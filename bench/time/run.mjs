@@ -13,7 +13,8 @@
  * Flags: --provider mock|anthropic · --model <id> (a Haiku 4.5 id) · --cases <id|cell>,… ·
  * --runs N · --seed N (a paid run draws a FRESH seed when none is given, and records it) ·
  * --max-usd X (required for anthropic) · --temperature T (sent only when given; the registered
- * run sends none) · --concurrency K (at most 4) · --out <dir> · --dry-run.
+ * run sends none) · --concurrency K (at most 4) · --out <dir> · --dry-run · --rule t6b|t6b-v2
+ * (the registered rule the run is judged under; default t6b, the frozen v1).
  *
  * THE CLOCK. The sheet's truths are planted at `cases.mjs` · `ANCHOR` (Friday 9 Oct 2026, 09:00
  * in Los Angeles). The library reads the dispatch clock from `Date.now()` (§ 7.4), so this script
@@ -44,6 +45,16 @@ import { ANCHOR, ARMS, CASES, sheetProblems } from './cases.mjs';
 import { MAX_ITERATIONS, MAX_TOKENS, PRICES, buildAgent, buildTools, runCase } from './harness.mjs';
 import { aggregate, formatReport, readRun } from './metrics.mjs';
 import { RULE_ID, formatVerdict, judge } from './rule.mjs';
+import { RULE_ID as RULE_ID_V2, judge as judgeV2, v2RowOf } from './rule-v2.mjs';
+
+/**
+ * The registered rules a run is judged under (`--rule`). `t6b` is the frozen v1 (`RULE.md`) and
+ * stays the default; `t6b-v2` (`RULE-v2.md`) splits v1's T2 for the run clock (time G16).
+ */
+export const RULES = Object.freeze({
+  t6b: { id: RULE_ID, rowOf: readRun, judge },
+  't6b-v2': { id: RULE_ID_V2, rowOf: v2RowOf, judge: judgeV2 },
+});
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -112,6 +123,7 @@ export function parseArgs(argv, drawSeed = () => randomInt(1, 2 ** 31 - 1)) {
     '--sdk-from',
     '--rescore',
     '--concurrency',
+    '--rule',
     ...bare,
   ]);
   for (const k of flags.keys()) if (!known.has(k)) throw new Error(`unknown flag ${k}`);
@@ -159,6 +171,9 @@ export function parseArgs(argv, drawSeed = () => randomInt(1, 2 ** 31 - 1)) {
     !(Number.isFinite(temperature) && temperature >= 0 && temperature <= 1)
   )
     throw new Error(`--temperature must be between 0 and 1, saw '${temperatureRaw}'`);
+  const rule = flags.get('--rule') ?? 't6b';
+  if (RULES[rule] === undefined)
+    throw new Error(`--rule must be one of ${Object.keys(RULES).join(', ')}, saw '${rule}'`);
   const concurrency = int('--concurrency', 1);
   if (concurrency > 4) throw new Error(`--concurrency must be at most 4, saw ${concurrency}`);
   return {
@@ -175,6 +190,7 @@ export function parseArgs(argv, drawSeed = () => randomInt(1, 2 ** 31 - 1)) {
     sdkFrom: flags.get('--sdk-from'),
     dryRun: flags.get('--dry-run') === true,
     rescore,
+    rule,
   };
 }
 
@@ -258,15 +274,15 @@ export function sortRows(rows) {
   );
 }
 
-function verdictOf(rows) {
+function verdictOf(rows, rule) {
   const arms = new Set(rows.map((r) => r.arm));
-  return arms.has('off') && arms.has('on') ? judge(rows) : undefined;
+  return arms.has('off') && arms.has('on') ? rule.judge(rows) : undefined;
 }
 
-function writeOutputs(dir, { config, spend, rows }) {
+function writeOutputs(dir, { config, spend, rows, rule = RULES.t6b }) {
   const aggregates = aggregate(rows);
-  const verdict = verdictOf(rows);
-  const results = { rule: RULE_ID, config, spend, rows, aggregates, ...(verdict && { verdict }) };
+  const verdict = verdictOf(rows, rule);
+  const results = { rule: rule.id, config, spend, rows, aggregates, ...(verdict && { verdict }) };
   writeFileSync(join(dir, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
   const report = [
     `# Time bench (T6b) — ${config.provider} · ${config.model} · seed ${config.seed}`,
@@ -292,10 +308,10 @@ function readRaws(dir) {
     .map((f) => JSON.parse(gunzipSync(readFileSync(join(dir, 'raw', f))).toString('utf8')));
 }
 
-async function rescore(dir) {
+async function rescore(dir, rule = RULES.t6b) {
   const results = JSON.parse(readFileSync(join(dir, 'results.json'), 'utf8'));
-  const rows = sortRows(readRaws(dir).map(readRun));
-  const out = writeOutputs(dir, { config: results.config, spend: results.spend, rows });
+  const rows = sortRows(readRaws(dir).map(rule.rowOf));
+  const out = writeOutputs(dir, { config: results.config, spend: results.spend, rows, rule });
   process.stdout.write(`${out.report}\n`);
 }
 
@@ -355,7 +371,8 @@ export async function runPlan({ plan, doors, opts, sdkClient, dir, log = () => {
 
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
-  if (opts.rescore !== undefined) return rescore(resolve(opts.rescore));
+  const rule = RULES[opts.rule];
+  if (opts.rescore !== undefined) return rescore(resolve(opts.rescore), rule);
   const problems = sheetProblems();
   if (problems.length > 0)
     throw new Error(`the case sheet is not sound:\n  ${problems.join('\n  ')}`);
@@ -378,6 +395,7 @@ async function main() {
     maxIterations: MAX_ITERATIONS,
     maxTokens: MAX_TOKENS,
     ...(opts.maxUsd !== undefined && { maxUsd: opts.maxUsd }),
+    ...(opts.rule !== 't6b' && { rule: opts.rule }),
   };
   const estimate =
     opts.provider === 'mock'
@@ -425,8 +443,8 @@ async function main() {
     dir,
     log: (s) => process.stdout.write(s),
   });
-  const rows = sortRows(raws.map(readRun));
-  const { report } = writeOutputs(dir, { config, spend, rows });
+  const rows = sortRows(raws.map(rule.rowOf));
+  const { report } = writeOutputs(dir, { config, spend, rows, rule });
   process.stdout.write(`${report}\nwritten: ${dir}\nspend: $${spend.usd.toFixed(4)}\n`);
   return undefined;
 }
