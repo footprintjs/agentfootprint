@@ -25,11 +25,11 @@ It is a leaf: it imports nothing outside itself, and `readers/` imports only the
 | `reader.ts` | the `TimeReader` port (`id`, `version`, `locale`, `kind: 'rule' \| 'model'`, `read`) and its result, `TimeParts` — zone-less parts, never instants; `readerIssue` (the builder's check) and `checkReading` (a quote must be a verbatim substring of the text; parts well formed; a `leftover` only beside parses, each token in the text; `confirm: true` only beside parses — the reader does not vouch the form; a refused mention keeps no text) |
 | `resolveRecord.ts` | what the resolver writes down, split out for the synchronous doors: the candidate and choice shapes, `DEFAULT_TIME_POLICY` and `readPolicy` (read at `.time()`, with the optional `abbreviations` map), `widenedGrain` (the one answer to "was this window's END widened?") and `shownGrain` (the grain a confirmation label shows the end at), and the checkpoint door's checks for a recorded candidate and choice (`candidateIsWellFormed`, `choiceIsWellFormed`) — `resolve.ts` re-exports them |
 | `resolve.ts` | parts + clock + policy → every candidate window (`resolveMention`: date orders, am/pm, the year, both instants of a DST overlap or gap, a day word, a look-back, a range read to the end of its grain except an o'clock end, a bare first side taking the second's meridiem, a said IANA zone or offset, a place named with `time` the tz database names once, an abbreviation only through the app's map and then read both as its zone and as its letters — any other zone token is asked), and `chooseReading` (`only` · `policy` · `open` with its questions · `none`); the v1 `TimePolicy` (`dateOrder`, `year`, both `'ask'` by default; `abbreviations`, absent by default — no map ships); the checks for a recorded candidate and choice |
-| `readers/english.ts` | the library's careful English reader, `englishTimeReader()` (§ 5.3, step T6b): a `kind: 'rule'` TOKENIZER over the v1 phrases — ISO dates and instants, numeric dates (`10/09/26`, the order undecided), clock times (a bare hour only as a range's first side), a range of two, a zone written after them or after a day word (IANA, `UTC-07:00`, a place named with `time` such as `London time`, a closed list of abbreviations — as written), an ISO time marked a 24-hour clock (`clock: '24h'`), today / yesterday / tomorrow, "last 40 minutes" — and ONE `unreadable` mention, quoting the whole phrase, for every other time phrase it recognises (parts of a day, night words, calendar spans, week days and named months, "ago", spans in words, a look-ahead, an ordinal day, and any v1 phrase a modifier such as "since" or "around" changes, and a bare first side the grammar does not read, `8 to 9:30`). It only PROPOSES: nothing it reads is ever filed as the person's words (the owner's decision "Always confirm", TQ29 — the law is the library's, `rowsBuild.ts` · `timeReadingRows`); every reading is offered through the time ask pre-filled with its window and zone, and only the person's answer settles it ([`readers/README.md`](readers/README.md)). Its word table is data inside the file; it imports only the port |
-| `periodForm.ts` | a tool's period forms AS DECLARED, split out for the synchronous doors (`defineTool({ period })`, the time answer's check, the checkpoint door's refusal codes): the shapes, the sugar, each form's own rules, a declared value's spelling, `periodFactProblem` and `TIME_REFUSALS` — `convert.ts` re-exports every public name |
+| `readers/english.ts` | the library's careful English reader, `englishTimeReader()` (§ 5.3, step T6b): a `kind: 'rule'` TOKENIZER over the v1 phrases — ISO dates and instants, numeric dates (`10/09/26`, the order undecided), dates with a named month (`11 September`, `Sept 29` — the year the policy's when not written), clock times (a bare hour only as a range's first side), a range of two (a day word may come first: `today between 1 pm and 2 pm`), a zone written after them or after a day word (IANA, `UTC-07:00`, a place named with `time` such as `London time`, a closed list of abbreviations — as written), an ISO time marked a 24-hour clock (`clock: '24h'`), today / yesterday / tomorrow, "last 40 minutes" and the compact `last 24h` — and ONE `unreadable` mention, quoting the whole phrase, for every other time phrase it recognises (parts of a day, night words, calendar spans, week days and a month named alone, "ago", spans in words, a look-ahead, a compact unit it does not read, an ordinal day, and any v1 phrase a modifier such as "since" or "around" changes, and a bare first side the grammar does not read, `8 to 9:30`). It only PROPOSES: nothing it reads is ever filed as the person's words (the owner's decision "Always confirm", TQ29 — the law is the library's, `rowsBuild.ts` · `timeReadingRows`); every reading is offered through the time ask pre-filled with its window and zone, and only the person's answer settles it ([`readers/README.md`](readers/README.md)). Its word table is data inside the file; it imports only the port |
+| `periodForm.ts` | a tool's period forms AS DECLARED, split out for the synchronous doors (`defineTool({ period })`, the time answer's check, the checkpoint door's refusal codes): the shapes, the sugar, each form's own rules, a declared value's spelling, `periodFactProblem` and `TIME_REFUSALS`, and the one owner of a form's own `maxRange` (`formMaxRange`; `formFacts` — the facts a window sent in one form is judged against; `toolFacts` — the facts before a form is chosen, `maxRange` the widest any form reads) — `convert.ts` re-exports every public name |
 | `convert.ts` | a tool's period FORMS (§ 7.1: `bounds` · `joined` · `object` · `day` · `lookback`, each bound `iso` · `epoch-ms` · `epoch-s` · `date` · `wall`) and the facts about its source (`PeriodFacts`); the sugar (`sugarForms` — today's `{ argument, spelling }`, `accepts`, `wall-range` + `zoneArgument`); one form's own rules (`formIssue`, `formArguments`, `parsesUnderForm`); the EXACT rows of § 7.2 (`convertExact`) and the inverse a binding reads (`readBack`, `sameRange`); the INEXACT rows (`convertWidened` — a range inside one day → that `day`, a range ending before now → the covering look-back; each with the range it reads and what it adds); `convertForTool` — the ONE answer to "can this tool read this window, and how" (a fact it breaks, else exact, else wider, else `multi-day`, else `no-form-holds`) that the fill, the time ask and the served line all ask; and the refusal tests (`spansDaysForDayOnly`, `wallGapArgument`); a range against the facts (`periodFactProblem`, `partlyBeyondRetention`, `TimeRefusal`) |
 | `bind.ts` | which window a call carries (§ 5.6, § 7.3): the turn's windows read from the record (`turnWindowsOf` — a mention the person settled in the time ask, `answered`; a `model` reader's reading waiting for confirmation; the clock's `control` window — a `rule` reading the person has not answered settles nothing) and one call's decision (`callWindowOf`: `filled` — exactly, or widened · `bound` by quote or value · `model-chosen` · `model` · `unread` · `not-filled` · `refused` before dispatch on a fact, a multi-day range to a `day`-only tool, a window no form can read (`no-form-holds`), or a skipped wall time) |
-| `windows.ts` | the turn's windows read from the record (`turnWindowsOf`, `pendingQuotesOf`, `readerWindowsOf` and their shapes) — the record half of `bind.ts`, split out BY FILE because the Tools mount's synchronous `inputMapper` and the evidence gate's lineage read it; imports only the leaves and `rows.ts`; `bind.ts` re-exports every name |
+| `windows.ts` | the turn's windows read from the record (`turnWindowsOf`, `pendingQuotesOf`, `readerWindowsOf` and their shapes); the one owner of "a time the person wrote that still waits on them" (`isOpenForPerson`: a reading to confirm, a zone to name, or words not read); the one input every door converts a window from (`windowToConvert`, with `offeredLookback`) — the record half of `bind.ts`, split out BY FILE because the Tools mount's synchronous `inputMapper` and the evidence gate's lineage read it; imports only the leaves and `rows.ts`; `bind.ts` re-exports every name |
 | `drift.ts` | the clock at dispatch (§ 7.4): `driftAtDispatch` — a call that sent a look-back, dispatched more than the tool's step after the turn's `now`, is `redrawn` (the library's own fill, re-sent as the asked range in the tool's first absolute form) or `shifted` (the model's look-back, or no absolute form — runs as sent) |
 | `wire.ts` | the JSON that crosses a transport (§ 7.5): `TimeContext` — `ctx.time` in process, the `tools/call` request's `_meta.agentfootprint.time` over MCP — versioned (`timeContextOf`, `readTimeContext`) |
 | `check.ts` | the result checks (§ 9.2, § 9.4, § 9.6, step T8): `periodTimeCheck` — what one call READ (the result's declared `queried`, read back with the tool's step; else a widened fill's `sent`; else a look-back shifted by its drift; else the asked range) against what it ASKED (for a window the model chose, the person's window): `differs { missing, extra }`, `shifted`, `beyondRetention`, `partlyBeyondRetention`; a closed end read as open (1 ms) is no difference, and a look-back read moved LATER within the tool's step (§ 7.4's first row only — never earlier, never a bounds window, never with a recorded drift) is the asked range; `rangeDifference`; `clocksDiffer` over the wall-clock sources (a declared axis zone — never a period's offset) |
@@ -77,7 +77,7 @@ axis through `axis.ts` · `timeAxisIssues`. From the package: `axis.ts` (through
 (`RunTime`, `TimeClock`, `TimeOptions`, `TimeRange`, and the three row types) from the main barrel;
 since the reader (step T6a) also the port's types (`TimeReader`, `TimeParts`, `TimeReading`, …),
 the resolver's (`TimeCandidate`, `ResolvedWindow`, `ReadingChoice`, `TimePolicy`, …) and
-`TimeReadingRow`; since the ask (step T4) its types (`TimeFormat`, `TimeAnswerProblem`,
+`TimeReadingRow`; since packet "gaps" the `TimeAnswerRow`, `TimeDerivedRow` and `SourceClockRow` types; since the ask (step T4) its types (`TimeFormat`, `TimeAnswerProblem`,
 `TimeAskMessageKey`, `TimeAskMessages`) and the catalog `defaultTimeAskMessages` (also from
 `agentfootprint/observe`, beside the other catalogs); since the English reader (step T6b)
 `englishTimeReader` and `EnglishTimeReaderOptions`; the doors are `AgentBuilder.time`,
@@ -87,7 +87,8 @@ OUTSIDE a run ships through its own door, `agentfootprint/time` (`src/doors/time
 main barrel — on the main barrel it would put `convert.ts` on every consumer's synchronous graph.
 The door leads with THE answer, `convertForTool` (with `ToolConversion` and `TimeRefusal`), and
 the tool's declaration read the run's way: `sugarForms` (a `period`'s forms, `PeriodShapes`),
-`granularityMsOf` (the clock's `granularityMs`) and `widestMsOf` (its `maxRange` in ms); then the
+`granularityMsOf` (the clock's `granularityMs`) and `widestMsOf` (its `maxRange` in ms); time for a
+person as the run writes it (`presentRange`) and the run's zone check (`isZoneName`); then the
 steps alone — `convertExact`, `convertWidened` (asked only after `convertExact` finds nothing),
 `periodFactProblem` — with `ConvertContext`, `WindowToConvert`, `Conversion`, `WidenedConversion`
 and `PeriodFactProblem`. **The one-answer law: an app that previews what a tool would read, or
@@ -198,6 +199,17 @@ choice. A window only PARTLY older than `retention` runs, marked `partlyBeyondRe
 **A window of the person's that no form can read — not even wider — is refused, never left to
 the tool's rule** (`no-form-holds`): a look-back ends at now, so a window still running is out of
 its reach, and a covering look-back longer than `maxRange` is one the tool will not read.
+**A form may declare its own `maxRange`** — the widest window THAT form reads (a tool caps its
+bounds at `24h` while its look-back reads any length): it overrides the period's for that form
+only (`periodForm.ts` · `formMaxRange`, the one owner). Before a form is chosen the tool is held to
+the widest any form reads, none when one form has no cap (`toolFacts`); a window SENT in one form
+is held to that form's (`formFacts`).
+
+```ts
+period: { forms: [{ kind: 'bounds', from, to, maxRange: '24h' }, { kind: 'lookback', argument: 'window', signed: false }] }
+convertForTool({ range: last48h, lookback: '48h' }, forms, {}, ctx); // { conversion: { form: 1, values: { window: '2d' } } }
+```
+
 **`maxRange` is an inclusive ceiling on a window's REACH** — first instant to last (`range.ts` ·
 `reachMs`, the one owner; `periodFactProblem` and `convertWidened` both ask it): the look-back
 `[now − L, now]` reaches `L` (its half-open end `now + 1 ms` keeps now inside, it adds no reach),
@@ -236,10 +248,16 @@ resolveMention([{ wall: { h: 8, meridiem: 'am' }, zoneToken: 'PST' }], clock, ru
 part.** `englishTimeReader()` tokenizes; it never decides an order, maps `PST` or `London time`
 to a zone, or refuses a future date. A phrase outside its v1 set is ONE `unreadable` mention quoting the whole phrase:
 reading `yesterday` out of `yesterday morning` would silently widen what the person said, and
-an unreadable mention still counts as a mention, so it fills nothing beside another.
+an unreadable mention still counts as a mention, so it fills nothing beside another — and, alone,
+it is ASKED (the lazy-ask law): the person wrote a time, so no default stands in for it.
 
 **The served-window law: the model is told each settled window of the person's words, in each
-tool's own form, with its SOURCE (TQ13).** Under `.time({ reader })`, each tool that declares a
+tool's own form, with its SOURCE (TQ13)** — and the window the person set in the app's time
+control (`time.window`, `ReaderWindows.control`): "The window the person set in the app's time
+control is … — <each tool's values>", under `.time()` with or without a reader, so an app never
+writes its own prompt text for it. The values are the ONE answer (`convert.ts` · `convertForTool`
+over `windows.ts` · `windowToConvert`) the fill and the time ask's answer also use, so the value
+served and the value a call is handed are one spelling. Under `.time({ reader })`, each tool that declares a
 period carries ONE sentence after its description naming every window SETTLED this turn in that
 tool's form — the exact conversion, else the wider one the fill would use, said so — and whose it
 is: "(the window the person confirmed when asked what their words meant)", "(… gave when asked …)",
@@ -267,8 +285,23 @@ call really carries; the note says the value came from the window the person cho
 the turn are filled from it and the mention is not asked again. **A start and an end asked
 separately are one window:** a pair that fits argument by argument but breaks the tool's
 `direction`, `retention` or `maxRange` together is asked again naming the fact, then refused
-(`arguments/ask.ts` · `pairsBroken`) — with the reader or without. An unreadable mention offers no pre-fill: the tool's own rule asks.
+(`arguments/ask.ts` · `pairsBroken`) — with the reader or without. **Words the library holds
+no reading of are asked too** (`windows.ts` · `isOpenForPerson`: a zone still to name, or words the
+reader could not read): one window field — the zone first, or "Which time did you mean by …?"
+with nothing pre-filled (`format: 'time-range'`) — judged at the door and converted into each
+call's form like any answer, whatever the tool's own rule says (time follow-ups, packet "gaps":
+`yesterday morning` to a tool that assumed `-30m` ran `-30m`; an ASK-rule tool's own format-less
+ask handed a raw `a/b` to a tool that reads `a..b`). The served line names them pending: "the
+library could not read those words, so its own form asks the person which time they meant…".
 A turn with no reader asks as it always did.
+
+```ts
+// 'any SMB on 10.0.0.1 yesterday morning?' — the model leaves `window` out (rule: assume '-30m'):
+//   paused: { format: 'time-range', description: 'Which time did you mean by “yesterday morning”?' }
+//   resume { f1: '2026-10-08T06:00:00-07:00/2026-10-08T12:00:00-07:00' }
+//   → the tool runs { window: '2026-10-08T06:00:00-07:00..2026-10-08T11:59:59-07:00' } — never '-30m'
+//   → { kind: 'time-answer', mention: 0, how: 'edited', … }
+```
 
 **The presentation law: a label is never data.** `present.ts` renders for a person — the typed
 record keeps the instants. With no reader armed (a later step) the form is locale-neutral:
@@ -536,8 +569,9 @@ return import('./timeLayer.js').then((time) => {
   typed answer (`.outputSchema()`) carries the checks on the `period` rows (`agent.findings()`),
   not in `answerCoverage`; § 9.1's `partly-future` is not checked. The paid bench of T8 (the false
   "not sure" rate on correct answers, TQ8) has not run.
-- The English reader reads English digits only; words for numbers ("two hours"), named months,
-  week days and parts of the day read "unreadable" until a bench shows people need them. Its word
+- The English reader reads English digits only; words for numbers ("two hours"), a month named
+  alone, week days and parts of the day read "unreadable" (and are asked, nothing pre-filled) until
+  a bench shows people need them. Its word
   table is data inside `readers/english.ts`; a second language moves it beside `src/locales/`.
 - Over MCP a time field with choices travels as the choices plus the free-entry properties (a
   person answers one or the other); MCP has no range, so a range is two `date-time` properties.

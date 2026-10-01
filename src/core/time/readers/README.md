@@ -45,7 +45,10 @@ wrote their own). Both are the person's answer: the argument rows are
 `answered`, the rest of the turn's calls are filled from it (`../bind.ts` ·
 `turnWindowsOf`, source `answered`), and the served sentence names it with its
 source ("the window the person confirmed when asked what their words meant").
-An unreadable phrase proposes nothing: the tool's own rule asks, with no pre-fill.
+An unreadable phrase proposes nothing — and is still ASKED: "Which time did you mean by
+“yesterday morning”?", free entry, nothing pre-filled, whatever the tool's own rule says (the
+person wrote a time, so a default never stands in for it — time follow-ups, packet "gaps"). The
+answer is filed `edited` and converted into the tool's form like any other.
 
 **A zone the person named is part of the reading** — after a clock time, a date
 or a day word, as written: `yesterday London time` → `{ relative: day −1,
@@ -60,7 +63,10 @@ reader.read('yesterday London time', ctx);      // { quote: 'yesterday London ti
 reader.read('8 to 9:30', ctx);                  // unreadable — `8` is no time here, and 9:30 alone would drop the start
 reader.read('errors in the last 2 hours', ctx); // { quote: 'last 2 hours', parses: [...] } — a proposal
 reader.read('8:40 AM til 9.30', ctx);           // { quote: '8:40 AM', parses: [...] } — a proposal; the person corrects it
-reader.read('yesterday morning', ctx);          // unreadable — the tool's own rule asks, no pre-fill
+reader.read('yesterday morning', ctx);          // unreadable — asked which time, nothing pre-filled
+reader.read('today between 1 pm and 2 pm', ctx); // ONE mention — a day word may come before `between`
+reader.read('between 14:15 and 14:40 on 11 September', ctx); // a named month: date fixed, the year the policy's
+reader.read('in the last 24h', ctx);            // { quote: 'last 24h', … } — a compact look-back
 ```
 
 **The trade-off.** Every time phrase costs one click before the first call that

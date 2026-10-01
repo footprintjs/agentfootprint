@@ -401,7 +401,8 @@ the others wait until a bench shows people need them:
 | a place named with `time` | `yesterday London time`, `8 AM New York time` | `zoneToken: 'London time'`, as written | the ONE zone the tz database names for the place (`zone.ts` · `zoneOfPlace`, noted `zone-read`); none or several (`India time`, `Pacific time`) → the zone is asked | v1 (reader follow-up) |
 | a zone abbreviation | `PST` | `zoneToken: 'PST'` | **only through the app's map** (`policy.abbreviations`, none ships): its zone's reading, and — when its DST state disagrees with the date — its letters' literal offset too, both offered in ONE confirmation (`open: ['abbreviation', 'confirm']`); with no map, or one missing it, the zone is asked (`format: 'zone'`) | tokenized; mapped only by the app's policy |
 | day words | today, yesterday, tomorrow | `relative: { day, offset }` | anchored on the clock, in the person's zone | v1 |
-| relative spans | last 40 minutes, past 2 hours, the last hour | `relative: { unit, count }` | a look-back (§ 3.2) | v1 — proposed and confirmed like every reading (TQ29) |
+| relative spans | last 40 minutes, past 2 hours, the last hour, `last 24h`, `past 6h` | `relative: { unit, count }` | a look-back (§ 3.2) | v1 — proposed and confirmed like every reading (TQ29); the compact units (`m`, `h`, `d`, `w`) since packet "gaps" |
+| a named-month date | `11 September`, `Sept 29`, `September 29, 2026` | `date: fixed` — `year` only when written | the year from the policy (`year`), as for `10/9` | v1 since packet "gaps" (the host's field phrasings use them); a month named alone stays unreadable |
 | night words | tonight, overnight | `relative` + `partOfDay` | a span that crosses midnight | later |
 | parts of a day | morning, afternoon, evening | `partOfDay: 'morning'` | the policy's table (`morning` = `[06:00, 12:00)`), noted as `{ kind: 'part-of-day', table: 'default' }` | later |
 | calendar spans | last week | `relative: { week, offset: -1 }` | a calendar range, which needs a week-start rule | later |
@@ -521,6 +522,7 @@ app may override every key, and only checks the app armed can produce one.
 | a wall time in a DST gap or overlap (a fixed v1 law: Temporal's `reject`) | the two instants as choices (Temporal's `earlier` and `later`) |
 | a zone abbreviation (v1 has no map), or one not in the map | the zone, `format: 'zone'` |
 | an abbreviation in the map whose DST state disagrees with the date (`PST` on 9 Oct) | both readings as choices — literal `−08:00`, or the zone's `−07:00` (`abbreviationMismatch: 'ask'`) |
+| a tool needs a period and the person wrote a time the library holds no reading of (words the reader could not read; a zone still to name) | the window, asked — the zone first, else "Which time did you mean by …?" with nothing pre-filled (`format: 'time-range'`), whatever the tool's own rule says: its default never stands in for words the person wrote (packet "gaps") |
 | a tool needs a period and the person said none | the carried window first (§ 5.6); else the tool's own `askOrAssume` rule, unchanged; its choices may now be ranges |
 | the only reading came from a `kind: 'model'` reader and a tool needs it | the reading as one choice to confirm (§ 5.5) |
 
@@ -589,6 +591,12 @@ Rules, checked at definition, at dispatch and at MCP ingest, refused and never r
 - A `wall` bound or a `day` form without a `zone` argument is refused, unless the app's `.time()`
   zone is declared as the tool's zone by `period.wallZone: 'app'` (explicit, never implied).
 - `units` is a subset of `smhdw`; absent, today's `mhdw` (§ 12.1).
+- Any form may carry its own `maxRange` (a duration in `smhdw`) — the widest window THAT form
+  reads at once — and it overrides the period's `maxRange` for that form only (time follow-ups,
+  packet "gaps": a tool caps its bounds at a day while its look-back reads any length). One owner
+  reads it, `periodForm.ts` · `formMaxRange`; before a form is chosen the tool is held to the
+  widest any form reads (`toolFacts`), once a window was sent in one form, to that form's
+  (`formFacts`).
 
 **The wire form.** Host tools are often served over MCP from another language, so the declaration
 must travel as JSON: `_meta.agentfootprint.period` carries the same object, field for field, read by
@@ -1686,6 +1694,57 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   their effect is unmeasured until a paid Haiku re-run of T6b. Pinned by
   `test/core/time/late-line-voice.test.ts`, `test/core/time/limits-served.test.ts` and
   `test/core/time/english-run.test.ts`.
+
+- **Time follow-ups, packet "gaps" (2026-09-30).** What an app switching to the layer found with
+  a no-model probe of its own tool declarations, re-checked on 9.132.0 first. The owner's ruling
+  for the packet: "you decide what is correct for the library". (1) **A reading waiting on its
+  ZONE is open** (G1). `windows.ts` · `turnWindowsOf` recorded an open mention only when it had
+  candidates, and a reading that waits on the zone the person wrote has none — so the lazy ask's
+  `proposed` check (`arguments/resolve.ts` · `verifyPlan`, `turn.open`) never fired and a tool
+  whose rule ASSUMES its period ran the default (`-30m`, source `default`) on "10/09/26 8 AM to
+  8:40 AM PST". An open mention with no reading yet is now in `open` with no ranges (nothing to
+  rule out); the one owner of "a time the person wrote that waits on them" is `windows.ts` ·
+  `isOpenForPerson`. (2) **Words the reader could not read are asked, never defaulted** (G2).
+  Decision: ASK, free entry, nothing pre-filled ("Which time did you mean by “yesterday
+  morning”?", `format: 'time-range'`) — not "run the default and serve the conclusion". Why: the
+  person wrote a time, so the always-confirm ruling (TQ29) already forbids the default standing in
+  for it — the lazy-ask law said so for readable words and a tool whose rule assumes; an
+  unreadable mention is the same words with less help, and running a window nobody asked about,
+  even with a conclusion served, spends a call on the wrong time and leaves the standing to repair
+  it. The answer goes through the window field the lazy ask already owns (`stages/argumentAsk.ts` ·
+  `windowPlanOf`, `core/time/readingAsk.ts` · `timeAskOf` for a `by: 'none'` row), so it is judged
+  as a time range at the door, converted into the tool's own form by `convertForTool` (which also
+  closes the ASK-rule half: the tool's own format-less ask had handed a raw `a/b` interval to a
+  tool that reads `a..b`), and filed `time-answer` `edited` + a `call-window` `filled`. The served
+  line names the words as pending (`ReaderWindows.pendingUnread`, `serve.ts` · `unreadClause`):
+  "the library could not read those words, so its own form asks the person which time they
+  meant…" — the conclusion, late, at the decision point (the recency strategy). This REVERSES the
+  T6b line "an unreadable mention offers no pre-fill: the tool's own rule asks" (pinned in
+  `english-run.test.ts`, now asserting the one window field). Not done, named: two or more
+  mentions still fill and ask nothing (`several-mentions`), so a tool whose rule assumes still runs
+  its default beside "compare this morning with yesterday" — which mention a call means is the
+  model's to say, through the quote; a bench would show whether the default needs asking there.
+  (3) **The reader reads the field phrasings** (G3–G5): a named-month date (`date: fixed`, the year
+  the policy's), a day word before `between` (the range's first side may follow the day:
+  `english.ts` · `groupsOf` tests `between` before the group OR before its last phrase), and
+  compact look-backs (`24h`, `6h`, `30m`); a compact unit it does not read is ONE unreadable
+  mention, never none. Reader version `1.2.0`. (4) **The asked call's window is re-filed** (G6) —
+  already closed on 9.132.0 by packet "lookback" (1); re-checked, nothing to do. (5) **One
+  spelling** (G7): the served line and a later call's fill converted a confirmed look-back with
+  its look-back (`[now − L, now)`, `…15:59:59Z`) while the time ask's own fill converted its range
+  (`…16:00:00Z`). The one input is `windows.ts` · `windowToConvert` (the look-back kept when the
+  answer is the offered look-back, `offeredLookback`), the one answer `convertForTool` — the
+  served line now asks it too, so a window the tool would refuse names no values. (6) **A form's own
+  `maxRange`** (§ 7.1). (7) **The control window is served** (G9): `ReaderWindows.control`, one
+  sentence ("The window the person set in the app's time control is …"), under `.time()` with or
+  without a reader — TQ26 makes it the person's own, and TQ13's "not named" had left every app to
+  write its own prompt text. (8) **Exports** (G8): `presentRange` and `isZoneName` on
+  `agentfootprint/time` (an app's panel shows the run's own label and checks a session zone the
+  run's way), the `time-answer`, `time-derived` and `source-clock` row types on the root. What a
+  bench would confirm (not run, no paid calls): the ask rate on unreadable phrases against the
+  needless-ask rate on the T6b controls, and whether the `pendingUnread` sentence keeps the model
+  from writing its own window. Pinned by `test/core/time/gaps-run.test.ts`, `reader-gaps.test.ts`,
+  `form-max-range.test.ts` and `time-door.test.ts`.
 
 **Why this order.** T1 settles the grammar every other step leans on and is free. T2 is already
 written and only needs rebasing and the value check. T3 gives the first visible win (the limits

@@ -24,6 +24,13 @@
  *   - the parts, for a caller that needs one step alone: `convertExact`,
  *     `convertWidened` (asked only AFTER `convertExact` finds nothing — it does
  *     not look for an exact form first), `periodFactProblem`.
+ *   - time for a PERSON, as the run writes it: `presentRange(range, { zone,
+ *     locale? }, grain?)` — the label the time ask and the served line use (a
+ *     half-open range with its end as said, the zone always named), so an
+ *     app's panel shows the run's own words; and `isZoneName(value)` — the
+ *     run's zone check (an IANA name; `PST` and a bare offset are refused,
+ *     although `Intl` takes them), for a session zone before it is passed as
+ *     `time.zone`.
  *
  * Pure functions over a clock the caller passes: no run, no record, no
  * `.time()`. A door of its own because the conversions are the time layer's
@@ -67,3 +74,5 @@ export {
   type PeriodShapes,
   type TimeRefusal,
 } from '../core/time/periodForm.js';
+export { presentRange, type Grain, type Presentation } from '../core/time/present.js';
+export { isZoneName, type ZoneName } from '../core/time/zone.js';

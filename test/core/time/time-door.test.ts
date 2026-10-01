@@ -28,13 +28,20 @@ import {
   convertForTool,
   convertWidened,
   granularityMsOf,
+  isZoneName,
   periodFactProblem,
+  presentRange,
   sugarForms,
   widestMsOf,
   type ConvertContext,
   type WindowToConvert,
 } from '../../../src/doors/time.js';
-import type { PeriodForm } from '../../../src/index.js';
+import type {
+  PeriodForm,
+  SourceClockRow,
+  TimeAnswerRow,
+  TimeDerivedRow,
+} from '../../../src/index.js';
 
 const clock: ConvertContext = {
   now: '2026-10-09T15:40:00Z',
@@ -249,5 +256,41 @@ describe('the run’s order, over seeded windows', () => {
         }
       }
     }
+  });
+});
+
+// ─── G8 (time follow-ups, packet "gaps"): what an app needs outside a run ───
+
+describe('time for a person and the zone check, from the door', () => {
+  it('presentRange writes the run’s label: the end as said, the zone named', () => {
+    const range = { from: '2026-10-09T08:00:00-07:00', to: '2026-10-09T08:41:00-07:00' };
+    expect(presentRange(range, { zone: 'America/Los_Angeles' }, 'minute')).toBe(
+      '2026-10-09 08:00–08:40 America/Los_Angeles (UTC-07:00)',
+    );
+  });
+
+  it('isZoneName is the run’s zone check: an IANA name; an abbreviation or a bare offset is refused', () => {
+    expect(isZoneName('America/Los_Angeles')).toBe(true);
+    expect(isZoneName('PST')).toBe(false);
+    expect(isZoneName('+05:30')).toBe(false);
+  });
+
+  it('the time-answer, time-derived and source-clock row types come from the root', () => {
+    const answer: TimeAnswerRow = {
+      kind: 'time-answer',
+      turn: 1,
+      iteration: 1,
+      mention: 0,
+      from: '2026-10-09T08:00:00-07:00',
+      to: '2026-10-09T08:41:00-07:00',
+      zone: 'America/Los_Angeles' as never,
+      how: 'confirmed',
+    };
+    const kinds: (TimeAnswerRow | TimeDerivedRow | SourceClockRow)['kind'][] = [
+      answer.kind,
+      'time-derived',
+      'source-clock',
+    ];
+    expect(kinds).toEqual(['time-answer', 'time-derived', 'source-clock']);
   });
 });

@@ -4836,12 +4836,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // The inputs layer (honesty layer 2): the same site decorates a ruled
       // tool's schema first — value-conditional, the same grammar.
       ...(inputsArmed && { inputsLayer: true as const }),
-      // …and, under `.time({ reader })` (step T6b), the ONE served time sentence on each tool
-      // that declares a period: the windows the reader settled this turn, in that tool's form.
+      // …and, under `.time()`, the ONE served time line on each tool that declares a period: the
+      // windows the reader settled this turn (`.time({ reader })`, step T6b) and the window the
+      // person set in the app's time control (`time.window`), in that tool's form.
       ...(inputsArmed &&
-        this.timeOptions?.reader !== undefined && {
+        this.timeOptions !== undefined && {
           timeWindows: {
             ...(this.timeOptions.zone !== undefined && { appZone: this.timeOptions.zone }),
+            ...(this.timeOptions.reader !== undefined && { reader: true as const }),
           },
         }),
       // …and, under `.time()` (step T8), the turn's time limits in the same line.

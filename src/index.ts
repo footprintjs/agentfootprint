@@ -1054,6 +1054,9 @@ export type {
   ClockRow,
   ControlWindow,
   PersonWindow,
+  SourceClockRow,
+  TimeAnswerRow,
+  TimeDerivedRow,
   TimeReaderStamp,
   TimeReadingRow,
 } from './core/time/rows.js';

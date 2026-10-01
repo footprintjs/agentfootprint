@@ -6,7 +6,8 @@
  * older than the source keeps, or two sources' clocks differ), every later
  * request of the turn ends with ONE line — the library's conclusion, both
  * ranges in the person's zone, and what an answer states. A turn whose reads
- * match serves no line; the first request (nothing read yet) serves none.
+ * match serves no limit; the first request (nothing read yet) serves none. A
+ * window set in the app's time control is named on its own sentence first.
  * The model reads the same lines the person reads in the limits block
  * (`coverage/timeLimits.ts` · `timeLimitLinesOf`), with "the person's window"
  * for "your window".
@@ -141,20 +142,35 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+/**
+ * The window set in the app's time control (`time.window`), served on its own sentence since
+ * packet "gaps" (G9) — before any limit: the first request names it, the later ones too.
+ */
+const CONTROL_30D =
+  "The window the person set in the app's time control is 2026-09-09 08:40 – 2026-10-09 08:39 " +
+  'America/Los_Angeles (UTC-07:00) — client_activity start_time 1788968400000, end_time ' +
+  '1791560400000. A call may pass these values as written; an answer built on them states that ' +
+  'window.';
+const CONTROL_7D =
+  "The window the person set in the app's time control is 2026-10-02 08:40 – 2026-10-09 08:39 " +
+  'America/Los_Angeles (UTC-07:00) — client_activity start_time 1790955600000, end_time ' +
+  '1791560400000. A call may pass these values as written; an answer built on them states that ' +
+  'window.';
+
 describe('the time limits line — served late, after the read', () => {
-  it('30 days asked, 7 read: the answer call ends with the conclusion; the first call serves none', async () => {
+  it('30 days asked, 7 read: the answer call ends with the conclusion; the first call names only the control window', async () => {
     const { requests } = await run(
       [clampTool()],
       [call('c1', 'client_activity'), { content: '42 operations.' }],
       { from: iso(NOW_MS - 30 * DAY), to: NOW },
     );
     expect(requests).toHaveLength(2);
-    expect(lastLine(requests[0]!)).toBeUndefined();
+    expect(lastLine(requests[0]!)).toBe(`${TIME_LINE_SOURCE} ${CONTROL_30D}`);
     const line = lastLine(requests[1]!);
     expect(line).toMatch(
       new RegExp(
-        `^${LEAD.replace(
-          /[[\].]/g,
+        `^${`${TIME_LINE_SOURCE} ${CONTROL_30D} The time the tools read is not the time asked about`.replace(
+          /[[\]().]/g,
           '\\$&',
         )} — client_activity read less than was asked — asked: 2026-09-09 08:40:00`,
       ),
@@ -164,13 +180,14 @@ describe('the time limits line — served late, after the read', () => {
     );
   });
 
-  it('7 days asked, 7 read: no request carries a line', async () => {
+  it('7 days asked, 7 read: no limit — each request names only the control window', async () => {
     const { requests } = await run(
       [clampTool()],
       [call('c1', 'client_activity'), { content: '42 operations.' }],
       { from: iso(NOW_MS - 7 * DAY), to: NOW },
     );
-    expect(requests.map(lastLine)).toEqual([undefined, undefined]);
+    const only = `${TIME_LINE_SOURCE} ${CONTROL_7D}`;
+    expect(requests.map(lastLine)).toEqual([only, only]);
   });
 
   it('older than the source keeps: the refusal is served as a limit', async () => {

@@ -312,6 +312,25 @@ for the library — what it holds, never what the person did not do — and a qu
 no reading of (`ReaderWindows.pendingZones`: a zone it cannot resolve) says its form asks for the
 zone, never that it "shows its reading".
 
+**Open means "the person wrote a time and the library holds no window for it" (packet "gaps").**
+A reading waiting on its zone (no candidates yet) and words the reader could not read
+(`by: 'none'`) are open too (`core/time/windows.ts` · `isOpenForPerson`, the one owner) — so the
+`proposed` check above fires for them as well, and a tool whose rule assumes its period is asked,
+never defaulted. The unread words are asked as ONE window field with nothing pre-filled
+(`format: 'time-range'`, "Which time did you mean by “yesterday morning”?"), judged and converted
+like any answer; the pending half says "the library could not read those words, so its own form
+asks the person which time they meant, with nothing filled in". The window the person set in the
+app's time control (`time.window`) is served on its own sentence under `.time()`, with or without
+a reader, and every value the line names is the one answer (`convertForTool` over
+`windows.ts` · `windowToConvert`) the call is handed.
+
+```ts
+// 'who talked to cluster 006 since 8 AM?' — `since 8 AM` is unreadable; the tool ASSUMES `1h`:
+//   paused: one field, format 'time-range', 'Which time did you mean by “since 8 AM”?', no enum
+//   resume { f1: '2026-10-09T08:00:00-07:00/2026-10-09T09:00:00-07:00' } → the tool runs window '1h'
+//   (the covering look-back, said so) — the rule's `1h` never ran on its own
+```
+
 ```ts
 // "client activity yesterday?" under the reader's arm, first request — its LAST message (every
 // line below is served after the one opening, `TIME_LINE_SOURCE`:

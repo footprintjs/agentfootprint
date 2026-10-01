@@ -94,16 +94,22 @@ Agent.create({ provider, model })
 
 `englishTimeReader()` is the reader the library ships: a `kind: 'rule'`
 tokenizer with no dependency. It reads a small, closed set — ISO dates and
-instants, numeric dates (the order left open), clock times, a range of two, a
-zone written after them, today / yesterday / tomorrow, "last 40 minutes" — and
-files every other time phrase it recognises as ONE unreadable mention quoting
-the whole phrase. `EnglishTimeReaderOptions` takes only a `locale` for the
+instants, numeric dates (the order left open), dates with a named month
+(`11 September`, `Sept 29` — the year from your `year` policy when not
+written), clock times, a range of two (`today between 1 pm and 2 pm`), a zone
+written after them, today / yesterday / tomorrow, "last 40 minutes" and the
+compact `last 24h` — and files every other time phrase it recognises as ONE
+unreadable mention quoting the whole phrase. `EnglishTimeReaderOptions` takes only a `locale` for the
 labels of the ask; it never decides a date order.
 
 A reading only PROPOSES. Nothing typed in chat is filed as the person's words:
 when a tool that declares a period is about to be called, the reading is
 offered as a pre-filled, editable confirmation naming its window and its zone,
-and only the person's answer settles it.
+and only the person's answer settles it. Words the reader could not read
+(`yesterday morning`, `since 8 AM`) are asked too — "Which time did you mean
+by …?", nothing filled in — even when the tool's rule assumes a default: the
+person wrote a time, so a default never stands in for it. Every answer settles
+the mention as a `TimeAnswerRow` (`confirmed` or `edited`).
 
 ```ts
 import { Agent, englishTimeReader } from 'agentfootprint';
@@ -174,7 +180,18 @@ What the library then does, under `.time()`:
   `day` tool, or a wall time the zone skips: the tool never runs, and the model
   reads why.
 
-One `CallWindowRow` per call says which. The tool is handed the call's time as
+A window the person set in your UI — a run's `time.window`, from a brushed
+chart or a range picker — is named on the model's late line with each tool's
+values ("The window the person set in the app's time control is …"), so your
+app writes no prompt text for it. When a form needs its own cap, give it
+`maxRange`: `{ kind: 'bounds', …, maxRange: '24h' }` caps the bounds at a day
+while a look-back form beside it reads any length; a window is refused
+`over-max-range` only when no form can read it.
+
+One `CallWindowRow` per call says which. Two more rows complete the record: a
+`TimeDerivedRow` when a judged answer states values the library spelled from a
+reading, and a `SourceClockRow` when a dataset declares the wall-clock zone its
+values are in. The tool is handed the call's time as
 `ctx.time`, a `TimeContext` (the asked range, the zone, the frozen `now` and
 the dispatch moment) — over MCP it rides the `tools/call` request's
 `_meta.agentfootprint.time`.
@@ -272,6 +289,16 @@ needs one alone. They answer only their own step:
   `PeriodFactProblem` code, or `undefined`. It checks the facts only. A range
   it cannot read as two instants (`'garbage'`) breaks no fact by this check;
   `convertForTool` refuses that range `'no-form-holds'`.
+
+Two helpers write and check time the way the run does. `presentRange(range,
+presentation, grain?)` is the label the time ask and the late line use: a
+`Presentation` (the `zone`, and an optional `locale`) and a `Grain` give the
+end as said, the zone always named —
+`presentRange(range, { zone: 'America/Los_Angeles' }, 'minute')` →
+`'2026-10-09 08:00–08:40 America/Los_Angeles (UTC-07:00)'`. `isZoneName(value)`
+is the run's zone check: it narrows to a `ZoneName` only for an IANA name and
+refuses `PST` or a bare offset, so a session zone can be checked before it is
+passed as `time.zone`.
 
 All of them are pure functions over the clock you pass. They need no run,
 write no record and do not need `.time()`. Two inputs are the caller's to get

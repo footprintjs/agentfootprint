@@ -63,16 +63,19 @@ import {
 import {
   convertForTool,
   formArguments,
+  formFacts,
   granularityMsOf,
   periodFactProblem,
   readBack,
   readBackLacksZone,
+  toolFacts,
   type PeriodFactProblem,
   type PeriodFacts,
+  type PeriodForm,
   type TimeRefusal,
 } from '../../time/convert.js';
 import type { CallWindow } from '../../time/bind.js';
-import type { TurnWindow } from '../../time/windows.js';
+import { offeredLookback, windowToConvert, type TurnWindow } from '../../time/windows.js';
 import { callWindowRow } from '../../time/rowsBuild.js';
 import { instantOf, type InstantText } from '../../time/instant.js';
 import { parseRange, spellRange, type TimeRange } from '../../time/range.js';
@@ -288,8 +291,10 @@ function unreadableBy(
   const facts = periodFactsOf(rules.period);
   const at = zone ?? time.zone;
   if (at === undefined) {
-    const problem = periodFactProblem(range, facts, time.now);
-    return problem === undefined ? undefined : { refused: problem, facts };
+    // No form chosen yet: the tool's facts, `maxRange` the widest any form reads (`toolFacts`).
+    const judged = toolFacts(periodFormsOf(rules.period), facts);
+    const problem = periodFactProblem(range, judged, time.now);
+    return problem === undefined ? undefined : { refused: problem, facts: judged };
   }
   const read = convertForTool({ range }, periodFormsOf(rules.period), facts, {
     now: time.now,
@@ -297,7 +302,9 @@ function unreadableBy(
     ...(time.appZone !== undefined && { appZone: time.appZone }),
     granularityMs: granularityMsOf(facts),
   });
-  return 'refused' in read ? { refused: read.refused, facts } : undefined;
+  return 'refused' in read
+    ? { refused: read.refused, facts: toolFacts(periodFormsOf(rules.period), facts) }
+    : undefined;
 }
 
 /**
@@ -892,23 +899,30 @@ function factBroken(
   if (member.period !== true) return undefined;
   const rules = rulesOf(toolOf(member.toolName));
   if (rules === undefined || isRefused(rules)) return undefined;
-  const facts = periodFactsOf(rules.period);
-  if (
-    facts.direction === undefined &&
-    facts.retention === undefined &&
-    facts.maxRange === undefined
-  ) {
-    return undefined;
-  }
-  for (const form of periodFormsOf(rules.period)) {
+  const declared = periodFactsOf(rules.period);
+  const forms = periodFormsOf(rules.period);
+  if (!declaresFacts(declared, forms)) return undefined;
+  for (const form of forms) {
     if (form.kind === 'bounds' || form.kind === 'object' || form.argument !== member.argument)
       continue;
     const range = readBack({ [member.argument]: value }, form, time);
     if (range === undefined) continue;
+    // Read back through THIS form, so held to this form's own `maxRange` (`formFacts`).
+    const facts = formFacts(form, declared);
     const problem = periodFactProblem(range, facts, time.now);
     return problem === undefined ? undefined : { problem, facts };
   }
   return undefined;
+}
+
+/** Whether a tool declares any fact a range can break — a period fact, or a form's own `maxRange`. */
+function declaresFacts(facts: PeriodFacts, forms: readonly PeriodForm[]): boolean {
+  return (
+    facts.direction !== undefined ||
+    facts.retention !== undefined ||
+    facts.maxRange !== undefined ||
+    forms.some((f) => f.maxRange !== undefined)
+  );
 }
 
 /**
@@ -962,14 +976,8 @@ function pairsBroken(
     const call = byId.get(id);
     const rules = rulesOf(toolOf(toolName));
     if (call === undefined || rules === undefined || isRefused(rules)) continue;
-    const facts = periodFactsOf(rules.period);
-    if (
-      facts.direction === undefined &&
-      facts.retention === undefined &&
-      facts.maxRange === undefined
-    ) {
-      continue;
-    }
+    const declared = periodFactsOf(rules.period);
+    if (!declaresFacts(declared, periodFormsOf(rules.period))) continue;
     const args: Record<string, unknown> = { ...call.args };
     for (const [argument, { value }] of answers) args[argument] = value;
     for (const form of periodFormsOf(rules.period)) {
@@ -983,6 +991,7 @@ function pairsBroken(
       // Every bound is present: no range means the pair names no window (a start not before its
       // end, a misspelled bound) — never "no problem", or it reaches the tool unjudged. Only a
       // zone still to come leaves the pair for the zone's own ask.
+      const facts = formFacts(form, declared);
       const expectation =
         range !== undefined
           ? pairExpectation(periodFactProblem(range, facts, time.now), facts)
@@ -1318,10 +1327,15 @@ function windowFills(
   | { readonly expected: string } {
   const fills: Record<string, WindowFill> = {};
   const filled: Record<string, WindowFilled> = {};
+  // The offered look-back, picked as offered, stays a look-back from now — the same window the
+  // served line and a later call's fill convert (`windows.ts` · `windowToConvert`), so the value
+  // this call is handed and the value the model is told are one spelling.
+  const lookback = offeredLookback(time.reading?.row, range);
   const answered: TurnWindow = {
     source: 'answered',
     mention: (field.window as WindowAskField).mention,
     range,
+    ...(lookback !== undefined && { lookback }),
     zone,
   };
   for (const member of field.members) {
@@ -1329,7 +1343,7 @@ function windowFills(
     if (rules === undefined || isRefused(rules)) return { expected: WINDOW_FORM_EXPECTATION };
     const forms = periodFormsOf(rules.period);
     const facts = periodFactsOf(rules.period);
-    const read = convertForTool({ range }, forms, facts, {
+    const read = convertForTool(windowToConvert(answered), forms, facts, {
       now: time.now,
       zone,
       ...(time.appZone !== undefined && { appZone: time.appZone }),

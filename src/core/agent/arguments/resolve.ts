@@ -65,7 +65,13 @@ import {
   type TurnWindows,
   type WindowSource,
 } from '../../time/bind.js';
-import { formArguments, granularityMsOf } from '../../time/convert.js';
+import {
+  formArguments,
+  formFacts,
+  granularityMsOf,
+  toolFacts,
+  type PeriodFacts,
+} from '../../time/convert.js';
 import type { InstantText } from '../../time/instant.js';
 import type { CallWindowRow } from '../../time/rows.js';
 import { callWindowRow } from '../../time/rowsBuild.js';
@@ -627,6 +633,20 @@ function checkUnderWindow(
 }
 
 /**
+ * The facts a refusal's reason names: the sent form's own (its `maxRange` in place) when the
+ * refused window was sent in one form, else the tool's (`maxRange` the widest any form reads).
+ */
+function refusalFactsOf(
+  period: Parameters<typeof periodFactsOf>[0],
+  form: number | undefined,
+): PeriodFacts {
+  const facts = periodFactsOf(period);
+  const forms = periodFormsOf(period);
+  const sentIn = form === undefined ? undefined : forms[form];
+  return sentIn !== undefined ? formFacts(sentIn, facts) : toolFacts(forms, facts);
+}
+
+/**
  * Where each ruled value of each planned call came from, by the table above.
  * Unarmed (no `sources`), a present value either IS the declared default (an
  * `assume` rule) or is the model's own; a missing value on an `ask` rule is
@@ -987,7 +1007,7 @@ export function resolutionsOf(
         refused: timeRefusal(
           planned.toolName,
           decision.refused,
-          periodFactsOf(readableRules(toolOf, planned.toolName)?.period),
+          refusalFactsOf(readableRules(toolOf, planned.toolName)?.period, decision.form),
           decision.argument,
         ),
       });
