@@ -27,11 +27,22 @@
  *     the same bound the runbook grammar declares for sub-runbooks;
  *   - it does not apply argument rules — a tool that declares `askOrAssume`
  *     refuses an inner call that leaves a ruled argument out (the inputs
- *     layer fills and records only the model's own calls).
+ *     layer fills and records only the model's own calls). A declared
+ *     `period`'s forms are ALTERNATIVES: the window is owed once, and a call
+ *     that gives one form whole (a look-back, or both bounds) is not refused
+ *     for the other forms' arguments.
  */
 
 import type { Credential } from '../../identity/types.js';
-import { isMissing, isRefused, rulesOf } from './arguments/declare.js';
+import {
+  isMissing,
+  isRefused,
+  periodFormsOf,
+  rulesOf,
+  sentFormOf,
+  untakenBesides,
+} from './arguments/declare.js';
+import { formArguments, type PeriodForm } from '../time/periodForm.js';
 import type {
   Tool,
   ToolDispatch,
@@ -118,6 +129,12 @@ export function agentToolDispatch(deps: AgentToolDispatchDeps): ToolDispatch {
  * run it on a value nobody chose, with nothing on the record. Refused by name,
  * like a `checkIn` or `wants` tool here. A rule that cannot be read refuses
  * too; a tool that declares nothing is never asked.
+ *
+ * A window is owed ONCE: a period's forms are alternatives, so the form the
+ * call sent its window in (`declare.ts` · `sentFormOf`) is the window and the
+ * other forms' arguments are not owed; a period with several forms left out,
+ * or given in part, is named once, as its forms. One form keeps the
+ * per-argument sentence it always had.
  */
 function refuseUnaccountedRuledArguments(name: string, tool: Tool, args: unknown): void {
   const rules = rulesOf(tool);
@@ -132,15 +149,47 @@ function refuseUnaccountedRuledArguments(name: string, tool: Tool, args: unknown
     args !== null && typeof args === 'object' && !Array.isArray(args)
       ? (args as Readonly<Record<string, unknown>>)
       : {};
-  const missing = rules.ruled.filter((r) => isMissing(given, r.argument)).map((r) => r.argument);
+  const forms = periodFormsOf(rules.period);
+  const several = forms.length > 1;
+  const sent = several ? sentFormOf(forms, given) : undefined;
+  const untaken = sent !== undefined ? untakenBesides(forms, sent) : new Set<string>();
+  const missing = rules.ruled
+    .filter((r) => !untaken.has(r.argument) && isMissing(given, r.argument))
+    .map((r) => r.argument);
   if (missing.length === 0) return;
+  const window = several ? windowArgumentNames(forms) : new Set<string>();
+  const named = missing.filter((m) => !window.has(m)).map((m) => `'${m}'`);
+  if (missing.some((m) => window.has(m))) named.push(`one window — ${formsSpelled(forms)} —`);
   throw new Error(
     `ctx.tools.call('${name}'): that tool declares argument rules (askOrAssume) and the call ` +
-      `leaves ${missing.map((m) => `'${m}'`).join(', ')} out — inner dispatch fills nothing and ` +
+      `leaves ${named.join(', ')} out — inner dispatch fills nothing and ` +
       `files no row, so running it would run on a value nobody chose, off the record. Pass ` +
       `every ruled argument, or call the tool as a top-level tool, where the inputs layer ` +
       `applies its rules.`,
   );
+}
+
+/** Every form's window arguments (the zone aside — a zone is owed as itself). */
+function windowArgumentNames(forms: readonly PeriodForm[]): ReadonlySet<string> {
+  return new Set(
+    forms.flatMap((f) =>
+      formArguments(f)
+        .filter((a) => a.role !== 'zone')
+        .map((a) => a.argument),
+    ),
+  );
+}
+
+/** The forms, spelled for a sentence: `'window', or 'start' and 'stop'`. */
+function formsSpelled(forms: readonly PeriodForm[]): string {
+  return forms
+    .map((f) =>
+      formArguments(f)
+        .filter((a) => a.role !== 'zone')
+        .map((a) => `'${a.argument}'`)
+        .join(' and '),
+    )
+    .join(', or ');
 }
 
 /**

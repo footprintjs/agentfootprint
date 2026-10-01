@@ -1303,7 +1303,14 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   `unread`. (7) **One T5a gap closed on the way:** a window the model sent in one form left another
   form's missing `ask` arguments to be asked, so the model's own look-back to a tool that also
   takes bounds paused instead of running; those arguments are now an alternative not taken
-  (`arguments/resolve.ts` · `untakenFormArgumentsOf`), as a filled call's already were. (8) **Not
+  (`arguments/resolve.ts` · `untakenFormArgumentsOf`), as a filled call's already were. Later closed
+  under the same law, a window is owed ONCE: a period LEFT OUT entirely was still ruled argument by
+  argument across forms — an assumed look-back beside asked bounds was filled AND asked, a pause for
+  a second window the tool refuses — and without `.time()` sent bounds were handed the assumed
+  look-back too. Now the form the call sent, else the form the rules owe (kept answers, else the
+  ASSUMED form, else the first form's own asks), is the window and the other forms are untaken
+  (`arguments/declare.ts` · `sentFormOf` / `owedFormOf` / `untakenBesides`); inner dispatch owes
+  and names the window once. (8) **Not
   in this step:** § 9.1's `partly-future` (a range straddling now to a `past` tool dispatches
   unmarked), and nothing new is exported — `CallRow['drift']` and `CallWindowRow['refused']` name
   the new shapes without adding API-reference routes.
