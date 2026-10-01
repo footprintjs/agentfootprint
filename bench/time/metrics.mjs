@@ -49,7 +49,11 @@ export function readRun(raw) {
   const windows = raw.rows.filter((r) => r.kind === 'call-window');
   const firstWindowRow = windows[0];
   const lines = raw.requests.map((q) => q.timeLine).filter((l) => l !== undefined);
-  const pendingServed = lines.some((l) => l.includes('is not settled yet:'));
+  // The pending half's markers: a reading to confirm or a zone to name, and (since the unread
+  // rule, `RULE-unread.md`) words the library could not read, which lead with the next step.
+  const pendingServed = lines.some(
+    (l) => l.includes('is not settled yet:') || l.includes('The library could not read “'),
+  );
   // The unconfirmed-call sentence's markers: before packet "serving", that packet, and since the
   // follow-up (a conclusion about the results, `serve.ts` · `pendingSentence`); the line
   // opens with who says it since that packet, so the settled half is found inside it, not first.

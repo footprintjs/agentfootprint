@@ -25,3 +25,22 @@ node bench/time/run.mjs --rescore bench/time/runs/<dir>   # re-read saved runs, 
 | `run.mjs` | the command: it shifts the clock to the anchor, interleaves the arms under a seeded shuffle, enforces the cap and writes `results.json`, `report.md` and `raw/` |
 
 Paid runs are committed under `runs/`.
+
+## The unread-words line (`RULE-unread.md`, rule `time-rule-unread`)
+
+A third registered rule on the same sheet: the two unread phrases (`yesterday-morning`,
+`last-week`) and two controls (`c-node`, `c-backup`), arm `before` = the released 9.134.2 build,
+arm `after` = this build, which serves the library's conclusion and the one next step for words it
+could not read (`arguments/serve.ts` · `unreadSentence`). Both arms are T6b's arm `on`. An unread
+run ends at its first ask: the rule measures whether the library's free-entry ask OPENS.
+
+```sh
+node bench/time/run-unread.mjs --before <built 21fbe0ae checkout>        # the scripted mock, $0
+node --env-file=<file with ANTHROPIC_API_KEY> bench/time/run-unread.mjs --before <dir> \
+  --provider anthropic --max-usd 0.35 --concurrency 2 --sdk-from <project with @anthropic-ai/sdk>
+```
+
+| File | Job |
+|---|---|
+| `rule-unread.mjs` | `RULE-unread.md` as code: the rows it reads (`unreadRowOf`), the tallies, the verdict |
+| `run-unread.mjs` | the command: both builds, the seeded interleave, the cap, `results.json`, `report.md`, `raw/` |
