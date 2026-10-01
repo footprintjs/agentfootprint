@@ -84,6 +84,7 @@ import {
   findingsInstructionFor,
 } from '../src/core/agent/findings/reserved.js';
 import { findingsLedgerPiece } from '../src/core/agent/findings/serve.js';
+import { UNKNOWN_ZONE_LINE } from '../src/core/agent/coverage/timeLimits.js';
 import {
   filledNote,
   keptAnswersNote,
@@ -927,6 +928,8 @@ function timeLimitLines(): string[] {
     { period: [shifted], clocks: [] },
     { period: [], clocks },
     { period: [clamp, wider, old, shifted], clocks },
+    // The person's zone is unknown (time G15): the ranges are spelled in UTC, and the line says why.
+    { period: [clamp], clocks: [UNKNOWN_ZONE_LINE] },
   ].flatMap((l) => {
     // The served bytes: the ONE line's composer opens it (`serve.ts` · `timeLine`).
     const line = timeLine([undefined, timeLimitsSentence(l)]);
@@ -1792,6 +1795,8 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       /search_logs's look-back ran after the clock moved on, so its result does not cover 2026-10-09 07:40:00–08:09:59 America\/Los_Angeles \(UTC-07:00\) of the window asked \(.+\), and covers .+, outside it\. So the answer says that search_logs's result does not cover 2026-10-09 07:40:00–08:09:59 America\/Los_Angeles \(UTC-07:00\), and claims nothing about that time from it/,
       // Both halves in one line: one opening, first — never a second inside.
       /^\[A note from the library[^\]]*\] The window for “yesterday” is not settled yet\. The time the tools read is not the time asked about — (?!.*A note from the library)/m,
+      // An unknown zone (G15): why the ranges are in UTC — never read as the person's zone.
+      /Clocks: times are shown in UTC — the person's time zone is not known\.$/m,
     ],
     compose: async () => timeLimitLines(),
   },

@@ -30,7 +30,7 @@
  * | a wall time the clocks skip (`02:30`) | both readings Temporal names, each noted `dst-gap` |
  * | a day word (`{ day, offset: -1 }`) | the calendar day in the zone, anchored on the clock |
  * | a span (`{ minute, count: 40 }`) | a look-back until the clock's `now` |
- * | a range | one per combination of its sides that agree on date order, year and abbreviation reading, `from` before `to`; a first side with no meridiem takes the second's (`8 to 9 PM` → 8 PM) unless that runs backwards (`11 to 1 PM` → 11 AM); two sides with none share one (`8:45 to 8:55` → AM–AM and PM–PM, never 8:45 AM – 8:55 PM) unless neither runs forward (`11 to 1` → 11 AM – 1 PM, and 11 PM – 1 AM the next day) |
+ * | a range | one per combination of its sides that agree on date order, year and abbreviation reading, `from` before `to`; a first side with no meridiem takes the second's (`8 to 9 PM` → 8 PM) unless that runs backwards (`11 to 1 PM` → 11 AM); two sides with none share one (`8:45 to 8:55` → AM–AM and PM–PM, never 8:45 AM – 8:55 PM) unless neither runs forward (`11 to 1` → 11 AM – 1 PM, and 11 PM – 1 AM the next day); any range that runs forward on no one day ends the next one, within the half-day (`11 PM to 1 AM`, `23:00 to 1:00`) |
  * | a place named with `time` (`London time`) | the ONE zone the tz database has for it (`zone.ts` · `zoneOfPlace`), noted `zone-read`; none or several → the zone is asked |
  * | any mention that names no zone, while the clock's zone is unknown (`zoneSource: 'unknown'`, G15) | none — the person's zone is asked first (`needsZone`) |
  * | an abbreviation in the app's map (`PST`) | its zone's reading AND its literal offset's, when they name different windows — tagged `abbreviation`, noted `zone-read` |
@@ -805,11 +805,15 @@ function withoutAgreeingLiterals(built: readonly Built[]): Built[] {
   );
 }
 
+const HALF_DAY_MS = 12 * 3_600_000;
+
 /** One forward pair of a range's sides: the window, and the meridiem each side was read with. */
 interface Pair {
   readonly built: Built;
   readonly left: 'am' | 'pm' | undefined;
   readonly right: 'am' | 'pm' | undefined;
+  /** How long the window is — what an overnight reading is weighed by (`withinHalfDay`). */
+  readonly spanMs: number;
 }
 
 /** Every combination of a range's sides that runs forward (`fromSides`). */
@@ -818,7 +822,14 @@ function forwardPairs(lp: readonly Point[], rp: readonly Point[], clock: Resolve
   for (const a of lp) {
     for (const b of rp) {
       const built = fromSides(a, b, clock);
-      if (built !== undefined) all.push({ built, left: a.tags.meridiem, right: b.tags.meridiem });
+      if (built !== undefined) {
+        all.push({
+          built,
+          left: a.tags.meridiem,
+          right: b.tags.meridiem,
+          spanMs: endOf(b).ms - a.fromMs,
+        });
+      }
     }
   }
   return all;
@@ -915,15 +926,30 @@ function builtOfAll(
   if (!Array.isArray(lp)) return lp;
   const rp = pointsOf(right, clock, nowMs, policy);
   if (!Array.isArray(rp)) return rp;
-  const pairs = forwardPairs(lp, rp, clock);
-  const inherits = inheritedMeridiem(l, r);
-  if (inherits !== undefined) return inheritingPairs(pairs, inherits);
-  if (!saysNoMeridiem(l.wall) || !saysNoMeridiem(r.wall)) return pairs.map((x) => x.built);
-  return sharedMeridiemPairs(pairs, () => {
+  const sameDay = forwardPairs(lp, rp, clock);
+  // The right side read on the next day — only when its day is the left side's.
+  const overnight = (): Pair[] => {
     if (hasOwnDay(r)) return [];
     const next = pointsOf(right, clock, nowMs, policy, true);
     return Array.isArray(next) ? forwardPairs(lp, next, clock) : [];
-  });
+  };
+  if (saysNoMeridiem(l.wall) && saysNoMeridiem(r.wall))
+    return sharedMeridiemPairs(sameDay, overnight);
+  // A range that runs forward on no one day ends the next one (G13's overnight law, for every
+  // spelling): "11 PM to 1 AM", "23:00 to 1:00", "11 to 1 AM".
+  const pairs = sameDay.length > 0 ? sameDay : withinHalfDay(overnight());
+  const inherits = inheritedMeridiem(l, r);
+  if (inherits !== undefined) return inheritingPairs(pairs, inherits);
+  return pairs.map((x) => x.built);
+}
+
+/**
+ * The overnight readings that cross no more than the half-day ("11 PM to 1" → 1 AM, never 1 PM the
+ * next day) — the bound the shared-meridiem night keeps too. A longer night is no reading: "11 AM
+ * to 1 AM" and "8 AM to 8 AM" name no window, as before.
+ */
+function withinHalfDay(pairs: readonly Pair[]): Pair[] {
+  return pairs.filter((x) => x.spanMs <= HALF_DAY_MS);
 }
 
 /**

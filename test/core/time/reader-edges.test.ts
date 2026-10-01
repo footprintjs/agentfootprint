@@ -254,7 +254,18 @@ describe('a bare first side takes the second side’s meridiem (English’s own 
       const want = same < end ? same : other < end ? other : undefined;
       const label = `${h1} to ${h2} ${mer}`;
       if (want === undefined) {
-        expect(res.candidates, label).toEqual([]);
+        // Neither runs forward on one day: the night into the next, within the half-day it
+        // crosses (G13 — "11 to 1 AM" is 11 PM – 1 AM), else no window.
+        const night = [same, other].find((h) => 24 - h + end <= 12);
+        if (night === undefined) {
+          expect(res.candidates, label).toEqual([]);
+          continue;
+        }
+        expect(ranges(res.candidates), label).toEqual([
+          `2026-10-09T${String(night).padStart(2, '0')}:00:00-07:00/2026-10-10T${String(
+            end,
+          ).padStart(2, '0')}:00:00-07:00`,
+        ]);
         continue;
       }
       expect(res.candidates, label).toHaveLength(1);
@@ -403,6 +414,65 @@ describe('G13 — a range whose two sides say no meridiem shares one (never AM �
         );
       }
     }
+  });
+});
+
+describe('G13 — an overnight range said with its meridiems, or past 12 on the clock, ends the next day', () => {
+  const D = '2026-10-09';
+  const N = '2026-10-10';
+  const at = (day: string, hm: string) => `${day}T${hm}:00-07:00`;
+  const span = (a: string, b: string, c: string, d: string) => `${at(a, b)}/${at(c, d)}`;
+  const wall = (h: number, m?: number) => ({ wall: { h, ...(m !== undefined && { m }) } });
+
+  for (const [said, l, r, want] of [
+    ['11 PM to 1 AM', { wall: pm(11) }, { wall: am(1) }, [span(D, '23:00', N, '01:00')]],
+    ['9:30 PM to 5 AM', { wall: pm(9, 30) }, { wall: am(5) }, [span(D, '21:30', N, '05:00')]],
+    // A said first side, a bare second: the overnight reading within the half-day it crosses.
+    ['11 PM to 1', { wall: pm(11) }, wall(1), [span(D, '23:00', N, '01:00')]],
+    // A bare first side takes the second's AM, which runs backwards the same day — so 11 PM.
+    ['11 to 1 AM', wall(11), { wall: am(1) }, [span(D, '23:00', N, '01:00')]],
+    // Past 12 on the clock says its half-day: "23:00 to 01:00" crosses midnight.
+    ['23:00 to 1:00', wall(23, 0), wall(1, 0), [span(D, '23:00', N, '01:01')]],
+    // Past the half-day it would cross, a night is no reading: "11 AM to 1 AM" names no window.
+    ['11 AM to 1 AM', { wall: am(11) }, { wall: am(1) }, []],
+  ] as const) {
+    it(`“${said}” → ${want.join(', ') || 'no window'}`, () => {
+      const res = resolve({ rangeOf: [l, r] } as TimeParts);
+      expect(ranges(res.candidates)).toEqual(want);
+      for (const c of res.candidates) expect(candidateIsWellFormed(c)).toBe(true);
+    });
+  }
+
+  it('the reader run: “yesterday 11 PM to 1 AM” is the night from yesterday into today', () => {
+    const [row] = rowsOf('errors yesterday 11 PM to 1 AM');
+    expect(row!.quote).toBe('yesterday 11 PM to 1 AM');
+    expect(ranges(row!.candidates!)).toEqual([
+      '2026-10-08T23:00:00-07:00/2026-10-09T01:00:00-07:00',
+    ]);
+    expect(row!.choice).toMatchObject({ by: 'open', open: ['confirm'] });
+    expect(timeRowIsWellFormed(row)).toBe(true);
+  });
+
+  it('BOUNDARY: a right side with a day of its own is never moved to the next day', () => {
+    const day = { kind: 'fixed', month: 10, day: 9 } as const;
+    const res = resolve({
+      rangeOf: [
+        { date: day, wall: pm(11) },
+        { date: day, wall: am(1) },
+      ],
+    } as TimeParts);
+    expect(res.candidates).toEqual([]);
+  });
+
+  it('GUARD: a range that runs forward on its own day is never read overnight', () => {
+    expect(ranges(resolve({ rangeOf: [{ wall: am(8) }, { wall: pm(5) }] }).candidates)).toEqual([
+      span(D, '08:00', D, '17:00'),
+    ]);
+    expect(ranges(resolve({ rangeOf: [wall(11), { wall: pm(1) }] }).candidates)).toEqual([
+      span(D, '11:00', D, '13:00'),
+    ]);
+    // "8 AM to 8 AM" names no window — the same instant twice is no range, overnight or not.
+    expect(resolve({ rangeOf: [{ wall: am(8) }, { wall: am(8) }] }).candidates).toEqual([]);
   });
 });
 

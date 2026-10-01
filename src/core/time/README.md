@@ -291,8 +291,11 @@ AM and 8:45–8:55 PM — never 8:45 AM – 8:55 PM, a twelve-hour window nobody
 crossed only when no shared reading runs forward, because the right side is earlier on the clock
 face ("11 to 1", "11:15 to 12:30", "8 to 8"): then both crossings are offered — AM to PM the same
 day, and PM to AM overnight, the right side read on the next day when its day is the left side's
-(a right side with a date of its own is never moved). A side that says its meridiem, or a 24-hour
-hour, is read as before; every reading stays a proposal the person confirms.
+(a right side with a date of its own is never moved). The same night holds for every spelling: a
+range that runs forward on no one day — "11 PM to 1 AM", "23:00 to 1:00", "11 to 1 AM" — ends on
+the next day when that night is at most the half-day it crosses ("11 PM to 1" is 1 AM, never 1 PM
+the next day; "11 AM to 1 AM" and "8 AM to 8 AM" name no window). A range that runs forward on its
+own day is never read overnight; every reading stays a proposal the person confirms.
 
 ```ts
 const bare = (h: number, m?: number) => ({ wall: { h, ...(m !== undefined && { m }) } });
