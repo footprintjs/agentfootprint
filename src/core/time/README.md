@@ -81,7 +81,18 @@ the resolver's (`TimeCandidate`, `ResolvedWindow`, `ReadingChoice`, `TimePolicy`
 `TimeAskMessageKey`, `TimeAskMessages`) and the catalog `defaultTimeAskMessages` (also from
 `agentfootprint/observe`, beside the other catalogs); since the English reader (step T6b)
 `englishTimeReader` and `EnglishTimeReaderOptions`; the doors are `AgentBuilder.time`,
-`run({ time })` and `InputField.format`. The grammar functions stay internal.
+`run({ time })` and `InputField.format`. The grammar functions stay internal. One exception, by
+the same law that keeps the run-time half off the default graph: the three conversions an app
+needs OUTSIDE a run — `convertExact`, `convertWidened` and `periodFactProblem`, with
+`ConvertContext`, `WindowToConvert`, `Conversion`, `WidenedConversion` and `PeriodFactProblem` —
+ship through their own door, `agentfootprint/time` (`src/doors/time.ts`), never the main barrel:
+on the main barrel they would put `convert.ts` on every consumer's synchronous graph. **The
+one-answer law: an app that previews what a tool would read, or builds a call itself, asks the
+library's own conversion — never a copy of it.** A copy drifts the first time the fill's rules
+change (an o'clock end, a look-back's `maxRange`), and the preview then shows a read the run will
+not send; the door is the same function objects the fill calls (pinned by identity in
+`test/api-conformance/subpath-exports.test.ts`, and by value against a run in
+`examples/features/85-time-widen-and-refuse.ts`).
 Since step T6b the windows the person CONFIRMED (and a `model` reader's readings) are also
 SERVED, with their source, and a mention still pending is served as NOT confirmed: the Tools mount
 reads them off the ledger (`windows.ts` · `readerWindowsOf`, `pendingQuotesOf`), the slot's one
@@ -411,10 +422,16 @@ convertExact({ range: asked }, sugarForms({ argument: 'w', spelling: 'iso-range'
 Wider than asked, refused, drifted (`examples/features/85-time-widen-and-refuse.ts`):
 
 ```ts
+import { convertExact, convertWidened, periodFactProblem } from 'agentfootprint/time';
+
 // "yesterday" to a look-back-only tool (now 2026-10-09T15:40Z, Los Angeles):
+convertExact({ range: yesterday }, [{ kind: 'lookback', argument: 'w', signed: false }], clock);
+// undefined — a look-back ends at now, so none holds yesterday exactly
 convertWidened({ range: yesterday }, [{ kind: 'lookback', argument: 'w', signed: false }], clock);
 // { form: 0, values: { w: '1960m' }, sent: { from: '2026-10-08T07:00:00Z', to: '2026-10-09T15:40:00.001Z' },
 //   extra: [{ from: '2026-10-09T07:00:00Z', to: '2026-10-09T15:40:00.001Z' }] }
+periodFactProblem(yesterday, { direction: 'future' }, clock.now);
+// 'time-past' — the code the refusal below names; undefined when no declared fact is broken
 // A window still to come, sent to `period: { …, direction: 'past' }`:
 //   { kind: 'call-window', how: 'refused', refused: 'time-future', asked: {…} } — the tool never ran
 // The same "yesterday" to a look-back tool that reads at most a day at once — no form reaches it:

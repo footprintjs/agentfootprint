@@ -53,6 +53,7 @@ import * as contextDoor from '../../src/doors/context.js';
 import * as securityDoor from '../../src/doors/security.js';
 import * as classifyDoor from '../../src/doors/classify.js';
 import * as ontologyDoor from '../../src/doors/ontology.js';
+import * as timeDoor from '../../src/doors/time.js';
 
 // ─── The implementation barrels behind them (no longer subpaths) ───
 
@@ -74,6 +75,8 @@ import * as injectionEngine from '../../src/injection-engine.js';
 import * as identity from '../../src/identity.js';
 import * as classify from '../../src/classify/index.js';
 import * as ontology from '../../src/ontology/index.js';
+import * as timeConvert from '../../src/core/time/convert.js';
+import * as timePeriodForm from '../../src/core/time/periodForm.js';
 
 // ─── The two lists ─────────────────────────────────────────────────
 
@@ -255,6 +258,12 @@ const SURVIVING_SUBPATHS = [
   // `ontologyPiece`, the shapes, the always-on ask) — pure data and pure
   // functions, no run entry point; mounted via `.ontology()`.
   './ontology',
+  // Also added, also never one of the sixteen. `./time` publishes the
+  // conversions the time layer asks at run time (`convertExact`,
+  // `convertWidened`, `periodFactProblem`) for an app that needs the same
+  // answer outside a run — pure functions, no run entry point; off the main
+  // barrel because they are the layer's run-time half.
+  './time',
 ] as const;
 
 // ─── Manifest helpers ──────────────────────────────────────────────
@@ -356,6 +365,21 @@ describe('a door added after 9.0.0 is a re-export of its implementation barrel',
       expect(impl[sample], `src/ontology lost ${sample}`).toBeDefined();
       expect(onDoor[sample], `./ontology's ${sample} is a different object`).toBe(impl[sample]);
     }
+  });
+
+  it('./time serves the SAME convertExact / convertWidened / periodFactProblem as src/core/time', () => {
+    const onDoor = timeDoor as unknown as Record<string, unknown>;
+    const owners: Record<string, Record<string, unknown>> = {
+      convertExact: timeConvert as unknown as Record<string, unknown>,
+      convertWidened: timeConvert as unknown as Record<string, unknown>,
+      periodFactProblem: timePeriodForm as unknown as Record<string, unknown>,
+    };
+    for (const [sample, impl] of Object.entries(owners)) {
+      expect(impl[sample], `src/core/time lost ${sample}`).toBeDefined();
+      expect(onDoor[sample], `./time's ${sample} is a different object`).toBe(impl[sample]);
+    }
+    // The door is exactly these three: the rest of the layer stays internal.
+    expect(Object.keys(onDoor).sort()).toEqual(Object.keys(owners).sort());
   });
 });
 

@@ -29,13 +29,18 @@
  *     window only PARTLY older than `retention` runs, marked;
  *   - a look-back the clock drifted past (after a pause) is redrawn as the
  *     asked range when the library wrote it and the tool takes an absolute
- *     form; the model's own look-back runs as sent and is recorded shifted.
+ *     form; the model's own look-back runs as sent and is recorded shifted;
+ *   - an app that needs the same answer OUTSIDE a run (a preview of what a
+ *     tool would read) asks the library's own conversion through
+ *     `agentfootprint/time` — `convertExact`, `convertWidened`,
+ *     `periodFactProblem` — and gets exactly what the run sent.
  *
  * Run:  npm run example examples/features/85-time-widen-and-refuse.ts
  */
 
 import { Agent, defineTool, isInputPause, type TimeReader } from '../../src/index.js';
 import { mock } from '../../src/doors/providers.js';
+import { convertExact, convertWidened, periodFactProblem } from '../../src/doors/time.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {
@@ -156,7 +161,28 @@ const shortDesk = Agent.create({
   .build();
 // #endregion no-form-holds
 
-type WindowRow = { kind: string; toolCallId?: string; how?: string; refused?: string };
+type WindowRow = {
+  kind: string;
+  toolCallId?: string;
+  how?: string;
+  refused?: string;
+  asked?: { from: string; to: string };
+  sent?: { from: string; to: string };
+};
+
+// #region same-answer-outside-a-run
+// The conversion the run asked, asked by the app for the same window and clock: no run, no
+// record — what a preview of "what would this tool read?" shows, and it is what the run sent.
+function previewOf(asked: { from: string; to: string }) {
+  const lookback = [{ kind: 'lookback', argument: 'window', signed: false }] as const;
+  const clock = { now: now.toISOString(), zone: 'America/Los_Angeles', granularityMs: 60_000 };
+  return {
+    exact: convertExact({ range: asked }, lookback, clock), // undefined: a look-back ends at now
+    widened: convertWidened({ range: asked }, lookback, clock), // the covering look-back + extra
+    breaks: periodFactProblem(asked, { direction: 'past', retention: '30d' }, clock.now),
+  };
+}
+// #endregion same-answer-outside-a-run
 /** A call's LATEST `call-window` row — the window it ran with (or why it did not run). */
 const latest = (rows: readonly WindowRow[], id: string) =>
   rows.filter((r) => r.kind === 'call-window' && r.toolCallId === id).pop();
@@ -185,6 +211,24 @@ export async function run(input: string): Promise<string> {
   check(later?.how === 'filled' && 'differs' in later, 'the later fill recorded wider');
   check(latest(rows, 'c2')?.how === 'refused', 'the future window refused before it ran');
   check(handed.length === 2, 'only the confirmed and the widened call ran');
+
+  // The app's preview of the same window — the library's own answer, not a copy.
+  if (asker?.asked !== undefined) {
+    const preview = previewOf(asker.asked);
+    check(preview.exact === undefined, 'no look-back holds yesterday exactly');
+    check(preview.breaks === undefined, 'yesterday breaks none of the tool facts');
+    check(
+      JSON.stringify(preview.widened?.values) === JSON.stringify(handed[0]),
+      'the preview sends what the run sent',
+    );
+    check(
+      JSON.stringify(preview.widened?.sent) === JSON.stringify(asker.sent),
+      'the preview reads what the row says the tool read',
+    );
+    console.log('\nthe same answer outside a run:', JSON.stringify(preview.widened));
+  } else {
+    check(false, 'the asking call carries the asked range');
+  }
 
   const short = await shortDesk.run({ message: input, time: { now: now.toISOString() } });
   const shortRows = (shortDesk.findings() ?? []) as readonly WindowRow[];

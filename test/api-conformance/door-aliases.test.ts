@@ -111,6 +111,12 @@ const DOORS = [
   // shapes, `ontologyHash`, the pure `ontologyPiece` composer and the
   // always-on ask — pure data and pure functions, mounted via `.ontology()`.
   './ontology',
+  // The SIXTEENTH, same argument: `./time` carries no run entry point. It
+  // publishes the conversions the time layer asks at run time —
+  // `convertExact`, `convertWidened`, `periodFactProblem` — pure functions
+  // over a clock the caller passes, kept off the main barrel because they
+  // are the layer's run-time half (the default-graph law).
+  './time',
 ] as const;
 
 /** Names an alias exports that its door deliberately does NOT. See header. */

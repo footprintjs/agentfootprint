@@ -192,6 +192,52 @@ defineTool({
 });
 ```
 
+### The same answer outside a run
+
+Sometimes an app needs that answer before any run: a screen that previews
+what a tool would read for the person's window, or a call the app builds
+itself. Ask the library's own conversion for it rather than keeping a copy. A
+copy drifts the first time the fill's rules change, and the preview then shows
+a read the run will not send. The conversions ship on their own door,
+`agentfootprint/time`. They are part of the layer's run-time half, so the main
+barrel keeps them off every plain agent's import graph:
+
+- `convertExact` returns the first declared form that holds a
+  `WindowToConvert` exactly, as a `Conversion` (the form's index and the
+  argument values to send). It returns `undefined` when no form holds the
+  window without widening, shifting or dropping part of it.
+- `convertWidened` returns the first form that holds the window by reading
+  more: a whole day, or the covering look-back from now. Its answer is a
+  `WidenedConversion`, which adds `sent` (the range the tool reads) and
+  `extra` (the parts nobody asked for). An optional fourth argument, the
+  tool's `maxRange` in milliseconds, skips a form whose read would be wider.
+- `periodFactProblem` returns which declared fact a range breaks
+  (`direction`, `retention`, `maxRange`), as a `PeriodFactProblem` code such
+  as `'time-past'`, or `undefined` when it breaks none.
+
+All three are pure functions over a `ConvertContext` you pass (`now`, `zone`,
+and the tool's step as `granularityMs`). They need no run, write no record and
+do not need `.time()`. They are the same functions the fill calls, so their
+answer is the one the run sends. `examples/features/85-time-widen-and-refuse.ts`
+checks this against a real run.
+
+```ts
+import { convertExact, convertWidened, periodFactProblem } from 'agentfootprint/time';
+
+const clock = { now: '2026-10-09T15:40:00Z', zone: 'America/Los_Angeles', granularityMs: 60_000 };
+const yesterday = { from: '2026-10-08T00:00:00-07:00', to: '2026-10-09T00:00:00-07:00' };
+const lookback = [{ kind: 'lookback', argument: 'window', signed: false }] as const;
+
+convertExact({ range: yesterday }, lookback, clock);
+// undefined — a look-back ends at now
+convertWidened({ range: yesterday }, lookback, clock);
+// { form: 0, values: { window: '1960m' },
+//   sent:  { from: '2026-10-08T07:00:00Z', to: '2026-10-09T15:40:00.001Z' },
+//   extra: [{ from: '2026-10-09T07:00:00Z', to: '2026-10-09T15:40:00.001Z' }] }
+periodFactProblem(yesterday, { direction: 'past', maxRange: '12h' }, clock.now);
+// 'over-max-range'
+```
+
 ## A dataset's time axis
 
 A dataset declares which column is time with a `DatasetTimeAxis`.
