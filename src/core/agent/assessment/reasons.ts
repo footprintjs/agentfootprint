@@ -101,7 +101,7 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
     layer: 3,
     class: 'not-sure',
     reads:
-      'history: an empty rowset (a top-level array, or the app’s rowsAt key) whose call has no coverage row',
+      'history: an empty rowset (a top-level array, the app’s rowsAt key, or the dataset ticket left where those rows were, counting 0) whose call has no coverage row',
   },
   {
     reason: 'period-not-held',

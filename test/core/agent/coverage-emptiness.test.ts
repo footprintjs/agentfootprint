@@ -8,7 +8,11 @@
  *                   and the gaps its envelope lists); `coverage()` read through
  *                   (nested, bounded);
  *                   a described envelope's counts and its clarify-only form;
- *                   the `rowsAt` rule (`rowsAtProblem`);
+ *                   the `rowsAt` rule (`rowsAtProblem`); rows that travel by
+ *                   reference — the dataset ticket left where the app's rows
+ *                   were, counted; a ticket with no count, the library's
+ *                   placement ticket, a declared key with no list: never
+ *                   guessed, and never said "not declared";
  *   - PROPERTY    — over 2,000 generated values and doors: never throws, is
  *                   deterministic, never mutates its input, never calls a
  *                   declared absence into being without an absence (the door's
@@ -28,6 +32,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { absent, coverage } from '../../../src/index.js';
+import { placedToolResult } from '../../../src/artifacts/placement.js';
 import {
   declaredByValue,
   readEmptiness,
@@ -86,6 +91,7 @@ describe('UNIT — the routes, in order', () => {
       emptiness: 'non-empty',
       rows: 2,
       source: 'library',
+      countedAt: ['result'],
       bounded: true,
       undeclaredShape: false,
     });
@@ -99,6 +105,7 @@ describe('UNIT — the routes, in order', () => {
       emptiness: 'declared-absent',
       rows: 0,
       source: 'library',
+      countedAt: ['result'],
       bounded: true,
       undeclaredShape: false,
     });
@@ -129,6 +136,7 @@ describe('UNIT — the routes, in order', () => {
       emptiness: 'undeclared-empty',
       rows: 0,
       source: 'library',
+      countedAt: [],
       undeclaredShape: false,
     });
     expect(readEmptiness([1, 2, 3])).toMatchObject({ emptiness: 'non-empty', rows: 3 });
@@ -190,6 +198,155 @@ describe('UNIT — the routes, in order', () => {
     expect(rowsAtProblem(3)).toBe('empty');
     expect(rowsAtProblem('a.b')).toBe('nested');
     expect(rowsAtProblem('a/b')).toBe('nested');
+  });
+});
+
+describe('UNIT — rows that travel by reference (take 4 of the demo video)', () => {
+  const REF = 'art_AbCdEfGhIjKlMnOpQrStUv';
+  const ticket = (extra: Record<string, unknown> = {}) => ({
+    ref: REF,
+    kind: 'dataset/rows',
+    rows: 2,
+    sourceField: 'rows',
+    ...extra,
+  });
+  /** The field result the model read: the rows staged, the ticket left in their place. */
+  const field = (t: Record<string, unknown> = ticket()) =>
+    coverage(
+      { cluster: 'cluster-a', clients: 2, dataset: t, datasets: { rows: t } },
+      { checked: ['ps_client over the window asked'] },
+    );
+  const BOUNDED = { door: { absent: false, bounded: true }, rowsAt: 'rows' } as const;
+
+  it('the ticket left where the app’s rows were is counted — app-counted, through the boundary', () => {
+    expect(readEmptiness(field(), BOUNDED)).toEqual({
+      emptiness: 'non-empty',
+      rows: 2,
+      source: 'app',
+      rowsAt: 'rows',
+      countedAt: ['result', 'datasets', 'rows', 'rows'],
+      bounded: true,
+      undeclaredShape: false,
+    });
+    // JSON text (a history message) reads the same; door-less, the run's recognizer rule.
+    expect(readEmptiness(JSON.stringify(field()), { rowsAt: 'rows' })).toMatchObject({
+      emptiness: 'non-empty',
+      rows: 2,
+      countedAt: ['result', 'datasets', 'rows', 'rows'],
+    });
+  });
+
+  it('the principal `dataset` alone, naming the key — and a count of 0 is empty', () => {
+    expect(readEmptiness({ dataset: ticket() }, { rowsAt: 'rows' })).toMatchObject({
+      emptiness: 'non-empty',
+      rows: 2,
+      countedAt: ['dataset', 'rows'],
+    });
+    expect(
+      readEmptiness({ datasets: { rows: ticket({ rows: 0 }) } }, { rowsAt: 'rows' }),
+    ).toMatchObject({ emptiness: 'undeclared-empty', rows: 0, source: 'app' });
+    // Inside a declared boundary an empty rowset is a declared absence — the ticket's too.
+    expect(readEmptiness(field(ticket({ rows: 0 })), BOUNDED)).toMatchObject({
+      emptiness: 'declared-absent',
+      rows: 0,
+      bounded: true,
+    });
+  });
+
+  it('NEVER GUESSED: a ticket with no whole-number count says so — not "undeclared"', () => {
+    for (const rows of [undefined, '2', 2.5, -1, null]) {
+      expect(readEmptiness(field(ticket({ rows })), BOUNDED), String(rows)).toEqual({
+        emptiness: 'unknown',
+        rowsAt: 'rows',
+        bounded: true,
+        undeclaredShape: false,
+        rowsUnread: 'uncounted-ticket',
+      });
+    }
+  });
+
+  it('read only for the DECLARED key, only when the rows moved, only when the ticket names it', () => {
+    const noList = {
+      emptiness: 'unknown',
+      rowsAt: 'rows',
+      undeclaredShape: false,
+      rowsUnread: 'no-list',
+    };
+    // A ticket for another field is not this key's.
+    expect(
+      readEmptiness({ datasets: { rows: ticket({ sourceField: 'nodes' }) } }, { rowsAt: 'rows' }),
+    ).toEqual(noList);
+    expect(
+      readEmptiness({ dataset: ticket({ sourceField: 'nodes' }) }, { rowsAt: 'rows' }),
+    ).toEqual(noList);
+    // The principal ticket must NAME the key; under `datasets` the key itself names it.
+    expect(
+      readEmptiness({ dataset: ticket({ sourceField: undefined }) }, { rowsAt: 'rows' }),
+    ).toEqual(noList);
+    expect(
+      readEmptiness({ datasets: { rows: ticket({ sourceField: undefined }) } }, { rowsAt: 'rows' }),
+    ).toMatchObject({ emptiness: 'non-empty', rows: 2 });
+    // Not a store ref → not a ticket.
+    expect(
+      readEmptiness({ datasets: { rows: ticket({ ref: 'rows.json' }) } }, { rowsAt: 'rows' }),
+    ).toEqual(noList);
+    // A key set to `undefined` is gone: the live value reads as its JSON does (the history).
+    const dropped = { rows: undefined, datasets: { rows: ticket() } };
+    expect(readEmptiness(dropped, { rowsAt: 'rows' })).toMatchObject({
+      emptiness: 'non-empty',
+      rows: 2,
+    });
+    expect(readEmptiness(dropped, { rowsAt: 'rows' })).toEqual(
+      readEmptiness(JSON.stringify(dropped), { rowsAt: 'rows' }),
+    );
+    // The key still in the value is read as the value holds it — a ticket BESIDE rows is not read.
+    expect(
+      readEmptiness({ rows: 'two', datasets: { rows: ticket() } }, { rowsAt: 'rows' }),
+    ).toEqual(noList);
+    expect(
+      readEmptiness({ rows: [], datasets: { rows: ticket() } }, { rowsAt: 'rows' }),
+    ).toMatchObject({ emptiness: 'undeclared-empty', rows: 0, countedAt: ['rows'] });
+    // With no rowsAt, a ticket is never a declaration: the shape is not declared.
+    expect(readEmptiness({ datasets: { rows: ticket() } })).toEqual({
+      emptiness: 'unknown',
+      undeclaredShape: true,
+    });
+    // Own keys only: `__proto__` is read when the value holds it as data, never off the prototype.
+    expect(readEmptiness({ datasets: {} }, { rowsAt: '__proto__' })).toMatchObject({
+      emptiness: 'unknown',
+      rowsUnread: 'no-list',
+    });
+    const own = ticket({ sourceField: '__proto__' });
+    expect(
+      readEmptiness(JSON.parse(`{"datasets":{"__proto__":${JSON.stringify(own)}}}`), {
+        rowsAt: '__proto__',
+      }),
+    ).toMatchObject({
+      emptiness: 'non-empty',
+      rows: 2,
+      countedAt: ['datasets', '__proto__', 'rows'],
+    });
+  });
+
+  it('the library’s own placement ticket counts bytes, never rows — said, with or without rowsAt', () => {
+    const placed = placedToolResult(
+      'pscale_client_health',
+      {
+        ref: REF,
+        kind: 'tool-result/pscale_client_health',
+        mediaType: 'application/json',
+        bytes: 900,
+      } as never,
+      900,
+      100,
+    );
+    for (const context of [{}, { rowsAt: 'rows' }, BOUNDED]) {
+      expect(readEmptiness(placed, context), JSON.stringify(context)).toMatchObject({
+        emptiness: 'unknown',
+        undeclaredShape: false,
+        rowsUnread: 'uncounted-ticket',
+      });
+    }
   });
 });
 

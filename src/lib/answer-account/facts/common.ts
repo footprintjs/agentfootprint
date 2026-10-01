@@ -232,6 +232,24 @@ export const rowsAtOf = (
 export const emptinessSource = (reading: { readonly source?: 'library' | 'app' }): AccountSource =>
   reading.source === 'app' ? 'app' : 'library';
 
+/**
+ * The count a fact carries from one reading — ONE owner for the three fact
+ * kinds (this run's calls, the calls before a pause, the earlier answers in
+ * view): how many rows, who counted them, and where in the value read the
+ * count was taken (a JSON pointer; "show me" points there — `shown.ts`).
+ */
+export const countedFields = (
+  reading: EmptinessReading,
+): {
+  readonly rows?: number;
+  readonly emptinessSource?: 'library' | 'app';
+  readonly countedAt?: string;
+} => ({
+  ...(reading.rows !== undefined && { rows: reading.rows }),
+  ...(reading.source !== undefined && { emptinessSource: reading.source }),
+  ...(reading.countedAt !== undefined && { countedAt: jsonPointer(...reading.countedAt) }),
+});
+
 /** `sharedState.history`, when it is an array. */
 export function historyOf(view: RecordingView): readonly unknown[] {
   const history = view.state?.history;

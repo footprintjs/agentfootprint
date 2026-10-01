@@ -24,7 +24,13 @@ import type {
   Signal,
   Unreachable,
 } from './types.js';
-import { at, emptinessSource, type ReadContext } from './facts/common.js';
+import {
+  at,
+  declarationAt,
+  emptinessSource,
+  type EmptinessReading,
+  type ReadContext,
+} from './facts/common.js';
 import { FACT_TEXT_CHARS, itemAt, type CallsRead, type CoverageRead } from './facts/calls.js';
 import { heldChip } from './facts/checked.js';
 import { beforePausePointers, inViewPointers, inViewVars } from './facts/found.js';
@@ -207,18 +213,43 @@ export function runChecks(
   );
   if (judged.length > 0 || inView.all.length > 0 || pausedLeg.calls.length > 0)
     states['empty-results'] = 'reachable';
-  const shapeUnknown = (tool: SentenceVar, pointer: RecordPointer) => {
+  // Whether a result was empty cannot be told — and WHY, from the one reader: no shape declared;
+  // the app's rows key holding no list; or a ticket to the artifact store that counts no rows
+  // (`emptiness.ts` · "Rows that travel by reference"). A declared key is never said undeclared.
+  const cannotTell = (
+    reading: EmptinessReading,
+    toolName: string,
+    tool: SentenceVar,
+    pointer: RecordPointer,
+  ): boolean => {
+    if (!reading.undeclaredShape && reading.rowsUnread === undefined) return false;
     states['empty-results'] = 'unreachable';
+    const declared = reading.rowsAt !== undefined;
+    // The value does not carry the rows (or their count) where the app declared them — or, with
+    // no key read, the library's placement ticket, which records bytes and no row count.
+    const missing =
+      reading.rowsUnread === 'uncounted-ticket' && !declared ? 'not-built' : 'not-declared';
+    const id =
+      reading.rowsUnread === 'no-list'
+        ? 'unreachable.empty.noList'
+        : reading.rowsUnread === 'uncounted-ticket'
+        ? 'unreachable.empty.uncountedTicket'
+        : 'unreachable.empty';
     addUnreachable({
       check: 'empty-results',
-      missing: 'not-declared',
-      sentence: ctx.say('unreachable.empty', {
+      missing,
+      sentence: ctx.say(id, {
         vars: { tool },
         status: 'not-recorded',
-        missing: 'not-declared',
-        pointers: [pointer],
+        missing,
+        // The app's rows key decides it when one was read: it is the basis, and "show me" names it.
+        ...(declared && { basis: ['app' as const] }),
+        pointers: declared
+          ? [pointer, declarationAt(ctx.declarations, `tools.${toolName}.rowsAt`)]
+          : [pointer],
       }),
     });
+    return true;
   };
   for (const call of judged) {
     const end = call.end;
@@ -227,10 +258,7 @@ export function runChecks(
       unnamed('empty-results', call);
       continue;
     }
-    if (call.emptiness.undeclaredShape) {
-      shapeUnknown(call.tool, at(end, 'toolCallId'));
-      continue;
-    }
+    if (cannotTell(call.emptiness, call.toolName, call.tool, at(end, 'toolCallId'))) continue;
     checkPointers.push(...call.fact.pointers.slice(-1));
     if (call.emptiness.emptiness !== 'undeclared-empty') continue;
     addSignal({
@@ -248,10 +276,7 @@ export function runChecks(
   // the committed `coverageDeclared` rows — the same result the model used for THIS answer.
   for (const call of pausedLeg.calls) {
     const pointers = beforePausePointers(call);
-    if (call.reading.undeclaredShape) {
-      shapeUnknown(call.tool, pointers[0] as RecordPointer);
-      continue;
-    }
+    if (cannotTell(call.reading, call.toolName, call.tool, pointers[0] as RecordPointer)) continue;
     checkPointers.push(...pointers.slice(-1));
     if (call.reading.emptiness !== 'undeclared-empty') continue;
     addSignal({
@@ -267,10 +292,7 @@ export function runChecks(
     });
   }
   for (const read of inView.all) {
-    if (read.reading.undeclaredShape) {
-      shapeUnknown(read.tool, at(read.witness, 'sourceId'));
-      continue;
-    }
+    if (cannotTell(read.reading, read.toolName, read.tool, at(read.witness, 'sourceId'))) continue;
     checkPointers.push(at(read.witness, 'sourceId'));
     if (read.reading.emptiness !== 'undeclared-empty') continue;
     addSignal({

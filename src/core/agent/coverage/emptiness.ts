@@ -4,7 +4,9 @@
  * Pattern: typed routes over two inputs — the value the MODEL read, and the
  *          door the RECORD says the call returned — and never a guess.
  * Role:    core/ layer, pure. It imports the recognizers only
- *          (`coverage/recognize.ts`), never a mint, so a post-hoc reader
+ *          (`coverage/recognize.ts`; the artifact ref grammar and the
+ *          placement ticket's guard, `artifacts/naming.ts`,
+ *          `artifacts/placement.ts`), never a mint, so a post-hoc reader
  *          loads it without the tool-name checks and refusal sentences.
  * Callers: the `/observe` answer account (`lib/answer-account/facts/calls.ts`
  *          for this run's calls, `lib/answer-account/facts/inView.ts` for an
@@ -24,8 +26,39 @@
  * | a `describedResult()` with only `clarify` | `clarify` — a question handed back, no data | — |
  * | a `coverage()` envelope | its wrapped `result`, read by these same routes, marked `bounded`; an empty wrapped rowset reads `declared-absent` | library or app |
  * | a bare top-level array | `undeclared-empty` or `non-empty` | library |
+ * | the library's placement ticket (`placedToolResult`) — the whole result is in the store | `unknown`, said: the ticket counts bytes, never rows | — |
  * | an object whose key the app declared in `rowsAt` | `undeclared-empty` or `non-empty` | app |
+ * | an object whose `rowsAt` rows went to the store — the dataset ticket left in their place | the ticket's whole-number `rows`: `undeclared-empty` (0) or `non-empty`; no count → `unknown`, said | app |
+ * | an object with no list and no ticket at the declared `rowsAt` | `unknown`, said: the declared key holds no list | — |
  * | anything else | `unknown` — the record cannot read it | — |
+ *
+ * ## Rows that travel by reference
+ *
+ * A projection may move a rowset out of the value the model reads and leave a
+ * TICKET to the artifact store in its place — `withDatasetArtifacts` /
+ * `stageDatasetArtifacts` stage the rows, and a projection (or an after-tool
+ * `allow(replacement)`) keeps the ticket and drops the rows. The library's
+ * spelling of that ticket, the one this reader counts:
+ *
+ * ```ts
+ * { …, datasets: { rows: { ref: 'art_…', kind: 'dataset/rows', rows: 2, sourceField: 'rows' } },
+ *      dataset: { ref: 'art_…', kind: 'dataset/rows', rows: 2, sourceField: 'rows' } } // the principal one
+ * ```
+ *
+ * `ref` is a store ref (`isArtifactRef`), `rows` the whole-number row count,
+ * `sourceField` the result key the rows came from. The ticket is read only for
+ * the key the APP declared (`rowsAt`), only when that key is gone from the
+ * value (moved, not merely beside it), and only when the ticket names it —
+ * keyed under `datasets[rowsAt]` (a `sourceField`, when present, agreeing) or
+ * the principal `dataset` with `sourceField: rowsAt`. Two declarations meet
+ * there: the app's key and the ticket's field. A ticket with no whole-number
+ * `rows` is never guessed: whether the result was empty cannot be told, and
+ * the reading says why (`rowsUnread`). The library's own placement ticket
+ * (`artifacts/placement.ts`) puts the WHOLE result in the store and counts
+ * bytes, so it reads the same way. Take 4 of the demo video: a ticketed
+ * `pscale_client_health` (2 rows, `sourceField: 'rows'`, the app's `rowsAt:
+ * 'rows'`) read as "its shape is not declared", and the account's tone stayed
+ * unknown.
  *
  * ## The door decides, when the record holds one
  *
@@ -60,6 +93,8 @@
  * with one owner, not in a reader.
  */
 
+import { isArtifactRef } from '../../../artifacts/naming.js';
+import { isPlacedToolResult } from '../../../artifacts/placement.js';
 import { readAbsence, readCoverageLedger } from './recognize.js';
 
 /**
@@ -125,12 +160,28 @@ export interface EmptinessReading {
   readonly source?: 'library' | 'app';
   /** The rows key the reading used (the app's `rowsAt`), when it used one. */
   readonly rowsAt?: string;
+  /**
+   * Where in the value read the count was taken (path segments; `[]` the value
+   * itself; `result` for each declared boundary read through): the rowset, or
+   * the `rows` of the dataset ticket standing for it.
+   */
+  readonly countedAt?: readonly string[];
   /** A described result's data, per kind. */
   readonly described?: DescribedCounts;
   /** Read through a declared `coverage()` boundary. */
   readonly bounded?: true;
   /** An object result with no declared shape — whether it was empty cannot be told. */
   readonly undeclaredShape: boolean;
+  /**
+   * Why the rows could not be counted when the shape IS known — so a reader
+   * never says "not declared" of a declared key:
+   * - `no-list` — the app declared `rowsAt`, and the value holds neither a list
+   *   there nor a ticket standing for it;
+   * - `uncounted-ticket` — the rows went to the artifact store and the ticket
+   *   left in their place carries no whole-number count (a dataset ticket
+   *   without `rows`, or the library's placement ticket, which counts bytes).
+   */
+  readonly rowsUnread?: 'no-list' | 'uncounted-ticket';
 }
 
 /** How deep `coverage(coverage(…))` is read before the reading gives up (`unknown`). */
@@ -170,29 +221,79 @@ const DECLARED_ABSENT: EmptinessReading = Object.freeze({
   undeclaredShape: false,
 });
 
-/** A bare rowset: a top-level array (library-counted) or the app's `rowsAt` key (app-counted). */
-function rowsetReading(data: unknown, rowsAt: string | undefined): EmptinessReading {
-  if (Array.isArray(data)) {
-    return data.length === 0
-      ? { emptiness: 'undeclared-empty', rows: 0, source: 'library', undeclaredShape: false }
-      : { emptiness: 'non-empty', rows: data.length, source: 'library', undeclaredShape: false };
-  }
-  if (isRecord(data)) {
-    const rows = rowsAt !== undefined ? data[rowsAt] : undefined;
-    if (rowsAt !== undefined && Array.isArray(rows)) {
-      return rows.length === 0
-        ? { emptiness: 'undeclared-empty', rows: 0, source: 'app', rowsAt, undeclaredShape: false }
-        : {
-            emptiness: 'non-empty',
-            rows: rows.length,
-            source: 'app',
-            rowsAt,
-            undeclaredShape: false,
-          };
+/** A count of rows: `undeclared-empty` at zero, `non-empty` above it. */
+function counted(
+  rows: number,
+  source: 'library' | 'app',
+  countedAt: readonly string[],
+  rowsAt?: string,
+): EmptinessReading {
+  return {
+    emptiness: rows === 0 ? 'undeclared-empty' : 'non-empty',
+    rows,
+    source,
+    ...(rowsAt !== undefined && { rowsAt }),
+    countedAt,
+    undeclaredShape: false,
+  };
+}
+
+const UNCOUNTED_TICKET: EmptinessReading = Object.freeze({
+  emptiness: 'unknown',
+  undeclaredShape: false,
+  rowsUnread: 'uncounted-ticket',
+});
+
+/** A ticket to the artifact store: an object whose `ref` is a store ref. */
+const isTicket = (value: unknown): value is Record<string, unknown> =>
+  isRecord(value) && isArtifactRef(value.ref);
+
+/**
+ * The dataset ticket standing for the declared rows key — `datasets[rowsAt]`
+ * (its `sourceField`, when present, naming that key) or the principal
+ * `dataset` with `sourceField: rowsAt` — with where it sits. See "Rows that
+ * travel by reference" in the header.
+ */
+function ticketFor(
+  data: Record<string, unknown>,
+  rowsAt: string,
+): { readonly ticket: Record<string, unknown>; readonly at: readonly string[] } | undefined {
+  const all = data.datasets;
+  if (isRecord(all) && Object.hasOwn(all, rowsAt)) {
+    const ticket = all[rowsAt];
+    if (isTicket(ticket) && (ticket.sourceField === undefined || ticket.sourceField === rowsAt)) {
+      return { ticket, at: ['datasets', rowsAt] };
     }
-    return { emptiness: 'unknown', undeclaredShape: true };
   }
-  return { emptiness: 'unknown', undeclaredShape: false };
+  const principal = data.dataset;
+  return isTicket(principal) && principal.sourceField === rowsAt
+    ? { ticket: principal, at: ['dataset'] }
+    : undefined;
+}
+
+/**
+ * A bare rowset: a top-level array (library-counted), the app's `rowsAt` key
+ * or the dataset ticket left where those rows were (app-counted).
+ */
+function rowsetReading(data: unknown, rowsAt: string | undefined): EmptinessReading {
+  if (Array.isArray(data)) return counted(data.length, 'library', []);
+  if (!isRecord(data)) return { emptiness: 'unknown', undeclaredShape: false };
+  // The library's own placement: the whole result is in the store, and its ticket counts bytes.
+  if (isPlacedToolResult(data)) return UNCOUNTED_TICKET;
+  if (rowsAt === undefined) return { emptiness: 'unknown', undeclaredShape: true };
+  // Own keys only. A key set to `undefined` is gone too — its JSON (the history, a saved
+  // recording) drops it, and the live value must read the same.
+  const rows = Object.hasOwn(data, rowsAt) ? data[rowsAt] : undefined;
+  if (Array.isArray(rows)) return counted(rows.length, 'app', [rowsAt], rowsAt);
+  // Moved, not merely beside: a key still in the value is read as the value holds it.
+  const found = rows === undefined ? ticketFor(data, rowsAt) : undefined;
+  if (found === undefined) {
+    return { emptiness: 'unknown', rowsAt, undeclaredShape: false, rowsUnread: 'no-list' };
+  }
+  const n = found.ticket.rows;
+  return typeof n === 'number' && Number.isSafeInteger(n) && n >= 0
+    ? counted(n, 'app', [...found.at, 'rows'], rowsAt)
+    : { ...UNCOUNTED_TICKET, rowsAt };
 }
 
 /** The data a recorded described envelope carries, per kind — or `undefined` when it cannot be read. */
@@ -273,12 +374,15 @@ function boundedReading(
   const covered = door.bounded ? readCoverageLedger(data) : undefined;
   if (covered === undefined) return rowsetReading(data, rowsAt);
   if (depth >= MAX_BOUND_DEPTH) return { emptiness: 'unknown', undeclaredShape: false };
-  const inner = boundedReading(covered.result, door, rowsAt, depth + 1);
+  const read = boundedReading(covered.result, door, rowsAt, depth + 1);
+  // The count sits under the boundary's `result`.
+  const inner: EmptinessReading =
+    read.countedAt !== undefined ? { ...read, countedAt: ['result', ...read.countedAt] } : read;
   // An empty rowset inside a declared boundary is a declared absence — the same meaning, the same reading.
   if (inner.emptiness === 'undeclared-empty') {
-    const { undeclaredShape: _shape, ...counted } = inner;
+    const { undeclaredShape: _shape, ...rest } = inner;
     void _shape;
-    return { ...counted, emptiness: 'declared-absent', bounded: true, undeclaredShape: false };
+    return { ...rest, emptiness: 'declared-absent', bounded: true, undeclaredShape: false };
   }
   return { ...inner, bounded: true };
 }

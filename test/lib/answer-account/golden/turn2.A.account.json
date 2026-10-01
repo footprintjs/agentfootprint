@@ -3,7 +3,7 @@
  "shape": 1,
  "templates": {
   "set": "answer-account",
-  "version": 9
+  "version": 10
  },
  "run": {
   "value": {
@@ -216,6 +216,7 @@
     "emptiness": "undeclared-empty",
     "rows": 0,
     "emptinessSource": "app",
+    "countedAt": "/volumes",
     "pointers": [
      {
       "kind": "event",

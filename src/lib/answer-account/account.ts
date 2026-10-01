@@ -40,6 +40,7 @@ import { validateDeclarations } from './declarations.js';
 import { isRecord, num, str, recordingView, type RecordingView, type ViewEvent } from './view.js';
 import {
   at,
+  countedFields,
   derived,
   makeSay,
   stateAt,
@@ -400,8 +401,7 @@ function beforePauseFact(c: BeforePauseCall): BeforePauseFact {
     toolName: c.toolName.slice(0, FACT_TEXT_CHARS),
     toolCallId: c.toolCallId.slice(0, FACT_TEXT_CHARS),
     emptiness: reading.emptiness,
-    ...(reading.rows !== undefined && { rows: reading.rows }),
-    ...(reading.source !== undefined && { emptinessSource: reading.source }),
+    ...countedFields(reading),
     ...(coverage !== undefined && {
       coverage: {
         kind: coverage.kind,

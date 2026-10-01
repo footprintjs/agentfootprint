@@ -544,7 +544,10 @@ typed routes only — never a guess:
 | a `describedResult()` with only `clarify`                                    | `clarify`                                                                                                        |
 | a `coverage()` envelope                                                      | its wrapped result, read by these same routes and marked `bounded`; an EMPTY wrapped rowset is `declared-absent` |
 | a bare top-level array                                                       | `undeclared-empty` or `non-empty` (library-counted)                                                              |
+| the library's placement ticket — the whole result went to the store          | `unknown`, `rowsUnread: 'uncounted-ticket'` (it counts bytes, never rows)                                         |
 | an object whose key the app declared in `rowsAt`                             | `undeclared-empty` or `non-empty` (app-counted)                                                                  |
+| an object whose `rowsAt` rows went to the store — the dataset ticket left in their place | its whole-number `rows`: `undeclared-empty` (0) or `non-empty` (app-counted); no count → `unknown`, `rowsUnread: 'uncounted-ticket'` |
+| an object with no list and no ticket at the declared `rowsAt`                | `unknown`, `rowsUnread: 'no-list'`                                                                               |
 | anything else                                                                | `unknown`                                                                                                        |
 
 Two callers, one rule: the `/observe` answer account
@@ -590,6 +593,36 @@ declaredByValue(
 
 `rowsAtProblem` is the one rule for an app's declared rows key (a non-empty
 top-level key), asked by both readers' declarations.
+
+**Rows that travel by reference.** A projection may move a declared rowset into
+the artifact store and leave a TICKET in its place (`stageDatasetArtifacts`
+stages the rows; a projection, or an after-tool `allow(replacement)`, drops
+them from what the model reads). The library's spelling of that ticket — the
+one the reader counts — is `{ ref, kind, rows, sourceField }` under
+`datasets[<key>]` (and, for the principal rowset, `dataset`): `ref` a store ref
+(`isArtifactRef`), `rows` the whole-number count, `sourceField` the result key
+the rows came from. It is read only for the key the APP declared, only when that
+key is gone from the value, and only when the ticket names it (`datasets[rowsAt]`,
+a `sourceField` agreeing when present; or `dataset` with `sourceField: rowsAt`).
+A ticket with no whole-number count is never guessed — `rowsUnread` says why the
+rows could not be counted, so a reader never calls a declared key undeclared:
+
+```ts
+readEmptiness(
+  coverage(
+    { clients: 2, datasets: { rows: { ref: 'art_…', kind: 'dataset/rows', rows: 2, sourceField: 'rows' } } },
+    { checked: ['ps_client over the window asked'] },
+  ),
+  { rowsAt: 'rows', door: { absent: false, bounded: true } },
+);
+// → { emptiness: 'non-empty', rows: 2, source: 'app', rowsAt: 'rows',
+//     countedAt: ['result', 'datasets', 'rows', 'rows'], bounded: true, undeclaredShape: false }
+```
+
+`countedAt` says where in the value the count was taken; the account's "show
+me" points there. Take 4 of the demo video: the app declared `rowsAt: 'rows'`,
+its model-data projection kept the ticket and dropped the rows, and the account
+said "its shape is not declared" — the tone stayed unknown.
 
 ## 7. The period a result covered — and an absence's source and time (honesty step 7b)
 

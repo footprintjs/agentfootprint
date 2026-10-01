@@ -232,6 +232,13 @@ export interface ToolCallFact {
   /** `app` when the emptiness rests on the app's declared `rowsAt`. */
   readonly emptinessSource?: 'library' | 'app';
   /**
+   * Where in the value the model read the count was taken — a JSON pointer
+   * (`/rows`; `/result/rows` through a declared boundary; `/result/datasets/rows/rows`
+   * when the rows went to the artifact store and the dataset ticket left in their
+   * place counts them). "Show me" points there.
+   */
+  readonly countedAt?: string;
+  /**
    * A described result's data, counted per kind from the envelope the record
    * keeps (the `tools.semantics_declared` event) — the model read its
    * projection, which carries no marker.
@@ -273,6 +280,13 @@ export interface BeforePauseFact {
   readonly emptiness?: Emptiness;
   readonly rows?: number;
   readonly emptinessSource?: 'library' | 'app';
+  /**
+   * Where in the value the model read before the pause the count was taken — a JSON pointer
+   * (`/rows`; `/result/rows` through a declared boundary; `/result/datasets/rows/rows`
+   * when the rows went to the artifact store and the dataset ticket left in their
+   * place counts them). "Show me" points there.
+   */
+  readonly countedAt?: string;
   /** What its tool declared, from the committed `coverageDeclared` rows; absent when it declared nothing. */
   readonly coverage?: {
     readonly kind: 'absent' | 'coverage';
@@ -296,6 +310,13 @@ export interface InViewFact {
   readonly emptiness: Emptiness;
   readonly rows?: number;
   readonly emptinessSource?: 'library' | 'app';
+  /**
+   * Where in the value the model read the count was taken — a JSON pointer
+   * (`/rows`; `/result/rows` through a declared boundary; `/result/datasets/rows/rows`
+   * when the rows went to the artifact store and the dataset ticket left in their
+   * place counts them). "Show me" points there.
+   */
+  readonly countedAt?: string;
   readonly pointers: readonly RecordPointer[];
 }
 

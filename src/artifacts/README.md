@@ -69,6 +69,28 @@ For MCP, opt into `resultMode: 'structured'` or the explicitly declared JSON-tex
 fallback before wrapping the tools. The default MCP text result cannot recover
 discarded structured data. See `src/lib/mcp/README.md`.
 
+**The ticket the library's readers count.** A projection that moves a declared
+rowset out of the result and leaves a ticket in its place spells it
+`{ ref, kind, rows, sourceField }` — `ref` / `kind` from the stored receipt, `rows`
+the whole-number row count, `sourceField` the result key the rows came from (the
+declaration's `key`) — under `datasets[<key>]`, and for the principal rowset also
+under `dataset`:
+
+```ts
+project([p]) {
+  if (p?.artifact.status !== 'stored') return result; // no ticket: the rows stay inline
+  const { ref, kind } = p.artifact.meta;
+  const { rows, ...rest } = result; // the rows key itself is gone
+  return { ...rest, datasets: { rows: { ref, kind, rows: rows.length, sourceField: 'rows' } } };
+},
+```
+
+The answer account and the standing (`core/agent/coverage/emptiness.ts`) count
+that `rows` for the key the app declares as `rowsAt`; a ticket without a
+whole-number `rows` is never guessed ("it reached the model as a ticket … does
+not say how many rows it holds"). Without the count, whether the result was empty
+cannot be told.
+
 ### A declared time axis (owned by `core/time/axis.ts`, re-exported here)
 
 **Law: declared, never guessed; judged at mint, never repaired.** A producer puts

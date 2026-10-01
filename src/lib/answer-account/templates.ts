@@ -42,7 +42,7 @@ export interface AccountTemplate {
 }
 
 /** Bumped whenever any template's words change (a pinned digest enforces it). */
-export const ANSWER_ACCOUNT_TEMPLATE_SET_VERSION = 9;
+export const ANSWER_ACCOUNT_TEMPLATE_SET_VERSION = 10;
 
 const t = (text: string, voucher: TemplateVoucher = 'library', version = 1): AccountTemplate =>
   Object.freeze({ version, text, voucher });
@@ -472,6 +472,14 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   ),
   'unreachable.empty': t(
     'It cannot be told whether the result of {{tool:code}} was empty: its shape is not declared.',
+  ),
+  // The shape IS declared (the app's `rowsAt`), so "not declared" would be false: the value the
+  // model read holds no list at that key, or the rows reached it as a ticket that counts none.
+  'unreachable.empty.noList': t(
+    'It cannot be told whether the result of {{tool:code}} was empty: what the model read holds no list at the key the app declared for its rows.',
+  ),
+  'unreachable.empty.uncountedTicket': t(
+    'It cannot be told whether the result of {{tool:code}} was empty: it reached the model as a ticket to the artifact store, and the ticket does not say how many rows it holds.',
   ),
 
   // ── Anything wrong: the row's own lines ──────────────────────────────
