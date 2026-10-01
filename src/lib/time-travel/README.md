@@ -554,6 +554,65 @@ What is NOT frozen is the recording you handed in. `EpochLocation.log`,
 `.source` and `.runSource` point at your own snapshot, and this folder does not
 lock down an object it was merely given.
 
+### One epoch at a time costs what all of them cost — counted, never timed
+
+A reader's UI scrubs: it holds the snapshot and asks `servedAt(snapshot, k)` for
+one epoch after another. That costs what one `servedViews(snapshot)` costs,
+because what every question needs is built once per recording, not once per
+question. `epochs.ts` · `epochLocations` locates every epoch in one walk of the
+log and memoizes the answer on the recording object. `keyedFold.ts` ·
+`keyedFold` builds each log's fold base once, memoized on its source, and folds
+forward from there. Before 9.88.0 every question relocated the epochs and
+rescanned the log, and scrubbing a 600-turn run took 20.8 s.
+
+**A complexity claim is counted, never timed.** The guard,
+`test/lib/time-travel/served-view-complexity.test.ts`, counts the two operations
+that defect multiplied: `stateAt` (a fold base built) and `splitStageId` (a log
+position walked). It wraps them at `footprintjs/trace`, the barrel `src` imports
+them from, so the code is measured untouched. It requires the scrub's counts to
+EQUAL the batch's at 13 and at 49 epochs. In the same test, a fresh recording
+object per question (the replaced shape) must pay the recording's preparation
+(locate the epochs, build the fold base) once per question instead of once:
+today that is exactly E times the batch. That proves the counter sees the
+defect it guards.
+
+```ts
+const counted = vi.hoisted(() => ({ stateAt: 0, splitStageId: 0 }));
+vi.mock('footprintjs/trace', async (importOriginal) => {
+  const real = await importOriginal<typeof import('footprintjs/trace')>();
+  return {
+    ...real,
+    stateAt: ((...args: Parameters<typeof real.stateAt>) => {
+      counted.stateAt += 1;
+      return real.stateAt(...args);
+    }) as typeof real.stateAt,
+    // …and `splitStageId` the same way.
+  };
+});
+
+// 49 epochs, 835 commits. The batch and the scrub each get their own cold JSON
+// copy of the run; the replaced shape spreads a NEW object per question.
+countOf(() => servedViews(forBatch));                               // { stateAt: 1,  splitStageId: 1081 }
+countOf(() => epochs.forEach((k) => servedAt(forScrub, k)));         // { stateAt: 1,  splitStageId: 1081 }
+countOf(() => epochs.forEach((k) => servedAt({ ...snapshot }, k)));  // { stateAt: 49, splitStageId: 52969 }
+```
+
+Why not a clock: the guard used to time both forms and require the ratio to
+stay flat, and it failed on CI with `src` unchanged. Each timed pass began
+right after the test's own JSON copy of the recording (22 MB at 48 turns), and
+the garbage collection that copy owed landed in the timed window: on Node 22, a
+young-generation collection fell inside 90–96% of the large passes and 3–7% of
+the small ones, and which form's best pass escaped it followed the collector's
+schedule. So the ratio measured the collector as much as the code. More rounds,
+a median or a wider bound move that noise around; they cannot remove it. A
+count has no noise to remove.
+
+One piece of a scrub is deliberately not counted. `epochAt` finds the asked
+epoch among the located ones with a linear `.find`: E(E+1)/2 number comparisons
+over a whole scrub. It walks no log position and builds no fold. The batch's own
+answer is already quadratic in the run (E conversations averaging E/2 turns), so
+those comparisons are a constant fraction of it, not a factor that grows.
+
 ### The boundary every receipt field is true at
 
 ```
