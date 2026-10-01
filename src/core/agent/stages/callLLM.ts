@@ -39,7 +39,7 @@ import {
   type ExternalGround,
 } from '../../../integrity/unsupported-argument/check.js';
 import { toolNameOfMessage } from '../window/toolNames.js';
-import { evidenceRecoveryPiece } from '../evidence/recovery.js';
+import { evidenceConclusionLine, evidenceRecoveryPiece } from '../evidence/recovery.js';
 import { joinSystemPrompt, stripFrameworkFields } from '../composeRequest.js';
 import { toolBytesOf } from '../../../lib/toolBytes.js';
 import { buildReceipt, receiptPieces, RECEIPT_KEY } from '../../../lib/time-travel/receipt.js';
@@ -685,6 +685,19 @@ export function buildCallLLMStage(
     ) {
       const line: LLMMessage = { role: 'user', content: timeLine.text };
       requestOnly.push({ message: line, reason: 'time-window-line' });
+      wireMessages = [...wireMessages, line];
+    }
+    // THE EVIDENCE CONCLUSION (the figures dial) — the library's finding about
+    // the numbers it flagged, LAST, on the one call that serves the revision
+    // instruction (`evidence/recovery.ts` · `figuresConclusionLine`). Absent
+    // whenever the dial is off or no flagged value was a number.
+    const conclusion =
+      deps.hasEvidenceRecovery === true
+        ? evidenceConclusionLine(scope.evidenceRecovery, scope.evidenceRecoveryUsed, iteration)
+        : undefined;
+    if (conclusion !== undefined) {
+      const line: LLMMessage = { role: 'user', content: conclusion };
+      requestOnly.push({ message: line, reason: 'evidence-conclusion' });
       wireMessages = [...wireMessages, line];
     }
 

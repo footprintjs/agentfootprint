@@ -50,6 +50,7 @@ looks the way it does, and it is stated again at the top of `gate.ts`.
 | `evidenceIndex.ts` | the structural walk of tool results, and the exempt corpus; `readResult` is the ONE reading of a result |
 | `servedJson.ts` | a served result that is NOT one JSON value, read by the JSON grammar: its leading value(s) — the tool's JSON before a framework note (a step banner, an effect note, the repeated-call note), an MCP text result's several blocks — and the text after them, and the complete leaves of JSON cut short (a capped result's `head`, a tool that truncated its own output) — never the token the cut falls inside — plus, when the cut falls inside a string, that string's whole words up to its last space, read as text (the word the cut may have split is left out: `mo` may be `more`). Read whole as text, `{"id":4417}` tokenises to `:4417`: every number and boolean the tool returned read as absent, a false flag at the gate and a false `not-in-result` in the inputs layer. Text that opens with a bracket and is not JSON stays text |
 | `resultCarries.ts` | one result, read the index's way (`evidenceIndex.ts` · `readResult`), asked for one value (`resultReader`, `resultCarries`) — the inputs layer's declared-sources check asks whether a result carries the value the model says it took from it; loaded with that layer, never on a plain agent's graph |
+| `figures.ts` | the figures dial (`figures: true`): which numbers the answer writes wearing a unit (`figureNumbersOf`), the results' numbers folded for the derivation question (`figureBasisOf`), and the question itself (`explainFigure`) — a closed set of derivations, at the answer's own precision |
 | `answerCarriers.ts` | which of THIS turn's results the answer's values were read from (`answerCarriersOf`) — identities and counts, the whole list or none; rides `evidence_checked` as `carriedBy` |
 | `gate.ts` | resolve options, judge an answer, write the sentences |
 | `recovery.ts` | resolve bounded recovery guidance and compose the internal repair instruction |
@@ -119,6 +120,59 @@ the recovery instruction is not proof that a user never saw the rejected draft.
 
 Run the [mock example](../../../../examples/features/69-evidence-repair.ts)
 to inspect the guidance actually served and the resulting clarification.
+
+## Figures — a number wearing a unit, and the arithmetic over the results (`figures: true`)
+
+**The law: under the figures dial, a number wearing a unit of measure is data
+whatever its length, and a number no result carried is flagged only after the
+library has asked whether it is a declared derivation of the numbers the
+results DO carry — and the flag says it matched neither.** Off (the default)
+the gate is byte-identical.
+
+Why: "how full is the cluster?" over a capacity result whose pool rows say
+61.1% / 435.5 TB usable and 57.7% / 1,090.8 TB usable. A small model answered
+"53.2% used, 6.3 TB free", and on a second run "64.5% used, 24.8 TB usable" —
+figures in no row and derived from none, the kind someone provisions against.
+The gate passed both CLEAN: each has fewer than `minDigits` digits, so the
+extractor read it as prose, like "3 issues". And the honest answer to the same
+question — "1,526.3 TB usable in total" — is a SUM, in no row, so the gate
+flagged it as invented. One rule failed in both directions.
+
+| the answer writes | off | on |
+|---|---|---|
+| `53.2%`, `6.3 TB`, `24.8TB`, `7 ms` (a number + `FIGURE_UNITS`) | prose (under `minDigits`) | a candidate, shape `figure` |
+| `3 issues`, `24 hours`, `OneFS 9.5`, `1.5x` | prose | prose — no unit of measure |
+| a number no result carried that is a rounding, unit conversion (÷1000^k, ÷1024^k), column sum (all rows, or the rows sharing one text value), like-unit ratio ×100 or difference of column sums, or a complement (100 − a `*pct` field or a ratio) of numbers the results carry | flagged (≥ `minDigits` digits) or prose | **computed** — `EvidenceVerdict.computed` / `evidence_checked.computed`, with `derivation` and `from` |
+| a number that is none of those | flagged, or prose | **unsupported** — flagged, and the sentences say it matched no value and no derivation |
+
+Comparisons are at the answer's own precision: `61%` is 61.1 rounded, `61.0%`
+is not. Under `guard`/`rails` the revision request also carries the library's
+conclusion as its LAST line (`recovery.ts` · `figuresConclusionLine`,
+request-only, rebuilt by `servedAt`, reason `'evidence-conclusion'`): which
+numbers matched no value and no derivation, and to say plainly when no result
+shows the figure asked for. Under the answer layer an unsupported figure folds
+to "not sure" (`value-unsupported`), the reason it always had.
+
+```ts
+const agent = Agent.create({ provider, model })
+  .tool(capacityTool) // rows: [{ pool, total_tb, used_tb, used_pct, usable_tb }, …]
+  .namesAndNumbersFromEvidence({ posture: 'guard', figures: true })
+  .build();
+
+agent.on('agentfootprint.agent.evidence_checked', ({ payload }) => {
+  payload.unsupported; // "53.2% used, 6.3 TB free" → [{ value: '53.2', shape: 'figure' }, { value: '6.3', … }]
+  payload.computed;    // "1,526.3 TB usable in total" →
+                       // [{ value: '1526.3', shape: 'number', derivation: 'column-sum', from: 'sum of rows[].usable_tb' }]
+});
+```
+
+What it is not: proof the arithmetic answered the question ("59.2% used" is
+accepted as a ratio of two columns whichever pool the person asked about), and
+not open-ended — an average, a product or a two-step derivation is not
+reconstructed and is flagged. Every derivation is a window an invented number
+can fall through by coincidence, so the set is closed and the window is the
+answer's precision: ±0.5 for a whole number, ±0.05 for one decimal. Pinned by
+`test/core/agent/evidence/figures.test.ts`.
 
 ## Why `guard` is a Route branch and not a loop of its own
 

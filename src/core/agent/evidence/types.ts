@@ -74,6 +74,13 @@ export type EvidenceRecoveryInstruction =
 export interface PendingEvidenceRecovery {
   readonly instruction: string;
   readonly iteration: number;
+  /**
+   * Under the figures dial: the library's CONCLUSION about the flagged
+   * numbers, served as the LAST line of the revision request (request-only,
+   * never history) — at the decision point, where recency cannot bury it
+   * (`recovery.ts` · `figuresConclusionLine`). Absent → no late line.
+   */
+  readonly conclusion?: string;
 }
 
 /** Options for `.namesAndNumbersFromEvidence()`. */
@@ -124,6 +131,27 @@ export interface NamesAndNumbersOptions {
    * byte-identical requests.
    */
   readonly nudge?: boolean;
+  /**
+   * The figures dial. Default `false` — off, byte-identical.
+   *
+   * A FIGURE is a number wearing a unit of measure: `53.2%`, `6.3 TB`,
+   * `24.8TB`, `120 ms`, `41,200 IOPS` (`figures.ts` · `FIGURE_UNITS`). Under
+   * `minDigits` such a number is prose to the default extractor — so an
+   * invented "53.2% used, 6.3 TB free" passed as clean. With the dial on, a
+   * figure is data whatever its digit count, and every NUMBER the results do
+   * not carry (a figure, or a bare number at or over `minDigits`) is asked one
+   * more question before it is flagged: is it a declared derivation of the
+   * numbers they do carry — a rounding, a column sum, a like-unit ratio or
+   * difference of column sums, a complement of a percentage, or a 1000/1024
+   * unit conversion (`figures.ts` · `explainFigure`)? One that is lands in
+   * `EvidenceVerdict.computed`, named with its derivation; one that is not is
+   * `unsupported` like any invented value, and the sentences say it matched
+   * no value AND no derivation.
+   *
+   * Whole numbers under `minDigits` with no unit ("3 issues", "24 hours")
+   * stay prose. See `figures.ts` for the derivation set and its bounds.
+   */
+  readonly figures?: boolean;
   /** Extra guidance after an evidence check requests revision. At most 4000
    * UTF-16 code units; callbacks receive a frozen context and must return
    * synchronously. Invalid output or a thrown callback fails the run.
@@ -141,6 +169,28 @@ export interface NamesAndNumbersOptions {
 export interface GroundedValue {
   readonly value: string;
   readonly forms: readonly string[];
+}
+
+/** The closed set of derivations the figures dial reconstructs (`figures.ts`). */
+export type FigureDerivation =
+  | 'rounded'
+  | 'unit-scale'
+  | 'column-sum'
+  | 'column-ratio'
+  | 'column-difference'
+  | 'complement';
+
+/**
+ * A number no tool result carried that IS a declared derivation of the
+ * numbers they do carry (the figures dial). Not invented and not read: the
+ * model computed it, and the library reconstructed how. `from` names the
+ * operands in the result's own keys (`sum of rows[].usable_tb`).
+ */
+export interface ComputedFigure {
+  readonly value: string;
+  readonly shape: string;
+  readonly derivation: FigureDerivation;
+  readonly from: string;
 }
 
 /** One value in the answer that no tool result carried. */
@@ -171,6 +221,8 @@ export interface ResolvedEvidenceGate {
   readonly minDigits: number;
   /** The staged-refs nudge dial. `false` is today's bytes. */
   readonly nudge: boolean;
+  /** The figures dial (`figures.ts`). `false` is today's verdict. */
+  readonly figures: boolean;
   readonly recoveryInstruction?: EvidenceRecoveryInstruction;
 }
 
@@ -212,6 +264,13 @@ export interface EvidenceVerdict {
    * most. Absent when the gate was not handed the list.
    */
   readonly derived?: readonly UnsupportedValue[];
+  /**
+   * Under the figures dial: the numbers no tool result carried that are a
+   * declared derivation of the numbers they did carry (`figures.ts` ·
+   * `explainFigure`), each with its derivation. Never `unsupported`; counted
+   * in `lookedUp`. Absent when the dial is off.
+   */
+  readonly computed?: readonly ComputedFigure[];
   /**
    * True when the evidence index hit its ceiling and is INCOMPLETE.
    *

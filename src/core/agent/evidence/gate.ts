@@ -66,8 +66,10 @@ import { stagedRefsTeachingClause } from '../stagedRefs.js';
 import type { EvidenceCorpus } from './evidenceIndex.js';
 import { EVIDENCE_CHECK_FRAME_PREFIX } from './frames.js';
 import { candidateForms, extractCandidates } from './extract.js';
+import { explainFigure, type FigureBasis } from './figures.js';
 import { lookupForms, normalizeToken } from './normalize.js';
 import type {
+  ComputedFigure,
   EvidencePosture,
   EvidenceShape,
   EvidenceVerdict,
@@ -130,6 +132,17 @@ export function resolveEvidenceGate(opts: NamesAndNumbersOptions = {}): Resolved
     );
   }
 
+  const figures = opts.figures ?? false;
+  if (typeof figures !== 'boolean') {
+    throw new Error(
+      `AgentBuilder.namesAndNumbersFromEvidence: figures must be a boolean — got ` +
+        `${String(opts.figures)}. \`true\` makes a number wearing a unit (\`53.2%\`, ` +
+        `\`6.3 TB\`) data whatever its digit count, and asks a number no result carried ` +
+        `whether it is a rounding, sum, ratio or unit conversion of the numbers one did; ` +
+        `absent or \`false\` is the gate as it was.`,
+    );
+  }
+
   const shapes: EvidenceShape[] = [];
   const names = new Set<string>();
   for (const shape of opts.shapes ?? []) {
@@ -179,6 +192,7 @@ export function resolveEvidenceGate(opts: NamesAndNumbersOptions = {}): Resolved
     exemptPatterns,
     minDigits,
     nudge,
+    figures,
     ...(opts.recoveryInstruction !== undefined && {
       recoveryInstruction: opts.recoveryInstruction,
     }),
@@ -223,11 +237,19 @@ export function checkAnswer(
      * lands in `derived`, not `unsupported`. Absent → the verdict it always was.
      */
     readonly derived?: ReadonlySet<string>;
+    /**
+     * Under the figures dial: the numbers the results carry, folded for the
+     * derivation question (`figures.ts` · `figureBasisOf`). A NUMBER no result
+     * carried that is a declared derivation of them lands in `computed`, not
+     * `unsupported`. Absent → the verdict it always was.
+     */
+    readonly figures?: FigureBasis;
   },
 ): EvidenceVerdict {
   const candidates = extractCandidates(answer, args.gate);
   const unsupported: UnsupportedValue[] = [];
   const derived: UnsupportedValue[] = [];
+  const computed: ComputedFigure[] = [];
   const grounded: GroundedValue[] = [];
   let fromThisTurn = 0;
   let fromPriorTurns = 0;
@@ -251,8 +273,21 @@ export function checkAnswer(
     if (turn === undefined) {
       // A time spelling the library derived from a reading (time design
       // § 9.5): not invented, and not the person's — its own lineage.
-      const list = forms.some((f) => args.derived?.has(f) === true) ? derived : unsupported;
-      list.push({ value: clip(candidate.value), shape: candidate.shape });
+      if (forms.some((f) => args.derived?.has(f) === true)) {
+        derived.push({ value: clip(candidate.value), shape: candidate.shape });
+        continue;
+      }
+      // A number the model computed from numbers the results carry
+      // (`figures.ts`): not read, not invented — named with its derivation.
+      const how =
+        args.figures !== undefined && (candidate.shape === 'number' || candidate.shape === 'figure')
+          ? explainFigure(candidate.value, args.figures)
+          : undefined;
+      if (how !== undefined) {
+        computed.push({ value: clip(candidate.value), shape: candidate.shape, ...how });
+        continue;
+      }
+      unsupported.push({ value: clip(candidate.value), shape: candidate.shape });
       continue;
     }
     // Unclipped, with the forms as looked up: the contingent check asks the
@@ -270,9 +305,10 @@ export function checkAnswer(
     candidates: candidates.length,
     // Every candidate not skipped as exempt landed in exactly one of the
     // lists above (two, or three under `.time()`) — the count the gate really looked up.
-    lookedUp: grounded.length + unsupported.length + derived.length,
+    lookedUp: grounded.length + unsupported.length + derived.length + computed.length,
     grounded,
     ...(args.derived !== undefined && { derived }),
+    ...(args.figures !== undefined && { computed }),
     evidenceTruncated: args.evidence.truncated,
     grounding: {
       fromThisTurn,
@@ -366,6 +402,9 @@ export function evidenceRefusalSentence(
   values: readonly UnsupportedValue[],
   posture: EvidencePosture,
   revised: boolean,
+  /** The figures dial was on: a flagged NUMBER was also asked for a
+   *  derivation (`figures.ts`) and matched none — say so. */
+  figures?: boolean,
 ): string {
   const head =
     posture === 'rails'
@@ -374,6 +413,11 @@ export function evidenceRefusalSentence(
   return (
     `${head} — ${describeValues(values)}. ` +
     (revised ? 'The model was asked once to correct them and they survived the revision. ' : '') +
+    (figures === true && values.some((v) => v.shape === 'number' || v.shape === 'figure')
+      ? 'Each flagged number was also checked against the roundings, column sums, like-unit ' +
+        'ratios and differences, complements and unit conversions of the numbers the results ' +
+        'carry, and is none of them. '
+      : '') +
     'What would satisfy the check: every name and number in the answer appears in a tool ' +
     'result (or in the message you sent). Call a tool that returns these values, declare their ' +
     'shape via `shapes` if they are legitimate and the extractor mis-read them, or accept the ' +

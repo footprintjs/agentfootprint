@@ -45,6 +45,7 @@
  * identifiers look like" has better information than these heuristics.
  */
 
+import { figureNumbersOf } from './figures.js';
 import { countDigits, lookupForms, normalizeToken, tokenize } from './normalize.js';
 import type { ResolvedEvidenceGate, UnsupportedValue } from './types.js';
 
@@ -95,7 +96,14 @@ export function isDeclaredExempt(token: string, gate: ResolvedEvidenceGate): boo
  * Exported for the unit tests, which is the whole reason the classifier is a
  * function over a string rather than a loop body.
  */
-export function classifyToken(token: string, gate: ResolvedEvidenceGate): Candidate | undefined {
+export function classifyToken(
+  token: string,
+  gate: ResolvedEvidenceGate,
+  /** Under the figures dial: the numbers the answer writes wearing a unit
+   *  (`figures.ts` · `figureNumbersOf`). A number in it is a candidate
+   *  whatever its digit count — `53.2%` and `6.3 TB` are readings. */
+  figures?: ReadonlySet<string>,
+): Candidate | undefined {
   if (token === '') return undefined;
   if (isDeclaredExempt(token, gate)) return undefined;
 
@@ -120,7 +128,14 @@ export function classifyToken(token: string, gate: ResolvedEvidenceGate): Candid
     // A quantity — judged on its digits only, so `32G` and `47th` are prose
     // while `41200iops` is still a reading. The glued spelling rides along
     // so the lookup can meet a result that carried it that way.
-    if (countDigits(numeric) < gate.minDigits) return undefined;
+    if (countDigits(numeric) < gate.minDigits) {
+      // A FIGURE — a number wearing a unit of measure — is a reading off a
+      // screen whatever its length (`figures.ts`, rule 1). Off, never reached.
+      if (figures?.has(numeric) !== true) return undefined;
+      return withTail !== null && token !== numeric
+        ? { value: numeric, shape: 'figure', token }
+        : { value: numeric, shape: 'figure' };
+    }
     return withTail !== null && token !== numeric
       ? { value: numeric, shape: 'number', token }
       : { value: numeric, shape: 'number' };
@@ -164,9 +179,10 @@ export function extractCandidates(
   const seen = new Set<string>();
   const out: Candidate[] = [];
   let budget = MAX_ANSWER_TOKENS;
+  const figures = gate.figures ? figureNumbersOf(answer) : undefined;
   for (const token of tokenize(answer)) {
     if (budget-- <= 0) break;
-    const candidate = classifyToken(token, gate);
+    const candidate = classifyToken(token, gate, figures);
     if (candidate === undefined || seen.has(candidate.value)) continue;
     seen.add(candidate.value);
     out.push(candidate);

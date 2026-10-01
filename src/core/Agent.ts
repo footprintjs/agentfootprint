@@ -2718,7 +2718,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       revisionSpent: true,
       ...(pending !== undefined &&
         state.evidenceRecoveryUsed !== true && {
-          pending: { instruction: pending.instruction },
+          pending: {
+            instruction: pending.instruction,
+            ...(pending.conclusion !== undefined && { conclusion: pending.conclusion }),
+          },
         }),
     };
   }

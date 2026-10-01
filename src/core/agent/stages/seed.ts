@@ -833,7 +833,13 @@ function seedFrom(
     const recovery = deps.consumePendingEvidenceRecovery?.();
     scope.evidenceRevisionSpent = recovery?.revisionSpent === true;
     if (recovery?.pending !== undefined) {
-      scope.evidenceRecovery = { instruction: recovery.pending.instruction, iteration: 1 };
+      scope.evidenceRecovery = {
+        instruction: recovery.pending.instruction,
+        iteration: 1,
+        ...(recovery.pending.conclusion !== undefined && {
+          conclusion: recovery.pending.conclusion,
+        }),
+      };
       scope.evidenceRecoveryUsed = false;
     }
   }

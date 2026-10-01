@@ -47,6 +47,7 @@ import {
 import { checkAnswer, evidenceRefusalSentence, MAX_REPORTED_VALUES } from '../evidence/gate.js';
 import { answerCarriersOf } from '../evidence/answerCarriers.js';
 import { derivedFormsOf, evidenceFromHistory, exemptFromRun } from '../evidence/evidenceIndex.js';
+import { figureBasisOf } from '../evidence/figures.js';
 import { timeDerivedRow } from '../../time/rows.js';
 import type { EvidenceVerdict, ResolvedEvidenceGate } from '../evidence/types.js';
 import { priorTurnEvidenceOf } from '../../../integrity/prior-turn-evidence/check.js';
@@ -748,6 +749,9 @@ function judgeEvidence(
     gate,
     evidence,
     ...(time !== undefined && { derived: derivedFormsOf(time.derived) }),
+    // The figures dial: the results' numbers, folded for the derivation
+    // question (`evidence/figures.ts`). Off → not built, the verdict as it was.
+    ...(gate.figures && { figures: figureBasisOf(history) }),
     exempt: exemptFromRun({
       userMessage: scope.userMessage as string | undefined,
       history,
@@ -828,6 +832,9 @@ function judgeEvidence(
       action: 'grounded',
       afterRevision,
       ...(carriedBy !== undefined && { carriedBy }),
+      ...(verdict.computed !== undefined && {
+        computed: verdict.computed.slice(0, MAX_REPORTED_VALUES),
+      }),
     });
     // The answer layer's witness (honesty layer 4): the clean verdict, on the
     // record — a flagged or refused one is committed already (below).
@@ -887,13 +894,16 @@ function judgeEvidence(
     afterRevision,
     ...(verdict.evidenceTruncated && { evidenceTruncated: true }),
     ...(carriedBy !== undefined && { carriedBy }),
+    ...(verdict.computed !== undefined && {
+      computed: verdict.computed.slice(0, MAX_REPORTED_VALUES),
+    }),
   });
   if (!refused) {
     // Only on the shipping path: a refusal raises a teaching error at the
     // boundary, and warning about an answer nobody receives is noise.
     // eslint-disable-next-line no-console
     console.warn(
-      evidenceRefusalSentence(verdict.unsupported, gate.posture, afterRevision) +
+      evidenceRefusalSentence(verdict.unsupported, gate.posture, afterRevision, gate.figures) +
         (verdict.evidenceTruncated
           ? ' NOTE: this turn read more evidence than the index holds, so the check ' +
             'recorded its verdict without acting on it.'
