@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.133.0] - 2026-10-01
+
+### Added
+
+- **`evidence_checked` now says which of this turn's results the answer's names and numbers came from (`carriedBy`).** A turn can fetch a result and then answer from something else — an earlier turn's data, a computation over it, a sibling call — and a host that shows every fetched result under the answer then presents data the answer never used as if the answer stood on it. The host could not tell them apart: that needs the evidence gate's extractor, spellings and carriers. On the `grounded`, `flagged` and `refused` verdicts (never on a draft sent back for revision), `carriedBy` lists each result of this turn that carried at least one of the answer's values, with how many (`values`) and how many no other result carried (`only`); a result of this turn that is not listed carried none of them. Identities and counts only. It is absent when the list cannot be whole (the evidence index hit its ceiling, or one value was carried by more results than the index keeps), so "not listed" is never read off a prefix. A fact about tokens, not meaning: an answer that states no value can still rest on a result, so read an unlisted result as "the answer cites nothing from it", never "unused".
+
+- **Time layer: a tool's default never stands in for a time the person wrote, more phrasings read, a form's own `maxRange`, and the window set in a UI served by the library.** Everything here is under `.time()`; without it nothing changes.
+
+  - **The person's time is asked, never defaulted.** A reading waiting on its time zone (`10/09/26 8 AM to 8:40 AM PST` with no abbreviation map) and words the reader could not read (`yesterday morning`, `since 8 AM`) now count as open: a call that leaves its period out is asked for the window — the zone first, or "Which time did you mean by …?" with nothing filled in — even when the tool's rule assumes a default (before, the default such as `-30m` ran silently). The answer is checked as a time range and converted into the tool's own form (a raw `a/b` no longer reaches a tool that reads `a..b`), and it is filed as the person's answer. The served line tells the model the form will ask. A greeting (`Good morning, …`, `good night`) names no time and reads no mention, so it asks nothing.
+  - **The English reader reads more.** A date with a named month (`11 September`, `Sept 29`, `September 29, 2026` — the year from your `year` policy when not written), a day word before `between` (`today between 1 pm and 2 pm`, `yesterday between 8 and 9 AM` — one range, no longer two mentions), and compact look-backs (`last 24h`, `past 6h`, `last 30m`). A compact unit it does not read (`last 30s`, `next 2h`) is one unreadable mention instead of none. The reader's version is now `1.2.0`.
+  - **A form may declare its own `maxRange`.** `period: { forms: [{ kind: 'bounds', …, maxRange: '24h' }, { kind: 'lookback', … }] }` caps the bounds at a day while the look-back reads any length. A form's own value overrides the period's for that form; a window is refused `over-max-range` only when no form can read it (the refusal names the widest cap), and a window the model sent in one form is held to that form's cap.
+  - **The window set in a UI is served.** A run's `time.window` (a brushed chart range) is named on the late line with each tool's values — "The window the person set in the app's time control is …" — so an app no longer writes its own prompt text for it. It is served with or without a reader.
+  - **One spelling for a confirmed look-back.** The value the late line names and the value the tool is handed are now the same (they differed by one second).
+  - **New exports.** `presentRange` and `isZoneName` from `agentfootprint/time`; the `TimeAnswerRow`, `TimeDerivedRow` and `SourceClockRow` types from the root.
+
+### Fixed
+
+- **A look-back exactly as long as a tool's `maxRange` is no longer refused.** A tool declaring
+  `maxRange: '24h'` refused the window "last 24 hours" — whether the person said it or the model
+  sent `window: '24h'` — as `over-max-range`: the look-back holds now as its last instant, and that
+  inclusive end was counted as one millisecond of extra reach. `maxRange` is now judged by how far a
+  window reaches from its first instant to its last (`periodFactProblem`, `convertForTool` and the
+  covering look-back all ask the same rule), so a look-back exactly `maxRange` long is read, the same
+  instants written as bounds get the same verdict, and one step more (`1441m`) is still refused.
+
 ## [9.132.0] - 2026-10-01
 
 ### Added
