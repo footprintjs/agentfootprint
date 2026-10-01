@@ -24,11 +24,16 @@
  *     state holds (its `coverageDeclared` rows: an `absence` row, a `ledger`
  *     boundary); what its tool declared it checked, did not check and can
  *     never cover.
- *   - NOT RECOVERABLE — that part's events: the routing verdict and its
- *     scores, what was in front of the model on each earlier iteration, a
- *     rule's verdict on a call (failed, refused, withheld), and timings. The
- *     rows that need them say so (`understood.resumed`,
- *     `wrong.beforePause.held`).
+ *   - RECOVERABLE TOO — the routing verdict: RouteTurn commits `turnRoute`
+ *     and the scorer's `entryScores` before the loop, so the state the run
+ *     paused with holds them (`understood.ts` · `routingVerdictOf`). Only
+ *     what the state does not carry is missing: whether the verdict was
+ *     decisive and the decider's model.
+ *   - NOT RECOVERABLE — that part's events: what was in front of the model
+ *     on each earlier iteration, a rule's verdict on a call (failed, refused,
+ *     withheld), and timings. The rows that need them say so
+ *     (`wrong.beforePause.held.events`; `understood.resumed` and
+ *     `wrong.beforePause.held` only when the state holds no verdict either).
  *
  * A record that does not hold the paused state (`stateHeld: false` — an
  * older or trimmed recording, or a leg the record only LOOKS resumed in) reads

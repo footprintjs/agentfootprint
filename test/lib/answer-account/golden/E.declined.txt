@@ -16,5 +16,5 @@ How sure:
 Anything wrong:
   1 tool call did not run cleanly: 0 failed, 0 refused by a rule, 1 declined by a person, 0 not run.  ⟨wrong.errors@1 · library · recorded⟩
   None of the checks this report looks for applies to this answer.  ⟨wrong.notApplicable@1 · library · not-applicable⟩
-  The part before the pause is read from the state this record holds. That part's events are not in this record, so how it was routed, what was in front of the model then, and whether a call then failed or was refused by a rule cannot be told here.  ⟨wrong.beforePause.held@1 · library · not-recorded · before the pause — read from the state this record holds⟩
+  The part before the pause is read from the state this record holds. That part's events are not in this record, so what was in front of the model then, and whether a call then failed or was refused by a rule, cannot be told here.  ⟨wrong.beforePause.held.events@1 · library · not-recorded · before the pause — read from the state this record holds⟩
 In one line (unknown): None of the checks this report looks for applies to this answer. This answer continued after a pause; this record holds the state the run kept from before it, not that part's events.  ⟨library⟩

@@ -8,9 +8,9 @@
  * a future pointer ever names one: injection bodies (skill bodies, app
  * prompts), tool arguments, tool results (only a derived `{ rows, at }` count
  * leaves), a decision's `why` (it can carry a person's note), `resumeInput`,
- * every state key but `turnNumber`, `userMessage` and the tool words of
- * `coverageDeclared` (`SHOWN_STATE_PATHS`), history content, and any event of
- * another run.
+ * every state key but `turnNumber`, `userMessage`, the tool words of
+ * `coverageDeclared` and the routing verdict's leaves (`SHOWN_STATE_PATHS`),
+ * history content, and any event of another run.
  *
  * Bounds: a leaf over 2,048 serialized characters is `too-large`; the whole map
  * stops at 64 KB — no later pointer adds a key; one `#more` entry says the rest
@@ -129,6 +129,11 @@ export const SHOWN_STATE_PATHS: Readonly<Record<string, readonly string[]>> = Ob
     '/*/{toolName,toolCallId,lookedFor}',
     '/*/{checked,notChecked,cannotCover}/*/{what,why,short,kind}',
   ),
+  // The routing verdict committed before a pause (`facts/understood.ts` · `routingVerdictOf`):
+  // the same leaves `skill.turn_routed` shows for a leg that routed — the matched words of the
+  // PERSON's own message, the skill ids and the scorer's numbers.
+  turnRoute: list('/{by,from,to}', '/witness/text'),
+  entryScores: list('/*/{id,score}'),
 });
 const HISTORY_PATHS = ['/toolName', '/toolCallId', '#emptiness'];
 

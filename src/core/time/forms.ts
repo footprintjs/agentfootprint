@@ -32,7 +32,9 @@
  *   every request under `.time()`): the minute of `now` in the person's zone
  *   (UTC under an unknown zone) — `7:08`, `07:08`, `7:08am`, the date, the
  *   year, the zone and its offset. Never a time the clock does not produce
- *   (`7:09`, or the clock's seconds). The gate files an answer
+ *   (`7:09`, or the clock's seconds). And a source's HELD span the served
+ *   time line names in the person's zone (take 3): each end's wall spellings
+ *   there and in UTC. The gate files an answer
  *   value found only here with the lineage `derived-from-reading`: it can
  *   support "not sure", never "known", and it is never called invented.
  *
@@ -79,11 +81,23 @@ export interface FormsWindow extends Pick<TurnWindow, 'source' | 'range' | 'zone
 /** The turn's clock as the record keeps it (`rows.ts` · `ClockRow`) — what the served time line names. */
 export type FormsClock = Pick<ClockRow, 'now' | 'zone'>;
 
-/** What {@link timeFormsOf} spells: words the person or the app wrote, one recorded window, or the turn's clock. */
+/**
+ * A source's held span as the served time line names it (`coverage/timeLimits.ts`
+ * · `heldLine`): the instants the tool declared, and the person's zone the
+ * line renders them in.
+ */
+export interface FormsHeld {
+  readonly from: string;
+  readonly to: string;
+  readonly zone: ZoneName;
+}
+
+/** What {@link timeFormsOf} spells: words the person or the app wrote, one recorded window, the turn's clock, or a source's held span. */
 export type TimeFormsSource =
   | { readonly text: string }
   | { readonly window: FormsWindow }
-  | { readonly clock: FormsClock };
+  | { readonly clock: FormsClock }
+  | { readonly held: FormsHeld };
 
 // FOLD · the one owner of which spellings of a time count as the person's and which the library derived
 // consumers read this and never re-derive it: evidence/evidenceIndex.ts · addExempt (the text rule), stages/timeLineage.ts · timeLineageOf (the turn's windows)
@@ -114,7 +128,29 @@ export type TimeFormsSource =
 export function timeFormsOf(source: TimeFormsSource): TimeForms {
   if ('text' in source) return timeFormsOfText(source.text);
   if ('clock' in source) return clockForms(source.clock);
+  if ('held' in source) return heldForms(source.held);
   return windowForms(source.window);
+}
+
+/**
+ * A source's held span, spelled as the library SERVES it (`coverage/timeLimits.ts`
+ * · `heldLine`, take 3): each end's wall time in the person's zone — `9:22`,
+ * `09:22`, `9:22am`, `09:22:44`, the date, the year — its UTC wall time and
+ * machine spellings, and the zone with its abbreviation and offset. All
+ * `derived`: the library converted the tool's instants, the person never
+ * wrote them. Only the two declared ends — never another minute.
+ */
+function heldForms(held: FormsHeld): TimeForms {
+  const derived = new Spellings();
+  for (const value of [held.from, held.to]) {
+    const ms = instantMs(value);
+    if (ms === undefined) continue;
+    derived.push(...allWallForms(wallAt(held.zone, ms), true));
+    derived.push(...allWallForms(wallAt('UTC', ms), false));
+    derived.push(...instantForms(ms, held.zone));
+    derived.push(...zoneForms(held.zone, ms));
+  }
+  return { said: [], derived: derived.list() };
 }
 
 /**

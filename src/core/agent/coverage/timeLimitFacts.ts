@@ -54,12 +54,21 @@ export interface TimeLimitFacts {
 }
 
 /**
- * Whether a `period` row carries a limits line (`period.ts` · `periodCheckLine`
- * returns one exactly then): a read that differs, a shifted look-back, or a
- * window beyond retention.
+ * Whether a `period` row carries a limits line for `audience`: a read that
+ * differs, a shifted look-back, or a window beyond retention (`period.ts` ·
+ * `periodCheckLine` returns one exactly then) — and, for the MODEL only, a
+ * source that holds none or only part of the asked time (`held`, rendered by
+ * `timeLimits.ts` · `heldLine`). The person's limits block already prints that
+ * span on the call's `Period:` line (`period.ts` · `periodLine`), in their
+ * zone, so it gets no second line.
  */
-export function carriesCheckLine(row: PeriodRow): boolean {
-  return row.differs !== undefined || row.shifted !== undefined || row.beyondRetention === true;
+export function carriesCheckLine(row: PeriodRow, audience: TimeLimitsAudience = 'person'): boolean {
+  return (
+    row.differs !== undefined ||
+    row.shifted !== undefined ||
+    row.beyondRetention === true ||
+    (audience === 'model' && row.held !== undefined)
+  );
 }
 
 /**
@@ -81,7 +90,7 @@ export function timeLimitFactsOf(
     const r = row as { readonly kind?: unknown; readonly turn?: unknown } | null;
     if (r === null || typeof r !== 'object' || r.kind !== 'period') continue;
     if (turn !== undefined && r.turn !== turn) continue;
-    if (carriesCheckLine(row as PeriodRow)) period.push(row as PeriodRow);
+    if (carriesCheckLine(row as PeriodRow, audience)) period.push(row as PeriodRow);
   }
   const sources = distinctSources(sourceClocksOf(ledger, turn));
   const differ = clocksDiffer(sources);

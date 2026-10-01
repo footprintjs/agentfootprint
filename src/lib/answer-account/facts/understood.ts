@@ -11,6 +11,18 @@
  * rows of that compose stage number exactly `sourceBreakdown.skill.count`).
  * Anything less and the check is unreachable — a missing row is never read as
  * "the skill was not given".
+ *
+ * The verdict has ONE reader, {@link routingVerdictOf}: the `skill.turn_routed`
+ * event — or, on a RESUMED leg (whose recording holds that leg's events only),
+ * the verdict the RouteTurn stage committed before the pause: `turnRoute` (by,
+ * from, to, the rule's witness, the offered menu) and the scorer's
+ * `entryScores` / `entryScorer`, carried in the state the run paused with
+ * (`snapshot.initialState`) and on into the committed state the pointers land
+ * in. Take 3 of the demo video: a resumed answer said "The routing happened
+ * before the pause and is not in this record" while its record held the
+ * verdict — the fold read the event only. What the state does NOT carry is
+ * said by the lines that need it: the decider's model (the `noModel` line) and
+ * whether the verdict was decisive (absent from the fact).
  */
 
 import { chip, n, v } from '../render.js';
@@ -24,7 +36,16 @@ import type {
 } from '../types.js';
 import { isRecord, num, str, type RecordingView, type ViewEvent } from '../view.js';
 import { FACT_TEXT_CHARS, PERMISSION_REFUSALS } from './calls.js';
-import { at, declarationAt, derived, skillVars, takeItem, type ReadContext } from './common.js';
+import { heldChip } from './checked.js';
+import {
+  at,
+  declarationAt,
+  derived,
+  skillVars,
+  stateAt,
+  takeItem,
+  type ReadContext,
+} from './common.js';
 
 /** Refusals listed in `facts.routing.refusals`; refusal LINES (distinct rules) in the row. */
 export const MAX_REFUSALS = 12;
@@ -45,6 +66,121 @@ export interface UnderstoodRead {
   readonly signal?: Sentence;
   /** Pointers behind a reachable check (for the "found nothing" line). */
   readonly checkPointers: readonly RecordPointer[];
+  /**
+   * On a resumed leg: `held` — the verdict was read from the state the run
+   * paused with; `lost` — the graph routes, and neither an event nor that
+   * state holds a verdict. Absent on a leg that was not resumed or that
+   * routes nothing.
+   */
+  readonly beforePause?: 'held' | 'lost';
+}
+
+/** The routing verdict, as its one reader hands it to the row (see the file header). */
+export interface RoutingVerdict {
+  readonly by: string;
+  readonly from?: string;
+  readonly to?: string;
+  readonly decisive?: boolean;
+  readonly scorer?: string;
+  /** The PERSON's words a tier-1 data rule matched. */
+  readonly witness?: string;
+  /** How many skills the menu offered — absent when no menu was offered. */
+  readonly offered?: number;
+  readonly deciderModel?: string;
+  /** The scorer's ranked numbers, as recorded. */
+  readonly scores: readonly Readonly<Record<string, unknown>>[];
+  /** Where one verdict field lives on the record (`by`, `to`, `witness`, `deciderModel`). */
+  readonly at: (field: 'by' | 'to' | 'witness' | 'deciderModel') => RecordPointer;
+  /** Where one score field lives on the record. */
+  readonly scoreAt: (index: number, field: 'id' | 'score') => RecordPointer;
+  /** Read from the state the run paused with, not from an event of this leg. */
+  readonly held: boolean;
+}
+
+/** The event's verdict, or `undefined` when its `by` cannot be read. */
+function eventVerdict(routed: ViewEvent): RoutingVerdict | undefined {
+  const p = routed.payload;
+  const by = str(p.by);
+  if (by === undefined) return undefined;
+  const decider = isRecord(p.decider) ? str(p.decider.model) : undefined;
+  const witness = isRecord(p.witness) ? str(p.witness.text) : undefined;
+  return {
+    by,
+    ...(str(p.from) !== undefined && { from: str(p.from) }),
+    ...(str(p.to) !== undefined && { to: str(p.to) }),
+    ...(typeof p.decisive === 'boolean' && { decisive: p.decisive }),
+    ...(str(p.scorer) !== undefined && { scorer: str(p.scorer) }),
+    ...(witness !== undefined && { witness }),
+    ...(Array.isArray(p.offered) && { offered: p.offered.length }),
+    ...(decider !== undefined && { deciderModel: decider }),
+    scores: Array.isArray(p.scores) ? p.scores.filter(isRecord) : [],
+    at: (field) =>
+      field === 'witness'
+        ? at(routed, 'witness', 'text')
+        : field === 'deciderModel'
+        ? at(routed, 'decider', 'model')
+        : at(routed, field),
+    scoreAt: (i, field) => at(routed, 'scores', i, field),
+    held: false,
+  };
+}
+
+const sameValue = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
+
+/**
+ * The verdict RouteTurn committed BEFORE a pause (`turnRoute`, `entryScores`,
+ * `entryScorer`): present in the state the run paused with and carried
+ * unchanged into the committed state, where the pointers land. `undefined`
+ * when either state lacks it or they disagree — never guessed.
+ */
+function heldVerdict(ctx: ReadContext): RoutingVerdict | undefined {
+  const paused = ctx.view.pausedWith;
+  const state = ctx.view.state;
+  if (!ctx.resumedLeg || paused === undefined || state === undefined) return undefined;
+  const route = state.turnRoute;
+  if (!isRecord(route) || !sameValue(route, paused.turnRoute)) return undefined;
+  const by = str(route.by);
+  if (by === undefined) return undefined;
+  const scoresHeld =
+    Array.isArray(state.entryScores) && sameValue(state.entryScores, paused.entryScores);
+  const scorer =
+    scoresHeld && sameValue(state.entryScorer, paused.entryScorer)
+      ? str(state.entryScorer)
+      : undefined;
+  const witness = isRecord(route.witness) ? str(route.witness.text) : undefined;
+  return {
+    by,
+    ...(str(route.from) !== undefined && { from: str(route.from) }),
+    ...(str(route.to) !== undefined && { to: str(route.to) }),
+    ...(scorer !== undefined && { scorer }),
+    ...(witness !== undefined && { witness }),
+    ...(Array.isArray(route.offered) && { offered: route.offered.length }),
+    scores: scoresHeld ? (state.entryScores as unknown[]).filter(isRecord) : [],
+    at: (field) =>
+      field === 'witness'
+        ? stateAt('turnRoute', 'witness', 'text')
+        : stateAt('turnRoute', field === 'deciderModel' ? 'by' : field),
+    scoreAt: (i, field) => stateAt('entryScores', i, field),
+    held: true,
+  };
+}
+
+// FOLD · the one reader of the routing verdict for the account
+// consumers read this and never re-derive it: readUnderstood (the row, check 1)
+/**
+ * The routing verdict this record holds: the `skill.turn_routed` event of
+ * this leg, else — on a resumed leg — the verdict committed before the pause
+ * ({@link heldVerdict}). `undefined` when neither holds one. An event whose
+ * `by` cannot be read is passed over and counted, never read as "none".
+ */
+export function routingVerdictOf(ctx: ReadContext): RoutingVerdict | undefined {
+  const routedRow = ctx.view.first('skill.turn_routed');
+  if (routedRow !== undefined) {
+    const verdict = eventVerdict(routedRow);
+    if (verdict !== undefined) return verdict;
+    ctx.noteUnread();
+  }
+  return heldVerdict(ctx);
 }
 
 interface Delivered {
@@ -137,9 +273,7 @@ export function readUnderstood(ctx: ReadContext): UnderstoodRead {
   const { view, say } = ctx;
   const configuredEvent = view.first('agent.run_configured');
   // A verdict with no readable `by` is passed over (counted), never read as "none".
-  const routedRow = view.first('skill.turn_routed');
-  const routed = str(routedRow?.payload.by) !== undefined ? routedRow : undefined;
-  if (routedRow !== undefined && routed === undefined) ctx.noteUnread();
+  const routed = routingVerdictOf(ctx);
   const delivered = deliveredSkills(view);
   const appDecides = ctx.declarations.routing?.appDecides === true;
   const graph = configuredEvent?.payload.skillGraph;
@@ -182,7 +316,7 @@ export function readUnderstood(ctx: ReadContext): UnderstoodRead {
           }),
         ]
       : [];
-  const refusals = refusalsOf(ctx, str(routed?.payload.to));
+  const refusals = refusalsOf(ctx, routed?.to);
   const deliveredFact: AccountFact<readonly string[]> = {
     value: delivered.ids.slice(0, MAX_REFUSALS).map((id) => id.slice(0, FACT_TEXT_CHARS)),
     source: 'library',
@@ -224,6 +358,7 @@ export function readUnderstood(ctx: ReadContext): UnderstoodRead {
       check: 'unreachable',
       unreachable: say('unreachable.decided', { status: 'not-recorded', missing: 'before-pause' }),
       checkPointers: [],
+      beforePause: 'lost',
     };
   }
 
@@ -262,49 +397,58 @@ export function readUnderstood(ctx: ReadContext): UnderstoodRead {
   }
 
   // ── the verdict ──
-  const by = str(routed.payload.by) ?? '';
-  const to = str(routed.payload.to);
+  const by = routed.by;
+  const to = routed.to;
   const toVars = (name: string): Record<string, SentenceVar> =>
-    to === undefined ? {} : skillVars(ctx, name, to, at(routed, 'to'));
+    to === undefined ? {} : skillVars(ctx, name, to, routed.at('to'));
   const lines: Sentence[] = [];
-  const byPointer = at(routed, 'by');
+  const byPointer = routed.at('by');
+  // A verdict read from the state the run paused with says so on each of its lines.
+  const held = routed.held ? { chips: [heldChip()] } : {};
   if (by === 'entry' && to !== undefined) {
-    const witness = isRecord(routed.payload.witness) ? str(routed.payload.witness.text) : undefined;
+    const witness = routed.witness;
     lines.push(
       witness !== undefined
         ? say('understood.rule.witness', {
             vars: {
               ...toVars('skill'),
-              witness: v(witness, 'person', at(routed, 'witness', 'text')),
+              witness: v(witness, 'person', routed.at('witness')),
             },
             pointers: [byPointer],
+            ...held,
           })
-        : say('understood.rule', { vars: toVars('skill'), pointers: [byPointer] }),
+        : say('understood.rule', { vars: toVars('skill'), pointers: [byPointer], ...held }),
     );
   } else if (by === 'intent' && to !== undefined) {
-    lines.push(say('understood.intent', { vars: toVars('skill'), pointers: [byPointer] }));
+    lines.push(say('understood.intent', { vars: toVars('skill'), pointers: [byPointer], ...held }));
   } else if (by === 'continuity' && to !== undefined) {
-    lines.push(say('understood.continuity', { vars: toVars('skill'), pointers: [byPointer] }));
+    lines.push(
+      say('understood.continuity', { vars: toVars('skill'), pointers: [byPointer], ...held }),
+    );
   } else if (by === 'decider' && to !== undefined) {
-    const decider = routed.payload.decider;
-    const model = isRecord(decider) ? str(decider.model) : undefined;
+    const model = routed.deciderModel;
     lines.push(
       model !== undefined
         ? say('understood.decider', {
             vars: {
               ...toVars('skill'),
-              model: v(model, 'library', at(routed, 'decider', 'model')),
+              model: v(model, 'library', routed.at('deciderModel')),
             },
             pointers: [byPointer],
+            ...held,
           })
-        : say('understood.decider.noModel', { vars: toVars('skill'), pointers: [byPointer] }),
+        : say('understood.decider.noModel', {
+            vars: toVars('skill'),
+            pointers: [byPointer],
+            ...held,
+          }),
     );
   } else if (by === 'menu') {
-    const offered = Array.isArray(routed.payload.offered) ? routed.payload.offered.length : 0;
+    const offered = routed.offered ?? 0;
     lines.push(
       offered > 0
-        ? say('understood.menu', { vars: { offered: n(offered) }, pointers: [byPointer] })
-        : say('understood.menu.bare', { pointers: [byPointer] }),
+        ? say('understood.menu', { vars: { offered: n(offered) }, pointers: [byPointer], ...held })
+        : say('understood.menu.bare', { pointers: [byPointer], ...held }),
     );
     const opened = delivered.ids[0];
     if (opened !== undefined) {
@@ -316,11 +460,11 @@ export function readUnderstood(ctx: ReadContext): UnderstoodRead {
       );
     }
   } else {
-    lines.push(say('understood.none', { pointers: [byPointer] }));
+    lines.push(say('understood.none', { pointers: [byPointer], ...held }));
   }
 
   // ── the scores: the app's numbers, when the pick is their top ──
-  const scores = Array.isArray(routed.payload.scores) ? routed.payload.scores.filter(isRecord) : [];
+  const scores = routed.scores;
   const top = scores[0];
   const next = scores[1];
   let scoresFact: RoutingFacts['scores'] = notRecordedFact();
@@ -333,8 +477,8 @@ export function readUnderstood(ctx: ReadContext): UnderstoodRead {
     str(next.id) !== undefined
   ) {
     const allOthersEqual = scores.slice(1).every((s) => s.score === next.score);
-    const topVar = v(num(top.score) as number, 'app', at(routed, 'scores', 0, 'score'));
-    const nextVar = v(num(next.score) as number, 'app', at(routed, 'scores', 1, 'score'));
+    const topVar = v(num(top.score) as number, 'app', routed.scoreAt(0, 'score'));
+    const nextVar = v(num(next.score) as number, 'app', routed.scoreAt(1, 'score'));
     scoresFact = {
       value: {
         top: topVar.value as number,
@@ -344,7 +488,7 @@ export function readUnderstood(ctx: ReadContext): UnderstoodRead {
       },
       source: 'app',
       status: 'recorded',
-      pointers: [at(routed, 'scores', 0, 'score'), at(routed, 'scores', 1, 'score')],
+      pointers: [routed.scoreAt(0, 'score'), routed.scoreAt(1, 'score')],
     };
     lines.push(
       allOthersEqual
@@ -353,7 +497,7 @@ export function readUnderstood(ctx: ReadContext): UnderstoodRead {
             vars: {
               top: topVar,
               next: nextVar,
-              ...skillVars(ctx, 'nextSkill', str(next.id) as string, at(routed, 'scores', 1, 'id')),
+              ...skillVars(ctx, 'nextSkill', str(next.id) as string, routed.scoreAt(1, 'id')),
             },
           }),
     );
@@ -363,7 +507,7 @@ export function readUnderstood(ctx: ReadContext): UnderstoodRead {
   let check: CheckState = 'not-applicable';
   let unreachable: Sentence | undefined;
   let signal: Sentence | undefined;
-  const checkPointers = [at(routed, 'to')];
+  const checkPointers = [routed.at('to')];
   if (LIBRARY_DECISIONS.has(by) && to !== undefined) {
     // One line per distinct refusing rule, within the shared item budget; the rest counted.
     const distinct = [
@@ -414,7 +558,7 @@ export function readUnderstood(ctx: ReadContext): UnderstoodRead {
       checkPointers.push(at(row, 'sourceId'));
       lines.push(
         say('understood.delivered', {
-          pointers: [at(routed, 'to'), at(row, 'sourceId')],
+          pointers: [routed.at('to'), at(row, 'sourceId')],
           chips: [chip('decided-delivered', 'chip.decidedDelivered', 'ok')],
         }),
       );
@@ -449,14 +593,16 @@ export function readUnderstood(ctx: ReadContext): UnderstoodRead {
       signal = say('signal.decidedNotDelivered', { vars: toVars('skill'), pointers: composes });
     } else {
       check = 'unreachable';
+      // A held verdict: what the model was given before the pause is that part's events.
+      const missing = routed.held ? 'before-pause' : 'no-event';
       lines.push(
         say('understood.delivery.unknown', {
           status: 'not-recorded',
-          missing: 'no-event',
+          missing,
           chips: [chip('not-recorded', 'chip.notRecorded')],
         }),
       );
-      unreachable = say('unreachable.delivery', { status: 'not-recorded', missing: 'no-event' });
+      unreachable = say('unreachable.delivery', { status: 'not-recorded', missing });
     }
   }
   lines.push(confidenceLine(), ...appLines());
@@ -464,14 +610,14 @@ export function readUnderstood(ctx: ReadContext): UnderstoodRead {
   const verdict: RoutingFacts['verdict'] = {
     value: {
       by,
-      ...(str(routed.payload.from) !== undefined && { from: str(routed.payload.from) }),
+      ...(routed.from !== undefined && { from: routed.from }),
       ...(to !== undefined && { to }),
-      ...(typeof routed.payload.decisive === 'boolean' && { decisive: routed.payload.decisive }),
-      ...(str(routed.payload.scorer) !== undefined && { scorer: str(routed.payload.scorer) }),
+      ...(routed.decisive !== undefined && { decisive: routed.decisive }),
+      ...(routed.scorer !== undefined && { scorer: routed.scorer }),
     },
     source: 'library',
     status: 'recorded',
-    pointers: [byPointer, ...(to !== undefined ? [at(routed, 'to')] : [])],
+    pointers: [byPointer, ...(to !== undefined ? [routed.at('to')] : [])],
   };
   return {
     routing: { ...base, verdict, scores: scoresFact },
@@ -481,5 +627,6 @@ export function readUnderstood(ctx: ReadContext): UnderstoodRead {
     ...(unreachable !== undefined && { unreachable }),
     ...(signal !== undefined && { signal }),
     checkPointers,
+    ...(routed.held && { beforePause: 'held' as const }),
   };
 }

@@ -48,6 +48,8 @@ export interface ChecksRead {
   readonly notApplicable: readonly CheckId[];
   /** Pointers behind the checks that ran (for "found nothing"). */
   readonly checkPointers: readonly RecordPointer[];
+  /** A resumed leg of a routed agent whose routing verdict neither an event nor the paused state holds. */
+  readonly routingLost: boolean;
 }
 
 type State = 'reachable' | 'unreachable' | 'not-applicable';
@@ -186,8 +188,22 @@ export function runChecks(
 
   // 3 — empty results: this run's results (judged ones) and the earlier ones in view.
   // Used before in-view: this run's results are read first, so their signals land first.
+  // A call the record shows PRESENTING an artifact (`artifacts.presented`, filed by the library's
+  // own `present`) returned a receipt for the screen, not data the answer was built on: whether
+  // it was empty is not a question it can be asked, so it is left out of the check — never read
+  // as a shape nobody declared (take 3: the receipt alone made the check unreachable).
+  const presented = new Set(
+    ctx.view
+      .ofType('artifacts.presented')
+      .map((e) => e.payload.toolCallId)
+      .filter((id): id is string => typeof id === 'string'),
+  );
   const judged = calls.all.filter(
-    (c) => c.fact.outcome === 'ran' && c.fact.withheldBy === undefined && c.end !== undefined,
+    (c) =>
+      c.fact.outcome === 'ran' &&
+      c.fact.withheldBy === undefined &&
+      c.end !== undefined &&
+      !presented.has(c.fact.toolCallId),
   );
   if (judged.length > 0 || inView.all.length > 0 || pausedLeg.calls.length > 0)
     states['empty-results'] = 'reachable';
@@ -300,6 +316,7 @@ export function runChecks(
     unreachableChecks: ids.filter((id) => states[id] === 'unreachable'),
     notApplicable: ids.filter((id) => states[id] === 'not-applicable'),
     checkPointers: dedupePointers(checkPointers).slice(0, MAX_LINES_PER_CHECK * 2),
+    routingLost: understood.beforePause === 'lost',
   };
 }
 
@@ -386,7 +403,10 @@ export function wrongLines(
   if (ctx.resumedLeg) {
     lines.push(
       pausedLeg.stateHeld
-        ? ctx.say('wrong.beforePause.held', {
+        ? // The routing is named as lost only when it is: a verdict the paused state holds is
+          // read (`facts/understood.ts` · `routingVerdictOf`), and an agent that routes nothing
+          // lost none.
+          ctx.say(checks.routingLost ? 'wrong.beforePause.held' : 'wrong.beforePause.held.events', {
             status: 'not-recorded',
             missing: 'before-pause',
             chips: [heldChip()],

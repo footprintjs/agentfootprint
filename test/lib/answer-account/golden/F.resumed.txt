@@ -18,5 +18,5 @@ Anything wrong:
   No tool call failed or was refused.  ⟨wrong.noErrors@1 · library · recorded⟩
   None of the checks this report looks for could be run on this record.  ⟨wrong.unreachable.all@1 · library · not-recorded · not recorded⟩
     • It cannot be told whether the result of ask_year was empty: its shape is not declared.  ⟨unreachable.empty@1 · library · not-recorded⟩
-  The part before the pause is read from the state this record holds. That part's events are not in this record, so how it was routed, what was in front of the model then, and whether a call then failed or was refused by a rule cannot be told here.  ⟨wrong.beforePause.held@1 · library · not-recorded · before the pause — read from the state this record holds⟩
+  The part before the pause is read from the state this record holds. That part's events are not in this record, so what was in front of the model then, and whether a call then failed or was refused by a rule, cannot be told here.  ⟨wrong.beforePause.held.events@1 · library · not-recorded · before the pause — read from the state this record holds⟩
 In one line (unknown): This report could not run any of its checks on this record. This answer continued after a pause; this record holds the state the run kept from before it, not that part's events.  ⟨library⟩
