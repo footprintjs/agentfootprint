@@ -50,6 +50,7 @@ looks the way it does, and it is stated again at the top of `gate.ts`.
 | `evidenceIndex.ts` | the structural walk of tool results, and the exempt corpus; `readResult` is the ONE reading of a result |
 | `servedJson.ts` | a served result that is NOT one JSON value, read by the JSON grammar: its leading value(s) — the tool's JSON before a framework note (a step banner, an effect note, the repeated-call note), an MCP text result's several blocks — and the text after them, and the complete leaves of JSON cut short (a capped result's `head`, a tool that truncated its own output) — never the token the cut falls inside — plus, when the cut falls inside a string, that string's whole words up to its last space, read as text (the word the cut may have split is left out: `mo` may be `more`). Read whole as text, `{"id":4417}` tokenises to `:4417`: every number and boolean the tool returned read as absent, a false flag at the gate and a false `not-in-result` in the inputs layer. Text that opens with a bracket and is not JSON stays text |
 | `resultCarries.ts` | one result, read the index's way (`evidenceIndex.ts` · `readResult`), asked for one value (`resultReader`, `resultCarries`) — the inputs layer's declared-sources check asks whether a result carries the value the model says it took from it; loaded with that layer, never on a plain agent's graph |
+| `answerCarriers.ts` | which of THIS turn's results the answer's values were read from (`answerCarriersOf`) — identities and counts, the whole list or none; rides `evidence_checked` as `carriedBy` |
 | `gate.ts` | resolve options, judge an answer, write the sentences |
 | `recovery.ts` | resolve bounded recovery guidance and compose the internal repair instruction |
 | `errors.ts` | `UnsupportedValuesError` — the `rails` refusal at the boundary |
@@ -194,6 +195,47 @@ spellings it was looked up under, exempt values left out, unclipped — the
 answer-moment input of the contingent check; at dispatch
 `groundedArgumentValues` reads the same rule over a call's string leaves. The
 exempt corpus never files a carrier — an exemption names no result.
+
+## Which results the answer cited — `carriedBy` (the answer's own carriers)
+
+**The law: a host shows an answer's data from what the answer cites, and the
+library says what it cites.** A turn can fetch a result and then answer from
+something else — an earlier turn's rows, a computation over them, a sibling
+call. A host that puts every fetched result under the answer presents the one
+it cited nothing from as if the answer stood on it (a field report: a
+follow-up fetched a second, wider rowset, answered from a computation over the
+first, and both landed under the answer as "its data"). Only the library can
+say which is which — the extractor, the spellings and the carriers are here —
+so it does, on the verdict, as identities and counts:
+
+- **On the verdicts of an answer that ships** (`grounded`, `flagged`,
+  `refused`), `evidence_checked.carriedBy` lists each `role: 'tool'` result
+  of THIS turn that carried at least one of the answer's grounded values:
+  `values` (how many) and `only` (how many no other result of this turn
+  carried). Never on `revision-asked` — a draft is not the answer.
+- **Not listed ⇒ the answer cites nothing from it.** A fact about tokens,
+  never about meaning: an answer that states no value ("one host was slow")
+  can rest on a result it cites nothing from, so a host says "cites nothing
+  from it", never "unused". `[]` is a fact too; `lookedUp` says whether the
+  answer stated any value at all.
+- **The whole list or none.** Absent when the index hit its token ceiling or
+  one value was carried by more results than `MAX_CARRIERS` — a result past a
+  cut is invisible, and "not listed" read off a prefix would be a false
+  denial (`findings/contingent.ts` keeps the same law).
+- **This turn only**, like the carriers map: a value taken from an earlier
+  turn's result names no carrier.
+
+```ts
+agent.on('agentfootprint.agent.evidence_checked', ({ payload }) => {
+  if (payload.carriedBy === undefined || payload.action === 'revision-asked') return;
+  const cited = new Set(payload.carriedBy.map((c) => c.toolCallId));
+  // A dataset minted by call `toolCallId` (its `origin.toolCallId`) that is not
+  // in `cited` carried none of the names and numbers this answer states.
+  markDatasets((toolCallId) => (cited.has(toolCallId) ? 'cited' : 'cites-nothing'));
+});
+```
+
+Pinned by `test/core/agent/evidence-carried-by.test.ts`.
 
 ## A compaction summary exempts nothing by itself
 
