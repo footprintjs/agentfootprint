@@ -591,6 +591,7 @@ title: agentfootprint
 - [INJECTION\_KEYS](/docs/api/variables/INJECTION_KEYS)
 - [lexicalDriverScorer](/docs/api/variables/lexicalDriverScorer)
 - [LIBRARY\_AUTHORED\_PREFIXES](/docs/api/variables/LIBRARY_AUTHORED_PREFIXES)
+- [LIBRARY\_NOTE\_OPENING](/docs/api/variables/LIBRARY_NOTE_OPENING)
 - [LOOP\_MOMENTS](/docs/api/variables/LOOP_MOMENTS)
 - [MILESTONE\_KINDS](/docs/api/variables/MILESTONE_KINDS)
 - [MILESTONE\_LABEL\_TAG\_PREFIX](/docs/api/variables/MILESTONE_LABEL_TAG_PREFIX)

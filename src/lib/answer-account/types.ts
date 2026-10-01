@@ -263,7 +263,7 @@ export interface ToolCallFact {
 export interface InViewFact {
   readonly toolName: string;
   readonly toolCallId: string;
-  /** User messages after the result, up to and including the current one. Always >= 1. */
+  /** Messages a person wrote (`isSaidByPerson`) after the result, up to and including the current one. Always >= 1. */
   readonly distance: number;
   /** A window strategy was configured, so the distance is a floor. */
   readonly windowed: boolean;

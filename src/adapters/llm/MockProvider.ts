@@ -21,6 +21,7 @@
  * common 3–8 s thinking + 30–80 ms per word streaming preset.
  */
 
+import { isSaidByPerson } from '../../lib/saidByPerson.js';
 import { sleep } from '../../lib/sleep.js';
 import type { LLMChunk, LLMProvider, LLMRequest, LLMResponse, WireRole } from '../types.js';
 
@@ -67,7 +68,10 @@ export interface MockProviderOptions {
    * `LLMResponse` so consumers can simulate tool calls + multi-turn
    * loops without needing a separate `scripted()` helper.
    *
-   * Default: echoes the last user message.
+   * Default: echoes the last message a PERSON wrote (`isSaidByPerson`) —
+   * never a line this library served in the user role, such as the time
+   * layer's late line, which is the LAST user-role message of every request
+   * under `.time()`.
    */
   readonly respond?: (req: LLMRequest) => string | Partial<LLMResponse>;
   /**
@@ -139,8 +143,10 @@ export class MockProvider implements LLMProvider {
     this.respond =
       options.respond ??
       ((req) => {
-        const lastUser = [...req.messages].reverse().find((m) => m.role === 'user');
-        return lastUser ? `echo: ${lastUser.content}` : '';
+        // The person's words, not the last user-role line: the library serves its own late
+        // lines (`lib/saidByPerson.ts` · `LIBRARY_AUTHORED_PREFIXES`) last on a request (G17).
+        const said = [...req.messages].reverse().find((m) => isSaidByPerson(m));
+        return said ? `echo: ${said.content}` : '';
       });
     // `delayMs` is kept as an alias of `thinkingMs` for back-compat.
     this.thinkingMs = options.thinkingMs ?? options.delayMs ?? 0;

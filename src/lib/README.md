@@ -20,6 +20,33 @@ each other, the fact moves HERE — that is exactly why `spokenIds.ts` exists
 (`spokenIds.ts` · "── WHY THIS IS A LEAF AND NOT A HELPER IN THE GATE") and why the writers of library-authored turns import the
 prefixes the recogniser matches on (`saidByPerson.ts`).
 
+## A line the library serves is never the person's
+`saidByPerson.ts` · `isSaidByPerson` is the one answer to "did a person write
+this `role: 'user'` message?", and every line this library writes in that
+role carries an opening from `LIBRARY_AUTHORED_PREFIXES` — the frames it puts
+in `history` AND the lines it serves on a request only: `LIBRARY_NOTE_OPENING`
+(the time layer's late line, `arguments/serve.ts` · `TIME_LINE_SOURCE`, and
+the figures dial's conclusion) and the staged-refs nudge. A writer imports its
+opening from here; it never types its own copy. A message marked `ephemeral`
+(a retry's feedback, on one attempt's request) or `injectedBy` is never a
+person's either.
+
+Why: "never in history" is not "never read as the person". Under `.time()`
+the library's note is the LAST message of every request, so a reader that
+took the last user-role message of what the model was sent — the mock's
+default echo, the window's `currentRequestIndexOf`, a host finding "this
+turn" — anchored on the library's line (G17). Readers of the recorded history
+ask the same rule (`answer-account/facts/common.ts` · `isPersonEntry`), so a
+correction frame after a turn's results never becomes "the current request".
+
+```ts
+import { isSaidByPerson, LIBRARY_NOTE_OPENING } from 'agentfootprint';
+
+const last = request.messages[request.messages.length - 1]; // under .time(): the library's note
+isSaidByPerson(last); // false — it opens with LIBRARY_NOTE_OPENING
+const said = [...request.messages].reverse().find((m) => isSaidByPerson(m)); // the person's words
+```
+
 ## A wait from here is never early
 `sleep.ts` · `sleep` is the library's ONE wait: the retry back-offs, the
 device-flow poll, the mock provider's thinking time and the sign-in door's
@@ -46,7 +73,8 @@ refuses a private sleep anywhere else in `src/`.
 
 ## Files
 - `spokenIds.ts` — `named` vs `held`; `held` is required, not optional.
-- `saidByPerson.ts` — the opening registry and the `injectedBy` marker.
+- `saidByPerson.ts` — the opening registry (history frames and request-only
+  late lines), the `injectedBy` marker and the `ephemeral` flag.
 - `iterationBudget.ts` — `iterationsRemainingOf`, computed once.
 - `toolBytes.ts` — `toolBytesOf`: a result's content cut at the tool-bytes
   boundary (`LLMMessage.toolChars`, honesty layer 2). The evidence index, the

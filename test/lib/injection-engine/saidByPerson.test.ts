@@ -374,9 +374,11 @@ describe('one rule, two readers', () => {
 // ── Contract: the registry is the whole answer, and it is closed ──────
 
 describe('the registry a reader is handed', () => {
-  it('holds one opening per prefixed class — six, and every framed message in the window opens with one', () => {
+  it('holds one opening per prefixed class — eight, and every framed message in the window opens with one', () => {
     const w = windowWithEveryClass();
-    expect(LIBRARY_AUTHORED_PREFIXES).toHaveLength(6);
+    // Six history frames, and (G17) the two openings of the lines served on a request
+    // only — the library note (the time line, the figures conclusion) and the staged-refs nudge.
+    expect(LIBRARY_AUTHORED_PREFIXES).toHaveLength(8);
     for (const msg of [
       w.compacted,
       w.notice,
@@ -396,7 +398,7 @@ describe('the registry a reader is handed', () => {
   it('cannot be extended at runtime — a consumer holds the same array the library reads', () => {
     expect(Object.isFrozen(LIBRARY_AUTHORED_PREFIXES)).toBe(true);
     expect(() => (LIBRARY_AUTHORED_PREFIXES as string[]).push('[mine')).toThrow();
-    expect(LIBRARY_AUTHORED_PREFIXES).toHaveLength(6);
+    expect(LIBRARY_AUTHORED_PREFIXES).toHaveLength(8);
   });
 });
 

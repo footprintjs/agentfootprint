@@ -2,7 +2,7 @@
 title: Variables
 ---
 
-69 exported from `agentfootprint`.
+70 exported from `agentfootprint`.
 
 - [`ABSENCE_MARKER`](/docs/api/variables/ABSENCE_MARKER)
 - [`ABSENCE_NOTE`](/docs/api/variables/ABSENCE_NOTE)
@@ -42,6 +42,7 @@ title: Variables
 - [`INJECTION_KEYS`](/docs/api/variables/INJECTION_KEYS)
 - [`lexicalDriverScorer`](/docs/api/variables/lexicalDriverScorer)
 - [`LIBRARY_AUTHORED_PREFIXES`](/docs/api/variables/LIBRARY_AUTHORED_PREFIXES)
+- [`LIBRARY_NOTE_OPENING`](/docs/api/variables/LIBRARY_NOTE_OPENING)
 - [`LOOP_MOMENTS`](/docs/api/variables/LOOP_MOMENTS)
 - [`MILESTONE_KINDS`](/docs/api/variables/MILESTONE_KINDS)
 - [`MILESTONE_LABEL_TAG_PREFIX`](/docs/api/variables/MILESTONE_LABEL_TAG_PREFIX)

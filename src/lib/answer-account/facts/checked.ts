@@ -5,8 +5,9 @@
  * full `what`, verbatim. More than five calls fold into `row.more@1`.
  *
  * A resumed leg never says "did not run any tools": the calls answered before
- * the pause are named from `history` (tool messages after the current user
- * message that are not calls of this run) and said to be out of this record.
+ * the pause are named from `history` (tool messages after the current request
+ * — the last message a PERSON wrote, `common.ts` · `isPersonEntry` — that are
+ * not calls of this run) and said to be out of this record.
  */
 
 import { chip, joinAnd, MAX_VAR_CHARS, n, v } from '../render.js';
@@ -22,7 +23,7 @@ import {
   type CoverageItemRead,
   type CoverageSectionKey,
 } from './calls.js';
-import { at, historyAt, historyOf, takeItem, type ReadContext } from './common.js';
+import { at, historyAt, historyOf, isPersonEntry, takeItem, type ReadContext } from './common.js';
 
 /** Calls listed per row before folding. */
 export const MAX_LISTED_CALLS = 5;
@@ -33,13 +34,13 @@ export interface BeforePauseCall {
   readonly historyIndex: number;
 }
 
-/** On a resumed leg: tool results in history after the current user message, not of this run. */
+/** On a resumed leg: tool results in history after the person's current request, not of this run. */
 export function readBeforePause(ctx: ReadContext, calls: CallsRead): BeforePauseCall[] {
   if (!ctx.resumedLeg) return [];
   const history = historyOf(ctx.view);
   let current = -1;
   history.forEach((m, i) => {
-    if (isRecord(m) && m.role === 'user') current = i;
+    if (isPersonEntry(m)) current = i;
   });
   const out: BeforePauseCall[] = [];
   history.forEach((m, i) => {

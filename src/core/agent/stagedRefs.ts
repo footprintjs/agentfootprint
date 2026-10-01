@@ -36,6 +36,7 @@
  */
 
 import type { LLMMessage } from '../../adapters/types.js';
+import { STAGED_DATA_FRAME_PREFIX } from '../../lib/saidByPerson.js';
 import { isPlacedToolResult } from '../../artifacts/placement.js';
 import type { Tool } from '../tools.js';
 
@@ -162,7 +163,7 @@ function describeSpenders(tools: readonly string[]): string {
  */
 export function stagedRefsNudgeLine(match: StagedRefsMatch): string {
   return (
-    `[staged data — this turn's tool results include data staged by reference: ` +
+    `${STAGED_DATA_FRAME_PREFIX} — this turn's tool results include data staged by reference: ` +
     `${describeRefs(match)}. Any derived number — a total, a sum, a difference, an average — ` +
     `must come from a tool result, not from your own arithmetic. To compute over the staged ` +
     `data, pass the ref string to ${describeSpenders(match.tools)} and report what it returns.]`

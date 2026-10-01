@@ -37,7 +37,13 @@
  *       continuation, a stored conversation's own turn.
  *   (c) NEVER IN HISTORY — request-only or transcript-only. It rides one
  *       provider call, or a record of the chat, and is never appended to
- *       `scope.history`, so no later reader can mistake it for anything.
+ *       `scope.history`, so no reader of the CONVERSATION can mistake it.
+ *       A reader of the REQUEST can (G17): the time layer's late
+ *       line is the last user-role message of every request under `.time()`,
+ *       and with no registered opening `isSaidByPerson` called it the
+ *       person's. So a request-only line the LIBRARY wrote also names its
+ *       `opening`, which must be in the registry — and is asserted against
+ *       its real writer below.
  *
  * A site in none of the three fails with its file and line. That is what turns
  * "five classes" from a claim into a walk.
@@ -72,7 +78,14 @@ import { currentRequestIndexOf } from '../../../src/core/agent/window/currentReq
 import { WRAP_UP_INSTRUCTION, wrapUpStage } from '../../../src/core/agent/stages/wrapUp.js';
 import { buildStepNudgeStage } from '../../../src/core/agent/stages/stepNudge.js';
 import type { StepPlan } from '../../../src/lib/injection-engine/skillSteps.js';
-import { LIBRARY_AUTHORED_PREFIXES } from '../../../src/lib/saidByPerson.js';
+import {
+  LIBRARY_AUTHORED_PREFIXES,
+  LIBRARY_NOTE_OPENING,
+  STAGED_DATA_FRAME_PREFIX,
+} from '../../../src/lib/saidByPerson.js';
+import { timeLine } from '../../../src/core/agent/arguments/serve.js';
+import { figuresConclusionLine } from '../../../src/core/agent/evidence/figures.js';
+import { stagedRefsNudgeLine } from '../../../src/core/agent/stagedRefs.js';
 import { unprovable, INJECTED_TURN } from '../../helpers/modelFacingClaims.js';
 
 const REPO = resolve(__dirname, '../../..');
@@ -85,6 +98,12 @@ interface Site {
   readonly cls: SiteClass;
   /** Why it is in that list. Prose, because the reason is the product. */
   readonly why: string;
+  /**
+   * On a `never-in-history` line the LIBRARY wrote and serves on the agent's
+   * own request: the registered opening it carries (G17). Absent on a side
+   * request, a transcript row, or a line whose words are the app's.
+   */
+  readonly opening?: string;
 }
 
 /**
@@ -196,8 +215,9 @@ const SITES: Readonly<Record<string, readonly Site[]>> = {
       cls: 'never-in-history',
       why:
         'the staged-refs nudge: appended to `wireMessages` for ONE request and recomposed ' +
-        'from scratch each iteration. `scope.history` is deliberately untouched, which is ' +
-        'why it needs no frame.',
+        'from scratch each iteration. `scope.history` is deliberately untouched — but a ' +
+        'reader of the request sees it last, so it opens with STAGED_DATA_FRAME_PREFIX (G17).',
+      opening: STAGED_DATA_FRAME_PREFIX,
     },
     {
       cls: 'never-in-history',
@@ -205,14 +225,17 @@ const SITES: Readonly<Record<string, readonly Site[]>> = {
         "the time layer's late line (step T6b): the tools slot's composition for THIS " +
         'iteration, appended LAST to `wireMessages` for one request and never to ' +
         "`scope.history` — the library's conclusion about the person's time words, re-read " +
-        'fresh by every later call.',
+        'fresh by every later call. LAST on every request under `.time()` since G16, so it ' +
+        'opens with LIBRARY_NOTE_OPENING (`TIME_LINE_SOURCE`) — never the person (G17).',
+      opening: LIBRARY_NOTE_OPENING,
     },
     {
       cls: 'never-in-history',
       why:
         "the evidence gate's late line (the figures dial): the committed recovery carrier's " +
         '`conclusion`, appended LAST to `wireMessages` on the one request that serves the ' +
-        'revision instruction, never to `scope.history`.',
+        'revision instruction, never to `scope.history`. Opens with LIBRARY_NOTE_OPENING (G17).',
+      opening: LIBRARY_NOTE_OPENING,
     },
   ],
   'src/lib/time-travel/servedView.ts': [
@@ -413,12 +436,20 @@ describe("every `role: 'user'` producer in src/ is classified", () => {
     const framed = Object.values(SITES)
       .flat()
       .filter((s) => s.cls === 'authored-frame');
-    // Six openings, six construction sites that carry one. The seventh
-    // library-authored class — a DELIVERED injection message — has no literal
-    // to find (deliver.ts copies the role off the Injection) and is asserted
-    // by its marker below instead.
-    expect(framed).toHaveLength(LIBRARY_AUTHORED_PREFIXES.length);
-    expect(LIBRARY_AUTHORED_PREFIXES).toHaveLength(6);
+    const requestOnly = new Set(
+      Object.values(SITES)
+        .flat()
+        .flatMap((s) => (s.opening === undefined ? [] : [s.opening])),
+    );
+    // Six history openings, six construction sites that carry one; plus the
+    // two openings the request-only late lines carry (G17 — the time line and
+    // the figures conclusion share one). The library-authored class with no
+    // opening — a DELIVERED injection message — has no literal to find
+    // (deliver.ts copies the role off the Injection) and is asserted by its
+    // marker below instead.
+    expect(framed.length + requestOnly.size).toBe(LIBRARY_AUTHORED_PREFIXES.length);
+    for (const opening of requestOnly) expect(LIBRARY_AUTHORED_PREFIXES).toContain(opening);
+    expect(LIBRARY_AUTHORED_PREFIXES).toHaveLength(8);
   });
 
   it('the registry cannot be extended at runtime by a consumer', () => {
@@ -426,7 +457,28 @@ describe("every `role: 'user'` producer in src/ is classified", () => {
     // array every reader in this library holds.
     expect(Object.isFrozen(LIBRARY_AUTHORED_PREFIXES)).toBe(true);
     expect(() => (LIBRARY_AUTHORED_PREFIXES as string[]).push('[mine')).toThrow();
-    expect(LIBRARY_AUTHORED_PREFIXES).toHaveLength(6);
+    expect(LIBRARY_AUTHORED_PREFIXES).toHaveLength(8);
+  });
+});
+
+// ─── Unit: each request-only late line's REAL writer opens with its opening (G17) ───
+
+describe('the request-only late lines, built by their real writers', () => {
+  it('the time line, the figures conclusion and the staged-refs nudge are never a person’s', () => {
+    const lines = [
+      timeLine(["This turn's time: Friday 2026-10-09 08:40 America/Los_Angeles (UTC-07:00)."])!,
+      figuresConclusionLine([{ value: '53.2', shape: 'figure' } as never])!,
+      stagedRefsNudgeLine({
+        refs: [{ ref: 'art_x', kind: 'dataset/rows' } as never],
+        refsOmitted: 0,
+        tools: ['compute'],
+      }),
+    ];
+    for (const content of lines) {
+      const msg = { role: 'user', content };
+      expect(isLibraryAuthoredFrame(msg)).toBe(true);
+      expect(isSaidByPerson(msg)).toBe(false);
+    }
   });
 });
 
