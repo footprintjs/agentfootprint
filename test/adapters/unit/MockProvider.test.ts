@@ -11,8 +11,10 @@
  *   M5  signal abort              — pending sleep rejects on abort
  *
  * Goal: prove the mock LLM-like behavior (latency + streaming + tool
- * calls) without flaking the suite. Timings asserted with a slack window
- * that won't break under a loaded CI host.
+ * calls) without flaking the suite. A LOWER bound is exact: the wait goes
+ * through lib/sleep.ts, which never resolves before its ms on the monotonic
+ * clock, and load only makes a wait longer. An UPPER bound carries slack,
+ * because a loaded CI host wakes a timer late.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -35,7 +37,7 @@ describe('MockProvider — M1: thinkingMs (fixed)', () => {
     const res = await provider.complete(req());
     const elapsed = Date.now() - t0;
     expect(res.content).toBe('ok');
-    expect(elapsed).toBeGreaterThanOrEqual(70);
+    expect(elapsed).toBeGreaterThanOrEqual(80);
   });
 });
 
@@ -51,12 +53,12 @@ describe('MockProvider — M2: thinkingMs (range)', () => {
     const elapsed = Date.now() - t0;
     // Both bounds are stated against the CONFIGURED BAND, not against a
     // machine-speed guess: the claim is that the provider sleeps inside the
-    // band it was handed. The lower bound is load-proof (load only makes it
-    // truer). The upper bound remains load-sensitive by choice — proving "did
-    // not sleep longer than asked" has no cheaper form — so it carries 3× the
-    // band's own maximum, since a late timer wake-up costs tens of
-    // milliseconds, not multiples of the band.
-    expect(elapsed).toBeGreaterThanOrEqual(BAND_MIN - 5);
+    // band it was handed. The lower bound is exact and load-proof (the wait
+    // never ends early, and load only makes it truer). The upper bound remains
+    // load-sensitive by choice — proving "did not sleep longer than asked" has
+    // no cheaper form — so it carries 3× the band's own maximum, since a late
+    // timer wake-up costs tens of milliseconds, not multiples of the band.
+    expect(elapsed).toBeGreaterThanOrEqual(BAND_MIN);
     expect(elapsed).toBeLessThan(BAND_MAX * 3);
   });
 });

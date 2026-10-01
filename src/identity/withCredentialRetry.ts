@@ -46,6 +46,7 @@
  *   const agent = Agent.create({ provider, model, credentials }).tools([...]).build();
  */
 
+import { sleep } from '../lib/sleep.js';
 import { defaultShouldRetry, type WithRetryOptions } from '../resilience/withRetry.js';
 import type { CredentialProvider, CredentialRequest, CredentialResult } from './types.js';
 
@@ -92,6 +93,8 @@ export function withCredentialRetry(
           }
           const delay = Math.min(maxDelayMs, initialDelayMs * Math.pow(backoffFactor, attempt - 1));
           onRetry?.(err, attempt + 1, delay);
+          // `CredentialRequest` carries no AbortSignal (port contract), so the
+          // wait has none to honour. If the port ever grows one, pass it here.
           await sleep(delay);
         }
       }
@@ -99,12 +102,4 @@ export function withCredentialRetry(
       throw lastError;
     },
   };
-}
-
-// `CredentialRequest` carries no AbortSignal (port contract), so this sleep is
-// the signal-less twin of withRetry's. If the port ever grows a signal, mirror
-// withRetry's abort-aware sleep here.
-function sleep(ms: number): Promise<void> {
-  if (ms <= 0) return Promise.resolve();
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }

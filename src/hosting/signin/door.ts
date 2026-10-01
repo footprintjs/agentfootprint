@@ -44,6 +44,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
+import { sleep } from '../../lib/sleep.js';
 import { isLoopbackBind, type CrossSiteOptions } from '../doorGuard.js';
 import type { DoorIdentity, IdentityVerifier } from '../identityVerification.js';
 import { readSignIn, signInKeyOf } from './cookie.js';
@@ -588,8 +589,4 @@ function bounded(value: number, name: string, max: number): number {
     throw new SignInDoorConfigError(name, `${name} must be more than 0 and at most ${max}`);
   }
   return value;
-}
-
-function sleep(ms: number): Promise<void> {
-  return ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve();
 }

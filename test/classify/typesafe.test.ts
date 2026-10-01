@@ -249,12 +249,17 @@ describe('typesafe — retries and errors', () => {
     const result = await build({ maxRetries: 2, retryDelayMs: 5 }).classify(REQUEST);
     expect(calls).toHaveLength(2);
     expect(result.model).toBe('jev-1.13.0');
-    // The back-off (5 ms) is inside the measured span. One millisecond of
-    // tolerance, not zero: latency is read from Date.now() (whole ms) while
-    // setTimeout runs on libuv's cached loop time and can fire up to ~1 ms
-    // early — CI measured 4 once with the code unchanged. Still proves the
-    // wait is counted: without it the span is ~0.
-    expect(result.latencyMs).toBeGreaterThanOrEqual(4);
+    // The back-off (5 ms) is inside the measured span, so the span is at
+    // least 5 — no tolerance. CI read 4 here six times while the wait was a
+    // bare setTimeout: Node's loop clock counts whole milliseconds and floors
+    // the stamp a timer is armed with, so a timer fired early whenever that
+    // clock refreshed across a millisecond after it was armed (by more than a
+    // millisecond on Linux, whose loop clock is the coarse one), and a
+    // fractional delay was truncated. The wait now goes through lib/sleep.ts,
+    // which re-arms until performance.now() has passed the deadline; and a
+    // full 5 ms on that clock reads as 5 whole Date.now() milliseconds.
+    // Without the wait in the span it would be ~0.
+    expect(result.latencyMs).toBeGreaterThanOrEqual(5);
   });
 
   it('backs off on 529 too, and stops after maxRetries with the status on the error', async () => {

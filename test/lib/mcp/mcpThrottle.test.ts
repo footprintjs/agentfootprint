@@ -117,7 +117,8 @@ describe('mcp throttle — P2 boundary', () => {
 
     expect(res?.status).toBe(200);
     expect(scripted.calls()).toBe(2);
-    expect(Date.now() - startedMs).toBeGreaterThanOrEqual(SECOND - 50);
+    // The full second, no tolerance: the wait keeps its minimum (lib/sleep.ts).
+    expect(Date.now() - startedMs).toBeGreaterThanOrEqual(SECOND);
     expect(seen).toHaveLength(1);
     expect(seen[0]).toMatchObject({ attempt: 2, waitMs: SECOND, retryAfterMs: SECOND });
   });

@@ -66,6 +66,8 @@
  * response body or a request.
  */
 
+import { sleep } from '../../lib/sleep.js';
+
 /** The endpoints, so a GitHub Enterprise Server deployment can move them. */
 const DEFAULT_AUTH_BASE = 'https://github.com';
 const DEFAULT_API_BASE = 'https://api.github.com';
@@ -126,22 +128,9 @@ export interface GithubDeviceSignIn {
   readonly completed: Promise<GithubDeviceIdentity>;
 }
 
+/** The wait between polls: the library's one wait, rejecting with this flow's own sentence. */
 const defaultSleep = (ms: number, signal?: AbortSignal): Promise<void> =>
-  new Promise((resolve, reject) => {
-    if (signal?.aborted) {
-      reject(abortedError());
-      return;
-    }
-    const timer = setTimeout(() => {
-      signal?.removeEventListener('abort', onAbort);
-      resolve();
-    }, ms);
-    const onAbort = (): void => {
-      clearTimeout(timer);
-      reject(abortedError());
-    };
-    signal?.addEventListener('abort', onAbort, { once: true });
-  });
+  sleep(ms, signal, abortedError);
 
 const abortedError = (): Error =>
   new Error('githubDeviceSignIn: sign-in was cancelled before the code was approved.');

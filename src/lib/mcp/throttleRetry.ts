@@ -40,6 +40,8 @@
  * Pattern: Decorator over `fetch`. Role: Layer-3 tool transport.
  */
 
+import { sleep } from '../sleep.js';
+
 /**
  * The fetch shape the MCP SDK's `fetch` hook uses — deliberately NARROWER
  * than `gatewayTransport`'s `FetchLike` (no `Request` input), because that is
@@ -256,23 +258,4 @@ function discardBody(response: Response): void {
 /** The endpoint, for the `onRetry` report. Never a credential. */
 function describeUrl(input: string | URL): string {
   return typeof input === 'string' ? input : input.toString();
-}
-
-function sleep(ms: number, signal?: AbortSignal | null): Promise<void> {
-  if (ms <= 0) return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    if (signal?.aborted) {
-      reject(signal.reason ?? new Error('Aborted'));
-      return;
-    }
-    const id = setTimeout(() => {
-      signal?.removeEventListener('abort', onAbort);
-      resolve();
-    }, ms);
-    const onAbort = (): void => {
-      clearTimeout(id);
-      reject(signal?.reason ?? new Error('Aborted'));
-    };
-    signal?.addEventListener('abort', onAbort, { once: true });
-  });
 }
