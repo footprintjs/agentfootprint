@@ -50,6 +50,7 @@ import type {
   LLMRequest,
   LLMResponse,
 } from '../adapters/types.js';
+import { sleep } from '../lib/sleep.js';
 import { statedRetryAfterMs } from './statedWait.js';
 
 export interface WithRetryOptions {
@@ -311,23 +312,4 @@ function isAbortError(err: unknown): boolean {
   if (!err || typeof err !== 'object') return false;
   const e = err as { name?: string; code?: string };
   return e.name === 'AbortError' || e.code === 'ABORT_ERR';
-}
-
-function sleep(ms: number, signal?: AbortSignal): Promise<void> {
-  if (ms <= 0) return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    if (signal?.aborted) {
-      reject(signal.reason ?? new Error('Aborted'));
-      return;
-    }
-    const id = setTimeout(() => {
-      signal?.removeEventListener('abort', onAbort);
-      resolve();
-    }, ms);
-    const onAbort = (): void => {
-      clearTimeout(id);
-      reject(signal?.reason ?? new Error('Aborted'));
-    };
-    signal?.addEventListener('abort', onAbort, { once: true });
-  });
 }

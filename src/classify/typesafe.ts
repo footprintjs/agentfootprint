@@ -32,6 +32,7 @@
  * `Authorization` header only: never in an error, never in a log.
  */
 
+import { sleep } from '../lib/sleep.js';
 import {
   ClassifierError,
   type ClassifyAnswer,
@@ -133,7 +134,7 @@ export function typesafe(options: TypesafeClassifierOptions = {}): Classifier {
             { status, retryable },
           );
         }
-        await wait(retryDelayMs * 2 ** attempt, signal);
+        await sleep(retryDelayMs * 2 ** attempt, signal, abortReason);
       }
     },
   };
@@ -176,24 +177,6 @@ async function readJson(response: Response): Promise<unknown> {
       { status: response.status, retryable: false },
     );
   }
-}
-
-function wait(ms: number, signal: AbortSignal | undefined): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (signal?.aborted) {
-      reject(abortReason(signal));
-      return;
-    }
-    const timer = setTimeout(() => {
-      signal?.removeEventListener('abort', onAbort);
-      resolve();
-    }, ms);
-    const onAbort = (): void => {
-      clearTimeout(timer);
-      reject(abortReason(signal!));
-    };
-    signal?.addEventListener('abort', onAbort, { once: true });
-  });
 }
 
 function throwIfAborted(signal: AbortSignal | undefined): void {

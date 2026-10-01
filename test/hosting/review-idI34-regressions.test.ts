@@ -28,6 +28,7 @@ import { hashPassword, localPasswords } from '../../src/identity.js';
 import { fakeSignInStore, signInAs } from './fakeSignIns.js';
 import {
   call,
+  doorWaits,
   login,
   mountDoor,
   TEST_COST,
@@ -347,37 +348,41 @@ describe('D — attempt limits', () => {
     expect((await login(m.url, 'alice', 'alice-pw')).status).toBe(429);
   });
 
+  // The two below read the limiter's DECISION off the door (`doorWaits`), not a
+  // login's wall time: "the delay grew" timed as `>= 35` ms is met by the
+  // scrypt check alone in many logins (it takes 22–50 ms), so it could pass
+  // with the address spoofed.
   it('HELD: X-Forwarded-For is ignored from an untrusted peer (spoofing moves no budget)', async () => {
+    const waits = doorWaits();
     const m = await mounted({
       limits: { perName: 1_000, perAddress: 2, backoffMs: 40 },
       warn: () => undefined,
+      _sleep: waits.sleep,
     });
-    const t = async (n: string, xff: string) => {
-      const s0 = Date.now();
-      await login(m.url, n, 'x', { 'x-forwarded-for': xff });
-      return Date.now() - s0;
-    };
-    await t('a1', '1.1.1.1');
-    await t('a2', '2.2.2.2');
-    await t('a3', '3.3.3.3');
-    // One peer, whatever the header says: the delay grew.
-    expect(await t('a4', '4.4.4.4')).toBeGreaterThanOrEqual(35);
+    const waitsOf = (n: string, xff: string) =>
+      waits.of(() => login(m.url, n, 'x', { 'x-forwarded-for': xff }));
+    // One peer, whatever the header says: from its second attempt on, the
+    // address waits the capped 8 × backoffMs = 320 ms.
+    expect(await waitsOf('a1', '1.1.1.1')).toEqual([]);
+    expect(await waitsOf('a2', '2.2.2.2')).toEqual([320]);
+    expect(await waitsOf('a3', '3.3.3.3')).toEqual([320]);
+    expect(await waitsOf('a4', '4.4.4.4')).toEqual([320]);
   });
 
   it('HELD: behind a trusted proxy, a client-prepended XFF hop is not believed (rightmost untrusted)', async () => {
+    const waits = doorWaits();
     const m = await mounted({
       limits: { perName: 1_000, perAddress: 2, backoffMs: 40 },
       trustedProxies: ['127.0.0.1'],
+      _sleep: waits.sleep,
     });
-    const t = async (n: string, xff: string) => {
-      const s0 = Date.now();
-      await login(m.url, n, 'x', { 'x-forwarded-for': xff });
-      return Date.now() - s0;
-    };
-    await t('b1', '9.9.9.1, 10.1.1.1');
-    await t('b2', '9.9.9.2, 10.1.1.1');
-    await t('b3', '9.9.9.3, 10.1.1.1');
-    expect(await t('b4', '9.9.9.4, 10.1.1.1')).toBeGreaterThanOrEqual(35);
+    const waitsOf = (n: string, xff: string) =>
+      waits.of(() => login(m.url, n, 'x', { 'x-forwarded-for': xff }));
+    // The client wrote 9.9.9.N; the proxy appended 10.1.1.1 — one client.
+    expect(await waitsOf('b1', '9.9.9.1, 10.1.1.1')).toEqual([]);
+    expect(await waitsOf('b2', '9.9.9.2, 10.1.1.1')).toEqual([320]);
+    expect(await waitsOf('b3', '9.9.9.3, 10.1.1.1')).toEqual([320]);
+    expect(await waitsOf('b4', '9.9.9.4, 10.1.1.1')).toEqual([320]);
   });
 
   it("FIXED: behind a proxy (a CIDR trusted range), strangers' wrong guesses never lock out bob's right password", async () => {
@@ -677,7 +682,9 @@ describe('I — routing and store faults', () => {
     const right = await login(m.url, 'alice', 'alice-pw');
     const tRight = performance.now() - t0;
     expect(right.status).toBe(503);
-    expect(tRight).toBeGreaterThanOrEqual(290);
+    // No tolerance: the door's minimum runs on this same monotonic clock and is
+    // waited in full, and this span contains the door's.
+    expect(tRight).toBeGreaterThanOrEqual(300);
   });
 });
 

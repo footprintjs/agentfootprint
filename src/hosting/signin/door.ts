@@ -28,7 +28,11 @@
  *  6. A new sign-in: 256 random bits in the cookie, only their SHA-256 in the
  *     store.
  *  Every answer waits until a minimum time has passed, so "no such user" and
- *  "wrong password" cannot be told apart by how fast they come back.
+ *  "wrong password" cannot be told apart by how fast they come back. The
+ *  minimum is a DURATION, so it is measured on the monotonic clock
+ *  (`performance.now()`) and waited in full (`lib/sleep`) — never on the epoch
+ *  clock `now`, which counts whole milliseconds (an answer up to 1 ms early)
+ *  and jumps when the system time is set (an hour ahead: an answer at once).
  *
  * ── The cookie (§5.4) ───────────────────────────────────────────────────────
  * `__Host-Http-af-signin=…; Path=/; HttpOnly; Secure; SameSite=Strict;
@@ -44,6 +48,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
+import { sleep } from '../../lib/sleep.js';
 import { isLoopbackBind, type CrossSiteOptions } from '../doorGuard.js';
 import type { DoorIdentity, IdentityVerifier } from '../identityVerification.js';
 import { readSignIn, signInKeyOf } from './cookie.js';
@@ -103,7 +108,10 @@ export interface SignInDoorOptions {
   readonly idleMinutes?: number;
   /** Attempt limits on `POST /auth/login`. */
   readonly limits?: AttemptLimits;
-  /** Every login answer waits at least this long, ms. Default 400. */
+  /**
+   * Every login answer waits at least this long, ms. Default 400. Measured on
+   * the monotonic clock from the moment the login starts — never on `now`.
+   */
   readonly minimumResponseMs?: number;
   /**
    * Peers whose `X-Forwarded-For` is believed: the client address is then the
@@ -112,12 +120,17 @@ export interface SignInDoorOptions {
   readonly trustedProxies?: readonly string[];
   /** The route prefix. Default `/auth`. */
   readonly prefix?: string;
-  /** The clock, epoch ms. Default `Date.now`. */
+  /**
+   * The clock, epoch ms: sign-in lifetimes and attempt windows. Default
+   * `Date.now`. Not the minimum answer time (`minimumResponseMs`).
+   */
   readonly now?: () => number;
   /** The door-wide cap on concurrent password checks (default 4 running, 32 waiting). */
   readonly checks?: CheckGateOptions;
   /** Where a one-time operator warning goes. Default `console.warn`. */
   readonly warn?: (message: string) => void;
+  /** Test seam — inject the door's waits: the attempt delay and the minimum answer time. */
+  readonly _sleep?: (ms: number) => Promise<void>;
 }
 
 export interface SignInDoor {
@@ -156,6 +169,7 @@ export function signInDoor(options: SignInDoorOptions): SignInDoor {
   const cookie = cookieFor(options.publicUrl, options.production);
   const prefix = options.prefix ?? '/auth';
   const now = options.now ?? Date.now;
+  const wait = options._sleep ?? sleep;
   const hours = bounded(options.hours ?? DEFAULT_HOURS, 'hours', MAX_HOURS);
   const mode = modeOf(options);
   const config = configAnswerOf(mode, options.passwords);
@@ -232,11 +246,15 @@ export function signInDoor(options: SignInDoorOptions): SignInDoor {
   };
 
   const login = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
-    const started = now();
     // EVERY answer — refused, wrong, right, or a store that failed — waits for
     // the minimum time, so no outcome can be told apart by how fast it came.
+    // The deadline is read off the MONOTONIC clock, never `now`: epoch ms are
+    // whole (a deadline taken late in one millisecond and read early in the
+    // next comes up to 1 ms short) and jump when the system time is set (an
+    // hour ahead would answer at once). `wait` runs until the clock passes it.
+    const deadline = performance.now() + minimumMs;
     const answer = async (status: number, body: unknown, extra: Headers = {}): Promise<void> => {
-      await sleep(started + minimumMs - now());
+      await wait(deadline - performance.now());
       reply(res, status, body, extra);
     };
     const unavailable = (extra: Headers = {}) =>
@@ -258,7 +276,7 @@ export function signInDoor(options: SignInDoorOptions): SignInDoor {
     }
     if (verdict.kind === 'busy') return unavailable();
     const { ticket } = verdict;
-    await sleep(verdict.delayMs);
+    await wait(verdict.delayMs);
     const expire: Headers = {};
     let accepted: SignInAccepted | undefined;
     try {
@@ -588,8 +606,4 @@ function bounded(value: number, name: string, max: number): number {
     throw new SignInDoorConfigError(name, `${name} must be more than 0 and at most ${max}`);
   }
   return value;
-}
-
-function sleep(ms: number): Promise<void> {
-  return ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve();
 }

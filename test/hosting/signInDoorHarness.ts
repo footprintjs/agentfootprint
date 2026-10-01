@@ -32,6 +32,36 @@ export async function testUsers(): Promise<string> {
   return cachedUsers;
 }
 
+/**
+ * The door's waits, RECORDED instead of slept: pass `sleep` as the door's
+ * `_sleep`, and `of(login)` returns what that one login asked to wait. A wait
+ * of 0 ms or less is no wait (`lib/sleep`) and is not recorded, so on a door
+ * with no minimum answer time (the harness's `minimumResponseMs: 0`) what is
+ * recorded is exactly the attempt limiter's delay — its decision, read off the
+ * door, with none of the login's own time (the scrypt check) in it.
+ *
+ * Every wait here ends at once, so it ends the same whether the door awaits it
+ * or not: what this reads is the DECISION, never that the door applied it.
+ * That the door waits the delay before it checks the password is its own law,
+ * with each wait held one turn of the event loop (sign-in-door-delay.test.ts).
+ */
+export function doorWaits(): {
+  readonly sleep: (ms: number) => Promise<void>;
+  of(run: () => Promise<unknown>): Promise<number[]>;
+} {
+  const asked: number[] = [];
+  return {
+    sleep: async (ms) => {
+      if (ms > 0) asked.push(ms);
+    },
+    async of(run) {
+      const from = asked.length;
+      await run();
+      return asked.slice(from);
+    },
+  };
+}
+
 export interface MountedDoor {
   readonly url: string;
   readonly port: number;

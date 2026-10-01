@@ -7,7 +7,7 @@ result message the library annotated). All four live here rather than beside
 their first caller so that readers in folders that cannot import each other
 cannot answer the same question differently.
 Support: `canonicalJson.ts`, `fnv1a.ts`, `lazyRequire.ts`, `libraryVersion.ts`,
-`sqliteUnavailable.ts`, `embedderMismatch.ts`, `storedPreview.ts`.
+`sqliteUnavailable.ts`, `embedderMismatch.ts`, `storedPreview.ts`, `sleep.ts`.
 Every subfolder here has its own role and its own README.
 
 ## What it reads / what it writes
@@ -19,6 +19,30 @@ One owner per fact. When two layers must agree about a fact and cannot import
 each other, the fact moves HERE — that is exactly why `spokenIds.ts` exists
 (`spokenIds.ts` · "── WHY THIS IS A LEAF AND NOT A HELPER IN THE GATE") and why the writers of library-authored turns import the
 prefixes the recogniser matches on (`saidByPerson.ts`).
+
+## A wait from here is never early
+`sleep.ts` · `sleep` is the library's ONE wait: the retry back-offs, the
+device-flow poll, the mock provider's thinking time and the sign-in door's
+minimum answer time all go through it. It never resolves before `ms` of
+MONOTONIC time have passed. A bare `setTimeout` cannot promise that — Node's
+loop clock counts whole milliseconds and floors the stamp it arms with, so a
+timer fires up to a millisecond early, and more on Linux, where the loop clock
+is the coarse one. So the deadline is read from `performance.now()` when the
+wait starts, and a timer that fired early is re-armed for what is left (rounded
+up, split below 2^31 ms) until the clock has passed it.
+
+```ts
+import { sleep } from '../lib/sleep.js';
+
+await sleep(retryDelayMs * 2 ** attempt, signal, abortReason); // at least that long, on performance.now()
+await sleep(0, signal); // no wait: resolves at once, nothing to cancel
+```
+
+It promises a minimum, never a maximum — a loaded host wakes a timer late. A
+timer that BOUNDS work (abort after `ms`, a grace or flush timer) is not a wait
+and stays beside the work it bounds. `test/lib/sleep.test.ts` proves the law
+with a timer that fires early on purpose; `test/architecture/sleepOwner.test.ts`
+refuses a private sleep anywhere else in `src/`.
 
 ## Files
 - `spokenIds.ts` — `named` vs `held`; `held` is required, not optional.
@@ -38,3 +62,5 @@ prefixes the recogniser matches on (`saidByPerson.ts`).
   loading and its two shared refusals.
 - `libraryVersion.ts`, `storedPreview.ts` — provenance stamp; how much of
   somebody's stored data a refusal may quote.
+- `sleep.ts` — `sleep`, the one wait that keeps its minimum; `makeSleep` builds
+  one over a test's own clock and timer.

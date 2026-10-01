@@ -21,6 +21,7 @@
  * common 3–8 s thinking + 30–80 ms per word streaming preset.
  */
 
+import { sleep } from '../../lib/sleep.js';
 import type { LLMChunk, LLMProvider, LLMRequest, LLMResponse, WireRole } from '../types.js';
 
 /** Either a fixed value (in ms) or a random `[min, max]` range (inclusive). */
@@ -286,29 +287,6 @@ function pickMs(spec: LatencyMs): number {
   const [min, max] = spec;
   if (max <= min) return Math.max(0, min);
   return Math.floor(min + Math.random() * (max - min));
-}
-
-/** AbortSignal-aware sleep. Resolves on timeout OR rejects on abort. */
-function sleep(ms: number, signal?: AbortSignal): Promise<void> {
-  if (ms <= 0) return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    if (signal?.aborted) {
-      reject(signal.reason ?? new Error('Aborted'));
-      return;
-    }
-    const id = setTimeout(() => {
-      signal?.removeEventListener('abort', onAbort);
-      resolve();
-    }, ms);
-    const onAbort = () => {
-      clearTimeout(id);
-      // onAbort is registered only when signal is defined (line below);
-      // accessing signal.reason here is structurally guaranteed.
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      reject(signal!.reason ?? new Error('Aborted'));
-    };
-    signal?.addEventListener('abort', onAbort, { once: true });
-  });
 }
 
 /** Split content into streamable units that read like real tokens —
