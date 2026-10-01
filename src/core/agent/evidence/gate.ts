@@ -66,7 +66,7 @@ import { stagedRefsTeachingClause } from '../stagedRefs.js';
 import type { EvidenceCorpus } from './evidenceIndex.js';
 import { EVIDENCE_CHECK_FRAME_PREFIX } from './frames.js';
 import { candidateForms, extractCandidates } from './extract.js';
-import { explainFigure, type FigureBasis } from './figures.js';
+import type { FigureCheck } from './figures.js';
 import { lookupForms, normalizeToken } from './normalize.js';
 import type {
   ComputedFigure,
@@ -238,15 +238,16 @@ export function checkAnswer(
      */
     readonly derived?: ReadonlySet<string>;
     /**
-     * Under the figures dial: the numbers the results carry, folded for the
-     * derivation question (`figures.ts` · `figureBasisOf`). A NUMBER no result
-     * carried that is a declared derivation of them lands in `computed`, not
-     * `unsupported`. Absent → the verdict it always was.
+     * Under the figures dial (`figures.ts` · `figureCheckOf`): the numbers the
+     * answer writes wearing a unit, and the derivation question over the
+     * numbers the results carry. A NUMBER no result carried that is a
+     * declared derivation of them lands in `computed`, not `unsupported`.
+     * Absent → the verdict it always was.
      */
-    readonly figures?: FigureBasis;
+    readonly figures?: FigureCheck;
   },
 ): EvidenceVerdict {
-  const candidates = extractCandidates(answer, args.gate);
+  const candidates = extractCandidates(answer, args.gate, args.figures?.numbers);
   const unsupported: UnsupportedValue[] = [];
   const derived: UnsupportedValue[] = [];
   const computed: ComputedFigure[] = [];
@@ -281,7 +282,7 @@ export function checkAnswer(
       // (`figures.ts`): not read, not invented — named with its derivation.
       const how =
         args.figures !== undefined && (candidate.shape === 'number' || candidate.shape === 'figure')
-          ? explainFigure(candidate.value, args.figures)
+          ? args.figures.explain(candidate.value)
           : undefined;
       if (how !== undefined) {
         computed.push({ value: clip(candidate.value), shape: candidate.shape, ...how });

@@ -47,7 +47,6 @@ import {
 import { checkAnswer, evidenceRefusalSentence, MAX_REPORTED_VALUES } from '../evidence/gate.js';
 import { answerCarriersOf } from '../evidence/answerCarriers.js';
 import { derivedFormsOf, evidenceFromHistory, exemptFromRun } from '../evidence/evidenceIndex.js';
-import { figureBasisOf } from '../evidence/figures.js';
 import { timeDerivedRow } from '../../time/rows.js';
 import type { EvidenceVerdict, ResolvedEvidenceGate } from '../evidence/types.js';
 import { priorTurnEvidenceOf } from '../../../integrity/prior-turn-evidence/check.js';
@@ -149,6 +148,15 @@ export type TimeLineage = (scope: TypedScope<AgentState>) => {
  * through `import()` — `undefined` when `.time()` is not armed. Reads no scope,
  * so loading it before the judges moves no read in the trace.
  */
+/** The figures dial's module (`evidence/figures.ts`), loaded through `import()`
+ *  only when the gate is armed with it — off, a plain agent's graph never carries it. */
+type FiguresModule = typeof import('../evidence/figures.js');
+async function loadFigures(
+  gate: ResolvedEvidenceGate | undefined,
+): Promise<FiguresModule | undefined> {
+  return gate?.figures === true ? import('../evidence/figures.js') : undefined;
+}
+
 async function loadTimeLineage(
   inputs: InputsRouteArm | undefined,
 ): Promise<TimeLineage | undefined> {
@@ -727,6 +735,8 @@ function judgeEvidence(
   answerLayer?: AnswerRouteArm,
   /** Under `.time()`: the loaded lineage reader (`loadTimeLineage`). Absent → the gate as it was. */
   timeLineage?: TimeLineage,
+  /** Under the figures dial: its loaded module (`loadFigures`). Absent → the gate as it was. */
+  figures?: FiguresModule,
 ): 'evidence-recheck' | undefined {
   if (gate === undefined) return undefined;
   const answer = (scope.llmLatestContent as string | undefined) ?? '';
@@ -751,7 +761,7 @@ function judgeEvidence(
     ...(time !== undefined && { derived: derivedFormsOf(time.derived) }),
     // The figures dial: the results' numbers, folded for the derivation
     // question (`evidence/figures.ts`). Off → not built, the verdict as it was.
-    ...(gate.figures && { figures: figureBasisOf(history) }),
+    ...(figures !== undefined && { figures: figures.figureCheckOf(answer, history) }),
     exempt: exemptFromRun({
       userMessage: scope.userMessage as string | undefined,
       history,
@@ -867,10 +877,13 @@ function judgeEvidence(
     !verdict.evidenceTruncated;
 
   if (mayRevise) {
+    const values = verdict.unsupported.slice(0, MAX_REPORTED_VALUES);
+    const conclusion = figures?.figuresConclusionLine(values);
     scope.evidenceUnsupported = {
-      values: verdict.unsupported.slice(0, MAX_REPORTED_VALUES),
+      values,
       candidates: verdict.candidates,
       lookedUp: verdict.lookedUp,
+      ...(conclusion !== undefined && { conclusion }),
     };
     return 'evidence-recheck';
   }
@@ -1383,6 +1396,7 @@ function buildJudgingDecider(
     // re-ask exits put the emission back (`restoreEmission`).
     const emission = await peelAnswerStandings(scope, findings, inputs, answer);
     const timeLineage = await loadTimeLineage(inputs);
+    const figures = await loadFigures(evidence);
     // A withheld answer is judged by nothing below, so the recency row says so
     // here rather than sitting untouched (see `noteRecency`).
     if (denied) noteRecency(noticePriorTurnEvidence, integrityLedger, 'not-applicable');
@@ -1406,6 +1420,7 @@ function buildJudgingDecider(
         inputs,
         answer,
         timeLineage,
+        figures,
       ) === 'evidence-recheck'
     ) {
       restoreEmission(scope, emission);
@@ -1490,6 +1505,7 @@ function buildEnforcingDecider(
     // came off is what every RE-ASK exit puts back (`reAsk`).
     const emission = await peelAnswerStandings(scope, findings, inputs, answer);
     const timeLineage = await loadTimeLineage(inputs);
+    const figures = await loadFigures(evidence);
     const reAsk = (
       branch: 'output-retry' | 'step-nudge' | 'evidence-recheck',
       rationale: string,
@@ -1545,6 +1561,7 @@ function buildEnforcingDecider(
           inputs,
           answer,
           timeLineage,
+          figures,
         ) === 'evidence-recheck'
       ) {
         return reAsk('evidence-recheck', evidenceRecheckRationale(scope));

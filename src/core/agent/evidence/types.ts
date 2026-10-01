@@ -78,7 +78,7 @@ export interface PendingEvidenceRecovery {
    * Under the figures dial: the library's CONCLUSION about the flagged
    * numbers, served as the LAST line of the revision request (request-only,
    * never history) — at the decision point, where recency cannot bury it
-   * (`recovery.ts` · `figuresConclusionLine`). Absent → no late line.
+   * (`figures.ts` · `figuresConclusionLine`, composed by Route). Absent → no late line.
    */
   readonly conclusion?: string;
 }

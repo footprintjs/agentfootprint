@@ -689,7 +689,7 @@ export function buildCallLLMStage(
     }
     // THE EVIDENCE CONCLUSION (the figures dial) — the library's finding about
     // the numbers it flagged, LAST, on the one call that serves the revision
-    // instruction (`evidence/recovery.ts` · `figuresConclusionLine`). Absent
+    // instruction (`evidence/figures.ts` · `figuresConclusionLine`). Absent
     // whenever the dial is off or no flagged value was a number.
     const conclusion =
       deps.hasEvidenceRecovery === true

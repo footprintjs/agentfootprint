@@ -45,7 +45,6 @@
  * identifiers look like" has better information than these heuristics.
  */
 
-import { figureNumbersOf } from './figures.js';
 import { countDigits, lookupForms, normalizeToken, tokenize } from './normalize.js';
 import type { ResolvedEvidenceGate, UnsupportedValue } from './types.js';
 
@@ -175,11 +174,14 @@ export function candidateForms(candidate: Candidate): readonly string[] {
 export function extractCandidates(
   answer: string,
   gate: ResolvedEvidenceGate,
+  /** Under the figures dial: the numbers the answer writes wearing a unit
+   *  (`figures.ts` · `figureNumbersOf`, computed by the caller that loaded
+   *  it — the module stays off a plain agent's graph). */
+  figures?: ReadonlySet<string>,
 ): readonly Candidate[] {
   const seen = new Set<string>();
   const out: Candidate[] = [];
   let budget = MAX_ANSWER_TOKENS;
-  const figures = gate.figures ? figureNumbersOf(answer) : undefined;
   for (const token of tokenize(answer)) {
     if (budget-- <= 0) break;
     const candidate = classifyToken(token, gate, figures);

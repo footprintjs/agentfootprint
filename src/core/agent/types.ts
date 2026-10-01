@@ -1619,6 +1619,9 @@ export interface AgentState {
     /** How many of them the gate looked up (exempt values excluded) — carried
      *  to the recheck stage's `evidence_checked` row. */
     readonly lookedUp: number;
+    /** Under the figures dial: the late line for the revision request
+     *  (`evidence/figures.ts` · `figuresConclusionLine`), composed by Route. */
+    readonly conclusion?: string;
   };
   /** The one bounded revision has been spent this turn (9.35.0). Written by
    *  the EvidenceRecheck branch; reset at seed. Absent on an agent without

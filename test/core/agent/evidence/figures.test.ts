@@ -20,15 +20,14 @@ import type { NamesAndNumbersOptions } from '../../../../src/index.js';
 import type { LLMRequest, LLMResponse } from '../../../../src/adapters/types.js';
 import { extractCandidates } from '../../../../src/core/agent/evidence/extract.js';
 import {
+  LIBRARY_NOTE_OPENING,
   explainFigure,
   figureBasisOf,
   figureNumbersOf,
+  figuresConclusionLine,
 } from '../../../../src/core/agent/evidence/figures.js';
 import { resolveEvidenceGate } from '../../../../src/core/agent/evidence/gate.js';
-import {
-  LIBRARY_NOTE_OPENING,
-  figuresConclusionLine,
-} from '../../../../src/core/agent/evidence/recovery.js';
+
 import { TIME_LINE_SOURCE } from '../../../../src/core/agent/arguments/serve.js';
 import { validateCheckpoint } from '../../../../src/core/runCheckpoint.js';
 
@@ -93,12 +92,12 @@ describe('figures: rule 1 — a number wearing a unit is data', () => {
 
   it('on: every figure is a candidate, shaped `figure`', () => {
     const on = resolveEvidenceGate({ figures: true });
-    expect(extractCandidates(HAIKU_1, on)).toEqual([
+    expect(extractCandidates(HAIKU_1, on, figureNumbersOf(HAIKU_1))).toEqual([
       { value: 'cluster-a01', shape: 'identifier' },
       { value: '53.2', shape: 'figure' },
       { value: '6.3', shape: 'figure' },
     ]);
-    expect(extractCandidates('24.8TB usable', on)).toEqual([
+    expect(extractCandidates('24.8TB usable', on, figureNumbersOf('24.8TB usable'))).toEqual([
       { value: '24.8', shape: 'figure', token: '24.8tb' },
     ]);
   });

@@ -50,7 +50,7 @@ looks the way it does, and it is stated again at the top of `gate.ts`.
 | `evidenceIndex.ts` | the structural walk of tool results, and the exempt corpus; `readResult` is the ONE reading of a result |
 | `servedJson.ts` | a served result that is NOT one JSON value, read by the JSON grammar: its leading value(s) — the tool's JSON before a framework note (a step banner, an effect note, the repeated-call note), an MCP text result's several blocks — and the text after them, and the complete leaves of JSON cut short (a capped result's `head`, a tool that truncated its own output) — never the token the cut falls inside — plus, when the cut falls inside a string, that string's whole words up to its last space, read as text (the word the cut may have split is left out: `mo` may be `more`). Read whole as text, `{"id":4417}` tokenises to `:4417`: every number and boolean the tool returned read as absent, a false flag at the gate and a false `not-in-result` in the inputs layer. Text that opens with a bracket and is not JSON stays text |
 | `resultCarries.ts` | one result, read the index's way (`evidenceIndex.ts` · `readResult`), asked for one value (`resultReader`, `resultCarries`) — the inputs layer's declared-sources check asks whether a result carries the value the model says it took from it; loaded with that layer, never on a plain agent's graph |
-| `figures.ts` | the figures dial (`figures: true`): which numbers the answer writes wearing a unit (`figureNumbersOf`), the results' numbers folded for the derivation question (`figureBasisOf`), and the question itself (`explainFigure`) — a closed set of derivations, at the answer's own precision |
+| `figures.ts` | the figures dial (`figures: true`): which numbers the answer writes wearing a unit (`figureNumbersOf`), the results' numbers folded for the derivation question (`figureBasisOf`), and the question itself (`explainFigure`) — a closed set of derivations, at the answer's own precision. Loaded through `import()` by Route under the dial only (`stages/route.ts` · `loadFigures`; pinned off the root graph by `test/lib/trace-toolpack/browserGraph.test.ts`) |
 | `answerCarriers.ts` | which of THIS turn's results the answer's values were read from (`answerCarriersOf`) — identities and counts, the whole list or none; rides `evidence_checked` as `carriedBy` |
 | `gate.ts` | resolve options, judge an answer, write the sentences |
 | `recovery.ts` | resolve bounded recovery guidance and compose the internal repair instruction |
@@ -147,7 +147,7 @@ flagged it as invented. One rule failed in both directions.
 
 Comparisons are at the answer's own precision: `61%` is 61.1 rounded, `61.0%`
 is not. Under `guard`/`rails` the revision request also carries the library's
-conclusion as its LAST line (`recovery.ts` · `figuresConclusionLine`,
+conclusion as its LAST line (`figures.ts` · `figuresConclusionLine`,
 request-only, rebuilt by `servedAt`, reason `'evidence-conclusion'`): which
 numbers matched no value and no derivation, and to say plainly when no result
 shows the figure asked for. Under the answer layer an unsupported figure folds
