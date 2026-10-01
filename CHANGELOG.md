@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.134.2] - 2026-10-01
+
+### Fixed
+
+- **`isSaidByPerson` no longer calls the library's own late lines the person's words.** Under `.time()` the library serves its time line as the LAST `user` message of every request, opening with "[A note from the library that runs the tools …]" — but that opening was not in `LIBRARY_AUTHORED_PREFIXES`, so `isSaidByPerson` returned `true` for it, and so for the figures dial's conclusion line (same opening) and the staged-refs nudge. Any code that found "this turn" as the last user-role message of a request anchored on the library's line: the window's current-request rule, a host's own predicate, and `mock()`'s default echo, which answered "echo: [A note from the library …]". All three openings are now in the registry (one copy, `LIBRARY_NOTE_OPENING`, exported, is what the time line and the figures line both emit); a message marked `ephemeral` (a reliability retry's feedback) is never a person's either; and `mock()` echoes the person's words. The answer account's "calls answered before the pause" and in-view turn distance read the same rule, so a library correction written after a resumed leg's results no longer hides them. The bytes the model reads are unchanged.
+
 ## [9.134.1] - 2026-10-01
 
 ### Changed
