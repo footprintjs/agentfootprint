@@ -23,7 +23,16 @@
  * - **`derived`** — everything the LIBRARY produced from a reading: an
  *   implied year, the zone's abbreviation in effect (`PDT` for a said `PST`),
  *   offsets, UTC and epoch spellings, the end-of-grain `08:41`, a look-back's
- *   duration, and every part of a `model` reading. The gate files an answer
+ *   duration, the window's length ("6:25 to 6:45" is `20-minute` as said and
+ *   `21-minute` as read to the end of its grain — arithmetic over the ends,
+ *   never a part anyone wrote), every part of a `model` reading, every part
+ *   of a PROPOSAL — a `rule` reading the time ask offers that the person has
+ *   not answered yet (`06:25:00` for "6:25"; its implied year) — and the
+ *   turn's CLOCK, at the grain it is served (G16: "This turn's time: …" on
+ *   every request under `.time()`): the minute of `now` in the person's zone
+ *   (UTC under an unknown zone) — `7:08`, `07:08`, `7:08am`, the date, the
+ *   year, the zone and its offset. Never a time the clock does not produce
+ *   (`7:09`, or the clock's seconds). The gate files an answer
  *   value found only here with the lineage `derived-from-reading`: it can
  *   support "not sure", never "known", and it is never called invented.
  *
@@ -43,7 +52,14 @@ import {
   type TimeCandidate,
   type TimePart,
 } from './resolve.js';
-import { answersOf, clockOf, readingsOf, type TimeReadingRow } from './rows.js';
+import {
+  answersOf,
+  clockOf,
+  readingsOf,
+  type ClockRow,
+  type TimeAnswerRow,
+  type TimeReadingRow,
+} from './rows.js';
 import { offsetAt, wallAt, type WallTime, type ZoneName } from './zone.js';
 
 export type { TimeForms };
@@ -60,8 +76,14 @@ export interface FormsWindow extends Pick<TurnWindow, 'source' | 'range' | 'zone
   readonly answer?: TurnWindow['answer'];
 }
 
-/** What {@link timeFormsOf} spells: words the person or the app wrote, or one recorded window. */
-export type TimeFormsSource = { readonly text: string } | { readonly window: FormsWindow };
+/** The turn's clock as the record keeps it (`rows.ts` · `ClockRow`) — what the served time line names. */
+export type FormsClock = Pick<ClockRow, 'now' | 'zone'>;
+
+/** What {@link timeFormsOf} spells: words the person or the app wrote, one recorded window, or the turn's clock. */
+export type TimeFormsSource =
+  | { readonly text: string }
+  | { readonly window: FormsWindow }
+  | { readonly clock: FormsClock };
 
 // FOLD · the one owner of which spellings of a time count as the person's and which the library derived
 // consumers read this and never re-derive it: evidence/evidenceIndex.ts · addExempt (the text rule), stages/timeLineage.ts · timeLineageOf (the turn's windows)
@@ -91,7 +113,25 @@ export type TimeFormsSource = { readonly text: string } | { readonly window: For
  */
 export function timeFormsOf(source: TimeFormsSource): TimeForms {
   if ('text' in source) return timeFormsOfText(source.text);
+  if ('clock' in source) return clockForms(source.clock);
   return windowForms(source.window);
+}
+
+/**
+ * The turn's clock, spelled at the grain the library SERVES it (G16,
+ * `arguments/serve.ts` · `clockSentence`: the minute of `now`, its date, in
+ * the clock's zone — `'UTC'` under an unknown zone, G15) — all `derived`: the
+ * library produced it, the person never wrote it. The minute is FLOORED, as
+ * served; the clock's seconds, and any other minute, are not its spellings.
+ */
+function clockForms(clock: FormsClock): TimeForms {
+  const ms = instantMs(clock.now);
+  if (ms === undefined) return { said: [], derived: [] };
+  const minute = Math.floor(ms / 60_000) * 60_000;
+  const derived = new Spellings();
+  derived.push(...allWallForms(wallAt(clock.zone, minute), true));
+  derived.push(...zoneForms(clock.zone, minute));
+  return { said: [], derived: derived.list() };
 }
 
 /**
@@ -103,8 +143,48 @@ export function turnFormsWindowsOf(ledger: readonly unknown[] | undefined): read
   const clock = clockOf(ledger);
   if (clock === undefined) return [];
   const readings = readingsOf(ledger, clock.turn);
-  const { windows } = turnWindowsOf(readings, clock, answersOf(ledger, clock.turn));
-  return windows.map((w) => withReading(w, readings, clock));
+  const answers = answersOf(ledger, clock.turn);
+  const { windows } = turnWindowsOf(readings, clock, answers);
+  return [
+    ...windows.map((w) => withReading(w, readings, clock)),
+    ...proposalsOf(readings, answers),
+  ];
+}
+
+/**
+ * The PROPOSALS of the turn: each window a `rule` reading offers the person in
+ * the time ask (its choice `open`, the offered candidates `remaining`) while
+ * they have not answered it. A proposal settles no call (`windows.ts` ·
+ * `turnWindowsOf` leaves it open), but its spellings are the library's own
+ * reading of the person's words — `06:25:00` for "6:25", the implied year —
+ * so every part is `derived` (`source: 'derived-from-reading'`, no said part):
+ * never invented, never the person's, "not sure" at most. Once the person
+ * answers, the answered window replaces it.
+ */
+function proposalsOf(
+  readings: readonly TimeReadingRow[],
+  answers: readonly TimeAnswerRow[],
+): readonly FormsWindow[] {
+  const answered = new Set(answers.map((a) => a.mention));
+  const out: FormsWindow[] = [];
+  for (const row of readings) {
+    if (row.reader.kind !== 'rule' || row.refused !== undefined || row.quote === undefined)
+      continue;
+    if (row.mention !== undefined && answered.has(row.mention)) continue;
+    const choice = row.choice;
+    if (choice?.by !== 'open') continue;
+    for (const i of choice.remaining) {
+      const c = row.candidates?.[i];
+      if (c === undefined) continue;
+      out.push({
+        source: 'derived-from-reading',
+        range: c.range,
+        zone: c.zone,
+        ...(c.window.kind === 'lookback' && { lookback: c.window.duration }),
+      });
+    }
+  }
+  return out;
 }
 
 /** A turn window with the reading it is, when the person confirmed a `rule` reading of their words. */
@@ -213,8 +293,80 @@ function windowForms(window: FormsWindow): TimeForms {
   }
   derived.push(window.range.from, window.range.to, ...zoneForms(window.zone, fromMs));
   if (window.lookback !== undefined) derived.push(window.lookback);
+  derived.push(...windowLengthForms(fromMs, saidEndMs(window, toMs), toMs));
   const saidList = said.list();
   return { said: saidList, derived: derived.list().filter((f) => !saidList.includes(f)) };
+}
+
+// ─── The window's length ────────────────────────────────────────────────────
+
+const SECOND_MS = 1000;
+const MINUTE_MS = 60_000;
+const HOUR_MS = 3_600_000;
+const DAY_MS = 86_400_000;
+
+/**
+ * How long the window is — DERIVED, never said: arithmetic over the ends of a
+ * window the record holds, not a part anyone wrote. Two lengths, because a
+ * range read to the end of its grain has two honest ones: the range AS SAID
+ * (its said end minus its start — "6:25 to 6:45 AM" is 20 minutes) and the
+ * half-open range read (`[06:25, 06:46)` is 21 minutes). An end that was not
+ * widened gives one length.
+ *
+ * Only whole-token spellings: the gate compares tokens (`evidence/normalize.ts`
+ * · `tokenize`), so `20 minutes` is two tokens and neither is a candidate,
+ * while `20-minute` and `1200s` are one and are asked about. A length that is
+ * not a whole number of seconds (a whole day's said end, one millisecond short)
+ * is not a duration anyone writes, and spells nothing.
+ *
+ * @example
+ * ```ts
+ * windowLengthForms(Date.parse('2026-10-01T13:25:00Z'), Date.parse('2026-10-01T13:45:00Z'), Date.parse('2026-10-01T13:46:00Z'));
+ * // ['1200s', '20m', '20-minute', …, '0.33h', …, '1260s', '21m', '21-minute', …]
+ * ```
+ */
+function windowLengthForms(fromMs: number, saidEndMs: number, toMs: number): readonly string[] {
+  const out = new Spellings();
+  for (const ms of [saidEndMs - fromMs, toMs - fromMs]) {
+    if (ms <= 0 || ms % SECOND_MS !== 0) continue;
+    out.push(...lengthSpellings(ms));
+  }
+  return out.list();
+}
+
+/** The common whole-token spellings of one length: seconds, and minutes, hours, days when whole. */
+function lengthSpellings(ms: number): readonly string[] {
+  const out: string[] = [...unitSpellings(ms / SECOND_MS, ['s', 'sec', 'secs'], 'second')];
+  if (ms % MINUTE_MS === 0) {
+    const m = ms / MINUTE_MS;
+    out.push(...unitSpellings(m, ['m', 'min', 'mins'], 'minute'), `PT${m}M`);
+  }
+  const hours = ms / HOUR_MS;
+  // A fraction of an hour is written to two places at most ("0.33 h"), trailing zeros dropped.
+  const h = Number.isInteger(hours) ? String(hours) : String(Number(hours.toFixed(2)));
+  if (h !== '0') out.push(...unitSpellings(h, ['h', 'hr', 'hrs'], 'hour'));
+  if (Number.isInteger(hours)) out.push(`PT${h}H`);
+  if (ms % DAY_MS === 0) {
+    const d = ms / DAY_MS;
+    out.push(...unitSpellings(d, ['d'], 'day'), `P${d}D`);
+  }
+  return out;
+}
+
+/** `20` with `m` / `min` and `minute` → `20m`, `20min`, `20-minute`, `20-minutes`, `20minute`, `20minutes`. */
+function unitSpellings(
+  value: number | string,
+  glued: readonly string[],
+  word: string,
+): readonly string[] {
+  const n = String(value);
+  return [
+    ...glued.map((unit) => `${n}${unit}`),
+    `${n}-${word}`,
+    `${n}-${word}s`,
+    `${n}${word}`,
+    `${n}${word}s`,
+  ];
 }
 
 /** The date spellings of the parts said: each said part, and the ISO date when all three were. */

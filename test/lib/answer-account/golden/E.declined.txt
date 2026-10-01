@@ -4,16 +4,17 @@ It understood:
   This app does not route questions to skills.  ⟨understood.notConfigured@1 · library · not-applicable⟩
 It checked:
   It asked to run act; a person was asked and declined.  ⟨checked.declined@1 · library · recorded⟩
-  Anything run before the pause is not in this record.  ⟨checked.beforePause.none@1 · library · not-recorded · before a pause — not in this record⟩
+  No tool result from before the pause is in this record's history.  ⟨beforePause.noResults@1 · library · not-recorded · before the pause — read from the state this record holds⟩
 It did not check:
-  What the tools run before the pause did not check is not in this record.  ⟨notChecked.beforePause@1 · library · not-recorded · before a pause — not in this record⟩
+  No tool result from before the pause is in this record's history.  ⟨beforePause.noResults@1 · library · not-recorded · before the pause — read from the state this record holds⟩
 It found:
   act did not run, so it found nothing.  ⟨found.declined@1 · library · recorded⟩
+  No tool result from before the pause is in this record's history.  ⟨beforePause.noResults@1 · library · not-recorded · before the pause — read from the state this record holds⟩
 How sure:
   Not assessed — this record's committed state holds no verdict the standing can rest on.  ⟨howSure.standing.notAssessed@1 · library · not-applicable⟩
   The library was not set to check the answer's names and numbers.  ⟨howSure.evidence.off@1 · library · not-applicable⟩
 Anything wrong:
   1 tool call did not run cleanly: 0 failed, 0 refused by a rule, 1 declined by a person, 0 not run.  ⟨wrong.errors@1 · library · recorded⟩
   None of the checks this report looks for applies to this answer.  ⟨wrong.notApplicable@1 · library · not-applicable⟩
-  Anything before the pause is not in this record, so these checks cover only the part after it.  ⟨wrong.beforePause@1 · library · not-recorded · before a pause — not in this record⟩
-In one line (unknown): This answer continued after a pause; what happened before the pause is not in this record.  ⟨library⟩
+  The part before the pause is read from the state this record holds. That part's events are not in this record, so how it was routed, what was in front of the model then, and whether a call then failed or was refused by a rule cannot be told here.  ⟨wrong.beforePause.held@1 · library · not-recorded · before the pause — read from the state this record holds⟩
+In one line (unknown): None of the checks this report looks for applies to this answer. This answer continued after a pause; this record holds the state the run kept from before it, not that part's events.  ⟨library⟩

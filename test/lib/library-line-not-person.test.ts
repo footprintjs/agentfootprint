@@ -21,7 +21,7 @@
  * reads the person's words, and no late line reaches the conversation.
  *
  * SAME CLASS, IN THE ANSWER ACCOUNT. `answer-account/facts/checked.ts` ·
- * `readBeforePause` took the LAST `role: 'user'` entry of the recorded history
+ * `readBeforePause` (now `facts/pausedLeg.ts` · `readPausedLeg`) took the LAST `role: 'user'` entry of the recorded history
  * as "the current request", so a library frame written after a resumed leg's
  * pre-pause results (an evidence correction, a budget wrap-up) hid them. It
  * reads through the one rule now (`common.ts` · `isPersonEntry`), as does
@@ -55,7 +55,7 @@ import {
 } from '../../src/core/agent/evidence/figures.js';
 import { stagedRefsNudgeLine } from '../../src/core/agent/stagedRefs.js';
 import { currentRequestIndexOf } from '../../src/core/agent/window/currentRequest.js';
-import { readBeforePause } from '../../src/lib/answer-account/facts/checked.js';
+import { readPausedLeg } from '../../src/lib/answer-account/facts/pausedLeg.js';
 import { isPersonEntry, type ReadContext } from '../../src/lib/answer-account/facts/common.js';
 import { STAGED_DATA_FRAME_PREFIX } from '../../src/lib/saidByPerson.js';
 
@@ -235,10 +235,15 @@ describe('the answer account’s "current request" is the person’s', () => {
     { role: 'user', content: '[evidence check — these values appear in no tool result: 53.2]' },
     { role: 'assistant', content: 'Both arrays answered.' },
   ];
-  const ctx = { resumedLeg: true, view: { state: { history } } } as unknown as ReadContext;
+  // The state the run paused with holds the same history (`snapshot.initialState`).
+  const ctx = {
+    resumedLeg: true,
+    declarations: {},
+    view: { state: { history }, pausedWith: { history } },
+  } as unknown as ReadContext;
 
   it('names the calls answered before the pause even when a library frame follows them', () => {
-    const before = readBeforePause(ctx, { ids: new Set<string>() } as never);
+    const before = readPausedLeg(ctx, { ids: new Set<string>() } as never).calls;
     expect(before.map((c) => c.toolCallId)).toEqual(['p1', 'p2']);
   });
 

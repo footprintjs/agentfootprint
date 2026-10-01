@@ -27,6 +27,7 @@ import type {
   AnswerAccountDeclarations,
   Chip,
   AccountFact,
+  BeforePauseFact,
   FactStatus,
   LimitsDataFact,
   RecordPointer,
@@ -49,8 +50,9 @@ import { readAsked } from './facts/asked.js';
 import { readUnderstood } from './facts/understood.js';
 import { FACT_TEXT_CHARS, MAX_CALLS, readCalls } from './facts/calls.js';
 import { answeringIteration, readInView } from './facts/inView.js';
-import { readBeforePause, readCheckedRows } from './facts/checked.js';
-import { readFoundRow } from './facts/found.js';
+import { readCheckedRows } from './facts/checked.js';
+import { readPausedLeg, type BeforePauseCall } from './facts/pausedLeg.js';
+import { beforePausePointers, readFoundRow } from './facts/found.js';
 import { readHowSure } from './facts/howSure.js';
 import { runChecks, summaryOf, wrongLines } from './signals.js';
 
@@ -390,6 +392,32 @@ function noOwnEventsAccount(
   };
 }
 
+/** One call answered before the pause, as the facts list it (read from the committed state). */
+function beforePauseFact(c: BeforePauseCall): BeforePauseFact {
+  const reading = c.reading;
+  const coverage = c.coverage;
+  return {
+    toolName: c.toolName.slice(0, FACT_TEXT_CHARS),
+    toolCallId: c.toolCallId.slice(0, FACT_TEXT_CHARS),
+    emptiness: reading.emptiness,
+    ...(reading.rows !== undefined && { rows: reading.rows }),
+    ...(reading.source !== undefined && { emptinessSource: reading.source }),
+    ...(coverage !== undefined && {
+      coverage: {
+        kind: coverage.kind,
+        ...(coverage.lookedFor !== undefined && {
+          lookedFor: coverage.lookedFor.text.slice(0, FACT_TEXT_CHARS),
+        }),
+        checked: coverage.items.filter((i) => i.section === 'checked').length,
+        notChecked: coverage.items.filter((i) => i.section === 'notChecked').length,
+        cannotCover: coverage.items.filter((i) => i.section === 'cannotCover').length,
+        kinds: coverage.items.filter((i) => i.kind !== undefined).length,
+      },
+    }),
+    pointers: beforePausePointers(c),
+  };
+}
+
 /** @internal — the account with test hooks (`failTemplate`). The public door is `accountForAnswer`. */
 export function buildAccount(
   recording: unknown,
@@ -429,14 +457,15 @@ export function buildAccount(
   const understood = readUnderstood(ctx);
   const calls = readCalls(ctx);
   const inView = readInView(ctx, calls.ids);
-  const beforePause = readBeforePause(ctx, calls);
-  const checkedRows = readCheckedRows(ctx, calls, beforePause);
-  const found = readFoundRow(ctx, calls, inView, beforePause);
+  const pausedLeg = readPausedLeg(ctx, calls);
+  const beforePause = pausedLeg.calls;
+  const checkedRows = readCheckedRows(ctx, calls, pausedLeg);
+  const found = readFoundRow(ctx, calls, inView, pausedLeg);
   const howSure = readHowSure(ctx, calls);
-  const checks = runChecks(ctx, understood, calls, inView);
-  const wrong = wrongLines(ctx, checks, calls);
+  const checks = runChecks(ctx, understood, calls, inView, pausedLeg);
+  const wrong = wrongLines(ctx, checks, calls, pausedLeg);
   const { answer, limits, limitsData } = readAnswer(view);
-  const summary = summaryOf(ctx, checks, answer.status === 'recorded');
+  const summary = summaryOf(ctx, checks, answer.status === 'recorded', pausedLeg);
 
   const firstSignal = checks.signals[0];
   const wrongChips: Chip[] =
@@ -482,10 +511,7 @@ export function buildAccount(
       routing: understood.routing,
       calls: calls.calls.map((c) => c.fact),
       ...(calls.omitted > 0 && { callsOmitted: calls.omitted }),
-      beforePause: beforePause.slice(0, MAX_CALLS).map(({ toolName, toolCallId }) => ({
-        toolName: toolName.slice(0, FACT_TEXT_CHARS),
-        toolCallId: toolCallId.slice(0, FACT_TEXT_CHARS),
-      })),
+      beforePause: beforePause.slice(0, MAX_CALLS).map((c) => beforePauseFact(c)),
       ...(beforePause.length > MAX_CALLS && { beforePauseOmitted: beforePause.length - MAX_CALLS }),
       inView: inView.all.slice(0, MAX_CALLS).map((r) => r.fact),
       ...(inView.all.length > MAX_CALLS && { inViewOmitted: inView.all.length - MAX_CALLS }),

@@ -5,15 +5,15 @@
  * full `what`, verbatim. More than five calls fold into `row.more@1`.
  *
  * A resumed leg never says "did not run any tools": the calls answered before
- * the pause are named from `history` (tool messages after the current request
- * — the last message a PERSON wrote, `common.ts` · `isPersonEntry` — that are
- * not calls of this run) and said to be out of this record.
+ * the pause are read from the committed state this record holds
+ * (`pausedLeg.ts` · `readPausedLeg`) — each with what its tool declared, from
+ * its `coverageDeclared` rows — and, when the record holds no committed
+ * history, said to be out of this record.
  */
 
-import { chip, joinAnd, MAX_VAR_CHARS, n, v } from '../render.js';
+import { chip, MAX_VAR_CHARS, n, v } from '../render.js';
 import type { TemplateId } from '../templates.js';
-import type { RecordPointer, Sentence } from '../types.js';
-import { isRecord, str } from '../view.js';
+import type { Chip, RecordPointer, Sentence, SentenceVar } from '../types.js';
 import {
   FACT_TEXT_CHARS,
   coverageHead,
@@ -21,43 +21,44 @@ import {
   type CallRead,
   type CallsRead,
   type CoverageItemRead,
+  type CoverageRead,
   type CoverageSectionKey,
 } from './calls.js';
-import { at, historyAt, historyOf, isPersonEntry, takeItem, type ReadContext } from './common.js';
+import { at, historyAt, takeItem, type ReadContext } from './common.js';
+import type { BeforePauseCall, PausedLegRead } from './pausedLeg.js';
 
 /** Calls listed per row before folding. */
 export const MAX_LISTED_CALLS = 5;
 
-export interface BeforePauseCall {
-  readonly toolName: string;
-  readonly toolCallId: string;
-  readonly historyIndex: number;
-}
-
-/** On a resumed leg: tool results in history after the person's current request, not of this run. */
-export function readBeforePause(ctx: ReadContext, calls: CallsRead): BeforePauseCall[] {
-  if (!ctx.resumedLeg) return [];
-  const history = historyOf(ctx.view);
-  let current = -1;
-  history.forEach((m, i) => {
-    if (isPersonEntry(m)) current = i;
-  });
-  const out: BeforePauseCall[] = [];
-  history.forEach((m, i) => {
-    if (i <= current || !isRecord(m) || m.role !== 'tool') return;
-    const id = str(m.toolCallId);
-    const name = str(m.toolName);
-    if (id !== undefined && name !== undefined && !calls.ids.has(id)) {
-      out.push({ toolName: name, toolCallId: id, historyIndex: i });
-    }
-  });
-  return out;
-}
-
 const toolOf = (call: CallRead) => call.tool;
 
-/** Before-pause names printed inline; more distinct names switch to the "among them" wording. */
-export const MAX_BEFORE_PAUSE_NAMES = 3;
+/** What a declaration's lines need of a call — one of this leg's, or one answered before the pause. */
+interface Declared {
+  readonly coverage?: CoverageRead;
+  readonly tool: SentenceVar;
+  /** The tool name the `tool:<name>` voucher carries (cut at 200, like the fact's). */
+  readonly toolName: string;
+  /** Where the call is on the record — an undeclared line points here. */
+  readonly pointers: readonly RecordPointer[];
+}
+
+const declaredOf = (call: CallRead): Declared => ({
+  ...(call.coverage !== undefined && { coverage: call.coverage }),
+  tool: call.tool,
+  toolName: call.fact.toolName,
+  pointers: call.fact.pointers,
+});
+
+/** A call answered before the pause, as its declaration's lines read it. */
+export const declaredBeforePause = (call: BeforePauseCall): Declared => ({
+  ...(call.coverage !== undefined && { coverage: call.coverage }),
+  tool: call.tool,
+  toolName: call.toolName.slice(0, FACT_TEXT_CHARS),
+  pointers: [historyAt(call.historyIndex, '/toolName', call.toolCallId)],
+});
+
+/** The chip every line about the part before the pause carries, read from the state. */
+export const heldChip = (): Chip => chip('before-pause', 'chip.beforePause.held');
 
 /** The pointer that shows the rule that refused a call. */
 function rulePointer(call: CallRead): RecordPointer | undefined {
@@ -71,11 +72,11 @@ function rulePointer(call: CallRead): RecordPointer | undefined {
 
 function itemLines(
   ctx: ReadContext,
-  call: CallRead,
+  call: Declared,
   section: CoverageSectionKey,
   id: { readonly short: TemplateId; readonly full: TemplateId },
 ): Sentence[] {
-  const source = `tool:${call.fact.toolName}` as const;
+  const source = `tool:${call.toolName}` as const;
   const all = call.coverage?.items.filter((i) => i.section === section) ?? [];
   const items: CoverageItemRead[] = [];
   for (const item of all) {
@@ -92,13 +93,13 @@ function itemLines(
     const kindPointer = item.kind !== undefined ? [itemAt(item, 'kind')] : [];
     return item.short !== undefined
       ? ctx.say(id.short, {
-          vars: { short: v(item.short, source, itemAt(item, 'short')), tool: toolOf(call) },
+          vars: { short: v(item.short, source, itemAt(item, 'short')), tool: call.tool },
           pointers: [itemAt(item, 'what'), ...kindPointer],
           chips,
           item: true,
         })
       : ctx.say(id.full, {
-          vars: { what: v(item.what, source, itemAt(item, 'what')), tool: toolOf(call) },
+          vars: { what: v(item.what, source, itemAt(item, 'what')), tool: call.tool },
           pointers: kindPointer,
           chips,
           item: true,
@@ -187,20 +188,64 @@ function checkedBlock(ctx: ReadContext, call: CallRead): Sentence[] {
           pointers: [coverageHead(call.coverage)],
           chips: [chip('declared', 'chip.declared')],
         }),
-        ...itemLines(ctx, call, 'checked', { short: 'checked.item', full: 'checked.item.full' }),
+        ...itemLines(ctx, declaredOf(call), 'checked', {
+          short: 'checked.item',
+          full: 'checked.item.full',
+        }),
       ];
     }
   }
 }
 
-function notCheckedBlock(ctx: ReadContext, call: CallRead): Sentence[] {
-  const tool = toolOf(call);
+/**
+ * The "It checked" block of a call answered BEFORE the pause — what its tool
+ * declared, read from its `coverageDeclared` rows (`pausedLeg.ts`). Whether it
+ * failed or was refused is in that part's events, so the line says what the
+ * model read, never that the tool "ran".
+ */
+function checkedBeforePauseBlock(ctx: ReadContext, call: BeforePauseCall): Sentence[] {
+  const d = declaredBeforePause(call);
+  const checked = call.coverage?.items.filter((i) => i.section === 'checked') ?? [];
+  if (call.coverage === undefined) {
+    return [
+      ctx.say('checked.beforePause.undeclared', {
+        vars: { tool: d.tool },
+        pointers: d.pointers,
+        chips: [chip('not-declared', 'chip.notDeclared'), heldChip()],
+      }),
+    ];
+  }
+  if (checked.length === 0) {
+    return [
+      ctx.say('checked.beforePause.silent', {
+        vars: { tool: d.tool },
+        pointers: [coverageHead(call.coverage)],
+        chips: [heldChip()],
+      }),
+    ];
+  }
+  return [
+    ctx.say('checked.beforePause.declared', {
+      vars: { tool: d.tool },
+      pointers: [coverageHead(call.coverage)],
+      chips: [chip('declared', 'chip.declared'), heldChip()],
+    }),
+    ...itemLines(ctx, d, 'checked', { short: 'checked.item', full: 'checked.item.full' }),
+  ];
+}
+
+function notCheckedBlock(
+  ctx: ReadContext,
+  call: Declared,
+  extra: readonly Chip[] = [],
+): Sentence[] {
+  const tool = call.tool;
   if (call.coverage === undefined) {
     return [
       ctx.say('notChecked.undeclared', {
         vars: { tool },
-        pointers: call.fact.pointers,
-        chips: [chip('not-declared', 'chip.notDeclared')],
+        pointers: call.pointers,
+        chips: [chip('not-declared', 'chip.notDeclared'), ...extra],
       }),
     ];
   }
@@ -213,7 +258,7 @@ function notCheckedBlock(ctx: ReadContext, call: CallRead): Sentence[] {
       ctx.say('notChecked.declared', {
         vars: { tool },
         pointers: [head],
-        chips: [chip('declared', 'chip.declared')],
+        chips: [chip('declared', 'chip.declared'), ...extra],
       }),
       ...itemLines(ctx, call, 'notChecked', {
         short: 'notChecked.item',
@@ -221,14 +266,16 @@ function notCheckedBlock(ctx: ReadContext, call: CallRead): Sentence[] {
       }),
     );
   } else {
-    lines.push(ctx.say('notChecked.silent', { vars: { tool }, pointers: [head] }));
+    lines.push(
+      ctx.say('notChecked.silent', { vars: { tool }, pointers: [head], chips: [...extra] }),
+    );
   }
   if (has('cannotCover')) {
     lines.push(
       ctx.say('cannotCover.declared', {
         vars: { tool },
         pointers: [head],
-        chips: [chip('declared', 'chip.declared')],
+        chips: [chip('declared', 'chip.declared'), ...extra],
       }),
       ...itemLines(ctx, call, 'cannotCover', {
         short: 'cannotCover.item',
@@ -242,12 +289,7 @@ function notCheckedBlock(ctx: ReadContext, call: CallRead): Sentence[] {
       ctx.say('tryInstead.tool', {
         vars: {
           tool,
-          other: v(
-            other.tool,
-            `tool:${call.fact.toolName}`,
-            at(other.event, 'tryInsteadTool', 'tool'),
-            FACT_TEXT_CHARS,
-          ),
+          other: v(other.tool, `tool:${call.toolName}`, other.pointer, FACT_TEXT_CHARS),
         },
       }),
     );
@@ -271,6 +313,35 @@ export function anchorPointer(ctx: ReadContext): RecordPointer[] {
     : [{ kind: 'event', index: anchor.index, type: anchor.type, path: '#meta/runId' }];
 }
 
+/** "…and N more tool calls from before the pause." — past `MAX_LISTED_CALLS` of them. */
+export function beforePauseMore(
+  ctx: ReadContext,
+  before: readonly BeforePauseCall[],
+): Sentence | undefined {
+  const hidden = before.length - MAX_LISTED_CALLS;
+  if (hidden <= 0) return undefined;
+  return ctx.say('beforePause.more', {
+    vars: { n: n(hidden) },
+    pointers: before
+      .slice(MAX_LISTED_CALLS)
+      .map((c) => historyAt(c.historyIndex, '/toolName', c.toolCallId)),
+    chips: [heldChip()],
+  });
+}
+
+/**
+ * The committed history holds no tool result from before the pause. Said as
+ * exactly that — never "nothing ran": a window strategy may have dropped an
+ * earlier result, and the record cannot tell the two apart.
+ */
+export function noResultsBeforePause(ctx: ReadContext): Sentence {
+  return ctx.say('beforePause.noResults', {
+    status: 'not-recorded',
+    missing: 'before-pause',
+    chips: [heldChip()],
+  });
+}
+
 export function foldMore(ctx: ReadContext, calls: CallsRead): Sentence | undefined {
   const hidden = Math.max(0, calls.calls.length - MAX_LISTED_CALLS) + calls.omitted;
   if (hidden === 0) return undefined;
@@ -285,7 +356,7 @@ export function foldMore(ctx: ReadContext, calls: CallsRead): Sentence | undefin
 export function readCheckedRows(
   ctx: ReadContext,
   calls: CallsRead,
-  beforePause: readonly BeforePauseCall[],
+  pausedLeg: PausedLegRead,
 ): CheckedRows {
   const listed = calls.calls.slice(0, MAX_LISTED_CALLS);
   const checked = listed.flatMap((c) => checkedBlock(ctx, c));
@@ -303,27 +374,33 @@ export function readCheckedRows(
             pointers: c.fact.pointers,
           }),
         ]
-      : notCheckedBlock(ctx, c),
+      : notCheckedBlock(ctx, declaredOf(c)),
   );
-  if (ctx.resumedLeg) {
-    const names = [...new Set(beforePause.map((c) => c.toolName.slice(0, FACT_TEXT_CHARS)))];
-    const shown = names.slice(0, MAX_BEFORE_PAUSE_NAMES);
-    const pointers = beforePause.map((c) => historyAt(c.historyIndex, '/toolName', c.toolCallId));
+  if (ctx.resumedLeg && pausedLeg.stateHeld) {
+    // The part before the pause, read from the committed state this record holds.
+    const before = pausedLeg.calls;
+    const shown = before.slice(0, MAX_LISTED_CALLS);
+    checked.push(...shown.flatMap((c) => checkedBeforePauseBlock(ctx, c)));
+    notChecked.push(
+      ...shown.flatMap((c) => notCheckedBlock(ctx, declaredBeforePause(c), [heldChip()])),
+    );
+    const more = beforePauseMore(ctx, before);
+    if (more !== undefined) {
+      checked.push(more);
+      notChecked.push(more);
+    }
+    if (before.length === 0) {
+      checked.push(noResultsBeforePause(ctx));
+      if (notChecked.length === 0) notChecked.push(noResultsBeforePause(ctx));
+    }
+  } else if (ctx.resumedLeg) {
+    // No committed history in this record: nothing of the part before the pause can be read.
     checked.push(
-      names.length > 0
-        ? ctx.say(
-            names.length > shown.length ? 'checked.beforePause.many' : 'checked.beforePause',
-            {
-              vars: { n: n(names.length), names: v(joinAnd(shown), 'library') },
-              pointers,
-              chips: [chip('before-pause', 'chip.beforePause')],
-            },
-          )
-        : ctx.say('checked.beforePause.none', {
-            status: 'not-recorded',
-            missing: 'before-pause',
-            chips: [chip('before-pause', 'chip.beforePause')],
-          }),
+      ctx.say('checked.beforePause.none', {
+        status: 'not-recorded',
+        missing: 'before-pause',
+        chips: [chip('before-pause', 'chip.beforePause')],
+      }),
     );
     notChecked.push(
       ctx.say('notChecked.beforePause', {

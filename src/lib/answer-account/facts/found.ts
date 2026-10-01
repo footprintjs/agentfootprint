@@ -16,9 +16,16 @@ import { chip, n, v } from '../render.js';
 import type { AccountSource, RecordPointer, Sentence } from '../types.js';
 import { at, declarationAt, emptinessSource, historyAt, type ReadContext } from './common.js';
 import { isRecord, str } from '../view.js';
-import { endPointer, type CallRead, type CallsRead } from './calls.js';
-import type { BeforePauseCall } from './checked.js';
-import { anchorPointer, foldMore, MAX_LISTED_CALLS } from './checked.js';
+import { endPointer, FACT_TEXT_CHARS, type CallRead, type CallsRead } from './calls.js';
+import type { BeforePauseCall, PausedLegRead } from './pausedLeg.js';
+import {
+  anchorPointer,
+  beforePauseMore,
+  foldMore,
+  heldChip,
+  MAX_LISTED_CALLS,
+  noResultsBeforePause,
+} from './checked.js';
 import type { InViewAll, InViewRead } from './inView.js';
 
 const toolOf = (call: CallRead) => call.tool;
@@ -79,11 +86,7 @@ function foundForCall(ctx: ReadContext, call: CallRead): Sentence | Sentence[] {
         ? ctx.say('found.absent', {
             vars: {
               tool,
-              lookedFor: v(
-                lookedFor.text,
-                `tool:${call.fact.toolName}`,
-                at(lookedFor.event, 'lookedFor'),
-              ),
+              lookedFor: v(lookedFor.text, `tool:${call.fact.toolName}`, lookedFor.pointer),
             },
             pointers: endPointers,
           })
@@ -200,17 +203,89 @@ function inViewLine(ctx: ReadContext, read: InViewRead): Sentence {
   }
 }
 
+/** Pointers behind a line about what came back from a call before the pause. */
+export function beforePausePointers(call: BeforePauseCall): RecordPointer[] {
+  return [
+    historyAt(call.historyIndex, '/toolName', call.toolCallId),
+    ...(call.reading.emptiness === 'unknown'
+      ? []
+      : [historyAt(call.historyIndex, '#emptiness', call.toolCallId)]),
+  ];
+}
+
+/**
+ * What came back from a call answered BEFORE the pause, as the model read it —
+ * the tool's own bytes in the committed history, with the door its
+ * `coverageDeclared` rows hold (`pausedLeg.ts`). Never "it ran": a rule's
+ * verdict on it is in that part's events.
+ */
+function foundBeforePause(ctx: ReadContext, call: BeforePauseCall): Sentence {
+  const tool = call.tool;
+  const reading = call.reading;
+  const pointers = [
+    ...beforePausePointers(call),
+    ...rowsAtPointers(ctx, call.toolName, reading.source),
+  ];
+  const chips = [heldChip()];
+  switch (reading.emptiness) {
+    case 'declared-absent': {
+      const lookedFor = call.coverage?.lookedFor;
+      return lookedFor !== undefined
+        ? ctx.say('found.beforePause.absent', {
+            vars: {
+              tool,
+              lookedFor: v(
+                lookedFor.text,
+                `tool:${call.toolName.slice(0, FACT_TEXT_CHARS)}`,
+                lookedFor.pointer,
+              ),
+            },
+            pointers,
+            chips,
+          })
+        : ctx.say('found.beforePause.bare', { vars: { tool }, pointers, chips });
+    }
+    case 'undeclared-empty':
+      return ctx.say('found.beforePause.undeclaredEmpty', {
+        vars: { tool },
+        basis: [emptinessSource(reading)],
+        pointers,
+        chips: [chip('undeclared-empty', 'chip.undeclaredEmpty', 'warn'), ...chips],
+      });
+    case 'non-empty':
+      if (reading.rows !== undefined) {
+        return ctx.say('found.beforePause.rows', {
+          vars: { tool, n: n(reading.rows, emptinessSource(reading)) },
+          pointers,
+          chips,
+        });
+      }
+      return ctx.say('found.beforePause.result', { vars: { tool }, pointers, chips });
+    case 'clarify':
+      return ctx.say('found.beforePause.clarify', { vars: { tool }, pointers, chips });
+    case 'unknown':
+      return ctx.say('found.beforePause.result', { vars: { tool }, pointers, chips });
+  }
+}
+
 export function readFoundRow(
   ctx: ReadContext,
   calls: CallsRead,
   inView: InViewAll,
-  beforePause: readonly BeforePauseCall[],
+  pausedLeg: PausedLegRead,
 ): Sentence[] {
   const lines = calls.calls.slice(0, MAX_LISTED_CALLS).flatMap((c) => foundForCall(ctx, c));
   // The same "…and N more tool calls" the other call rows carry, right after the listed calls.
   const more = foldMore(ctx, calls);
   if (more !== undefined) lines.push(more);
-  if (ctx.resumedLeg && beforePause.length > 0) {
+  if (ctx.resumedLeg && pausedLeg.stateHeld) {
+    const before = pausedLeg.calls;
+    lines.push(...before.slice(0, MAX_LISTED_CALLS).map((c) => foundBeforePause(ctx, c)));
+    const moreBefore = beforePauseMore(ctx, before);
+    if (moreBefore !== undefined) lines.push(moreBefore);
+    if (before.length === 0) lines.push(noResultsBeforePause(ctx));
+  } else if (ctx.resumedLeg) {
+    // No paused state in this record: nothing of the part before the pause can be read.
     lines.push(
       ctx.say('found.beforePause', {
         status: 'not-recorded',
@@ -228,16 +303,6 @@ export function readFoundRow(
       ctx.say('found.inView.more', {
         vars: { n: n(inView.more) },
         pointers: inView.all.slice(inView.listed.length).map((r) => at(r.witness, 'sourceId')),
-      }),
-    );
-  }
-  if (lines.length === 0) {
-    // A resumed leg whose own calls and pre-pause calls are both absent.
-    lines.push(
-      ctx.say('found.beforePause', {
-        status: 'not-recorded',
-        missing: 'before-pause',
-        chips: [chip('before-pause', 'chip.beforePause')],
       }),
     );
   }

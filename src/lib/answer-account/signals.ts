@@ -25,8 +25,10 @@ import type {
   Unreachable,
 } from './types.js';
 import { at, emptinessSource, type ReadContext } from './facts/common.js';
-import { itemAt, type CallsRead } from './facts/calls.js';
-import { inViewPointers, inViewVars } from './facts/found.js';
+import { FACT_TEXT_CHARS, itemAt, type CallsRead, type CoverageRead } from './facts/calls.js';
+import { heldChip } from './facts/checked.js';
+import { beforePausePointers, inViewPointers, inViewVars } from './facts/found.js';
+import type { PausedLegRead } from './facts/pausedLeg.js';
 import type { InViewAll } from './facts/inView.js';
 import type { UnderstoodRead } from './facts/understood.js';
 
@@ -55,6 +57,8 @@ export function runChecks(
   understood: UnderstoodRead,
   calls: CallsRead,
   inView: InViewAll,
+  /** The part before a pause, read from the committed state (`facts/pausedLeg.ts`) — judged like this leg's calls. */
+  pausedLeg: PausedLegRead = { stateHeld: false, calls: [] },
 ): ChecksRead {
   const signals: Signal[] = [];
   const unreachable: Unreachable[] = [];
@@ -115,12 +119,31 @@ export function runChecks(
   };
 
   // 2 — existence: EVERY call of this run (the listing cap never limits a check) whose
-  // declaration has not-checked / cannot-cover items — every item, not only the printed ones.
-  for (const call of calls.all) {
+  // declaration has not-checked / cannot-cover items — every item, not only the printed ones —
+  // and every call before a pause whose declaration the committed state holds.
+  const declaredCalls: {
+    readonly coverage?: CoverageRead;
+    readonly tool: SentenceVar;
+    readonly toolName: string;
+    readonly unnamedCall?: (typeof calls.all)[number];
+  }[] = [
+    ...calls.all.map((call) => ({
+      ...(call.coverage !== undefined && { coverage: call.coverage }),
+      tool: call.tool,
+      toolName: call.fact.toolName,
+      ...(call.unnamed === true && { unnamedCall: call }),
+    })),
+    ...pausedLeg.calls.map((call) => ({
+      ...(call.coverage !== undefined && { coverage: call.coverage }),
+      tool: call.tool,
+      toolName: call.toolName.slice(0, FACT_TEXT_CHARS),
+    })),
+  ];
+  for (const call of declaredCalls) {
     const items = call.coverage?.items.filter((i) => i.section !== 'checked') ?? [];
     if (items.length === 0) continue;
-    if (call.unnamed) {
-      unnamed('existence', call);
+    if (call.unnamedCall !== undefined) {
+      unnamed('existence', call.unnamedCall);
       continue;
     }
     const tool = call.tool;
@@ -142,7 +165,7 @@ export function runChecks(
     if (states.existence === 'not-applicable') states.existence = 'reachable';
     checkPointers.push(...withKind.map((i) => itemAt(i, 'kind')));
     for (const item of withKind.filter((i) => i.kind === 'existence')) {
-      const source = `tool:${call.fact.toolName}` as const;
+      const source = `tool:${call.toolName}` as const;
       const never = item.section === 'cannotCover';
       const sentence =
         item.short !== undefined
@@ -166,7 +189,8 @@ export function runChecks(
   const judged = calls.all.filter(
     (c) => c.fact.outcome === 'ran' && c.fact.withheldBy === undefined && c.end !== undefined,
   );
-  if (judged.length > 0 || inView.all.length > 0) states['empty-results'] = 'reachable';
+  if (judged.length > 0 || inView.all.length > 0 || pausedLeg.calls.length > 0)
+    states['empty-results'] = 'reachable';
   const shapeUnknown = (tool: SentenceVar, pointer: RecordPointer) => {
     states['empty-results'] = 'unreachable';
     addUnreachable({
@@ -201,6 +225,28 @@ export function runChecks(
         vars: { tool: call.tool },
         basis: [emptinessSource(call.emptiness)],
         pointers: call.fact.pointers,
+      }),
+    });
+  }
+  // The calls answered before a pause: their bytes are in the committed history, their door in
+  // the committed `coverageDeclared` rows — the same result the model used for THIS answer.
+  for (const call of pausedLeg.calls) {
+    const pointers = beforePausePointers(call);
+    if (call.reading.undeclaredShape) {
+      shapeUnknown(call.tool, pointers[0] as RecordPointer);
+      continue;
+    }
+    checkPointers.push(...pointers.slice(-1));
+    if (call.reading.emptiness !== 'undeclared-empty') continue;
+    addSignal({
+      id: 'undeclared-empty-used',
+      check: 'empty-results',
+      tone: 'bad',
+      sentence: ctx.say('signal.undeclaredEmptyUsed.beforePause', {
+        vars: { tool: call.tool },
+        basis: [emptinessSource(call.reading)],
+        pointers,
+        chips: [heldChip()],
       }),
     });
   }
@@ -258,7 +304,12 @@ export function runChecks(
 }
 
 /** The "Anything wrong" row's lines, in order. */
-export function wrongLines(ctx: ReadContext, checks: ChecksRead, calls: CallsRead): Sentence[] {
+export function wrongLines(
+  ctx: ReadContext,
+  checks: ChecksRead,
+  calls: CallsRead,
+  pausedLeg: PausedLegRead = { stateHeld: false, calls: [] },
+): Sentence[] {
   const lines: Sentence[] = checks.signals.map((s) => s.sentence);
   // Every call, not only the listed ones: a count is a judgement.
   const all = calls.all;
@@ -334,11 +385,17 @@ export function wrongLines(ctx: ReadContext, checks: ChecksRead, calls: CallsRea
   }
   if (ctx.resumedLeg) {
     lines.push(
-      ctx.say('wrong.beforePause', {
-        status: 'not-recorded',
-        missing: 'before-pause',
-        chips: [chip('before-pause', 'chip.beforePause')],
-      }),
+      pausedLeg.stateHeld
+        ? ctx.say('wrong.beforePause.held', {
+            status: 'not-recorded',
+            missing: 'before-pause',
+            chips: [heldChip()],
+          })
+        : ctx.say('wrong.beforePause', {
+            status: 'not-recorded',
+            missing: 'before-pause',
+            chips: [chip('before-pause', 'chip.beforePause')],
+          }),
     );
   }
   if (ctx.view.scope === 'unfiltered') {
@@ -352,8 +409,36 @@ export interface SummaryRead {
   readonly tone: 'ok' | 'warn' | 'bad' | 'unknown';
 }
 
-/** The one-liner. */
-export function summaryOf(ctx: ReadContext, checks: ChecksRead, finished: boolean): SummaryRead {
+/**
+ * The one-liner. On a resumed leg whose record holds the committed state, the
+ * checks above read the part before the pause from it, so the one-liner is
+ * the one any answer gets, followed by what this record does NOT hold of the
+ * part before the pause (its events). Only a record with no committed history
+ * says the part before the pause is not in it.
+ */
+export function summaryOf(
+  ctx: ReadContext,
+  checks: ChecksRead,
+  finished: boolean,
+  pausedLeg: PausedLegRead = { stateHeld: false, calls: [] },
+): SummaryRead {
+  const read = summaryOfChecks(ctx, checks, finished, pausedLeg.stateHeld);
+  if (!finished || !ctx.resumedLeg || !pausedLeg.stateHeld) return read;
+  return {
+    sentence: joinSentences(
+      read.sentence,
+      ctx.say('summary.resumed.held', { status: 'not-recorded', missing: 'before-pause' }),
+    ),
+    tone: read.tone,
+  };
+}
+
+function summaryOfChecks(
+  ctx: ReadContext,
+  checks: ChecksRead,
+  finished: boolean,
+  stateHeld: boolean,
+): SummaryRead {
   if (!finished) {
     return {
       sentence: ctx.say('summary.unfinished', { status: 'not-recorded', missing: 'no-event' }),
@@ -363,7 +448,7 @@ export function summaryOf(ctx: ReadContext, checks: ChecksRead, finished: boolea
   const [first, second] = checks.signals;
   if (first !== undefined) {
     let sentence = joinSentences(first.sentence, second?.sentence);
-    if (ctx.resumedLeg) {
+    if (ctx.resumedLeg && !stateHeld) {
       sentence = joinSentences(
         sentence,
         ctx.say('summary.resumed.tail', { status: 'not-recorded', missing: 'before-pause' }),
@@ -371,7 +456,7 @@ export function summaryOf(ctx: ReadContext, checks: ChecksRead, finished: boolea
     }
     return { sentence, tone: first.tone };
   }
-  if (ctx.resumedLeg) {
+  if (ctx.resumedLeg && !stateHeld) {
     return {
       sentence: ctx.say('summary.resumed', { status: 'not-recorded', missing: 'before-pause' }),
       tone: 'unknown',

@@ -5,14 +5,14 @@ It understood:
 It checked:
   It ran second. The tool did not say what it checked.  ⟨checked.undeclared@1 · library · recorded · no coverage declared⟩
   It asked to run third, but the call was not run.  ⟨checked.notDispatched@1 · library · recorded⟩
-  Before the pause it also ran 1 tool (first); what those checked is not in this record.  ⟨checked.beforePause@1 · library · recorded · before a pause — not in this record⟩
+  Before the pause, the model read what came back from first; the tool did not say what it checked.  ⟨checked.beforePause.undeclared@1 · library · recorded · no coverage declared / before the pause — read from the state this record holds⟩
 It did not check:
   second did not say what it left unchecked.  ⟨notChecked.undeclared@1 · library · recorded · no coverage declared⟩
-  What the tools run before the pause did not check is not in this record.  ⟨notChecked.beforePause@1 · library · not-recorded · before a pause — not in this record⟩
+  first did not say what it left unchecked.  ⟨notChecked.undeclared@1 · library · recorded · no coverage declared / before the pause — read from the state this record holds⟩
 It found:
   second returned a result.  ⟨found.result@1 · library · recorded⟩
   third did not run, so it found nothing.  ⟨found.notDispatched@1 · library · recorded⟩
-  What the tools found before the pause is not in this record.  ⟨found.beforePause@1 · library · not-recorded · before a pause — not in this record⟩
+  Before the pause, the model read what came back from first.  ⟨found.beforePause.result@1 · library · recorded · before the pause — read from the state this record holds⟩
 How sure:
   Not assessed — this record's committed state holds no verdict the standing can rest on.  ⟨howSure.standing.notAssessed@1 · library · not-applicable⟩
   The library was not set to check the answer's names and numbers.  ⟨howSure.evidence.off@1 · library · not-applicable⟩
@@ -20,5 +20,5 @@ Anything wrong:
   1 tool call did not run cleanly: 0 failed, 0 refused by a rule, 0 declined by a person, 1 not run.  ⟨wrong.errors@1 · library · recorded⟩
   None of the checks this report looks for could be run on this record.  ⟨wrong.unreachable.all@1 · library · not-recorded · not recorded⟩
     • It cannot be told whether the result of second was empty: its shape is not declared.  ⟨unreachable.empty@1 · library · not-recorded⟩
-  Anything before the pause is not in this record, so these checks cover only the part after it.  ⟨wrong.beforePause@1 · library · not-recorded · before a pause — not in this record⟩
-In one line (unknown): This answer continued after a pause; what happened before the pause is not in this record.  ⟨library⟩
+  The part before the pause is read from the state this record holds. That part's events are not in this record, so how it was routed, what was in front of the model then, and whether a call then failed or was refused by a rule cannot be told here.  ⟨wrong.beforePause.held@1 · library · not-recorded · before the pause — read from the state this record holds⟩
+In one line (unknown): This report could not run any of its checks on this record. This answer continued after a pause; this record holds the state the run kept from before it, not that part's events.  ⟨library⟩

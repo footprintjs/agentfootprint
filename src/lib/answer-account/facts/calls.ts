@@ -36,6 +36,7 @@ import {
   historyOf,
   readEmptiness,
   rowsAtOf,
+  stateAt,
   type EmptinessReading,
   type ReadContext,
 } from './common.js';
@@ -57,18 +58,25 @@ export interface CoverageItemRead {
   readonly what: string;
   readonly short?: string;
   readonly kind?: 'existence' | 'scope';
-  /** Pointer base: the item on its event. */
-  readonly event: ViewEvent;
+  /**
+   * Pointer base: the declaration that holds the item — its event
+   * (`tools.absent` / `tools.coverage_declared`), or, for a call before a
+   * pause, its row of the committed `coverageDeclared` state.
+   */
+  readonly base: (...keys: readonly (string | number)[]) => RecordPointer;
   readonly position: number;
 }
 
 export interface CoverageRead {
   readonly kind: 'absent' | 'coverage';
+  /** The declaration's events — empty when it was read from the committed state. */
   readonly events: readonly ViewEvent[];
-  readonly lookedFor?: { readonly text: string; readonly event: ViewEvent };
+  /** Where the declaration's head is: its tool name when the record holds one, else its call id. */
+  readonly head: RecordPointer;
+  readonly lookedFor?: { readonly text: string; readonly pointer: RecordPointer };
   /** EVERY declared item — the checks judge them all; the rows print what the item budget allows. */
   readonly items: readonly CoverageItemRead[];
-  readonly tryInsteadTool?: { readonly tool: string; readonly event: ViewEvent };
+  readonly tryInsteadTool?: { readonly tool: string; readonly pointer: RecordPointer };
 }
 
 /** One call, as the row readers need it (the fact plus the events behind it). */
@@ -140,21 +148,38 @@ function indexByCall(ctx: ReadContext): CallIndex {
   };
 }
 
-function readCoverage(events: readonly ViewEvent[]): CoverageRead | undefined {
-  if (events.length === 0) return undefined;
+/** One declaration as a reader meets it: its fields, and where each leaf of it is on the record. */
+interface DeclarationSource {
+  readonly fields: Readonly<Record<string, unknown>>;
+  readonly base: (...keys: readonly (string | number)[]) => RecordPointer;
+  readonly absent: boolean;
+}
+
+/**
+ * The ONE reading of a tool's coverage declaration(s) — from its events for a
+ * call of this run, or from its rows of the committed `coverageDeclared`
+ * state for a call before a pause (`readStateCoverage`). Same fields, same
+ * refusals; only the pointer base differs.
+ */
+function readDeclarations(
+  sources: readonly DeclarationSource[],
+  events: readonly ViewEvent[],
+): CoverageRead | undefined {
+  const first = sources[0];
+  if (first === undefined) return undefined;
   const items: CoverageItemRead[] = [];
   let lookedFor: CoverageRead['lookedFor'];
   let tryInsteadTool: CoverageRead['tryInsteadTool'];
-  for (const event of events) {
-    const lf = str(event.payload.lookedFor);
+  for (const { fields, base } of sources) {
+    const lf = str(fields.lookedFor);
     if (lookedFor === undefined && lf !== undefined && lf.length > 0)
-      lookedFor = { text: lf, event };
-    const tit = event.payload.tryInsteadTool;
+      lookedFor = { text: lf, pointer: base('lookedFor') };
+    const tit = fields.tryInsteadTool;
     if (tryInsteadTool === undefined && isRecord(tit) && typeof tit.tool === 'string') {
-      tryInsteadTool = { tool: tit.tool, event };
+      tryInsteadTool = { tool: tit.tool, pointer: base('tryInsteadTool', 'tool') };
     }
     for (const section of SECTIONS) {
-      const list = event.payload[section];
+      const list = fields[section];
       if (!Array.isArray(list)) continue;
       list.forEach((item: unknown, position) => {
         if (!isRecord(item) || typeof item.what !== 'string') return;
@@ -171,20 +196,58 @@ function readCoverage(events: readonly ViewEvent[]): CoverageRead | undefined {
           what: item.what,
           ...(short !== undefined && { short }),
           ...(kind !== undefined && { kind }),
-          event,
+          base,
           position,
         });
       });
     }
   }
-  const kind = events.some((e) => e.type.endsWith('tools.absent')) ? 'absent' : 'coverage';
+  const named = sources.find((src) => typeof src.fields.toolName === 'string');
   return {
-    kind,
+    kind: sources.some((src) => src.absent) ? 'absent' : 'coverage',
     events,
+    head: named !== undefined ? named.base('toolName') : first.base('toolCallId'),
     ...(lookedFor !== undefined && { lookedFor }),
     items,
     ...(tryInsteadTool !== undefined && { tryInsteadTool }),
   };
+}
+
+function readCoverage(events: readonly ViewEvent[]): CoverageRead | undefined {
+  return readDeclarations(
+    events.map((event) => ({
+      fields: event.payload,
+      base: (...keys: readonly (string | number)[]) => at(event, ...keys),
+      absent: event.type.endsWith('tools.absent'),
+    })),
+    events,
+  );
+}
+
+/** The committed state's coverage key: every declaration the run's tools made, tracked. */
+export const COVERAGE_STATE_KEY = 'coverageDeclared';
+
+/**
+ * A call's declaration as the committed state keeps it — its rows of
+ * `coverageDeclared` (tracked state: a limit is a fact about the answer, so it
+ * rides every recording, `core/agent/types.ts` · `coverageDeclared`).
+ * What a call BEFORE a pause declared is read here: its events are in the
+ * earlier leg, its rows are in this record's state.
+ */
+export function readStateCoverage(
+  rows: readonly unknown[],
+  toolCallId: string,
+): CoverageRead | undefined {
+  const sources: DeclarationSource[] = [];
+  rows.forEach((row, index) => {
+    if (!isRecord(row) || row.toolCallId !== toolCallId) return;
+    sources.push({
+      fields: row,
+      base: (...keys: readonly (string | number)[]) => stateAt(COVERAGE_STATE_KEY, index, ...keys),
+      absent: row.kind === 'absence',
+    });
+  });
+  return readDeclarations(sources, []);
 }
 
 function toolNameFor(
@@ -414,12 +477,9 @@ export function readCalls(ctx: ReadContext): CallsRead {
 
 /** The declaration's head: its tool name when the row holds one, else the call id it was joined by. */
 export function coverageHead(coverage: CoverageRead): RecordPointer {
-  const named = coverage.events.find((e) => typeof e.payload.toolName === 'string');
-  return named !== undefined
-    ? at(named, 'toolName')
-    : at(coverage.events[0] as ViewEvent, 'toolCallId');
+  return coverage.head;
 }
 
 /** Pointer to one coverage item's leaf. */
 export const itemAt = (item: CoverageItemRead, field: 'what' | 'short' | 'kind'): RecordPointer =>
-  at(item.event, item.section, item.position, field);
+  item.base(item.section, item.position, field);

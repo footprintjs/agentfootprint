@@ -21,6 +21,7 @@
  */
 
 import { timeFormsOf, turnFormsWindowsOf } from '../../time/forms.js';
+import { clockOf } from '../../time/rows.js';
 import { HIDDEN_VALUE } from '../arguments/rows.js';
 import type { FindingsLedger } from '../findings/types.js';
 import { isWindowFillRow, type TimeLineage } from './route.js';
@@ -30,8 +31,9 @@ import { isWindowFillRow, type TimeLineage } from './route.js';
 // detached: yes — fresh arrays per call, read from the committed ledger and the served time line.
 /**
  * This turn's time spellings, split by lineage (time design § 9.5, step T7):
- * per recorded window (`core/time/forms.ts` · `turnFormsWindowsOf`), the
- * spellings `timeFormsOf` files as the person's and as the library's; plus,
+ * per recorded window and offered proposal (`core/time/forms.ts` ·
+ * `turnFormsWindowsOf`), the spellings `timeFormsOf` files as the person's and
+ * as the library's; the turn's clock at the grain it is served (G16); plus,
  * as the library's, every value it filled from a window into a call
  * (`isWindowFillRow`) and the served time line (`timeLine` — library text,
  * never evidence, so an answer that echoes it is not the person's).
@@ -45,6 +47,9 @@ export const timeLineageOf: TimeLineage = (scope) => {
     said.push(...forms.said);
     derived.push(...forms.derived);
   }
+  // The turn's clock, as served on every request (G16) — the library's value, never the person's.
+  const clock = clockOf(ledger);
+  if (clock !== undefined) derived.push(...timeFormsOf({ clock }).derived);
   const turn = scope.turnNumber as number;
   for (const row of ledger) {
     if (row.kind !== 'argument' || row.turn !== turn || !isWindowFillRow(row, ledger)) continue;

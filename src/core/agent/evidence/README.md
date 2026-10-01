@@ -432,7 +432,7 @@ person's words. Neither is true, so the record says which.
 | the value in the answer | lineage | the gate | the standing |
 |---|---|---|---|
 | a part the person WROTE, at the grain they wrote it (`8:00` for "8 AM", `08:40`, `2026-10-09` for a confirmed `10/09/26`), or any part of a window they typed in the ask or set in a UI | said | exempt (`exemptFromRun`'s `timeSaid`) | nothing fires |
-| an implied year, the abbreviation in effect, an offset, the end-of-grain minute, a UTC or epoch spelling, a look-back's duration, a value the library filled from the window, a value of the served time line, any part of a `model` reading | `derived-from-reading` | not flagged: `EvidenceVerdict.derived`, filed as ONE `time-derived` row per judged answer that stands (`core/time/rows.ts`) | `derived-from-reading` — "not sure", never "known" |
+| an implied year, the abbreviation in effect, an offset, the end-of-grain minute, a UTC or epoch spelling, a look-back's duration, the window's length ("6:25 to 6:45" → `20-minute`, and `21-minute` read to the end of its grain), a value the library filled from the window, a value of the served time line, the turn's clock at its served minute (`7:08`, the date, the year — never `7:09` or its seconds), any part of a `model` reading or of a reading the time ask offers that the person has not answered yet (`06:25:00` for "6:25") | `derived-from-reading` | not flagged: `EvidenceVerdict.derived`, filed as ONE `time-derived` row per judged answer that stands (`core/time/rows.ts`) | `derived-from-reading` — "not sure", never "known" |
 | anything else (`09:15` nobody read, `2031`) | none | flagged, as always | `value-unsupported` |
 
 The order is exempt → the tools' results → derived: a value a tool returned is

@@ -8,6 +8,8 @@
  *                 `08:41`, `-07:00`, `PDT` for a said `PST`, UTC and epoch spellings → derived; an
  *                 implied year → derived; a `model` reading → nothing said; a window the person
  *                 typed or set in a UI → every part said; the two lists never share a spelling;
+ *                 the window's length (as said, and as read to the end of its grain) → derived;
+ *                 the turn's clock at its served minute → derived, never another minute or its seconds;
  *   property    — the text rule equals the retired gate table (`normalize.ts` ·
  *                 `dateAndClockForms`, kept below as the oracle) over seeded time-like texts;
  *   boundary    — a DST end (`01:30` twice) spells each instant in its own offset; a record the
@@ -40,6 +42,19 @@ const FIELD: FormsWindow = {
   zone: LA,
   reading: {
     said: ['year', 'month', 'day', 'hour', 'minute', 'meridiem', 'zone'],
+    grain: 'minute',
+    notes: [{ kind: 'end-of-grain' }],
+  },
+};
+
+/** "6:25 to 6:45 AM on October 1", confirmed — the take-2 video's window: minute grain, read to the end of it. */
+const TAKE2: FormsWindow = {
+  source: 'answered',
+  answer: 'confirmed',
+  range: { from: '2026-10-01T06:25:00-07:00', to: '2026-10-01T06:46:00-07:00' },
+  zone: LA,
+  reading: {
+    said: ['month', 'day', 'hour', 'minute', 'meridiem'],
     grain: 'minute',
     notes: [{ kind: 'end-of-grain' }],
   },
@@ -154,6 +169,61 @@ describe('one recorded window — said at grain, the rest derived', () => {
       },
     });
     expect(derived).toContain('2h');
+  });
+
+  it('the window’s length is derived — as said, and as read to the end of its grain (take-2 video)', () => {
+    // The field run: "from 6:25 to 6:45 AM on October 1", the reading confirmed as
+    // [06:25, 06:46) — the answer said "that 20-minute window".
+    const { said, derived } = timeFormsOf({ window: TAKE2 });
+    for (const form of ['20-minute', '20-minutes', '20min', '20m', '1200s', '0.33h', 'PT20M']) {
+      expect(derived, form).toContain(form);
+    }
+    // The end-of-grain range is 21 minutes long — the library's reading, also derived.
+    expect(derived).toEqual(expect.arrayContaining(['21-minute', '1260s', '0.35h', 'PT21M']));
+    // A length is arithmetic over the ends, never a part the person wrote.
+    expect(said.some((f) => /minute|^\d+m$|h$/.test(f))).toBe(false);
+    // A length the window does not have is in neither list.
+    expect([...said, ...derived]).not.toContain('45-minute');
+    // Only whole tokens: a spaced spelling is two tokens, and a bare count would ground a figure.
+    expect(derived).not.toContain('20');
+    expect(derived.every((f) => !/\s/.test(f))).toBe(true);
+  });
+
+  it('a window not widened has one length; whole hours and days are spelled too', () => {
+    const { derived } = timeFormsOf({
+      window: {
+        source: 'answered',
+        answer: 'edited',
+        range: { from: '2026-09-30T06:00:00-07:00', to: '2026-09-30T12:00:00-07:00' },
+        zone: LA,
+      },
+    });
+    expect(derived).toEqual(expect.arrayContaining(['6-hour', '6h', '360-minute', 'PT6H']));
+    const day = timeFormsOf({
+      window: {
+        source: 'answered',
+        answer: 'edited',
+        range: { from: '2026-09-29T00:00:00Z', to: '2026-09-30T00:00:00Z' },
+        zone: 'UTC',
+      },
+    }).derived;
+    expect(day).toEqual(expect.arrayContaining(['1-day', '1d', '24-hour', 'P1D']));
+  });
+
+  it('the turn’s clock is derived at the minute it is served — never another minute, never its seconds', () => {
+    // G16: "This turn's time: Thursday 2026-10-01 07:08 America/Los_Angeles (UTC-07:00)."
+    const { said, derived } = timeFormsOf({ clock: { now: '2026-10-01T14:08:49Z', zone: LA } });
+    expect(said).toEqual([]);
+    for (const form of ['7:08', '07:08', '7:08am', '2026', '2026-10-01', '-07:00', 'PDT', LA]) {
+      expect(derived, form).toContain(form);
+    }
+    for (const form of ['7:09', '07:09', '07:08:49', '14:08', '6:25', '06:25']) {
+      expect(derived, form).not.toContain(form);
+    }
+    // Under an unknown zone (G15) the clock is served — and spelled — in UTC.
+    const utc = timeFormsOf({ clock: { now: '2026-10-01T14:08:49Z', zone: 'UTC' } }).derived;
+    expect(utc).toEqual(expect.arrayContaining(['14:08', '2:08pm', '2026-10-01']));
+    expect(utc).not.toContain('7:08');
   });
 
   it('BOUNDARY: across a DST end, each instant is spelled in its own offset', () => {
