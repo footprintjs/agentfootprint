@@ -150,7 +150,7 @@ space of approximately 6.3 TB". main's gate flagged 3 of those 24 answers. With 
 figures served and the dial on, no answer invented a figure, and none was flagged falsely.
 
 The gain cannot be split between the two fixes from this run: the served figures left nothing to
-invent. The dial's share is measured separately at $0 (`node <replay>` over the saved `before`
+invent. The dial's share is measured separately at $0 (`bench/figures/replay.mjs` over the saved `before`
 answers, judged again by the gate with `figures: true`, `assist`, over the same `before` view).
 The dial flags **24 of the 24** answers the labeller marks invented, compared with 3 of 24 for
 main's gate. It flags 2 more answers that the labeller clears ("approximately 5.4 TB" usable).
