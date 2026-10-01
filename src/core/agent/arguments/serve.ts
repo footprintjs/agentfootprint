@@ -402,17 +402,23 @@ function pendingSentence(
       `assistant's reading of ${quotes}.`
     );
   }
-  const calls = tools.flatMap((pt) => {
+  const leftOut = tools.flatMap((pt) => {
     const args = [...new Set(pt.forms.flatMap((f) => formArguments(f).map((a) => a.argument)))];
-    return args.length === 0 ? [] : [`${pt.name} is called with ${args.join(', ')} left out`];
+    return args.length === 0 ? [] : [{ name: pt.name, args: args.join(', ') }];
   });
-  if (calls.length === 0) return undefined;
-  return (
-    `The window for ${quotes} is not settled yet: ${formClause(
+  if (leftOut.length === 0) return undefined;
+  const unread = (windows.pendingUnread ?? []).filter((q) => pending.includes(q));
+  if (unread.length > 0) {
+    return unreadSentence(
       pending,
-      windows.pendingZones,
-      windows.pendingUnread,
-    )} ` +
+      windows.pendingZones ?? [],
+      unread,
+      leftOut.map((c) => `${c.name} with ${c.args} left out`).join(', or '),
+    );
+  }
+  const calls = leftOut.map((c) => `${c.name} is called with ${c.args} left out`);
+  return (
+    `The window for ${quotes} is not settled yet: ${formClause(pending, windows.pendingZones)} ` +
     `${calls.join(', or ')} (or the call is refused with the reason). So the next step is that ` +
     'call — not a question about the time in the reply, and not a window written into the call, ' +
     'which would run unconfirmed.'
@@ -422,16 +428,10 @@ function pendingSentence(
 /**
  * What the library's own form does for the pending quotes, up to "opens when": it shows its
  * reading to confirm — or, for a quote it holds no reading of (`ReaderWindows.pendingZones`: a
- * zone it cannot resolve), it asks which time zone the words name and shows no reading; or, for
- * words it could not read at all (`ReaderWindows.pendingUnread`), it asks which time they meant
- * with nothing filled in.
+ * zone it cannot resolve), it asks which time zone the words name and shows no reading. Words it
+ * could not read at all (`ReaderWindows.pendingUnread`) are {@link unreadSentence}'s.
  */
-function formClause(
-  pending: readonly string[],
-  zones: readonly string[] = [],
-  unread: readonly string[] = [],
-): string {
-  if (unread.some((q) => pending.includes(q))) return unreadClause(pending, zones, unread);
+function formClause(pending: readonly string[], zones: readonly string[] = []): string {
   const zoned = pending.filter((q) => zones.includes(q));
   const read = pending.filter((q) => !zones.includes(q));
   if (zoned.length === 0) {
@@ -456,25 +456,36 @@ function formClause(
 }
 
 /**
- * {@link formClause} when some pending words were not read at all: each group of quotes with what
- * the form does for it, joined; the words-not-read part alone when it is the only one.
+ * The pending half when some of the person's words were not read at all
+ * (`ReaderWindows.pendingUnread`): the library's CONCLUSION and the ONE next step, in that order —
+ * it could not read those words, so the next step is the call with the period left out, which
+ * opens its own form (asking which time they meant, nothing filled in; beside it, a reading to
+ * confirm and a zone to name, each quote with what the form does for it) — then the two moves
+ * that are not it, said as what not to do.
+ *
+ * WHY THIS SHAPE. The line before it opened "The window for … is not settled yet: the library
+ * could not read those words, so its own form asks the person which time they meant … So the next
+ * step is that call — not a question about the time in the reply". Haiku 4.5 answered it with a
+ * question in prose and no call on 15/15 `yesterday-morning` runs of the T6b bench
+ * (`bench/time/runs/haiku45-t6b-v2`), and again in the 2026-10-01 demo video ("which clients had
+ * slow operations yesterday morning"): "could not read" read as permission to ask, and the next
+ * step came last. So the step comes first, as the conclusion of what the library could not read,
+ * and the reply's question is named as the move NOT to make (`bench/time/RULE-unread.md`).
  */
-function unreadClause(
+function unreadSentence(
   pending: readonly string[],
   zones: readonly string[],
   unread: readonly string[],
+  leftOut: string,
 ): string {
   const listed = (qs: readonly string[]): string => qs.map((q) => `“${q}”`).join(', ');
-  const blank = pending.filter((q) => unread.includes(q));
   const zoned = pending.filter((q) => zones.includes(q) && !unread.includes(q));
   const read = pending.filter((q) => !zones.includes(q) && !unread.includes(q));
-  if (zoned.length === 0 && read.length === 0) {
-    return (
-      'the library could not read those words, so its own form asks the person which time they ' +
-      'meant, with nothing filled in, and it opens when'
-    );
-  }
-  const parts = [
+  const alone = zoned.length === 0 && read.length === 0;
+  const does = [
+    alone
+      ? 'asks the person which time they meant, with nothing filled in'
+      : `asks the person which time ${listed(unread)} meant, with nothing filled in`,
     ...(read.length > 0
       ? [`shows its reading of ${listed(read)} with the zone for the person to confirm`]
       : []),
@@ -485,9 +496,17 @@ function unreadClause(
           )}, which the library holds no reading of until it knows it`,
         ]
       : []),
-    `asks which time ${listed(blank)} meant, words the library could not read`,
   ];
-  return `the library's own form ${parts.join(', and ')}; the form opens when`;
+  const doing =
+    does.length === 1
+      ? does[0]
+      : `${does.slice(0, -1).join(', ')}, and ${does[does.length - 1] as string}`;
+  return (
+    `The library could not read ${listed(unread)}, so the next step is to call ${leftOut}: ` +
+    `that call opens the library's own form, which ${doing} (or the call is refused with the ` +
+    'reason). Do not ask about the time in the reply — the form asks it — and do not write a ' +
+    'window into the call, which would run unconfirmed.'
+  );
 }
 
 // LENS · late-line · request-ephemeral

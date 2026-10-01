@@ -322,8 +322,14 @@ A reading waiting on its zone (no candidates yet) and words the reader could not
 `proposed` check above fires for them as well, and a tool whose rule assumes its period is asked,
 never defaulted. The unread words are asked as ONE window field with nothing pre-filled
 (`format: 'time-range'`, "Which time did you mean by “yesterday morning”?"), judged and converted
-like any answer; the pending half says "the library could not read those words, so its own form
-asks the person which time they meant, with nothing filled in". The window the person set in the
+like any answer; the pending half leads with the library's conclusion and the ONE next step —
+"The library could not read “yesterday morning”, so the next step is to call client_activity with
+start_time, end_time left out: that call opens the library's own form, which asks the person which
+time they meant, with nothing filled in … Do not ask about the time in the reply — the form asks
+it" (`serve.ts` · `unreadSentence`). The line before it ("The window for … is not settled yet: the
+library could not read those words …", the next step last) drew a prose question and no call on
+15/15 Haiku 4.5 runs; under `bench/time/RULE-unread.md` the free-entry ask opened 0/30 → 17/30
+(`yesterday-morning` 0/15 → 15/15; `last-week` 0/15 → 2/15 — the model still writes `7d`). The window the person set in the
 app's time control (`time.window`) is served on its own sentence under `.time()`, with or without
 a reader — on every request of the turn, whether or not a served tool declares a period (G14: the
 window is a fact about the person's turn; with no tool that can take values it is named alone,

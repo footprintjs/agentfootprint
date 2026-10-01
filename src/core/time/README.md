@@ -359,9 +359,11 @@ reader could not read): one window field — the zone first, or "Which time did 
 with nothing pre-filled (`format: 'time-range'`) — judged at the door and converted into each
 call's form like any answer, whatever the tool's own rule says (time follow-ups, packet "gaps":
 `yesterday morning` to a tool that assumed `-30m` ran `-30m`; an ASK-rule tool's own format-less
-ask handed a raw `a/b` to a tool that reads `a..b`). The served line names them pending: "the
-library could not read those words, so its own form asks the person which time they meant…".
-A turn with no reader asks as it always did.
+ask handed a raw `a/b` to a tool that reads `a..b`). The served line leads with the library's conclusion and the one next step: "The library could
+not read “yesterday morning”, so the next step is to call smb_records with window left out: that
+call opens the library's own form … Do not ask about the time in the reply — the form asks it"
+(`arguments/serve.ts` · `unreadSentence`; measured by `bench/time/RULE-unread.md`). A turn with
+no reader asks as it always did.
 
 ```ts
 // 'any SMB on 10.0.0.1 yesterday morning?' — the model leaves `window` out (rule: assume '-30m'):

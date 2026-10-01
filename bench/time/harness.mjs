@@ -200,6 +200,9 @@ export function anthropicWire(doors, sdkClient, requests, personMessage) {
  * @param {string} opts.now     the run's clock, ISO (the time the person wrote the message)
  * @param {object} [opts.sdkClient]
  * @param {number} [opts.temperature] sent only when set; the registered run sends none
+ * @param {number} [opts.maxAnsweredAsks] how many asks the person answers (default
+ *   `MAX_ANSWERED_ASKS`); `0` ends the run at its first ask, kept as `pendingAsk` — the unread
+ *   rule's cases (`rule-unread.mjs`) measure whether the ask OPENS, not what follows it
  */
 export async function runCase(opts) {
   const { doors, caseDef, arm, rep, provider: kind, model, now } = opts;
@@ -225,9 +228,11 @@ export async function runCase(opts) {
   let answer;
   let error;
   let stuck = false;
+  let pendingAsk;
+  const maxAsks = opts.maxAnsweredAsks ?? MAX_ANSWERED_ASKS;
   try {
     let out = await agent.run({ message: caseDef.message, time: { now } });
-    while (doors.isInputPause(out) && asks.length < MAX_ANSWERED_ASKS) {
+    while (doors.isInputPause(out) && asks.length < maxAsks) {
       const ai = out.awaitingInput;
       const answered = answerAsk(caseDef, ai, nowMs);
       asks.push({
@@ -243,6 +248,19 @@ export async function runCase(opts) {
     }
     if (typeof out === 'string') answer = out;
     else stuck = true;
+    // The ask the run ended on, unanswered: its fields and how many values each OFFERED (an
+    // empty list is the free-entry ask — nothing filled in).
+    if (doors.isInputPause(out)) {
+      pendingAsk = {
+        question: out.awaitingInput.question,
+        fields: (out.awaitingInput.fields ?? []).map((f) => ({
+          id: f.id,
+          ...(f.format !== undefined && { format: f.format }),
+          description: f.description,
+          offered: (f.enum ?? []).length,
+        })),
+      };
+    }
   } catch (err) {
     error = String(err?.message ?? err);
   }
@@ -271,6 +289,7 @@ export async function runCase(opts) {
     ...(error !== undefined && { error }),
     readLog,
     asks,
+    ...(pendingAsk !== undefined && { pendingAsk }),
     rows,
     requests,
     usage,

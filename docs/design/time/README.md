@@ -1723,7 +1723,7 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   as a time range at the door, converted into the tool's own form by `convertForTool` (which also
   closes the ASK-rule half: the tool's own format-less ask had handed a raw `a/b` interval to a
   tool that reads `a..b`), and filed `time-answer` `edited` + a `call-window` `filled`. The served
-  line names the words as pending (`ReaderWindows.pendingUnread`, `serve.ts` · `unreadClause`):
+  line names the words as pending (`ReaderWindows.pendingUnread`, `serve.ts` · `unreadClause` — since the demo-video follow-up, `unreadSentence`, below):
   "the library could not read those words, so its own form asks the person which time they
   meant…" — the conclusion, late, at the decision point (the recency strategy). This REVERSES the
   T6b line "an unreadable mention offers no pre-fill: the tool's own rule asks" (pinned in
@@ -1796,6 +1796,29 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   `.time()`; classic mode serves it on its first request only. Pinned by
   `test/core/time/zone-unknown-run.test.ts`, `clock-served.test.ts`, and the updated byte tests
   (`clock-run.test.ts`: an armed request is the unarmed one plus the one line).
+
+- **Time follow-ups, the demo video (2026-10-01).** A demo of an app on 9.134.1 asked "which
+  clients had slow operations yesterday morning": Haiku 4.5 asked the person in prose and made no
+  call, so the library's free-entry ask never opened (the T6b runs: 15/15 the same). The served
+  pending half read "The window for “yesterday morning” is not settled yet: the library could not
+  read those words, so its own form asks the person which time they meant … So the next step is
+  that call — not a question about the time in the reply". Following the playbook (record →
+  served → late → phrasing): the record held `pendingUnread`, the line was served late, so the
+  broken link was the phrasing — "could not read" came first and read as permission to ask, the
+  next step came last. Now (`serve.ts` · `unreadSentence`, replacing `unreadClause`) the line leads
+  with the conclusion and the ONE next step, then the move not to make: "The library could not read
+  “yesterday morning”, so the next step is to call client_activity with start_time, end_time left
+  out: that call opens the library's own form, which asks the person which time they meant, with
+  nothing filled in (or the call is refused with the reason). Do not ask about the time in the
+  reply — the form asks it — and do not write a window into the call, which would run
+  unconfirmed." Beside a reading to confirm or a zone to name, the one form names each quote with
+  what it does. Measured under `bench/time/RULE-unread.md` (registered and pushed before the paid
+  call; `runs/haiku45-unread`, 120 runs, $0.26): the free-entry ask opened 0/30 → 17/30, PASS —
+  `yesterday-morning` 0/15 → 15/15; `last-week` 0/15 → 2/15. Not done, named: on "last week" the
+  model still writes its own `7d` look-back 13/15 (then served "the results … cover the window
+  written into the call"); controls unchanged (30/30 answered, no time ask). Pinned by
+  `test/core/time/gaps-run.test.ts` and the registered surface in
+  `test/modelFacingSurfaces.test.ts`.
 
 **Why this order.** T1 settles the grammar every other step leans on and is free. T2 is already
 written and only needs rebasing and the value check. T3 gives the first visible win (the limits

@@ -211,12 +211,17 @@ describe('G2 — words the reader could not read are asked, free entry, and conv
       }),
     ]);
     expect(first.awaitingInput.fields[0]!.enum).toBeUndefined();
-    // The model was told, late, what the form will do with the words.
+    // The model was told, late, the library's conclusion and the ONE next step: the call with the
+    // period left out — the form asks the person — and no question about the time in the reply
+    // (the video and the T6b bench: the old "not settled yet" line drew 15/15 prose asks).
     expect(timeLineOf(requests[0])).toContain(
-      'The window for “yesterday morning” is not settled yet: the library could not read those ' +
-        'words, so its own form asks the person which time they meant, with nothing filled in, ' +
-        'and it opens when smb_records is called with window left out',
+      'The library could not read “yesterday morning”, so the next step is to call smb_records ' +
+        "with window left out: that call opens the library's own form, which asks the person " +
+        'which time they meant, with nothing filled in (or the call is refused with the reason). ' +
+        'Do not ask about the time in the reply — the form asks it — and do not write a window ' +
+        'into the call, which would run unconfirmed.',
     );
+    expect(timeLineOf(requests[0])).not.toContain('is not settled yet');
     const done = await agent.resume(first.checkpoint as never, {
       requestId: first.awaitingInput.requestId,
       values: { f1: '2026-10-08T06:00:00-07:00/2026-10-08T12:00:00-07:00' },

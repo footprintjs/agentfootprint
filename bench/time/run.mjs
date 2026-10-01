@@ -42,7 +42,7 @@ import { gunzipSync, gzipSync } from 'node:zlib';
 
 import { shuffled } from '../inputs/labels.mjs';
 import { ANCHOR, ARMS, CASES, sheetProblems } from './cases.mjs';
-import { MAX_ITERATIONS, MAX_TOKENS, PRICES, buildAgent, buildTools, runCase } from './harness.mjs';
+import { MAX_ITERATIONS, MAX_TOKENS, PRICES, buildAgent, buildTools, runCase, runKey } from './harness.mjs';
 import { aggregate, formatReport, readRun } from './metrics.mjs';
 import { RULE_ID, formatVerdict, judge } from './rule.mjs';
 import { RULE_ID as RULE_ID_V2, judge as judgeV2, v2RowOf } from './rule-v2.mjs';
@@ -315,7 +315,11 @@ async function rescore(dir, rule = RULES.t6b) {
   process.stdout.write(`${out.report}\n`);
 }
 
-/** Runs the plan; returns the raws in completion order and the spend. */
+/**
+ * Runs the plan; returns the raws in completion order and the spend. `opts.prepare(item)` (the
+ * unread rule, `run-unread.mjs`) may hand one item its own build's `doors`, the T6b arm its agent
+ * is built with (`arm` — the item's own arm then stays its label), and `maxAnsweredAsks`.
+ */
 export async function runPlan({ plan, doors, opts, sdkClient, dir, log = () => {} }) {
   const byId = new Map(CASES.map((c) => [c.id, c]));
   const raws = [];
@@ -335,20 +339,25 @@ export async function runPlan({ plan, doors, opts, sdkClient, dir, log = () => {
       next += 1;
       inFlight += 1;
       let raw;
+      const over = opts.prepare?.(item) ?? {};
       try {
         raw = await runCase({
-          doors,
+          doors: over.doors ?? doors,
           caseDef: byId.get(item.caseId),
-          arm: item.arm,
+          arm: over.arm ?? item.arm,
           rep: item.rep,
           provider: opts.provider,
           model: opts.model,
           now: runNow(),
           sdkClient,
           temperature: opts.temperature,
+          ...(over.maxAnsweredAsks !== undefined && { maxAnsweredAsks: over.maxAnsweredAsks }),
         });
       } finally {
         inFlight -= 1;
+      }
+      if (over.arm !== undefined && over.arm !== item.arm) {
+        raw = { ...raw, arm: item.arm, key: runKey(item.arm, item.caseId, item.rep), agentArm: over.arm };
       }
       raws.push(raw);
       spend.usd += raw.usd;
@@ -357,7 +366,13 @@ export async function runPlan({ plan, doors, opts, sdkClient, dir, log = () => {
       if (dir !== undefined)
         writeFileSync(join(dir, 'raw', rawFileName(raw.key)), gzipSync(JSON.stringify(raw)));
       const outcome =
-        raw.answer !== undefined ? 'answered' : raw.stuck ? 'stuck' : `error: ${raw.error}`;
+        raw.answer !== undefined
+          ? 'answered'
+          : raw.error !== undefined
+            ? `error: ${raw.error}`
+            : raw.pendingAsk !== undefined && over.maxAnsweredAsks === 0
+              ? 'ended at its first ask'
+              : 'stuck';
       log(
         `  ${String(spend.runs).padStart(3)}/${plan.length} ${raw.key} · $${raw.usd.toFixed(
           4,
