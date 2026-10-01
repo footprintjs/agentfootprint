@@ -10,12 +10,13 @@
  * at half the length — the difference between a scrubber and a spinner.
  *
  * ── A COMPLEXITY CLAIM IS COUNTED, NEVER TIMED ─────────────────────────────
- * The defect was a COUNT before it was a cost: work that belongs to the
- * recording — locating the epochs, preparing the fold — was redone for every
- * question. So this file counts the two operations that work is made of, at
- * the module boundary the code reaches them through, and requires the scrub to
- * perform as many of each as the batch does — the same number, at 13 epochs
- * and at 49.
+ * The defect was a COUNT before it was a cost: work was redone for every
+ * question. A scrub's work has two halves. The RECORDING's preparation —
+ * locate the epochs, build the fold base — is owed once per recording. Each
+ * EPOCH's view — its pieces, read at the call — is owed once per epoch. This
+ * file counts the operations each half is made of, at the module boundaries
+ * the code reaches them through, and requires the scrub to perform as many of
+ * each as the batch does: the same number, at 13 epochs and at 49.
  *
  * It used to time them instead: best-of-5 milliseconds per form, the median of
  * three rounds, the ratio required to stay flat as the run grew. That failed on
@@ -30,39 +31,68 @@
  * rounds, a median, a `gc()` first or a wider bound only move where it lands.
  * The copies (70 of them) were also most of the test's run time, enough to
  * cross the 5 s default once. A count has no such floor: it reads the same on
- * a quiet laptop and on a loaded runner under coverage.
+ * a quiet laptop and on a loaded runner under coverage. And it needs no copy:
+ * each form gets a SPREAD of the recording, a new object for both memos to key
+ * on (see the calibration).
  *
  * ── WHAT IS COUNTED ────────────────────────────────────────────────────────
+ * The recording's preparation, wrapped at `footprintjs/trace`, the barrel
+ * `src` imports them from (footprintjs's calls to its own functions do not
+ * pass through it and are not counted):
  * - `stateAt` — a FOLD BASE BUILT. `keyedFold.ts` · `keyedFold` calls it once
  *   per fold source and memoizes the fold on that object; a question that
  *   rebuilt the fold would clone the run's initial state again.
  * - `splitStageId` — a LOG POSITION WALKED. `epochs.ts` · `locate` parses one
  *   stage id per bundle (and one per `subflowResults` mount key) to find the
  *   calls; a question that relocated the epochs would walk the whole log again.
- * Both are wrapped at `footprintjs/trace`, the barrel `src` imports them from,
- * so `src` is measured untouched. footprintjs's calls to its own functions do
- * not pass through that barrel and are not counted.
+ * Each epoch's view, wrapped at `epochs.ts`, the module `servedView.ts`
+ * imports them from:
+ * - `readAtCall`, `readAfterCall`, `readRunConstant` — a PIECE READ.
+ *   `servedView.ts` · `viewOf` reads every piece it rebuilds through these
+ *   three, so a question that built views it was not asked for reads more
+ *   pieces than the batch does.
+ * Either way `src` runs untouched.
+ *
+ * NEITHER HALF GUARDS THE OTHER. With only the preparation counted, a
+ * `servedAt` that answered one epoch by building every view
+ * (`servedViews(source).find(...)`) passed: both memos still hit, so the
+ * preparation counts stayed equal, while the scrub read E times the batch's
+ * pieces — 1,859 `readAtCall`s against 143 at 13 epochs, a factor that grows
+ * with the run. The timed test this file replaced caught that one; the count
+ * has to as well.
  *
  * ── WHAT IS NOT COUNTED, AND WHY THAT IS HONEST ────────────────────────────
  * `epochs.ts` · `epochAt` finds the asked epoch among the LOCATED ones with a
  * linear `.find`: one number comparison per located epoch, E(E+1)/2 across a
  * whole scrub. It is the only work the scrub does that the batch does not. It
- * walks no log position and builds no fold, and the batch's own answer is
- * already quadratic in the run (E conversations averaging E/2 turns each), so
- * it is a constant fraction of the batch rather than a factor that grows.
+ * walks no log position, builds no fold and reads no piece, and the batch's
+ * own answer is already quadratic in the run (E conversations averaging E/2
+ * turns each), so it is a constant fraction of the batch rather than a factor
+ * that grows.
+ *
+ * The counters see work only through the operations it calls. A question that
+ * walked the whole log calling none of them — parsing each id with
+ * `parseRuntimeStageId` instead of `splitStageId`, say — would pass this file.
+ * Seeing every walk, whatever it calls, would take a count of log entries
+ * READ rather than of named operations.
  *
  * ── THE CALIBRATION ────────────────────────────────────────────────────────
  * A counter that cannot see the defect proves nothing by staying equal. So the
- * same test asks the shape this release replaced: a fresh recording OBJECT per
- * question (a spread, not a copy) defeats both memos, which key on that object,
- * so every question relocates every epoch and builds its own fold base. It must
- * read the scrub's count plus one whole preparation (locate the epochs, build
- * the fold base) for each of the other E - 1 questions — today exactly E times
- * the batch on both counters: the factor that grows with the run, seen by the
- * instrument that guards against it. (The runs below use the default
- * `reactMode: 'dynamic'`, where the fold source IS the recording. Under
- * `'dynamic-grouped'` each turn folds its own subtree, which a spread shares,
- * so this calibration would not hold there as written.)
+ * same test asks two shapes that each redo ONE half per question, and requires
+ * each to count exactly that:
+ * - A fresh recording OBJECT per question — the shape 9.88.0 replaced. A
+ *   spread, not a copy, defeats both memos, which key on that object, so every
+ *   question prepares the recording again: the scrub plus one whole
+ *   preparation for each of the other E - 1 questions. Today that is E times
+ *   the batch on the preparation counters, and the batch's own reads.
+ * - Every view built per question, on ONE recording: the preparation once, and
+ *   the batch's view work (the batch minus the preparation) E times. Today
+ *   that is the batch's preparation, and E times its reads.
+ * Each factor grows with the run, and each is seen by its own half of the
+ * instrument and by nothing else. The runs use `reactMode: 'dynamic'`, where
+ * the fold source IS the recording, which is what makes a spread cold for
+ * both memos. Under `'dynamic-grouped'` each turn folds its own subtree, which
+ * a spread shares, so none of this would hold as written.
  *
  * The structural half needs no counter at all: `epochLocations` returns the
  * very same array for the same recording, checked by identity.
@@ -74,27 +104,51 @@ import { describe, expect, it, vi } from 'vitest';
 import { Agent, defineTool, epochLocations, servedAt, servedViews } from '../../../src/index.js';
 import type { LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
 
-/** The two operations the defect multiplied — see the header. Held in a
- *  hoisted cell so the (hoisted) mock factory below can reach it. */
-const counted = vi.hoisted(() => ({ stateAt: 0, splitStageId: 0 }));
+/** The operations a scrub's work is made of — see the header — and the
+ *  wrapper that counts one. Hoisted, so the (hoisted) mock factories below can
+ *  reach both. */
+const { counted, counting } = vi.hoisted(() => {
+  const counted = {
+    // The recording's preparation.
+    stateAt: 0,
+    splitStageId: 0,
+    // Each epoch's view.
+    readAtCall: 0,
+    readAfterCall: 0,
+    readRunConstant: 0,
+  };
+  /** `fn` itself, plus one on `counted[name]` per call. */
+  const counting = <F extends (...args: any[]) => any>(name: keyof typeof counted, fn: F): F =>
+    ((...args: Parameters<F>): ReturnType<F> => {
+      counted[name] += 1;
+      return fn(...args);
+    }) as F;
+  return { counted, counting };
+});
 
 vi.mock('footprintjs/trace', async (importOriginal) => {
   const real = await importOriginal<typeof import('footprintjs/trace')>();
   return {
     ...real,
-    stateAt: ((...args: Parameters<typeof real.stateAt>) => {
-      counted.stateAt += 1;
-      return real.stateAt(...args);
-    }) as typeof real.stateAt,
-    splitStageId: ((...args: Parameters<typeof real.splitStageId>) => {
-      counted.splitStageId += 1;
-      return real.splitStageId(...args);
-    }) as typeof real.splitStageId,
+    stateAt: counting('stateAt', real.stateAt),
+    splitStageId: counting('splitStageId', real.splitStageId),
+  };
+});
+
+vi.mock('../../../src/lib/time-travel/epochs.js', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../../../src/lib/time-travel/epochs.js')>();
+  return {
+    ...real,
+    readAtCall: counting('readAtCall', real.readAtCall),
+    readAfterCall: counting('readAfterCall', real.readAfterCall),
+    readRunConstant: counting('readRunConstant', real.readRunConstant),
   };
 });
 
 type Snapshot = NonNullable<ReturnType<Agent['getSnapshot']>>;
-type Counts = { readonly stateAt: number; readonly splitStageId: number };
+type Counter = keyof typeof counted;
+type Counts = Readonly<Record<Counter, number>>;
+const COUNTERS = Object.keys(counted) as Counter[];
 
 /** A provider that calls one tool `turns` times and then answers. */
 function looping(turns: number) {
@@ -121,6 +175,9 @@ async function runOf(turns: number): Promise<Snapshot> {
     provider: looping(turns) as never,
     model: 'mock',
     maxIterations: turns + 4,
+    // The fold source IS the recording here, so a spread is cold — see the
+    // header's last note.
+    reactMode: 'dynamic',
   })
     .system('you are a bot')
     .tool(ping)
@@ -131,46 +188,54 @@ async function runOf(turns: number): Promise<Snapshot> {
 
 /** How many of each counted operation `work` performed. */
 function countOf(work: () => void): Counts {
-  counted.stateAt = 0;
-  counted.splitStageId = 0;
+  for (const name of COUNTERS) counted[name] = 0;
   work();
-  return { stateAt: counted.stateAt, splitStageId: counted.splitStageId };
+  return { ...counted };
+}
+
+/** `base + times × each`, counter by counter. */
+function plusTimes(base: Counts, times: number, each: Counts): Counts {
+  return Object.fromEntries(COUNTERS.map((n) => [n, base[n] + times * each[n]])) as Counts;
+}
+
+/** `from - less`, counter by counter. */
+function minus(from: Counts, less: Counts): Counts {
+  return Object.fromEntries(COUNTERS.map((n) => [n, from[n] - less[n]])) as Counts;
 }
 
 /**
- * A detached copy, because the epoch memo and the fold memo both key on the
- * recording OBJECT: each form gets its own, or the second form counted would
- * be reading the first one's memo and prove nothing. One per form — the
- * replaced shape below needs none.
- */
-function coldCopyOf(snapshot: Snapshot): Snapshot {
-  return JSON.parse(JSON.stringify(snapshot)) as Snapshot;
-}
-
-/**
- * The batch form, the scrub and the replaced shape, counted on one run — and
- * the recording's PREPARATION on its own, which is what the replaced shape
- * repeats.
+ * The batch form, the scrub and the two calibration shapes, counted on one
+ * run — and the recording's PREPARATION on its own, which the first
+ * calibration repeats.
+ *
+ * Every form gets its own NEW recording object — a spread — because the epoch
+ * memo and the fold memo both key on that object: a form that shared one would
+ * be reading another form's memo and prove nothing.
  */
 function countTheForms(snapshot: Snapshot) {
   // Asked of the live snapshot, so it warms that object's memos and nobody
   // else's.
   const epochs = epochLocations(snapshot).map((e) => e.epoch);
-  const forBatch = coldCopyOf(snapshot);
-  const forScrub = coldCopyOf(snapshot);
   return {
     epochs: epochs.length,
     // Locating the epochs of a NEW recording object, which builds its fold
     // base on the way: the work that belongs to a recording, not to a question.
     prepare: countOf(() => void epochLocations({ ...snapshot })),
-    batch: countOf(() => void servedViews(forBatch)),
+    batch: countOf(() => void servedViews({ ...snapshot })),
     scrub: countOf(() => {
-      for (const epoch of epochs) servedAt(forScrub, epoch);
+      const recording = { ...snapshot };
+      for (const epoch of epochs) servedAt(recording, epoch);
     }),
-    // A NEW recording object per question: nothing is copied, and neither memo
-    // ever hits — every question prepares the recording from scratch.
-    rebuilt: countOf(() => {
+    // A NEW recording object per question: neither memo ever hits, so every
+    // question prepares the recording from scratch — and builds one view.
+    eachPrepared: countOf(() => {
       for (const epoch of epochs) servedAt({ ...snapshot }, epoch);
+    }),
+    // ONE recording, every view built per question: both memos hit after the
+    // first question, and every question builds all E views.
+    eachViewed: countOf(() => {
+      const recording = { ...snapshot };
+      for (const epoch of epochs) servedViews(recording).find((v) => v.epoch === epoch);
     }),
   };
 }
@@ -203,34 +268,42 @@ describe('a per-epoch scrub', () => {
     const forms = [countTheForms(small), countTheForms(large)];
     expect(forms[1]!.epochs).toBeGreaterThan(forms[0]!.epochs * 3);
 
-    for (const { epochs, prepare, batch, scrub, rebuilt } of forms) {
+    for (const { epochs, prepare, batch, scrub, eachPrepared, eachViewed } of forms) {
       const at = `at ${epochs} epochs`;
+      // What the batch does beyond preparing the recording: its E views.
+      const views = minus(batch, prepare);
 
-      // The counters are wired, and preparing a recording moves both. A mock
-      // that never fired would make every comparison below an equality of
-      // zeros.
+      // The counters are wired: preparing a recording moves the preparation
+      // counters, and building the views moves every read counter. A mock that
+      // never fired would make every comparison below an equality of zeros.
       expect(prepare.stateAt, `fold bases built preparing a recording ${at}`).toBeGreaterThan(0);
       expect(
         prepare.splitStageId,
         `log positions walked preparing a recording ${at}`,
       ).toBeGreaterThan(0);
+      for (const read of ['readAtCall', 'readAfterCall', 'readRunConstant'] as const) {
+        expect(views[read], `${read} building the views ${at}`).toBeGreaterThan(0);
+      }
 
       // THE LAW. Not "within 2x" — the same. The epoch index is located once
-      // per recording and each log's fold base is built once, after which both
-      // forms ask the same questions of the same folds in the same order, so a
-      // scrub that counts more than the batch is rebuilding something per
-      // question: exactly the defect, at its smallest.
+      // per recording, each log's fold base is built once, and each epoch's
+      // view is built once, after which both forms ask the same questions of
+      // the same folds in the same order. A scrub that counts more than the
+      // batch is rebuilding something per question: exactly the defect, at
+      // its smallest.
       expect(scrub, `the scrub against the batch ${at}`).toEqual(batch);
 
-      // THE CALIBRATION. The replaced shape prepares the recording again for
-      // every question, where the scrub prepares it once: E - 1 preparations
-      // more, a count that grows with the run, and the instrument reads
-      // exactly that. (Today a view itself counts nothing, so this is also E
-      // times the batch: 49 fold bases where the scrub builds 1.)
-      expect(rebuilt, `a rebuild per question ${at}`).toEqual({
-        stateAt: scrub.stateAt + (epochs - 1) * prepare.stateAt,
-        splitStageId: scrub.splitStageId + (epochs - 1) * prepare.splitStageId,
-      });
+      // THE CALIBRATION, one shape per half. A recording prepared again for
+      // every question pays E - 1 preparations more than the scrub: E times
+      // the batch on the preparation counters, the batch's reads.
+      expect(eachPrepared, `a recording prepared per question ${at}`).toEqual(
+        plusTimes(scrub, epochs - 1, prepare),
+      );
+      // Every view built for every question pays one preparation and the
+      // batch's view work E times: the batch's preparation, E times its reads.
+      expect(eachViewed, `every view built per question ${at}`).toEqual(
+        plusTimes(prepare, epochs, views),
+      );
     }
   });
 });
