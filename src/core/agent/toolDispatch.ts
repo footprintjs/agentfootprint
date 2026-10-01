@@ -27,11 +27,16 @@
  *     the same bound the runbook grammar declares for sub-runbooks;
  *   - it does not apply argument rules — a tool that declares `askOrAssume`
  *     refuses an inner call that leaves a ruled argument out (the inputs
- *     layer fills and records only the model's own calls).
+ *     layer fills and records only the model's own calls). A declared
+ *     `period`'s forms are ALTERNATIVES: a call that gives one form whole
+ *     (a look-back, or both bounds) leaves the other forms' arguments out by
+ *     design, and is not refused for them.
  */
 
 import type { Credential } from '../../identity/types.js';
-import { isMissing, isRefused, rulesOf } from './arguments/declare.js';
+import { isMissing, isRefused, periodFormsOf, rulesOf } from './arguments/declare.js';
+import type { ToolPeriod } from './arguments/declare.js';
+import { formArguments } from '../time/periodForm.js';
 import type {
   Tool,
   ToolDispatch,
@@ -117,7 +122,9 @@ export function agentToolDispatch(deps: AgentToolDispatchDeps): ToolDispatch {
  * accounted unit — so running a ruled tool with a ruled value missing would
  * run it on a value nobody chose, with nothing on the record. Refused by name,
  * like a `checkIn` or `wants` tool here. A rule that cannot be read refuses
- * too; a tool that declares nothing is never asked.
+ * too; a tool that declares nothing is never asked. A window is ONE value:
+ * the arguments of a period form the call did not take are not asked for
+ * (`untakenFormArguments`).
  */
 function refuseUnaccountedRuledArguments(name: string, tool: Tool, args: unknown): void {
   const rules = rulesOf(tool);
@@ -132,14 +139,41 @@ function refuseUnaccountedRuledArguments(name: string, tool: Tool, args: unknown
     args !== null && typeof args === 'object' && !Array.isArray(args)
       ? (args as Readonly<Record<string, unknown>>)
       : {};
-  const missing = rules.ruled.filter((r) => isMissing(given, r.argument)).map((r) => r.argument);
+  const untaken = untakenFormArguments(rules.period, given);
+  const missing = rules.ruled
+    .filter((r) => !untaken.has(r.argument) && isMissing(given, r.argument))
+    .map((r) => r.argument);
   if (missing.length === 0) return;
   throw new Error(
     `ctx.tools.call('${name}'): that tool declares argument rules (askOrAssume) and the call ` +
       `leaves ${missing.map((m) => `'${m}'`).join(', ')} out — inner dispatch fills nothing and ` +
       `files no row, so running it would run on a value nobody chose, off the record. Pass ` +
-      `every ruled argument, or call the tool as a top-level tool, where the inputs layer ` +
-      `applies its rules.`,
+      `every ruled argument (for a window, every argument of ONE of its forms), or call the ` +
+      `tool as a top-level tool, where the inputs layer applies its rules.`,
+  );
+}
+
+/**
+ * The period arguments an inner call does not owe: a period's forms are
+ * alternatives, so once the call gives one form WHOLE — every argument but
+ * the zone, the first such form, exactly as the time layer reads a present
+ * window (`time/bind.ts` · `presentWindow`) — every other form's arguments
+ * that the taken form does not also name are an alternative not taken (the
+ * model-facing twin: `resolve.ts` · `untakenFormArgumentsOf`). Empty when no
+ * form is given whole: then each ruled argument is owed, as before.
+ */
+function untakenFormArguments(
+  period: ToolPeriod | undefined,
+  given: Readonly<Record<string, unknown>>,
+): ReadonlySet<string> {
+  const forms = periodFormsOf(period);
+  const taken = forms.find((form) =>
+    formArguments(form).every((a) => a.role === 'zone' || !isMissing(given, a.argument)),
+  );
+  if (taken === undefined) return new Set();
+  const mine = new Set(formArguments(taken).map((a) => a.argument));
+  return new Set(
+    forms.flatMap((form) => formArguments(form).map((a) => a.argument)).filter((a) => !mine.has(a)),
   );
 }
 
