@@ -1815,7 +1815,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       // The unknown zone (G15): UTC, named as not known — never a guessed zone.
       /^\[A note from the library[^\]]*\] This turn's time: Friday 2026-10-09 15:40 UTC \(the person's time zone is not known\)\.$/m,
       // …and the control window under it, spelled in UTC and saying why.
-      /The window the person set in the app's time control is 2026-10-09 08:00–08:40 UTC, in UTC \(the person's time zone is not known\)\. An answer built on it states that window\.$/m,
+      /The window the person set in the app's time control is 2026-10-09 08:00–08:40 UTC \(the person's time zone is not known\)\. An answer built on it states that window\.$/m,
     ],
     compose: async () => {
       const now = '2026-10-09T15:40:00Z';

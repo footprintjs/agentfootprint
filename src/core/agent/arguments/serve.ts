@@ -357,8 +357,9 @@ function controlSentence(tools: readonly PeriodTool[], windows: ServedWindows): 
   const w = windows.control;
   if (w === undefined) return undefined;
   const values = tools.flatMap((pt) => toolValues(pt, w, windows) ?? []);
-  // Under an unknown zone (G15) the window is spelled in UTC, and the line says why.
-  const unknown = windows.zoneUnknown === true ? `, in UTC (${UNKNOWN_ZONE_CLAUSE})` : '';
+  // Under an unknown zone (G15) the window is spelled in UTC — the zone the presented window
+  // already names — and the line says why, once.
+  const unknown = windows.zoneUnknown === true ? ` (${UNKNOWN_ZONE_CLAUSE})` : '';
   const named = `The window the person set in the app's time control is ${presentedWindow(
     w,
   )}${unknown}`;
