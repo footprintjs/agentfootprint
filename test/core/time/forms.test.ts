@@ -9,6 +9,7 @@
  *                 implied year → derived; a `model` reading → nothing said; a window the person
  *                 typed or set in a UI → every part said; the two lists never share a spelling;
  *                 the window's length (as said, and as read to the end of its grain) → derived;
+ *                 the turn's clock at its served minute → derived, never another minute or its seconds;
  *   property    — the text rule equals the retired gate table (`normalize.ts` ·
  *                 `dateAndClockForms`, kept below as the oracle) over seeded time-like texts;
  *   boundary    — a DST end (`01:30` twice) spells each instant in its own offset; a record the
@@ -207,6 +208,22 @@ describe('one recorded window — said at grain, the rest derived', () => {
       },
     }).derived;
     expect(day).toEqual(expect.arrayContaining(['1-day', '1d', '24-hour', 'P1D']));
+  });
+
+  it('the turn’s clock is derived at the minute it is served — never another minute, never its seconds', () => {
+    // G16: "This turn's time: Thursday 2026-10-01 07:08 America/Los_Angeles (UTC-07:00)."
+    const { said, derived } = timeFormsOf({ clock: { now: '2026-10-01T14:08:49Z', zone: LA } });
+    expect(said).toEqual([]);
+    for (const form of ['7:08', '07:08', '7:08am', '2026', '2026-10-01', '-07:00', 'PDT', LA]) {
+      expect(derived, form).toContain(form);
+    }
+    for (const form of ['7:09', '07:09', '07:08:49', '14:08', '6:25', '06:25']) {
+      expect(derived, form).not.toContain(form);
+    }
+    // Under an unknown zone (G15) the clock is served — and spelled — in UTC.
+    const utc = timeFormsOf({ clock: { now: '2026-10-01T14:08:49Z', zone: 'UTC' } }).derived;
+    expect(utc).toEqual(expect.arrayContaining(['14:08', '2:08pm', '2026-10-01']));
+    expect(utc).not.toContain('7:08');
   });
 
   it('BOUNDARY: across a DST end, each instant is spelled in its own offset', () => {

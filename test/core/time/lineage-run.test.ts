@@ -286,3 +286,59 @@ describe('the take-2 video — the window’s length is derived from the reading
     expect(run.derived).toEqual([]);
   });
 });
+
+// ─── The take-2 video, before the pause: the clock and the offered reading ──
+
+/** The model's interim message before the pause, byte for byte (vid2-events, run-1790863729368-5, iteration 2). */
+const TAKE2_INTERIM =
+  "I need to confirm the time window you specified. The system shows the current time as **Thursday, October 1, 2026 at 7:08 AM (America/Los_Angeles, UTC-07:00)**.\n\nYou're asking about **6:25 to 6:45 AM on October 1** — is that correct? If so, I'll proceed with:\n- **Start:** 2026-10-01 06:25:00 AM (Los Angeles time, UTC-07:00)\n- **Start:** 2026-10-01 06:45:00 AM (Los Angeles time, UTC-07:00)\n\nPlease confirm, and I'll query for clients on SHISOLPLPAP006 with operations exceeding 200 ms during that window.";
+
+/** The take-2 question answered at once with `text` — before any confirmation, the reading still offered. */
+async function interimRun(text: string) {
+  vi.setSystemTime(Date.parse(TAKE2_NOW) + 5_000);
+  const agent = Agent.create({
+    provider: scripted([{ content: text }]) as never,
+    model: 'mock',
+    maxIterations: 4,
+  })
+    .tools([boundsTool()])
+    .namesAndNumbersFromEvidence({ posture: 'assist' })
+    .time({ zone: LA, reader: englishTimeReader() })
+    .build();
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  try {
+    await agent.run({ message: TAKE2_QUESTION, time: { now: TAKE2_NOW } });
+  } finally {
+    warn.mockRestore();
+  }
+  const reading = ofKind(agent, 'time-reading')[0] as { choice?: { by?: string } } | undefined;
+  return {
+    reading,
+    flagged: agent.unsupportedValues()?.values.map((v) => v.value) ?? [],
+    derived: ofKind(agent, 'time-derived'),
+    standing: assessAnswer({ snapshot: agent.getLastSnapshot() }),
+  };
+}
+
+describe('the take-2 video, before the pause — the served clock and the offered reading are the library’s', () => {
+  it('the run’s exact interim text: 2026, 7:08, 06:25:00, 06:45:00 are derived — nothing flagged', async () => {
+    const run = await interimRun(TAKE2_INTERIM);
+    // The record: the rule reading is OFFERED (open), not yet answered — a proposal.
+    expect(run.reading?.choice?.by).toBe('open');
+    expect(run.flagged).toEqual([]);
+    expect(run.derived).toHaveLength(1);
+    expect(run.derived[0]!.values).toEqual(
+      expect.arrayContaining(['2026', '7:08', '06:25:00', '06:45:00']),
+    );
+    expect(run.standing.reasons.map((r) => r.reason)).toContain('derived-from-reading');
+    expect(run.standing.reasons.map((r) => r.reason)).not.toContain('value-unsupported');
+  });
+
+  it('NEGATIVE: a minute the clock does not produce, its seconds, and a time no reading offered are still flagged', async () => {
+    const run = await interimRun(
+      'It is 7:09 now (07:08:49 exactly); the window could be 06:30:00 to 06:45:00 in 2027.',
+    );
+    expect(run.flagged).toEqual(expect.arrayContaining(['7:09', '07:08:49', '06:30:00', '2027']));
+    expect(run.flagged).not.toContain('06:45:00');
+  });
+});
