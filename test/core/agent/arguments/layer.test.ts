@@ -576,9 +576,10 @@ describe('assume — fail closed, and the dispatch re-read', () => {
       { cluster: 'c', ...bounds },
     ]);
     expect(refused).toHaveLength(2);
-    expect(refused[0]).toContain("leaves 'window', 'stop' out");
-    expect(refused[1]).toContain("leaves 'window', 'start', 'stop' out");
-    expect(refused[1]).toContain('every argument of ONE of its forms');
+    // Half a window is still owed; the window is named ONCE, as its forms, never per argument.
+    for (const message of refused) {
+      expect(message).toContain("leaves one window — 'window', or 'start' and 'stop' — out");
+    }
     expect(argumentRows(agent)).toEqual([]);
   });
 });

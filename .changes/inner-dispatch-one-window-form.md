@@ -1,13 +1,4 @@
 ---
 type: fixed
 ---
-**A composed tool can call a windowed tool through `ctx.tools` with ONE window.** Inner dispatch
-refused a ruled tool unless EVERY ruled argument was given — and for a tool that declares a
-`period` with two forms (a look-back `window` beside `start`/`stop` bounds), every period argument
-is ruled. So a composer that passed a look-back was refused for leaving the bounds out, one that
-passed the bounds was refused for leaving the look-back out, and passing all three is two windows,
-which such a tool refuses itself: every call a runbook could make failed before the tool ran. A
-period's forms are alternatives now, at inner dispatch exactly as for the model's own calls: a call
-that gives one form whole (every argument but the zone) owes nothing for the forms it did not take.
-Half a window — one bound alone — still owes the rest, and every non-period ruled argument is still
-owed one by one.
+**A tool with a look-back beside start/stop bounds is owed ONE window — no more pause for a second one, and a composed tool can call it.** A tool whose `period` declares several forms (a look-back `window` beside `start`/`stop` bounds) rules every form's arguments, and they were ruled one by one. So a call that left the period out was given the assumed look-back AND asked "From when should the query start?" — a pause for a second window the tool itself refuses; without `.time()`, a call that sent its bounds was handed the assumed look-back beside them; and inner dispatch (`ctx.tools.call`) refused every call a runbook could make — a look-back for leaving the bounds out, bounds for leaving the look-back out. A period's forms are alternatives now, everywhere: the form the call sent its window in is the window; a call that leaves every form out takes the form its kept answers fill, else the form the rules ASSUME whole (the default is the window), else the first form, asked by its own asks; every other form's arguments are neither filled, asked nor filed. Inner dispatch passes a call that gives one form whole and names a missing window once, as its forms. A tool with ONE form (or no period) behaves exactly as before.
