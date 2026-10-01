@@ -259,6 +259,32 @@ export interface ToolCallFact {
   readonly pointers: readonly RecordPointer[];
 }
 
+/**
+ * A call answered BEFORE a pause, on a resumed leg — read from the committed
+ * state this record holds, never from that part's events (which the record
+ * does not hold): what came back, from its message in `history`, and what its
+ * tool declared, from its `coverageDeclared` rows. Whether it failed or was
+ * refused by a rule is in those events, so it carries no outcome.
+ */
+export interface BeforePauseFact {
+  readonly toolName: string;
+  readonly toolCallId: string;
+  /** What came back, as the model read it — the tool's own bytes, by the one emptiness reader. */
+  readonly emptiness?: Emptiness;
+  readonly rows?: number;
+  readonly emptinessSource?: 'library' | 'app';
+  /** What its tool declared, from the committed `coverageDeclared` rows; absent when it declared nothing. */
+  readonly coverage?: {
+    readonly kind: 'absent' | 'coverage';
+    readonly lookedFor?: string;
+    readonly checked: number;
+    readonly notChecked: number;
+    readonly cannotCover: number;
+    readonly kinds: number;
+  };
+  readonly pointers?: readonly RecordPointer[];
+}
+
 /** An earlier answer's tool result that was in front of the model when it answered. */
 export interface InViewFact {
   readonly toolName: string;
@@ -335,8 +361,12 @@ export interface AnswerFacts {
   readonly calls: readonly ToolCallFact[];
   /** Calls past the 50-call cap, counted, not listed. */
   readonly callsOmitted?: number;
-  /** On a resumed leg: tool calls answered in history before the pause, named only (≤ 50, names cut at 200). */
-  readonly beforePause: readonly { readonly toolName: string; readonly toolCallId: string }[];
+  /**
+   * On a resumed leg: the calls answered before the pause, read from the
+   * committed state this record holds (≤ 50, names cut at 200) — what came
+   * back (history) and what each tool declared (`coverageDeclared`).
+   */
+  readonly beforePause: readonly BeforePauseFact[];
   readonly beforePauseOmitted?: number;
   /** ≤ 50, newest first; every one of them is judged by the checks. */
   readonly inView: readonly InViewFact[];

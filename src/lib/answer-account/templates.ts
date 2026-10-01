@@ -42,7 +42,7 @@ export interface AccountTemplate {
 }
 
 /** Bumped whenever any template's words change (a pinned digest enforces it). */
-export const ANSWER_ACCOUNT_TEMPLATE_SET_VERSION = 7;
+export const ANSWER_ACCOUNT_TEMPLATE_SET_VERSION = 8;
 
 const t = (text: string, voucher: TemplateVoucher = 'library', version = 1): AccountTemplate =>
   Object.freeze({ version, text, voucher });
@@ -73,6 +73,8 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   'chip.decidedNotDelivered': t('decided ≠ delivered'),
   'chip.notRecorded': t('not recorded'),
   'chip.beforePause': t('before a pause — not in this record'),
+  // A line about the part before a pause, read from the committed state this record holds.
+  'chip.beforePause.held': t('before the pause — read from the state this record holds'),
   'chip.kind.existence': t('whether it exists'),
   'chip.kind.scope': t('outside what it covers'),
   'chip.signals': t("{{count:n,'signal','signals'}}"),
@@ -167,12 +169,19 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   'checked.declined': t('It asked to run {{tool:code}}; a person was asked and declined.'),
   'checked.notDispatched': t('It asked to run {{tool:code}}, but the call was not run.'),
   'checked.unknown': t('It started {{tool:code}}; how the call ended is not recorded.'),
-  'checked.beforePause': t(
-    "Before the pause it also ran {{count:n,'tool','tools'}} ({{names}}); what those checked is not in this record.",
+  // A call answered BEFORE a pause, read from the committed state (`facts/pausedLeg.ts`): what
+  // came back is in history, what its tool declared is in `coverageDeclared` — never its events.
+  'checked.beforePause.declared': t('Before the pause, {{tool:code}} said it checked:', 'tool'),
+  'checked.beforePause.silent': t(
+    'Before the pause, {{tool:code}} declared its limits but did not say what it checked.',
   ),
-  'checked.beforePause.many': t(
-    "Before the pause it also ran {{count:n,'tool','tools'}} (among them {{names}}); what those checked is not in this record.",
+  'checked.beforePause.undeclared': t(
+    'Before the pause, the model read what came back from {{tool:code}}; the tool did not say what it checked.',
   ),
+  'beforePause.more': t(
+    "…and {{count:n,'more tool call','more tool calls'}} from before the pause.",
+  ),
+  'beforePause.noResults': t("No tool result from before the pause is in this record's history."),
   'checked.unnamed': t(
     'A tool call ({{id:code}}) is in this record, but no event of it names its tool.',
   ),
@@ -228,6 +237,24 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
     '{{tool:code}} ran, but a rule named {{by:code}} withheld its result from the model.',
   ),
   'found.beforePause': t('What the tools found before the pause is not in this record.'),
+  'found.beforePause.absent': t(
+    'Before the pause, {{tool:code}} looked for {{lookedFor}} and found none.',
+    'tool',
+  ),
+  'found.beforePause.bare': t('Before the pause, {{tool:code}} found nothing matching.', 'tool'),
+  'found.beforePause.undeclaredEmpty': t(
+    'Before the pause, {{tool:code}} returned an empty result and did not declare what it searched.',
+  ),
+  'found.beforePause.rows': t(
+    "Before the pause, {{tool:code}} returned {{count:n,'item','items'}}.",
+  ),
+  'found.beforePause.clarify': t(
+    'Before the pause, {{tool:code}} handed back a question instead of data.',
+    'tool',
+  ),
+  'found.beforePause.result': t(
+    'Before the pause, the model read what came back from {{tool:code}}.',
+  ),
   'found.inView': t(
     'The model could also see the result of {{tool:code}} from an earlier answer {{distance:distance}}.',
   ),
@@ -417,6 +444,9 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   'signal.undeclaredEmptyUsed': t(
     "This answer's {{tool:code}} call returned an empty result that did not declare what it searched.",
   ),
+  'signal.undeclaredEmptyUsed.beforePause': t(
+    "Before the pause, this answer's {{tool:code}} call returned an empty result that did not declare what it searched.",
+  ),
   'signal.undeclaredEmptyInView': t(
     'An empty result that did not declare what it searched, from {{tool:code}} in an earlier answer {{distance:distance}}, was in front of the model when it answered.',
   ),
@@ -464,6 +494,9 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   'wrong.beforePause': t(
     'Anything before the pause is not in this record, so these checks cover only the part after it.',
   ),
+  'wrong.beforePause.held': t(
+    "The part before the pause is read from the state this record holds. That part's events are not in this record, so how it was routed, what was in front of the model then, and whether a call then failed or was refused by a rule cannot be told here.",
+  ),
   'scope.noOwnEvents': t(
     "None of this record's events belong to the run asked for, so nothing about that run can be told from it.",
   ),
@@ -487,6 +520,9 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
     'This answer continued after a pause; what happened before the pause is not in this record.',
   ),
   'summary.resumed.tail': t('What happened before the pause is not in this record.'),
+  'summary.resumed.held': t(
+    "This answer continued after a pause; this record holds the state the run kept from before it, not that part's events.",
+  ),
   // What the RECORD shows, never what the run did: a missing `turn_end` can be a pause, a crash
   // or a truncated recording, and the record cannot tell those apart.
   'summary.unfinished': t('This record does not show the run finishing.'),

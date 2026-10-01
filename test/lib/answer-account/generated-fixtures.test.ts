@@ -535,7 +535,7 @@ describe('F — a resumed leg (a tool paused for a person, who answered)', () =>
     return explainChecked(leg!.recording, undefined, { runId: leg!.runId });
   }
 
-  it('B7 — never "did not run any tools"; before-pause lines; summary.resumed', async () => {
+  it('B7 — never "did not run any tools"; the part before the pause read from the state it holds', async () => {
     const a = await resumedLeg();
     expect(a.run.value?.resumedLeg).toBe(true);
     const all = a.rows.flatMap((r) => r.lines.map((l) => l.template.id));
@@ -545,12 +545,19 @@ describe('F — a resumed leg (a tool paused for a person, who answered)', () =>
     expect(rowText(a, 'asked')[0]).toBe(
       'This answer continued after a pause. The message, as the run held it: “how many volumes last year?”',
     );
+    // The record holds the state the run paused with: the call before the pause is read from it.
     expect(rowText(a, 'checked')).toContain(
-      'Before the pause it also ran 1 tool (lookup); what those checked is not in this record.',
+      'Before the pause, the model read what came back from lookup; the tool did not say what it checked.',
+    );
+    expect(rowText(a, 'found')).toContain(
+      'Before the pause, the model read what came back from lookup.',
     );
     expect(rowIds(a, 'understood')).toEqual(['understood.notConfigured']);
-    expect(rowIds(a, 'anything-wrong')).toContain('wrong.beforePause');
-    expect(a.summary.sentence.template.id).toBe('summary.resumed');
+    // What it does NOT hold of that part — its events — is said, and only that.
+    expect(rowIds(a, 'anything-wrong')).toContain('wrong.beforePause.held');
+    expect(all).not.toContain('found.beforePause');
+    expect(a.summary.sentence.template.id).not.toBe('summary.resumed');
+    expect(a.summary.sentence.text).toMatch(/not that part's events\.$/);
     golden('F.resumed.txt', dump(a));
   });
 });

@@ -188,6 +188,15 @@
   ],
   "source": "library"
  },
+ "chip.beforePause.held@1": {
+  "text": "before the pause — read from the state this record holds",
+  "parts": [
+   {
+    "text": "before the pause — read from the state this record holds"
+   }
+  ],
+  "source": "library"
+ },
  "chip.kind.existence@1": {
   "text": "whether it exists",
   "parts": [
@@ -875,20 +884,65 @@
   ],
   "source": "library"
  },
- "checked.beforePause@1": {
-  "text": "Before the pause it also ran 2 tools (names value); what those checked is not in this record.",
+ "checked.beforePause.declared@1": {
+  "text": "Before the pause, lookup_volumes said it checked:",
   "parts": [
    {
-    "text": "Before the pause it also ran 2 tools (names value); what those checked is not in this record."
+    "text": "Before the pause, "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " said it checked:"
+   }
+  ],
+  "source": "tool:lookup_volumes"
+ },
+ "checked.beforePause.silent@1": {
+  "text": "Before the pause, lookup_volumes declared its limits but did not say what it checked.",
+  "parts": [
+   {
+    "text": "Before the pause, "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " declared its limits but did not say what it checked."
    }
   ],
   "source": "library"
  },
- "checked.beforePause.many@1": {
-  "text": "Before the pause it also ran 2 tools (among them names value); what those checked is not in this record.",
+ "checked.beforePause.undeclared@1": {
+  "text": "Before the pause, the model read what came back from lookup_volumes; the tool did not say what it checked.",
   "parts": [
    {
-    "text": "Before the pause it also ran 2 tools (among them names value); what those checked is not in this record."
+    "text": "Before the pause, the model read what came back from "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": "; the tool did not say what it checked."
+   }
+  ],
+  "source": "library"
+ },
+ "beforePause.more@1": {
+  "text": "…and 2 more tool calls from before the pause.",
+  "parts": [
+   {
+    "text": "…and 2 more tool calls from before the pause."
+   }
+  ],
+  "source": "library"
+ },
+ "beforePause.noResults@1": {
+  "text": "No tool result from before the pause is in this record's history.",
+  "parts": [
+   {
+    "text": "No tool result from before the pause is in this record's history."
    }
   ],
   "source": "library"
@@ -1287,6 +1341,96 @@
   "parts": [
    {
     "text": "What the tools found before the pause is not in this record."
+   }
+  ],
+  "source": "library"
+ },
+ "found.beforePause.absent@1": {
+  "text": "Before the pause, lookup_volumes looked for lookedFor value and found none.",
+  "parts": [
+   {
+    "text": "Before the pause, "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " looked for lookedFor value and found none."
+   }
+  ],
+  "source": "tool:lookup_volumes"
+ },
+ "found.beforePause.bare@1": {
+  "text": "Before the pause, lookup_volumes found nothing matching.",
+  "parts": [
+   {
+    "text": "Before the pause, "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " found nothing matching."
+   }
+  ],
+  "source": "tool:lookup_volumes"
+ },
+ "found.beforePause.undeclaredEmpty@1": {
+  "text": "Before the pause, lookup_volumes returned an empty result and did not declare what it searched.",
+  "parts": [
+   {
+    "text": "Before the pause, "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " returned an empty result and did not declare what it searched."
+   }
+  ],
+  "source": "library"
+ },
+ "found.beforePause.rows@1": {
+  "text": "Before the pause, lookup_volumes returned 2 items.",
+  "parts": [
+   {
+    "text": "Before the pause, "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " returned 2 items."
+   }
+  ],
+  "source": "library"
+ },
+ "found.beforePause.clarify@1": {
+  "text": "Before the pause, lookup_volumes handed back a question instead of data.",
+  "parts": [
+   {
+    "text": "Before the pause, "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " handed back a question instead of data."
+   }
+  ],
+  "source": "tool:lookup_volumes"
+ },
+ "found.beforePause.result@1": {
+  "text": "Before the pause, the model read what came back from lookup_volumes.",
+  "parts": [
+   {
+    "text": "Before the pause, the model read what came back from "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": "."
    }
   ],
   "source": "library"
@@ -1974,6 +2118,21 @@
   ],
   "source": "library"
  },
+ "signal.undeclaredEmptyUsed.beforePause@1": {
+  "text": "Before the pause, this answer's lookup_volumes call returned an empty result that did not declare what it searched.",
+  "parts": [
+   {
+    "text": "Before the pause, this answer's "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " call returned an empty result that did not declare what it searched."
+   }
+  ],
+  "source": "library"
+ },
  "signal.undeclaredEmptyInView@1": {
   "text": "An empty result that did not declare what it searched, from lookup_volumes in an earlier answer (2 answers back), was in front of the model when it answered.",
   "parts": [
@@ -2163,6 +2322,15 @@
   ],
   "source": "library"
  },
+ "wrong.beforePause.held@1": {
+  "text": "The part before the pause is read from the state this record holds. That part's events are not in this record, so how it was routed, what was in front of the model then, and whether a call then failed or was refused by a rule cannot be told here.",
+  "parts": [
+   {
+    "text": "The part before the pause is read from the state this record holds. That part's events are not in this record, so how it was routed, what was in front of the model then, and whether a call then failed or was refused by a rule cannot be told here."
+   }
+  ],
+  "source": "library"
+ },
  "scope.noOwnEvents@1": {
   "text": "None of this record's events belong to the run asked for, so nothing about that run can be told from it.",
   "parts": [
@@ -2258,6 +2426,15 @@
   "parts": [
    {
     "text": "What happened before the pause is not in this record."
+   }
+  ],
+  "source": "library"
+ },
+ "summary.resumed.held@1": {
+  "text": "This answer continued after a pause; this record holds the state the run kept from before it, not that part's events.",
+  "parts": [
+   {
+    "text": "This answer continued after a pause; this record holds the state the run kept from before it, not that part's events."
    }
   ],
   "source": "library"

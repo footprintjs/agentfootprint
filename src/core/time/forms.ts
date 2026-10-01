@@ -23,7 +23,9 @@
  * - **`derived`** — everything the LIBRARY produced from a reading: an
  *   implied year, the zone's abbreviation in effect (`PDT` for a said `PST`),
  *   offsets, UTC and epoch spellings, the end-of-grain `08:41`, a look-back's
- *   duration, and every part of a `model` reading. The gate files an answer
+ *   duration, the window's length ("6:25 to 6:45" is `20-minute` as said and
+ *   `21-minute` as read to the end of its grain — arithmetic over the ends,
+ *   never a part anyone wrote), and every part of a `model` reading. The gate files an answer
  *   value found only here with the lineage `derived-from-reading`: it can
  *   support "not sure", never "known", and it is never called invented.
  *
@@ -213,8 +215,80 @@ function windowForms(window: FormsWindow): TimeForms {
   }
   derived.push(window.range.from, window.range.to, ...zoneForms(window.zone, fromMs));
   if (window.lookback !== undefined) derived.push(window.lookback);
+  derived.push(...windowLengthForms(fromMs, saidEndMs(window, toMs), toMs));
   const saidList = said.list();
   return { said: saidList, derived: derived.list().filter((f) => !saidList.includes(f)) };
+}
+
+// ─── The window's length ────────────────────────────────────────────────────
+
+const SECOND_MS = 1000;
+const MINUTE_MS = 60_000;
+const HOUR_MS = 3_600_000;
+const DAY_MS = 86_400_000;
+
+/**
+ * How long the window is — DERIVED, never said: arithmetic over the ends of a
+ * window the record holds, not a part anyone wrote. Two lengths, because a
+ * range read to the end of its grain has two honest ones: the range AS SAID
+ * (its said end minus its start — "6:25 to 6:45 AM" is 20 minutes) and the
+ * half-open range read (`[06:25, 06:46)` is 21 minutes). An end that was not
+ * widened gives one length.
+ *
+ * Only whole-token spellings: the gate compares tokens (`evidence/normalize.ts`
+ * · `tokenize`), so `20 minutes` is two tokens and neither is a candidate,
+ * while `20-minute` and `1200s` are one and are asked about. A length that is
+ * not a whole number of seconds (a whole day's said end, one millisecond short)
+ * is not a duration anyone writes, and spells nothing.
+ *
+ * @example
+ * ```ts
+ * windowLengthForms(Date.parse('2026-10-01T13:25:00Z'), Date.parse('2026-10-01T13:45:00Z'), Date.parse('2026-10-01T13:46:00Z'));
+ * // ['1200s', '20m', '20-minute', …, '0.33h', …, '1260s', '21m', '21-minute', …]
+ * ```
+ */
+function windowLengthForms(fromMs: number, saidEndMs: number, toMs: number): readonly string[] {
+  const out = new Spellings();
+  for (const ms of [saidEndMs - fromMs, toMs - fromMs]) {
+    if (ms <= 0 || ms % SECOND_MS !== 0) continue;
+    out.push(...lengthSpellings(ms));
+  }
+  return out.list();
+}
+
+/** The common whole-token spellings of one length: seconds, and minutes, hours, days when whole. */
+function lengthSpellings(ms: number): readonly string[] {
+  const out: string[] = [...unitSpellings(ms / SECOND_MS, ['s', 'sec', 'secs'], 'second')];
+  if (ms % MINUTE_MS === 0) {
+    const m = ms / MINUTE_MS;
+    out.push(...unitSpellings(m, ['m', 'min', 'mins'], 'minute'), `PT${m}M`);
+  }
+  const hours = ms / HOUR_MS;
+  // A fraction of an hour is written to two places at most ("0.33 h"), trailing zeros dropped.
+  const h = Number.isInteger(hours) ? String(hours) : String(Number(hours.toFixed(2)));
+  if (h !== '0') out.push(...unitSpellings(h, ['h', 'hr', 'hrs'], 'hour'));
+  if (Number.isInteger(hours)) out.push(`PT${h}H`);
+  if (ms % DAY_MS === 0) {
+    const d = ms / DAY_MS;
+    out.push(...unitSpellings(d, ['d'], 'day'), `P${d}D`);
+  }
+  return out;
+}
+
+/** `20` with `m` / `min` and `minute` → `20m`, `20min`, `20-minute`, `20-minutes`, `20minute`, `20minutes`. */
+function unitSpellings(
+  value: number | string,
+  glued: readonly string[],
+  word: string,
+): readonly string[] {
+  const n = String(value);
+  return [
+    ...glued.map((unit) => `${n}${unit}`),
+    `${n}-${word}`,
+    `${n}-${word}s`,
+    `${n}${word}`,
+    `${n}${word}s`,
+  ];
 }
 
 /** The date spellings of the parts said: each said part, and the ISO date when all three were. */

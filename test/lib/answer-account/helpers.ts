@@ -117,7 +117,9 @@ import {
   isShowable,
   showLeaves,
   SHOW_ME_ALLOW_LIST,
+  SHOWN_STATE_PATHS,
 } from '../../../src/lib/answer-account/shown.js';
+import { ANSWER_ACCOUNT_TEMPLATES } from '../../../src/lib/answer-account/templates.js';
 import type { RecordPointer, SentenceVar } from '../../../src/lib/answer-account/types.js';
 
 const isObj = (x: unknown): x is Record<string, unknown> =>
@@ -250,6 +252,21 @@ function allowedValues(recording: Recording, declarations: AnswerAccountDeclarat
       : {}
   ) as Record<string, unknown>;
   if (typeof state.userMessage === 'string') out.add(state.userMessage);
+  // State leaves at an allow-listed path (`SHOWN_STATE_PATHS` — the tools' own coverage words).
+  for (const key of Object.keys(SHOWN_STATE_PATHS)) {
+    const visit = (value: unknown, path: string) => {
+      if (typeof value === 'string') {
+        if (isShowable({ kind: 'state', key, path })) out.add(value);
+      } else if (Array.isArray(value)) value.forEach((v, i) => visit(v, `${path}/${i}`));
+      else if (isObj(value)) Object.entries(value).forEach(([k, v]) => visit(v, `${path}/${k}`));
+    };
+    visit(state[key], '');
+  }
+  // The library's own words and vocabulary (the template table, the three check ids) are not
+  // a record leaf leaking: a state leaf that equals one (a ledger row's `kind: 'argument'`
+  // beside "…declares a period argument.") is printed by the words, not read from the state.
+  for (const t of Object.values(ANSWER_ACCOUNT_TEMPLATES)) out.add(t.text);
+  for (const id of ['decided-delivered', 'existence', 'empty-results']) out.add(id);
   // History rows show their tool name and call id (never their content).
   for (const m of Array.isArray(state.history) ? state.history : []) {
     if (!isObj(m)) continue;

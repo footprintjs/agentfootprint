@@ -8,8 +8,9 @@
  * a future pointer ever names one: injection bodies (skill bodies, app
  * prompts), tool arguments, tool results (only a derived `{ rows, at }` count
  * leaves), a decision's `why` (it can carry a person's note), `resumeInput`,
- * every state key but `turnNumber` and `userMessage`, history content, and any
- * event of another run.
+ * every state key but `turnNumber`, `userMessage` and the tool words of
+ * `coverageDeclared` (`SHOWN_STATE_PATHS`), history content, and any event of
+ * another run.
  *
  * Bounds: a leaf over 2,048 serialized characters is `too-large`; the whole map
  * stops at 64 KB — no later pointer adds a key; one `#more` entry says the rest
@@ -118,6 +119,17 @@ export const SHOW_ME_ALLOW_LIST: Readonly<Record<string, readonly string[]>> = O
 const ANY_EVENT = ['#meta/runId'];
 /** The two state keys the account reads for a sentence (R3-S2 adds `userMessage`). */
 export const SHOWN_STATE_KEYS: readonly string[] = ['turnNumber', 'userMessage'];
+/**
+ * State keys whose LEAVES "show me" may show, by path shape — the committed
+ * `coverageDeclared` rows a call before a pause is read from: the same tool
+ * words `tools.absent` / `tools.coverage_declared` show for a call of this leg.
+ */
+export const SHOWN_STATE_PATHS: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  coverageDeclared: list(
+    '/*/{toolName,toolCallId,lookedFor}',
+    '/*/{checked,notChecked,cannotCover}/*/{what,why,short,kind}',
+  ),
+});
 const HISTORY_PATHS = ['/toolName', '/toolCallId', '#emptiness'];
 
 /** Leaves that are never shown, whatever list names them — per event type. */
@@ -161,7 +173,9 @@ export function isShowable(
       return (allowList[type] ?? []).includes(shape(p.path));
     }
     case 'state':
-      return SHOWN_STATE_KEYS.includes(p.key) && p.path === '';
+      return p.path === ''
+        ? SHOWN_STATE_KEYS.includes(p.key)
+        : (SHOWN_STATE_PATHS[p.key] ?? []).includes(shape(p.path));
     case 'history':
       return HISTORY_PATHS.includes(p.path);
     case 'declaration':
@@ -235,6 +249,7 @@ export function accountPointers(account: AnswerAccount): RecordPointer[] {
   ].forEach((x) => fromFact(x as AccountFact<unknown>));
   f.calls.forEach((c) => out.push(...c.pointers));
   f.inView.forEach((c) => out.push(...c.pointers));
+  f.beforePause.forEach((c) => out.push(...(c.pointers ?? [])));
   return out;
 }
 
@@ -247,7 +262,8 @@ function emptinessLeaf(
   const call =
     where === 'event'
       ? account.facts.calls.find((c) => c.toolCallId === toolCallId)
-      : account.facts.inView.find((c) => c.toolCallId === toolCallId);
+      : account.facts.inView.find((c) => c.toolCallId === toolCallId) ??
+        account.facts.beforePause.find((c) => c.toolCallId === toolCallId);
   if (call === undefined || call.rows === undefined) return { withheld: 'not-shown-here' };
   const rowsAt =
     call.emptinessSource === 'app' ? declarations.tools?.[call.toolName]?.rowsAt : undefined;
@@ -318,7 +334,7 @@ export function showLeaves(
         else out = leaf(resolvePointer(event.payload, p.path));
       }
     } else if (p.kind === 'state') {
-      out = leaf(state[p.key]);
+      out = leaf(p.path === '' ? state[p.key] : resolvePointer(state[p.key], p.path));
     } else if (p.kind === 'history') {
       const message: unknown = history[p.index];
       out = !isRecord(message)

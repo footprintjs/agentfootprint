@@ -44,6 +44,13 @@ export interface RecordingView {
   readonly unread: number;
   /** `snapshot.sharedState`, when it is an object. */
   readonly state?: Readonly<Record<string, unknown>>;
+  /**
+   * `snapshot.initialState`, when it is an object with a `history` — on a
+   * resumed leg, the state the run PAUSED with (a fresh run's is empty). The
+   * part of the answer before the pause is read from it
+   * (`facts/pausedLeg.ts`).
+   */
+  readonly pausedWith?: Readonly<Record<string, unknown>>;
   /** Every event of one type (the agentfootprint prefix is optional). */
   ofType(type: string): readonly ViewEvent[];
   first(type: string): ViewEvent | undefined;
@@ -141,6 +148,8 @@ export function recordingView(
   const ofType = (type: string): readonly ViewEvent[] => byType.get(full(type)) ?? [];
   const snapshot = isRecord(recording.snapshot) ? recording.snapshot : undefined;
   const state = snapshot && isRecord(snapshot.sharedState) ? snapshot.sharedState : undefined;
+  const initial = snapshot && isRecord(snapshot.initialState) ? snapshot.initialState : undefined;
+  const pausedWith = initial !== undefined && Array.isArray(initial.history) ? initial : undefined;
   return {
     events: own,
     ...(runId !== undefined && { runId }),
@@ -149,6 +158,7 @@ export function recordingView(
     foreign: raw.length - own.length,
     unread,
     ...(state !== undefined && { state }),
+    ...(pausedWith !== undefined && { pausedWith }),
     ofType,
     first: (type) => ofType(type)[0],
     last: (type) => {

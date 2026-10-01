@@ -80,6 +80,27 @@ coverage row is — reads the envelope (it may over-report; it never hides).
    system-prompt composition of the run to be recorded and complete
    (`facts/understood.ts` · `deliveryComplete`); otherwise the check is
    unreachable, never a signal.
+   **A resumed leg reads the part before the pause from what its record
+   carries** (`facts/pausedLeg.ts` · `readPausedLeg`): the recording holds that
+   leg's events only, but also the state the run PAUSED with
+   (`snapshot.initialState`) and the committed state after it — so each call
+   answered before the pause is listed with what came back (its message in
+   `history`, by the one emptiness reader) and what its tool declared (its
+   `coverageDeclared` rows), and the checks judge them like this leg's calls.
+   What is NOT recoverable is said, and only that: that part's events — the
+   routing verdict, what was in front of the model then, whether a call then
+   failed or was refused (`wrong.beforePause.held`, `summary.resumed.held`).
+   "What happened before the pause is not in this record" is printed only when
+   the record holds no paused state (an older or trimmed recording).
+
+   ```ts
+   // a resumed `.time()` leg: the person confirmed "6:25 to 6:45 AM" (test/lib/answer-account/paused-leg.test.ts)
+   account.rows.find((r) => r.id === 'found')!.lines.map((l) => l.text);
+   // ['pscale_client_health returned …', 'Before the pause, cluster_lookup returned 1 item.']
+   account.summary.sentence.text;
+   // '… This answer continued after a pause; this record holds the state the run kept
+   //  from before it, not that part's events.'
+   ```
 3. **Templates output typed text parts, never HTML** (`text` / `code` / `quote` /
    `label`), filled non-recursively: a value is never re-read as a template.
 4. **Own run only.** Events are kept by `bridge/eventMeta.ts` · `eventBelongsToRun`,
@@ -127,7 +148,7 @@ coverage row is — reads the envelope (it may over-report; it never hides).
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | `types.ts`                   | the `AnswerAccount` shape (one exported name; the family by indexed access)                                                                 |
 | `view.ts`                    | `recordingView` — ONE indexed pass, filtered to this run                                                                                    |
-| `facts/`                     | one reader per row: `asked`, `understood`, `calls` (+ `checked`), `found` (+ `inView`), `howSure`                                           |
+| `facts/`                     | one reader per row: `asked`, `understood`, `calls` (+ `checked`), `found` (+ `inView`), `howSure`; `pausedLeg` — the part before a pause, from the state the record holds |
 | `signals.ts`                 | the three checks, the signals, "Anything wrong", the one-liner                                                                              |
 | `templates.ts` / `render.ts` | the closed table and its filler (grammar: `count` pairs, `allOf`, `joinAnd`, `distance`)                                                    |
 | `account.ts`                 | `accountForAnswer`; the per-sentence catch (`unreadable.line@1`)                                                                            |
