@@ -507,9 +507,14 @@ export function periodFactProblem(
 /**
  * Why a call is refused before dispatch (§ 7.2, step T5b): one of the tool's
  * facts ({@link PeriodFactProblem}), a range across days to a tool that reads
- * one day (`multi-day`), or a wall time the zone skips (`dst-gap`).
+ * one day (`multi-day`), a wall time the zone skips (`dst-gap`), or a window
+ * of the person's that no form the tool declares can read, exactly or by
+ * reading a wider one (`no-form-holds` — a look-back ends at now, so a window
+ * still running is out of its reach, and a covering look-back wider than
+ * `maxRange` is one the tool will not read). The tool's own rule never stands
+ * in for the person's window: its default would read a time nobody asked about.
  */
-export type TimeRefusal = PeriodFactProblem | 'multi-day' | 'dst-gap';
+export type TimeRefusal = PeriodFactProblem | 'multi-day' | 'dst-gap' | 'no-form-holds';
 
 export const TIME_REFUSALS: readonly TimeRefusal[] = Object.freeze([
   'time-future',
@@ -518,4 +523,5 @@ export const TIME_REFUSALS: readonly TimeRefusal[] = Object.freeze([
   'over-max-range',
   'multi-day',
   'dst-gap',
+  'no-form-holds',
 ]);

@@ -26,3 +26,22 @@ node bench/time-checks/run.mjs --rescore bench/time-checks/runs/<dir>   # re-rea
 | `run.mjs` | the command: shifts the clock, loads both builds, interleaves the arms under a seeded shuffle, enforces the cap, writes `results.json`, `report.md` and `raw/` |
 
 Paid runs are committed under `runs/`.
+
+## The pause/shift follow-up (`RULE-shift.md`, rule `time-rule-shift`)
+
+A second registered rule on the same sheet: the pause case (`lookback-after-pause`) and two
+controls (`c-lookback-hour`, `c-clamp-7d`), arm `before` = a reference build that served the two
+ranges to compare, arm `after` = this build, which serves the library's conclusion
+(`coverage/period.ts` · `shiftedConclusion`). Same harness, truth and labeller; its own arms, plan
+and verdict.
+
+```sh
+node bench/time-checks/run-shift.mjs --before <reference dir>          # the scripted mock, $0
+node --env-file=<file with ANTHROPIC_API_KEY> bench/time-checks/run-shift.mjs --before <dir> \
+  --provider anthropic --max-usd 0.60 --concurrency 4 --sdk-from <project with @anthropic-ai/sdk>
+```
+
+| File | Job |
+|---|---|
+| `rule-shift.mjs` | `RULE-shift.md` as code: the rows it reads (`shiftRowOf`), the tallies, the verdict |
+| `run-shift.mjs` | the command: both builds, the seeded interleave, the cap, `results.json`, `report.md`, `raw/` |

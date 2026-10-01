@@ -281,3 +281,100 @@ export function tzdataVersion(): string {
   const tz = versions?.tz;
   return typeof tz === 'string' && tz.length > 0 && tz.length <= 32 ? tz : 'unknown';
 }
+
+// ─── Zones named in words (data from the tz database, never a word list) ─
+
+/** The areas a place's zone is looked up under (`Etc` and the legacy `US/…` links are not places). */
+const PLACE_AREAS = [
+  'Africa',
+  'America',
+  'Antarctica',
+  'Asia',
+  'Atlantic',
+  'Australia',
+  'Europe',
+  'Indian',
+  'Pacific',
+] as const;
+const PLACE_KEY = /^[A-Za-z][A-Za-z'.-]*(?:_[A-Za-z][A-Za-z'.-]*){0,3}$/;
+const placeMemo = new Map<string, ZoneName | null>();
+let placeIndex: ReadonlyMap<string, readonly ZoneName[]> | undefined;
+
+/** Last segment (lower case) → the runtime's zones that end in it, from `Intl.supportedValuesOf`. */
+function placeIndexOf(): ReadonlyMap<string, readonly ZoneName[]> {
+  if (placeIndex !== undefined) return placeIndex;
+  const index = new Map<string, ZoneName[]>();
+  const supported = (Intl as { supportedValuesOf?: (key: string) => string[] }).supportedValuesOf;
+  let names: readonly string[] = [];
+  try {
+    names = typeof supported === 'function' ? supported('timeZone') : [];
+  } catch {
+    names = [];
+  }
+  for (const name of names) {
+    const area = name.slice(0, name.indexOf('/'));
+    if (!(PLACE_AREAS as readonly string[]).includes(area)) continue;
+    const last = name.slice(name.lastIndexOf('/') + 1).toLowerCase();
+    index.set(last, [...(index.get(last) ?? []), name]);
+  }
+  placeIndex = index;
+  return index;
+}
+
+/**
+ * The ONE zone a place name names in this runtime's tz database, or
+ * `undefined` when it names none or more than one. `London` → `Europe/London`,
+ * `New York` → `America/New_York`; `India`, `Pacific`, `Eastern` → `undefined`
+ * (no zone ends in them — a region is not a place). Looked up two ways, both
+ * the tz database's own data: the zones whose last segment is the place, and
+ * `Area/Place` under each geographic area (which admits a renamed city's link,
+ * `Kyiv`). Every hit is compared by its canonical name, so a link and its
+ * target are one zone. Memoised; the runtime's database does not change.
+ *
+ * @example
+ * ```ts
+ * zoneOfPlace('London');   // 'Europe/London'
+ * zoneOfPlace('New York'); // 'America/New_York'
+ * zoneOfPlace('India');    // undefined — asked, never guessed
+ * ```
+ */
+export function zoneOfPlace(place: string): ZoneName | undefined {
+  const key = place.trim().replace(/\s+/g, '_');
+  if (key.length > 32 || !PLACE_KEY.test(key)) return undefined;
+  const memo = placeMemo.get(key.toLowerCase());
+  if (memo !== undefined) return memo ?? undefined;
+  const found = new Set<ZoneName>();
+  for (const name of placeIndexOf().get(key.toLowerCase()) ?? []) {
+    found.add(canonicalZone(name) ?? name);
+  }
+  for (const area of PLACE_AREAS) {
+    const name = canonicalZone(`${area}/${key}`);
+    if (name !== undefined) found.add(name);
+  }
+  const zone = found.size === 1 ? ([...found][0] as ZoneName) : undefined;
+  if (placeMemo.size >= MAX_CACHED) placeMemo.clear();
+  placeMemo.set(key.toLowerCase(), zone ?? null);
+  return zone;
+}
+
+/**
+ * The IANA zone that is a fixed offset, for a whole-hour offset the tz
+ * database names (`Etc/GMT+8` is −08:00 — POSIX signs, inverted), else
+ * `undefined`. How a window read at a literal offset, or typed with one no
+ * other zone shows, names its zone without claiming a place's.
+ *
+ * @example
+ * ```ts
+ * fixedOffsetZone(-480); // 'Etc/GMT+8'
+ * fixedOffsetZone(0);    // 'UTC'
+ * fixedOffsetZone(330);  // undefined — no Etc zone for +05:30
+ * ```
+ */
+export function fixedOffsetZone(minutes: number): ZoneName | undefined {
+  if (minutes === 0) return 'UTC';
+  if (!Number.isInteger(minutes) || minutes % 60 !== 0) return undefined;
+  const hours = minutes / 60;
+  if (hours < -12 || hours > 14) return undefined;
+  const name = `Etc/GMT${hours < 0 ? '+' : '-'}${Math.abs(hours)}`;
+  return isZoneName(name) ? name : undefined;
+}

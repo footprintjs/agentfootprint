@@ -1,0 +1,670 @@
+{
+  "rule": "time-rule-t6b (registered 2026-09-30)",
+  "config": {
+    "provider": "anthropic",
+    "model": "claude-haiku-4-5-20251001",
+    "cases": [
+      "field-pst",
+      "date-only",
+      "last-2h",
+      "abs-lookback"
+    ],
+    "runs": 3,
+    "seed": 1592721960,
+    "seedDrawn": "fresh, crypto.randomInt, at the start of this invocation",
+    "clock": {
+      "anchor": "2026-10-09T16:00:00Z",
+      "realStart": "2026-10-01T00:57:20.757Z",
+      "offsetMs": 745359242
+    },
+    "concurrency": 4,
+    "maxIterations": 6,
+    "maxTokens": 1024,
+    "maxUsd": 0.08
+  },
+  "spend": {
+    "usd": 0.01191,
+    "runs": 4,
+    "stopped": "after 4 of 24 runs, before on/last-2h/r0"
+  },
+  "rows": [
+    {
+      "key": "off/date-only/r0",
+      "arm": "off",
+      "caseId": "date-only",
+      "cell": "readable",
+      "rep": 0,
+      "completed": true,
+      "right": false,
+      "why": "other-window",
+      "periodReads": 1,
+      "asks": 0,
+      "timeAsks": 0,
+      "zoneAsked": false,
+      "confirmRaised": false,
+      "toolAsks": 0,
+      "unknownAsks": 0,
+      "readingRows": 0,
+      "unreadable": false,
+      "firstCallWindow": "model",
+      "bypass": false,
+      "answered": [],
+      "timeLines": 0,
+      "pendingServed": false,
+      "limitServed": false,
+      "settledServed": false,
+      "saidRows": 0,
+      "calls": 2,
+      "inputTokens": 1898,
+      "outputTokens": 180,
+      "usd": 0.002798
+    },
+    {
+      "key": "off/abs-lookback/r0",
+      "arm": "off",
+      "caseId": "abs-lookback",
+      "cell": "readable",
+      "rep": 0,
+      "completed": true,
+      "right": false,
+      "why": "misses-start",
+      "periodReads": 1,
+      "asks": 0,
+      "timeAsks": 0,
+      "zoneAsked": false,
+      "confirmRaised": false,
+      "toolAsks": 0,
+      "unknownAsks": 0,
+      "readingRows": 0,
+      "unreadable": false,
+      "firstCallWindow": "model",
+      "bypass": false,
+      "answered": [],
+      "timeLines": 0,
+      "pendingServed": false,
+      "limitServed": false,
+      "settledServed": false,
+      "saidRows": 0,
+      "calls": 2,
+      "inputTokens": 1859,
+      "outputTokens": 228,
+      "usd": 0.002999
+    },
+    {
+      "key": "on/field-pst/r0",
+      "arm": "on",
+      "caseId": "field-pst",
+      "cell": "readable",
+      "rep": 0,
+      "completed": true,
+      "right": false,
+      "why": "other-window",
+      "periodReads": 1,
+      "asks": 0,
+      "timeAsks": 0,
+      "zoneAsked": false,
+      "confirmRaised": false,
+      "toolAsks": 0,
+      "unknownAsks": 0,
+      "readingRows": 1,
+      "unreadable": false,
+      "firstCallWindow": "model",
+      "bypass": true,
+      "answered": [],
+      "timeLines": 2,
+      "pendingServed": true,
+      "limitServed": true,
+      "settledServed": false,
+      "saidRows": 0,
+      "calls": 2,
+      "inputTokens": 2203,
+      "outputTokens": 190,
+      "usd": 0.003153
+    },
+    {
+      "key": "on/date-only/r0",
+      "arm": "on",
+      "caseId": "date-only",
+      "cell": "readable",
+      "rep": 0,
+      "completed": true,
+      "right": true,
+      "periodReads": 1,
+      "asks": 1,
+      "timeAsks": 1,
+      "zoneAsked": false,
+      "confirmRaised": true,
+      "prefill": "prefill-right",
+      "toolAsks": 0,
+      "unknownAsks": 0,
+      "readingRows": 1,
+      "unreadable": false,
+      "firstCallWindow": "not-filled",
+      "bypass": false,
+      "answered": [
+        "confirmed"
+      ],
+      "timeLines": 2,
+      "pendingServed": true,
+      "limitServed": false,
+      "settledServed": true,
+      "saidRows": 0,
+      "calls": 2,
+      "inputTokens": 2250,
+      "outputTokens": 142,
+      "usd": 0.00296
+    }
+  ],
+  "aggregates": {
+    "perCase": {
+      "date-only": {
+        "right": {
+          "off": {
+            "k": 0,
+            "n": 1,
+            "share": 0
+          },
+          "on": {
+            "k": 1,
+            "n": 1,
+            "share": 1
+          }
+        },
+        "confirm": {
+          "off": {
+            "k": 0,
+            "n": 1,
+            "share": 0
+          },
+          "on": {
+            "k": 1,
+            "n": 1,
+            "share": 1
+          }
+        },
+        "bypass": {
+          "off": {
+            "k": 0,
+            "n": 1,
+            "share": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 1,
+            "share": 0
+          }
+        },
+        "asks": {
+          "off": {
+            "k": 0,
+            "n": 1,
+            "share": 0
+          },
+          "on": {
+            "k": 1,
+            "n": 1,
+            "share": 1
+          }
+        }
+      },
+      "abs-lookback": {
+        "right": {
+          "off": {
+            "k": 0,
+            "n": 1,
+            "share": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 0
+          }
+        },
+        "confirm": {
+          "off": {
+            "k": 0,
+            "n": 1,
+            "share": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 0
+          }
+        },
+        "bypass": {
+          "off": {
+            "k": 0,
+            "n": 1,
+            "share": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 0
+          }
+        },
+        "asks": {
+          "off": {
+            "k": 0,
+            "n": 1,
+            "share": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 0
+          }
+        }
+      },
+      "field-pst": {
+        "right": {
+          "off": {
+            "k": 0,
+            "n": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 1,
+            "share": 0
+          }
+        },
+        "confirm": {
+          "off": {
+            "k": 0,
+            "n": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 1,
+            "share": 0
+          }
+        },
+        "bypass": {
+          "off": {
+            "k": 0,
+            "n": 0
+          },
+          "on": {
+            "k": 1,
+            "n": 1,
+            "share": 1
+          }
+        },
+        "asks": {
+          "off": {
+            "k": 0,
+            "n": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 1,
+            "share": 0
+          }
+        }
+      }
+    },
+    "perCell": {
+      "readable": {
+        "right": {
+          "off": {
+            "k": 0,
+            "n": 2,
+            "share": 0
+          },
+          "on": {
+            "k": 1,
+            "n": 2,
+            "share": 0.5
+          }
+        },
+        "completed": {
+          "off": {
+            "k": 2,
+            "n": 2,
+            "share": 1
+          },
+          "on": {
+            "k": 2,
+            "n": 2,
+            "share": 1
+          }
+        },
+        "anyAsk": {
+          "off": {
+            "k": 0,
+            "n": 2,
+            "share": 0
+          },
+          "on": {
+            "k": 1,
+            "n": 2,
+            "share": 0.5
+          }
+        },
+        "timeAsk": {
+          "off": {
+            "k": 0,
+            "n": 2,
+            "share": 0
+          },
+          "on": {
+            "k": 1,
+            "n": 2,
+            "share": 0.5
+          }
+        },
+        "readingRow": {
+          "off": {
+            "k": 0,
+            "n": 2,
+            "share": 0
+          },
+          "on": {
+            "k": 2,
+            "n": 2,
+            "share": 1
+          }
+        },
+        "timeLine": {
+          "off": {
+            "k": 0,
+            "n": 2,
+            "share": 0
+          },
+          "on": {
+            "k": 2,
+            "n": 2,
+            "share": 1
+          }
+        }
+      },
+      "unreadable": {
+        "right": {
+          "off": {
+            "k": 0,
+            "n": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 0
+          }
+        },
+        "completed": {
+          "off": {
+            "k": 0,
+            "n": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 0
+          }
+        },
+        "anyAsk": {
+          "off": {
+            "k": 0,
+            "n": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 0
+          }
+        },
+        "timeAsk": {
+          "off": {
+            "k": 0,
+            "n": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 0
+          }
+        },
+        "readingRow": {
+          "off": {
+            "k": 0,
+            "n": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 0
+          }
+        },
+        "timeLine": {
+          "off": {
+            "k": 0,
+            "n": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 0
+          }
+        }
+      },
+      "future": {
+        "right": {
+          "off": {
+            "k": 0,
+            "n": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 0
+          }
+        },
+        "completed": {
+          "off": {
+            "k": 0,
+            "n": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 0
+          }
+        },
+        "anyAsk": {
+          "off": {
+            "k": 0,
+            "n": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 0
+          }
+        },
+        "timeAsk": {
+          "off": {
+            "k": 0,
+            "n": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 0
+          }
+        },
+        "readingRow": {
+          "off": {
+            "k": 0,
+            "n": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 0
+          }
+        },
+        "timeLine": {
+          "off": {
+            "k": 0,
+            "n": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 0
+          }
+        }
+      },
+      "control": {
+        "right": {
+          "off": {
+            "k": 0,
+            "n": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 0
+          }
+        },
+        "completed": {
+          "off": {
+            "k": 0,
+            "n": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 0
+          }
+        },
+        "anyAsk": {
+          "off": {
+            "k": 0,
+            "n": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 0
+          }
+        },
+        "timeAsk": {
+          "off": {
+            "k": 0,
+            "n": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 0
+          }
+        },
+        "readingRow": {
+          "off": {
+            "k": 0,
+            "n": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 0
+          }
+        },
+        "timeLine": {
+          "off": {
+            "k": 0,
+            "n": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 0
+          }
+        }
+      }
+    },
+    "prefill": {
+      "raised": {
+        "k": 1,
+        "n": 2
+      },
+      "prefillRight": 1,
+      "otherOption": 0,
+      "edited": 0,
+      "zoneAsked": 0,
+      "bypass": 1,
+      "pendingServed": 2,
+      "settledServed": 1,
+      "limitServed": 1,
+      "proseOnly": 0
+    },
+    "tokens": {
+      "off": {
+        "calls": 4,
+        "input": 3757,
+        "perCall": 939.25,
+        "usd": 0.005797
+      },
+      "on": {
+        "calls": 4,
+        "input": 4453,
+        "perCall": 1113.25,
+        "usd": 0.006113
+      }
+    },
+    "errors": {
+      "off": {
+        "k": 0,
+        "n": 2,
+        "share": 0
+      },
+      "on": {
+        "k": 0,
+        "n": 2,
+        "share": 0
+      }
+    },
+    "said": {
+      "off": {
+        "k": 0,
+        "n": 2,
+        "share": 0
+      },
+      "on": {
+        "k": 0,
+        "n": 2,
+        "share": 0
+      }
+    }
+  },
+  "verdict": {
+    "rule": "time-rule-t6b (registered 2026-09-30)",
+    "verdict": "FAIL",
+    "clauses": [
+      {
+        "id": "T1",
+        "what": "right window on readable phrases: on − off ≥ 0.15 and one-sided Fisher p < 0.05",
+        "pass": false,
+        "detail": "off 0/2, on 1/2, difference 0.500, p = 5.00e-1"
+      },
+      {
+        "id": "T2",
+        "what": "controls raise no confirmation",
+        "detail": "no control run"
+      },
+      {
+        "id": "T3",
+        "what": "controls not harmed",
+        "detail": "no control run in an arm"
+      },
+      {
+        "id": "T4",
+        "what": "unreadable and future not harmed",
+        "detail": "no run"
+      },
+      {
+        "id": "T5",
+        "what": "input tokens per model call: on ≤ 1.15 × off",
+        "pass": false,
+        "detail": "off 939.3, on 1113.3, ratio 1.185"
+      },
+      {
+        "id": "T6",
+        "what": "arm on: no row files a chat reading as said",
+        "pass": true,
+        "detail": "runs with a said row: 0"
+      },
+      {
+        "id": "G1",
+        "what": "errors or stuck runs ≤ 0.02 of each arm",
+        "pass": true,
+        "detail": "off 0/2, on 0/2"
+      },
+      {
+        "id": "G2",
+        "what": "arm on: every readable run filed a time-reading row",
+        "pass": true,
+        "detail": "2/2"
+      }
+    ]
+  }
+}

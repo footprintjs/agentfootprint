@@ -408,6 +408,7 @@ title: agentfootprint
 - [WireToolManifest](/docs/api/interfaces/WireToolManifest)
 - [WorkflowOptions](/docs/api/interfaces/WorkflowOptions)
 - [WriteEvent](/docs/api/interfaces/WriteEvent)
+- [ZoneAbbreviation](/docs/api/interfaces/ZoneAbbreviation)
 - [ZoneArgument](/docs/api/interfaces/ZoneArgument)
 
 ## Type Aliases

@@ -28,10 +28,12 @@ import type { DurationText } from './duration.js';
 import type { InstantText } from './instant.js';
 import { sameRange, type TimeRange } from './range.js';
 import type { TimeCandidate } from './resolveRecord.js';
+import type { TimeRefusal } from './periodForm.js';
 import {
   answersOf,
   clockOf,
   readingsOf,
+  type CallWindowRow,
   type ClockRow,
   type TimeAnswerRow,
   type TimeReadingRow,
@@ -178,6 +180,14 @@ export interface ReaderWindows {
    */
   readonly pending?: readonly string[];
   /**
+   * The quotes in `pending` the library holds NO reading of yet: the words
+   * name a zone it cannot resolve (an abbreviation outside the app's map), so
+   * the time ask asks for the zone and pre-fills nothing (the choice `open`
+   * on `zone`, no candidates). The served line says so instead of promising a
+   * form that shows a reading (T6b paid run: `field-pst`). Absent when none.
+   */
+  readonly pendingZones?: readonly string[];
+  /**
    * A mention is pending AND a call of this turn already ran on a window the
    * model wrote into it (a `call-window` row `how: 'model'` — § 7.3: it runs
    * as sent, unconfirmed). The served line then names that limit for the
@@ -185,6 +195,26 @@ export interface ReaderWindows {
    * otherwise.
    */
   readonly ranUnconfirmed?: true;
+  /**
+   * The person's windows a tool REFUSED this turn, before dispatch (a
+   * `call-window` row `how: 'refused'`): the quote, the tool and the reason
+   * code — a window of the person's the call carried (`person.mention`), or
+   * the turn's one open reading, refused in every reading (a row with no
+   * range). The served line turns each into the conclusion an answer states,
+   * so a refused window is never asked for again as though a call could read
+   * it. A window the model wrote is not the person's and is not named. Absent
+   * when none was refused.
+   */
+  readonly refused?: readonly RefusedWindow[];
+}
+
+/** One window of the person's a tool refused before dispatch — what the served line concludes. */
+export interface RefusedWindow {
+  readonly quote: string;
+  readonly toolName: string;
+  readonly refused: TimeRefusal;
+  /** On a `dst-gap`: the argument whose wall time the zone skips. */
+  readonly argument?: string;
 }
 
 /** Whether a call of `turn` ran on a window the model wrote (`call-window` `how: 'model'`). */
@@ -199,6 +229,49 @@ function ranOnSentWindow(ledger: readonly unknown[] | undefined, turn: number): 
       r.how === 'model'
     );
   });
+}
+
+/**
+ * The person's windows the tools refused this turn (`ReaderWindows.refused`):
+ * each `call-window` row `how: 'refused'` whose window was the person's — its
+ * `person.mention`'s quote — or, with no range at all, the turn's one open
+ * reading (`openQuote`), refused in every reading. Once per (quote, tool).
+ */
+function refusedWindowsOf(
+  ledger: readonly unknown[] | undefined,
+  turn: number,
+  readings: readonly TimeReadingRow[],
+  openQuote: string | undefined,
+): RefusedWindow[] {
+  const quoteOf = new Map(
+    readings.flatMap((r) =>
+      r.quote !== undefined && r.refused === undefined ? [[r.mention ?? 0, r.quote] as const] : [],
+    ),
+  );
+  const out: RefusedWindow[] = [];
+  for (const row of ledger ?? []) {
+    const r = row as Partial<CallWindowRow> | null;
+    if (r === null || typeof r !== 'object' || r.kind !== 'call-window' || r.turn !== turn)
+      continue;
+    if (r.how !== 'refused' || r.refused === undefined || typeof r.toolName !== 'string') continue;
+    const quote =
+      r.person !== undefined
+        ? r.person.mention === undefined
+          ? undefined
+          : quoteOf.get(r.person.mention)
+        : r.asked === undefined && r.form === undefined
+        ? openQuote
+        : undefined;
+    if (quote === undefined) continue;
+    if (out.some((w) => w.quote === quote && w.toolName === r.toolName)) continue;
+    out.push({
+      quote,
+      toolName: r.toolName,
+      refused: r.refused,
+      ...(r.argument !== undefined && { argument: r.argument }),
+    });
+  }
+  return out;
 }
 
 /**
@@ -224,6 +297,26 @@ export function pendingQuotesOf(
 }
 
 /**
+ * The quotes among `pending` whose reading offers nothing to confirm yet —
+ * no candidate, the choice open on the zone the words name
+ * (`ReaderWindows.pendingZones`).
+ */
+function pendingZonesOf(
+  readings: readonly TimeReadingRow[],
+  pending: readonly string[],
+): readonly string[] {
+  return pending.filter((quote) =>
+    readings.some(
+      (r) =>
+        r.quote === quote &&
+        (r.candidates ?? []).length === 0 &&
+        r.choice?.by === 'open' &&
+        r.choice.open.includes('zone'),
+    ),
+  );
+}
+
+/**
  * The latest turn's windows of the person's words, read off the ledger (its
  * last `clock` row and that turn's `time-reading` and `time-answer` rows) —
  * `undefined` when the turn has no clock, no settled mention and none
@@ -240,10 +333,19 @@ export function readerWindowsOf(ledger: readonly unknown[] | undefined): ReaderW
   const { windows } = turnWindowsOf(readings, undefined, answers);
   const pending = pendingQuotesOf(readings, answers);
   if (windows.length === 0 && pending.length === 0) return undefined;
+  const zones = pendingZonesOf(readings, pending);
+  const refused = refusedWindowsOf(
+    ledger,
+    turn,
+    readings,
+    pending.length === 1 ? pending[0] : undefined,
+  );
   return {
     now: clock.now,
     windows,
     ...(pending.length > 0 && { pending }),
+    ...(zones.length > 0 && { pendingZones: zones }),
     ...(pending.length > 0 && ranOnSentWindow(ledger, turn) && { ranUnconfirmed: true as const }),
+    ...(refused.length > 0 && { refused }),
   };
 }

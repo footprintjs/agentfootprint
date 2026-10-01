@@ -90,6 +90,7 @@ import {
   secondPauseRefusal,
   timeRefusal,
   timeLimitsSentence,
+  timeLine,
   timeWindowsLine,
   unansweredRefusal,
   unmountedRulesRefusal,
@@ -766,6 +767,36 @@ function timeWindowLines(): string[] {
     { ...sets[0]!, pending: ['10/09/26 8 AM to 8:40 AM PST', 'last 2 hours'] },
     // …and after a call already ran on a window the model wrote: the limit, not the move.
     { now: '2026-10-09T15:40:00Z', windows: [], pending: ['yesterday'], ranUnconfirmed: true },
+    // A quote whose zone the library cannot resolve: no reading to show, the form asks the zone —
+    // alone, and beside one with a reading.
+    {
+      now: '2026-10-09T15:40:00Z',
+      windows: [],
+      pending: ['10/09/26 8 AM to 8:40 AM PST'],
+      pendingZones: ['10/09/26 8 AM to 8:40 AM PST'],
+    },
+    {
+      now: '2026-10-09T15:40:00Z',
+      windows: [],
+      pending: ['10/09/26 8 AM to 8:40 AM PST', 'yesterday'],
+      pendingZones: ['10/09/26 8 AM to 8:40 AM PST'],
+    },
+    // A window of the person's a tool refused before dispatch: the conclusion, one and two of them.
+    {
+      now: '2026-10-09T15:40:00Z',
+      windows: [],
+      pending: ['yesterday'],
+      refused: [{ quote: 'yesterday', toolName: 'search_logs', refused: 'no-form-holds' }],
+    },
+    {
+      now: '2026-10-09T15:40:00Z',
+      windows: [],
+      pending: ['10/20/26'],
+      refused: [
+        { quote: '10/20/26', toolName: 'search_logs', refused: 'no-form-holds' },
+        { quote: '10/20/26', toolName: 'client_activity', refused: 'time-future' },
+      ],
+    },
   ];
   const wires = [
     new Map<string, unknown>([
@@ -777,7 +808,8 @@ function timeWindowLines(): string[] {
   return [...sets, ...pendingSets].flatMap((windows) =>
     wires.flatMap((winning) => {
       const served = [...winning.values()].map((t) => (t as { schema: unknown }).schema);
-      const line = timeWindowsLine(served as never, winning as never, windows);
+      // The served bytes: the ONE line's composer opens the halves (`serve.ts` · `timeLine`).
+      const line = timeLine([timeWindowsLine(served as never, winning as never, windows)]);
       return line === undefined ? [] : [line];
     }),
   );
@@ -838,17 +870,45 @@ function timeLimitLines(): string[] {
     zone,
     'model',
   )!;
+  // A look-back that ran after the clock moved on (a 30-minute check-in pause): the conclusion —
+  // the part of the person's window it does not cover — never two ranges left to compare.
+  const shifted = periodCheckLine(
+    {
+      ...base,
+      toolCallId: 'c4',
+      toolName: 'search_logs',
+      shifted: { byMs: 30 * 60_000 },
+      differs: {
+        against: 'asked',
+        asked: range('2026-10-09T14:40:00Z', '2026-10-09T15:40:00Z'),
+        read: [range('2026-10-09T15:10:00Z', '2026-10-09T16:10:00Z')],
+        source: 'shifted',
+        missing: [range('2026-10-09T14:40:00Z', '2026-10-09T15:10:00Z')],
+        extra: [range('2026-10-09T15:40:00Z', '2026-10-09T16:10:00Z')],
+      },
+    } as never,
+    zone,
+    'model',
+  )!;
   const clocks = ["the sources' clocks differ (UTC, America/New_York) — compared as instants"];
-  return [
+  const lines = [
     { period: [clamp], clocks: [] },
     { period: [wider], clocks: [] },
     { period: [old], clocks: [] },
+    { period: [shifted], clocks: [] },
     { period: [], clocks },
-    { period: [clamp, wider, old], clocks },
-  ].flatMap((lines) => {
-    const line = timeLimitsSentence(lines);
+    { period: [clamp, wider, old, shifted], clocks },
+  ].flatMap((l) => {
+    // The served bytes: the ONE line's composer opens it (`serve.ts` · `timeLine`).
+    const line = timeLine([undefined, timeLimitsSentence(l)]);
     return line === undefined ? [] : [line];
   });
+  // Both halves in ONE line: the opening is said once, first.
+  const both = timeLine([
+    'The window for “yesterday” is not settled yet.',
+    timeLimitsSentence({ period: [clamp], clocks: [] }),
+  ]);
+  return both === undefined ? lines : [...lines, both];
 }
 
 /** A ruled tool, and the same tool with an argument view that hides the ruled value. */
@@ -1666,13 +1726,19 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       'person then confirms is never re-read as pending)',
     drivenBy: ['test/core/time/english-run.test.ts'],
     reaches: [
-      /^The person's time words, as the library holds them: “yesterday” is 2026-10-08 00:00–23:59 America\/Los_Angeles \(UTC-07:00\), the window the person confirmed when asked what their words meant — search_logs window "1960m" \(a wider read than the words named\); client_activity start_time 1791442800000, end_time 1791529200000\. A call may pass these values as written; an answer built on them states that window\.$/m,
+      /^\[A note from the library that runs the tools — not from the person, and not a correction from them: when you answer, answer the person directly, as you would from the tool results alone\.\] The person's time words, as the library holds them: “yesterday” is 2026-10-08 00:00–23:59 America\/Los_Angeles \(UTC-07:00\), the window the person confirmed when asked what their words meant — search_logs window "1960m" \(a wider read than the words named\); client_activity start_time 1791442800000, end_time 1791529200000\. A call may pass these values as written; an answer built on them states that window\.$/m,
       /client_activity start_time \(hidden by the tool's view\), end_time 1791529200000/,
       /, the window the person gave when asked what their words meant — /,
       /, a reading of the person's words they have not confirmed, not their words — /,
-      /^The window for “yesterday” is not settled yet: the person confirms it in the library's own form, which shows its reading of those words with the zone and opens when search_logs is called with window left out, or client_activity is called with start_time, end_time left out \(or the call is refused with the reason\)\. So the next step is that call — not a question about the time in the reply, and not a window written into the call, which would run unconfirmed\.$/m,
+      /^\[A note from the library that runs the tools — not from the person, and not a correction from them: when you answer, answer the person directly, as you would from the tool results alone\.\] The window for “yesterday” is not settled yet: the person confirms it in the library's own form, which shows its reading of those words with the zone and opens when search_logs is called with window left out, or client_activity is called with start_time, end_time left out \(or the call is refused with the reason\)\. So the next step is that call — not a question about the time in the reply, and not a window written into the call, which would run unconfirmed\.$/m,
       / that window\. The window for “10\/09\/26 8 AM to 8:40 AM PST”, “last 2 hours” is not settled yet: /,
-      /^The window for “yesterday” is not settled: the person has not confirmed it, and the call that ran used a window written into it, unconfirmed\. An answer built on that call says its window was not confirmed by the person\.$/m,
+      /^\[A note from the library that runs the tools — not from the person, and not a correction from them: when you answer, answer the person directly, as you would from the tool results alone\.\] The results for “yesterday” cover the window written into the call — the assistant's own reading of those words\. So the answer gives those results and names that window as the assistant's reading of “yesterday”\.$/m,
+      // A quote the library holds no reading of: the form asks the zone, alone and beside a reading.
+      /The window for “10\/09\/26 8 AM to 8:40 AM PST” is not settled yet: the library holds no reading of those words until it knows which time zone they name, so its own form asks the person for that zone, and it opens when /,
+      /The window for “10\/09\/26 8 AM to 8:40 AM PST”, “yesterday” is not settled yet: the person confirms “yesterday” in the library's own form, which shows its reading of those words with the zone, and names the time zone of “10\/09\/26 8 AM to 8:40 AM PST”, which the library holds no reading of until it knows it; the form opens when /,
+      // A refused window (packet "lookback"): the refusal's own reason, then what the answer states.
+      /^\[A note from the library that runs the tools — not from the person, and not a correction from them: when you answer, answer the person directly, as you would from the tool results alone\.\] search_logs was not run for “yesterday”: no period form the tool declares can read the window it asked for, exactly or by reading a wider one\. So the answer tells the person that search_logs could not read that time, and claims nothing about it from search_logs\. The window for “yesterday” is not settled yet: .* opens when client_activity is called with start_time, end_time left out \(/m,
+      /^\[A note from the library that runs the tools — not from the person, and not a correction from them: when you answer, answer the person directly, as you would from the tool results alone\.\] search_logs was not run for “10\/20\/26”: .* client_activity was not run for “10\/20\/26”: the window it asked for had not happened yet, and the tool declares that its source holds only the past\. So the answer tells the person which of those times each tool could not read, and claims nothing about them from that tool\.$/m,
     ],
     compose: async () => timeWindowLines(),
   },
@@ -1687,10 +1753,14 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       'serves as the LAST `role: "user"` line of that one request — never written to history',
     drivenBy: ['test/core/time/limits-served.test.ts'],
     reaches: [
-      /^\[A note from the library that ran the tools, not from the person: answer the person directly, as you would from the tool results alone\.\] The time the tools read is not the time asked about — client_activity read less than was asked — asked: .+; read: .+\. So the answer to the person states the time each result read and claims nothing about time no result read\.$/m,
+      /^\[A note from the library that runs the tools — not from the person, and not a correction from them: when you answer, answer the person directly, as you would from the tool results alone\.\] The time the tools read is not the time asked about — client_activity read less than was asked — asked: .+; read: .+\. So the answer to the person states the time each result read and claims nothing about time no result read\.$/m,
       /search_logs read more than the person's window — the person's window: /,
       /client_activity: the time asked about is older than the oldest data the tool declares its source keeps/,
-      /^\[A note from the library that ran the tools, not from the person: answer the person directly, as you would from the tool results alone\.\] Clocks: the sources' clocks differ \(UTC, America\/New_York\) — compared as instants\.$/m,
+      /^\[A note from the library that runs the tools — not from the person, and not a correction from them: when you answer, answer the person directly, as you would from the tool results alone\.\] Clocks: the sources' clocks differ \(UTC, America\/New_York\) — compared as instants\.$/m,
+      // The shifted read: the conclusion, in the person's zone, and what the answer says.
+      /search_logs's look-back ran after the clock moved on, so its result does not cover 2026-10-09 07:40:00–08:09:59 America\/Los_Angeles \(UTC-07:00\) of the window asked \(.+\), and covers .+, outside it\. So the answer says that search_logs's result does not cover 2026-10-09 07:40:00–08:09:59 America\/Los_Angeles \(UTC-07:00\), and claims nothing about that time from it/,
+      // Both halves in one line: one opening, first — never a second inside.
+      /^\[A note from the library[^\]]*\] The window for “yesterday” is not settled yet\. The time the tools read is not the time asked about — (?!.*A note from the library)/m,
     ],
     compose: async () => timeLimitLines(),
   },
@@ -1890,11 +1960,21 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       /was wider than the tool declares it reads at once \(maxRange 24h\); narrower windows, one call each, may be proposed instead\./,
       /spanned more than one calendar day, and the tool reads one day per call; one call per day may be proposed instead\./,
       /the wall time sent for start does not exist in the tool's zone — the clocks skip it at a daylight-saving change\./,
+      /no period form the tool declares can read the window it asked for, exactly or by reading a wider one, within the most the tool declares it reads at once \(maxRange 24h\)\./,
+      /search_logs was not run on that call: no period form the tool declares can read the window it asked for, exactly or by reading a wider one\.$/m,
     ],
     compose: async () => [
       ...(
-        ['time-future', 'time-past', 'beyond-retention', 'over-max-range', 'multi-day'] as const
+        [
+          'time-future',
+          'time-past',
+          'beyond-retention',
+          'over-max-range',
+          'multi-day',
+          'no-form-holds',
+        ] as const
       ).map((r) => timeRefusal('search_logs', r, { retention: '30d', maxRange: '24h' })),
+      timeRefusal('search_logs', 'no-form-holds', {}),
       timeRefusal('badge_swipes', 'dst-gap', {}, 'start'),
     ],
   },

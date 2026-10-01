@@ -721,7 +721,12 @@ export function periodRowIsWellFormed(row: Readonly<Record<string, unknown>>): b
  * `audience` names who reads the line: the PERSON (the limits block, the
  * default — their window is "your window") or the MODEL (the served time line,
  * `agent/arguments/serve.ts` · `timeLimitsSentence` — the same window is "the
- * person's window"). Only that reference differs.
+ * person's window"). That reference differs, and a SHIFTED read: the model is
+ * handed the library's conclusion ({@link shiftedConclusion}) — which part of
+ * the window the result does not cover, in the person's zone, and that the
+ * answer says so — not the two ranges to compare (T8 bench: after a pause the
+ * two-range line did not stop "1 error in the last 30 minutes", 11/20). The
+ * person's line keeps its bytes.
  */
 export function periodCheckLine(
   row: PeriodRow,
@@ -730,7 +735,15 @@ export function periodCheckLine(
 ): string | undefined {
   const parts: string[] = [];
   const d = row.differs;
-  if (d !== undefined) {
+  if (
+    d !== undefined &&
+    audience === 'model' &&
+    row.shifted !== undefined &&
+    d.missing.length > 0 &&
+    d.extra.length > 0
+  ) {
+    parts.push(shiftedConclusion(row.toolName, d, presentation));
+  } else if (d !== undefined) {
     const person = d.against === 'person';
     const theirs = audience === 'model' ? "the person's window" : 'your window';
     const reference = person ? theirs : 'was asked';
@@ -754,6 +767,47 @@ export function periodCheckLine(
     );
   }
   return parts.length === 0 ? undefined : parts.join('. ');
+}
+
+// LENS · late-line · request-ephemeral
+// reads: one `period` row's `differs` (asked, missing, extra) and `shifted` — a look-back that ran
+//        after the turn's clock moved on — rendered in the person's zone by the bound renderer
+// law: the library's CONCLUSION for the MODEL: the part of the window the result does not cover,
+//      and that the answer says so and claims nothing about it; never two ranges left to compare.
+/**
+ * The model's line for a SHIFTED read (`period-shifted` with both `missing`
+ * and `extra`): the part of the asked window (or the person's) the result
+ * does not cover and the time it read outside it, in the presentation zone,
+ * then what the answer does with that — says it, and claims nothing about it
+ * from this tool.
+ *
+ * @example
+ * ```ts
+ * shiftedConclusion('search_logs', differs, presentation);
+ * // "search_logs's look-back ran after the clock moved on, so its result does not cover
+ * //  2026-10-09 09:30:00–09:59:59 America/Los_Angeles (UTC-07:00) of the person's window (…),
+ * //  and covers …, outside it. So the answer says that search_logs's result does not cover
+ * //  2026-10-09 09:30:00–09:59:59 America/Los_Angeles (UTC-07:00), and claims nothing about that
+ * //  time from it"
+ * ```
+ */
+function shiftedConclusion(
+  toolName: string,
+  d: PeriodDiffers,
+  presentation: BoundPresentation,
+): string {
+  const ranges = (rs: readonly PeriodDiffers['asked'][]): string =>
+    rs.map((r) => presentation.range(r, 'second')).join(' and ');
+  const reference = d.against === 'person' ? "the person's window" : 'the window asked';
+  const missing = ranges(d.missing);
+  const asked = ranges([d.asked]);
+  const none = missing === asked;
+  const gap = none ? `any of ${reference}, ${asked}` : `${missing} of ${reference} (${asked})`;
+  return (
+    `${toolName}'s look-back ran after the clock moved on, so its result does not cover ${gap}, ` +
+    `and covers ${ranges(d.extra)}, outside it. So the answer says that ${toolName}'s result ` +
+    `does not cover ${missing}, and claims nothing about that time from it`
+  );
 }
 
 /**

@@ -1034,8 +1034,9 @@ describe('the staged-refs nudge', () => {
         role: 'user',
         reason: 'time-window-line',
       });
+      // The rebuild reproduces the served line byte for byte — its one opening included.
       expect(first.messages.requestOnly[0]!.text).toMatch(
-        /^The window for “yesterday” is not settled yet: .* opens when client_activity is called with start_time, end_time left out/,
+        /^\[A note from the library that runs the tools — not from the person, and not a correction from them: [^\]]*\] The window for “yesterday” is not settled yet: .* opens when client_activity is called with start_time, end_time left out/,
       );
       // What went out: the line is the request's LAST message; the history never holds it.
       const sent = wire[0]!.messages;

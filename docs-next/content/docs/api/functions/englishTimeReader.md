@@ -6,7 +6,7 @@ title: englishTimeReader
 
 > **englishTimeReader**(`options?`): [`TimeReader`](/docs/api/interfaces/TimeReader)
 
-Defined in: [src/core/time/readers/english.ts:672](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/readers/english.ts#L672)
+Defined in: [src/core/time/readers/english.ts:706](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/readers/english.ts#L706)
 
 The library's careful English reader: a `kind: 'rule'` tokenizer over the
 v1 phrases of the time design's § 5.3, "unreadable" for every other time

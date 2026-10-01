@@ -37,6 +37,7 @@ import { turnWindowsOf, type TurnWindow } from './windows.js';
 import { instantOf, spellInstant } from './instant.js';
 import {
   resolveMention,
+  widenedGrain,
   withZoneAnswered,
   type ResolveClock,
   type TimeCandidate,
@@ -171,13 +172,15 @@ function saidPartsOf(window: FormsWindow): readonly TimePart[] {
 }
 
 /**
- * The last instant of the range AS SAID — a reading runs to the end of its
- * grain, so `[08:00, 08:41)` at minute grain is said as `08:40`, and a whole
- * day `[26 Sep, 27 Sep)` as 26 Sep. A window with no reading (typed in the
- * ask, set in a UI) ends at its own `to`, as entered.
+ * The last instant of the range AS SAID — a reading whose end was widened
+ * runs to the end of its grain, so `[08:00, 08:41)` at minute grain is said
+ * as `08:40`, and a whole day `[26 Sep, 27 Sep)` as 26 Sep. An end that was
+ * not widened ("8 AM to 9 AM" → `[08:00, 09:00)`) is said as it is, `09:00`
+ * (`resolveRecord.ts` · `widenedGrain`, the one answer). A window with no
+ * reading (typed in the ask, set in a UI) ends at its own `to`, as entered.
  */
 function saidEndMs(window: FormsWindow, toMs: number): number {
-  const grain = window.reading?.grain;
+  const grain = window.reading === undefined ? undefined : widenedGrain(window.reading);
   if (grain === undefined) return toMs;
   // A day or wider: the last millisecond is inside the last said day.
   return toMs - (GRAIN_MS[grain] ?? 1);

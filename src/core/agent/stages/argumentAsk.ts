@@ -147,6 +147,8 @@ function windowPlanOf(
     ...(ask.field.labels !== undefined && { labels: ask.field.labels }),
     mention: row.mention ?? 0,
     now: clock.now,
+    zone: clock.zone,
+    ...(deps.time?.appZone !== undefined && { appZone: deps.time.appZone }),
   };
 }
 

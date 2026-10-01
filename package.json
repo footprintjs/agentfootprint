@@ -287,6 +287,16 @@
         "default": "./dist/doors/ontology.js"
       }
     },
+    "./time": {
+      "import": {
+        "types": "./dist/esm/doors/time.d.ts",
+        "default": "./dist/esm/doors/time.js"
+      },
+      "require": {
+        "types": "./dist/types/doors/time.d.ts",
+        "default": "./dist/doors/time.js"
+      }
+    },
     "./package.json": "./package.json",
     "./canonical-notes.json": "./canonical-notes.json"
   },
@@ -339,6 +349,9 @@
       ],
       "ontology": [
         "./dist/types/doors/ontology.d.ts"
+      ],
+      "time": [
+        "./dist/types/doors/time.d.ts"
       ]
     }
   },

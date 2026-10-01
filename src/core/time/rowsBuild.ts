@@ -135,7 +135,13 @@ export function timeReadingRows(input: {
   if (mentions.length === 0) return [base];
   return mentions.map((m, mention) => {
     if ('refused' in m) return { ...base, mention, refused: m.refused };
-    const resolution = resolveMention(m.parses, clock, { id: reader.id, kind: reader.kind }, true);
+    const resolution = resolveMention(
+      m.parses,
+      clock,
+      { id: reader.id, kind: reader.kind },
+      true,
+      policy,
+    );
     return {
       ...base,
       mention,

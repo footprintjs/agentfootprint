@@ -77,7 +77,7 @@ describe('the v1 rows of § 5.3 — the parts, never an instant', () => {
       'at 2026-10-09T08:00-07:00',
       {
         date: { kind: 'fixed', year: 2026, month: 10, day: 9 },
-        wall: { h: 8, m: 0 },
+        wall: { h: 8, m: 0, clock: '24h' },
         zoneToken: '-07:00',
       },
     ],
@@ -133,12 +133,12 @@ describe('the v1 rows of § 5.3 — the parts, never an instant', () => {
         rangeOf: [
           {
             date: { kind: 'fixed', year: 2026, month: 10, day: 9 },
-            wall: { h: 8, m: 0 },
+            wall: { h: 8, m: 0, clock: '24h' },
             zoneToken: 'Z',
           },
           {
             date: { kind: 'fixed', year: 2026, month: 10, day: 9 },
-            wall: { h: 9, m: 0 },
+            wall: { h: 9, m: 0, clock: '24h' },
             zoneToken: 'Z',
           },
         ],
@@ -636,7 +636,7 @@ describe('boundary', () => {
   it('the reader is frozen and names itself', () => {
     expect(reader).toMatchObject({
       id: 'agentfootprint/english',
-      version: '1.0.0',
+      version: '1.1.0',
       locale: 'en-US',
       kind: 'rule',
     });

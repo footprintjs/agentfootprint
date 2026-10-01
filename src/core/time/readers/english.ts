@@ -6,7 +6,8 @@
  * Pattern: Strategy behind the `TimeReader` port (`../reader.ts`). It
  *          TOKENIZES only: it returns the parts it sees and the verbatim
  *          quote. It never resolves an instant, never applies a date order,
- *          never maps a zone abbreviation and never refuses a future date —
+ *          never maps a zone token (an abbreviation, a place) to a zone and
+ *          never refuses a future date —
  *          all of that is `resolve.ts`'s, the policy's or the ask's.
  * Role:    core/ leaf (the time layer). Imports only the port's types. Armed
  *          by the app: `.time({ reader: englishTimeReader() })` — there is no
@@ -17,11 +18,11 @@
  *
  * | Phrase | Example | Parts |
  * |--------|---------|-------|
- * | an ISO date or instant | `2026-10-09`, `2026-10-09T08:00-07:00` | `date: fixed`, `wall`, `zoneToken` |
+ * | an ISO date or instant | `2026-10-09`, `2026-10-09T08:00-07:00` | `date: fixed`, `wall` (marked `clock: '24h'` — never also pm), `zoneToken` |
  * | a numeric date | `10/09/26`, `10/9` | `date: numeric` — the ORDER is not decided here |
  * | a clock time | `8 AM`, `8:40`, `20:40`, `8:40 p.m.` | `wall` (a bare `8` is a time only as a range's first side: `8 to 9 AM`) |
  * | a range between two of the above | `8 AM to 8:40 AM`, `08:00–08:40`, `between 8 and 9 AM` | `rangeOf` (a day or zone said once for both sides is the whole mention's) |
- * | a zone after a time or date | `America/Los_Angeles`, `UTC-07:00`, `PST` | `zoneToken`, as written (an abbreviation is ASKED — v1 ships no map) |
+ * | a zone after a time, a date or a day word | `America/Los_Angeles`, `UTC-07:00`, `London time`, `PST` | `zoneToken`, as written — `resolve.ts` maps it (a place the tz database names once; an abbreviation only through the app's map; else ASKED) |
  * | a day word | today, yesterday, tomorrow | `relative: { unit: 'day', offset }` |
  * | a relative span from now | last 40 minutes, past 2 hours, the last hour, the past week | `relative: { unit, count }` — a look-back in minutes, hours, days or weeks |
  *
@@ -34,8 +35,9 @@
  * (`previous 7 days` — often relative to another window), a look-ahead (`next 2 hours`), an
  * ordinal day (`the 9th`), `8 o'clock`, and any v1 phrase a modifier changes
  * (`since 8 AM`, `before yesterday`, `around 8:40`, `earlier today`,
- * `8 AM to now`, `past 8 PM`, `8 AM-ish`, `from 3 PM yesterday` with no `to`) and
- * a meridiem the number contradicts (`13:00 PM`). Such a phrase is ONE mention
+ * `8 AM to now`, `past 8 PM`, `8 AM-ish`, `from 3 PM yesterday` with no `to`), a
+ * bare first side whose far side says no meridiem (`8 to 9:30` — `9:30` alone
+ * would drop the start) and a meridiem the number contradicts (`13:00 PM`). Such a phrase is ONE mention
  * with `problem: 'unreadable'`, quoting the whole phrase: reading `yesterday`
  * out of `yesterday morning` would silently widen what the person said.
  *
@@ -88,7 +90,7 @@ import {
 /** The reader's recorded identity — on every `time-reading` row with its version. */
 export const ENGLISH_TIME_READER_ID = 'agentfootprint/english';
 /** Raised whenever what the reader returns for some text changes. */
-export const ENGLISH_TIME_READER_VERSION = '1.0.0';
+export const ENGLISH_TIME_READER_VERSION = '1.1.0';
 
 const DAY_WORDS: Readonly<Record<string, number>> = { today: 0, yesterday: -1, tomorrow: 1 };
 
@@ -172,6 +174,16 @@ const MODIFIER_BEFORE = new RegExp(
 );
 /** `from` with no `to`: a time after it is where a window STARTS (`from 3 PM yesterday`), not an hour. */
 const FROM_BEFORE = /(?:^|[^\w])(from)\s*$/i;
+/**
+ * A bare number joined to a clock time as a range's first side the grammar
+ * does not read (`8 to 9:30`, `from 8 to 9:30`, `between 8 and 9:30` — the
+ * far side says no meridiem, so `8` is no time): the whole phrase is not
+ * read. Reading `9:30` alone would drop the start the person said.
+ */
+const BARE_SIDE_BEFORE = new RegExp(
+  `(?:^|[^\\w:./-])((?:from\\s+)?\\d{1,2}\\s*${RANGE_CONNECTOR}|between\\s+\\d{1,2}\\s+and)\\s*$`,
+  'i',
+);
 /** …and right after it. */
 const MODIFIER_AFTER = new RegExp(
   '^(?:\\s*-?\\s*ish\\b|\\s*(?:ago\\b|onwards?\\b|or\\s+so\\b|(?:or|and)\\s+(?:later|earlier|after|before)\\b|' +
@@ -232,18 +244,33 @@ const SPAN = /\b(?:last|past)\s+(\d{1,6})\s*(minutes?|mins?|hours?|hrs?|days?|we
 /** `the last hour`, `the past week` — a look-back of one unit; without `the`, `last week` is a calendar week (not read). */
 const ONE_SPAN = /\bthe\s+(?:last|past)\s+(hour|day|week)\b/gi;
 
+/**
+ * A place named with the word `time` — `London time`, `New York time` — kept
+ * as written: which zone it names is `resolve.ts`'s (the tz database's one
+ * zone for the place, else asked). Capitalised words only, so `the same
+ * time` is no zone.
+ */
+const PLACE_TIME = '[A-Z][a-z]+(?:[ -][A-Z][a-z]+){0,2}\\s+[Tt]ime';
+
 /** A zone right after a phrase: optional `(`, or `in`, then the token (and a closing `)`). */
 const ZONE_AFTER = new RegExp(
-  '^(\\s*\\(?\\s*|\\s+in\\s+)' +
-    `(?:(${IANA_AREAS})/[A-Za-z0-9_+-]+(?:/[A-Za-z0-9_+-]+)?` +
-    '|(?:UTC|GMT)\\s?([+-]\\d{1,2}(?::?\\d{2})?)' +
-    `|(${ZONE_ABBREVIATIONS.join('|')}))(?![A-Za-z0-9_/])(\\s*\\))?`,
+  '^(?<lead>\\s*\\(?\\s*|\\s+in\\s+)' +
+    `(?:(?<iana>(?:${IANA_AREAS})/[A-Za-z0-9_+-]+(?:/[A-Za-z0-9_+-]+)?)` +
+    '|(?:UTC|GMT)\\s?(?<offset>[+-]\\d{1,2}(?::?\\d{2})?)' +
+    `|(?<place>${PLACE_TIME})` +
+    `|(?<abbreviation>${ZONE_ABBREVIATIONS.join('|')}))(?![A-Za-z0-9_/])(?<close>\\s*\\))?`,
 );
 
 const num = (text: string | undefined): number | undefined =>
   text === undefined ? undefined : Number(text);
 
-function wallOf(h: number, m?: number, s?: number, meridiem?: 'am' | 'pm'): TimeWall | undefined {
+function wallOf(
+  h: number,
+  m?: number,
+  s?: number,
+  meridiem?: 'am' | 'pm',
+  clock?: '24h',
+): TimeWall | undefined {
   if (!Number.isInteger(h) || h > 23) return undefined;
   if (m !== undefined && m > 59) return undefined;
   if (s !== undefined && s > 59) return undefined;
@@ -253,6 +280,7 @@ function wallOf(h: number, m?: number, s?: number, meridiem?: 'am' | 'pm'): Time
     ...(m !== undefined && { m }),
     ...(s !== undefined && { s }),
     ...(meridiem !== undefined && { meridiem }),
+    ...(clock !== undefined && { clock }),
   };
 }
 
@@ -269,7 +297,9 @@ function isoAtoms(text: string): Atom[] {
   for (const m of matches(ISO, text)) {
     const [, y, mo, d, h, mi, s, zone] = m;
     const date: TimeDate = { kind: 'fixed', year: Number(y), month: Number(mo), day: Number(d) };
-    const wall = h === undefined ? undefined : wallOf(Number(h), Number(mi), num(s));
+    // An ISO time is a 24-hour clock by its form: `T08:00` is 8 AM, never also 8 PM.
+    const wall =
+      h === undefined ? undefined : wallOf(Number(h), Number(mi), num(s), undefined, '24h');
     if (h !== undefined && wall === undefined) continue;
     out.push({
       start: m.index,
@@ -379,19 +409,21 @@ function atomsOf(text: string): Atom[] {
   return out;
 }
 
-/** A zone written right after a date or a time joins that phrase, as written. */
+/**
+ * A zone written right after a date, a time or a day word joins that
+ * phrase, as written — `yesterday London time` is a London day, and reading
+ * `yesterday` alone would silently put it in the app's zone. A look-back
+ * (`last 2 hours`) takes none: it runs until now in every zone.
+ */
 function attachZone(text: string, atom: Atom): void {
-  if (atom.kind === 'day' || atom.kind === 'span' || atom.kind === 'bare') return;
+  if (atom.kind === 'span' || atom.kind === 'bare') return;
   if (atom.zoneToken !== undefined) return;
   const m = ZONE_AFTER.exec(text.slice(atom.end));
-  if (m === null) return;
-  const lead = m[1] as string;
-  const opened = lead.includes('(');
-  const closed = m[5] !== undefined;
-  if (opened !== closed) return;
-  // The IANA name, else the offset after `UTC` / `GMT`, else the abbreviation — each verbatim.
-  const whole = m[0].slice(lead.length).replace(/\s*\)$/, '');
-  const token = m[2] !== undefined ? whole : m[3] !== undefined ? m[3] : (m[4] as string);
+  if (m === null || m.groups === undefined) return;
+  const { lead, iana, offset, place, abbreviation, close } = m.groups;
+  if ((lead as string).includes('(') !== (close !== undefined)) return;
+  // The IANA name, else the offset after `UTC` / `GMT`, else the place, else the abbreviation — each verbatim.
+  const token = iana ?? offset ?? place ?? (abbreviation as string);
   atom.zoneToken = token;
   atom.end += m[0].length;
 }
@@ -528,7 +560,9 @@ function mergeOverlaps(groups: readonly Group[]): Group[] {
 function widenForModifiers(text: string, group: Group): void {
   const head = text.slice(0, group.start);
   const clock = group.items.some((i) => i.atom?.wall !== undefined);
+  const startsOnWall = group.items[0]?.atom?.kind === 'wall';
   const before =
+    (startsOnWall ? BARE_SIDE_BEFORE.exec(head) : null) ??
     MODIFIER_BEFORE.exec(head) ??
     (group.rangeAt === undefined && clock ? FROM_BEFORE.exec(head) : null);
   if (before !== null) {

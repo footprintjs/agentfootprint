@@ -15,7 +15,13 @@
  *     from now (`1960m` for all of yesterday), or the whole day for a `day`
  *     form — and records what it adds: the `call-window` row carries `sent`
  *     and `differs.extra` (or `trimmedByTool` when the tool declares
- *     `filtersToAsked`), and the model's note says the value reads a wider one;
+ *     `filtersToAsked`), and the model's note says the value reads a wider one.
+ *     The call that ASKED is recorded the same way once the person confirms:
+ *     its latest `call-window` row is `filled` from the person's answer;
+ *   - when NO form can read the person's window, even wider — a covering
+ *     look-back longer than the tool's `maxRange`, or a window still running —
+ *     the call is refused (`no-form-holds`), never run on the tool's assumed
+ *     `1h`, and the served line turns the refusal into what the answer states;
  *   - a call whose window the tool cannot honestly read is refused BEFORE it
  *     runs, and the model reads why: a window outside the tool's `direction`,
  *     wholly older than its `retention`, wider than its `maxRange`, spanning
@@ -23,13 +29,19 @@
  *     window only PARTLY older than `retention` runs, marked;
  *   - a look-back the clock drifted past (after a pause) is redrawn as the
  *     asked range when the library wrote it and the tool takes an absolute
- *     form; the model's own look-back runs as sent and is recorded shifted.
+ *     form; the model's own look-back runs as sent and is recorded shifted;
+ *   - an app that needs the same answer OUTSIDE a run (a preview of what a
+ *     tool would read) asks the library's own conversion through
+ *     `agentfootprint/time` — `convertForTool` over the tool's own `period`
+ *     (`sugarForms`, `granularityMsOf`) — and gets exactly what the run sent,
+ *     or the refusal the run filed.
  *
  * Run:  npm run example examples/features/85-time-widen-and-refuse.ts
  */
 
 import { Agent, defineTool, isInputPause, type TimeReader } from '../../src/index.js';
 import { mock } from '../../src/doors/providers.js';
+import { convertForTool, granularityMsOf, sugarForms } from '../../src/doors/time.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {
@@ -40,7 +52,8 @@ export const meta: ExampleMeta = {
     "When no form of a tool holds the person's window exactly, the library sends the first form " +
     'that holds more (a covering look-back, a whole day) and records what it adds; a call whose ' +
     "window breaks the tool's declared facts (direction, retention, maxRange, one day per call, a " +
-    'skipped wall time) is refused before it runs, with the reason.',
+    'skipped wall time) or that no form can read even wider is refused before it runs, with the ' +
+    'reason.',
   defaultInput: 'Any backup errors yesterday? And what is scheduled tomorrow?',
   providerSlots: [],
   tags: ['features', 'observability'],
@@ -64,12 +77,18 @@ const reader: TimeReader = {
 
 // #region widen-and-refuse
 const handed: unknown[] = [];
+const errorsPeriod = {
+  argument: 'window',
+  spelling: 'lookback',
+  direction: 'past',
+  retention: '30d',
+} as const;
 const backupErrors = defineTool({
   name: 'backup_errors',
   description: 'Backup error lines over a look-back window ending now.',
   inputSchema: { type: 'object', properties: { window: { type: 'string' } } },
   askOrAssume: { window: { assume: '1h' } },
-  period: { argument: 'window', spelling: 'lookback', direction: 'past', retention: '30d' },
+  period: errorsPeriod,
   execute: (args) => {
     handed.push(args);
     return '{"errors":0}';
@@ -120,6 +139,70 @@ const desk = Agent.create({
   .build();
 // #endregion widen-and-refuse
 
+// #region no-form-holds
+// The same look-back tool, but it reads at most one day at once: reaching the start of yesterday
+// from now takes a longer look-back, so no form can read that window — the call is refused before
+// anything is asked, and never runs on its assumed `1h`.
+const recentPeriod = {
+  argument: 'window',
+  spelling: 'lookback',
+  direction: 'past',
+  maxRange: '24h',
+} as const;
+const shortSearch = defineTool({
+  name: 'recent_errors',
+  description: 'Error lines over a look-back window ending now, at most one day.',
+  inputSchema: { type: 'object', properties: { window: { type: 'string' } } },
+  askOrAssume: { window: { assume: '1h' } },
+  period: recentPeriod,
+  execute: (args) => {
+    handed.push(args);
+    return '{"errors":0}';
+  },
+});
+const shortDesk = Agent.create({
+  provider: mock({
+    replies: [
+      toolCall('s1', 'recent_errors', {}),
+      { content: 'That tool reads at most the last day; yesterday is out of its reach.' },
+    ],
+  }),
+  model: 'small-model',
+})
+  .tool(shortSearch)
+  .time({ zone: 'America/Los_Angeles', reader })
+  .build();
+// #endregion no-form-holds
+
+type WindowRow = {
+  kind: string;
+  toolCallId?: string;
+  how?: string;
+  refused?: string;
+  asked?: { from: string; to: string };
+  sent?: { from: string; to: string };
+};
+
+// #region same-answer-outside-a-run
+// The question the run asked, asked by the app for the same window, clock and tool: no run, no
+// record — what a preview of "what would this tool read?" shows. The tool's own `period` is the
+// whole input: its forms (`sugarForms`), its step (`granularityMsOf`) and its facts (itself).
+function previewOf(
+  asked: { from: string; to: string },
+  period: typeof errorsPeriod | typeof recentPeriod,
+) {
+  const clock = {
+    now: now.toISOString(),
+    zone: 'America/Los_Angeles',
+    granularityMs: granularityMsOf(period),
+  };
+  return convertForTool({ range: asked }, sugarForms(period), period, clock);
+}
+// #endregion same-answer-outside-a-run
+/** A call's LATEST `call-window` row — the window it ran with (or why it did not run). */
+const latest = (rows: readonly WindowRow[], id: string) =>
+  rows.filter((r) => r.kind === 'call-window' && r.toolCallId === id).pop();
+
 export async function run(input: string): Promise<string> {
   const asked = await desk.run({ message: input, time: { now: now.toISOString() } });
   check(isInputPause(asked), '"yesterday" offered to confirm');
@@ -129,13 +212,55 @@ export async function run(input: string): Promise<string> {
     values: { f1: asked.awaitingInput.fields[0]?.enum?.[0] as string },
   });
   console.log('the tool was handed:', JSON.stringify(handed));
-  const rows = (desk.findings() ?? []) as readonly { kind: string; how?: string }[];
-  const windows = rows.filter((r) => r.kind === 'call-window');
-  console.log('\ncall-window rows:', JSON.stringify(windows, null, 2));
-  check(windows[1]?.how === 'filled' && 'differs' in windows[1], 'the fill recorded wider');
-  check(windows[2]?.how === 'refused', 'the future window refused before it ran');
+  const rows = (desk.findings() ?? []) as readonly WindowRow[];
+  console.log(
+    '\ncall-window rows:',
+    JSON.stringify(
+      rows.filter((r) => r.kind === 'call-window'),
+      null,
+      2,
+    ),
+  );
+  const asker = latest(rows, 'c0');
+  check(asker?.how === 'filled' && 'differs' in asker, 'the asking call recorded wider');
+  const later = latest(rows, 'c1');
+  check(later?.how === 'filled' && 'differs' in later, 'the later fill recorded wider');
+  check(latest(rows, 'c2')?.how === 'refused', 'the future window refused before it ran');
   check(handed.length === 2, 'only the confirmed and the widened call ran');
-  return String(out);
+
+  // The app's preview of the same window — the library's own answer, not a copy.
+  if (asker?.asked !== undefined) {
+    const preview = previewOf(asker.asked, errorsPeriod);
+    const read = 'conversion' in preview ? preview.conversion : undefined;
+    check(read !== undefined && 'sent' in read, 'no look-back holds yesterday exactly: wider');
+    check(
+      JSON.stringify(read?.values) === JSON.stringify(handed[0]),
+      'the preview sends what the run sent',
+    );
+    check(
+      read !== undefined && 'sent' in read && JSON.stringify(read.sent) === JSON.stringify(asker.sent),
+      'the preview reads what the row says the tool read',
+    );
+    console.log('\nthe same answer outside a run:', JSON.stringify(preview));
+  } else {
+    check(false, 'the asking call carries the asked range');
+  }
+
+  const short = await shortDesk.run({ message: input, time: { now: now.toISOString() } });
+  const shortRows = (shortDesk.findings() ?? []) as readonly WindowRow[];
+  check(!isInputPause(short), 'nothing asked: no reading of "yesterday" is readable');
+  check(latest(shortRows, 's1')?.refused === 'no-form-holds', 'refused, not run on its 1h');
+  check(handed.length === 2, 'the one-day tool never ran');
+  // The app's preview of the one-day tool names the same refusal — its `maxRange` included.
+  if (asker?.asked !== undefined) {
+    const preview = previewOf(asker.asked, recentPeriod);
+    check(
+      'refused' in preview && preview.refused === latest(shortRows, 's1')?.refused,
+      'the preview refuses what the run refused',
+    );
+  }
+  console.log('\nthe one-day tool:', JSON.stringify(latest(shortRows, 's1')));
+  return `${String(out)}\n${String(short)}`;
 }
 
 if (isCliEntry(import.meta.url)) {

@@ -21,7 +21,11 @@ export const T8_REASONS = Object.freeze(['period-differs-from-asked', 'period-be
 
 /** The served line's lead (`arguments/serve.ts` · `timeLimitsSentence`). */
 export const LIMITS_LEAD = 'The time the tools read is not the time asked about';
-/** Its opening since round 1 (`arguments/serve.ts` · `TIME_LIMITS_SOURCE`) — either marks the line. */
+/**
+ * Its opening since round 1 (`arguments/serve.ts` · `TIME_LIMITS_SOURCE`, since packet "serving"
+ * `TIME_LINE_SOURCE`, which opens EVERY served time line once) — either marks the line. It marks
+ * the limits half only because this bench arms `.time()` without a reader: no windows half is served.
+ */
 export const LIMITS_SOURCE = 'A note from the library';
 
 const byId = new Map(CASES.map((c) => [c.id, c]));

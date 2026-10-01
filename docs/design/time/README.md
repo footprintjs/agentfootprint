@@ -208,8 +208,18 @@ Rules:
 
 Inside the library a range is half-open `[from, to)`. When a person says an end at a grain ("to
 8:40"), the default reading runs to the end of that grain — `[08:00, 08:41)` — and records
-`{ kind: 'end-of-grain' }` (Elasticsearch's `lte` rounding). In v1 this is a fixed law, not a
-switch; an `exact` reading waits for a bench that shows the need (§ 11, TQ9). A tool's declared `granularity` rounds a range outward, never inward,
+`{ kind: 'end-of-grain' }` (Elasticsearch's `lte` rounding). A lone point is its grain ("9 AM" is
+`[09:00, 10:00)`) and a day ends at the next midnight, both noted the same way. **One exception
+(time follow-ups, packet "reader", 2026-09-30):** a range END said as an o'clock hour is a
+boundary on the clock face, not a grain to fill — "8 AM to 9 AM" is `[08:00, 09:00)`, one hour, with
+no `end-of-grain` note (`resolve.ts` · `endOf`). The bench record showed the old reading proposing
+`08:00–10:00` for "8 AM to 9 AM" on every run (the truth, and the person, want 09:00), and the
+minute law was only ever worked at minute grain. Whether an end was widened has ONE answer,
+`resolveRecord.ts` · `widenedGrain` (the note, never `grain`): `forms.ts` spells the said end
+`to − 1 grain` only then. The label asks `resolveRecord.ts` · `shownGrain` — the widened grain,
+or a look-back's own grain, whose `[now − L, now + 1 ms)` ends AT now ("last 40 minutes" is
+shown `8:00 – 8:40 AM`, never `8:40:00.001`). In v1 this is otherwise a fixed law,
+not a switch; an `exact` reading waits for a bench that shows the need (§ 11, TQ9). A tool's declared `granularity` rounds a range outward, never inward,
 and records the rounding.
 
 The places a range crosses do **not** share that edge. Each boundary converts, and each
@@ -322,7 +332,7 @@ interface TimeParts {
   readonly date?:
     | { readonly kind: 'numeric'; readonly fields: readonly number[]; readonly yearDigits?: 2 | 4 } // '10/09/26' — order NOT decided
     | { readonly kind: 'fixed'; readonly year?: number; readonly month: number; readonly day: number }; // ISO or a named month: the text fixes the order
-  readonly wall?: { readonly h: number; readonly m?: number; readonly s?: number; readonly meridiem?: 'am' | 'pm' };
+  readonly wall?: { readonly h: number; readonly m?: number; readonly s?: number; readonly meridiem?: 'am' | 'pm'; readonly clock?: '24h' }; // clock: the FORM is a 24-hour clock (ISO) — never also pm
   readonly zoneToken?: string;             // as written: 'PST', '-07:00', 'America/Los_Angeles' — resolve.ts maps it
   readonly relative?:
     | { readonly unit: 'minute' | 'hour' | 'day' | 'week' | 'month' | 'year'; readonly offset: number } // 'yesterday' = { day, -1 }
@@ -387,8 +397,9 @@ the others wait until a bench shows people need them:
 | numeric dates | `10/09/26` | `date: numeric [10, 9, 26]` | up to three (MDY, DMY, YMD), each tagged | v1 |
 | clock times, with or without a meridiem | `8 AM`, `8:40`, `20:40` | `wall` | `8:40` alone → am and pm when no other part settles it | v1 |
 | a range between two of the above | `8 AM to 8:40 AM`, `08:00–08:40` | `rangeOf` | one per combination of the sides' candidates | v1 |
-| a zone | IANA (`America/Los_Angeles`), a numeric offset | `zoneToken`, as written | directly | v1 |
-| a zone abbreviation | `PST` | `zoneToken: 'PST'` | v1 has no abbreviation map, so the zone is asked (`format: 'zone'`); later, **only through the policy's map**, and one whose DST state disagrees with the date is asked with both readings as choices (`abbreviationMismatch: 'ask'`, § 11) | tokenized; resolved by the ask |
+| a zone | IANA (`America/Los_Angeles`), a numeric offset — after a time, a date or a day word | `zoneToken`, as written | directly | v1 |
+| a place named with `time` | `yesterday London time`, `8 AM New York time` | `zoneToken: 'London time'`, as written | the ONE zone the tz database names for the place (`zone.ts` · `zoneOfPlace`, noted `zone-read`); none or several (`India time`, `Pacific time`) → the zone is asked | v1 (reader follow-up) |
+| a zone abbreviation | `PST` | `zoneToken: 'PST'` | **only through the app's map** (`policy.abbreviations`, none ships): its zone's reading, and — when its DST state disagrees with the date — its letters' literal offset too, both offered in ONE confirmation (`open: ['abbreviation', 'confirm']`); with no map, or one missing it, the zone is asked (`format: 'zone'`) | tokenized; mapped only by the app's policy |
 | day words | today, yesterday, tomorrow | `relative: { day, offset }` | anchored on the clock, in the person's zone | v1 |
 | relative spans | last 40 minutes, past 2 hours, the last hour | `relative: { unit, count }` | a look-back (§ 3.2) | v1 — proposed and confirmed like every reading (TQ29) |
 | night words | tonight, overnight | `relative` + `partOfDay` | a span that crosses midnight | later |
@@ -504,6 +515,9 @@ app may override every key, and only checks the app armed can produce one.
 | a date without a year under `year: 'ask'` | the year's readings as choices |
 | every reading outside the tool's `direction` (a future window for a `past` tool) | nothing is asked; the call is refused with the reason ("that window has not happened yet") |
 | some readings inside the tool's `direction`, some outside | the ones inside as choices |
+| every reading one no form of the tool can read, even wider (a look-back tool and a window still running, or a covering look-back over `maxRange`) | nothing is asked; the call is refused, `no-form-holds` (time follow-ups, packet "lookback") |
+| some readings the tool can read, some not (`10/08/26` to a look-back tool with `maxRange: '7d'`: 8 Oct in reach, 10 Aug and 2010 not) | the readable ones as choices |
+| a start and an end asked separately (`From when?`, `Until when?`) that together break the tool's `direction`, `retention` or `maxRange` | asked again naming the fact, bounded, then the call is refused — with the reader or without |
 | a wall time in a DST gap or overlap (a fixed v1 law: Temporal's `reject`) | the two instants as choices (Temporal's `earlier` and `later`) |
 | a zone abbreviation (v1 has no map), or one not in the map | the zone, `format: 'zone'` |
 | an abbreviation in the map whose DST state disagrees with the date (`PST` on 9 Oct) | both readings as choices — literal `−08:00`, or the zone's `−07:00` (`abbreviationMismatch: 'ask'`) |
@@ -612,6 +626,7 @@ that is exact, else the first that is not, at the inputs layer, before dispatch.
 | a range **wholly** older than `retention` | any | nothing | — | refused before dispatch: `period-beyond-retention` |
 | a range **partly** older than `retention` | any | the range, as asked | yes | `converted`, `partly-beyond-retention`; the result's `held` decides `partly-held` |
 | a range wider than `maxRange` | any | nothing | — | refused before dispatch, the reason naming `maxRange`; splitting it into several calls is the model's choice, as for a `day`-only tool (TQ22) |
+| a range of the person's no form holds, even wider — a window still running to a `lookback`-only tool, a covering look-back longer than `maxRange` | `lookback` / `day` | nothing — never the tool's own default | — | refused before dispatch: `no-form-holds` (time follow-ups, packet "lookback"; it used to fall back to the tool's rule, so an assumed `1h` read a time nobody asked about) |
 
 The wider row is the honest version of the host's `coveringLookback`: the read covers more than
 was asked, the record says so, and the answer's limits block says so in words (§ 10.2). Whether the
@@ -903,6 +918,7 @@ await agent.run({
 | `reader` | **none** | reading the person's words is armed separately; no reader means no `time-reading` rows and no word-driven asks (T-words, § 5.4) |
 | `policy.dateOrder` | `'ask'` | no silent MDY (dateparser's documented trap) |
 | `policy.year` | `'ask'` | a year the person did not say is a guess, and near New Year the current and previous years are both plausible (dateparser's `PREFER_DATES_FROM` exists for exactly this) |
+| `policy.abbreviations` | absent — no map ships | added by the reader follow-ups after the T6b bench (the field sentence's `PST` opened a bare zone ask with no pre-fill on every run, then a second round for the date order): a map the APP declares, `{ PST: { zone: 'America/Los_Angeles', offset: '-08:00' } }`; a mapped abbreviation is read as its zone and, when they disagree, as its letters — both offered in one confirmation, never corrected. Without it every byte is v1's |
 | tool `period` facts | absent: nothing checked | `direction`, `retention`, `maxRange`, `granularity`, `filtersToAsked` are facts about the tool (§ 7.1); a tool never sets policy |
 
 **Fixed laws in v1**, each a switch later only if a bench shows the need:
@@ -910,9 +926,9 @@ await agent.run({
 | Behaviour | v1 law | A later switch would add |
 |---|---|---|
 | presentation | the zone the person meant, else the run's; the reader's `locale`, or a locale-neutral ISO form with the zone named when no reader is armed | `present: { zone, locale }` |
-| the end of "to 8:40" | end of grain, recorded (§ 3.3, TQ9) | `endEdge: 'exact'` |
+| the end of "to 8:40" | end of grain, recorded — except an o'clock range end, which ends AT the hour (§ 3.3, TQ9) | `endEdge: 'exact'` |
 | a wall time in a DST gap or overlap | ask, with both instants (Temporal's `reject`) | `dst` |
-| a zone abbreviation | asked as a zone (`format: 'zone'`); no map ships | `abbreviations` (a map, e.g. US zones, as data), with `abbreviationMismatch: 'ask'` as its default — a literal `PST` is −08:00, so correcting it to −07:00 is a guess, and the host itself refuses a mismatch (`host:be-server/timeContext.ts` · `zoneMismatch`) |
+| a zone abbreviation | asked as a zone (`format: 'zone'`) unless the app declares `policy.abbreviations` (landed with the reader follow-ups: `{ PST: { zone, offset } }`, as data; no map ships — a shipped US table is an owner call); a mapped abbreviation whose DST state disagrees is offered BOTH ways — a literal `PST` is −08:00, so correcting it to −07:00 is a guess, and the host itself refuses a mismatch (`host:be-server/timeContext.ts` · `zoneMismatch`) | `abbreviationMismatch` beyond `'ask'` — not added: one careful value is a law, not a switch |
 | parts of a day, night words, calendar spans | not read (§ 5.3) | `partsOfDay` (a table applied in `resolve.ts`) |
 | the model's window differs from the person's | record and run (§ 7.3, TQ6) | `mismatch: 'refuse'` |
 | a turn with no time words | carry the last window through a recorded row (§ 5.6, TQ17) | `carry: 'off'` |
@@ -1248,7 +1264,14 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   model's value is refused, never rewritten). (3) **Widening is a fill's alone** — a sent value is
   never converted. A covering look-back or day whose read would exceed `maxRange` is skipped (the
   asked window fits, so this is `not-filled`, never a refusal); `why: 'no-exact-form'` now means
-  "no form holds it, exactly or widened" (the row vocabulary kept). A range already ending at now
+  "no form holds it, exactly or widened" (the row vocabulary kept). **Amended (time follow-ups,
+  packet "lookback", 2026-09-30):** that `not-filled` let the tool's own rule stand in for the
+  person's window — a look-back tool's `assume: '1h'` ran on "yesterday" when its `maxRange` could
+  not reach it, and on a window still running. Such a window is now REFUSED, `no-form-holds`, and
+  `no-exact-form` is no longer filed (kept in the row vocabulary so an older record reads). The
+  one answer every door asks is `convert.ts` · `convertForTool`; a covering look-back exactly
+  `maxRange` long is read (its inclusive end no longer counts one millisecond against it). A
+  range already ending at now
   (within the step) stays the exact row. (4) **No fold reason yet.** TQ8's "not sure" for a read
   with `extra` is T8's (`period-differs-from-asked` is its fold reason); until T8 a widened fill's
   standing comes from its argument rows, the note tells the model the value reads a wider one, and
@@ -1578,7 +1601,9 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   line is written only when it says something. A turn whose reads match serves nothing. The line
   opens by naming its source (`TIME_LIMITS_SOURCE`: a note from the library, not from the person —
   answer the person directly): the channel is a `user` message, and the bench's first paid rounds
-  showed an unmarked line answered as the person's correction ("You're right"). Pinned by
+  showed an unmarked line answered as the person's correction ("You're right"). (Since the time
+  follow-ups' packet "serving" that opening belongs to the whole line, said once: `serve.ts` ·
+  `TIME_LINE_SOURCE`, applied by `timeLine`.) Pinned by
   `test/core/time/limits-served.test.ts` and its row in `test/modelFacingSurfaces.test.ts`. (8) **The bench** (`bench/time-checks/`, rule `time-rule-t8`,
   Haiku 4.5, arm off = the build before T8): round 2 (`bench/time/runs/t8`, 360 runs, $1.19) is
   NOT-MEASURABLE — every gated clause passed but A1 (claims past what was read), whose baseline
@@ -1591,6 +1616,71 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   "shifted window" line did not stop claims ("1 error in the last 30 minutes": 11/20 on vs 6/20
   off). TQ8's F rests on one run (1/1) — no decision. Rounds 0 and 1 were stopped at 41 and 46
   runs for the line's voice (answered as the person's correction) and a harness store bug.
+
+- **Time follow-ups, packet "lookback" (2026-09-30).** A past window on a look-back-only tool now
+  reaches the tool wider with its over-inclusion on the record, or is refused by name — never
+  silently read as the tool's default. (1) **The asking call is recorded like any fill.** Binding
+  the time ask's answer files a second `call-window` row for each call it filled — `filled`,
+  `person.source: 'answered'`, with `sent` and `differs.extra` when wider (`arguments/ask.ts` ·
+  `bindAnswer`); the call's LATEST row is its window, so `ctx.time.asked`, the clock at dispatch and
+  the T8 result check (and the limits line: "search_logs read more than was asked") read the window
+  the asking call really carries. Before, that call kept only `not-filled` / `open-reading`: the
+  T6b mock's `abs-lookback` confirmation ran `1501m` with no `asked`, no over-inclusion row, and no
+  limit served. (2) **No form holds it → refused** (`no-form-holds`, the T5b note (3) amendment and
+  the § 7.2 row); an open reading a tool can read in NO reading is refused before it is asked, one
+  it can read in SOME offers only those (§ 6.3). (3) **The served line concludes a refusal.** A
+  refused window of the person's (its `call-window` row names the mention, or — an open reading
+  refused in every reading — the row carries no range and the turn's one pending quote is it)
+  becomes the refused part of the line: the refusal's own reason (`serve.ts` · `refusalReason`,
+  the one text `timeRefusal` also serves), then "So the answer tells the person that … could not
+  read that time, and claims nothing about it from …"; that quote is no longer pending for that
+  tool. The T6b paid record's `future` case asked the same refused call until the budget ran out
+  on 5/15 runs while the pending half kept naming it the next step. (4) **A start and end asked
+  separately are one window** (`arguments/ask.ts` · `pairsBroken`): the single-argument fact check
+  could not judge one bound of two, so the unarmed arm's mock ran a future `start_time`/`end_time`
+  pair to a `direction: 'past'` tool; the pair is now read back and judged together, asked again
+  naming the fact, then refused. (5) **The checkpoint door** takes the open-reading refusal row (no
+  range, no form, no person); it refused it before, so any later checkpoint of such a turn failed
+  validation. Not done, named: the covering look-back the ask fills is spelled at the turn's
+  `now`, so after the person's answer it runs `shifted` on a tool with no absolute form (recorded,
+  and the check reads the missed front) rather than re-spelled from the dispatch clock; a quote
+  pending for several tools still names a tool that will refuse it until that call is made (the
+  pending sentence's "or the call is refused with the reason" keeps it true). Pinned by
+  `test/core/time/lookback-only.test.ts` and `test/core/time/lookback-only-run.test.ts`.
+- **Time follow-ups, packet "serving" (2026-09-30).** The late line's voice. (1) **One line, one
+  opening.** The served time line is composed by ONE function, `arguments/serve.ts` · `timeLine`
+  (the windows' halves, then the limits), and opened ONCE with `TIME_LINE_SOURCE` — a note from the
+  library that runs the tools, not from the person and not a correction from them — whichever halves
+  it holds; no half carries its own (it replaces `TIME_LIMITS_SOURCE`, which opened the limits half
+  only). Why: in the T6b paid run (`bench/time/runs/haiku45-t6b-r1`) the windows halves carried no
+  opening, and 37 of 37 answers after "the person has not confirmed it" opened "You're right… I
+  apologize" — the T8 failure again, on the half the T8 fix never reached. (2) **The unconfirmed
+  call, in the library's voice:** "The library holds no confirmed window for “…”: the call that ran
+  carried a window written into the call, not one the person confirmed. So an answer built on that
+  call states that its window was not confirmed." — what the library holds, never what the person
+  did not do. *Superseded by the follow-up below:* the T6b re-run on this wording
+  (`bench/time/runs/haiku45-t6b-r2`, stopped at 92 runs) still drew "You're right… I apologize" on 7
+  of 10 answers after it. The sentence is now a conclusion about the results in hand — "The results
+  for “…” cover the window written into the call — the assistant's own reading of those words. So
+  the answer gives those results and names that window as the assistant's reading of “…”." — no
+  account of the call that ran and no negation of a confirmation (`serve.ts` · `pendingSentence`);
+  a 32-run probe drew 1 misread in 8 answers after it. (3) **A quote the library holds no reading of** (`windows.ts` ·
+  `ReaderWindows.pendingZones`: no candidate, the choice open on `zone` — an abbreviation outside the
+  app's map) no longer promises a form "which shows its reading": the pending half says the form
+  asks the person for the zone (`serve.ts` · `formClause`). (4) **A shifted read is a conclusion.**
+  A look-back that ran after the clock moved on (a check-in pause) is served to the MODEL as which
+  part of the window its result does not cover, in the person's zone, and that the answer says so
+  and claims nothing about it (`coverage/period.ts` · `shiftedConclusion`, the `'model'` audience of
+  `periodCheckLine`) — never the two ranges left to compare; the person's limits block keeps its
+  bytes. Each sentence is registered in `test/modelFacingSurfaces.test.ts`; `servedView` rebuilds
+  the line from the same committed `timeLine` key, so the rebuild carries the opening byte for
+  byte (`test/lib/time-travel/receipt-conformance.test.ts`); without `.time()` nothing here runs.
+  Not done, named: the durable root of the own-window rate (36/90 readable runs wrote their own
+  window on a pending reading) is the § 7.3 dispatch law — "a present value runs as sent" — and
+  routing such a call to the confirmation is an owner decision; this packet changes words only, and
+  their effect is unmeasured until a paid Haiku re-run of T6b. Pinned by
+  `test/core/time/late-line-voice.test.ts`, `test/core/time/limits-served.test.ts` and
+  `test/core/time/english-run.test.ts`.
 
 **Why this order.** T1 settles the grammar every other step leans on and is free. T2 is already
 written and only needs rebasing and the value check. T3 gives the first visible win (the limits

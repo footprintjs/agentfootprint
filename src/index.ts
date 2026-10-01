@@ -1097,6 +1097,7 @@ export type {
   TimePart,
   TimePolicy,
   TimeWindow,
+  ZoneAbbreviation,
 } from './core/time/resolve.js';
 // The time ask (step T4) — a `requestInput` field with a `format`
 // (`'instant' | 'time-range' | 'zone'`) is checked at the resume door; a

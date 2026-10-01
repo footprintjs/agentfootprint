@@ -1,0 +1,1604 @@
+{
+  "rule": "time-rule-t6b (registered 2026-09-30)",
+  "config": {
+    "provider": "anthropic",
+    "model": "claude-haiku-4-5-20251001",
+    "cases": [
+      "field-pst",
+      "date-only",
+      "last-2h",
+      "abs-lookback"
+    ],
+    "runs": 4,
+    "seed": 38799845,
+    "seedDrawn": "fresh, crypto.randomInt, at the start of this invocation",
+    "clock": {
+      "anchor": "2026-10-09T16:00:00Z",
+      "realStart": "2026-10-01T00:57:47.915Z",
+      "offsetMs": 745332084
+    },
+    "concurrency": 4,
+    "maxIterations": 6,
+    "maxTokens": 1024,
+    "maxUsd": 0.2
+  },
+  "spend": {
+    "usd": 0.09313000000000002,
+    "runs": 32
+  },
+  "rows": [
+    {
+      "key": "off/field-pst/r0",
+      "arm": "off",
+      "caseId": "field-pst",
+      "cell": "readable",
+      "rep": 0,
+      "completed": true,
+      "right": false,
+      "why": "other-window",
+      "periodReads": 1,
+      "asks": 0,
+      "timeAsks": 0,
+      "zoneAsked": false,
+      "confirmRaised": false,
+      "toolAsks": 0,
+      "unknownAsks": 0,
+      "readingRows": 0,
+      "unreadable": false,
+      "firstCallWindow": "model",
+      "bypass": false,
+      "answered": [],
+      "timeLines": 0,
+      "pendingServed": false,
+      "limitServed": false,
+      "settledServed": false,
+      "saidRows": 0,
+      "calls": 2,
+      "inputTokens": 1906,
+      "outputTokens": 199,
+      "usd": 0.002901
+    },
+    {
+      "key": "off/field-pst/r1",
+      "arm": "off",
+      "caseId": "field-pst",
+      "cell": "readable",
+      "rep": 1,
+      "completed": true,
+      "right": false,
+      "why": "other-window",
+      "periodReads": 1,
+      "asks": 0,
+      "timeAsks": 0,
+      "zoneAsked": false,
+      "confirmRaised": false,
+      "toolAsks": 0,
+      "unknownAsks": 0,
+      "readingRows": 0,
+      "unreadable": false,
+      "firstCallWindow": "model",
+      "bypass": false,
+      "answered": [],
+      "timeLines": 0,
+      "pendingServed": false,
+      "limitServed": false,
+      "settledServed": false,
+      "saidRows": 0,
+      "calls": 2,
+      "inputTokens": 1906,
+      "outputTokens": 190,
+      "usd": 0.002856
+    },
+    {
+      "key": "off/field-pst/r2",
+      "arm": "off",
+      "caseId": "field-pst",
+      "cell": "readable",
+      "rep": 2,
+      "completed": true,
+      "right": false,
+      "why": "other-window",
+      "periodReads": 1,
+      "asks": 0,
+      "timeAsks": 0,
+      "zoneAsked": false,
+      "confirmRaised": false,
+      "toolAsks": 0,
+      "unknownAsks": 0,
+      "readingRows": 0,
+      "unreadable": false,
+      "firstCallWindow": "model",
+      "bypass": false,
+      "answered": [],
+      "timeLines": 0,
+      "pendingServed": false,
+      "limitServed": false,
+      "settledServed": false,
+      "saidRows": 0,
+      "calls": 2,
+      "inputTokens": 1906,
+      "outputTokens": 196,
+      "usd": 0.002886
+    },
+    {
+      "key": "off/field-pst/r3",
+      "arm": "off",
+      "caseId": "field-pst",
+      "cell": "readable",
+      "rep": 3,
+      "completed": true,
+      "right": false,
+      "why": "other-window",
+      "periodReads": 1,
+      "asks": 0,
+      "timeAsks": 0,
+      "zoneAsked": false,
+      "confirmRaised": false,
+      "toolAsks": 0,
+      "unknownAsks": 0,
+      "readingRows": 0,
+      "unreadable": false,
+      "firstCallWindow": "model",
+      "bypass": false,
+      "answered": [],
+      "timeLines": 0,
+      "pendingServed": false,
+      "limitServed": false,
+      "settledServed": false,
+      "saidRows": 0,
+      "calls": 2,
+      "inputTokens": 1906,
+      "outputTokens": 187,
+      "usd": 0.002841
+    },
+    {
+      "key": "off/date-only/r0",
+      "arm": "off",
+      "caseId": "date-only",
+      "cell": "readable",
+      "rep": 0,
+      "completed": true,
+      "right": false,
+      "why": "other-window",
+      "periodReads": 1,
+      "asks": 0,
+      "timeAsks": 0,
+      "zoneAsked": false,
+      "confirmRaised": false,
+      "toolAsks": 0,
+      "unknownAsks": 0,
+      "readingRows": 0,
+      "unreadable": false,
+      "firstCallWindow": "model",
+      "bypass": false,
+      "answered": [],
+      "timeLines": 0,
+      "pendingServed": false,
+      "limitServed": false,
+      "settledServed": false,
+      "saidRows": 0,
+      "calls": 2,
+      "inputTokens": 1882,
+      "outputTokens": 164,
+      "usd": 0.002702
+    },
+    {
+      "key": "off/date-only/r1",
+      "arm": "off",
+      "caseId": "date-only",
+      "cell": "readable",
+      "rep": 1,
+      "completed": true,
+      "right": false,
+      "why": "other-window",
+      "periodReads": 1,
+      "asks": 0,
+      "timeAsks": 0,
+      "zoneAsked": false,
+      "confirmRaised": false,
+      "toolAsks": 0,
+      "unknownAsks": 0,
+      "readingRows": 0,
+      "unreadable": false,
+      "firstCallWindow": "model",
+      "bypass": false,
+      "answered": [],
+      "timeLines": 0,
+      "pendingServed": false,
+      "limitServed": false,
+      "settledServed": false,
+      "saidRows": 0,
+      "calls": 2,
+      "inputTokens": 1882,
+      "outputTokens": 200,
+      "usd": 0.002882
+    },
+    {
+      "key": "off/date-only/r2",
+      "arm": "off",
+      "caseId": "date-only",
+      "cell": "readable",
+      "rep": 2,
+      "completed": true,
+      "right": false,
+      "why": "other-window",
+      "periodReads": 1,
+      "asks": 0,
+      "timeAsks": 0,
+      "zoneAsked": false,
+      "confirmRaised": false,
+      "toolAsks": 0,
+      "unknownAsks": 0,
+      "readingRows": 0,
+      "unreadable": false,
+      "firstCallWindow": "model",
+      "bypass": false,
+      "answered": [],
+      "timeLines": 0,
+      "pendingServed": false,
+      "limitServed": false,
+      "settledServed": false,
+      "saidRows": 0,
+      "calls": 2,
+      "inputTokens": 1897,
+      "outputTokens": 199,
+      "usd": 0.002892
+    },
+    {
+      "key": "off/date-only/r3",
+      "arm": "off",
+      "caseId": "date-only",
+      "cell": "readable",
+      "rep": 3,
+      "completed": true,
+      "right": false,
+      "why": "other-window",
+      "periodReads": 1,
+      "asks": 0,
+      "timeAsks": 0,
+      "zoneAsked": false,
+      "confirmRaised": false,
+      "toolAsks": 0,
+      "unknownAsks": 0,
+      "readingRows": 0,
+      "unreadable": false,
+      "firstCallWindow": "model",
+      "bypass": false,
+      "answered": [],
+      "timeLines": 0,
+      "pendingServed": false,
+      "limitServed": false,
+      "settledServed": false,
+      "saidRows": 0,
+      "calls": 2,
+      "inputTokens": 1882,
+      "outputTokens": 200,
+      "usd": 0.002882
+    },
+    {
+      "key": "off/last-2h/r0",
+      "arm": "off",
+      "caseId": "last-2h",
+      "cell": "readable",
+      "rep": 0,
+      "completed": true,
+      "right": true,
+      "periodReads": 1,
+      "asks": 0,
+      "timeAsks": 0,
+      "zoneAsked": false,
+      "confirmRaised": false,
+      "toolAsks": 0,
+      "unknownAsks": 0,
+      "readingRows": 0,
+      "unreadable": false,
+      "firstCallWindow": "model",
+      "bypass": false,
+      "answered": [],
+      "timeLines": 0,
+      "pendingServed": false,
+      "limitServed": false,
+      "settledServed": false,
+      "saidRows": 0,
+      "calls": 2,
+      "inputTokens": 1853,
+      "outputTokens": 159,
+      "usd": 0.002648
+    },
+    {
+      "key": "off/last-2h/r1",
+      "arm": "off",
+      "caseId": "last-2h",
+      "cell": "readable",
+      "rep": 1,
+      "completed": true,
+      "right": true,
+      "periodReads": 1,
+      "asks": 0,
+      "timeAsks": 0,
+      "zoneAsked": false,
+      "confirmRaised": false,
+      "toolAsks": 0,
+      "unknownAsks": 0,
+      "readingRows": 0,
+      "unreadable": false,
+      "firstCallWindow": "model",
+      "bypass": false,
+      "answered": [],
+      "timeLines": 0,
+      "pendingServed": false,
+      "limitServed": false,
+      "settledServed": false,
+      "saidRows": 0,
+      "calls": 2,
+      "inputTokens": 1853,
+      "outputTokens": 137,
+      "usd": 0.002538
+    },
+    {
+      "key": "off/last-2h/r2",
+      "arm": "off",
+      "caseId": "last-2h",
+      "cell": "readable",
+      "rep": 2,
+      "completed": true,
+      "right": true,
+      "periodReads": 1,
+      "asks": 0,
+      "timeAsks": 0,
+      "zoneAsked": false,
+      "confirmRaised": false,
+      "toolAsks": 0,
+      "unknownAsks": 0,
+      "readingRows": 0,
+      "unreadable": false,
+      "firstCallWindow": "model",
+      "bypass": false,
+      "answered": [],
+      "timeLines": 0,
+      "pendingServed": false,
+      "limitServed": false,
+      "settledServed": false,
+      "saidRows": 0,
+      "calls": 2,
+      "inputTokens": 1853,
+      "outputTokens": 162,
+      "usd": 0.002663
+    },
+    {
+      "key": "off/last-2h/r3",
+      "arm": "off",
+      "caseId": "last-2h",
+      "cell": "readable",
+      "rep": 3,
+      "completed": true,
+      "right": true,
+      "periodReads": 1,
+      "asks": 0,
+      "timeAsks": 0,
+      "zoneAsked": false,
+      "confirmRaised": false,
+      "toolAsks": 0,
+      "unknownAsks": 0,
+      "readingRows": 0,
+      "unreadable": false,
+      "firstCallWindow": "model",
+      "bypass": false,
+      "answered": [],
+      "timeLines": 0,
+      "pendingServed": false,
+      "limitServed": false,
+      "settledServed": false,
+      "saidRows": 0,
+      "calls": 2,
+      "inputTokens": 1853,
+      "outputTokens": 158,
+      "usd": 0.002643
+    },
+    {
+      "key": "off/abs-lookback/r0",
+      "arm": "off",
+      "caseId": "abs-lookback",
+      "cell": "readable",
+      "rep": 0,
+      "completed": true,
+      "right": false,
+      "why": "misses-start",
+      "periodReads": 1,
+      "asks": 0,
+      "timeAsks": 0,
+      "zoneAsked": false,
+      "confirmRaised": false,
+      "toolAsks": 0,
+      "unknownAsks": 0,
+      "readingRows": 0,
+      "unreadable": false,
+      "firstCallWindow": "model",
+      "bypass": false,
+      "answered": [],
+      "timeLines": 0,
+      "pendingServed": false,
+      "limitServed": false,
+      "settledServed": false,
+      "saidRows": 0,
+      "calls": 2,
+      "inputTokens": 1894,
+      "outputTokens": 245,
+      "usd": 0.003119
+    },
+    {
+      "key": "off/abs-lookback/r1",
+      "arm": "off",
+      "caseId": "abs-lookback",
+      "cell": "readable",
+      "rep": 1,
+      "completed": true,
+      "right": false,
+      "why": "misses-start",
+      "periodReads": 1,
+      "asks": 0,
+      "timeAsks": 0,
+      "zoneAsked": false,
+      "confirmRaised": false,
+      "toolAsks": 0,
+      "unknownAsks": 0,
+      "readingRows": 0,
+      "unreadable": false,
+      "firstCallWindow": "model",
+      "bypass": false,
+      "answered": [],
+      "timeLines": 0,
+      "pendingServed": false,
+      "limitServed": false,
+      "settledServed": false,
+      "saidRows": 0,
+      "calls": 2,
+      "inputTokens": 1876,
+      "outputTokens": 218,
+      "usd": 0.002966
+    },
+    {
+      "key": "off/abs-lookback/r2",
+      "arm": "off",
+      "caseId": "abs-lookback",
+      "cell": "readable",
+      "rep": 2,
+      "completed": true,
+      "right": false,
+      "why": "misses-start",
+      "periodReads": 1,
+      "asks": 0,
+      "timeAsks": 0,
+      "zoneAsked": false,
+      "confirmRaised": false,
+      "toolAsks": 0,
+      "unknownAsks": 0,
+      "readingRows": 0,
+      "unreadable": false,
+      "firstCallWindow": "model",
+      "bypass": false,
+      "answered": [],
+      "timeLines": 0,
+      "pendingServed": false,
+      "limitServed": false,
+      "settledServed": false,
+      "saidRows": 0,
+      "calls": 2,
+      "inputTokens": 1876,
+      "outputTokens": 244,
+      "usd": 0.003096
+    },
+    {
+      "key": "off/abs-lookback/r3",
+      "arm": "off",
+      "caseId": "abs-lookback",
+      "cell": "readable",
+      "rep": 3,
+      "completed": true,
+      "right": false,
+      "why": "misses-start",
+      "periodReads": 1,
+      "asks": 0,
+      "timeAsks": 0,
+      "zoneAsked": false,
+      "confirmRaised": false,
+      "toolAsks": 0,
+      "unknownAsks": 0,
+      "readingRows": 0,
+      "unreadable": false,
+      "firstCallWindow": "model",
+      "bypass": false,
+      "answered": [],
+      "timeLines": 0,
+      "pendingServed": false,
+      "limitServed": false,
+      "settledServed": false,
+      "saidRows": 0,
+      "calls": 2,
+      "inputTokens": 1876,
+      "outputTokens": 243,
+      "usd": 0.003091
+    },
+    {
+      "key": "on/field-pst/r0",
+      "arm": "on",
+      "caseId": "field-pst",
+      "cell": "readable",
+      "rep": 0,
+      "completed": true,
+      "right": false,
+      "why": "other-window",
+      "periodReads": 1,
+      "asks": 0,
+      "timeAsks": 0,
+      "zoneAsked": false,
+      "confirmRaised": false,
+      "toolAsks": 0,
+      "unknownAsks": 0,
+      "readingRows": 1,
+      "unreadable": false,
+      "firstCallWindow": "model",
+      "bypass": true,
+      "answered": [],
+      "timeLines": 2,
+      "pendingServed": true,
+      "limitServed": true,
+      "settledServed": false,
+      "saidRows": 0,
+      "calls": 2,
+      "inputTokens": 2203,
+      "outputTokens": 148,
+      "usd": 0.002943
+    },
+    {
+      "key": "on/field-pst/r1",
+      "arm": "on",
+      "caseId": "field-pst",
+      "cell": "readable",
+      "rep": 1,
+      "completed": true,
+      "right": false,
+      "why": "other-window",
+      "periodReads": 1,
+      "asks": 0,
+      "timeAsks": 0,
+      "zoneAsked": false,
+      "confirmRaised": false,
+      "toolAsks": 0,
+      "unknownAsks": 0,
+      "readingRows": 1,
+      "unreadable": false,
+      "firstCallWindow": "model",
+      "bypass": true,
+      "answered": [],
+      "timeLines": 2,
+      "pendingServed": true,
+      "limitServed": true,
+      "settledServed": false,
+      "saidRows": 0,
+      "calls": 2,
+      "inputTokens": 2276,
+      "outputTokens": 210,
+      "usd": 0.003326
+    },
+    {
+      "key": "on/field-pst/r2",
+      "arm": "on",
+      "caseId": "field-pst",
+      "cell": "readable",
+      "rep": 2,
+      "completed": true,
+      "right": false,
+      "why": "other-window",
+      "periodReads": 1,
+      "asks": 0,
+      "timeAsks": 0,
+      "zoneAsked": false,
+      "confirmRaised": false,
+      "toolAsks": 0,
+      "unknownAsks": 0,
+      "readingRows": 1,
+      "unreadable": false,
+      "firstCallWindow": "model",
+      "bypass": true,
+      "answered": [],
+      "timeLines": 2,
+      "pendingServed": true,
+      "limitServed": true,
+      "settledServed": false,
+      "saidRows": 0,
+      "calls": 2,
+      "inputTokens": 2203,
+      "outputTokens": 187,
+      "usd": 0.003138
+    },
+    {
+      "key": "on/field-pst/r3",
+      "arm": "on",
+      "caseId": "field-pst",
+      "cell": "readable",
+      "rep": 3,
+      "completed": true,
+      "right": true,
+      "periodReads": 1,
+      "asks": 0,
+      "timeAsks": 0,
+      "zoneAsked": false,
+      "confirmRaised": false,
+      "toolAsks": 0,
+      "unknownAsks": 0,
+      "readingRows": 1,
+      "unreadable": false,
+      "firstCallWindow": "model",
+      "bypass": true,
+      "answered": [],
+      "timeLines": 2,
+      "pendingServed": true,
+      "limitServed": true,
+      "settledServed": false,
+      "saidRows": 0,
+      "calls": 2,
+      "inputTokens": 2203,
+      "outputTokens": 140,
+      "usd": 0.002903
+    },
+    {
+      "key": "on/date-only/r0",
+      "arm": "on",
+      "caseId": "date-only",
+      "cell": "readable",
+      "rep": 0,
+      "completed": true,
+      "right": true,
+      "periodReads": 1,
+      "asks": 1,
+      "timeAsks": 1,
+      "zoneAsked": false,
+      "confirmRaised": true,
+      "prefill": "prefill-right",
+      "toolAsks": 0,
+      "unknownAsks": 0,
+      "readingRows": 1,
+      "unreadable": false,
+      "firstCallWindow": "not-filled",
+      "bypass": false,
+      "answered": [
+        "confirmed"
+      ],
+      "timeLines": 2,
+      "pendingServed": true,
+      "limitServed": false,
+      "settledServed": true,
+      "saidRows": 0,
+      "calls": 2,
+      "inputTokens": 2266,
+      "outputTokens": 158,
+      "usd": 0.003056
+    },
+    {
+      "key": "on/date-only/r1",
+      "arm": "on",
+      "caseId": "date-only",
+      "cell": "readable",
+      "rep": 1,
+      "completed": true,
+      "right": true,
+      "periodReads": 1,
+      "asks": 1,
+      "timeAsks": 1,
+      "zoneAsked": false,
+      "confirmRaised": true,
+      "prefill": "prefill-right",
+      "toolAsks": 0,
+      "unknownAsks": 0,
+      "readingRows": 1,
+      "unreadable": false,
+      "firstCallWindow": "not-filled",
+      "bypass": false,
+      "answered": [
+        "confirmed"
+      ],
+      "timeLines": 2,
+      "pendingServed": true,
+      "limitServed": false,
+      "settledServed": true,
+      "saidRows": 0,
+      "calls": 2,
+      "inputTokens": 2266,
+      "outputTokens": 158,
+      "usd": 0.003056
+    },
+    {
+      "key": "on/date-only/r2",
+      "arm": "on",
+      "caseId": "date-only",
+      "cell": "readable",
+      "rep": 2,
+      "completed": true,
+      "right": true,
+      "periodReads": 1,
+      "asks": 1,
+      "timeAsks": 1,
+      "zoneAsked": false,
+      "confirmRaised": true,
+      "prefill": "prefill-right",
+      "toolAsks": 0,
+      "unknownAsks": 0,
+      "readingRows": 1,
+      "unreadable": false,
+      "firstCallWindow": "not-filled",
+      "bypass": false,
+      "answered": [
+        "confirmed"
+      ],
+      "timeLines": 2,
+      "pendingServed": true,
+      "limitServed": false,
+      "settledServed": true,
+      "saidRows": 0,
+      "calls": 2,
+      "inputTokens": 2266,
+      "outputTokens": 163,
+      "usd": 0.003081
+    },
+    {
+      "key": "on/date-only/r3",
+      "arm": "on",
+      "caseId": "date-only",
+      "cell": "readable",
+      "rep": 3,
+      "completed": true,
+      "right": true,
+      "periodReads": 1,
+      "asks": 1,
+      "timeAsks": 1,
+      "zoneAsked": false,
+      "confirmRaised": true,
+      "prefill": "prefill-right",
+      "toolAsks": 0,
+      "unknownAsks": 0,
+      "readingRows": 1,
+      "unreadable": false,
+      "firstCallWindow": "not-filled",
+      "bypass": false,
+      "answered": [
+        "confirmed"
+      ],
+      "timeLines": 2,
+      "pendingServed": true,
+      "limitServed": false,
+      "settledServed": true,
+      "saidRows": 0,
+      "calls": 2,
+      "inputTokens": 2266,
+      "outputTokens": 146,
+      "usd": 0.002996
+    },
+    {
+      "key": "on/last-2h/r0",
+      "arm": "on",
+      "caseId": "last-2h",
+      "cell": "readable",
+      "rep": 0,
+      "completed": true,
+      "right": true,
+      "periodReads": 1,
+      "asks": 1,
+      "timeAsks": 1,
+      "zoneAsked": false,
+      "confirmRaised": true,
+      "prefill": "prefill-right",
+      "toolAsks": 0,
+      "unknownAsks": 0,
+      "readingRows": 1,
+      "unreadable": false,
+      "firstCallWindow": "not-filled",
+      "bypass": false,
+      "answered": [
+        "confirmed"
+      ],
+      "timeLines": 2,
+      "pendingServed": true,
+      "limitServed": false,
+      "settledServed": true,
+      "saidRows": 0,
+      "calls": 2,
+      "inputTokens": 2200,
+      "outputTokens": 129,
+      "usd": 0.002845
+    },
+    {
+      "key": "on/last-2h/r1",
+      "arm": "on",
+      "caseId": "last-2h",
+      "cell": "readable",
+      "rep": 1,
+      "completed": true,
+      "right": true,
+      "periodReads": 1,
+      "asks": 1,
+      "timeAsks": 1,
+      "zoneAsked": false,
+      "confirmRaised": true,
+      "prefill": "prefill-right",
+      "toolAsks": 0,
+      "unknownAsks": 0,
+      "readingRows": 1,
+      "unreadable": false,
+      "firstCallWindow": "not-filled",
+      "bypass": false,
+      "answered": [
+        "confirmed"
+      ],
+      "timeLines": 2,
+      "pendingServed": true,
+      "limitServed": false,
+      "settledServed": true,
+      "saidRows": 0,
+      "calls": 2,
+      "inputTokens": 2187,
+      "outputTokens": 116,
+      "usd": 0.002767
+    },
+    {
+      "key": "on/last-2h/r2",
+      "arm": "on",
+      "caseId": "last-2h",
+      "cell": "readable",
+      "rep": 2,
+      "completed": true,
+      "right": true,
+      "periodReads": 1,
+      "asks": 1,
+      "timeAsks": 1,
+      "zoneAsked": false,
+      "confirmRaised": true,
+      "prefill": "prefill-right",
+      "toolAsks": 0,
+      "unknownAsks": 0,
+      "readingRows": 1,
+      "unreadable": false,
+      "firstCallWindow": "not-filled",
+      "bypass": false,
+      "answered": [
+        "confirmed"
+      ],
+      "timeLines": 2,
+      "pendingServed": true,
+      "limitServed": false,
+      "settledServed": true,
+      "saidRows": 0,
+      "calls": 2,
+      "inputTokens": 2200,
+      "outputTokens": 132,
+      "usd": 0.00286
+    },
+    {
+      "key": "on/last-2h/r3",
+      "arm": "on",
+      "caseId": "last-2h",
+      "cell": "readable",
+      "rep": 3,
+      "completed": true,
+      "right": true,
+      "periodReads": 1,
+      "asks": 1,
+      "timeAsks": 1,
+      "zoneAsked": false,
+      "confirmRaised": true,
+      "prefill": "prefill-right",
+      "toolAsks": 0,
+      "unknownAsks": 0,
+      "readingRows": 1,
+      "unreadable": false,
+      "firstCallWindow": "not-filled",
+      "bypass": false,
+      "answered": [
+        "confirmed"
+      ],
+      "timeLines": 2,
+      "pendingServed": true,
+      "limitServed": false,
+      "settledServed": true,
+      "saidRows": 0,
+      "calls": 2,
+      "inputTokens": 2200,
+      "outputTokens": 129,
+      "usd": 0.002845
+    },
+    {
+      "key": "on/abs-lookback/r0",
+      "arm": "on",
+      "caseId": "abs-lookback",
+      "cell": "readable",
+      "rep": 0,
+      "completed": true,
+      "right": false,
+      "why": "misses-start",
+      "periodReads": 1,
+      "asks": 0,
+      "timeAsks": 0,
+      "zoneAsked": false,
+      "confirmRaised": false,
+      "toolAsks": 0,
+      "unknownAsks": 0,
+      "readingRows": 1,
+      "unreadable": false,
+      "firstCallWindow": "model",
+      "bypass": true,
+      "answered": [],
+      "timeLines": 2,
+      "pendingServed": true,
+      "limitServed": true,
+      "settledServed": false,
+      "saidRows": 0,
+      "calls": 2,
+      "inputTokens": 2143,
+      "outputTokens": 138,
+      "usd": 0.002833
+    },
+    {
+      "key": "on/abs-lookback/r1",
+      "arm": "on",
+      "caseId": "abs-lookback",
+      "cell": "readable",
+      "rep": 1,
+      "completed": true,
+      "right": false,
+      "why": "misses-start",
+      "periodReads": 1,
+      "asks": 0,
+      "timeAsks": 0,
+      "zoneAsked": false,
+      "confirmRaised": false,
+      "toolAsks": 0,
+      "unknownAsks": 0,
+      "readingRows": 1,
+      "unreadable": false,
+      "firstCallWindow": "model",
+      "bypass": true,
+      "answered": [],
+      "timeLines": 2,
+      "pendingServed": true,
+      "limitServed": true,
+      "settledServed": false,
+      "saidRows": 0,
+      "calls": 2,
+      "inputTokens": 2152,
+      "outputTokens": 183,
+      "usd": 0.003067
+    },
+    {
+      "key": "on/abs-lookback/r2",
+      "arm": "on",
+      "caseId": "abs-lookback",
+      "cell": "readable",
+      "rep": 2,
+      "completed": true,
+      "right": false,
+      "why": "misses-start",
+      "periodReads": 1,
+      "asks": 0,
+      "timeAsks": 0,
+      "zoneAsked": false,
+      "confirmRaised": false,
+      "toolAsks": 0,
+      "unknownAsks": 0,
+      "readingRows": 1,
+      "unreadable": false,
+      "firstCallWindow": "model",
+      "bypass": true,
+      "answered": [],
+      "timeLines": 2,
+      "pendingServed": true,
+      "limitServed": true,
+      "settledServed": false,
+      "saidRows": 0,
+      "calls": 2,
+      "inputTokens": 2152,
+      "outputTokens": 148,
+      "usd": 0.002892
+    },
+    {
+      "key": "on/abs-lookback/r3",
+      "arm": "on",
+      "caseId": "abs-lookback",
+      "cell": "readable",
+      "rep": 3,
+      "completed": true,
+      "right": false,
+      "why": "misses-start",
+      "periodReads": 1,
+      "asks": 0,
+      "timeAsks": 0,
+      "zoneAsked": false,
+      "confirmRaised": false,
+      "toolAsks": 0,
+      "unknownAsks": 0,
+      "readingRows": 1,
+      "unreadable": false,
+      "firstCallWindow": "model",
+      "bypass": true,
+      "answered": [],
+      "timeLines": 2,
+      "pendingServed": true,
+      "limitServed": true,
+      "settledServed": false,
+      "saidRows": 0,
+      "calls": 2,
+      "inputTokens": 2166,
+      "outputTokens": 150,
+      "usd": 0.002916
+    }
+  ],
+  "aggregates": {
+    "perCase": {
+      "field-pst": {
+        "right": {
+          "off": {
+            "k": 0,
+            "n": 4,
+            "share": 0
+          },
+          "on": {
+            "k": 1,
+            "n": 4,
+            "share": 0.25
+          }
+        },
+        "confirm": {
+          "off": {
+            "k": 0,
+            "n": 4,
+            "share": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 4,
+            "share": 0
+          }
+        },
+        "bypass": {
+          "off": {
+            "k": 0,
+            "n": 4,
+            "share": 0
+          },
+          "on": {
+            "k": 4,
+            "n": 4,
+            "share": 1
+          }
+        },
+        "asks": {
+          "off": {
+            "k": 0,
+            "n": 4,
+            "share": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 4,
+            "share": 0
+          }
+        }
+      },
+      "date-only": {
+        "right": {
+          "off": {
+            "k": 0,
+            "n": 4,
+            "share": 0
+          },
+          "on": {
+            "k": 4,
+            "n": 4,
+            "share": 1
+          }
+        },
+        "confirm": {
+          "off": {
+            "k": 0,
+            "n": 4,
+            "share": 0
+          },
+          "on": {
+            "k": 4,
+            "n": 4,
+            "share": 1
+          }
+        },
+        "bypass": {
+          "off": {
+            "k": 0,
+            "n": 4,
+            "share": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 4,
+            "share": 0
+          }
+        },
+        "asks": {
+          "off": {
+            "k": 0,
+            "n": 4,
+            "share": 0
+          },
+          "on": {
+            "k": 4,
+            "n": 4,
+            "share": 1
+          }
+        }
+      },
+      "last-2h": {
+        "right": {
+          "off": {
+            "k": 4,
+            "n": 4,
+            "share": 1
+          },
+          "on": {
+            "k": 4,
+            "n": 4,
+            "share": 1
+          }
+        },
+        "confirm": {
+          "off": {
+            "k": 0,
+            "n": 4,
+            "share": 0
+          },
+          "on": {
+            "k": 4,
+            "n": 4,
+            "share": 1
+          }
+        },
+        "bypass": {
+          "off": {
+            "k": 0,
+            "n": 4,
+            "share": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 4,
+            "share": 0
+          }
+        },
+        "asks": {
+          "off": {
+            "k": 0,
+            "n": 4,
+            "share": 0
+          },
+          "on": {
+            "k": 4,
+            "n": 4,
+            "share": 1
+          }
+        }
+      },
+      "abs-lookback": {
+        "right": {
+          "off": {
+            "k": 0,
+            "n": 4,
+            "share": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 4,
+            "share": 0
+          }
+        },
+        "confirm": {
+          "off": {
+            "k": 0,
+            "n": 4,
+            "share": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 4,
+            "share": 0
+          }
+        },
+        "bypass": {
+          "off": {
+            "k": 0,
+            "n": 4,
+            "share": 0
+          },
+          "on": {
+            "k": 4,
+            "n": 4,
+            "share": 1
+          }
+        },
+        "asks": {
+          "off": {
+            "k": 0,
+            "n": 4,
+            "share": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 4,
+            "share": 0
+          }
+        }
+      }
+    },
+    "perCell": {
+      "readable": {
+        "right": {
+          "off": {
+            "k": 4,
+            "n": 16,
+            "share": 0.25
+          },
+          "on": {
+            "k": 9,
+            "n": 16,
+            "share": 0.5625
+          }
+        },
+        "completed": {
+          "off": {
+            "k": 16,
+            "n": 16,
+            "share": 1
+          },
+          "on": {
+            "k": 16,
+            "n": 16,
+            "share": 1
+          }
+        },
+        "anyAsk": {
+          "off": {
+            "k": 0,
+            "n": 16,
+            "share": 0
+          },
+          "on": {
+            "k": 8,
+            "n": 16,
+            "share": 0.5
+          }
+        },
+        "timeAsk": {
+          "off": {
+            "k": 0,
+            "n": 16,
+            "share": 0
+          },
+          "on": {
+            "k": 8,
+            "n": 16,
+            "share": 0.5
+          }
+        },
+        "readingRow": {
+          "off": {
+            "k": 0,
+            "n": 16,
+            "share": 0
+          },
+          "on": {
+            "k": 16,
+            "n": 16,
+            "share": 1
+          }
+        },
+        "timeLine": {
+          "off": {
+            "k": 0,
+            "n": 16,
+            "share": 0
+          },
+          "on": {
+            "k": 16,
+            "n": 16,
+            "share": 1
+          }
+        }
+      },
+      "unreadable": {
+        "right": {
+          "off": {
+            "k": 0,
+            "n": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 0
+          }
+        },
+        "completed": {
+          "off": {
+            "k": 0,
+            "n": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 0
+          }
+        },
+        "anyAsk": {
+          "off": {
+            "k": 0,
+            "n": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 0
+          }
+        },
+        "timeAsk": {
+          "off": {
+            "k": 0,
+            "n": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 0
+          }
+        },
+        "readingRow": {
+          "off": {
+            "k": 0,
+            "n": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 0
+          }
+        },
+        "timeLine": {
+          "off": {
+            "k": 0,
+            "n": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 0
+          }
+        }
+      },
+      "future": {
+        "right": {
+          "off": {
+            "k": 0,
+            "n": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 0
+          }
+        },
+        "completed": {
+          "off": {
+            "k": 0,
+            "n": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 0
+          }
+        },
+        "anyAsk": {
+          "off": {
+            "k": 0,
+            "n": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 0
+          }
+        },
+        "timeAsk": {
+          "off": {
+            "k": 0,
+            "n": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 0
+          }
+        },
+        "readingRow": {
+          "off": {
+            "k": 0,
+            "n": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 0
+          }
+        },
+        "timeLine": {
+          "off": {
+            "k": 0,
+            "n": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 0
+          }
+        }
+      },
+      "control": {
+        "right": {
+          "off": {
+            "k": 0,
+            "n": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 0
+          }
+        },
+        "completed": {
+          "off": {
+            "k": 0,
+            "n": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 0
+          }
+        },
+        "anyAsk": {
+          "off": {
+            "k": 0,
+            "n": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 0
+          }
+        },
+        "timeAsk": {
+          "off": {
+            "k": 0,
+            "n": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 0
+          }
+        },
+        "readingRow": {
+          "off": {
+            "k": 0,
+            "n": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 0
+          }
+        },
+        "timeLine": {
+          "off": {
+            "k": 0,
+            "n": 0
+          },
+          "on": {
+            "k": 0,
+            "n": 0
+          }
+        }
+      }
+    },
+    "prefill": {
+      "raised": {
+        "k": 8,
+        "n": 16
+      },
+      "prefillRight": 8,
+      "otherOption": 0,
+      "edited": 0,
+      "zoneAsked": 0,
+      "bypass": 8,
+      "pendingServed": 16,
+      "settledServed": 8,
+      "limitServed": 8,
+      "proseOnly": 0
+    },
+    "tokens": {
+      "off": {
+        "calls": 32,
+        "input": 30101,
+        "perCall": 940.65625,
+        "usd": 0.045605999999999994
+      },
+      "on": {
+        "calls": 32,
+        "input": 35349,
+        "perCall": 1104.65625,
+        "usd": 0.047524000000000004
+      }
+    },
+    "errors": {
+      "off": {
+        "k": 0,
+        "n": 16,
+        "share": 0
+      },
+      "on": {
+        "k": 0,
+        "n": 16,
+        "share": 0
+      }
+    },
+    "said": {
+      "off": {
+        "k": 0,
+        "n": 16,
+        "share": 0
+      },
+      "on": {
+        "k": 0,
+        "n": 16,
+        "share": 0
+      }
+    }
+  },
+  "verdict": {
+    "rule": "time-rule-t6b (registered 2026-09-30)",
+    "verdict": "FAIL",
+    "clauses": [
+      {
+        "id": "T1",
+        "what": "right window on readable phrases: on − off ≥ 0.15 and one-sided Fisher p < 0.05",
+        "pass": false,
+        "detail": "off 4/16, on 9/16, difference 0.313, p = 7.44e-2"
+      },
+      {
+        "id": "T2",
+        "what": "controls raise no confirmation",
+        "detail": "no control run"
+      },
+      {
+        "id": "T3",
+        "what": "controls not harmed",
+        "detail": "no control run in an arm"
+      },
+      {
+        "id": "T4",
+        "what": "unreadable and future not harmed",
+        "detail": "no run"
+      },
+      {
+        "id": "T5",
+        "what": "input tokens per model call: on ≤ 1.15 × off",
+        "pass": false,
+        "detail": "off 940.7, on 1104.7, ratio 1.174"
+      },
+      {
+        "id": "T6",
+        "what": "arm on: no row files a chat reading as said",
+        "pass": true,
+        "detail": "runs with a said row: 0"
+      },
+      {
+        "id": "G1",
+        "what": "errors or stuck runs ≤ 0.02 of each arm",
+        "pass": true,
+        "detail": "off 0/16, on 0/16"
+      },
+      {
+        "id": "G2",
+        "what": "arm on: every readable run filed a time-reading row",
+        "pass": true,
+        "detail": "16/16"
+      }
+    ]
+  }
+}

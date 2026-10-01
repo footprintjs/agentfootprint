@@ -20,9 +20,20 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { Agent, defineTool, describedResult, type Tool } from '../../../src/index.js';
+import {
+  Agent,
+  checkInApproved,
+  defineTool,
+  describedResult,
+  isPaused,
+  type Tool,
+} from '../../../src/index.js';
 import type { LLMMessage, LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
-import { timeLimitsSentence } from '../../../src/core/agent/arguments/serve.js';
+import {
+  TIME_LINE_SOURCE,
+  timeLimitsSentence,
+  timeLine,
+} from '../../../src/core/agent/arguments/serve.js';
 
 type Reply = { content: string; toolCalls?: { id: string; name: string; args: object }[] };
 
@@ -31,8 +42,7 @@ const NOW_MS = Date.parse(NOW);
 const DAY = 86_400_000;
 const iso = (ms: number) => new Date(ms).toISOString();
 const LA = 'America/Los_Angeles';
-const LEAD =
-  '[A note from the library that ran the tools, not from the person: answer the person directly, as you would from the tool results alone.] The time the tools read is not the time asked about';
+const LEAD = `${TIME_LINE_SOURCE} The time the tools read is not the time asked about`;
 
 function scripted(script: readonly Reply[], requests: LLMRequest[]) {
   let i = 0;
@@ -194,6 +204,60 @@ describe('the time limits line — served late, after the read', () => {
   });
 });
 
+describe('a shifted read — the conclusion, not two ranges to compare', () => {
+  // A look-back that waits on a check-in runs after the clock moved on: it reads the HOUR BEFORE IT
+  // RAN, not the hour asked. The T8 bench served the two ranges and the answer still claimed the
+  // asked hour ("1 error in the last 30 minutes", 11/20), so the model is told which part of the
+  // window the result does not cover, in the person's zone, and that the answer says so.
+  function lookbackCheckIn() {
+    return defineTool({
+      name: 'client_activity',
+      checkIn: 'always',
+      description: 'Client operations over a look-back window.',
+      inputSchema: { type: 'object', properties: { window: { type: 'string' } } },
+      askOrAssume: { window: { assume: '1h' } },
+      period: { forms: [{ kind: 'lookback', argument: 'window', signed: false }] } as never,
+      execute: () => '{"ops":42}',
+    });
+  }
+
+  it('after a 30-minute check-in pause the answer call names the uncovered half hour and what the answer says', async () => {
+    const requests: LLMRequest[] = [];
+    const agent = Agent.create({
+      provider: scripted(
+        [call('c1', 'client_activity', { window: '1h' }), { content: '42 operations.' }],
+        requests,
+      ) as never,
+      model: 'mock',
+      maxIterations: 6,
+    })
+      .tools([lookbackCheckIn()])
+      .time({ zone: LA })
+      .limitsTravelWithTheAnswer()
+      .build();
+    const paused = await agent.run({ message: 'client activity', time: { now: NOW } });
+    expect(isPaused(paused)).toBe(true);
+    vi.setSystemTime(NOW_MS + 30 * 60_000);
+    const out = await agent.resume(
+      (paused as { checkpoint: never }).checkpoint,
+      checkInApproved({ by: 'ops' }),
+    );
+    const line = lastLine(requests[requests.length - 1]!);
+    expect(line).toBe(
+      `${LEAD} — client_activity's look-back ran after the clock moved on, so its result does ` +
+        'not cover 2026-10-09 07:40:00–08:09:59 America/Los_Angeles (UTC-07:00) of the window ' +
+        'asked (2026-10-09 07:40:00–08:40:00 America/Los_Angeles (UTC-07:00)), and covers ' +
+        '2026-10-09 08:40:00–09:10:00 America/Los_Angeles (UTC-07:00), outside it. So the ' +
+        "answer says that client_activity's result does not cover 2026-10-09 07:40:00–08:09:59 " +
+        'America/Los_Angeles (UTC-07:00), and claims nothing about that time from it. So the ' +
+        'answer to the person states the time each result read and claims nothing about time no ' +
+        'result read.',
+    );
+    // The PERSON's limits block keeps its bytes: two ranges, "a shifted window".
+    expect(String(out)).toContain('- client_activity read a shifted window — asked: ');
+  });
+});
+
 describe('timeLimitsSentence — the composition', () => {
   it('nothing to say → undefined', () => {
     expect(timeLimitsSentence(undefined)).toBeUndefined();
@@ -205,9 +269,28 @@ describe('timeLimitsSentence — the composition', () => {
         period: [],
         clocks: ["the sources' clocks differ (UTC, America/New_York) — compared as instants"],
       }),
-    ).toBe(
-      "[A note from the library that ran the tools, not from the person: answer the person directly, as you would from the tool results alone.] Clocks: the sources' clocks differ (UTC, America/New_York) — compared as instants.",
+    ).toBe("Clocks: the sources' clocks differ (UTC, America/New_York) — compared as instants.");
+  });
+});
+
+describe('timeLine — ONE line, opened once with who says it', () => {
+  it('the opening names the library, not the person, and is no correction', () => {
+    expect(TIME_LINE_SOURCE).toMatch(/^\[A note from the library that runs the tools/);
+    expect(TIME_LINE_SOURCE).toContain('not from the person');
+    expect(TIME_LINE_SOURCE).toContain('not a correction from them');
+  });
+  it('nothing to say → no line; one half → the opening, then that half', () => {
+    expect(timeLine([])).toBeUndefined();
+    expect(timeLine([undefined, undefined])).toBeUndefined();
+    expect(timeLine(['', undefined])).toBeUndefined();
+    expect(timeLine([undefined, 'Clocks: x.'])).toBe(`${TIME_LINE_SOURCE} Clocks: x.`);
+  });
+  it('both halves → the opening ONCE, first, the windows before the limits', () => {
+    const line = timeLine(['The window for “yesterday” is not settled yet.', 'Clocks: x.'])!;
+    expect(line).toBe(
+      `${TIME_LINE_SOURCE} The window for “yesterday” is not settled yet. Clocks: x.`,
     );
+    expect(line.split('A note from the library')).toHaveLength(2);
   });
 });
 

@@ -31,14 +31,18 @@
  *   narrower.** Every argument of every form must be missing; the window goes
  *   into the first form that holds it exactly (`convert.ts` · `convertExact`),
  *   else the first that holds MORE (`convertWidened`: a whole day, the
- *   covering look-back — recorded with what it adds). No such form → nothing
- *   is filled and the tool's own rule applies, as before.
+ *   covering look-back — recorded with what it adds). No such form → the call
+ *   is REFUSED, `no-form-holds` (`convert.ts` · `convertForTool`, the one
+ *   answer): the tool's own rule never stands in for the person's window, so
+ *   an assumed `1h` never silently reads a time the person did not ask about.
  * - **Refuse before dispatch what the tool cannot honestly read (step
  *   T5b).** A window — the person's to fill, or the model's sent — outside
  *   the tool's declared `direction`, wholly beyond its `retention` or wider
  *   than its `maxRange`; a range across days for a tool whose every form is a
- *   `day`; a sent wall time the zone skips. A window only partly beyond
- *   `retention` runs, marked.
+ *   `day`; a window of the person's no form can read (`no-form-holds`); a
+ *   sent wall time the zone skips. A window only partly beyond `retention`
+ *   runs, marked. An open reading the tool can read in NO reading is refused
+ *   too, and never asked.
  * - **A present window is never written over.** Bound by quote (the model's
  *   declared `user` quote names a recorded mention) or by value (the sent
  *   value, read back, IS a window of this turn); otherwise it runs as sent and
@@ -47,17 +51,14 @@
  */
 
 import {
-  convertExact,
-  convertWidened,
+  convertForTool,
   formArguments,
   lookbackAsBounds,
   partlyBeyondRetention,
   periodFactProblem,
   readBack,
   sameRange,
-  spansDaysForDayOnly,
   wallGapArgument,
-  widestMsOf,
   type Conversion,
   type PeriodFacts,
   type PeriodForm,
@@ -77,6 +78,7 @@ export {
   readerWindowsOf,
   turnWindowsOf,
   type ReaderWindows,
+  type RefusedWindow,
   type TurnWindow,
   type TurnWindows,
   type WindowSource,
@@ -166,7 +168,7 @@ export type CallWindow =
   /** The model left the period out and nothing was filled — why. */
   | {
       readonly how: 'not-filled';
-      readonly why: 'no-window' | 'several-mentions' | 'open-reading' | 'no-exact-form';
+      readonly why: 'no-window' | 'several-mentions' | 'open-reading';
     };
 
 const normalQuote = (text: string): string => text.toLowerCase().replace(/\s+/g, ' ').trim();
@@ -231,53 +233,49 @@ function fillWindow(call: CallToBind, turn: TurnWindows, ctx: BindContext): Call
   if (turn.mentions === 0) return { how: 'not-filled', why: 'no-window' };
   if (turn.mentions > 1) return { how: 'not-filled', why: 'several-mentions' };
   const window = turn.windows[0];
-  const facts = call.facts;
-  if (window === undefined) {
-    // An open reading: when the tool's facts rule out EVERY reading left, nothing is asked —
-    // the call is refused with the first reading's reason (§ 6.3).
-    const left = turn.open?.[0] ?? [];
-    const problems =
-      facts === undefined ? [] : left.map((range) => periodFactProblem(range, facts, ctx.now));
-    const first = problems[0];
-    if (left.length > 0 && first !== undefined && problems.every((p) => p !== undefined)) {
-      return { how: 'refused', refused: first };
-    }
-    return { how: 'not-filled', why: 'open-reading' };
-  }
-  const problem = facts === undefined ? undefined : periodFactProblem(window.range, facts, ctx.now);
-  if (problem !== undefined) {
-    return { how: 'refused', refused: problem, asked: window.range, person: window };
-  }
+  if (window === undefined) return openReadingWindow(call, turn, ctx);
   const toConvert = {
     range: window.range,
     ...(window.lookback !== undefined && { lookback: window.lookback }),
   };
-  const convertCtx = {
+  const read = convertForTool(toConvert, call.forms, call.facts, {
     now: ctx.now,
     zone: window.zone,
     appZone: ctx.appZone,
     granularityMs: ctx.granularityMs,
+  });
+  // No form reads it (or a fact rules it out): refused with the reason — the tool's own rule
+  // never stands in for the person's window, which its default would silently not read.
+  if ('refused' in read) {
+    return { how: 'refused', refused: read.refused, asked: window.range, person: window };
+  }
+  return {
+    how: 'filled',
+    window,
+    conversion: read.conversion,
+    ...('sent' in read.conversion &&
+      call.facts?.filtersToAsked === true && { trimmedByTool: true as const }),
+    ...(read.partlyBeyondRetention === true && { partlyBeyondRetention: true as const }),
   };
-  const partly =
-    facts !== undefined && partlyBeyondRetention(window.range, facts, ctx.now)
-      ? { partlyBeyondRetention: true as const }
-      : {};
-  const exact = convertExact(toConvert, call.forms, convertCtx);
-  if (exact !== undefined) return { how: 'filled', window, conversion: exact, ...partly };
-  const widened = convertWidened(toConvert, call.forms, convertCtx, widestMsOf(facts));
-  if (widened !== undefined) {
-    return {
-      how: 'filled',
-      window,
-      conversion: widened,
-      ...(facts?.filtersToAsked === true && { trimmedByTool: true as const }),
-      ...partly,
-    };
+}
+
+/**
+ * The turn's one mention is still an open reading (the person has not chosen):
+ * nothing is filled. When the tool can read NONE of the readings left — each
+ * breaks a fact, or no form holds it — nothing is asked (§ 6.3): the call is
+ * refused with the first reading's reason. Otherwise the reading is asked.
+ */
+function openReadingWindow(call: CallToBind, turn: TurnWindows, ctx: BindContext): CallWindow {
+  const left = turn.open?.[0] ?? [];
+  const reasons = left.map((range) => {
+    const read = convertForTool({ range }, call.forms, call.facts, ctx);
+    return 'refused' in read ? read.refused : undefined;
+  });
+  const first = reasons[0];
+  if (left.length > 0 && first !== undefined && reasons.every((r) => r !== undefined)) {
+    return { how: 'refused', refused: first };
   }
-  if (spansDaysForDayOnly(toConvert, call.forms, convertCtx)) {
-    return { how: 'refused', refused: 'multi-day', asked: window.range, person: window };
-  }
-  return { how: 'not-filled', why: 'no-exact-form' };
+  return { how: 'not-filled', why: 'open-reading' };
 }
 
 /** A present window: bound, the model's own, unread — or refused on a skipped wall time or a fact. */

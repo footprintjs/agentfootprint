@@ -280,6 +280,17 @@ describe.skipIf(!built)('the default browser graph of the root entry', () => {
     }
   });
 
+  it('contrast: the /time door carries the conversions statically — the root still does not', async () => {
+    // An app that asks the conversions outside a run (`agentfootprint/time` ·
+    // `convertExact`, `convertWidened`, `periodFactProblem`) imports them
+    // eagerly through their own door; publishing them there must not move
+    // `convert.ts` onto the root graph (the time-layer law above).
+    const door = await splitGraph(resolve(DIST, 'doors/time.js'));
+    expect(door.syncInputs.has('dist/esm/core/time/convert.js')).toBe(true);
+    const root = await splitGraph(resolve(DIST, 'index.js'));
+    expect(root.syncInputs.has('dist/esm/core/time/convert.js')).toBe(false);
+  });
+
   it('contrast: the /observe door carries the pack statically, by design', async () => {
     const graph = await splitGraph(resolve(DIST, 'observe.js'));
     expect(graph.syncInputs.has(PACK)).toBe(true);
