@@ -172,14 +172,17 @@ describe('the pending half — the form clause says what the form really does', 
         TAIL,
     );
   });
-  it('after a call ran on a written window → the library’s voice, no clause about the person failing', () => {
+  it('after a call ran on a written window → a conclusion about the results, no account of the call', () => {
     const text = halves({ now: NOW, windows: [], pending: ['yesterday'], ranUnconfirmed: true })!;
     expect(text).toBe(
-      'The library holds no confirmed window for “yesterday”: the call that ran carried a window ' +
-        'written into the call, not one the person confirmed. So an answer built on that call ' +
-        'states that its window was not confirmed.',
+      "The results for “yesterday” cover the window written into the call — the assistant's own " +
+        'reading of those words. So the answer gives those results and names that window as the ' +
+        "assistant's reading of “yesterday”.",
     );
-    expect(text).not.toMatch(/the person has not|you should|apolog/i);
+    // The two phrasings a paid run read as the person's complaint (37/37, then 7/10).
+    expect(text).not.toMatch(
+      /the person has not|not confirmed|not one the person|the call that ran|you should|apolog/i,
+    );
   });
   it('the halves carry no opening — the line composer owns it', () => {
     expect(halves({ now: NOW, windows: [], pending: ['yesterday'] })).not.toContain(

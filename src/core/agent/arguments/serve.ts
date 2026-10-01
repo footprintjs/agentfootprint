@@ -346,9 +346,13 @@ function settledSentence(tools: readonly PeriodTool[], windows: ServedWindows): 
  * The pending half: the quotes no one has confirmed. Before any call ran on a window of the
  * model's own, the one move that asks the person — the call with the period left out — named as
  * the next step, with the two moves that do not (a question in the reply, a written window).
- * After one did, the limit the answer states instead, in the library's voice: what the library
- * holds, never what the person failed to do (the T6b paid run read that clause as the person's
- * complaint — 37/37 answers after it opened "You're right… I apologize").
+ * After one did, the limit the answer states instead, as a CONCLUSION about the results in hand:
+ * whose reading their window is and what the answer names — never a story of the call that ran
+ * and never a negation of a confirmation. Measured twice: "the person has not confirmed it" drew
+ * "You're right… I apologize" on 37/37 answers (T6b round 1); "the call that ran carried a window
+ * written into the call, not one the person confirmed", under the library's opening, still drew it
+ * on 7/10 (`bench/time/runs/haiku45-t6b-r2`, stopped) — a past-tense account of the call reads as
+ * the person's complaint, whoever the opening says is talking.
  */
 function pendingSentence(
   allTools: readonly PeriodTool[],
@@ -364,9 +368,9 @@ function pendingSentence(
   const quotes = pending.map((q) => `“${q}”`).join(', ');
   if (windows.ranUnconfirmed === true) {
     return (
-      `The library holds no confirmed window for ${quotes}: the call that ran carried a window ` +
-      'written into the call, not one the person confirmed. So an answer built on that call ' +
-      'states that its window was not confirmed.'
+      `The results for ${quotes} cover the window written into the call — the assistant's own ` +
+      `reading of those words. So the answer gives those results and names that window as the ` +
+      `assistant's reading of ${quotes}.`
     );
   }
   const calls = tools.flatMap((pt) => {

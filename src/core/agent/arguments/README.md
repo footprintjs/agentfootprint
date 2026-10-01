@@ -323,9 +323,9 @@ zone, never that it "shows its reading".
 //     with the reason). So the next step is that call — not a question about the time in the
 //     reply, and not a window written into the call, which would run unconfirmed.' }
 // once a call of the turn already ran on a window the model wrote, the line names the limit:
-//   'The library holds no confirmed window for “yesterday”: the call that ran carried a window
-//    written into the call, not one the person confirmed. So an answer built on that call states
-//    that its window was not confirmed.'
+//   'The results for “yesterday” cover the window written into the call — the assistant's own
+//    reading of those words. So the answer gives those results and names that window as the
+//    assistant's reading of “yesterday”.'
 // a quote whose zone the library cannot resolve ("… 8:40 AM PST", no map) — no reading to show:
 //   'The window for “10/09/26 8 AM to 8:40 AM PST” is not settled yet: the library holds no reading
 //    of those words until it knows which time zone they name, so its own form asks the person for

@@ -1658,7 +1658,13 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   call, in the library's voice:** "The library holds no confirmed window for “…”: the call that ran
   carried a window written into the call, not one the person confirmed. So an answer built on that
   call states that its window was not confirmed." — what the library holds, never what the person
-  did not do. (3) **A quote the library holds no reading of** (`windows.ts` ·
+  did not do. *Superseded by the follow-up below:* the T6b re-run on this wording
+  (`bench/time/runs/haiku45-t6b-r2`, stopped at 92 runs) still drew "You're right… I apologize" on 7
+  of 10 answers after it. The sentence is now a conclusion about the results in hand — "The results
+  for “…” cover the window written into the call — the assistant's own reading of those words. So
+  the answer gives those results and names that window as the assistant's reading of “…”." — no
+  account of the call that ran and no negation of a confirmation (`serve.ts` · `pendingSentence`);
+  a 32-run probe drew 1 misread in 8 answers after it. (3) **A quote the library holds no reading of** (`windows.ts` ·
   `ReaderWindows.pendingZones`: no candidate, the choice open on `zone` — an abbreviation outside the
   app's map) no longer promises a form "which shows its reading": the pending half says the form
   asks the person for the zone (`serve.ts` · `formClause`). (4) **A shifted read is a conclusion.**

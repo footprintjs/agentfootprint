@@ -683,12 +683,12 @@ describe('the one served time sentence — the confirmed window and its source',
       pendingLine('last 2 hours', 'search_logs is called with window left out'),
     );
     expect(ofKind(agent, 'call-window')[0]).toMatchObject({ how: 'model' });
-    // In the library's voice — what it holds, never what the person did not do (the T6b paid run:
-    // 37/37 answers after the old clause opened "You're right… I apologize").
+    // A conclusion about the results in hand — never an account of the call that ran (paid runs:
+    // 37/37, then 7/10 answers after such an account opened "You're right… I apologize").
     expect(timeLineOf(requests[1])).toBe(
-      `${TIME_LINE_SOURCE} The library holds no confirmed window for “last 2 hours”: the call ` +
-        'that ran carried a window written into the call, not one the person confirmed. So an ' +
-        'answer built on that call states that its window was not confirmed.',
+      `${TIME_LINE_SOURCE} The results for “last 2 hours” cover the window written into the ` +
+        "call — the assistant's own reading of those words. So the answer gives those results " +
+        "and names that window as the assistant's reading of “last 2 hours”.",
     );
     expect(timeLineOf(requests[1])).not.toMatch(/the person has not confirmed/);
   });
