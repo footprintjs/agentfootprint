@@ -24,6 +24,9 @@
  *   property    — seeded ranges of clock times: an o'clock end is exact, a minute end is +1 min,
  *                 a bare first side takes the second side's meridiem unless that runs backwards;
  *                 every zone the runtime lists by a unique last segment is found by its place;
+ *   G13         — two sides with no meridiem share one (`8:45 to 8:55` → AM–AM, PM–PM), crossing
+ *                 the half-day only when neither runs forward (`11 to 1` → 11 AM – 1 PM and
+ *                 11 PM – 1 AM the next day); unit table, the reader run, a seeded property;
  *   boundary    — `8 AM to 8 AM` is no window; `11 to 1 PM` falls back to 11 AM; an abbreviation
  *                 whose zone agrees with its letters (PST in January) is one reading;
  *   security    — hostile policy maps, place tokens and built-in-name zone tokens
@@ -227,9 +230,12 @@ describe('a bare first side takes the second side’s meridiem (English’s own 
     );
   });
 
-  it('GUARD: both sides with no meridiem still offer every forward combination', () => {
+  it('GUARD: both sides with no meridiem still leave the meridiem open (AM–AM and PM–PM, G13)', () => {
     const res = resolve({ rangeOf: [{ wall: { h: 8 } }, { wall: { h: 9, m: 40 } }] });
-    expect(res.candidates.length).toBeGreaterThan(1);
+    expect(ranges(res.candidates)).toEqual([
+      '2026-10-09T08:00:00-07:00/2026-10-09T09:41:00-07:00',
+      '2026-10-09T20:00:00-07:00/2026-10-09T21:41:00-07:00',
+    ]);
     expect(chooseReading(res, DEFAULT_TIME_POLICY, 'rule', undefined, true)).toMatchObject({
       open: ['meridiem', 'confirm'],
     });
@@ -255,6 +261,147 @@ describe('a bare first side takes the second side’s meridiem (English’s own 
       expect(new Date(res.candidates[0]!.range.from).getTime(), label).toBe(
         Date.parse(`2026-10-09T${String(want).padStart(2, '0')}:00:00-07:00`),
       );
+    }
+  });
+});
+
+// ─── G13: two sides with no meridiem share one ──────────────────────────
+
+describe('G13 — a range whose two sides say no meridiem shares one (never AM → PM across the half-day)', () => {
+  const D = '2026-10-09';
+  const N = '2026-10-10';
+  const at = (day: string, hm: string) => `${day}T${hm}:00-07:00`;
+  const span = (a: string, b: string, c: string, d: string) => `${at(a, b)}/${at(c, d)}`;
+  const wall = (h: number, m?: number) => ({ wall: { h, ...(m !== undefined && { m }) } });
+
+  for (const [said, l, r, want] of [
+    [
+      '8:45 to 8:55',
+      wall(8, 45),
+      wall(8, 55),
+      [span(D, '08:45', D, '08:56'), span(D, '20:45', D, '20:56')],
+    ],
+    [
+      '8 to 9:30',
+      wall(8),
+      wall(9, 30),
+      [span(D, '08:00', D, '09:31'), span(D, '20:00', D, '21:31')],
+    ],
+    ['8 to 9', wall(8), wall(9), [span(D, '08:00', D, '09:00'), span(D, '20:00', D, '21:00')]],
+    ['12 to 1', wall(12), wall(1), [span(D, '00:00', D, '01:00'), span(D, '12:00', D, '13:00')]],
+    ['11 to 1', wall(11), wall(1), [span(D, '11:00', D, '13:00'), span(D, '23:00', N, '01:00')]],
+    [
+      '11:15 to 12:30',
+      wall(11, 15),
+      wall(12, 30),
+      [span(D, '11:15', D, '12:31'), span(D, '23:15', N, '00:31')],
+    ],
+    ['8 to 8', wall(8), wall(8), [span(D, '08:00', D, '20:00'), span(D, '20:00', N, '08:00')]],
+  ] as const) {
+    it(`“${said}” → ${want.length} readings, each AM–AM / PM–PM unless the right side is earlier on the clock`, () => {
+      const res = resolve({ rangeOf: [l, r] });
+      expect(ranges(res.candidates)).toEqual(want);
+      for (const c of res.candidates) expect(candidateIsWellFormed(c)).toBe(true);
+      expect(chooseReading(res, DEFAULT_TIME_POLICY, 'rule', undefined, true)).toMatchObject({
+        by: 'open',
+        open: ['meridiem', 'confirm'],
+      });
+    });
+  }
+
+  it('each reading records the meridiem it shares — or the half-day it crosses', () => {
+    const shared = resolve({ rangeOf: [wall(8, 45), wall(8, 55)] }).candidates;
+    expect(shared.map((c) => [c.reading.meridiem, c.reading.endMeridiem])).toEqual([
+      ['am', 'am'],
+      ['pm', 'pm'],
+    ]);
+    const crossing = resolve({ rangeOf: [wall(11), wall(1)] }).candidates;
+    expect(crossing.map((c) => [c.reading.meridiem, c.reading.endMeridiem])).toEqual([
+      ['am', 'pm'],
+      ['pm', 'am'],
+    ]);
+  });
+
+  it('the reader run: “September 29 8:45 to 8:55” is offered AM–AM and PM–PM for each year, never 8:45 AM – 8:55 PM', () => {
+    const [row] = rowsOf('any SMB September 29 8:45 to 8:55');
+    expect(row!.quote).toBe('September 29 8:45 to 8:55');
+    expect(ranges(row!.candidates!)).toEqual([
+      '2026-09-29T08:45:00-07:00/2026-09-29T08:56:00-07:00',
+      '2026-09-29T20:45:00-07:00/2026-09-29T20:56:00-07:00',
+      '2025-09-29T08:45:00-07:00/2025-09-29T08:56:00-07:00',
+      '2025-09-29T20:45:00-07:00/2025-09-29T20:56:00-07:00',
+    ]);
+    expect(row!.choice).toMatchObject({ by: 'open', open: ['year', 'meridiem', 'confirm'] });
+    expect(timeRowIsWellFormed(row)).toBe(true);
+  });
+
+  it('the reader run: “today 11:00 to 1:00” crosses the half-day — 11 AM – 1 PM, and overnight to 1 AM tomorrow', () => {
+    const [row] = rowsOf('errors today 11:00 to 1:00');
+    expect(ranges(row!.candidates!)).toEqual([
+      '2026-10-09T11:00:00-07:00/2026-10-09T13:01:00-07:00',
+      '2026-10-09T23:00:00-07:00/2026-10-10T01:01:00-07:00',
+    ]);
+  });
+
+  it('BOUNDARY: a right side with a day of its own is never moved to the next day', () => {
+    const day = { kind: 'fixed', month: 10, day: 9 } as const;
+    const res = resolve({
+      rangeOf: [
+        { date: day, wall: { h: 11 } },
+        { date: day, wall: { h: 1 } },
+      ],
+    } as TimeParts);
+    expect(ranges(res.candidates)).toEqual([
+      '2026-10-09T11:00:00-07:00/2026-10-09T13:00:00-07:00',
+      '2025-10-09T11:00:00-07:00/2025-10-09T13:00:00-07:00',
+    ]);
+  });
+
+  it('GUARD (9.132): a bare first side still takes the second side’s said meridiem', () => {
+    expect(ranges(resolve({ rangeOf: [wall(8), { wall: pm(9) }] }).candidates)).toEqual([
+      span(D, '20:00', D, '21:00'),
+    ]);
+    expect(ranges(resolve({ rangeOf: [wall(11), { wall: pm(1) }] }).candidates)).toEqual([
+      span(D, '11:00', D, '13:00'),
+    ]);
+  });
+
+  it('GUARD: a side that says its meridiem, or a 24-hour hour, is read as before', () => {
+    // A said first side leaves a bare second side read both ways ("9 AM to 5" may be 5 PM).
+    expect(ranges(resolve({ rangeOf: [{ wall: am(8) }, wall(9)] }).candidates)).toEqual([
+      span(D, '08:00', D, '09:00'),
+      span(D, '08:00', D, '21:00'),
+    ]);
+    expect(ranges(resolve({ rangeOf: [wall(8), wall(13)] }).candidates)).toEqual([
+      span(D, '08:00', D, '13:00'),
+    ]);
+    expect(
+      ranges(resolve({ rangeOf: [{ wall: { h: 8, clock: '24h' } }, wall(9)] }).candidates),
+    ).toEqual([span(D, '08:00', D, '09:00'), span(D, '08:00', D, '21:00')]);
+  });
+
+  it('property: 600 seeded bare ranges — every reading shares a meridiem, or crosses only when none can', () => {
+    const r = prng(0x613);
+    const mins = (h: number, m: number) => (h % 12) * 60 + m;
+    for (let i = 0; i < 600; i++) {
+      const [h1, h2] = [int(r, 1, 12), int(r, 1, 12)];
+      const m1 = r() < 0.5 ? undefined : int(r, 0, 59);
+      const m2 = r() < 0.5 ? undefined : int(r, 0, 59);
+      const label = `${h1}:${m1} to ${h2}:${m2}`;
+      const res = resolve({ rangeOf: [wall(h1, m1), wall(h2, m2)] });
+      // The shared reading runs forward when the end (an o'clock end AT it, else a minute on)
+      // comes after the start on the 12-hour face.
+      const end = mins(h2, m2 ?? 0) + (m2 === undefined ? 0 : 1);
+      const sharedForward = end > mins(h1, m1 ?? 0);
+      const pairs = res.candidates.map((c) => `${c.reading.meridiem}-${c.reading.endMeridiem}`);
+      expect(pairs, label).toEqual(sharedForward ? ['am-am', 'pm-pm'] : ['am-pm', 'pm-am']);
+      for (const c of res.candidates) {
+        expect(Date.parse(c.range.from) < Date.parse(c.range.to), label).toBe(true);
+        // Never a window longer than the half-day it may cross.
+        expect(Date.parse(c.range.to) - Date.parse(c.range.from), label).toBeLessThanOrEqual(
+          12 * 3_600_000,
+        );
+      }
     }
   });
 });

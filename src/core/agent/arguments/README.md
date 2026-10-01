@@ -322,7 +322,10 @@ never defaulted. The unread words are asked as ONE window field with nothing pre
 like any answer; the pending half says "the library could not read those words, so its own form
 asks the person which time they meant, with nothing filled in". The window the person set in the
 app's time control (`time.window`) is served on its own sentence under `.time()`, with or without
-a reader, and every value the line names is the one answer (`convertForTool` over
+a reader — on every request of the turn, whether or not a served tool declares a period (G14: the
+window is a fact about the person's turn; with no tool that can take values it is named alone,
+"… is 2026-10-09 08:00–08:39 America/Los_Angeles (UTC-07:00). An answer built on it states that
+window.") — and every value the line names is the one answer (`convertForTool` over
 `windows.ts` · `windowToConvert`) the call is handed.
 
 ```ts

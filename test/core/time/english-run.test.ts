@@ -839,3 +839,36 @@ describe('reader edges — the end edge, a named zone, the app’s abbreviation 
     expect(ofKind(agent, 'time-answer')).toMatchObject([{ zone: LA, how: 'confirmed' }]);
   });
 });
+
+// ─── G13: a range with no meridiem on either side shares one ─────────────────
+
+describe('G13 — “September 29 8:45 to 8:55” through a real agent', () => {
+  it('offers 8:45–8:55 AM and PM (the policy settles the year) — never 8:45 AM to 8:55 PM — and runs the pick', async () => {
+    const seen: Record<string, unknown>[] = [];
+    const { agent } = build(
+      [call('c1', 'client_activity', {}), answer('ok')],
+      [epochTool(seen)],
+      (b) => b.time({ zone: LA, reader, policy: { year: 'current' } }),
+    );
+    const first = paused(
+      await agent.run({
+        message: 'Show client activity September 29 8:45 to 8:55',
+        time: { now: NOW },
+      }),
+    );
+    const field = first.awaitingInput.fields[0]!;
+    expect(field.enum).toEqual([
+      '2026-09-29T08:45:00-07:00/2026-09-29T08:56:00-07:00',
+      '2026-09-29T20:45:00-07:00/2026-09-29T20:56:00-07:00',
+    ]);
+    const done = await agent.resume(first.checkpoint as never, {
+      requestId: first.awaitingInput.requestId,
+      values: { f1: field.enum![1]! },
+    });
+    expect(isInputPause(done)).toBe(false);
+    expect(seen[0]).toMatchObject({
+      start_time: Date.parse('2026-09-30T03:45:00Z'),
+      end_time: Date.parse('2026-09-30T03:56:00Z'),
+    });
+  });
+});

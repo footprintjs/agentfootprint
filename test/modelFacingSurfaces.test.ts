@@ -716,7 +716,8 @@ const RULED_PROPERTY_DESCRIPTION: Surface = {
  * look-back tool's and an epoch tool's form — as the window the person
  * CONFIRMED in the time ask, as one they EDITED, as a `model` reader's
  * unconfirmed reading, and PENDING (a proposal the person has not answered),
- * alone and beside a settled window; once more with a view that hides a value.
+ * alone and beside a settled window; once more with a view that hides a value;
+ * and the app's control window with no served period tool (G14).
  */
 function timeWindowLines(): string[] {
   const lookback = defineTool({
@@ -829,6 +830,8 @@ function timeWindowLines(): string[] {
       ['client_activity', epoch],
     ]),
     new Map<string, unknown>([['client_activity', hiding]]),
+    // No served tool declares a period: only the control half speaks — the window alone (G14).
+    new Map<string, unknown>(),
   ];
   return [...sets, ...pendingSets].flatMap((windows) =>
     wires.flatMap((winning) => {
@@ -1749,7 +1752,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       'and appended by `callLLM` as the LAST `role: "user"` line of that one request — never ' +
       'written to history, so every later call re-reads a fresh composition (a pending quote the ' +
       'person then confirms is never re-read as pending)',
-    drivenBy: ['test/core/time/english-run.test.ts'],
+    drivenBy: ['test/core/time/english-run.test.ts', 'test/core/time/gaps-run.test.ts'],
     reaches: [
       /^\[A note from the library that runs the tools — not from the person, and not a correction from them: when you answer, answer the person directly, as you would from the tool results alone\.\] The person's time words, as the library holds them: “yesterday” is 2026-10-08 00:00–23:59 America\/Los_Angeles \(UTC-07:00\), the window the person confirmed when asked what their words meant — search_logs window "1960m" \(a wider read than the words named\); client_activity start_time 1791442800000, end_time 1791529200000\. A call may pass these values as written; an answer built on them states that window\.$/m,
       /client_activity start_time \(hidden by the tool's view\), end_time 1791529200000/,
@@ -1764,6 +1767,8 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       // A refused window (packet "lookback"): the refusal's own reason, then what the answer states.
       /^\[A note from the library that runs the tools — not from the person, and not a correction from them: when you answer, answer the person directly, as you would from the tool results alone\.\] search_logs was not run for “yesterday”: no period form the tool declares can read the window it asked for, exactly or by reading a wider one\. So the answer tells the person that search_logs could not read that time, and claims nothing about it from search_logs\. The window for “yesterday” is not settled yet: .* opens when client_activity is called with start_time, end_time left out \(/m,
       /^\[A note from the library that runs the tools — not from the person, and not a correction from them: when you answer, answer the person directly, as you would from the tool results alone\.\] search_logs was not run for “10\/20\/26”: .* client_activity was not run for “10\/20\/26”: the window it asked for had not happened yet, and the tool declares that its source holds only the past\. So the answer tells the person which of those times each tool could not read, and claims nothing about them from that tool\.$/m,
+      // The control window with no served period tool (G14): the window alone, no values, no permission.
+      /^\[A note from the library that runs the tools — not from the person, and not a correction from them: when you answer, answer the person directly, as you would from the tool results alone\.\] The window the person set in the app's time control is 2026-10-09 08:00–08:40 America\/Los_Angeles \(UTC-07:00\)\. An answer built on it states that window\.$/m,
     ],
     compose: async () => timeWindowLines(),
   },

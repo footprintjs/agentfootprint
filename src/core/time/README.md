@@ -24,7 +24,7 @@ It is a leaf: it imports nothing outside itself, and `readers/` imports only the
 | `clock.ts` | the run clock (§ 4): `TimeClock { now, nowSource, zone, zoneSource }`; the two inputs read or refused by name — the run's `time: { now, zone, window }` (`readRunTime`) and the builder's `.time({ zone })` (`readTimeOptions`); `draftClock` (the run's zone wins, the builder's is a fallback, neither is `'no-zone'`), `completeClock` (`now` is the app's, else the turn's start: `nowSource: 'default'`), `clockChange` (what a resume passed that differs from the kept clock) |
 | `reader.ts` | the `TimeReader` port (`id`, `version`, `locale`, `kind: 'rule' \| 'model'`, `read`) and its result, `TimeParts` — zone-less parts, never instants; `readerIssue` (the builder's check) and `checkReading` (a quote must be a verbatim substring of the text; parts well formed; a `leftover` only beside parses, each token in the text; `confirm: true` only beside parses — the reader does not vouch the form; a refused mention keeps no text) |
 | `resolveRecord.ts` | what the resolver writes down, split out for the synchronous doors: the candidate and choice shapes, `DEFAULT_TIME_POLICY` and `readPolicy` (read at `.time()`, with the optional `abbreviations` map), `widenedGrain` (the one answer to "was this window's END widened?") and `shownGrain` (the grain a confirmation label shows the end at), and the checkpoint door's checks for a recorded candidate and choice (`candidateIsWellFormed`, `choiceIsWellFormed`) — `resolve.ts` re-exports them |
-| `resolve.ts` | parts + clock + policy → every candidate window (`resolveMention`: date orders, am/pm, the year, both instants of a DST overlap or gap, a day word, a look-back, a range read to the end of its grain except an o'clock end, a bare first side taking the second's meridiem, a said IANA zone or offset, a place named with `time` the tz database names once, an abbreviation only through the app's map and then read both as its zone and as its letters — any other zone token is asked), and `chooseReading` (`only` · `policy` · `open` with its questions · `none`); the v1 `TimePolicy` (`dateOrder`, `year`, both `'ask'` by default; `abbreviations`, absent by default — no map ships); the checks for a recorded candidate and choice |
+| `resolve.ts` | parts + clock + policy → every candidate window (`resolveMention`: date orders, am/pm, the year, both instants of a DST overlap or gap, a day word, a look-back, a range read to the end of its grain except an o'clock end, a bare first side taking the second's meridiem, two bare sides sharing one, a said IANA zone or offset, a place named with `time` the tz database names once, an abbreviation only through the app's map and then read both as its zone and as its letters — any other zone token is asked), and `chooseReading` (`only` · `policy` · `open` with its questions · `none`); the v1 `TimePolicy` (`dateOrder`, `year`, both `'ask'` by default; `abbreviations`, absent by default — no map ships); the checks for a recorded candidate and choice |
 | `readers/english.ts` | the library's careful English reader, `englishTimeReader()` (§ 5.3, step T6b): a `kind: 'rule'` TOKENIZER over the v1 phrases — ISO dates and instants, numeric dates (`10/09/26`, the order undecided), dates with a named month (`11 September`, `Sept 29` — the year the policy's when not written), clock times (a bare hour only as a range's first side), a range of two (a day word may come first: `today between 1 pm and 2 pm`), a zone written after them or after a day word (IANA, `UTC-07:00`, a place named with `time` such as `London time`, a closed list of abbreviations — as written), an ISO time marked a 24-hour clock (`clock: '24h'`), today / yesterday / tomorrow, "last 40 minutes" and the compact `last 24h` — and ONE `unreadable` mention, quoting the whole phrase, for every other time phrase it recognises (parts of a day, night words, calendar spans, week days and a month named alone, "ago", spans in words, a look-ahead, a compact unit it does not read, an ordinal day, and any v1 phrase a modifier such as "since" or "around" changes, and a bare first side the grammar does not read, `8 to 9:30`). It only PROPOSES: nothing it reads is ever filed as the person's words (the owner's decision "Always confirm", TQ29 — the law is the library's, `rowsBuild.ts` · `timeReadingRows`); every reading is offered through the time ask pre-filled with its window and zone, and only the person's answer settles it ([`readers/README.md`](readers/README.md)). Its word table is data inside the file; it imports only the port |
 | `periodForm.ts` | a tool's period forms AS DECLARED, split out for the synchronous doors (`defineTool({ period })`, the time answer's check, the checkpoint door's refusal codes): the shapes, the sugar, each form's own rules, a declared value's spelling, `periodFactProblem` and `TIME_REFUSALS`, and the one owner of a form's own `maxRange` (`formMaxRange`; `formFacts` — the facts a window sent in one form is judged against; `toolFacts` — the facts before a form is chosen, `maxRange` the widest any form reads) — `convert.ts` re-exports every public name |
 | `convert.ts` | a tool's period FORMS (§ 7.1: `bounds` · `joined` · `object` · `day` · `lookback`, each bound `iso` · `epoch-ms` · `epoch-s` · `date` · `wall`) and the facts about its source (`PeriodFacts`); the sugar (`sugarForms` — today's `{ argument, spelling }`, `accepts`, `wall-range` + `zoneArgument`); one form's own rules (`formIssue`, `formArguments`, `parsesUnderForm`); the EXACT rows of § 7.2 (`convertExact`) and the inverse a binding reads (`readBack`, `sameRange`); the INEXACT rows (`convertWidened` — a range inside one day → that `day`, a range ending before now → the covering look-back; each with the range it reads and what it adds); `convertForTool` — the ONE answer to "can this tool read this window, and how" (a fact it breaks, else exact, else wider, else `multi-day`, else `no-form-holds`) that the fill, the time ask and the served line all ask; and the refusal tests (`spansDaysForDayOnly`, `wallGapArgument`); a range against the facts (`periodFactProblem`, `partlyBeyondRetention`, `TimeRefusal`) |
@@ -244,6 +244,26 @@ resolveMention([{ wall: { h: 8, meridiem: 'am' }, zoneToken: 'PST' }], clock, ru
 }).candidates.map((c) => c.range.from); // ['…T08:00:00-07:00', '…T08:00:00-08:00'] — both offered
 ```
 
+**The meridiem law: a range's sides share a meridiem unless one is said.** `resolve.ts` owns it
+(`builtOfAll` over `forwardPairs`). A bare first side takes the second side's SAID meridiem ("8
+to 9 PM" → 8 PM – 9 PM), falling back to the other only when that runs backwards ("11 to 1 PM" →
+11 AM). Two sides that say none share one (G13): "September 29 8:45 to 8:55" is offered as 8:45–8:55
+AM and 8:45–8:55 PM — never 8:45 AM – 8:55 PM, a twelve-hour window nobody said. The half-day is
+crossed only when no shared reading runs forward, because the right side is earlier on the clock
+face ("11 to 1", "11:15 to 12:30", "8 to 8"): then both crossings are offered — AM to PM the same
+day, and PM to AM overnight, the right side read on the next day when its day is the left side's
+(a right side with a date of its own is never moved). A side that says its meridiem, or a 24-hour
+hour, is read as before; every reading stays a proposal the person confirms.
+
+```ts
+const bare = (h: number, m?: number) => ({ wall: { h, ...(m !== undefined && { m }) } });
+resolveMention([{ rangeOf: [bare(8, 45), bare(8, 55)] }], clock, rule).candidates.map((c) => c.range);
+// [{ from: '…T08:45:00-07:00', to: '…T08:56:00-07:00' }, { from: '…T20:45:00-07:00', to: '…T20:56:00-07:00' }]
+resolveMention([{ rangeOf: [bare(11), bare(1)] }], clock, rule).candidates.map((c) => c.range);
+// [{ from: '2026-10-09T11:00:00-07:00', to: '2026-10-09T13:00:00-07:00' },
+//  { from: '2026-10-09T23:00:00-07:00', to: '2026-10-10T01:00:00-07:00' }]
+```
+
 **The English law: read a small set carefully, and say "unreadable" for the rest — never a
 part.** `englishTimeReader()` tokenizes; it never decides an order, maps `PST` or `London time`
 to a zone, or refuses a future date. A phrase outside its v1 set is ONE `unreadable` mention quoting the whole phrase:
@@ -255,7 +275,13 @@ it is ASKED (the lazy-ask law): the person wrote a time, so no default stands in
 tool's own form, with its SOURCE (TQ13)** — and the window the person set in the app's time
 control (`time.window`, `ReaderWindows.control`): "The window the person set in the app's time
 control is … — <each tool's values>", under `.time()` with or without a reader, so an app never
-writes its own prompt text for it. The values are the ONE answer (`convert.ts` · `convertForTool`
+writes its own prompt text for it. The control window is a fact about the person's TURN, not about
+a tool (G14): it is served on EVERY request of the turn whether or not a served tool declares a
+period, and whether or not the inputs layer is armed — with no tool that can take values, the
+window alone ("The window the person set in the app's time control is 2026-10-09 08:00–08:39
+America/Los_Angeles (UTC-07:00). An answer built on it states that window."), no values and no
+permission to pass any. Never without `.time()`: `run({ time })` is refused there, and a turn with
+no control window serves no line (`test/core/time/gaps-run.test.ts`, "G14"). The values are the ONE answer (`convert.ts` · `convertForTool`
 over `windows.ts` · `windowToConvert`) the fill and the time ask's answer also use, so the value
 served and the value a call is handed are one spelling. Under `.time({ reader })`, each tool that declares a
 period carries ONE sentence after its description naming every window SETTLED this turn in that

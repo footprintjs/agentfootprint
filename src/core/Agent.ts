@@ -4839,16 +4839,18 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // The inputs layer (honesty layer 2): the same site decorates a ruled
       // tool's schema first — value-conditional, the same grammar.
       ...(inputsArmed && { inputsLayer: true as const }),
-      // …and, under `.time()`, the ONE served time line on each tool that declares a period: the
-      // windows the reader settled this turn (`.time({ reader })`, step T6b) and the window the
-      // person set in the app's time control (`time.window`), in that tool's form.
-      ...(inputsArmed &&
-        this.timeOptions !== undefined && {
-          timeWindows: {
-            ...(this.timeOptions.zone !== undefined && { appZone: this.timeOptions.zone }),
-            ...(this.timeOptions.reader !== undefined && { reader: true as const }),
-          },
-        }),
+      // …and, under `.time()`, the ONE served time line: the windows the reader settled this turn
+      // (`.time({ reader })`, step T6b) in each served period tool's form — and the window the
+      // person set in the app's time control (`time.window`), a fact about the person's turn,
+      // served on every request whether or not a served tool declares a period (G14), so it
+      // needs no inputs layer. `reader` (write the line every composition) only beside the
+      // inputs layer, the one place a reading is asked and served.
+      ...(this.timeOptions !== undefined && {
+        timeWindows: {
+          ...(this.timeOptions.zone !== undefined && { appZone: this.timeOptions.zone }),
+          ...(inputsArmed && this.timeOptions.reader !== undefined && { reader: true as const }),
+        },
+      }),
       // …and, under `.time()` (step T8), the turn's time limits in the same line.
       ...(inputsArmed && this.timeOptions !== undefined && { timeLimits: true as const }),
       // …and, under declared sources, plants `_findings.from` on ruled tools only.
@@ -4903,10 +4905,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // constant on every call, under the one gate — an unarmed agent reads
       // no new key.
       ...(this.ontology !== undefined && { ontology: true as const }),
-      // The time layer's served line (step T6b): read only where the Tools
-      // mount can compose it — the `timeReader` arm of the chart deps.
-      // Step T8 widens it to `.time()`: the same line then carries the turn's time limits.
-      ...(inputsArmed && this.timeOptions !== undefined && { timeLine: true as const }),
+      // The time layer's served line (step T6b): read wherever the Tools mount
+      // composes it — under `.time()` (G14: the control window needs no inputs
+      // layer). Step T8: the same line carries the turn's time limits.
+      ...(this.timeOptions !== undefined && { timeLine: true as const }),
       // The receipt's salt (9.88.0) — read per call, like seed's own accessor.
       getRunId: () => this.currentRunContext?.runId,
       // …and its off switch. Value-conditional, so an agent on the default
@@ -5473,8 +5475,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // The time layer: the prose limits block renders its `Period:` lines in
       // the run's clock zone. Absent → the final stage it always mounted.
       ...(this.timeOptions !== undefined && { timeLayer: true as const }),
-      // The reader (step T6b): the Tools mount hands the slot the turn's settled windows.
-      ...(inputsArmed && this.timeOptions?.reader !== undefined && { timeReader: true as const }),
+      // The Tools mount hands the slot the turn's windows — the reader's (step T6b) and the
+      // app's control window (G14) — under `.time()`.
+      ...(this.timeOptions !== undefined && { timeWindows: true as const }),
       ...(inputsArmed && this.timeOptions !== undefined && { timeLimits: true as const }),
       ...(this.answerValidationConfig !== undefined && { hasAnswerValidation: true }),
       // The out-of-budget wrap-up branch (9.56.0) — the conditional-mount law

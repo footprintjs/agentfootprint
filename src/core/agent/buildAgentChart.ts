@@ -300,20 +300,19 @@ export interface AgentChartDeps {
   readonly timeLayer?: true;
 
   /**
-   * The time layer's READER is armed (`.time({ reader })`, step T6b). Gates
-   * ONE mount arg on the Tools branch's `inputMapper`: `timeWindows`, the
-   * windows the reader settled this turn with the turn's clock
-   * (`core/time/windows.ts` · `readerWindowsOf`, off `parent.findingsLedger`) —
-   * value-conditional, so a turn with none crosses no key. The slot serves
-   * them on each tool that declares a period (`ToolsSlotConfig.timeWindows`).
+   * The time layer is armed (`.time()`). Gates ONE mount arg on the Tools
+   * branch's `inputMapper`: `timeWindows`, the turn's windows with the turn's
+   * clock (`core/time/windows.ts` · `readerWindowsOf`, off
+   * `parent.findingsLedger`) — the reader's (step T6b) and the app's control
+   * window (`time.window`) — value-conditional, so a turn with none crosses no
+   * key. The slot serves the reader's on each tool that declares a period and
+   * the control window on every request (`ToolsSlotConfig.timeWindows`, G14).
    */
-  readonly timeReader?: true;
+  readonly timeWindows?: true;
 
   /**
    * The time layer is armed with the inputs layer (`.time()` over a tool that
-   * declares a period, step T8). Gates the `timeWindows` mount arg too (with
-   * no reader it can carry only the app's control window, `time.window`), and
-   * ONE more on the Tools branch's
+   * declares a period, step T8). Gates ONE mount arg on the Tools branch's
    * `inputMapper`: `timeLimits`, the turn's result-check facts for the model
    * (`coverage/timeLimitFacts.ts` · `timeLimitFactsOf`, audience `model`, off
    * `parent.findingsLedger`) — value-conditional, so a turn whose reads match
@@ -425,7 +424,7 @@ export interface AgentChartDeps {
 /**
  * Build the agent's complete FlowChart from the supplied deps.
  */
-/** The Tools mount's `timeWindows` arg — the reader's settled windows, or no key at all. */
+/** The Tools mount's `timeWindows` arg — the turn's windows (the reader's, the control's), or no key at all. */
 export function timeWindowsArg(ledger: unknown): {
   timeWindows?: ReturnType<typeof readerWindowsOf>;
 } {
@@ -859,9 +858,8 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
         }),
         // The reader's settled windows (step T6b) and the app's control window,
         // under `.time()` only and value-conditional: a turn with none crosses no
-        // key. See `AgentChartDeps.timeReader` / `timeLimits`.
-        ...((deps.timeReader === true || deps.timeLimits === true) &&
-          timeWindowsArg(parent.findingsLedger)),
+        // key. See `AgentChartDeps.timeWindows`.
+        ...(deps.timeWindows === true && timeWindowsArg(parent.findingsLedger)),
         // The turn's result-check lines (step T8), under `.time()` only and
         // value-conditional. See `AgentChartDeps.timeLimits`.
         ...(deps.timeLimits === true && timeLimitsArg(parent.findingsLedger)),

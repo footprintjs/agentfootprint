@@ -22,7 +22,12 @@
  *   integration — the served line names the unread words as pending (what the form will do),
  *                 and once answered names the window as the person's;
  *   security    — a free answer that is no time range is refused at the door and asked again;
- *   byte identity — a turn whose words read no time at all asks nothing new and runs the default.
+ *   G14         — the app's control window is a fact about the person's TURN: served on every
+ *                 request whether or not a served tool declares a period (inputs layer armed or
+ *                 not), the window alone when no tool can take values, the rebuild reproducing it;
+ *   byte identity — a turn whose words read no time at all asks nothing new and runs the default;
+ *                 `.time()` with no control window serves no line, the same request bytes as an
+ *                 agent without `.time()`.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -36,6 +41,7 @@ import {
 } from '../../../src/index.js';
 import type { LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
 import { TIME_LINE_SOURCE } from '../../../src/core/agent/arguments/serve.js';
+import { servedAt } from '../../../src/lib/time-travel/servedView.js';
 
 type Reply = { content: string; toolCalls?: { id: string; name: string; args: object }[] };
 
@@ -357,6 +363,102 @@ describe('G9 — the window set in the app’s time control is served by the lib
       .build();
     await agent.run({ message: 'any SMB on 10.0.0.1?', time: { now: NOW } });
     expect(s.requests.every((r) => timeLineOf(r) === undefined)).toBe(true);
+  });
+});
+
+describe('G14 — the control window is a fact about the person’s turn: served on every request, period tool or not', () => {
+  const WINDOW = { from: '2026-10-09T08:00:00-07:00', to: '2026-10-09T08:40:00-07:00' };
+  /** The control half with no tool values — the window alone (`serve.ts` · `controlSentence`). */
+  const BARE_LINE =
+    `${TIME_LINE_SOURCE} The window the person set in the app's time control is 2026-10-09 ` +
+    '08:00–08:39 America/Los_Angeles (UTC-07:00). An answer built on it states that window.';
+
+  /** A tool that declares no period — with an `askOrAssume` rule (arms the inputs layer) or none. */
+  function noPeriodTool(ruled: boolean) {
+    return defineTool({
+      name: 'smb_sessions',
+      description: 'Open SMB sessions on a server.',
+      inputSchema: {
+        type: 'object',
+        properties: { server: { type: 'string' }, limit: { type: 'integer' } },
+      },
+      ...(ruled && { askOrAssume: { limit: { assume: 50 } } }),
+      execute: () => '{"sessions":[]}',
+    } as never);
+  }
+
+  function run(
+    tools: readonly Tool[],
+    opts: { time?: boolean; mode?: 'dynamic' | 'dynamic-grouped' } = {},
+  ) {
+    const s = scripted([call('c1', 'smb_sessions', { server: '10.0.0.1' }), answer('done')]);
+    let b = Agent.create({
+      provider: s.provider as never,
+      model: 'mock',
+      maxIterations: 6,
+      ...(opts.mode !== undefined && { reactMode: opts.mode }),
+    }).tools(tools);
+    if (opts.time !== false) b = b.time({ zone: LA });
+    return { agent: b.build(), requests: s.requests };
+  }
+
+  for (const [ruled, mode] of [
+    [true, 'dynamic'],
+    [false, 'dynamic'],
+    [false, 'dynamic-grouped'],
+  ] as const) {
+    it(`a turn whose tools declare no period (${
+      ruled ? 'inputs layer armed' : 'no inputs layer'
+    }, ${mode}) names the window on EVERY request, without tool values`, async () => {
+      const { agent, requests } = run([noPeriodTool(ruled)], { mode });
+      const out = await agent.run({
+        message: 'any open SMB sessions on 10.0.0.1?',
+        time: { now: NOW, window: WINDOW },
+      });
+      expect(isInputPause(out)).toBe(false);
+      expect(requests).toHaveLength(2);
+      for (const req of requests) expect(timeLineOf(req)).toBe(BARE_LINE);
+      // The served-request rebuild reproduces it byte for byte, last and request-only.
+      for (const epoch of [1, 2]) {
+        const view = servedAt(agent.getSnapshot(), epoch)!;
+        expect(view.messages.requestOnly).toEqual([
+          { role: 'user', text: BARE_LINE, reason: 'time-window-line' },
+        ]);
+      }
+    });
+  }
+
+  it('beside a period tool the line keeps that tool’s values — on every request, the second one too', async () => {
+    const { agent, requests } = run([noPeriodTool(true), rangeTool([])]);
+    await agent.run({ message: 'any open SMB sessions?', time: { now: NOW, window: WINDOW } });
+    expect(requests).toHaveLength(2);
+    for (const req of requests) {
+      expect(timeLineOf(req)).toContain('— smb_records window "2026-10-09T08:00:00-07:00..');
+      expect(timeLineOf(req)).toContain('A call may pass these values as written');
+    }
+  });
+
+  it('a period tool that cannot read the window gives no values — the window alone is still named', async () => {
+    // `direction: 'past'` + a window in the future: the tool refuses it, so no value is a permission.
+    const future = { from: '2026-10-10T08:00:00-07:00', to: '2026-10-10T09:00:00-07:00' };
+    const { agent, requests } = run([rangeTool([])]);
+    await agent.run({ message: 'any SMB?', time: { now: NOW, window: future } });
+    expect(timeLineOf(requests[0])).toBe(
+      `${TIME_LINE_SOURCE} The window the person set in the app's time control is 2026-10-10 ` +
+        '08:00–08:59 America/Los_Angeles (UTC-07:00). An answer built on it states that window.',
+    );
+  });
+
+  it('byte identity — `.time()` with no control window serves no line; without `.time()` the requests are the same bytes', async () => {
+    const timed = run([noPeriodTool(false)]);
+    await timed.agent.run({ message: 'any open SMB sessions?', time: { now: NOW } });
+    expect(timed.requests.every((r) => timeLineOf(r) === undefined)).toBe(true);
+    const plain = run([noPeriodTool(false)], { time: false });
+    await plain.agent.run({ message: 'any open SMB sessions?' });
+    expect(plain.requests.every((r) => timeLineOf(r) === undefined)).toBe(true);
+    expect(JSON.stringify(timed.requests.map((r) => r.messages))).toBe(
+      JSON.stringify(plain.requests.map((r) => r.messages)),
+    );
   });
 });
 

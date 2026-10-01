@@ -30,7 +30,7 @@
  * | a wall time the clocks skip (`02:30`) | both readings Temporal names, each noted `dst-gap` |
  * | a day word (`{ day, offset: -1 }`) | the calendar day in the zone, anchored on the clock |
  * | a span (`{ minute, count: 40 }`) | a look-back until the clock's `now` |
- * | a range | one per combination of its sides that agree on date order, year and abbreviation reading, `from` before `to`; a first side with no meridiem takes the second's (`8 to 9 PM` → 8 PM) unless that runs backwards (`11 to 1 PM` → 11 AM) |
+ * | a range | one per combination of its sides that agree on date order, year and abbreviation reading, `from` before `to`; a first side with no meridiem takes the second's (`8 to 9 PM` → 8 PM) unless that runs backwards (`11 to 1 PM` → 11 AM); two sides with none share one (`8:45 to 8:55` → AM–AM and PM–PM, never 8:45 AM – 8:55 PM) unless neither runs forward (`11 to 1` → 11 AM – 1 PM, and 11 PM – 1 AM the next day) |
  * | a place named with `time` (`London time`) | the ONE zone the tz database has for it (`zone.ts` · `zoneOfPlace`), noted `zone-read`; none or several → the zone is asked |
  * | an abbreviation in the app's map (`PST`) | its zone's reading AND its literal offset's, when they name different windows — tagged `abbreviation`, noted `zone-read` |
  *
@@ -456,6 +456,12 @@ function datesOf(parts: TimeParts, today: WallTime): DateReading[] | { unsupport
   ];
 }
 
+/** The same reading of a date, one calendar day later. */
+function nextDay(date: DateReading): DateReading {
+  const [y, m, d] = addDays(date.y, date.m, date.d, 1);
+  return { ...date, y, m, d };
+}
+
 // ─── Clock times ─────────────────────────────────────────────────────────
 
 /**
@@ -500,11 +506,17 @@ interface Point {
 
 type Unresolved = { readonly unsupported: string } | { readonly needsZone: true };
 
+/**
+ * The points of one side. `dayAfter` reads its date one calendar day later —
+ * only for the right side of an overnight range (`overnightPairs`), whose day
+ * is the left side's.
+ */
 function pointsOf(
   parts: TimeParts,
   clock: ResolveClock,
   nowMs: number,
   policy: ZonePolicy | undefined,
+  dayAfter = false,
 ): Point[] | Unresolved {
   if (parts.partOfDay !== undefined) return { unsupported: 'a part of the day' };
   if (parts.anchor !== undefined) return { unsupported: 'a window anchored on the previous one' };
@@ -512,7 +524,7 @@ function pointsOf(
   if (zones === undefined) return { needsZone: true };
   const out: Point[] = [];
   for (const zone of zones) {
-    const points = pointsIn(parts, zone, nowMs);
+    const points = pointsIn(parts, zone, nowMs, dayAfter);
     if (!Array.isArray(points)) return points;
     out.push(...points);
   }
@@ -532,9 +544,15 @@ function viaOf(zone: ZoneRead): { notes: TimeNote[]; tags: Pick<ReadingTags, 'ab
 }
 
 /** The points of the parts under ONE zone read. */
-function pointsIn(parts: TimeParts, zone: ZoneRead, nowMs: number): Point[] | Unresolved {
-  const dates = datesOf(parts, wallIn(zone, nowMs));
-  if (!Array.isArray(dates)) return dates;
+function pointsIn(
+  parts: TimeParts,
+  zone: ZoneRead,
+  nowMs: number,
+  dayAfter: boolean,
+): Point[] | Unresolved {
+  const read = datesOf(parts, wallIn(zone, nowMs));
+  if (!Array.isArray(read)) return read;
+  const dates = dayAfter ? read.map(nextDay) : read;
   const zoneSaid: TimePart[] = parts.zoneToken !== undefined ? ['zone'] : [];
   const zoneImplied: TimePart[] = parts.zoneToken !== undefined ? [] : ['zone'];
   const via = viaOf(zone);
@@ -786,40 +804,70 @@ function withoutAgreeingLiterals(built: readonly Built[]): Built[] {
   );
 }
 
+/** One forward pair of a range's sides: the window, and the meridiem each side was read with. */
+interface Pair {
+  readonly built: Built;
+  readonly left: 'am' | 'pm' | undefined;
+  readonly right: 'am' | 'pm' | undefined;
+}
+
+/** Every combination of a range's sides that runs forward (`fromSides`). */
+function forwardPairs(lp: readonly Point[], rp: readonly Point[], clock: ResolveClock): Pair[] {
+  const all: Pair[] = [];
+  for (const a of lp) {
+    for (const b of rp) {
+      const built = fromSides(a, b, clock);
+      if (built !== undefined) all.push({ built, left: a.tags.meridiem, right: b.tags.meridiem });
+    }
+  }
+  return all;
+}
+
 /**
  * The combinations of a range's sides that run forward. A first side said
  * with no meridiem takes the second side's said one ("8 to 9 PM" is 8 PM –
  * 9 PM, English's own rule), falling back to the other only when that does
  * not run forward ("11 to 1 PM" → 11 AM).
  */
-function rangeCombinations(
-  lp: readonly Point[],
-  rp: readonly Point[],
-  inherits: 'am' | 'pm' | undefined,
-  clock: ResolveClock,
-): Built[] {
-  const all: { built: Built; left: Point }[] = [];
-  for (const a of lp) {
-    for (const b of rp) {
-      const built = fromSides(a, b, clock);
-      if (built !== undefined) all.push({ built, left: a });
-    }
-  }
-  if (inherits !== undefined) {
-    const same = all.filter((x) => x.left.tags.meridiem === inherits);
-    if (same.length > 0) return same.map((x) => x.built);
-  }
-  return all.map((x) => x.built);
+function inheritingPairs(pairs: readonly Pair[], inherits: 'am' | 'pm'): Built[] {
+  const same = pairs.filter((x) => x.left === inherits);
+  return (same.length > 0 ? same : pairs).map((x) => x.built);
 }
+
+/**
+ * A range whose two sides say no meridiem SHARES one (G13): "8:45 to 8:55"
+ * is 8:45–8:55 AM or 8:45–8:55 PM, never 8:45 AM – 8:55 PM — the half-day is
+ * crossed only when no shared reading runs forward, because the right side
+ * is earlier on the clock face ("11 to 1", "11:15 to 12:30"): then the range
+ * crosses it either way — AM to PM the same day, and PM to AM overnight,
+ * the right side read on the next day when its day is the left side's.
+ */
+function sharedMeridiemPairs(pairs: readonly Pair[], overnight: () => Pair[]): Built[] {
+  const shared = pairs.filter((x) => x.left === x.right);
+  if (shared.length > 0) return shared.map((x) => x.built);
+  const crossing = [
+    ...pairs.filter((x) => x.left === 'am' && x.right === 'pm'),
+    ...overnight().filter((x) => x.left === 'pm' && x.right === 'am'),
+  ];
+  return crossing.map((x) => x.built);
+}
+
+/** A side that says an hour 1–12 with no meridiem and not on a 24-hour clock — read both ways. */
+const saysNoMeridiem = (wall: TimeWall | undefined): wall is TimeWall =>
+  wall !== undefined &&
+  wall.meridiem === undefined &&
+  wall.clock !== '24h' &&
+  wall.h >= 1 &&
+  wall.h <= 12;
 
 /** The meridiem a first side said with none takes from the second side, when the second said one. */
 function inheritedMeridiem(l: TimeParts, r: TimeParts): 'am' | 'pm' | undefined {
-  const lw = l.wall;
-  const rw = r.wall;
-  if (lw === undefined || rw?.meridiem === undefined) return undefined;
-  if (lw.meridiem !== undefined || lw.clock === '24h' || lw.h < 1 || lw.h > 12) return undefined;
-  return rw.meridiem;
+  return saysNoMeridiem(l.wall) ? r.wall?.meridiem : undefined;
 }
+
+/** A side with its own day — a date or a day word of its own, not the mention's or the other side's. */
+const hasOwnDay = (side: TimeParts): boolean =>
+  side.date !== undefined || side.relative !== undefined;
 
 function builtOf(
   parts: TimeParts,
@@ -857,7 +905,15 @@ function builtOfAll(
   if (!Array.isArray(lp)) return lp;
   const rp = pointsOf(right, clock, nowMs, policy);
   if (!Array.isArray(rp)) return rp;
-  return rangeCombinations(lp, rp, inheritedMeridiem(l, r), clock);
+  const pairs = forwardPairs(lp, rp, clock);
+  const inherits = inheritedMeridiem(l, r);
+  if (inherits !== undefined) return inheritingPairs(pairs, inherits);
+  if (!saysNoMeridiem(l.wall) || !saysNoMeridiem(r.wall)) return pairs.map((x) => x.built);
+  return sharedMeridiemPairs(pairs, () => {
+    if (hasOwnDay(r)) return [];
+    const next = pointsOf(right, clock, nowMs, policy, true);
+    return Array.isArray(next) ? forwardPairs(lp, next, clock) : [];
+  });
 }
 
 /**
