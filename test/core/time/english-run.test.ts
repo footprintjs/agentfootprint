@@ -52,6 +52,7 @@ import {
   type ToolExecutionContext,
 } from '../../../src/index.js';
 import type { LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
+import { TIME_LINE_SOURCE } from '../../../src/core/agent/arguments/serve.js';
 
 // ─── the harness ─────────────────────────────────────────────────────
 
@@ -161,8 +162,12 @@ function lookbackTool(seen: Record<string, unknown>[] = []) {
 
 const reader = englishTimeReader();
 
-/** The pending half of the served time line (`arguments/serve.ts` · `timeWindowsLine`). */
+/**
+ * The served time line holding only the pending half (`arguments/serve.ts` · `timeWindowsLine`),
+ * opened once with who says it (`timeLine` · `TIME_LINE_SOURCE`).
+ */
 const pendingLine = (quote: string, calls: string): string =>
+  `${TIME_LINE_SOURCE} ` +
   `The window for “${quote}” is not settled yet: the person confirms it in the library's own ` +
   `form, which shows its reading of those words with the zone and opens when ${calls} (or the ` +
   'call is refused with the reason). So the next step is that call — not a question about the ' +
@@ -175,10 +180,7 @@ const pendingLine = (quote: string, calls: string): string =>
 function timeLineOf(req: LLMRequest | undefined): string | undefined {
   const last = req?.messages[req.messages.length - 1];
   if (last?.role !== 'user' || typeof last.content !== 'string') return undefined;
-  return last.content.startsWith("The person's time words") ||
-    last.content.startsWith('The window for “')
-    ? last.content
-    : undefined;
+  return last.content.startsWith(TIME_LINE_SOURCE) ? last.content : undefined;
 }
 
 function paused(result: unknown) {
@@ -232,6 +234,16 @@ describe('the field sentence — the zone, then the date order, then the tool ru
       how: 'not-filled',
       why: 'open-reading',
     });
+    // The served line before the zone ask: the library holds NO reading of these words yet, so it
+    // never promises a form that shows one (the T6b paid run's `field-pst` rows: no candidates).
+    expect(timeLineOf(requests[0])).toBe(
+      `${TIME_LINE_SOURCE} The window for “10/09/26 8 AM to 8:40 AM PST” is not settled yet: the ` +
+        'library holds no reading of those words until it knows which time zone they name, so ' +
+        'its own form asks the person for that zone, and it opens when client_activity is called ' +
+        'with start_time, end_time left out (or the call is refused with the reason). So the next ' +
+        'step is that call — not a question about the time in the reply, and not a window ' +
+        'written into the call, which would run unconfirmed.',
+    );
 
     const second = paused(
       await agent.resume(first.checkpoint as never, {
@@ -624,7 +636,7 @@ describe('the one served time sentence — the confirmed window and its source',
         'Client operations over a window.',
       ]);
       expect(timeLineOf(requests[1])).toBe(
-        "The person's time words, as the library holds them: “last 2 hours” is " +
+        `${TIME_LINE_SOURCE} The person's time words, as the library holds them: “last 2 hours” is ` +
           `${WINDOW_2H}, the window the person confirmed when asked what their words meant — ` +
           `search_logs window "2h"; client_activity start_time ${NOW_MS - 2 * 3_600_000}, ` +
           `end_time ${NOW_MS}. A call may pass these values as written; an answer built on them ` +
@@ -671,11 +683,14 @@ describe('the one served time sentence — the confirmed window and its source',
       pendingLine('last 2 hours', 'search_logs is called with window left out'),
     );
     expect(ofKind(agent, 'call-window')[0]).toMatchObject({ how: 'model' });
+    // In the library's voice — what it holds, never what the person did not do (the T6b paid run:
+    // 37/37 answers after the old clause opened "You're right… I apologize").
     expect(timeLineOf(requests[1])).toBe(
-      'The window for “last 2 hours” is not settled: the person has not confirmed it, and the ' +
-        'call that ran used a window written into it, unconfirmed. An answer built on that call ' +
-        'says its window was not confirmed by the person.',
+      `${TIME_LINE_SOURCE} The library holds no confirmed window for “last 2 hours”: the call ` +
+        'that ran carried a window written into the call, not one the person confirmed. So an ' +
+        'answer built on that call states that its window was not confirmed.',
     );
+    expect(timeLineOf(requests[1])).not.toMatch(/the person has not confirmed/);
   });
 
   it('an edited window is served as the window the person gave', async () => {

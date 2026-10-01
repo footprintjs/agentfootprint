@@ -180,6 +180,14 @@ export interface ReaderWindows {
    */
   readonly pending?: readonly string[];
   /**
+   * The quotes in `pending` the library holds NO reading of yet: the words
+   * name a zone it cannot resolve (an abbreviation outside the app's map), so
+   * the time ask asks for the zone and pre-fills nothing (the choice `open`
+   * on `zone`, no candidates). The served line says so instead of promising a
+   * form that shows a reading (T6b paid run: `field-pst`). Absent when none.
+   */
+  readonly pendingZones?: readonly string[];
+  /**
    * A mention is pending AND a call of this turn already ran on a window the
    * model wrote into it (a `call-window` row `how: 'model'` — § 7.3: it runs
    * as sent, unconfirmed). The served line then names that limit for the
@@ -289,6 +297,26 @@ export function pendingQuotesOf(
 }
 
 /**
+ * The quotes among `pending` whose reading offers nothing to confirm yet —
+ * no candidate, the choice open on the zone the words name
+ * (`ReaderWindows.pendingZones`).
+ */
+function pendingZonesOf(
+  readings: readonly TimeReadingRow[],
+  pending: readonly string[],
+): readonly string[] {
+  return pending.filter((quote) =>
+    readings.some(
+      (r) =>
+        r.quote === quote &&
+        (r.candidates ?? []).length === 0 &&
+        r.choice?.by === 'open' &&
+        r.choice.open.includes('zone'),
+    ),
+  );
+}
+
+/**
  * The latest turn's windows of the person's words, read off the ledger (its
  * last `clock` row and that turn's `time-reading` and `time-answer` rows) —
  * `undefined` when the turn has no clock, no settled mention and none
@@ -305,6 +333,7 @@ export function readerWindowsOf(ledger: readonly unknown[] | undefined): ReaderW
   const { windows } = turnWindowsOf(readings, undefined, answers);
   const pending = pendingQuotesOf(readings, answers);
   if (windows.length === 0 && pending.length === 0) return undefined;
+  const zones = pendingZonesOf(readings, pending);
   const refused = refusedWindowsOf(
     ledger,
     turn,
@@ -315,6 +344,7 @@ export function readerWindowsOf(ledger: readonly unknown[] | undefined): ReaderW
     now: clock.now,
     windows,
     ...(pending.length > 0 && { pending }),
+    ...(zones.length > 0 && { pendingZones: zones }),
     ...(pending.length > 0 && ranOnSentWindow(ledger, turn) && { ranUnconfirmed: true as const }),
     ...(refused.length > 0 && { refused }),
   };

@@ -50,8 +50,14 @@ export function readRun(raw) {
   const firstWindowRow = windows[0];
   const lines = raw.requests.map((q) => q.timeLine).filter((l) => l !== undefined);
   const pendingServed = lines.some((l) => l.includes('is not settled yet:'));
-  const limitServed = lines.some((l) => l.includes('is not settled: the person has not confirmed'));
-  const settledServed = lines.some((l) => l.startsWith("The person's time words"));
+  // The unconfirmed-call sentence's marker, then (runs before packet "serving") and now; the line
+  // opens with who says it since that packet, so the settled half is found inside it, not first.
+  const limitServed = lines.some(
+    (l) =>
+      l.includes('is not settled: the person has not confirmed') ||
+      l.includes('holds no confirmed window for'),
+  );
+  const settledServed = lines.some((l) => l.includes("The person's time words"));
   const saidRows =
     raw.rows.filter(
       (r) =>

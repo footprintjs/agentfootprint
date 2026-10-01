@@ -46,6 +46,7 @@ import {
 import type { LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
 import { validateCheckpoint } from '../../../src/core/runCheckpoint.js';
 import { timeRowIsWellFormed } from '../../../src/core/time/rows.js';
+import { TIME_LINE_SOURCE } from '../../../src/core/agent/arguments/serve.js';
 
 // ─── the harness ─────────────────────────────────────────────────────
 
@@ -286,7 +287,8 @@ describe('no form can read the window, even wider — refused, never run on the 
     );
     // The late line: the refusal as a conclusion — not the pending ask naming that call again.
     expect(timeLineOf(requests[1], message)).toBe(
-      'search_logs was not run for “yesterday”: no period form the tool declares can read the ' +
+      `${TIME_LINE_SOURCE} ` +
+        'search_logs was not run for “yesterday”: no period form the tool declares can read the ' +
         'window it asked for, exactly or by reading a wider one, within the most the tool ' +
         'declares it reads at once (maxRange 24h). So the answer tells the person that ' +
         'search_logs could not read that time, and claims nothing about it from search_logs.',
@@ -436,7 +438,8 @@ describe('the served line — a refused reading is a conclusion, not the next ca
     expect(windowOf(agent, 'c1')).toMatchObject({ how: 'refused', refused: 'time-future' });
     expect(timeLineOf(requests[0], message)).toContain('is not settled yet');
     expect(timeLineOf(requests[1], message)).toBe(
-      'client_activity was not run for “10/20/26”: the window it asked for had not happened yet, ' +
+      `${TIME_LINE_SOURCE} ` +
+        'client_activity was not run for “10/20/26”: the window it asked for had not happened yet, ' +
         'and the tool declares that its source holds only the past. So the answer tells the ' +
         'person that client_activity could not read that time, and claims nothing about it from ' +
         'client_activity.',

@@ -53,7 +53,11 @@ ends) and, under `.time()`, renders `periodLine` through `present.ts` in the run
 since step T8, each result check's line (`periodCheckLine`) and the wall-clock sources
 (`clockLines`), composed per turn by `coverage/timeLimits.ts` · `timeLimitLinesOf` for the limits
 block AND for the model's served time line (`arguments/serve.ts` · `timeLimitsSentence`, late, at
-the decision point); the results layer (`results/subflow.ts` · `checkPeriods`, handed each call's
+the decision point — a SHIFTED read reaches the model as the library's conclusion, `period.ts` ·
+`shiftedConclusion`: "search_logs's look-back ran after the clock moved on, so its result does not
+cover <the missed part, in the person's zone> of the person's window (…) … So the answer says that
+search_logs's result does not cover <it>, and claims nothing about that time from it", while the
+person's block keeps its two ranges); the results layer (`results/subflow.ts` · `checkPeriods`, handed each call's
 `call-window` and `call` rows by `honesty/mounts.ts` · `timeOfBatch`) asks `check.ts` ·
 `periodTimeCheck` and files the answer on the call's `period` row, which the answer's standing folds
 (`period-differs-from-asked`, `period-beyond-retention`); `stages/toolCalls.ts` files a

@@ -346,7 +346,9 @@ function settledSentence(tools: readonly PeriodTool[], windows: ServedWindows): 
  * The pending half: the quotes no one has confirmed. Before any call ran on a window of the
  * model's own, the one move that asks the person — the call with the period left out — named as
  * the next step, with the two moves that do not (a question in the reply, a written window).
- * After one did, the limit the answer states instead.
+ * After one did, the limit the answer states instead, in the library's voice: what the library
+ * holds, never what the person failed to do (the T6b paid run read that clause as the person's
+ * complaint — 37/37 answers after it opened "You're right… I apologize").
  */
 function pendingSentence(
   allTools: readonly PeriodTool[],
@@ -362,9 +364,9 @@ function pendingSentence(
   const quotes = pending.map((q) => `“${q}”`).join(', ');
   if (windows.ranUnconfirmed === true) {
     return (
-      `The window for ${quotes} is not settled: the person has not confirmed it, and the call ` +
-      'that ran used a window written into it, unconfirmed. An answer built on that call says ' +
-      'its window was not confirmed by the person.'
+      `The library holds no confirmed window for ${quotes}: the call that ran carried a window ` +
+      'written into the call, not one the person confirmed. So an answer built on that call ' +
+      'states that its window was not confirmed.'
     );
   }
   const calls = tools.flatMap((pt) => {
@@ -373,11 +375,39 @@ function pendingSentence(
   });
   if (calls.length === 0) return undefined;
   return (
-    `The window for ${quotes} is not settled yet: the person confirms it in the library's own ` +
-    `form, which shows its reading of those words with the zone and opens when ` +
+    `The window for ${quotes} is not settled yet: ${formClause(pending, windows.pendingZones)} ` +
     `${calls.join(', or ')} (or the call is refused with the reason). So the next step is that ` +
     'call — not a question about the time in the reply, and not a window written into the call, ' +
     'which would run unconfirmed.'
+  );
+}
+
+/**
+ * What the library's own form does for the pending quotes, up to "opens when": it shows its
+ * reading to confirm — or, for a quote it holds no reading of (`ReaderWindows.pendingZones`: a
+ * zone it cannot resolve), it asks which time zone the words name and shows no reading.
+ */
+function formClause(pending: readonly string[], zones: readonly string[] = []): string {
+  const zoned = pending.filter((q) => zones.includes(q));
+  const read = pending.filter((q) => !zones.includes(q));
+  if (zoned.length === 0) {
+    return (
+      "the person confirms it in the library's own form, which shows its reading of those " +
+      'words with the zone and opens when'
+    );
+  }
+  const zq = zoned.map((q) => `“${q}”`).join(', ');
+  if (read.length === 0) {
+    return (
+      'the library holds no reading of those words until it knows which time zone they name, ' +
+      'so its own form asks the person for that zone, and it opens when'
+    );
+  }
+  const rq = read.map((q) => `“${q}”`).join(', ');
+  return (
+    `the person confirms ${rq} in the library's own form, which shows its reading of those ` +
+    `words with the zone, and names the time zone of ${zq}, which the library holds no reading ` +
+    'of until it knows it; the form opens when'
   );
 }
 
@@ -460,7 +490,9 @@ const refusedFor = (windows: ServedWindows, quote: string, tool: string): boolea
  *   (`ranUnconfirmed`), it names the limit an answer states instead.
  *
  * `undefined` when no served tool declares a period or no part has
- * anything to say — a turn with no time words serves no line at all.
+ * anything to say — a turn with no time words serves no line at all. The
+ * halves carry no opening: {@link timeLine} composes the served line and
+ * opens it, once, with {@link TIME_LINE_SOURCE}.
  *
  * @example
  * ```ts
@@ -521,15 +553,15 @@ export function timeLimitsLine(facts: TimeLimitFacts | undefined): string | unde
  * compared by the model, a conclusion served at the decision point is.
  *
  * `undefined` when nothing holds — a turn whose reads match what was asked
- * serves no sentence at all.
+ * serves no sentence at all. It carries no opening: {@link timeLine} opens
+ * the served line once with {@link TIME_LINE_SOURCE}.
  *
  * @example
  * ```ts
  * timeLimitsSentence({ period: ['client_activity read less than was asked — asked: …; read: …'], clocks: [] });
- * // "[A note from the library that ran the tools, not from the person: answer the person directly,
- * //  as you would from the tool results alone.] The time the tools read is not the time asked about — client_activity read less than was asked —
- * //  asked: …; read: …. So the answer to the person states the time each result read and claims
- * //  nothing about time no result read."
+ * // 'The time the tools read is not the time asked about — client_activity read less than was
+ * //  asked — asked: …; read: …. So the answer to the person states the time each result read and
+ * //  claims nothing about time no result read.'
  * ```
  */
 export function timeLimitsSentence(lines: TimeLimitLines | undefined): string | undefined {
@@ -548,20 +580,51 @@ export function timeLimitsSentence(lines: TimeLimitLines | undefined): string | 
   if (parts.length === 0) return undefined;
   const [first, ...rest] = parts;
   const lead = first!.charAt(0).toUpperCase() + first!.slice(1);
-  return [TIME_LIMITS_SOURCE, lead, ...rest].join(' ');
+  return [lead, ...rest].join(' ');
 }
 
 /**
- * The line's opening: WHO says it. The line is a request-only `user`
- * message, and the T8 bench's first paid round (stopped at 41 runs) showed
- * the model reading an unmarked one as the person correcting it — 15 of 15
- * served answers opened "You're right" / "I apologize"; naming the library
- * alone (round 1, stopped at 46) still drew "Thank you for the
- * clarification". The opening now also says how to use it: answer the person
- * directly, as from the tool results alone.
+ * The ONE served time line's opening: WHO says it — the library, not the
+ * person. The line is a request-only `user` message, so an unmarked one reads
+ * as the person talking. Measured twice: the T8 bench's first paid round
+ * (stopped at 41 runs) — 15 of 15 answers to the limits sentence opened
+ * "You're right" / "I apologize", and naming the library alone (round 1,
+ * stopped at 46) still drew "Thank you for the clarification"; the T6b paid
+ * run, whose windows halves carried no opening — 37 of 37 answers after the
+ * unconfirmed-call sentence opened "You're right… I apologize". So it also
+ * says the note is no correction, and how an answer uses it. It says nothing
+ * about WHEN to answer: the pending half names a call as the next step.
+ * Applied once, by {@link timeLine}, whichever halves the line holds.
  */
-export const TIME_LIMITS_SOURCE =
-  '[A note from the library that ran the tools, not from the person: answer the person directly, as you would from the tool results alone.]';
+export const TIME_LINE_SOURCE =
+  '[A note from the library that runs the tools — not from the person, and not a correction from them: when you answer, answer the person directly, as you would from the tool results alone.]';
+
+// LENS · late-line · request-ephemeral
+// reads: the composed halves of the turn's ONE served time line — the person's windows
+//        (`timeWindowsLine`) and the time limits (`timeLimitsLine`) — and nothing else
+// law: one line, one opening: the source is said ONCE, first, whichever halves are present; no half
+//      carries its own, so the opening never repeats inside the line.
+/**
+ * The ONE served time line (TQ13): its parts in order — the windows' halves,
+ * then the limits — opened ONCE with {@link TIME_LINE_SOURCE}. The tools
+ * slot's one decoration site (`core/slots/buildToolsSlot.ts` · `commitWire`)
+ * calls it, `callLLM` appends the result LAST to the request, and
+ * `lib/time-travel/servedView.ts` rebuilds it byte for byte from the same
+ * committed `timeLine` key. `undefined` when no part has anything to say — a
+ * turn with nothing to say serves no line (and without `.time()` nothing here
+ * runs at all).
+ *
+ * @example
+ * ```ts
+ * timeLine([undefined, timeLimitsLine(facts)]);
+ * // '[A note from the library that runs the tools — …] The time the tools read is not …'
+ * timeLine([undefined, undefined]); // undefined
+ * ```
+ */
+export function timeLine(parts: readonly (string | undefined)[]): string | undefined {
+  const present = parts.filter((p): p is string => p !== undefined && p.length > 0);
+  return present.length === 0 ? undefined : [TIME_LINE_SOURCE, ...present].join(' ');
+}
 
 // ─── The note on a result ───────────────────────────────────────────────
 

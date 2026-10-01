@@ -200,11 +200,12 @@ export function mergeWire(candidates: readonly WireCandidate[]): {
 
 /**
  * The inputs layer's wire decoration (`agent/arguments/serve.ts` · `rulesOnWire`) and the time
- * layer's late line (`timeWindowsLine`), from the one module loaded under the arm.
+ * layer's late line (`timeWindowsLine` + `timeLimitsLine`, composed by `timeLine`), from the one
+ * module loaded under the arm.
  */
 type RulesOnWire = Pick<
   typeof import('../agent/arguments/serve.js'),
-  'rulesOnWire' | 'timeWindowsLine' | 'timeLimitsLine'
+  'rulesOnWire' | 'timeWindowsLine' | 'timeLimitsLine' | 'timeLine'
 >;
 
 /**
@@ -1043,7 +1044,8 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
               });
         const limits =
           config.timeLimits === true ? rules.timeLimitsLine(args.timeLimits) : undefined;
-        const text = [windows, limits].filter((t) => t !== undefined).join(' ');
+        // ONE line, opened ONCE with who says it (`agent/arguments/serve.ts` · `timeLine`), never per half.
+        const text = rules.timeLine([windows, limits]) ?? '';
         if (config.timeWindows !== undefined || text.length > 0) {
           scope.timeLine = { iteration, text };
         }
@@ -1185,6 +1187,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
             rulesOnWire: m.rulesOnWire,
             timeWindowsLine: m.timeWindowsLine,
             timeLimitsLine: m.timeLimitsLine,
+            timeLine: m.timeLine,
           }))
         : undefined;
     if (toolChoice === undefined) {

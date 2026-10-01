@@ -1601,7 +1601,9 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   line is written only when it says something. A turn whose reads match serves nothing. The line
   opens by naming its source (`TIME_LIMITS_SOURCE`: a note from the library, not from the person —
   answer the person directly): the channel is a `user` message, and the bench's first paid rounds
-  showed an unmarked line answered as the person's correction ("You're right"). Pinned by
+  showed an unmarked line answered as the person's correction ("You're right"). (Since the time
+  follow-ups' packet "serving" that opening belongs to the whole line, said once: `serve.ts` ·
+  `TIME_LINE_SOURCE`, applied by `timeLine`.) Pinned by
   `test/core/time/limits-served.test.ts` and its row in `test/modelFacingSurfaces.test.ts`. (8) **The bench** (`bench/time-checks/`, rule `time-rule-t8`,
   Haiku 4.5, arm off = the build before T8): round 2 (`bench/time/runs/t8`, 360 runs, $1.19) is
   NOT-MEASURABLE — every gated clause passed but A1 (claims past what was read), whose baseline
@@ -1645,6 +1647,34 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   pending for several tools still names a tool that will refuse it until that call is made (the
   pending sentence's "or the call is refused with the reason" keeps it true). Pinned by
   `test/core/time/lookback-only.test.ts` and `test/core/time/lookback-only-run.test.ts`.
+- **Time follow-ups, packet "serving" (2026-09-30).** The late line's voice. (1) **One line, one
+  opening.** The served time line is composed by ONE function, `arguments/serve.ts` · `timeLine`
+  (the windows' halves, then the limits), and opened ONCE with `TIME_LINE_SOURCE` — a note from the
+  library that runs the tools, not from the person and not a correction from them — whichever halves
+  it holds; no half carries its own (it replaces `TIME_LIMITS_SOURCE`, which opened the limits half
+  only). Why: in the T6b paid run (`bench/time/runs/haiku45-t6b-r1`) the windows halves carried no
+  opening, and 37 of 37 answers after "the person has not confirmed it" opened "You're right… I
+  apologize" — the T8 failure again, on the half the T8 fix never reached. (2) **The unconfirmed
+  call, in the library's voice:** "The library holds no confirmed window for “…”: the call that ran
+  carried a window written into the call, not one the person confirmed. So an answer built on that
+  call states that its window was not confirmed." — what the library holds, never what the person
+  did not do. (3) **A quote the library holds no reading of** (`windows.ts` ·
+  `ReaderWindows.pendingZones`: no candidate, the choice open on `zone` — an abbreviation outside the
+  app's map) no longer promises a form "which shows its reading": the pending half says the form
+  asks the person for the zone (`serve.ts` · `formClause`). (4) **A shifted read is a conclusion.**
+  A look-back that ran after the clock moved on (a check-in pause) is served to the MODEL as which
+  part of the window its result does not cover, in the person's zone, and that the answer says so
+  and claims nothing about it (`coverage/period.ts` · `shiftedConclusion`, the `'model'` audience of
+  `periodCheckLine`) — never the two ranges left to compare; the person's limits block keeps its
+  bytes. Each sentence is registered in `test/modelFacingSurfaces.test.ts`; `servedView` rebuilds
+  the line from the same committed `timeLine` key, so the rebuild carries the opening byte for
+  byte (`test/lib/time-travel/receipt-conformance.test.ts`); without `.time()` nothing here runs.
+  Not done, named: the durable root of the own-window rate (36/90 readable runs wrote their own
+  window on a pending reading) is the § 7.3 dispatch law — "a present value runs as sent" — and
+  routing such a call to the confirmation is an owner decision; this packet changes words only, and
+  their effect is unmeasured until a paid Haiku re-run of T6b. Pinned by
+  `test/core/time/late-line-voice.test.ts`, `test/core/time/limits-served.test.ts` and
+  `test/core/time/english-run.test.ts`.
 
 **Why this order.** T1 settles the grammar every other step leans on and is free. T2 is already
 written and only needs rebasing and the value check. T3 gives the first visible win (the limits

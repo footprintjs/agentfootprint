@@ -303,17 +303,33 @@ not run for “10/20/26”: <the same reason>. So the answer tells the person th
 could not read that time, and claims nothing about it from client_activity." — and no longer names
 that call as the next step (the T6b bench's future case asked it again until its budget ran out).
 
+ONE line, ONE opening (packet "serving"): `timeLine` composes the halves (the windows', then the
+limits) and opens the line ONCE with `TIME_LINE_SOURCE` — a note from the library that runs the
+tools, not from the person and not a correction from them; no half carries its own. Why: the line
+is a `user` message, and in the T6b paid run 37 of 37 answers after the unmarked "the person has
+not confirmed it" opened "You're right… I apologize". So the unconfirmed-call sentence also speaks
+for the library — what it holds, never what the person did not do — and a quote the library holds
+no reading of (`ReaderWindows.pendingZones`: a zone it cannot resolve) says its form asks for the
+zone, never that it "shows its reading".
+
 ```ts
-// "client activity yesterday?" under the reader's arm, first request — its LAST message:
+// "client activity yesterday?" under the reader's arm, first request — its LAST message (every
+// line below is served after the one opening, `TIME_LINE_SOURCE`:
+//   '[A note from the library that runs the tools — not from the person, and not a correction from
+//    them: when you answer, answer the person directly, as you would from the tool results alone.] '):
 //   { role: 'user', content: 'The window for “yesterday” is not settled yet: the person confirms it
 //     in the library's own form, which shows its reading of those words with the zone and opens
 //     when client_activity is called with start_time, end_time left out (or the call is refused
 //     with the reason). So the next step is that call — not a question about the time in the
 //     reply, and not a window written into the call, which would run unconfirmed.' }
 // once a call of the turn already ran on a window the model wrote, the line names the limit:
-//   'The window for “yesterday” is not settled: the person has not confirmed it, and the call that
-//    ran used a window written into it, unconfirmed. An answer built on that call says its window
-//    was not confirmed by the person.'
+//   'The library holds no confirmed window for “yesterday”: the call that ran carried a window
+//    written into the call, not one the person confirmed. So an answer built on that call states
+//    that its window was not confirmed.'
+// a quote whose zone the library cannot resolve ("… 8:40 AM PST", no map) — no reading to show:
+//   'The window for “10/09/26 8 AM to 8:40 AM PST” is not settled yet: the library holds no reading
+//    of those words until it knows which time zone they name, so its own form asks the person for
+//    that zone, and it opens when client_activity is called with start_time, end_time left out …'
 // after the person confirms, the next request's last message:
 //   'The person's time words, as the library holds them: “yesterday” is 2026-10-08 00:00–23:59
 //    America/Los_Angeles (UTC-07:00), the window the person confirmed when asked what their words
