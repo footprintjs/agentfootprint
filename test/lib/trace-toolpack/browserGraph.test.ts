@@ -128,6 +128,16 @@ describe.skipIf(!built)('the default browser graph of the root entry', () => {
     expect(graph.syncInputs.has('dist/esm/core/agent/findings/peel.js')).toBe(false);
   });
 
+  it('LAW: the evidence gate’s figures dial is off the root sync closure — Route loads it under the dial', async () => {
+    // `namesAndNumbersFromEvidence({ figures: true })` only: Route's deciders
+    // load `evidence/figures.ts` through `import()` (`route.ts` · `loadFigures`)
+    // — it grew the docs demo chunk past its ceiling when it sat on the graph.
+    const graph = await splitGraph(resolve(DIST, 'index.js'));
+    expect(graph.syncInputs.has('dist/esm/core/agent/evidence/extract.js')).toBe(true);
+    expect(graph.syncInputs.has('dist/esm/core/agent/evidence/figures.js')).toBe(false);
+    expect(graph.dynamicInputs.has('dist/esm/core/agent/evidence/figures.js')).toBe(true);
+  });
+
   it('the scanner is still reachable — behind a dynamic-import edge', async () => {
     const graph = await splitGraph(resolve(DIST, 'index.js'));
     expect(graph.dynamicInputs.has('dist/esm/core/agent/findings/answerText.js')).toBe(true);

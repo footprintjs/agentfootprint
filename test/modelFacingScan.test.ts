@@ -283,6 +283,13 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: 'one internal evidence-recovery system instruction, composed for the next attempt and never inserted into conversation history or trusted evidence',
     },
   ],
+  'src/core/agent/evidence/figures.ts': [
+    {
+      kind: 'ephemeral',
+      count: 1,
+      why: "the figures dial's conclusion line, served LAST on the one revision request only (request-only, never history) — the checker clears it at `request-ephemeral`",
+    },
+  ],
   'src/core/agent/outputEnforcement.ts': [
     {
       kind: 'unrepaired',
@@ -1124,10 +1131,13 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // holds the word `now` — words it recognises in a person's message, never
         // text anyone reads. not-model-facing (1) — the leftover rule's word
         // list went with the owner's decision "Always confirm".
-        files: 98,
-        total: 193,
+        // Unreleased (evidence figures dial): the conclusion line in
+        // evidence/figures.ts (one new file) — one request only, served last on the revision
+        // request and never in history. ephemeral 20 → 21.
+        files: 99,
+        total: 194,
         registry: 8,
-        ephemeral: 20,
+        ephemeral: 21,
         unrepaired: 33,
         notModelFacing: 132,
         unrepairedEntries: 13,

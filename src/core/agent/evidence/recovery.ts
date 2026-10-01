@@ -45,6 +45,9 @@ export function buildEvidenceRecovery(
   },
   extra?: EvidenceRecoveryInstruction,
   staged?: StagedRefsMatch,
+  /** The figures dial's late line (`figures.ts` · `figuresConclusionLine`,
+   *  composed by Route, which loaded the module): rides the request LAST. */
+  conclusion?: string,
 ): PendingEvidenceRecovery {
   const context: EvidenceRecoveryContext = Object.freeze({
     kind: 'evidence',
@@ -89,7 +92,22 @@ export function buildEvidenceRecovery(
       'namesAndNumbersFromEvidence: complete evidence recovery exceeds 1000000 UTF-16 code units. Reduce the draft size.',
     );
   }
-  return { instruction, iteration: input.iteration + 1 };
+  return {
+    instruction,
+    iteration: input.iteration + 1,
+    ...(conclusion !== undefined && conclusion.length > 0 && { conclusion }),
+  };
+}
+
+/** The late line, on the iteration its instruction is served — `callLLM` and `servedView` alike. */
+export function evidenceConclusionLine(
+  pending: PendingEvidenceRecovery | undefined,
+  used: boolean | undefined,
+  iteration: number,
+): string | undefined {
+  return evidenceRecoveryPiece(pending, used, iteration) !== undefined
+    ? pending?.conclusion
+    : undefined;
 }
 
 /** Shared by live request assembly and servedAt's independent reconstruction. */

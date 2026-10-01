@@ -1,0 +1,134 @@
+{
+ "$comment": "GENERATED once by the figures bench author from the app's REAL code: the capacity tool (py-tools/server.py real_pscale_capacity, Flux stood in by rows built from the field report's figures; cluster and pool names neutral), its real result adapter (staging into the artifact store) and, for the be views, the real BE model-data projection. before = the app at 6f40b36 (agentfootprint 9.129.0); after = the app at 43f6c24 (capacity_by_cluster). Each view is the tool message content exactly as the model received it. record = the full after result (the truth the labeller reads; the before result is the same data minus capacity_by_cluster/units).",
+ "views": {
+  "be-before": "{\"af_coverage\":{\"note\":\"This result covers only what `checked` lists. `not_checked` is ground the call this result answers did not look at, and `cannot_cover` is ground this tool can never see — a clean result here is NOT evidence about either, and no retry changes `cannot_cover`. Carry these limits into any answer you build on this result.\",\"checked\":[{\"what\":\"ps_nodepool: per-pool capacity with the hot spare subtracted\"},{\"what\":\"ps_quota: per-path usage, thresholds, exceeded flags, bytes-per-file\"}],\"cannot_cover\":[{\"what\":\"directory entry counts per DIRECTORY\",\"why\":\"ps_quota reports inodes per quota PATH, not per directory. A single hot directory inside a share is invisible\"}]},\"result\":{\"clusters_matched\":[\"CLUSTER-A01\"],\"quotas_shown\":3,\"quotas_total\":3,\"quotas_complete\":true,\"quotas_over_threshold\":0,\"data_window\":{\"window\":\"-26h\",\"range_end\":null},\"note\":\"usable_tb subtracts the virtual hot spare — avail_bytes alone overstated one pool by 36x. A quota full and a filesystem full present the same symptoms; these are the raw numbers that tell them apart. bytes_per_inode separates workloads (85 MB/file vs 254 KB/file on this estate). Inode count does NOT track slowness — never report it as a cause.\",\"dataset\":{\"ref\":\"art_g1JqLShMAJg4nx9QudYKxJ\",\"kind\":\"dataset/rows\",\"rows\":2,\"sourceField\":\"rows\",\"schema\":{\"basis\":\"first-row\",\"columns\":[\"cluster\",\"pool\",\"lnns\",\"total_tb\",\"used_tb\",\"used_pct\",\"usable_tb\",\"hot_spare_tb\",\"l3_enabled\"],\"complete\":true},\"sourceEvidence\":{\"ref\":\"art_YoZBsCJmrVXFfcwnDAa03v\",\"kind\":\"evidence/source-provenance\"}},\"datasets\":{\"rows\":{\"ref\":\"art_g1JqLShMAJg4nx9QudYKxJ\",\"kind\":\"dataset/rows\",\"rows\":2,\"sourceField\":\"rows\",\"schema\":{\"basis\":\"first-row\",\"columns\":[\"cluster\",\"pool\",\"lnns\",\"total_tb\",\"used_tb\",\"used_pct\",\"usable_tb\",\"hot_spare_tb\",\"l3_enabled\"],\"complete\":true},\"sourceEvidence\":{\"ref\":\"art_YoZBsCJmrVXFfcwnDAa03v\",\"kind\":\"evidence/source-provenance\"}},\"quotas\":{\"ref\":\"art_h2QC9hT8BjfZKWYMzwHOFy\",\"kind\":\"dataset/rows\",\"rows\":3,\"sourceField\":\"quotas\",\"schema\":{\"basis\":\"first-row\",\"columns\":[\"cluster\",\"path\",\"quota_type\",\"used_inodes\",\"used_logical_tb\",\"hard_tb\",\"used_pct_of_hard\",\"hard_exceeded\",\"soft_exceeded\",\"bytes_per_inode\"],\"complete\":true},\"sourceEvidence\":{\"ref\":\"art_XwijXNvKDxaRShVPhonC71\",\"kind\":\"evidence/source-provenance\"}}}}}",
+  "be-after": "{\"af_coverage\":{\"note\":\"This result covers only what `checked` lists. `not_checked` is ground the call this result answers did not look at, and `cannot_cover` is ground this tool can never see — a clean result here is NOT evidence about either, and no retry changes `cannot_cover`. Carry these limits into any answer you build on this result.\",\"checked\":[{\"what\":\"ps_nodepool: per-pool capacity with the hot spare subtracted\"},{\"what\":\"ps_quota: per-path usage, thresholds, exceeded flags, bytes-per-file\"}],\"cannot_cover\":[{\"what\":\"directory entry counts per DIRECTORY\",\"why\":\"ps_quota reports inodes per quota PATH, not per directory. A single hot directory inside a share is invisible\"}]},\"result\":{\"clusters_matched\":[\"CLUSTER-A01\"],\"capacity_by_cluster\":{\"CLUSTER-A01\":{\"pools\":2,\"total_tb\":5402.9,\"used_tb\":3200.1,\"used_pct\":59.2,\"usable_tb\":1526.3,\"hot_spare_tb\":108.1}},\"units\":\"TB = 10^12 bytes (decimal). used_pct = used_tb / total_tb x 100. usable_tb = avail_bytes minus virtual_hot_spare_bytes — the space that can still be written. hot_spare_tb is reserved, never free.\",\"quotas_shown\":3,\"quotas_total\":3,\"quotas_complete\":true,\"quotas_over_threshold\":0,\"data_window\":{\"window\":\"-26h\",\"range_end\":null},\"note\":\"capacity_by_cluster answers 'how full is the cluster': state its figures as given, never a sum or a percentage worked out from the pool rows. usable_tb subtracts the virtual hot spare — avail_bytes alone overstated one pool by 36x. A quota full and a filesystem full present the same symptoms; these are the raw numbers that tell them apart. bytes_per_inode separates workloads (85 MB/file vs 254 KB/file on this estate). Inode count does NOT track slowness — never report it as a cause.\",\"dataset\":{\"ref\":\"art_eb6sxe68tJFFExZtB31n8l\",\"kind\":\"dataset/rows\",\"rows\":2,\"sourceField\":\"rows\",\"schema\":{\"basis\":\"first-row\",\"columns\":[\"cluster\",\"pool\",\"lnns\",\"total_tb\",\"used_tb\",\"used_pct\",\"usable_tb\",\"hot_spare_tb\",\"l3_enabled\"],\"complete\":true},\"sourceEvidence\":{\"ref\":\"art_34ajZ9EPDDlVQhRLm4CxDQ\",\"kind\":\"evidence/source-provenance\"}},\"datasets\":{\"rows\":{\"ref\":\"art_eb6sxe68tJFFExZtB31n8l\",\"kind\":\"dataset/rows\",\"rows\":2,\"sourceField\":\"rows\",\"schema\":{\"basis\":\"first-row\",\"columns\":[\"cluster\",\"pool\",\"lnns\",\"total_tb\",\"used_tb\",\"used_pct\",\"usable_tb\",\"hot_spare_tb\",\"l3_enabled\"],\"complete\":true},\"sourceEvidence\":{\"ref\":\"art_34ajZ9EPDDlVQhRLm4CxDQ\",\"kind\":\"evidence/source-provenance\"}},\"quotas\":{\"ref\":\"art_pQk9OReksZ2BVgJQvYVdFI\",\"kind\":\"dataset/rows\",\"rows\":3,\"sourceField\":\"quotas\",\"schema\":{\"basis\":\"first-row\",\"columns\":[\"cluster\",\"path\",\"quota_type\",\"used_inodes\",\"used_logical_tb\",\"hard_tb\",\"used_pct_of_hard\",\"hard_exceeded\",\"soft_exceeded\",\"bytes_per_inode\"],\"complete\":true},\"sourceEvidence\":{\"ref\":\"art_x3OV3qFvMVsBioYJcyHWTE\",\"kind\":\"evidence/source-provenance\"}}}}}",
+  "classic-before": "{\"af_coverage\":{\"note\":\"This result covers only what `checked` lists. `not_checked` is ground the call this result answers did not look at, and `cannot_cover` is ground this tool can never see — a clean result here is NOT evidence about either, and no retry changes `cannot_cover`. Carry these limits into any answer you build on this result.\",\"checked\":[{\"what\":\"ps_nodepool: per-pool capacity with the hot spare subtracted\"},{\"what\":\"ps_quota: per-path usage, thresholds, exceeded flags, bytes-per-file\"}],\"cannot_cover\":[{\"what\":\"directory entry counts per DIRECTORY\",\"why\":\"ps_quota reports inodes per quota PATH, not per directory. A single hot directory inside a share is invisible\"}]},\"result\":{\"clusters_matched\":[\"CLUSTER-A01\"],\"rows\":[{\"cluster\":\"CLUSTER-A01\",\"pool\":\"f710_pool\",\"lnns\":\"1,2,3,4\",\"total_tb\":2429,\"used_tb\":1484.1,\"used_pct\":61.1,\"usable_tb\":435.5,\"hot_spare_tb\":48.6,\"l3_enabled\":false},{\"cluster\":\"CLUSTER-A01\",\"pool\":\"h700_pool\",\"lnns\":\"1,2,3,4\",\"total_tb\":2973.9,\"used_tb\":1715.9,\"used_pct\":57.7,\"usable_tb\":1090.8,\"hot_spare_tb\":59.5,\"l3_enabled\":false}],\"quotas\":[{\"cluster\":\"CLUSTER-A01\",\"path\":\"/ifs/CLUSTER-A01/imaging/repo\",\"quota_type\":\"directory\",\"used_inodes\":3100000,\"used_logical_tb\":263.5,\"hard_tb\":300,\"used_pct_of_hard\":87.8,\"hard_exceeded\":false,\"soft_exceeded\":false,\"bytes_per_inode\":85000000},{\"cluster\":\"CLUSTER-A01\",\"path\":\"/ifs/CLUSTER-A01/research\",\"quota_type\":\"directory\",\"used_inodes\":41800000,\"used_logical_tb\":118.2,\"hard_tb\":150,\"used_pct_of_hard\":78.8,\"hard_exceeded\":false,\"soft_exceeded\":false,\"bytes_per_inode\":2827751},{\"cluster\":\"CLUSTER-A01\",\"path\":\"/ifs/CLUSTER-A01/archive\",\"quota_type\":\"directory\",\"used_inodes\":7250000000,\"used_logical_tb\":1841.5,\"hard_tb\":null,\"used_pct_of_hard\":null,\"hard_exceeded\":false,\"soft_exceeded\":false,\"bytes_per_inode\":254000}],\"quotas_shown\":3,\"quotas_total\":3,\"quotas_complete\":true,\"quotas_over_threshold\":0,\"rows_table\":\"| Cluster | Pool | Total TB | Used % | Usable TB (after hot spare) | Hot spare TB | L3 |\\n|---|---|---|---|---|---|---|\\n| CLUSTER-A01 | f710_pool | 2429.0 | 61.1 | 435.5 | 48.6 | off |\\n| CLUSTER-A01 | h700_pool | 2973.9 | 57.7 | 1090.8 | 59.5 | off |\",\"quotas_table\":\"| Cluster | Path | Inodes | Logical TB | Hard TB | Used % | Bytes/file | Over? |\\n|---|---|---|---|---|---|---|---|\\n| CLUSTER-A01 | /ifs/CLUSTER-A01/imaging/repo | 3100000 | 263.50 | 300.00 | 87.8 | 85000000 |  |\\n| CLUSTER-A01 | /ifs/CLUSTER-A01/research | 41800000 | 118.20 | 150.00 | 78.8 | 2827751 |  |\\n| CLUSTER-A01 | /ifs/CLUSTER-A01/archive | 7250000000 | 1841.50 | — | — | 254000 |  |\",\"data_window\":{\"window\":\"-26h\",\"range_end\":null},\"note\":\"usable_tb subtracts the virtual hot spare — avail_bytes alone overstated one pool by 36x. A quota full and a filesystem full present the same symptoms; these are the raw numbers that tell them apart. bytes_per_inode separates workloads (85 MB/file vs 254 KB/file on this estate). Inode count does NOT track slowness — never report it as a cause.\",\"render_note\":\"Output rows_table verbatim; quotas_table when quotas are the question or anything is over a threshold.\",\"dataset\":{\"ref\":\"art_PUHChBYj06ktS8RPLww65P\",\"kind\":\"dataset/rows\",\"rows\":2,\"sourceField\":\"rows\",\"schema\":{\"basis\":\"first-row\",\"columns\":[\"cluster\",\"pool\",\"lnns\",\"total_tb\",\"used_tb\",\"used_pct\",\"usable_tb\",\"hot_spare_tb\",\"l3_enabled\"],\"complete\":true},\"sourceEvidence\":{\"ref\":\"art_FA0yFMCDqKSLHNDeYAw5t9\",\"kind\":\"evidence/source-provenance\"}},\"datasets\":{\"rows\":{\"ref\":\"art_PUHChBYj06ktS8RPLww65P\",\"kind\":\"dataset/rows\",\"rows\":2,\"sourceField\":\"rows\",\"schema\":{\"basis\":\"first-row\",\"columns\":[\"cluster\",\"pool\",\"lnns\",\"total_tb\",\"used_tb\",\"used_pct\",\"usable_tb\",\"hot_spare_tb\",\"l3_enabled\"],\"complete\":true},\"sourceEvidence\":{\"ref\":\"art_FA0yFMCDqKSLHNDeYAw5t9\",\"kind\":\"evidence/source-provenance\"}},\"quotas\":{\"ref\":\"art_C086Q4D9jCVY3uW7HF3qvV\",\"kind\":\"dataset/rows\",\"rows\":3,\"sourceField\":\"quotas\",\"schema\":{\"basis\":\"first-row\",\"columns\":[\"cluster\",\"path\",\"quota_type\",\"used_inodes\",\"used_logical_tb\",\"hard_tb\",\"used_pct_of_hard\",\"hard_exceeded\",\"soft_exceeded\",\"bytes_per_inode\"],\"complete\":true},\"sourceEvidence\":{\"ref\":\"art_9nWrv3iMIQT3NReaZnzseG\",\"kind\":\"evidence/source-provenance\"}}}}}",
+  "classic-after": "{\"af_coverage\":{\"note\":\"This result covers only what `checked` lists. `not_checked` is ground the call this result answers did not look at, and `cannot_cover` is ground this tool can never see — a clean result here is NOT evidence about either, and no retry changes `cannot_cover`. Carry these limits into any answer you build on this result.\",\"checked\":[{\"what\":\"ps_nodepool: per-pool capacity with the hot spare subtracted\"},{\"what\":\"ps_quota: per-path usage, thresholds, exceeded flags, bytes-per-file\"}],\"cannot_cover\":[{\"what\":\"directory entry counts per DIRECTORY\",\"why\":\"ps_quota reports inodes per quota PATH, not per directory. A single hot directory inside a share is invisible\"}]},\"result\":{\"clusters_matched\":[\"CLUSTER-A01\"],\"capacity_by_cluster\":{\"CLUSTER-A01\":{\"pools\":2,\"total_tb\":5402.9,\"used_tb\":3200.1,\"used_pct\":59.2,\"usable_tb\":1526.3,\"hot_spare_tb\":108.1}},\"units\":\"TB = 10^12 bytes (decimal). used_pct = used_tb / total_tb x 100. usable_tb = avail_bytes minus virtual_hot_spare_bytes — the space that can still be written. hot_spare_tb is reserved, never free.\",\"rows\":[{\"cluster\":\"CLUSTER-A01\",\"pool\":\"f710_pool\",\"lnns\":\"1,2,3,4\",\"total_tb\":2429,\"used_tb\":1484.1,\"used_pct\":61.1,\"usable_tb\":435.5,\"hot_spare_tb\":48.6,\"l3_enabled\":false},{\"cluster\":\"CLUSTER-A01\",\"pool\":\"h700_pool\",\"lnns\":\"1,2,3,4\",\"total_tb\":2973.9,\"used_tb\":1715.9,\"used_pct\":57.7,\"usable_tb\":1090.8,\"hot_spare_tb\":59.5,\"l3_enabled\":false}],\"quotas\":[{\"cluster\":\"CLUSTER-A01\",\"path\":\"/ifs/CLUSTER-A01/imaging/repo\",\"quota_type\":\"directory\",\"used_inodes\":3100000,\"used_logical_tb\":263.5,\"hard_tb\":300,\"used_pct_of_hard\":87.8,\"hard_exceeded\":false,\"soft_exceeded\":false,\"bytes_per_inode\":85000000},{\"cluster\":\"CLUSTER-A01\",\"path\":\"/ifs/CLUSTER-A01/research\",\"quota_type\":\"directory\",\"used_inodes\":41800000,\"used_logical_tb\":118.2,\"hard_tb\":150,\"used_pct_of_hard\":78.8,\"hard_exceeded\":false,\"soft_exceeded\":false,\"bytes_per_inode\":2827751},{\"cluster\":\"CLUSTER-A01\",\"path\":\"/ifs/CLUSTER-A01/archive\",\"quota_type\":\"directory\",\"used_inodes\":7250000000,\"used_logical_tb\":1841.5,\"hard_tb\":null,\"used_pct_of_hard\":null,\"hard_exceeded\":false,\"soft_exceeded\":false,\"bytes_per_inode\":254000}],\"quotas_shown\":3,\"quotas_total\":3,\"quotas_complete\":true,\"quotas_over_threshold\":0,\"rows_table\":\"| Cluster | Pool | Total TB | Used % | Usable TB (after hot spare) | Hot spare TB | L3 |\\n|---|---|---|---|---|---|---|\\n| CLUSTER-A01 | f710_pool | 2429.0 | 61.1 | 435.5 | 48.6 | off |\\n| CLUSTER-A01 | h700_pool | 2973.9 | 57.7 | 1090.8 | 59.5 | off |\",\"quotas_table\":\"| Cluster | Path | Inodes | Logical TB | Hard TB | Used % | Bytes/file | Over? |\\n|---|---|---|---|---|---|---|---|\\n| CLUSTER-A01 | /ifs/CLUSTER-A01/imaging/repo | 3100000 | 263.50 | 300.00 | 87.8 | 85000000 |  |\\n| CLUSTER-A01 | /ifs/CLUSTER-A01/research | 41800000 | 118.20 | 150.00 | 78.8 | 2827751 |  |\\n| CLUSTER-A01 | /ifs/CLUSTER-A01/archive | 7250000000 | 1841.50 | — | — | 254000 |  |\",\"data_window\":{\"window\":\"-26h\",\"range_end\":null},\"note\":\"capacity_by_cluster answers 'how full is the cluster': state its figures as given, never a sum or a percentage worked out from the pool rows. usable_tb subtracts the virtual hot spare — avail_bytes alone overstated one pool by 36x. A quota full and a filesystem full present the same symptoms; these are the raw numbers that tell them apart. bytes_per_inode separates workloads (85 MB/file vs 254 KB/file on this estate). Inode count does NOT track slowness — never report it as a cause.\",\"render_note\":\"Output rows_table verbatim; quotas_table when quotas are the question or anything is over a threshold.\",\"dataset\":{\"ref\":\"art_12CH1lM1t1i7173JfdMvRA\",\"kind\":\"dataset/rows\",\"rows\":2,\"sourceField\":\"rows\",\"schema\":{\"basis\":\"first-row\",\"columns\":[\"cluster\",\"pool\",\"lnns\",\"total_tb\",\"used_tb\",\"used_pct\",\"usable_tb\",\"hot_spare_tb\",\"l3_enabled\"],\"complete\":true},\"sourceEvidence\":{\"ref\":\"art_HA02nSWjN0k398Yxd4NyUT\",\"kind\":\"evidence/source-provenance\"}},\"datasets\":{\"rows\":{\"ref\":\"art_12CH1lM1t1i7173JfdMvRA\",\"kind\":\"dataset/rows\",\"rows\":2,\"sourceField\":\"rows\",\"schema\":{\"basis\":\"first-row\",\"columns\":[\"cluster\",\"pool\",\"lnns\",\"total_tb\",\"used_tb\",\"used_pct\",\"usable_tb\",\"hot_spare_tb\",\"l3_enabled\"],\"complete\":true},\"sourceEvidence\":{\"ref\":\"art_HA02nSWjN0k398Yxd4NyUT\",\"kind\":\"evidence/source-provenance\"}},\"quotas\":{\"ref\":\"art_eXkzSg4CtK0fN2mnkTFPZO\",\"kind\":\"dataset/rows\",\"rows\":3,\"sourceField\":\"quotas\",\"schema\":{\"basis\":\"first-row\",\"columns\":[\"cluster\",\"path\",\"quota_type\",\"used_inodes\",\"used_logical_tb\",\"hard_tb\",\"used_pct_of_hard\",\"hard_exceeded\",\"soft_exceeded\",\"bytes_per_inode\"],\"complete\":true},\"sourceEvidence\":{\"ref\":\"art_4V2QWIcxaqAnQyv6Z3UMj1\",\"kind\":\"evidence/source-provenance\"}}}}}"
+ },
+ "descriptions": {
+  "before": "PowerScale capacity — per hardware pool: total, used %, and usable TB computed AFTER the virtual hot spare reservation (avail_bytes alone overstates free space, 36x on one pool here), plus per-path QUOTA pressure: used vs hard/soft thresholds, exceeded flags, and bytes-per-file (logical bytes / inodes — separates a large-file workload from a small-file one when nothing else does). A quota full and a filesystem full present identical symptoms; this returns the raw numbers that tell them apart. Fleet by default, cluster= narrows. Use for 'how full', 'usable space', 'quota status', 'which quotas are over'.",
+  "after": "PowerScale capacity — per cluster (capacity_by_cluster: total, used, used %, usable TB, the figures for 'how full is it') and per hardware pool: total, used %, and usable TB computed AFTER the virtual hot spare reservation (avail_bytes alone overstates free space, 36x on one pool here), plus per-path QUOTA pressure: used vs hard/soft thresholds, exceeded flags, and bytes-per-file (logical bytes / inodes — separates a large-file workload from a small-file one when nothing else does). A quota full and a filesystem full present identical symptoms; this returns the raw numbers that tell them apart. Fleet by default, cluster= narrows. Use for 'how full', 'usable space', 'quota status', 'which quotas are over'."
+ },
+ "inputSchema": {
+  "type": "object",
+  "properties": {
+   "cluster": {
+    "type": "string",
+    "pattern": "^[A-Za-z0-9_.:-]+$",
+    "description": "cluster name or any fragment — omit for the fleet"
+   }
+  },
+  "required": []
+ },
+ "record": {
+  "af_coverage": {
+   "note": "This result covers only what `checked` lists. `not_checked` is ground the call this result answers did not look at, and `cannot_cover` is ground this tool can never see — a clean result here is NOT evidence about either, and no retry changes `cannot_cover`. Carry these limits into any answer you build on this result.",
+   "checked": [
+    {
+     "what": "ps_nodepool: per-pool capacity with the hot spare subtracted"
+    },
+    {
+     "what": "ps_quota: per-path usage, thresholds, exceeded flags, bytes-per-file"
+    }
+   ],
+   "cannot_cover": [
+    {
+     "what": "directory entry counts per DIRECTORY",
+     "why": "ps_quota reports inodes per quota PATH, not per directory. A single hot directory inside a share is invisible",
+     "kind": "scope"
+    }
+   ]
+  },
+  "result": {
+   "clusters_matched": [
+    "CLUSTER-A01"
+   ],
+   "capacity_by_cluster": {
+    "CLUSTER-A01": {
+     "pools": 2,
+     "total_tb": 5402.9,
+     "used_tb": 3200.1,
+     "used_pct": 59.2,
+     "usable_tb": 1526.3,
+     "hot_spare_tb": 108.1
+    }
+   },
+   "units": "TB = 10^12 bytes (decimal). used_pct = used_tb / total_tb x 100. usable_tb = avail_bytes minus virtual_hot_spare_bytes — the space that can still be written. hot_spare_tb is reserved, never free.",
+   "rows": [
+    {
+     "cluster": "CLUSTER-A01",
+     "pool": "f710_pool",
+     "lnns": "1,2,3,4",
+     "total_tb": 2429.0,
+     "used_tb": 1484.1,
+     "used_pct": 61.1,
+     "usable_tb": 435.5,
+     "hot_spare_tb": 48.6,
+     "l3_enabled": false
+    },
+    {
+     "cluster": "CLUSTER-A01",
+     "pool": "h700_pool",
+     "lnns": "1,2,3,4",
+     "total_tb": 2973.9,
+     "used_tb": 1715.9,
+     "used_pct": 57.7,
+     "usable_tb": 1090.8,
+     "hot_spare_tb": 59.5,
+     "l3_enabled": false
+    }
+   ],
+   "quotas": [
+    {
+     "cluster": "CLUSTER-A01",
+     "path": "/ifs/CLUSTER-A01/imaging/repo",
+     "quota_type": "directory",
+     "used_inodes": 3100000,
+     "used_logical_tb": 263.5,
+     "hard_tb": 300.0,
+     "used_pct_of_hard": 87.8,
+     "hard_exceeded": false,
+     "soft_exceeded": false,
+     "bytes_per_inode": 85000000
+    },
+    {
+     "cluster": "CLUSTER-A01",
+     "path": "/ifs/CLUSTER-A01/research",
+     "quota_type": "directory",
+     "used_inodes": 41800000,
+     "used_logical_tb": 118.2,
+     "hard_tb": 150.0,
+     "used_pct_of_hard": 78.8,
+     "hard_exceeded": false,
+     "soft_exceeded": false,
+     "bytes_per_inode": 2827751
+    },
+    {
+     "cluster": "CLUSTER-A01",
+     "path": "/ifs/CLUSTER-A01/archive",
+     "quota_type": "directory",
+     "used_inodes": 7250000000,
+     "used_logical_tb": 1841.5,
+     "hard_tb": null,
+     "used_pct_of_hard": null,
+     "hard_exceeded": false,
+     "soft_exceeded": false,
+     "bytes_per_inode": 254000
+    }
+   ],
+   "quotas_shown": 3,
+   "quotas_total": 3,
+   "quotas_complete": true,
+   "quotas_over_threshold": 0,
+   "rows_table": "| Cluster | Pool | Total TB | Used % | Usable TB (after hot spare) | Hot spare TB | L3 |\n|---|---|---|---|---|---|---|\n| CLUSTER-A01 | f710_pool | 2429.0 | 61.1 | 435.5 | 48.6 | off |\n| CLUSTER-A01 | h700_pool | 2973.9 | 57.7 | 1090.8 | 59.5 | off |",
+   "quotas_table": "| Cluster | Path | Inodes | Logical TB | Hard TB | Used % | Bytes/file | Over? |\n|---|---|---|---|---|---|---|---|\n| CLUSTER-A01 | /ifs/CLUSTER-A01/imaging/repo | 3100000 | 263.50 | 300.00 | 87.8 | 85000000 |  |\n| CLUSTER-A01 | /ifs/CLUSTER-A01/research | 41800000 | 118.20 | 150.00 | 78.8 | 2827751 |  |\n| CLUSTER-A01 | /ifs/CLUSTER-A01/archive | 7250000000 | 1841.50 | — | — | 254000 |  |",
+   "data_window": {
+    "window": "-26h",
+    "range_end": null
+   },
+   "note": "capacity_by_cluster answers 'how full is the cluster': state its figures as given, never a sum or a percentage worked out from the pool rows. usable_tb subtracts the virtual hot spare — avail_bytes alone overstated one pool by 36x. A quota full and a filesystem full present the same symptoms; these are the raw numbers that tell them apart. bytes_per_inode separates workloads (85 MB/file vs 254 KB/file on this estate). Inode count does NOT track slowness — never report it as a cause.",
+   "render_note": "Output rows_table verbatim; quotas_table when quotas are the question or anything is over a threshold."
+  }
+ }
+}

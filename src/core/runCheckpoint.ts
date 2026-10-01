@@ -80,7 +80,11 @@ import { MAX_EVIDENCE_RECOVERY_CHARS } from './agent/evidence/recovery.js';
 export interface EvidenceRecoveryCheckpoint {
   readonly revisionSpent: true;
   /** Present only when the request carrying this instruction did not complete. */
-  readonly pending?: { readonly instruction: string };
+  readonly pending?: {
+    readonly instruction: string;
+    /** The figures dial's late line, when the pending revision has one. */
+    readonly conclusion?: string;
+  };
 }
 
 /**
@@ -803,7 +807,11 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
         (pending === null ||
           typeof pending !== 'object' ||
           Array.isArray(pending) ||
-          Object.keys(pending).some((key) => key !== 'instruction') ||
+          Object.keys(pending).some((key) => key !== 'instruction' && key !== 'conclusion') ||
+          (pending.conclusion !== undefined &&
+            (typeof pending.conclusion !== 'string' ||
+              pending.conclusion.length === 0 ||
+              pending.conclusion.length > MAX_EVIDENCE_RECOVERY_CHARS)) ||
           typeof pending.instruction !== 'string' ||
           pending.instruction.length === 0 ||
           pending.instruction.length > MAX_EVIDENCE_RECOVERY_CHARS))

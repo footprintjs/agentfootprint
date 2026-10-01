@@ -207,6 +207,13 @@ const SITES: Readonly<Record<string, readonly Site[]>> = {
         "`scope.history` — the library's conclusion about the person's time words, re-read " +
         'fresh by every later call.',
     },
+    {
+      cls: 'never-in-history',
+      why:
+        "the evidence gate's late line (the figures dial): the committed recovery carrier's " +
+        '`conclusion`, appended LAST to `wireMessages` on the one request that serves the ' +
+        'revision instruction, never to `scope.history`.',
+    },
   ],
   'src/lib/time-travel/servedView.ts': [
     {
@@ -222,6 +229,12 @@ const SITES: Readonly<Record<string, readonly Site[]>> = {
       why:
         "not a producer either: the REBUILD of the time layer's late line (step T6b), read " +
         'from the committed `timeLine` key onto a `ServedView` — a reading of a finished run.',
+    },
+    {
+      cls: 'never-in-history',
+      why:
+        "not a producer either: the REBUILD of the evidence gate's late line, read from the " +
+        'committed `evidenceRecovery` carrier onto a `ServedView` — a reading of a finished run.',
     },
   ],
   'src/core/agent/stages/reliabilityExecution.ts': [

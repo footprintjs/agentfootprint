@@ -96,6 +96,7 @@ export function buildEvidenceRecheckStage(
       },
       gate.recoveryInstruction,
       match,
+      pending.conclusion,
     );
     scope.evidenceRecoveryUsed = false;
     const newHistory: LLMMessage[] = [...(scope.history as readonly LLMMessage[])];

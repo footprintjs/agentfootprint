@@ -2716,6 +2716,23 @@ export interface AgentEvidenceCheckedPayload {
   readonly stagedRefs?: readonly { readonly ref: string; readonly kind: string }[];
   /** The spender tools the correction named, beside {@link stagedRefs}. */
   readonly spenderTools?: readonly string[];
+  /**
+   * Under the figures dial (`namesAndNumbersFromEvidence({ figures: true })`),
+   * on `'grounded'`, `'flagged'` and `'refused'`: the numbers no tool result
+   * carried that ARE a declared derivation of the numbers the results carry —
+   * each with its `derivation` (`rounded`, `unit-scale`, `column-sum`,
+   * `column-ratio`, `column-difference`, `complement`) and `from` (the
+   * operands, in the results' own keys). Not read and not invented: the model
+   * computed them. Present (possibly `[]`) exactly when the dial is on, so its
+   * presence says the derivation check ran; the `unsupported` numbers beside
+   * it matched no value AND no derivation. Sliced like `unsupported`.
+   */
+  readonly computed?: readonly {
+    readonly value: string;
+    readonly shape: string;
+    readonly derivation: string;
+    readonly from: string;
+  }[];
 }
 
 /**

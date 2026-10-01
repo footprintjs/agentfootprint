@@ -162,7 +162,10 @@ import {
   stripFrameworkFields,
 } from '../../core/agent/composeRequest.js';
 import { findStagedRefs, stagedRefsNudgeLine } from '../../core/agent/stagedRefs.js';
-import { evidenceRecoveryPiece } from '../../core/agent/evidence/recovery.js';
+import {
+  evidenceConclusionLine,
+  evidenceRecoveryPiece,
+} from '../../core/agent/evidence/recovery.js';
 import {
   collapseJudged,
   findingsLedgerPiece,
@@ -193,7 +196,8 @@ export interface ServedPiece {
 export interface ServedRequestOnly {
   readonly role: ContextRole;
   readonly text: string;
-  /** Which library mechanism composed it — `'staged-refs-nudge'` or `'time-window-line'` (step T6b). */
+  /** Which library mechanism composed it — `'staged-refs-nudge'`, `'time-window-line'` (step T6b)
+   *  or `'evidence-conclusion'` (the evidence gate's figures dial). */
   readonly reason: string;
 }
 
@@ -1196,6 +1200,16 @@ function viewOf(location: EpochLocation): ServedView {
     timeLine.iteration === readAtCall(location, 'iteration')
   ) {
     requestOnly.push({ role: 'user', text: timeLine.text, reason: 'time-window-line' });
+  }
+  // The evidence conclusion (the figures dial) — the committed carrier's late
+  // line, on the iteration its instruction is served (`callLLM` · the same test).
+  const conclusion = evidenceConclusionLine(
+    readAtCall(location, 'evidenceRecovery') as Parameters<typeof evidenceConclusionLine>[0],
+    readAtCall(location, 'evidenceRecoveryUsed') as boolean | undefined,
+    iteration,
+  );
+  if (conclusion !== undefined) {
+    requestOnly.push({ role: 'user', text: conclusion, reason: 'evidence-conclusion' });
   }
 
   // ── what this view cannot prove ────────────────────────────────────────
