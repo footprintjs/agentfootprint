@@ -978,7 +978,8 @@ export function sentFormOf(
   forms: readonly PeriodForm[],
   args: Readonly<Record<string, unknown>>,
 ): number | undefined {
-  const given = (form: PeriodForm) => windowArgumentsOf(form).map((a) => !isMissing(args, a.argument));
+  const given = (form: PeriodForm) =>
+    windowArgumentsOf(form).map((a) => !isMissing(args, a.argument));
   const whole = forms.findIndex((form) => given(form).every(Boolean));
   if (whole >= 0) return whole;
   const part = forms.findIndex((form) => given(form).some(Boolean));

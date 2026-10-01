@@ -35,7 +35,11 @@ function scripted(script: readonly Reply[]) {
     complete: async (_req: LLMRequest): Promise<LLMResponse> => {
       const reply = script[Math.min(i, script.length - 1)] ?? { content: 'done' };
       i += 1;
-      return { content: reply.content, toolCalls: reply.toolCalls ?? [], usage: { input: 0, output: 0 } };
+      return {
+        content: reply.content,
+        toolCalls: reply.toolCalls ?? [],
+        usage: { input: 0, output: 0 },
+      };
     },
   };
 }
@@ -105,7 +109,10 @@ async function runOnce(tool: Tool, args: object, time: boolean) {
     model: 'm',
   }).tool(tool);
   const agent = (time ? b.time({ zone: LA }) : b).build();
-  const out = await agent.run({ message: 'what was slow?', ...(time && { time: { now: NOW } }) } as never);
+  const out = await agent.run({
+    message: 'what was slow?',
+    ...(time && { time: { now: NOW } }),
+  } as never);
   return { agent, out };
 }
 
@@ -124,7 +131,9 @@ describe('the period left out entirely: ONE window is owed', () => {
       expect(isInputPause(out)).toBe(false);
       expect(ran).toEqual([{ cluster: 'c', window: '1h' }]);
       // The untaken bounds are not on the record: they were never owed.
-      expect(rowFacts(agent)).toEqual([{ argument: 'window', source: 'default', asked: undefined }]);
+      expect(rowFacts(agent)).toEqual([
+        { argument: 'window', source: 'default', asked: undefined },
+      ]);
     });
 
     it(`the ASSUMED form is the window wherever it is declared — bounds first — ${under}`, async () => {
@@ -148,7 +157,9 @@ describe('the period left out entirely: ONE window is owed', () => {
       if (!isInputPause(out)) throw new Error(`expected the ask, got ${JSON.stringify(out)}`);
       const fields = out.awaitingInput.fields as readonly { id: string; description?: string }[];
       expect(fields.map((f) => f.description)).toEqual(['How far back?']);
-      expect(rowFacts(agent)).toEqual([{ argument: 'window', source: undefined, asked: 'missing' }]);
+      expect(rowFacts(agent)).toEqual([
+        { argument: 'window', source: undefined, asked: 'missing' },
+      ]);
       const done = await agent.resume(out.checkpoint as never, {
         requestId: out.awaitingInput.requestId,
         values: { [fields[0]!.id]: '6h' },
@@ -195,7 +206,10 @@ describe('byte identity — a one-form period and a plain ruled tool ask as befo
     const tool = defineTool({
       name: 'client_activity',
       description: 'Client operations for one cluster.',
-      inputSchema: { type: 'object', properties: { cluster: { type: 'string' }, node: { type: 'string' } } },
+      inputSchema: {
+        type: 'object',
+        properties: { cluster: { type: 'string' }, node: { type: 'string' } },
+      },
       askOrAssume: { node: { ask: 'Which node?' } },
       execute: async () => ({ rows: [] }),
     });
@@ -240,12 +254,15 @@ describe('inner dispatch (ctx.tools) owes the window once, and names it once', (
 
   it('one form whole runs; no window, or half of one, is refused naming ONE window', async () => {
     const ran: Record<string, unknown>[] = [];
-    const { refused, rows } = await inner(activity(ran, ASSUMED_LOOKBACK, [LOOKBACK, BOUNDS_FORM]), [
-      { cluster: 'c', window: '6h' },
-      { cluster: 'c', ...BOUNDS },
-      { cluster: 'c' },
-      { cluster: 'c', start: BOUNDS.start },
-    ]);
+    const { refused, rows } = await inner(
+      activity(ran, ASSUMED_LOOKBACK, [LOOKBACK, BOUNDS_FORM]),
+      [
+        { cluster: 'c', window: '6h' },
+        { cluster: 'c', ...BOUNDS },
+        { cluster: 'c' },
+        { cluster: 'c', start: BOUNDS.start },
+      ],
+    );
     expect(ran).toEqual([
       { cluster: 'c', window: '6h' },
       { cluster: 'c', ...BOUNDS },

@@ -603,8 +603,7 @@ function windowUntakenOf(
   if (rules === undefined || forms.length < 2) return new Set();
   const sent = sentFormOf(forms, call.args);
   const taken =
-    sent ??
-    owedFormOf(forms, rules, (a) => keptValue(toolOf, kept, toolName, a) !== undefined);
+    sent ?? owedFormOf(forms, rules, (a) => keptValue(toolOf, kept, toolName, a) !== undefined);
   return untakenBesides(forms, taken);
 }
 

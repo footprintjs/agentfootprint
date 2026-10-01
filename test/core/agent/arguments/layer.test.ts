@@ -546,7 +546,10 @@ describe('assume — fail closed, and the dispatch re-read', () => {
       },
     });
     const refused: string[] = [];
-    const attempt = async (ctx: { tools?: { call: (n: string, a: object) => Promise<unknown> } }, args: object) => {
+    const attempt = async (
+      ctx: { tools?: { call: (n: string, a: object) => Promise<unknown> } },
+      args: object,
+    ) => {
       try {
         await ctx.tools!.call('client_activity', args);
       } catch (error) {

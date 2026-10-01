@@ -172,7 +172,11 @@ function refuseUnaccountedRuledArguments(name: string, tool: Tool, args: unknown
 /** Every form's window arguments (the zone aside — a zone is owed as itself). */
 function windowArgumentNames(forms: readonly PeriodForm[]): ReadonlySet<string> {
   return new Set(
-    forms.flatMap((f) => formArguments(f).filter((a) => a.role !== 'zone').map((a) => a.argument)),
+    forms.flatMap((f) =>
+      formArguments(f)
+        .filter((a) => a.role !== 'zone')
+        .map((a) => a.argument),
+    ),
   );
 }
 
