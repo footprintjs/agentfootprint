@@ -2685,6 +2685,29 @@ export interface AgentEvidenceCheckedPayload {
    *  a partial corpus can call a grounded value fabricated. */
   readonly evidenceTruncated?: boolean;
   /**
+   * WHICH RESULTS OF THIS TURN THE ANSWER'S VALUES WERE READ FROM — on the
+   * verdicts about an answer that ships (`'grounded'`, `'flagged'`,
+   * `'refused'`), never on `'revision-asked'` (a draft). One entry per
+   * `role: 'tool'` result of this turn that carried at least one of the
+   * answer's names and numbers: `values` = how many, `only` = how many of
+   * those no other result of this turn carried. A result of this turn that
+   * is NOT listed carried none of them — a fact about tokens, not meaning:
+   * read it as "the answer cites nothing from it", never "unused" (an answer
+   * that states no value can still rest on a result). `[]` is a fact too:
+   * no result of this turn carried any of them (an answer drawn from an
+   * earlier turn, or one that states no value — `lookedUp` tells which).
+   *
+   * ABSENT when the list cannot be whole: the evidence index hit its ceiling,
+   * or one value was carried by more results than the index keeps. Absent on
+   * recordings made before the field existed. Identities and counts only,
+   * never a value (`evidence/answerCarriers.ts`).
+   */
+  readonly carriedBy?: readonly {
+    readonly toolCallId: string;
+    readonly values: number;
+    readonly only: number;
+  }[];
+  /**
    * On `action: 'revision-asked'` only, and only when the turn held placed
    * artifact tickets a served `wants` tool can spend: the refs the
    * correction NAMED as the route to a grounded number. Absent otherwise —

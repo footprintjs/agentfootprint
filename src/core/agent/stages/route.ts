@@ -45,6 +45,7 @@ import {
   type StepPlanFor,
 } from '../../../lib/injection-engine/skillSteps.js';
 import { checkAnswer, evidenceRefusalSentence, MAX_REPORTED_VALUES } from '../evidence/gate.js';
+import { answerCarriersOf } from '../evidence/answerCarriers.js';
 import { derivedFormsOf, evidenceFromHistory, exemptFromRun } from '../evidence/evidenceIndex.js';
 import { timeDerivedRow } from '../../time/rows.js';
 import type { EvidenceVerdict, ResolvedEvidenceGate } from '../evidence/types.js';
@@ -811,6 +812,11 @@ function judgeEvidence(
     }
   }
 
+  // Which of this turn's results the answer's values were read from — the
+  // whole list or none (`evidence/answerCarriers.ts`). Rides the verdicts of
+  // an answer that ships; a draft about to be revised says nothing.
+  const carriedBy = answerCarriersOf(verdict.grounded, evidence);
+
   if (verdict.unsupported.length === 0) {
     fileTimeDerived(scope, verdict.derived, iteration);
     typedEmit(scope, 'agentfootprint.agent.evidence_checked', {
@@ -821,6 +827,7 @@ function judgeEvidence(
       unsupported: [],
       action: 'grounded',
       afterRevision,
+      ...(carriedBy !== undefined && { carriedBy }),
     });
     // The answer layer's witness (honesty layer 4): the clean verdict, on the
     // record — a flagged or refused one is committed already (below).
@@ -879,6 +886,7 @@ function judgeEvidence(
     action: refused ? 'refused' : 'flagged',
     afterRevision,
     ...(verdict.evidenceTruncated && { evidenceTruncated: true }),
+    ...(carriedBy !== undefined && { carriedBy }),
   });
   if (!refused) {
     // Only on the shipping path: a refusal raises a teaching error at the
