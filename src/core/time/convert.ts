@@ -87,7 +87,7 @@ import {
   type DurationText,
 } from './duration.js';
 import { instantOf, spellInstant, utcWallMs, type InstantText } from './instant.js';
-import { lookbackRange, sameRange, type Edge, type TimeRange } from './range.js';
+import { lookbackRange, reachMs, sameRange, type Edge, type TimeRange } from './range.js';
 
 // `sameRange` moved to `range.ts` (the range owner) so the turn's windows
 // (`windows.ts`) read it without this module; re-exported for its callers.
@@ -518,10 +518,9 @@ export function convertWidened(
     if (done === undefined || done.extra.length === 0) continue;
     const sentFrom = msOf(done.sent.from) as Ms;
     const sentTo = msOf(done.sent.to) as Ms;
-    // A look-back's read holds both ends (`[now − L, now]`, one millisecond past `L` half-open):
-    // its length is `L`, so a look-back exactly `maxRange` long is one the tool reads at once.
-    const readMs = sentTo.ms - sentFrom.ms - (form.kind === 'lookback' ? 1 : 0);
-    if (widestMs !== undefined && readMs > widestMs) continue;
+    // The read's reach, judged as `periodFactProblem` judges a window (`range.ts` · `reachMs`):
+    // a look-back `[now − L, now]` reaches `L`, so one exactly `maxRange` long is read at once.
+    if (widestMs !== undefined && reachMs(sentFrom.ms, sentTo.ms) > widestMs) continue;
     return { form: i, ...done };
   }
   return undefined;
