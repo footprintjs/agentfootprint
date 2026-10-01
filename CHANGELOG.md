@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.134.6] - 2026-10-01
+
+### Fixed
+
+- **"Explain this answer" counts the rows of a result whose rows went to the artifact store — from the dataset ticket left in their place.**
+
+  When an app's projection moves a declared rowset into the artifact store and leaves its ticket where the rows were — `{ ref, kind, rows, sourceField }` under `datasets[<key>]` (and `dataset` for the principal one), the spelling the library now documents for `stageDatasetArtifacts` / `withDatasetArtifacts` projections — the one emptiness reader now counts the ticket's `rows` for the key the app declared as `rowsAt`. So `accountForAnswer` says "pscale_client_health returned 2 items.", the empty-results check runs and the tone can be ok, where a demo account said "It cannot be told whether the result of pscale_client_health was empty: its shape is not declared" although the app had declared `rowsAt: 'rows'`. The answer's standing reads the same result the same way, and "show me" points at the ticket's count (`countedAt` on the account's call facts).
+
+  Nothing is guessed: the ticket is read only for the declared key, only when that key is gone from the value, and only when the ticket names it. A ticket without a whole-number `rows`, and the library's own placement ticket (which counts bytes, not rows), are said for what they are — "it reached the model as a ticket to the artifact store, and the ticket does not say how many rows it holds" — and a declared key that holds no list is no longer called undeclared ("what the model read holds no list at the key the app declared for its rows"). New templates `unreachable.empty.uncountedTicket` and `unreachable.empty.noList`; template set version 10.
+
 ## [9.134.5] - 2026-10-01
 
 ### Fixed
