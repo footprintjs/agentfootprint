@@ -68,6 +68,15 @@ the policy's pick, or `open` with an `OpenQuestion` for each thing only the
 person can settle — a date order, a missing am/pm, a DST overlap, a zone
 abbreviation.
 
+A zone abbreviation is asked unless your policy maps it. `abbreviations` holds
+one `ZoneAbbreviation` per spelling your people write: the zone it stands for
+and the offset its letters spell, as in
+`policy: { abbreviations: { PST: { zone: 'America/Los_Angeles', offset: '-08:00' } } }`.
+When the two disagree at the instant (`PST` in October is −07:00 by the zone,
+−08:00 by the letters), both readings are offered in the one confirmation —
+neither is corrected into the other. An abbreviation missing from the map is
+still asked, and no map ships.
+
 Each message read files one `TimeReadingRow` per mention (or one row with
 `mentions: 0`), stamped with a `TimeReaderStamp` — the reader's id, version,
 kind and locale — and the tz database version. A resume never calls the reader
@@ -85,16 +94,22 @@ Agent.create({ provider, model })
 
 `englishTimeReader()` is the reader the library ships: a `kind: 'rule'`
 tokenizer with no dependency. It reads a small, closed set — ISO dates and
-instants, numeric dates (the order left open), clock times, a range of two, a
-zone written after them, today / yesterday / tomorrow, "last 40 minutes" — and
-files every other time phrase it recognises as ONE unreadable mention quoting
-the whole phrase. `EnglishTimeReaderOptions` takes only a `locale` for the
+instants, numeric dates (the order left open), dates with a named month
+(`11 September`, `Sept 29` — the year from your `year` policy when not
+written), clock times, a range of two (`today between 1 pm and 2 pm`), a zone
+written after them, today / yesterday / tomorrow, "last 40 minutes" and the
+compact `last 24h` — and files every other time phrase it recognises as ONE
+unreadable mention quoting the whole phrase. `EnglishTimeReaderOptions` takes only a `locale` for the
 labels of the ask; it never decides a date order.
 
 A reading only PROPOSES. Nothing typed in chat is filed as the person's words:
 when a tool that declares a period is about to be called, the reading is
 offered as a pre-filled, editable confirmation naming its window and its zone,
-and only the person's answer settles it.
+and only the person's answer settles it. Words the reader could not read
+(`yesterday morning`, `since 8 AM`) are asked too — "Which time did you mean
+by …?", nothing filled in — even when the tool's rule assumes a default: the
+person wrote a time, so a default never stands in for it. Every answer settles
+the mention as a `TimeAnswerRow` (`confirmed` or `edited`).
 
 ```ts
 import { Agent, englishTimeReader } from 'agentfootprint';
@@ -165,7 +180,18 @@ What the library then does, under `.time()`:
   `day` tool, or a wall time the zone skips: the tool never runs, and the model
   reads why.
 
-One `CallWindowRow` per call says which. The tool is handed the call's time as
+A window the person set in your UI — a run's `time.window`, from a brushed
+chart or a range picker — is named on the model's late line with each tool's
+values ("The window the person set in the app's time control is …"), so your
+app writes no prompt text for it. When a form needs its own cap, give it
+`maxRange`: `{ kind: 'bounds', …, maxRange: '24h' }` caps the bounds at a day
+while a look-back form beside it reads any length; a window is refused
+`over-max-range` only when no form can read it.
+
+One `CallWindowRow` per call says which. Two more rows complete the record: a
+`TimeDerivedRow` when a judged answer states values the library spelled from a
+reading, and a `SourceClockRow` when a dataset declares the wall-clock zone its
+values are in. The tool is handed the call's time as
 `ctx.time`, a `TimeContext` (the asked range, the zone, the frozen `now` and
 the dispatch moment) — over MCP it rides the `tools/call` request's
 `_meta.agentfootprint.time`.
@@ -191,6 +217,94 @@ defineTool({
   execute: (args, ctx) => query(args, ctx.time?.asked),
 });
 ```
+
+### The same answer outside a run
+
+Sometimes an app needs that answer before any run: a screen that previews
+what a tool would read for the person's window, or a call the app builds
+itself. Ask the library's own conversion for it rather than keeping a copy. A
+copy drifts the first time the fill's rules change, and the preview then shows
+a read the run will not send. The conversions ship on their own door,
+`agentfootprint/time`. They are part of the layer's run-time half, so the main
+barrel keeps them off every plain agent's import graph.
+
+Ask `convertForTool`. It is the question the run asks of each tool, and it
+takes the tool's own `period` declaration:
+
+- the window, as a `WindowToConvert` (its `range`, and its `lookback` when it
+  was said as one);
+- the tool's forms, `sugarForms(period)`: the `forms` it declares, else the
+  ones its `argument` + `spelling` (or `accepts`) stand for. `sugarForms`
+  takes any `PeriodShapes`, so a whole `period` will do;
+- the tool's facts, which is the `period` itself (`direction`, `retention`,
+  `maxRange`, `granularity`);
+- a `ConvertContext`: `now`, the window's `zone`, and the tool's step as
+  `granularityMs`. Build that step with `granularityMsOf(period)`, which reads
+  `granularity` and falls back to one minute the way the run does.
+
+Its answer is a `ToolConversion`. A tool that can read the window gives
+`{ conversion }`: the form's index and the argument values to send, plus
+`sent` (the range the tool reads) and `extra` (the parts nobody asked for)
+when it reads more than was asked. A window that starts before the source's
+oldest data and ends after it also carries `partlyBeyondRetention: true`. A
+tool that cannot read it gives `{ refused }` with a `TimeRefusal` code. It is
+a fact the window breaks (`'time-past'`, `'time-future'`, `'beyond-retention'`,
+`'over-max-range'`), `'multi-day'` (a `day`-only tool and a window over more
+than one day), or `'no-form-holds'` (no form can read it, even wider: a
+look-back ends at now, and a covering look-back longer than `maxRange` is not
+read). The run applies these rules in this order, and so does
+`convertForTool`. It is the same function the time ask and the fill call;
+`examples/features/85-time-widen-and-refuse.ts` checks it against a real run,
+the refusal included.
+
+```ts
+import { convertForTool, granularityMsOf, sugarForms } from 'agentfootprint/time';
+
+// The tool's own declaration, the `period` passed to defineTool.
+const period = { argument: 'window', spelling: 'lookback', direction: 'past', maxRange: '24h' } as const;
+const clock = { now: '2026-10-09T15:40:00Z', zone: 'America/Los_Angeles', granularityMs: granularityMsOf(period) };
+const yesterday = { from: '2026-10-08T00:00:00-07:00', to: '2026-10-09T00:00:00-07:00' };
+
+convertForTool({ range: yesterday }, sugarForms(period), period, clock);
+// { refused: 'no-form-holds' }: reaching 8 Oct from now takes a look-back wider than 24h
+convertForTool({ range: yesterday }, sugarForms(period), { direction: 'past' }, clock);
+// { conversion: { form: 0, values: { window: '1960m' },
+//     sent:  { from: '2026-10-08T07:00:00Z', to: '2026-10-09T15:40:00.001Z' },
+//     extra: [{ from: '2026-10-09T07:00:00Z', to: '2026-10-09T15:40:00.001Z' }] } }
+```
+
+The door also carries the steps `convertForTool` takes, for a caller that
+needs one alone. They answer only their own step:
+
+- `convertExact` returns the first form that holds the window exactly, as a
+  `Conversion`, or `undefined`.
+- `convertWidened` returns the first form that holds it by reading more, as a
+  `WidenedConversion`. Its optional fourth argument is the tool's widest read
+  in milliseconds, `widestMsOf(period)`; leave it out and a read wider than
+  `maxRange` is not skipped. It does not look for an exact form first, so ask
+  it only after `convertExact` finds nothing: with forms `[day, bounds]` and a
+  one-hour window, `convertExact` answers with the bounds form and
+  `convertWidened` asked alone answers with the day.
+- `periodFactProblem` returns which declared fact a range breaks, as a
+  `PeriodFactProblem` code, or `undefined`. It checks the facts only. A range
+  it cannot read as two instants (`'garbage'`) breaks no fact by this check;
+  `convertForTool` refuses that range `'no-form-holds'`.
+
+Two helpers write and check time the way the run does. `presentRange(range,
+presentation, grain?)` is the label the time ask and the late line use: a
+`Presentation` (the `zone`, and an optional `locale`) and a `Grain` give the
+end as said, the zone always named —
+`presentRange(range, { zone: 'America/Los_Angeles' }, 'minute')` →
+`'2026-10-09 08:00–08:40 America/Los_Angeles (UTC-07:00)'`. `isZoneName(value)`
+is the run's zone check: it narrows to a `ZoneName` only for an IANA name and
+refuses `PST` or a bare offset, so a session zone can be checked before it is
+passed as `time.zone`.
+
+All of them are pure functions over the clock you pass. They need no run,
+write no record and do not need `.time()`. Two inputs are the caller's to get
+right. A `now` that is not an instant gives no look-back answer: a look-back
+tool then gets `'no-form-holds'` from `convertForTool`. A `day` or wall form
+asked with a `zone` that is not an IANA zone name throws.
 
 ## A dataset's time axis
 

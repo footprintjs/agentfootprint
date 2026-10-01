@@ -87,7 +87,7 @@ import {
   type DurationText,
 } from './duration.js';
 import { instantOf, spellInstant, utcWallMs, type InstantText } from './instant.js';
-import { lookbackRange, sameRange, type Edge, type TimeRange } from './range.js';
+import { lookbackRange, reachMs, sameRange, type Edge, type TimeRange } from './range.js';
 
 // `sameRange` moved to `range.ts` (the range owner) so the turn's windows
 // (`windows.ts`) read it without this module; re-exported for its callers.
@@ -98,12 +98,16 @@ import {
   DEFAULT_GRANULARITY_MS,
   epochFromText,
   FACT_UNITS,
+  formMaxRange,
   isPlain,
   needsZone,
+  periodFactProblem,
+  toolFacts,
   wallOf,
   type BoundAs,
   type PeriodFacts,
   type PeriodForm,
+  type TimeRefusal,
 } from './periodForm.js';
 
 export {
@@ -112,7 +116,9 @@ export {
   FACT_UNITS,
   FORM_KINDS,
   formArguments,
+  formFacts,
   formIssue,
+  formMaxRange,
   isBoundValue,
   needsZone,
   parsesUnderForm,
@@ -122,6 +128,7 @@ export {
   sugarForm,
   sugarForms,
   TIME_REFUSALS,
+  toolFacts,
 } from './periodForm.js';
 export type {
   Bound,
@@ -469,9 +476,12 @@ function lookbackWidened(
 ): Omit<WidenedConversion, 'form'> | undefined {
   if (window.lookback !== undefined) return undefined;
   const now = msOf(ctx.now);
-  const from = msOf(window.range.from);
-  const to = msOf(window.range.to);
-  if (now === undefined || from === undefined || to === undefined) return undefined;
+  // `absoluteOf` refuses an empty or inverted range, as every other form's reading does — a
+  // look-back from now "covering" a range that ends before it starts would read a confident
+  // wrong window (its `extra` outside its own `sent`).
+  const span = absoluteOf(window, ctx.now);
+  if (now === undefined || span === undefined) return undefined;
+  const [from, to] = span;
   if (to.ms >= now.ms - ctx.granularityMs) return undefined;
   const units = form.units ?? LOOKBACK_UNITS;
   const finest = finestUnitMs(units);
@@ -513,7 +523,9 @@ export function convertWidened(
     if (done === undefined || done.extra.length === 0) continue;
     const sentFrom = msOf(done.sent.from) as Ms;
     const sentTo = msOf(done.sent.to) as Ms;
-    if (widestMs !== undefined && sentTo.ms - sentFrom.ms > widestMs) continue;
+    // The read's reach, judged as `periodFactProblem` judges a window (`range.ts` · `reachMs`):
+    // a look-back `[now − L, now]` reaches `L`, so one exactly `maxRange` long is read at once.
+    if (widestMs !== undefined && reachMs(sentFrom.ms, sentTo.ms) > widestMs) continue;
     return { form: i, ...done };
   }
   return undefined;
@@ -537,6 +549,101 @@ export function spansDaysForDayOnly(
     if (zone === undefined) return false;
     return spellDate(dateAt(zone, span[0].ms)) !== spellDate(dateAt(zone, span[1].ms - 1));
   });
+}
+
+// ─── One window, one tool: the conversion or the reason (the one owner) ──
+
+/** A window a tool can read — the conversion to send — or the reason it cannot, before dispatch. */
+export type ToolConversion =
+  | {
+      /** Exact, or — when no form holds the window exactly — WIDENED (it carries `sent` and `extra`). */
+      readonly conversion: Conversion | WidenedConversion;
+      /** The window starts before the source's oldest data and ends after it: it dispatches, marked. */
+      readonly partlyBeyondRetention?: true;
+    }
+  | { readonly refused: TimeRefusal };
+
+/**
+ * Whether one tool can read one window, and how — the ONE answer every door
+ * that puts a person's window into a tool asks (the fill, the time ask's
+ * answer and its choices, the served line): the tool's facts first
+ * ({@link periodFactProblem}), then the first form that holds it exactly
+ * ({@link convertExact}), then the first that holds it by reading MORE
+ * ({@link convertWidened} — `maxRange` skips a read too wide), then `multi-day`
+ * for a `day`-only tool ({@link spansDaysForDayOnly}), and otherwise
+ * `no-form-holds`: no declared form can read it at all (a look-back ends at
+ * now, so it cannot reach a window still running; a covering look-back wider
+ * than `maxRange` is not read). Never the tool's own default in its place.
+ *
+ * @example
+ * ```ts
+ * const lookbackOnly = [{ kind: 'lookback', argument: 'window', signed: false }] as const;
+ * const ctx = { now: '2026-10-09T15:40:00Z', zone: 'America/Los_Angeles', granularityMs: 60_000 };
+ * const yesterday = { from: '2026-10-08T00:00:00-07:00', to: '2026-10-09T00:00:00-07:00' };
+ * convertForTool({ range: yesterday }, lookbackOnly, {}, ctx);
+ * // { conversion: { form: 0, values: { window: '1960m' }, sent: …, extra: [ …the gap after it… ] } }
+ * convertForTool({ range: yesterday }, lookbackOnly, { maxRange: '24h' }, ctx);
+ * // { refused: 'no-form-holds' } — reaching 8 Oct from now takes a look-back wider than 24h
+ * ```
+ */
+export function convertForTool(
+  window: WindowToConvert,
+  forms: readonly PeriodForm[],
+  facts: PeriodFacts | undefined,
+  ctx: ConvertContext,
+): ToolConversion {
+  // The tool's facts before a form is chosen: `maxRange` is the widest any form reads, so a window
+  // is over it only when NO form can read it (`periodForm.ts` · `toolFacts`; the period's own
+  // facts when no form declares its own `maxRange`).
+  const judged = facts === undefined ? undefined : toolFacts(forms, facts);
+  const problem =
+    judged === undefined ? undefined : periodFactProblem(window.range, judged, ctx.now);
+  if (problem !== undefined) return { refused: problem };
+  const partly =
+    facts !== undefined && partlyBeyondRetention(window.range, facts, ctx.now)
+      ? { partlyBeyondRetention: true as const }
+      : {};
+  const read = forms.some((f) => f.maxRange !== undefined)
+    ? convertWithinFormCaps(window, forms, facts, ctx)
+    : convertExact(window, forms, ctx) ?? convertWidened(window, forms, ctx, widestMsOf(facts));
+  if (read !== undefined) return { conversion: read, ...partly };
+  if (spansDaysForDayOnly(window, forms, ctx)) return { refused: 'multi-day' };
+  return { refused: 'no-form-holds' };
+}
+
+/**
+ * {@link convertForTool}'s exact-then-wider search when a form declares its
+ * own `maxRange`: the same order (the first form that holds the window
+ * exactly, then the first that holds it by reading more), each form held to
+ * ITS cap ({@link formMaxRange}) — an exact form the window reaches past, or a
+ * wider read past it, is skipped, and the next form is asked.
+ */
+function convertWithinFormCaps(
+  window: WindowToConvert,
+  forms: readonly PeriodForm[],
+  facts: PeriodFacts | undefined,
+  ctx: ConvertContext,
+): Conversion | WidenedConversion | undefined {
+  const capMs = (form: PeriodForm): number | undefined => {
+    const text = formMaxRange(form, facts);
+    return text === undefined ? undefined : durationMs(text, FACT_UNITS);
+  };
+  const from = msOf(window.range.from);
+  const to = msOf(window.range.to);
+  const reach = from === undefined || to === undefined ? undefined : reachMs(from.ms, to.ms);
+  for (let i = 0; i < forms.length; i++) {
+    const form = forms[i] as PeriodForm;
+    const cap = capMs(form);
+    if (cap !== undefined && (reach === undefined || reach > cap)) continue;
+    const exact = convertExact(window, [form], ctx);
+    if (exact !== undefined) return { ...exact, form: i };
+  }
+  for (let i = 0; i < forms.length; i++) {
+    const form = forms[i] as PeriodForm;
+    const widened = convertWidened(window, [form], ctx, capMs(form));
+    if (widened !== undefined) return { ...widened, form: i };
+  }
+  return undefined;
 }
 
 /**
@@ -627,6 +734,34 @@ function spanRange(fromMs: number, toMs: number): TimeRange | undefined {
   return from === undefined || to === undefined ? undefined : { from, to };
 }
 
+/** The zone `form`'s arguments are read in: the zone argument's value when the form has one, else the app's. */
+function readZone(
+  args: Readonly<Record<string, unknown>>,
+  form: PeriodForm,
+  ctx: { readonly appZone?: ZoneName },
+): ZoneName | undefined {
+  const sentZone = 'zone' in form && form.zone !== undefined ? args[form.zone.argument] : undefined;
+  return formZone(form, {
+    zone: isZoneName(sentZone) ? sentZone : undefined,
+    ...(ctx.appZone !== undefined && { appZone: ctx.appZone }),
+  });
+}
+
+/**
+ * Whether {@link readBack} cannot read `args` for want of a zone alone — a
+ * wall or date form whose zone argument is not in the call yet and no app
+ * zone stands in. A caller that finds every bound present and still gets no
+ * range tells "the zone is still to come" (this) from "the bounds name no
+ * window" (misspelled, a wall time the zone skips, `from` not before `to`).
+ */
+export function readBackLacksZone(
+  args: Readonly<Record<string, unknown>>,
+  form: PeriodForm,
+  ctx: { readonly appZone?: ZoneName },
+): boolean {
+  return form.kind !== 'lookback' && needsZone(form) && readZone(args, form, ctx) === undefined;
+}
+
 /**
  * The half-open range the arguments of `form` name — the § 3.3 conversion back
  * from each bound — or `undefined` when they do not name one (missing,
@@ -648,14 +783,8 @@ export function readBack(
     if (!isDuration(length, units) || durationMs(length, units) === undefined) return undefined;
     return lookbackRange(ctx.now, length, units);
   }
-  const sentZone = 'zone' in form && form.zone !== undefined ? args[form.zone.argument] : undefined;
-  if ('zone' in form && form.zone !== undefined && !isZoneName(sentZone)) {
-    if (needsZone(form)) return undefined;
-  }
-  const zone = formZone(form, {
-    zone: isZoneName(sentZone) ? sentZone : undefined,
-    appZone: ctx.appZone,
-  });
+  const zone = readZone(args, form, ctx);
+  if (needsZone(form) && zone === undefined) return undefined;
   if (form.kind === 'day') {
     if (zone === undefined) return undefined;
     const date = dateOf(args[form.argument]);

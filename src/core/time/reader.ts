@@ -112,6 +112,13 @@ export interface TimeWall {
   readonly m?: number;
   readonly s?: number;
   readonly meridiem?: 'am' | 'pm';
+  /**
+   * `'24h'`: the text's FORM is a 24-hour clock (an ISO instant's
+   * `T08:00`), so the hour is read as written — never also as pm. A form
+   * fact the reader sees and `resolve.ts` cannot; absent, an hour 1–12 with
+   * no meridiem is read both ways. Never with `meridiem`.
+   */
+  readonly clock?: '24h';
 }
 
 /** A time said relative to the message's moment. */
@@ -232,11 +239,12 @@ function isDate(value: unknown): boolean {
 function isWall(value: unknown): boolean {
   return (
     isRecord(value) &&
-    onlyKeys(value, ['h', 'm', 's', 'meridiem']) &&
+    onlyKeys(value, ['h', 'm', 's', 'meridiem', 'clock']) &&
     isInt(value.h, 0, 23) &&
     (value.m === undefined || isInt(value.m, 0, 59)) &&
     (value.s === undefined || (value.m !== undefined && isInt(value.s, 0, 59))) &&
-    (value.meridiem === undefined || value.meridiem === 'am' || value.meridiem === 'pm')
+    (value.meridiem === undefined || value.meridiem === 'am' || value.meridiem === 'pm') &&
+    (value.clock === undefined || (value.clock === '24h' && value.meridiem === undefined))
   );
 }
 

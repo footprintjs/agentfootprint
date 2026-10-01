@@ -65,7 +65,13 @@ import {
   type TurnWindows,
   type WindowSource,
 } from '../../time/bind.js';
-import { formArguments, granularityMsOf } from '../../time/convert.js';
+import {
+  formArguments,
+  formFacts,
+  granularityMsOf,
+  toolFacts,
+  type PeriodFacts,
+} from '../../time/convert.js';
 import type { InstantText } from '../../time/instant.js';
 import type { CallWindowRow } from '../../time/rows.js';
 import { callWindowRow } from '../../time/rowsBuild.js';
@@ -76,11 +82,14 @@ import { checkSource, isTraced, type SourceCheck, type SourceCorpus } from './ch
 import {
   isMissing,
   isRefused,
+  owedFormOf,
   periodArgumentsOf,
   periodFactsOf,
   periodFormsOf,
   rulesOf,
   sameArgumentValue,
+  sentFormOf,
+  untakenBesides,
   type RuledArgument,
   type RuledToolLike,
   type ToolRules,
@@ -572,13 +581,30 @@ function untakenFormArgumentsOf(
   ) {
     return new Set();
   }
-  const forms = periodFormsOf(readableRules(toolOf, toolName)?.period);
-  const used = forms[decision.form];
-  if (used === undefined) return new Set();
-  const mine = new Set(formArguments(used).map((a) => a.argument));
-  return new Set(
-    forms.flatMap((f) => formArguments(f).map((a) => a.argument)).filter((a) => !mine.has(a)),
-  );
+  return untakenBesides(periodFormsOf(readableRules(toolOf, toolName)?.period), decision.form);
+}
+
+/**
+ * A window is owed ONCE, with no window decision to read (`.time()` off, or nothing filled):
+ * the form the call SENT its window in (`declare.ts` · `sentFormOf`) — or, the period left out
+ * entirely, the form the rules owe (`owedFormOf`: kept answers, else the ASSUMED form, else
+ * the first form's own asks) — is the window; every other form's arguments are untaken. Before
+ * this, each form's arguments were ruled one by one: an assumed look-back beside asked bounds
+ * was filled AND asked, a pause for two windows the tool refuses.
+ */
+function windowUntakenOf(
+  toolOf: ToolOf,
+  toolName: string,
+  call: BatchCall,
+  kept: readonly KeptAnswer[] | undefined,
+): ReadonlySet<string> {
+  const rules = readableRules(toolOf, toolName);
+  const forms = periodFormsOf(rules?.period);
+  if (rules === undefined || forms.length < 2) return new Set();
+  const sent = sentFormOf(forms, call.args);
+  const taken =
+    sent ?? owedFormOf(forms, rules, (a) => keptValue(toolOf, kept, toolName, a) !== undefined);
+  return untakenBesides(forms, taken);
 }
 
 /** The argument-row source a window fills with: the person's answer, a reading of their words, or the app's control. */
@@ -627,6 +653,20 @@ function checkUnderWindow(
 }
 
 /**
+ * The facts a refusal's reason names: the sent form's own (its `maxRange` in place) when the
+ * refused window was sent in one form, else the tool's (`maxRange` the widest any form reads).
+ */
+function refusalFactsOf(
+  period: Parameters<typeof periodFactsOf>[0],
+  form: number | undefined,
+): PeriodFacts {
+  const facts = periodFactsOf(period);
+  const forms = periodFormsOf(period);
+  const sentIn = form === undefined ? undefined : forms[form];
+  return sentIn !== undefined ? formFacts(sentIn, facts) : toolFacts(forms, facts);
+}
+
+/**
  * Where each ruled value of each planned call came from, by the table above.
  * Unarmed (no `sources`), a present value either IS the declared default (an
  * `assume` rule) or is the model's own; a missing value on an `ask` rule is
@@ -670,7 +710,6 @@ export function verifyPlan(
     // A window the model SENT in one form: another form's missing arguments were an alternative
     // it did not take — never filled or asked (step T5b: a look-back sent to a tool that also
     // takes bounds must run, so the clock at dispatch can record it).
-    const untaken = untakenFormArgumentsOf(toolOf, planned.toolName, decision);
     // The person named a time the library could only PROPOSE (the owner's decision "Always
     // confirm"): a period left out is asked as that mention's window even where the tool's
     // rule assumes one — its default would silently stand in for what the person said.
@@ -680,6 +719,12 @@ export function verifyPlan(
       (time?.turn.open?.length ?? 0) > 0
         ? formArgumentsOf(toolOf, planned.toolName)
         : undefined;
+    // Otherwise the window is owed once: the untaken forms' arguments are neither asked nor filed.
+    const decided = untakenFormArgumentsOf(toolOf, planned.toolName, decision);
+    const untaken =
+      decided.size > 0 || proposed !== undefined || filled.size > 0
+        ? decided
+        : windowUntakenOf(toolOf, planned.toolName, call, kept);
     for (const p of planned.ruled) {
       const base = {
         toolCallId: planned.toolCallId,
@@ -987,7 +1032,7 @@ export function resolutionsOf(
         refused: timeRefusal(
           planned.toolName,
           decision.refused,
-          periodFactsOf(readableRules(toolOf, planned.toolName)?.period),
+          refusalFactsOf(readableRules(toolOf, planned.toolName)?.period, decision.form),
           decision.argument,
         ),
       });

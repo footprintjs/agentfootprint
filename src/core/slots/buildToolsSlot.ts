@@ -200,11 +200,12 @@ export function mergeWire(candidates: readonly WireCandidate[]): {
 
 /**
  * The inputs layer's wire decoration (`agent/arguments/serve.ts` · `rulesOnWire`) and the time
- * layer's late line (`timeWindowsLine`), from the one module loaded under the arm.
+ * layer's late line (`timeWindowsLine` + `timeLimitsLine`, composed by `timeLine`), from the one
+ * module loaded under the arm.
  */
 type RulesOnWire = Pick<
   typeof import('../agent/arguments/serve.js'),
-  'rulesOnWire' | 'timeWindowsLine' | 'timeLimitsLine'
+  'rulesOnWire' | 'timeWindowsLine' | 'timeLimitsLine' | 'timeLine'
 >;
 
 /**
@@ -411,20 +412,23 @@ export interface ToolsSlotConfig {
    */
   readonly argumentSources?: true;
   /**
-   * THE TIME LAYER'S READER IS ARMED (`.time({ reader })`, step T6b) —
-   * present ONLY then, and only beside `inputsLayer`. At the same decoration
-   * site the slot composes the ONE served time line (`agent/arguments/serve.ts`
-   * · `timeWindowsLine`) from the tools it really serves — each window the
-   * reader SETTLED this turn in each period tool's own form, and each quote
-   * still pending — and writes it to `timeLine` as `{ iteration, text }` (`''`
-   * when there is nothing to say); the mount carries it to `callLLM`, which
-   * appends it LAST to the request, never to history. The tool schemas are not
-   * touched. Reads one mount arg under this gate only, `timeWindows`
+   * THE TIME LAYER IS ARMED (`.time()`) — present ONLY then, and only beside
+   * `inputsLayer`. At the same decoration site the slot composes the ONE
+   * served time line (`agent/arguments/serve.ts` · `timeWindowsLine`) from
+   * the tools it really serves — each window the reader SETTLED this turn in
+   * each period tool's own form, each quote still pending, and the window the
+   * person set in the app's time control (`time.window`) — and writes it to
+   * `timeLine` as `{ iteration, text }`; the mount carries it to `callLLM`,
+   * which appends it LAST to the request, never to history. The tool schemas
+   * are not touched. Reads one mount arg under this gate only, `timeWindows`
    * (`core/time/windows.ts` · `readerWindowsOf` — absent on a turn with none).
-   * `appZone` is
-   * the app's `.time({ zone })`.
+   * `appZone` is the app's `.time({ zone })`. `reader` — the reader is armed
+   * (`.time({ reader })`, step T6b): the line is written EVERY composition
+   * (`''` when there is nothing to say), so a slot that does not re-run never
+   * serves a stale one; without it only a line with something to say is
+   * written (the control window alone).
    */
-  readonly timeWindows?: { readonly appZone?: ZoneName };
+  readonly timeWindows?: { readonly appZone?: ZoneName; readonly reader?: true };
   /**
    * THE TIME LAYER IS ARMED (`.time()`, step T8) — present ONLY then, and only
    * beside `inputsLayer`. The same site appends the turn's time limits
@@ -1043,8 +1047,9 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
               });
         const limits =
           config.timeLimits === true ? rules.timeLimitsLine(args.timeLimits) : undefined;
-        const text = [windows, limits].filter((t) => t !== undefined).join(' ');
-        if (config.timeWindows !== undefined || text.length > 0) {
+        // ONE line, opened ONCE with who says it (`agent/arguments/serve.ts` · `timeLine`), never per half.
+        const text = rules.timeLine([windows, limits]) ?? '';
+        if (config.timeWindows?.reader === true || text.length > 0) {
           scope.timeLine = { iteration, text };
         }
       }
@@ -1185,6 +1190,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
             rulesOnWire: m.rulesOnWire,
             timeWindowsLine: m.timeWindowsLine,
             timeLimitsLine: m.timeLimitsLine,
+            timeLine: m.timeLine,
           }))
         : undefined;
     if (toolChoice === undefined) {

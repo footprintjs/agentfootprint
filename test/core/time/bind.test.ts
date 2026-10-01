@@ -229,7 +229,7 @@ describe('one call', () => {
     });
   });
 
-  it('fills nothing with no window, with two mentions, or with no form that holds it', () => {
+  it('fills nothing with no window or with two mentions; refuses a window no form holds', () => {
     expect(callWindowOf(call({}), none, CTX)).toEqual({ how: 'not-filled', why: 'no-window' });
     expect(callWindowOf(call({}), two, CTX)).toEqual({
       how: 'not-filled',
@@ -239,7 +239,8 @@ describe('one call', () => {
       ...call({}),
       forms: [{ kind: 'lookback', argument: 'w', signed: false } as PeriodForm],
     };
-    // A window still to come: no look-back reaches it, exactly or widened (step T5b widens a past one).
+    // A window still to come: no look-back reaches it, exactly or widened (step T5b widens a past
+    // one). Refused with the reason — the tool's own rule never stands in for the person's window.
     const tomorrow = confirmed(
       [
         reading(0, 1, 'tomorrow 8 to 8:40', {
@@ -249,9 +250,11 @@ describe('one call', () => {
       ],
       clock(),
     );
-    expect(callWindowOf(lookbackOnly, tomorrow, CTX)).toEqual({
-      how: 'not-filled',
-      why: 'no-exact-form',
+    expect(callWindowOf(lookbackOnly, tomorrow, CTX)).toMatchObject({
+      how: 'refused',
+      refused: 'no-form-holds',
+      asked: { from: '2026-10-10T08:00:00-07:00', to: '2026-10-10T08:41:00-07:00' },
+      person: { source: 'answered', mention: 0 },
     });
   });
 

@@ -263,6 +263,27 @@ export function lookbackOf(
     : { until: respell(until, to.offsetMinutes, 'lookbackOf'), duration };
 }
 
+/**
+ * How far a half-open range `[from, to)` REACHES, in milliseconds: from its
+ * first instant to its last (`to − 1 ms − from`) — the length a tool's
+ * `maxRange` is held against (an inclusive ceiling: a range is over it only
+ * when its last instant lies further than `maxRange` after its first). The one
+ * owner of that length, so a range is judged by the instants it holds, never by
+ * how it was spelled: the look-back row `[until − L, until]` ({@link lookbackRange},
+ * half-open `[until − L, until + 1 ms)`) reaches `L`, exactly as the same instants
+ * written as bounds do — a look-back exactly `maxRange` long is one the tool reads
+ * at once, and one more step (`L + 1 min`) is not.
+ *
+ * @example
+ * ```ts
+ * reachMs(Date.parse('2026-10-08T15:40:00Z'), Date.parse('2026-10-09T15:40:00.001Z')); // 86_400_000 — 'last 24h'
+ * reachMs(Date.parse('2026-10-08T00:00:00Z'), Date.parse('2026-10-09T00:00:00Z'));     // 86_399_999 — one day
+ * ```
+ */
+export function reachMs(fromMs: number, toMs: number): number {
+  return toMs - 1 - fromMs;
+}
+
 /** Whether `outer` holds every instant of `inner` (half-open). */
 export function covers(outer: TimeRange, inner: TimeRange): boolean {
   const [of, ot] = assertRange(outer, 'covers');

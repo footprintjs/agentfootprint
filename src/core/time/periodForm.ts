@@ -32,7 +32,7 @@ import {
   type DurationText,
 } from './duration.js';
 import { compareInstants, daysInMonth, instantOf, type InstantText } from './instant.js';
-import type { Edge, TimeRange } from './range.js';
+import { reachMs, type Edge, type TimeRange } from './range.js';
 import { isZoneName, type WallTime } from './zone.js';
 
 // ─── The declaration's shapes ────────────────────────────────────────────
@@ -81,13 +81,20 @@ export interface ZoneArgument {
   readonly argument: string;
 }
 
-/** Every shape a tool's period can take — one `TimeRange` onto one or more arguments. */
+/**
+ * Every shape a tool's period can take — one `TimeRange` onto one or more
+ * arguments. Any form may carry its own `maxRange` — the widest window THAT
+ * form reads at once — when the tool's forms differ (bounds capped at a day,
+ * a look-back with no cap): it overrides the period's `maxRange` for that
+ * form only ({@link formMaxRange}, the one owner).
+ */
 export type PeriodForm =
   | {
       readonly kind: 'bounds';
       readonly from: Bound;
       readonly to: ToBound;
       readonly zone?: ZoneArgument;
+      readonly maxRange?: DurationText;
     }
   | {
       readonly kind: 'joined';
@@ -96,6 +103,7 @@ export type PeriodForm =
       readonly joiner: '..' | '/';
       readonly edge?: Edge;
       readonly zone?: ZoneArgument;
+      readonly maxRange?: DurationText;
     }
   | {
       readonly kind: 'object';
@@ -105,14 +113,21 @@ export type PeriodForm =
       /** Declared, never defaulted (TQ18). */
       readonly edge: Edge;
       readonly zone?: ZoneArgument;
+      readonly maxRange?: DurationText;
     }
-  | { readonly kind: 'day'; readonly argument: string; readonly zone?: ZoneArgument }
+  | {
+      readonly kind: 'day';
+      readonly argument: string;
+      readonly zone?: ZoneArgument;
+      readonly maxRange?: DurationText;
+    }
   | {
       readonly kind: 'lookback';
       readonly argument: string;
       readonly signed: boolean;
       /** A unit set ⊆ `smhdw`; absent → today's `mhdw`. */
       readonly units?: string;
+      readonly maxRange?: DurationText;
     };
 
 export const FORM_KINDS: readonly PeriodForm['kind'][] = Object.freeze([
@@ -199,11 +214,11 @@ const isName = (value: unknown): value is string =>
   typeof value === 'string' && value.trim() !== '';
 
 const FORM_KEYS: Readonly<Record<PeriodForm['kind'], readonly string[]>> = Object.freeze({
-  bounds: ['kind', 'from', 'to', 'zone'],
-  joined: ['kind', 'argument', 'as', 'joiner', 'edge', 'zone'],
-  object: ['kind', 'argument', 'keys', 'as', 'edge', 'zone'],
-  day: ['kind', 'argument', 'zone'],
-  lookback: ['kind', 'argument', 'signed', 'units'],
+  bounds: ['kind', 'from', 'to', 'zone', 'maxRange'],
+  joined: ['kind', 'argument', 'as', 'joiner', 'edge', 'zone', 'maxRange'],
+  object: ['kind', 'argument', 'keys', 'as', 'edge', 'zone', 'maxRange'],
+  day: ['kind', 'argument', 'zone', 'maxRange'],
+  lookback: ['kind', 'argument', 'signed', 'units', 'maxRange'],
 });
 
 function boundIssue(value: unknown, which: 'from' | 'to'): string | undefined {
@@ -264,6 +279,11 @@ export function formIssue(form: unknown): string | undefined {
         .map((k) => `\`${k}\``)
         .join(', ')}.`;
     }
+  }
+  if (form.maxRange !== undefined && !isDuration(form.maxRange, FACT_UNITS)) {
+    return `maxRange ${JSON.stringify(
+      form.maxRange,
+    )} is not a duration — a positive whole number and one of s, m, h, d, w (\`24h\`).`;
   }
   switch (kind) {
     case 'bounds':
@@ -482,8 +502,9 @@ export type PeriodFactProblem = 'time-future' | 'time-past' | 'beyond-retention'
  * turn's clock — or `undefined`. `past`: a range that starts after now;
  * `future`: one that ends before now; `retention`: only a range WHOLLY older
  * than `now − retention` (a partial overlap is the result's to judge);
- * `maxRange`: a range longer than it. A fact the tool does not declare is not
- * checked.
+ * `maxRange`: a range that REACHES further than it (`range.ts` · `reachMs`:
+ * first instant to last, so a look-back exactly `maxRange` long fits — an
+ * inclusive ceiling). A fact the tool does not declare is not checked.
  */
 export function periodFactProblem(
   range: TimeRange,
@@ -500,16 +521,70 @@ export function periodFactProblem(
     facts.retention === undefined ? undefined : durationMs(facts.retention, FACT_UNITS);
   if (retention !== undefined && to.ms <= at.ms - retention) return 'beyond-retention';
   const widest = facts.maxRange === undefined ? undefined : durationMs(facts.maxRange, FACT_UNITS);
-  if (widest !== undefined && to.ms - from.ms > widest) return 'over-max-range';
+  if (widest !== undefined && reachMs(from.ms, to.ms) > widest) return 'over-max-range';
   return undefined;
+}
+
+// ─── A form's own `maxRange` (the one owner) ─────────────────────────────
+
+/**
+ * The widest window ONE form reads at once: its own `maxRange`, else the
+ * period's — the one owner every door asks (the conversion, a sent window's
+ * check, the answer to a period argument). `undefined`: no cap for that form.
+ *
+ * @example
+ * ```ts
+ * formMaxRange({ kind: 'bounds', from, to, maxRange: '24h' }, { maxRange: '7d' }); // '24h'
+ * formMaxRange({ kind: 'lookback', argument: 'w', signed: false }, { maxRange: '7d' }); // '7d'
+ * ```
+ */
+export function formMaxRange(
+  form: PeriodForm,
+  facts: PeriodFacts | undefined,
+): DurationText | undefined {
+  return form.maxRange ?? facts?.maxRange;
+}
+
+/** The facts ONE form is judged against: the period's, with the form's own `maxRange` in place. */
+export function formFacts(form: PeriodForm, facts: PeriodFacts): PeriodFacts {
+  if (form.maxRange === undefined) return facts;
+  return { ...facts, maxRange: form.maxRange };
+}
+
+/**
+ * The facts the TOOL is judged against before any form is chosen (a window
+ * of the person's to fill, a time ask's choices): `maxRange` is the widest
+ * any form reads — none when one form reads with no cap — so a window is
+ * refused `over-max-range` only when NO form can read it. The period's facts
+ * as declared when no form declares its own `maxRange`.
+ */
+export function toolFacts(forms: readonly PeriodForm[], facts: PeriodFacts): PeriodFacts {
+  if (!forms.some((f) => f.maxRange !== undefined)) return facts;
+  let widest: { readonly text: DurationText; readonly ms: number } | undefined;
+  for (const form of forms) {
+    const text = formMaxRange(form, facts);
+    const ms = text === undefined ? undefined : durationMs(text, FACT_UNITS);
+    if (text === undefined || ms === undefined) {
+      const { maxRange: _uncapped, ...rest } = facts;
+      void _uncapped;
+      return rest;
+    }
+    if (widest === undefined || ms > widest.ms) widest = { text, ms };
+  }
+  return widest === undefined ? facts : { ...facts, maxRange: widest.text };
 }
 
 /**
  * Why a call is refused before dispatch (§ 7.2, step T5b): one of the tool's
  * facts ({@link PeriodFactProblem}), a range across days to a tool that reads
- * one day (`multi-day`), or a wall time the zone skips (`dst-gap`).
+ * one day (`multi-day`), a wall time the zone skips (`dst-gap`), or a window
+ * of the person's that no form the tool declares can read, exactly or by
+ * reading a wider one (`no-form-holds` — a look-back ends at now, so a window
+ * still running is out of its reach, and a covering look-back wider than
+ * `maxRange` is one the tool will not read). The tool's own rule never stands
+ * in for the person's window: its default would read a time nobody asked about.
  */
-export type TimeRefusal = PeriodFactProblem | 'multi-day' | 'dst-gap';
+export type TimeRefusal = PeriodFactProblem | 'multi-day' | 'dst-gap' | 'no-form-holds';
 
 export const TIME_REFUSALS: readonly TimeRefusal[] = Object.freeze([
   'time-future',
@@ -518,4 +593,5 @@ export const TIME_REFUSALS: readonly TimeRefusal[] = Object.freeze([
   'over-max-range',
   'multi-day',
   'dst-gap',
+  'no-form-holds',
 ]);

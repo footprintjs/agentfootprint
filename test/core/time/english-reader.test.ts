@@ -77,7 +77,7 @@ describe('the v1 rows of § 5.3 — the parts, never an instant', () => {
       'at 2026-10-09T08:00-07:00',
       {
         date: { kind: 'fixed', year: 2026, month: 10, day: 9 },
-        wall: { h: 8, m: 0 },
+        wall: { h: 8, m: 0, clock: '24h' },
         zoneToken: '-07:00',
       },
     ],
@@ -133,12 +133,12 @@ describe('the v1 rows of § 5.3 — the parts, never an instant', () => {
         rangeOf: [
           {
             date: { kind: 'fixed', year: 2026, month: 10, day: 9 },
-            wall: { h: 8, m: 0 },
+            wall: { h: 8, m: 0, clock: '24h' },
             zoneToken: 'Z',
           },
           {
             date: { kind: 'fixed', year: 2026, month: 10, day: 9 },
-            wall: { h: 9, m: 0 },
+            wall: { h: 9, m: 0, clock: '24h' },
             zoneToken: 'Z',
           },
         ],
@@ -183,8 +183,10 @@ describe('every non-v1 phrase reads "unreadable" — the whole phrase, never a p
     ['next 2 hours', 'next 2 hours'], // a look-ahead
     ['3 hours ago', '3 hours ago'],
     ['on Friday', 'Friday'],
-    ['Oct 9 2026', 'Oct 9 2026'],
-    ['9 October', '9 October'],
+    // A month named alone is a calendar month (with a day it is a date — reader-gaps.test.ts).
+    ['in September', 'September'],
+    ['next 2h', 'next 2h'], // a compact look-ahead, or a compact unit the reader does not read
+    ['last 30s', 'last 30s'],
     ['the day before yesterday', 'the day before yesterday'],
     ['since 8 AM', 'since 8 AM'], // a modifier changes a v1 phrase
     ['around 8:40', 'around 8:40'],
@@ -636,7 +638,7 @@ describe('boundary', () => {
   it('the reader is frozen and names itself', () => {
     expect(reader).toMatchObject({
       id: 'agentfootprint/english',
-      version: '1.0.0',
+      version: '1.2.0',
       locale: 'en-US',
       kind: 'rule',
     });

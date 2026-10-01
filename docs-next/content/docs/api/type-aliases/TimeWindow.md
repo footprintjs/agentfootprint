@@ -6,7 +6,7 @@ title: TimeWindow
 
 > **TimeWindow** = \{ `kind`: `"range"`; `range`: [`TimeRange`](/docs/api/interfaces/TimeRange); \} \| \{ `duration`: `DurationText`; `kind`: `"lookback"`; \}
 
-Defined in: [src/core/time/resolveRecord.ts:45](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/resolveRecord.ts#L45)
+Defined in: [src/core/time/resolveRecord.ts:47](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/resolveRecord.ts#L47)
 
 What was asked, before the clock is applied.
 

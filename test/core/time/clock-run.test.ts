@@ -28,7 +28,8 @@
  *                 (the unarmed references in test/core/tools/reference/ stay green; the armed
  *                 case is the `agent-time-clock` reference there);
  *   load        — 200 calls in one run file 200 call rows, in order, at no more than twice the
- *                 CPU of the same run unarmed (a relative budget — see the test).
+ *                 cost of the same run unarmed (a relative budget through test/helpers/perf.ts ·
+ *                 expectWithinTimes — see the test).
  * Unit, property, performance: clock.test.ts and present.test.ts.
  */
 
@@ -48,6 +49,7 @@ import {
 } from '../../../src/index.js';
 import type { LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
 import { validateCheckpoint } from '../../../src/core/runCheckpoint.js';
+import { expectWithinTimes } from '../../helpers/perf.js';
 
 // ─── the harness ─────────────────────────────────────────────────────
 
@@ -472,17 +474,22 @@ describe('the model is served nothing new', () => {
 // ─── load ────────────────────────────────────────────────────────────
 
 describe('load', () => {
-  // A RELATIVE budget. The 200-call run is slow with the layer off too — the
+  // A RELATIVE budget, through the repo's perf helper (test/helpers/perf.ts ·
+  // expectWithinTimes). The 200-call run is slow with the layer off too — the
   // agent loop's own cost grows with the conversation (measured on one machine:
   // 50 calls 0.4 s, 100 calls 1.4 s, 200 calls 5.2–5.9 s on origin/main and
   // 5.1–5.7 s here unarmed; 5.7–6.4 s armed, +3–9 % CPU) — so an absolute
-  // wall-clock number measured the CI machine (16–22 s), not the layer. What
-  // the layer must not do is add cost that grows with the run (a scan of every
-  // row per call, a re-fold, a clone of the ledger): that shows up as a RATIO
-  // against the same run unarmed, in the same process. CPU time, not wall
-  // time, so a busy neighbour does not move it.
-  const cpuMsOf = async (armed: boolean) => {
-    const N = 200;
+  // wall-clock number measured the machine (16–22 s on CI, a failure at load
+  // average ~71 on a shared laptop), not the layer. What the layer must not do
+  // is add cost that grows with the run (a scan of every row per call, a
+  // re-fold, a clone of the ledger): that shows up as a RATIO against the same
+  // run unarmed. The helper samples the two runs ALTERNATELY in this process,
+  // times a reference workload before and after and widens the ceiling by the
+  // machine's own drift, so a busy neighbour divides out. One sample of a
+  // 200-call run is already far past a scheduler quantum, so it runs each side
+  // once to warm and once to measure; `retry` is the helper's stated last mile.
+  const N = 200;
+  const runOf = async (armed: boolean) => {
     const script: Reply[] = [];
     for (let i = 0; i < N; i++) script.push(call(`c${i}`, 'backup_runs'));
     script.push(answer('done'));
@@ -493,19 +500,33 @@ describe('load', () => {
       maxIterations: N + 5,
     }).tool(backupRuns());
     const agent = (armed ? builder.time({ zone: LA }) : builder).build();
-    const before = process.cpuUsage();
     await agent.run(armed ? { message: 'go', time: { now: NOW } } : { message: 'go' });
-    const used = process.cpuUsage(before);
-    return { agent, N, cpuMs: (used.user + used.system) / 1000 };
+    return agent;
   };
 
-  it('200 calls in one run file 200 call rows, in order, at most 2× the unarmed run’s CPU', async () => {
-    const plain = await cpuMsOf(false);
-    const { agent, N, cpuMs } = await cpuMsOf(true);
-    expect(cpuMs).toBeLessThanOrEqual(2 * plain.cpuMs);
-    const calls = ofKind<CallRow>(agent, 'call');
-    expect(calls.map((c) => c.toolCallId)).toEqual(Array.from({ length: N }, (_, i) => `c${i}`));
-    expect(ofKind<ClockRow>(agent, 'clock')).toHaveLength(1);
-    expect(ofKind<CallRow>(plain.agent, 'call')).toHaveLength(0);
-  }, 120_000);
+  it(
+    '200 calls in one run file 200 call rows, in order, at most 2× the unarmed run’s cost',
+    { timeout: 300_000, retry: 2 },
+    async () => {
+      let armed: Awaited<ReturnType<typeof runOf>> | undefined;
+      let plain: Awaited<ReturnType<typeof runOf>> | undefined;
+      await expectWithinTimes({
+        subject: async () => {
+          armed = await runOf(true);
+        },
+        baseline: async () => {
+          plain = await runOf(false);
+        },
+        times: 2,
+        why:
+          'the armed run files one clock row per run and one call row per call; measured +3–9 % over ' +
+          'the unarmed twin, so 2× still trips on a per-call scan or clone of the ledger',
+      });
+      if (armed === undefined || plain === undefined) throw new Error('both runs were sampled');
+      const calls = ofKind<CallRow>(armed, 'call');
+      expect(calls.map((c) => c.toolCallId)).toEqual(Array.from({ length: N }, (_, i) => `c${i}`));
+      expect(ofKind<ClockRow>(armed, 'clock')).toHaveLength(1);
+      expect(ofKind<CallRow>(plain, 'call')).toHaveLength(0);
+    },
+  );
 });

@@ -4,9 +4,9 @@ title: TimeNote
 
 # Type Alias: TimeNote
 
-> **TimeNote** = \{ `kind`: `"end-of-grain"`; \} \| \{ `end?`: `"from"` \| `"to"`; `kind`: `"dst-overlap"`; `which`: `"earlier"` \| `"later"`; \} \| \{ `end?`: `"from"` \| `"to"`; `kind`: `"dst-gap"`; `which`: `"earlier"` \| `"later"`; \} \| \{ `kind`: `"offset-said"`; `offset`: `string`; \} \| \{ `century`: `number`; `kind`: `"century-implied"`; \}
+> **TimeNote** = \{ `kind`: `"end-of-grain"`; \} \| \{ `end?`: `"from"` \| `"to"`; `kind`: `"dst-overlap"`; `which`: `"earlier"` \| `"later"`; \} \| \{ `end?`: `"from"` \| `"to"`; `kind`: `"dst-gap"`; `which`: `"earlier"` \| `"later"`; \} \| \{ `kind`: `"offset-said"`; `offset`: `string`; \} \| \{ `century`: `number`; `kind`: `"century-implied"`; \} \| \{ `as`: `"place"` \| `"abbreviation"` \| `"abbreviation-literal"`; `kind`: `"zone-read"`; `token`: `string`; \}
 
-Defined in: [src/core/time/resolveRecord.ts:51](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/resolveRecord.ts#L51)
+Defined in: [src/core/time/resolveRecord.ts:53](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/resolveRecord.ts#L53)
 
 A library-written note on how a window was read.
 
@@ -16,7 +16,10 @@ A library-written note on how a window was read.
 
 \{ `kind`: `"end-of-grain"`; \}
 
-The range runs to the end of its last said grain ("to 8:40" → `08:41`).
+The window's END was widened to the end of its last said grain: "to 8:40"
+→ `08:41`, a day → the next midnight, a lone "9 AM" → `[09:00, 10:00)`.
+Never on a range end said as an o'clock hour ("8 AM to 9 AM" ends AT
+`09:00`, § 3.3). Ask widenedGrain, never `grain` alone.
 
 ***
 
@@ -49,3 +52,16 @@ The person said a numeric offset, not a zone: the instants carry it; `zone` is t
 \{ `century`: `number`; `kind`: `"century-implied"`; \}
 
 A two-digit year, read in the clock's century.
+
+***
+
+### Type Literal
+
+\{ `as`: `"place"` \| `"abbreviation"` \| `"abbreviation-literal"`; `kind`: `"zone-read"`; `token`: `string`; \}
+
+The person named the zone in words that are no zone name (`London time`,
+`PST`): `token` as written, and how the library read it — the one IANA
+zone the place names (`place`), the app's abbreviation map's zone
+(`abbreviation`), or the fixed offset the abbreviation spells
+(`abbreviation-literal`). A proposal like every reading: the person
+confirms the zone with the window.

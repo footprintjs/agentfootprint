@@ -2,7 +2,7 @@
 title: Interfaces
 ---
 
-357 exported from `agentfootprint`.
+361 exported from `agentfootprint`.
 
 - [`AbsenceDeclaration`](/docs/api/interfaces/AbsenceDeclaration)
 - [`ActOptions`](/docs/api/interfaces/ActOptions)
@@ -290,6 +290,7 @@ title: Interfaces
 - [`SlidingWindowOptions`](/docs/api/interfaces/SlidingWindowOptions)
 - [`SlidingWindowRecord`](/docs/api/interfaces/SlidingWindowRecord)
 - [`SlotComposition`](/docs/api/interfaces/SlotComposition)
+- [`SourceClockRow`](/docs/api/interfaces/SourceClockRow)
 - [`SqliteArtifacts`](/docs/api/interfaces/SqliteArtifacts)
 - [`SqliteArtifactsOptions`](/docs/api/interfaces/SqliteArtifactsOptions)
 - [`StagedCodeInput`](/docs/api/interfaces/StagedCodeInput)
@@ -300,9 +301,11 @@ title: Interfaces
 - [`SwarmOptions`](/docs/api/interfaces/SwarmOptions)
 - [`SweptArtifact`](/docs/api/interfaces/SweptArtifact)
 - [`TeardownOptions`](/docs/api/interfaces/TeardownOptions)
+- [`TimeAnswerRow`](/docs/api/interfaces/TimeAnswerRow)
 - [`TimeCandidate`](/docs/api/interfaces/TimeCandidate)
 - [`TimeClock`](/docs/api/interfaces/TimeClock)
 - [`TimeContext`](/docs/api/interfaces/TimeContext)
+- [`TimeDerivedRow`](/docs/api/interfaces/TimeDerivedRow)
 - [`TimeMention`](/docs/api/interfaces/TimeMention)
 - [`TimeOptions`](/docs/api/interfaces/TimeOptions)
 - [`TimeParts`](/docs/api/interfaces/TimeParts)
@@ -360,4 +363,5 @@ title: Interfaces
 - [`WireToolManifest`](/docs/api/interfaces/WireToolManifest)
 - [`WorkflowOptions`](/docs/api/interfaces/WorkflowOptions)
 - [`WriteEvent`](/docs/api/interfaces/WriteEvent)
+- [`ZoneAbbreviation`](/docs/api/interfaces/ZoneAbbreviation)
 - [`ZoneArgument`](/docs/api/interfaces/ZoneArgument)

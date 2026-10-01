@@ -17,6 +17,8 @@
  * @example
  * ```ts
  * readPolicy({ dateOrder: 'DMY' }); // { dateOrder: 'DMY', year: 'ask' }
+ * readPolicy({ abbreviations: { PST: { zone: 'America/Los_Angeles', offset: '-08:00' } } });
+ * // { dateOrder: 'ask', year: 'ask', abbreviations: { PST: { zone: 'America/Los_Angeles', offset: '-08:00' } } }
  * candidateIsWellFormed({ kind: 'range', range: { from: 'x', to: 'y' } }); // false
  * ```
  */
@@ -49,7 +51,12 @@ export type TimeWindow =
 
 /** A library-written note on how a window was read. */
 export type TimeNote =
-  /** The range runs to the end of its last said grain ("to 8:40" → `08:41`). */
+  /**
+   * The window's END was widened to the end of its last said grain: "to 8:40"
+   * → `08:41`, a day → the next midnight, a lone "9 AM" → `[09:00, 10:00)`.
+   * Never on a range end said as an o'clock hour ("8 AM to 9 AM" ends AT
+   * `09:00`, § 3.3). Ask {@link widenedGrain}, never `grain` alone.
+   */
   | { readonly kind: 'end-of-grain' }
   /** A wall time the clocks go back through: which of its two instants this is (`end`: which end of a range). */
   | {
@@ -62,7 +69,20 @@ export type TimeNote =
   /** The person said a numeric offset, not a zone: the instants carry it; `zone` is the clock's. */
   | { readonly kind: 'offset-said'; readonly offset: string }
   /** A two-digit year, read in the clock's century. */
-  | { readonly kind: 'century-implied'; readonly century: number };
+  | { readonly kind: 'century-implied'; readonly century: number }
+  /**
+   * The person named the zone in words that are no zone name (`London time`,
+   * `PST`): `token` as written, and how the library read it — the one IANA
+   * zone the place names (`place`), the app's abbreviation map's zone
+   * (`abbreviation`), or the fixed offset the abbreviation spells
+   * (`abbreviation-literal`). A proposal like every reading: the person
+   * confirms the zone with the window.
+   */
+  | {
+      readonly kind: 'zone-read';
+      readonly token: string;
+      readonly as: 'place' | 'abbreviation' | 'abbreviation-literal';
+    };
 
 /** Which reading of the PARTS produced a candidate, so a policy — or an ask — can choose among them. */
 export interface ReadingTags {
@@ -72,6 +92,8 @@ export interface ReadingTags {
   /** The same, for the `to` end of a range. */
   readonly endMeridiem?: 'am' | 'pm';
   readonly year?: 'said' | 'current' | 'previous';
+  /** An abbreviation in the app's map: read as its zone (`zone`) or as its literal offset (`literal`). */
+  readonly abbreviation?: 'zone' | 'literal';
 }
 
 /** A window read from words, resolved against the clock (§ 3.2). */
@@ -99,12 +121,33 @@ export interface TimeCandidate extends ResolvedWindow {
   readonly parse: number;
 }
 
-/** The v1 policy (§ 11): the two switches with two careful answers. */
+/**
+ * One zone abbreviation the app's people write, as data (§ 11): the zone it
+ * stands for, and the fixed offset it literally spells. `PST` in October is
+ * both `America/Los_Angeles` (−07:00, what a person on the US west coast
+ * usually means) and −08:00 (what the letters say) — so a mismatch offers
+ * BOTH readings, never corrects one into the other.
+ */
+export interface ZoneAbbreviation {
+  readonly zone: ZoneName;
+  /** `±HH:MM` (or `±HH`, `±HHMM`). */
+  readonly offset: string;
+}
+
+/** The v1 policy (§ 11): the switches with careful answers. */
 export interface TimePolicy {
   /** `'ask'`: a numeric date's readings become choices. Or the one order this app's people write. */
   readonly dateOrder: 'ask' | 'MDY' | 'DMY' | 'YMD';
   /** `'ask'`: a date said without a year is asked. `'current'`: the clock's year, recorded as assumed. */
   readonly year: 'ask' | 'current';
+  /**
+   * Absent (the default): no abbreviation maps to a zone — `PST` is ASKED as
+   * a zone. Present: the abbreviations this app's people write, each read as
+   * its zone AND as its literal offset when the two disagree at the instant
+   * (both offered in the one confirmation, noted `zone-read`). An
+   * abbreviation missing from the map is still asked. No map ships.
+   */
+  readonly abbreviations?: Readonly<Record<string, ZoneAbbreviation>>;
 }
 
 /** No silent MDY, no guessed year. */
@@ -125,13 +168,14 @@ export interface MentionResolution {
   readonly unsupported: readonly string[];
 }
 
-/** A question only the person can settle. */
+/** A question only the person can settle. `abbreviation`: the app's map's zone, or the letters' offset. */
 export type OpenQuestion =
   | 'date-order'
   | 'year'
   | 'meridiem'
   | 'dst'
   | 'zone'
+  | 'abbreviation'
   | 'parse'
   | 'confirm';
 
@@ -159,22 +203,73 @@ export type ReadingChoice =
 
 // ─── The policy ──────────────────────────────────────────────────────────
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
 const DATE_ORDERS: readonly string[] = ['ask', 'MDY', 'DMY', 'YMD'];
 const YEAR_RULES: readonly string[] = ['ask', 'current'];
+const POLICY_KEYS: readonly string[] = ['dateOrder', 'year', 'abbreviations'];
+
+/** `±HH`, `±HHMM`, `±HH:MM` — a colon only between hours and minutes, never trailing. */
+const OFFSET_TOKEN = /^([+-])(\d{2})(?::?(\d{2}))?$/;
+
+/**
+ * A numeric offset as written (`-07`, `-0700`, `-07:00`) → minutes east of
+ * UTC and its `±HH:MM` spelling, or `undefined`. The one reader of an offset
+ * token: `resolve.ts` · `zoneReadsOf` (a said offset) and {@link readPolicy} (an
+ * abbreviation's literal offset) both ask it.
+ */
+export function offsetOfToken(
+  token: string,
+): { readonly minutes: number; readonly spelled: string } | undefined {
+  const m = OFFSET_TOKEN.exec(token);
+  if (m === null) return undefined;
+  const hours = Number(m[2]);
+  const minutes = m[3] === undefined ? 0 : Number(m[3]);
+  if (hours > 23 || minutes > 59) return undefined;
+  const total = (m[1] === '-' ? -1 : 1) * (hours * 60 + minutes);
+  return { minutes: total === 0 ? 0 : total, spelled: `${m[1]}${m[2]}:${m[3] ?? '00'}` };
+}
+
+/** An abbreviation key: letters only, as the person writes it (`PST`, `CEST`). */
+const ABBREVIATION_KEY = /^[A-Za-z]{2,8}$/;
+const MAX_ABBREVIATIONS = 256;
+
+function readAbbreviations(value: unknown): Readonly<Record<string, ZoneAbbreviation>> | string {
+  const shape =
+    "policy.abbreviations must map letters to { zone, offset } — { PST: { zone: 'America/Los_Angeles', offset: '-08:00' } }";
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return shape;
+  const entries = Object.entries(value as Record<string, unknown>);
+  if (entries.length === 0 || entries.length > MAX_ABBREVIATIONS) return shape;
+  const out: Record<string, ZoneAbbreviation> = {};
+  for (const [key, entry] of entries) {
+    if (!ABBREVIATION_KEY.test(key) || !isRecord(entry)) return shape;
+    if (Object.keys(entry).some((k) => k !== 'zone' && k !== 'offset')) return shape;
+    if (!isZoneName(entry.zone)) {
+      return `policy.abbreviations.${key}.zone must be an IANA zone name such as 'America/Los_Angeles'`;
+    }
+    const offset = typeof entry.offset === 'string' ? offsetOfToken(entry.offset) : undefined;
+    if (offset === undefined) {
+      return `policy.abbreviations.${key}.offset must be a numeric offset such as '-08:00'`;
+    }
+    out[key] = Object.freeze({ zone: entry.zone, offset: offset.spelled });
+  }
+  return Object.freeze(out);
+}
 
 /**
  * The app's `policy`, read with the v1 defaults filled in — or a problem in
- * words (an unknown key, a value outside its switch).
+ * words (an unknown key, a value outside its switch). `abbreviations` is kept
+ * only when given, so a policy without it reads byte-identical to v1's.
  */
 export function readPolicy(value: unknown): TimePolicy | string {
   if (value === undefined) return DEFAULT_TIME_POLICY;
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
-    return 'policy must be an object — { dateOrder?, year? }';
+    return 'policy must be an object — { dateOrder?, year?, abbreviations? }';
   }
   const p = value as Record<string, unknown>;
-  const extra = Object.keys(p).filter((k) => k !== 'dateOrder' && k !== 'year');
+  const extra = Object.keys(p).filter((k) => !POLICY_KEYS.includes(k));
   if (extra.length > 0) {
-    return `policy takes { dateOrder?, year? } — unknown key ${extra
+    return `policy takes { dateOrder?, year?, abbreviations? } — unknown key ${extra
       .map((k) => `'${k}'`)
       .join(', ')}`;
   }
@@ -184,10 +279,54 @@ export function readPolicy(value: unknown): TimePolicy | string {
   if (p.year !== undefined && !YEAR_RULES.includes(p.year as string)) {
     return "policy.year must be 'ask' or 'current'";
   }
+  const abbreviations =
+    p.abbreviations === undefined ? undefined : readAbbreviations(p.abbreviations);
+  if (typeof abbreviations === 'string') return abbreviations;
   return Object.freeze({
     dateOrder: (p.dateOrder as TimePolicy['dateOrder'] | undefined) ?? 'ask',
     year: (p.year as TimePolicy['year'] | undefined) ?? 'ask',
+    ...(abbreviations !== undefined && { abbreviations }),
   });
+}
+
+/**
+ * The grain a candidate's END was widened to, or `undefined` when its `to`
+ * is exact — the one answer to "was the end widened?" (§ 3.3). A label
+ * renders the end as said only then (`readingAsk.ts` · `timeAskOf`), and
+ * the said end is `to − 1 grain` only then (`forms.ts` · `saidEndMs`).
+ * `grain` alone is not the answer: "8 AM to 9 AM" is grain `hour` and ends
+ * AT `09:00`; a look-back is grain `hour` and ends at the clock's now.
+ *
+ * @example
+ * ```ts
+ * widenedGrain({ grain: 'minute', notes: [{ kind: 'end-of-grain' }] }); // 'minute' — [08:00, 08:41)
+ * widenedGrain({ grain: 'hour', notes: [] });                          // undefined — [08:00, 09:00)
+ * ```
+ */
+export function widenedGrain(candidate: Pick<TimeCandidate, 'notes' | 'grain'>): Grain | undefined {
+  return candidate.notes.some((n) => n.kind === 'end-of-grain') ? candidate.grain : undefined;
+}
+
+/**
+ * The grain a candidate's LABEL shows its end at (`readingAsk.ts` ·
+ * `timeAskOf`), or `undefined` to show the range as it is. A widened end is
+ * shown as said ({@link widenedGrain}). A look-back is the other kept-inside
+ * end: `[now − L, now + 1 ms)` holds the clock's now, so its label ends AT now,
+ * at the grain the person counted in — "last 40 minutes" is `8:00 – 8:40 AM`,
+ * never `8:40:00.001`. Only the label asks this: a look-back's end was not
+ * widened to a grain, so the said end (`forms.ts` · `saidEndMs`) keeps asking
+ * {@link widenedGrain}.
+ *
+ * @example
+ * ```ts
+ * shownGrain({ window: { kind: 'lookback', duration: '40m' }, grain: 'minute', notes: [] }); // 'minute'
+ * shownGrain({ window: { kind: 'range', range }, grain: 'hour', notes: [] });               // undefined — "8 AM to 9 AM"
+ * ```
+ */
+export function shownGrain(
+  candidate: Pick<TimeCandidate, 'notes' | 'grain' | 'window'>,
+): Grain | undefined {
+  return candidate.window.kind === 'lookback' ? candidate.grain : widenedGrain(candidate);
 }
 
 // ─── The record's checks ─────────────────────────────────────────────────
@@ -213,12 +352,11 @@ const OPEN: readonly string[] = [
   'meridiem',
   'dst',
   'zone',
+  'abbreviation',
   'parse',
   'confirm',
 ];
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === 'object' && !Array.isArray(value);
 const isIndex = (value: unknown, below: number): boolean =>
   typeof value === 'number' && Number.isInteger(value) && value >= 0 && value < below;
 const isPartList = (value: unknown): boolean =>
@@ -239,6 +377,11 @@ function isNote(value: unknown): boolean {
       return typeof value.offset === 'string';
     case 'century-implied':
       return typeof value.century === 'number';
+    case 'zone-read':
+      return (
+        typeof value.token === 'string' &&
+        (value.as === 'place' || value.as === 'abbreviation' || value.as === 'abbreviation-literal')
+      );
     default:
       return false;
   }

@@ -4,7 +4,7 @@ title: PeriodFacts
 
 # Interface: PeriodFacts
 
-Defined in: [src/core/time/periodForm.ts:130](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/periodForm.ts#L130)
+Defined in: [src/core/time/periodForm.ts:145](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/periodForm.ts#L145)
 
 Facts about the source — never policy (§ 7.1). Durations are in `smhdw`.
 
@@ -14,7 +14,7 @@ Facts about the source — never policy (§ 7.1). Durations are in `smhdw`.
 
 > `readonly` `optional` **direction?**: [`PeriodDirection`](/docs/api/type-aliases/PeriodDirection)
 
-Defined in: [src/core/time/periodForm.ts:131](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/periodForm.ts#L131)
+Defined in: [src/core/time/periodForm.ts:146](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/periodForm.ts#L146)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/core/time/periodForm.ts:131](https://github.com/footprintjs/age
 
 > `readonly` `optional` **filtersToAsked?**: `boolean`
 
-Defined in: [src/core/time/periodForm.ts:135](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/periodForm.ts#L135)
+Defined in: [src/core/time/periodForm.ts:150](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/periodForm.ts#L150)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/core/time/periodForm.ts:135](https://github.com/footprintjs/age
 
 > `readonly` `optional` **granularity?**: `string`
 
-Defined in: [src/core/time/periodForm.ts:134](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/periodForm.ts#L134)
+Defined in: [src/core/time/periodForm.ts:149](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/periodForm.ts#L149)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [src/core/time/periodForm.ts:134](https://github.com/footprintjs/age
 
 > `readonly` `optional` **maxRange?**: `string`
 
-Defined in: [src/core/time/periodForm.ts:133](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/periodForm.ts#L133)
+Defined in: [src/core/time/periodForm.ts:148](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/periodForm.ts#L148)
 
 ***
 
@@ -46,4 +46,4 @@ Defined in: [src/core/time/periodForm.ts:133](https://github.com/footprintjs/age
 
 > `readonly` `optional` **retention?**: `string`
 
-Defined in: [src/core/time/periodForm.ts:132](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/periodForm.ts#L132)
+Defined in: [src/core/time/periodForm.ts:147](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/periodForm.ts#L147)

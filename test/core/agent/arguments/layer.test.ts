@@ -504,6 +504,87 @@ describe('assume — fail closed, and the dispatch re-read', () => {
     // Inner calls file no rows: the outer call is the accounted unit.
     expect(argumentRows(agent)).toEqual([]);
   });
+
+  it('inner dispatch owes a window ONCE: one whole period form passes, the untaken form is not asked for', async () => {
+    // A look-back OR a past window's bounds — the shape a composed walk hands
+    // its windowed ingredient. Every period argument is ruled (the look-back
+    // assumed, the bounds asked), and the tool itself refuses two windows; so
+    // owing each one separately refused every call a composer could make.
+    const ran: Record<string, unknown>[] = [];
+    const activity = defineTool({
+      name: 'client_activity',
+      description: 'Client operations for one cluster over a look-back or a past window.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          cluster: { type: 'string' },
+          window: { type: 'string' },
+          start: { type: 'string' },
+          stop: { type: 'string' },
+        },
+        required: ['cluster'],
+      },
+      askOrAssume: {
+        window: { assume: '1h' },
+        start: { ask: 'From when?' },
+        stop: { ask: 'Until when?' },
+      },
+      period: {
+        forms: [
+          { kind: 'lookback', argument: 'window', signed: false, units: 'mhdw' },
+          {
+            kind: 'bounds',
+            from: { argument: 'start', as: 'iso', edge: 'inclusive' },
+            to: { argument: 'stop', as: 'iso', edge: 'exclusive' },
+          },
+        ],
+        direction: 'past',
+      },
+      execute: async (args) => {
+        ran.push({ ...args });
+        return { rows: [] };
+      },
+    });
+    const refused: string[] = [];
+    const attempt = async (
+      ctx: { tools?: { call: (n: string, a: object) => Promise<unknown> } },
+      args: object,
+    ) => {
+      try {
+        await ctx.tools!.call('client_activity', args);
+      } catch (error) {
+        refused.push((error as Error).message);
+      }
+    };
+    const bounds = { start: '2026-09-29T08:45:00-07:00', stop: '2026-09-29T08:55:00-07:00' };
+    const composer = defineTool({
+      name: 'walk',
+      description: 'calls client_activity through ctx.tools',
+      execute: async (_args, ctx) => {
+        await attempt(ctx, { cluster: 'c', window: '6h' });
+        await attempt(ctx, { cluster: 'c', ...bounds });
+        await attempt(ctx, { cluster: 'c', start: bounds.start }); // half a window: no form whole
+        await attempt(ctx, { cluster: 'c' }); // no window at all
+        return 'done';
+      },
+    });
+    const m = scripted([call('c1', 'walk', {}), answer('done')]);
+    const agent = Agent.create({ provider: m.provider as never, model: 'm' })
+      .tool(activity)
+      .tool(composer)
+      .build();
+    await agent.run({ message: 'go' });
+    expect(ran).toEqual([
+      { cluster: 'c', window: '6h' },
+      { cluster: 'c', ...bounds },
+    ]);
+    expect(refused).toHaveLength(2);
+    // Half a window is still owed; the window is named ONCE, as its forms, never per argument.
+    for (const message of refused) {
+      expect(message).toContain("leaves one window — 'window', or 'start' and 'stop' — out");
+    }
+    expect(argumentRows(agent)).toEqual([]);
+  });
 });
 
 describe('assume — a before-tool middleware that rewrites a ruled argument', () => {

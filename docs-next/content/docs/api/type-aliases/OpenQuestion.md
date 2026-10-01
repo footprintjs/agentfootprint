@@ -4,8 +4,8 @@ title: OpenQuestion
 
 # Type Alias: OpenQuestion
 
-> **OpenQuestion** = `"date-order"` \| `"year"` \| `"meridiem"` \| `"dst"` \| `"zone"` \| `"parse"` \| `"confirm"`
+> **OpenQuestion** = `"date-order"` \| `"year"` \| `"meridiem"` \| `"dst"` \| `"zone"` \| `"abbreviation"` \| `"parse"` \| `"confirm"`
 
-Defined in: [src/core/time/resolveRecord.ts:129](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/resolveRecord.ts#L129)
+Defined in: [src/core/time/resolveRecord.ts:172](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/resolveRecord.ts#L172)
 
-A question only the person can settle.
+A question only the person can settle. `abbreviation`: the app's map's zone, or the letters' offset.

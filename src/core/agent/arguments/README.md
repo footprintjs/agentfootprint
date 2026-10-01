@@ -210,7 +210,7 @@ pure decision per call (`resolve.ts` · `timeDecisionsOf` over `core/time/bind.t
 | The call's period arguments | Row | Runs with |
 |---|---|---|
 | all left out, the turn holds ONE window of the person's, a form holds it exactly | `said` + `matched: 'mention'` (a `model` reader's window: + `reading`; a UI `time.window`: `app`, `appSource: 'time.window'`) | the window in the form's spelling — a FILL, noted past tense on the result (`serve.ts` · `filledNote`'s window clause); another form's arguments are left alone |
-| all left out, no window / two mentions / an open reading / no exact form | as the table above (the rule assumes or asks) | as the table above |
+| all left out, no window / two mentions / an open reading / no exact form | as the table above (the rule assumes or asks) — for ONE form: a window is owed once, so with several forms the form the rules owe is the window (kept answers, else the form the rules ASSUME whole, else the first form's own asks) and every other form's arguments are untaken, neither asked nor filed (`resolve.ts` · `windowUntakenOf` over `declare.ts` · `owedFormOf`). Ruled one by one, an assumed look-back beside asked bounds was filled AND asked: a pause for a second window the tool would refuse | as the table above, for that form |
 | sent, and the declared `user` quote names a mention whose window it IS | `said` + `matched: 'mention'` (a reading stays a reading) | as sent — never asked |
 | sent, equal to a window by value, or different from the person's | the check's own verdict (`model`, a reading, …) | as sent — a differing window is NOT asked about (the v1 law: record and run) |
 
@@ -246,8 +246,13 @@ tool's facts (`direction`; wholly beyond `retention`; over `maxRange`), spans da
 `ArgumentResolution.refused` door the unreadable-rules refusal already uses, with the sentence
 `serve.ts` · `timeRefusal` — and files no argument row (its `call-window` row, `how: 'refused'`,
 is the record); a window only partly beyond `retention` runs, marked `partlyBeyondRetention`.
-A window the model sent in one form leaves another form's missing arguments alone — never
-filled or asked (`resolve.ts` · `untakenFormArgumentsOf`). At dispatch, a look-back the clock
+A window of the person's that NO form can read, not even wider — a window still running to a
+look-back-only tool, a covering look-back longer than `maxRange` — is refused the same way
+(`no-form-holds`), never left to the tool's rule: an assumed `1h` would read a time nobody asked
+about. The fill, the time ask and the served line all ask ONE owner, `core/time/convert.ts` ·
+`convertForTool`. A window the model sent in one form leaves another form's missing arguments
+alone — never filled or asked (`resolve.ts` · `untakenFormArgumentsOf`) — with or without `.time()`
+(`resolve.ts` · `windowUntakenOf`: a call that sends its bounds is not also handed the assumed look-back). At dispatch, a look-back the clock
 drifted past (§ 7.4) is redrawn only when the library wrote it (`stages/toolCalls.ts` ·
 `timeAtDispatch` over `core/time/drift.ts`); the `call` row records `drift`.
 
@@ -257,6 +262,11 @@ drifted past (§ 7.4) is redrawn only when the library wrote it (`stages/toolCal
 //   { kind: 'call-window', how: 'filled', sent: {…}, differs: { extra: [{ from: '…T07:00:00Z', to: now }] } }
 // the model sends a window still to come → the tool does not run; the model reads
 //   "search_logs was not run on that call: the window it asked for had not happened yet, …"
+// the same "yesterday" to period: { …, maxRange: '24h' } → refused, its `assume: '1h'` never runs:
+//   { kind: 'call-window', how: 'refused', refused: 'no-form-holds', … } and the model reads
+//   "search_logs was not run on that call: no period form the tool declares can read the window it
+//    asked for, exactly or by reading a wider one, within the most the tool declares it reads at
+//    once (maxRange 24h)."
 ```
 
 **Proposed, asked lazily, then served (step T6b, `.time({ reader })`).** A reading of the
@@ -273,8 +283,10 @@ zone, free entry open. The answer is converted into each call's forms (`bindAnsw
 wider), filed `answered` per argument, filled with `ArgumentFill.window` (the note's window clause:
 "from the window the person chose when asked what their words meant"), and settles the mention
 with a `time-answer` row (`how: 'confirmed'` for the click on a pre-filled reading, `'edited'` for a
-window the person wrote) — so later calls of the turn are filled from it (`answered` +
-`matched: 'mention'`) and it is not asked again. SERVED — LATE, at the decision point, never on a
+window the person wrote) and one more `call-window` row per call it filled (`filled`,
+`person.source: 'answered'`, `sent` + `differs.extra` when wider — the call's latest row is its
+window, so `ctx.time`, the clock at dispatch and the result checks read it) — so later calls of
+the turn are filled from it (`answered` + `matched: 'mention'`) and it is not asked again. SERVED — LATE, at the decision point, never on a
 tool description: ONE request-only `user` line appended last to each request (`serve.ts` ·
 `timeWindowsLine`, composed at the slot's one decoration site from the tools really served, carried
 on `timeLine` = `{ iteration, text }`, appended by `callLLM`, rebuilt by `servedView`; the mount
@@ -286,19 +298,58 @@ arguments left out — not a question in the reply, which the first paid T6b run
 model reaching for, and not a written window, which runs unconfirmed); once a call already ran on
 a written window, the limit the answer states instead. Why late: the step-7b bench
 measured raw facts served early wrong 73/80 and the conclusion served at the decision point 20/80.
-When every reading breaks a tool's facts nothing is asked and the call is refused (`timeRefusal`).
+When a tool can read NO reading (each breaks a fact, or no form holds it) nothing is asked and the
+call is refused (`timeRefusal`); the next request's line then CONCLUDES it — "client_activity was
+not run for “10/20/26”: <the same reason>. So the answer tells the person that client_activity
+could not read that time, and claims nothing about it from client_activity." — and no longer names
+that call as the next step (the T6b bench's future case asked it again until its budget ran out).
+
+ONE line, ONE opening (packet "serving"): `timeLine` composes the halves (the windows', then the
+limits) and opens the line ONCE with `TIME_LINE_SOURCE` — a note from the library that runs the
+tools, not from the person and not a correction from them; no half carries its own. Why: the line
+is a `user` message, and in the T6b paid run 37 of 37 answers after the unmarked "the person has
+not confirmed it" opened "You're right… I apologize". So the unconfirmed-call sentence also speaks
+for the library — what it holds, never what the person did not do — and a quote the library holds
+no reading of (`ReaderWindows.pendingZones`: a zone it cannot resolve) says its form asks for the
+zone, never that it "shows its reading".
+
+**Open means "the person wrote a time and the library holds no window for it" (packet "gaps").**
+A reading waiting on its zone (no candidates yet) and words the reader could not read
+(`by: 'none'`) are open too (`core/time/windows.ts` · `isOpenForPerson`, the one owner) — so the
+`proposed` check above fires for them as well, and a tool whose rule assumes its period is asked,
+never defaulted. The unread words are asked as ONE window field with nothing pre-filled
+(`format: 'time-range'`, "Which time did you mean by “yesterday morning”?"), judged and converted
+like any answer; the pending half says "the library could not read those words, so its own form
+asks the person which time they meant, with nothing filled in". The window the person set in the
+app's time control (`time.window`) is served on its own sentence under `.time()`, with or without
+a reader, and every value the line names is the one answer (`convertForTool` over
+`windows.ts` · `windowToConvert`) the call is handed.
 
 ```ts
-// "client activity yesterday?" under the reader's arm, first request — its LAST message:
+// 'who talked to cluster 006 since 8 AM?' — `since 8 AM` is unreadable; the tool ASSUMES `1h`:
+//   paused: one field, format 'time-range', 'Which time did you mean by “since 8 AM”?', no enum
+//   resume { f1: '2026-10-09T08:00:00-07:00/2026-10-09T09:00:00-07:00' } → the tool runs window '1h'
+//   (the covering look-back, said so) — the rule's `1h` never ran on its own
+```
+
+```ts
+// "client activity yesterday?" under the reader's arm, first request — its LAST message (every
+// line below is served after the one opening, `TIME_LINE_SOURCE`:
+//   '[A note from the library that runs the tools — not from the person, and not a correction from
+//    them: when you answer, answer the person directly, as you would from the tool results alone.] '):
 //   { role: 'user', content: 'The window for “yesterday” is not settled yet: the person confirms it
 //     in the library's own form, which shows its reading of those words with the zone and opens
 //     when client_activity is called with start_time, end_time left out (or the call is refused
 //     with the reason). So the next step is that call — not a question about the time in the
 //     reply, and not a window written into the call, which would run unconfirmed.' }
 // once a call of the turn already ran on a window the model wrote, the line names the limit:
-//   'The window for “yesterday” is not settled: the person has not confirmed it, and the call that
-//    ran used a window written into it, unconfirmed. An answer built on that call says its window
-//    was not confirmed by the person.'
+//   'The results for “yesterday” cover the window written into the call — the assistant's own
+//    reading of those words. So the answer gives those results and names that window as the
+//    assistant's reading of “yesterday”.'
+// a quote whose zone the library cannot resolve ("… 8:40 AM PST", no map) — no reading to show:
+//   'The window for “10/09/26 8 AM to 8:40 AM PST” is not settled yet: the library holds no reading
+//    of those words until it knows which time zone they name, so its own form asks the person for
+//    that zone, and it opens when client_activity is called with start_time, end_time left out …'
 // after the person confirms, the next request's last message:
 //   'The person's time words, as the library holds them: “yesterday” is 2026-10-08 00:00–23:59
 //    America/Los_Angeles (UTC-07:00), the window the person confirmed when asked what their words
@@ -347,7 +398,19 @@ once, before anything in the batch is written or run (`stages/argumentAsk.ts` ·
   breaks its `pattern`. One that does not fit files `asked: 'invalid-answer'` and is asked
   again with a second fixed question (`ask.ts` · `ARGUMENT_REASK_QUESTION`), at most
   `ask.ts` · `MAX_ASK_ROUNDS` (three) times; then the calls that needed it are refused by
-  name (`serve.ts` · `unansweredRefusal`). More than 32 fields go in rounds of 32.
+  name (`serve.ts` · `unansweredRefusal`). More than 32 fields go in rounds of 32. Under
+  `.time()` a period answer is also judged against the tool's `direction`, `retention` and
+  `maxRange` — and a START and END asked as two fields are judged TOGETHER (`ask.ts` ·
+  `pairsBroken`: the call's bounds read back with both answers), because one bound of two is no
+  window: a future `start_time` / `end_time` pair to a tool whose source holds only the past is
+  asked again naming the fact, then refused, with the reader armed or not.
+
+  ```ts
+  // period: { forms: [{ kind: 'bounds', from: start_time, to: end_time }], direction: 'past' },
+  // "Show client activity", the model leaves both out → f1 'From when?', f2 'Until when?';
+  // the person answers tomorrow's start and end → asked again ("a window that has already
+  // happened (the source holds only the past)"), three times, then the call is refused unrun.
+  ```
 - **The resume adds no model call.** The answered values are filled like a declared default
   (`ArgumentFill.source: 'answered'`), each call runs on its ordinary path — permission,
   middleware, validation, check-in, credentials — and its result carries a past-tense note
@@ -390,7 +453,7 @@ where footprintjs resumes it correctly.
 | DECLARE | the tool author: `Tool.askOrAssume` (`{ assume }` or `{ ask, choices? }`) and `Tool.period` (`ToolPeriod`), judged by ONE assert (`declare.ts` · `assertAskOrAssume`) at definition (`core/tools.ts` · `defineTool`), at dispatch (`declare.ts` · `rulesOf` — a Tool built by hand or served by a ToolProvider never passed `defineTool`) and at MCP ingest (`lib/mcp/toolExtras.ts` · `readToolExtras`, which judges each rule against the listed tool's own `inputSchema`). A rule is refused, never repaired: an argument the schema does not offer or whose type is not exactly one of `string`, `number`, `integer`, `boolean`; a `wants` argument; a value or choice the PROPERTY's own schema rejects (never the root `required`); a period on an argument with no rule. The host declares its own ask context (`AgentOptions.argumentAskContext`). The MODEL declares, under declared sources (`.inputsLayer({ argumentSources: true })` or `.findings({ argumentSources: true })`), where each value came from (`_findings.from`), read by the ONE reader of `_findings` (`findings/reserved.ts` · `readDeclaration`, through `sources.ts` · `readSources`): a malformed entry is dropped and counted, never defaulted. A composition declares a message it composed (`AgentInput.messageFrom`). |
 | VERIFY | `resolve.ts` · `verifyPlan` — the tables above; a pure function of the batch and the rules of the implementation that will run (`stages/toolResolver.ts` · `buildToolResolver`, the one dispatch resolver). The declared sources: `checks.ts` · `checkSource`, whole-token membership in the ONE place each source lives, over corpora the mount builds from the served record (`honesty/sourceCorpus.ts` · `sourceCorpusOf`) — a membership pass can REFUTE a claim and never supports one. The person's answer: `ask.ts` · `checkAnswer`, the property's own schema. |
 | RECORD | `rows.ts` · `ArgumentRow` — one row per ruled argument per call, its value in the tool's OWN argument view (`core/toolShownArgs.ts` · `shownArgsOf`: a hidden argument reads `'REDACTED'`), stamped with the conversation `turn`: `default`, `model`, `asked` (`missing`, `invalid-answer`; no value), `answered` (`free` for a free-text field; filed by the layer itself, with no `asked` row, when a kept answer fills the value). Under declared sources a present value's row also carries the check (`claimed`, `matched`, `quote` — `'REDACTED'` while any tool in reach can hide arguments (a registered tool with an argument view, or any ToolProvider), since a quote is free text that may hold any hidden value (`resolve.ts` · `quotesMayShow`) — `reading`, `earlier`, `result`, `setAside`, `argumentsFrom`, `appSource`, `coincides`, `failed`), the model's value as `proposed` on an `asked: 'unverified'` row, a FREE argument a `from` entry named is filed with no `rule`, and the call's first row carries its dropped `from` entries (`malformed`) when no basis row does. The layer's rows are merged into the ONE ledger (`AgentState.findingsLedger`) by the ledger's pure half (`findings/ledger.ts` · `appendRows`) in ONE write per batch, through the mount's output mapper (`honesty/mounts.ts` · `mountInputsLayer`); the ask's `answered` and `invalid-answer` rows through the one writer (`findings/ledger.ts` · `recordFindings`), once per answer. One `agentfootprint.findings.argument` event per row (names, enums and counts — never a value). The `agentfootprint.pause.resume` event of the library's own ask carries the reply's shape with every value `'REDACTED'` (`askMarker.ts` · `argumentAskReplyForEvent`, read in `core/RunnerBase.ts` · `emitPauseResume`), because an answer may fill an argument the tool's view hides. |
-| RESOLVE | **assume** (fill the declared default — `resolve.ts` · `resolutionsOf`), **ask** (the batch ask, `stages/argumentAsk.ts` · `askBeforeDispatch` — a missing `ask` value, and under declared sources an untraced present one), **refuse** (rules that cannot be read at dispatch; answers that never fit). ToolCalls applies each entry after `tool_start` (which keeps the model's proposal) and BEFORE the permission check, so policy judges the call that will really run (`dispatch.ts` · `withFills`). A ruled tool met on an agent WITHOUT the layer is refused rather than run unruled (`dispatch.ts` · `unmountedRefusal`, the sentence `serve.ts` · `unmountedRulesRefusal`). The refusals are decided after permission and BEFORE the before-tool middleware chain, so no middleware can ask a person about a call that will not run; the middleware-ask resume door re-applies them (`stages/toolCalls.ts` · `resume`). Inner dispatch (`ctx.tools.call`) refuses a ruled tool unless every ruled argument is given (`toolDispatch.ts` · `refuseUnaccountedRuledArguments`). |
+| RESOLVE | **assume** (fill the declared default — `resolve.ts` · `resolutionsOf`), **ask** (the batch ask, `stages/argumentAsk.ts` · `askBeforeDispatch` — a missing `ask` value, and under declared sources an untraced present one), **refuse** (rules that cannot be read at dispatch; answers that never fit). ToolCalls applies each entry after `tool_start` (which keeps the model's proposal) and BEFORE the permission check, so policy judges the call that will really run (`dispatch.ts` · `withFills`). A ruled tool met on an agent WITHOUT the layer is refused rather than run unruled (`dispatch.ts` · `unmountedRefusal`, the sentence `serve.ts` · `unmountedRulesRefusal`). The refusals are decided after permission and BEFORE the before-tool middleware chain, so no middleware can ask a person about a call that will not run; the middleware-ask resume door re-applies them (`stages/toolCalls.ts` · `resume`). Inner dispatch (`ctx.tools.call`) refuses a ruled tool unless every ruled argument is given (`toolDispatch.ts` · `refuseUnaccountedRuledArguments`) — a window counts ONCE: a call that gives one period form whole (`{ window: '6h' }`, or `{ start, stop }`) owes nothing for the forms it did not take (`declare.ts` · `sentFormOf`), and a period of several forms left out is named once, as its forms (`leaves one window — 'window', or 'start' and 'stop' — out`); one form keeps its per-argument sentence. |
 | FOLD | the answer's standing (`assessment/assess.ts` · `readArgumentVerdicts`, `readArgumentAsk`), this turn's rows only: a `default` row fires `argument-assumed`, a `model` row on a ruled argument fires `argument-unverified` — "not sure"; the batch ask still waiting (`AgentState.argumentAsk`'s `waiting`, with this turn's `asked` rows as witnesses) fires `argument-asked` — "ask". Under declared sources: a READING fires `argument-read`, a value from a result the model had set aside fires `value-contingent`, a failed claim on ANY argument fires `argument-unverified`, and a traced source (`said` via the quote or a phrase, `answered`, `result`, `app`) fires nothing — so an answer can read "consistent with the record" on checked values, and never "known" from them; `checked` gains `argument-sources`. An `answered` row fires nothing and supports nothing. A before-tool middleware that rewrote a ruled argument AFTER the layer checked it supersedes the row: assumed, unless it declared the value the person's or the app's (`allow(args, why, { from })`; `middleware/outcomes.ts` · `allow`), read by ONE owner (`middleware/rewrites.ts` · `argumentRewritesOf`). Every result the fold reads is the TOOL's own bytes (`lib/toolBytes.ts` · `toolBytesOf`). No row here ever SUPPORTS "known". |
 | SERVE | the model: the served schema drops a ruled argument from `required` and says the rule (`serve.ts` · `withArgumentRules`, `ASK_SENTENCE`); a call that ran on a filled value gets a past-tense note after the tool's own bytes (`serve.ts` · `filledNote`) — one clause per fill the call really ran with (`dispatch.ts` · `fillsThatRan`) — and its history message carries `toolChars`, the cut every reader of a result as the TOOL's words reads through (`lib/toolBytes.ts` · `toolBytesOf`). Under declared sources: the `from` property on a ruled tool's `_findings` (`findings/reserved.ts` · `FINDINGS_FROM_PROPERTY`, first and required — or alone, `FINDINGS_SOURCES_SCHEMA`, without the ledger), the `ask` sentence that names it (`serve.ts` · `ASK_SOURCES_SENTENCE` — only where the schema carries it, never on a tool whose author owns `_findings`), and the answered note's "(the call had carried …)" and its `turn` clause (`serve.ts` · `ANSWERED_SOURCE_CLAUSE`) — no instruction line. The person: the typed ask (with `quoted`, the person's own words a reading was made of); the rows, the event, the standing — and, only under `.limitsTravelWithTheAnswer()`, an "Assumed (a tool's rule, not your words)" block (`serve.ts` · `assumedBlockOf`). The evidence gate treats a declared default as the app's words and an answered value as the person's (`evidence/evidenceIndex.ts` · `exemptFromRun`, `stages/route.ts` · `answeredValuesOf`). |
 | ARM + MEASURE | a REGISTERED tool that declares rules (`.tool()`, a skill's tools, an MCP tool registered on the builder) arms the mount; `AgentBuilder.inputsLayer()` arms it for ruled tools only a ToolProvider serves. Nothing declared → nothing mounted, decorated, read or written: every run is byte-identical (the 21 references in `test/core/tools/reference/`), and an agent whose tools declare only `assume` rules is byte-identical to step 3 (its two references). The ask's code loads through `import()` when an ask is raised. The bench is honesty step 2's inputs bench, whose registered rule names step 4's clauses (the share of period calls that ran with the value the person meant, the needless asks on the controls, the facts, the overhead). Declared sources: `.inputsLayer({ argumentSources: true })` alone, or `.findings({ argumentSources: true })` beside the ledger (refused at build without the layer); off → no `from`, no check, no new key — the 25 other references do not move, `agent-arguments-sources` pins the armed run beside the ledger and `agent-arguments-sources-only` without it; step 5 is measured by its own rule, registered before its first paid call. |

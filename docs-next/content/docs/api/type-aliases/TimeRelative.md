@@ -6,7 +6,7 @@ title: TimeRelative
 
 > **TimeRelative** = \{ `offset`: `number`; `unit`: `"minute"` \| `"hour"` \| `"day"` \| `"week"` \| `"month"` \| `"year"`; \} \| \{ `count`: `number`; `unit`: `"second"` \| `"minute"` \| `"hour"` \| `"day"` \| `"week"`; \}
 
-Defined in: [src/core/time/reader.ts:118](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L118)
+Defined in: [src/core/time/reader.ts:125](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L125)
 
 A time said relative to the message's moment.
 

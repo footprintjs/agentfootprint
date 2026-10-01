@@ -14,6 +14,7 @@ inclusive — every boundary converts (the module table).
 
 - [`ControlWindow`](/docs/api/interfaces/ControlWindow)
 - [`PersonWindow`](/docs/api/interfaces/PersonWindow)
+- [`TimeAnswerRow`](/docs/api/interfaces/TimeAnswerRow)
 
 ## Properties
 

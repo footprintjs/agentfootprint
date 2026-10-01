@@ -26,6 +26,7 @@ import { spellRange } from './range.js';
 import { presentRange } from './present.js';
 import type { TimeReadingRow } from './rows.js';
 import type { TimeCandidate } from './resolve.js';
+import { shownGrain } from './resolveRecord.js';
 
 // ─── The choices a reading offers ─────────────────────────────────────────
 
@@ -56,9 +57,13 @@ function saidZoneToken(row: TimeReadingRow): string {
 
 /**
  * The ask a `time-reading` row needs, or `undefined` when its reading is
- * settled (`only`, `policy`) or cannot be asked about (`none`, a refused
- * mention). `messages` is the whole catalog (the caller composes the app's
- * overrides over `defaultTimeAskMessages`); `id` names the field.
+ * settled (`only`, `policy`) or is no person's words (a refused mention).
+ * Words the library holds NO reading of (`none`: unreadable, no candidate)
+ * are asked too — which time the person meant, free entry, nothing
+ * pre-filled (`ask.which`, `format: 'time-range'`): the person wrote a time,
+ * and a tool's default never stands in for it. `messages` is the whole
+ * catalog (the caller composes the app's overrides over
+ * `defaultTimeAskMessages`); `id` names the field.
  */
 export function timeAskOf(
   row: TimeReadingRow,
@@ -66,7 +71,14 @@ export function timeAskOf(
   id = 'time',
 ): TimeAsk | undefined {
   const choice = row.choice;
-  if (choice?.by !== 'open' || row.quote === undefined) return undefined;
+  if (row.quote === undefined || row.refused !== undefined) return undefined;
+  if (choice?.by === 'none') {
+    return {
+      question: fillMessage(messages['ask.which'], { quote: quoted(row.quote) }),
+      field: { id, type: 'string', required: true, format: 'time-range' },
+    };
+  }
+  if (choice?.by !== 'open') return undefined;
   const quote = quoted(row.quote);
   if (choice.open.includes('zone')) {
     return {
@@ -90,10 +102,12 @@ export function timeAskOf(
   // on every reading's open choice); this only reads it.
   const confirm = choice.open.includes('confirm');
   const labels = offered.map(({ candidate }) => {
+    // The end as said when it was widened, a look-back's at now: "8 AM to 9 AM" is shown
+    // 8:00 – 9:00, not 8:59; "last 40 minutes" 8:00 – 8:40, not 8:40:00.001.
     const window = presentRange(
       candidate.range,
       { zone: candidate.zone, locale: row.reader.locale },
-      candidate.grain,
+      shownGrain(candidate),
     );
     if (!confirm) return window;
     // The zone is named: the reading leaned on it, and the person may have meant another.
