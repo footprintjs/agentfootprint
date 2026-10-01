@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.134.3] - 2026-10-01
+
+### Fixed
+
+- **Words the library could not read: the served line leads with the next step.** Under `.time({ reader })`, when the reader cannot read the person's time words ("yesterday morning", "last week"), the one late time line now serves the library's conclusion and the ONE next step first — "The library could not read “yesterday morning”, so the next step is to call client_activity with start_time, end_time left out: that call opens the library's own form, which asks the person which time they meant, with nothing filled in (or the call is refused with the reason). Do not ask about the time in the reply — the form asks it — and do not write a window into the call, which would run unconfirmed." The line before ("The window for … is not settled yet: the library could not read those words …") drew a question in prose and no call, so the library's free-entry ask never opened. Measured on Claude Haiku 4.5 under a rule registered before the run (`bench/time/RULE-unread.md`, 120 runs): the free-entry ask opened on 0/30 unread runs before and 17/30 after — "yesterday morning" 0/15 → 15/15, "last week" 0/15 → 2/15 (the model still writes its own `7d` there); controls unchanged.
+
 ## [9.134.2] - 2026-10-01
 
 ### Fixed
