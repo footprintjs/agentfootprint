@@ -4,7 +4,7 @@ title: SemanticGrain
 
 # Interface: SemanticGrain
 
-Defined in: [src/lib/semantics/types.ts:87](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L87)
+Defined in: src/lib/semantics/types.ts:87
 
 The grain — what one value MEANS, stated when it is not what a reader
 would assume. This is the field that stops a model from adding
@@ -17,7 +17,7 @@ has.
 
 > `readonly` `optional` **aggregation?**: `string`
 
-Defined in: [src/lib/semantics/types.ts:91](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L91)
+Defined in: src/lib/semantics/types.ts:91
 
 How the values were folded ('avg', 'max', 'sum', 'count', …).
 
@@ -27,7 +27,7 @@ How the values were folded ('avg', 'max', 'sum', 'count', …).
 
 > `readonly` `optional` **collapsed?**: `string`
 
-Defined in: [src/lib/semantics/types.ts:100](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L100)
+Defined in: src/lib/semantics/types.ts:100
 
 What was folded away ('per-port rows collapsed to per-switch').
 
@@ -37,7 +37,7 @@ What was folded away ('per-port rows collapsed to per-switch').
 
 > `readonly` `optional` **interval?**: `string`
 
-Defined in: [src/lib/semantics/types.ts:89](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L89)
+Defined in: src/lib/semantics/types.ts:89
 
 The collection interval the values live on ('30m', '1h', 'daily').
 
@@ -47,7 +47,7 @@ The collection interval the values live on ('30m', '1h', 'daily').
 
 > `readonly` `optional` **is\_counter?**: `boolean`
 
-Defined in: [src/lib/semantics/types.ts:98](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L98)
+Defined in: src/lib/semantics/types.ts:98
 
 Whether the values are counters. MUST be stated (true or false) whenever
 `aggregation` is counter-looking (see

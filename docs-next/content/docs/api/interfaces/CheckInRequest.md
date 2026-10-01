@@ -4,7 +4,7 @@ title: CheckInRequest
 
 # Interface: CheckInRequest
 
-Defined in: [src/core/checkin.ts:41](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L41)
+Defined in: src/core/checkin.ts:41
 
 The typed pause payload for one check-in. Rides the existing pause
 machinery: it becomes the checkpoint's `pauseData` and is surfaced on
@@ -16,7 +16,7 @@ surfaced on `RunnerPauseOutcome.checkIn` (`core/pause.ts`). JSON/clone-safe.
 
 > `readonly` **args**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/core/checkin.ts:50](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L50)
+Defined in: src/core/checkin.ts:50
 
 The arguments the call will run with: the model's proposal, with any value
 the inputs layer filled (a tool's `askOrAssume` `assume` rule) and any
@@ -29,7 +29,7 @@ runs.
 
 > `readonly` `optional` **component?**: [`AskComponent`](/docs/api/interfaces/AskComponent)
 
-Defined in: [src/core/checkin.ts:67](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L67)
+Defined in: src/core/checkin.ts:67
 
 Which REGISTERED screen component collects the decision (9.24.0) — the
 tool's own declaration (`defineTool({ checkIn, checkInComponent })`),
@@ -44,7 +44,7 @@ what the answer is.
 
 > `readonly` **evidence**: [`CheckInEvidence`](/docs/api/interfaces/CheckInEvidence)
 
-Defined in: [src/core/checkin.ts:58](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L58)
+Defined in: src/core/checkin.ts:58
 
 The receipts riding the ask.
 
@@ -54,7 +54,7 @@ The receipts riding the ask.
 
 > `readonly` `optional` **intent?**: `string`
 
-Defined in: [src/core/checkin.ts:56](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L56)
+Defined in: src/core/checkin.ts:56
 
 The model's stated reasoning for THIS call, when the assistant turn
 carried text alongside the tool call. Omitted when the turn was a bare
@@ -66,6 +66,6 @@ tool call with no content.
 
 > `readonly` **tool**: `string`
 
-Defined in: [src/core/checkin.ts:43](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L43)
+Defined in: src/core/checkin.ts:43
 
 The tool the agent wants to run (its name).

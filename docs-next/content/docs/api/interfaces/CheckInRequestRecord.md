@@ -4,7 +4,7 @@ title: CheckInRequestRecord
 
 # Interface: CheckInRequestRecord
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:46](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L46)
+Defined in: src/recorders/core/CheckInRecorder.ts:46
 
 One captured check-in ask.
 
@@ -14,7 +14,7 @@ One captured check-in ask.
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:49](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L49)
+Defined in: src/recorders/core/CheckInRecorder.ts:49
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/recorders/core/CheckInRecorder.ts:49](https://github.com/footpr
 
 > `readonly` **request**: [`CheckInRequest`](/docs/api/interfaces/CheckInRequest)
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:51](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L51)
+Defined in: src/recorders/core/CheckInRecorder.ts:51
 
 The typed ask + evidence pack.
 
@@ -32,7 +32,7 @@ The typed ask + evidence pack.
 
 > `readonly` **toolCallId**: `string`
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:48](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L48)
+Defined in: src/recorders/core/CheckInRecorder.ts:48
 
 ***
 
@@ -40,4 +40,4 @@ Defined in: [src/recorders/core/CheckInRecorder.ts:48](https://github.com/footpr
 
 > `readonly` **toolName**: `string`
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:47](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L47)
+Defined in: src/recorders/core/CheckInRecorder.ts:47

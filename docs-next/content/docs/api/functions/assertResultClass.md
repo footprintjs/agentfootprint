@@ -6,7 +6,7 @@ title: assertResultClass
 
 > **assertResultClass**(`toolName`, `resultClass`): `void`
 
-Defined in: [src/core/tools.ts:486](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L486)
+Defined in: src/core/tools.ts:486
 
 Refuse a `resultClass` outside the closed set, at definition time — naming
 the tool, the value and the whole vocabulary (the `assertResultCeiling`

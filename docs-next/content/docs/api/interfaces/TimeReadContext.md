@@ -4,7 +4,7 @@ title: TimeReadContext
 
 # Interface: TimeReadContext
 
-Defined in: [src/core/time/reader.ts:47](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L47)
+Defined in: src/core/time/reader.ts:47
 
 What a reader is told besides the text: a hint for its tokenizer — no clock, no zone, no map.
 
@@ -14,4 +14,4 @@ What a reader is told besides the text: a hint for its tokenizer — no clock, n
 
 > `readonly` **locale**: `string`
 
-Defined in: [src/core/time/reader.ts:48](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L48)
+Defined in: src/core/time/reader.ts:48

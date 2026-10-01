@@ -6,6 +6,6 @@ title: OpenQuestion
 
 > **OpenQuestion** = `"date-order"` \| `"year"` \| `"meridiem"` \| `"dst"` \| `"zone"` \| `"abbreviation"` \| `"parse"` \| `"confirm"`
 
-Defined in: [src/core/time/resolveRecord.ts:172](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/resolveRecord.ts#L172)
+Defined in: src/core/time/resolveRecord.ts:172
 
 A question only the person can settle. `abbreviation`: the app's map's zone, or the letters' offset.

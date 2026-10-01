@@ -4,7 +4,7 @@ title: AnswerGroundingReading
 
 # Interface: AnswerGroundingReading
 
-Defined in: [src/integrity/prior-turn-evidence/check.ts:109](https://github.com/footprintjs/agentfootprint/blob/main/src/integrity/prior-turn-evidence/check.ts#L109)
+Defined in: src/integrity/prior-turn-evidence/check.ts:109
 
 What the library could read about one judged answer's grounding.
 
@@ -21,7 +21,7 @@ eventually disagree with the first.
 
 > `readonly` **currentTurn**: `number`
 
-Defined in: [src/integrity/prior-turn-evidence/check.ts:129](https://github.com/footprintjs/agentfootprint/blob/main/src/integrity/prior-turn-evidence/check.ts#L129)
+Defined in: src/integrity/prior-turn-evidence/check.ts:129
 
 The turn in progress, on the same window-relative scale. `0` = the
 history carries no user turn at all, and then there is no boundary to
@@ -33,7 +33,7 @@ measure against.
 
 > `readonly` **fromPriorTurns**: `number`
 
-Defined in: [src/integrity/prior-turn-evidence/check.ts:113](https://github.com/footprintjs/agentfootprint/blob/main/src/integrity/prior-turn-evidence/check.ts#L113)
+Defined in: src/integrity/prior-turn-evidence/check.ts:113
 
 Grounded values whose newest source is older than the turn in progress.
 
@@ -43,7 +43,7 @@ Grounded values whose newest source is older than the turn in progress.
 
 > `readonly` **fromThisTurn**: `number`
 
-Defined in: [src/integrity/prior-turn-evidence/check.ts:111](https://github.com/footprintjs/agentfootprint/blob/main/src/integrity/prior-turn-evidence/check.ts#L111)
+Defined in: src/integrity/prior-turn-evidence/check.ts:111
 
 Grounded values whose newest source is a result THIS turn served.
 
@@ -53,7 +53,7 @@ Grounded values whose newest source is a result THIS turn served.
 
 > `readonly` **indexTruncated**: `boolean`
 
-Defined in: [src/integrity/prior-turn-evidence/check.ts:137](https://github.com/footprintjs/agentfootprint/blob/main/src/integrity/prior-turn-evidence/check.ts#L137)
+Defined in: src/integrity/prior-turn-evidence/check.ts:137
 
 The evidence index hit its ceiling and is INCOMPLETE. A partial index can
 miss the very occurrence that would have stamped a value with this turn,
@@ -65,7 +65,7 @@ so provenance from one is not something to file on.
 
 > `readonly` `optional` **latestPriorTurn?**: `number`
 
-Defined in: [src/integrity/prior-turn-evidence/check.ts:123](https://github.com/footprintjs/agentfootprint/blob/main/src/integrity/prior-turn-evidence/check.ts#L123)
+Defined in: src/integrity/prior-turn-evidence/check.ts:123
 
 The newest turn any of those older values came from. Absent when
 `fromPriorTurns` is 0. This is the number a reader wants first: "turn 2,
@@ -81,6 +81,6 @@ strategy it is not the conversation's own ordinal and the distance from
 
 > `readonly` **toolResultsThisTurn**: `number`
 
-Defined in: [src/integrity/prior-turn-evidence/check.ts:131](https://github.com/footprintjs/agentfootprint/blob/main/src/integrity/prior-turn-evidence/check.ts#L131)
+Defined in: src/integrity/prior-turn-evidence/check.ts:131
 
 How many `role: 'tool'` results this turn served. `0` is the sharp case.

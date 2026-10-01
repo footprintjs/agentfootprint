@@ -4,7 +4,7 @@ title: EnglishTimeReaderOptions
 
 # Interface: EnglishTimeReaderOptions
 
-Defined in: [src/core/time/readers/english.ts:742](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/readers/english.ts#L742)
+Defined in: src/core/time/readers/english.ts:742
 
 Options for [englishTimeReader](/docs/api/functions/englishTimeReader).
 
@@ -14,7 +14,7 @@ Options for [englishTimeReader](/docs/api/functions/englishTimeReader).
 
 > `readonly` `optional` **locale?**: `string`
 
-Defined in: [src/core/time/readers/english.ts:748](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/readers/english.ts#L748)
+Defined in: src/core/time/readers/english.ts:748
 
 The language tag the time ask's labels are rendered in (`present.ts`),
 e.g. `'en-GB'`. Default `'en-US'`. It never decides a date order — that is

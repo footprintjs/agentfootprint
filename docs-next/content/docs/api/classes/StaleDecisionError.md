@@ -4,7 +4,7 @@ title: StaleDecisionError
 
 # Class: StaleDecisionError
 
-Defined in: [src/core/pause.ts:286](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L286)
+Defined in: src/core/pause.ts:286
 
 The person answered about something the ask was not about.
 
@@ -41,7 +41,7 @@ artifact are all byte-identical to every earlier release.
 
 > **new StaleDecisionError**(`asked`, `answered`): `StaleDecisionError`
 
-Defined in: [src/core/pause.ts:293](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L293)
+Defined in: src/core/pause.ts:293
 
 #### Parameters
 
@@ -67,7 +67,7 @@ Defined in: [src/core/pause.ts:293](https://github.com/footprintjs/agentfootprin
 
 > `readonly` **answered**: `string`
 
-Defined in: [src/core/pause.ts:291](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L291)
+Defined in: src/core/pause.ts:291
 
 The artifact the ANSWER was chosen against.
 
@@ -77,7 +77,7 @@ The artifact the ANSWER was chosen against.
 
 > `readonly` **asked**: `string`
 
-Defined in: [src/core/pause.ts:289](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L289)
+Defined in: src/core/pause.ts:289
 
 The artifact the QUESTION was asked against.
 
@@ -99,7 +99,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_STALE_DECISION"`
 
-Defined in: [src/core/pause.ts:287](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L287)
+Defined in: src/core/pause.ts:287
 
 ***
 

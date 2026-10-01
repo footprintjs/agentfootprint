@@ -4,7 +4,7 @@ title: PeriodRow
 
 # Interface: PeriodRow
 
-Defined in: [src/core/agent/coverage/period.ts:649](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/period.ts#L649)
+Defined in: src/core/agent/coverage/period.ts:649
 
 The results layer's verdict on ONE call's period — a row on the one honesty
 ledger (`AgentState.findingsLedger`, `kind: 'period'`), filed by the results
@@ -29,7 +29,7 @@ Readers that switch over every row kind must skip one they do not know.
 
 > `readonly` `optional` **argument?**: `string`
 
-Defined in: [src/core/agent/coverage/period.ts:659](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/period.ts#L659)
+Defined in: src/core/agent/coverage/period.ts:659
 
 The argument the tool's `ToolPeriod` names — present only when it declares one.
 
@@ -39,7 +39,7 @@ The argument the tool's `ToolPeriod` names — present only when it declares one
 
 > `readonly` `optional` **beyondRetention?**: `true`
 
-Defined in: [src/core/agent/coverage/period.ts:668](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/period.ts#L668)
+Defined in: src/core/agent/coverage/period.ts:668
 
 `period-beyond-retention` — refused as, or read as, wholly older than the tool's source keeps.
 
@@ -49,7 +49,7 @@ Defined in: [src/core/agent/coverage/period.ts:668](https://github.com/footprint
 
 > `readonly` `optional` **differs?**: `PeriodDiffers`
 
-Defined in: [src/core/agent/coverage/period.ts:664](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/period.ts#L664)
+Defined in: src/core/agent/coverage/period.ts:664
 
 `period-differs-from-asked { missing, extra }` — the read differs from the asked range (or, for a window the model chose, from the person's).
 
@@ -59,7 +59,7 @@ Defined in: [src/core/agent/coverage/period.ts:664](https://github.com/footprint
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/core/agent/coverage/period.ts:656](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/period.ts#L656)
+Defined in: src/core/agent/coverage/period.ts:656
 
 The iteration of the batch the call ran in.
 
@@ -69,7 +69,7 @@ The iteration of the batch the call ran in.
 
 > `readonly` **kind**: `"period"`
 
-Defined in: [src/core/agent/coverage/period.ts:650](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/period.ts#L650)
+Defined in: src/core/agent/coverage/period.ts:650
 
 ***
 
@@ -77,7 +77,7 @@ Defined in: [src/core/agent/coverage/period.ts:650](https://github.com/footprint
 
 > `readonly` `optional` **partlyBeyondRetention?**: `true`
 
-Defined in: [src/core/agent/coverage/period.ts:670](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/period.ts#L670)
+Defined in: src/core/agent/coverage/period.ts:670
 
 `partly-beyond-retention` — the read crosses the edge of what the source keeps; `verdict` decides.
 
@@ -87,7 +87,7 @@ Defined in: [src/core/agent/coverage/period.ts:670](https://github.com/footprint
 
 > `readonly` `optional` **shifted?**: `object`
 
-Defined in: [src/core/agent/coverage/period.ts:666](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/period.ts#L666)
+Defined in: src/core/agent/coverage/period.ts:666
 
 `period-shifted` — the call's look-back ran as sent, `byMs` after the turn's `now`.
 
@@ -101,7 +101,7 @@ Defined in: [src/core/agent/coverage/period.ts:666](https://github.com/footprint
 
 > `readonly` **toolCallId**: `string`
 
-Defined in: [src/core/agent/coverage/period.ts:653](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/period.ts#L653)
+Defined in: src/core/agent/coverage/period.ts:653
 
 ***
 
@@ -109,7 +109,7 @@ Defined in: [src/core/agent/coverage/period.ts:653](https://github.com/footprint
 
 > `readonly` **toolName**: `string`
 
-Defined in: [src/core/agent/coverage/period.ts:654](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/period.ts#L654)
+Defined in: src/core/agent/coverage/period.ts:654
 
 ***
 
@@ -117,7 +117,7 @@ Defined in: [src/core/agent/coverage/period.ts:654](https://github.com/footprint
 
 > `readonly` **turn**: `number`
 
-Defined in: [src/core/agent/coverage/period.ts:652](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/period.ts#L652)
+Defined in: src/core/agent/coverage/period.ts:652
 
 `AgentState.turnNumber` when the row was filed — the conversation turn.
 
@@ -127,4 +127,4 @@ Defined in: [src/core/agent/coverage/period.ts:652](https://github.com/footprint
 
 > `readonly` **verdict**: `"unknown"` \| `"covered"` \| `"partly-held"` \| `"not-held"` \| `"undeclared"`
 
-Defined in: [src/core/agent/coverage/period.ts:657](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/period.ts#L657)
+Defined in: src/core/agent/coverage/period.ts:657

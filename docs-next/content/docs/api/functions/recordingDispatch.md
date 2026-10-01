@@ -6,7 +6,7 @@ title: recordingDispatch
 
 > **recordingDispatch**(`delivered`, `runbookName`): [`RecordedDispatch`](/docs/api/interfaces/RecordedDispatch)
 
-Defined in: [src/core/runbook/dispatch.ts:84](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/dispatch.ts#L84)
+Defined in: src/core/runbook/dispatch.ts:84
 
 Wrap the delivered dispatch (or its absence) for one runbook invocation.
 

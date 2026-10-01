@@ -4,7 +4,7 @@ title: CheckInBuilderOptions
 
 # Interface: CheckInBuilderOptions
 
-Defined in: [src/core/checkin.ts:541](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L541)
+Defined in: src/core/checkin.ts:541
 
 What `.checkIn({...})` accepts on the Agent builder.
 
@@ -14,7 +14,7 @@ What `.checkIn({...})` accepts on the Agent builder.
 
 > `readonly` `optional` **evidence?**: [`CheckInAssembler`](/docs/api/type-aliases/CheckInAssembler) \| [`EvidencePreset`](/docs/api/type-aliases/EvidencePreset)
 
-Defined in: [src/core/checkin.ts:547](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L547)
+Defined in: src/core/checkin.ts:547
 
 How much evidence rides the ask. `'standard'` (default) fills all four
 fields; `'minimal'` fills only `willDo` (zero cost); or pass your own
@@ -26,7 +26,7 @@ fields; `'minimal'` fills only `willDo` (zero cost); or pass your own
 
 > `readonly` `optional` **scorer?**: [`CheckInScorer`](/docs/api/type-aliases/CheckInScorer)
 
-Defined in: [src/core/checkin.ts:552](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L552)
+Defined in: src/core/checkin.ts:552
 
 The scorer that ranks `drivers`. Default [lexicalDriverScorer](/docs/api/variables/lexicalDriverScorer)
 (deterministic, zero LLM). Only consulted by the `'standard'` assembler.
