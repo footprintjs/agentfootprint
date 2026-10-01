@@ -6,7 +6,7 @@ title: ReadingChoice
 
 > **ReadingChoice** = \{ `by`: `"only"`; `candidate`: `number`; \} \| \{ `by`: `"policy"`; `candidate`: `number`; `policy`: `Partial`\<[`TimePolicy`](/docs/api/interfaces/TimePolicy)\>; \} \| \{ `by`: `"open"`; `open`: readonly [`OpenQuestion`](/docs/api/type-aliases/OpenQuestion)[]; `policy?`: `Partial`\<[`TimePolicy`](/docs/api/interfaces/TimePolicy)\>; `remaining`: readonly `number`[]; \} \| \{ `by`: `"none"`; `why`: `"unreadable"` \| `"unsupported"` \| `"no-candidate"` \| `"excluded-by-policy"`; \}
 
-Defined in: src/core/time/resolveRecord.ts:183
+Defined in: [src/core/time/resolveRecord.ts:183](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/resolveRecord.ts#L183)
 
 How a mention's reading settled — recorded on its `time-reading` row.
 

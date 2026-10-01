@@ -4,7 +4,7 @@ title: WorkflowOptions
 
 # Interface: WorkflowOptions
 
-Defined in: src/core-flow/Workflow.ts:102
+Defined in: [src/core-flow/Workflow.ts:102](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Workflow.ts#L102)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: src/core-flow/Workflow.ts:102
 
 > `readonly` `optional` **id?**: `string`
 
-Defined in: src/core-flow/Workflow.ts:106
+Defined in: [src/core-flow/Workflow.ts:106](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Workflow.ts#L106)
 
 Stable id used for topology + events. Default `'workflow'`.
 
@@ -22,7 +22,7 @@ Stable id used for topology + events. Default `'workflow'`.
 
 > `readonly` `optional` **name?**: `string`
 
-Defined in: src/core-flow/Workflow.ts:104
+Defined in: [src/core-flow/Workflow.ts:104](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Workflow.ts#L104)
 
 Human-friendly name for events + topology. Default `'Workflow'`.
 
@@ -32,7 +32,7 @@ Human-friendly name for events + topology. Default `'Workflow'`.
 
 > `readonly` `optional` **structureRecorders?**: readonly `StructureRecorder`[]
 
-Defined in: src/core-flow/Workflow.ts:113
+Defined in: [src/core-flow/Workflow.ts:113](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Workflow.ts#L113)
 
 Optional build-time recorders passed through to footprintjs's
 `flowChart()` factory — they observe this workflow's own nodes (Seed +

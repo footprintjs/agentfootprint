@@ -4,7 +4,7 @@ title: ContextEngineeringHandle
 
 # Interface: ContextEngineeringHandle
 
-Defined in: src/recorders/core/contextEngineering.ts:138
+Defined in: [src/recorders/core/contextEngineering.ts:138](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/contextEngineering.ts#L138)
 
 Handle returned by `contextEngineering(agent)`. Lets consumers
 subscribe to engineered / baseline streams and detach cleanly.
@@ -15,7 +15,7 @@ subscribe to engineered / baseline streams and detach cleanly.
 
 > **detach**(): `void`
 
-Defined in: src/recorders/core/contextEngineering.ts:154
+Defined in: [src/recorders/core/contextEngineering.ts:154](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/contextEngineering.ts#L154)
 
 Detach all subscriptions registered through this handle. After
 calling, no further callbacks will fire. Idempotent (safe to
@@ -31,7 +31,7 @@ call multiple times).
 
 > **onBaseline**(`listener`): [`ContextEngineeringUnsubscribe`](/docs/api/type-aliases/ContextEngineeringUnsubscribe)
 
-Defined in: src/recorders/core/contextEngineering.ts:148
+Defined in: [src/recorders/core/contextEngineering.ts:148](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/contextEngineering.ts#L148)
 
 Fires for `context.injected` events whose source is in
 `BASELINE_SOURCES`. Returns an unsubscribe function.
@@ -52,7 +52,7 @@ Fires for `context.injected` events whose source is in
 
 > **onEngineered**(`listener`): [`ContextEngineeringUnsubscribe`](/docs/api/type-aliases/ContextEngineeringUnsubscribe)
 
-Defined in: src/recorders/core/contextEngineering.ts:143
+Defined in: [src/recorders/core/contextEngineering.ts:143](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/contextEngineering.ts#L143)
 
 Fires for `context.injected` events whose source is in
 `ENGINEERED_SOURCES`. Returns an unsubscribe function.

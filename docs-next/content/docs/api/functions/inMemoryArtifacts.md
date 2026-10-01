@@ -6,7 +6,7 @@ title: inMemoryArtifacts
 
 > **inMemoryArtifacts**(`options?`): [`InMemoryArtifacts`](/docs/api/interfaces/InMemoryArtifacts)
 
-Defined in: src/artifacts/inMemoryArtifacts.ts:102
+Defined in: [src/artifacts/inMemoryArtifacts.ts:102](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/inMemoryArtifacts.ts#L102)
 
 A bounded, drop-counting, per-scope-isolated artifact store in process
 memory.

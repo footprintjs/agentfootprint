@@ -6,7 +6,7 @@ title: receiptHash
 
 > **receiptHash**(`runId`, `content`): `string`
 
-Defined in: src/lib/time-travel/receipt.ts:460
+Defined in: [src/lib/time-travel/receipt.ts:460](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L460)
 
 The receipt's hash: run-salted SHA-256, first RECEIPT\_HASH\_CHARS hex
 characters. Exported because it is half of the conformance law — a reader

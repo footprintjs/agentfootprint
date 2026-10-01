@@ -4,7 +4,7 @@ title: TimeWall
 
 # Interface: TimeWall
 
-Defined in: src/core/time/reader.ts:110
+Defined in: [src/core/time/reader.ts:110](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L110)
 
 A wall-clock time as the text wrote it — no zone.
 
@@ -14,7 +14,7 @@ A wall-clock time as the text wrote it — no zone.
 
 > `readonly` `optional` **clock?**: `"24h"`
 
-Defined in: src/core/time/reader.ts:121
+Defined in: [src/core/time/reader.ts:121](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L121)
 
 `'24h'`: the text's FORM is a 24-hour clock (an ISO instant's
 `T08:00`), so the hour is read as written — never also as pm. A form
@@ -27,7 +27,7 @@ no meridiem is read both ways. Never with `meridiem`.
 
 > `readonly` **h**: `number`
 
-Defined in: src/core/time/reader.ts:111
+Defined in: [src/core/time/reader.ts:111](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L111)
 
 ***
 
@@ -35,7 +35,7 @@ Defined in: src/core/time/reader.ts:111
 
 > `readonly` `optional` **m?**: `number`
 
-Defined in: src/core/time/reader.ts:112
+Defined in: [src/core/time/reader.ts:112](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L112)
 
 ***
 
@@ -43,7 +43,7 @@ Defined in: src/core/time/reader.ts:112
 
 > `readonly` `optional` **meridiem?**: `"am"` \| `"pm"`
 
-Defined in: src/core/time/reader.ts:114
+Defined in: [src/core/time/reader.ts:114](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L114)
 
 ***
 
@@ -51,4 +51,4 @@ Defined in: src/core/time/reader.ts:114
 
 > `readonly` `optional` **s?**: `number`
 
-Defined in: src/core/time/reader.ts:113
+Defined in: [src/core/time/reader.ts:113](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/reader.ts#L113)

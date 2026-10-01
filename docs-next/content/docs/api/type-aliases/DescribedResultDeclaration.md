@@ -6,7 +6,7 @@ title: DescribedResultDeclaration
 
 > **DescribedResultDeclaration** = `object` & \{ `provenance`: \{ `ageSeconds?`: `number`; `measuredAt`: `string`; `source`: `string`; `sourceExportDate?`: `string`; \}; \} \| \{ `facts?`: `undefined`; `series?`: `undefined`; \}
 
-Defined in: src/lib/semantics/types.ts:285
+Defined in: [src/lib/semantics/types.ts:285](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L285)
 
 What a tool author passes to `describedResult()` — the
 [SemanticDeclaration](/docs/api/interfaces/SemanticDeclaration) fields in ONE spelling, camelCase, respelled to

@@ -4,7 +4,7 @@ title: ArtifactStoreReport
 
 # Interface: ArtifactStoreReport
 
-Defined in: src/artifacts/conformance/types.ts:207
+Defined in: [src/artifacts/conformance/types.ts:207](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/conformance/types.ts#L207)
 
 What one store's whole run came to.
 
@@ -14,7 +14,7 @@ What one store's whole run came to.
 
 > `readonly` **declared**: `number`
 
-Defined in: src/artifacts/conformance/types.ts:213
+Defined in: [src/artifacts/conformance/types.ts:213](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/conformance/types.ts#L213)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: src/artifacts/conformance/types.ts:213
 
 > `readonly` **failed**: `number`
 
-Defined in: src/artifacts/conformance/types.ts:214
+Defined in: [src/artifacts/conformance/types.ts:214](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/conformance/types.ts#L214)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: src/artifacts/conformance/types.ts:214
 
 > `readonly` **notApplicable**: `number`
 
-Defined in: src/artifacts/conformance/types.ts:212
+Defined in: [src/artifacts/conformance/types.ts:212](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/conformance/types.ts#L212)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: src/artifacts/conformance/types.ts:212
 
 > `readonly` **ok**: `boolean`
 
-Defined in: src/artifacts/conformance/types.ts:218
+Defined in: [src/artifacts/conformance/types.ts:218](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/conformance/types.ts#L218)
 
 True when nothing failed. Declarations do not make a store
  non-conformant — they make it conformant WITH STATED LIMITS, which is a
@@ -50,7 +50,7 @@ True when nothing failed. Declarations do not make a store
 
 > `readonly` **outcomes**: readonly [`ArtifactStoreOutcome`](/docs/api/type-aliases/ArtifactStoreOutcome)[]
 
-Defined in: src/artifacts/conformance/types.ts:210
+Defined in: [src/artifacts/conformance/types.ts:210](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/conformance/types.ts#L210)
 
 ***
 
@@ -58,7 +58,7 @@ Defined in: src/artifacts/conformance/types.ts:210
 
 > `readonly` **passed**: `number`
 
-Defined in: src/artifacts/conformance/types.ts:211
+Defined in: [src/artifacts/conformance/types.ts:211](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/conformance/types.ts#L211)
 
 ***
 
@@ -66,6 +66,6 @@ Defined in: src/artifacts/conformance/types.ts:211
 
 > `readonly` **store**: `string`
 
-Defined in: src/artifacts/conformance/types.ts:209
+Defined in: [src/artifacts/conformance/types.ts:209](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/conformance/types.ts#L209)
 
 The harness name.

@@ -4,7 +4,7 @@ title: BasisRow
 
 # Interface: BasisRow
 
-Defined in: src/core/agent/findings/types.ts:135
+Defined in: [src/core/agent/findings/types.ts:135](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L135)
 
 The model's basis for ONE tool call, filed before the call runs.
 
@@ -14,7 +14,7 @@ The model's basis for ONE tool call, filed before the call runs.
 
 > `readonly` **basis**: [`Basis`](/docs/api/type-aliases/Basis)
 
-Defined in: src/core/agent/findings/types.ts:140
+Defined in: [src/core/agent/findings/types.ts:140](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L140)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: src/core/agent/findings/types.ts:140
 
 > `readonly` `optional` **expect?**: [`Expect`](/docs/api/type-aliases/Expect)
 
-Defined in: src/core/agent/findings/types.ts:141
+Defined in: [src/core/agent/findings/types.ts:141](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L141)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: src/core/agent/findings/types.ts:141
 
 > `readonly` **iteration**: `number`
 
-Defined in: src/core/agent/findings/types.ts:139
+Defined in: [src/core/agent/findings/types.ts:139](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L139)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: src/core/agent/findings/types.ts:139
 
 > `readonly` **kind**: `"basis"`
 
-Defined in: src/core/agent/findings/types.ts:136
+Defined in: [src/core/agent/findings/types.ts:136](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L136)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: src/core/agent/findings/types.ts:136
 
 > `readonly` `optional` **malformed?**: `number`
 
-Defined in: src/core/agent/findings/types.ts:155
+Defined in: [src/core/agent/findings/types.ts:155](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L155)
 
 How many entries of the same `_findings` value `splitFindings` dropped as
 malformed. A count about the emission, present only when non-zero — it is
@@ -59,7 +59,7 @@ about THIS declaration can live (the writer emits from rows alone).
 
 > `readonly` `optional` **predicts?**: `string`
 
-Defined in: src/core/agent/findings/types.ts:148
+Defined in: [src/core/agent/findings/types.ts:148](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L148)
 
 ***
 
@@ -67,7 +67,7 @@ Defined in: src/core/agent/findings/types.ts:148
 
 > `readonly` `optional` **proposition?**: `string`
 
-Defined in: src/core/agent/findings/types.ts:147
+Defined in: [src/core/agent/findings/types.ts:147](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L147)
 
 The declared proposition and prediction, each at most `PROPOSITION_CHARS`
 with any cut stated in the text itself. Present only when declared —
@@ -79,7 +79,7 @@ never defaulted, never inferred from the call's arguments.
 
 > `readonly` **toolCallId**: `string`
 
-Defined in: src/core/agent/findings/types.ts:137
+Defined in: [src/core/agent/findings/types.ts:137](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L137)
 
 ***
 
@@ -87,7 +87,7 @@ Defined in: src/core/agent/findings/types.ts:137
 
 > `readonly` **toolName**: `string`
 
-Defined in: src/core/agent/findings/types.ts:138
+Defined in: [src/core/agent/findings/types.ts:138](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L138)
 
 ***
 
@@ -95,7 +95,7 @@ Defined in: src/core/agent/findings/types.ts:138
 
 > `readonly` `optional` **turn?**: `number`
 
-Defined in: src/core/agent/findings/types.ts:162
+Defined in: [src/core/agent/findings/types.ts:162](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L162)
 
 The conversation turn the row was filed in (`AgentState.turnNumber`) —
 stamped by the one writer while an honesty layer is armed (the inputs

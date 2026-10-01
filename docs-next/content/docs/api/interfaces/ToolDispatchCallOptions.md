@@ -4,7 +4,7 @@ title: ToolDispatchCallOptions
 
 # Interface: ToolDispatchCallOptions
 
-Defined in: src/core/tools.ts:679
+Defined in: [src/core/tools.ts:679](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L679)
 
 Options for one [ToolDispatch.call](/docs/api/interfaces/ToolDispatch#call).
 
@@ -14,7 +14,7 @@ Options for one [ToolDispatch.call](/docs/api/interfaces/ToolDispatch#call).
 
 > `readonly` `optional` **allowAbsent?**: `boolean`
 
-Defined in: src/core/tools.ts:693
+Defined in: [src/core/tools.ts:693](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L693)
 
 Declare an inner ABSENCE survivable (9.76.0). By default a dispatch
 consumer that composes answers (runbookAsTool) propagates an inner
@@ -32,6 +32,6 @@ consumer that wraps it.
 
 > `readonly` `optional` **signal?**: `AbortSignal`
 
-Defined in: src/core/tools.ts:681
+Defined in: [src/core/tools.ts:681](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L681)
 
 Abort signal for the inner call. Defaults to the outer call's own.

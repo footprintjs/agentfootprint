@@ -6,7 +6,7 @@ title: RagDocument
 
 > **RagDocument** = \{ `content`: `string`; `id`: `string`; `metadata?`: `Readonly`\<`Record`\<`string`, `unknown`\>\>; `text?`: `string`; \} \| \{ `content?`: `string`; `id`: `string`; `metadata?`: `Readonly`\<`Record`\<`string`, `unknown`\>\>; `text`: `string`; \}
 
-Defined in: src/lib/rag/indexDocuments.ts:51
+Defined in: [src/lib/rag/indexDocuments.ts:51](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/rag/indexDocuments.ts#L51)
 
 A document to index. `id` must be unique within the store + identity.
 

@@ -4,7 +4,7 @@ title: ToolSemantics
 
 # Interface: ToolSemantics
 
-Defined in: src/lib/semantics/types.ts:324
+Defined in: [src/lib/semantics/types.ts:324](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L324)
 
 The rendered semantic envelope — the exact object a tool hands back.
 Field names are snake_case and English on purpose (the `ToolAbsence`
@@ -17,7 +17,7 @@ code, and `af_semantics` is the only field that exists for the machine.
 
 > `readonly` **af\_semantics**: `true`
 
-Defined in: src/lib/semantics/types.ts:325
+Defined in: [src/lib/semantics/types.ts:325](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L325)
 
 ***
 
@@ -25,7 +25,7 @@ Defined in: src/lib/semantics/types.ts:325
 
 > `readonly` `optional` **clarify?**: [`SemanticClarify`](/docs/api/interfaces/SemanticClarify) \| `null`
 
-Defined in: src/lib/semantics/types.ts:338
+Defined in: [src/lib/semantics/types.ts:338](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L338)
 
 ***
 
@@ -33,7 +33,7 @@ Defined in: src/lib/semantics/types.ts:338
 
 > `readonly` `optional` **coverage?**: [`SemanticCoverage`](/docs/api/interfaces/SemanticCoverage)
 
-Defined in: src/lib/semantics/types.ts:334
+Defined in: [src/lib/semantics/types.ts:334](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L334)
 
 ***
 
@@ -41,7 +41,7 @@ Defined in: src/lib/semantics/types.ts:334
 
 > `readonly` `optional` **edges?**: readonly [`SemanticEdge`](/docs/api/interfaces/SemanticEdge)[]
 
-Defined in: src/lib/semantics/types.ts:328
+Defined in: [src/lib/semantics/types.ts:328](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L328)
 
 ***
 
@@ -49,7 +49,7 @@ Defined in: src/lib/semantics/types.ts:328
 
 > `readonly` `optional` **facts?**: readonly [`SemanticFact`](/docs/api/interfaces/SemanticFact)[]
 
-Defined in: src/lib/semantics/types.ts:327
+Defined in: [src/lib/semantics/types.ts:327](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L327)
 
 ***
 
@@ -57,7 +57,7 @@ Defined in: src/lib/semantics/types.ts:327
 
 > `readonly` `optional` **grain?**: [`SemanticGrain`](/docs/api/interfaces/SemanticGrain)
 
-Defined in: src/lib/semantics/types.ts:329
+Defined in: [src/lib/semantics/types.ts:329](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L329)
 
 ***
 
@@ -65,7 +65,7 @@ Defined in: src/lib/semantics/types.ts:329
 
 > `readonly` `optional` **not\_covered?**: readonly `string`[]
 
-Defined in: src/lib/semantics/types.ts:337
+Defined in: [src/lib/semantics/types.ts:337](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L337)
 
 DERIVED from `coverage` (not checked + cannot cover), one prose line
  per item — never author-set, so the list and the lists cannot drift.
@@ -76,7 +76,7 @@ DERIVED from `coverage` (not checked + cannot cover), one prose line
 
 > `readonly` **note**: `string`
 
-Defined in: src/lib/semantics/types.ts:341
+Defined in: [src/lib/semantics/types.ts:341](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L341)
 
 The static sentence. Never interpolated — see `envelope.ts`.
 
@@ -86,7 +86,7 @@ The static sentence. Never interpolated — see `envelope.ts`.
 
 > `readonly` `optional` **period?**: `object`
 
-Defined in: src/lib/semantics/types.ts:333
+Defined in: [src/lib/semantics/types.ts:333](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L333)
 
 What the read behind the data covered in time — honesty step 7b; minted
  only by `describedResult()`. The model reads it as declared.
@@ -117,7 +117,7 @@ What the read behind the data covered in time — honesty step 7b; minted
 
 > `readonly` `optional` **provenance?**: [`SemanticProvenance`](/docs/api/interfaces/SemanticProvenance)
 
-Defined in: src/lib/semantics/types.ts:330
+Defined in: [src/lib/semantics/types.ts:330](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L330)
 
 ***
 
@@ -125,7 +125,7 @@ Defined in: src/lib/semantics/types.ts:330
 
 > `readonly` `optional` **render?**: [`SemanticRender`](/docs/api/interfaces/SemanticRender)
 
-Defined in: src/lib/semantics/types.ts:339
+Defined in: [src/lib/semantics/types.ts:339](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L339)
 
 ***
 
@@ -133,4 +133,4 @@ Defined in: src/lib/semantics/types.ts:339
 
 > `readonly` `optional` **series?**: readonly [`SemanticSeriesPoint`](/docs/api/interfaces/SemanticSeriesPoint)[]
 
-Defined in: src/lib/semantics/types.ts:326
+Defined in: [src/lib/semantics/types.ts:326](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L326)

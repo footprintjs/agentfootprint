@@ -4,7 +4,7 @@ title: ControlWindow
 
 # Interface: ControlWindow
 
-Defined in: src/core/time/rows.ts:53
+Defined in: [src/core/time/rows.ts:53](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L53)
 
 A window set in a UI, as the clock row records it.
 
@@ -18,7 +18,7 @@ A window set in a UI, as the clock row records it.
 
 > `readonly` **from**: `string`
 
-Defined in: src/core/time/range.ts:60
+Defined in: [src/core/time/range.ts:60](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/range.ts#L60)
 
 #### Inherited from
 
@@ -30,7 +30,7 @@ Defined in: src/core/time/range.ts:60
 
 > `readonly` **source**: `"control"`
 
-Defined in: src/core/time/rows.ts:54
+Defined in: [src/core/time/rows.ts:54](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L54)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: src/core/time/rows.ts:54
 
 > `readonly` **to**: `string`
 
-Defined in: src/core/time/range.ts:61
+Defined in: [src/core/time/range.ts:61](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/range.ts#L61)
 
 #### Inherited from
 

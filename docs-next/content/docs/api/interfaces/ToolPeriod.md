@@ -4,7 +4,7 @@ title: ToolPeriod
 
 # Interface: ToolPeriod
 
-Defined in: src/core/agent/arguments/declare.ts:126
+Defined in: [src/core/agent/arguments/declare.ts:126](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/arguments/declare.ts#L126)
 
 Which arguments set the period a tool's answer covers, how their values are
 spelled, and the facts about the source. The one period shape's TOOL half;
@@ -34,7 +34,7 @@ period: {
 
 > `readonly` `optional` **accepts?**: readonly [`PeriodSpelling`](/docs/api/type-aliases/PeriodSpelling)[]
 
-Defined in: src/core/agent/arguments/declare.ts:131
+Defined in: [src/core/agent/arguments/declare.ts:131](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/arguments/declare.ts#L131)
 
 Every single-argument spelling the argument takes, in preference order.
 
@@ -44,7 +44,7 @@ Every single-argument spelling the argument takes, in preference order.
 
 > `readonly` `optional` **argument?**: `string`
 
-Defined in: src/core/agent/arguments/declare.ts:128
+Defined in: [src/core/agent/arguments/declare.ts:128](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/arguments/declare.ts#L128)
 
 ***
 
@@ -52,7 +52,7 @@ Defined in: src/core/agent/arguments/declare.ts:128
 
 > `readonly` `optional` **direction?**: [`PeriodDirection`](/docs/api/type-aliases/PeriodDirection)
 
-Defined in: src/core/agent/arguments/declare.ts:140
+Defined in: [src/core/agent/arguments/declare.ts:140](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/arguments/declare.ts#L140)
 
 Which side of now the source can hold; absent: not checked.
 
@@ -62,7 +62,7 @@ Which side of now the source can hold; absent: not checked.
 
 > `readonly` `optional` **filtersToAsked?**: `boolean`
 
-Defined in: src/core/agent/arguments/declare.ts:148
+Defined in: [src/core/agent/arguments/declare.ts:148](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/arguments/declare.ts#L148)
 
 The tool reads `ctx.time.asked` and drops rows outside it.
 
@@ -72,7 +72,7 @@ The tool reads `ctx.time.asked` and drops rows outside it.
 
 > `readonly` `optional` **forms?**: readonly [`PeriodForm`](/docs/api/type-aliases/PeriodForm)[]
 
-Defined in: src/core/agent/arguments/declare.ts:135
+Defined in: [src/core/agent/arguments/declare.ts:135](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/arguments/declare.ts#L135)
 
 ***
 
@@ -80,7 +80,7 @@ Defined in: src/core/agent/arguments/declare.ts:135
 
 > `readonly` `optional` **granularity?**: `string`
 
-Defined in: src/core/agent/arguments/declare.ts:146
+Defined in: [src/core/agent/arguments/declare.ts:146](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/arguments/declare.ts#L146)
 
 The source's smallest step (`1m`).
 
@@ -90,7 +90,7 @@ The source's smallest step (`1m`).
 
 > `readonly` `optional` **maxRange?**: `string`
 
-Defined in: src/core/agent/arguments/declare.ts:144
+Defined in: [src/core/agent/arguments/declare.ts:144](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/arguments/declare.ts#L144)
 
 The widest window the tool accepts at once (`24h`).
 
@@ -100,7 +100,7 @@ The widest window the tool accepts at once (`24h`).
 
 > `readonly` `optional` **retention?**: `string`
 
-Defined in: src/core/agent/arguments/declare.ts:142
+Defined in: [src/core/agent/arguments/declare.ts:142](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/arguments/declare.ts#L142)
 
 The oldest data the source keeps (`30d`).
 
@@ -110,7 +110,7 @@ The oldest data the source keeps (`30d`).
 
 > `readonly` `optional` **spelling?**: [`PeriodSpelling`](/docs/api/type-aliases/PeriodSpelling)
 
-Defined in: src/core/agent/arguments/declare.ts:129
+Defined in: [src/core/agent/arguments/declare.ts:129](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/arguments/declare.ts#L129)
 
 ***
 
@@ -118,7 +118,7 @@ Defined in: src/core/agent/arguments/declare.ts:129
 
 > `readonly` `optional` **wallZone?**: `"app"`
 
-Defined in: src/core/agent/arguments/declare.ts:137
+Defined in: [src/core/agent/arguments/declare.ts:137](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/arguments/declare.ts#L137)
 
 A `wall` / `date` / `day` form with no zone argument reads in the app's `.time({ zone })` — explicit, never implied.
 
@@ -128,6 +128,6 @@ A `wall` / `date` / `day` form with no zone argument reads in the app's `.time({
 
 > `readonly` `optional` **zoneArgument?**: `string`
 
-Defined in: src/core/agent/arguments/declare.ts:133
+Defined in: [src/core/agent/arguments/declare.ts:133](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/arguments/declare.ts#L133)
 
 The argument that carries the zone of a `wall-range`.
