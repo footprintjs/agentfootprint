@@ -98,16 +98,21 @@ describe('the documented examples', () => {
 });
 
 describe('convertForTool — the run’s whole question, from the tool’s own period', () => {
-  const oneDay = { argument: 'w', spelling: 'lookback', direction: 'past', maxRange: '24h' } as const;
+  const oneDay = {
+    argument: 'w',
+    spelling: 'lookback',
+    direction: 'past',
+    maxRange: '24h',
+  } as const;
   const clockOf = (period: Parameters<typeof granularityMsOf>[0]): ConvertContext => ({
     ...clock,
     granularityMs: granularityMsOf(period),
   });
 
   it('the documented example: a look-back tool that reads at most a day refuses yesterday', () => {
-    expect(convertForTool({ range: yesterday }, sugarForms(oneDay), oneDay, clockOf(oneDay))).toEqual(
-      { refused: 'no-form-holds' },
-    );
+    expect(
+      convertForTool({ range: yesterday }, sugarForms(oneDay), oneDay, clockOf(oneDay)),
+    ).toEqual({ refused: 'no-form-holds' });
     // The parts alone, without the tool's maxRange, would preview a read the run refuses.
     expect(convertWidened({ range: yesterday }, sugarForms(oneDay), clock)?.values).toEqual({
       w: '1960m',

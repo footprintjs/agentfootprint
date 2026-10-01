@@ -68,6 +68,15 @@ the policy's pick, or `open` with an `OpenQuestion` for each thing only the
 person can settle — a date order, a missing am/pm, a DST overlap, a zone
 abbreviation.
 
+A zone abbreviation is asked unless your policy maps it. `abbreviations` holds
+one `ZoneAbbreviation` per spelling your people write: the zone it stands for
+and the offset its letters spell, as in
+`policy: { abbreviations: { PST: { zone: 'America/Los_Angeles', offset: '-08:00' } } }`.
+When the two disagree at the instant (`PST` in October is −07:00 by the zone,
+−08:00 by the letters), both readings are offered in the one confirmation —
+neither is corrected into the other. An abbreviation missing from the map is
+still asked, and no map ships.
+
 Each message read files one `TimeReadingRow` per mention (or one row with
 `mentions: 0`), stamped with a `TimeReaderStamp` — the reader's id, version,
 kind and locale — and the tz database version. A resume never calls the reader

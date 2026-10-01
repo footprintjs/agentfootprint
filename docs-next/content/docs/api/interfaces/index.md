@@ -2,7 +2,7 @@
 title: Interfaces
 ---
 
-357 exported from `agentfootprint`.
+358 exported from `agentfootprint`.
 
 - [`AbsenceDeclaration`](/docs/api/interfaces/AbsenceDeclaration)
 - [`ActOptions`](/docs/api/interfaces/ActOptions)
@@ -360,4 +360,5 @@ title: Interfaces
 - [`WireToolManifest`](/docs/api/interfaces/WireToolManifest)
 - [`WorkflowOptions`](/docs/api/interfaces/WorkflowOptions)
 - [`WriteEvent`](/docs/api/interfaces/WriteEvent)
+- [`ZoneAbbreviation`](/docs/api/interfaces/ZoneAbbreviation)
 - [`ZoneArgument`](/docs/api/interfaces/ZoneArgument)
