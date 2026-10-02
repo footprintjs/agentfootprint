@@ -18,6 +18,7 @@
  */
 
 import type { DoorIdentity, VerifiedIdentity } from '../identityVerification.js';
+import type { PasswordCheckDetail } from './audit.js';
 
 /**
  * The sign-in cookie's name. `__Host-` makes the browser refuse it unless it is
@@ -154,7 +155,19 @@ export interface PasswordChecker {
    * answer carries no `passwordKind` — never a guess.
    */
   readonly kind?: PasswordKind;
-  check(username: string, password: string): Promise<PasswordAccepted | undefined>;
+  /**
+   * Check a typed name and password. `note`, when the door passes one, is
+   * where a checker says WHY it refused (the reason class and, for a
+   * directory, AD's sub-code) — for the operator's audit record only; the
+   * person still gets one answer. Call it at most once, before resolving
+   * `undefined`; never with anything secret. A checker that never calls it is
+   * recorded as `'wrong-credential'`.
+   */
+  check(
+    username: string,
+    password: string,
+    note?: (detail: PasswordCheckDetail) => void,
+  ): Promise<PasswordAccepted | undefined>;
   /**
    * The ACCOUNT a typed name reaches, as the checker's backend resolves it —
    * the key the door's attempt budget and its one-check-in-flight rule are kept

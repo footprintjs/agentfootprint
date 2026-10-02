@@ -30,3 +30,22 @@ export function doorRefusal(strategy: string, err: unknown): IdentityConfigError
     option === undefined ? undefined : ENV_FOR_OPTION[option],
   );
 }
+
+/**
+ * `IDENTITY_SIGN_IN_ADDRESS_REFUSE_AFTER` as the door's `limits` fragment —
+ * absent when unset (the default: an address is only delayed), refused at boot
+ * when 0 (a refusal after no failures would refuse everybody).
+ */
+export function addressRefusalLimits(
+  value: number | undefined,
+): { readonly refuseAddressAfter: number } | undefined {
+  if (value === undefined) return undefined;
+  if (value < 1) {
+    throw new IdentityConfigError(
+      'IDENTITY_SIGN_IN_ADDRESS_REFUSE_AFTER is the number of failed sign-ins from one address ' +
+        'after which it is refused, at least 1. Leave it unset to only delay (the default).',
+      'IDENTITY_SIGN_IN_ADDRESS_REFUSE_AFTER',
+    );
+  }
+  return { refuseAddressAfter: value };
+}

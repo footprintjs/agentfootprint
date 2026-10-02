@@ -101,8 +101,8 @@ const scoped = await handle.artifactsForRequest({ sessionId, headers, signInKey:
   check that threw `PasswordCheckUnreachableError` is un-counted; any other
   throw (a bind that timed out after it was sent) stays counted. The per-name
   budget refuses; the per-address budget only DELAYS (a proxy or a NAT must
-  not let a stranger lock everybody out), and a right password never adds to
-  it. Name and address counters live in separate bounded maps and a counter
+  not let a stranger lock everybody out) unless `refuseAddressAfter` opts in,
+  and a right password never adds to it. Name and address counters live in separate bounded maps and a counter
   that still penalises is never evicted — for a NAME that is any counted
   attempt, so a flood of junk names cannot push out a victim's counter at one
   failure; a map full of such counters answers a new name 503 (`busy`). For `directory-password` this
@@ -114,6 +114,61 @@ const scoped = await handle.artifactsForRequest({ sessionId, headers, signInKey:
     budgetKey: (typed) => typed.trim().toLowerCase(), // one account, one budget
     check: async (name, password) => lookUp(name, password), // undefined = wrong
   };
+  ```
+- **Every sign-in outcome is on the record (`audit.ts`).** One
+  `SignInAuditRecord` per outcome — `signed-in`, `refused`, `limited`,
+  `unavailable` at `/auth/login` and the redirect callback, `signed-out` at
+  `/auth/logout` (a LIVE sign-in only), `expired` when `signInSource` finds one
+  past a clock — goes to the typed sink `onAudit` AND, as one JSON line, to
+  `log` (default `console.info`), so an install has the trail with no code. A
+  record carries classes and identifiers: the reason class, the strategy, the
+  ACCOUNT (the checker's `budgetKey`, so `user`, `DOMAIN\user` and
+  `user@dns.domain` are one), the PROVED `userId`, the client address after
+  `trustedProxies`, the time, and on `directory-password` AD's sub-code and its
+  name. Never the password, the cookie, the sign-in key, a token or an error's
+  message. A door option, not a typed event: every typed event's `EventMeta`
+  needs a `runId`, and a sign-in is never a run — the `onIngressDecision`
+  precedent. The record is filed at the exit the door reached, BEFORE the
+  answer's minimum wait; a throwing sink or log is contained and reported once.
+  A sign-in ENDS once on the record: two requests racing on one stale cookie
+  (two tabs, a double-clicked sign-out) both see the row before either deletes
+  it, so the door remembers the last 1 024 ended keys (`door.ts · recentKeys`)
+  and files only the first end — pinned with a store whose lookup is slow.
+  ```ts
+  const door = signInDoor({ ...options, onAudit: (r) => securityLog.write(r) });
+  // and, with no code, on stdout:
+  // [identity] sign-in {"time":"2026-10-02T02:13:43.144Z","outcome":"refused","reason":"wrong-credential",
+  //   "strategy":"directory-password","account":"carol","address":"10.4.7.21","adSubCode":"775","adSubCodeName":"locked"}
+  ```
+- **A checker says WHY through `note`, never through the answer.**
+  `PasswordChecker.check(name, password, note?)` — the door passes `note`; a
+  checker calls it once with a `PasswordCheckDetail` (`reason`, and for a
+  directory `adSubCode` + `adSubCodeName`) before resolving `undefined`. The
+  door copies it down to that vocabulary (an unknown reason becomes
+  `wrong-credential`, a sub-code that is not hex is dropped, an extra field is
+  never read), so app code cannot put free text on the record. The person's
+  answer is `WRONG_CREDENTIAL_SENTENCE` whatever was noted.
+  ```ts
+  check: async (name, password, note) => {
+    const row = await lookUp(name);
+    if (row === undefined) {
+      note?.({ reason: 'unknown-account' }); // the record says it; the person never does
+      return undefined;
+    }
+    // …
+  },
+  ```
+- **The per-address budget can REFUSE, opt-in (`refuseAddressAfter`).** Off by
+  default — behind a shared NAT or proxy every person is one address, and a
+  hard address budget lets one person lock everybody out. An install where
+  each person's own address reaches the door (`trustedProxies` set behind a
+  proxy) can set it: past that many failed attempts in the window, the address
+  is answered 429 without a check until a full window after its last counted
+  attempt (refused attempts are not counted, so the refusal is bounded); a
+  right password is no strike. `IDENTITY_SIGN_IN_ADDRESS_REFUSE_AFTER` from
+  config.
+  ```ts
+  limits: { perName: 3, windowMinutes: 15, refuseAddressAfter: 20 }
   ```
 - **Bounded, fair and per process (rule 19):** `memorySignIns` keeps at most
   10 000 live sign-ins and 10 per account (that account's oldest ends);
@@ -207,6 +262,8 @@ const door = signInDoor({
 - `returnTo.ts` — `safeReturnTo`.
 - `memorySignIns.ts` — the bounded in-memory store.
 - `limits.ts` — attempt limits: counted at the start, bounded, per process.
+- `audit.ts` — the audit trail: `SignInAuditRecord`, the reason vocabulary,
+  the log line.
 - `checkGate.ts` — the door-wide cap on concurrent password checks.
 - `clientAddress.ts` — the client address, trusted proxies (IPs and CIDR ranges).
 - `errors.ts` — `SignInDoorConfigError`, `SignInStoreFullError`.

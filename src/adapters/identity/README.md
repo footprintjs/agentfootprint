@@ -179,6 +179,11 @@ door shows a username and password form; the directory decides who it was.
 
 - **LDAPS only**, the chain checked against `IDENTITY_LDAP_CA_FILE` and the
   host name against the URL — no switch to skip either. `ldap://` is refused.
+  `IDENTITY_LDAP_CA_FILE` is the ROOT CA's PEM file, or exactly `system` for
+  Node's default store (public roots) when a public CA issued the DC's
+  certificate — never unset-means-system. Trust the root, not the leaf or an
+  intermediate: both change at renewal, a root does not (see
+  `directory/README.md`, "Trust the ROOT").
 - **An empty password never reaches the directory** (a simple bind with an
   empty password is an unauthenticated bind a DC may call a success).
 - **Who-am-I decides who signed in (rule 18).** Bind as `<name>@<domain>`,
@@ -187,7 +192,11 @@ door shows a username and password form; the directory decides who it was.
   The typed name is never used to find the person, which closes the rename
   collision (an explicit UPN beats another object's implicit one).
 - **One answer** for every wrong credential; AD's sub-code (`52e`, `532`,
-  `773`, …) goes to the server log only. A directory that is down is 503.
+  `773`, …) and its name go to the sign-in door's audit record only — one
+  `[identity] sign-in {…}` line per outcome, success included, with the
+  account, the client address and the time. A directory that is down is 503,
+  and the reason it could not be reached (a TLS trust or host-name refusal) is
+  logged by its error CODE.
 - **Attempt limits from AD's lockout policy — per ACCOUNT, a third, from the
   LAST failure:** `IDENTITY_LDAP_LOCKOUT_THRESHOLD` ÷ 3 attempts per account,
   counted as they START, one bind in flight per account. The budget is kept
@@ -243,7 +252,13 @@ IDENTITY_LDAP_BASE_DN=DC=corp,DC=example
 IDENTITY_LDAP_REQUIRED_GROUP=CN=Neo Users,OU=Groups,DC=corp,DC=example
 IDENTITY_LDAP_LOCKOUT_THRESHOLD=10
 IDENTITY_LDAP_LOCKOUT_WINDOW_MINUTES=30
+# optional: refuse (not only delay) an address after 20 failures per window —
+# only when each person's own address reaches the door (IDENTITY_TRUSTED_PROXIES)
+IDENTITY_SIGN_IN_ADDRESS_REFUSE_AFTER=20
 ```
+
+A company security checklist, line by line, is in
+`directory/README.md` — "Meeting a company's AD checklist".
 
 ## `local-password` — development, tests and demos
 

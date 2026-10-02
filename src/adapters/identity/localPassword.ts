@@ -41,6 +41,7 @@
 import { randomBytes, scrypt, timingSafeEqual, type ScryptOptions } from 'node:crypto';
 
 import type { PasswordAccepted, PasswordChecker } from '../../hosting/signin/types.js';
+import type { PasswordCheckDetail } from '../../hosting/signin/audit.js';
 
 /** The scrypt cost this library writes. OWASP Password Storage Cheat Sheet: N=2^17, r=8, p=1. */
 export const SCRYPT_DEFAULT = { log2N: 17, r: 8, p: 1 } as const;
@@ -148,12 +149,20 @@ export function localPasswords(
     // The attempt budget is kept under the name the list compares — the
     // trimmed NFC form (review idI57 B-1: the checker names the key).
     budgetKey: (username) => localName(username),
-    async check(username: string, password: string): Promise<PasswordAccepted | undefined> {
+    async check(
+      username: string,
+      password: string,
+      note?: (detail: PasswordCheckDetail) => void,
+    ): Promise<PasswordAccepted | undefined> {
       const name = localName(username);
       const stored = table.get(name);
       const against = stored ?? decoy;
       const key = await derive(password, against.salt, against.cost);
       const match = timingSafeEqual(key, against.key);
+      // The reason goes to the operator's audit record only; the person gets
+      // one answer, after the same scrypt cost, whichever it was.
+      if (stored === undefined) note?.({ reason: 'unknown-account' });
+      else if (!match) note?.({ reason: 'wrong-credential' });
       if (stored === undefined || !match) return undefined;
       return { identity: { userId: name }, displayName: name };
     },

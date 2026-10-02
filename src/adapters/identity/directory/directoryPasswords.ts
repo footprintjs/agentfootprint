@@ -53,11 +53,28 @@
  * attempt); a failure after the bind was sent throws anything else (503, and
  * the attempt stays counted — AD may have counted it). The password is never
  * stored, logged or forwarded.
+ *
+ * **Why, for the operator:** each refusal is also NOTED to the sign-in door
+ * (`PasswordChecker.check`'s `note`) as a reason class — `wrong-credential`
+ * with AD's sub-code and its name (`52e` bad-password, `775` locked, `532`
+ * password-expired, `773` must-change, `533` disabled, `701`
+ * account-expired), `name-refused`, `account-unresolved`, `not-in-group` —
+ * which the door writes to its audit record. The person's answer is the same.
  */
 
 import { PasswordCheckUnreachableError } from '../../../hosting/signin/errors.js';
+import type { PasswordCheckDetail } from '../../../hosting/signin/audit.js';
 import type { PasswordAccepted, PasswordChecker } from '../../../hosting/signin/types.js';
-import { escapeFilterValue, sidToBytes, type Directory, type DirectorySession } from './port.js';
+import {
+  adSubCodeName,
+  escapeFilterValue,
+  sidToBytes,
+  type Directory,
+  type DirectorySession,
+} from './port.js';
+
+/** Where a refusal's reason goes — the door's `note`, or nowhere. */
+type Note = (detail: PasswordCheckDetail) => void;
 
 export interface DirectoryPasswordsOptions {
   /** Where connections come from — `ldapDirectory({ … })`, or a fake in tests. */
@@ -97,10 +114,20 @@ export function directoryPasswords(options: DirectoryPasswordsOptions): Password
     strategy: 'directory-password',
     kind: 'directory',
     budgetKey: (typed) => accountBudgetKey(typed),
-    async check(typed: string, password: string): Promise<PasswordAccepted | undefined> {
-      if (password.length === 0 || CONTROL_CHARACTER.test(password)) return undefined;
+    async check(
+      typed: string,
+      password: string,
+      note: Note = () => undefined,
+    ): Promise<PasswordAccepted | undefined> {
+      if (password.length === 0 || CONTROL_CHARACTER.test(password)) {
+        note({ reason: 'malformed-request' });
+        return undefined;
+      }
       const name = accountName(typed, suffix, netbios);
-      if (name === undefined) return undefined;
+      if (name === undefined) {
+        note({ reason: 'name-refused' });
+        return undefined;
+      }
       let session: DirectorySession;
       try {
         session = await options.directory.open();
@@ -112,7 +139,7 @@ export function directoryPasswords(options: DirectoryPasswordsOptions): Password
         });
       }
       try {
-        return await authenticated(session, name, password);
+        return await authenticated(session, name, password, note);
       } finally {
         await session.close().catch(() => undefined);
       }
@@ -123,13 +150,25 @@ export function directoryPasswords(options: DirectoryPasswordsOptions): Password
     session: DirectorySession,
     name: string,
     password: string,
+    note: Note,
   ): Promise<PasswordAccepted | undefined> {
-    if ((await session.bind(`${name}@${domain}`, password)) !== 'ok') return undefined;
+    // Sent ONCE: a refused or failed bind is never retried (a retry is a
+    // second strike on AD's lockout counter).
+    const bound = await session.bind(`${name}@${domain}`, password);
+    if (bound !== 'ok') {
+      const code = typeof bound === 'object' ? bound.adSubCode : undefined;
+      note({
+        reason: 'wrong-credential',
+        ...(code !== undefined && { adSubCode: code, adSubCodeName: adSubCodeName(code) }),
+      });
+      return undefined;
+    }
     const filter = accountFilter(await session.whoAmI(), netbios);
     if (filter === undefined) {
       options.log?.(
         '[identity] directory-password: Who-am-I did not name an account of this domain',
       );
+      note({ reason: 'account-unresolved' });
       return undefined;
     }
     const entries = await session.search(baseDn, filter, 'sub');
@@ -137,17 +176,24 @@ export function directoryPasswords(options: DirectoryPasswordsOptions): Password
       options.log?.(
         `[identity] directory-password: ${entries.length} entries matched the authenticated account`,
       );
+      note({ reason: 'account-unresolved' });
       return undefined;
     }
     const entry = entries[0] as (typeof entries)[number];
-    if (entry.objectGUID === undefined || entry.objectGUID.length !== 16) return undefined;
+    if (entry.objectGUID === undefined || entry.objectGUID.length !== 16) {
+      note({ reason: 'account-unresolved' });
+      return undefined;
+    }
     if (options.requiredGroup !== undefined) {
       const member = await session.search(
         entry.dn,
         `(memberOf:${IN_CHAIN}:=${escapeFilterValue(options.requiredGroup)})`,
         'base',
       );
-      if (member.length !== 1) return undefined;
+      if (member.length !== 1) {
+        note({ reason: 'not-in-group' });
+        return undefined;
+      }
     }
     const userId = entry.objectGUID.toString('base64');
     return {

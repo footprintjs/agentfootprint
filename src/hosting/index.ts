@@ -284,6 +284,19 @@ export {
   SignInStoreFullError,
 } from './signin/errors.js';
 export type { CheckGateOptions } from './signin/checkGate.js';
+// The sign-in door's audit trail — `signInDoor({ onAudit, log })`: one record
+// per sign-in outcome, never a password, cookie or token.
+export {
+  SIGN_IN_AUDIT_PREFIX,
+  signInAuditLine,
+  type AdSubCodeName,
+  type PasswordCheckDetail,
+  type PasswordRefusalReason,
+  type SignInAuditRecord,
+  type SignInAuditSink,
+  type SignInOutcome,
+  type SignInReason,
+} from './signin/audit.js';
 export type { AttemptLimits } from './signin/limits.js';
 export { safeReturnTo } from './signin/returnTo.js';
 export { randomSealKey, sealKeyFrom, type SealKey } from './signin/seal.js';

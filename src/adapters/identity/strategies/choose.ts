@@ -30,6 +30,7 @@ import type { CrossSiteOptions } from '../../../hosting/doorGuard.js';
 import type { DoorIdentity } from '../../../hosting/identityVerification.js';
 import type { SignInDoor } from '../../../hosting/signin/door.js';
 import type { HostSignInOptions } from '../../../hosting/signin/types.js';
+import type { SignInAuditSink } from '../../../hosting/signin/audit.js';
 import { pathLabel } from '../verify/claims.js';
 import { discoveryUrlFor, fetchableUrlProblem, type DiscoveryFetch } from '../verify/discovery.js';
 import type { JoseBackend } from '../verify/jwtCore.js';
@@ -78,6 +79,15 @@ export interface IdentityBootOptions {
   readonly openIdClient?: OpenIdClientBackend;
   /** An already-imported `ldapts`, for a bundled app (`directory-password`). */
   readonly ldapts?: LdaptsBackend;
+  /**
+   * The sign-in door's typed audit trail (`signInDoor({ onAudit })`): one
+   * record per sign-in outcome, for a sign-in strategy (`local-password`,
+   * `directory-password`, `oidc-token` browser sign-in). Unset: the door
+   * still writes one log line per outcome through `signInLog`.
+   */
+  readonly onSignInAudit?: SignInAuditSink;
+  /** Where the sign-in door's audit LINES go (`signInDoor({ log })`). Default `console.info`. */
+  readonly signInLog?: (line: string) => void;
 }
 
 /** What the page's sign-in gate should show — `GET /auth/config` answers it. */

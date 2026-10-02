@@ -6,15 +6,15 @@ _Recorded 2026-09-25._
 
 ## In plain words
 
-The package publishes **18 import paths** carrying **2470 distinct named exports**, plus **124 typed events**. For each one this report asks three separate questions: is it really *exported* (declared), is it *described in prose on the published docs site* (documented), and does a *real run actually use it* (exercised).
+The package publishes **18 import paths** carrying **2482 distinct named exports**, plus **124 typed events**. For each one this report asks three separate questions: is it really *exported* (declared), is it *described in prose on the published docs site* (documented), and does a *real run actually use it* (exercised).
 
-**1739 of 2470 exports (70%) are described in prose on the site.** The rest split into five different problems, which is the whole point of keeping the columns apart:
+**1751 of 2482 exports (71%) are described in prose on the site.** The rest split into five different problems, which is the whole point of keeping the columns apart:
 
 - **31 exist, provably work, and are undocumented.** A reference run exercises them and no page on the site describes them. This is the honest headline number for "features that work and nobody has written about". It is the list to work through.
 - **92 are already written up, just not published.** Prose about them exists inside the repo (`docs/`, `README.md`) but never made it onto the site. These are cheap wins: the writing is done, it needs moving.
 - **18 appear only inside a code sample** and nowhere in the surrounding text. A reader scanning the page never learns they exist, and site search does not find them.
 - **590 are undocumented and no reference run touches them.** This report will not guess whether they work. They are reported as UNKNOWN, which is the honest answer, and they need a human pass.
-- **1506 are documented but no reference run exercises them.** For a function or a class that is the shape a dead or unimplemented feature has. For a type or an interface it is mostly noise, because a type is used, not called — so read that class by kind, and the tables below split it.
+- **1518 are documented but no reference run exercises them.** For a function or a class that is the shape a dead or unimplemented feature has. For a type or an interface it is mostly noise, because a type is used, not called — so read that class by kind, and the tables below split it.
 
 On events: **70** of the 124 typed events are both described on the site and were seen firing in a real run. **23** are described but were never observed firing — that is exactly the shape the resilience events had for months (fully declared, with payload types, and zero emitters), so this number is worth a look every time it moves. **31** are not described in prose on the site at all.
 
@@ -57,7 +57,7 @@ Freshness is a separate question from documentation. `docs/api-reference/` is re
 
 ## What the existing CI docs gate already covers
 
-CI's `docs` job builds docs-next, which twoslash-compiles code blocks marked `ts twoslash` against the real types. That gate is real, and where it applies nothing can drift. It just applies narrowly: **32 of the 657 TypeScript/JavaScript blocks on the site are twoslash-marked**, and **395 `import … from 'agentfootprint…'` lines sit inside blocks the compiler never sees**. Three genuinely broken imports were found in exactly that blind spot while this report was first built (plain `typescript`-tagged fences in `reference/strategy-everywhere.mdx`), which is the concrete argument for checking the export map directly rather than trusting the build to catch it.
+CI's `docs` job builds docs-next, which twoslash-compiles code blocks marked `ts twoslash` against the real types. That gate is real, and where it applies nothing can drift. It just applies narrowly: **32 of the 658 TypeScript/JavaScript blocks on the site are twoslash-marked**, and **395 `import … from 'agentfootprint…'` lines sit inside blocks the compiler never sees**. Three genuinely broken imports were found in exactly that blind spot while this report was first built (plain `typescript`-tagged fences in `reference/strategy-everywhere.mdx`), which is the concrete argument for checking the export map directly rather than trusting the build to catch it.
 
 ## What each column means
 
@@ -155,7 +155,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `agentfootprint.integrity.context_error` | `docs-next/content/docs/monitor/arming-context-integrity.mdx`, `docs-next/content/docs/monitor/column-types.mdx` |
 | `agentfootprint.integrity.external_ground_used` | `docs-next/content/docs/monitor/arming-context-integrity.mdx` |
 
-**Functions and classes described on the site but not touched by any reference run (458).** The other 1048 in this class are types, interfaces and constants, which a run cannot "call" — they are named in `docs/docs-truth/baseline.json` rather than here.
+**Functions and classes described on the site but not touched by any reference run (460).** The other 1058 in this class are types, interfaces and constants, which a run cannot "call" — they are named in `docs/docs-truth/baseline.json` rather than here.
 
 | Symbol | Kind | Exported from |
 |---|---|---|
@@ -278,6 +278,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `a2aWire` | function | `agentfootprint/hosting` |
 | `accountForAnswer` | function | `agentfootprint/observe` |
 | `accountKeyOf` | function | `agentfootprint/hosting` |
+| `adSubCodeName` | function | `agentfootprint/security` |
 | `advanceEngagement` | function | `agentfootprint/maps` |
 | `agentCoreA2AErrorCode` | function | `agentfootprint/hosting` |
 | `agentCoreA2AHost` | function | `agentfootprint/hosting` |
@@ -498,6 +499,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `sessionRetention` | function | `agentfootprint/hosting` |
 | `sessionWireBody` | function | `agentfootprint/hosting` |
 | `sha256` | function | `agentfootprint/rag` |
+| `signInAuditLine` | function | `agentfootprint/hosting` |
 | `signInDoor` | function | `agentfootprint/hosting` |
 | `signInKeyOf` | function | `agentfootprint/hosting` |
 | `signInSource` | function | `agentfootprint/hosting` |
@@ -904,8 +906,8 @@ Whether a symbol comes from the root barrel or only from a subpath is a document
 | `agentfootprint/events` | 24 | 9 | 38% |
 | `agentfootprint/context` | 162 | 100 | 62% |
 | `agentfootprint/resilience` | 24 | 16 | 67% |
-| `agentfootprint/hosting` | 287 | 287 | 100% |
-| `agentfootprint/security` | 118 | 97 | 82% |
+| `agentfootprint/hosting` | 296 | 296 | 100% |
+| `agentfootprint/security` | 121 | 100 | 83% |
 | `agentfootprint/reliability` | 16 | 12 | 75% |
 | `agentfootprint/skill-graph` | 116 | 72 | 62% |
 | `agentfootprint/maps` | 24 | 24 | 100% |
