@@ -504,17 +504,22 @@ describe('S5 — a session app that resumes WITHOUT sessionId keeps the resumed 
 // ─── item C — artifactsForRequest (C1–C4, holds) ─────────────────────
 
 describe('C1 (S6) — at an OPEN door the seam never builds a lane or evicts one', () => {
-  it('naming sessions nobody ever ran is the one not-found; the real person’s lane stays', async () => {
+  it('naming sessions nobody ever ran binds through the ONE reader — no pooled lane; the real person’s lane stays', async () => {
     const { host, handle, built, evicted } = await pooled({ max: 1 });
     await host.deliver({ sessionId: 'real-user', input: 'hi' });
     expect(built).toHaveLength(1);
-    expect(await handle.artifactsForRequest({ sessionId: 'made-up-1' })).toEqual({
-      bound: false,
-      reason: 'not-found',
-    });
-    expect(built).toHaveLength(1);
+    // A session nobody ran yet is where an app files a guide before the first
+    // turn: it binds (the store answers what its scope holds), on the reader.
+    for (const id of ['made-up-1', 'made-up-2', 'made-up-3']) {
+      const seam = await handle.artifactsForRequest({ sessionId: id });
+      expect(seam.bound).toBe(true);
+    }
+    expect(built).toHaveLength(2); // real-user's lane + the reader, outside the pool
     await tick();
     expect(evicted).toEqual([]);
+    // The pool still holds real-user's instance: its next turn builds nothing.
+    await host.deliver({ sessionId: 'real-user', input: 'again' });
+    expect(built).toHaveLength(2);
   });
 });
 

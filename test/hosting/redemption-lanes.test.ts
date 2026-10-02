@@ -10,11 +10,15 @@
  *
  * The laws being pinned:
  *   • A session with a live lane is redeemed on it.
- *   • A session with no live lane and no stored conversation is the one
- *     not-found — no instance built, nothing evicted, nothing emitted.
- *   • A session with no live lane but a stored conversation (its instance was
- *     evicted) is redeemed by ONE reader instance held outside the pool — so
- *     the pool is exactly what the turns made it.
+ *   • A session with no live lane — no turn yet, or its instance was evicted —
+ *     is answered by ONE reader instance held outside the pool, built once
+ *     however many ids are named — so the pool is exactly what the turns made
+ *     it. Whether a ticket exists is the artifact store's answer under the
+ *     session's scope; a made-up id is the one not-found, nothing emitted.
+ *     (Until the session-ticket fix a lane-less session with no STORED
+ *     conversation was the not-found without asking the store, and this file
+ *     pinned "no instance at all" — see session-ticket-redeem.test.ts for why
+ *     that premise was false.)
  *
  * Test types (Convention 3): security (the flood) · regression (a live
  * session and an evicted one still redeem) · boundary (the reader is built
@@ -83,7 +87,7 @@ async function pooledDoor(options: {
 const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
 
 describe('R2-12 — a flood of redemptions for made-up sessions at an OPEN door', () => {
-  it('builds no instance and retires no live lane — no tool session closes as evicted', async () => {
+  it('builds no pooled instance and retires no live lane — no tool session closes as evicted; one reader answers every made-up id', async () => {
     const { host, handle, counts, minted } = await pooledDoor({ maxActiveSessions: 2 });
     await host.deliver({ sessionId: 'sA', input: 'hi' });
     expect(counts.built).toBe(1);
@@ -95,18 +99,19 @@ describe('R2-12 — a flood of redemptions for made-up sessions at an OPEN door'
     );
     expect(flood.map((d) => d.code)).toEqual(Array(12).fill('ERR_ARTIFACT_NOT_FOUND'));
     for (let i = 0; i < 5; i++) {
-      expect(await handle.artifactsForRequest({ sessionId: `seam-junk-${i}` })).toEqual({
-        bound: false,
-        reason: 'not-found',
-      });
+      // Bound through the reader: what the scope holds is the store's answer.
+      const seam = await handle.artifactsForRequest({ sessionId: `seam-junk-${i}` });
+      if (!seam.bound) throw new Error(seam.reason);
+      expect(await seam.artifacts.head(NEVER_MINTED)).toBeNull();
     }
     await settle();
-    expect(counts).toEqual({ built: 1, stopped: 0, evictedToolCloses: 0 });
+    // sA's lane + the ONE reader, outside the pool — not one instance per id.
+    expect(counts).toEqual({ built: 2, stopped: 0, evictedToolCloses: 0 });
 
     // …and the live session is served on its own lane, as before.
     const own = await redeem(host, 'sA', minted[0] as string);
     expect(own.error).toBeUndefined();
-    expect(counts.built).toBe(1);
+    expect(counts.built).toBe(2);
   });
 });
 

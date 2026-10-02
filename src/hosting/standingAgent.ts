@@ -983,6 +983,11 @@ export async function standingAgent<TH extends HostHandle>(
    *     serving. Anyone else gets the ONE not-found, and nothing is emitted —
    *     a stranger can neither write into another person's recording nor flood
    *     it until its own events are evicted.
+   *  3. **With no live lane** (the reader answers — `redeemerFor`), whether the
+   *     store HOLDS the ref under the session's scope, asked silently
+   *     (`holds`; `account` asks it in `explainAnswer`). A made-up session id
+   *     is the one not-found with nothing emitted; a real one is redeemed,
+   *     whether or not its conversation was ever stored.
    *
    * At a door with no verifier the session id IS the key, by law: whoever
    * presents it may redeem under it, and its facts are that session's.
@@ -1013,16 +1018,16 @@ export async function standingAgent<TH extends HostHandle>(
       reply.fail(new InvalidWireOpError(`'${artifactOpWireName(op.op)}' ${NOT_A_REF}`));
       return;
     }
-    // Read the stored conversation once: its OWNER (a verifying door), its
-    // identity tuple (any request naming a user), and — for a pooled session
-    // with no live instance — whether there is a conversation at all.
+    // Read the stored conversation once, and only when it decides something:
+    // its OWNER (a verifying door) and its identity tuple (any request naming
+    // a user). Whether a ticket EXISTS is never its question — that is the
+    // artifact store's, asked under the composed scope below.
     const needsStored = identityOptions !== undefined || request.userId !== undefined;
-    let envelope = needsStored ? await storedFor(sessionId) : undefined;
+    const envelope = needsStored ? await storedFor(sessionId) : undefined;
     if (identityOptions !== undefined && !mayRedeemFrom(sessionId, envelope, verified)) {
       reply.fail(new ArtifactNotFoundError(op.ref));
       return;
     }
-    if (!needsStored && liveLane(sessionId) === undefined) envelope = await storedFor(sessionId);
     // Outlived the composer across an await: answer like the door after close.
     if (closing !== undefined) {
       reply.fail(new HostClosedError(host.name));
@@ -1039,8 +1044,8 @@ export async function standingAgent<TH extends HostHandle>(
       return;
     }
     // NEVER a new lane, never an eviction (R2-12): the session's live
-    // instance, the reader, or the one not-found — see `redeemerFor`.
-    const redeemer = redeemerFor(sessionId, envelope);
+    // instance, else the reader — see `redeemerFor`.
+    const redeemer = redeemerFor(sessionId);
     if (redeemer === undefined) {
       reply.fail(new ArtifactNotFoundError(op.ref));
       return;
@@ -1060,22 +1065,34 @@ export async function standingAgent<TH extends HostHandle>(
         // reply names the attach.
         // (An account would have been READ with `get`, so that is the verb its
         // refusal names — no new `ArtifactOp` member.)
-        emitArtifactFact(
-          redeemer.agent,
-          {
-            type: 'refused',
-            op: op.op === 'account' ? 'get' : op.op,
-            reason: 'no-store',
-            ref: op.ref,
-          },
-          { sessionId },
-        );
+        // On a live lane only: a lane-less session has proved nothing exists
+        // under its name, so the reader emits nothing for it (R2-12).
+        if (lane !== undefined) {
+          emitArtifactFact(
+            redeemer.agent,
+            {
+              type: 'refused',
+              op: op.op === 'account' ? 'get' : op.op,
+              reason: 'no-store',
+              ref: op.ref,
+            },
+            { sessionId },
+          );
+        }
         reply.fail(new NoArtifactStoreError(op.op));
         return;
       }
       const stored =
         request.userId !== undefined ? storedIdentityOf(envelope, sessionId) : undefined;
       const scope = sessionArtifactScope(request.userId, sessionId, stored);
+      // A lane-less session (the reader answers) emits only for a ref its scope
+      // HOLDS: asked silently first — the `explainAnswer` precedent, which
+      // already covers `account` — so a made-up session id is the one
+      // not-found with nothing emitted (R2-12), and a real one is redeemed.
+      if (lane === undefined && op.op !== 'account' && !(await holds(store, scope, op.ref))) {
+        reply.fail(new ArtifactNotFoundError(op.ref));
+        return;
+      }
       const bound = bindArtifacts(store, scope, {
         onEvent: (fact) => emitArtifactFact(redeemer.agent, fact, { sessionId }),
       });
@@ -1262,18 +1279,20 @@ export async function standingAgent<TH extends HostHandle>(
     const invalid = checkSessionId(sessionId, host.name);
     if (invalid !== undefined) return { bound: false, reason: 'invalid-session', error: invalid };
     const needsStored = identityOptions !== undefined || userId !== undefined;
-    let envelope = needsStored ? await storedFor(sessionId) : undefined;
+    const envelope = needsStored ? await storedFor(sessionId) : undefined;
     if (identityOptions !== undefined && !mayRedeemFrom(sessionId, envelope, verified)) {
       return { bound: false, reason: 'not-found' };
     }
-    if (!needsStored && liveLane(sessionId) === undefined) envelope = await storedFor(sessionId);
     // Every await above could have outlived the composer (RS5): a call that
     // lost the race to `close()` binds nothing, builds nothing, and says so the
     // way a call made after close does.
     if (closing !== undefined) throw new HostClosedError(host.name);
     const stored = userId !== undefined ? storedIdentityOf(envelope, sessionId) : undefined;
-    // Never a new lane, never an eviction — the redemption door's own rule.
-    const redeemer = redeemerFor(sessionId, envelope);
+    // Never a new lane, never an eviction — the redemption door's own rule. A
+    // session with no live lane binds through the reader: what its scope holds
+    // is the store's answer, and a session nobody has chatted in yet is where
+    // an app-owned route files a guide before the first turn.
+    const redeemer = redeemerFor(sessionId);
     if (redeemer === undefined) return { bound: false, reason: 'not-found' };
     const agent = redeemer.agent;
     const store = agent.getArtifactStore();
@@ -1383,35 +1402,38 @@ export async function standingAgent<TH extends HostHandle>(
    *
    *  - **A live lane** (the shared agent, or this session's pooled instance) →
    *    its agent. The lane is refreshed and admitted by the caller.
-   *  - **No live lane, no stored conversation** → `undefined`: the one
-   *    not-found. Artifacts are minted by a session's turns, and a session with
-   *    no stored conversation and no instance has no turn that could have
-   *    minted anything (a first turn still in flight HAS a lane). This is what
-   *    makes a flood of made-up ids cost one store read each and nothing else.
-   *  - **No live lane, a stored conversation** (its instance was evicted, or the
-   *    process restarted) → the READER: one instance from the factory, held
-   *    OUTSIDE the pool, built on first need and shared by every lane-less
-   *    session. It never counts toward `maxActiveSessions` and never evicts, so
-   *    the pool is exactly what the turns made it. It answers from the
-   *    factory's store, which is the only store an evicted session's
-   *    artifacts can still be in — the one-shared-store shape. (With a store
-   *    built per instance, an evicted instance's artifacts left with it, and
-   *    the reader's not-found is the true answer.)
+   *  - **No live lane** (no turn yet, its instance was evicted, or the process
+   *    restarted) → the READER: one instance from the factory, held OUTSIDE
+   *    the pool, built on first need and shared by every lane-less session. It
+   *    never counts toward `maxActiveSessions` and never evicts, so the pool is
+   *    exactly what the turns made it. It answers from the factory's store,
+   *    which is the only store a lane-less session's artifacts can be in — the
+   *    one-shared-store shape. (With a store built per instance, an evicted
+   *    instance's artifacts left with it, and the reader's not-found is the
+   *    true answer.) The wire asks the store silently before it emits anything
+   *    for a lane-less session (`holds`), so a flood of made-up ids costs one
+   *    artifact-store read each, one reader per process, and nothing else.
+   *  - **Closing** → `undefined`: the one not-found.
    *
-   * Rejected: answering "not-found" for EVERY lane-less session — a pooled
-   * session whose instance was evicted would lose redemption of refs it
-   * minted, which every release so far has served.
+   * Whether a ticket EXISTS is the artifact store's answer, asked under the
+   * session's own scope — never the pool's, never the session store's.
+   * Rejected (shipped from 9.117.0, then found false): the one not-found for
+   * a lane-less session with no STORED conversation, on the premise that such
+   * a session has no turn that could have minted anything. The library itself
+   * falsifies it — an app-owned route files beside a conversation before its
+   * first turn (`artifactsForRequest`, built for exactly that), and a tool
+   * mints during a first turn that then throws, which persists nothing — and
+   * the shared shape redeemed the same filing, so the answer depended on the
+   * deployment's shape.
    */
   function redeemerFor(
     sessionId: string,
-    envelope: CheckpointEnvelope | undefined,
   ): { readonly agent: Agent; readonly lane?: Lane } | undefined {
     const live = liveLane(sessionId);
     if (live !== undefined) {
       live.lastUsedMs = Date.now();
       return { agent: live.agent, lane: live };
     }
-    if (envelope === undefined) return undefined;
     // Never built once the composer is closing: `close()` stops the reader it
     // can see, and one built after that would run with no owner (RS5).
     if (closing !== undefined) return undefined;
@@ -2175,6 +2197,16 @@ function deliverSessions(reply: HostReply, op: string, result: SessionWireResult
     return;
   }
   reply.fail(new SessionsNotCarriedError(op));
+}
+
+/**
+ * Does `scope` hold `ref`? Asked through a binding with NO fact sink, so the
+ * question itself puts nothing on any record — what lets the redemption door
+ * answer a lane-less session (one the reader serves) without emitting a fact
+ * under a session id nobody has proved exists (R2-12).
+ */
+async function holds(store: ArtifactStore, scope: ArtifactScope, ref: string): Promise<boolean> {
+  return (await bindArtifacts(store, scope).head(ref)) !== null;
 }
 
 /**

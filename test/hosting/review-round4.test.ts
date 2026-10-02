@@ -460,7 +460,10 @@ describe('RS3 — no bound to fall off: 256 later pauses change nothing', () => 
 // ─── RS5: racing close() ──────────────────────────────────────────────
 
 describe('RS5 + NIT 6 — artifactsForRequest racing close() throws HostClosedError and builds no reader', () => {
-  it('a lane-less stored session, hydrate held across close → HostClosedError, no reader built', async () => {
+  // A session-only call at an open door reads no stored conversation any more
+  // (whether a ticket exists is the artifact store's answer), so the await this
+  // race needs is the one a `userId` claim still takes: the stored identity.
+  it('a lane-less stored session named with a userId claim, hydrate held across close → HostClosedError, no reader built', async () => {
     const store = inMemoryArtifacts();
     const built: Agent[] = [];
     const shut: number[] = [];
@@ -503,7 +506,7 @@ describe('RS5 + NIT 6 — artifactsForRequest racing close() throws HostClosedEr
     await tick();
     expect(built).toHaveLength(2);
     armed = true;
-    const pending = handle.artifactsForRequest({ sessionId: 'sA' });
+    const pending = handle.artifactsForRequest({ sessionId: 'sA', userId: 'u-a' });
     await tick();
     await handle.close();
     open();

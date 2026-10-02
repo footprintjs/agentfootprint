@@ -259,9 +259,15 @@ id), so a reader joining on that run id must say "paused, no recording", not
   `{ agent }`. Until then: do not combine them.
 - **R2-12 — FIXED: the artifact door built and evicted pooled lanes for any
   named session.** A redemption and `artifactsForRequest` now go through
-  `standingAgent.ts · redeemerFor`: the live lane, else the one not-found when
-  nothing is stored, else a single reader instance outside the pool. Pinned by
-  `test/hosting/redemption-lanes.test.ts`.
+  `standingAgent.ts · redeemerFor`: the live lane, else a single reader
+  instance outside the pool. Pinned by `test/hosting/redemption-lanes.test.ts`.
+  (As first shipped it answered the one not-found for a lane-less session with
+  NO stored conversation, without asking the artifact store — on the premise
+  that nothing could have been minted there. False: a guide filed through
+  `artifactsForRequest` before the first turn, and a tool's mint in a first
+  turn that threw, both live under such a session. Corrected: whether a ticket
+  exists is the store's answer, asked silently first (`holds`) so a made-up id
+  still emits nothing — `test/hosting/session-ticket-redeem.test.ts`.)
 - **Late non-artifact emits.** Only facts emitted through an artifact binding
   own their run now; any other emit that outlives its run (a tool's floating
   `ctx.progress`, a late `typedEmit`) is still stamped by the emit bridge with
