@@ -2043,13 +2043,48 @@ sign-in when full (`SignInStoreFullError`, answered 503) rather than ending
 somebody else's. Every removal is announced, so a socket carrying it closes.
 Attempts are counted when they start, one check per name runs at a time, and
 `checks` (a `CheckGateOptions`) caps checks door-wide (4 running, 32 waiting).
-The per-name budget refuses; the per-address budget only delays, and
-`trustedProxies` takes IPs and CIDR ranges. A construction refusal is a
+The per-name budget refuses; the per-address budget only delays — unless you
+opt in to `refuseAddressAfter` (an `AttemptLimits` field) where each person's
+own address reaches the door — and `trustedProxies` takes IPs and CIDR ranges. A construction refusal is a
 `SignInDoorConfigError` naming the option; `MemorySignInsConfigError` likewise. Sign-ins and attempt budgets are per process: run one replica,
 pin each browser to one, or put a shared store behind the same four verbs.
 
+**The audit trail.** Every sign-in outcome — signed in, refused, limited,
+unavailable, signed out, expired — is one `SignInAuditRecord`: the outcome, a
+reason class (`SignInReason`), the strategy, the account (the typed name as the
+checker folds it, so `alice`, `CORP\alice` and `alice@corp.example` are one),
+the proved user id on success, the client address after `trustedProxies`, the
+time, and on `directory-password` AD's sub-code and its name (`AdSubCodeName`).
+It never carries a password, a cookie, a token or an error's message. With no
+code at all, the door writes it as one line through its `log` option (default
+`console.info`); pass `onAudit` (a `SignInAuditSink`) to receive the typed
+record, or `onSignInAudit` / `signInLog` to `identityFromConfig`.
+
+```ts
+const door = signInDoor({
+  passwords, store, publicUrl, production,
+  onAudit: (record) => securityLog.write(record),
+});
+// stdout, with no code:
+// [identity] sign-in {"time":"…","outcome":"refused","reason":"wrong-credential",
+//   "strategy":"directory-password","account":"carol","address":"10.4.7.21",
+//   "adSubCode":"775","adSubCodeName":"locked"}
+```
+
+`SignInOutcome` names the six outcomes and `PasswordRefusalReason` the reasons
+a password check may give. `signInAuditLine(record)` builds the exact line the
+door writes, and `SIGN_IN_AUDIT_PREFIX` is its fixed start, so a log pipeline
+can pick the lines out and parse the JSON after it. A directory adapter passes
+AD's sub-code up as a `DirectoryBind` answer: `'ok'`, `'invalid'`, or a
+`DirectoryBindRefused` with its `adSubCode`.
+
+It is a door option rather than a typed event because a sign-in happens before
+any run exists — the same reason `onIngressDecision` is a sink. It is a stream
+into your own store, not a tamper-evident chain.
+
 The password check is a `PasswordChecker` (it answers a `PasswordAccepted` or
-nothing). `local-password` is the one this release ships, for development,
+nothing; it may say why it refused through its `note` argument, a
+`PasswordCheckDetail`, which reaches the record and never the person). `local-password` is the one this release ships, for development,
 tests and demos — refused in production: `localPasswords(list)` over
 `name:scrypt$…` entries, made by `hashPassword(password)`. The KDF is scrypt
 from `node:crypto` (no dependency, memory-hard); `SCRYPT_DEFAULT` is OWASP's
@@ -2182,8 +2217,10 @@ app). `directoryPasswords(options)` (options `DirectoryPasswordsOptions`) is the
   account; the id is its `objectGUID` (base64). This closes the rename
   collision, where an explicit UPN beats another person's implicit one;
 - a required group is checked nested, its DN escaped (`escapeFilterValue`);
-- every wrong credential is one answer, AD's sub-code goes to the server log,
-  and a directory that is down is 503;
+- every wrong credential is one answer; AD's sub-code (`52e` bad password,
+  `775` locked, `532` password expired, `773` must change, `533` disabled,
+  `701` account expired — `adSubCodeName`) goes to the audit record, and a
+  directory that is down is 503;
 - attempt limits come from AD's own lockout policy: a THIRD of the threshold
   per ACCOUNT (the checker's `budgetKey` — `alice`, `ALICE` and
   `alice@corp.example` share one), reset only a full window after the LAST
@@ -2196,8 +2233,14 @@ app). `directoryPasswords(options)` (options `DirectoryPasswordsOptions`) is the
 - a bind that timed out after it was sent stays counted; a directory that
   could not be reached (`PasswordCheckUnreachableError`) gives the attempt
   back;
-- the CA file must hold a CA certificate and the base DN must parse, or the
-  boot is refused;
+- `IDENTITY_LDAP_CA_FILE` is the company's ROOT CA, or exactly `system` for
+  Node's default CA store when a public CA issued the DC's certificate
+  (`systemCa: true` on `ldapDirectory`) — never unset-means-system. Trust the
+  root: a DC certificate and its intermediate change at renewal, a root does
+  not. A CA file holding the DC's own certificate is refused at boot, one
+  holding an intermediate boots with a warning, and the base DN must parse;
+- with no `IDENTITY_LDAP_REQUIRED_GROUP` in production, the banner warns that
+  every enabled account in the domain can sign in;
 - it bypasses the company's MFA, and the banner says so.
 
 The directory sits behind a small port (`Directory`, `DirectorySession`,

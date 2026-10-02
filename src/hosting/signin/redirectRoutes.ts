@@ -39,6 +39,7 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
+import type { SignInOutcome, SignInReason } from './audit.js';
 import { safeReturnTo } from './returnTo.js';
 import { seal, unseal, type SealKey } from './seal.js';
 import {
@@ -67,6 +68,8 @@ export interface RedirectContext {
     accepted: SignInAccepted,
     strategy: string,
   ): Promise<{ setCookie: string; body: Record<string, string> }>;
+  /** File the callback's outcome in the door's audit trail (the door adds strategy, address, time). */
+  audit(req: IncomingMessage, outcome: SignInOutcome, reason: SignInReason, userId?: string): void;
 }
 
 export interface RedirectRoutes {
@@ -169,11 +172,15 @@ export function redirectRoutesFor(ctx: RedirectContext): RedirectRoutes {
       const url = new URL(req.url ?? '/', ctx.publicUrl.origin);
       const state = url.searchParams.get('state') ?? '';
       const attempt = state.split('.')[0] ?? '';
-      if (!ATTEMPT.test(attempt)) return failed(res, 'state', []);
+      if (!ATTEMPT.test(attempt)) {
+        ctx.audit(req, 'refused', 'state-mismatch');
+        return failed(res, 'state', []);
+      }
       // Cleared whatever happens next: a `state` is single use.
       const clear = [ctx.cookie.expireTx(attempt)];
       const transaction = openTransaction(ctx, req, attempt);
       if (transaction === undefined || !sameText(transaction.s, state)) {
+        ctx.audit(req, 'refused', 'state-mismatch');
         return failed(res, 'state', clear);
       }
       const secrets: SignInAttempt = {
@@ -191,6 +198,8 @@ export function redirectRoutesFor(ctx: RedirectContext): RedirectRoutes {
         if (reason === 'unavailable' || !(err instanceof RedirectSignInError)) {
           note('the callback', err);
         }
+        if (reason === 'unavailable') ctx.audit(req, 'unavailable', 'idp-unavailable');
+        else ctx.audit(req, 'refused', reason);
         return failed(res, reason, clear);
       }
       let started: { setCookie: string };
@@ -203,8 +212,10 @@ export function redirectRoutesFor(ctx: RedirectContext): RedirectRoutes {
         // A store that is full or down: the same redirect shape as every
         // other failure, and the transaction cookie still cleared (N-4).
         note('the callback', err);
+        ctx.audit(req, 'unavailable', 'store-failed');
         return failed(res, 'unavailable', clear);
       }
+      ctx.audit(req, 'signed-in', 'accepted', accepted.identity.userId);
       return go(res, 303, transaction.r, [...clear, started.setCookie]);
     },
 

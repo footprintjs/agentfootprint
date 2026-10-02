@@ -16,7 +16,7 @@ import { DEFAULT_IDLE_MINUTES, signInDoor, type SignInDoor } from '../../../host
 import { LocalPasswordConfigError, localPasswords } from '../localPassword.js';
 import { IdentityConfigError, type IdentityConfig } from './config.js';
 import type { IdentityBootOptions, IdentityChoice } from './choose.js';
-import { doorRefusal } from './doorError.js';
+import { addressRefusalLimits, doorRefusal } from './doorError.js';
 import { keyLabel } from './vocabulary.js';
 
 /** Build the `local-password` choice, or refuse to boot naming the key. */
@@ -76,6 +76,7 @@ function buildDoor(
   publicUrl: string,
   passwords: ReturnType<typeof localPasswords>,
 ): SignInDoor {
+  const addressRefusal = addressRefusalLimits(config.signInAddressRefuseAfter);
   try {
     return signInDoor({
       passwords,
@@ -89,6 +90,9 @@ function buildDoor(
       ...(config.signInHours !== undefined && { hours: config.signInHours }),
       ...(config.signInIdleMinutes !== undefined && { idleMinutes: config.signInIdleMinutes }),
       ...(config.trustedProxies !== undefined && { trustedProxies: config.trustedProxies }),
+      ...(addressRefusal !== undefined && { limits: addressRefusal }),
+      ...(boot.onSignInAudit !== undefined && { onAudit: boot.onSignInAudit }),
+      ...(boot.signInLog !== undefined && { log: boot.signInLog }),
     });
   } catch (err) {
     throw doorRefusal('local-password', err);

@@ -57,6 +57,13 @@ import { checkGate, type CheckGateOptions } from './checkGate.js';
 import { PasswordCheckUnreachableError, SignInDoorConfigError } from './errors.js';
 import { clientAddress, trustedProxies } from './clientAddress.js';
 import { attemptLimiter, type AttemptLimits } from './limits.js';
+import {
+  signInAuditTrail,
+  type PasswordCheckDetail,
+  type SignInAuditRecord,
+  type SignInAuditSink,
+  type SignInReason,
+} from './audit.js';
 import { redirectRoutesFor } from './redirectRoutes.js';
 import { randomSealKey, type SealKey } from './seal.js';
 import { signInSource, type SignIns } from './source.js';
@@ -129,6 +136,27 @@ export interface SignInDoorOptions {
   readonly checks?: CheckGateOptions;
   /** Where a one-time operator warning goes. Default `console.warn`. */
   readonly warn?: (message: string) => void;
+  /**
+   * The audit trail, typed: called once per sign-in outcome — signed in,
+   * refused, limited, unavailable, signed out, expired — with the account,
+   * the client address (after `trustedProxies`), the time, the strategy and,
+   * on `directory-password`, AD's sub-code and its name. Never a password, a
+   * cookie, a token or an error's message. See {@link SignInAuditRecord}.
+   * A sink that throws is contained and reported once through `warn`.
+   *
+   * @example
+   *   onAudit: (record) => {
+   *     if (record.outcome !== 'signed-in') securityLog.write(record);
+   *   }
+   */
+  readonly onAudit?: SignInAuditSink;
+  /**
+   * Where the door writes ONE structured line per sign-in outcome — the same
+   * record as `onAudit`, as `[identity] sign-in {"time":"…","outcome":…}`.
+   * Default `console.info`, so an install has its audit trail with no code;
+   * pass `() => {}` to keep it out of the process log.
+   */
+  readonly log?: (line: string) => void;
   /** Test seam — inject the door's waits: the attempt delay and the minimum answer time. */
   readonly _sleep?: (ms: number) => Promise<void>;
 }
@@ -185,9 +213,34 @@ export function signInDoor(options: SignInDoorOptions): SignInDoor {
   const guard = browserDoorGuard('sign-in', options.guard, cookie.url, !cookie.secure);
   const limiter = attemptLimiter(options.limits);
   const gate = checkGate(options.checks);
-  const signIns = signInSource({ store: options.store, idleMinutes, now });
   const trusted = trustedProxies(options.trustedProxies);
   const warn = options.warn ?? ((message: string) => console.warn(message));
+  const audit = signInAuditTrail({
+    ...(options.onAudit !== undefined && { sink: options.onAudit }),
+    log: options.log ?? ((line: string) => console.info(line)),
+    warn,
+    now,
+  });
+  // A sign-in ENDS once: two requests racing on one stale cookie (two tabs,
+  // a socket check beside `/auth/me`, a double-clicked sign-out) each see the
+  // row before either deleted it. The first end files the record; a key is
+  // 256 random bits and never reused, so remembering the last few is exact.
+  const ended = recentKeys(ENDED_KEYS_KEPT);
+  const signIns = signInSource({
+    store: options.store,
+    idleMinutes,
+    now,
+    onExpired: (row, why) => {
+      if (!ended.first(row.key)) return;
+      audit.file({
+        outcome: 'expired',
+        reason: why,
+        strategy: row.strategy,
+        userId: row.identity.userId,
+      });
+    },
+  });
+  const strategyName = options.passwords?.strategy ?? options.redirect?.strategy ?? 'unknown';
   let warnedForwarded = false;
   const noteForwarded = (): void => {
     if (warnedForwarded) return;
@@ -257,56 +310,97 @@ export function signInDoor(options: SignInDoorOptions): SignInDoor {
       await wait(deadline - performance.now());
       reply(res, status, body, extra);
     };
-    const unavailable = (extra: Headers = {}) =>
-      answer(503, { error: UNAVAILABLE }, { 'retry-after': '5', ...extra });
-    const read = await readLoginBody(req);
-    if (read.kind === 'refused') return answer(read.status, { error: read.sentence });
     const address = clientAddress(req, trusted, noteForwarded);
     const passwords = options.passwords as PasswordChecker;
+    // The audit record of THIS attempt: filed once, at the exit it reached,
+    // before the answer's wait (the record is the door's decision, not the
+    // socket's delivery).
+    let account: string | undefined;
+    const record = (
+      outcome: SignInAuditRecord['outcome'],
+      reason: SignInReason,
+      extra: { userId?: string; detail?: PasswordCheckDetail } = {},
+    ): void =>
+      audit.file({
+        outcome,
+        reason,
+        strategy: passwords.strategy,
+        ...(account !== undefined && { account }),
+        ...(extra.userId !== undefined && { userId: extra.userId }),
+        address,
+        ...(extra.detail?.adSubCode !== undefined && { adSubCode: extra.detail.adSubCode }),
+        ...(extra.detail?.adSubCodeName !== undefined && {
+          adSubCodeName: extra.detail.adSubCodeName,
+        }),
+      });
+    const unavailable = (reason: SignInReason, extra: Headers = {}) => {
+      record('unavailable', reason);
+      return answer(503, { error: UNAVAILABLE }, { 'retry-after': '5', ...extra });
+    };
+    const read = await readLoginBody(req);
+    if (read.kind === 'refused') {
+      if (read.username !== undefined) account = budgetKeyOf(passwords, read.username);
+      record('refused', 'malformed-request');
+      return answer(read.status, { error: read.sentence });
+    }
     // Counted as it STARTS, before the slow check (review idI34 B-1), under the
     // ACCOUNT the checker says the name reaches — `alice`, `ALICE` and
     // `alice@corp.example` are one budget and one check in flight (idI57 B-1).
-    const verdict = limiter.begin(budgetKeyOf(passwords, read.username), address, now());
+    account = budgetKeyOf(passwords, read.username);
+    const verdict = limiter.begin(account, address, now());
     if (verdict.kind === 'refuse') {
+      record('limited', verdict.why);
       return answer(
         429,
         { error: 'Too many sign-in attempts. Wait, then try again.' },
         { 'retry-after': String(verdict.retryAfterSeconds) },
       );
     }
-    if (verdict.kind === 'busy') return unavailable();
+    if (verdict.kind === 'busy') return unavailable('limits-full');
     const { ticket } = verdict;
     await wait(verdict.delayMs);
     const expire: Headers = {};
     let accepted: SignInAccepted | undefined;
+    // What the checker said about a refusal — the first note only.
+    let detail: PasswordCheckDetail | undefined;
+    const note = (said: PasswordCheckDetail): void => {
+      detail ??= checkDetailOf(said);
+    };
     try {
       if (await endPresent(req)) expire['set-cookie'] = cookie.expired();
-      const ran = await gate.run(() => passwords.check(read.username, read.password));
+      const ran = await gate.run(() => passwords.check(read.username, read.password, note));
       if (ran === undefined) {
         limiter.abandoned(ticket);
-        return await unavailable(expire);
+        return await unavailable('checks-busy', expire);
       }
       accepted = ran.value;
     } catch (error) {
       // Un-counted ONLY when the password never left this process; a check
       // that failed after it was sent (a bind that timed out) may have been
       // charged by the directory, so it stays counted (review idI57 S-6).
-      if (error instanceof PasswordCheckUnreachableError) limiter.abandoned(ticket);
-      else limiter.failed(ticket, now());
-      return unavailable(expire);
+      if (error instanceof PasswordCheckUnreachableError) {
+        limiter.abandoned(ticket);
+        return unavailable('backend-unreachable', expire);
+      }
+      limiter.failed(ticket, now());
+      return unavailable('check-failed', expire);
     }
     if (accepted === undefined) {
       limiter.failed(ticket, now());
+      record('refused', detail?.reason ?? 'wrong-credential', {
+        ...(detail !== undefined && { detail }),
+      });
       return answer(401, { error: WRONG_CREDENTIAL_SENTENCE }, expire);
     }
     limiter.succeeded(ticket);
     try {
       const signedIn = await startSignIn(accepted, passwords.strategy);
+      record('signed-in', 'accepted', { userId: accepted.identity.userId });
       return await answer(200, signedIn.body, { 'set-cookie': signedIn.setCookie });
     } catch {
       // A store that is full or down: the same 503, after the same minimum
       // time — never an oracle for "that password was right".
-      return unavailable(expire);
+      return unavailable('store-failed', expire);
     }
   };
 
@@ -323,6 +417,14 @@ export function signInDoor(options: SignInDoorOptions): SignInDoor {
           warn,
           endPresent,
           startSignIn,
+          audit: (req, outcome, reason, userId) =>
+            audit.file({
+              outcome,
+              reason,
+              strategy: strategyName,
+              ...(userId !== undefined && { userId }),
+              address: clientAddress(req, trusted, noteForwarded),
+            }),
         });
 
   const me = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
@@ -338,15 +440,44 @@ export function signInDoor(options: SignInDoorOptions): SignInDoor {
   };
 
   const logout = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    // Only a LIVE sign-in's end is a sign-out worth recording; a stale cookie
+    // ends nothing anybody could still use.
+    const key = readSignIn(req.headers, cookie.name).key;
+    // A store that cannot answer the lookup changes nothing about the logout.
+    const live =
+      key === undefined ? undefined : await options.store.find(key).catch(() => undefined);
     await endPresent(req);
+    const at = now();
+    const stillLive =
+      live !== undefined && at < live.expiresAt && at - live.lastSeenAt < idleMinutes * 60_000;
+    if (live !== undefined && stillLive && ended.first(live.key)) {
+      audit.file({
+        outcome: 'signed-out',
+        reason: 'logout',
+        strategy: live.strategy,
+        userId: live.identity.userId,
+        address: clientAddress(req, trusted, noteForwarded),
+      });
+    }
     const next = (await redirectRoutes?.logoutNext()) ?? '/';
     return reply(res, 200, { next }, { 'set-cookie': cookie.expired() });
   };
 
   const route = async (req: IncomingMessage, res: ServerResponse, path: string): Promise<void> => {
     const refusal = guard.check(req);
-    if (refusal !== undefined)
+    if (refusal !== undefined) {
+      // A refused LOGIN is a sign-in attempt (a forged cross-site login is
+      // the shape this guard exists for); a refused `/auth/me` is not.
+      if (path === 'login' || path === 'callback') {
+        audit.file({
+          outcome: 'refused',
+          reason: 'cross-site',
+          strategy: strategyName,
+          address: clientAddress(req, trusted, noteForwarded),
+        });
+      }
       return reply(res, refusal.status, { error: refusal.message, code: refusal.code });
+    }
     const method = (req.method ?? 'GET').toUpperCase();
     const routes = ROUTES[mode];
     const want = Object.prototype.hasOwnProperty.call(routes, path) ? routes[path] : undefined;
@@ -409,6 +540,22 @@ export function signInDoor(options: SignInDoorOptions): SignInDoor {
 }
 
 // ─── Pieces ──────────────────────────────────────────────────────────
+
+/** How many ended sign-in keys the door remembers, to file each end once. */
+const ENDED_KEYS_KEPT = 1024;
+
+/** A bounded set of recently seen keys: `first(key)` is true only the first time. */
+function recentKeys(max: number): { first(key: string): boolean } {
+  const seen = new Set<string>();
+  return {
+    first(key) {
+      if (seen.has(key)) return false;
+      seen.add(key);
+      if (seen.size > max) seen.delete(seen.values().next().value as string);
+      return true;
+    },
+  };
+}
 
 type Headers = Record<string, string | string[]>;
 
@@ -540,7 +687,13 @@ function cookieFor(publicUrl: string, production: boolean): CookieShape {
 
 type LoginRead =
   | { readonly kind: 'ok'; readonly username: string; readonly password: string }
-  | { readonly kind: 'refused'; readonly status: number; readonly sentence: string };
+  | {
+      readonly kind: 'refused';
+      readonly status: number;
+      readonly sentence: string;
+      /** The name, when the body named a plain one — so the audit record can say whose. */
+      readonly username?: string;
+    };
 
 const BAD_BODY = 'The sign-in request must be a JSON object: { "username": "…", "password": "…" }.';
 
@@ -575,26 +728,77 @@ async function readLoginBody(req: IncomingMessage): Promise<LoginRead> {
   const name = username.trim().normalize('NFC');
   // An empty password is refused before any check (RFC 4513 §6.3.1's advice,
   // kept for every password strategy): it is a malformed request, not a guess.
+  // The name an audit record may carry: a plain one, never one that could
+  // forge a log field or flood the line.
+  const named =
+    name.length > 0 && name.length <= 256 && !CONTROL_CHARACTER.test(name)
+      ? { username: name }
+      : {};
   if (name.length === 0 || password.length === 0) {
     return {
       kind: 'refused',
       status: 400,
       sentence: 'A username and a password are both required.',
+      ...named,
     };
   }
   if (name.length > 256 || password.length > 1024) {
-    return { kind: 'refused', status: 400, sentence: BAD_BODY };
+    return { kind: 'refused', status: 400, sentence: BAD_BODY, ...named };
   }
   // A control character is never part of a password a person typed, and a
   // directory may cut the password at one (Samba signs `right\0junk` in —
   // review idI57 N-7). Refused as malformed, before any check.
   if (CONTROL_CHARACTER.test(password) || CONTROL_CHARACTER.test(name)) {
-    return { kind: 'refused', status: 400, sentence: BAD_BODY };
+    return { kind: 'refused', status: 400, sentence: BAD_BODY, ...named };
   }
   return { kind: 'ok', username: name, password };
 }
 
 const CONTROL_CHARACTER = /\p{Cc}/u;
+
+/**
+ * A checker's note, copied down to the fields the record may carry — a
+ * checker is app code, and only these classes travel onward (never a field a
+ * checker added, which could be anything).
+ */
+function checkDetailOf(said: PasswordCheckDetail): PasswordCheckDetail {
+  // Each field is READ ONCE, then tested and kept as that one value: a getter
+  // (or a Proxy) answering a vocabulary word to the test and free text to a
+  // second read must not carry the free text past the test.
+  const saidReason: unknown = said?.reason;
+  const saidCode: unknown = said?.adSubCode;
+  const saidName: unknown = said?.adSubCodeName;
+  const reason = REFUSAL_REASONS.find((known) => known === saidReason) ?? 'wrong-credential';
+  const code =
+    typeof saidCode === 'string' && /^[0-9a-f]{1,8}$/i.test(saidCode)
+      ? saidCode.toLowerCase()
+      : undefined;
+  const name = AD_SUB_CODE_NAMES.find((known) => known === saidName);
+  return {
+    reason,
+    ...(code !== undefined && { adSubCode: code }),
+    ...(name !== undefined && { adSubCodeName: name }),
+  };
+}
+
+const REFUSAL_REASONS: readonly PasswordCheckDetail['reason'][] = [
+  'wrong-credential',
+  'unknown-account',
+  'name-refused',
+  'malformed-request',
+  'account-unresolved',
+  'not-in-group',
+];
+
+const AD_SUB_CODE_NAMES: readonly NonNullable<PasswordCheckDetail['adSubCodeName']>[] = [
+  'bad-password',
+  'locked',
+  'password-expired',
+  'must-change',
+  'disabled',
+  'account-expired',
+  'unknown',
+];
 
 /** The key a typed name's attempts are counted under — the checker's, when it names one. */
 function budgetKeyOf(passwords: PasswordChecker, typed: string): string {

@@ -153,6 +153,12 @@ export const KEYS_IN_THIS_RELEASE: readonly ConfigKey[] = [
     reading: 'whole-number',
     owners: ['oidc-token', 'local-password', 'directory-password'],
   },
+  {
+    env: 'IDENTITY_SIGN_IN_ADDRESS_REFUSE_AFTER',
+    field: 'signInAddressRefuseAfter',
+    reading: 'whole-number',
+    owners: ['local-password', 'directory-password'],
+  },
   { env: 'IDENTITY_LOCAL_USERS', field: 'localUsers', reading: 'text', owners: ['local-password'] },
   {
     env: 'IDENTITY_TRUSTED_PROXIES',

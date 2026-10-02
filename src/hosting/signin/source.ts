@@ -19,7 +19,7 @@
  */
 
 import type { VerifiedIdentity } from '../identityVerification.js';
-import type { SignInSource, SignInStore } from './types.js';
+import type { SignIn, SignInSource, SignInStore } from './types.js';
 
 export interface SignInSourceOptions {
   /** Where sign-ins are kept. */
@@ -28,6 +28,12 @@ export interface SignInSourceOptions {
   readonly idleMinutes: number;
   /** The clock, epoch ms. Default `Date.now`. */
   readonly now?: () => number;
+  /**
+   * Told when `identify` FINDS a sign-in past a clock and ends it — which
+   * clock, and the row (its identity and strategy; the row holds no secret).
+   * The sign-in door's audit trail uses it. A listener that throws is ignored.
+   */
+  readonly onExpired?: (signIn: SignIn, why: 'lifetime' | 'idle') => void;
 }
 
 /** A {@link SignInSource} that can also END a sign-in (sign-out). */
@@ -70,6 +76,11 @@ export function signInSource(options: SignInSourceOptions): SignIns {
       const at = now();
       if (at >= signIn.expiresAt || at - signIn.lastSeenAt >= idleMs) {
         await end(key);
+        try {
+          options.onExpired?.(signIn, at >= signIn.expiresAt ? 'lifetime' : 'idle');
+        } catch {
+          // An observer that throws changes nothing: the sign-in is over regardless.
+        }
         return undefined;
       }
       await store.touch(key, at);

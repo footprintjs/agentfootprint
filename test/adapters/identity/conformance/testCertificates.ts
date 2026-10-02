@@ -1,7 +1,8 @@
 /**
- * Two PUBLIC test certificates (no private key is kept anywhere): a CA with
+ * PUBLIC test certificates (no private key is kept anywhere): a CA with
  * `basicConstraints CA:TRUE`, and a leaf it issued (`CA:FALSE`) — for the
- * `ldapDirectory` boot check that a CA file holds a CA (review idI57 N-10).
+ * `ldapDirectory` boot check that a CA file holds a CA (review idI57 N-10) —
+ * and an intermediate CA, for the boot warning to trust the root instead.
  */
 
 export const TEST_CA_PEM = `-----BEGIN CERTIFICATE-----
@@ -27,5 +28,22 @@ HRMEAjAAMBsGA1UdEQQUMBKCEGRjMS5jb3JwLmV4YW1wbGUwHQYDVR0OBBYEFK4j
 3xqUSzOxn37MZ900+T6yiHB0MB8GA1UdIwQYMBaAFBYxUvmUAWClpPxviDx8PkPL
 ih1kMAoGCCqGSM49BAMCA0kAMEYCIQDvX4BkQTyhSXtJ9IZDzts8xxAMcOsfnT63
 TwYnDHkK6wIhAL62CLm24j8o+FVpRL/+Vb9OlCZzxpjEiO02gTbQNr+p
+-----END CERTIFICATE-----
+`;
+
+/**
+ * An INTERMEDIATE CA (`CA:TRUE`, issued by a separate test root, not
+ * self-signed) — for the boot warning that a CA file should hold the ROOT.
+ */
+export const TEST_INTERMEDIATE_CA_PEM = `-----BEGIN CERTIFICATE-----
+MIIBmzCCAUGgAwIBAgIUPs03C+JcyUZmyHkmduqlZsgeAb0wCgYIKoZIzj0EAwIw
+FzEVMBMGA1UEAwwMVGVzdCBSb290IENBMCAXDTI2MTAwMjAyMDcyNVoYDzIxMjYw
+OTA4MDIwNzI1WjAaMRgwFgYDVQQDDA9UZXN0IElzc3VpbmcgQ0EwWTATBgcqhkjO
+PQIBBggqhkjOPQMBBwNCAARovgrV2eo/z1e1gIqZ5VQmg3vKOXQt9gGm6ZwJDXmR
+Pqy6RRwuaLQfzVQ22VjOLMaSxlFdVinOg3/gi3i2PJTao2YwZDASBgNVHRMBAf8E
+CDAGAQH/AgEAMA4GA1UdDwEB/wQEAwIBBjAdBgNVHQ4EFgQUqWcVK72h6/jIJxLz
+alzbbKflVcIwHwYDVR0jBBgwFoAUIzCyyKVSJqMNIDem6vc3XfXDNxowCgYIKoZI
+zj0EAwIDSAAwRQIhAPPSQEs4vSdATpzdRdnOwWPp/BABhRPgrfVNeaYEoaUmAiAM
+7xzhVf93nCqpZ894u1y3ddnfXuyi7nnHI3dUT/xCWg==
 -----END CERTIFICATE-----
 `;

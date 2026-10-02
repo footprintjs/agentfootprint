@@ -26,6 +26,12 @@
  * The protection that holds whatever this door does is AD's own: a lockout
  * DURATION of minutes, not "until an admin unlocks", and a threshold of 10 or
  * more (the Microsoft security baseline's number).
+ *
+ * Trust (`IDENTITY_LDAP_CA_FILE`): a PEM file holding the ROOT CA, or exactly
+ * `system` — Node's default CA store, for a DC certificate a public CA issued.
+ * Never unset-means-system: an operator who forgot the key is refused, not
+ * quietly trusting every public CA. A file holding an INTERMEDIATE boots with
+ * a banner warning (it is replaced at renewal; trust the root).
  */
 
 import { readFileSync } from 'node:fs';
@@ -33,10 +39,14 @@ import { readFileSync } from 'node:fs';
 import { memorySignIns } from '../../../hosting/signin/memorySignIns.js';
 import { DEFAULT_IDLE_MINUTES, signInDoor, type SignInDoor } from '../../../hosting/signin/door.js';
 import { directoryPasswords } from '../directory/directoryPasswords.js';
-import { ldapDirectory, type LdaptsBackend } from '../directory/ldapDirectory.js';
+import {
+  intermediateCaSubjects,
+  ldapDirectory,
+  type LdaptsBackend,
+} from '../directory/ldapDirectory.js';
 import { IdentityConfigError, type IdentityConfig } from './config.js';
 import type { IdentityBootOptions, IdentityChoice } from './choose.js';
-import { doorRefusal } from './doorError.js';
+import { addressRefusalLimits, doorRefusal } from './doorError.js';
 import { keyLabel } from './vocabulary.js';
 
 /** Build the `directory-password` choice, or refuse to boot naming the key. */
@@ -66,21 +76,28 @@ export function directoryPasswordChoice(
       'IDENTITY_LDAP_LOCKOUT_WINDOW_MINUTES',
     );
   }
-  let caPem: string;
-  try {
-    caPem = readFileSync(caFile, 'utf8');
-  } catch {
-    throw new IdentityConfigError(
-      'IDENTITY_LDAP_CA_FILE names a file that cannot be read.',
-      'IDENTITY_LDAP_CA_FILE',
-    );
+  const systemCa = caFile === SYSTEM_TRUST;
+  let caPem: string | undefined;
+  if (!systemCa) {
+    try {
+      caPem = readFileSync(caFile, 'utf8');
+    } catch {
+      throw new IdentityConfigError(
+        `IDENTITY_LDAP_CA_FILE names a file that cannot be read. Give the ROOT CA's PEM file, ` +
+          `or '${SYSTEM_TRUST}' to trust Node's default CA store (a DC certificate from a public CA).`,
+        'IDENTITY_LDAP_CA_FILE',
+      );
+    }
   }
   let directory;
   try {
     directory = ldapDirectory({
       url,
-      caPem,
+      ...(systemCa ? { systemCa: true as const } : { caPem: caPem as string }),
       ...(boot.ldapts !== undefined && { backend: boot.ldapts }),
+      // Why the directory could not answer — a TLS trust or host-name refusal
+      // by its code — so an operator sees more than `backend-unreachable`.
+      log: (line) => console.warn(line),
     });
   } catch (err) {
     const text = err instanceof Error ? err.message.replace(/^\[identity\] /, '') : String(err);
@@ -107,6 +124,8 @@ export function directoryPasswordChoice(
     );
   }
   const perName = attemptsPerAccount(threshold, config.ldapAcceptLowThreshold);
+  const addressRefusal = addressRefusalLimits(config.signInAddressRefuseAfter);
+  const intermediates = caPem === undefined ? [] : intermediateCaSubjects(caPem);
   let door: SignInDoor;
   try {
     door = signInDoor({
@@ -117,11 +136,17 @@ export function directoryPasswordChoice(
       }),
       publicUrl,
       production,
-      limits: { ...(perName !== undefined && { perName }), windowMinutes },
+      limits: {
+        ...(perName !== undefined && { perName }),
+        windowMinutes,
+        ...addressRefusal,
+      },
       ...(boot.crossSite !== undefined && { guard: boot.crossSite }),
       ...(config.signInHours !== undefined && { hours: config.signInHours }),
       ...(config.signInIdleMinutes !== undefined && { idleMinutes: config.signInIdleMinutes }),
       ...(config.trustedProxies !== undefined && { trustedProxies: config.trustedProxies }),
+      ...(boot.onSignInAudit !== undefined && { onAudit: boot.onSignInAudit }),
+      ...(boot.signInLog !== undefined && { log: boot.signInLog }),
     });
   } catch (err) {
     throw doorRefusal('directory-password', err);
@@ -134,11 +159,29 @@ export function directoryPasswordChoice(
     hostSignIn: door.hostSignIn,
     banner: [
       `identity: strategy directory-password — ${url}, bind as <name>@${domain}, Who-am-I must name ${netbiosDomain.toUpperCase()}\\…`,
+      systemCa
+        ? `identity: LDAPS trust = Node's default CA store (public roots; IDENTITY_LDAP_CA_FILE=${SYSTEM_TRUST}); host name checked against ${url}`
+        : `identity: LDAPS trust = ${caFile}; host name checked against ${url}`,
+      ...intermediates.map(
+        (subject) =>
+          `identity: WARNING IDENTITY_LDAP_CA_FILE holds an INTERMEDIATE CA (${subject}). Trust the ROOT: an intermediate is replaced at renewal, and sign-in then fails until this file changes`,
+      ),
       'identity: directory-password is PENDING INDEPENDENT REVIEW before a company install',
       `identity: user id = the authenticated entry's objectGUID (base64) under ${baseDn}` +
         (config.ldapRequiredGroup !== undefined
           ? `; required group ${config.ldapRequiredGroup}`
           : ''),
+      ...(config.ldapRequiredGroup === undefined && production
+        ? [
+            'identity: WARNING no IDENTITY_LDAP_REQUIRED_GROUP: every enabled account in the domain can sign in. Set the access group (nested membership is honoured)',
+          ]
+        : []),
+      ...(addressRefusal !== undefined
+        ? [
+            `identity: a client address is REFUSED after ${addressRefusal.refuseAddressAfter} failed sign-ins per window (IDENTITY_SIGN_IN_ADDRESS_REFUSE_AFTER) — everybody behind one NAT or an untrusted proxy shares that budget`,
+          ]
+        : []),
+      'identity: every sign-in outcome is logged as one `[identity] sign-in {…}` line (account, address, time, AD sub-code; never a password)',
       `identity: attempt limits from AD's lockout policy: ${
         perName === undefined
           ? 'AD never locks (threshold 0), door default'
@@ -186,6 +229,9 @@ function attemptsPerAccount(threshold: number, acceptLow: string | undefined): n
   if (threshold === 0) return undefined;
   return Math.max(1, Math.floor(threshold / 3));
 }
+
+/** The one `IDENTITY_LDAP_CA_FILE` value that is not a file: Node's default CA store. */
+const SYSTEM_TRUST = 'system';
 
 function need(value: string | undefined, field: string, key: string): string {
   if (typeof value === 'string' && value.trim().length > 0) return value.trim();

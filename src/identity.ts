@@ -166,8 +166,11 @@ export {
   type LdaptsBackend,
 } from './adapters/identity/directory/ldapDirectory.js';
 export {
+  adSubCodeName,
   escapeFilterValue,
   type Directory,
+  type DirectoryBind,
+  type DirectoryBindRefused,
   type DirectoryEntry,
   type DirectorySession,
 } from './adapters/identity/directory/port.js';

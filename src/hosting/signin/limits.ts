@@ -25,6 +25,14 @@
  *     account; the address delay slows one client spraying many names. IPv6
  *     clients are counted per /64 (one customer's network), so rotating
  *     addresses inside it does not escape the delay.
+ *     **Opt-in hard refusal (`refuseAddressAfter`):** an install whose clients
+ *     each arrive from their OWN address (no shared NAT or proxy in front, or
+ *     `trustedProxies` set so each person's address is resolved) can ask for a
+ *     refusal too: once an address holds that many failed attempts inside the
+ *     window, it is refused (429) without a check until a full window passes
+ *     since its last counted attempt. Refused attempts are not counted, so the
+ *     refusal is bounded by one window. Off by default, for the NAT reason
+ *     above.
  *
  * ── Bounded without being flushable ─────────────────────────────────────────
  * Name and address counters live in two SEPARATE bounded maps, so address churn
@@ -44,6 +52,15 @@ export interface AttemptLimits {
   readonly perName?: number;
   /** Attempts per client address per window after which the address's delay is at its cap. Default 20. */
   readonly perAddress?: number;
+  /**
+   * OPT-IN: failed attempts per client address per window after which the
+   * address is REFUSED (429), not only delayed. Unset (the default): never
+   * refused — behind a shared NAT or proxy every person is one address, and a
+   * hard address budget lets anybody lock everybody out. Set it only when each
+   * person's own address reaches the door (`trustedProxies` set behind a
+   * proxy). A right password never counts against an address.
+   */
+  readonly refuseAddressAfter?: number;
   /** The window, in minutes. Default 15. */
   readonly windowMinutes?: number;
   /** The first back-off step, in ms; each further attempt doubles it (capped at 8×). Default 1000. */
@@ -61,7 +78,12 @@ export interface AttemptTicket {
 /** What the limiter says about an attempt it has just COUNTED (or refused to count). */
 export type AttemptVerdict =
   | { readonly kind: 'allow'; readonly delayMs: number; readonly ticket: AttemptTicket }
-  | { readonly kind: 'refuse'; readonly retryAfterSeconds: number }
+  | {
+      readonly kind: 'refuse';
+      readonly retryAfterSeconds: number;
+      /** Which rule refused: the name's budget, a check in flight for it, or the opt-in address budget. */
+      readonly why: 'name-budget' | 'name-in-flight' | 'address-budget';
+    }
   | { readonly kind: 'busy'; readonly retryAfterSeconds: number };
 
 export interface AttemptLimiter {
@@ -90,12 +112,18 @@ export function attemptLimiter(limits: AttemptLimits = {}): AttemptLimiter {
   const windowMs = positive(limits.windowMinutes ?? 15, 'windowMinutes') * 60_000;
   const backoffMs = nonNegative(limits.backoffMs ?? 1_000, 'backoffMs');
   const maxEntries = positive(limits.maxEntries ?? 10_000, 'maxEntries');
+  const refuseAddressAfter =
+    limits.refuseAddressAfter === undefined
+      ? undefined
+      : positiveWhole(limits.refuseAddressAfter, 'refuseAddressAfter');
   // A NAME counter with even ONE counted attempt is never evicted by new names
   // (idI57 recheck): with `>= 2`, a flood of junk names could push out a
   // victim's counter at one failure and hand the guesser a fresh budget. A map
   // full of penalising counters answers a new name `busy` (503) instead.
   const names = boundedCounters(maxEntries, windowMs, (c) => c.attempts >= 1);
-  const addresses = boundedCounters(maxEntries, windowMs, (c) => c.attempts >= 2);
+  // An address at its opt-in refusal is penalising too, so it is never evicted.
+  const addressPenalty = Math.min(2, refuseAddressAfter ?? 2);
+  const addresses = boundedCounters(maxEntries, windowMs, (c) => c.attempts >= addressPenalty);
 
   const delayFor = (prior: number): number =>
     prior <= 1 ? 0 : backoffMs * Math.min(8, 2 ** (prior - 2));
@@ -108,8 +136,24 @@ export function attemptLimiter(limits: AttemptLimits = {}): AttemptLimiter {
       const bucket = addressBucket(address);
       const byName = names.get(name, now);
       if (byName !== undefined && (byName.inFlight > 0 || byName.attempts >= perName)) {
-        const left = byName.inFlight > 0 ? 1_000 : byName.lastAt + windowMs - now;
-        return { kind: 'refuse', retryAfterSeconds: Math.max(1, Math.ceil(left / 1000)) };
+        const inFlight = byName.inFlight > 0;
+        const left = inFlight ? 1_000 : byName.lastAt + windowMs - now;
+        return {
+          kind: 'refuse',
+          retryAfterSeconds: Math.max(1, Math.ceil(left / 1000)),
+          why: inFlight ? 'name-in-flight' : 'name-budget',
+        };
+      }
+      if (refuseAddressAfter !== undefined) {
+        const byAddress = addresses.get(bucket, now);
+        if (byAddress !== undefined && byAddress.attempts >= refuseAddressAfter) {
+          const left = byAddress.lastAt + windowMs - now;
+          return {
+            kind: 'refuse',
+            retryAfterSeconds: Math.max(1, Math.ceil(left / 1000)),
+            why: 'address-budget',
+          };
+        }
       }
       const nameCounter = byName ?? names.create(name, now);
       if (nameCounter === undefined) return { kind: 'busy', retryAfterSeconds: 5 };
@@ -237,6 +281,13 @@ function expandIPv6(address: string): string[] | undefined {
 function positive(value: number, name: string): number {
   if (!Number.isFinite(value) || value <= 0) {
     throw new TypeError(`[hosting] attempt limits: ${name} must be a positive number.`);
+  }
+  return value;
+}
+
+function positiveWhole(value: number, name: string): number {
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new TypeError(`[hosting] attempt limits: ${name} must be a whole number above 0.`);
   }
   return value;
 }

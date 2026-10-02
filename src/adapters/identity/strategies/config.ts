@@ -69,9 +69,20 @@ export interface IdentityConfig {
   readonly signInIdleMinutes?: number;
   /** `IDENTITY_SIGN_IN_MAX` — the most sign-ins kept in memory. Default 10 000. */
   readonly signInMax?: number;
+  /**
+   * `IDENTITY_SIGN_IN_ADDRESS_REFUSE_AFTER` — OPT-IN: failed sign-ins from one
+   * client address per window after which that address is REFUSED, not only
+   * delayed. Unset: never refused (a shared NAT or proxy would let one person
+   * lock everybody out). Password strategies.
+   */
+  readonly signInAddressRefuseAfter?: number;
   /** `IDENTITY_LDAP_URL` — `ldaps://dc1.corp.example:636` (`directory-password`; `ldap://` refused). */
   readonly ldapUrl?: string;
-  /** `IDENTITY_LDAP_CA_FILE` — the company CA (PEM) the DC certificate chains to. */
+  /**
+   * `IDENTITY_LDAP_CA_FILE` — the ROOT CA (PEM) the DC certificate chains to,
+   * or exactly `system`: trust Node's default CA store (the public roots), for
+   * a DC certificate a public CA issued. A file named `system` is `./system`.
+   */
   readonly ldapCaFile?: string;
   /** `IDENTITY_LDAP_DOMAIN` — the DNS domain people bind as `<name>@<domain>`. */
   readonly ldapDomain?: string;

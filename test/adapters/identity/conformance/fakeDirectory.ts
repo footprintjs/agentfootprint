@@ -28,7 +28,22 @@ export interface FakeAccount {
   readonly memberOf?: readonly string[];
   /** The SDDL SID Who-am-I answers with, when `whoAmIForm` is 'sid'. */
   readonly sid?: string;
+  /**
+   * An account AD refuses even with the right password — answered with AD's
+   * own sub-code: locked `775` (whatever the password), disabled `533`,
+   * password expired `532`, must change `773`, account expired `701` (these
+   * four only with the RIGHT password; a wrong one is `52e`, as AD does).
+   */
+  readonly state?: 'locked' | 'disabled' | 'password-expired' | 'must-change' | 'account-expired';
 }
+
+const STATE_SUB_CODE: Readonly<Record<NonNullable<FakeAccount['state']>, string>> = {
+  locked: '775',
+  disabled: '533',
+  'password-expired': '532',
+  'must-change': '773',
+  'account-expired': '701',
+};
 
 export interface FakeDirectory extends Directory {
   readonly binds: string[];
@@ -43,6 +58,8 @@ export interface FakeDirectory extends Directory {
   duplicate?: string;
   /** Group DN → groups that contain it (for nesting). */
   groups: Record<string, readonly string[]>;
+  /** Answer a refused bind as a bare `'invalid'` (a directory that names no sub-code). */
+  bareInvalid: boolean;
   lastFilter?: string;
 }
 
@@ -79,6 +96,7 @@ export function fakeDirectory(
     bindTimesOut: false,
     whoAmIForm: 'netbios',
     groups: {},
+    bareInvalid: false,
     guidOf: (sam) => (guids.get(sam) as Buffer).toString('base64'),
     async open(): Promise<DirectorySession> {
       if (fake.down) throw new Error('connect ECONNREFUSED');
@@ -98,7 +116,14 @@ export function fakeDirectory(
             return 'ok';
           }
           const account = resolveBind(name);
-          if (account === undefined || account.password !== password) return 'invalid';
+          // AD's own sub-codes: 525 no such user, 775 locked (whatever the
+          // password), 52e wrong password, then the account's state.
+          const refused = (adSubCode: string) =>
+            fake.bareInvalid ? ('invalid' as const) : { kind: 'invalid' as const, adSubCode };
+          if (account === undefined) return refused('525');
+          if (account.state === 'locked') return refused('775');
+          if (account.password !== password) return refused('52e');
+          if (account.state !== undefined) return refused(STATE_SUB_CODE[account.state]);
           authenticated = account;
           return 'ok';
         },

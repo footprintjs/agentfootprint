@@ -4,6 +4,8 @@
  * (`ldapDirectory`, through `ldapts`) in a deployment.
  */
 
+import type { AdSubCodeName } from '../../../hosting/signin/audit.js';
+
 /** One entry a search found. Binary attributes (objectGUID, objectSid) arrive as bytes. */
 export interface DirectoryEntry {
   readonly dn: string;
@@ -11,14 +13,30 @@ export interface DirectoryEntry {
   readonly displayName?: string;
 }
 
+/**
+ * A refused bind that says WHY: Active Directory's sub-code from the LDAP
+ * error (`… data 52e, v1db1` → `'52e'`). For the operator's audit record only —
+ * the person gets one answer whatever it says.
+ */
+export interface DirectoryBindRefused {
+  readonly kind: 'invalid';
+  /** AD's sub-code, lower-case hex, when the error carried one. */
+  readonly adSubCode?: string;
+}
+
+/** What a bind answered: `'ok'`, or a refusal — bare, or with AD's sub-code. */
+export type DirectoryBind = 'ok' | 'invalid' | DirectoryBindRefused;
+
 /** One connection, used for exactly one sign-in attempt, then closed. */
 export interface DirectorySession {
   /**
-   * A simple bind. `'ok'` when the directory authenticated the name and
-   * password; `'invalid'` for ANY wrong credential (the AD sub-code is the
-   * adapter's to log, never to return). Throws only when it could not ask.
+   * A simple bind, sent ONCE — never retried. `'ok'` when the directory
+   * authenticated the name and password; `'invalid'` (or
+   * `{ kind: 'invalid', adSubCode }`) for ANY wrong credential. The sub-code
+   * reaches the audit record and never the person. Throws only when it could
+   * not ask.
    */
-  bind(name: string, password: string): Promise<'ok' | 'invalid'>;
+  bind(name: string, password: string): Promise<DirectoryBind>;
   /** RFC 4532 "Who am I?" — the authzId the directory says this connection is, e.g. `u:CORP\\alice`. Empty = anonymous. */
   whoAmI(): Promise<string>;
   /** A search below `base` (subtree) or AT `base` (`scope: 'base'`). */
@@ -29,6 +47,27 @@ export interface DirectorySession {
 /** Where connections come from. */
 export interface Directory {
   open(): Promise<DirectorySession>;
+}
+
+/** AD bind sub-codes by name (MS-ADTS; the `data <code>` in an LDAP 49 error). */
+const AD_SUB_CODES: Readonly<Record<string, AdSubCodeName>> = {
+  '52e': 'bad-password',
+  '775': 'locked',
+  '532': 'password-expired',
+  '773': 'must-change',
+  '533': 'disabled',
+  '701': 'account-expired',
+};
+
+/**
+ * What an AD bind sub-code means: `52e` bad password, `775` locked, `532`
+ * password expired, `773` must change at next logon, `533` disabled, `701`
+ * account expired; anything else (`525` no such user, `530`/`531` logon
+ * hours/workstation, a code a later AD invents) is `'unknown'`.
+ */
+export function adSubCodeName(code: string): AdSubCodeName {
+  const known = Object.prototype.hasOwnProperty.call(AD_SUB_CODES, code.toLowerCase());
+  return known ? (AD_SUB_CODES[code.toLowerCase()] as AdSubCodeName) : 'unknown';
 }
 
 /**

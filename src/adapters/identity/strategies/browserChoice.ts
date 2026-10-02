@@ -178,6 +178,8 @@ export async function browserDoor(
       ...(config.signInHours !== undefined && { hours: config.signInHours }),
       ...(config.signInIdleMinutes !== undefined && { idleMinutes: config.signInIdleMinutes }),
       ...(browser.cookieKey !== undefined && { cookieKey: browser.cookieKey }),
+      ...(boot.onSignInAudit !== undefined && { onAudit: boot.onSignInAudit }),
+      ...(boot.signInLog !== undefined && { log: boot.signInLog }),
     });
   } catch (err) {
     throw doorRefusal('oidc-token browser sign-in', err);
