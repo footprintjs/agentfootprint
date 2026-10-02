@@ -156,7 +156,10 @@ export function directoryPasswords(options: DirectoryPasswordsOptions): Password
     // second strike on AD's lockout counter).
     const bound = await session.bind(`${name}@${domain}`, password);
     if (bound !== 'ok') {
-      const code = typeof bound === 'object' ? bound.adSubCode : undefined;
+      // A JS session may answer anything that is not 'ok' — all of it is a
+      // refusal (401), and only a STRING sub-code is read from it.
+      const said = typeof bound === 'object' && bound !== null ? bound.adSubCode : undefined;
+      const code = typeof said === 'string' ? said : undefined;
       note({
         reason: 'wrong-credential',
         ...(code !== undefined && { adSubCode: code, adSubCodeName: adSubCodeName(code) }),

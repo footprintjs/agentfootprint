@@ -134,6 +134,12 @@ const scoped = await handle.artifactsForRequest({ sessionId, headers, signInKey:
   (two tabs, a double-clicked sign-out) both see the row before either deletes
   it, so the door remembers the last 1 024 ended keys (`door.ts · recentKeys`)
   and files only the first end — pinned with a store whose lookup is slow.
+  One thing the door cannot tell apart: a person who types their PASSWORD
+  into the name field gets it on the record as the `account` (folded the way
+  the checker folds a name), as every sign-in log that names the account
+  does. Keep the trail where passwords would be safe enough, or drop
+  `account` in your own sink. The line escapes U+2028/U+2029 and the bidi
+  controls, so a name cannot break or reorder it in a viewer.
   ```ts
   const door = signInDoor({ ...options, onAudit: (r) => securityLog.write(r) });
   // and, with no code, on stdout:
@@ -165,8 +171,9 @@ const scoped = await handle.artifactsForRequest({ sessionId, headers, signInKey:
   proxy) can set it: past that many failed attempts in the window, the address
   is answered 429 without a check until a full window after its last counted
   attempt (refused attempts are not counted, so the refusal is bounded); a
-  right password is no strike. `IDENTITY_SIGN_IN_ADDRESS_REFUSE_AFTER` from
-  config.
+  right password is no strike, but while the address is refused a right
+  password is refused too — that is what a hard refusal means, and why it is
+  off by default. `IDENTITY_SIGN_IN_ADDRESS_REFUSE_AFTER` from config.
   ```ts
   limits: { perName: 3, windowMinutes: 15, refuseAddressAfter: 20 }
   ```

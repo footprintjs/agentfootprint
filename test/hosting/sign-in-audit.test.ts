@@ -848,6 +848,101 @@ describe('sign-in audit — security', () => {
   });
 });
 
+describe('sign-in audit — security (review)', () => {
+  it('a note whose getters answer a word to the test and the password to a second read: only the word travels', async () => {
+    const sly: PasswordChecker = {
+      strategy: 'sly',
+      check: async (_n, password, note) => {
+        const reads = { reason: 0, code: 0, name: 0 };
+        note?.({
+          get reason() {
+            return (reads.reason++ === 0 ? 'not-in-group' : `x ${password}`) as never;
+          },
+          get adSubCode() {
+            return (reads.code++ === 0 ? '775' : `775 ${password}`) as never;
+          },
+          get adSubCodeName() {
+            return (reads.name++ === 0 ? 'locked' : `n ${password}`) as never;
+          },
+        });
+        return undefined;
+      },
+    };
+    const { m, records, lines } = await auditedDoor({ passwords: sly });
+    await login(m.url, 'alice', 'S3cret-typed-here');
+    expect(records[0]).toMatchObject({
+      reason: 'not-in-group',
+      adSubCode: '775',
+      adSubCodeName: 'locked',
+    });
+    expect(JSON.stringify(records) + lines.join('\n')).not.toContain('S3cret-typed-here');
+  });
+
+  it('U+2028, U+2029 and bidi controls in a name are escaped on the line, which parses back to the record', () => {
+    const account = 'eve\u2028[identity] sign-in {}\u2029\u202eecila\u2066';
+    const line = signInAuditLine({
+      at: 0,
+      outcome: 'refused',
+      reason: 'wrong-credential',
+      strategy: 'local-password',
+      account,
+    });
+    expect(/[\u2028\u2029\u202a-\u202e\u2066-\u2069]/.test(line)).toBe(false);
+    expect(JSON.parse(line.slice(SIGN_IN_AUDIT_PREFIX.length + 1)).account).toBe(account);
+  });
+
+  it('a malformed body names its account only when the name is plain: no control character, at most 256', async () => {
+    const { m, records } = await auditedDoor();
+    await call(m.url, '/auth/login', json({ username: 'ann\u0007', password: '' }));
+    await call(m.url, '/auth/login', json({ username: 'b'.repeat(257), password: '' }));
+    await call(m.url, '/auth/login', json({ username: 'cat', password: '' }));
+    expect(records.map((r) => [r.reason, r.account])).toEqual([
+      ['malformed-request', undefined],
+      ['malformed-request', undefined],
+      ['malformed-request', 'cat'],
+    ]);
+  });
+
+  it('a sign-out with a cookie past its IDLE limit is not a sign-out on the record', async () => {
+    let clock = Date.now();
+    const { passwords } = directoryChecker();
+    const { m, records } = await auditedDoor({ passwords, now: () => clock });
+    const one = await login(m.url, 'alice', 'Quartz-River-41!');
+    clock += 61 * 60_000; // idle-dead, lifetime still running
+    await call(m.url, '/auth/logout', {
+      method: 'POST',
+      headers: { cookie: one.cookie as string, 'content-type': 'application/json' },
+    });
+    expect(records.map((r) => r.outcome)).toEqual(['signed-in']);
+  });
+
+  it('a JS directory session answering null or a number sub-code is a refusal (401), as before the sub-code', async () => {
+    const base = fakeDirectory(ACCOUNTS);
+    for (const answer of [null, { kind: 'invalid', adSubCode: 775 }, false]) {
+      const passwords = directoryPasswords({
+        directory: {
+          open: async () => {
+            const session = await base.open();
+            return {
+              bind: async () => answer as never,
+              whoAmI: () => session.whoAmI(),
+              search: (b, f, sc) => session.search(b, f, sc),
+              close: () => session.close(),
+            };
+          },
+        },
+        domain: 'corp.example',
+        netbiosDomain: 'CORP',
+        baseDn: 'DC=corp,DC=example',
+      });
+      const { m, records } = await auditedDoor({ passwords });
+      expect((await login(m.url, 'alice', 'wrong')).status).toBe(401);
+      expect(records[0]).toMatchObject({ outcome: 'refused', reason: 'wrong-credential' });
+      expect(records[0]?.adSubCode).toBeUndefined();
+    }
+  });
+});
+
 // ─── 6. PERFORMANCE ──────────────────────────────────────────────────
 
 describe('sign-in audit — performance', () => {

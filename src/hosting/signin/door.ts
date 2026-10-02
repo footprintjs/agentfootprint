@@ -762,14 +762,18 @@ const CONTROL_CHARACTER = /\p{Cc}/u;
  * checker added, which could be anything).
  */
 function checkDetailOf(said: PasswordCheckDetail): PasswordCheckDetail {
-  const reason = REFUSAL_REASONS.includes(said?.reason) ? said.reason : 'wrong-credential';
+  // Each field is READ ONCE, then tested and kept as that one value: a getter
+  // (or a Proxy) answering a vocabulary word to the test and free text to a
+  // second read must not carry the free text past the test.
+  const saidReason: unknown = said?.reason;
+  const saidCode: unknown = said?.adSubCode;
+  const saidName: unknown = said?.adSubCodeName;
+  const reason = REFUSAL_REASONS.find((known) => known === saidReason) ?? 'wrong-credential';
   const code =
-    typeof said?.adSubCode === 'string' && /^[0-9a-f]{1,8}$/i.test(said.adSubCode)
-      ? said.adSubCode.toLowerCase()
+    typeof saidCode === 'string' && /^[0-9a-f]{1,8}$/i.test(saidCode)
+      ? saidCode.toLowerCase()
       : undefined;
-  const name = AD_SUB_CODE_NAMES.includes(said?.adSubCodeName as never)
-    ? said.adSubCodeName
-    : undefined;
+  const name = AD_SUB_CODE_NAMES.find((known) => known === saidName);
   return {
     reason,
     ...(code !== undefined && { adSubCode: code }),

@@ -202,7 +202,18 @@ export const SIGN_IN_AUDIT_PREFIX = '[identity] sign-in';
  */
 export function signInAuditLine(record: SignInAuditRecord): string {
   const { at, ...rest } = record;
-  return `${SIGN_IN_AUDIT_PREFIX} ${JSON.stringify({ time: new Date(at).toISOString(), ...rest })}`;
+  const json = JSON.stringify({ time: new Date(at).toISOString(), ...rest });
+  // JSON leaves U+2028/U+2029 and the bidi controls raw; a viewer may break a
+  // line at the first or reorder the text after the second. Escaped, the line
+  // still parses to the same record.
+  return `${SIGN_IN_AUDIT_PREFIX} ${json.replace(LINE_UNSAFE, escapeChar)}`;
+}
+
+/** Line and paragraph separators, and the bidi embedding/override/isolate controls. */
+const LINE_UNSAFE = /[\u2028\u2029\u202a-\u202e\u2066-\u2069]/g;
+
+function escapeChar(ch: string): string {
+  return `\\u${ch.charCodeAt(0).toString(16).padStart(4, '0')}`;
 }
 
 /**
