@@ -487,7 +487,14 @@ const OUTPUT_LIMITS = { bytes: 218_700_000, files: 8_270, duplicateRscBytes: 0 }
 // listed in src/core/time/README.md, "What a plain agent carries". Ceiling ~2%
 // over CI's expected ~471.9 KB (local builds read ~1.6 KB under CI on this
 // branch: 478.7 vs 480.3), as every raise here.
-const DEMO_ASYNC_GZIP_LIMIT = 481_000;
+// 2026-10-02: footprintjs 9.29.0 (copy-on-write commit) adds its own engine
+// code to the demo chunk (`privatise`, `detachBase`): CI measured 482.1 KB
+// against 481.0 (main 480.7); local EXPORT=true builds read 480.8 on 9.28.0 and
+// 482.2 on 9.29.0, a +1.4 KB move from the dependency alone — nothing on the
+// agentfootprint side to shrink. Raised ~2% over the new measurement; owner-
+// approved raise (2026-09-27 ruling: raise when it bites, docs-site cleanup
+// planned).
+const DEMO_ASYNC_GZIP_LIMIT = 492_000;
 
 function formatBytes(bytes) {
   if (bytes < 1_000) return `${bytes} B`;
