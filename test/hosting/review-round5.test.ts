@@ -394,6 +394,9 @@ describe('HOLD J6 — session ids spelled like the composer’s own keys are jus
 // ─── NIT 5 + NIT 6 (J7): the close race, pooled AND shared ──────────────────
 
 describe('NIT 6 (J7) — a seam call that loses the race to close() throws HostClosedError, like the wire', () => {
+  // At a VERIFYING door the seam still reads the stored conversation (its
+  // owner decides who may bind); a session-only call at an open door reads
+  // none, so that is where the hydrate can be held across close().
   it('pooled: hydrate held across close → HostClosedError', async () => {
     const base = memorySessions();
     let armed = false;
@@ -420,12 +423,13 @@ describe('NIT 6 (J7) — a seam call that loses the race to close() throws HostC
       maxActiveSessions: 1,
       sessions,
       host,
+      identity: { verify: verifier().verify },
     } as unknown as StandingAgentOptions<HostHandle>)) as HostHandle & StandingAgentHandle;
-    await host.deliver({ sessionId: 'sA', input: 'hi' });
-    await host.deliver({ sessionId: 'sB', input: 'hi' });
+    await host.deliver({ sessionId: 'sA', input: 'hi', headers: ALICE });
+    await host.deliver({ sessionId: 'sB', input: 'hi', headers: BOB });
     await tick();
     armed = true;
-    const pending = handle.artifactsForRequest({ sessionId: 'sA' });
+    const pending = handle.artifactsForRequest({ sessionId: 'sA', headers: ALICE });
     await tick();
     await handle.close();
     open();

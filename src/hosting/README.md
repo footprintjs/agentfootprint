@@ -413,8 +413,32 @@ sessions as `'evicted'`. The store that answers (`redeemerFor`):
 | the session has | answered by |
 |---|---|
 | a live lane (the shared agent, or its pooled instance) | that instance's store |
-| no live lane and no stored conversation | the one not-found — nothing built, nothing emitted (nothing could have been minted there: a first turn still in flight HAS a lane) |
-| no live lane, a stored conversation (its instance was evicted) | the READER: one instance from `agentFactory`, held outside the pool, built on first need, stopped at `close()` — it never counts toward `maxActiveSessions` |
+| no live lane — no turn yet, its instance was evicted, or the process restarted | the READER: one instance from `agentFactory`, held outside the pool, built on first need, stopped at `close()` — it never counts toward `maxActiveSessions` |
+
+**Whether a ticket exists is the artifact store's answer — never the pool's,
+never the session store's.** A ticket filed under a session's scope is redeemed
+under it whether or not that session has a live instance or a stored
+conversation: a guide an app-owned route filed before the session's first chat
+turn, a dataset a tool minted during a first turn that then threw (a thrown run
+persists nothing). The shared shape and the pooled shape give the same filing
+the same answer. (A verifying door still asks ownership FIRST — `mayRedeemFrom`
+— and a session whose first turn has not persisted is nobody's to open yet;
+that rule is unchanged.) For a lane-less session the wire first asks the store, with no
+fact sink, whether the scope HOLDS the ref (`holds`): a made-up session id is
+the one not-found with nothing emitted, so a flood of them at an open door
+costs one artifact-store read each, ONE reader per process, no session-store
+read, and no pooled lane. (Through the release that introduced the reader, a
+lane-less session with no stored conversation was the one not-found WITHOUT
+asking the store — on the premise that nothing could have been minted there,
+which the two cases above falsify.)
+
+```ts
+// an app-owned route files a guide beside a conversation nobody has chatted in yet
+const scoped = await handle.artifactsForRequest({ sessionId });
+if (scoped.bound) await scoped.artifacts.put({ kind: 'note/guide', mediaType: 'text/plain', data: guide });
+// the screen redeems it on the wire under the same session — 200, on either shape
+// another session presenting the same ref — the one 404
+```
 
 The reader answers from the factory's store, so a pooled deployment whose
 artifacts must outlive an instance hands every instance ONE store — which was
@@ -424,7 +448,9 @@ when it is evicted.
 ```ts
 const store = sqliteArtifacts({ file: './artifacts.db' }); // shared by every instance
 await standingAgent({ agentFactory: () => Agent.create({ provider, model, artifacts: store }).build(), sessions, host });
-``` Redemptions stay lane-free — and are therefore
+```
+
+Redemptions stay lane-free — and are therefore
 BOUNDED per session instead: `artifact-head`, `artifact-get` and
 `answer-account` count together against `artifactOpsPerSession` (default
 `DEFAULT_ARTIFACT_OPS_PER_SESSION`, 8), counted after the ownership check, and
@@ -478,7 +504,10 @@ What comes back is the `TurnArtifacts` shape — five verbs, no scope on the
 value, never the unscoped store — or a reason, in this order: `'unverified'`
 (401), `'unavailable'` (the verifier could not answer — 503, never 401),
 `'no-session'`, `'invalid-session'` (400), `'not-found'` (a session this caller
-cannot open, or one with no live instance and nothing stored), `'no-store'`.
+cannot open), `'no-store'`. Past the ownership check, a session with no live
+instance binds through the reader — at a door with no verifier, a session nobody
+has chatted in yet included, which is where a guide filed before the first turn
+goes.
 The verbs count against `artifactOpsPerSession` with the wire's redemptions
 (`ArtifactOpsBusyError`), and the binding is REVOKED when its instance is
 retired from the pool or the host closes: a call STARTED after that rejects

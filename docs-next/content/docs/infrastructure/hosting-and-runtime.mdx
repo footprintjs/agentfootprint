@@ -1670,7 +1670,11 @@ The result is the `TurnArtifacts` shape (five verbs, no scope on the value,
 never the unscoped store) or a reason: `'unverified'` (401; a repeated
 `authorization` header counts), `'unavailable'` (the verifier could not answer —
 503, never 401), `'no-session'`, `'invalid-session'` (400), `'not-found'`,
-`'no-store'`. It never builds or evicts a pooled instance. The verbs count
+`'no-store'`. It never builds or evicts a pooled instance. A session nobody has
+chatted in yet binds too — at a door with no verifier, that is where a guide
+filed before the first turn goes, and the screen redeems it on the wire under
+the same session (pooled or shared, the same answer: whether a ref exists is the
+store's to say). The verbs count
 against `artifactOpsPerSession`, and a call started after the binding's
 instance is retired or the host closes rejects with
 `RequestArtifactsRevokedError` — already handled; ask again.

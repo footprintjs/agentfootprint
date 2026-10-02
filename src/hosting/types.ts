@@ -439,12 +439,16 @@ export interface ArtifactsForRequestInput {
  *  - `'invalid-session'` — the session id is one the wire refuses at the door
  *    (empty, over the length bound, or a character outside visible ASCII —
  *    `InvalidSessionIdError` as `error`); a host's 400.
- *  - `'not-found'` — no conversation THIS caller can open under that id: at a
- *    verifying door somebody else's, one nobody signed for, or one whose first
- *    turn has not persisted (unless that turn is this caller's, in flight); at
- *    any door, a session with no live instance and no stored conversation.
- *    One reason for all of them, as redemption answers them with one
- *    not-found. Never builds or evicts a pooled instance to find out.
+ *  - `'not-found'` — at a verifying door, no conversation THIS caller can
+ *    open under that id: somebody else's, one nobody signed for, or one whose
+ *    first turn has not persisted (unless that turn is this caller's, in
+ *    flight). One reason for all of them, as redemption answers them with one
+ *    not-found. Never builds or evicts a pooled instance to find out. Having
+ *    no live instance is NOT by itself a reason: past that ownership check a
+ *    lane-less session binds through the pool's reader — at a door with no
+ *    verifier, a session nobody has chatted in yet included, which is where a
+ *    guide filed before its first turn goes — and whether a ref exists is the
+ *    store's answer (`head` → `null`).
  *  - `'no-store'` — the serving agent has no artifact store.
  */
 export type ArtifactsForRequestResult =
@@ -990,11 +994,13 @@ export type DurabilityMode = 'exit' | 'async' | 'sync';
  *  - `'invoke'` — a request arrived for that session.
  *  - `'resume'` — that request carries a person's decision for a run which
  *    paused earlier.
- *  - `'artifact'` — that request redeems an artifact ref, and the session's
- *    stored identity is needed to compose the scope it resolves under. Fired
- *    only when the resolution actually reads the store (a request carrying a
- *    `userId`); a session-only resolution composes its scope from the request
- *    alone and wakes nothing.
+ *  - `'artifact'` — that request redeems an artifact ref (or binds through
+ *    `artifactsForRequest`), and the stored conversation decides something:
+ *    its identity tuple composes the scope (a request carrying a `userId`) or
+ *    its owner decides who may redeem (a verifying door). Fired only when the
+ *    resolution actually reads the store; a session-only resolution at a door
+ *    with no verifier composes its scope from the request alone and wakes
+ *    nothing — whether its ref exists is the artifact store's answer.
  *  - `'transcript'` — a verified owner is READING that session's messages back
  *    (9.26.0). Nothing runs and nothing is written; the store is woken because
  *    it is about to be read from, which is the only promise this hook ever
