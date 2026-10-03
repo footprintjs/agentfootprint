@@ -4,7 +4,7 @@ title: TokenBudgetRecord
 
 # Interface: TokenBudgetRecord
 
-Defined in: [src/core/agent/window/types.ts:333](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L333)
+Defined in: src/core/agent/window/types.ts:333
 
 What one OVER-BUDGET visit to `tokenBudget` put in the ledger.
 
@@ -18,7 +18,7 @@ What one OVER-BUDGET visit to `tokenBudget` put in the ledger.
 
 > `readonly` `optional` **droppedObservations?**: readonly `string`[]
 
-Defined in: [src/core/agent/window/types.ts:207](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L207)
+Defined in: src/core/agent/window/types.ts:207
 
 The tools whose RESULTS left the window on this visit, in first-appearance
 order (9.57.0). Present only when at least one did.
@@ -45,7 +45,7 @@ said the evidence had gone.
 
 > `readonly` `optional` **droppedStandings?**: readonly `object`[]
 
-Defined in: [src/core/agent/window/types.ts:246](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L246)
+Defined in: src/core/agent/window/types.ts:246
 
 The standing of every tool result that LEFT the window on this visit,
 by id, as the model had declared it (9.102.0) — beside
@@ -69,7 +69,7 @@ hash on the receipt to the ledger fold at that stop gets the same answer.
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/core/agent/window/types.ts:181](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L181)
+Defined in: src/core/agent/window/types.ts:181
 
 ReAct iteration this visit belongs to.
 
@@ -83,7 +83,7 @@ ReAct iteration this visit belongs to.
 
 > `readonly` **keepRecentTurns**: `number`
 
-Defined in: [src/core/agent/window/types.ts:342](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L342)
+Defined in: src/core/agent/window/types.ts:342
 
 How many recent turns were off-limits to this visit.
 
@@ -93,7 +93,7 @@ How many recent turns were off-limits to this visit.
 
 > `readonly` `optional` **ledgerFacts?**: [`WindowObservations`](/docs/api/interfaces/WindowObservations)
 
-Defined in: [src/core/agent/window/types.ts:232](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L232)
+Defined in: src/core/agent/window/types.ts:232
 
 What the ledger-fact pin did on this visit (9.102.0). Present only when
 it did something: held a turn, turned one away at the ceiling, or stood
@@ -118,7 +118,7 @@ says so (`{ pinned: [], yielded: 0, limit, standDown: true }`).
 
 > `readonly` **measuredTokens**: `number`
 
-Defined in: [src/core/agent/window/types.ts:336](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L336)
+Defined in: src/core/agent/window/types.ts:336
 
 Adapter-reported input tokens of the last call — what tripped the check.
 
@@ -128,7 +128,7 @@ Adapter-reported input tokens of the last call — what tripped the check.
 
 > `readonly` `optional` **observations?**: [`WindowObservations`](/docs/api/interfaces/WindowObservations)
 
-Defined in: [src/core/agent/window/types.ts:217](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L217)
+Defined in: src/core/agent/window/types.ts:217
 
 What the last-tool-result pin did on this visit (9.57.0). Present only
 when it did something: held a turn, turned one away at the ceiling, or
@@ -148,7 +148,7 @@ key, so its records are the exact shape they were before 9.57.0.
 
 > `readonly` **overBudget**: `boolean`
 
-Defined in: [src/core/agent/window/types.ts:340](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L340)
+Defined in: src/core/agent/window/types.ts:340
 
 True when the measurement was over budget (a drop was attempted).
 
@@ -158,7 +158,7 @@ True when the measurement was over budget (a drop was attempted).
 
 > `readonly` **refusals**: readonly [`WindowRefusal`](/docs/api/interfaces/WindowRefusal)[]
 
-Defined in: [src/core/agent/window/types.ts:190](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L190)
+Defined in: src/core/agent/window/types.ts:190
 
 Every turn that refused to leave, named.
 
@@ -172,7 +172,7 @@ Every turn that refused to leave, named.
 
 > `readonly` **removedMessageCount**: `number`
 
-Defined in: [src/core/agent/window/types.ts:185](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L185)
+Defined in: src/core/agent/window/types.ts:185
 
 How many messages left the window.
 
@@ -186,7 +186,7 @@ How many messages left the window.
 
 > `readonly` **removedStageIds**: readonly `string`[]
 
-Defined in: [src/core/agent/window/types.ts:183](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L183)
+Defined in: src/core/agent/window/types.ts:183
 
 `runtimeStageId`s of the stages that appended the messages that left.
 
@@ -200,7 +200,7 @@ Defined in: [src/core/agent/window/types.ts:183](https://github.com/footprintjs/
 
 > `readonly` **strategy**: `"token-budget"`
 
-Defined in: [src/core/agent/window/types.ts:334](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L334)
+Defined in: src/core/agent/window/types.ts:334
 
 `WindowStrategy.name` of the strategy that decided — `'summarize-oldest'`,
 `'sliding-window'`, `'token-budget'`, or your own. Narrow on it.
@@ -215,7 +215,7 @@ Defined in: [src/core/agent/window/types.ts:334](https://github.com/footprintjs/
 
 > `readonly` **thresholdTokens**: `number`
 
-Defined in: [src/core/agent/window/types.ts:338](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L338)
+Defined in: src/core/agent/window/types.ts:338
 
 The budget it was compared against.
 
@@ -225,7 +225,7 @@ The budget it was compared against.
 
 > `readonly` **windowCharsAfter**: `number`
 
-Defined in: [src/core/agent/window/types.ts:188](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L188)
+Defined in: src/core/agent/window/types.ts:188
 
 #### Inherited from
 
@@ -237,7 +237,7 @@ Defined in: [src/core/agent/window/types.ts:188](https://github.com/footprintjs/
 
 > `readonly` **windowCharsBefore**: `number`
 
-Defined in: [src/core/agent/window/types.ts:187](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L187)
+Defined in: src/core/agent/window/types.ts:187
 
 Window size in chars before / after this visit. Exact, and not tokens.
 

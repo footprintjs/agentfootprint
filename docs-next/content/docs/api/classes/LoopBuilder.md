@@ -4,7 +4,7 @@ title: LoopBuilder
 
 # Class: LoopBuilder
 
-Defined in: [src/core-flow/Loop.ts:374](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L374)
+Defined in: src/core-flow/Loop.ts:374
 
 ## Constructors
 
@@ -12,7 +12,7 @@ Defined in: [src/core-flow/Loop.ts:374](https://github.com/footprintjs/agentfoot
 
 > **new LoopBuilder**(`opts`): `LoopBuilder`
 
-Defined in: [src/core-flow/Loop.ts:382](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L382)
+Defined in: src/core-flow/Loop.ts:382
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [src/core-flow/Loop.ts:382](https://github.com/footprintjs/agentfoot
 
 > **build**(): [`Loop`](/docs/api/classes/Loop)
 
-Defined in: [src/core-flow/Loop.ts:436](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L436)
+Defined in: src/core-flow/Loop.ts:436
 
 #### Returns
 
@@ -42,7 +42,7 @@ Defined in: [src/core-flow/Loop.ts:436](https://github.com/footprintjs/agentfoot
 
 > **forAtMost**(`ms`): `this`
 
-Defined in: [src/core-flow/Loop.ts:418](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L418)
+Defined in: src/core-flow/Loop.ts:418
 
 Wall-clock time budget in milliseconds. The loop exits at the next
 guard check after this elapses.
@@ -63,7 +63,7 @@ guard check after this elapses.
 
 > **repeat**(`runner`, `opts?`): `this`
 
-Defined in: [src/core-flow/Loop.ts:394](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L394)
+Defined in: src/core-flow/Loop.ts:394
 
 The runner that executes each iteration. Required.
 Each iteration's output string becomes the next iteration's input `{ message }`.
@@ -92,7 +92,7 @@ runner's own translator for THIS loop only — only its
 
 > **times**(`n`): `this`
 
-Defined in: [src/core-flow/Loop.ts:409](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L409)
+Defined in: src/core-flow/Loop.ts:409
 
 Maximum iteration count. Default 10 if only `.repeat()` is called.
 Hard ceiling 500 — larger values are clamped.
@@ -113,7 +113,7 @@ Hard ceiling 500 — larger values are clamped.
 
 > **until**(`guard`): `this`
 
-Defined in: [src/core-flow/Loop.ts:431](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L431)
+Defined in: src/core-flow/Loop.ts:431
 
 Exit predicate evaluated after each iteration. Return `true` to exit.
 Receives `{ iteration, latestOutput, startMs }`.

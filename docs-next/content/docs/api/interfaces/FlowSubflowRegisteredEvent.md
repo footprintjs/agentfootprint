@@ -4,7 +4,7 @@ title: FlowSubflowRegisteredEvent
 
 # Interface: FlowSubflowRegisteredEvent
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:231
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:261
 
 Event passed to FlowRecorder.onSubflowRegistered (dynamic subflow attachment).
 
@@ -14,7 +14,7 @@ Event passed to FlowRecorder.onSubflowRegistered (dynamic subflow attachment).
 
 > `optional` **description?**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:237
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:267
 
 Build-time description.
 
@@ -24,7 +24,7 @@ Build-time description.
 
 > **name**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:235
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:265
 
 Human-readable name.
 
@@ -34,7 +34,7 @@ Human-readable name.
 
 > `optional` **specStructure?**: `unknown`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:239
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:269
 
 Full spec structure (when available from buildTimeStructure).
 
@@ -44,7 +44,7 @@ Full spec structure (when available from buildTimeStructure).
 
 > **subflowId**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:233
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:263
 
 Subflow identifier.
 
@@ -54,4 +54,4 @@ Subflow identifier.
 
 > `optional` **traversalContext?**: [`TraversalContext`](/docs/api/interfaces/TraversalContext)
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:240
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:270

@@ -6,7 +6,7 @@ title: topK
 
 > **topK**(`options?`): [`RetrievalStrategy`](/docs/api/interfaces/RetrievalStrategy)
 
-Defined in: [src/memory/retrieval/topK.ts:75](https://github.com/footprintjs/agentfootprint/blob/main/src/memory/retrieval/topK.ts#L75)
+Defined in: src/memory/retrieval/topK.ts:75
 
 Build the top-K strategy.
 

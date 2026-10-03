@@ -6,7 +6,7 @@ title: CombinedRecorder
 
 > **CombinedRecorder** = `Partial`\<`Omit`\<[`ScopeRecorder`](/docs/api/interfaces/ScopeRecorder), `SharedLifecycleOverlap` \| `SharedLifecycle`\>\> & `Partial`\<`Omit`\<[`FlowRecorder`](/docs/api/interfaces/FlowRecorder), `SharedLifecycleOverlap` \| `SharedLifecycle`\>\> & `Partial`\<`Omit`\<[`EmitRecorder`](/docs/api/interfaces/EmitRecorder), `SharedLifecycle`\>\> & `object`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/recorder/CombinedRecorder.d.ts:94
+Defined in: node\_modules/footprintjs/dist/types/lib/recorder/CombinedRecorder.d.ts:95
 
 A recorder that MAY observe any combination of supported event streams.
 
@@ -103,29 +103,8 @@ the recorder lands on.
 
 ### toSnapshot()?
 
-> `optional` **toSnapshot**(): `object`
+> `optional` **toSnapshot**(): `RecorderBundle`
 
 #### Returns
 
-##### data
-
-> **data**: `unknown`
-
-##### description?
-
-> `optional` **description?**: `string`
-
-##### meta?
-
-> `optional` **meta?**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
-
-Machine-readable facts about the bundle itself — see
- import('../runner/ExecutionRuntime.js').RecorderSnapshot.meta.
-
-##### name
-
-> **name**: `string`
-
-##### preferredOperation?
-
-> `optional` **preferredOperation?**: `"translate"` \| `"accumulate"` \| `"aggregate"`
+`RecorderBundle`

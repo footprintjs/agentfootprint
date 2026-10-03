@@ -4,7 +4,7 @@ title: AnswerCoverage
 
 # Interface: AnswerCoverage
 
-Defined in: [src/core/agent/coverage/answer.ts:93](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/answer.ts#L93)
+Defined in: src/core/agent/coverage/answer.ts:93
 
 A TYPED answer's limits, as data — the three coverage lists the prose block
 would print, plus the values a tool's `assume` rule filled this turn (the
@@ -30,7 +30,7 @@ data twin of the block's `Period:` lines, present only when a call declared one.
 
 > `readonly` `optional` **assumed?**: readonly `object`[]
 
-Defined in: [src/core/agent/coverage/answer.ts:101](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/answer.ts#L101)
+Defined in: src/core/agent/coverage/answer.ts:101
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [src/core/agent/coverage/answer.ts:101](https://github.com/footprint
 
 > `readonly` **cannotCover**: readonly [`CoverageItem`](/docs/api/interfaces/CoverageItem)[]
 
-Defined in: [src/core/agent/coverage/types.ts:127](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L127)
+Defined in: src/core/agent/coverage/types.ts:127
 
 #### Inherited from
 
@@ -50,7 +50,7 @@ Defined in: [src/core/agent/coverage/types.ts:127](https://github.com/footprintj
 
 > `readonly` **checked**: readonly [`CoverageItem`](/docs/api/interfaces/CoverageItem)[]
 
-Defined in: [src/core/agent/coverage/types.ts:125](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L125)
+Defined in: src/core/agent/coverage/types.ts:125
 
 #### Inherited from
 
@@ -62,7 +62,7 @@ Defined in: [src/core/agent/coverage/types.ts:125](https://github.com/footprintj
 
 > `readonly` `optional` **inProgress?**: readonly `object`[]
 
-Defined in: [src/core/agent/coverage/answer.ts:100](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/answer.ts#L100)
+Defined in: src/core/agent/coverage/answer.ts:100
 
 What the calls found still running — its outcome not known yet — one
  entry per declaring call, as declared; present only when one did. Never a
@@ -74,7 +74,7 @@ What the calls found still running — its outcome not known yet — one
 
 > `readonly` **notChecked**: readonly [`CoverageItem`](/docs/api/interfaces/CoverageItem)[]
 
-Defined in: [src/core/agent/coverage/types.ts:126](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L126)
+Defined in: src/core/agent/coverage/types.ts:126
 
 #### Inherited from
 
@@ -86,7 +86,7 @@ Defined in: [src/core/agent/coverage/types.ts:126](https://github.com/footprintj
 
 > `readonly` `optional` **periods?**: readonly `object`[]
 
-Defined in: [src/core/agent/coverage/answer.ts:96](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/answer.ts#L96)
+Defined in: src/core/agent/coverage/answer.ts:96
 
 The periods the calls declared (honesty step 7b) — one per declaring
  call, as declared; present only when one did.

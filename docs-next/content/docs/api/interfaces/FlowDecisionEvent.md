@@ -4,7 +4,7 @@ title: FlowDecisionEvent
 
 # Interface: FlowDecisionEvent
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:193
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:223
 
 Event passed to FlowRecorder.onDecision.
 
@@ -14,7 +14,7 @@ Event passed to FlowRecorder.onDecision.
 
 > **chosen**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:195
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:225
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > **decider**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:194
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:224
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **description?**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:197
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:227
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **evidence?**: `DecisionEvidence`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:200
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:230
 
 Structured decision evidence from decide() helper.
 
@@ -48,7 +48,7 @@ Structured decision evidence from decide() helper.
 
 > `optional` **rationale?**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:196
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:226
 
 ***
 
@@ -56,4 +56,4 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **traversalContext?**: [`TraversalContext`](/docs/api/interfaces/TraversalContext)
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:198
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:228

@@ -4,7 +4,7 @@ title: PermissionChecker
 
 # Interface: PermissionChecker
 
-Defined in: [src/adapters/types.ts:922](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L922)
+Defined in: src/adapters/types.ts:922
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/adapters/types.ts:922](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **governs?**: readonly [`PermissionCapability`](/docs/api/type-aliases/PermissionCapability)[]
 
-Defined in: [src/adapters/types.ts:955](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L955)
+Defined in: src/adapters/types.ts:955
 
 Which capabilities BEYOND `'tool_call'` this checker asks to be consulted
 about (9.11.0). Optional and feature-detected — **absence is NO**.
@@ -53,7 +53,7 @@ a checker that also governs which skills a role may activate
 
 > `readonly` **name**: `string`
 
-Defined in: [src/adapters/types.ts:923](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L923)
+Defined in: src/adapters/types.ts:923
 
 ## Methods
 
@@ -61,7 +61,7 @@ Defined in: [src/adapters/types.ts:923](https://github.com/footprintjs/agentfoot
 
 > **check**(`request`): [`PermissionDecision`](/docs/api/interfaces/PermissionDecision) \| `Promise`\<[`PermissionDecision`](/docs/api/interfaces/PermissionDecision)\>
 
-Defined in: [src/adapters/types.ts:924](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L924)
+Defined in: src/adapters/types.ts:924
 
 #### Parameters
 

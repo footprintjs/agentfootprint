@@ -4,7 +4,7 @@ title: TraversalContext
 
 # Interface: TraversalContext
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:118
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:124
 
 Traversal context attached to every FlowRecorder event.
 Created by the traverser during DFS, passed to recorders as read-only data.
@@ -19,9 +19,14 @@ Like OpenTelemetry's span context: stageId + parentStageId form a tree.
 
 > `readonly` **depth**: `number`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:159
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:172
 
-Nesting depth (0 = root, 1 = inside first subflow, etc.).
+Subflow nesting depth of the stage's ADDRESS: how many subflow segments its
+`runtimeStageId` carries (0 = top level, 1 = inside a subflow or a
+`parallelForEach` branch, 2 = a subflow inside that, …). One meaning on
+every stamp — stage events, the run-boundary root (0) and `onResume`
+(9.37.0; until 9.36.0 stage events stamped the parent-chain length of the
+stage's context instead).
 
 ***
 
@@ -29,7 +34,7 @@ Nesting depth (0 = root, 1 = inside first subflow, etc.).
 
 > `readonly` `optional` **forkBranch?**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:170
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:183
 
 Fork branch ID when inside a parallel or decider branch.
 
@@ -39,7 +44,7 @@ Fork branch ID when inside a parallel or decider branch.
 
 > `readonly` `optional` **loopIteration?**: `number`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:168
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:181
 
 How many times this stage has executed BEFORE in this run — the loop
 iteration count when a node is revisited (e.g. via `loopTo`). Absent on the
@@ -54,7 +59,7 @@ narrative recorder's "pass N" count.
 
 > `readonly` `optional` **parentRuntimeStageId?**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:153
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:159
 
 The parent EXECUTION step's runtimeStageId — the runtime twin of
 `parentStageId` (RFC-003 D1). Walk up to reconstruct the runtime
@@ -70,9 +75,23 @@ Undefined only at the first stage of the top-level chart.
 
 > `readonly` `optional` **parentStageId?**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:143
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:149
 
 Parent stage ID — walk up to reconstruct the tree. Undefined at root.
+
+***
+
+### resumedFrom?
+
+> `readonly` `optional` **resumedFrom?**: `ResumeLink`
+
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:191
+
+On the `onResume` event only (9.37.0): the PAUSED execution this resumed
+run continues — a link in the OpenTelemetry sense, not a parent. A resume
+is a new `runId`, so the paused `(runId, runtimeStageId)` cannot be a
+parent of anything in it; it is named here instead. Absent when the
+checkpoint predates 9.37.0 (it did not record the paused execution).
 
 ***
 
@@ -80,7 +99,7 @@ Parent stage ID — walk up to reconstruct the tree. Undefined at root.
 
 > `readonly` **runId**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:134
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:140
 
 Per-`executor.run()` identifier. Generated once at the start of every
 `run()` (and again on `resume()`); shared by every event of that run;
@@ -102,7 +121,7 @@ ignore the field.
 
 > `readonly` **runtimeStageId**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:139
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:145
 
 Unique per-execution-step identifier. Format: [subflowPath/]stageId#executionIndex.
  Counter resets per executor — combine with `runId` for globally unique step keys.
@@ -113,7 +132,7 @@ Unique per-execution-step identifier. Format: [subflowPath/]stageId#executionInd
 
 > `readonly` **stageId**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:136
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:142
 
 Stable stage identifier from the builder (matches spec node id).
 
@@ -123,7 +142,7 @@ Stable stage identifier from the builder (matches spec node id).
 
 > `readonly` **stageName**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:141
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:147
 
 Human-readable stage name.
 
@@ -133,7 +152,7 @@ Human-readable stage name.
 
 > `readonly` `optional` **subflowId?**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:155
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:161
 
 Subflow ID when inside a subflow. Undefined at root level.
 
@@ -143,6 +162,6 @@ Subflow ID when inside a subflow. Undefined at root level.
 
 > `readonly` `optional` **subflowPath?**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:157
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:163
 
 Full subflow path for nested subflows (e.g., "sf-outer/sf-inner").

@@ -4,7 +4,7 @@ title: CoveredResult<T>
 
 # Interface: CoveredResult\<T\>
 
-Defined in: [src/core/agent/coverage/types.ts:290](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L290)
+Defined in: src/core/agent/coverage/types.ts:290
 
 The rendered coverage ledger, wrapped around the result it bounds.
 
@@ -20,7 +20,7 @@ The rendered coverage ledger, wrapped around the result it bounds.
 
 > `readonly` **af\_coverage**: `object`
 
-Defined in: [src/core/agent/coverage/types.ts:291](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L291)
+Defined in: src/core/agent/coverage/types.ts:291
 
 #### cannot\_cover?
 
@@ -78,6 +78,6 @@ What the read behind the value covered in time — honesty step 7b.
 
 > `readonly` **result**: `T`
 
-Defined in: [src/core/agent/coverage/types.ts:304](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L304)
+Defined in: src/core/agent/coverage/types.ts:304
 
 The tool's own answer, untouched.

@@ -438,6 +438,7 @@
     {
       "idx": 2,
       "overwrite": {},
+      "phase": "exit",
       "redactedPaths": [],
       "runtimeStageId": "sf-llm-call#1",
       "stage": "LLM",
@@ -739,6 +740,7 @@
     {
       "idx": 6,
       "overwrite": {},
+      "phase": "exit",
       "redactedPaths": [],
       "runtimeStageId": "sf-llm-call#24",
       "stage": "LLM",
@@ -771,9 +773,13 @@
       "idx": 8,
       "overwrite": {},
       "redactedPaths": [],
-      "runtimeStageId": "sf-route#45",
-      "stage": "Route",
-      "stageId": "sf-route",
+      "runtimeStageId": "final#46",
+      "stage": "Final",
+      "stageId": "final",
+      "tags": [
+        "milestone:decision",
+        "milestone-label:Answer"
+      ],
       "trace": [
         {
           "path": "finalContent",
@@ -785,14 +791,11 @@
     {
       "idx": 9,
       "overwrite": {},
+      "phase": "exit",
       "redactedPaths": [],
       "runtimeStageId": "final#46",
       "stage": "Final",
       "stageId": "final",
-      "tags": [
-        "milestone:decision",
-        "milestone-label:Answer"
-      ],
       "trace": [],
       "updates": {}
     }

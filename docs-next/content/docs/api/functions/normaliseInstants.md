@@ -6,7 +6,7 @@ title: normaliseInstants
 
 > **normaliseInstants**(`rows`, `axis`, `options?`): [`NormalisedAxis`](/docs/api/type-aliases/NormalisedAxis)
 
-Defined in: [src/core/time/axis.ts:588](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/axis.ts#L588)
+Defined in: src/core/time/axis.ts:588
 
 THE READ-SIDE VIEW of a declared time column: every value turned into a UTC
 `Z` instant at one precision, sorted in time, with every value it could not

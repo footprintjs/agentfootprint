@@ -4,7 +4,7 @@ title: CallWindowRow
 
 # Interface: CallWindowRow
 
-Defined in: [src/core/time/rows.ts:202](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L202)
+Defined in: src/core/time/rows.ts:202
 
 Which window one call to a tool that declares period forms carries (time
 design § 7.3) — one row per such call (two when the time ask filled it, below), filed by the inputs layer beside the
@@ -40,7 +40,7 @@ call is the window it runs with (`callWindowOfCall`).
 
 > `readonly` `optional` **argument?**: `string`
 
-Defined in: [src/core/time/rows.ts:226](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L226)
+Defined in: src/core/time/rows.ts:226
 
 On a `dst-gap` refusal: the argument whose wall time the zone skips.
 
@@ -50,7 +50,7 @@ On a `dst-gap` refusal: the argument whose wall time the zone skips.
 
 > `readonly` `optional` **asked?**: [`TimeRange`](/docs/api/interfaces/TimeRange)
 
-Defined in: [src/core/time/rows.ts:211](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L211)
+Defined in: src/core/time/rows.ts:211
 
 ***
 
@@ -58,7 +58,7 @@ Defined in: [src/core/time/rows.ts:211](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **by?**: `"quote"` \| `"value"`
 
-Defined in: [src/core/time/rows.ts:213](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L213)
+Defined in: src/core/time/rows.ts:213
 
 ***
 
@@ -66,7 +66,7 @@ Defined in: [src/core/time/rows.ts:213](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **differs?**: `object`
 
-Defined in: [src/core/time/rows.ts:219](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L219)
+Defined in: src/core/time/rows.ts:219
 
 A widened fill the tool does not trim: the parts read but not asked.
 
@@ -80,7 +80,7 @@ A widened fill the tool does not trim: the parts read but not asked.
 
 > `readonly` `optional` **form?**: `number`
 
-Defined in: [src/core/time/rows.ts:210](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L210)
+Defined in: src/core/time/rows.ts:210
 
 The index of the tool's form the call used (filled into, or read back from).
 
@@ -90,7 +90,7 @@ The index of the tool's form the call used (filled into, or read back from).
 
 > `readonly` **how**: `"refused"` \| `"model"` \| `"filled"` \| `"bound"` \| `"model-chosen"` \| `"unread"` \| `"not-filled"`
 
-Defined in: [src/core/time/rows.ts:208](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L208)
+Defined in: src/core/time/rows.ts:208
 
 ***
 
@@ -98,7 +98,7 @@ Defined in: [src/core/time/rows.ts:208](https://github.com/footprintjs/agentfoot
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/core/time/rows.ts:205](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L205)
+Defined in: src/core/time/rows.ts:205
 
 ***
 
@@ -106,7 +106,7 @@ Defined in: [src/core/time/rows.ts:205](https://github.com/footprintjs/agentfoot
 
 > `readonly` **kind**: `"call-window"`
 
-Defined in: [src/core/time/rows.ts:203](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L203)
+Defined in: src/core/time/rows.ts:203
 
 ***
 
@@ -114,7 +114,7 @@ Defined in: [src/core/time/rows.ts:203](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **partlyBeyondRetention?**: `true`
 
-Defined in: [src/core/time/rows.ts:222](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L222)
+Defined in: src/core/time/rows.ts:222
 
 ***
 
@@ -122,7 +122,7 @@ Defined in: [src/core/time/rows.ts:222](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **person?**: [`PersonWindow`](/docs/api/interfaces/PersonWindow)
 
-Defined in: [src/core/time/rows.ts:212](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L212)
+Defined in: src/core/time/rows.ts:212
 
 ***
 
@@ -130,7 +130,7 @@ Defined in: [src/core/time/rows.ts:212](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **refused?**: `TimeRefusal`
 
-Defined in: [src/core/time/rows.ts:224](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L224)
+Defined in: src/core/time/rows.ts:224
 
 Why the call was refused before dispatch.
 
@@ -140,7 +140,7 @@ Why the call was refused before dispatch.
 
 > `readonly` `optional` **rounded?**: `true`
 
-Defined in: [src/core/time/rows.ts:214](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L214)
+Defined in: src/core/time/rows.ts:214
 
 ***
 
@@ -148,7 +148,7 @@ Defined in: [src/core/time/rows.ts:214](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **sent?**: [`TimeRange`](/docs/api/interfaces/TimeRange)
 
-Defined in: [src/core/time/rows.ts:217](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L217)
+Defined in: src/core/time/rows.ts:217
 
 A widened fill: the range the tool reads with the sent values.
 
@@ -158,7 +158,7 @@ A widened fill: the range the tool reads with the sent values.
 
 > `readonly` **toolCallId**: `string`
 
-Defined in: [src/core/time/rows.ts:206](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L206)
+Defined in: src/core/time/rows.ts:206
 
 ***
 
@@ -166,7 +166,7 @@ Defined in: [src/core/time/rows.ts:206](https://github.com/footprintjs/agentfoot
 
 > `readonly` **toolName**: `string`
 
-Defined in: [src/core/time/rows.ts:207](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L207)
+Defined in: src/core/time/rows.ts:207
 
 ***
 
@@ -174,7 +174,7 @@ Defined in: [src/core/time/rows.ts:207](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **trimmedByTool?**: `true`
 
-Defined in: [src/core/time/rows.ts:221](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L221)
+Defined in: src/core/time/rows.ts:221
 
 A widened fill to a tool that declares `filtersToAsked`.
 
@@ -184,7 +184,7 @@ A widened fill to a tool that declares `filtersToAsked`.
 
 > `readonly` **turn**: `number`
 
-Defined in: [src/core/time/rows.ts:204](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L204)
+Defined in: src/core/time/rows.ts:204
 
 ***
 
@@ -192,4 +192,4 @@ Defined in: [src/core/time/rows.ts:204](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **why?**: `"no-window"` \| `"several-mentions"` \| `"open-reading"` \| `"no-exact-form"`
 
-Defined in: [src/core/time/rows.ts:215](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L215)
+Defined in: src/core/time/rows.ts:215

@@ -6,7 +6,7 @@ title: IN_PROGRESS_CLAUSE
 
 > `const` **IN\_PROGRESS\_CLAUSE**: `string`
 
-Defined in: [src/core/agent/coverage/inProgress.ts:66](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/inProgress.ts#L66)
+Defined in: src/core/agent/coverage/inProgress.ts:66
 
 The one clause the dispatch door appends to the note of a ledger that
 declares a well-formed, non-empty `in_progress` — the model is SERVED it; the

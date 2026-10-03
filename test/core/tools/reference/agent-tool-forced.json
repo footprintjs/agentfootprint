@@ -243,6 +243,7 @@
     {
       "idx": 2,
       "overwrite": {},
+      "phase": "exit",
       "redactedPaths": [],
       "runtimeStageId": "sf-injection-engine#1",
       "stage": "Injection Engine",
@@ -284,9 +285,13 @@
         ]
       },
       "redactedPaths": [],
-      "runtimeStageId": "context#6",
-      "stage": "Context",
-      "stageId": "context",
+      "runtimeStageId": "sf-system-prompt#7",
+      "stage": "System Prompt",
+      "stageId": "sf-system-prompt",
+      "tags": [
+        "milestone:slot",
+        "milestone-label:System prompt"
+      ],
       "trace": [
         {
           "path": "systemPromptInjections",
@@ -298,14 +303,11 @@
     {
       "idx": 5,
       "overwrite": {},
+      "phase": "exit",
       "redactedPaths": [],
       "runtimeStageId": "sf-system-prompt#7",
       "stage": "System Prompt",
       "stageId": "sf-system-prompt",
-      "tags": [
-        "milestone:slot",
-        "milestone-label:System prompt"
-      ],
       "trace": [],
       "updates": {}
     },
@@ -327,9 +329,13 @@
         ]
       },
       "redactedPaths": [],
-      "runtimeStageId": "context#6",
-      "stage": "Context",
-      "stageId": "context",
+      "runtimeStageId": "sf-messages#9",
+      "stage": "Messages",
+      "stageId": "sf-messages",
+      "tags": [
+        "milestone:slot",
+        "milestone-label:Messages"
+      ],
       "trace": [
         {
           "path": "messagesInjections",
@@ -341,20 +347,18 @@
     {
       "idx": 7,
       "overwrite": {},
+      "phase": "exit",
       "redactedPaths": [],
       "runtimeStageId": "sf-messages#9",
       "stage": "Messages",
       "stageId": "sf-messages",
-      "tags": [
-        "milestone:slot",
-        "milestone-label:Messages"
-      ],
       "trace": [],
       "updates": {}
     },
     {
       "idx": 8,
       "overwrite": {},
+      "phase": "repeat",
       "redactedPaths": [],
       "runtimeStageId": "sf-system-prompt#7",
       "stage": "System Prompt",
@@ -365,6 +369,7 @@
     {
       "idx": 9,
       "overwrite": {},
+      "phase": "repeat",
       "redactedPaths": [],
       "runtimeStageId": "sf-messages#9",
       "stage": "Messages",
@@ -374,16 +379,6 @@
     },
     {
       "idx": 10,
-      "overwrite": {},
-      "redactedPaths": [],
-      "runtimeStageId": "context#6",
-      "stage": "Context",
-      "stageId": "context",
-      "trace": [],
-      "updates": {}
-    },
-    {
-      "idx": 11,
       "overwrite": {},
       "redactedPaths": [],
       "runtimeStageId": "sf-tools#11",
@@ -397,8 +392,20 @@
       "updates": {}
     },
     {
+      "idx": 11,
+      "overwrite": {},
+      "phase": "exit",
+      "redactedPaths": [],
+      "runtimeStageId": "sf-tools#11",
+      "stage": "Tools",
+      "stageId": "sf-tools",
+      "trace": [],
+      "updates": {}
+    },
+    {
       "idx": 12,
       "overwrite": {},
+      "phase": "repeat",
       "redactedPaths": [],
       "runtimeStageId": "sf-tools#11",
       "stage": "Tools",
@@ -433,6 +440,7 @@
     {
       "idx": 14,
       "overwrite": {},
+      "phase": "exit",
       "redactedPaths": [],
       "runtimeStageId": "sf-cache#14",
       "stage": "Cache",
@@ -588,9 +596,13 @@
       "idx": 17,
       "overwrite": {},
       "redactedPaths": [],
-      "runtimeStageId": "sf-route#19",
-      "stage": "Route",
-      "stageId": "sf-route",
+      "runtimeStageId": "final#20",
+      "stage": "Final",
+      "stageId": "final",
+      "tags": [
+        "milestone:decision",
+        "milestone-label:Answer"
+      ],
       "trace": [
         {
           "path": "finalContent",
@@ -602,14 +614,11 @@
     {
       "idx": 18,
       "overwrite": {},
+      "phase": "exit",
       "redactedPaths": [],
       "runtimeStageId": "final#20",
       "stage": "Final",
       "stageId": "final",
-      "tags": [
-        "milestone:decision",
-        "milestone-label:Answer"
-      ],
       "trace": [],
       "updates": {}
     }

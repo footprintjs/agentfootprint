@@ -4,7 +4,7 @@ title: BudgetPressureRecord
 
 # Interface: BudgetPressureRecord
 
-Defined in: [src/recorders/core/types.ts:110](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/types.ts#L110)
+Defined in: src/recorders/core/types.ts:110
 
 Budget-pressure warning — emitted before evictions fire.
 
@@ -32,7 +32,7 @@ the honest reading of a slot that composed over its `budgetCap`.
 
 > `readonly` **cap**: `number`
 
-Defined in: [src/recorders/core/types.ts:118](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/types.ts#L118)
+Defined in: src/recorders/core/types.ts:118
 
 The budget, in [unit](/docs/api/interfaces/BudgetPressureRecord#unit).
 
@@ -42,7 +42,7 @@ The budget, in [unit](/docs/api/interfaces/BudgetPressureRecord#unit).
 
 > `readonly` **overflowBy**: `number`
 
-Defined in: [src/recorders/core/types.ts:112](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/types.ts#L112)
+Defined in: src/recorders/core/types.ts:112
 
 ***
 
@@ -50,7 +50,7 @@ Defined in: [src/recorders/core/types.ts:112](https://github.com/footprintjs/age
 
 > `readonly` **planAction**: `"abort"` \| `"evict"` \| `"summarize"` \| `"none"`
 
-Defined in: [src/recorders/core/types.ts:113](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/types.ts#L113)
+Defined in: src/recorders/core/types.ts:113
 
 ***
 
@@ -58,7 +58,7 @@ Defined in: [src/recorders/core/types.ts:113](https://github.com/footprintjs/age
 
 > `readonly` **projected**: `number`
 
-Defined in: [src/recorders/core/types.ts:120](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/types.ts#L120)
+Defined in: src/recorders/core/types.ts:120
 
 What was measured against it, in [unit](/docs/api/interfaces/BudgetPressureRecord#unit).
 
@@ -68,7 +68,7 @@ What was measured against it, in [unit](/docs/api/interfaces/BudgetPressureRecor
 
 > `readonly` **slot**: `ContextSlot`
 
-Defined in: [src/recorders/core/types.ts:111](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/types.ts#L111)
+Defined in: src/recorders/core/types.ts:111
 
 ***
 
@@ -76,7 +76,7 @@ Defined in: [src/recorders/core/types.ts:111](https://github.com/footprintjs/age
 
 > `readonly` `optional` **unit?**: `"chars"` \| `"tokens"`
 
-Defined in: [src/recorders/core/types.ts:116](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/types.ts#L116)
+Defined in: src/recorders/core/types.ts:116
 
 What the numbers count. Absent on a record written by a third-party slot
  builder — the slot channel is `'chars'`.

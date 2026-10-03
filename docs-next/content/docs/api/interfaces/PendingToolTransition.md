@@ -4,7 +4,7 @@ title: PendingToolTransition
 
 # Interface: PendingToolTransition
 
-Defined in: [src/core/agent/toolEffects.ts:276](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/toolEffects.ts#L276)
+Defined in: src/core/agent/toolEffects.ts:276
 
 The transition proposal the tool-calls stage ACCEPTED this iteration —
 validated (graph mounted, target reachable), first-accepted-wins across
@@ -19,7 +19,7 @@ back to undefined (zero-cost stays zero for agents that never see one).
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/core/agent/toolEffects.ts:284](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/toolEffects.ts#L284)
+Defined in: src/core/agent/toolEffects.ts:284
 
 The ReAct iteration whose batch granted it (valid for iteration + 1).
 
@@ -29,7 +29,7 @@ The ReAct iteration whose batch granted it (valid for iteration + 1).
 
 > `readonly` **reason**: `string`
 
-Defined in: [src/core/agent/toolEffects.ts:282](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/toolEffects.ts#L282)
+Defined in: src/core/agent/toolEffects.ts:282
 
 The effect's own declared reason.
 
@@ -39,7 +39,7 @@ The effect's own declared reason.
 
 > `readonly` **targetSkillId**: `string`
 
-Defined in: [src/core/agent/toolEffects.ts:277](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/toolEffects.ts#L277)
+Defined in: src/core/agent/toolEffects.ts:277
 
 ***
 
@@ -47,7 +47,7 @@ Defined in: [src/core/agent/toolEffects.ts:277](https://github.com/footprintjs/a
 
 > `readonly` `optional` **toolCallId?**: `string`
 
-Defined in: [src/core/agent/toolEffects.ts:280](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/toolEffects.ts#L280)
+Defined in: src/core/agent/toolEffects.ts:280
 
 ***
 
@@ -55,6 +55,6 @@ Defined in: [src/core/agent/toolEffects.ts:280](https://github.com/footprintjs/a
 
 > `readonly` **toolName**: `string`
 
-Defined in: [src/core/agent/toolEffects.ts:279](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/toolEffects.ts#L279)
+Defined in: src/core/agent/toolEffects.ts:279
 
 The proposing tool — provenance for the record.

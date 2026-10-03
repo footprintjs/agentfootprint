@@ -4,7 +4,7 @@ title: WireToolManifest
 
 # Interface: WireToolManifest
 
-Defined in: [src/adapters/types.ts:403](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L403)
+Defined in: src/adapters/types.ts:403
 
 The structural record of what one request actually carried on the wire.
 
@@ -14,6 +14,6 @@ The structural record of what one request actually carried on the wire.
 
 > `readonly` **toolNames**: readonly `string`[]
 
-Defined in: [src/adapters/types.ts:405](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L405)
+Defined in: src/adapters/types.ts:405
 
 Tool names as they appear in the serialized body, in wire order.

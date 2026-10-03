@@ -4,7 +4,7 @@ title: AbsenceDeclaration
 
 # Interface: AbsenceDeclaration
 
-Defined in: [src/core/agent/coverage/types.ts:162](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L162)
+Defined in: src/core/agent/coverage/types.ts:162
 
 What a tool author passes to import('./absent.js').absent.
 
@@ -14,7 +14,7 @@ What a tool author passes to import('./absent.js').absent.
 
 > `readonly` `optional` **cannotCover?**: readonly [`CoverageInput`](/docs/api/type-aliases/CoverageInput)[]
 
-Defined in: [src/core/agent/coverage/types.ts:180](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L180)
+Defined in: src/core/agent/coverage/types.ts:180
 
 Ground no search by this tool can reach. Each needs a `why`.
 
@@ -24,7 +24,7 @@ Ground no search by this tool can reach. Each needs a `why`.
 
 > `readonly` **checked**: readonly [`CoverageInput`](/docs/api/type-aliases/CoverageInput)[]
 
-Defined in: [src/core/agent/coverage/types.ts:175](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L175)
+Defined in: src/core/agent/coverage/types.ts:175
 
 The coverage of the search — REQUIRED and non-empty. An absence that
 names no coverage is a `null` with extra steps: the reader still cannot
@@ -37,7 +37,7 @@ the entire failure this primitive exists to prevent.
 
 > `readonly` `optional` **notChecked?**: readonly [`CoverageInput`](/docs/api/type-aliases/CoverageInput)[]
 
-Defined in: [src/core/agent/coverage/types.ts:178](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L178)
+Defined in: src/core/agent/coverage/types.ts:178
 
 Ground the search did not reach this time — an absence here proves
  nothing about it.
@@ -48,7 +48,7 @@ Ground the search did not reach this time — an absence here proves
 
 > `readonly` `optional` **period?**: [`DeclaredPeriod`](/docs/api/interfaces/DeclaredPeriod)
 
-Defined in: [src/core/agent/coverage/types.ts:220](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L220)
+Defined in: src/core/agent/coverage/types.ts:220
 
 What the search's READ covered in time — the instants it asked for, and
 what the store holds (or `'unknown'`, said out loud) — honesty step 7b.
@@ -62,7 +62,7 @@ not held · unknown), and `.limitsTravelWithTheAnswer()` prints it.
 
 > `readonly` `optional` **provenance?**: `object`
 
-Defined in: [src/core/agent/coverage/types.ts:212](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L212)
+Defined in: src/core/agent/coverage/types.ts:212
 
 Where the search looked and how old that source is — the SAME shape
 `describedResult()` declares (`measuredAt`, `source`, and optionally
@@ -106,7 +106,7 @@ For file-fed collectors: the export the values rode in on.
 
 > `readonly` `optional` **tryInstead?**: `string`
 
-Defined in: [src/core/agent/coverage/types.ts:191](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L191)
+Defined in: src/core/agent/coverage/types.ts:191
 
 Where to go INSTEAD, in one sentence ("widen the window with
 `window: '7d'`, or ask for a different interface"). Optional, and the
@@ -123,7 +123,7 @@ when the sentence points at another tool, name that tool in
 
 > `readonly` `optional` **tryInsteadTool?**: [`TryInsteadTool`](/docs/api/interfaces/TryInsteadTool)
 
-Defined in: [src/core/agent/coverage/types.ts:201](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L201)
+Defined in: src/core/agent/coverage/types.ts:201
 
 The other TOOL the suggestion points at, as data (9.113.0) —
 `{ tool, why? }`. Beside the sentence, not instead of it: the sentence is
@@ -139,7 +139,7 @@ refused (see `absent.ts` · `readToolSuggestion` for why).
 
 > `readonly` **what**: `string`
 
-Defined in: [src/core/agent/coverage/types.ts:168](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L168)
+Defined in: src/core/agent/coverage/types.ts:168
 
 What was looked for, in the author's own words ("FLOGI entries on
 fc1/3"). Required: an absence that cannot say what it did not find is

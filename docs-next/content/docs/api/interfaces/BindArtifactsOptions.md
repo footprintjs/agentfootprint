@@ -4,7 +4,7 @@ title: BindArtifactsOptions
 
 # Interface: BindArtifactsOptions
 
-Defined in: [src/artifacts/capability.ts:102](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/capability.ts#L102)
+Defined in: src/artifacts/capability.ts:102
 
 What `bindArtifacts` needs beyond the store and the scope.
 
@@ -14,7 +14,7 @@ What `bindArtifacts` needs beyond the store and the scope.
 
 > `readonly` `optional` **onEvent?**: [`ArtifactEventSink`](/docs/api/type-aliases/ArtifactEventSink)
 
-Defined in: [src/artifacts/capability.ts:108](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/capability.ts#L108)
+Defined in: src/artifacts/capability.ts:108
 
 Fact sink. Absent = silent binding (raw store semantics, no record).
 
@@ -24,7 +24,7 @@ Fact sink. Absent = silent binding (raw store semantics, no record).
 
 > `readonly` `optional` **origin?**: [`ArtifactOrigin`](/docs/api/interfaces/ArtifactOrigin)
 
-Defined in: [src/artifacts/capability.ts:106](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/capability.ts#L106)
+Defined in: src/artifacts/capability.ts:106
 
 Stamped onto every mint — the run's own facts, absent when unknown. A
  caller-supplied `origin` is dropped either way: with none here, a mint

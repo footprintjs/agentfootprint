@@ -6,7 +6,7 @@ title: LIBRARY_NOTE_OPENING
 
 > `const` **LIBRARY\_NOTE\_OPENING**: `"[A note from the library that runs the tools — not from the person, and not a correction from them: when you answer, answer the person directly, as you would from the tool results alone.]"` = `'[A note from the library that runs the tools — not from the person, and not a correction from them: when you answer, answer the person directly, as you would from the tool results alone.]'`
 
-Defined in: [src/lib/saidByPerson.ts:132](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/saidByPerson.ts#L132)
+Defined in: src/lib/saidByPerson.ts:132
 
 Opening of the LIBRARY NOTE — the late line this library serves LAST on a
 request and never writes to `history`: the time layer's ONE served time line

@@ -6,7 +6,7 @@ title: elicitationOf
 
 > **elicitationOf**(`awaiting`): [`ElicitationRequest`](/docs/api/interfaces/ElicitationRequest)
 
-Defined in: [src/lib/mcp/elicitation.ts:133](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/mcp/elicitation.ts#L133)
+Defined in: src/lib/mcp/elicitation.ts:133
 
 The MCP elicitation for a pending typed ask: its question (after the
 refusal's reason, on a re-ask) and one property per way to answer each open

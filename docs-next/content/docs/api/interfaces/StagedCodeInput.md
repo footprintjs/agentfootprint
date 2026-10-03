@@ -4,7 +4,7 @@ title: StagedCodeInput
 
 # Interface: StagedCodeInput
 
-Defined in: [src/adapters/types.ts:1151](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1151)
+Defined in: src/adapters/types.ts:1151
 
 Where one staged input actually landed.
 
@@ -14,7 +14,7 @@ Where one staged input actually landed.
 
 > `readonly` **bytes**: `number`
 
-Defined in: [src/adapters/types.ts:1159](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1159)
+Defined in: src/adapters/types.ts:1159
 
 How many bytes landed.
 
@@ -24,7 +24,7 @@ How many bytes landed.
 
 > `readonly` **name**: `string`
 
-Defined in: [src/adapters/types.ts:1153](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1153)
+Defined in: src/adapters/types.ts:1153
 
 The name it was asked for — the manifest key the code looks up.
 
@@ -34,7 +34,7 @@ The name it was asked for — the manifest key the code looks up.
 
 > `readonly` **path**: `string`
 
-Defined in: [src/adapters/types.ts:1157](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1157)
+Defined in: src/adapters/types.ts:1157
 
 The path the executing code opens. Absolute, or relative to the session's
  working directory: whichever it is, it is what the manifest carries and
