@@ -13,6 +13,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { CommitBundle } from 'footprintjs/advanced';
+import { findLastWriterWithBasis } from 'footprintjs/trace';
 import { Agent, defineTool } from '../../../src/index';
 import { mock } from '../../../src/llm-providers.js';
 import {
@@ -373,6 +374,46 @@ describe('integration — assembleTrajectory over a real GROUPED agent run', () 
     expect(new Set(llmIds).size).toBe(3);
     // and distinct subflow scopes (sf-llm-call#1 / #25 / #49)
     expect(new Set(traj.frames.map((f) => f.subflowScope)).size).toBe(3);
+  });
+
+  // footprintjs 9.33.0 (nested-row reads) + 9.34.0 (the seed is named by its mount): the inner
+  // log now ANSWERS `lastToolResult` — from the subflow's input seed, which copies it in through
+  // rows inside the key (`lastToolResult␟toolName`, `␟result`). That writer is the copy-in, not
+  // the producing tool-calls stage (which lives in the run log), so grouped frames still carry
+  // no proximateToolSource — and the twin says why the answer is partial.
+  it('a subflow’s lastToolResult: the seed (named by its mount) with nested-rows; no proximate edge', async () => {
+    const snapshot = await runThreeLoopGroupedAgent();
+    const traj = assembleTrajectory({ snapshot } as unknown as ContextBugArtifacts);
+    const results = (
+      snapshot as unknown as {
+        subflowResults: Record<string, { treeContext: { history: CommitBundle[] } }>;
+      }
+    ).subflowResults;
+
+    traj.frames.forEach((frame, i) => {
+      expect(frame.proximateToolSource).toBeUndefined();
+      const inner = results[frame.subflowScope!].treeContext.history;
+      const found = findLastWriterWithBasis(inner, 'lastToolResult');
+      if (i === 0) {
+        // Nothing has run a tool yet: the seed copies no lastToolResult in.
+        expect(found.writer).toBeUndefined();
+        expect(found.basis).toEqual(['never-written']);
+      } else {
+        expect(found.writer?.runtimeStageId).toBe(frame.subflowScope);
+        expect(found.basis).toEqual(['nested-rows']);
+      }
+    });
+  });
+
+  it('a context source never written before its call-llm says so on `basis`', async () => {
+    const snapshot = await runThreeLoopGroupedAgent();
+    const traj = assembleTrajectory({ snapshot } as unknown as ContextBugArtifacts);
+    for (const frame of traj.frames) {
+      for (const source of frame.contextSources) {
+        if (source.writerId === undefined) expect(source.basis).toEqual(['never-written']);
+        else expect(source.basis).toBeUndefined();
+      }
+    }
   });
 
   it('captures each grouped loop’s live contextSources from its OWN inner commit log', async () => {

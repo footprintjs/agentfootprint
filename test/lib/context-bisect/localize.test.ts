@@ -21,8 +21,10 @@ import {
   type InfluenceScorer,
 } from '../../../src/lib/influence-core';
 import {
+  defaultSuspectClassifier,
   formatContextBugReport,
   localizeContextBug,
+  type ClassifyContext,
   type ContextBugReport,
   type Suspect,
 } from '../../../src/lib/context-bisect';
@@ -548,5 +550,28 @@ describe('localizeContextBug — scorer strategies (rankedBy)', () => {
       atStep: original.lastLlmCallId,
     });
     expect(report.rankedBy).toBe('semantic-alignment');
+  });
+});
+
+// footprintjs 9.33.0 basis twin: the value a suspect is read from says why it is not exact.
+describe('defaultSuspectClassifier — valueBasis (UNIT)', () => {
+  const ctxWith = (basis: ClassifyContext['basisOf']): ClassifyContext => ({
+    node: { incompleteSources: undefined } as unknown as ClassifyContext['node'],
+    keysWritten: ['lastToolResult', 'systemPromptInjections'],
+    valueOf: (key) =>
+      key === 'lastToolResult'
+        ? { toolName: 'lookup', result: 'r' }
+        : [{ source: 'rag', sourceId: 'doc-1', contentSummary: 'd' }],
+    basisOf: basis,
+  });
+
+  it('carries a non-exact basis onto the seed detail', () => {
+    const seeds = defaultSuspectClassifier(ctxWith(() => ['nested-rows']));
+    expect(seeds.map((s) => s.detail?.valueBasis)).toEqual([['nested-rows'], ['nested-rows']]);
+  });
+
+  it('leaves the detail byte-identical when the value is exact', () => {
+    const seeds = defaultSuspectClassifier(ctxWith(() => []));
+    for (const seed of seeds) expect(seed.detail && 'valueBasis' in seed.detail).toBe(false);
   });
 });

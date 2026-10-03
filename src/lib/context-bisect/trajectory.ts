@@ -23,8 +23,8 @@
  *     primitives run correctly over the isolated log. Such frames carry `subflowScope`.
  */
 import type { CommitBundle, StageSnapshot } from 'footprintjs/advanced';
-import { commitValueAt, findLastWriter, splitStageId } from 'footprintjs/trace';
-import type { UntrackedSource } from 'footprintjs/trace';
+import { commitValueAtWithBasis, findLastWriterWithBasis, splitStageId } from 'footprintjs/trace';
+import type { UntrackedSource, ValueBasis } from 'footprintjs/trace';
 import { STAGE_IDS, SUBFLOW_IDS } from '../../conventions.js';
 // The flat/grouped fork, from its ONE owner (9.88.0) — see time-travel/epochs.ts.
 import { llmCallMountKeys } from '../time-travel/epochs.js';
@@ -44,6 +44,14 @@ export interface ContextSource {
   readonly writerArrayIdx: number | undefined;
   /** Materialized live value (commitValueAt); undefined under the pre-run-initial blind spot. */
   readonly value: unknown;
+  /**
+   * Why `writerId` / `value` are not exact, when they are not — the writer's and the value's
+   * footprintjs basis codes, writer's first (`findLastWriterWithBasis` then
+   * `commitValueAtWithBasis`; sentences in `HONESTY_CODES` on `footprintjs/trace`). E.g.
+   * `['nested-rows']` when the writer reached the key only through paths inside it (a subflow
+   * seed or merge-back). ABSENT when both answers are exact.
+   */
+  readonly basis?: readonly ValueBasis[];
   /** The bridge handed to scorers: { id, text, ancestorTexts }. */
   readonly evidence: EvidenceInput;
 }
@@ -92,6 +100,8 @@ export interface ProximateToolSource {
   readonly value: unknown;
   /** The producing loop's tool-calls stage runtimeStageId — resolves to an EARLIER frame. */
   readonly writerId: string | undefined;
+  /** Why the writer / value are not exact, when they are not — as {@link ContextSource.basis}. */
+  readonly basis?: readonly ValueBasis[];
   /**
    * The state key this value was materialized from (`'lastToolResult'`). Every
    * OTHER source the walk can hop along carries its key on `ContextSource.key`;
@@ -127,6 +137,30 @@ export interface Trajectory {
 
 /** The state key the proximate tool result is committed under (agent chart convention). */
 const PROXIMATE_TOOL_KEY = 'lastToolResult';
+
+/** One key's live writer before `beforeIdx` and its value there, each with its basis. */
+interface TracedKey {
+  readonly writerId: string | undefined;
+  readonly writerArrayIdx: number | undefined;
+  readonly value: unknown;
+  /** Writer codes then value codes, de-duplicated; empty when both answers are exact. */
+  readonly basis: readonly ValueBasis[];
+}
+
+function traceKey(
+  log: CommitBundle[],
+  lastIdxOf: ReadonlyMap<string, number>,
+  key: string,
+  beforeIdx: number,
+): TracedKey {
+  const found = findLastWriterWithBasis(log, key, beforeIdx);
+  const writerId = found.writer?.runtimeStageId;
+  const writerArrayIdx = writerId !== undefined ? lastIdxOf.get(writerId) : undefined;
+  const read =
+    writerArrayIdx !== undefined ? commitValueAtWithBasis(log, writerArrayIdx, key) : undefined;
+  const basis = [...new Set<ValueBasis>([...found.basis, ...(read?.basis ?? [])])];
+  return { writerId, writerArrayIdx, value: read?.value, basis };
+}
 
 // ─── bucketByAnchors — the pure HEAD-range partition (domain-agnostic) ─
 
@@ -285,18 +319,16 @@ function projectFrame(
   const keys = llmCallId !== undefined ? readsOf.get(llmCallId) ?? [] : [];
   const contextSources: ContextSource[] = keys.map((key) => {
     // EXCLUSIVE beforeIdx — finds the PRIOR writer, never call-llm's own write-back.
-    const writer =
-      llmCallArrayIdx !== undefined ? findLastWriter(log, key, llmCallArrayIdx) : undefined;
-    const writerId = writer?.runtimeStageId;
-    const writerArrayIdx = writerId !== undefined ? lastIdxOf.get(writerId) : undefined;
-    const value =
-      writerArrayIdx !== undefined ? commitValueAt(log, writerArrayIdx, key) : undefined;
+    const traced =
+      llmCallArrayIdx !== undefined ? traceKey(log, lastIdxOf, key, llmCallArrayIdx) : undefined;
+    const value = traced?.value;
     const text = value === undefined ? '' : safeStringify(value).slice(0, maxTextChars);
     return {
       key,
-      writerId,
-      writerArrayIdx,
+      writerId: traced?.writerId,
+      writerArrayIdx: traced?.writerArrayIdx,
       value,
+      ...(traced !== undefined && traced.basis.length > 0 && { basis: traced.basis }),
       evidence: { id: `${llmCallId}::${key}`, text, ancestorTexts: [] },
     };
   });
@@ -304,18 +336,20 @@ function projectFrame(
   // Proximate tool source (proposal 008) — the most recent `lastToolResult` committed BEFORE this
   // loop's call-llm, surfaced WALK-ONLY (NOT in contextSources, so L3's narrow is untouched). Its
   // writer is the PRODUCING loop's tool-calls stage — the cross-loop provenance edge L4's descent
-  // hops along. FLAT only: in the grouped chart `lastToolResult` lives in the run log outside the
-  // per-scope inner log, so the inner findLastWriter can't reach it (deferred). Honesty: the call-llm
-  // read `history` (the aggregate), NOT this key — so it's an INFERRED proximate (`proximate: true`).
+  // hops along. FLAT only: in the grouped chart the PRODUCING tool-calls stage lives in the run
+  // log outside the per-scope inner log. Since footprintjs 9.33.0 (nested-row reads) the inner
+  // log does answer `lastToolResult` — from the subflow's input SEED, named by the mount
+  // (9.34.0), basis `['nested-rows']` — but that writer is the copy-in, not the producer, so it
+  // is no cross-loop edge (pinned in trajectory.test.ts). Honesty: the call-llm read `history`
+  // (the aggregate), NOT this key — so it's an INFERRED proximate (`proximate: true`).
   let proximateToolSource: ProximateToolSource | undefined;
   if (subflowScope === undefined && llmCallArrayIdx !== undefined) {
-    const w = findLastWriter(log, PROXIMATE_TOOL_KEY, llmCallArrayIdx);
-    const wIdx = w !== undefined ? lastIdxOf.get(w.runtimeStageId) : undefined;
-    const v = wIdx !== undefined ? commitValueAt(log, wIdx, PROXIMATE_TOOL_KEY) : undefined;
-    if (w !== undefined && v !== undefined) {
+    const traced = traceKey(log, lastIdxOf, PROXIMATE_TOOL_KEY, llmCallArrayIdx);
+    if (traced.writerId !== undefined && traced.value !== undefined) {
       proximateToolSource = {
-        value: v,
-        writerId: w.runtimeStageId,
+        value: traced.value,
+        writerId: traced.writerId,
+        ...(traced.basis.length > 0 && { basis: traced.basis }),
         stateKey: PROXIMATE_TOOL_KEY,
         proximate: true,
       };

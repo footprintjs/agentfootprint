@@ -35,7 +35,16 @@
  */
 
 import type { CommitBundle, StageSnapshot } from 'footprintjs/advanced';
-import { causalChain, commitValueAt, findLastWriter, formatCausalChain } from 'footprintjs/trace';
+import {
+  causalChain,
+  commitValueAt,
+  commitValueAtWithBasis,
+  findLastWriter,
+  findLastWriterWithBasis,
+  formatCausalChain,
+  HONESTY_CODES,
+} from 'footprintjs/trace';
+import type { HonestyCode } from 'footprintjs/trace';
 import { arrayProvenance, elementProvenance, formatSlice, sliceForKey } from 'footprintjs/trace';
 
 import type { LLMMessage } from '../../adapters/types.js';
@@ -280,6 +289,19 @@ function unknownKeySuffix(index: ToolpackIndex): string {
 function redactionNote(bundles: readonly CommitBundle[] | undefined, path: string): string {
   const redacted = (bundles ?? []).some((b) => b.redactedPaths.includes(path));
   return redacted ? ' (redacted by policy)' : '';
+}
+
+/**
+ * A footprintjs reason code as the toolpack prints it: `⚠ <code>: <sentence>`. The sentence is
+ * footprintjs's own (`HONESTY_CODES` on `footprintjs/trace`) — this pack keeps no copy of it.
+ */
+function honestyLine(code: HonestyCode): string {
+  return `⚠ ${code}: ${HONESTY_CODES[code]}`;
+}
+
+/** One `honestyLine` per distinct code, each on its own line after `\n`; '' when exact. */
+function basisLines(codes: readonly HonestyCode[]): string {
+  return [...new Set(codes)].map((code) => `\n${honestyLine(code)}`).join('');
 }
 
 /** Union of untracked sources across a step's bundles. */
@@ -1462,14 +1484,17 @@ function buildTraceNode(
       }
 
       const parentLines: string[] = [];
+      const parentCodes: HonestyCode[] = [];
       const anchorIdx = anchorIdxFor(runtimeStageId, index);
       for (const key of reads.slice(0, NODE_READ_CAP)) {
-        const writer = findLastWriter(index.commitLog, key, anchorIdx);
+        const { writer, basis } = findLastWriterWithBasis(index.commitLog, key, anchorIdx);
         parentLines.push(
           writer
-            ? `- data: ${displayKey(key)} ← ${writer.runtimeStageId} "${writer.stage}"`
-            : `- data: ${displayKey(key)} ← (no tracked writer — run input/env/pre-run state ⚠)`,
+            ? `- data: ${displayKey(key)} ← ${writer.runtimeStageId} "${writer.stage}"` +
+                (basis.length > 0 ? ` ⚠ ${basis.join(', ')}` : '')
+            : `- data: ${displayKey(key)} ← (no tracked writer ⚠ ${basis.join(', ')})`,
         );
+        parentCodes.push(...basis);
       }
       const controlDep = artifacts.controlDeps?.(runtimeStageId);
       if (controlDep) {
@@ -1481,6 +1506,7 @@ function buildTraceNode(
       if (parentLines.length > 0) {
         lines.push('parents:');
         lines.push(...parentLines);
+        for (const code of new Set(parentCodes)) lines.push(honestyLine(code));
       }
       if (!artifacts.controlDeps) {
         lines.push(
@@ -1491,10 +1517,8 @@ function buildTraceNode(
       const untracked = untrackedSourcesOf(bundles);
       if (untracked.length > 0) {
         lines.push(
-          `⚠ this step also consumed ${untracked.join(
-            '/',
-          )} — those inputs are NOT in the parents ` +
-            `list; the slice through this step may be incomplete.`,
+          `⚠ this step also consumed ${untracked.join('/')} — NOT in the parents list. ` +
+            honestyLine('incomplete-sources'),
         );
       }
 
@@ -1727,21 +1751,16 @@ function buildBacktrack(
           const prov = arrayProvenance(index.commitLog, key, {
             ...(before !== undefined && { atIdx: before - 1 }),
           });
-          if (prov.missing === 'never-written') {
-            return (
-              `'${displayKey(key)}' was never written in range — it may come from run input ` +
-              '(args), env, pre-run state, or a closure; the commit log cannot see those.'
-            );
-          }
           if (prov.missing === 'not-an-array') {
             return (
-              `'${displayKey(
-                key,
-              )}' is not an array at that point (scalar, deleted, or degraded) — ` +
-              `element attribution does not apply. Call backtrack without 'element' to slice it.`
+              `'${displayKey(key)}': ${honestyLine('not-an-array')}` +
+              basisLines(prov.basis ?? []) +
+              `\nCall backtrack without 'element' to slice it.`
             );
           }
-          if (prov.missing === 'empty-log') return 'the commit log is empty — nothing executed.';
+          if (prov.missing !== undefined) {
+            return `'${displayKey(key)}': ${honestyLine(prov.missing)}`;
+          }
           return (
             `element ${element} is out of range for '${displayKey(key)}' ` +
             `(length ${prov.length}). Valid indices: 0..${(prov.length ?? 1) - 1}.`
@@ -1752,11 +1771,10 @@ function buildBacktrack(
             boundedPreview(birth.value, opts.previewChars),
           )} — ` +
           `born at ${birth.runtimeStageId} ("${birth.stageName}", verb: ${birth.verb}, ` +
-          `attribution: ${birth.basis}${
-            birth.basis === 'append-verb' ? ' — engine-recorded, exact' : ''
-          }). ` +
+          `attribution: ${birth.basis}). ` +
           `Drill the producer with trace_node('${birth.runtimeStageId}'), or ask why it wrote this ` +
-          `with backtrack({variable: '${displayKey(key)}', before: ${birth.commitIdx + 1}}).`
+          `with backtrack({variable: '${displayKey(key)}', before: ${birth.commitIdx + 1}}).` +
+          basisLines([birth.basis, ...(birth.valueBasis ?? [])])
         );
       }
 
@@ -1830,23 +1848,21 @@ function buildWhoWrote(index: ToolpackIndex, opts: ResolvedToolpackOptions): Too
         beforeIdx = anchorIdxFor(beforeStageId, index);
       }
 
-      const writer = findLastWriter(index.commitLog, path, beforeIdx);
+      const { writer, basis } = findLastWriterWithBasis(index.commitLog, path, beforeIdx);
       if (!writer) {
         return (
           `no tracked write to '${displayKey(path)}'` +
           (beforeStageId !== undefined ? ` before ${beforeStageId}` : '') +
-          ` in the commit log. ⚠ the value may come from run input (args), env, pre-run state, ` +
-          `or a closure — those never enter the commit log.` +
+          ` in the commit log.` +
+          basisLines(basis) +
           (index.knownPaths.has(path) ? '' : unknownKeySuffix(index))
         );
       }
 
       const writerIdx = index.commitLog.indexOf(writer);
       const verb = writer.trace.find((entry) => entry.path === path)?.verb ?? 'set';
-      const preview = boundedPreview(
-        commitValueAt(index.commitLog, writerIdx, path),
-        opts.previewChars,
-      );
+      const read = commitValueAtWithBasis(index.commitLog, writerIdx, path);
+      const preview = boundedPreview(read.value, opts.previewChars);
       const untracked = untrackedSourcesOf([writer]);
       return (
         `'${displayKey(path)}' was last written by ${writer.runtimeStageId} — "${writer.stage}" ` +
@@ -1856,10 +1872,11 @@ function buildWhoWrote(index: ToolpackIndex, opts: ResolvedToolpackOptions): Too
             `get_value('${writer.runtimeStageId}', '${displayKey(path)}') for full`,
           ),
         )}${redactionNote([writer], path)}` +
+        basisLines([...basis, ...read.basis]) +
         (untracked.length > 0
-          ? `\n⚠ that step also consumed ${untracked.join(
-              '/',
-            )} — its inputs may not be fully traceable.`
+          ? `\n⚠ that step also consumed ${untracked.join('/')}. ${honestyLine(
+              'incomplete-sources',
+            )}`
           : '')
       );
     },
@@ -1898,34 +1915,37 @@ function buildGetValue(index: ToolpackIndex, opts: ResolvedToolpackOptions): Too
       const lastIdx = index.lastIdxOf.get(runtimeStageId);
       const atIdx = lastIdx !== undefined ? lastIdx : anchorIdxFor(runtimeStageId, index) - 1;
 
-      if (!index.knownPaths.has(path)) {
+      // Nested rows count (footprintjs 9.33.0): a key written only through paths inside it —
+      // a subflow seed, a merge-back — is written, though no row names it exactly.
+      const lastWrite = findLastWriterWithBasis(index.commitLog, path);
+      if (!lastWrite.writer) {
         return (
-          `no tracked write to '${displayKey(path)}' anywhere in the commit log. ⚠ run input ` +
-          `(args), env, pre-run state, and closure-carried values never enter the commit log.` +
-          unknownKeySuffix(index)
+          `no tracked write to '${displayKey(path)}' anywhere in the commit log.` +
+          basisLines(lastWrite.basis) +
+          (index.knownPaths.has(path) ? '' : unknownKeySuffix(index))
         );
       }
 
-      const value = atIdx >= 0 ? commitValueAt(index.commitLog, atIdx, path) : undefined;
+      const read = atIdx >= 0 ? commitValueAtWithBasis(index.commitLog, atIdx, path) : undefined;
+      const value = read?.value;
       if (value === undefined) {
-        const firstWriter = findLastWriter(index.commitLog, path);
         return (
-          `'${displayKey(path)}' has no value as of ${runtimeStageId} — it was ` +
-          (firstWriter !== undefined
-            ? `written later (last writer over the whole run: ${firstWriter.runtimeStageId}), or deleted by then.`
-            : 'never written.') +
-          ` ⚠ pre-run seeded values never enter the commit log.`
+          `'${displayKey(path)}' has no value as of ${runtimeStageId}` +
+          ` (last writer over the whole run: ${lastWrite.writer.runtimeStageId}).` +
+          basisLines(read?.basis ?? ['never-written'])
         );
       }
 
       const serialized = displayText(safeStringify(value));
       const redacted = redactionNote(index.bundlesOf.get(runtimeStageId), path);
       const header = `VALUE of '${displayKey(path)}' as of ${runtimeStageId}${redacted}:`;
-      if (serialized.length <= cap) return `${header}\n${serialized}`;
+      const basis = basisLines(read?.basis ?? []);
+      if (serialized.length <= cap) return `${header}\n${serialized}${basis}`;
       return (
         `${header}\n${serialized.slice(0, cap)}\n` +
         `⚠ truncated: served ${cap} of ${serialized.length} chars — raise maxChars ` +
-        `(hard cap ${TOOLPACK_HARD_CAPS.valueMaxChars}) or fetch a narrower nested key.`
+        `(hard cap ${TOOLPACK_HARD_CAPS.valueMaxChars}) or fetch a narrower nested key.` +
+        basis
       );
     },
   });

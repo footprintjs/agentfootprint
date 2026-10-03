@@ -652,13 +652,6 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: 'a line of the bug-report bundle, written for the person who opens the issue',
     },
   ],
-  'src/lib/context-bisect/sliceToBacktrackTrace.ts': [
-    {
-      kind: 'not-model-facing',
-      count: 1,
-      why: 'the honesty banner of a BacktrackTrace — analysis output rendered for a person or a UI',
-    },
-  ],
   'src/lib/context-bisect/variableToBacktrackTrace.ts': [
     {
       kind: 'not-model-facing',
@@ -1145,12 +1138,16 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // sentence in arguments/serve.ts (one new file) — the served time line
         // is one request only, the LAST user line, never in history. ephemeral
         // 21 → 22.
-        files: 100,
-        total: 195,
+        // footprintjs 9.41.0: sliceToBacktrackTrace's honesty banner now reads its
+        // sentences from footprintjs's HONESTY_CODES (one owner) — its own literal,
+        // and with it the file's only entry, is gone. files 100 → 99, total 195 →
+        // 194, notModelFacing 132 → 131.
+        files: 99,
+        total: 194,
         registry: 8,
         ephemeral: 22,
         unrepaired: 33,
-        notModelFacing: 132,
+        notModelFacing: 131,
         unrepairedEntries: 13,
       });
       // And the ledger's own total is the number of literals the scan flagged —

@@ -12,7 +12,7 @@
  */
 
 import { decide, flowChart, FlowChartExecutor } from 'footprintjs';
-import { controlDepRecorder } from 'footprintjs/trace';
+import { controlDepRecorder, HONESTY_CODES } from 'footprintjs/trace';
 import type { RuntimeSnapshot, StageSnapshot } from 'footprintjs/advanced';
 import { describe, expect, it } from 'vitest';
 
@@ -353,7 +353,8 @@ describe('who_wrote', () => {
     const tools = traceToolpack(fixture.artifacts);
     const out = await callTraceTool(tools, 'who_wrote', { key: 'nonexistent' });
     expect(out).toContain("no tracked write to 'nonexistent'");
-    expect(out).toContain('⚠');
+    // The reason is footprintjs's own sentence (one owner), keyed by its code.
+    expect(out).toContain(`⚠ never-written: ${HONESTY_CODES['never-written']}`);
     expect(out).toContain('Known keys include:');
   });
 });
@@ -410,7 +411,7 @@ describe('get_value', () => {
       key: 'ghost',
     });
     expect(out).toContain("no tracked write to 'ghost' anywhere in the commit log");
-    expect(out).toContain('⚠');
+    expect(out).toContain(`⚠ never-written: ${HONESTY_CODES['never-written']}`);
   });
 
   it('says when a key had no value YET as of an early step', async () => {

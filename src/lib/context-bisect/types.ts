@@ -36,7 +36,7 @@
  */
 
 import type { CommitBundle, RuntimeSnapshot, StageSnapshot } from 'footprintjs/advanced';
-import type { ControlDepLookup } from 'footprintjs/trace';
+import type { ControlDepLookup, ValueBasis } from 'footprintjs/trace';
 import type { Embedder, InfluenceWeights } from '../influence-core/index.js';
 
 // ─── Artifacts (input contract) ──────────────────────────────────────
@@ -118,6 +118,14 @@ export interface SuspectDetail {
    * what the embedder saw for `semanticScore`.
    */
   readonly text?: string;
+  /**
+   * Why the committed value this suspect was read from is not exact, when it
+   * is not — footprintjs's `commitValueAtWithBasis` codes (e.g.
+   * `['nested-rows']` for a value a subflow seed or merge-back wrote only
+   * partly). Sentences: `HONESTY_CODES` on `footprintjs/trace`. ABSENT when
+   * exact.
+   */
+  readonly valueBasis?: readonly ValueBasis[];
 }
 
 /**

@@ -101,11 +101,12 @@ interface ResolvedSuspect {
 
 /** Build a ClassifyContext from a loop frame's contextSources (the localizer's view, per loop). */
 function classifyContextFor(frame: LoopFrame): ClassifyContext {
-  const byKey = new Map(frame.contextSources.map((s) => [s.key, s.value]));
+  const byKey = new Map(frame.contextSources.map((s) => [s.key, s]));
   return {
     node: { incompleteSources: frame.incompleteSources } as unknown as ClassifyContext['node'],
     keysWritten: frame.contextSources.map((s) => s.key),
-    valueOf: (key) => byKey.get(key),
+    valueOf: (key) => byKey.get(key)?.value,
+    basisOf: (key) => byKey.get(key)?.basis ?? [],
   };
 }
 

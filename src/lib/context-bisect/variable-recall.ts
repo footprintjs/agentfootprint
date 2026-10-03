@@ -48,6 +48,7 @@ import type {
   MissingSliceReason,
   ReadsCoverage,
   StateKey,
+  ValueBasis,
 } from 'footprintjs/trace';
 
 import { ablationForSuspect } from './ablation.js';
@@ -221,6 +222,12 @@ function dataflowCoverage(forward: ForwardSlice | undefined): DataflowCoverage {
 
 // ─── The join ────────────────────────────────────────────────────────
 
+/** One committed value the trajectory carries, with the codes that say why it is not exact. */
+interface CommittedValue {
+  readonly value: unknown;
+  readonly basis: readonly ValueBasis[];
+}
+
 /** Identity of one committed value the trajectory carries: (state key, writer). */
 function valueKey(key: string, writerId: string): string {
   return `${key} ${writerId}`;
@@ -231,13 +238,13 @@ function valueKey(key: string, writerId: string): string {
  * These are `commitValueAt` results — already redaction-scrubbed, already
  * verb-folded — so classification needs no second pass over the commit log.
  */
-function buildValueIndex(trajectory: Trajectory): Map<string, unknown> {
-  const values = new Map<string, unknown>();
+function buildValueIndex(trajectory: Trajectory): Map<string, CommittedValue> {
+  const values = new Map<string, CommittedValue>();
   for (const frame of trajectory.frames) {
     for (const src of frame.contextSources) {
       if (src.writerId === undefined) continue;
       const id = valueKey(src.key, src.writerId);
-      if (!values.has(id)) values.set(id, src.value);
+      if (!values.has(id)) values.set(id, { value: src.value, basis: src.basis ?? [] });
     }
     // The WALK-ONLY proximate tool source carries a value `call-llm` never read
     // (`lastToolResult`) — including it here is what gives TOOL writes their
@@ -245,7 +252,7 @@ function buildValueIndex(trajectory: Trajectory): Map<string, unknown> {
     const prox = frame.proximateToolSource;
     if (prox?.writerId !== undefined) {
       const id = valueKey(prox.stateKey, prox.writerId);
-      if (!values.has(id)) values.set(id, prox.value);
+      if (!values.has(id)) values.set(id, { value: prox.value, basis: prox.basis ?? [] });
     }
   }
   return values;
@@ -254,7 +261,7 @@ function buildValueIndex(trajectory: Trajectory): Map<string, unknown> {
 /** Classify one write's committed value with the localizer's own classifier. */
 function classifyWrite(
   key: string,
-  value: unknown,
+  { value, basis }: CommittedValue,
   classify: SuspectClassifier,
 ): ReadonlyArray<{ suspectId: string; kind: SuspectKind; spec: AblationSpec }> {
   const ctx: ClassifyContext = {
@@ -263,6 +270,7 @@ function classifyWrite(
     node: { incompleteSources: undefined } as unknown as ClassifyContext['node'],
     keysWritten: [key],
     valueOf: (k) => (k === key ? value : undefined),
+    basisOf: (k) => (k === key ? basis : []),
   };
   const seeds = classify(ctx) ?? [];
   const out: Array<{ suspectId: string; kind: SuspectKind; spec: AblationSpec }> = [];
@@ -343,8 +351,11 @@ export function joinVariableSlice(
         ...(loopIndex !== undefined && { loopIndex }),
       };
     }
-    const value = values.get(valueKey(slice.key, m.runtimeStageId));
-    const sources = value === undefined ? [] : classifyWrite(slice.key, value, classify);
+    const committed = values.get(valueKey(slice.key, m.runtimeStageId));
+    const sources =
+      committed === undefined || committed.value === undefined
+        ? []
+        : classifyWrite(slice.key, committed, classify);
     for (const s of sources) {
       const id = `${m.runtimeStageId} ${s.suspectId}`;
       if (seenHook.has(id)) continue;
