@@ -49,6 +49,7 @@
     {
       "idx": 2,
       "overwrite": {},
+      "phase": "exit",
       "redactedPaths": [],
       "runtimeStageId": "sf-llm-call#1",
       "stage": "LLM",

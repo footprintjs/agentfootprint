@@ -30,8 +30,8 @@
  */
 
 import type { CommitBundle, StageSnapshot } from 'footprintjs/advanced';
-import type { CausalNode } from 'footprintjs/trace';
-import { causalChain, commitValueAt } from 'footprintjs/trace';
+import type { CausalNode, ValueBasis } from 'footprintjs/trace';
+import { causalChain, commitValueAtWithBasis } from 'footprintjs/trace';
 
 import {
   scoreInfluence,
@@ -99,6 +99,13 @@ export interface ClassifyContext {
   readonly keysWritten: readonly string[];
   /** Verb-aware value of a key as of this node's last commit. */
   readonly valueOf: (key: string) => unknown;
+  /**
+   * Why `valueOf(key)` is not exact, when it is not — footprintjs's
+   * `commitValueAtWithBasis` codes for the same fold (`HONESTY_CODES` on
+   * `footprintjs/trace` has each sentence). `[]` = exact. ABSENT = unknown (a hand-built
+   * context): no `valueBasis` is attached.
+   */
+  readonly basisOf?: (key: string) => readonly ValueBasis[];
 }
 
 /**
@@ -150,6 +157,7 @@ export function defaultSuspectClassifier(ctx: ClassifyContext): readonly Suspect
     if (!ctx.keysWritten.includes(slotKey)) continue;
     const records = ctx.valueOf(slotKey);
     if (!Array.isArray(records)) continue;
+    const valueBasis = ctx.basisOf?.(slotKey) ?? [];
     for (const record of records as InjectionRecordLike[]) {
       const source = typeof record?.source === 'string' ? record.source : undefined;
       const sourceId = typeof record?.sourceId === 'string' ? record.sourceId : undefined;
@@ -171,6 +179,7 @@ export function defaultSuspectClassifier(ctx: ClassifyContext): readonly Suspect
           injectionId: sourceId,
           flavor: source,
           ...(text !== undefined ? { text } : {}),
+          ...(valueBasis.length > 0 && { valueBasis }),
         },
       });
     }
@@ -181,11 +190,13 @@ export function defaultSuspectClassifier(ctx: ClassifyContext): readonly Suspect
       | { toolName?: unknown; result?: unknown }
       | undefined;
     if (value && typeof value.toolName === 'string') {
+      const valueBasis = ctx.basisOf?.('lastToolResult') ?? [];
       seeds.push({
         kind: 'tool',
         detail: {
           toolName: value.toolName,
           ...(typeof value.result === 'string' ? { text: value.result } : {}),
+          ...(valueBasis.length > 0 && { valueBasis }),
         },
       });
     }
@@ -202,6 +213,8 @@ export function defaultSuspectClassifier(ctx: ClassifyContext): readonly Suspect
 
 interface ArtifactIndex {
   readonly commitLog: CommitBundle[];
+  /** The log's fold base (`RuntimeSnapshot.initialState`), for the value basis. */
+  readonly initialState: Record<string, unknown> | undefined;
   readonly lastIdxOf: Map<string, number>;
   readonly readsOf: Map<string, string[]>;
   readonly hasReadTracking: boolean;
@@ -227,7 +240,13 @@ function buildArtifactIndex(artifacts: ContextBugArtifacts): ArtifactIndex {
   };
   visit(artifacts.snapshot.executionTree as StageSnapshot | undefined);
 
-  return { commitLog, lastIdxOf, readsOf, hasReadTracking };
+  return {
+    commitLog,
+    initialState: artifacts.snapshot.initialState as Record<string, unknown> | undefined,
+    lastIdxOf,
+    readsOf,
+    hasReadTracking,
+  };
 }
 
 // ─── Path scoring (max-product over the weighted DAG) ────────────────
@@ -482,13 +501,26 @@ export async function localizeContextBug(
     if (node.runtimeStageId === root.runtimeStageId) continue; // the trigger itself
     const info = pathInfo.get(node.runtimeStageId);
     if (!info) continue;
+    const idx = index.lastIdxOf.get(node.runtimeStageId);
+    const reads = new Map<string, { value: unknown; basis: readonly ValueBasis[] }>();
+    const readAt = (key: string): { value: unknown; basis: readonly ValueBasis[] } => {
+      let read = reads.get(key);
+      if (!read) {
+        read =
+          idx === undefined
+            ? { value: undefined, basis: [] }
+            : commitValueAtWithBasis(index.commitLog, idx, key, {
+                initialState: index.initialState,
+              });
+        reads.set(key, read);
+      }
+      return read;
+    };
     const ctx: ClassifyContext = {
       node,
       keysWritten: node.keysWritten,
-      valueOf: (key) => {
-        const idx = index.lastIdxOf.get(node.runtimeStageId);
-        return idx === undefined ? undefined : commitValueAt(index.commitLog, idx, key);
-      },
+      valueOf: (key) => readAt(key).value,
+      basisOf: (key) => readAt(key).basis,
     };
     const seeds = classify?.(ctx) ?? defaultSuspectClassifier(ctx);
     const edgePath = buildEdgePath(node, pathInfo);

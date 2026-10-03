@@ -49,6 +49,11 @@ that writer in the answer's `sliceForKey` DAG is the signal.
 - Slice credit is **slot-granular** (all injections sharing a slot share its
   write) — the signal name says so.
 - `approxTokens*` = serialized length ÷ 4. An estimate, named as one.
+- Every value and writer the ledger reads comes from footprintjs's basis
+  twins, so a non-exact answer says why on `RecordedRun.basis` (per key,
+  absent when all exact). Example: a redacted `history` →
+  `basis: { history: ['redacted'] }` — the placeholder is not read as data.
+  Each code's sentence is `HONESTY_CODES[code]` (`footprintjs/trace`).
 - **No causal claims.** `earnRate` is bookkeeping; outcome columns are
   presence-correlation. Ablation (`localizeContextBug` / context-bisect) can
   upgrade individual rows to causal verdicts when you pay for the reruns.

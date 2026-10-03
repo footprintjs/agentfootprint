@@ -30,15 +30,22 @@
  * The slot→slice join needs NO id conventions: for each slot key
  * (INJECTION_KEYS.*), `findLastWriter` names the commit that fed the final
  * LLM call; membership of that writer in the answer slice IS the signal.
+ *
+ * Every read goes through footprintjs's BASIS twins (`commitValueAtWithBasis`,
+ * `findLastWriterWithBasis`): an answer that rests on nested rows, the
+ * pre-run state, a redaction or a delete says so on `RecordedRun.basis`
+ * (per key, absent when every answer was exact) instead of being counted as
+ * if it were exact.
  */
 
 import {
-  commitValueAt,
-  findLastWriter,
+  commitValueAtWithBasis,
+  findLastWriterWithBasis,
   flattenCausalDAG,
   keysReadFromExecutionTree,
   sliceForKey,
 } from 'footprintjs/trace';
+import type { ValueBasis } from 'footprintjs/trace';
 import type { CommitBundle, StageSnapshot } from 'footprintjs/advanced';
 
 import { INJECTION_KEYS } from '../../conventions.js';
@@ -77,8 +84,13 @@ interface MutableRow {
 
 interface SnapshotLike {
   commitLog?: CommitBundle[];
+  /** The log's fold base — passed to the value twin so an unseeded key is not called partial. */
+  initialState?: Record<string, unknown>;
   executionTree?: unknown;
-  subflowResults?: Record<string, { treeContext?: { history?: CommitBundle[] } }>;
+  subflowResults?: Record<
+    string,
+    { treeContext?: { history?: CommitBundle[]; initialState?: Record<string, unknown> } }
+  >;
 }
 
 function snapshotOf(source: RunnerLike | unknown): SnapshotLike | undefined {
@@ -160,6 +172,25 @@ export function contextLedger(): ContextLedger {
     const runRef = `run-${runsRecorded}`;
     const offeredKeys = new Set<string>();
 
+    // The reason codes behind every non-exact answer read below, per key.
+    const basisByKey = new Map<string, Set<ValueBasis>>();
+    const noteBasis = (key: string, codes: readonly ValueBasis[]): void => {
+      if (codes.length === 0) return;
+      let seen = basisByKey.get(key);
+      if (!seen) basisByKey.set(key, (seen = new Set()));
+      for (const code of codes) seen.add(code);
+    };
+    const valueAt = (
+      bundles: CommitBundle[],
+      initialState: Record<string, unknown> | undefined,
+      idx: number,
+      key: string,
+    ): unknown => {
+      const { value, basis } = commitValueAtWithBasis(bundles, idx, key, { initialState });
+      noteBasis(key, basis);
+      return value;
+    };
+
     const offer = (kind: PieceKind, id: string, tokens: number): void => {
       const row = rowOf(kind, id);
       row.offered += 1;
@@ -182,17 +213,20 @@ export function contextLedger(): ContextLedger {
     const staticTools = staticToolNamesOf(source);
     let callMarkers = 0;
 
-    const foldOffersFrom = (bundles: CommitBundle[]): void => {
+    const foldOffersFrom = (
+      bundles: CommitBundle[],
+      initialState: Record<string, unknown> | undefined,
+    ): void => {
       let injections: ActiveInjectionLike[] = [];
       let schemas: ToolSchemaLike[] = [];
       for (let i = 0; i < bundles.length; i++) {
         const paths = new Set(bundles[i].trace.map((t) => t.path));
         if (paths.has('activeInjections')) {
-          const v = commitValueAt(bundles, i, 'activeInjections');
+          const v = valueAt(bundles, initialState, i, 'activeInjections');
           if (Array.isArray(v)) injections = v as ActiveInjectionLike[];
         }
         if (paths.has('dynamicToolSchemas')) {
-          const v = commitValueAt(bundles, i, 'dynamicToolSchemas');
+          const v = valueAt(bundles, initialState, i, 'dynamicToolSchemas');
           if (Array.isArray(v)) schemas = v as ToolSchemaLike[];
         }
         if (!paths.has('totalInputTokens') || paths.has('userMessage')) continue;
@@ -222,11 +256,11 @@ export function contextLedger(): ContextLedger {
     const mountKeys = llmCallMountKeys(snapshot?.subflowResults);
     if (mountKeys.length > 0) {
       for (const key of mountKeys) {
-        const inner = snapshot?.subflowResults?.[key]?.treeContext?.history;
-        if (Array.isArray(inner)) foldOffersFrom(inner);
+        const tree = snapshot?.subflowResults?.[key]?.treeContext;
+        if (Array.isArray(tree?.history)) foldOffersFrom(tree.history, tree.initialState);
       }
     } else {
-      foldOffersFrom(log);
+      foldOffersFrom(log, snapshot?.initialState);
     }
 
     // A run with NO call markers anywhere is a shape this ledger cannot
@@ -239,7 +273,8 @@ export function contextLedger(): ContextLedger {
 
     // ── USES: tool calls (assistant messages in the final history) ───────
     const lastIdx = log.length - 1;
-    const history = commitValueAt(log, lastIdx, 'history');
+    const runBase = snapshot?.initialState;
+    const history = valueAt(log, runBase, lastIdx, 'history');
     if (Array.isArray(history)) {
       for (const msg of history as HistoryMessageLike[]) {
         if (msg?.role !== 'assistant' || !Array.isArray(msg.toolCalls)) continue;
@@ -250,7 +285,7 @@ export function contextLedger(): ContextLedger {
     }
 
     // ── USES: skill activations ──────────────────────────────────────────
-    const activated = commitValueAt(log, lastIdx, 'activatedInjectionIds');
+    const activated = valueAt(log, runBase, lastIdx, 'activatedInjectionIds');
     if (Array.isArray(activated)) {
       for (const id of activated as string[]) {
         if (typeof id === 'string' && id.length > 0) markUsed('skill', id, 'skill-activated');
@@ -269,14 +304,15 @@ export function contextLedger(): ContextLedger {
       if (slice.root) {
         sliceAvailable = true;
         const memberIds = new Set(flattenCausalDAG(slice.root).map((n) => n.runtimeStageId));
-        const finalInjections = commitValueAt(log, lastIdx, 'activeInjections');
+        const finalInjections = valueAt(log, runBase, lastIdx, 'activeInjections');
         const finalBySlotKey = new Map<string, ActiveInjectionLike[]>();
         // Which slot carried each injection is projected per-slot into the
         // INJECTION_KEYS records — fold each slot key's final value.
         for (const slotKey of Object.values(INJECTION_KEYS)) {
-          const writer = findLastWriter(log, slotKey);
+          const { writer, basis } = findLastWriterWithBasis(log, slotKey);
+          noteBasis(slotKey, basis);
           if (!writer || !memberIds.has(writer.runtimeStageId)) continue;
-          const slotRecords = commitValueAt(log, lastIdx, slotKey);
+          const slotRecords = valueAt(log, runBase, lastIdx, slotKey);
           if (Array.isArray(slotRecords))
             finalBySlotKey.set(slotKey, slotRecords as ActiveInjectionLike[]);
         }
@@ -306,7 +342,14 @@ export function contextLedger(): ContextLedger {
     }
     runOffers.set(runRef, offeredKeys);
     lastRunRef = runRef;
-    return { runRef, offeredPieces: [...offeredKeys], sliceAvailable };
+    return {
+      runRef,
+      offeredPieces: [...offeredKeys],
+      sliceAvailable,
+      ...(basisByKey.size > 0 && {
+        basis: Object.fromEntries([...basisByKey].map(([key, codes]) => [key, [...codes]])),
+      }),
+    };
   }
 
   function recordOutcome(label: string, runRef?: string): boolean {

@@ -25,6 +25,8 @@
  *   for it.
  */
 
+import type { ValueBasis } from 'footprintjs/trace';
+
 /** What kind of context piece a row tracks. Skills are injections with
  *  flavor 'skill' — split out because their `used` signal differs. */
 export type PieceKind = 'injection' | 'skill' | 'tool';
@@ -74,6 +76,15 @@ export interface RecordedRun {
   readonly offeredPieces: readonly string[];
   /** True when the answer slice could be computed (finalContent + reads). */
   readonly sliceAvailable: boolean;
+  /**
+   * The reason codes behind any NON-exact answer the ledger counted from, per
+   * state key — the union of footprintjs's `commitValueAtWithBasis` /
+   * `findLastWriterWithBasis` `basis` over every read of that key in this run
+   * (`'nested-rows'`, `'from-initial-state'`, `'redacted'`, `'deleted'`,
+   * `'never-written'`). Each code's sentence is `HONESTY_CODES[code]` on
+   * `footprintjs/trace`. ABSENT when every answer was exact.
+   */
+  readonly basis?: Readonly<Record<string, readonly ValueBasis[]>>;
 }
 
 /** JSON-safe persisted shape (consumer owns storage). */

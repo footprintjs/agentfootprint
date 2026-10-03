@@ -450,6 +450,16 @@
  * message bytes +295. Nothing else moved — the history, the tools, the
  * system prompt and the answer's `Period:` lines are the 9.134.0 bytes.
  *
+ * ALL THIRTY REGENERATED ON footprintjs 9.41.0. The old and new sets were diffed structurally, leaf by leaf:
+ * every moved leaf is one of `runtimeStageId` / `stage` / `stageId` / `tags`
+ * / `phase` — zero others, so no value, verb, message, tool or receipt key
+ * moved. Two engine changes account for all of it: R13 (9.34.0) records a
+ * mount's outputMapper merge-back under the MOUNT, so 247 merge-back bundles
+ * changed their three ids and the mount's declared milestone tags moved with
+ * them (247 removed from the previous stage's bundle, 247 added to the
+ * merge-back); and 9.39.0 stamps `phase` on a stage's continuation bundles
+ * (419 `'exit'` on mount exits, 221 `'repeat'` on fork fan-out settles).
+ *
  * Every scenario is a real run — the receipt-conformance shapes, each in the
  * configuration that has no name collision — and what is compared is the
  * whole `commitLog` plus `servedAt(k)` for every located epoch, after ONE

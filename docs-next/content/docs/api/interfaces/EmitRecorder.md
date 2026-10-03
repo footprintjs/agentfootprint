@@ -63,7 +63,7 @@ Called for every `scope.$emit(name, payload)` call in any stage.
 
 ### toSnapshot()?
 
-> `optional` **toSnapshot**(): `object`
+> `optional` **toSnapshot**(): `RecorderBundle`
 
 Defined in: node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:129
 
@@ -72,20 +72,4 @@ Optional: expose collected data for inclusion in
 
 #### Returns
 
-`object`
-
-##### data
-
-> **data**: `unknown`
-
-##### description?
-
-> `optional` **description?**: `string`
-
-##### name
-
-> **name**: `string`
-
-##### preferredOperation?
-
-> `optional` **preferredOperation?**: `RecorderOperation`
+`RecorderBundle`

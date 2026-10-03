@@ -4,7 +4,12 @@ title: ErrorEvent
 
 # Interface: ErrorEvent
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:37
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:44
+
+A recorder threw in a scope-channel hook (`operation` says which kind:
+a read, a write, or a commit hook). Delivered to every recorder on the
+scope channel, inline and deferred alike (`recorder/hooks.ts ·
+recorderFailureEvent`).
 
 ## Extends
 
@@ -16,7 +21,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:37
 
 > `optional` **channel?**: `"scope"`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:47
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:60
 
 Explicit channel discriminant — `'scope'` on every engine-dispatched
 event. `isFlowEvent()` checks it first (backlog B3); optional so
@@ -27,9 +32,14 @@ back to the legacy pipelineId-presence heuristic.
 
 ### error
 
-> **error**: `Error`
+> **error**: `StructuredErrorInfo`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:38
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:51
+
+What the recorder threw, in the structured form (9.39.0): `message` and
+`name` read as before; `raw` is the thrown value itself (an `Error`, a
+string, anything). One shape on every path — until 9.38.0 the inline
+paths passed the raw thrown value and the deferred tier a `new Error(...)`.
 
 ***
 
@@ -37,7 +47,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:38
 
 > `optional` **key?**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:40
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:53
 
 ***
 
@@ -45,7 +55,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:40
 
 > **operation**: `"read"` \| `"write"` \| `"commit"`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:39
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:52
 
 ***
 
@@ -53,7 +63,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:39
 
 > **pipelineId**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:14
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:15
 
 #### Inherited from
 
@@ -65,7 +75,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:14
 
 > **runtimeStageId**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:13
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:14
 
 Unique per-execution-step identifier. Format: [subflowPath/]stageId#executionIndex
 
@@ -79,7 +89,7 @@ Unique per-execution-step identifier. Format: [subflowPath/]stageId#executionInd
 
 > **stageId**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:11
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:12
 
 Stable stage identifier (matches spec node id).
 
@@ -93,7 +103,7 @@ Stable stage identifier (matches spec node id).
 
 > **stageName**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:9
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:10
 
 #### Inherited from
 
@@ -105,7 +115,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:9
 
 > **timestamp**: `number`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:15
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:16
 
 #### Inherited from
 

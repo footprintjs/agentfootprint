@@ -26,7 +26,8 @@
  * emits this, a person confirms or overrides on the board).
  */
 
-import type { SliceJSON } from 'footprintjs/trace';
+import { HONESTY_CODES } from 'footprintjs/trace';
+import type { HonestyCode, SliceJSON } from 'footprintjs/trace';
 
 import type { BacktrackHop, BacktrackSuspectCard, BacktrackTrace } from './toBacktrackTrace.js';
 
@@ -96,31 +97,29 @@ export function sliceToBacktrackTrace(
   const max = opts.maxSuspects ?? 6;
   const claim = opts.claim ?? `Why is '${json.key}' what it is?`;
 
+  // Every sentence is footprintjs's own (`HONESTY_CODES`) — this module keeps no copy.
   const honesty: string[] = [];
-  if (json.missing === 'never-written') {
-    honesty.push(
-      `⚠ '${json.key}' was never written in this run — the value came from initial state, frozen run input (args), or a closure; the commit log cannot see those.`,
-    );
-  } else if (json.missing === 'empty-log') {
-    honesty.push('⚠ the commit log is empty — nothing executed.');
-  }
+  const say = (code: HonestyCode, subject?: string): void => {
+    honesty.push(`⚠ ${subject !== undefined ? `${subject}: ` : ''}${HONESTY_CODES[code]}`);
+  };
+  if (json.missing !== undefined) say(json.missing, `'${json.key}'`);
+  for (const note of json.notes ?? []) say(note.code, `'${json.key}'`);
   if (
     json.readsCoverage &&
     json.readsCoverage.steps > 1 &&
     json.readsCoverage.stepsWithReads === 0
   ) {
-    honesty.push(
-      '⚠ reads were not recorded (readTracking off) — upstream dependencies are unknowable, NOT absent.',
-    );
+    say('reads-not-recorded');
   }
   if (json.truncated) {
-    honesty.push(
-      `⚠ slice truncated (${[
+    say(
+      'truncated',
+      `slice truncated (${[
         json.truncated.byDepth && 'depth',
         json.truncated.byNodes && 'node budget',
       ]
         .filter(Boolean)
-        .join(' + ')}) — older causes exist beyond this horizon.`,
+        .join(' + ')})`,
     );
   }
 

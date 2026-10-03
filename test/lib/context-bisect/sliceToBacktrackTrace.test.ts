@@ -13,6 +13,7 @@
 
 import { flowChart, FlowChartExecutor } from 'footprintjs';
 import {
+  HONESTY_CODES,
   keysReadFromExecutionTree,
   sliceForKey,
   sliceToJSON,
@@ -113,8 +114,8 @@ describe('sliceToBacktrackTrace — honesty units (hand-built slices)', () => {
     const json: SliceJSON = { key: 'ghost', missing: 'never-written', keysReadKind: 'map' };
     const trace = sliceToBacktrackTrace(json, { answer: ANSWER });
     expect(trace.suspects).toHaveLength(0);
-    expect(trace.honesty!.join('\n')).toContain('never written');
-    expect(trace.honesty!.join('\n')).toContain('closure');
+    // The sentence is footprintjs's own — one owner, no copy here.
+    expect(trace.honesty!.join('\n')).toContain(HONESTY_CODES['never-written']);
     expect(trace.decidedAt.label).toContain('no recorded writer');
   });
 
@@ -128,8 +129,7 @@ describe('sliceToBacktrackTrace — honesty units (hand-built slices)', () => {
       edges: [],
     };
     const trace = sliceToBacktrackTrace(json, { answer: ANSWER });
-    expect(trace.honesty!.join('\n')).toContain('reads were not recorded');
-    expect(trace.honesty!.join('\n')).toContain('NOT absent');
+    expect(trace.honesty!.join('\n')).toContain(HONESTY_CODES['reads-not-recorded']);
   });
 
   it('truncation and incomplete-sources surface as ⚠ lines', () => {

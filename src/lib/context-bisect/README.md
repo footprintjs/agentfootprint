@@ -13,6 +13,12 @@ type.
 The claim tier travels with the number. Embedding scores are proxies; only
 ablation verdicts are causal; slice completeness is bounded by what tracking
 recorded, and says so.
+Every value read off the log goes through footprintjs's basis twins
+(`commitValueAtWithBasis` / `findLastWriterWithBasis`): a `ContextSource`,
+`ProximateToolSource` or suspect's `valueBasis` names why its answer is not
+exact (e.g. `['nested-rows']` for a value a subflow seed wrote only partly),
+and every printed reason is footprintjs's own sentence, `HONESTY_CODES[code]` —
+this folder keeps no copy.
 
 ## Files
 - `localize.ts`, `bisect.ts`, `rankSuspects` callers — the ranked suspect set.
