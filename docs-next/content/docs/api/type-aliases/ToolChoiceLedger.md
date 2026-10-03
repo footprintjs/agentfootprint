@@ -6,6 +6,6 @@ title: ToolChoiceLedger
 
 > **ToolChoiceLedger** = readonly [`ToolChoiceEntry`](/docs/api/type-aliases/ToolChoiceEntry)[]
 
-Defined in: src/core/agent/toolChoice/types.ts:129
+Defined in: [src/core/agent/toolChoice/types.ts:129](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/toolChoice/types.ts#L129)
 
 The committed key: flat, append-only, a fresh array on every write.

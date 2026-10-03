@@ -4,7 +4,7 @@ title: ToolResultContext
 
 # Interface: ToolResultContext
 
-Defined in: src/core/agent/middleware/types.ts:214
+Defined in: [src/core/agent/middleware/types.ts:214](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L214)
 
 The finished call `onToolResult` is deciding about: everything `onToolCall`
 saw, plus what came back.
@@ -23,7 +23,7 @@ than the model's proposal beside somebody else's answer.
 
 > `readonly` **args**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: src/core/agent/middleware/types.ts:197
+Defined in: [src/core/agent/middleware/types.ts:197](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L197)
 
 The args as THIS middleware sees them — every earlier transform in the
 chain already applied. The first middleware sees what the model asked
@@ -39,7 +39,7 @@ for; the last sees what the tool is about to receive.
 
 > `readonly` `optional` **error?**: `true`
 
-Defined in: src/core/agent/middleware/types.ts:226
+Defined in: [src/core/agent/middleware/types.ts:226](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L226)
 
 Present and `true` when the tool THREW and `result` is the error's
 message. The call still executed, which is why this moment happens at
@@ -51,7 +51,7 @@ all: a tool that failed halfway may have done half its work.
 
 > `readonly` **history**: readonly [`LLMMessage`](/docs/api/interfaces/LLMMessage)[]
 
-Defined in: src/core/agent/middleware/types.ts:199
+Defined in: [src/core/agent/middleware/types.ts:199](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L199)
 
 Conversation so far, including the assistant turn that made this call.
 
@@ -65,7 +65,7 @@ Conversation so far, including the assistant turn that made this call.
 
 > `readonly` `optional` **identity?**: `MemoryIdentity`
 
-Defined in: src/core/agent/middleware/types.ts:201
+Defined in: [src/core/agent/middleware/types.ts:201](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L201)
 
 Multi-tenant run identity, when the run carried one.
 
@@ -79,7 +79,7 @@ Multi-tenant run identity, when the run carried one.
 
 > `readonly` **iteration**: `number`
 
-Defined in: src/core/agent/middleware/types.ts:191
+Defined in: [src/core/agent/middleware/types.ts:191](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L191)
 
 ReAct iteration this call belongs to.
 
@@ -93,7 +93,7 @@ ReAct iteration this call belongs to.
 
 > `readonly` **result**: `unknown`
 
-Defined in: src/core/agent/middleware/types.ts:220
+Defined in: [src/core/agent/middleware/types.ts:220](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L220)
 
 What the tool returned. Whatever the tool's own return type is, un-
 stringified — the conversion to the text the model reads happens after
@@ -105,7 +105,7 @@ this chain, so a rule can inspect the real object.
 
 > `readonly` `optional` **signal?**: `AbortSignal`
 
-Defined in: src/core/agent/middleware/types.ts:203
+Defined in: [src/core/agent/middleware/types.ts:203](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L203)
 
 Abort signal from `run({ env: { signal } })`.
 
@@ -119,7 +119,7 @@ Abort signal from `run({ env: { signal } })`.
 
 > `readonly` **toolCallId**: `string`
 
-Defined in: src/core/agent/middleware/types.ts:189
+Defined in: [src/core/agent/middleware/types.ts:189](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L189)
 
 Matches `stream.tool_start.toolCallId` for this dispatch.
 
@@ -133,7 +133,7 @@ Matches `stream.tool_start.toolCallId` for this dispatch.
 
 > `readonly` **toolName**: `string`
 
-Defined in: src/core/agent/middleware/types.ts:175
+Defined in: [src/core/agent/middleware/types.ts:175](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L175)
 
 #### Inherited from
 
@@ -145,7 +145,7 @@ Defined in: src/core/agent/middleware/types.ts:175
 
 > `readonly` `optional` **toolSource?**: `string`
 
-Defined in: src/core/agent/middleware/types.ts:187
+Defined in: [src/core/agent/middleware/types.ts:187](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L187)
 
 Where the tool being called came from — `Tool.source`, which `mcpClient`
 fills with the server's name.

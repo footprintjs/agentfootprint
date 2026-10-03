@@ -4,7 +4,7 @@ title: PutArtifactInput
 
 # Interface: PutArtifactInput
 
-Defined in: src/artifacts/types.ts:120
+Defined in: [src/artifacts/types.ts:120](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L120)
 
 What `put` takes — everything on [ArtifactMeta](/docs/api/interfaces/ArtifactMeta) the CALLER owns.
  `ref`, `bytes`, `digest` and `createdAt` are the store's to stamp.
@@ -15,7 +15,7 @@ What `put` takes — everything on [ArtifactMeta](/docs/api/interfaces/ArtifactM
 
 > `readonly` **data**: `unknown`
 
-Defined in: src/artifacts/types.ts:129
+Defined in: [src/artifacts/types.ts:129](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L129)
 
 The payload. Strings and `Uint8Array` are stored byte-for-byte; any other
 value must be JSON-serializable (it is measured, digested and — in the
@@ -28,7 +28,7 @@ refused at `put` by name, never stored as an approximation.
 
 > `readonly` `optional` **digest?**: `"sha-256"`
 
-Defined in: src/artifacts/types.ts:132
+Defined in: [src/artifacts/types.ts:132](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L132)
 
 Ask for an integrity digest, computed by the store at put.
 
@@ -38,7 +38,7 @@ Ask for an integrity digest, computed by the store at put.
 
 > `readonly` `optional` **expiresAt?**: `number`
 
-Defined in: src/artifacts/types.ts:134
+Defined in: [src/artifacts/types.ts:134](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L134)
 
 Caller-stated expiry (unix ms). The store's own ttl may only TIGHTEN it.
 
@@ -48,7 +48,7 @@ Caller-stated expiry (unix ms). The store's own ttl may only TIGHTEN it.
 
 > `readonly` **kind**: `string`
 
-Defined in: src/artifacts/types.ts:121
+Defined in: [src/artifacts/types.ts:121](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L121)
 
 ***
 
@@ -56,7 +56,7 @@ Defined in: src/artifacts/types.ts:121
 
 > `readonly` `optional` **label?**: `string`
 
-Defined in: src/artifacts/types.ts:130
+Defined in: [src/artifacts/types.ts:130](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L130)
 
 ***
 
@@ -64,7 +64,7 @@ Defined in: src/artifacts/types.ts:130
 
 > `readonly` **mediaType**: `string`
 
-Defined in: src/artifacts/types.ts:122
+Defined in: [src/artifacts/types.ts:122](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L122)
 
 ***
 
@@ -72,7 +72,7 @@ Defined in: src/artifacts/types.ts:122
 
 > `readonly` `optional` **origin?**: [`ArtifactOrigin`](/docs/api/interfaces/ArtifactOrigin)
 
-Defined in: src/artifacts/types.ts:135
+Defined in: [src/artifacts/types.ts:135](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L135)
 
 ***
 
@@ -80,7 +80,7 @@ Defined in: src/artifacts/types.ts:135
 
 > `readonly` `optional` **parentRefs?**: readonly `string`[]
 
-Defined in: src/artifacts/types.ts:136
+Defined in: [src/artifacts/types.ts:136](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L136)
 
 ***
 
@@ -88,6 +88,6 @@ Defined in: src/artifacts/types.ts:136
 
 > `readonly` `optional` **timeAxis?**: [`DatasetTimeAxis`](/docs/api/interfaces/DatasetTimeAxis)
 
-Defined in: src/artifacts/types.ts:138
+Defined in: [src/artifacts/types.ts:138](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L138)
 
 Declare the rows' time axis (see [ArtifactMeta.timeAxis](/docs/api/interfaces/ArtifactMeta#timeaxis)).

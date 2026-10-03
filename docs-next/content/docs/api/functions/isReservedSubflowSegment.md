@@ -6,7 +6,7 @@ title: isReservedSubflowSegment
 
 > **isReservedSubflowSegment**(`segment`): `boolean`
 
-Defined in: src/conventions.ts:114
+Defined in: [src/conventions.ts:114](https://github.com/footprintjs/agentfootprint/blob/main/src/conventions.ts#L114)
 
 True when a subflow-path segment falls inside the reserved namespace.
 

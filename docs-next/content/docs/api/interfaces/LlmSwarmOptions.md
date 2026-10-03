@@ -4,7 +4,7 @@ title: LlmSwarmOptions
 
 # Interface: LlmSwarmOptions
 
-Defined in: src/patterns/LlmSwarm.ts:68
+Defined in: [src/patterns/LlmSwarm.ts:68](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/LlmSwarm.ts#L68)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: src/patterns/LlmSwarm.ts:68
 
 > `readonly` **agents**: readonly [`LlmSwarmAgent`](/docs/api/interfaces/LlmSwarmAgent)[]
 
-Defined in: src/patterns/LlmSwarm.ts:74
+Defined in: [src/patterns/LlmSwarm.ts:74](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/LlmSwarm.ts#L74)
 
 The roster. Two or more; ids must be unique and none may be `'done'`.
 
@@ -22,7 +22,7 @@ The roster. Two or more; ids must be unique and none may be `'done'`.
 
 > `readonly` `optional` **id?**: `string`
 
-Defined in: src/patterns/LlmSwarm.ts:85
+Defined in: [src/patterns/LlmSwarm.ts:85](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/LlmSwarm.ts#L85)
 
 Stable id for the swarm's composition events. Default `'swarm'`.
 
@@ -32,7 +32,7 @@ Stable id for the swarm's composition events. Default `'swarm'`.
 
 > `readonly` `optional` **instruction?**: `string`
 
-Defined in: src/patterns/LlmSwarm.ts:76
+Defined in: [src/patterns/LlmSwarm.ts:76](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/LlmSwarm.ts#L76)
 
 Extra authored framing for the router. See `llmRouter`.
 
@@ -42,7 +42,7 @@ Extra authored framing for the router. See `llmRouter`.
 
 > `readonly` `optional` **maxHandoffs?**: `number`
 
-Defined in: src/patterns/LlmSwarm.ts:83
+Defined in: [src/patterns/LlmSwarm.ts:83](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/LlmSwarm.ts#L83)
 
 Maximum agent turns before the loop halts. Default 10 (the swarm's
 own default). The router runs once per turn plus once to start.
@@ -53,7 +53,7 @@ own default). The router runs once per turn plus once to start.
 
 > `readonly` **model**: `string`
 
-Defined in: src/patterns/LlmSwarm.ts:72
+Defined in: [src/patterns/LlmSwarm.ts:72](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/LlmSwarm.ts#L72)
 
 Model to ask for routing decisions.
 
@@ -63,7 +63,7 @@ Model to ask for routing decisions.
 
 > `readonly` `optional` **name?**: `string`
 
-Defined in: src/patterns/LlmSwarm.ts:87
+Defined in: [src/patterns/LlmSwarm.ts:87](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/LlmSwarm.ts#L87)
 
 Display name. Default `'Swarm'`.
 
@@ -73,7 +73,7 @@ Display name. Default `'Swarm'`.
 
 > `readonly` **provider**: [`LLMProvider`](/docs/api/interfaces/LLMProvider)
 
-Defined in: src/patterns/LlmSwarm.ts:70
+Defined in: [src/patterns/LlmSwarm.ts:70](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/LlmSwarm.ts#L70)
 
 The LLM that makes the routing decisions (not the specialists' own).
 
@@ -83,6 +83,6 @@ The LLM that makes the routing decisions (not the specialists' own).
 
 > `readonly` `optional` **temperature?**: `number`
 
-Defined in: src/patterns/LlmSwarm.ts:78
+Defined in: [src/patterns/LlmSwarm.ts:78](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/LlmSwarm.ts#L78)
 
 Routing temperature. Default `0`.

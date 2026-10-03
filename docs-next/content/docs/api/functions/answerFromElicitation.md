@@ -6,7 +6,7 @@ title: answerFromElicitation
 
 > **answerFromElicitation**(`awaiting`, `content`): [`InputResponse`](/docs/api/interfaces/InputResponse)
 
-Defined in: src/lib/mcp/elicitation.ts:182
+Defined in: [src/lib/mcp/elicitation.ts:182](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/mcp/elicitation.ts#L182)
 
 The `InputResponse` an accepted elicitation's `content` names — each open
 field's value, a time range's two properties joined as `from/to`. Throws

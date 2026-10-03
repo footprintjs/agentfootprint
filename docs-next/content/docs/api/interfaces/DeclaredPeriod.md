@@ -4,7 +4,7 @@ title: DeclaredPeriod
 
 # Interface: DeclaredPeriod
 
-Defined in: src/core/agent/coverage/period.ts:81
+Defined in: [src/core/agent/coverage/period.ts:81](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/period.ts#L81)
 
 The period a result declares — what its READ covered — in the camelCase
 spelling an author writes on `absent()`, `coverage()` and
@@ -31,7 +31,7 @@ absent({
 
 > `readonly` **held**: `"unknown"` \| \{ `from`: `string`; `to`: `string`; \}
 
-Defined in: src/core/agent/coverage/period.ts:87
+Defined in: [src/core/agent/coverage/period.ts:87](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/period.ts#L87)
 
 What the store holds at the time of the read — the same shape — or
  `'unknown'`, said out loud when the tool cannot vouch for it.
@@ -42,7 +42,7 @@ What the store holds at the time of the read — the same shape — or
 
 > `readonly` **queried**: `object`
 
-Defined in: src/core/agent/coverage/period.ts:84
+Defined in: [src/core/agent/coverage/period.ts:84](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/period.ts#L84)
 
 The instants of the READ that produced this result — not of "this call".
  ISO 8601 instants WITH a zone; `from` is not after `to`.
@@ -61,7 +61,7 @@ The instants of the READ that produced this result — not of "this call".
 
 > `readonly` `optional` **readAt?**: `string`
 
-Defined in: src/core/agent/coverage/period.ts:90
+Defined in: [src/core/agent/coverage/period.ts:90](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/period.ts#L90)
 
 When the read ran — a cached answer is served minutes after the read it
  describes. An ISO 8601 instant with a zone.

@@ -6,7 +6,7 @@ title: RequestMeasurement
 
 > **RequestMeasurement** = `MeasurementBoundary` & \{ `slots`: \{ `messages?`: [`RequestJsonSize`](/docs/api/interfaces/RequestJsonSize); `systemPrompt?`: [`RequestJsonSize`](/docs/api/interfaces/RequestJsonSize); `tools?`: [`RequestJsonSize`](/docs/api/interfaces/RequestJsonSize); \}; `status`: `"measured"`; `total`: [`RequestJsonSize`](/docs/api/interfaces/RequestJsonSize); \} \| \{ `reason`: `"unsupported-value"` \| `"cyclic-value"` \| `"measurement-limit"`; `status`: `"unavailable"`; \}
 
-Defined in: src/lib/time-travel/requestMeasurement.ts:18
+Defined in: [src/lib/time-travel/requestMeasurement.ts:18](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/requestMeasurement.ts#L18)
 
 Sizes describe JSON of the canonical request, excluding its root `signal`.
 Slot values are serialized separately and do not sum to the request total.

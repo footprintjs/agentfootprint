@@ -4,7 +4,7 @@ title: "~~Interface: ContextContribution~~"
 
 # ~~Interface: ContextContribution~~
 
-Defined in: src/adapters/types.ts:674
+Defined in: [src/adapters/types.ts:674](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L674)
 
 ## Deprecated
 
@@ -16,7 +16,7 @@ No implementation exists — see [ContextSourceAdapter](/docs/api/interfaces/Con
 
 > `readonly` `optional` **asRole?**: `ContextRole`
 
-Defined in: src/adapters/types.ts:679
+Defined in: [src/adapters/types.ts:679](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L679)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: src/adapters/types.ts:679
 
 > `readonly` **contentSummary**: `string`
 
-Defined in: src/adapters/types.ts:675
+Defined in: [src/adapters/types.ts:675](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L675)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: src/adapters/types.ts:675
 
 > `readonly` `optional` **rank?**: `number`
 
-Defined in: src/adapters/types.ts:678
+Defined in: [src/adapters/types.ts:678](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L678)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: src/adapters/types.ts:678
 
 > `readonly` `optional` **rawContent?**: `string`
 
-Defined in: src/adapters/types.ts:676
+Defined in: [src/adapters/types.ts:676](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L676)
 
 ***
 
@@ -48,7 +48,7 @@ Defined in: src/adapters/types.ts:676
 
 > `readonly` **reason**: `string`
 
-Defined in: src/adapters/types.ts:681
+Defined in: [src/adapters/types.ts:681](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L681)
 
 ***
 
@@ -56,7 +56,7 @@ Defined in: src/adapters/types.ts:681
 
 > `readonly` `optional` **score?**: `number`
 
-Defined in: src/adapters/types.ts:677
+Defined in: [src/adapters/types.ts:677](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L677)
 
 ***
 
@@ -64,4 +64,4 @@ Defined in: src/adapters/types.ts:677
 
 > `readonly` `optional` **sectionTag?**: `string`
 
-Defined in: src/adapters/types.ts:680
+Defined in: [src/adapters/types.ts:680](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L680)

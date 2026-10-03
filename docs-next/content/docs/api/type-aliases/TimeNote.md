@@ -6,7 +6,7 @@ title: TimeNote
 
 > **TimeNote** = \{ `kind`: `"end-of-grain"`; \} \| \{ `end?`: `"from"` \| `"to"`; `kind`: `"dst-overlap"`; `which`: `"earlier"` \| `"later"`; \} \| \{ `end?`: `"from"` \| `"to"`; `kind`: `"dst-gap"`; `which`: `"earlier"` \| `"later"`; \} \| \{ `kind`: `"offset-said"`; `offset`: `string`; \} \| \{ `century`: `number`; `kind`: `"century-implied"`; \} \| \{ `as`: `"place"` \| `"abbreviation"` \| `"abbreviation-literal"`; `kind`: `"zone-read"`; `token`: `string`; \}
 
-Defined in: src/core/time/resolveRecord.ts:53
+Defined in: [src/core/time/resolveRecord.ts:53](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/resolveRecord.ts#L53)
 
 A library-written note on how a window was read.
 

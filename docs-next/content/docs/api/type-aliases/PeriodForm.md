@@ -6,7 +6,7 @@ title: PeriodForm
 
 > **PeriodForm** = \{ `from`: [`Bound`](/docs/api/interfaces/Bound); `kind`: `"bounds"`; `maxRange?`: `DurationText`; `to`: `ToBound`; `zone?`: [`ZoneArgument`](/docs/api/interfaces/ZoneArgument); \} \| \{ `argument`: `string`; `as`: [`BoundAs`](/docs/api/type-aliases/BoundAs); `edge?`: `Edge`; `joiner`: `".."` \| `"/"`; `kind`: `"joined"`; `maxRange?`: `DurationText`; `zone?`: [`ZoneArgument`](/docs/api/interfaces/ZoneArgument); \} \| \{ `argument`: `string`; `as`: [`BoundAs`](/docs/api/type-aliases/BoundAs); `edge`: `Edge`; `keys`: \{ `from`: `string`; `to`: `string`; \}; `kind`: `"object"`; `maxRange?`: `DurationText`; `zone?`: [`ZoneArgument`](/docs/api/interfaces/ZoneArgument); \} \| \{ `argument`: `string`; `kind`: `"day"`; `maxRange?`: `DurationText`; `zone?`: [`ZoneArgument`](/docs/api/interfaces/ZoneArgument); \} \| \{ `argument`: `string`; `kind`: `"lookback"`; `maxRange?`: `DurationText`; `signed`: `boolean`; `units?`: `string`; \}
 
-Defined in: src/core/time/periodForm.ts:91
+Defined in: [src/core/time/periodForm.ts:91](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/periodForm.ts#L91)
 
 Every shape a tool's period can take — one `TimeRange` onto one or more
 arguments. Any form may carry its own `maxRange` — the widest window THAT

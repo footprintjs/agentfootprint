@@ -4,7 +4,7 @@ title: ArtifactStoreCase
 
 # Interface: ArtifactStoreCase
 
-Defined in: src/artifacts/conformance/types.ts:172
+Defined in: [src/artifacts/conformance/types.ts:172](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/conformance/types.ts#L172)
 
 One case in the battery.
 
@@ -14,7 +14,7 @@ One case in the battery.
 
 > `readonly` `optional` **harnessNeeds?**: readonly [`ArtifactStoreHarnessHook`](/docs/api/type-aliases/ArtifactStoreHarnessHook)[]
 
-Defined in: src/artifacts/conformance/types.ts:179
+Defined in: [src/artifacts/conformance/types.ts:179](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/conformance/types.ts#L179)
 
 Harness hooks without which this case cannot run at all.
 
@@ -24,7 +24,7 @@ Harness hooks without which this case cannot run at all.
 
 > `readonly` **law**: `string`
 
-Defined in: src/artifacts/conformance/types.ts:175
+Defined in: [src/artifacts/conformance/types.ts:175](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/conformance/types.ts#L175)
 
 The law it holds, in one sentence — printed beside a failure.
 
@@ -34,7 +34,7 @@ The law it holds, in one sentence — printed beside a failure.
 
 > `readonly` `optional` **members?**: readonly [`ArtifactStoreMember`](/docs/api/type-aliases/ArtifactStoreMember)[]
 
-Defined in: src/artifacts/conformance/types.ts:177
+Defined in: [src/artifacts/conformance/types.ts:177](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/conformance/types.ts#L177)
 
 Optional port members without which this case does not apply.
 
@@ -44,7 +44,7 @@ Optional port members without which this case does not apply.
 
 > `readonly` **name**: [`ArtifactStoreCaseName`](/docs/api/type-aliases/ArtifactStoreCaseName)
 
-Defined in: src/artifacts/conformance/types.ts:173
+Defined in: [src/artifacts/conformance/types.ts:173](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/conformance/types.ts#L173)
 
 ## Methods
 
@@ -52,7 +52,7 @@ Defined in: src/artifacts/conformance/types.ts:173
 
 > **run**(`store`, `kit`): `Promise`\<`void`\>
 
-Defined in: src/artifacts/conformance/types.ts:180
+Defined in: [src/artifacts/conformance/types.ts:180](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/conformance/types.ts#L180)
 
 #### Parameters
 

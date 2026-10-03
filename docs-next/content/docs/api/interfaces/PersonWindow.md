@@ -4,7 +4,7 @@ title: PersonWindow
 
 # Interface: PersonWindow
 
-Defined in: src/core/time/rows.ts:167
+Defined in: [src/core/time/rows.ts:167](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L167)
 
 The person's window a `call-window` row names — its range, who gave it, and its mention.
 
@@ -18,7 +18,7 @@ The person's window a `call-window` row names — its range, who gave it, and it
 
 > `readonly` **from**: `string`
 
-Defined in: src/core/time/range.ts:60
+Defined in: [src/core/time/range.ts:60](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/range.ts#L60)
 
 #### Inherited from
 
@@ -30,7 +30,7 @@ Defined in: src/core/time/range.ts:60
 
 > `readonly` `optional` **mention?**: `number`
 
-Defined in: src/core/time/rows.ts:170
+Defined in: [src/core/time/rows.ts:170](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L170)
 
 The `time-reading` row's mention index — absent on a `control` window.
 
@@ -40,7 +40,7 @@ The `time-reading` row's mention index — absent on a `control` window.
 
 > `readonly` **source**: `WindowSource`
 
-Defined in: src/core/time/rows.ts:168
+Defined in: [src/core/time/rows.ts:168](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L168)
 
 ***
 
@@ -48,7 +48,7 @@ Defined in: src/core/time/rows.ts:168
 
 > `readonly` **to**: `string`
 
-Defined in: src/core/time/range.ts:61
+Defined in: [src/core/time/range.ts:61](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/range.ts#L61)
 
 #### Inherited from
 

@@ -4,7 +4,7 @@ title: ServedRequestOnly
 
 # Interface: ServedRequestOnly
 
-Defined in: src/lib/time-travel/servedView.ts:196
+Defined in: [src/lib/time-travel/servedView.ts:196](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L196)
 
 A line that was on the request and in no history.
 
@@ -14,7 +14,7 @@ A line that was on the request and in no history.
 
 > `readonly` **reason**: `string`
 
-Defined in: src/lib/time-travel/servedView.ts:201
+Defined in: [src/lib/time-travel/servedView.ts:201](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L201)
 
 Which library mechanism composed it — `'staged-refs-nudge'`, `'time-window-line'` (step T6b)
  or `'evidence-conclusion'` (the evidence gate's figures dial).
@@ -25,7 +25,7 @@ Which library mechanism composed it — `'staged-refs-nudge'`, `'time-window-lin
 
 > `readonly` **role**: `ContextRole`
 
-Defined in: src/lib/time-travel/servedView.ts:197
+Defined in: [src/lib/time-travel/servedView.ts:197](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L197)
 
 ***
 
@@ -33,4 +33,4 @@ Defined in: src/lib/time-travel/servedView.ts:197
 
 > `readonly` **text**: `string`
 
-Defined in: src/lib/time-travel/servedView.ts:198
+Defined in: [src/lib/time-travel/servedView.ts:198](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L198)

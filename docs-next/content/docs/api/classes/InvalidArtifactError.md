@@ -4,7 +4,7 @@ title: InvalidArtifactError
 
 # Class: InvalidArtifactError
 
-Defined in: src/artifacts/types.ts:350
+Defined in: [src/artifacts/types.ts:350](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L350)
 
 A `put` this store cannot honor as stated — a payload JSON cannot carry, a
 blank `kind`, a payload larger than the whole scope budget. Refused by name
@@ -20,7 +20,7 @@ at the door: storing an approximation would be accepted-and-silently-wrong.
 
 > **new InvalidArtifactError**(`detail`): `InvalidArtifactError`
 
-Defined in: src/artifacts/types.ts:353
+Defined in: [src/artifacts/types.ts:353](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L353)
 
 #### Parameters
 
@@ -54,7 +54,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_INVALID_ARTIFACT"`
 
-Defined in: src/artifacts/types.ts:351
+Defined in: [src/artifacts/types.ts:351](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L351)
 
 ***
 

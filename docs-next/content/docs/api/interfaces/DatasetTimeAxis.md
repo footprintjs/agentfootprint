@@ -4,7 +4,7 @@ title: DatasetTimeAxis
 
 # Interface: DatasetTimeAxis
 
-Defined in: src/core/time/axis.ts:95
+Defined in: [src/core/time/axis.ts:95](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/axis.ts#L95)
 
 A dataset's declared time axis.
 
@@ -27,7 +27,7 @@ raw samples every five minutes, epoch seconds
 
 > `readonly` `optional` **aggregate?**: [`TimeAxisAggregate`](/docs/api/type-aliases/TimeAxisAggregate) \| `"raw"` \| `Readonly`\<`Record`\<`string`, [`TimeAxisAggregate`](/docs/api/type-aliases/TimeAxisAggregate)\>\>
 
-Defined in: src/core/time/axis.ts:123
+Defined in: [src/core/time/axis.ts:123](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/axis.ts#L123)
 
 How each row summarises its interval. `'raw'` — every row is a sample as
 collected, nothing was reduced. One aggregate — every measure column was
@@ -44,7 +44,7 @@ half a declaration.
 
 > `readonly` **column**: `string`
 
-Defined in: src/core/time/axis.ts:97
+Defined in: [src/core/time/axis.ts:97](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/axis.ts#L97)
 
 The column that holds time.
 
@@ -54,7 +54,7 @@ The column that holds time.
 
 > `readonly` `optional` **interval?**: `string`
 
-Defined in: src/core/time/axis.ts:112
+Defined in: [src/core/time/axis.ts:112](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/axis.ts#L112)
 
 Width of the interval one row stands for: a positive whole number and
  one of `s m h d w` (`'30s'`, `'5m'`, `'1h'`, `'1d'`, `'1w'`) — the time
@@ -67,7 +67,7 @@ Width of the interval one row stands for: a positive whole number and
 
 > `readonly` **unit**: [`TimeAxisUnit`](/docs/api/type-aliases/TimeAxisUnit)
 
-Defined in: src/core/time/axis.ts:100
+Defined in: [src/core/time/axis.ts:100](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/axis.ts#L100)
 
 `'iso'` — ISO-8601 strings; `'epoch-s'` / `'epoch-ms'` — numbers since
  1970-01-01T00:00:00Z in seconds / milliseconds.
@@ -78,7 +78,7 @@ Defined in: src/core/time/axis.ts:100
 
 > `readonly` `optional` **zone?**: `string`
 
-Defined in: src/core/time/axis.ts:107
+Defined in: [src/core/time/axis.ts:107](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/axis.ts#L107)
 
 IANA zone name (`'Europe/London'`) the values are WALL-CLOCK in — never
  an abbreviation such as `'PST'` or a bare offset. `'iso'` only — an epoch

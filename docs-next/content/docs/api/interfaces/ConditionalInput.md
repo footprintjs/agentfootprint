@@ -4,7 +4,7 @@ title: ConditionalInput
 
 # Interface: ConditionalInput
 
-Defined in: src/core-flow/Conditional.ts:60
+Defined in: [src/core-flow/Conditional.ts:60](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Conditional.ts#L60)
 
 ## Properties
 
@@ -12,4 +12,4 @@ Defined in: src/core-flow/Conditional.ts:60
 
 > `readonly` **message**: `string`
 
-Defined in: src/core-flow/Conditional.ts:61
+Defined in: [src/core-flow/Conditional.ts:61](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Conditional.ts#L61)

@@ -4,7 +4,7 @@ title: MessageDeniedError
 
 # Class: MessageDeniedError
 
-Defined in: src/core/agent/middleware/errors.ts:47
+Defined in: [src/core/agent/middleware/errors.ts:47](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/errors.ts#L47)
 
 ## Extends
 
@@ -16,7 +16,7 @@ Defined in: src/core/agent/middleware/errors.ts:47
 
 > **new MessageDeniedError**(`ctx`): `MessageDeniedError`
 
-Defined in: src/core/agent/middleware/errors.ts:53
+Defined in: [src/core/agent/middleware/errors.ts:53](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/errors.ts#L53)
 
 #### Parameters
 
@@ -50,7 +50,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_MESSAGE_DENIED"`
 
-Defined in: src/core/agent/middleware/errors.ts:48
+Defined in: [src/core/agent/middleware/errors.ts:48](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/errors.ts#L48)
 
 ***
 
@@ -70,7 +70,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1077
 
 > `readonly` **middleware**: `string`
 
-Defined in: src/core/agent/middleware/errors.ts:51
+Defined in: [src/core/agent/middleware/errors.ts:51](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/errors.ts#L51)
 
 ***
 
@@ -90,7 +90,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1076
 
 > `readonly` **phase**: `"input"` \| `"output"`
 
-Defined in: src/core/agent/middleware/errors.ts:50
+Defined in: [src/core/agent/middleware/errors.ts:50](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/errors.ts#L50)
 
 ***
 
@@ -98,7 +98,7 @@ Defined in: src/core/agent/middleware/errors.ts:50
 
 > `readonly` **reason**: `string`
 
-Defined in: src/core/agent/middleware/errors.ts:49
+Defined in: [src/core/agent/middleware/errors.ts:49](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/errors.ts#L49)
 
 ***
 

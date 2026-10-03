@@ -4,7 +4,7 @@ title: InputResponseResult
 
 # Interface: InputResponseResult
 
-Defined in: src/core/inputRequest.ts:143
+Defined in: [src/core/inputRequest.ts:143](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L143)
 
 The dedicated collecting tool's result; it contains inputs, not observations.
 
@@ -14,7 +14,7 @@ The dedicated collecting tool's result; it contains inputs, not observations.
 
 > `readonly` `optional` **context?**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: src/core/inputRequest.ts:148
+Defined in: [src/core/inputRequest.ts:148](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L148)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: src/core/inputRequest.ts:148
 
 > `readonly` **origin**: `object`
 
-Defined in: src/core/inputRequest.ts:149
+Defined in: [src/core/inputRequest.ts:149](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L149)
 
 #### offeredSkillIds?
 
@@ -52,7 +52,7 @@ lists every call each field is for.
 
 > `readonly` **origins**: `Readonly`\<`Record`\<`string`, `"declaration"` \| `"response"`\>\>
 
-Defined in: src/core/inputRequest.ts:147
+Defined in: [src/core/inputRequest.ts:147](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L147)
 
 ***
 
@@ -60,7 +60,7 @@ Defined in: src/core/inputRequest.ts:147
 
 > `readonly` **requestId**: `string`
 
-Defined in: src/core/inputRequest.ts:145
+Defined in: [src/core/inputRequest.ts:145](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L145)
 
 ***
 
@@ -68,7 +68,7 @@ Defined in: src/core/inputRequest.ts:145
 
 > `readonly` **status**: `"input_received"`
 
-Defined in: src/core/inputRequest.ts:144
+Defined in: [src/core/inputRequest.ts:144](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L144)
 
 ***
 
@@ -76,4 +76,4 @@ Defined in: src/core/inputRequest.ts:144
 
 > `readonly` **values**: `Readonly`\<`Record`\<`string`, [`InputValue`](/docs/api/type-aliases/InputValue)\>\>
 
-Defined in: src/core/inputRequest.ts:146
+Defined in: [src/core/inputRequest.ts:146](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L146)
