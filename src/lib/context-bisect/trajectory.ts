@@ -149,6 +149,7 @@ interface TracedKey {
 
 function traceKey(
   log: CommitBundle[],
+  initialState: Record<string, unknown> | undefined,
   lastIdxOf: ReadonlyMap<string, number>,
   key: string,
   beforeIdx: number,
@@ -157,7 +158,9 @@ function traceKey(
   const writerId = found.writer?.runtimeStageId;
   const writerArrayIdx = writerId !== undefined ? lastIdxOf.get(writerId) : undefined;
   const read =
-    writerArrayIdx !== undefined ? commitValueAtWithBasis(log, writerArrayIdx, key) : undefined;
+    writerArrayIdx !== undefined
+      ? commitValueAtWithBasis(log, writerArrayIdx, key, { initialState })
+      : undefined;
   const basis = [...new Set<ValueBasis>([...found.basis, ...(read?.basis ?? [])])];
   return { writerId, writerArrayIdx, value: read?.value, basis };
 }
@@ -281,6 +284,8 @@ interface GroupedSubflowResult {
   readonly treeContext?: {
     readonly history?: readonly unknown[];
     readonly stageContexts?: unknown;
+    /** The inner log's fold base (footprintjs ≥ 9.17). */
+    readonly initialState?: Record<string, unknown>;
   };
 }
 
@@ -293,6 +298,8 @@ interface GroupedSubflowResult {
 function projectFrame(
   loopIndex: number,
   log: CommitBundle[],
+  /** `log`'s fold base — so a key nothing seeded is not called partial. */
+  initialState: Record<string, unknown> | undefined,
   lastIdxOf: Map<string, number>,
   readsOf: Map<string, string[]>,
   headArrayIdx: number,
@@ -320,7 +327,9 @@ function projectFrame(
   const contextSources: ContextSource[] = keys.map((key) => {
     // EXCLUSIVE beforeIdx — finds the PRIOR writer, never call-llm's own write-back.
     const traced =
-      llmCallArrayIdx !== undefined ? traceKey(log, lastIdxOf, key, llmCallArrayIdx) : undefined;
+      llmCallArrayIdx !== undefined
+        ? traceKey(log, initialState, lastIdxOf, key, llmCallArrayIdx)
+        : undefined;
     const value = traced?.value;
     const text = value === undefined ? '' : safeStringify(value).slice(0, maxTextChars);
     return {
@@ -344,7 +353,7 @@ function projectFrame(
   // (the aggregate), NOT this key — so it's an INFERRED proximate (`proximate: true`).
   let proximateToolSource: ProximateToolSource | undefined;
   if (subflowScope === undefined && llmCallArrayIdx !== undefined) {
-    const traced = traceKey(log, lastIdxOf, PROXIMATE_TOOL_KEY, llmCallArrayIdx);
+    const traced = traceKey(log, initialState, lastIdxOf, PROXIMATE_TOOL_KEY, llmCallArrayIdx);
     if (traced.writerId !== undefined && traced.value !== undefined) {
       proximateToolSource = {
         value: traced.value,
@@ -408,6 +417,7 @@ function assembleGroupedTrajectory(
     return projectFrame(
       loopIndex,
       innerLog,
+      sr[key]?.treeContext?.initialState,
       innerLastIdxOf,
       innerReadsOf,
       0,
@@ -475,6 +485,7 @@ export function assembleTrajectory(
     projectFrame(
       loopIndex,
       commitLog,
+      artifacts.snapshot.initialState as Record<string, unknown> | undefined,
       lastIdxOf,
       readsOf,
       bucket.headArrayIdx,

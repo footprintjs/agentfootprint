@@ -151,6 +151,13 @@ interface ToolpackIndex {
   errorSteps: { id: string; keys: string[] }[];
   /** Count of steps that consumed untracked sources (args/env/silent). */
   untrackedStepCount: number;
+  /** The log's fold base (`RuntimeSnapshot.initialState`), for the value basis. */
+  initialState: Record<string, unknown> | undefined;
+  /**
+   * Honesty codes whose full sentence this toolpack instance has already served — every
+   * later mention is the bare `⚠ <code>` (the model has the sentence in context).
+   */
+  explained: Set<HonestyCode>;
 }
 
 function stagePartOf(runtimeStageId: string): string {
@@ -249,6 +256,8 @@ function buildIndex(artifacts: TraceToolpackArtifacts): ToolpackIndex {
     hasReadTracking,
     errorSteps,
     untrackedStepCount,
+    initialState: artifacts.snapshot.initialState as Record<string, unknown> | undefined,
+    explained: new Set<HonestyCode>(),
   };
 }
 
@@ -292,16 +301,21 @@ function redactionNote(bundles: readonly CommitBundle[] | undefined, path: strin
 }
 
 /**
- * A footprintjs reason code as the toolpack prints it: `⚠ <code>: <sentence>`. The sentence is
- * footprintjs's own (`HONESTY_CODES` on `footprintjs/trace`) — this pack keeps no copy of it.
+ * A footprintjs reason code as the toolpack prints it. The FIRST time a code appears in this
+ * toolpack instance it is `⚠ <code>: <sentence>` — the sentence is footprintjs's own
+ * (`HONESTY_CODES` on `footprintjs/trace`), this pack keeps no copy — and every later time the
+ * bare `⚠ <code>`: the sentence is already in the model's context, and repeating it on every
+ * answer is pure token cost.
  */
-function honestyLine(code: HonestyCode): string {
+function honestyLine(index: ToolpackIndex, code: HonestyCode): string {
+  if (index.explained.has(code)) return `⚠ ${code}`;
+  index.explained.add(code);
   return `⚠ ${code}: ${HONESTY_CODES[code]}`;
 }
 
 /** One `honestyLine` per distinct code, each on its own line after `\n`; '' when exact. */
-function basisLines(codes: readonly HonestyCode[]): string {
-  return [...new Set(codes)].map((code) => `\n${honestyLine(code)}`).join('');
+function basisLines(index: ToolpackIndex, codes: readonly HonestyCode[]): string {
+  return [...new Set(codes)].map((code) => `\n${honestyLine(index, code)}`).join('');
 }
 
 /** Union of untracked sources across a step's bundles. */
@@ -1506,7 +1520,7 @@ function buildTraceNode(
       if (parentLines.length > 0) {
         lines.push('parents:');
         lines.push(...parentLines);
-        for (const code of new Set(parentCodes)) lines.push(honestyLine(code));
+        for (const code of new Set(parentCodes)) lines.push(honestyLine(index, code));
       }
       if (!artifacts.controlDeps) {
         lines.push(
@@ -1518,7 +1532,7 @@ function buildTraceNode(
       if (untracked.length > 0) {
         lines.push(
           `⚠ this step also consumed ${untracked.join('/')} — NOT in the parents list. ` +
-            honestyLine('incomplete-sources'),
+            honestyLine(index, 'incomplete-sources'),
         );
       }
 
@@ -1753,13 +1767,13 @@ function buildBacktrack(
           });
           if (prov.missing === 'not-an-array') {
             return (
-              `'${displayKey(key)}': ${honestyLine('not-an-array')}` +
-              basisLines(prov.basis ?? []) +
+              `'${displayKey(key)}': ${honestyLine(index, 'not-an-array')}` +
+              basisLines(index, prov.basis ?? []) +
               `\nCall backtrack without 'element' to slice it.`
             );
           }
           if (prov.missing !== undefined) {
-            return `'${displayKey(key)}': ${honestyLine(prov.missing)}`;
+            return `'${displayKey(key)}': ${honestyLine(index, prov.missing)}`;
           }
           return (
             `element ${element} is out of range for '${displayKey(key)}' ` +
@@ -1771,10 +1785,13 @@ function buildBacktrack(
             boundedPreview(birth.value, opts.previewChars),
           )} — ` +
           `born at ${birth.runtimeStageId} ("${birth.stageName}", verb: ${birth.verb}, ` +
-          `attribution: ${birth.basis}). ` +
+          `attribution: ${birth.basis}${
+            birth.basis === 'append-verb' ? ' — engine-recorded, exact' : ''
+          }). ` +
           `Drill the producer with trace_node('${birth.runtimeStageId}'), or ask why it wrote this ` +
           `with backtrack({variable: '${displayKey(key)}', before: ${birth.commitIdx + 1}}).` +
-          basisLines([birth.basis, ...(birth.valueBasis ?? [])])
+          // Only an INFERRED birth says why; an exact one keeps its bytes.
+          (birth.basis === 'prefix-inference' ? basisLines(index, [birth.basis]) : '')
         );
       }
 
@@ -1854,14 +1871,16 @@ function buildWhoWrote(index: ToolpackIndex, opts: ResolvedToolpackOptions): Too
           `no tracked write to '${displayKey(path)}'` +
           (beforeStageId !== undefined ? ` before ${beforeStageId}` : '') +
           ` in the commit log.` +
-          basisLines(basis) +
-          (index.knownPaths.has(path) ? '' : unknownKeySuffix(index))
+          (index.knownPaths.has(path) ? '' : unknownKeySuffix(index)) +
+          basisLines(index, basis)
         );
       }
 
       const writerIdx = index.commitLog.indexOf(writer);
       const verb = writer.trace.find((entry) => entry.path === path)?.verb ?? 'set';
-      const read = commitValueAtWithBasis(index.commitLog, writerIdx, path);
+      const read = commitValueAtWithBasis(index.commitLog, writerIdx, path, {
+        initialState: index.initialState,
+      });
       const preview = boundedPreview(read.value, opts.previewChars);
       const untracked = untrackedSourcesOf([writer]);
       return (
@@ -1872,9 +1891,10 @@ function buildWhoWrote(index: ToolpackIndex, opts: ResolvedToolpackOptions): Too
             `get_value('${writer.runtimeStageId}', '${displayKey(path)}') for full`,
           ),
         )}${redactionNote([writer], path)}` +
-        basisLines([...basis, ...read.basis]) +
+        basisLines(index, [...basis, ...read.basis]) +
         (untracked.length > 0
           ? `\n⚠ that step also consumed ${untracked.join('/')}. ${honestyLine(
+              index,
               'incomplete-sources',
             )}`
           : '')
@@ -1921,25 +1941,30 @@ function buildGetValue(index: ToolpackIndex, opts: ResolvedToolpackOptions): Too
       if (!lastWrite.writer) {
         return (
           `no tracked write to '${displayKey(path)}' anywhere in the commit log.` +
-          basisLines(lastWrite.basis) +
-          (index.knownPaths.has(path) ? '' : unknownKeySuffix(index))
+          (index.knownPaths.has(path) ? '' : unknownKeySuffix(index)) +
+          basisLines(index, lastWrite.basis)
         );
       }
 
-      const read = atIdx >= 0 ? commitValueAtWithBasis(index.commitLog, atIdx, path) : undefined;
+      const read =
+        atIdx >= 0
+          ? commitValueAtWithBasis(index.commitLog, atIdx, path, {
+              initialState: index.initialState,
+            })
+          : undefined;
       const value = read?.value;
       if (value === undefined) {
         return (
           `'${displayKey(path)}' has no value as of ${runtimeStageId}` +
           ` (last writer over the whole run: ${lastWrite.writer.runtimeStageId}).` +
-          basisLines(read?.basis ?? ['never-written'])
+          basisLines(index, read?.basis ?? ['never-written'])
         );
       }
 
       const serialized = displayText(safeStringify(value));
       const redacted = redactionNote(index.bundlesOf.get(runtimeStageId), path);
       const header = `VALUE of '${displayKey(path)}' as of ${runtimeStageId}${redacted}:`;
-      const basis = basisLines(read?.basis ?? []);
+      const basis = basisLines(index, read?.basis ?? []);
       if (serialized.length <= cap) return `${header}\n${serialized}${basis}`;
       return (
         `${header}\n${serialized.slice(0, cap)}\n` +

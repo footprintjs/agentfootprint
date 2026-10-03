@@ -570,6 +570,13 @@ describe('defaultSuspectClassifier — valueBasis (UNIT)', () => {
     expect(seeds.map((s) => s.detail?.valueBasis)).toEqual([['nested-rows'], ['nested-rows']]);
   });
 
+  it('attaches nothing when the context has no basisOf (unknown, not exact)', () => {
+    const { basisOf: _omitted, ...ctx } = ctxWith(() => ['nested-rows']);
+    const seeds = defaultSuspectClassifier(ctx);
+    expect(seeds.length).toBe(2);
+    for (const seed of seeds) expect(seed.detail && 'valueBasis' in seed.detail).toBe(false);
+  });
+
   it('leaves the detail byte-identical when the value is exact', () => {
     const seeds = defaultSuspectClassifier(ctxWith(() => []));
     for (const seed of seeds) expect(seed.detail && 'valueBasis' in seed.detail).toBe(false);

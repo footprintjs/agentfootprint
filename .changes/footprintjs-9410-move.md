@@ -18,13 +18,13 @@ bump: minor
 - **One owner for the sentences.** The trace toolpack (`who_wrote`, `get_value`, `trace_node`'s
   parents, `backtrack`'s element mode) and `sliceToBacktrackTrace` kept their own copies of what
   footprintjs's codes mean ("never written … a closure", "reads were not recorded", "the commit
-  log is empty", …). They now print `⚠ <code>: HONESTY_CODES[<code>]`, from footprintjs.
+  log is empty", …). They now print `⚠ <code>: HONESTY_CODES[<code>]`, from footprintjs — the
+  full sentence the FIRST time a code appears in one toolpack instance, the bare `⚠ <code>`
+  after that (the sentence is already in the model's context). An exact element birth
+  (`append-verb`, `whole-value`) keeps its old bytes; only an inferred one
+  (`prefix-inference`) gains its code.
   `who_wrote` / `get_value` / `trace_node` read through the basis twins, so an answer resting
   on rows inside the key (a subflow seed or merge-back) is flagged `nested-rows`, and
   `get_value` no longer answers "no tracked write" for such a key (its known-key check matched
   exact rows only); `sliceToBacktrackTrace` also prints a slice's `notes` (9.33.0). *Migration:* a consumer matching the old sentences matches
   `HONESTY_CODES[code]` (or the `⚠ <code>:` prefix) instead.
-- **`ClassifyContext` gains a required `basisOf(key)`** beside `valueOf(key)` — the same fold's
-  reason codes (`[]` = exact). *Migration:* a hand-built `ClassifyContext` (a custom classifier
-  that calls `defaultSuspectClassifier` with its own context) adds
-  `basisOf: () => []` or the codes it knows.

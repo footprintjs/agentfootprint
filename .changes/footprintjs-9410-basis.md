@@ -7,9 +7,10 @@ footprintjs 9.33.0 added basis twins of its two key readers — `commitValueAtWi
 (a subflow's input seed, an outputMapper merge-back), on the state before the run, on a
 redaction or on a delete carries a reason code (`'nested-rows'`, `'from-initial-state'`,
 `'redacted'`, `'deleted'`, `'never-written'`; each one's sentence is `HONESTY_CODES[code]`).
-agentfootprint's readers now go through them, and the codes ride the answers they already
-returned, as new optional fields that are ABSENT when the answer is exact (an all-exact run
-keeps its bytes):
+agentfootprint's readers now go through them — always with the log's own fold base
+(`snapshot.initialState`, or a subflow's `treeContext.initialState`), so a key nothing seeded
+is never called partial — and the codes ride the answers they already returned, as new
+optional fields that are ABSENT when the answer is exact (an all-exact run keeps its bytes):
 
 - `contextLedger().recordRun(...)` → `RecordedRun.basis?: Record<stateKey, ValueBasis[]>` —
   e.g. `{ history: ['redacted'] }` for a run whose `history` was redacted (the placeholder is no
@@ -18,11 +19,12 @@ keeps its bytes):
   writer's codes, then the value's) — a context source with no writer before its `call-llm`
   now says `['never-written']`.
 - `localizeContextBug(...)` → `SuspectDetail.valueBasis?` on the default classifier's suspects,
-  read through the new `ClassifyContext.basisOf(key)` (see Changed).
+  read through the new optional `ClassifyContext.basisOf(key)` (absent = unknown: no
+  `valueBasis` is attached, so a hand-built context keeps working unchanged).
 
 Pinned: `activeByslot` — written by the injection-engine subflow's merge-back only through rows
-inside the key — answers its MOUNT (`sf-injection-engine#k`) as the writer with
-`['nested-rows']`, and its value with `['nested-rows', 'from-initial-state']` (before
+inside the key — answers its MOUNT (`sf-injection-engine#k`) as the writer, and its value, each with
+`['nested-rows']` (before
 footprintjs 9.33.0 every key query called it never written); a grouped (`dynamic-grouped`)
 loop's inner log answers `lastToolResult` from the subflow's input seed, named by its mount,
 with `['nested-rows']` — the copy-in, not the producing tool-calls stage, so grouped frames

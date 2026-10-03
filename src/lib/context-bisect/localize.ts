@@ -102,9 +102,10 @@ export interface ClassifyContext {
   /**
    * Why `valueOf(key)` is not exact, when it is not — footprintjs's
    * `commitValueAtWithBasis` codes for the same fold (`HONESTY_CODES` on
-   * `footprintjs/trace` has each sentence). `[]` = exact.
+   * `footprintjs/trace` has each sentence). `[]` = exact. ABSENT = unknown (a hand-built
+   * context): no `valueBasis` is attached.
    */
-  readonly basisOf: (key: string) => readonly ValueBasis[];
+  readonly basisOf?: (key: string) => readonly ValueBasis[];
 }
 
 /**
@@ -156,7 +157,7 @@ export function defaultSuspectClassifier(ctx: ClassifyContext): readonly Suspect
     if (!ctx.keysWritten.includes(slotKey)) continue;
     const records = ctx.valueOf(slotKey);
     if (!Array.isArray(records)) continue;
-    const valueBasis = ctx.basisOf(slotKey);
+    const valueBasis = ctx.basisOf?.(slotKey) ?? [];
     for (const record of records as InjectionRecordLike[]) {
       const source = typeof record?.source === 'string' ? record.source : undefined;
       const sourceId = typeof record?.sourceId === 'string' ? record.sourceId : undefined;
@@ -189,7 +190,7 @@ export function defaultSuspectClassifier(ctx: ClassifyContext): readonly Suspect
       | { toolName?: unknown; result?: unknown }
       | undefined;
     if (value && typeof value.toolName === 'string') {
-      const valueBasis = ctx.basisOf('lastToolResult');
+      const valueBasis = ctx.basisOf?.('lastToolResult') ?? [];
       seeds.push({
         kind: 'tool',
         detail: {
@@ -212,6 +213,8 @@ export function defaultSuspectClassifier(ctx: ClassifyContext): readonly Suspect
 
 interface ArtifactIndex {
   readonly commitLog: CommitBundle[];
+  /** The log's fold base (`RuntimeSnapshot.initialState`), for the value basis. */
+  readonly initialState: Record<string, unknown> | undefined;
   readonly lastIdxOf: Map<string, number>;
   readonly readsOf: Map<string, string[]>;
   readonly hasReadTracking: boolean;
@@ -237,7 +240,13 @@ function buildArtifactIndex(artifacts: ContextBugArtifacts): ArtifactIndex {
   };
   visit(artifacts.snapshot.executionTree as StageSnapshot | undefined);
 
-  return { commitLog, lastIdxOf, readsOf, hasReadTracking };
+  return {
+    commitLog,
+    initialState: artifacts.snapshot.initialState as Record<string, unknown> | undefined,
+    lastIdxOf,
+    readsOf,
+    hasReadTracking,
+  };
 }
 
 // ─── Path scoring (max-product over the weighted DAG) ────────────────
@@ -500,7 +509,9 @@ export async function localizeContextBug(
         read =
           idx === undefined
             ? { value: undefined, basis: [] }
-            : commitValueAtWithBasis(index.commitLog, idx, key);
+            : commitValueAtWithBasis(index.commitLog, idx, key, {
+                initialState: index.initialState,
+              });
         reads.set(key, read);
       }
       return read;

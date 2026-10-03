@@ -11,7 +11,8 @@
  *    merge-back ONLY through rows inside the key (`activeByslot␟systemPrompt`,
  *    …). Before footprintjs 9.33.0 every key query answered "never written";
  *    now the writer is the MOUNT (9.34.0 records the merge-back under it) and
- *    both twins say the answer rests on nested rows.
+ *    both twins say the answer rests on nested rows — and, read with the run's
+ *    `initialState`, nothing else (no false 'from-initial-state').
  *
  * Test types (Convention 3): unit (hand-built chart) / integration (real
  * agent runs) / regression (the activeByslot answer).
@@ -109,7 +110,7 @@ describe('contextLedger — basis (UNIT, hand-built chart)', () => {
     expect(recorded?.basis).toEqual({
       history: ['redacted'],
       // This chart never writes it — the ledger says so instead of reading an empty list.
-      activatedInjectionIds: ['never-written', 'from-initial-state'],
+      activatedInjectionIds: ['never-written'],
     });
     // The placeholder is not data: no tool call is read out of it.
     expect(ledger.row('tool', 'lookup')).toBeUndefined();
@@ -120,7 +121,8 @@ describe('contextLedger — basis (UNIT, hand-built chart)', () => {
 describe('activeByslot — answered from nested rows (REGRESSION)', () => {
   it('the writer is the injection-engine mount; both twins say nested-rows', async () => {
     const agent = await runEchoAgent();
-    const log = agent.getSnapshot()!.commitLog;
+    const snapshot = agent.getSnapshot()!;
+    const log = snapshot.commitLog;
 
     const writer = findLastWriterWithBasis(log, 'activeByslot');
     expect(writer.writer?.runtimeStageId).toMatch(/^sf-injection-engine#\d+$/);
@@ -130,8 +132,13 @@ describe('activeByslot — answered from nested rows (REGRESSION)', () => {
     expect(rows.length).toBeGreaterThan(0);
     expect(rows.every((t) => t.path !== 'activeByslot')).toBe(true);
 
-    const read = commitValueAtWithBasis(log, log.length - 1, 'activeByslot');
+    // With the run's fold base, nothing seeded the key before the run, so the answer is
+    // NOT partial: only 'nested-rows' (without initialState the twin cannot know that and
+    // adds 'from-initial-state' — the readers always pass the base they have).
+    const read = commitValueAtWithBasis(log, log.length - 1, 'activeByslot', {
+      initialState: snapshot.initialState,
+    });
     expect(read.value).toEqual({ systemPrompt: [], messages: [], tools: [] });
-    expect(read.basis).toEqual(['nested-rows', 'from-initial-state']);
+    expect(read.basis).toEqual(['nested-rows']);
   });
 });
