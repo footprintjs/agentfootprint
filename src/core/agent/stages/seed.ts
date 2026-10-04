@@ -475,13 +475,12 @@ export function buildSeedStage(
     });
     recordDecisions(scope, verdict.decisions);
     if (verdict.kind === 'deny') {
-      // Seed the run anyway, with the content as it stood when it was
-      // refused, then stop. Committing it costs nothing (a refusal is a fact
-      // about a run, and hiding what was refused would make the record
-      // useless), and a fully-seeded state means `resumeOnError` and every
-      // recorder see the shape they expect rather than a half-built one.
-      seedFrom(scope, verdict.content, deps, decorate);
-      if (deps.timeClock !== undefined) (await import('./timeLayer.js')).stampClock(scope, deps);
+      // A refusal is recorded, but is NOT an admitted conversation. Do not
+      // seed even an empty history: hosting/durability watches history writes
+      // and would overwrite the last accepted session before this run raises.
+      // Do not restore a retry's history either — it already contains the
+      // failing turn, and there is no recorded boundary for a safe prefix.
+      // Agent.run's finally clears the unconsumed continuation side channels.
       scope.messageDeniedReason = verdict.reason;
       scope.messageDeniedPhase = 'input';
       scope.messageDeniedBy = verdict.middleware;
@@ -519,8 +518,8 @@ function fileTime(scope: TypedScope<AgentState>, deps: SeedStageDeps): void | Pr
  * the ONE place that entry is written (9.112.2).
  *
  * `message` is what the `'input'` chain let through (the caller's message
- * when there is no chain; on a refusal, the content as it stood when it was
- * refused), so a rewrite — a scrub, a stated quote — is the entry the model
+ * when there is no chain). A refusal never calls this writer. A rewrite —
+ * a scrub, a stated quote — is the entry the model
  * reads on a continued turn exactly as on a first one.
  *
  *   • fresh run → `[{ user: message }]`

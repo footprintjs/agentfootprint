@@ -250,16 +250,15 @@ describe('input middleware on a continued turn — a refusal', () => {
     },
   ];
 
-  it('raises MessageDeniedError, never calls the model, and commits the refused content the way a first turn does', async () => {
-    // First turn, refused: the committed user entry is the content as it
-    // stood when the chain refused it.
+  it('raises MessageDeniedError without admitting either a fresh or continued user entry', async () => {
     const firstSpy = spyProvider();
     const fresh = build(firstSpy.provider, rewriteThenDeny);
     await expect(fresh.run({ message: 'a secret' })).rejects.toThrow(MessageDeniedError);
     expect(firstSpy.requests).toHaveLength(0);
-    const firstTurnEntry = committedHistory(fresh).at(-1);
+    expect(committedHistory(fresh)).toEqual([]);
+    expect(fresh.checkpoint()).toBeUndefined();
 
-    // Continued turn, refused: the same entry, after the stored conversation.
+    // The original admitted checkpoint is still the caller's to continue.
     const spy = spyProvider();
     const agent = build(spy.provider, rewriteThenDeny);
     const stored = await firstTurn(agent);
@@ -267,8 +266,13 @@ describe('input middleware on a continued turn — a refusal', () => {
       MessageDeniedError,
     );
     expect(spy.requests).toHaveLength(1);
-    expect(firstTurnEntry).toEqual({ role: 'user', content: 'PREFIX\n\na secret' });
-    expect(committedHistory(agent)).toEqual([...stored.history, firstTurnEntry]);
+    expect(committedHistory(agent)).toEqual([]);
+    expect(agent.checkpoint()).toBeUndefined();
+    await agent.run({ message: 'q2', continueFrom: stored });
+    expect(committedHistory(agent)).toEqual([
+      ...stored.history,
+      { role: 'user', content: 'PREFIX\n\nq2' },
+    ]);
   });
 });
 

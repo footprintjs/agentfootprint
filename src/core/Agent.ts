@@ -2614,7 +2614,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * hand it back next turn, and the agent continues where it left off — across
    * a restart, a deploy, or a different machine.
    *
-   * Returns `undefined` before any run has completed.
+   * Returns `undefined` before any run has completed or when the latest run
+   * was refused by input middleware. A refused input is not an admitted
+   * conversation. Keep an earlier accepted checkpoint to continue explicitly;
+   * `followUp()` after input denial raises `NoConversationError`.
    *
    * **Read from the run's own recording, not from a second copy.** The history
    * comes from `getLastSnapshot().sharedState.history` — the state the run
@@ -2644,14 +2647,18 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * const conversation = agent.checkpoint();          // persist anywhere
    * // …a restart later, on a fresh Agent:
    * await agent.run({ message: 'Make it three.', continueFrom: conversation });
-   * // `continueFrom` runs the 'input' middleware chain on the new turn; a user
-   * // entry appended to `history` by hand and passed to `resumeOnError` skips it.
+   * // `continueFrom` admits the new turn through the 'input' middleware chain.
+   * // `resumeOnError` rechecks originalInput but replays stored history as-is;
+   * // it does not rewrite entries manually appended to that history.
    * ```
    */
   checkpoint(): AgentRunCheckpoint | undefined {
     const snapshot = this.getLastSnapshot();
     if (!snapshot) return undefined;
     const state = snapshot.sharedState as Partial<AgentState> | undefined;
+    // Admission is decided by seed, before any conversation state is written.
+    // Do not manufacture a blank replay carrier for an unadmitted attempt.
+    if (state?.messageDeniedPhase === 'input') return undefined;
     const recorded = (state?.history ?? []) as readonly LLMMessage[];
     const history = structuredClone(recorded) as LLMMessage[];
     if (this.lastRunAnswer !== undefined && this.lastRunAnswer.length > 0) {

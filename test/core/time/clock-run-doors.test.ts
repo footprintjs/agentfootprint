@@ -268,14 +268,15 @@ describe('seed stamps one clock row on every path', () => {
     expect(ofKind<ClockRow>(agent, 'clock')).toMatchObject([{ now: NOW, zone: LA }]);
   });
 
-  it('a message chain that denies — the refused turn still carries its clock', async () => {
+  it('a message chain that denies — no conversation turn or clock is admitted', async () => {
     const agent = agentWith([answer('hi')], (b) =>
       b.messageMiddleware({ name: 'no', onMessage: () => deny('refused') }).time({ zone: LA }),
     );
     await expect(agent.run({ message: 'hello', time: { now: NOW } })).rejects.toThrow(
       MessageDeniedError,
     );
-    expect(ofKind<ClockRow>(agent, 'clock')).toMatchObject([{ now: NOW, zone: LA }]);
+    expect(ofKind<ClockRow>(agent, 'clock')).toEqual([]);
+    expect(agent.checkpoint()).toBeUndefined();
   });
 });
 
