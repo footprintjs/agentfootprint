@@ -50,6 +50,31 @@ await agent.followUp('my account is 12345678');
 
 Pinned by `test/core/agent-middleware-continuation.test.ts`.
 
+## A refused input is not a conversation
+Seed records the chain's decisions and refusal flags, then breaks before
+`seedFrom`. It writes no `history` or `userMessage`, restores no continuation
+state, and files no conversation clock. `Agent.checkpoint()` returns
+`undefined`; `followUp()` after that attempt raises `NoConversationError`.
+Keep the earlier accepted checkpoint and pass it explicitly as `continueFrom`.
+
+This is a write-time boundary, not a checkpoint scrub. Hosted async/sync
+durability watches history commits directly, so writing even an empty history
+would overwrite an accepted session. No history write means all durability
+modes retain their last accepted checkpoint. A refused `resumeOnError` follows
+the same rule: its supplied history already contains the failing turn, and
+guessing a safe prefix from the last user message would be unsound. The caller's
+checkpoint is unchanged; the run's finally clears the pending restoration.
+
+The refusal remains visible through `middlewareDecisions` and
+`agentfootprint.middleware.decision`. No LLM work is seeded, so the integrity
+disposition reports `workExisted: false`. Allowed paths, output refusals and
+tool pause/resume are unchanged. Previously persisted conversations are not
+rescanned or repaired. Audit input, rewrite pairs and middleware-authored
+reasons still require their own retention policy.
+
+Pinned by `test/core/input-admission.test.ts` and
+`test/hosting/input-denial-durability.test.ts`.
+
 ## An `'input'` scrub does not scrub the record
 The ledger row is NOT the only copy of the pre-scrub text. The model, the
 committed `history`, `checkpoint().history` and every `agentfootprint.*`
@@ -67,11 +92,7 @@ redaction policy today):
 - the run's input as passed — the `run.entry` payload every flow recorder
   receives;
 - a crash checkpoint — `RunCheckpointError.checkpoint.originalInput.message`
-  (open issue, CHANGELOG 9.112.2);
-- a refused turn — `deny` commits the content as it stood when refused into
-  `history`, and a turn continued from it (`followUp()`, a `standingAgent`
-  session under `durability: 'async'` or `'sync'` — any mode except the
-  default `'exit'`) sends it to the model (open issue, CHANGELOG 9.112.2).
+  (open issue, CHANGELOG 9.112.2).
 
 The user-facing version, with what to do about each, is the docs page
 `docs-next/content/docs/build/middleware.mdx` ("Read this before you scrub

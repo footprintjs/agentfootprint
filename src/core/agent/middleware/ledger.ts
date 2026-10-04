@@ -26,7 +26,7 @@
  * `'input'` phase the seed stage commits the transformed message, so the
  * model and the conversation never hold the original — but this row is NOT
  * its only copy: the run's input as passed (`run.entry` payload), a crash
- * checkpoint's `originalInput`, a refused turn's history entry and a paused
+ * checkpoint's `originalInput` and a paused
  * run's checkpoint (`RunnerPauseOutcome.checkpoint`, which `standingAgent`
  * stores for a paused session) keep it too — the full list, and what an app
  * must redact, is in `./README.md`, the one place it is maintained. An
