@@ -38,6 +38,9 @@ import type { AgentState } from '../types.js';
 import type { FindingsLedger } from '../findings/types.js';
 import { presentationZoneOf } from '../../time/rows.js';
 import type { BoundPresentation } from '../../time/present.js';
+import { withheldByOutputPolicy } from './outputAdmission.js';
+
+type FinalStage = (scope: TypedScope<AgentState>) => void | Promise<void>;
 
 /**
  * The stage body, with the answer passed IN.
@@ -63,6 +66,7 @@ const captureTurnPayload = (
   commitValidated = false,
   answerCoverage?: AnswerCoverage,
   answerAssessment?: AnswerAssessmentData,
+  releaseTokens = false,
 ): void => {
   const iteration = scope.iteration;
   scope.finalContent = answer;
@@ -86,6 +90,8 @@ const captureTurnPayload = (
 
   if (commitValidated) {
     scope.answerValidationCommitted = true;
+  }
+  if (commitValidated || releaseTokens) {
     // The stream carries exactly the captured candidate, including any
     // earlier output transformation. Replaying provider chunks would undo it.
     if (answer.length > 0) {
@@ -133,9 +139,10 @@ const captureTurnPayload = (
   });
 };
 
-export const prepareFinalStage = (scope: TypedScope<AgentState>): void => {
-  captureTurnPayload(scope, scope.llmLatestContent);
+const prepareFinal = (scope: TypedScope<AgentState>, releaseTokens = false): void => {
+  captureTurnPayload(scope, scope.llmLatestContent, false, undefined, undefined, releaseTokens);
 };
+export const prepareFinalStage = (scope: TypedScope<AgentState>): void => prepareFinal(scope);
 
 /**
  * Configured answer validation is the only door that may release its candidate.
@@ -188,15 +195,22 @@ function withheldByValidation(scope: TypedScope<AgentState>): boolean {
  * chart (`./answerCoverage.ts` · `withAnswerCoverage`). The key is read only
  * under this arm: a run that asked for neither never reads it.
  */
-export const prepareFinalWithLimitsAsDataStage = (scope: TypedScope<AgentState>): void => {
+const prepareFinalWithLimitsAsData = (
+  scope: TypedScope<AgentState>,
+  releaseTokens = false,
+): void => {
   const limits = scope.answerCoverage;
   captureTurnPayload(
     scope,
     scope.llmLatestContent,
     false,
     limits === undefined ? undefined : copyAnswerCoverage(limits),
+    undefined,
+    releaseTokens,
   );
 };
+export const prepareFinalWithLimitsAsDataStage = (scope: TypedScope<AgentState>): void =>
+  prepareFinalWithLimitsAsData(scope);
 
 /**
  * `.limitsTravelWithTheAnswer()`'s half of prepare-final — the SAME stage,
@@ -217,14 +231,16 @@ export const prepareFinalWithLimitsAsDataStage = (scope: TypedScope<AgentState>)
  * to a check for values the MODEL could not support would be asking whether
  * the library grounded itself.
  */
-export const prepareFinalWithLimitsStage = (scope: TypedScope<AgentState>): void => {
+const prepareFinalWithLimits = (scope: TypedScope<AgentState>, releaseTokens = false): void => {
   const declared = scope.coverageDeclared;
   const answer =
     declared !== undefined && declared.length > 0
       ? composeAnswerWithCoverage(scope.llmLatestContent, declared)
       : scope.llmLatestContent;
-  captureTurnPayload(scope, answer);
+  captureTurnPayload(scope, answer, false, undefined, undefined, releaseTokens);
 };
+export const prepareFinalWithLimitsStage = (scope: TypedScope<AgentState>): void =>
+  prepareFinalWithLimits(scope);
 
 /**
  * The run's presentation zone (the time layer) — the zone of the turn's
@@ -267,8 +283,9 @@ async function timeLinesOf(scope: TypedScope<AgentState>): Promise<TimeLimitLine
  * checks' lines and the wall-clock sources (`timeLinesOf`). The typed record
  * keeps the declared instants; only the person's line changes.
  */
-export const prepareFinalWithLimitsInZoneStage = async (
+const prepareFinalWithLimitsInZone = async (
   scope: TypedScope<AgentState>,
+  releaseTokens = false,
 ): Promise<void> => {
   const declared = scope.coverageDeclared ?? [];
   const time = await timeLinesOf(scope);
@@ -283,8 +300,10 @@ export const prepareFinalWithLimitsInZoneStage = async (
           time,
         )
       : scope.llmLatestContent;
-  captureTurnPayload(scope, answer);
+  captureTurnPayload(scope, answer, false, undefined, undefined, releaseTokens);
 };
+export const prepareFinalWithLimitsInZoneStage = (scope: TypedScope<AgentState>): Promise<void> =>
+  prepareFinalWithLimitsInZone(scope);
 
 /**
  * `.limitsTravelWithTheAnswer()` on an agent whose inputs layer is armed
@@ -314,7 +333,8 @@ export const prepareFinalWithLimitsInZoneStage = async (
 export function prepareFinalWithLimitsAndAssumedStage(
   readsRewrites: boolean,
   inZone = false,
-): (scope: TypedScope<AgentState>) => Promise<void> {
+  releaseTokens = false,
+): FinalStage {
   return async (scope) => {
     const { assumedBlockOf } = await import('../arguments/serve.js');
     const declared = scope.coverageDeclared ?? [];
@@ -339,7 +359,7 @@ export function prepareFinalWithLimitsAndAssumedStage(
             time,
           )
         : scope.llmLatestContent;
-    captureTurnPayload(scope, answer);
+    captureTurnPayload(scope, answer, false, undefined, undefined, releaseTokens);
   };
 }
 
@@ -348,6 +368,7 @@ export function prepareFinalWithLimitsAndAssumedStage(
 /** Which PrepareFinal body the final branch mounts — the arms both chart builders read. */
 export interface FinalStageArms {
   readonly hasAnswerValidation?: boolean;
+  readonly releaseOutputTokens?: true;
   readonly coverageLimitsAsData?: boolean;
   readonly attachCoverageLimits?: boolean;
   /** The inputs layer is armed; `rewrites` — a before-tool chain can rewrite a filled value. */
@@ -368,30 +389,54 @@ export interface FinalStageArms {
 export function prepareFinalFor(
   arms: FinalStageArms,
 ): (scope: TypedScope<AgentState>) => void | Promise<void> {
+  const stage = finalStageFor(arms);
+  if (arms.releaseOutputTokens !== true) return stage;
+  return (scope) => {
+    if (withheldByOutputPolicy(scope)) return;
+    return stage(scope);
+  };
+}
+
+/** Pick the existing composer; output admission wraps it without recomposing the answer. */
+function finalStageFor(arms: FinalStageArms): FinalStage {
+  const releaseTokens = arms.releaseOutputTokens === true;
+  // A stage's second argument belongs to the engine. Bind delivery here,
+  // never add a policy parameter to the function the executor invokes.
+  const select = (
+    original: FinalStage,
+    body: (scope: TypedScope<AgentState>, releaseTokens: boolean) => void | Promise<void>,
+  ): FinalStage => (releaseTokens ? (scope) => body(scope, true) : original);
   if (arms.answerLayer !== undefined) {
-    return prepareFinalWithAnswerLayerStage({
-      validation: arms.hasAnswerValidation === true,
-      limitsAsData: arms.coverageLimitsAsData === true,
-      limits: arms.attachCoverageLimits === true,
-      ...(arms.inputsLayer !== undefined && {
-        assumed: { readsRewrites: arms.inputsLayer.rewrites === true },
-      }),
-      standingLine: arms.answerLayer.standingLine === true,
-      ...(arms.timeLayer === true && { inZone: true }),
-    });
+    return prepareFinalWithAnswerLayerStage(
+      {
+        validation: arms.hasAnswerValidation === true,
+        limitsAsData: arms.coverageLimitsAsData === true,
+        limits: arms.attachCoverageLimits === true,
+        ...(arms.inputsLayer !== undefined && {
+          assumed: { readsRewrites: arms.inputsLayer.rewrites === true },
+        }),
+        standingLine: arms.answerLayer.standingLine === true,
+        ...(arms.timeLayer === true && { inZone: true }),
+      },
+      releaseTokens,
+    );
   }
   const inZone = arms.timeLayer === true;
   return arms.hasAnswerValidation === true
     ? prepareFinalWithValidationStage
     : arms.coverageLimitsAsData === true
-    ? prepareFinalWithLimitsAsDataStage
+    ? select(prepareFinalWithLimitsAsDataStage, prepareFinalWithLimitsAsData)
     : arms.attachCoverageLimits === true
     ? arms.inputsLayer !== undefined
-      ? prepareFinalWithLimitsAndAssumedStage(arms.inputsLayer.rewrites === true, inZone)
+      ? prepareFinalWithLimitsAndAssumedStage(
+          arms.inputsLayer.rewrites === true,
+          inZone,
+          releaseTokens,
+        )
       : inZone
-      ? prepareFinalWithLimitsInZoneStage
-      : prepareFinalWithLimitsStage
-    : prepareFinalStage;
+      ? select(prepareFinalWithLimitsInZoneStage, prepareFinalWithLimitsInZone)
+      : select(prepareFinalWithLimitsStage, prepareFinalWithLimits)
+    : select(prepareFinalStage, prepareFinal);
 }
 
 /** The answer layer's standing as detached plain data — the fields the projection declares, nothing else. */
@@ -421,16 +466,19 @@ function copyAssessment(value: AnswerAssessmentData): AnswerAssessmentData {
  * one composer (`coverage/answer.ts` · `composeAnswerWithCoverage`); with
  * nothing to append it is the model's answer, byte for byte.
  */
-export function prepareFinalWithAnswerLayerStage(o: {
-  readonly validation: boolean;
-  readonly limitsAsData: boolean;
-  readonly limits: boolean;
-  /** The inputs layer is armed beside the prose limits block. */
-  readonly assumed?: { readonly readsRewrites: boolean };
-  readonly standingLine: boolean;
-  /** The time layer is armed — `Period:` lines render in the clock's zone. */
-  readonly inZone?: true;
-}): (scope: TypedScope<AgentState>) => Promise<void> {
+export function prepareFinalWithAnswerLayerStage(
+  o: {
+    readonly validation: boolean;
+    readonly limitsAsData: boolean;
+    readonly limits: boolean;
+    /** The inputs layer is armed beside the prose limits block. */
+    readonly assumed?: { readonly readsRewrites: boolean };
+    readonly standingLine: boolean;
+    /** The time layer is armed — `Period:` lines render in the clock's zone. */
+    readonly inZone?: true;
+  },
+  releaseTokens = false,
+): FinalStage {
   return async (scope) => {
     const filed = scope.$getValue('answerAssessment') as AnswerAssessmentData | undefined;
     const assessed = filed === undefined ? undefined : copyAssessment(filed);
@@ -447,6 +495,7 @@ export function prepareFinalWithAnswerLayerStage(o: {
         false,
         limits === undefined ? undefined : copyAnswerCoverage(limits),
         assessed,
+        releaseTokens,
       );
       return;
     }
@@ -478,6 +527,6 @@ export function prepareFinalWithAnswerLayerStage(o: {
             time,
           )
         : scope.llmLatestContent;
-    captureTurnPayload(scope, answer, false, undefined, assessed);
+    captureTurnPayload(scope, answer, false, undefined, assessed, releaseTokens);
   };
 }

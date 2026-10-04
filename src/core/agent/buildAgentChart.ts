@@ -290,6 +290,8 @@ export interface AgentChartDeps {
 
   /** Opt-in terminal guard and one committed token; absent preserves the original final stage. */
   readonly hasAnswerValidation?: boolean;
+  /** Output middleware owns delivery: publish only the final captured answer. */
+  readonly releaseOutputTokens?: true;
 
   /**
    * The time layer (`.time()`) is armed: under `attachCoverageLimits`, the

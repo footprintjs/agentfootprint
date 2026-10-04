@@ -27,7 +27,7 @@ const agent = Agent.create({ provider, model })
 
 Five optional keys, one per moment, in the order the loop reaches them. Autocomplete on an empty `{}` is the loop.
 
-**It is sugar, and provably so.** Each key is forwarded to the door that already owned it, so the agent above is byte-for-byte the agent five separate calls build — same requests on the wire, same rows in the ledger. That equivalence is pinned per key by tests.
+**The existing doors still own policy.** Each key forwards to the middleware/window machinery already responsible for that moment, preserving requests and decision rows. The phase declaration also controls answer delivery: `.act({ input: [...] })` can promise input-only rules, while generic `.messageMiddleware(...)` may inspect output and therefore holds drafts. Output-governed runs release the captured answer once after acceptance, or emit an API-boundary `error.fatal` on refusal. See [output admission](doc:middleware#output-policy-holds-drafts-until-the-answer-is-accepted).
 
 **Call it once.** A second `.act()` throws: two posture blocks put the answer to "what does this agent do at each moment?" in two places, with the later one silently winning. Adding one rule to an agent somebody else built is what the [individual doors](#composing-incrementally) are for.
 

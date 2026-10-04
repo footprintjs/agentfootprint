@@ -3094,8 +3094,17 @@ export class AgentBuilder {
    * `scope.history` — the window strategies, the injections, all three slots,
    * the bytes on the wire and every slice taken afterwards — so the
    * transformed text is what the whole run agrees was said. The `'output'`
-   * half runs where the final answer is captured, so the record and the caller
-   * receive the same string.
+   * half runs before final capture. Configuring this door withholds provider
+   * draft tokens and `stream.llm_end.content` (marked `contentWithheld: true`).
+   * An accepted run emits its captured final answer once; a refused output
+   * emits no answer or `turn_end` and makes no final memory write. The API
+   * boundary emits `error.fatal` so public streams can close.
+   *
+   * This door may inspect both phases. For input-only rules with immediate
+   * draft streaming, declare `.act({ input: [rule] })`. Output policy is not
+   * audit erasure: raw model content and rewrite evidence remain in the run.
+   * Coverage/standing text is composed after the output rule; policy approval
+   * is not answer validation.
    *
    * `deny(reason)` at either phase raises a `MessageDeniedError` rather than
    * returning. At `'input'` there is no model to tell; at `'output'` the

@@ -83,7 +83,47 @@ At the very top of the run, **before the message is committed**. Everything down
 
 That holds on **every** turn. A continued conversation — `run({ message, continueFrom })`, `followUp()`, a stored session behind `standingAgent` — appends the message the chain let through, so the stored history keeps the rewritten turn, the same string `checkpoint().originalInput.message` names. (Before 9.112.2 the chain ran on a continued turn but its output was discarded: the model was sent, and the conversation stored, the raw message, while the ledger row and `userMessage` held the rewrite.)
 
-`'output'` runs at the moment the run knows this turn is the final answer, so the caller and the record receive the same string.
+`'output'` runs when Route identifies a would-be final answer, before final capture.
+
+### Output policy holds drafts until the answer is accepted
+
+A nonempty `.act({ output: [...] })` chain holds provider draft tokens for the
+whole run, including tool iterations and schema retries. `stream.llm_end` still
+reports usage and timing, but its `content` is empty and `contentWithheld` is
+`true`. That marker means text was withheld, not that the model returned nothing.
+
+After the chain accepts an answer, final capture emits one `stream.token` with
+the captured answer (unless it is empty), then `agent.turn_end`. The returned
+answer, the token and the final assistant memory entry agree, including an
+output rewrite. This also works with complete-only providers.
+
+<CodeFile path="examples/features/90-output-admission.ts" region="output-admission" title="Hold the draft; deliver the captured rewrite once" />
+
+A refusal produces no final answer token, `turn_end` or final memory write.
+`Agent.run()` / `resume()` surface the refusal, and their API boundary emits a
+content-free `error.fatal` event so public streams close. The existing
+`middleware.decision` event still identifies the rule and its verdict. A thrown
+rule, an unsupported `ask`, or a non-text rewrite is also a refusal.
+
+Generic `.messageMiddleware(...)` may inspect both phases, even if its callback
+manually branches on `phase`. It therefore holds drafts too. Declare genuinely
+input-only rules through `.act({ input: [rule] })` to retain immediate streaming.
+No message chain, an empty output list, and declared input-only rules keep their
+existing streaming behavior.
+
+**This protects answer delivery, not every copy of the data.** Raw model content,
+rewrite pairs, earlier tool history and checkpoint audit state remain available
+to recorders. It does not sanitize every typed event or undo earlier tool
+effects. A denial after earlier iterations may be wrapped in
+`RunCheckpointError`; its cause is `MessageDeniedError`. Composed pipelines
+retain their existing error propagation behavior, so this is not a guarantee
+that a refused child stops the entire pipeline.
+
+Coverage and standing lines are still composed *after* the output rule: releasing
+one captured answer does not mean that rule inspected those appended lines.
+Likewise, policy acceptance does not set `answerValidationCommitted`, and a
+`runTyped` fallback created after the run is outside this chart's output policy.
+Protect raw records separately before storing or sharing them.
 
 ## The ledger: a scrub that hides its scrubbing poisons every slice
 

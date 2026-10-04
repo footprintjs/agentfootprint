@@ -358,7 +358,10 @@ export interface LLMStartPayload {
 
 export interface LLMEndPayload {
   readonly iteration: number;
+  /** Draft text, or an empty string when contentWithheld is true. */
   readonly content: string;
+  /** An output policy withheld draft text. This does not mean the model returned no text. */
+  readonly contentWithheld?: true;
   readonly toolCallCount: number;
   readonly usage: {
     readonly input: number;
