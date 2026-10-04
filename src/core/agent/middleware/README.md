@@ -6,14 +6,16 @@ Trace: `ledger.ts` — one writer for one committed key, where a chain's decisio
 become record.
 Fold: `rewrites.ts` — which ruled argument a before-tool rewrite superseded, read
 off that key (honesty layer 2).
-Support: `errors.ts`, `index.ts`.
+Support: `errors.ts`, `messagePhase.ts`, `index.ts`.
 
 ## What it reads / what it writes
+
 - Reads the call (or its result) and the caller's own middleware list.
 - Writes the decisions through `ledger.ts` only; `deny` raises
   `MessageDeniedError`.
 
 ## The one law here
+
 Every decision is recorded, including the boring ones. A chain that allowed
 silently and a chain that never ran must not look the same afterwards.
 
@@ -75,6 +77,37 @@ reasons still require their own retention policy.
 Pinned by `test/core/input-admission.test.ts` and
 `test/hosting/input-denial-durability.test.ts`.
 
+## Output admission: one policy owner, one delivery owner
+
+`messagePhase.ts` owns phase-bound wrappers and their private build-time
+metadata. Only `.act({ input })` wrappers promise not to inspect output; generic
+message middleware is conservatively output-governed. The wrappers preserve
+the opposite phase's existing allow row. Each library-owned wrapper is frozen
+so that promise cannot outlive its phase guard; caller-owned rules are not
+frozen. No callback inspection or new ledger.
+
+`Agent.buildChart` uses that declaration to hold draft tokens and withhold
+`llm_end.content` while retaining usage and the `contentWithheld` marker.
+Route still walks the chain and `ledger.ts` still records its decisions.
+`prepareFinalFor` installs `outputAdmission.ts`'s guard before the selected
+composer/capture, so an output refusal cannot write the final answer or memory.
+Acceptance releases one captured answer token from `captureTurnPayload`.
+`finalizeResult` owns the output refusal's content-free `error.fatal` and typed
+error at the API boundary, shared by run/resume. The engine broke cleanly, so
+its `onRunFailed` bridge does not fire. That terminal closes public streams
+without reporting a successful turn.
+
+Stage callbacks take only scope; build-time delivery flags are bound in
+closures, never read from the engine's extra callback arguments. Unarmed stages
+keep their original entry points. Policy acceptance is not answer validation.
+Coverage/standing composition still follows the rule; raw drafts and audit
+state remain available. This is neither audit erasure nor pipeline-wide refusal
+propagation, and `runTyped` fallbacks remain outside the chart policy.
+
+Pinned by `test/core/output-admission.test.ts`,
+`test/core/output-admission-edges.test.ts`, and
+`test/hosting/output-admission.test.ts`.
+
 ## An `'input'` scrub does not scrub the record
 The ledger row is NOT the only copy of the pre-scrub text. The model, the
 committed `history`, `checkpoint().history` and every `agentfootprint.*`
@@ -99,6 +132,8 @@ The user-facing version, with what to do about each, is the docs page
 secrets").
 
 ## Files
+
+- `messagePhase.ts` — phase-bound wrappers and conservative output declaration.
 - `runChain.ts` — the Chain-of-Responsibility driver.
 - `outcomes.ts` — `allow` / `deny` / `ask`, as smart constructors.
 - `ledger.ts` — `recordDecisions`.

@@ -109,8 +109,10 @@ export interface CallLLMStageDeps {
   readonly temperature?: number;
   /** Optional max output tokens. */
   readonly maxTokens?: number;
-  /** Answer validation owns committed delivery; keep all provider drafts off the public token channel. */
+  /** A terminal policy owns delivery; keep provider drafts off the token channel. */
   readonly suppressDraftTokens?: boolean;
+  /** Output middleware has not judged this draft; keep lifecycle/usage, not its text. */
+  readonly withholdDraftContent?: true;
   /** Read recovery state only on an agent whose evidence gate can revise. */
   readonly hasEvidenceRecovery?: boolean;
   /**
@@ -1108,7 +1110,12 @@ export function buildCallLLMStage(
       // Under the arm, the content as the stream showed it (9.114.2) — the
       // committed `llmLatestContent` below keeps what the model sent.
       content:
-        peel !== undefined ? peel.withoutReservedMembers(response.content).text : response.content,
+        deps.withholdDraftContent === true
+          ? ''
+          : peel !== undefined
+          ? peel.withoutReservedMembers(response.content).text
+          : response.content,
+      ...(deps.withholdDraftContent === true && { contentWithheld: true as const }),
       toolCallCount: response.toolCalls.length,
       usage: response.usage,
       stopReason: response.stopReason,

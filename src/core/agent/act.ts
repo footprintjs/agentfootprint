@@ -32,7 +32,7 @@
  * that cannot drift from the type it is validating.
  */
 
-import { allow } from './middleware/outcomes.js';
+import { messageAt } from './middleware/messagePhase.js';
 import type { MessageMiddleware, ToolMiddleware } from './middleware/types.js';
 import { actKeyFor, LOOP_MOMENTS, type ActKey, type LoopMoment } from './moments.js';
 import type { WindowStrategy } from './window/strategy.js';
@@ -43,7 +43,8 @@ import type { WindowStrategy } from './window/strategy.js';
  * The declaration order below is the order the loop reaches them.
  */
 export interface ActOptions {
-  /** The user's message, before the run commits it. */
+  /** The user's message, before the run commits it. Input-only rules do not
+   *  withhold provider draft streaming. */
   readonly input?: readonly MessageMiddleware[];
   /** Every tool call, before it is dispatched. */
   readonly beforeTool?: readonly ToolMiddleware[];
@@ -51,7 +52,9 @@ export interface ActOptions {
   readonly afterTool?: readonly ToolMiddleware[];
   /** What the live context window keeps, at each iteration boundary. */
   readonly window?: WindowStrategy;
-  /** The final answer, before the caller receives it. */
+  /** The answer before final capture. A nonempty output chain withholds
+   *  provider drafts and releases the captured answer once after acceptance;
+   *  refusal stops delivery and final memory writes. Not audit erasure. */
   readonly output?: readonly MessageMiddleware[];
 }
 
@@ -73,23 +76,6 @@ export interface ResolvedAct {
   readonly message: readonly MessageMiddleware[];
   readonly tool: readonly ToolMiddleware[];
   readonly window?: WindowStrategy;
-}
-
-/**
- * Restrict a message middleware to ONE phase.
- *
- * `.messageMiddleware()` attaches a link to both halves of the boundary and
- * lets it read `msg.phase`; the bundle names the phases instead, so an entry
- * written for one of them is wrapped in exactly the guard a person writes by
- * hand today. The pass-through at the other phase is a real walk with a real
- * row, because it is a real link in the chain — the same run, the same
- * record, whichever spelling put it there.
- */
-function onlyAt(phase: 'input' | 'output', mw: MessageMiddleware): MessageMiddleware {
-  return {
-    name: mw.name,
-    onMessage: (msg) => (msg.phase === phase ? mw.onMessage(msg) : allow()),
-  };
 }
 
 function assertList(value: unknown, key: string): readonly unknown[] {
@@ -159,10 +145,10 @@ export function resolveAct(options: ActOptions): ResolvedAct {
 
   const message: MessageMiddleware[] = [];
   for (const mw of input) {
-    message.push(output.includes(mw) ? mw : onlyAt('input', mw));
+    message.push(output.includes(mw) ? mw : messageAt('input', mw));
   }
   for (const mw of output) {
-    if (!input.includes(mw)) message.push(onlyAt('output', mw));
+    if (!input.includes(mw)) message.push(messageAt('output', mw));
   }
 
   // ── The tool moments ────────────────────────────────────────────────

@@ -275,6 +275,7 @@ import type {
 } from './agent/types.js';
 import { buildRouteDeciderStage } from './agent/stages/route.js';
 import { withAnswerValidation } from './agent/stages/answerValidation.js';
+import { hasOutputMiddleware } from './agent/middleware/messagePhase.js';
 import { withAnswerCoverage } from './agent/stages/answerCoverage.js';
 import type { AnswerCoverage } from './agent/coverage/answer.js';
 import {
@@ -4127,7 +4128,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       }
     }
     // Message-boundary refusal (7.18+) — a `messageMiddleware` returned
-    // `deny`. The stage wrote the flags and (at 'input') broke the chart. We
+    // `deny`. The stage wrote the flags and stopped delivery. We
     // surface the typed error here, the same way a policy halt is surfaced,
     // because a refusal must never be mistaken for an answer: at 'input' no
     // model was ever asked, and at 'output' the middleware has just declined
@@ -4138,6 +4139,24 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         'messageDeniedReason' | 'messageDeniedPhase' | 'messageDeniedBy'
       >;
       if (state.messageDeniedReason !== undefined) {
+        if (state.messageDeniedPhase === 'output') {
+          // The chart stopped cleanly, so ErrorBridge's onRunFailed cannot
+          // close public streams. This API boundary owns the refusal on both
+          // run and resume. Name it as a virtual stage, not a fabricated
+          // engine failure, and never echo policy text into a public stream.
+          this.dispatcher.dispatch({
+            type: 'agentfootprint.error.fatal',
+            payload: {
+              error: 'The output policy withheld this answer.',
+              stage: '__output_admission__',
+              scope: 'run',
+            },
+            meta: buildEventMeta(
+              { runtimeStageId: '__output_admission__' },
+              this.currentRunContext,
+            ),
+          });
+        }
         throw new MessageDeniedError({
           reason: state.messageDeniedReason,
           phase: state.messageDeniedPhase ?? 'output',
@@ -4220,6 +4239,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   // ─── Chart assembly ────────────────────────────────────────────
 
   private buildChart(): FlowChart {
+    const governsOutput = hasOutputMiddleware(this.messageMiddleware);
     const provider = this.provider;
     const model = this.model;
     const temperature = this.temperature;
@@ -4888,7 +4908,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // seam peels `_findings` where the served schema carries it (ruled
       // tools only) — value-conditional, the same grammar.
       ...(argumentSources && { argumentSources: true as const }),
-      ...(this.answerValidationConfig !== undefined && { suppressDraftTokens: true }),
+      ...((this.answerValidationConfig !== undefined || governsOutput) && {
+        suppressDraftTokens: true,
+      }),
+      ...(governsOutput && { withholdDraftContent: true }),
       // Tool choice by classifier (9.105.0): the outcome row after the reply.
       ...(this.toolChoiceOptions !== undefined && { toolChoice: true as const }),
       // The declared ontology (9.106.0): the piece served from the run
@@ -5470,6 +5493,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(this.timeOptions !== undefined && { timeWindows: true as const }),
       ...(inputsArmed && this.timeOptions !== undefined && { timeLimits: true as const }),
       ...(this.answerValidationConfig !== undefined && { hasAnswerValidation: true }),
+      ...(governsOutput && { releaseOutputTokens: true as const }),
       // The out-of-budget wrap-up branch (9.56.0) — the conditional-mount law
       // above, decided once beside the Route decider that routes to it so the
       // two can never disagree about whether the branch exists.

@@ -16,7 +16,7 @@ The declaration order below is the order the loop reaches them.
 
 > `readonly` `optional` **afterTool?**: readonly [`ToolMiddleware`](/docs/api/type-aliases/ToolMiddleware)[]
 
-Defined in: [src/core/agent/act.ts:51](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/act.ts#L51)
+Defined in: [src/core/agent/act.ts:52](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/act.ts#L52)
 
 Every tool result, after the tool ran and before the model reads it.
 
@@ -26,7 +26,7 @@ Every tool result, after the tool ran and before the model reads it.
 
 > `readonly` `optional` **beforeTool?**: readonly [`ToolMiddleware`](/docs/api/type-aliases/ToolMiddleware)[]
 
-Defined in: [src/core/agent/act.ts:49](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/act.ts#L49)
+Defined in: [src/core/agent/act.ts:50](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/act.ts#L50)
 
 Every tool call, before it is dispatched.
 
@@ -36,9 +36,10 @@ Every tool call, before it is dispatched.
 
 > `readonly` `optional` **input?**: readonly [`MessageMiddleware`](/docs/api/interfaces/MessageMiddleware)[]
 
-Defined in: [src/core/agent/act.ts:47](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/act.ts#L47)
+Defined in: [src/core/agent/act.ts:48](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/act.ts#L48)
 
-The user's message, before the run commits it.
+The user's message, before the run commits it. Input-only rules do not
+ withhold provider draft streaming.
 
 ***
 
@@ -46,9 +47,11 @@ The user's message, before the run commits it.
 
 > `readonly` `optional` **output?**: readonly [`MessageMiddleware`](/docs/api/interfaces/MessageMiddleware)[]
 
-Defined in: [src/core/agent/act.ts:55](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/act.ts#L55)
+Defined in: [src/core/agent/act.ts:58](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/act.ts#L58)
 
-The final answer, before the caller receives it.
+The answer before final capture. A nonempty output chain withholds
+ provider drafts and releases the captured answer once after acceptance;
+ refusal stops delivery and final memory writes. Not audit erasure.
 
 ***
 
@@ -56,6 +59,6 @@ The final answer, before the caller receives it.
 
 > `readonly` `optional` **window?**: [`WindowStrategy`](/docs/api/interfaces/WindowStrategy)
 
-Defined in: [src/core/agent/act.ts:53](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/act.ts#L53)
+Defined in: [src/core/agent/act.ts:54](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/act.ts#L54)
 
 What the live context window keeps, at each iteration boundary.
