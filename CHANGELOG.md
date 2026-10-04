@@ -5,6 +5,68 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.136.0] - 2026-10-03
+
+### Added
+
+- **Every trace answer the context ledger and context-bisect read now says why it is not exact, when it is not.**
+  footprintjs 9.33.0 added basis twins of its two key readers — `commitValueAtWithBasis` and
+  `findLastWriterWithBasis` on `footprintjs/trace` — so an answer that rests on rows inside a key
+  (a subflow's input seed, an outputMapper merge-back), on the state before the run, on a
+  redaction or on a delete carries a reason code (`'nested-rows'`, `'from-initial-state'`,
+  `'redacted'`, `'deleted'`, `'never-written'`; each one's sentence is `HONESTY_CODES[code]`).
+  agentfootprint's readers now go through them — always with the log's own fold base
+  (`snapshot.initialState`, or a subflow's `treeContext.initialState`), so a key nothing seeded
+  is never called partial — and the codes ride the answers they already returned, as new
+  optional fields that are ABSENT when the answer is exact (an all-exact run keeps its bytes):
+
+  - `contextLedger().recordRun(...)` → `RecordedRun.basis?: Record<stateKey, ValueBasis[]>` —
+    e.g. `{ history: ['redacted'] }` for a run whose `history` was redacted (the placeholder is no
+    longer counted as if it were data without a word).
+  - `assembleTrajectory(...)` → `ContextSource.basis?` and `ProximateToolSource.basis?` (the
+    writer's codes, then the value's) — a context source with no writer before its `call-llm`
+    now says `['never-written']`.
+  - `localizeContextBug(...)` → `SuspectDetail.valueBasis?` on the default classifier's suspects,
+    read through the new optional `ClassifyContext.basisOf(key)` (absent = unknown: no
+    `valueBasis` is attached, so a hand-built context keeps working unchanged).
+
+  Pinned: `activeByslot` — written by the injection-engine subflow's merge-back only through rows
+  inside the key — answers its MOUNT (`sf-injection-engine#k`) as the writer, and its value, each with
+  `['nested-rows']` (before
+  footprintjs 9.33.0 every key query called it never written); a grouped (`dynamic-grouped`)
+  loop's inner log answers `lastToolResult` from the subflow's input seed, named by its mount,
+  with `['nested-rows']` — the copy-in, not the producing tool-calls stage, so grouped frames
+  still carry no proximate tool edge.
+
+### Changed
+
+- **agentfootprint runs on footprintjs 9.41.0, and footprintjs owns every explanation sentence for its own honesty codes.**
+
+  - **Peer and dev range `footprintjs: ^9.41.0`** (were `^9.28.0` / `^9.29.0`; the docs site's own
+    pin moves too). No source change was needed for the 9.29→9.41 removals and moves (the run
+    policy, the hook registry, the id grammar, the executor split): agentfootprint used none of
+    the removed members.
+  - **Recorded bytes move, values do not.** A commit log recorded on 9.41.0 differs from one
+    recorded on 9.29.0 only in ids, tags and phase: a mount's outputMapper merge-back is recorded
+    under the MOUNT (footprintjs 9.34.0 — its `runtimeStageId` / `stageId` / `stage` and the
+    mount's declared milestone tags move from the previous stage's bundle to it), and a stage's
+    continuation bundles carry `phase: 'exit'` (a mount's exit) or `'repeat'` (a fork child's
+    fan-out settle) (9.39.0). The thirty `test/core/tools` byte-identity references were
+    regenerated; a leaf-by-leaf diff found no other moved field.
+  - **One owner for the sentences.** The trace toolpack (`who_wrote`, `get_value`, `trace_node`'s
+    parents, `backtrack`'s element mode) and `sliceToBacktrackTrace` kept their own copies of what
+    footprintjs's codes mean ("never written … a closure", "reads were not recorded", "the commit
+    log is empty", …). They now print `⚠ <code>: HONESTY_CODES[<code>]`, from footprintjs — the
+    full sentence the FIRST time a code appears in one toolpack instance, the bare `⚠ <code>`
+    after that (the sentence is already in the model's context). An exact element birth
+    (`append-verb`, `whole-value`) keeps its old bytes; only an inferred one
+    (`prefix-inference`) gains its code.
+    `who_wrote` / `get_value` / `trace_node` read through the basis twins, so an answer resting
+    on rows inside the key (a subflow seed or merge-back) is flagged `nested-rows`, and
+    `get_value` no longer answers "no tracked write" for such a key (its known-key check matched
+    exact rows only); `sliceToBacktrackTrace` also prints a slice's `notes` (9.33.0). *Migration:* a consumer matching the old sentences matches
+    `HONESTY_CODES[code]` (or the `⚠ <code>:` prefix) instead.
+
 ## [9.135.1] - 2026-10-02
 
 ### Fixed
