@@ -10,9 +10,9 @@ description: Reduce hallucination by giving the LLM the source material — and 
 **Grounding** = constraining the LLM to answer from supplied source material, not from training-data memory. Two complementary mechanisms:
 
 1. **Source injection** — the source material (docs, policy text, retrieved chunks, prior decisions) lands in the system-prompt slot via [RAG](doc:rag), [Memory](doc:memory), or `defineFact`. The LLM sees it as supplied context, above the conversation.
-2. **Source observation** — the framework records what was injected (event: `agentfootprint.context.injected`) and what the LLM produced (event: `agentfootprint.stream.llm_end`). Side-by-side comparison is the grounding audit.
+2. **Source observation** — the framework records observed injections (`agentfootprint.context.injected`), model-call results (`agentfootprint.stream.llm_end`, with text withheld when an output policy applies), and a delivered answer when there is one (`agentfootprint.agent.turn_end`). Keep those different observations distinct in an audit.
 
-Together they form a *verifiable answer*: not "the LLM said X", but "the LLM said X having been given Y as the source material."
+Together they provide evidence for checking an answer against its observed sources. They do not themselves prove every claim correct or make a withheld model response available in an event-only export.
 
 ## RAG as grounding
 
@@ -53,20 +53,29 @@ Every flavor of context engineering routes through the SAME event channel — th
 
 ## Recording what the LLM produced
 
-`agentfootprint.stream.llm_end` carries the `LLMEndPayload` — `content`, `toolCallCount`, `usage`, `stopReason`, `durationMs`, `iteration`. Pair with `context.injected` events to produce grounding triplets:
+`agentfootprint.stream.llm_end` carries the `LLMEndPayload` — `content`, `toolCallCount`, `usage`, `stopReason`, `durationMs`, `iteration`. Keep each call's event, rather than selecting the first one: a turn may contain multiple calls.
+
+With [output middleware](doc:middleware#output-policy-holds-drafts-until-the-answer-is-accepted), this event carries `contentWithheld: true` and empty `content`: the draft is withheld, not absent. Use `agent.turn_end.finalContent` for the delivered answer, and distinguish it from raw model output. A refused answer has no `turn_end`. Raw drafts remain in the run's audit state, which needs separate access and retention protection; do not copy them into a public event stream to replace the withheld field.
+
+Capture the observations available for each run:
 
 ```
-For each turn:
-  injected_chunks = events.filter(e => e.type === 'agentfootprint.context.injected')
-  llm_output       = events.find(e => e.type === 'agentfootprint.stream.llm_end')
-  triplet           = { question, injected_chunks, llm_output }
+For events belonging to one run:
+  injected_chunks = all context.injected events
+  model_calls = every stream.llm_end event, keeping iteration and usage:
+    if contentWithheld is true:
+      output = { status: 'withheld' }  // never infer an empty model answer
+    otherwise:
+      output = { status: 'observed', text: content }
+  delivered_answer = agent.turn_end.finalContent, only if that event exists
+  evidence = { question, injected_chunks, model_calls, delivered_answer }
 ```
 
-That triplet IS the grounding evidence. Persist it (S3, Postgres, your audit trail) and you can show six months later exactly what the LLM saw and what it said.
+This record distinguishes available model text from withheld drafts and from the answer actually delivered. Persist it under an appropriate access and retention policy. A missing `turn_end` means no delivered answer was observed; it does not by itself explain whether the run paused, failed, or the event capture was incomplete. An event-only record cannot reconstruct text that the output policy withheld.
 
 ## Anti-patterns
 
-- Don't claim "grounded" without persisting the triplet. Without injection-content + LLM-output captured at the moment, you have NO grounding evidence — just logs.
+- Don't describe an event-only record as complete when response text was withheld or capture was incomplete. Keep that limitation visible rather than treating blank `llm_end.content` as an empty answer.
 - Don't trust the LLM to cite sources from memory. It will hallucinate URLs / doc IDs. Cite by injecting the source AND requiring the LLM to repeat the injected source ID in its answer (verifiable via comparison).
 - Don't mix high-confidence and low-confidence sources without flagging. If RAG returns chunks at score 0.9 and 0.5, the LLM treats them equally. Either threshold strictly OR weight injection role to mark uncertainty.
 

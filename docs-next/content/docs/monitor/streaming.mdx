@@ -25,7 +25,7 @@ Every runner exposes typed events. Subscribe to `agentfootprint.stream.*` for th
 The event taxonomy:
 - `stream.llm_start` — provider call about to start (model, request shape)
 - `stream.token` — one token chunk arrived (content, tokenIndex)
-- `stream.llm_end` — final chunk processed (full response, usage, stopReason)
+- `stream.llm_end` — one model call ended (content, usage, stopReason); output-governed drafts have empty content and `contentWithheld: true`
 - `stream.tool_start` — agent about to dispatch a tool (name, args)
 - `stream.tool_progress` — a long-running tool reporting mid-call (`ctx.progress(payload)`; framework-stamped `toolCallId` / `toolName` / `iteration`, author's `payload` verbatim)
   - Since 9.54.0 this also moves the **live status line**: a top-level string `message` is shown verbatim (cut at 120 characters, cut stated), anything else renders an honest generic line — never a payload dump. See [Tools → What a person sees](doc:tools).
@@ -35,11 +35,13 @@ Every event arrives as an envelope `{ type, payload, meta }`. `e.payload` is typ
 
 ### Token events follow the provider
 
-There is no streaming switch. If the provider has a `stream()` method, the agent uses it and fires one `stream.token` per text chunk. If it only has `complete()`, you get every other event — turn and iteration framing, `llm_start` / `llm_end`, `tool_start` / `tool_end` — just no `stream.token`. The same subscriber code works with either kind of provider.
+Without a delivery policy, token events follow the provider: a `stream()` provider emits text chunks, while a `complete()`-only provider emits the other lifecycle events without tokens. The same subscriber code works with either kind.
+
+An [output middleware policy](doc:middleware#output-policy-holds-drafts-until-the-answer-is-accepted) changes delivery, not the provider call. It holds all draft tokens and withholds `llm_end.content` with `contentWithheld: true`, while retaining usage and timing. Final capture releases one accepted answer token, even for complete-only providers; an empty accepted answer has no token. A refusal releases no answer and the API boundary emits `error.fatal`. Declared input-only `.act({ input: [...] })` rules retain normal streaming. Generic `.messageMiddleware(...)` may inspect both phases and therefore holds drafts too. Answer validation can also hold tokens; policy acceptance is not a validation result.
 
 ## The order events arrive in
 
-One `agent.run()` is one **turn**. A turn holds one or more **iterations**; each iteration is one LLM call followed by the tools it asked for:
+One `agent.run()` is one **turn**. A turn holds one or more **iterations**; each iteration is one LLM call followed by the tools it asked for. This is the ordinary, ungoverned streaming order:
 
 ```
 agent.turn_start
@@ -74,6 +76,8 @@ agent.turn_end         { turnIndex: 0, finalContent: 'Your order was denied…',
 ```
 
 (All names carry the `agentfootprint.` prefix; it is dropped above for width.) Iterations count from 1, turns from 0. `agentfootprint.error.fatal` fires instead of a clean ending when a run fails.
+
+With output middleware, there are no provider-draft token events in this sequence. The accepted final token follows the output decision and the last `llm_end`, before `turn_end`. **A model call ending is not the turn ending**: more tools, retries or policy checks may follow. Never close a turn's stream at `llm_end`.
 
 ## Parallel tool calls
 
@@ -119,45 +123,55 @@ Listeners are also never awaited. An `async` listener runs in the background, an
 
 ## SSE for browser clients
 
-The fastest path is the built-in `toSSE()` helper from `agentfootprint/observe`. Hand it the runner and it yields SSE-formatted strings (`event: <name>\ndata: <json>\n\n`) until the run finishes — drop it into any HTTP framework that accepts an async-iterable body:
+The built-in `toSSE()` helper from `agentfootprint/observe` yields SSE-formatted strings (`event: <name>\ndata: <json>\n\n`). Start consuming it **before** starting the run, so the subscriber is already listening. For an agent whose run ends with `turn_end` or a run failure event:
 
 ```ts
 import { toSSE } from 'agentfootprint/observe';
 
-// Express
-app.post('/agent', async (req, res) => {
-  res.setHeader('content-type', 'text/event-stream');
-  // Run in parallel so events flow while the iterable drains.
-  const running = agent.run({ message: req.body.message });
-  for await (const chunk of toSSE(agent, {
-    // token-only feed; omit `filter` to forward every event
-    filter: (e) => e.type.startsWith('agentfootprint.stream.'),
-  })) {
-    res.write(chunk);
-  }
-  await running;
-  res.end();
-});
+const frames: string[] = [];
+const draining = (async () => {
+  for await (const frame of toSSE(agent)) frames.push(frame);
+})();
+// An HTTP adapter can write each frame instead of collecting it.
+await Promise.all([agent.run({ message: userInput }), draining]);
 ```
 
 `toSSE(runner, options?)` accepts `filter` (skip events), `format: 'full' | 'text'` (`'text'` yields raw token content only — pipe straight into a chat UI), `eventName` (rename events), and `heartbeatMs` (keep-alive `: ping` comments for proxies). The class form `new SSEFormatter(agent).stream()` is identical. `encodeSSE(name, payload)` formats a one-off frame for app-level events outside the typed registry.
 
-If you'd rather wire the events by hand, subscribe and write each frame yourself:
+**Existing helper limits:** its filter runs before terminal detection, so a filter that excludes `turn_end` or `error.fatal` can leave it waiting forever. Use `format: 'text'` without a filter for text-only delivery. The helper currently stops on any `error.fatal`, including observer errors, and does not close on a pause or an input refusal that raises without a terminal event. It is not a universal run-lifecycle adapter. For those flows, use a hosting transport or own the subscriptions and close from the run's returned outcome or rejection too.
+
+A request-owned subscription can handle those outcomes explicitly. Unsubscribe when it ends; do not leave one request listening to a later run on the same agent:
 
 ```ts
-// Express / Hono / Fastify
-agent.on('agentfootprint.stream.token', (e) => {
-  res.write(`data: ${JSON.stringify({ type: 'token', content: e.payload.content })}\n\n`);
-});
-agent.on('agentfootprint.stream.tool_start', (e) => {
-  res.write(`data: ${JSON.stringify({ type: 'tool', name: e.payload.toolName })}\n\n`);
-});
-agent.on('agentfootprint.stream.llm_end', () => {
-  res.write(`event: done\ndata: {}\n\n`);
-  res.end();
-});
+import { isPaused } from 'agentfootprint';
 
-await agent.run({ message: userInput });
+// Inside one HTTP request, after setting its SSE headers.
+let ended = false;
+function finish(event: 'done' | 'failed' | 'paused') {
+  if (ended) return;
+  ended = true;
+  res.write(`event: ${event}\ndata: {}\n\n`);
+  res.end();
+}
+const unsubscribe = [
+  agent.on('agentfootprint.stream.token', (e) => {
+    if (!ended) res.write(`data: ${JSON.stringify({ type: 'token', content: e.payload.content })}\n\n`);
+  }),
+  agent.on('agentfootprint.agent.turn_end', () => finish('done')),
+  agent.on('agentfootprint.error.fatal', (e) => {
+    if (e.payload.scope === 'run') finish('failed');
+  }),
+  agent.on('agentfootprint.pause.request', () => finish('paused')),
+];
+
+try {
+  const outcome = await agent.run({ message: userInput });
+  finish(isPaused(outcome) ? 'paused' : 'done');
+} catch {
+  finish('failed'); // covers API-boundary refusals without a terminal event
+} finally {
+  for (const off of unsubscribe) off();
+}
 ```
 
 The browser consumes via `EventSource` and renders tokens into the UI as they arrive.
@@ -171,7 +185,7 @@ The browser consumes via `EventSource` and renders tokens into the UI as they ar
 ## Anti-patterns
 
 - Don't try to dispatch tools off `stream.token`. Tool calls land in the final chunk's `response.toolCalls`. Token chunks are content-only.
-- Don't keep the SSE connection open after `stream.llm_end`. End it; the browser's EventSource will reconnect automatically if needed.
+- Don't close SSE at `stream.llm_end`: it ends one model call, not the turn. Close on `agent.turn_end`, a run-scoped `error.fatal`, or a pause; handle the run's rejected promise too.
 - Don't run two `stream()`s concurrently on the same agent. Build one, run one.
 
 ## Next steps
