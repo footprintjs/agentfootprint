@@ -6,7 +6,7 @@ Map: `buildAgentChart.ts`, `buildDynamicAgentChart.ts`,
 `skillBrains.ts`, `types.ts`.
 Walker: `toolDispatch.ts`, `toolEffects.ts`, `toolArgsValidation.ts`,
 `validators.ts`, `act.ts`, `moments.ts`.
-Trace: `runManifest.ts`, `integrityFindings.ts`, `watch.ts`.
+Trace: `runManifest.ts`, `integrityFindings.ts`, `watch.ts`, `toolSecurityEvents.ts`.
 Fold: `memoryRecallInjections.ts`, `toolsFromActiveSkill.ts`.
 Lens: `selfCallNotice.ts`, `stagedRefs.ts` · `stagedRefsNudgeLine`,
 `presentTool.ts`, `outputEnforcement.ts` · `buildCorrectiveTurn`,
@@ -96,5 +96,16 @@ notDispatchedResult('fetch_invoices', { toolName: 'collect_input', toolCallId: '
 ```
 
 ## Files
+
+`toolSecurityEvents.ts` binds the current tool call's id and iteration once,
+then stamps existing permission and credential events through `typedEmit`.
+Normal dispatch, resumed dispatch and nested `ctx.tools` pull failures use
+the same facade. It copies only those two scalar identifiers; it never reads
+scope, judges policy, stores a second ledger or reconstructs a call from event
+order. Permission checks and credential requests stay in `stages/toolCalls.ts`.
+Nested calls use their existing inner id, and an old or caller-emitted event
+with no correlation stays uncorrelated. This does not solve commit placement
+under deferred observation or sanitize provider-authored failure text.
+
 See the role lists above; `types.ts` holds both the public agent types and the
 internal ones the stages share.

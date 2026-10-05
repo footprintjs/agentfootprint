@@ -231,9 +231,11 @@ describe('what this event may never carry', () => {
     expect(serialized).not.toContain(URL_);
     expect(Object.keys(failed?.payload ?? {}).sort()).toEqual([
       'errorClass',
+      'iteration',
       'reason',
       'service',
       'tool',
+      'toolCallId',
     ]);
   });
 });

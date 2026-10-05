@@ -72,6 +72,17 @@ export type LLMProviderName =
 
 export type ToolProtocol = 'native' | 'mcp' | 'http' | 'python-fn';
 
+/**
+ * The tool call an event was produced for. Qualify this pair with the
+ * event's run identity: providers may reuse call ids across iterations or
+ * runs. A nested `ctx.tools` call carries its existing inner call id.
+ * This identifies an invocation, not permission to execute it.
+ */
+export interface ToolCallEventIdentity {
+  readonly toolCallId: string;
+  readonly iteration: number;
+}
+
 export type CompositionKind = 'Sequence' | 'Parallel' | 'Conditional' | 'Loop';
 
 /**

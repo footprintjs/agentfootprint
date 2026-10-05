@@ -85,6 +85,15 @@ Then: add to `registry.ts` (EVENT_NAMES, AgentfootprintEventMap, ALL_EVENT_TYPES
 
 ## How consumers use this layer
 
+Library-produced `permission.check`, `permission.halt` and credential lifecycle
+events carry `ToolCallEventIdentity` (`toolCallId`, `iteration`). The fields are
+optional on the public payloads because older recordings and caller-emitted
+events may have no invocation. `permission.halt.iteration` remains required.
+The dispatch-bound facade in `core/agent/toolSecurityEvents.ts` stamps the
+actual call, including resumes and nested credential failures. Do not infer
+an absent identity from a shared stage, tool name, service or arrival order.
+The pair is run-local; it supplies neither a policy verdict nor a commit index.
+
 Three API tiers of progressive disclosure:
 
 ```typescript

@@ -147,11 +147,16 @@ describe('declare-and-push — credential material, both halves', () => {
       expect(blob).not.toContain('st_LAW_0002');
       expect(blob).not.toContain('idp.example.test');
     }
-    // …and the event that IS designed for this still says only which service.
+    // The event names the service, consent session and actual call, never the URL.
     const ev = out.events.find(
       (e) => e.name === 'agentfootprint.credential.authorization_required',
     );
-    expect(ev?.payload).toEqual({ service: 'github', sessionId: 'sess_law' });
+    expect(ev?.payload).toEqual({
+      service: 'github',
+      sessionId: 'sess_law',
+      toolCallId: 'c1',
+      iteration: 1,
+    });
   });
 });
 
