@@ -55,6 +55,35 @@ as unknown attribution, not an allowed call. A permission `allow` or credential
 it. These identifiers do not supply a time-travel commit position, and existing
 reason text still needs its own retention policy.
 
+## Emission time and recorded positions
+
+For events forwarded from a stage's emit channel, `meta.wallClockMs` is the
+original emission timestamp, including under deferred delivery. `runOffsetMs`
+uses that timestamp minus the agent run's start time. Other observer hooks
+without a source timestamp still use metadata-construction time; these clocks
+are not a total ordering of concurrent events.
+
+When the engine supplies valid coordinates, `meta.sourcePosition` carries the
+`EventSourcePosition` type exported by `agentfootprint/events`. Its
+`engineRunId` names the emitting engine execution leg, not `meta.runId`.
+`logRunId` identifies the owning log, `drillPath` contains actual runtime mount
+ids, and `committedThroughIdx` is the local inclusive committed prefix at
+emission. A value of `-1` means only the fold base. Pending writes are excluded.
+
+<CodeFile path="examples/features/92-emission-origin.ts" region="emission-origin" title="Read available event origins" />
+
+This optional capability needs an engine build that supplies source positions.
+An older engine, manual or unaddressable emitter, or malformed carrier leaves
+the field absent. No dependency version or position is invented. The bridge
+copies only the named coordinate fields and does not inspect event payloads.
+
+A viewer must match the saved log address and check local bounds before folding
+state. Do not select the emitter's eventual commit, convert the static
+`subflowPath` into a runtime mount path, or silently clamp a missing position.
+These coordinates describe a committed prefix, not a policy approval, a complete
+event ordering, or proof that nested history is available. This bridge change
+does not add a Lens navigation implementation or sanitize ordinary payloads.
+
 ## Which arm was this run? — `agent.run_configured`
 
 Swapping a strategy is easy. Attributing an outcome to it is the hard part: the numbers (tokens, latency, iterations, routing, refusals, evidence verdicts) all carry `meta.runId`, but until 9.41.0 nothing said which STRATEGIES that runId was running. Grouping ten runs into two arms was your own bookkeeping, spelled differently in every study.

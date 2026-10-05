@@ -9,7 +9,8 @@ Helpers that translate between footprintjs's runtime context shapes and event me
 
 ```
 bridge/
-└── eventMeta.ts    buildEventMeta, parseSubflowPath, RunContext, StageOrigin
+├── eventMeta.ts              buildEventMeta, parseSubflowPath, RunContext, StageOrigin
+└── eventSourcePosition.ts    optional engine coordinates → detached event wire value
 ```
 
 ## Why this folder exists
@@ -39,6 +40,15 @@ Building this from footprintjs's per-event context (TraversalContext, RecorderCo
 - `compositionPath` is a runner-scope concept not present in footprintjs events
 
 Centralizing the translation in one place keeps every core recorder consistent.
+
+EmitBridge passes the source emission timestamp to `buildEventMeta`; other
+origins without one keep metadata-construction time. `eventSourcePosition.ts`
+owns the optional coordinate projection into `EventSourcePosition`. It validates
+own data fields, renames the engine's `runId` to `engineRunId`, detaches the mount
+path and retains no additional fields. No live executor, policy or index counter
+is consulted. The result names the committed prefix, not pending stage writes.
+Absent or malformed coordinates remain absent, including on engines that do not
+supply them. Consumers must verify the saved log address and bounds before use.
 
 ## Architectural decisions
 

@@ -14,6 +14,7 @@ import type { CombinedRecorder, EmitEvent } from 'footprintjs';
 import type { EventDispatcher } from '../../events/dispatcher.js';
 import type { AgentfootprintEventMap, AgentfootprintEventType } from '../../events/registry.js';
 import { buildEventMeta, type RunContext } from '../../bridge/eventMeta.js';
+import { projectEventSourcePosition } from '../../bridge/eventSourcePosition.js';
 
 export interface EmitBridgeOptions {
   readonly dispatcher: EventDispatcher;
@@ -52,7 +53,12 @@ export class EmitBridge implements CombinedRecorder {
 
     const payload = event.payload as AgentfootprintEventMap[AgentfootprintEventType]['payload'];
     const meta = buildEventMeta(
-      { runtimeStageId: event.runtimeStageId, subflowPath: event.subflowPath },
+      {
+        runtimeStageId: event.runtimeStageId,
+        subflowPath: event.subflowPath,
+        timestamp: event.timestamp,
+        sourcePosition: projectEventSourcePosition(event),
+      },
       this.getRunContext(),
     );
 

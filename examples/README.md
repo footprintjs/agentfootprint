@@ -311,6 +311,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 89 | [`89-input-admission.ts`](features/89-input-admission.ts) | Input admission — continue only the accepted conversation | A refused message makes no conversation checkpoint. Keep the last accepted checkpoint and continue it explicitly. |
 | 90 | [`90-output-admission.ts`](features/90-output-admission.ts) | Output admission — deliver only the accepted answer | An output rule holds draft tokens, then releases the captured rewrite once. A refusal closes the stream without delivering an answer. |
 | 91 | [`91-security-call-correlation.ts`](features/91-security-call-correlation.ts) | Security events identify their tool call | Two mock calls to the same tool and credential service carry distinct call ids. Permission and credential events retain that identity under deferred delivery. |
+| 92 | [`92-emission-origin.ts`](features/92-emission-origin.ts) | Emission time and available log positions | Read source emission time under deferred delivery. Engine coordinates stay optional and distinct from the agent run identity. |
 
 ### [`canonical/`](canonical/) — end-to-end patterns
 
