@@ -2,6 +2,9 @@
 (opt-in, beside always-on `../core/`), not a role.
 Trace: `BoundaryRecorder.ts` (the unified ordered stream), `RunStepRecorder.ts`,
 `ToolLineageRecorder.ts`, `RouteRecorder.ts`, `ToolChoiceRecorder.ts`.
+`recordRun.ts` can also own the opt-in typed Trust Boundary trace from
+`../../lib/trust-boundaries/`; its facts are captured live, never replayed from
+the completed event tail. One versioned bundle is added to `snapshot.recorders`.
 Fold: `FlowchartRecorder.ts` (`buildStepGraph`, rebuilt per call), `trace.ts`
 (`serializeTrace`), `recordingEnvelope.ts`, and `recordRun.ts` — which is the one
 KNOWN BREACH of the detachment law: its snapshot half hands out the runner's own
@@ -131,9 +134,12 @@ Three consequences worth knowing before they surprise you:
 is what downstream readers act on — an archive browser decides what to show, a
 retention rule decides how long to keep it — so stamping `redacted` on
 un-redacted bytes would get them handled with *less* care than bytes that admit
-they are raw. Redact before persisting instead: `recordRun(agent, {
-boundaryDetail: 'lean' })` captures no payloads at all, and
-`serializeTrace`/`redactContent` redact at the serialize boundary.
+they are raw. Minimize or redact each exported channel before persisting instead.
+`recordRun(agent, { boundaryDetail: 'lean' })` removes captured content only
+from the **BoundaryEvents bundle**. The ordinary event tail and engine state
+can still contain prompts, arguments and results. `serializeTrace`/
+`redactContent` operate on their own projection; none of these switches makes
+an arbitrary whole recording safe to disclose.
 
 ### Writing your own sink
 

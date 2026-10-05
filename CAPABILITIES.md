@@ -20,6 +20,7 @@ not in this table, search `src/index.ts` for the nearest noun before writing cod
 
 | If you are about to build… | It is | Where | Since |
 |---|---|---|---|
+| observing selected middleware, permission and credential facts at runtime with bounded content-minimized metadata, explicit loss counters and optional source positions; never inferring approval, redaction or complete coverage from silence | `trustBoundaryRecorder` + `TrustBoundaryRecorder` | `src/lib/trust-boundaries/` | unreleased |
 | keeping a queued event's emission time and supplied engine log coordinates, without guessing a root index or confusing agent and engine run identities; absent when the engine supplies no usable position | `EventSourcePosition` + `projectEventSourcePosition` | `src/bridge/eventSourcePosition.ts` | unreleased |
 | identifying which same-name tool call a permission check or credential event describes — captured at dispatch, including resume and inner pull failures; qualify with run identity, missing fields stay unknown | `ToolCallEventIdentity` + `bindToolSecurityEvents` | `src/core/agent/toolSecurityEvents.ts` | unreleased |
 | guiding an evidence repair to ask for missing context without inventing values | `recoveryInstruction` + `EvidenceRecoveryContext` | `src/core/agent/evidence/` | 9.96.0 |

@@ -99,6 +99,19 @@ export {
   type RunRecorder,
 } from './recorders/observability/recordRun.js';
 
+// Runtime selected-policy evidence: typed subscription only, with one bounded
+// capture owner. recordRun can own its lifecycle and snapshot bundle.
+export {
+  trustBoundaryRecorder,
+  type TrustBoundaryRecorder,
+  type TrustBoundaryRecorderOptions,
+  type TrustBoundaryEventSource,
+  type TrustBoundaryEventType,
+  type TrustBoundaryFact,
+  type TrustBoundaryCounters,
+  type TrustBoundarySnapshot,
+} from './lib/trust-boundaries/index.js';
+
 // accountForAnswer — "Explain this answer": one answer's recording (plus what
 // the app declared) in, a typed account out — facts, each with who vouches for
 // it and where it lives in the record, and fixed sentences from a closed,

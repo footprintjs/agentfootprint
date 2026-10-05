@@ -49,12 +49,14 @@
  *
  * WHAT IT DOES NOT DO
  * ───────────────────
- * It attaches no OTHER recorders. `narrative()` and `metrics()` are the
+ * It attaches no OTHER recorders by default. `narrative()` and `metrics()` are the
  * consumer's choice — their data rides the snapshot when attached, and
  * each viewer says so when it isn't there (a Gantt with no timings shows
  * execution ORDER and says so; a story panel falls back to "X executed.
  * Wrote: y"). Attaching them behind the consumer's back would make every
  * recording pay for panels most runs never open.
+ * The explicit `trustBoundaries` option adds typed metadata capture, not an
+ * engine attachment. Its bundle is overlaid only when exporting a recording.
  */
 
 import type { Runner } from '../../core/runner.js';
@@ -63,6 +65,11 @@ import type { Unsubscribe } from '../../events/dispatcher.js';
 import { DEFAULT_MAX_EVENTS, eventTail } from '../../events/eventTail.js';
 import { boundaryRecorder, type BoundaryRecorder } from './BoundaryRecorder.js';
 import { summarizeEmbeddings } from './embeddingSummary.js';
+import {
+  trustBoundaryRecorder,
+  type TrustBoundaryRecorder,
+  type TrustBoundaryRecorderOptions,
+} from '../../lib/trust-boundaries/index.js';
 
 /**
  * One frozen run — everything a viewer needs, and nothing it doesn't.
@@ -95,9 +102,11 @@ export interface RecordRunOptions {
    * How much of the boundary log rides the snapshot:
    *   - `'full'` (default) — every field, content included. What an
    *     offline step strip needs to show detail behind each stop.
-   *   - `'lean'` — boundary structure only, no captured payloads. The
+   *   - `'lean'` — BoundaryEvents structure only, no captured payloads. The
    *     strip still rebuilds; the detail panels are empty, and a
    *     consumer reading the bundle's `meta.mode` can say so.
+   * This changes only the BoundaryEvents bundle, not the raw event tail or
+   * snapshot state. It is not a whole-recording redaction policy.
    */
   readonly boundaryDetail?: 'full' | 'lean';
   /**
@@ -116,6 +125,16 @@ export interface RecordRunOptions {
    * only when a consumer genuinely replays raw vectors offline.
    */
   readonly recordEmbeddings?: boolean;
+  /**
+   * Capture a bounded, content-minimized view of selected middleware,
+   * permission and credential events. Default off. The facts are collected
+   * at typed dispatch, never recovered from the event tail or execution tree.
+   *
+   * The `TrustBoundaries` row rides `snapshot.recorders`; other recording
+   * fields can still contain raw content. Stopping this opt-in capture pins
+   * its base snapshot so later runner reuse cannot substitute another log.
+   */
+  readonly trustBoundaries?: boolean | TrustBoundaryRecorderOptions;
 }
 
 /** A recording in progress. Keep it until the run ends, then freeze it. */
@@ -134,6 +153,8 @@ export interface RunRecorder {
   toRecording(): Recording;
   /** The boundary recorder, for richer live queries (slot rows, ranges). */
   readonly boundary: BoundaryRecorder;
+  /** Opt-in typed trust capture; its detached facts remain readable after stop. */
+  readonly trustBoundaries?: TrustBoundaryRecorder;
   /** How many events have been captured. */
   readonly eventCount: number;
   /** Events discarded to stay under `maxEvents`. `0` on a normal turn. */
@@ -147,6 +168,12 @@ export interface RunRecorder {
    * `toRecording()` after `stop()` is the normal end of a run; call it
    * when the runner outlives the recording (a server that records one
    * turn out of many).
+   *
+   * With `trustBoundaries`, pins the current base snapshot by reference even
+   * if the run is unfinished. This does not assert completion or drain pending
+   * events. A failing snapshot read still attempts every subscription's cleanup; no
+   * later run's snapshot is substituted. Other recording modes keep their
+   * existing live snapshot getter behavior.
    */
   stop(): void;
 }
@@ -174,10 +201,33 @@ export interface RunRecorder {
  * ```
  */
 export function recordRun(runner: Runner, options: RecordRunOptions = {}): RunRecorder {
-  return recordRunWhere(runner, keepEveryEvent, options);
+  // Only this opt-in door constructs the optional observer. The Agent's
+  // internal recording coordinator can stay on the default browser graph
+  // without making every consumer carry the trust capture implementation.
+  // Validate capture options before acquiring any subscriptions.
+  const trust = options.trustBoundaries
+    ? trustBoundaryRecorder(options.trustBoundaries === true ? {} : options.trustBoundaries)
+    : undefined;
+  return recordRunWhere(runner, keepEveryEvent, options, trust);
 }
 
 const keepEveryEvent = (): boolean => true;
+
+/** Dispose all acquired resources; an earlier operation's error stays primary. */
+function disposeSubscriptions(
+  subscriptions: readonly Unsubscribe[],
+  failure?: { readonly error: unknown },
+): void {
+  let firstFailure = failure;
+  for (const unsubscribe of subscriptions) {
+    try {
+      unsubscribe();
+    } catch (error) {
+      firstFailure ??= { error };
+    }
+  }
+  if (firstFailure) throw firstFailure.error;
+}
 
 /**
  * {@link recordRun} with a timeline that keeps only the events `keep` admits —
@@ -188,78 +238,132 @@ const keepEveryEvent = (): boolean => true;
  * neither ever carried such a fact.
  *
  * @internal — the Agent's; not on any door. `recordRun` is the public producer
- * and records everything, as it always has.
+ * and records everything, as it always has. Optional typed capture is supplied
+ * by that public factory; this coordinator never constructs another observer.
  */
 export function recordRunWhere(
   runner: Runner,
   keep: (event: AgentfootprintEvent) => boolean,
-  options: RecordRunOptions = {},
+  options: Omit<RecordRunOptions, 'trustBoundaries'> = {},
+  trust?: TrustBoundaryRecorder,
 ): RunRecorder {
-  // 1. THE TIMELINE. Subscribed before the run so nothing is missed —
-  //    the dispatcher drops events with no listener rather than queuing
-  //    them, so a late subscription starts mid-story. The bounded tail
-  //    (cap + drop count) is the shared `eventTail` helper, so a
-  //    recording and the self-explaining agent's evidence keep the same
-  //    amount and report a shortfall the same way.
-  const tail = eventTail(options.maxEvents ?? DEFAULT_MAX_EVENTS);
-  const offEvents: Unsubscribe = runner.on('*', (event: AgentfootprintEvent) => {
-    if (keep(event)) tail.push(event);
-  });
+  const subscriptions: Unsubscribe[] | undefined = trust ? [] : undefined;
+  try {
+    // Fan out admitted events from the existing listener. Evaluate `keep` only
+    // once: a stateful membership callback must not admit the timeline but
+    // reject its corresponding fact on a second invocation.
+    let onTrustEvent: ((event: AgentfootprintEvent) => void) | undefined;
+    const offTrust = trust?.subscribe({
+      on: (_type, listener) => {
+        onTrustEvent = listener;
+        return () => {
+          onTrustEvent = undefined;
+        };
+      },
+    });
+    if (offTrust) subscriptions?.push(offTrust);
+    // 1. THE TIMELINE. Subscribed before the run so nothing is missed —
+    //    the dispatcher drops events with no listener rather than queuing
+    //    them, so a late subscription starts mid-story. The bounded tail
+    //    (cap + drop count) is the shared `eventTail` helper, so a
+    //    recording and the self-explaining agent's evidence keep the same
+    //    amount and report a shortfall the same way.
+    const tail = eventTail(options.maxEvents ?? DEFAULT_MAX_EVENTS);
+    const offEvents: Unsubscribe = runner.on('*', (event: AgentfootprintEvent) => {
+      if (keep(event)) {
+        tail.push(event);
+        onTrustEvent?.(event);
+      }
+    });
+    subscriptions?.push(offEvents);
 
-  // 2. THE BOUNDARIES — all three connections, which is the whole reason
-  //    to call this instead of wiring it yourself. `getCommitCount` reads
-  //    through the runner on every boundary, so it reports the count at
-  //    that moment rather than a number captured now (when it is 0).
-  const keepEmbeddings = options.recordEmbeddings ?? false;
-  const boundary = boundaryRecorder({
-    getCommitCount: () => runner.getCommitCount(),
-    ...(options.boundaryDetail === 'lean' ? { snapshot: 'lean' as const } : {}),
-    ...(keepEmbeddings ? { recordEmbeddings: true } : {}),
-  });
-  const offAttach = runner.attach(boundary);
-  const offTyped = boundary.subscribe(runner);
+    // 2. THE BOUNDARIES — all three connections, which is the whole reason
+    //    to call this instead of wiring it yourself. `getCommitCount` reads
+    //    through the runner on every boundary, so it reports the count at
+    //    that moment rather than a number captured now (when it is 0).
+    const keepEmbeddings = options.recordEmbeddings ?? false;
+    const boundary = boundaryRecorder({
+      getCommitCount: () => runner.getCommitCount(),
+      ...(options.boundaryDetail === 'lean' ? { snapshot: 'lean' as const } : {}),
+      ...(keepEmbeddings ? { recordEmbeddings: true } : {}),
+    });
+    const offAttach = runner.attach(boundary);
+    subscriptions?.push(offAttach);
+    const offTyped = boundary.subscribe(runner);
+    subscriptions?.push(offTyped);
+    let stopped = false;
+    let stoppedSnapshot: ReturnType<Runner['getLastSnapshot']>;
 
-  let stopped = false;
+    const snapshot = (): unknown => {
+      const base = trust && stopped ? stoppedSnapshot : runner.getLastSnapshot();
+      const retained = (keepEmbeddings ? base : summarizeEmbeddings(base)) as typeof base;
+      if (!trust || retained === undefined) return retained;
+      // One export owner, one row per capture. Never alter the engine snapshot
+      // or replace another recorder's row just because it has the same name.
+      const recorders = retained.recorders ?? [];
+      if (recorders.some((row) => row.id === trust.id)) {
+        throw new Error(
+          `Trust boundary recorder id '${trust.id}' conflicts with an existing recorder`,
+        );
+      }
+      return {
+        ...retained,
+        recorders: [...recorders, { id: trust.id, ...trust.toSnapshot() }],
+      };
+    };
 
-  return {
-    toRecording: (): Recording => ({
-      // Read at freeze time. Before the run there is no snapshot; during
-      // one it grows; after it, it is the finished run's. Unless
-      // `recordEmbeddings` asked for them, raw vectors are summarised to
-      // `{ dims, norm }` here — the snapshot's subflow results carry every
-      // retrieved entry's full vector otherwise, which is what made a
-      // single retrieval turn's recording weigh 2.76 MB in the field. The
-      // summarisation is copy-on-write: parts of the snapshot without
-      // embeddings are the runner's own objects, held by reference, as
-      // before — serialize to detach.
-      snapshot: keepEmbeddings
-        ? runner.getLastSnapshot()
-        : summarizeEmbeddings(runner.getLastSnapshot()),
-      events: keepEmbeddings
-        ? tail.snapshot().events
-        : (summarizeEmbeddings(tail.snapshot().events) as readonly AgentfootprintEvent[]),
-      // The one piece a run does not leave behind — it lives on the
-      // chart, which is built once and never changes.
-      structure: (runner.getSpec() as { buildTimeStructure?: unknown }).buildTimeStructure,
-    }),
-    boundary,
-    get eventCount() {
-      return tail.count;
-    },
-    get droppedEvents() {
-      return tail.dropped;
-    },
-    get firstRetainedEventIndex() {
-      return tail.firstRetainedIndex;
-    },
-    stop: () => {
-      // Idempotent: a consumer that stops in both a finally block and an
-      // unmount handler should not detach someone else's later recorder.
-      if (stopped) return;
-      stopped = true;
-      offEvents();
-      offTyped();
-      offAttach();
-    },
-  };
+    return {
+      toRecording: (): Recording => ({
+        // Read at freeze time. Before the run there is no snapshot; during
+        // one it grows; after it, it is the finished run's. Unless
+        // `recordEmbeddings` asked for them, raw vectors are summarised to
+        // `{ dims, norm }` here — the snapshot's subflow results carry every
+        // retrieved entry's full vector otherwise, which is what made a
+        // single retrieval turn's recording weigh 2.76 MB in the field. The
+        // summarisation is copy-on-write: parts of the snapshot without
+        // embeddings are the runner's own objects, held by reference, as
+        // before — serialize to detach.
+        snapshot: snapshot(),
+        events: keepEmbeddings
+          ? tail.snapshot().events
+          : (summarizeEmbeddings(tail.snapshot().events) as readonly AgentfootprintEvent[]),
+        // The one piece a run does not leave behind — it lives on the
+        // chart, which is built once and never changes.
+        structure: (runner.getSpec() as { buildTimeStructure?: unknown }).buildTimeStructure,
+      }),
+      boundary,
+      ...(trust ? { trustBoundaries: trust } : {}),
+      get eventCount() {
+        return tail.count;
+      },
+      get droppedEvents() {
+        return tail.dropped;
+      },
+      get firstRetainedEventIndex() {
+        return tail.firstRetainedIndex;
+      },
+      stop: () => {
+        // Idempotent: a consumer that stops in both a finally block and an
+        // unmount handler should not detach someone else's later recorder.
+        if (stopped) return;
+        stopped = true;
+        if (subscriptions) {
+          let failure: { readonly error: unknown } | undefined;
+          try {
+            stoppedSnapshot = runner.getLastSnapshot();
+          } catch (error) {
+            failure = { error };
+          }
+          disposeSubscriptions(subscriptions, failure);
+          return;
+        }
+        offEvents();
+        offTyped();
+        offAttach();
+      },
+    };
+  } catch (error) {
+    if (subscriptions) disposeSubscriptions(subscriptions, { error });
+    throw error;
+  }
 }

@@ -291,9 +291,11 @@ export class UnsupportedPrivacyModeError extends Error {
         `that admits it is raw, so silently storing the raw bytes under that label is the ` +
         `worse outcome, not the convenient one.\n\n` +
         `Either persist with privacy: { mode: 'full' } and hold the result under the rules raw ` +
-        `run data needs, or redact BEFORE persisting — recordRun(agent, { boundaryDetail: ` +
-        `'lean' }) captures no payloads in the first place, and serializeTrace/redactContent ` +
-        `redact at the serialize boundary.`,
+        `run data needs, or minimize/redact EVERY exported channel before persisting. ` +
+        `recordRun(agent, { boundaryDetail: 'lean' }) removes captured content only from ` +
+        `BoundaryEvents; the event tail and engine state can still contain raw content. ` +
+        `serializeTrace/redactContent operate on their own projection, not an arbitrary ` +
+        `whole recording.`,
     );
     this.name = 'UnsupportedPrivacyModeError';
     this.mode = mode;

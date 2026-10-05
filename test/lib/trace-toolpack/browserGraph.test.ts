@@ -306,6 +306,25 @@ describe.skipIf(!built)('the default browser graph of the root entry', () => {
     expect(graph.syncInputs.has(PACK)).toBe(true);
   });
 
+  it('LAW: opt-in trust capture is off the root graph — internal run recording does not construct it', async () => {
+    const graph = await splitGraph(resolve(DIST, 'index.js'));
+    expect(graph.syncInputs.has('dist/esm/core/Agent.js')).toBe(true);
+    expect(graph.syncInputs.has('dist/esm/recorders/observability/recordRun.js')).toBe(true);
+    for (const optional of ['capture', 'project']) {
+      const module = `dist/esm/lib/trust-boundaries/${optional}.js`;
+      expect(graph.syncInputs.has(module), module).toBe(false);
+      expect(graph.dynamicInputs.has(module), module).toBe(false);
+    }
+  });
+
+  it('contrast: the /observe door retains the synchronous trust capture factory', async () => {
+    const graph = await splitGraph(resolve(DIST, 'observe.js'));
+    for (const optional of ['capture', 'project']) {
+      const module = `dist/esm/lib/trust-boundaries/${optional}.js`;
+      expect(graph.syncInputs.has(module), module).toBe(true);
+    }
+  });
+
   it('the sideEffects list the ESM build now carries is TRUE: every module-level registration survives', async () => {
     // With `sideEffects` finally reaching dist/esm (9.94.0), a bundler may
     // skip any module not on the list whose exports go unused. The list names

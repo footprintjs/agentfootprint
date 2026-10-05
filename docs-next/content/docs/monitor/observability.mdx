@@ -37,6 +37,83 @@ Every runner (`Agent`, `LLMCall`, `Sequence`, etc.) exposes the same observabili
 
 There are **124 typed events across 28 domains**: `agent` (incl. `run_configured`, the run-configuration manifest described below; `agentfootprint.agent.budget_exhausted`, which says a turn's budget ran out AND what the run did about it — wrapped up with one last tool-free call, or cut short; `output_schema_validation_failed` for Instructor-style retry and `output_schema_retry` for the loop-level re-ask), `composition`, `context`, `stream`, `tools` (incl. `absent` and `coverage_declared` — a tool that looked and found nothing, and a tool that named what its verdict does not rule out — and `semantics_declared`, the full semantic envelope a tool returned via `semantic()` while the model read only the compact projection), `skill`, `memory`, `cost`, `permission` (incl. `halt` for sequence governance), `credential` (declare-and-push resolution), `artifacts` (the claim-check lifecycle: minted / resolved / expired / refused / presented, plus `hand_over_failed` — a host's own filing for a turn that did not go cleanly), `eval`, `embedding`, `pause`, `checkin` (evidence-carrying human consent), `middleware` (a governance chain answered), `findings` (the model's own standings on its tool results under `.findings()` — `agentfootprint.findings.declared` when a call carries a basis, `agentfootprint.findings.standing` when a previous result is called a fact, open, ruled-out or noise, and under `.findings({ judge })` `agentfootprint.findings.judged` when a configured classifier judged a landed result — its standing, confidence, latency and tokens — or `agentfootprint.findings.judge_failed` when that call produced no answer, with `agrees` on the model's own `findings.standing` once a judgment exists for the result, and under `.findings()` beside `.namesAndNumbersFromEvidence()` `agentfootprint.findings.contingent` when the model used a value — in its answer or as a later call's argument — that came only from results it had itself declared open, noise or ruled-out: the moment, the carrier count, their distinct standings and the value's length; and, for a tool that declares `askOrAssume`, `agentfootprint.findings.argument` for each ruled argument of each call — whether the library filled the tool's declared default or the model sent the value, with the conversation turn; identities, enums and numbers only, never the model's words, the judged state or the value), `tool_choice` (a classifier's pick of WHICH TOOL beside every model call under `.toolChoice()` — `agentfootprint.tool_choice.picked` before the call with the pick, its confidence, how many tools were offered and served, whether the list was narrowed and the cost; `agentfootprint.tool_choice.outcome` after the reply with the tools the model called, `firstAgrees` and any `missed`; `agentfootprint.tool_choice.failed` when the classifier produced no answer; tool names are identities, never a description or the message), `ontology` (the declared map served on a model call under `.ontology()` — `agentfootprint.ontology.served` with the map's `id`, `version` and `hash` and its node, source and edge counts; identities and numbers only, never a meaning, a coverage sentence or a node name), `answer` (the answer's standing under `.answerLayer()` — `agentfootprint.answer.assessed`, once per answer, with the value, its word, the reason kinds and the checks that ran; never a value from the answer or a quote), `error`, `reliability`, `resilience` (the `outputSchema` fallback ladder — `output_fallback_triggered` and `output_canned_used`), `fallback`, `risk`. Every event has a typed payload — `agentfootprint.stream.llm_start`, `agentfootprint.stream.tool_start`, `agentfootprint.cost.tick`, `agentfootprint.composition.iteration_start`, etc. The framework owns the loop and emits during DFS traversal — no instrumentation, no spans-after-the-fact.
 
+## Trust boundary observations
+
+`trustBoundaryRecorder` captures selected typed events **during execution**,
+never by reconstructing a finished tree. It observes; it does not enforce policy.
+Enable the optional observer with
+`recordRun(agent, { trustBoundaries: { maxFacts: 100 } })`, before running.
+[Example 93](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/93-trust-boundaries.ts)
+demonstrates a real permission refusal with a mock model and independently
+asserts that the synthetic tool did not execute.
+
+`RecordRunOptions.trustBoundaries` accepts `true` or
+`TrustBoundaryRecorderOptions`; default off. `RunRecorder.trustBoundaries`
+exposes the `TrustBoundaryRecorder` handle. Standalone collection uses
+`trustBoundaryRecorder` from `agentfootprint/observe`: `subscribe(agent)`
+returns an unsubscribe function. `TrustBoundaryEventSource` is that narrow
+subscription port. One active subscription is permitted; this typed observer
+does **not** belong in raw engine `.attach()` or `.watch()`.
+
+### Facts, not approvals
+
+`TrustBoundaryEventType` selects seven `agentfootprint.` events:
+`middleware.decision`, `permission.check`, `permission.halt`,
+`credential.requested`, `credential.acquired`,
+`credential.authorization_required`, and `credential.failed`.
+
+Each `TrustBoundaryFact` carries sequence, event type, run/stage ids and source
+time, plus supplied call identity/iteration/position. Its payload retains only
+named decision, capability, service and error-class metadata.
+[The field whitelist](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/trust-boundaries/README.md#admission)
+defines each variant.
+
+An allow does not prove execution: middleware pass-through can allow without
+invoking the user's rule. `changed` means transformation, **not redaction**;
+after-tool refusal does not undo execution. Pull credential success and
+permission-gate lifecycle are not covered. Sequence/Parallel `.act()` children
+currently lack these typed security bridges, even when subscribing to the
+mounted child. Missing evidence never means “allowed,” “safe” or “checked.”
+
+### Retention and lifecycle
+
+`TrustBoundarySnapshot` is a `TrustBoundaries` recorder row with
+`meta.version: 1`. `recordRun` adds it to `snapshot.recorders` without changing
+the engine snapshot. Its data contains capture id, immutable facts,
+`TrustBoundaryCounters`, and nullable first/last observed/retained sequences.
+The accounting law is
+`observed = retained + evicted + invalid + oversized + pending`.
+Selected events reserve their sequence before inspection; rejected events
+leave gaps. `pending` counts projections still in progress, normally zero
+after dispatch finishes. Unrelated/unreadable types are ignored.
+
+`maxFacts` defaults to 1,000 (integer 1–10,000). The tail retains newest facts.
+Strings are limited to 512 UTF-16 units, mount paths to 32 segments and serialized
+facts to 8,192 UTF-8 bytes. Oversized identities are rejected, not truncated;
+malformed supplied positions reject the fact. Source positions follow
+[the committed-prefix contract below](#emission-time-and-recorded-positions),
+not the emitting stage's eventual state.
+
+Capture spans subscribed run ids/resumes without implicit reset.
+`resetCapture()` starts a new id, clearing facts and counts, including fencing
+in-progress old observations. Await execution before export: stopping early
+does not drain pending engine events or prove completion. With trust capture,
+`recordRun.stop()` pins its base snapshot, retains facts and is idempotent.
+The base keeps the existing by-reference contract; serialize an approved
+projection to detach. A fact whose log is no longer retained stays unplaced.
+
+### Content-minimized is not PII-free
+
+Prompts, arguments, results, rewrite values, free-text reasons, authorization
+URLs, session ids, principals and tenants are excluded. Declared identifiers
+and service/error labels can still contain sensitive text.
+
+The surrounding event tail and state may contain raw content.
+`boundaryDetail: 'lean'` reduces **only BoundaryEvents**, not the whole
+recording. Review every exported channel. This observer promises neither
+complete coverage nor legal compliance or tamper-proof evidence.
+See [Archive a run](doc:recordings).
+
 ## Which tool call did a security check describe
 
 `permission.check`, `permission.halt` and the emitted credential lifecycle
