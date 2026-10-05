@@ -61,6 +61,7 @@ import type {
 import { checkerGoverns } from '../../../adapters/types.js';
 import type { ContextRole } from '../../../events/types.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
+import { bindToolSecurityEvents, type ToolSecurityEmitter } from '../toolSecurityEvents.js';
 import type { AgentfootprintEventMap, AgentfootprintEventType } from '../../../events/registry.js';
 import { extractSequence } from '../../../security/extractSequence.js';
 import { skillTarget } from '../../../security/skillTarget.js';
@@ -785,7 +786,7 @@ function errorClassOf(err: unknown): string | undefined {
  */
 function reportingCredentials(
   provider: CredentialProvider,
-  scope: TypedScope<AgentState>,
+  emitSecurity: ToolSecurityEmitter,
   toolName: string,
 ): CredentialProvider {
   return {
@@ -794,7 +795,7 @@ function reportingCredentials(
       try {
         return await provider.getCredential(req);
       } catch (err) {
-        typedEmit(scope, 'agentfootprint.credential.failed', {
+        emitSecurity('agentfootprint.credential.failed', {
           service: req.service,
           reason: err instanceof Error ? err.message : String(err),
           tool: toolName,
@@ -2799,7 +2800,11 @@ export function buildToolCallsHandler(
           toolCallId: innerId,
           iteration: call.iteration,
           ...(signal && { signal }),
-          credentials: reportingCredentials(credentials, scope, name),
+          credentials: reportingCredentials(
+            credentials,
+            bindToolSecurityEvents(scope, { toolCallId: innerId, iteration: call.iteration }),
+            name,
+          ),
           hasCredentials,
           artifacts: unconfiguredArtifacts(),
           hasArtifacts: false,
@@ -3590,6 +3595,7 @@ export function buildToolCallsHandler(
     ceilingRefused?: true;
   }> => {
     const tool = resolved.tool;
+    const emitSecurity = bindToolSecurityEvents(scope, { toolCallId, iteration });
     // The two refusals share one door here too (9.92.0): a name nothing holds,
     // and a name whose offered party cannot answer on this resume.
     if (!tool) {
@@ -3622,7 +3628,7 @@ export function buildToolCallsHandler(
     let resolvedCredential: Credential | undefined;
     const need = tool.needs;
     if (need) {
-      typedEmit(scope, 'agentfootprint.credential.requested', {
+      emitSecurity('agentfootprint.credential.requested', {
         service: need.credential,
         ...(need.mode && { mode: need.mode }),
       });
@@ -3640,7 +3646,7 @@ export function buildToolCallsHandler(
         });
         if (cred.status === 'issued') {
           resolvedCredential = cred.credential;
-          typedEmit(scope, 'agentfootprint.credential.acquired', {
+          emitSecurity('agentfootprint.credential.acquired', {
             service: need.credential,
             kind: cred.credential.kind,
             ...(cred.expiresAt !== undefined && { expiresAt: cred.expiresAt }),
@@ -3648,7 +3654,7 @@ export function buildToolCallsHandler(
           // The consent that was outstanding for this service has been given.
           deps.clearConsentOutstanding?.(need.credential);
         } else {
-          typedEmit(scope, 'agentfootprint.credential.authorization_required', {
+          emitSecurity('agentfootprint.credential.authorization_required', {
             service: need.credential,
             sessionId: cred.sessionId,
           });
@@ -3670,7 +3676,7 @@ export function buildToolCallsHandler(
         }
       } catch (credErr) {
         const reason = credErr instanceof Error ? credErr.message : String(credErr);
-        typedEmit(scope, 'agentfootprint.credential.failed', {
+        emitSecurity('agentfootprint.credential.failed', {
           service: need.credential,
           reason,
           tool: toolName,
@@ -3702,7 +3708,7 @@ export function buildToolCallsHandler(
         iteration,
         ...(callTime !== undefined && { time: callTime }),
         ...(env.signal && { signal: env.signal }),
-        credentials: reportingCredentials(credentials, scope, toolName),
+        credentials: reportingCredentials(credentials, emitSecurity, toolName),
         hasCredentials,
         ...(resolvedCredential && { credential: resolvedCredential }),
         ...toolArtifacts(scope, toolName, toolCallId),
@@ -4070,6 +4076,7 @@ export function buildToolCallsHandler(
       const env = scope.$getEnv();
 
       for (const tc of toolCalls) {
+        const emitSecurity = bindToolSecurityEvents(scope, { toolCallId: tc.id, iteration });
         const resolved = resolveTool(tc.name);
         const tool = resolved.tool;
         // ── THE PEEL (9.101.0, `.findings()`) — the FIRST read of `tc.args`
@@ -4195,7 +4202,7 @@ export function buildToolCallsHandler(
               ...(runIdentity && { identity: runIdentity }),
               ...(env.signal && { signal: env.signal }),
             });
-            typedEmit(scope, 'agentfootprint.permission.check', {
+            emitSecurity('agentfootprint.permission.check', {
               capability: 'tool_call',
               actor: 'agent',
               target: tc.name,
@@ -4255,7 +4262,7 @@ export function buildToolCallsHandler(
             // not belong in a transcript.
             denied = true;
             const msg = permErr instanceof Error ? permErr.message : String(permErr);
-            typedEmit(scope, 'agentfootprint.permission.check', {
+            emitSecurity('agentfootprint.permission.check', {
               capability: 'tool_call',
               actor: 'agent',
               target: tc.name,
@@ -4295,7 +4302,7 @@ export function buildToolCallsHandler(
               ...(runIdentity && { identity: runIdentity }),
               ...(env.signal && { signal: env.signal }),
             });
-            typedEmit(scope, 'agentfootprint.permission.check', {
+            emitSecurity('agentfootprint.permission.check', {
               capability,
               actor: 'agent',
               target,
@@ -4324,7 +4331,7 @@ export function buildToolCallsHandler(
             // whole: an operator's outage text reads as weather to a model.
             denied = true;
             const msg = permErr instanceof Error ? permErr.message : String(permErr);
-            typedEmit(scope, 'agentfootprint.permission.check', {
+            emitSecurity('agentfootprint.permission.check', {
               capability,
               actor: 'agent',
               target,
@@ -4695,7 +4702,7 @@ export function buildToolCallsHandler(
           let credentialBlocked = false;
           const need = wantsBlocked ? undefined : tool?.needs;
           if (need) {
-            typedEmit(scope, 'agentfootprint.credential.requested', {
+            emitSecurity('agentfootprint.credential.requested', {
               service: need.credential,
               ...(need.mode && { mode: need.mode }),
             });
@@ -4713,7 +4720,7 @@ export function buildToolCallsHandler(
               });
               if (cred.status === 'issued') {
                 resolvedCredential = cred.credential;
-                typedEmit(scope, 'agentfootprint.credential.acquired', {
+                emitSecurity('agentfootprint.credential.acquired', {
                   service: need.credential,
                   kind: cred.credential.kind,
                   ...(cred.expiresAt !== undefined && { expiresAt: cred.expiresAt }),
@@ -4726,7 +4733,7 @@ export function buildToolCallsHandler(
                 // wrong was the tool-result string below, which carried the URL
                 // to the one party that cannot click it and to every channel
                 // built to preserve tool output.
-                typedEmit(scope, 'agentfootprint.credential.authorization_required', {
+                emitSecurity('agentfootprint.credential.authorization_required', {
                   service: need.credential,
                   sessionId: cred.sessionId,
                 });
@@ -4790,7 +4797,7 @@ export function buildToolCallsHandler(
               credentialBlocked = true;
               error = true;
               const reason = credErr instanceof Error ? credErr.message : String(credErr);
-              typedEmit(scope, 'agentfootprint.credential.failed', {
+              emitSecurity('agentfootprint.credential.failed', {
                 service: need.credential,
                 reason,
                 tool: tc.name,
@@ -4835,7 +4842,7 @@ export function buildToolCallsHandler(
                 iteration,
                 ...(callTime !== undefined && { time: callTime }),
                 ...(env.signal && { signal: env.signal }),
-                credentials: reportingCredentials(credentials, scope, tc.name),
+                credentials: reportingCredentials(credentials, emitSecurity, tc.name),
                 hasCredentials,
                 ...(resolvedCredential && { credential: resolvedCredential }),
                 ...toolArtifacts(scope, tc.name, tc.id),
@@ -5653,11 +5660,10 @@ export function buildToolCallsHandler(
         // remaining parallel-call siblings (intentional — once a halt
         // fires, no further tool dispatches should occur this turn).
         if (haltContext) {
-          typedEmit(scope, 'agentfootprint.permission.halt', {
+          emitSecurity('agentfootprint.permission.halt', {
             target: tc.name,
             reason: haltContext.reason,
             tellLLM: haltContext.tellLLM,
-            iteration,
             sequenceLength: extractSequence(newHistory, iteration).length,
             ...(haltContext.checkerId !== undefined && { checkerId: haltContext.checkerId }),
           });

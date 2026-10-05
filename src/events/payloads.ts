@@ -17,6 +17,7 @@ import type {
   ContextSource,
   LLMProviderName,
   ToolProtocol,
+  ToolCallEventIdentity,
 } from './types.js';
 import type { LLMMessage, PermissionCapability } from '../adapters/types.js';
 import type { MemoryFlavor, MemoryStrategyKind, MemoryType } from '../memory/define.types.js';
@@ -2322,7 +2323,7 @@ export interface ToolSemanticsDeclaredPayload {
 }
 
 // permission.* (4)
-export interface PermissionCheckPayload {
+export interface PermissionCheckPayload extends Partial<ToolCallEventIdentity> {
   /** 9.11.0 — the shared vocabulary, so the event cannot drift from the
    *  request. `'skill_read'` joined it when skill activation became something
    *  a policy can refuse. */
@@ -2345,19 +2346,19 @@ export interface PermissionGateOpenedPayload {
 
 // ─── credential (declare-and-push; NEVER carries the secret) ──────────
 /** A tool's declared credential is being resolved before invocation. */
-export interface CredentialRequestedPayload {
+export interface CredentialRequestedPayload extends Partial<ToolCallEventIdentity> {
   readonly service: string;
   readonly mode?: 'machine' | 'user';
 }
 /** A credential was issued. Carries the `kind` only — NEVER the token/secret. */
-export interface CredentialAcquiredPayload {
+export interface CredentialAcquiredPayload extends Partial<ToolCallEventIdentity> {
   readonly service: string;
   readonly kind: string;
   readonly expiresAt?: number;
 }
 /** 3-legged consent is required (the tool is not run until the user authorizes).
  *  Carries `sessionId` for correlation, NOT the authorization URL. */
-export interface CredentialAuthorizationRequiredPayload {
+export interface CredentialAuthorizationRequiredPayload extends Partial<ToolCallEventIdentity> {
   readonly service: string;
   readonly sessionId: string;
 }
@@ -2377,7 +2378,7 @@ export interface CredentialAuthorizationRequiredPayload {
  * on a tool's behalf, and `errorClass` is absent when what was thrown was not
  * an `Error`.
  */
-export interface CredentialFailedPayload {
+export interface CredentialFailedPayload extends Partial<ToolCallEventIdentity> {
   /** The service id the tool declared (or asked for), never the credential. */
   readonly service: string;
   /** The provider's thrown message. */
@@ -2406,7 +2407,7 @@ export interface PermissionGateClosedPayload {
  * halt while the conversation history is consistent for downstream
  * audit/replay.
  */
-export interface PermissionHaltPayload {
+export interface PermissionHaltPayload extends Partial<ToolCallEventIdentity> {
   readonly checkerId?: string;
   readonly target: string;
   readonly reason: string;

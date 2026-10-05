@@ -186,11 +186,16 @@ describe('3LO consent — the URL never reaches a channel the caller did not ask
     expect(q.authorization.authorizationUrl).toMatch(/withheld/i);
   });
 
-  it('the authorization_required event still carries {service, sessionId} and nothing more', async () => {
+  it('the authorization_required event names the service, consent session and actual call only', async () => {
     const h = buildAgent(consentVault({ granted: false, calls: 0 }));
     await h.agent.run({ message: 'go' });
     const ev = h.events.find((e) => e.name === 'agentfootprint.credential.authorization_required');
-    expect(ev?.payload).toEqual({ service: 'billing', sessionId: SESSION_ID });
+    expect(ev?.payload).toEqual({
+      service: 'billing',
+      sessionId: SESSION_ID,
+      toolCallId: 'c1',
+      iteration: 1,
+    });
   });
 });
 

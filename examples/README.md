@@ -310,6 +310,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 88 | [`88-time-result-checks.ts`](features/88-time-result-checks.ts) | Result checks — what a call read, against what it asked | Under .time(), each call's read (its result's declared period, a widened fill, a look-back shifted by a pause) is compared with the window it asked for: a narrower, wider or shifted read, or a window older than the source keeps, is recorded on the call’s period row, makes the answer "not sure", and is said in the limits block in the person’s zone. |
 | 89 | [`89-input-admission.ts`](features/89-input-admission.ts) | Input admission — continue only the accepted conversation | A refused message makes no conversation checkpoint. Keep the last accepted checkpoint and continue it explicitly. |
 | 90 | [`90-output-admission.ts`](features/90-output-admission.ts) | Output admission — deliver only the accepted answer | An output rule holds draft tokens, then releases the captured rewrite once. A refusal closes the stream without delivering an answer. |
+| 91 | [`91-security-call-correlation.ts`](features/91-security-call-correlation.ts) | Security events identify their tool call | Two mock calls to the same tool and credential service carry distinct call ids. Permission and credential events retain that identity under deferred delivery. |
 
 ### [`canonical/`](canonical/) — end-to-end patterns
 
