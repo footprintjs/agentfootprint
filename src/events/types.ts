@@ -86,14 +86,35 @@ export interface ToolCallEventIdentity {
 export type CompositionKind = 'Sequence' | 'Parallel' | 'Conditional' | 'Loop';
 
 /**
+ * The committed log prefix at the moment a stage emitted an event.
+ *
+ * This is AgentFootprint's wire projection of coordinates supplied by the
+ * execution engine, not a commit index inferred at observer delivery. It is
+ * absent when the engine supplies no usable position. Match `logRunId` and
+ * `drillPath` to the recorded log's address before interpreting the index.
+ */
+export interface EventSourcePosition {
+  /** The emitting engine frame's execution leg; NOT EventMeta.runId. */
+  readonly engineRunId: string;
+  /** The engine execution leg that first owned this log. */
+  readonly logRunId: string;
+  /** Runtime mount IDs, outermost first. Empty for the root log. */
+  readonly drillPath: readonly string[];
+  /** Local inclusive committed prefix; -1 means no commits yet. */
+  readonly committedThroughIdx: number;
+}
+
+/**
  * Metadata attached by the dispatcher to every event. Consumers never
  * construct this manually — the dispatcher fills it in.
  */
 export interface EventMeta {
-  /** Wall-clock ms — for external correlation / dashboards. */
+  /** Source emission time when supplied, otherwise observer-time wall-clock ms. */
   readonly wallClockMs: number;
-  /** ms since run start — deterministic replay. */
+  /** wallClockMs minus this AgentFootprint run's start time. */
   readonly runOffsetMs: number;
+  /** Source-time engine log coordinates, when supplied; never reconstructed. */
+  readonly sourcePosition?: EventSourcePosition;
   /** footprintjs universal stage key. */
   readonly runtimeStageId: string;
   /** Subflow path parsed from runtimeStageId. */

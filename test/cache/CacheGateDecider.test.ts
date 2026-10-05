@@ -16,6 +16,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import type { TypedScope } from 'footprintjs';
 import {
   cacheGateDecide,
   detectSkillChurn,
@@ -26,21 +27,21 @@ import {
   type CacheGateState,
 } from '../../src/cache/CacheGateDecider';
 import { expectScalesLinearly } from '../helpers/perf.js';
+import { typedScope } from '../helpers/typedScope.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────
 
 /**
- * Build a scope-like object that exposes only what the decider reads.
- * The decider uses `scope.x` typed access via the proxy; for testing
- * we pass a plain object that satisfies the same shape.
+ * The decider records evidence through the engine's scope protocol. Use the
+ * real factory rather than a lookalike object with no registered runtime.
  */
-function makeScope(state: Partial<CacheGateState>): CacheGateState {
-  return {
+function makeScope(state: Partial<CacheGateState>): TypedScope<CacheGateState> {
+  return typedScope({
     cachingDisabled: false,
     recentHitRate: undefined,
     skillHistory: [],
     ...state,
-  };
+  });
 }
 
 // ─── 1. Unit — each rule fires in isolation ───────────────────────

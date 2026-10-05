@@ -75,6 +75,13 @@ Raw footprintjs events carry structural metadata (runtimeStageId, subflowPath, s
 
 `buildEventMeta()` is in `../bridge/` to keep recorders focused on translation and meta construction in one place.
 
+EmitBridge preserves the raw emission timestamp even when the observer is
+deferred. It also delegates optional log-coordinate validation to
+`bridge/eventSourcePosition.ts · projectEventSourcePosition`. The public wire
+uses `engineRunId` separately from the agent's `meta.runId`; missing coordinates
+are not reconstructed from delivery-time commit counts. This metadata says
+which prefix was committed, not that the emitting stage had finished.
+
 ## Fast-path invariant
 
 Every recorder checks `dispatcher.hasListenersFor(type)` before constructing the typed event. When nothing subscribes, zero allocations happen. This is critical for production runs where observability is optional.

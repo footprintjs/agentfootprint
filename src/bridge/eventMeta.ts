@@ -9,7 +9,7 @@
 
 import type { TraversalContext } from 'footprintjs';
 import { parseRuntimeStageId } from 'footprintjs/trace';
-import type { EventMeta } from '../events/types.js';
+import type { EventMeta, EventSourcePosition } from '../events/types.js';
 
 // NOTE: runtimeStageId parsing lives in footprintjs/trace
 // (parseRuntimeStageId, buildRuntimeStageId). We reuse their helper instead
@@ -30,6 +30,10 @@ import type { EventMeta } from '../events/types.js';
 export interface StageOrigin {
   readonly runtimeStageId?: string;
   readonly subflowPath?: string | readonly string[];
+  /** Source emission time, when this origin is an emit rather than a flow hook. */
+  readonly timestamp?: number;
+  /** Already validated wire coordinates; never read from live executor state. */
+  readonly sourcePosition?: EventSourcePosition;
 }
 
 export interface RunContext {
@@ -70,7 +74,8 @@ export function buildEventMeta(
   origin: StageOrigin | TraversalContext | undefined,
   run: RunContext,
 ): EventMeta {
-  const now = Date.now();
+  const stageOrigin: StageOrigin | undefined = origin;
+  const now = stageOrigin?.timestamp ?? Date.now();
   const runtimeStageId = origin?.runtimeStageId ?? 'unknown#0';
   // Normalize subflowPath across the 3 shapes footprintjs uses:
   //   - undefined (RecorderContext: derive from runtimeStageId)
@@ -85,6 +90,9 @@ export function buildEventMeta(
   return {
     wallClockMs: now,
     runOffsetMs: now - run.runStartMs,
+    ...(stageOrigin?.sourcePosition !== undefined && {
+      sourcePosition: stageOrigin.sourcePosition,
+    }),
     runtimeStageId,
     subflowPath,
     compositionPath: run.compositionPath,

@@ -20,6 +20,7 @@ not in this table, search `src/index.ts` for the nearest noun before writing cod
 
 | If you are about to build… | It is | Where | Since |
 |---|---|---|---|
+| keeping a queued event's emission time and supplied engine log coordinates, without guessing a root index or confusing agent and engine run identities; absent when the engine supplies no usable position | `EventSourcePosition` + `projectEventSourcePosition` | `src/bridge/eventSourcePosition.ts` | unreleased |
 | identifying which same-name tool call a permission check or credential event describes — captured at dispatch, including resume and inner pull failures; qualify with run identity, missing fields stay unknown | `ToolCallEventIdentity` + `bindToolSecurityEvents` | `src/core/agent/toolSecurityEvents.ts` | unreleased |
 | guiding an evidence repair to ask for missing context without inventing values | `recoveryInstruction` + `EvidenceRecoveryContext` | `src/core/agent/evidence/` | 9.96.0 |
 | checking a typed final answer against scoped evidence before streaming or memory delivery — optional host-authored checks with enforce/observe modes, canonical JSON and bounded read-only artifacts | `answerValidation` + `AnswerValidationError` | `src/answer-validation/` | 9.95.0 |
