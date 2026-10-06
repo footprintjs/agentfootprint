@@ -2,6 +2,7 @@ import { source } from '@/lib/source';
 import { createSearchAPI } from 'fumadocs-core/search/server';
 import type { AdvancedIndex } from 'fumadocs-core/search/server';
 import { CHAPTERS_META } from '@/lib/chapters';
+import { orderSearchIndexes } from '@/lib/search-index-order.mjs';
 
 // Static search index for the exported (GitHub Pages) site. Prerendered to a single
 // /static.json file at build; the search dialog loads it client-side (Orama).
@@ -71,5 +72,5 @@ const chapterIndexes: AdvancedIndex[] = CHAPTERS_META.map((c) => ({
 
 export const { staticGET: GET } = createSearchAPI('advanced', {
   language: 'english',
-  indexes: [...docsIndexes, ...chapterIndexes],
+  indexes: orderSearchIndexes([...docsIndexes, ...chapterIndexes]),
 });
