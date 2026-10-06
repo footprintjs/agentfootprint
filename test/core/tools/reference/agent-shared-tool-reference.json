@@ -17,6 +17,7 @@
           {
             "description": "Activate a skill for the next iteration. Available skills:\n  - desk-a: desk a\n  - desk-b: desk b\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
             "inputSchema": {
+              "additionalProperties": false,
               "properties": {
                 "id": {
                   "description": "The skill id to activate.",
@@ -539,14 +540,14 @@
                 "jsonChars": 5
               },
               "tools": {
-                "jsonBytes": 533,
-                "jsonChars": 533
+                "jsonBytes": 562,
+                "jsonChars": 562
               }
             },
             "status": "measured",
             "total": {
-              "jsonBytes": 623,
-              "jsonChars": 623
+              "jsonBytes": 652,
+              "jsonChars": 652
             }
           },
           "system": {
@@ -1071,14 +1072,14 @@
                 "jsonChars": 10
               },
               "tools": {
-                "jsonBytes": 533,
-                "jsonChars": 533
+                "jsonBytes": 562,
+                "jsonChars": 562
               }
             },
             "status": "measured",
             "total": {
-              "jsonBytes": 850,
-              "jsonChars": 850
+              "jsonBytes": 879,
+              "jsonChars": 879
             }
           },
           "system": {
@@ -1549,14 +1550,14 @@
                 "jsonChars": 10
               },
               "tools": {
-                "jsonBytes": 533,
-                "jsonChars": 533
+                "jsonBytes": 562,
+                "jsonChars": 562
               }
             },
             "status": "measured",
             "total": {
-              "jsonBytes": 1031,
-              "jsonChars": 1031
+              "jsonBytes": 1060,
+              "jsonChars": 1060
             }
           },
           "system": {
@@ -2160,14 +2161,14 @@
                 "jsonChars": 15
               },
               "tools": {
-                "jsonBytes": 533,
-                "jsonChars": 533
+                "jsonBytes": 562,
+                "jsonChars": 562
               }
             },
             "status": "measured",
             "total": {
-              "jsonBytes": 1258,
-              "jsonChars": 1258
+              "jsonBytes": 1287,
+              "jsonChars": 1287
             }
           },
           "system": {
@@ -2710,14 +2711,14 @@
                 "jsonChars": 15
               },
               "tools": {
-                "jsonBytes": 533,
-                "jsonChars": 533
+                "jsonBytes": 562,
+                "jsonChars": 562
               }
             },
             "status": "measured",
             "total": {
-              "jsonBytes": 1793,
-              "jsonChars": 1791
+              "jsonBytes": 1822,
+              "jsonChars": 1820
             }
           },
           "system": {
@@ -2899,6 +2900,7 @@
             {
               "description": "Activate a skill for the next iteration. Available skills:\n  - desk-a: desk a\n  - desk-b: desk b\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
               "inputSchema": {
+                "additionalProperties": false,
                 "properties": {
                   "id": {
                     "description": "The skill id to activate.",
@@ -3019,6 +3021,7 @@
             {
               "description": "Activate a skill for the next iteration. Available skills:\n  - desk-a: desk a\n  - desk-b: desk b\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
               "inputSchema": {
+                "additionalProperties": false,
                 "properties": {
                   "id": {
                     "description": "The skill id to activate.",
@@ -3156,6 +3159,7 @@
             {
               "description": "Activate a skill for the next iteration. Available skills:\n  - desk-a: desk a\n  - desk-b: desk b\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
               "inputSchema": {
+                "additionalProperties": false,
                 "properties": {
                   "id": {
                     "description": "The skill id to activate.",
@@ -3317,6 +3321,7 @@
             {
               "description": "Activate a skill for the next iteration. Available skills:\n  - desk-a: desk a\n  - desk-b: desk b\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
               "inputSchema": {
+                "additionalProperties": false,
                 "properties": {
                   "id": {
                     "description": "The skill id to activate.",
@@ -3495,6 +3500,7 @@
             {
               "description": "Activate a skill for the next iteration. Available skills:\n  - desk-a: desk a\n  - desk-b: desk b\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
               "inputSchema": {
+                "additionalProperties": false,
                 "properties": {
                   "id": {
                     "description": "The skill id to activate.",

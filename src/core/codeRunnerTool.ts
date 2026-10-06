@@ -288,6 +288,7 @@ export function codeRunnerTool(
         ),
       },
       required: ['code'],
+      additionalProperties: false,
     },
     ...(options.checkIn !== undefined && { checkIn: options.checkIn }),
     ...(options.needs && { needs: options.needs }),

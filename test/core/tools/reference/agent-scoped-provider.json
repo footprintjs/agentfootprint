@@ -17,6 +17,7 @@
           {
             "description": "Activate a skill for the next iteration. Available skills:\n  - billing: billing questions\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
             "inputSchema": {
+              "additionalProperties": false,
               "properties": {
                 "id": {
                   "description": "The skill id to activate.",
@@ -518,14 +519,14 @@
                 "jsonChars": 5
               },
               "tools": {
-                "jsonBytes": 409,
-                "jsonChars": 409
+                "jsonBytes": 438,
+                "jsonChars": 438
               }
             },
             "status": "measured",
             "total": {
-              "jsonBytes": 499,
-              "jsonChars": 499
+              "jsonBytes": 528,
+              "jsonChars": 528
             }
           },
           "system": {
@@ -931,14 +932,14 @@
                 "jsonChars": 5
               },
               "tools": {
-                "jsonBytes": 409,
-                "jsonChars": 409
+                "jsonBytes": 438,
+                "jsonChars": 438
               }
             },
             "status": "measured",
             "total": {
-              "jsonBytes": 774,
-              "jsonChars": 774
+              "jsonBytes": 803,
+              "jsonChars": 803
             }
           },
           "system": {
@@ -1477,14 +1478,14 @@
                 "jsonChars": 10
               },
               "tools": {
-                "jsonBytes": 517,
-                "jsonChars": 517
+                "jsonBytes": 546,
+                "jsonChars": 546
               }
             },
             "status": "measured",
             "total": {
-              "jsonBytes": 1111,
-              "jsonChars": 1111
+              "jsonBytes": 1140,
+              "jsonChars": 1140
             }
           },
           "system": {
@@ -1969,14 +1970,14 @@
                 "jsonChars": 10
               },
               "tools": {
-                "jsonBytes": 517,
-                "jsonChars": 517
+                "jsonBytes": 546,
+                "jsonChars": 546
               }
             },
             "status": "measured",
             "total": {
-              "jsonBytes": 1292,
-              "jsonChars": 1292
+              "jsonBytes": 1321,
+              "jsonChars": 1321
             }
           },
           "system": {
@@ -2152,6 +2153,7 @@
             {
               "description": "Activate a skill for the next iteration. Available skills:\n  - billing: billing questions\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
               "inputSchema": {
+                "additionalProperties": false,
                 "properties": {
                   "id": {
                     "description": "The skill id to activate.",
@@ -2255,6 +2257,7 @@
             {
               "description": "Activate a skill for the next iteration. Available skills:\n  - billing: billing questions\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
               "inputSchema": {
+                "additionalProperties": false,
                 "properties": {
                   "id": {
                     "description": "The skill id to activate.",
@@ -2383,6 +2386,7 @@
             {
               "description": "Activate a skill for the next iteration. Available skills:\n  - billing: billing questions\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
               "inputSchema": {
+                "additionalProperties": false,
                 "properties": {
                   "id": {
                     "description": "The skill id to activate.",
@@ -2536,6 +2540,7 @@
             {
               "description": "Activate a skill for the next iteration. Available skills:\n  - billing: billing questions\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
               "inputSchema": {
+                "additionalProperties": false,
                 "properties": {
                   "id": {
                     "description": "The skill id to activate.",

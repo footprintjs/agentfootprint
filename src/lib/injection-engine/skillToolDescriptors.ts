@@ -545,6 +545,7 @@ export function readSkillDescriptor(
         },
       },
       required: ['id'],
+      additionalProperties: false,
     },
     execute: ({ id }) => {
       const entry = byId.get(id);
