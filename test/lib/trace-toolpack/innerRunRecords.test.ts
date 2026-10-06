@@ -345,14 +345,14 @@ describe('inspect_tool_run — the descent', () => {
     expect(out).toContain('weigh-the-rain');
   });
 
-  it("'key' without a step says what a value AS OF nothing would mean", async () => {
+  it("'key' without a step names its last writer inside (who_wrote, shared with inspect_subflow)", async () => {
     const tools = await packOverOneCall();
     const out = await callTraceTool(tools, 'inspect_tool_run', {
       toolCallId: 'c1',
       key: 'rainChancePct',
     });
-    expect(out).toContain('needs a step');
-    expect(out).toContain("use 'variable'");
+    expect(out).toContain("'rainChancePct' was last written by");
+    expect(out).toContain('INNER ids');
   });
 
   it("an unknown inner step id gets the inner pack's own correction, not a crash", async () => {

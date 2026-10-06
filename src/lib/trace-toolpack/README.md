@@ -32,8 +32,40 @@ c1 answered 'first answer' in 1ms, then — reused — threw 'second call failed
   duration: 27ms
 ```
 
+## Below the run: one descent, two doors
+A record BELOW the run is opened by reference, through ONE implementation
+(`innerDescent.ts`: a one-slot memo, the param-shaped ask, the three-line
+frame). Two doors use it: `inspect_tool_run` (the record a chart-as-tool kept,
+`innerRunRecords.ts`) and `inspect_subflow` (a subflow mount's OWN log, read
+through footprintjs's `getSubtreeSnapshot` — `subflowRecords.ts`). The inner
+views are this pack's own tools over the inner record, so inner answers carry
+the same reason codes, folded from the inner record's own `initialState`.
+Inner ids are said to be inner on every answer; an outer tool handed one
+corrects toward the mount (`traceToolpack.ts` · `innerIdMessage`), so step-id
+schemas carry no `enum` when subflows kept their own logs. A nested mount opens
+one level at a time (`subflowRecords.ts` · `mountChain`). The outer views name
+the door in ONE line and print nothing from inside — and only when following it
+gives a true answer (pinned by a follow-every-hint property in
+`test/lib/trace-toolpack/inspectSubflow.test.ts`): a merge-back under a renamed
+key names the mount without claiming a writer inside, a `beforeStageId`
+question considers only mounts that ran before the anchor, and a pack opened by
+`inspect_tool_run` names no `inspect_subflow` door it cannot route to.
+
+```text
+> who_wrote({ key: 'toolSchemas' })
+no tracked write to 'toolSchemas' in the commit log. …
+⚠ never-written
+↳ but subflow sf-tools#33 wrote 'toolSchemas' in its OWN log (not merged back here): inspect_subflow({ mount: 'sf-tools#33', key: 'toolSchemas' }) names the writer.
+> inspect_subflow({ mount: 'sf-tools#33', key: 'toolSchemas' })
+INSIDE SUBFLOW sf-tools#33 — "Tools": its own log, 3 commit(s), the mount's seed first.
+'toolSchemas' was last written by sf-tools/compose#35 — "sf-tools/Compose" (verb: set): …
+⚠ that step also consumed args. ⚠ incomplete-sources
+```
+
 ## Files
-- `traceToolpack.ts` — the eleven trace tools.
+- `traceToolpack.ts` — the twelve trace tools.
+- `innerDescent.ts` — the one descent below the run, shared by both inner doors.
+- `subflowRecords.ts` — where a mount's own log is, and why it is not.
 - `bounded.ts` — the one bound every served value passes through.
 - `selfExplain.ts`, `traceDebugAgent.ts` — the two conversational doors.
 - `traceToolNames.ts` — the two facts `.selfExplain()` needs BEFORE the pack
