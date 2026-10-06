@@ -163,30 +163,14 @@ Gotchas:
 - **Hand-offs are a different shape.** When the specialist should *take over the conversation* rather than answer one question, use [`swarm()`](doc:swarm).
 - **Remote agents.** There is no built-in client for calling another team's agent over A2A; call its endpoint from `execute` like any other HTTP API. The other direction — letting other agents call yours over A2A — ships as `agentCoreA2AHost` (see [AgentCore adapters](doc:agentcore-adapters)).
 
-## Argument validation — a declared shape is an enforced shape (9.64.0)
+## Argument validation
 
-Before a call is dispatched, its arguments are checked against the tool's own
-`inputSchema`: types, required fields, `enum` values — and, since 9.64.0, the
-three string-shape keywords `pattern`, `minLength` and `maxLength`.
+The Agent checks `inputSchema` before dispatch: types, required fields,
+primitive enums, nested properties/items, explicit extra-field restrictions,
+and string `pattern`, `minLength`, and `maxLength`. This is a subset of JSON
+Schema. A rejected call returns a correction without executing.
 
-**Why.** In a recorded triage turn, a tool result ended with an offer — "I can
-also map these WWNs to volume names" — and the person answered "yes please".
-The model bound those two words AS THE WWN ARGUMENT and dispatched. The tool
-refused it correctly, but only after a round trip that told the person their
-word was not a WWN. The tool's schema knew exactly what a WWN looks like; the
-validator just never read that part. Now it does — the call dies at the door,
-and the refusal teaches:
-
-```
-Invalid arguments for tool 'lookup_wwn' — the call was not executed.
-- 'wwn': expected a string matching ^[0-9a-f]{2}(:[0-9a-f]{2}){7}$, got "yes please"
-  'wwn' is described as: A world-wide name: eight colon-separated hex pairs.
-Fix the arguments to match the tool's input schema and call it again.
-```
-
-The parameter's own `description` rides the refusal — that sentence is where
-you write what a valid value LOOKS like, and it is precisely the correction the
-model needs. Declare shapes for anything identifier-like:
+Declare an identifier's format and explain it in `description`:
 
 ```ts
 inputSchema: {
@@ -202,22 +186,23 @@ inputSchema: {
 }
 ```
 
-**The dial.** String-shape enforcement rides the existing `toolArgValidation`
-option, identically to type/enum/required: `'enforce'` (the default — the call
-is refused and the model reads the teaching message), `'warn'` (the
-`agentfootprint.validation.args_invalid` event fires with `enforced: false`
-and the call proceeds), `'off'` (nothing runs, byte-identical to before).
-If you already declare patterns and run the default dial, 9.64.0 starts
-enforcing them — that is the fix, stated loudly.
+`toolArgValidation` selects `'enforce'` (default refusal), `'warn'` (execute
+and emit `agentfootprint.validation.args_invalid` with `enforced: false`), or
+`'off'` (skip validation).
 
-Three edges, stated: a `pattern` that is not a valid regex is treated as
-unconstrained with a one-time dev warning (a schema typo must never crash
-dispatch); when both `pattern` and a length bound would complain, only the
-pattern speaks (one mistake, one sentence); and the refusal quotes the
-offending value capped at 80 characters — the value is the model's own
-argument, already verbatim in the same history, while structural errors
-(wrong type, missing field) echo nothing, and telemetry projections stay
-value-free.
+Invalid regexes are ignored with a one-time warning. A pattern failure takes
+precedence over length failures. String-shape corrections include the
+description and at most 80 characters of the supplied value; structural
+issues name paths and types, not values. Telemetry projections omit values.
+
+**Other dispatch paths.** Resumed Agent calls apply the same mode after
+middleware, before artifact resolution and credentials; warn may report again.
+`ctx.tools.call` and `mcpServe` always enforce the shared subset, throwing the
+correction or returning an MCP tool error before credentials or execution.
+Accepted args are unchanged; open schemas still allow extras. Direct
+`tool.execute` remains caller-governed. This is not full JSON Schema validation.
+Credential-consent checkpoints containing resolved artifact data instead of
+refs remain unsupported and may now fail schema admission first.
 
 ## A default nobody chose — `askOrAssume`
 

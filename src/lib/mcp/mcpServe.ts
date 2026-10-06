@@ -83,6 +83,7 @@ import { lazyRequire } from '../lazyRequire.js';
 import { sdkLoadFailure } from './sdkLoadFailure.js';
 import { callTimeOf, MCP_TOOL_EXTRAS_KEY, toolExtrasOf } from './toolExtras.js';
 import { runToolChain, runToolAfterChain } from '../../core/agent/middleware/runChain.js';
+import { formatToolArgIssues, validateToolArgs } from '../../core/agent/toolArgsValidation.js';
 
 const DEFAULT_SERVER_NAME = 'agentfootprint';
 const DEFAULT_SERVER_VERSION = '0.0.0';
@@ -150,10 +151,9 @@ export async function mcpServe(
 
       const toolCallId = `mcp-${name}-${++callCounter}`;
 
-      // Args are forwarded EXACTLY as the client sent them. Validating
-      // them here would mean a second, weaker copy of the tool's own
-      // contract — and a tool that already rejects bad input is the one
-      // place that rejection belongs.
+      // Keep the original value until middleware explicitly replaces it.
+      // Admission below consumes the shared schema rule without coercing,
+      // stripping keys, or replacing an accepted argument object.
       let args = request?.params?.arguments as unknown;
 
       // The governance chain, when one was passed. Same walker the Agent's
@@ -199,6 +199,13 @@ export async function mcpServe(
       if (tool.wants !== undefined) {
         return toolError(wantsNeedsStoreRefusal(tool.schema.name, tool.wants));
       }
+
+      // Same schema owner as Agent dispatch, over the actual middleware
+      // output. Invalid calls acquire no credentials and never reach the
+      // handler or its after-tool hooks. A served call has no Agent dial:
+      // its declared supported schema constraints are always enforced.
+      const verdict = validateToolArgs(args, tool.schema.inputSchema);
+      if (!verdict.ok) return toolError(formatToolArgIssues(tool.schema.name, verdict.issues));
 
       const ctx = await buildExecutionContext(tool, toolCallId, {
         credentials,

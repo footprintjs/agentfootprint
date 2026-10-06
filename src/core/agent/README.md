@@ -97,6 +97,17 @@ notDispatchedResult('fetch_invoices', { toolName: 'collect_input', toolCallId: '
 
 ## Files
 
+`toolArgsValidation.ts` owns the supported schema rules and correction text.
+`stages/toolCalls.ts` · `argumentRefusal` applies the Agent's mode and emits
+the existing invalid-arguments event at initial and resumed admission, before
+artifact resolution and credentials. A middleware approval is not schema
+approval. In warn mode the resumed admission can emit another warning.
+`toolDispatch.ts` · `agentToolDispatch` enforces the same rules on inner calls
+after its existing unsupported-declaration checks, before allocating context
+or credentials; it throws the shared correction without inventing a model
+call or a separate validation event. Raw `Tool.execute` stays caller-governed.
+The validator remains a documented subset, not a full JSON Schema engine.
+
 `toolSecurityEvents.ts` binds the current tool call's id and iteration once,
 then stamps existing permission and credential events through `typedEmit`.
 Normal dispatch, resumed dispatch and nested `ctx.tools` pull failures use
