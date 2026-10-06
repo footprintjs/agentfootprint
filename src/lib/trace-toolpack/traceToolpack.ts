@@ -44,7 +44,7 @@ import {
   formatCausalChain,
   HONESTY_CODES,
 } from 'footprintjs/trace';
-import type { HonestyCode } from 'footprintjs/trace';
+import type { ControlDepLookup, HonestyCode } from 'footprintjs/trace';
 import { arrayProvenance, elementProvenance, formatSlice, sliceForKey } from 'footprintjs/trace';
 
 import type { LLMMessage } from '../../adapters/types.js';
@@ -2909,6 +2909,13 @@ function buildInspectSubflow(
   });
 }
 
+/**
+ * The run's own control-dependence lookup, keyed by every subflow bag opened
+ * below it — so each level filters the RUN's edges to its own log
+ * (`openSubflowArtifacts`), at any depth.
+ */
+const RAW_CONTROL_DEPS = new WeakMap<TraceToolpackArtifacts, ControlDepLookup>();
+
 /** The mount's record as an artifact bag, or why there is none. */
 function openSubflowArtifacts(
   artifacts: TraceToolpackArtifacts,
@@ -2916,20 +2923,25 @@ function openSubflowArtifacts(
 ): TraceToolpackArtifacts | string {
   const opened = openSubflow(artifacts.snapshot, mount);
   if (typeof opened === 'string') return `inspect_subflow: ${opened}`;
-  // Step ids are unique across a run, so the run's lookup answers inner ids —
+  // Step ids are unique across a run, so the RUN's lookup answers inner ids —
   // but a decider OUTSIDE this log is not an inner step: keep only edges from
   // a decider in the mount's own log, so no outer id is served as an inner one.
-  const outer = artifacts.controlDeps;
+  // Always filter the run's RAW lookup, never this level's filtered one: a
+  // nested mount's deciders are not in its parent's log, so filtering the
+  // parent's view would drop every edge one level further down.
+  const raw = RAW_CONTROL_DEPS.get(artifacts) ?? artifacts.controlDeps;
   const innerIds = new Set(opened.commitLog.map((bundle) => bundle.runtimeStageId));
-  return {
+  const bag: TraceToolpackArtifacts = {
     snapshot: opened,
-    ...(outer !== undefined && {
+    ...(raw !== undefined && {
       controlDeps: (id: string) => {
-        const dep = outer(id);
+        const dep = raw(id);
         return dep !== undefined && innerIds.has(dep.deciderId) ? dep : undefined;
       },
     }),
   };
+  if (raw !== undefined) RAW_CONTROL_DEPS.set(bag, raw);
+  return bag;
 }
 
 /** The question's params that were actually given (strict schemas refuse `undefined`). */

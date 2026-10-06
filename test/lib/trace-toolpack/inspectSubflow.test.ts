@@ -8,7 +8,8 @@
  * through `callTraceTool`, the way a model reads it.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { FlowChartExecutor, flowChart, type RuntimeSnapshot } from 'footprintjs';
+import { decide, FlowChartExecutor, flowChart, type RuntimeSnapshot } from 'footprintjs';
+import { controlDepRecorder, type ControlDepLookup } from 'footprintjs/trace';
 
 import { callTraceTool, traceToolpack } from '../../../src/lib/trace-toolpack/traceToolpack';
 import { TRACE_TOOL_NAMES } from '../../../src/lib/trace-toolpack/traceToolNames';
@@ -21,11 +22,13 @@ import { FACTS, SYSTEM, scriptedRespond } from '../recorded-chat/chatDeskFixture
 
 let snapshot: RuntimeSnapshot;
 let tools: Tool[];
+let controlDeps: ControlDepLookup;
 
 beforeAll(async () => {
   const run = await runPlantedScenario(plantedScenario(0));
   snapshot = run.snapshot;
-  tools = traceToolpack({ snapshot, controlDeps: run.controlDeps });
+  controlDeps = run.controlDeps;
+  tools = traceToolpack({ snapshot, controlDeps });
 });
 
 /** The first `inspect_subflow({ … })` call an answer hands the model, parsed. */
@@ -575,5 +578,177 @@ describe('property — every hint the outer tools emit, followed, holds', () => 
     await agent.run({ message: 'User: should I buy ACME?' });
     const desk = agent.getLastSnapshot() as RuntimeSnapshot;
     expect(await contradictions(traceToolpack({ snapshot: desk }), desk)).toEqual([]);
+  }, 60_000);
+});
+
+// ── Review round 2: control edges at every depth ────────────────────────────
+
+/** A subflow whose own decider routes: score → gate{hi | lo}. */
+function gateChart(score: number) {
+  return flowChart<{ score: number; verdict?: string }>(
+    'Score',
+    (scope) => {
+      scope.score = score;
+    },
+    'score',
+  )
+    .addDeciderFunction(
+      'Gate',
+      (scope) =>
+        decide(scope, [{ when: { score: { gte: 60 } }, then: 'hi', label: 'score ≥ 60' }], {
+          branch: 'lo',
+          label: 'below 60',
+        }),
+      'gate',
+    )
+    .addFunctionBranch('hi', 'High', (scope) => {
+      scope.verdict = 'high';
+    })
+    .addFunctionBranch('lo', 'Low', (scope) => {
+      scope.verdict = 'low';
+    })
+    .end()
+    .build();
+}
+
+/**
+ * start → route{ sf-a | skip } → sf-c{gate}, where sf-a = make-mid → sf-b{gate}.
+ * An OUTER decider routes into sf-a (its edge must not show inside), a gate
+ * routes at depth 1 (sf-c) and at depth 2 (sf-a/sf-b).
+ */
+async function gatedRun(): Promise<{ snap: RuntimeSnapshot; lookup: ControlDepLookup }> {
+  const mid = flowChart<{ mid: number; verdict?: string }>(
+    'Mid',
+    (scope) => {
+      scope.mid = 1;
+    },
+    'make-mid',
+  )
+    .addSubFlowChartNext('sf-b', gateChart(70), 'B', {
+      inputMapper: () => ({}),
+      outputMapper: (out) => ({ verdict: out.verdict }),
+    })
+    .build();
+  const chart = flowChart<{ n: number; verdict?: string; v2?: string; skipped?: number }>(
+    'Start',
+    (scope) => {
+      scope.n = 1;
+    },
+    'start',
+  )
+    .addDeciderFunction(
+      'Route',
+      (scope) => decide(scope, [{ when: { n: { gte: 1 } }, then: 'sf-a', label: 'n ≥ 1' }], 'skip'),
+      'route',
+    )
+    .addSubFlowChartBranch('sf-a', mid, 'A', {
+      inputMapper: () => ({}),
+      outputMapper: (out) => ({ verdict: out.verdict }),
+    })
+    .addFunctionBranch('skip', 'Skip', (scope) => {
+      scope.skipped = 1;
+    })
+    .end()
+    .addSubFlowChartNext('sf-c', gateChart(10), 'C', {
+      inputMapper: () => ({}),
+      outputMapper: (out) => ({ v2: out.verdict }),
+    })
+    .build();
+  const executor = new FlowChartExecutor(chart);
+  const recorder = controlDepRecorder();
+  executor.attachCombinedRecorder(recorder);
+  await executor.run();
+  return { snap: executor.getSnapshot(), lookup: recorder.asLookup() };
+}
+
+/**
+ * Every inner step of every mount, opened through the OUTER tool: its control
+ * parents must be exactly the run's edge when that edge's decider is in the
+ * mount's own log, and none otherwise. Returns the mismatches and how many
+ * real edges were checked per depth (so a green run is not a vacuous one).
+ */
+async function controlEdgeMismatches(
+  pack: Tool[],
+  snap: RuntimeSnapshot,
+  lookup: ControlDepLookup,
+): Promise<{ bad: string[]; edgesAtDepth: Record<number, number> }> {
+  const results = (snap.subflowResults ?? {}) as Record<
+    string,
+    { treeContext?: { history?: { runtimeStageId: string }[] } }
+  >;
+  const bad: string[] = [];
+  const edgesAtDepth: Record<number, number> = {};
+  for (const [mount, entry] of Object.entries(results)) {
+    if (!mount.includes('#')) continue;
+    const history = entry.treeContext?.history ?? [];
+    const own = new Set(history.map((bundle) => bundle.runtimeStageId));
+    const depth = mount.split('/').length;
+    for (const id of own) {
+      const dep = lookup(id);
+      const expected = dep !== undefined && own.has(dep.deciderId) ? [dep.deciderId] : [];
+      const answer = await callTraceTool(pack, 'inspect_subflow', { mount, runtimeStageId: id });
+      const shown = [...answer.matchAll(/routed here by (\S+)/g)].map((m) => m[1]);
+      if (JSON.stringify(shown) !== JSON.stringify(expected)) {
+        bad.push(
+          `${mount} ${id}: shown ${JSON.stringify(shown)}, own log says ${JSON.stringify(
+            expected,
+          )}`,
+        );
+      }
+      if (expected.length > 0) edgesAtDepth[depth] = (edgesAtDepth[depth] ?? 0) + 1;
+    }
+  }
+  return { bad, edgesAtDepth };
+}
+
+describe('review round 2 — control edges hold at every depth', () => {
+  it('a gate two levels down still routes its branch, in the step and in the slice', async () => {
+    const { snap, lookup } = await gatedRun();
+    const pack = traceToolpack({ snapshot: snap, controlDeps: lookup });
+    const nested = Object.keys(snap.subflowResults ?? {}).find((key) =>
+      /^sf-a\/sf-b#\d+$/.test(key),
+    ) as string;
+    const history = (
+      snap.subflowResults?.[nested] as { treeContext: { history: { runtimeStageId: string }[] } }
+    ).treeContext.history;
+    const hi = history
+      .map((bundle) => bundle.runtimeStageId)
+      .find((id) => id.startsWith('sf-a/sf-b/hi#')) as string;
+    const gate = history
+      .map((bundle) => bundle.runtimeStageId)
+      .find((id) => id.startsWith('sf-a/sf-b/gate#')) as string;
+
+    const step = await callTraceTool(pack, 'inspect_subflow', {
+      mount: nested,
+      runtimeStageId: hi,
+    });
+    expect(step).toContain(`- control: routed here by ${gate} — rule "score ≥ 60"`);
+    const slice = await callTraceTool(pack, 'inspect_subflow', {
+      mount: nested,
+      variable: 'verdict',
+    });
+    expect(slice).toContain(gate);
+  });
+
+  it("property: inner control parents equal the subflow's own decisions, at depth 1 and depth 2", async () => {
+    const { snap, lookup } = await gatedRun();
+    const pack = traceToolpack({ snapshot: snap, controlDeps: lookup });
+    const { bad, edgesAtDepth } = await controlEdgeMismatches(pack, snap, lookup);
+    expect(bad).toEqual([]);
+    expect(edgesAtDepth[1]).toBeGreaterThan(0);
+    expect(edgesAtDepth[2]).toBeGreaterThan(0);
+    // The outer decider routed INTO sf-a: a real edge, never shown as an inner one.
+    const sfA = Object.keys(snap.subflowResults ?? {}).find((key) =>
+      /^sf-a#\d+$/.test(key),
+    ) as string;
+    expect(lookup(sfA)?.deciderId).toMatch(/^route#\d+$/);
+    // And every door hint on this run, followed, holds too.
+    expect(await contradictions(pack, snap)).toEqual([]);
+  }, 60_000);
+
+  it('property: the same holds on the planted-fact agent run', async () => {
+    const { bad, edgesAtDepth } = await controlEdgeMismatches(tools, snapshot, controlDeps);
+    expect(bad).toEqual([]);
+    expect(edgesAtDepth[1]).toBeGreaterThan(0);
   }, 60_000);
 });
