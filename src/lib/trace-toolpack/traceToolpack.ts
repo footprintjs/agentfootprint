@@ -63,8 +63,17 @@ import {
   renderPreview,
   safeStringify,
 } from './bounded.js';
+import { askInner, framed, innerPackSlot } from './innerDescent.js';
 import type { InnerRunRecord } from './innerRunRecords.js';
 import { openRecording } from './openRecording.js';
+import {
+  homeMountOf,
+  innerCommitCount,
+  mountChain,
+  openSubflow,
+  subflowResultsOf,
+  subflowWrote,
+} from './subflowRecords.js';
 import {
   resolveToolpackOptions,
   TOOLPACK_HARD_CAPS,
@@ -158,6 +167,10 @@ interface ToolpackIndex {
    * later mention is the bare `⚠ <code>` (the model has the sentence in context).
    */
   explained: Set<HonestyCode>;
+  /** `snapshot.subflowResults` as a map — where every mount's OWN log is. */
+  subflowResults: Record<string, unknown> | undefined;
+  /** The mount whose own log holds an id this log does not (memoised; see `subflowRecords`). */
+  homeMountOf: (id: string) => string | undefined;
 }
 
 function stagePartOf(runtimeStageId: string): string {
@@ -187,6 +200,9 @@ function buildIndex(artifacts: TraceToolpackArtifacts): ToolpackIndex {
     for (const entry of bundle.trace) knownPaths.add(entry.path);
   }
 
+  const subflowResults = subflowResultsOf(artifacts.snapshot);
+  const homes = new Map<string, string | undefined>();
+
   // Walk the execution tree: node → children → next (≈ execution order).
   const nodes = new Map<string, StageSnapshot>();
   const orderedIds: string[] = [];
@@ -207,10 +223,17 @@ function buildIndex(artifacts: TraceToolpackArtifacts): ToolpackIndex {
   };
   visit(artifacts.snapshot.executionTree);
 
-  // Steps present in the commit log but missing from the tree (defensive).
+  // Steps present in the commit log but missing from the tree. A subflow's own
+  // log opens with its MOUNT's seed commit, which its tree does not hold — so
+  // an id that committed before the tree's first step goes FIRST, not last.
+  const treeFirstIdx = firstIdxOf.get(orderedIds[0] ?? '') ?? Infinity;
+  const before: string[] = [];
   for (const id of bundlesOf.keys()) {
-    if (!nodes.has(id)) orderedIds.push(id);
+    if (nodes.has(id)) continue;
+    if ((firstIdxOf.get(id) ?? Infinity) < treeFirstIdx) before.push(id);
+    else orderedIds.push(id);
   }
+  orderedIds.unshift(...before);
 
   const idsByStagePart = new Map<string, string[]>();
   const groupsByStagePart = new Map<string, StageGroup>();
@@ -258,12 +281,20 @@ function buildIndex(artifacts: TraceToolpackArtifacts): ToolpackIndex {
     untrackedStepCount,
     initialState: artifacts.snapshot.initialState as Record<string, unknown> | undefined,
     explained: new Set<HonestyCode>(),
+    subflowResults,
+    homeMountOf: (id) => {
+      if (subflowResults === undefined) return undefined;
+      if (!homes.has(id)) homes.set(id, homeMountOf(subflowResults, id));
+      return homes.get(id);
+    },
   };
 }
 
 // ── Shared message helpers ─────────────────────────────────────────────────
 
 function unknownIdMessage(id: string, index: ToolpackIndex): string {
+  const home = index.homeMountOf(id);
+  if (home !== undefined) return innerIdMessage(id, home);
   const stagePart = stagePartOf(id);
   const siblings = index.idsByStagePart.get(stagePart);
   if (siblings && siblings.length > 0) {
@@ -284,6 +315,21 @@ function unknownIdMessage(id: string, index: ToolpackIndex): string {
       : '') +
     `. Call run_overview to list every stage.`
   );
+}
+
+/** An id from a subflow's OWN log, pasted into a tool over the log above it. */
+function innerIdMessage(id: string, mount: string): string {
+  return (
+    `'${id}' is a step INSIDE subflow mount ${mount} — an id of that subflow's own log, not ` +
+    `of this one. Open it there: inspect_subflow({ mount: '${mount}', runtimeStageId: '${id}' }).`
+  );
+}
+
+/** The one line a subflow mount carries: it can be opened, and how. */
+function mountLine(index: ToolpackIndex, id: string): string {
+  return index.subflowResults !== undefined && id in index.subflowResults
+    ? `inside: inspect_subflow({ mount: '${id}' }) opens this subflow's own log.`
+    : `inside: no own log kept for this mount — inspect_subflow({ mount: '${id}' }) says why.`;
 }
 
 function unknownKeySuffix(index: ToolpackIndex): string {
@@ -384,6 +430,7 @@ function matchWindow(text: string, needleLower: string, radius: number): string 
  * | `get_value`         | The full value of K as of step X (capped, truncation-marked) |
  * | `inspect_tool_call` | One tool call end to end: proposed args → ran-with args → result → outcome |
  * | `inspect_tool_run`  | INSIDE one tool call — the chart it ran, when that tool kept its record |
+ * | `inspect_subflow`   | INSIDE one subflow mount — the subflow's own log, one level at a time |
  * | `read_narrative`    | The human-readable story, paginated (only when narrative provided) |
  *
  * Mount on an Agent (`Agent.create({...}).tool(...tools)`) or drive scripted
@@ -420,6 +467,7 @@ export function traceToolpack(
     buildGetValue(index, opts),
     buildInspectToolCall(artifacts, calls),
     buildInspectToolRun(artifacts, calls, options),
+    buildInspectSubflow(artifacts, index, options),
   ];
   if (artifacts.narrative !== undefined) {
     tools.push(buildReadNarrative(artifacts.narrative));
@@ -439,10 +487,25 @@ export { TRACE_TOOL_NAMES } from './traceToolNames.js';
 
 function idProperty(index: ToolpackIndex, description: string): Record<string, unknown> {
   const property: Record<string, unknown> = { type: 'string', description };
-  if (index.orderedIds.length > 0 && index.orderedIds.length <= SCHEMA_ENUM_CAP) {
+  // No enum when subflows kept their own logs: the model may then hold an
+  // INNER id, and it is owed the correction toward `inspect_subflow` that only
+  // `execute` can give — a schema refusal would read as "no such step".
+  if (
+    index.orderedIds.length > 0 &&
+    index.orderedIds.length <= SCHEMA_ENUM_CAP &&
+    !hasMountLogs(index)
+  ) {
     property.enum = index.orderedIds;
   }
   return property;
+}
+
+/** True when at least one subflow mount kept its own log in this snapshot. */
+function hasMountLogs(index: ToolpackIndex): boolean {
+  const results = index.subflowResults;
+  return (
+    results !== undefined && Object.keys(results).some((key) => innerCommitCount(results, key) > 0)
+  );
 }
 
 /**
@@ -460,6 +523,21 @@ function keyProperty(index: ToolpackIndex, description: string): Record<string, 
 }
 
 // ── run_overview ───────────────────────────────────────────────────────────
+
+/**
+ * ONE line, only when the run mounted subflows: their inner steps are not in
+ * this log, and here is the door. By reference — nothing from inside a
+ * subflow is printed until the model asks for it.
+ */
+function overviewSubflowLine(index: ToolpackIndex): string | undefined {
+  const mounts = index.groups.filter((group) => group.isSubflow).flatMap((group) => group.ids);
+  if (mounts.length === 0) return undefined;
+  const results = index.subflowResults;
+  const openable = mounts.find((id) => results !== undefined && id in results);
+  return openable !== undefined
+    ? `[subflow] steps ran their own log: inspect_subflow({ mount: '${openable}' }) opens one.`
+    : `[subflow] steps kept no own log here — inspect_subflow({ mount }) says why.`;
+}
 
 function buildRunOverview(artifacts: TraceToolpackArtifacts, index: ToolpackIndex): Tool {
   return defineTool<Record<string, never>, string>({
@@ -511,6 +589,8 @@ function buildRunOverview(artifacts: TraceToolpackArtifacts, index: ToolpackInde
       if (index.groups.length > OVERVIEW_STAGE_CAP) {
         lines.push(`…and ${index.groups.length - OVERVIEW_STAGE_CAP} more stages (output capped)`);
       }
+      const subflowHint = overviewSubflowLine(index);
+      if (subflowHint !== undefined) lines.push(subflowHint);
 
       const loops = index.groups.filter((g) => g.ids.length > 1);
       if (loops.length > 0) {
@@ -1449,6 +1529,7 @@ function buildTraceNode(
       const name = node?.name ?? bundles?.[0]?.stage ?? stagePartOf(runtimeStageId);
       lines.push(`STEP ${runtimeStageId} — "${name}"${flags}`);
       if (node?.description) lines.push(`description: ${node.description}`);
+      if (node?.subflowId) lines.push(mountLine(index, runtimeStageId));
 
       // Writes — verb-aware values via commitValueAt (delta-mode safe).
       const writes = new Map<string, string>(); // path → verb (last wins)
@@ -1872,7 +1953,8 @@ function buildWhoWrote(index: ToolpackIndex, opts: ResolvedToolpackOptions): Too
           (beforeStageId !== undefined ? ` before ${beforeStageId}` : '') +
           ` in the commit log.` +
           (index.knownPaths.has(path) ? '' : unknownKeySuffix(index)) +
-          basisLines(index, basis)
+          basisLines(index, basis) +
+          writtenInsideLine(index, path)
         );
       }
 
@@ -1897,10 +1979,43 @@ function buildWhoWrote(index: ToolpackIndex, opts: ResolvedToolpackOptions): Too
               index,
               'incomplete-sources',
             )}`
-          : '')
+          : '') +
+        mergeBackLine(index, writer.runtimeStageId, path)
       );
     },
   });
+}
+
+/**
+ * A write by a subflow MOUNT is its merge-back: the value was made inside. One
+ * line names the question that reaches the inner writer; '' otherwise.
+ */
+function mergeBackLine(index: ToolpackIndex, writerId: string, path: string): string {
+  if (index.nodes.get(writerId)?.subflowId === undefined) return '';
+  return (
+    `\n↳ ${writerId} is a subflow mount — this write is its merge-back. ` +
+    `inspect_subflow({ mount: '${writerId}', key: '${displayKey(path)}' }) names the writer ` +
+    `inside.`
+  );
+}
+
+/**
+ * A key this log never wrote may still be written INSIDE a subflow mounted at
+ * this level — its own log never merged it back. One line naming the latest
+ * such mount; '' when none did (asked only on a miss).
+ */
+function writtenInsideLine(index: ToolpackIndex, path: string): string {
+  const results = index.subflowResults;
+  if (results === undefined) return '';
+  const mounts = [...index.orderedIds]
+    .reverse()
+    .filter((id) => index.nodes.get(id)?.subflowId !== undefined);
+  const inside = mounts.find((id) => subflowWrote(results[id], path));
+  if (inside === undefined) return '';
+  return (
+    `\n↳ but subflow ${inside} wrote '${displayKey(path)}' in its OWN log (not merged back ` +
+    `here): inspect_subflow({ mount: '${inside}', key: '${displayKey(path)}' }) names the writer.`
+  );
 }
 
 // ── get_value ──────────────────────────────────────────────────────────────
@@ -2516,14 +2631,11 @@ function buildInspectToolRun(
   reader: ToolCallReader,
   options: TraceToolpackOptions | undefined,
 ): Tool {
-  // One inner pack at a time, memoized by call id: three drills into one
-  // inner run build one index, and the memo pins at most ONE inner run's
-  // index beyond the record the store is already holding.
-  let memoId: string | undefined;
-  let memoTools: Tool[] | undefined;
+  // One inner pack at a time, memoized by call id (`innerDescent`): three
+  // drills into one inner run build one index.
+  const slot = innerPackSlot((inner) => traceToolpack(inner, options));
 
-  const innerToolsFor = (record: InnerRunRecord): Tool[] | string => {
-    if (memoTools !== undefined && memoId === record.toolCallId) return memoTools;
+  const openRecord = (record: InnerRunRecord): TraceToolpackArtifacts | string => {
     if (record.recording === undefined) {
       return (
         `tool call '${record.toolCallId}' ran '${record.toolName}', which keeps records — but ` +
@@ -2532,9 +2644,8 @@ function buildInspectToolRun(
         `envelope (arguments in, result out).`
       );
     }
-    let inner: TraceToolpackArtifacts;
     try {
-      inner = {
+      return {
         // `openRecording` is the adapter, not a copy of it: same lift, same
         // two teaching refusals if the bag is malformed. The two fields it
         // cannot lift from JSON — control edges, and a narrative nobody
@@ -2549,9 +2660,6 @@ function buildInspectToolRun(
         `${e instanceof Error ? e.message : String(e)}`
       );
     }
-    memoId = record.toolCallId;
-    memoTools = traceToolpack(inner, options);
-    return memoTools;
   };
 
   return defineTool<
@@ -2570,8 +2678,8 @@ function buildInspectToolRun(
       'record of what they ran; this opens it. Called with just a toolCallId it returns a ' +
       'bounded overview of the inner run (its stages, its errors, its state keys). Add ' +
       "'find' to search that inner run in free text, 'variable' to ask why an inner value is " +
-      "what it is, 'runtimeStageId' to open one inner step, or both 'runtimeStageId' and " +
-      "'key' for an inner value in full. The ids it returns are the INNER chart's — the " +
+      "what it is, 'key' alone for who last wrote an inner key, 'runtimeStageId' to open one " +
+      "inner step, or both 'runtimeStageId' and 'key' for an inner value in full. The ids it returns are the INNER chart's — the " +
       'outer trace tools do not accept them. Reach for it when inspect_tool_call says a ' +
       'record was kept and the question is about what the tool DID, not what it returned.',
     inputSchema: {
@@ -2591,7 +2699,8 @@ function buildInspectToolRun(
         key: {
           type: 'string',
           description:
-            "Optional, with runtimeStageId: the inner state key to fetch in full, e.g. 'forecast'.",
+            "Optional: an inner state key, e.g. 'forecast' — alone, who last wrote it inside; " +
+            'with runtimeStageId, its value in full as of that step.',
         },
         variable: {
           type: 'string',
@@ -2614,44 +2723,182 @@ function buildInspectToolRun(
       const record = lookup.get(toolCallId);
       if (record === undefined) return unknownInnerRunMessage(toolCallId, lookup, reader);
 
-      const inner = innerToolsFor(record);
+      const inner = slot(record.toolCallId, () => openRecord(record));
       if (typeof inner === 'string') return inner;
 
-      // Param-shaped dispatch (the `backtrack({ element })` precedent): the
-      // narrowest question the caller asked wins, and the default — no
-      // extra params at all — is the entry point, exactly as run_overview
-      // is the entry point one level up.
-      let body: string;
-      if (find !== undefined) {
-        body = await callTraceTool(inner, 'find_in_trace', { query: find });
-      } else if (variable !== undefined) {
-        body = await callTraceTool(inner, 'backtrack', { variable });
-      } else if (runtimeStageId !== undefined && key !== undefined) {
-        body = await callTraceTool(inner, 'get_value', { runtimeStageId, key });
-      } else if (runtimeStageId !== undefined) {
-        body = await callTraceTool(inner, 'trace_node', { runtimeStageId });
-      } else if (key !== undefined) {
-        body =
-          `'key' names a value AS OF a step, so it needs a step: pass runtimeStageId too, or ` +
-          `use 'variable' to ask why '${displayKey(key)}' is what it is across the whole inner ` +
-          `run.`;
-      } else {
-        body = await callTraceTool(inner, 'run_overview', {});
-      }
-
-      return [
-        `INSIDE TOOL CALL ${toolCallId} — '${record.toolName}' ran a recorded flowchart ` +
-          `(${record.steps} committed step(s), ${record.outcome}).`,
+      const body = await askInner(inner, { runtimeStageId, key, variable, find }, callTraceTool);
+      return framed(
+        {
+          header:
+            `INSIDE TOOL CALL ${toolCallId} — '${record.toolName}' ran a recorded flowchart ` +
+            `(${record.steps} committed step(s), ${record.outcome}).`,
+          next:
+            `next inside call '${toolCallId}': inspect_tool_run({ toolCallId: '${toolCallId}', ` +
+            `runtimeStageId: '<inner id>' }) opens a step · add 'key' for a value in full · ` +
+            `'variable' asks why an inner value is what it is · 'find' searches this inner run.`,
+          namespace:
+            `⚠ the ids above are INNER ids — they name steps of ${record.toolName}'s own chart, ` +
+            `not of the run that called it. trace_node / get_value / trace_slice do not accept ` +
+            `them; come back through inspect_tool_run.`,
+        },
         body,
-        `next inside call '${toolCallId}': inspect_tool_run({ toolCallId: '${toolCallId}', ` +
-          `runtimeStageId: '<inner id>' }) opens a step · add 'key' for a value in full · ` +
-          `'variable' asks why an inner value is what it is · 'find' searches this inner run.`,
-        `⚠ the ids above are INNER ids — they name steps of ${record.toolName}'s own chart, not ` +
-          `of the run that called it. trace_node / get_value / trace_slice do not accept them; ` +
-          `come back through inspect_tool_run.`,
-      ].join('\n');
+      );
     },
   });
+}
+
+// ── inspect_subflow ────────────────────────────────────────────────────────
+
+/** How many mounts a correction names. */
+const MOUNT_SUGGESTION_CAP = 8;
+
+/**
+ * INSIDE a subflow mount — the subflow's OWN log, opened.
+ *
+ * A subflow runs in an isolated runtime and commits to its own log, so this
+ * run's log holds only the mount boundary: what went in, what came back. The
+ * evidence of who wrote a value IN there was always recorded (footprintjs keeps
+ * it in `subflowResults`) — no tool served it. This one does, through the same
+ * descent `inspect_tool_run` uses (`innerDescent`): the inner views are the
+ * pack's own tools over the mount's own record, so the inner answers carry the
+ * same reason codes, folded from the SUBFLOW's own `initialState`.
+ *
+ *   - BY REFERENCE. Nothing from inside a subflow is printed until the model
+ *     asks; the outer views carry one line naming the door.
+ *   - ONE LEVEL AT A TIME. A mount nested inside a subflow is opened through
+ *     its parent's pack — this tool walks the chain (`mountChain`), each level
+ *     answering only for its own log.
+ *   - ITS OWN NAMESPACE. Inner ids are said to be inner on every answer, and
+ *     an outer tool handed one corrects toward here (`innerIdMessage`).
+ */
+function buildInspectSubflow(
+  artifacts: TraceToolpackArtifacts,
+  index: ToolpackIndex,
+  options: TraceToolpackOptions | undefined,
+): Tool {
+  const slot = innerPackSlot((inner) => traceToolpack(inner, options));
+  const isStep = (id: string): boolean => index.nodes.has(id) || index.firstIdxOf.has(id);
+  const mountIds = (): string[] => index.orderedIds.filter((id) => index.nodes.get(id)?.subflowId);
+
+  const notAMount = (mount: string): string => {
+    if (isStep(mount)) {
+      return `'${mount}' is an outer step, not a subflow mount — trace_node('${mount}') opens it.`;
+    }
+    const mounts = mountIds();
+    const sameStage = mounts.filter((id) => stagePartOf(id) === mount);
+    if (sameStage.length > 0) {
+      return (
+        `'${mount}' ran ${sameStage.length} time(s); a mount is ONE execution: ` +
+        `${sameStage.slice(0, MOUNT_SUGGESTION_CAP).join(', ')}` +
+        `${sameStage.length > MOUNT_SUGGESTION_CAP ? ', …' : ''}. Retry with one of those ids.`
+      );
+    }
+    if (mounts.length === 0)
+      return `the traced run mounted no subflows — there is no inner log to open.`;
+    return (
+      `unknown mount '${mount}'. Subflow mounts in the traced run: ` +
+      `${mounts.slice(0, MOUNT_SUGGESTION_CAP).join(', ')}` +
+      `${mounts.length > MOUNT_SUGGESTION_CAP ? ', …' : ''}.`
+    );
+  };
+
+  return defineTool<
+    { mount: string; runtimeStageId?: string; key?: string; variable?: string; find?: string },
+    string
+  >({
+    name: 'inspect_subflow',
+    description:
+      "Open a [subflow] step's OWN log (the run's log holds only its boundary). Mount id alone: " +
+      "inner overview. 'key': its last writer inside. 'variable': why it is what it is. " +
+      "'find': search. 'runtimeStageId' (+'key'): one inner step (value). Inner ids go back here.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        mount: { type: 'string', description: "The mount step, e.g. 'sf-tools#11'." },
+        runtimeStageId: { type: 'string', description: 'Optional: an inner step id.' },
+        key: { type: 'string', description: 'Optional: an inner state key.' },
+        variable: { type: 'string', description: 'Optional: an inner state key to explain.' },
+        find: { type: 'string', description: 'Optional: free text to locate inside.' },
+      },
+      required: ['mount'],
+      additionalProperties: false,
+    },
+    execute: async ({ mount, runtimeStageId, key, variable, find }) => {
+      const question = { runtimeStageId, key, variable, find };
+      const results = index.subflowResults;
+      const isMount = index.nodes.get(mount)?.subflowId !== undefined;
+
+      // A mount nested below this level: open its parent here, ask there.
+      if (!isMount && !isStep(mount) && results !== undefined) {
+        const chain = mountChain(results, mount, isStep);
+        if (chain !== undefined && chain.length > 1) {
+          const parent = chain[0] as string;
+          const pack = slot(parent, () => openSubflowArtifacts(artifacts, parent));
+          if (typeof pack === 'string') return pack;
+          return callTraceTool(pack, 'inspect_subflow', { mount, ...definedOf(question) });
+        }
+      }
+      if (!isMount) return notAMount(mount);
+
+      if (
+        runtimeStageId !== undefined &&
+        runtimeStageId !== mount &&
+        isStep(runtimeStageId) &&
+        index.homeMountOf(runtimeStageId) !== mount
+      ) {
+        return (
+          `'${runtimeStageId}' is a step of the run ABOVE subflow ${mount}, not of its own log — ` +
+          `trace_node('${runtimeStageId}') opens it there.`
+        );
+      }
+
+      const inner = slot(mount, () => openSubflowArtifacts(artifacts, mount));
+      if (typeof inner === 'string') return inner;
+
+      const body = await askInner(inner, question, callTraceTool);
+      const name = index.nodes.get(mount)?.name;
+      const parent = index.homeMountOf(mount);
+      const commits = innerCommitCount(index.subflowResults, mount);
+      return framed(
+        {
+          header:
+            `INSIDE SUBFLOW ${mount}${name !== undefined ? ` — "${name}"` : ''}` +
+            `${parent !== undefined ? ` (nested in ${parent})` : ''}: its own log, ` +
+            `${commits} commit(s), the mount's seed first.`,
+          next:
+            `next inside '${mount}': inspect_subflow({ mount: '${mount}', runtimeStageId: ` +
+            `'<inner id>' }) opens a step · 'key' alone names its last writer inside · 'variable' ` +
+            `asks why an inner value is what it is · 'find' searches this inner log.`,
+          namespace:
+            `⚠ the ids above are INNER ids — steps of subflow ${mount}'s own log, not of the run ` +
+            `that mounted it. trace_node / get_value / trace_slice correct them back here.`,
+        },
+        body,
+      );
+    },
+  });
+}
+
+/** The mount's record as an artifact bag, or why there is none. */
+function openSubflowArtifacts(
+  artifacts: TraceToolpackArtifacts,
+  mount: string,
+): TraceToolpackArtifacts | string {
+  const opened = openSubflow(artifacts.snapshot, mount);
+  if (typeof opened === 'string') return `inspect_subflow: ${opened}`;
+  // Step ids are unique across a run (the execution counter is shared with
+  // every subflow), so the run's control-dependence lookup answers inner ids.
+  return {
+    snapshot: opened,
+    ...(artifacts.controlDeps !== undefined && { controlDeps: artifacts.controlDeps }),
+  };
+}
+
+/** The question's params that were actually given (strict schemas refuse `undefined`). */
+function definedOf(question: Record<string, string | undefined>): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(question).filter((entry): entry is [string, string] => entry[1] !== undefined),
+  );
 }
 
 /** No tool in this run keeps a record — name the switch, not the emptiness. */

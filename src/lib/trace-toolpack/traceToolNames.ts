@@ -44,6 +44,7 @@ export const TRACE_TOOL_NAMES = [
   'get_value',
   'inspect_tool_call',
   'inspect_tool_run',
+  'inspect_subflow',
   'read_narrative',
 ] as const;
 
