@@ -1,5 +1,6 @@
 ---
 type: security
+bump: minor
 ---
 **Output middleware now governs answer delivery before drafts escape.** A configured output policy withholds provider tokens and `stream.llm_end.content`, retaining usage and timing with `contentWithheld: true`. After acceptance, one token carries the captured final answer, including an output rewrite. Refusal stops before final capture, `turn_end`, and final memory writes; the API boundary emits a content-free `error.fatal` terminal so streams close. The existing middleware chain remains the sole decision and evidence writer. Raw drafts, rewrite pairs and earlier tool history remain audit data, not safe exports.
 
