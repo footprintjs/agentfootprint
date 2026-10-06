@@ -167,10 +167,10 @@ export async function executeWithReliability(
   const withholdDraft = options?.withholdDraftContent === true;
   // The error text a PUBLIC event may carry. A schema failure's message is
   // parser text about the draft, so it is withheld with the draft.
+  const withholdsDraft = (error: Error): boolean =>
+    withholdDraft && error instanceof ValidationFailure;
   const publicErrorMessage = (): { errorMessage?: string } =>
-    lastError === undefined || (withholdDraft && lastError instanceof ValidationFailure)
-      ? {}
-      : { errorMessage: lastError.message };
+    lastError === undefined || withholdsDraft(lastError) ? {} : { errorMessage: lastError.message };
 
   // Closure-local state — see header comment for rationale.
   let attempt = 0;
@@ -224,7 +224,7 @@ export async function executeWithReliability(
       attempt,
       providerUsed: cur.name,
       errorKind: lastErrorKind,
-      ...(lastError?.message !== undefined && { errorMessage: lastError.message }),
+      ...publicErrorMessage(),
     };
     const reason = `reliability-${phase}: ${label}`;
     // Typed writes via the live TypedScope<AgentState> — the
@@ -241,7 +241,12 @@ export async function executeWithReliability(
       // ReliabilityFailFastError.cause; consumer's `instanceof` checks
       // get a stable Error subclass without us needing to preserve the
       // exact prototype.
-      scope.reliabilityFailCauseMessage = lastError.message;
+      // Under an output policy a schema failure's message quotes a draft that
+      // never passed admission, so the error the caller catches (and the
+      // record) carries the fixed sentence instead.
+      scope.reliabilityFailCauseMessage = withholdsDraft(lastError)
+        ? WITHHELD_SCHEMA_FAILURE
+        : lastError.message;
       scope.reliabilityFailCauseName = lastError.name;
     }
     typedEmit(scope, 'agentfootprint.reliability.fail_fast', {
