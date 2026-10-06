@@ -1562,6 +1562,31 @@ export function buildToolCallsHandler(
     permissionChecker,
   } = deps;
   const toolArgValidation = deps.toolArgValidation ?? 'enforce';
+  /**
+   * One admission rule for initial and resumed dispatch. Judge against the
+   * wire schema after middleware, before artifact resolution or credentials.
+   * Approval of an ask does not establish schema validity, and a remaining
+   * middleware link may have changed the paused arguments. Credential-consent
+   * checkpoints holding resolved wants data are not converted back to refs.
+   */
+  const argumentRefusal = (
+    scope: TypedScope<AgentState>,
+    tool: Tool,
+    args: unknown,
+    call: { readonly toolName: string; readonly toolCallId: string; readonly iteration: number },
+  ): string | undefined => {
+    if (toolArgValidation === 'off') return undefined;
+    const verdict = validateToolArgs(args, tool.schema.inputSchema);
+    if (verdict.ok) return undefined;
+    typedEmit(scope, 'agentfootprint.validation.args_invalid', {
+      ...call,
+      issues: verdict.issues,
+      enforced: toolArgValidation === 'enforce',
+    });
+    return toolArgValidation === 'enforce'
+      ? formatToolArgIssues(call.toolName, verdict.issues)
+      : undefined;
+  };
   // 8.6.0 — default `'pause'`. Consent is work waiting on a person, and every
   // other place this library needs a person stops the run and asks the caller.
   const onAuthorizationRequired: AuthorizationRequiredMode =
@@ -3604,6 +3629,8 @@ export function buildToolCallsHandler(
         error: true,
       };
     }
+    const invalidArgs = argumentRefusal(scope, tool, args, { toolName, toolCallId, iteration });
+    if (invalidArgs !== undefined) return { result: invalidArgs, error: true };
     noteOffWire(scope, resolved, { toolName, toolCallId, iteration });
     // Declared artifact arguments (9.22.0) — the same resolution the batch
     // loop applies, at this door: a resumed call's refs are judged exactly
@@ -4497,21 +4524,16 @@ export function buildToolCallsHandler(
         // tools (their inputSchema is the contract the LLM was shown).
         // (`argsRejected` is declared above the middleware chain: the inputs
         // layer's refusals land in the same shape, before the chain.)
-        if (!denied && !argsRejected && tool && toolArgValidation !== 'off') {
-          const verdict = validateToolArgs(callArgs, tool.schema.inputSchema);
-          if (!verdict.ok) {
-            typedEmit(scope, 'agentfootprint.validation.args_invalid', {
-              toolName: tc.name,
-              toolCallId: tc.id,
-              iteration,
-              issues: verdict.issues,
-              enforced: toolArgValidation === 'enforce',
-            });
-            if (toolArgValidation === 'enforce') {
-              argsRejected = true;
-              error = true;
-              result = formatToolArgIssues(tc.name, verdict.issues);
-            }
+        if (!denied && !argsRejected && tool) {
+          const invalidArgs = argumentRefusal(scope, tool, callArgs, {
+            toolName: tc.name,
+            toolCallId: tc.id,
+            iteration,
+          });
+          if (invalidArgs !== undefined) {
+            argsRejected = true;
+            error = true;
+            result = invalidArgs;
           }
         }
         // ── Skill-activation gate (9.11.0) ───────────────────────────────
@@ -5502,14 +5524,13 @@ export function buildToolCallsHandler(
         // a ceiling refusal each already teach their own lesson, and stacking
         // a second one would bury it.
         //
-        // ONE tool-dispatch door, deliberately. Verified by search, not
-        // assumed: `tool.execute(...)` is invoked from exactly four places in
-        // this library — this batch loop; `resolveCredentialAndExecute`
-        // above (the check-in RESUME door, same file); `mcp/mcpServe.ts`
-        // (serving a tool to an external MCP client); and
-        // `trace-toolpack/traceToolpack.ts` (offline replay against a
-        // recorded run). Only this one, the main ReAct loop, gets the nudge.
-        // The other three never see a live multi-turn conversation the way
+        // Only this batch-loop dispatch gets the nudge. The other dispatch
+        // owners are `resolveCredentialAndExecute` above (resume),
+        // `../toolDispatch.ts` · `agentToolDispatch` (inner calls),
+        // `lib/mcp/mcpServe.ts` (external MCP clients), and
+        // `lib/trace-toolpack/traceToolpack.ts` · `callTraceTool` (offline).
+        // Inner calls are the outer call's work, not another model turn.
+        // The other doors never see a live multi-turn conversation the way
         // this loop does — a resumed check-in is a single call with no
         // "again" to notice, an MCP-served call has no ledger to be a run's
         // (the caller IS the loop, elsewhere), and a trace replay is judging

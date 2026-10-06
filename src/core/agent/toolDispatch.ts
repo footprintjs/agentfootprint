@@ -34,6 +34,7 @@
  */
 
 import type { Credential } from '../../identity/types.js';
+import { formatToolArgIssues, validateToolArgs } from './toolArgsValidation.js';
 import {
   isMissing,
   isRefused,
@@ -69,8 +70,9 @@ export interface AgentToolDispatchDeps {
  * `call` resolves the inner tool's declared `needs` through the inner
  * context's own credential provider (fail-closed — the provider throws its
  * teaching refusal when none is attached), refuses the shapes an inner call
- * cannot honor (see the module header), executes, and returns the result
- * exactly as the tool returned it. Policy about what a result MEANS — an
+ * cannot honor (see the module header), validates the declared input schema
+ * before creating an inner context, executes, and returns the result exactly
+ * as the tool returned it. Policy about what a result MEANS — an
  * absence that should short-circuit, a coverage ledger that should fold —
  * belongs to the consumer wrapping this dispatch, never here.
  */
@@ -107,6 +109,10 @@ export function agentToolDispatch(deps: AgentToolDispatchDeps): ToolDispatch {
         );
       }
       refuseUnaccountedRuledArguments(name, tool, args);
+      const validation = validateToolArgs(args, tool.schema.inputSchema);
+      if (!validation.ok) {
+        throw new Error(formatToolArgIssues(name, validation.issues));
+      }
       seq += 1;
       const base = deps.innerContext(name, seq);
       const ctx: ToolExecutionContext = {

@@ -14,7 +14,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { allow, ask, defineTool, deny } from '../../../src/index.js';
 import { mcpServe } from '../../../src/tool-providers/index.js';
 import { PermissionPolicy } from '../../../src/security/index.js';
-import { staticTokens } from '../../../src/identity.js';
+import { bearer, staticTokens } from '../../../src/identity.js';
 import type { McpCallToolRequest, McpSdkServer } from '../../../src/lib/mcp/types.js';
 import type { Tool, ToolExecutionContext } from '../../../src/core/tools.js';
 import { expectScalesLinearly } from '../../helpers/perf.js';
@@ -348,11 +348,12 @@ describe('mcpServe — integration', () => {
 // ─── Property — args are forwarded verbatim ───────────────────────
 
 describe('mcpServe — property', () => {
-  it('whatever the client sends as arguments arrives at execute unchanged', async () => {
+  it('arguments accepted by an unconstrained schema arrive at execute unchanged', async () => {
     const seen: unknown[] = [];
     const sink = defineTool({
       name: 'sink',
       description: 'Takes anything',
+      inputSchema: {},
       execute: (args) => {
         seen.push(args);
         return 'ok';
@@ -378,6 +379,151 @@ describe('mcpServe — property', () => {
       expect((await server.call(name, {})).content[0]?.text).toBe(`ran ${name}`);
     }
     expect((await server.call('delta', {})).isError).toBe(true);
+  });
+});
+
+describe('mcpServe — shared argument admission', () => {
+  const inputSchema = {
+    type: 'object',
+    properties: {
+      query: { type: 'string', minLength: 1 },
+      filters: {
+        type: 'object',
+        properties: { region: { type: 'string' } },
+        additionalProperties: false,
+      },
+    },
+    required: ['query'],
+    additionalProperties: false,
+  };
+
+  it.each([
+    ['extra', { query: 'ok', extra: 'private-canary' }],
+    ['query', {}],
+    ['query', { query: 1 }],
+    ['filters.extra', { query: 'ok', filters: { extra: 'private-canary' } }],
+    ['arguments', []],
+  ])('refuses %s before credentials, execute, and after-tool middleware', async (path, args) => {
+    const execute = vi.fn(() => 'executed');
+    const getCredential = vi.fn(async () => ({
+      status: 'issued' as const,
+      credential: bearer('credential-canary'),
+    }));
+    const after = vi.fn(() => allow());
+    const tool: Tool = {
+      schema: { name: 'query', description: 'Query', inputSchema },
+      needs: { credential: 'private-service' },
+      execute,
+    };
+    const server = makeMockServer();
+    const handle = await mcpServe([tool], {
+      _server: server,
+      credentials: { id: 'test-vault', getCredential },
+      toolMiddleware: [{ name: 'after', onToolResult: after }],
+    });
+    try {
+      const result = await server.call('query', args);
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain("Invalid arguments for tool 'query'");
+      expect(result.content[0]?.text).toContain(path);
+      expect(result.content[0]?.text).not.toContain('private-canary');
+      expect(result.content[0]?.text).not.toContain('credential-canary');
+      expect(execute).not.toHaveBeenCalled();
+      expect(getCredential).not.toHaveBeenCalled();
+      expect(after).not.toHaveBeenCalled();
+    } finally {
+      await handle.close();
+    }
+  });
+
+  it('validates the middleware output, allowing repairs but refusing invalid rewrites', async () => {
+    for (const valid of [false, true]) {
+      const execute = vi.fn((_args: unknown) => 'executed');
+      const rewritten = valid ? { query: 'repaired' } : { query: 'ok', extra: true };
+      const server = makeMockServer();
+      const handle = await mcpServe(
+        [{ schema: { name: 'query', description: 'Query', inputSchema }, execute }],
+        {
+          _server: server,
+          toolMiddleware: [{ name: 'rewrite', onToolCall: () => allow(rewritten, 'rewrite') }],
+        },
+      );
+      try {
+        const result = await server.call('query', { query: 3 });
+        expect(result.isError === true).toBe(!valid);
+        expect(execute).toHaveBeenCalledTimes(valid ? 1 : 0);
+        if (valid) expect(execute.mock.calls[0]?.[0]).toBe(rewritten);
+      } finally {
+        await handle.close();
+      }
+    }
+  });
+
+  it('keeps policy denial ahead of validation', async () => {
+    const execute = vi.fn(() => 'executed');
+    const server = makeMockServer();
+    const handle = await mcpServe(
+      [{ schema: { name: 'query', description: 'Query', inputSchema }, execute }],
+      {
+        _server: server,
+        toolMiddleware: [{ name: 'deny', onToolCall: () => deny('policy refused') }],
+      },
+    );
+    try {
+      expect(await server.call('query', { extra: true })).toEqual({
+        content: [{ type: 'text', text: 'policy refused' }],
+        isError: true,
+      });
+      expect(execute).not.toHaveBeenCalled();
+    } finally {
+      await handle.close();
+    }
+  });
+
+  it.each([undefined, true])(
+    'preserves explicitly or implicitly open schemas (%s)',
+    async (open) => {
+      const args = { query: 'ok', extra: { retained: false } };
+      const execute = vi.fn((_args: unknown) => 'executed');
+      const schema = { ...inputSchema, additionalProperties: open };
+      if (open === undefined) delete schema.additionalProperties;
+      const server = makeMockServer();
+      const handle = await mcpServe(
+        [{ schema: { name: 'query', description: 'Query', inputSchema: schema }, execute }],
+        { _server: server },
+      );
+      try {
+        expect((await server.call('query', args)).isError).toBeUndefined();
+        expect(execute.mock.calls[0]?.[0]).toBe(args);
+        expect((await server.list()).tools[0]?.inputSchema).toBe(schema);
+      } finally {
+        await handle.close();
+      }
+    },
+  );
+
+  it('does not normalize omitted args on an accepted no-argument call', async () => {
+    const execute = vi.fn((_args: unknown) => 'executed');
+    const server = makeMockServer();
+    const handle = await mcpServe(
+      [
+        {
+          schema: {
+            name: 'noop',
+            description: 'No arguments',
+            inputSchema: { type: 'object', properties: {} },
+          },
+          execute,
+        },
+      ],
+      { _server: server },
+    );
+    try {
+      expect((await server.call('noop')).isError).toBeUndefined();
+      expect(execute.mock.calls[0]?.[0]).toBeUndefined();
+    } finally {
+      await handle.close();
+    }
   });
 });
 

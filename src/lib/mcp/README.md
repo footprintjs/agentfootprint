@@ -12,6 +12,15 @@ A tool is two things at once — execution and declaration — and both must sur
 the wire (`toolExtras.ts`). A refusal here names WHY, because "install it" is
 only one of the reasons a connection fails.
 
+`mcpServe.ts` uses `core/agent/toolArgsValidation.ts` after the before-tool
+middleware chain and before credentials or execution. A rejected call returns
+an MCP tool error with the shared correction; after-tool middleware does not
+run. This boundary always enforces the validator's supported subset and has
+no Agent warn/off dial. Accepted arguments and schema objects retain their
+identity; omitted arguments are not converted to an empty object. An open
+schema still allows extra fields. Direct `Tool.execute` and the MCP client's
+existing argument coercion are not changed by server-side admission.
+
 `mcpServe` over HTTP runs the hosting door guard (`src/hosting/doorGuard.ts`)
 before any tool runs. A browser `Origin` it does not allow gets 403. A POST that
 does not say `content-type: application/json` gets 415 from this library, not
