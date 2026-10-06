@@ -158,28 +158,61 @@ export class ResumeIdentityConflictError extends Error {
 }
 
 /**
+ * Why `followUp()` found no conversation to continue.
+ *
+ * - `'never-run'` — this agent has not completed a run.
+ * - `'last-run-unfinished'` — the last run ended without an answer (it threw);
+ *   its conversation rides `RunCheckpointError.checkpoint`.
+ * - `'last-input-refused'` — input middleware refused the last run's message.
+ *   A refusal raises `MessageDeniedError`, which carries no checkpoint: the
+ *   refused attempt admitted no conversation, so the one to continue is the
+ *   checkpoint taken after the last ACCEPTED run.
+ */
+export type NoConversationReason = 'never-run' | 'last-run-unfinished' | 'last-input-refused';
+
+/**
  * Thrown by `followUp()` when there is no conversation to follow up on.
  *
  * `followUp()` continues THIS agent's own last completed run. Before the first
  * one there is nothing to continue, and a "follow-up" that quietly became a
  * first turn would be the very confusion the door exists to remove.
+ * `reason` says which of those it was, so a caller can branch on it.
  */
 export class NoConversationError extends Error {
   readonly code = 'ERR_NO_CONVERSATION' as const;
+  readonly reason: NoConversationReason;
 
-  constructor(door: string, reason: 'never-run' | 'last-run-unfinished') {
-    super(
-      reason === 'never-run'
-        ? `${door}: this agent has not completed a run, so there is no conversation to ` +
-            `continue. Start it with agent.run({ message }) — the first turn is a run; every ` +
-            `turn after it is a followUp(). To continue a conversation this PROCESS did not ` +
-            `have (a stored one, or one from another instance), pass it explicitly: ` +
-            `agent.run({ message, continueFrom: storedConversation }).`
-        : `${door}: this agent's last run did not finish with an answer, so there is no ` +
-            `conversation to continue yet. A failed run's conversation is carried by ` +
-            `RunCheckpointError.checkpoint — catch it and pass that to ` +
-            `run({ message, continueFrom }) or resumeOnError(checkpoint).`,
-    );
+  constructor(door: string, reason: NoConversationReason) {
+    super(noConversationSentence(door, reason));
     this.name = 'NoConversationError';
+    this.reason = reason;
+  }
+}
+
+function noConversationSentence(door: string, reason: NoConversationReason): string {
+  switch (reason) {
+    case 'never-run':
+      return (
+        `${door}: this agent has not completed a run, so there is no conversation to ` +
+        `continue. Start it with agent.run({ message }) — the first turn is a run; every ` +
+        `turn after it is a followUp(). To continue a conversation this PROCESS did not ` +
+        `have (a stored one, or one from another instance), pass it explicitly: ` +
+        `agent.run({ message, continueFrom: storedConversation }).`
+      );
+    case 'last-run-unfinished':
+      return (
+        `${door}: this agent's last run did not finish with an answer, so there is no ` +
+        `conversation to continue yet. A failed run's conversation is carried by ` +
+        `RunCheckpointError.checkpoint — catch it and pass that to ` +
+        `run({ message, continueFrom }) or resumeOnError(checkpoint).`
+      );
+    case 'last-input-refused':
+      return (
+        `${door}: input middleware refused this agent's last message, so that run ` +
+        `admitted no conversation to continue. Continue from your earlier accepted ` +
+        `checkpoint — the one agent.checkpoint() returned after the last accepted run — ` +
+        `with agent.run({ message, continueFrom: earlierCheckpoint }), or start a new ` +
+        `conversation with agent.run({ message }).`
+      );
   }
 }

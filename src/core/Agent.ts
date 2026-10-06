@@ -2118,7 +2118,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     }
     const conversation = this.checkpoint();
     if (conversation === undefined || conversation.history.length === 0) {
-      throw new NoConversationError('Agent.followUp', 'last-run-unfinished');
+      throw new NoConversationError(
+        'Agent.followUp',
+        this.lastInputRefused() ? 'last-input-refused' : 'last-run-unfinished',
+      );
     }
     return this.run({ message, continueFrom: conversation }, options);
   }
@@ -2659,7 +2662,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     const state = snapshot.sharedState as Partial<AgentState> | undefined;
     // Admission is decided by seed, before any conversation state is written.
     // Do not manufacture a blank replay carrier for an unadmitted attempt.
-    if (state?.messageDeniedPhase === 'input') return undefined;
+    if (this.lastInputRefused()) return undefined;
     const recorded = (state?.history ?? []) as readonly LLMMessage[];
     const history = structuredClone(recorded) as LLMMessage[];
     if (this.lastRunAnswer !== undefined && this.lastRunAnswer.length > 0) {
@@ -2697,6 +2700,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // layer is armed, so every other checkpoint keeps its byte shape.
       ...(turnNumber !== undefined && { turnNumber }),
     };
+  }
+
+  /** Whether input middleware refused the last run's message — the one reading both doors ask. */
+  private lastInputRefused(): boolean {
+    const state = this.getLastSnapshot()?.sharedState as Partial<AgentState> | undefined;
+    return state?.messageDeniedPhase === 'input';
   }
 
   /** Both checkpoint doors keep the repair budget separately from conversation text. */

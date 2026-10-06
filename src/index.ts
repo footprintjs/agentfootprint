@@ -713,6 +713,7 @@ export {
 // "there is nothing to follow up on".
 export {
   NoConversationError,
+  type NoConversationReason,
   PendingQuestionError,
   ResumeIdentityConflictError,
   RunInFlightError,

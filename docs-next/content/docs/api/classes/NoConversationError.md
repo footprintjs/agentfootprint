@@ -4,13 +4,14 @@ title: NoConversationError
 
 # Class: NoConversationError
 
-Defined in: [src/core/conversation.ts:167](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L167)
+Defined in: [src/core/conversation.ts:181](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L181)
 
 Thrown by `followUp()` when there is no conversation to follow up on.
 
 `followUp()` continues THIS agent's own last completed run. Before the first
 one there is nothing to continue, and a "follow-up" that quietly became a
 first turn would be the very confusion the door exists to remove.
+`reason` says which of those it was, so a caller can branch on it.
 
 ## Extends
 
@@ -22,7 +23,7 @@ first turn would be the very confusion the door exists to remove.
 
 > **new NoConversationError**(`door`, `reason`): `NoConversationError`
 
-Defined in: [src/core/conversation.ts:170](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L170)
+Defined in: [src/core/conversation.ts:185](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L185)
 
 #### Parameters
 
@@ -32,7 +33,7 @@ Defined in: [src/core/conversation.ts:170](https://github.com/footprintjs/agentf
 
 ##### reason
 
-`"never-run"` \| `"last-run-unfinished"`
+[`NoConversationReason`](/docs/api/type-aliases/NoConversationReason)
 
 #### Returns
 
@@ -60,7 +61,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_NO_CONVERSATION"`
 
-Defined in: [src/core/conversation.ts:168](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L168)
+Defined in: [src/core/conversation.ts:182](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L182)
 
 ***
 
@@ -85,6 +86,14 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1076
 #### Inherited from
 
 `Error.name`
+
+***
+
+### reason
+
+> `readonly` **reason**: [`NoConversationReason`](/docs/api/type-aliases/NoConversationReason)
+
+Defined in: [src/core/conversation.ts:183](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L183)
 
 ***
 

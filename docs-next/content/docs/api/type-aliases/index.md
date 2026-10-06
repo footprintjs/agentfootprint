@@ -2,7 +2,7 @@
 title: Type Aliases
 ---
 
-134 exported from `agentfootprint`.
+135 exported from `agentfootprint`.
 
 - [`ActKey`](/docs/api/type-aliases/ActKey)
 - [`AgentOutput`](/docs/api/type-aliases/AgentOutput)
@@ -71,6 +71,7 @@ title: Type Aliases
 - [`NaiveValues`](/docs/api/type-aliases/NaiveValues)
 - [`NarrowSkipReason`](/docs/api/type-aliases/NarrowSkipReason)
 - [`NextStepInput`](/docs/api/type-aliases/NextStepInput)
+- [`NoConversationReason`](/docs/api/type-aliases/NoConversationReason)
 - [`NormalisedAxis`](/docs/api/type-aliases/NormalisedAxis)
 - [`ObservabilityHandle`](/docs/api/type-aliases/ObservabilityHandle)
 - [`ObserverDeliveryOptions`](/docs/api/type-aliases/ObserverDeliveryOptions)

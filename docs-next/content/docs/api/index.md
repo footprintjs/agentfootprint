@@ -483,6 +483,7 @@ title: agentfootprint
 - [NaiveValues](/docs/api/type-aliases/NaiveValues)
 - [NarrowSkipReason](/docs/api/type-aliases/NarrowSkipReason)
 - [NextStepInput](/docs/api/type-aliases/NextStepInput)
+- [NoConversationReason](/docs/api/type-aliases/NoConversationReason)
 - [NormalisedAxis](/docs/api/type-aliases/NormalisedAxis)
 - [ObservabilityHandle](/docs/api/type-aliases/ObservabilityHandle)
 - [ObserverDeliveryOptions](/docs/api/type-aliases/ObserverDeliveryOptions)

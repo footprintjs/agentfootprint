@@ -90,9 +90,13 @@ for (const mode of ['dynamic', 'dynamic-grouped'] as const) {
             messageDeniedBy: 'admission',
             middlewareDecisions: [expect.objectContaining({ outcome: 'deny', phase: 'input' })],
           });
-          await expect(agent.followUp('safe next turn')).rejects.toBeInstanceOf(
-            NoConversationError,
-          );
+          // The reason is the refusal, not an unfinished run: a refusal raises
+          // MessageDeniedError, which carries no checkpoint to catch.
+          const refusedFollowUp = agent.followUp('safe next turn');
+          await expect(refusedFollowUp).rejects.toBeInstanceOf(NoConversationError);
+          await expect(refusedFollowUp).rejects.toMatchObject({ reason: 'last-input-refused' });
+          await expect(refusedFollowUp).rejects.toThrow(/earlier accepted checkpoint/);
+          await expect(refusedFollowUp).rejects.not.toThrow(/RunCheckpointError/);
           expect(requests).toHaveLength(beforeCalls);
           expect(JSON.stringify(prior)).toBe(priorBytes);
 

@@ -45,7 +45,7 @@ await agent.run({ message: 'Make it three.', continueFrom: conversation });
 | `agent.run({ message, continueFrom })` | any conversation you hand it | a server, a queue worker, anything that restarts |
 | `standingAgent({ agent, sessions, host })` | one conversation **per session**, stored | you want the whole thing served for you |
 
-`followUp(message)` is sugar for `run({ message, continueFrom: this.checkpoint() })` and nothing else — one restoration path, so the convenience cannot drift from the mechanism. It refuses with `NoConversationError` when there is nothing to follow up on: before the first run, a "follow-up" that quietly became a first turn would be exactly the confusion this door exists to remove.
+`followUp(message)` is sugar for `run({ message, continueFrom: this.checkpoint() })` and nothing else — one restoration path, so the convenience cannot drift from the mechanism. It refuses with `NoConversationError` when there is nothing to follow up on: before the first run, a "follow-up" that quietly became a first turn would be exactly the confusion this door exists to remove. Its `reason` (a `NoConversationReason`) says which case it was: `'never-run'`; `'last-run-unfinished'` — the run threw, and its conversation rides `RunCheckpointError.checkpoint`; or `'last-input-refused'` — input middleware refused the last message, so continue from the checkpoint you took after the last accepted run.
 
 ### What travels with a conversation
 
