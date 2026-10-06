@@ -41,12 +41,7 @@ const ROUTES = [
 // 2.155 MB ceiling, so the package was tagged but not published. ~2% over the
 // measurement, the rule every raise here follows. Owner-approved raise;
 // docs-site cleanup planned.
-const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_208_000, records: 2_000 };
-// Search gzip raised 2.205 -> 2.208 MB (2026-10-06), the minimum: the review
-// fixes (#70) document `NoConversationError.reason` (its own API page,
-// `NoConversationReason`, which docs-truth requires) and the governed-run
-// schema-failure event. Merge base 2,204,723 B; CI measured 2,207,268 B, local
-// EXPORT=true 2,206,982 B. No headroom added — the next raise needs its own cause.
+const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_205_000, records: 2_000 };
 // Search gzip raised 2.11 -> 2.155 MB (2026-09-27) — growth this release can
 // name: the answer's standing (`assessAnswer()` / `agent.assessment()`), its
 // section on the recordings page and its Agent API entry. Measured with
