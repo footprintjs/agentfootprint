@@ -14,6 +14,10 @@ import { callTraceTool, traceToolpack } from '../../../src/lib/trace-toolpack/tr
 import { TRACE_TOOL_NAMES } from '../../../src/lib/trace-toolpack/traceToolNames';
 import type { Tool } from '../../../src/core/tools';
 import { plantedScenario, runPlantedScenario } from '../context-bisect/plantedFactFixture';
+import { innerRunStore } from '../../../src/lib/trace-toolpack/innerRunRecords';
+import { Agent } from '../../../src/core/Agent';
+import { mock } from '../../../src/adapters/llm/MockProvider';
+import { FACTS, SYSTEM, scriptedRespond } from '../recorded-chat/chatDeskFixture';
 
 let snapshot: RuntimeSnapshot;
 let tools: Tool[];
@@ -395,4 +399,181 @@ describe('inspect_subflow — what the door costs', () => {
     expect(hint.length).toBeLessThanOrEqual(100);
     expect((after.length - before.length) / before.length).toBeLessThan(0.06);
   });
+});
+
+// ── Review round 1: a hint is emitted only when it is TRUE ──────────────────
+
+async function renamedRun(): Promise<RuntimeSnapshot> {
+  const inner = flowChart<{ score: number }>(
+    'Score',
+    (scope) => {
+      scope.score = 7;
+    },
+    'score-it',
+  ).build();
+  const chart = flowChart<{ start: number; finalScore?: number }>(
+    'Start',
+    (scope) => {
+      scope.start = 1;
+    },
+    'start',
+  )
+    .addSubFlowChartNext('sf', inner, 'Sub', {
+      inputMapper: () => ({}),
+      // The key is RENAMED on the way out: 'finalScore' is never written inside.
+      outputMapper: (out) => ({ finalScore: out.score }),
+    })
+    .build();
+  const executor = new FlowChartExecutor(chart);
+  await executor.run();
+  return executor.getSnapshot();
+}
+
+describe('review fixes — hints claim only what is true', () => {
+  it('a merge-back under a RENAMED key names the mount and claims no writer inside', async () => {
+    const pack = traceToolpack({ snapshot: await renamedRun() });
+    const out = await callTraceTool(pack, 'who_wrote', { key: 'finalScore' });
+    expect(out).toMatch(
+      /↳ sf#\d+ is a subflow mount — inside: inspect_subflow\(\{ mount: 'sf#\d+' \}\)/,
+    );
+    expect(out).not.toContain('names the writer');
+    expect(out).not.toContain('merge-back');
+  });
+
+  it("a computed merge-back on the agent run ('activeByslot.systemPrompt') claims no writer inside", async () => {
+    const out = await callTraceTool(tools, 'who_wrote', { key: 'activeByslot.systemPrompt' });
+    expect(out).not.toContain('names the writer');
+  });
+
+  it('who_wrote before an anchor never points at a mount that ran after it', async () => {
+    const out = await callTraceTool(tools, 'who_wrote', {
+      key: 'toolSchemas',
+      beforeStageId: 'call-llm#18',
+    });
+    expect(callIn(out).mount).toBe('sf-tools#11');
+    const early = await callTraceTool(tools, 'who_wrote', {
+      key: 'toolSchemas',
+      beforeStageId: 'sf-tools#11',
+    });
+    expect(early).not.toContain('inspect_subflow');
+  });
+
+  it('the header claims a seed only when the log opens with the mount', async () => {
+    expect(await callTraceTool(tools, 'inspect_subflow', { mount: 'sf-tools#11' })).toContain(
+      "the mount's seed first",
+    );
+    const results = { ...(snapshot.subflowResults ?? {}) } as Record<string, any>;
+    const entry = results['sf-tools#11'];
+    results['sf-tools#11'] = {
+      ...entry,
+      treeContext: { ...entry.treeContext, history: entry.treeContext.history.slice(1) },
+    };
+    const pack = traceToolpack({
+      snapshot: { ...snapshot, subflowResults: results } as RuntimeSnapshot,
+    });
+    const out = await callTraceTool(pack, 'inspect_subflow', { mount: 'sf-tools#11' });
+    expect(out).toContain('2 commit(s).');
+    expect(out).not.toContain('seed');
+  });
+
+  it('an outer decider is not served as an inner control parent', async () => {
+    const out = await callTraceTool(tools, 'inspect_subflow', {
+      mount: 'sf-tools#11',
+      runtimeStageId: 'sf-tools/compose#13',
+    });
+    expect(out).not.toContain('context#6');
+  });
+
+  it("inspect_tool_run's inner pack names no door it cannot route to", async () => {
+    const store = innerRunStore();
+    const inner = await nestedRun();
+    store.keep({
+      toolCallId: 'c1',
+      toolName: 'nested',
+      outcome: 'ok',
+      steps: 3,
+      recording: { snapshot: inner },
+    });
+    const pack = traceToolpack({ snapshot, innerRuns: store });
+    const overview = await callTraceTool(pack, 'inspect_tool_run', { toolCallId: 'c1' });
+    expect(overview).toContain('[subflow]');
+    const mount = /sf-a#\d+/.exec(overview)?.[0] as string;
+    const answers = [
+      overview,
+      await callTraceTool(pack, 'inspect_tool_run', { toolCallId: 'c1', runtimeStageId: mount }),
+      await callTraceTool(pack, 'inspect_tool_run', { toolCallId: 'c1', key: 'deep' }),
+    ];
+    for (const answer of answers) expect(answer).not.toContain('inspect_subflow');
+  });
+});
+
+// ── Property: every hint, followed, does not contradict itself ─────────────
+
+/** Follow every inspect_subflow hint the outer tools emit; return the contradictions. */
+async function contradictions(pack: Tool[], snap: RuntimeSnapshot): Promise<string[]> {
+  const log = snap.commitLog;
+  const keys = [...new Set(log.flatMap((bundle) => bundle.trace.map((row) => row.path)))];
+  const ids = [...new Set(log.map((bundle) => bundle.runtimeStageId))];
+  const outerKeys = new Set(keys);
+  const bad: string[] = [];
+  const follow = async (source: string, out: string): Promise<void> => {
+    const match = /inspect_subflow\(\{ ([^}]*) \}\)/.exec(out);
+    if (match === null) return;
+    const args = callIn(out);
+    const answer = await callTraceTool(pack, 'inspect_subflow', args);
+    const line = out.split('\n').find((l) => l.includes('inspect_subflow')) ?? '';
+    if (line.includes('names the writer') && !answer.includes('was last written by')) {
+      bad.push(`${source}: promised a writer, got ${answer.split('\n')[1]}`);
+    }
+    if (line.includes('opens') && !answer.startsWith(`INSIDE SUBFLOW ${args.mount}`)) {
+      bad.push(`${source}: promised the log opens, got ${answer.split('\n')[0]}`);
+    }
+    if (line.includes('not merged back') && outerKeys.has(args.key ?? '')) {
+      bad.push(`${source}: 'not merged back' for a key the outer log wrote`);
+    }
+  };
+  for (const key of keys) {
+    for (const before of [undefined, ...ids]) {
+      const args = before === undefined ? { key } : { key, beforeStageId: before };
+      const out = await callTraceTool(pack, 'who_wrote', args);
+      await follow(`who_wrote(${key}, ${before ?? '-'})`, out);
+      const mount = callInOrUndefined(out)?.mount;
+      if (before !== undefined && mount !== undefined && out.includes('but subflow')) {
+        const order = ids.indexOf(mount);
+        if (order >= ids.indexOf(before))
+          bad.push(`who_wrote(${key}, ${before}): ${mount} ran after`);
+      }
+    }
+  }
+  for (const id of ids)
+    await follow(
+      `trace_node(${id})`,
+      await callTraceTool(pack, 'trace_node', { runtimeStageId: id }),
+    );
+  await follow('run_overview', await callTraceTool(pack, 'run_overview'));
+  return bad;
+}
+
+function callInOrUndefined(text: string): Record<string, string> | undefined {
+  try {
+    return callIn(text);
+  } catch {
+    return undefined;
+  }
+}
+
+describe('property — every hint the outer tools emit, followed, holds', () => {
+  it('on the planted-fact agent run', async () => {
+    expect(await contradictions(tools, snapshot)).toEqual([]);
+  }, 60_000);
+
+  it('on the chat-desk agent run', async () => {
+    const provider = mock({ respond: (req) => scriptedRespond(req) });
+    let builder = Agent.create({ provider, model: 'mock-1', maxIterations: 2 }).system(SYSTEM);
+    for (const fact of FACTS) builder = builder.fact(fact);
+    const agent = builder.build();
+    await agent.run({ message: 'User: should I buy ACME?' });
+    const desk = agent.getLastSnapshot() as RuntimeSnapshot;
+    expect(await contradictions(traceToolpack({ snapshot: desk }), desk)).toEqual([]);
+  }, 60_000);
 });

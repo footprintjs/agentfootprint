@@ -44,7 +44,12 @@ Inner ids are said to be inner on every answer; an outer tool handed one
 corrects toward the mount (`traceToolpack.ts` · `innerIdMessage`), so step-id
 schemas carry no `enum` when subflows kept their own logs. A nested mount opens
 one level at a time (`subflowRecords.ts` · `mountChain`). The outer views name
-the door in ONE line and print nothing from inside.
+the door in ONE line and print nothing from inside — and only when following it
+gives a true answer (pinned by a follow-every-hint property in
+`test/lib/trace-toolpack/inspectSubflow.test.ts`): a merge-back under a renamed
+key names the mount without claiming a writer inside, a `beforeStageId`
+question considers only mounts that ran before the anchor, and a pack opened by
+`inspect_tool_run` names no `inspect_subflow` door it cannot route to.
 
 ```text
 > who_wrote({ key: 'toolSchemas' })

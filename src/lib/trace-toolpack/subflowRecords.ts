@@ -86,6 +86,14 @@ export function subflowWrote(entry: unknown, path: string): boolean {
   );
 }
 
+/** Does `mount`'s own log open with the mount's seed commit (its own id first)? */
+export function opensWithSeed(
+  results: Record<string, unknown> | undefined,
+  mount: string,
+): boolean {
+  return historyOf(results?.[mount])?.[0]?.runtimeStageId === mount;
+}
+
 /** Commits in `mount`'s own log (the mount's seed included); 0 when it kept none. */
 export function innerCommitCount(
   results: Record<string, unknown> | undefined,

@@ -71,6 +71,7 @@ import {
   innerCommitCount,
   mountChain,
   openSubflow,
+  opensWithSeed,
   subflowResultsOf,
   subflowWrote,
 } from './subflowRecords.js';
@@ -171,7 +172,20 @@ interface ToolpackIndex {
   subflowResults: Record<string, unknown> | undefined;
   /** The mount whose own log holds an id this log does not (memoised; see `subflowRecords`). */
   homeMountOf: (id: string) => string | undefined;
+  /**
+   * False in a pack opened by `inspect_tool_run`: the model reaches it only
+   * through that tool, which cannot route to `inspect_subflow`, so no hint may
+   * name that door there (`WITHOUT_SUBFLOW_DOOR`).
+   */
+  subflowDoor: boolean;
 }
+
+/**
+ * Artifact bags whose pack must not name `inspect_subflow` — the inner packs
+ * `inspect_tool_run` opens. Module-private on purpose: not an option a
+ * consumer sets, a fact about how the pack is reached.
+ */
+const WITHOUT_SUBFLOW_DOOR = new WeakSet<TraceToolpackArtifacts>();
 
 function stagePartOf(runtimeStageId: string): string {
   const hash = runtimeStageId.lastIndexOf('#');
@@ -200,7 +214,8 @@ function buildIndex(artifacts: TraceToolpackArtifacts): ToolpackIndex {
     for (const entry of bundle.trace) knownPaths.add(entry.path);
   }
 
-  const subflowResults = subflowResultsOf(artifacts.snapshot);
+  const subflowDoor = !WITHOUT_SUBFLOW_DOOR.has(artifacts);
+  const subflowResults = subflowDoor ? subflowResultsOf(artifacts.snapshot) : undefined;
   const homes = new Map<string, string | undefined>();
 
   // Walk the execution tree: node → children → next (≈ execution order).
@@ -282,6 +297,7 @@ function buildIndex(artifacts: TraceToolpackArtifacts): ToolpackIndex {
     initialState: artifacts.snapshot.initialState as Record<string, unknown> | undefined,
     explained: new Set<HonestyCode>(),
     subflowResults,
+    subflowDoor,
     homeMountOf: (id) => {
       if (subflowResults === undefined) return undefined;
       if (!homes.has(id)) homes.set(id, homeMountOf(subflowResults, id));
@@ -530,6 +546,7 @@ function keyProperty(index: ToolpackIndex, description: string): Record<string, 
  * subflow is printed until the model asks for it.
  */
 function overviewSubflowLine(index: ToolpackIndex): string | undefined {
+  if (!index.subflowDoor) return undefined;
   const mounts = index.groups.filter((group) => group.isSubflow).flatMap((group) => group.ids);
   if (mounts.length === 0) return undefined;
   const results = index.subflowResults;
@@ -1529,7 +1546,7 @@ function buildTraceNode(
       const name = node?.name ?? bundles?.[0]?.stage ?? stagePartOf(runtimeStageId);
       lines.push(`STEP ${runtimeStageId} — "${name}"${flags}`);
       if (node?.description) lines.push(`description: ${node.description}`);
-      if (node?.subflowId) lines.push(mountLine(index, runtimeStageId));
+      if (node?.subflowId && index.subflowDoor) lines.push(mountLine(index, runtimeStageId));
 
       // Writes — verb-aware values via commitValueAt (delta-mode safe).
       const writes = new Map<string, string>(); // path → verb (last wins)
@@ -1954,7 +1971,7 @@ function buildWhoWrote(index: ToolpackIndex, opts: ResolvedToolpackOptions): Too
           ` in the commit log.` +
           (index.knownPaths.has(path) ? '' : unknownKeySuffix(index)) +
           basisLines(index, basis) +
-          writtenInsideLine(index, path)
+          writtenInsideLine(index, path, beforeIdx)
         );
       }
 
@@ -1991,7 +2008,12 @@ function buildWhoWrote(index: ToolpackIndex, opts: ResolvedToolpackOptions): Too
  * line names the question that reaches the inner writer; '' otherwise.
  */
 function mergeBackLine(index: ToolpackIndex, writerId: string, path: string): string {
-  if (index.nodes.get(writerId)?.subflowId === undefined) return '';
+  if (!index.subflowDoor || index.nodes.get(writerId)?.subflowId === undefined) return '';
+  // The outputMapper may rename or compute the key: claim a writer inside only
+  // when the mount's own log wrote this very path. Otherwise name the mount.
+  if (!subflowWrote(index.subflowResults?.[writerId], path)) {
+    return `\n↳ ${writerId} is a subflow mount — ${mountLine(index, writerId)}`;
+  }
   return (
     `\n↳ ${writerId} is a subflow mount — this write is its merge-back. ` +
     `inspect_subflow({ mount: '${writerId}', key: '${displayKey(path)}' }) names the writer ` +
@@ -2004,17 +2026,21 @@ function mergeBackLine(index: ToolpackIndex, writerId: string, path: string): st
  * this level — its own log never merged it back. One line naming the latest
  * such mount; '' when none did (asked only on a miss).
  */
-function writtenInsideLine(index: ToolpackIndex, path: string): string {
+function writtenInsideLine(index: ToolpackIndex, path: string, beforeIdx?: number): string {
   const results = index.subflowResults;
-  if (results === undefined) return '';
+  if (!index.subflowDoor || results === undefined) return '';
+  // Only mounts that ran BEFORE the anchor answer "who wrote it before X".
   const mounts = [...index.orderedIds]
     .reverse()
-    .filter((id) => index.nodes.get(id)?.subflowId !== undefined);
+    .filter((id) => index.nodes.get(id)?.subflowId !== undefined)
+    .filter((id) => beforeIdx === undefined || (index.lastIdxOf.get(id) ?? Infinity) < beforeIdx);
   const inside = mounts.find((id) => subflowWrote(results[id], path));
   if (inside === undefined) return '';
+  // "Not merged back" is a claim about THIS log: true only if it never wrote the key.
+  const where = index.knownPaths.has(path) ? '' : ' (not merged back here)';
   return (
-    `\n↳ but subflow ${inside} wrote '${displayKey(path)}' in its OWN log (not merged back ` +
-    `here): inspect_subflow({ mount: '${inside}', key: '${displayKey(path)}' }) names the writer.`
+    `\n↳ but subflow ${inside} wrote '${displayKey(path)}' in its OWN log${where}: ` +
+    `inspect_subflow({ mount: '${inside}', key: '${displayKey(path)}' }) names the writer.`
   );
 }
 
@@ -2645,7 +2671,7 @@ function buildInspectToolRun(
       );
     }
     try {
-      return {
+      const inner: TraceToolpackArtifacts = {
         // `openRecording` is the adapter, not a copy of it: same lift, same
         // two teaching refusals if the bag is malformed. The two fields it
         // cannot lift from JSON — control edges, and a narrative nobody
@@ -2654,6 +2680,8 @@ function buildInspectToolRun(
         ...(record.controlDeps !== undefined && { controlDeps: record.controlDeps }),
         ...(record.narrative !== undefined && { narrative: record.narrative }),
       };
+      WITHOUT_SUBFLOW_DOOR.add(inner);
+      return inner;
     } catch (e) {
       return (
         `the retained record for '${record.toolCallId}' could not be opened: ` +
@@ -2864,7 +2892,9 @@ function buildInspectSubflow(
           header:
             `INSIDE SUBFLOW ${mount}${name !== undefined ? ` — "${name}"` : ''}` +
             `${parent !== undefined ? ` (nested in ${parent})` : ''}: its own log, ` +
-            `${commits} commit(s), the mount's seed first.`,
+            `${commits} commit(s)${
+              opensWithSeed(index.subflowResults, mount) ? ", the mount's seed first" : ''
+            }.`,
           next:
             `next inside '${mount}': inspect_subflow({ mount: '${mount}', runtimeStageId: ` +
             `'<inner id>' }) opens a step · 'key' alone names its last writer inside · 'variable' ` +
@@ -2886,11 +2916,19 @@ function openSubflowArtifacts(
 ): TraceToolpackArtifacts | string {
   const opened = openSubflow(artifacts.snapshot, mount);
   if (typeof opened === 'string') return `inspect_subflow: ${opened}`;
-  // Step ids are unique across a run (the execution counter is shared with
-  // every subflow), so the run's control-dependence lookup answers inner ids.
+  // Step ids are unique across a run, so the run's lookup answers inner ids —
+  // but a decider OUTSIDE this log is not an inner step: keep only edges from
+  // a decider in the mount's own log, so no outer id is served as an inner one.
+  const outer = artifacts.controlDeps;
+  const innerIds = new Set(opened.commitLog.map((bundle) => bundle.runtimeStageId));
   return {
     snapshot: opened,
-    ...(artifacts.controlDeps !== undefined && { controlDeps: artifacts.controlDeps }),
+    ...(outer !== undefined && {
+      controlDeps: (id: string) => {
+        const dep = outer(id);
+        return dep !== undefined && innerIds.has(dep.deciderId) ? dep : undefined;
+      },
+    }),
   };
 }
 
