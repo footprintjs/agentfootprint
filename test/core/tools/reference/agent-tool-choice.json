@@ -49,6 +49,7 @@
           {
             "description": "Activate a skill for the next iteration. Available skills:\n  - billing: billing\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
             "inputSchema": {
+              "additionalProperties": false,
               "properties": {
                 "id": {
                   "description": "The skill id to activate.",
@@ -418,6 +419,7 @@
           {
             "description": "Activate a skill for the next iteration. Available skills:\n  - billing: billing\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
             "inputSchema": {
+              "additionalProperties": false,
               "properties": {
                 "id": {
                   "description": "The skill id to activate.",
@@ -655,14 +657,14 @@
                 "jsonChars": 5
               },
               "tools": {
-                "jsonBytes": 595,
-                "jsonChars": 595
+                "jsonBytes": 624,
+                "jsonChars": 624
               }
             },
             "status": "measured",
             "total": {
-              "jsonBytes": 685,
-              "jsonChars": 685
+              "jsonBytes": 714,
+              "jsonChars": 714
             }
           },
           "system": {
@@ -975,6 +977,7 @@
           {
             "description": "Activate a skill for the next iteration. Available skills:\n  - billing: billing\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
             "inputSchema": {
+              "additionalProperties": false,
               "properties": {
                 "id": {
                   "description": "The skill id to activate.",
@@ -1207,14 +1210,14 @@
                 "jsonChars": 5
               },
               "tools": {
-                "jsonBytes": 593,
-                "jsonChars": 593
+                "jsonBytes": 622,
+                "jsonChars": 622
               }
             },
             "status": "measured",
             "total": {
-              "jsonBytes": 849,
-              "jsonChars": 849
+              "jsonBytes": 878,
+              "jsonChars": 878
             }
           },
           "system": {
@@ -1571,6 +1574,7 @@
           {
             "description": "Activate a skill for the next iteration. Available skills:\n  - billing: billing\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
             "inputSchema": {
+              "additionalProperties": false,
               "properties": {
                 "id": {
                   "description": "The skill id to activate.",
@@ -1835,14 +1839,14 @@
                 "jsonChars": 5
               },
               "tools": {
-                "jsonBytes": 789,
-                "jsonChars": 789
+                "jsonBytes": 818,
+                "jsonChars": 818
               }
             },
             "status": "measured",
             "total": {
-              "jsonBytes": 1211,
-              "jsonChars": 1211
+              "jsonBytes": 1240,
+              "jsonChars": 1240
             }
           },
           "system": {
@@ -2205,6 +2209,7 @@
           {
             "description": "Activate a skill for the next iteration. Available skills:\n  - billing: billing\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
             "inputSchema": {
+              "additionalProperties": false,
               "properties": {
                 "id": {
                   "description": "The skill id to activate.",
@@ -2450,14 +2455,14 @@
                 "jsonChars": 5
               },
               "tools": {
-                "jsonBytes": 597,
-                "jsonChars": 597
+                "jsonBytes": 626,
+                "jsonChars": 626
               }
             },
             "status": "measured",
             "total": {
-              "jsonBytes": 1179,
-              "jsonChars": 1179
+              "jsonBytes": 1208,
+              "jsonChars": 1208
             }
           },
           "system": {
@@ -2659,6 +2664,7 @@
             {
               "description": "Activate a skill for the next iteration. Available skills:\n  - billing: billing\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
               "inputSchema": {
+                "additionalProperties": false,
                 "properties": {
                   "id": {
                     "description": "The skill id to activate.",
@@ -2780,6 +2786,7 @@
             {
               "description": "Activate a skill for the next iteration. Available skills:\n  - billing: billing\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
               "inputSchema": {
+                "additionalProperties": false,
                 "properties": {
                   "id": {
                     "description": "The skill id to activate.",
@@ -2936,6 +2943,7 @@
             {
               "description": "Activate a skill for the next iteration. Available skills:\n  - billing: billing\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
               "inputSchema": {
+                "additionalProperties": false,
                 "properties": {
                   "id": {
                     "description": "The skill id to activate.",
@@ -3091,6 +3099,7 @@
             {
               "description": "Activate a skill for the next iteration. Available skills:\n  - billing: billing\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
               "inputSchema": {
+                "additionalProperties": false,
                 "properties": {
                   "id": {
                     "description": "The skill id to activate.",

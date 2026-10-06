@@ -25,6 +25,7 @@
           {
             "description": "Activate a skill for the next iteration. Available skills:\n  - alpha: alpha does things\n  - beta: beta does things\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
             "inputSchema": {
+              "additionalProperties": false,
               "properties": {
                 "id": {
                   "description": "The skill id to activate.",
@@ -458,6 +459,7 @@
           {
             "description": "You are in 'alpha'.\n\nActivate a skill for the next iteration.\n\nReachable from here:\n  - beta: beta does things\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
             "inputSchema": {
+              "additionalProperties": false,
               "properties": {
                 "id": {
                   "description": "The skill id to activate.",
@@ -712,14 +714,14 @@
                 "jsonChars": 19
               },
               "tools": {
-                "jsonBytes": 839,
-                "jsonChars": 839
+                "jsonBytes": 868,
+                "jsonChars": 868
               }
             },
             "status": "measured",
             "total": {
-              "jsonBytes": 943,
-              "jsonChars": 943
+              "jsonBytes": 972,
+              "jsonChars": 972
             }
           },
           "system": {
@@ -1162,14 +1164,14 @@
                 "jsonChars": 19
               },
               "tools": {
-                "jsonBytes": 839,
-                "jsonChars": 839
+                "jsonBytes": 868,
+                "jsonChars": 868
               }
             },
             "status": "measured",
             "total": {
-              "jsonBytes": 1106,
-              "jsonChars": 1106
+              "jsonBytes": 1135,
+              "jsonChars": 1135
             }
           },
           "system": {
@@ -1646,14 +1648,14 @@
                 "jsonChars": 19
               },
               "tools": {
-                "jsonBytes": 839,
-                "jsonChars": 839
+                "jsonBytes": 868,
+                "jsonChars": 868
               }
             },
             "status": "measured",
             "total": {
-              "jsonBytes": 1266,
-              "jsonChars": 1266
+              "jsonBytes": 1295,
+              "jsonChars": 1295
             }
           },
           "system": {
@@ -2157,14 +2159,14 @@
                 "jsonChars": 19
               },
               "tools": {
-                "jsonBytes": 839,
-                "jsonChars": 839
+                "jsonBytes": 868,
+                "jsonChars": 868
               }
             },
             "status": "measured",
             "total": {
-              "jsonBytes": 1721,
-              "jsonChars": 1719
+              "jsonBytes": 1750,
+              "jsonChars": 1748
             }
           },
           "system": {
@@ -2363,6 +2365,7 @@
             {
               "description": "You are in 'alpha'.\n\nActivate a skill for the next iteration.\n\nReachable from here:\n  - beta: beta does things\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
               "inputSchema": {
+                "additionalProperties": false,
                 "properties": {
                   "id": {
                     "description": "The skill id to activate.",
@@ -2508,6 +2511,7 @@
             {
               "description": "You are in 'alpha'.\n\nActivate a skill for the next iteration.\n\nReachable from here:\n  - beta: beta does things\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
               "inputSchema": {
+                "additionalProperties": false,
                 "properties": {
                   "id": {
                     "description": "The skill id to activate.",
@@ -2670,6 +2674,7 @@
             {
               "description": "You are in 'alpha'.\n\nActivate a skill for the next iteration.\n\nReachable from here:\n  - beta: beta does things\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
               "inputSchema": {
+                "additionalProperties": false,
                 "properties": {
                   "id": {
                     "description": "The skill id to activate.",
@@ -2851,6 +2856,7 @@
             {
               "description": "You are in 'alpha'.\n\nActivate a skill for the next iteration.\n\nReachable from here:\n  - beta: beta does things\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
               "inputSchema": {
+                "additionalProperties": false,
                 "properties": {
                   "id": {
                     "description": "The skill id to activate.",

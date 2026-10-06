@@ -460,6 +460,17 @@
  * merge-back); and 9.39.0 stamps `phase` on a stage's continuation bundles
  * (419 `'exit'` on mount exits, 221 `'repeat'` on fork fan-out settles).
  *
+ * Owned tool-schema closure (N3, baseline 7398d84d): the ten references that
+ * serve `read_skill` REGENERATED ALONE under `AF_TOOLS_REFERENCE=update -t ...`,
+ * after all 31 tests passed on an independent baseline snapshot and all 30
+ * original files were copied aside. The recursive audit found exactly 185
+ * moved paths: 57 additions of `inputSchema.additionalProperties: false` on
+ * `read_skill`, and 128 measurement leaves — `requestMeasurement.slots.tools`
+ * and `.total`, both `jsonBytes` and `jsonChars`, each +29 on 32 requests.
+ * Each tools size equals the corresponding served schemas' serialized size;
+ * the added member is exactly 29 bytes/chars. The other 20 references remain
+ * byte-identical. No message, body, enum, trace, normalizer or other key moved.
+ *
  * Every scenario is a real run — the receipt-conformance shapes, each in the
  * configuration that has no name collision — and what is compared is the
  * whole `commitLog` plus `servedAt(k)` for every located epoch, after ONE

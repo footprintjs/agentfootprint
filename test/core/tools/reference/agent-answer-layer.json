@@ -17,6 +17,7 @@
           {
             "description": "Activate a skill for the next iteration. Available skills:\n  - refund: refunds\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
             "inputSchema": {
+              "additionalProperties": false,
               "properties": {
                 "id": {
                   "description": "The skill id to activate.",
@@ -503,6 +504,7 @@
           {
             "description": "You are in 'refund'.\n\nActivate a skill for the next iteration.\n\nNothing is reachable from here — answer with the skill you are in, or finish.\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
             "inputSchema": {
+              "additionalProperties": false,
               "properties": {
                 "id": {
                   "description": "The skill id to activate.",
@@ -737,14 +739,14 @@
                 "jsonChars": 336
               },
               "tools": {
-                "jsonBytes": 1037,
-                "jsonChars": 1031
+                "jsonBytes": 1066,
+                "jsonChars": 1060
               }
             },
             "status": "measured",
             "total": {
-              "jsonBytes": 1470,
-              "jsonChars": 1452
+              "jsonBytes": 1499,
+              "jsonChars": 1481
             }
           },
           "system": {
@@ -1080,6 +1082,7 @@
           {
             "description": "You are in 'refund'.\n\nActivate a skill for the next iteration.\n\nNothing is reachable from here — answer with the skill you are in, or finish.\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
             "inputSchema": {
+              "additionalProperties": false,
               "properties": {
                 "id": {
                   "description": "The skill id to activate.",
@@ -1298,14 +1301,14 @@
                 "jsonChars": 336
               },
               "tools": {
-                "jsonBytes": 1031,
-                "jsonChars": 1025
+                "jsonBytes": 1060,
+                "jsonChars": 1054
               }
             },
             "status": "measured",
             "total": {
-              "jsonBytes": 1704,
-              "jsonChars": 1686
+              "jsonBytes": 1733,
+              "jsonChars": 1715
             }
           },
           "system": {
@@ -1758,14 +1761,14 @@
                 "jsonChars": 336
               },
               "tools": {
-                "jsonBytes": 1031,
-                "jsonChars": 1025
+                "jsonBytes": 1060,
+                "jsonChars": 1054
               }
             },
             "status": "measured",
             "total": {
-              "jsonBytes": 1961,
-              "jsonChars": 1941
+              "jsonBytes": 1990,
+              "jsonChars": 1970
             }
           },
           "system": {
@@ -1972,6 +1975,7 @@
             {
               "description": "You are in 'refund'.\n\nActivate a skill for the next iteration.\n\nNothing is reachable from here — answer with the skill you are in, or finish.\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
               "inputSchema": {
+                "additionalProperties": false,
                 "properties": {
                   "id": {
                     "description": "The skill id to activate.",
@@ -2112,6 +2116,7 @@
             {
               "description": "You are in 'refund'.\n\nActivate a skill for the next iteration.\n\nNothing is reachable from here — answer with the skill you are in, or finish.\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
               "inputSchema": {
+                "additionalProperties": false,
                 "properties": {
                   "id": {
                     "description": "The skill id to activate.",
@@ -2260,6 +2265,7 @@
             {
               "description": "You are in 'refund'.\n\nActivate a skill for the next iteration.\n\nNothing is reachable from here — answer with the skill you are in, or finish.\n\nPass the skill's id. The skill's body becomes part of the system prompt and any gated tools become available on the next call.",
               "inputSchema": {
+                "additionalProperties": false,
                 "properties": {
                   "id": {
                     "description": "The skill id to activate.",

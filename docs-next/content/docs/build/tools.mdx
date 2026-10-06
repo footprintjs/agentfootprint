@@ -176,6 +176,14 @@ names such as `constructor` remain valid. Malformed property maps and nonempty
 or malformed `patternProperties` defer extra-key checks, not required/type
 checks. Pattern properties need a full validator in the tool.
 
+**Owned schemas.** `read_skill` accepts only `id`; `run_code` accepts `code`
+and the artifact argument names configured in `codeRunnerTool({ wants })`.
+Both declare `additionalProperties: false`. With default enforcement, remove
+previously tolerated extra fields from calls or middleware-added arguments.
+Declared artifact inputs remain optional; runtime-enabled `_findings` is still
+accepted and peeled before validation. The skill id enum remains the full
+catalog, so unreachable picks still receive the graph's teaching refusal.
+
 Declare an identifier's format and explain it in `description`:
 
 ```ts
