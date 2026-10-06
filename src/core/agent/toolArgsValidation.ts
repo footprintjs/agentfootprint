@@ -4,8 +4,8 @@
  *
  * Pattern: pure function module — no events, and no state beyond one compiled-
  *          regex cache (which doubles as the warn-once ledger for `pattern`s
- *          that do not compile); the toolCalls stage owns when to call it and
- *          what to do with the verdict.
+ *          that do not compile); each dispatch boundary owns when to call it
+ *          and what to do with the verdict.
  * Role:    The model writes tool args as free-form JSON; nothing guaranteed
  *          they match the schema the tool advertised. Dispatching garbage
  *          surfaced as deep tool stack traces (or worse, silent misbehavior).
@@ -22,11 +22,15 @@
  *   ENFORCED: `type` (object/array/string/number/integer/boolean/null,
  *             union arrays), `required`, `properties` (recursive),
  *             `items` (single-schema, recursive), `enum` (primitives),
- *             `additionalProperties: false` ONLY when explicitly set,
+ *             `additionalProperties: false` when declared names are knowable,
  *             and the STRING SHAPE keywords `pattern` / `minLength` /
- *             `maxLength`.
+ *             `maxLength`. Object membership means OWN properties, not
+ *             prototype lookup. An omitted `properties` map declares no names.
  *   IGNORED:  format, numeric min/max, oneOf/anyOf/allOf/not, $ref,
- *             const, dependencies, …
+ *             const, dependencies, patternProperties, …
+ * A malformed `properties` map or nonempty/malformed `patternProperties`
+ * defers extra-key rejection: unknown name coverage cannot prove a key extra.
+ * Independent required and declared-property checks still apply.
  *
  * ── Why string SHAPE joined the subset ────────────────────────────────────
  * A tool result ended with an offer ("I can also map these ids to volume
@@ -232,6 +236,28 @@ function isPrimitive(value: unknown): value is string | number | boolean | null 
   );
 }
 
+/**
+ * Closing an object requires knowing which names its declarations cover.
+ * Missing `properties` means no explicit names; malformed maps do not.
+ * `patternProperties` is outside this validator's subset, so only its absent
+ * or empty form proves it contributes no names. Never turn ignored coverage
+ * into a false refusal, nor implement a second pattern-schema engine here.
+ */
+function canCheckExtraKeys(
+  schema: JsonSchemaLike,
+  properties: JsonSchemaLike | undefined,
+): boolean {
+  if (schema.properties !== undefined && properties === undefined) return false;
+  const patterns = schema.patternProperties;
+  return (
+    patterns === undefined ||
+    (typeof patterns === 'object' &&
+      patterns !== null &&
+      !Array.isArray(patterns) &&
+      Object.keys(patterns).length === 0)
+  );
+}
+
 function validateNode(
   value: unknown,
   schema: JsonSchemaLike,
@@ -276,7 +302,9 @@ function validateNode(
   if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
     const record = value as Readonly<Record<string, unknown>>;
     const properties =
-      typeof schema.properties === 'object' && schema.properties !== null
+      typeof schema.properties === 'object' &&
+      schema.properties !== null &&
+      !Array.isArray(schema.properties)
         ? (schema.properties as Readonly<Record<string, unknown>>)
         : undefined;
 
@@ -284,7 +312,7 @@ function validateNode(
     if (Array.isArray(required)) {
       for (const key of required) {
         if (typeof key !== 'string') continue;
-        if (!(key in record)) {
+        if (!Object.hasOwn(record, key)) {
           issues.push({
             path: path === '' ? key : `${path}.${key}`,
             expected: 'required',
@@ -297,7 +325,7 @@ function validateNode(
 
     if (properties) {
       for (const [key, childSchema] of Object.entries(properties)) {
-        if (!(key in record)) continue; // absent optional → fine
+        if (!Object.hasOwn(record, key)) continue; // absent optional → fine
         if (typeof childSchema !== 'object' || childSchema === null) continue;
         validateNode(
           record[key],
@@ -309,10 +337,11 @@ function validateNode(
       }
     }
 
-    // Strict-extra-keys ONLY when the schema explicitly says so.
-    if (schema.additionalProperties === false && properties) {
+    // Own enumerable string keys are the JSON boundary. Inherited names are
+    // neither supplied arguments nor explicit property declarations.
+    if (schema.additionalProperties === false && canCheckExtraKeys(schema, properties)) {
       for (const key of Object.keys(record)) {
-        if (!(key in properties)) {
+        if (properties === undefined || !Object.hasOwn(properties, key)) {
           issues.push({
             path: path === '' ? key : `${path}.${key}`,
             expected: 'no additional properties',
