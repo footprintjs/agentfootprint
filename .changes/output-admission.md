@@ -1,7 +1,0 @@
----
-type: security
-bump: minor
----
-**Output middleware now governs answer delivery before drafts escape.** A configured output policy withholds provider tokens and `stream.llm_end.content`, retaining usage and timing with `contentWithheld: true`. After acceptance, one token carries the captured final answer, including an output rewrite. Refusal stops before final capture, `turn_end`, and final memory writes; the API boundary emits a content-free `error.fatal` terminal so streams close. The existing middleware chain remains the sole decision and evidence writer. Raw drafts, rewrite pairs and earlier tool history remain audit data, not safe exports.
-
-Migration: Consumers of `stream.llm_end.content` must handle `contentWithheld: true` and read delivered answers from `stream.token` or `agent.turn_end`. Governed runs no longer stream incremental drafts; they emit the accepted final token even for complete-only providers. Generic `.messageMiddleware(...)` can inspect both phases; declare genuinely input-only rules through `.act({ input: [rule] })` to retain immediate streaming. Empty output lists and ungoverned runs are unchanged. Output rules still precede coverage/standing composition; this does not add policy checks to `runTyped` fallbacks or propagate refusal through an entire composed pipeline. Previously stored records and earlier tool effects are not repaired or undone.

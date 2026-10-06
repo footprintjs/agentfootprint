@@ -5,6 +5,156 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.137.0] - 2026-10-06
+
+### Added
+
+- **The trace tools can open a subflow's own log: `inspect_subflow`.** A subflow
+  commits to its own log, so the model reading a run saw only each mount's
+  boundary — what went in, what came out — and could never say who wrote a value
+  inside `sf-tools` or `sf-injection-engine`. `inspect_subflow({ mount })` opens
+  that log by reference, with the same moves as `inspect_tool_run` (one shared
+  implementation): an inner overview, `find`, `variable`, one step, a step's
+  value, and — new for both tools — `key` alone for the last writer inside, with
+  footprintjs's reason codes folded from the subflow's own base. A nested subflow
+  opens one level at a time. Inner ids are said to be inner; an outer tool handed
+  one now answers with the mount to open instead of "unknown id", and a missing
+  inner log (no subflow results, a mount that never returned, a lean checkpoint)
+  is named, not silent. Keys a redaction policy NAMES stay redacted inside — the
+  subflow's log is scrubbed at commit like the run's. `run_overview`, `trace_node` and `who_wrote` add one line
+  naming the door — only when following it gives a true answer: a merge-back
+  under a renamed key names the mount without claiming a writer, and a
+  `beforeStageId` question considers only mounts that ran before the anchor — 98 characters on a planted-fact agent run's overview. Step-id
+  schemas drop their `enum` when subflows kept their own logs, so a pasted inner
+  id reaches that correction rather than a schema refusal.
+
+- **Capture selected trust-boundary facts while an agent runs.** The opt-in
+  `trustBoundaryRecorder` keeps bounded, content-minimized middleware, permission
+  and credential observations, with original call/run identity and available
+  source-time positions. `recordRun` can own its subscription and place one
+  versioned bundle in the snapshot. Counts and sequence gaps disclose lost
+  evidence; missing events never mean approval, and a changed value is not
+  automatically called redacted. Existing recording defaults are unchanged.
+  Privacy guidance now explicitly distinguishes lean boundary data from the
+  ordinary event tail and engine state, which can still carry raw content.
+
+### Changed
+
+- **`recordRun(...).stop()` pins the run's snapshot in every mode.** With
+  `trustBoundaries` on, `stop()` pinned the snapshot; without it, a later
+  `toRecording()` still read the runner live — so after the runner ran again, the
+  recording paired this run's events and boundary log with ANOTHER run's
+  snapshot. `stop()` now pins the snapshot whether `trustBoundaries` is on or
+  off (stopped before any run, it stays `undefined`), and in every mode it
+  attempts every listener's cleanup even when one fails. `toRecording()` before
+  `stop()` still reads the runner as the run grows.
+
+### Fixed
+
+- **Queued events keep their emission time and available engine coordinates.**
+  The shared emit bridge now uses the source timestamp rather than listener delivery
+  time. It projects an optional engine position into `EventMeta.sourcePosition` with
+  an explicit `engineRunId`, log identity, runtime mount path and committed prefix.
+  Missing or malformed positions remain absent. This requires an engine that supplies
+  coordinates; it does not reconstruct them for older recordings or claim an event
+  is positioned at its emitting stage's eventual commit.
+
+- **`followUp()` after a refused input now says why, truthfully.** It used to
+  raise `NoConversationError` with the unfinished-run advice — catch
+  `RunCheckpointError.checkpoint` — but a refusal raises `MessageDeniedError`,
+  which carries no checkpoint. The error now has `reason: 'last-input-refused'`
+  and points at the earlier accepted checkpoint (a refused FIRST turn, with no
+  earlier one, stays `'never-run'`): pass the one `checkpoint()`
+  returned after the last accepted run to `run({ message, continueFrom })`.
+  `NoConversationError.reason` (`NoConversationReason`: `'never-run'`,
+  `'last-run-unfinished'`, `'last-input-refused'`) lets a caller branch on it.
+
+- **Enforce declared tool arguments at resumed, inner, and MCP-server dispatch.**
+  These dispatch paths now use the same supported-schema validator as normal
+  Agent calls. Invalid arguments are refused before credentials or execution;
+  middleware output is validated after the chain, before artifact references
+  are resolved. Agent resumes preserve `toolArgValidation` enforce/warn/off;
+  warn mode can report another invalid-arguments event at resumed admission.
+  Inner `ctx.tools.call` throws the shared correction; `mcpServe` returns an MCP
+  tool error. Neither has an Agent validation dial.
+
+  Migration: correct arguments that formerly bypassed admission, or declare
+  intentional extra fields in the tool schema. Open schemas stay open, accepted
+  arguments are not coerced or stripped, and `defineTool` still preserves the
+  original `execute` function. Direct `.execute`, client-side MCP coercion, and
+  the validator's existing subset limits are unchanged. A credential-consent
+  checkpoint that already contains resolved `wants` data remains unsupported:
+  it may now fail schema admission before the existing artifact-ref refusal.
+
+- **`read_skill` and `run_code` reject undeclared arguments.** Their owning schema factories now declare `additionalProperties: false`: `read_skill` permits `id`, and `run_code` permits `code` plus its configured `wants` names. The full skill catalog, graph teaching refusals, optional artifact inputs, custom code-tool names, and runtime-enabled `_findings` remain supported.
+
+  Compatibility: with default argument enforcement, remove previously tolerated extra fields from calls or middleware-added arguments. The public `readSkillDescriptor` schema also exposes this restriction to external hosts. Agent `warn` and `off` policies and direct `execute` calls are unchanged; direct execution does not gain a validator.
+
+- **Documentation search builds use a reproducible page order.** Asynchronous
+  file discovery previously changed Orama's numeric IDs, posting lists and
+  compressed output size, sometimes failing the unchanged site budget with the
+  same content. One pure ordering helper now sorts all page indexes by URL and
+  ID before insertion. Every record, field and searchable term is retained;
+  equal-score ties follow stable page order instead of filesystem order. A
+  build-time regression compares complete static exports across permutations.
+
+- **Permission and credential events identify the tool call they belong to.**
+  Library-produced `permission.check`, `permission.halt` and credential lifecycle
+  events now carry `toolCallId` and `iteration`, captured at dispatch. Resumed calls
+  keep the paused call's identity; failures from nested `ctx.tools` credential
+  requests name the inner call. Same-name calls no longer require an order-based
+  guess. Existing event counts, decisions and tool execution are unchanged.
+
+  New correlation fields are optional on public payloads for caller-emitted events
+  and older recordings; `permission.halt.iteration` remains required.
+  Qualify them with the event's run identity; missing fields mean attribution is
+  unavailable, not approval. This does not add credential-success events to the
+  pull API, sanitize existing reason text, or assign events to commit indices.
+
+- **Tool argument validation uses own properties consistently.** Inherited values
+  no longer satisfy required arguments or trigger optional-field checks. An
+  undeclared argument named `constructor`, `toString` or `__proto__` no longer
+  evades a closed schema, while explicitly declared names remain valid. Closing
+  an object without a `properties` map now permits no extra keys, including in
+  nested objects and argument-value checks.
+
+  The validator remains a JSON Schema subset. Malformed property maps and
+  nonempty or malformed `patternProperties` defer extra-key rejection because
+  the validator cannot determine their name coverage; independent required and
+  declared-property checks remain active. This also removes previous false
+  extra-key refusals for such schemas, without implementing pattern properties.
+
+  Migration: supply required values as own fields and explicitly declare intended
+  keys in closed schemas. Do not rely on the prototype chain as an argument or
+  schema declaration. For complete pattern-property enforcement, validate in the
+  tool with a full schema implementation. Arguments are not copied or rewritten;
+  Agent enforce/warn/off behavior and the existing enumeration boundary remain.
+
+### Security
+
+- **Refused inputs no longer become conversation checkpoints.** Input middleware
+  denials now record their decision and stop before conversation state is seeded.
+  A later turn cannot inherit the refused request through the new run's history.
+  Hosted sessions retain their last accepted checkpoint under exit, async and sync
+  durability; a refused first request creates no stored conversation. Refused
+  retries restore no history, folded spans or findings. Allowed input paths,
+  output denials and tool pause/resume keep their existing behavior.
+
+  Migration: `checkpoint()` after input denial now returns `undefined`, and
+  `followUp()` raises `NoConversationError`. Keep an earlier accepted checkpoint
+  and pass it explicitly as `run({ message, continueFrom })`. Refused runs no
+  longer seed conversation fields or a clock; their integrity disposition reports
+  `workExisted: false`. Previously persisted unsafe conversations need separate
+  cleanup before reuse. This is admission protection, not audit redaction: run
+  inputs, rewrite evidence and middleware-authored reasons remain subject to your
+  retention policy.
+
+- **Output middleware now governs answer delivery before drafts escape.** A configured output policy withholds provider tokens and `stream.llm_end.content`, retaining usage and timing with `contentWithheld: true`. After acceptance, one token carries the captured final answer, including an output rewrite. Refusal stops before final capture, `turn_end`, and final memory writes; the API boundary emits a content-free `error.fatal` terminal so streams close. The existing middleware chain remains the sole decision and evidence writer. Raw drafts, rewrite pairs and earlier tool history remain audit data, not safe exports.
+
+  Migration: Consumers of `stream.llm_end.content` must handle `contentWithheld: true` and read delivered answers from `stream.token` or `agent.turn_end`. Governed runs no longer stream incremental drafts; they emit the accepted final token even for complete-only providers. Generic `.messageMiddleware(...)` can inspect both phases; declare genuinely input-only rules through `.act({ input: [rule] })` to retain immediate streaming. Empty output lists and ungoverned runs are unchanged. Output rules still precede coverage/standing composition; this does not add policy checks to `runTyped` fallbacks or propagate refusal through an entire composed pipeline. Previously stored records and earlier tool effects are not repaired or undone.
+
+- **A governed run no longer streams a schema-failing draft.** Under an output policy, a final answer that failed `.outputSchema(...)` still went out on the public event stream before output admission: `agent.output_schema_validation_failed` carried it as `rawOutput`, and the parser's message — which can quote it (`JSON.parse` does) — rode that event and `reliability.retried` / `reliability.fail_fast` as `errorMessage`. Under an output policy the event now carries `draftWithheld: true` and a fixed message with no `rawOutput`, and the reliability events drop `errorMessage` for a schema failure. A fail-fast exit keeps the draft out of `ReliabilityFailFastError` too: its `cause.message` and the run's record carry the fixed sentence, and `payload.errorMessage` is absent. Retry rules still read the full detail on `validationError`. Ungoverned runs are unchanged.
+
 ## [9.136.0] - 2026-10-03
 
 ### Added
