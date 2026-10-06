@@ -859,6 +859,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  kept here rather than read back from the recording. Undefined after a run
    *  that failed or paused. */
   private lastRunAnswer?: string;
+  /** Whether any run on this instance got past input admission — so a
+   *  refused FIRST turn is reported as 'never-run', never as "continue from
+   *  your earlier accepted checkpoint" when there is none. */
+  private hadAdmittedRun = false;
 
   /** The id the CONSUMER chose, or undefined when they took the default.
    *  `this.id` cannot answer that question — it is `'agent'` either way — and
@@ -2059,6 +2063,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       this.fileIntegrityDisposition();
       // Always released: a recording left subscribed would keep listening
       // through the next run and grow a tail nobody reads.
+      this.noteAdmittedRun();
       recording?.stop();
       stopTracking();
       this.inFlightRunId = undefined;
@@ -2113,7 +2118,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // Refuse BEFORE the timing guards, so "there is nothing to follow up on"
     // is never reported as "a run is in flight" for an agent that has simply
     // not run yet.
-    if (this.getLastSnapshot() === undefined) {
+    if (this.getLastSnapshot() === undefined || (this.lastInputRefused() && !this.hadAdmittedRun)) {
       throw new NoConversationError('Agent.followUp', 'never-run');
     }
     const conversation = this.checkpoint();
@@ -2576,6 +2581,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // Same terms as the fresh-run path: rows on every exit, before the
       // recording stops (9.60.0).
       this.fileIntegrityDisposition();
+      this.noteAdmittedRun();
       recording?.stop();
       this.inFlightRunId = undefined;
     }
@@ -2700,6 +2706,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // layer is armed, so every other checkpoint keeps its byte shape.
       ...(turnNumber !== undefined && { turnNumber }),
     };
+  }
+
+  /** Called as each run/resume ends: remember a run that got past input admission. */
+  private noteAdmittedRun(): void {
+    if (this.getLastSnapshot() !== undefined && !this.lastInputRefused()) {
+      this.hadAdmittedRun = true;
+    }
   }
 
   /** Whether input middleware refused the last run's message — the one reading both doors ask. */
