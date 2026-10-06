@@ -1071,6 +1071,7 @@ export function buildCallLLMStage(
         model,
         singleProviderCall,
         postValidate,
+        deps.withholdDraftContent === true ? { withholdDraftContent: true } : undefined,
       );
       // `executeWithReliability` returns `undefined` when it took the
       // fail-fast path. It already wrote scope state and called

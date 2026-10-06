@@ -9,6 +9,7 @@ import {
   type MessageMiddleware,
   type MessageOutcome,
 } from '../../src/index.js';
+import { ReliabilityFailFastError } from '../../src/reliability/index.js';
 
 const draft = 'private-output-canary';
 const accepted = 'public answer';
@@ -94,6 +95,113 @@ for (const mode of ['classic', 'dynamic', 'dynamic-grouped'] as const) {
           checkpoint?.history.some((m) => m.role === 'assistant' && m.content === draft),
         ).not.toBe(true);
       });
+    }
+
+    for (const governed of [true, false]) {
+      it(`a draft that fails the output schema ${
+        governed ? 'stays off' : 'rides'
+      } the public stream (${governed ? 'governed' : 'ungoverned'})`, async () => {
+        // A non-JSON draft: JSON.parse's own message quotes its first bytes,
+        // so the parser's MESSAGE carries the draft as well as `rawOutput`.
+        const replies = [draft, '{"ok":true}'];
+        let calls = 0;
+        const schemaProvider: LLMProvider = {
+          name: 'schema-draft-test',
+          complete: async () => ({
+            content: replies[Math.min(calls++, replies.length - 1)]!,
+            toolCalls: [],
+            usage: { input: 1, output: 1 },
+            stopReason: 'end_turn',
+          }),
+        };
+        const builder = Agent.create({ provider: schemaProvider, model: 'mock', reactMode: mode })
+          .outputSchema({ parse: (raw: unknown) => raw as { ok: boolean } })
+          .reliability({
+            postDecide: [
+              {
+                when: (s) => s.validationError !== undefined && s.attempt < 3,
+                then: 'retry',
+                kind: 'schema-retry',
+              },
+            ],
+          });
+        const agent = (
+          governed ? builder.act({ output: [{ name: 'pass', onMessage: () => allow() }] }) : builder
+        ).build();
+        const events: { type: string; payload: unknown }[] = [];
+        agent.on('*', (e) => events.push({ type: e.type, payload: e.payload }));
+        await agent.run('hello');
+        const failed = events.filter(
+          (e) => e.type === 'agentfootprint.agent.output_schema_validation_failed',
+        );
+        expect(failed).toHaveLength(1);
+        const retried = events.filter((e) => e.type === 'agentfootprint.reliability.retried');
+        expect(retried).toHaveLength(1);
+        if (governed) {
+          expect(JSON.stringify(events)).not.toContain(draft.slice(0, 8));
+          expect(failed[0]!.payload).toMatchObject({ stage: 'json-parse', draftWithheld: true });
+          expect(failed[0]!.payload).not.toHaveProperty('rawOutput');
+          expect(retried[0]!.payload).toMatchObject({ errorKind: 'schema-fail' });
+          expect(retried[0]!.payload).not.toHaveProperty('errorMessage');
+        } else {
+          expect(failed[0]!.payload).toMatchObject({ stage: 'json-parse', rawOutput: draft });
+          expect(failed[0]!.payload).not.toHaveProperty('draftWithheld');
+          expect(retried[0]!.payload).toHaveProperty('errorMessage');
+        }
+      });
+    }
+
+    for (const [exit, postDecide] of [
+      ['a fail-fast rule', [{ when: () => true, then: 'fail-fast', kind: 'schema-stop' }]],
+      ['no matching rule', [{ when: () => false, then: 'retry', kind: 'never' }]],
+    ] as const) {
+      // dynamic-grouped surfaces no ReliabilityFailFastError for this chart
+      // today (the run returns ''; pre-existing, governed or not), so the
+      // fail-fast exit is pinned on the two modes that reach it.
+      it.skipIf(mode === 'dynamic-grouped')(
+        `a schema-failing draft stays out of the fail-fast error, record and narrative (${exit})`,
+        async () => {
+          const secret = 'zqxSECRET-draft';
+          const agent = Agent.create({
+            provider: {
+              name: 'schema-fail-fast-test',
+              complete: async () => ({
+                content: secret,
+                toolCalls: [],
+                usage: { input: 1, output: 1 },
+                stopReason: 'end_turn',
+              }),
+            },
+            model: 'mock',
+            reactMode: mode,
+          })
+            .outputSchema({ parse: (raw: unknown) => raw as { ok: boolean } })
+            .reliability({ postDecide: [...postDecide] })
+            .act({ output: [{ name: 'pass', onMessage: () => allow() }] })
+            .build();
+          const events: unknown[] = [];
+          agent.on('*', (e) => events.push(e.payload));
+          const error = await agent.run('hello').then(
+            () => undefined,
+            (e: unknown) => e,
+          );
+          expect(error).toBeInstanceOf(ReliabilityFailFastError);
+          const failure = error as ReliabilityFailFastError;
+          const marker = secret.slice(0, 6);
+          expect(failure.message).not.toContain(marker);
+          expect(String((failure.cause as Error | undefined)?.message)).not.toContain(marker);
+          expect(JSON.stringify(failure.payload)).not.toContain(marker);
+          expect(JSON.stringify(events)).not.toContain(marker);
+          const state = agent.getLastSnapshot()!.sharedState as Record<string, unknown>;
+          expect(JSON.stringify(state.reliabilityFailCauseMessage)).not.toContain(marker);
+          expect(JSON.stringify(state.reliabilityFailPayload)).not.toContain(marker);
+          const failLines = agent
+            .getLastNarrativeEntries()
+            .filter((entry) => JSON.stringify(entry).includes('reliabilityFail'));
+          expect(failLines.length).toBeGreaterThan(0);
+          expect(JSON.stringify(failLines)).not.toContain(marker);
+        },
+      );
     }
 
     for (const streaming of [false, true]) {

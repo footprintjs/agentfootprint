@@ -40,8 +40,12 @@ interface LLMMessage {
 
 // New typed event
 'agentfootprint.agent.output_schema_validation_failed' {
-  message, stage, path?, rawOutput?, attempt, cumulativeRetries
+  message, stage, path?, rawOutput?, draftWithheld?, attempt, cumulativeRetries
 }
+// Under an output policy (.act({ output }) / .messageMiddleware), the draft has
+// not passed output admission yet: the event carries draftWithheld: true and a
+// fixed message instead of rawOutput and the parser's text (JSON.parse quotes
+// the draft). Rules still read the full detail on validationError.
 
 // New helpers (agentfootprint/resilience subpath)
 ValidationFailure          // sentinel error class

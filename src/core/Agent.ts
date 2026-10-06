@@ -859,6 +859,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  kept here rather than read back from the recording. Undefined after a run
    *  that failed or paused. */
   private lastRunAnswer?: string;
+  /** Whether any run on this instance got past input admission — so a
+   *  refused FIRST turn is reported as 'never-run', never as "continue from
+   *  your earlier accepted checkpoint" when there is none. */
+  private hadAdmittedRun = false;
 
   /** The id the CONSUMER chose, or undefined when they took the default.
    *  `this.id` cannot answer that question — it is `'agent'` either way — and
@@ -2059,6 +2063,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       this.fileIntegrityDisposition();
       // Always released: a recording left subscribed would keep listening
       // through the next run and grow a tail nobody reads.
+      this.noteAdmittedRun();
       recording?.stop();
       stopTracking();
       this.inFlightRunId = undefined;
@@ -2113,12 +2118,15 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // Refuse BEFORE the timing guards, so "there is nothing to follow up on"
     // is never reported as "a run is in flight" for an agent that has simply
     // not run yet.
-    if (this.getLastSnapshot() === undefined) {
+    if (this.getLastSnapshot() === undefined || (this.lastInputRefused() && !this.hadAdmittedRun)) {
       throw new NoConversationError('Agent.followUp', 'never-run');
     }
     const conversation = this.checkpoint();
     if (conversation === undefined || conversation.history.length === 0) {
-      throw new NoConversationError('Agent.followUp', 'last-run-unfinished');
+      throw new NoConversationError(
+        'Agent.followUp',
+        this.lastInputRefused() ? 'last-input-refused' : 'last-run-unfinished',
+      );
     }
     return this.run({ message, continueFrom: conversation }, options);
   }
@@ -2573,6 +2581,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // Same terms as the fresh-run path: rows on every exit, before the
       // recording stops (9.60.0).
       this.fileIntegrityDisposition();
+      this.noteAdmittedRun();
       recording?.stop();
       this.inFlightRunId = undefined;
     }
@@ -2659,7 +2668,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     const state = snapshot.sharedState as Partial<AgentState> | undefined;
     // Admission is decided by seed, before any conversation state is written.
     // Do not manufacture a blank replay carrier for an unadmitted attempt.
-    if (state?.messageDeniedPhase === 'input') return undefined;
+    if (this.lastInputRefused()) return undefined;
     const recorded = (state?.history ?? []) as readonly LLMMessage[];
     const history = structuredClone(recorded) as LLMMessage[];
     if (this.lastRunAnswer !== undefined && this.lastRunAnswer.length > 0) {
@@ -2697,6 +2706,19 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // layer is armed, so every other checkpoint keeps its byte shape.
       ...(turnNumber !== undefined && { turnNumber }),
     };
+  }
+
+  /** Called as each run/resume ends: remember a run that got past input admission. */
+  private noteAdmittedRun(): void {
+    if (this.getLastSnapshot() !== undefined && !this.lastInputRefused()) {
+      this.hadAdmittedRun = true;
+    }
+  }
+
+  /** Whether input middleware refused the last run's message — the one reading both doors ask. */
+  private lastInputRefused(): boolean {
+    const state = this.getLastSnapshot()?.sharedState as Partial<AgentState> | undefined;
+    return state?.messageDeniedPhase === 'input';
   }
 
   /** Both checkpoint doors keep the repair budget separately from conversation text. */

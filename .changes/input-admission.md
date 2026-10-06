@@ -1,5 +1,6 @@
 ---
 type: security
+bump: minor
 ---
 **Refused inputs no longer become conversation checkpoints.** Input middleware
 denials now record their decision and stop before conversation state is seeded.

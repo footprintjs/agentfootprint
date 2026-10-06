@@ -122,6 +122,10 @@ export class ValidationFailure extends Error {
  *  rules wanted to retry. Surfaces in `ReliabilityFailFastError.kind`. */
 export const MID_STREAM_KIND = 'mid-stream-not-retryable';
 
+/** The schema-failure message a governed run's public event carries in place of parser text. */
+const WITHHELD_SCHEMA_FAILURE =
+  'The draft failed the output schema; the output policy withholds its text.';
+
 /**
  * Run the reliability retry loop. Returns the committed `LLMResponse`
  * on success; calls `scope.$break(reason)` and returns `undefined` on
@@ -142,6 +146,11 @@ export async function executeWithReliability(
    *  PostDecide rules. Caller is responsible for guarding tool-call
    *  turns; this helper assumes the validator is already gated. */
   postValidate?: OutputSchemaValidator,
+  /** An output policy governs delivery: a draft that fails the schema has
+   *  not passed output admission, so its text — `rawOutput`, and the parser's
+   *  message, which can quote it (`JSON.parse` does) — stays off the public
+   *  event stream. Rules still read it on `validationError`. */
+  options?: { readonly withholdDraftContent?: true },
 ): Promise<LLMResponse | undefined> {
   // v2.13 — mutable so feedbackForLLM can append ephemeral messages
   // before retry. The reliabilityScope() helper captures `request` by
@@ -154,6 +163,14 @@ export async function executeWithReliability(
   const providers = config.providers ?? [];
   const breakerConfig = config.circuitBreaker;
   const fallbackFn = config.fallback;
+
+  const withholdDraft = options?.withholdDraftContent === true;
+  // The error text a PUBLIC event may carry. A schema failure's message is
+  // parser text about the draft, so it is withheld with the draft.
+  const withholdsDraft = (error: Error): boolean =>
+    withholdDraft && error instanceof ValidationFailure;
+  const publicErrorMessage = (): { errorMessage?: string } =>
+    lastError === undefined || withholdsDraft(lastError) ? {} : { errorMessage: lastError.message };
 
   // Closure-local state — see header comment for rationale.
   let attempt = 0;
@@ -207,7 +224,7 @@ export async function executeWithReliability(
       attempt,
       providerUsed: cur.name,
       errorKind: lastErrorKind,
-      ...(lastError?.message !== undefined && { errorMessage: lastError.message }),
+      ...publicErrorMessage(),
     };
     const reason = `reliability-${phase}: ${label}`;
     // Typed writes via the live TypedScope<AgentState> — the
@@ -224,7 +241,12 @@ export async function executeWithReliability(
       // ReliabilityFailFastError.cause; consumer's `instanceof` checks
       // get a stable Error subclass without us needing to preserve the
       // exact prototype.
-      scope.reliabilityFailCauseMessage = lastError.message;
+      // Under an output policy a schema failure's message quotes a draft that
+      // never passed admission, so the error the caller catches (and the
+      // record) carries the fixed sentence instead.
+      scope.reliabilityFailCauseMessage = withholdsDraft(lastError)
+        ? WITHHELD_SCHEMA_FAILURE
+        : lastError.message;
       scope.reliabilityFailCauseName = lastError.name;
     }
     typedEmit(scope, 'agentfootprint.reliability.fail_fast', {
@@ -234,7 +256,7 @@ export async function executeWithReliability(
       attempt,
       providerUsed: cur.name,
       errorKind: lastErrorKind,
-      ...(lastError?.message !== undefined && { errorMessage: lastError.message }),
+      ...publicErrorMessage(),
     });
     scope.$break(reason);
     return undefined;
@@ -359,10 +381,14 @@ export async function executeWithReliability(
             // routes to fail-fast or swallows it.
             // MUST-FIX #3: payload includes attempt + cumulativeRetries.
             scope.$emit('agentfootprint.agent.output_schema_validation_failed', {
-              message: vfailure.message,
+              ...(withholdDraft
+                ? { message: WITHHELD_SCHEMA_FAILURE, draftWithheld: true as const }
+                : {
+                    message: vfailure.message,
+                    ...(vfailure.rawOutput !== undefined && { rawOutput: vfailure.rawOutput }),
+                  }),
               stage: vfailure.stage,
               ...(vfailure.path !== undefined && { path: vfailure.path }),
-              ...(vfailure.rawOutput !== undefined && { rawOutput: vfailure.rawOutput }),
               attempt: attempt + 1, // 1-indexed; bump happens in finally
               cumulativeRetries: validationErrorHistory.length,
             });
@@ -473,7 +499,7 @@ export async function executeWithReliability(
         attempt,
         action: 'retry',
         errorKind: lastErrorKind,
-        ...(lastError?.message !== undefined && { errorMessage: lastError.message }),
+        ...publicErrorMessage(),
         fromProvider: cur.name,
         toProvider: cur.name,
       });

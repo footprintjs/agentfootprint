@@ -145,8 +145,8 @@ Every decision files a row, including the pass-throughs — "the rule looked and
 
 An input refusal raises `MessageDeniedError` without calling the model or
 admitting conversation state. `checkpoint()` then returns `undefined`, and
-`followUp()` raises `NoConversationError`. Keep the last accepted checkpoint
-and continue from it explicitly:
+`followUp()` raises `NoConversationError` with `reason: 'last-input-refused'`.
+Keep the last accepted checkpoint and continue from it explicitly:
 
 <CodeFile path="examples/features/89-input-admission.ts" region="input-refusal" title="Continue the accepted conversation after a refusal" />
 

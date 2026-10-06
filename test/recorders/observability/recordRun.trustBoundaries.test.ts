@@ -107,19 +107,44 @@ function toolAgent(
 }
 
 describe('recordRun trust capture lifecycle', () => {
-  it('keeps the old opt-out shape and live getter behavior', async () => {
+  it('keeps the old opt-out shape', async () => {
     const agent = plainAgent();
     const recorder = recordRun(agent);
-    const getSnapshot = vi.spyOn(agent, 'getLastSnapshot');
     expect(recorder).not.toHaveProperty('trustBoundaries');
     await agent.run(CONTENT);
     expect(bundles(recorder)).toEqual([]);
-    getSnapshot.mockClear();
     recorder.stop();
-    expect(getSnapshot).not.toHaveBeenCalled();
-    recorder.toRecording();
-    expect(getSnapshot).toHaveBeenCalledOnce();
   });
+
+  // One stop() in every mode: the timeline and the boundary log end at stop,
+  // so the snapshot ends there too — a reused runner's later log is never
+  // paired with this recording's events.
+  it.each([false, true])(
+    'stop pins the run log against runner reuse (trustBoundaries: %s)',
+    async (trustBoundaries) => {
+      const agent = plainAgent();
+      const recorder = recordRun(agent, { trustBoundaries });
+      await agent.run('first turn');
+      const first = recorder.toRecording().snapshot as { runId: string };
+      recorder.stop();
+      await agent.run('second turn');
+      expect(agent.getLastSnapshot()?.runId).not.toBe(first.runId);
+      const getSnapshot = vi.spyOn(agent, 'getLastSnapshot');
+      expect(recorder.toRecording().snapshot).toMatchObject({ runId: first.runId });
+      expect(getSnapshot).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([false, true])(
+    'stop before a run pins undefined (trustBoundaries: %s)',
+    async (trustBoundaries) => {
+      const agent = plainAgent();
+      const recorder = recordRun(agent, { trustBoundaries });
+      recorder.stop();
+      await agent.run(CONTENT);
+      expect(recorder.toRecording().snapshot).toBeUndefined();
+    },
+  );
 
   it('false is the same opt-out, with no extra typed listener', () => {
     const agent = plainAgent();
@@ -237,9 +262,14 @@ describe('recordRun trust capture lifecycle', () => {
     expect(detached).toHaveBeenCalledOnce();
   });
 
-  it.each([false, true])(
-    'attempts all cleanup and preserves the %s snapshot failure',
-    (snapshotFails) => {
+  it.each([
+    [false, false],
+    [true, false],
+    [false, true],
+    [true, true],
+  ])(
+    'attempts all cleanup and preserves the %s snapshot failure (trustBoundaries: %s)',
+    (snapshotFails, trustBoundaries) => {
       const agent = plainAgent();
       const originalOn = agent.on.bind(agent);
       const originalAttach = agent.attach.bind(agent);
@@ -262,7 +292,7 @@ describe('recordRun trust capture lifecycle', () => {
           throw nextCleanupFailure;
         };
       });
-      const recorder = recordRun(agent, { trustBoundaries: true });
+      const recorder = recordRun(agent, { trustBoundaries });
       if (snapshotFails)
         vi.spyOn(agent, 'getLastSnapshot').mockImplementation(() => {
           throw snapshotFailure;

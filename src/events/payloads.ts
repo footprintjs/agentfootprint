@@ -2958,7 +2958,8 @@ export interface AgentRunConfiguredPayload {
 }
 
 export interface AgentOutputSchemaValidationFailedPayload {
-  /** Validation error message (from Zod / parser). */
+  /** Validation error message (from Zod / parser), or a fixed sentence when
+   *  `draftWithheld` is true — parser text can quote the draft. */
   readonly message: string;
   /** Validation stage — JSON parse vs schema validate. Lets dashboards
    *  distinguish "model emitted prose" (`json-parse`) from "model emitted
@@ -2969,8 +2970,13 @@ export interface AgentOutputSchemaValidationFailedPayload {
    *  Only set when `stage === 'schema-validate'`. */
   readonly path?: string;
   /** The raw string output that failed — useful for narrative entries showing
-   *  "what the model actually said" alongside the validation error. */
+   *  "what the model actually said" alongside the validation error. Absent
+   *  when `draftWithheld` is true. */
   readonly rawOutput?: string;
+  /** An output policy governs delivery, and this draft never passed output
+   *  admission: its text (`rawOutput`, and the parser's message) is withheld
+   *  from the event stream. Rules still read it on `validationError`. */
+  readonly draftWithheld?: true;
   /** 1-indexed attempt counter. `1` for the first failure, `2` for the
    *  retry that also failed, etc. */
   readonly attempt: number;
@@ -3077,7 +3083,8 @@ export interface ReliabilityFailFastPayload {
   readonly providerUsed?: string;
   /** Classification of the failure being failed-fast on. */
   readonly errorKind?: string;
-  /** Originating error message, when present. */
+  /** Originating error message, when present. Absent for a schema failure
+   *  under an output policy — the parser's message can quote the draft. */
   readonly errorMessage?: string;
 }
 
@@ -3092,7 +3099,8 @@ export interface ReliabilityRetriedPayload {
   readonly action: 'retry' | 'retry-other';
   /** Classification of the failure being retried. */
   readonly errorKind: string;
-  /** Originating error message, when present. */
+  /** Originating error message, when present. Absent for a schema failure
+   *  under an output policy — the parser's message can quote the draft. */
   readonly errorMessage?: string;
   /** Provider that just failed. */
   readonly fromProvider: string;

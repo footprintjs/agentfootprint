@@ -131,8 +131,8 @@ export interface RecordRunOptions {
    * at typed dispatch, never recovered from the event tail or execution tree.
    *
    * The `TrustBoundaries` row rides `snapshot.recorders`; other recording
-   * fields can still contain raw content. Stopping this opt-in capture pins
-   * its base snapshot so later runner reuse cannot substitute another log.
+   * fields can still contain raw content. `stop()` pins the base snapshot
+   * (as it does in every mode), so runner reuse cannot substitute another log.
    */
   readonly trustBoundaries?: boolean | TrustBoundaryRecorderOptions;
 }
@@ -169,11 +169,12 @@ export interface RunRecorder {
    * when the runner outlives the recording (a server that records one
    * turn out of many).
    *
-   * With `trustBoundaries`, pins the current base snapshot by reference even
-   * if the run is unfinished. This does not assert completion or drain pending
-   * events. A failing snapshot read still attempts every subscription's cleanup; no
-   * later run's snapshot is substituted. Other recording modes keep their
-   * existing live snapshot getter behavior.
+   * Pins the current snapshot by reference — in every mode, with or without
+   * `trustBoundaries` — because the timeline and the boundary log end here
+   * too: a reused runner's later run is never paired with these events. It
+   * pins even if the run is unfinished; it does not assert completion or
+   * drain pending events. A failing snapshot read still attempts every
+   * subscription's cleanup, and no later run's snapshot is substituted.
    */
   stop(): void;
 }
@@ -247,7 +248,7 @@ export function recordRunWhere(
   options: Omit<RecordRunOptions, 'trustBoundaries'> = {},
   trust?: TrustBoundaryRecorder,
 ): RunRecorder {
-  const subscriptions: Unsubscribe[] | undefined = trust ? [] : undefined;
+  const subscriptions: Unsubscribe[] = [];
   try {
     // Fan out admitted events from the existing listener. Evaluate `keep` only
     // once: a stateful membership callback must not admit the timeline but
@@ -261,7 +262,7 @@ export function recordRunWhere(
         };
       },
     });
-    if (offTrust) subscriptions?.push(offTrust);
+    if (offTrust) subscriptions.push(offTrust);
     // 1. THE TIMELINE. Subscribed before the run so nothing is missed —
     //    the dispatcher drops events with no listener rather than queuing
     //    them, so a late subscription starts mid-story. The bounded tail
@@ -275,7 +276,7 @@ export function recordRunWhere(
         onTrustEvent?.(event);
       }
     });
-    subscriptions?.push(offEvents);
+    subscriptions.push(offEvents);
 
     // 2. THE BOUNDARIES — all three connections, which is the whole reason
     //    to call this instead of wiring it yourself. `getCommitCount` reads
@@ -288,14 +289,14 @@ export function recordRunWhere(
       ...(keepEmbeddings ? { recordEmbeddings: true } : {}),
     });
     const offAttach = runner.attach(boundary);
-    subscriptions?.push(offAttach);
+    subscriptions.push(offAttach);
     const offTyped = boundary.subscribe(runner);
-    subscriptions?.push(offTyped);
+    subscriptions.push(offTyped);
     let stopped = false;
     let stoppedSnapshot: ReturnType<Runner['getLastSnapshot']>;
 
     const snapshot = (): unknown => {
-      const base = trust && stopped ? stoppedSnapshot : runner.getLastSnapshot();
+      const base = stopped ? stoppedSnapshot : runner.getLastSnapshot();
       const retained = (keepEmbeddings ? base : summarizeEmbeddings(base)) as typeof base;
       if (!trust || retained === undefined) return retained;
       // One export owner, one row per capture. Never alter the engine snapshot
@@ -347,23 +348,19 @@ export function recordRunWhere(
         // unmount handler should not detach someone else's later recorder.
         if (stopped) return;
         stopped = true;
-        if (subscriptions) {
-          let failure: { readonly error: unknown } | undefined;
-          try {
-            stoppedSnapshot = runner.getLastSnapshot();
-          } catch (error) {
-            failure = { error };
-          }
-          disposeSubscriptions(subscriptions, failure);
-          return;
+        // The timeline and the boundary log end here, so the snapshot does
+        // too: a reused runner's later log is never paired with these events.
+        let failure: { readonly error: unknown } | undefined;
+        try {
+          stoppedSnapshot = runner.getLastSnapshot();
+        } catch (error) {
+          failure = { error };
         }
-        offEvents();
-        offTyped();
-        offAttach();
+        disposeSubscriptions(subscriptions, failure);
       },
     };
   } catch (error) {
-    if (subscriptions) disposeSubscriptions(subscriptions, { error });
+    disposeSubscriptions(subscriptions, { error });
     throw error;
   }
 }
