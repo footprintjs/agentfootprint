@@ -155,53 +155,47 @@ for (const mode of ['classic', 'dynamic', 'dynamic-grouped'] as const) {
       ['a fail-fast rule', [{ when: () => true, then: 'fail-fast', kind: 'schema-stop' }]],
       ['no matching rule', [{ when: () => false, then: 'retry', kind: 'never' }]],
     ] as const) {
-      // dynamic-grouped surfaces no ReliabilityFailFastError for this chart
-      // today (the run returns ''; pre-existing, governed or not), so the
-      // fail-fast exit is pinned on the two modes that reach it.
-      it.skipIf(mode === 'dynamic-grouped')(
-        `a schema-failing draft stays out of the fail-fast error, record and narrative (${exit})`,
-        async () => {
-          const secret = 'zqxSECRET-draft';
-          const agent = Agent.create({
-            provider: {
-              name: 'schema-fail-fast-test',
-              complete: async () => ({
-                content: secret,
-                toolCalls: [],
-                usage: { input: 1, output: 1 },
-                stopReason: 'end_turn',
-              }),
-            },
-            model: 'mock',
-            reactMode: mode,
-          })
-            .outputSchema({ parse: (raw: unknown) => raw as { ok: boolean } })
-            .reliability({ postDecide: [...postDecide] })
-            .act({ output: [{ name: 'pass', onMessage: () => allow() }] })
-            .build();
-          const events: unknown[] = [];
-          agent.on('*', (e) => events.push(e.payload));
-          const error = await agent.run('hello').then(
-            () => undefined,
-            (e: unknown) => e,
-          );
-          expect(error).toBeInstanceOf(ReliabilityFailFastError);
-          const failure = error as ReliabilityFailFastError;
-          const marker = secret.slice(0, 6);
-          expect(failure.message).not.toContain(marker);
-          expect(String((failure.cause as Error | undefined)?.message)).not.toContain(marker);
-          expect(JSON.stringify(failure.payload)).not.toContain(marker);
-          expect(JSON.stringify(events)).not.toContain(marker);
-          const state = agent.getLastSnapshot()!.sharedState as Record<string, unknown>;
-          expect(JSON.stringify(state.reliabilityFailCauseMessage)).not.toContain(marker);
-          expect(JSON.stringify(state.reliabilityFailPayload)).not.toContain(marker);
-          const failLines = agent
-            .getLastNarrativeEntries()
-            .filter((entry) => JSON.stringify(entry).includes('reliabilityFail'));
-          expect(failLines.length).toBeGreaterThan(0);
-          expect(JSON.stringify(failLines)).not.toContain(marker);
-        },
-      );
+      it(`a schema-failing draft stays out of the fail-fast error, record and narrative (${exit})`, async () => {
+        const secret = 'zqxSECRET-draft';
+        const agent = Agent.create({
+          provider: {
+            name: 'schema-fail-fast-test',
+            complete: async () => ({
+              content: secret,
+              toolCalls: [],
+              usage: { input: 1, output: 1 },
+              stopReason: 'end_turn',
+            }),
+          },
+          model: 'mock',
+          reactMode: mode,
+        })
+          .outputSchema({ parse: (raw: unknown) => raw as { ok: boolean } })
+          .reliability({ postDecide: [...postDecide] })
+          .act({ output: [{ name: 'pass', onMessage: () => allow() }] })
+          .build();
+        const events: unknown[] = [];
+        agent.on('*', (e) => events.push(e.payload));
+        const error = await agent.run('hello').then(
+          () => undefined,
+          (e: unknown) => e,
+        );
+        expect(error).toBeInstanceOf(ReliabilityFailFastError);
+        const failure = error as ReliabilityFailFastError;
+        const marker = secret.slice(0, 6);
+        expect(failure.message).not.toContain(marker);
+        expect(String((failure.cause as Error | undefined)?.message)).not.toContain(marker);
+        expect(JSON.stringify(failure.payload)).not.toContain(marker);
+        expect(JSON.stringify(events)).not.toContain(marker);
+        const state = agent.getLastSnapshot()!.sharedState as Record<string, unknown>;
+        expect(JSON.stringify(state.reliabilityFailCauseMessage)).not.toContain(marker);
+        expect(JSON.stringify(state.reliabilityFailPayload)).not.toContain(marker);
+        const failLines = agent
+          .getLastNarrativeEntries()
+          .filter((entry) => JSON.stringify(entry).includes('reliabilityFail'));
+        expect(failLines.length).toBeGreaterThan(0);
+        expect(JSON.stringify(failLines)).not.toContain(marker);
+      });
     }
 
     for (const streaming of [false, true]) {

@@ -67,6 +67,7 @@ import { offeredResultIds } from './findings/offer.js';
 import type { FindingsLedger } from './findings/types.js';
 import { breakFinalStage, breakFinalWithValidationStage } from './stages/breakFinal.js';
 import { prepareFinalFor } from './stages/prepareFinal.js';
+import { failFastRecordOf } from './stages/reliabilityExecution.js';
 import { buildCacheSubflow } from './buildCacheSubflow.js';
 import {
   timeClockArg,
@@ -920,11 +921,22 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           // the next iteration's boundary reads. Top-level ARRAY +
           // `arrayMerge: Replace` = set wholesale. Value-conditional.
           ...(s.toolChoices !== undefined && { toolChoices: s.toolChoices }),
+          // THE FAIL-FAST RECORD, out with the break below. `callLLM`'s
+          // reliability loop writes it in here and breaks; the run boundary
+          // reads it from the OUTER scope to raise `ReliabilityFailFastError`.
+          // Left inside, the run ended with `''` and no error. Present only
+          // after a fail-fast, so every other turn crosses no new key.
+          ...failFastRecordOf(s),
         };
       },
       // llmLatestToolCalls / thinkingBlocks / skillHistory are arrays —
       // REPLACE (not concat) so each turn overwrites the prior value.
       arrayMerge: ArrayMergeMode.Replace,
+      // A break inside the turn ends the RUN, as it does in the flat chart,
+      // where `callLLM` sits on the run's own traversal. The one stage in here
+      // that breaks is the reliability loop's fail-fast exit; without this the
+      // break stopped only the turn and the outer loop went on to `Final`.
+      propagateBreak: true,
     })
     // Declared milestones (9.90.0): the mount is the iteration boundary on the
     // OUTER log; the decider and its branches declare in their own `tags`.
