@@ -20,9 +20,12 @@ name: Release
 #            with no tag; `propose` when fragments are waiting (or a bump was
 #            asked for by hand); otherwise nothing. Pins the commit every later
 #            job works on. Cheap — it runs on every push to main.
-#   propose  writes the release PR. Pushes and opens it with the release GitHub
-#            App's token: a PR opened with GITHUB_TOKEN would run no CI, and
-#            its required checks would never report.
+#   propose  builds the release commit (version, CHANGELOG, generated docs).
+#            Runs npm ci and holds no write token.
+#   release-pr  pushes that commit to `release/next` and opens the release PR
+#            with the release GitHub App's token: a PR opened with GITHUB_TOKEN
+#            would run no CI, and its required checks would never report.
+#            Installs nothing.
 #   build    every gate against the release tree, then stages the npm tarball.
 #            No write power of any kind.
 #   release  tag + GitHub release. Runs no npm install. Safe to re-run: a tag or
@@ -46,7 +49,9 @@ name: Release
 # trusted-publisher setting on npmjs.com is changed to match.
 #
 # The legacy trigger stays: a GitHub release published by a person runs the same
-# gates + publish against that tag.
+# gates + publish against that tag — only when the tag points at a commit main
+# already has (`plan` asks the compare API), so a tag on any other commit, pushed
+# by a person or with a leaked token, publishes nothing.
 on:
   push:
     branches: [main]
@@ -62,8 +67,9 @@ on:
 
 # Least privilege: nothing at the top level. `release` gets contents write,
 # `publish` gets id-token, `docs` gets actions write; `build` and `propose` —
-# the jobs that install dependencies — get read (propose writes only through
-# the App token, scoped to contents + pull requests).
+# the jobs that install dependencies — get read and keep no credentials, and
+# only `release-pr`, which installs nothing, holds the App token (scoped to
+# contents + pull requests).
 #
 # No cache on the release path, restored or saved. Every run here is a
 # default-branch run, so a cache it restored could have been written by any
@@ -72,7 +78,8 @@ on:
 # `packageManager`, so each setup-node below says `package-manager-cache:
 # false` instead of relying on that field staying absent. Every action is
 # pinned to a full commit SHA, because a moved tag would run with this file's
-# write and OIDC powers. Renovate keeps the pins current.
+# write and OIDC powers. Renovate's github-actions manager proposes new pins;
+# its token needs the Workflows permission to push changes to this folder.
 permissions:
   contents: read
 
@@ -110,11 +117,23 @@ jobs:
       - id: plan
         env:
           BUMP: ${{ inputs.bump || 'auto' }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
         run: |
           VERSION="$(node -p "require('./package.json').version")"
-          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          SHA="$(git rev-parse HEAD)"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           if [ "${{ github.event_name }}" = "release" ]; then
+            # The legacy path publishes what the tag points at, so that commit
+            # must already be on main: compare says main is `ahead` of it, or
+            # `identical`. Anything else (`behind`, `diverged`) publishes nothing.
+            STATUS="$(gh api "repos/$REPO/compare/$SHA...main" --jq .status)"
+            if [ "$STATUS" != "ahead" ] && [ "$STATUS" != "identical" ]; then
+              echo "::error::Tag $TAG points at $SHA, which main does not contain (compare: $STATUS). Nothing was published."
+              exit 1
+            fi
             echo "mode=publish" >> "$GITHUB_OUTPUT"; exit 0
           fi
           node scripts/changes.mjs check
@@ -340,11 +359,21 @@ jobs:
 
   # Fragments are waiting: write the release onto `release/next` and open (or
   # update) the release PR. Its merge is what `publish` mode releases.
+  #
+  # Two jobs, ON PURPOSE. `propose` runs `npm ci`, so every dependency's install
+  # script runs in it, and it holds no write token. `release-pr` holds the
+  # release App's token and runs no dependency code: it pushes the commit
+  # `propose` built and opens the PR. A token in the same job as an install
+  # script is a token that script can read (.git/config, a later step's
+  # environment, a process left running), and this App can push tags and create
+  # releases — which the legacy `release` trigger would publish.
   propose:
     needs: plan
     if: needs.plan.outputs.mode == 'propose'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      version: ${{ steps.prepare.outputs.version }}
     steps:
       - name: The release App is configured
         env:
@@ -356,20 +385,10 @@ jobs:
             exit 1
           fi
 
-      # Pinned to a full commit SHA, like every third-party action with write
-      # power here. The token is scoped to exactly what this job writes.
-      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        id: app
-        with:
-          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
-          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
-          permission-contents: write
-          permission-pull-requests: write
-
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.plan.outputs.sha }}
-          token: ${{ steps.app.outputs.token }}
+          persist-credentials: false
 
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
@@ -392,21 +411,67 @@ jobs:
       - name: Regenerate docs for the new version
         run: npm run docs:generate
 
-      # `release/next` belongs to this workflow: it is rebuilt from the tip of
-      # main on every run, so a force-push is the point, not a hazard.
-      - name: Open or update the release PR
+      # The release commit travels to `release-pr` as a git bundle: data, never
+      # code it would run.
+      - name: Bundle the release commit
         env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
           VERSION: ${{ steps.prepare.outputs.version }}
+          BASE: ${{ needs.plan.outputs.sha }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
           git checkout -B release/next
           git add -A
           git commit -m "chore: release v$VERSION"
+          mkdir -p "$RUNNER_TEMP/release-pr"
+          git bundle create "$RUNNER_TEMP/release-pr/release.bundle" "$BASE..release/next"
+          cp "$RUNNER_TEMP/notes.md" "$RUNNER_TEMP/release-pr/notes.md"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-pr
+          path: ${{ runner.temp }}/release-pr/
+          retention-days: 1
+
+  # Pushes `release/next` and opens (or updates) the release PR with the release
+  # App's token: a PR opened with GITHUB_TOKEN would run no CI, and its required
+  # checks would never report. Installs nothing and runs no repository script.
+  release-pr:
+    needs: [plan, propose]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # Pinned to a full commit SHA, like every action here. The token is scoped
+      # to exactly what this job writes.
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: app
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+          token: ${{ steps.app.outputs.token }}
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-pr
+          path: ${{ runner.temp }}/release-pr
+
+      # `release/next` belongs to this workflow: it is rebuilt from the tip of
+      # main on every run, so a force-push is the point, not a hazard.
+      - name: Open or update the release PR
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          VERSION: ${{ needs.propose.outputs.version }}
+        run: |
+          git fetch "$RUNNER_TEMP/release-pr/release.bundle" "release/next:release/next"
           git push --force origin release/next
           {
-            cat "$RUNNER_TEMP/notes.md"
+            cat "$RUNNER_TEMP/release-pr/notes.md"
             echo
             echo "---"
             echo "Written by the Release workflow from the \`.changes/\` fragments on main. Merging this PR tags v$VERSION, publishes it to npm and deploys the docs site. More fragments merging to main update this PR."
