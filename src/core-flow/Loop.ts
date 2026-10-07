@@ -36,6 +36,7 @@ import { streamRecorder } from '../recorders/core/StreamRecorder.js';
 import { agentRecorder } from '../recorders/core/AgentRecorder.js';
 import { compositionRecorder } from '../recorders/core/CompositionRecorder.js';
 import { typedEmit } from '../recorders/core/typedEmit.js';
+import { childFailFast, raiseChildFailFast } from './childFailFast.js';
 import { composedInput, readsMessageFromIfAny } from '../core/messageFrom.js';
 
 export interface LoopOptions {
@@ -275,6 +276,8 @@ export class Loop extends RunnerBase<LoopInput, LoopOutput> {
      * the reason + $break terminates the loop.
      */
     const guard = (scope: TypedScope<LoopState>) => {
+      // A body that failed fast ends the loop with its error (`childFailFast.ts`).
+      raiseChildFailFast((key) => scope.$getValue(key));
       const iteration = scope.iteration as number;
       const latestOutput = (scope.current as string) ?? '';
       const startMs = scope.startMs as number;
@@ -342,9 +345,11 @@ export class Loop extends RunnerBase<LoopInput, LoopOutput> {
             ? composedInput(body, input)
             : input;
         },
-        // Body's string return becomes next iteration's input via `current`.
+        // Body's string return becomes next iteration's input via `current`;
+        // a failed-fast body's record goes onto the loop's own state.
         outputMapper: (sfOutput) => ({
           current: typeof sfOutput === 'string' ? sfOutput : '',
+          ...childFailFast(sfOutput),
         }),
       })
       .addFunction('Guard', guard, 'guard', 'Loop exit-condition guard')

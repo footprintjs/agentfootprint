@@ -196,7 +196,7 @@ import { buildStepNudgeStage } from './agent/stages/stepNudge.js';
 import { buildEvidenceRecheckStage } from './agent/stages/evidenceRecheck.js';
 import { toolWantsOf } from './agent/stagedRefs.js';
 import { wrapUpStage } from './agent/stages/wrapUp.js';
-import type { ReliabilityFailRecord } from './agent/stages/reliabilityExecution.js';
+import { failFastErrorOf, failFastRecordOf } from '../reliability/failFastRecord.js';
 import { evidenceRefusalSentence } from './agent/evidence/gate.js';
 import { UnsupportedValuesError } from './agent/evidence/errors.js';
 import type { ResolvedEvidenceGate } from './agent/evidence/types.js';
@@ -1876,7 +1876,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // starts — a run with no zone anywhere runs with its zone UNKNOWN (G15),
     // never on the server's zone.
     const clockDraft = this.clockDraftFor(runInput.time ?? options?.time, 'Agent.run');
-    const engineOptions = withoutTime(options);
+    const engineOptions = withRunSignalInEnv(withoutTime(options));
     // Timing next, and before the executor exists: both of these refuse a call
     // that would have SUCCEEDED into corrupted per-instance state or an
     // orphaned human question. See ./conversation.ts for why they are throws.
@@ -2438,7 +2438,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // moves; it is never applied — the paused turn's clock is kept, and a
     // differing value is recorded by the ToolCalls resume door.
     const passedTime = this.passedTimeFor(options?.time, 'Agent.resume');
-    options = withoutTime(options);
+    options = withRunSignalInEnv(withoutTime(options));
     const gate = pauseDemandsDecision(checkpoint.pauseData);
     if (gate && !isCheckInDecision(input)) throw new DecisionRequiredError(gate, input);
     // One run, one identity — refused before anything moves. The paused run's
@@ -4069,39 +4069,15 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   ): AgentOutput | RunnerPauseOutcome {
     const paused = this.detectPause(executor, result);
     if (paused) return paused;
-    // Reliability fail-fast translation (v2.11.5+) — when the
-    // reliability retry loop in callLLM hits a `fail-fast` decision,
-    // it writes scope.reliabilityFailKind + payload and calls $break.
-    // The chart stops; the executor returns the last finalContent
-    // (typically empty). At the API boundary we surface the typed
-    // error so consumers can `instanceof ReliabilityFailFastError`
-    // and branch on `.kind`.
+    // Reliability fail-fast translation (v2.11.5+) — the reliability loop in
+    // callLLM ends the run by writing the fail-fast record and calling
+    // $break. The chart stops; at the API boundary the record becomes the
+    // typed error (`reliability/failFastRecord.ts`, the one translation — a
+    // composition the agent runs inside raises the same error from it).
     if (this.reliabilityConfig !== undefined) {
       const snap = executor.getSnapshot();
-      // Read as the one list of the record's keys (`RELIABILITY_FAIL_KEYS`,
-      // checked against AgentState) — the list a chart boundary carries out.
-      const state = snap.sharedState as ReliabilityFailRecord;
-      if (state.reliabilityFailKind !== undefined) {
-        // Reconstruct the cause Error from the captured message+name —
-        // see the matching note in reliabilityExecution.failFast about
-        // why we don't keep the original Error in scope.
-        let cause: Error | undefined;
-        if (state.reliabilityFailCauseMessage !== undefined) {
-          cause = new Error(state.reliabilityFailCauseMessage);
-          if (state.reliabilityFailCauseName !== undefined) {
-            cause.name = state.reliabilityFailCauseName;
-          }
-        }
-        throw new ReliabilityFailFastError({
-          kind: state.reliabilityFailKind,
-          reason: state.reliabilityFailReason ?? state.reliabilityFailKind,
-          ...(cause !== undefined && { cause }),
-          ...(state.reliabilityFailPayload !== undefined && {
-            payload: state.reliabilityFailPayload,
-          }),
-          snapshot: snap,
-        });
-      }
+      const record = failFastRecordOf(snap.sharedState as Record<string, unknown>);
+      if (record !== undefined) throw failFastErrorOf(record, snap);
     }
     // Policy-halt translation (v2.12+) — when a `PermissionChecker` returns
     // `{ result: 'halt', ... }`, the toolCalls handler writes a synthetic
@@ -5587,4 +5563,17 @@ function withoutTime<T extends { time?: unknown }>(options: T | undefined): T | 
   const { time: _time, ...rest } = options;
   void _time;
   return rest as T;
+}
+
+/**
+ * One cancellation signal per run. A caller may hand it to the engine
+ * (`signal`, which stops the traversal) or to the stages (`env.signal`, which
+ * tools and the reliability loop read). Handed only to the engine, it is handed
+ * to the stages too, so a stage never takes the run's own abort for a failure
+ * (the reliability loop used to file it as a fail-fast). The SAME object when
+ * there is nothing to add.
+ */
+function withRunSignalInEnv<T extends RunOptions>(options: T | undefined): T | undefined {
+  if (options?.signal === undefined || options.env?.signal !== undefined) return options;
+  return { ...options, env: { ...options.env, signal: options.signal } };
 }

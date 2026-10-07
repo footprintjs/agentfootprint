@@ -122,39 +122,6 @@ export class ValidationFailure extends Error {
  *  rules wanted to retry. Surfaces in `ReliabilityFailFastError.kind`. */
 export const MID_STREAM_KIND = 'mid-stream-not-retryable';
 
-/**
- * The fail-fast RECORD: the keys `failFast` writes before it breaks, which the
- * run boundary (`Agent · finalizeResult`) turns into `ReliabilityFailFastError`.
- * Listed once, so a chart boundary between the call and the run boundary can
- * carry every one of them out (`buildDynamicAgentChart`'s `sf-llm-call`). A
- * record left behind a boundary is a run that ends with `''` and no error.
- */
-export const RELIABILITY_FAIL_KEYS = [
-  'reliabilityFailKind',
-  'reliabilityFailPayload',
-  'reliabilityFailReason',
-  'reliabilityFailCauseMessage',
-  'reliabilityFailCauseName',
-] as const satisfies readonly (keyof AgentState)[];
-
-/** The fail-fast record as the run boundary reads it. */
-export type ReliabilityFailRecord = Pick<AgentState, (typeof RELIABILITY_FAIL_KEYS)[number]>;
-
-/**
- * The fail-fast record a scope holds: its present keys, or nothing when no
- * fail-fast fired — so a boundary that spreads it crosses no new key otherwise.
- */
-export function failFastRecordOf(
-  state: Readonly<Record<string, unknown>>,
-): ReliabilityFailRecord | undefined {
-  if (state.reliabilityFailKind === undefined) return undefined;
-  const record: Record<string, unknown> = {};
-  for (const key of RELIABILITY_FAIL_KEYS) {
-    if (state[key] !== undefined) record[key] = state[key];
-  }
-  return record as ReliabilityFailRecord;
-}
-
 /** The schema-failure message a governed run's public event carries in place of parser text. */
 const WITHHELD_SCHEMA_FAILURE =
   'The draft failed the output schema; the output policy withholds its text.';
@@ -204,6 +171,15 @@ export async function executeWithReliability(
     withholdDraft && error instanceof ValidationFailure;
   const publicErrorMessage = (): { errorMessage?: string } =>
     lastError === undefined || withholdsDraft(lastError) ? {} : { errorMessage: lastError.message };
+
+  // An abort is the CALLER cancelling the run — not a provider failure and
+  // never a fail-fast. Once the run's signal has fired the loop leaves at its
+  // next step: an error the cancelled call threw is rethrown as it came (never
+  // classified, never handed to a rule — a retry rule would re-ask a cancelled
+  // run — never counted against a breaker), and a call that returned anyway is
+  // not judged, retried or recorded. No `fail_fast` event, no record.
+  const signal = scope.$getEnv().signal;
+  const aborted = (): boolean => signal?.aborted === true;
 
   // Closure-local state — see header comment for rationale.
   let attempt = 0;
@@ -345,6 +321,7 @@ export async function executeWithReliability(
   // this is just a safety net.
   const MAX_LOOP = 50;
   for (let loop = 0; loop < MAX_LOOP; loop++) {
+    if (aborted()) throw signal?.reason;
     const cur = providerEntry();
 
     // Breaker check (pure): admit + transition based on cooldown.
@@ -377,6 +354,7 @@ export async function executeWithReliability(
             firstChunkSeen = true;
           },
         });
+        if (aborted()) throw signal?.reason;
         // v2.13 — output-schema validation. MUST-FIX #1: only validate
         // on terminal turns (no toolCalls). Tool-call turns aren't
         // final answers; validating them would be premature.
@@ -441,6 +419,7 @@ export async function executeWithReliability(
           );
         }
       } catch (err) {
+        if (aborted()) throw err;
         lastResponse = undefined;
         lastError = err instanceof Error ? err : new Error(String(err));
         lastErrorKind = classifyError(err);
@@ -584,6 +563,7 @@ export async function executeWithReliability(
       }
       try {
         const repaired = await fallbackFn(mutableRequest, lastError);
+        if (aborted()) throw signal?.reason;
         // Successful fallback IS a recovery — the failure that triggered
         // it counts toward priorFailures. Fire reliability.recovered then
         // commit and exit.
@@ -596,6 +576,7 @@ export async function executeWithReliability(
         });
         return repaired;
       } catch (fallbackErr) {
+        if (aborted()) throw fallbackErr;
         // Fallback threw — re-classify and let next iteration's
         // post-decide rules route on the new error.
         lastError = fallbackErr instanceof Error ? fallbackErr : new Error(String(fallbackErr));

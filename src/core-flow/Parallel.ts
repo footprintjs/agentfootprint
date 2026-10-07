@@ -35,6 +35,7 @@ import { streamRecorder } from '../recorders/core/StreamRecorder.js';
 import { agentRecorder } from '../recorders/core/AgentRecorder.js';
 import { compositionRecorder } from '../recorders/core/CompositionRecorder.js';
 import { typedEmit } from '../recorders/core/typedEmit.js';
+import { throwIfChildFailedFast } from './childFailFast.js';
 import { resilienceHooks } from '../recorders/core/resilienceHooks.js';
 import { resilienceRecorder } from '../recorders/core/ResilienceRecorder.js';
 import { composedInput, readsMessageFromIfAny } from '../core/messageFrom.js';
@@ -610,11 +611,16 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
           const input = { message: (parent.userMessage as string) ?? '' };
           return parent.messageFrom === 'composed' ? composedInput(branch.runner, input) : input;
         },
-        outputMapper: wrapBranchOutputMapper(branch.id, this.branchErrors, (sfOutput) => ({
-          branchResults: {
-            [branch.id]: typeof sfOutput === 'string' ? sfOutput : '',
-          },
-        })),
+        // A branch that failed fast is a FAILED branch (`childFailFast.ts`): its
+        // mapper throws the agent's own error, which the wrapper attributes.
+        outputMapper: wrapBranchOutputMapper(branch.id, this.branchErrors, (sfOutput) => {
+          throwIfChildFailedFast(sfOutput);
+          return {
+            branchResults: {
+              [branch.id]: typeof sfOutput === 'string' ? sfOutput : '',
+            },
+          };
+        }),
       });
     }
 

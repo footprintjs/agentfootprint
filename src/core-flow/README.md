@@ -144,13 +144,27 @@ Two semantics to know when engaging all-required fail-fast:
 
 ### Decision 9: `core-flow/` has zero LLM dependency
 
-Every file in this folder depends only on: `footprintjs`, `../core/runner.ts`, `../core/RunnerBase.ts`, `../recorders/core/*`, `../bridge/eventMeta.ts`. **Never imports from `../core/LLMCall.ts` or `../core/Agent.ts`**.
+Every file in this folder depends only on: `footprintjs`, `../core/runner.ts`, `../core/RunnerBase.ts`, `../recorders/core/*`, `../bridge/eventMeta.ts`, `../reliability/failFastRecord.ts` (the fail-fast record and its error — no LLM code; Decision 11). **Never imports from `../core/LLMCall.ts` or `../core/Agent.ts`**.
 
 This is enforced by convention (no import paths cross the line). Compositions take `Runner<T>` generically — they don't know or care whether a child is LLM-backed. That makes them trivially testable with pure-function runner stubs.
 
 ### Decision 10: a composed message is marked — for the runner that reads the mark
 
 A step after the first of a `Sequence` or a `workflow()`, every `Loop` iteration after the first, and every `graph()` node that is not a root (a `join` node included) is handed ANOTHER runner's output as its message. Another model's words must never count as "the person said it" (the inputs layer's declared sources check a quote against the person's messages), and only the composition knows where the message came from. So these mappers pass `messageFrom: 'composed'` (`../core/messageFrom.ts` · `composedInput`; a `workflow()` / `graph()` structured hand-off is marked whole, a `messageFrom` it carries overwritten) — and `Parallel`, `Conditional` and a nested `Sequence` / `Loop` pass it on to the child they hand their OWN message to when they were handed a composed one, while `workflow()`'s first step and `graph()`'s roots receive the composition's whole input, the mark included. The mark goes ONLY to a runner that reads it (an `Agent` armed with declared sources — `.findings({ argumentSources: true })` or `.inputsLayer({ argumentSources: true })` — or with a time reader — `.time({ reader })`, which reads only a person's words — or a composition holding one — `readsMessageFromIfAny`): every other composition hands its children the input object it always did, byte for byte. The registry is a leaf in `core/`, so this folder still imports no LLM-backed runner. Pinned by `test/core/messageFrom.test.ts`.
+
+### Decision 11: a child that failed fast is a FAILED child
+
+An `Agent` whose reliability loop fails fast ends its chart with the fail-fast record and a break, and only its own run boundary (`Agent · finalizeResult`) turns that record into `ReliabilityFailFastError`. A composition mounts the agent's CHART, so that boundary never runs: until this was fixed `Sequence.step('a', agent).step('b', next)` ran `next` on an empty input and returned ITS answer, and nothing was raised. A child's mount hands its outputMapper the child's result, or — when the chart returned none, as a failed-fast agent's does — the child's whole state; `childFailFast.ts` reads the record off it. Each composition then fails the way it fails for any child:
+
+- `Sequence`, `workflow()`, `Conditional`, `Loop` hand a child's error on as it is, so they carry the record onto their own state and raise the agent's own error (`raiseChildFailFast`) before anything else runs — the next step's hand-off (its inputMapper), or `Finalize` / the Loop's `Guard` after the last. A `workflow()` step never hands the failed agent's state on as the next step's input.
+- `Parallel` and `graph()` report failed children themselves, so the child's mapper throws the agent's error (`throwIfChildFailedFast`, attributed like any mapper throw) and the branch or node is reported failed by the merge or the level join, with the fail-fast's message.
+
+```ts
+const pipeline = Sequence.create().step('draft', agent).step('send', sender).build();
+await pipeline.run({ message: 'hi' }); // agent fails fast → rejects: ReliabilityFailFastError; `sender` never runs
+```
+
+Pinned for all three `reactMode`s by `test/core-flow/composed-fail-fast.test.ts`. The error carries no `snapshot` (the composition's executor is still running when it is raised); kind, reason, payload and cause are the agent's own.
 
 ## Events emitted
 

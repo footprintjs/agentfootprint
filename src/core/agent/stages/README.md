@@ -194,9 +194,12 @@ answer.
 
 ### A reliability fail-fast ends the RUN, whatever the chart shape
 
-**`reliabilityExecution.ts · failFast` writes the record (`RELIABILITY_FAIL_KEYS`)
-and breaks; the run boundary (`Agent · finalizeResult`) raises
-`ReliabilityFailFastError` from that record on the OUTER scope.** Under
+**`reliabilityExecution.ts · failFast` writes the record and breaks; the run
+boundary (`Agent · finalizeResult`) raises `ReliabilityFailFastError` from that
+record on the OUTER scope.** The record's keys, the read and the error live in
+one place, `reliability/failFastRecord.ts` (`RELIABILITY_FAIL_KEYS`,
+`failFastRecordOf`, `failFastErrorOf`); a composition the agent runs inside
+raises the same error from them (`core-flow/README.md`, Decision 11). Under
 `'dynamic-grouped'` `callLLM` runs inside `sf-llm-call`, so the mount carries
 both out: `propagateBreak: true` ends the run, and the outputMapper spreads
 `failFastRecordOf(s)` (nothing unless a fail-fast fired). Without them the break
@@ -213,6 +216,16 @@ await agent.run('hi'); // rejects: ReliabilityFailFastError, kind 'stop' — as 
 `test/core/reliability-fail-fast-modes.test.ts` pins one outcome per exit (no
 rule, fail-fast rule, mid-stream, pre-check; with and without an output policy)
 across all three modes.
+
+**An abort is never a fail-fast.** Once the run's signal has fired, the loop
+leaves at its next step: an error the cancelled call threw is rethrown as it
+came — never classified, never handed to a rule (a retry rule used to re-ask a
+cancelled run up to the loop's cap), never counted against a breaker — and a call
+that returned anyway is not judged or retried. No `reliability.*` event, no
+record. The loop reads the signal from `$getEnv()`, so `Agent.run` / `resume`
+hand a signal passed as `{ signal }` to the stages too (`withRunSignalInEnv`).
+The same file pins it per mode (stream and complete, with and without a retry
+rule).
 
 ### A self-call skips the policy only while the cursor is MOUNTED
 

@@ -67,7 +67,7 @@ import { offeredResultIds } from './findings/offer.js';
 import type { FindingsLedger } from './findings/types.js';
 import { breakFinalStage, breakFinalWithValidationStage } from './stages/breakFinal.js';
 import { prepareFinalFor } from './stages/prepareFinal.js';
-import { failFastRecordOf } from './stages/reliabilityExecution.js';
+import { failFastRecordOf } from '../../reliability/failFastRecord.js';
 import { buildCacheSubflow } from './buildCacheSubflow.js';
 import {
   timeClockArg,

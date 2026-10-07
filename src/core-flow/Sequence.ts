@@ -31,6 +31,7 @@ import { agentRecorder } from '../recorders/core/AgentRecorder.js';
 import { compositionRecorder } from '../recorders/core/CompositionRecorder.js';
 import { typedEmit } from '../recorders/core/typedEmit.js';
 import { composedInput, readsMessageFromIfAny } from '../core/messageFrom.js';
+import { childFailFast, raiseChildFailFast } from './childFailFast.js';
 
 export interface SequenceOptions {
   /** Human-friendly name for events + topology. Default: 'Sequence'. */
@@ -253,6 +254,9 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
         // (`core/messageFrom.ts` · `composedInput`); every other runner gets
         // the input it always did.
         inputMapper: (parent) => {
+          // A step that failed fast hands nothing on: the run raises its error
+          // here, before the next step runs (`childFailFast.ts`).
+          raiseChildFailFast((key) => (parent as Record<string, unknown>)[key]);
           const input = step.mapFromPrev((parent.current as string) ?? '');
           return index === 0 && parent.messageFrom !== 'composed'
             ? input
@@ -264,6 +268,8 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
         // inputMapper to pick up.
         outputMapper: (sfOutput) => ({
           current: typeof sfOutput === 'string' ? sfOutput : '',
+          // A failed-fast step's record, onto the Sequence's own state.
+          ...childFailFast(sfOutput),
         }),
       });
     });
@@ -273,6 +279,8 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
     builder = builder.addFunction(
       'Finalize',
       (scope: TypedScope<SequenceState>) => {
+        // The LAST step failed fast — no next step's hand-off to raise it.
+        raiseChildFailFast((key) => scope.$getValue(key));
         const current = (scope.current as string) ?? '';
         typedEmit(scope, 'agentfootprint.composition.exit', {
           kind: 'Sequence',

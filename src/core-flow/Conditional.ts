@@ -33,6 +33,7 @@ import { streamRecorder } from '../recorders/core/StreamRecorder.js';
 import { agentRecorder } from '../recorders/core/AgentRecorder.js';
 import { compositionRecorder } from '../recorders/core/CompositionRecorder.js';
 import { typedEmit } from '../recorders/core/typedEmit.js';
+import { childFailFast, raiseChildFailFast } from './childFailFast.js';
 import { composedInput, readsMessageFromIfAny } from '../core/messageFrom.js';
 
 export interface ConditionalOptions {
@@ -288,6 +289,8 @@ export class Conditional extends RunnerBase<ConditionalInput, ConditionalOutput>
         // as `result` for the Finalize stage to read.
         outputMapper: (sfOutput) => ({
           result: typeof sfOutput === 'string' ? sfOutput : '',
+          // A failed-fast branch's record, onto the Conditional's own state.
+          ...childFailFast(sfOutput),
         }),
       });
     }
@@ -321,6 +324,9 @@ export class Conditional extends RunnerBase<ConditionalInput, ConditionalOutput>
         //
         // Solution: have each branch's outputMapper write scope.result,
         // then read it here.
+        //
+        // A branch that failed fast raises its error instead (`childFailFast.ts`).
+        raiseChildFailFast((key) => scope.$getValue(key));
         typedEmit(scope, 'agentfootprint.composition.exit', {
           kind: 'Conditional',
           id: compositionId,

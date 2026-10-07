@@ -1,0 +1,5 @@
+---
+type: fixed
+---
+
+**A composed agent's reliability fail-fast now fails the composition instead of being swallowed.** An agent mounted in a `Sequence`, `workflow()`, `Conditional`, `Loop`, `Parallel` or `graph()` never reaches its own run boundary, which is where the fail-fast record becomes `ReliabilityFailFastError`. The record stayed behind the child's mount: `Sequence.step('a', agent).step('b', next)` ran `next` on an empty input and returned its answer with nothing raised, `workflow()` and `graph()` handed the failed agent's whole state on as the next step's input, and `Parallel` counted the branch as a success with `''`. Now a child that failed fast is a failed child, in every `reactMode`. `Sequence`, `workflow()`, `Conditional` and `Loop` carry the record onto their own state and raise the agent's own error (same `kind`, `reason`, `payload` and `cause`) before anything after the child runs. `Parallel` and `graph()` report the branch or node as failed through their merge or level join, with the fail-fast's message, so a tolerant merge sees `{ ok: false }` for it. Behaviour change: these compositions now reject where they used to resolve.

@@ -82,6 +82,7 @@ import { compositionRecorder } from '../recorders/core/CompositionRecorder.js';
 import { ContextRecorder } from '../recorders/core/ContextRecorder.js';
 import { streamRecorder } from '../recorders/core/StreamRecorder.js';
 import { typedEmit } from '../recorders/core/typedEmit.js';
+import { childFailFast, raiseChildFailFast } from './childFailFast.js';
 
 /**
  * What the NEXT step must accept, given what the previous one returns.
@@ -252,12 +253,19 @@ export class Workflow<TIn extends object = object, TOut = unknown> extends Runne
           // runner that reads the marker (`core/messageFrom.ts` ·
           // `composedInput`); every other runner gets the input it always did.
           inputMapper: (parent) => {
+            // A step that failed fast hands nothing on (`childFailFast.ts`).
+            raiseChildFailFast((key) => (parent as Record<string, unknown>)[key]);
             const args = toStepArgs(parent.current, stepNumber);
             return stepNumber === 1 ? args : composedInput(step, args);
           },
           // Untouched: whatever the step's chart returned is what the next
           // step (or the caller) receives. No string coercion.
-          outputMapper: (sfOutput) => ({ current: sfOutput }),
+          // A failed-fast step hands back its STATE: carry its record, never
+          // the state itself, onto the workflow's own state.
+          outputMapper: (sfOutput) => {
+            const failed = childFailFast(sfOutput);
+            return failed !== undefined ? { ...failed } : { current: sfOutput };
+          },
         },
       );
     });
@@ -265,6 +273,8 @@ export class Workflow<TIn extends object = object, TOut = unknown> extends Runne
     builder = builder.addFunction(
       'Finalize',
       (scope: TypedScope<WorkflowState>) => {
+        // The LAST step failed fast — no next step's hand-off to raise it.
+        raiseChildFailFast((key) => scope.$getValue(key));
         typedEmit(scope, 'agentfootprint.composition.exit', {
           kind: 'Sequence',
           id: compositionId,
