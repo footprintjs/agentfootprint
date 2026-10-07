@@ -20,6 +20,14 @@
  *                   iterations cost ~4× the packed bytes and under 6× the
  *                   packer's reads; the plain recording grows ~16× (9.5× at
  *                   these sizes, where the fixed part still weighs in).
+ *   - BOUND       — a packed recording is expanded only when the plain
+ *                   recording it stands for is within `maxBytes`: a few KB
+ *                   that stand for 10^40 bytes (values referring ten times to
+ *                   values referring ten times…) are refused after reading the
+ *                   packed form ONCE and expanding nothing — counted, not
+ *                   timed; the measure is exact to the byte (a real recording
+ *                   with multi-byte text passes at its plain size and is
+ *                   refused one byte below); a plain recording is untouched.
  */
 import { describe, expect, it } from 'vitest';
 
@@ -27,15 +35,17 @@ import { Agent, defineTool, inMemoryArtifacts } from '../../../src/index.js';
 import type { AgentfootprintEvent } from '../../../src/index.js';
 import { mock } from '../../../src/providers.js';
 import {
+  DEFAULT_UNPACK_MAX_BYTES,
   isPackedRecording,
   packRecording,
   PACKED_RECORDING_FORMAT,
   PackedRecordingError,
+  PackedRecordingTooLargeError,
   recordRun,
   unpackRecording,
 } from '../../../src/observe.js';
 import { openRecording } from '../../../src/debug.js';
-import { packCounted } from '../../../src/recorders/observability/recordingPack.js';
+import { packCounted, unpackCounted } from '../../../src/recorders/observability/recordingPack.js';
 import type { Recording } from '../../../src/recorders/observability/recordRun.js';
 import { toWireJson } from '../../../src/lib/wireJson.js';
 
@@ -44,16 +54,24 @@ const roundTrip = (recording: unknown): string =>
     unpackRecording(JSON.parse(JSON.stringify(packRecording(recording as Recording)))),
   );
 
-const rowsTool = (rows: number) =>
+const rowsTool = (rows: number, label = 'row') =>
   defineTool<{ k: number }, unknown>({
     name: 'rows',
     description: 'returns rows',
     inputSchema: { type: 'object', properties: { k: { type: 'number' } } },
     execute: (args) =>
-      Array.from({ length: rows }, (_, i) => ({ id: i, name: `row-${args.k}-${i}`, v: i % 13 })),
+      Array.from({ length: rows }, (_, i) => ({
+        id: i,
+        name: `${label}-${args.k}-${i}`,
+        v: i % 13,
+      })),
   });
 
-async function agentRecording(iterations: number, rows: number): Promise<Recording> {
+async function agentRecording(
+  iterations: number,
+  rows: number,
+  label?: string,
+): Promise<Recording> {
   const replies = [
     ...Array.from({ length: iterations }, (_, i) => ({
       toolCalls: [{ id: `c${i + 1}`, name: 'rows', args: { k: i + 1 } }],
@@ -65,7 +83,7 @@ async function agentRecording(iterations: number, rows: number): Promise<Recordi
     model: 'm',
     maxIterations: iterations + 5,
   })
-    .tools([rowsTool(rows)])
+    .tools([rowsTool(rows, label)])
     .build();
   const recorder = recordRun(agent);
   await agent.run({ message: 'go' });
@@ -253,5 +271,107 @@ describe('the answer-account step reads a packed recording', () => {
     const packed = explainRecording({ data: JSON.stringify(packRecording(recording)) }, {});
     expect(plain).not.toBeNull();
     expect(packed).toEqual(plain);
+  });
+});
+
+// ── The expansion bound ─────────────────────────────────────────────────────
+
+/**
+ * A packed recording a few KB long that stands for 10^`depth` copies of a
+ * 100-character string: value k is ten references to value k−1. Built as a
+ * file would arrive — parsed from its JSON text, every reference its own object.
+ */
+function amplification(depth: number): unknown {
+  const values: unknown[] = ['x'.repeat(100)];
+  for (let k = 1; k <= depth; k++) {
+    values.push(Array.from({ length: 10 }, () => ({ '$af:ref': k - 1 })));
+  }
+  return JSON.parse(
+    JSON.stringify({
+      format: PACKED_RECORDING_FORMAT,
+      values,
+      recording: { snapshot: { '$af:ref': depth }, events: [], structure: null },
+    }),
+  );
+}
+
+/** Every node of a parsed JSON value — the packed form's own size, in nodes. */
+function nodesOf(value: unknown): number {
+  if (value === null || typeof value !== 'object') return 1;
+  return 1 + Object.values(value).reduce((sum: number, child) => sum + nodesOf(child), 0);
+}
+
+/** UTF-8 bytes of the plain recording's wire JSON — what a plain mint would store. */
+const plainBytes = (recording: unknown): number => Buffer.byteLength(toWireJson(recording), 'utf8');
+
+describe('unpackRecording — the expansion bound', () => {
+  it('BOUND: a few KB standing for 10^40 copies is refused — the packed form read once, nothing expanded', () => {
+    for (const depth of [20, 40]) {
+      const payload = amplification(depth);
+      expect(JSON.stringify(payload).length).toBeLessThan(10_000);
+      const work = { measured: 0, decoded: 0 };
+      expect(() => unpackCounted(payload, { maxBytes: 16 * 1024 * 1024 }, work)).toThrow(
+        PackedRecordingTooLargeError,
+      );
+      // The work is the PACKED size, whatever the expansion: at most one read
+      // per packed node, and not one node built.
+      expect(work.measured).toBeLessThanOrEqual(nodesOf(payload));
+      expect(work.decoded).toBe(0);
+    }
+  });
+
+  it('BOUND: the default bound refuses it too, and the refusal is a PackedRecordingError by name', () => {
+    expect(DEFAULT_UNPACK_MAX_BYTES).toBe(512 * 1024 * 1024);
+    let caught: unknown;
+    try {
+      unpackRecording(amplification(30));
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(PackedRecordingTooLargeError);
+    expect(caught).toBeInstanceOf(PackedRecordingError);
+    expect((caught as PackedRecordingTooLargeError).maxBytes).toBe(DEFAULT_UNPACK_MAX_BYTES);
+    // openRecording reads through the same default.
+    expect(() => openRecording(amplification(30) as never)).toThrow(PackedRecordingTooLargeError);
+  });
+
+  it('BOUND: exact to the byte — a real recording with multi-byte text passes at its plain size, and not one byte under', async () => {
+    const recording = await agentRecording(3, 20, 'rów😀');
+    const exact = plainBytes(recording);
+    const packed = JSON.parse(JSON.stringify(packRecording(recording))) as unknown;
+    expect(JSON.stringify(unpackRecording(packed, { maxBytes: exact }))).toBe(
+      toWireJson(recording),
+    );
+    expect(() => unpackRecording(packed, { maxBytes: exact - 1 })).toThrow(
+      PackedRecordingTooLargeError,
+    );
+  });
+
+  it('BOUND: exact for what only an in-memory packed value can hold — undefined, holes, functions, shared nodes', () => {
+    const shared = { note: 'é'.repeat(10) };
+    const packed = {
+      format: PACKED_RECORDING_FORMAT,
+      values: [{ a: undefined, b: [1, , undefined, () => 1], c: () => 1, d: NaN, e: shared }], // eslint-disable-line no-sparse-arrays
+      recording: { snapshot: { x: { '$af:ref': 0 }, y: { '$af:ref': 0 }, z: shared }, events: [] },
+    };
+    const exact = Buffer.byteLength(
+      JSON.stringify(unpackRecording(packed, { maxBytes: Infinity })),
+      'utf8',
+    );
+    expect(() => unpackRecording(packed, { maxBytes: exact })).not.toThrow();
+    expect(() => unpackRecording(packed, { maxBytes: exact - 1 })).toThrow(
+      PackedRecordingTooLargeError,
+    );
+  });
+
+  it('BOUND: a plain recording is returned untouched — its bound is the text it was parsed from', () => {
+    const plain = { snapshot: { long: 'p'.repeat(1_000) }, events: [], structure: null };
+    expect(unpackRecording(plain, { maxBytes: 0 })).toBe(plain);
+  });
+
+  it('BOUND: a bound that is not a byte count is refused by name', () => {
+    for (const bad of [-1, Number.NaN, '16' as unknown as number]) {
+      expect(() => unpackRecording({}, { maxBytes: bad })).toThrow(/maxBytes/);
+    }
   });
 });

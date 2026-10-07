@@ -96,6 +96,49 @@ export class PackedRecordingError extends Error {
   }
 }
 
+/**
+ * A packed recording whose PLAIN form is larger than the reader agreed to take
+ * ({@link UnpackRecordingOptions.maxBytes}) — refused before anything is
+ * expanded. Packed, a recording can stand for far more JSON than it holds (a
+ * value referred to ten times, by values each referred to ten times, …), so
+ * its own byte count bounds nothing a tree walk does with it; this does.
+ */
+export class PackedRecordingTooLargeError extends PackedRecordingError {
+  /** The bound that was exceeded, in UTF-8 bytes of the plain recording's JSON. */
+  readonly maxBytes: number;
+  constructor(maxBytes: number) {
+    super(
+      `This packed recording expands to more than ${maxBytes} bytes of JSON — the most this ` +
+        'reader takes. Its plain form would be refused at that size too; a reader that trusts ' +
+        'the recording and reads it as a graph (never as a tree) can pass a larger maxBytes.',
+    );
+    this.name = 'PackedRecordingTooLargeError';
+    this.maxBytes = maxBytes;
+  }
+}
+
+/**
+ * The default bound on what a packed recording may expand to: 512 MiB of JSON —
+ * about the largest plain recording a JavaScript string can hold. Reading a
+ * packed recording through the default is never more work than reading its
+ * plain twin could have been.
+ */
+export const DEFAULT_UNPACK_MAX_BYTES = 512 * 1024 * 1024;
+
+/** How much a reader of {@link unpackRecording} agrees to expand. */
+export interface UnpackRecordingOptions {
+  /**
+   * The largest PLAIN recording this read may stand for, in UTF-8 bytes of its
+   * JSON — exactly the size the same recording minted plain would have.
+   * Checked over the PACKED form, in time proportional to the packed size,
+   * before anything is expanded; a packed recording over it is refused with
+   * {@link PackedRecordingTooLargeError}. Default
+   * {@link DEFAULT_UNPACK_MAX_BYTES}. `Infinity` takes anything — only for a
+   * reader that trusts the recording and never walks it as a tree.
+   */
+  readonly maxBytes?: number;
+}
+
 /** Is `value` a packed recording of the format this reader expands? */
 export function isPackedRecording(value: unknown): value is PackedRecording {
   return (
@@ -184,6 +227,13 @@ export function packCounted(
  * other value is returned as it is — so one call reads every recording, plain
  * or packed. See the module header for what "expanded" shares.
  *
+ * BOUNDED. A packed recording is expanded only when its plain form is at most
+ * `maxBytes` (default {@link DEFAULT_UNPACK_MAX_BYTES}) — measured over the
+ * packed form, each pooled value sized once, before anything is built. A plain
+ * recording is returned as it is: its size is the size of the text it was
+ * parsed from, which its reader bounds before parsing.
+ *
+ * @throws PackedRecordingTooLargeError when the plain form is over `maxBytes`.
  * @throws PackedRecordingError for a packed format other than v1, or a packed
  *   value whose references do not resolve.
  *
@@ -194,9 +244,36 @@ export function packCounted(
  *
  * const recording = unpackRecording(JSON.parse(text));   // plain or packed
  * const { recorder, runner } = observeRecording(recording);
+ *
+ * // A host that serves recordings to others bounds what one may stand for:
+ * unpackRecording(JSON.parse(text), { maxBytes: 16 * 1024 * 1024 });
  * ```
  */
-export function unpackRecording(input: unknown): Recording {
+export function unpackRecording(input: unknown, options: UnpackRecordingOptions = {}): Recording {
+  return unpackCounted(input, options, undefined);
+}
+
+/**
+ * @internal {@link unpackRecording}, counting its work: `work.measured` grows
+ * by one for every packed node the size check reads, `work.decoded` for every
+ * node expanded — the operation counts
+ * test/recorders/observability/recordingPack.test.ts pins (a refused
+ * amplification reads the packed form once and expands nothing). Not on any
+ * barrel.
+ */
+export function unpackCounted(
+  input: unknown,
+  options: UnpackRecordingOptions,
+  work: UnpackWork | undefined,
+): Recording {
+  const maxBytes = options.maxBytes ?? DEFAULT_UNPACK_MAX_BYTES;
+  if (typeof maxBytes !== 'number' || Number.isNaN(maxBytes) || maxBytes < 0) {
+    throw new TypeError(
+      `unpackRecording: maxBytes is a number of bytes (0 or more, or Infinity); got ${String(
+        maxBytes,
+      )}.`,
+    );
+  }
   if (!isPackedRecording(input)) {
     if (
       isRecord(input) &&
@@ -210,30 +287,18 @@ export function unpackRecording(input: unknown): Recording {
     }
     return input as Recording;
   }
+  if (maxBytes !== Number.POSITIVE_INFINITY) checkExpansion(input, maxBytes, work);
   const values = input.values;
   const resolved: unknown[] = new Array(values.length);
   const state = new Uint8Array(values.length); // 0 unread · 1 reading · 2 read
   const resolve = (index: unknown): unknown => {
-    if (
-      typeof index !== 'number' ||
-      !Number.isInteger(index) ||
-      index < 0 ||
-      index >= values.length
-    ) {
-      throw new PackedRecordingError(
-        `A reference names value ${String(index)}, which this recording does not hold.`,
-      );
-    }
-    if (state[index] === 2) return resolved[index];
-    if (state[index] === 1) {
-      throw new PackedRecordingError(
-        `Value ${index} refers to itself; a recording cannot hold that.`,
-      );
-    }
-    state[index] = 1;
-    resolved[index] = decode(values[index]);
-    state[index] = 2;
-    return resolved[index];
+    const at = checkedIndex(index, values.length);
+    if (state[at] === 2) return resolved[at];
+    if (state[at] === 1) throw selfReference(at);
+    state[at] = 1;
+    resolved[at] = decode(values[at]);
+    state[at] = 2;
+    return resolved[at];
   };
   const decodeObject = (node: Record<string, unknown>): Record<string, unknown> => {
     const out: Record<string, unknown> = {};
@@ -241,6 +306,7 @@ export function unpackRecording(input: unknown): Recording {
     return out;
   };
   const decode = (node: unknown): unknown => {
+    if (work !== undefined) work.decoded += 1;
     if (node === null || typeof node !== 'object') return node;
     if (Array.isArray(node)) return node.map(decode);
     const record = node as Record<string, unknown>;
@@ -252,6 +318,134 @@ export function unpackRecording(input: unknown): Recording {
     return decodeObject(record);
   };
   return decode(input.recording) as Recording;
+}
+
+/** @internal What {@link unpackCounted} counts. */
+export interface UnpackWork {
+  measured: number;
+  decoded: number;
+}
+
+/** The index a reference names, checked — or the refusal that names it. */
+function checkedIndex(index: unknown, length: number): number {
+  if (typeof index !== 'number' || !Number.isInteger(index) || index < 0 || index >= length) {
+    throw new PackedRecordingError(
+      `A reference names value ${String(index)}, which this recording does not hold.`,
+    );
+  }
+  return index;
+}
+
+function selfReference(index: number): PackedRecordingError {
+  return new PackedRecordingError(`Value ${index} refers to itself; a recording cannot hold that.`);
+}
+
+/**
+ * Refuse a packed recording whose PLAIN form — `JSON.stringify` of what
+ * {@link unpackRecording} would build — is over `maxBytes` UTF-8 bytes, without
+ * building it. Sizes are computed over the packed form in the decoder's own
+ * reading (a reference is the size of its value; an escape is the object
+ * inside it; `undefined` is `null` in an array and nothing in an object), each
+ * pooled value ONCE and each packed node once, so the check costs the packed
+ * size however far the recording expands. It stops at the first partial sum
+ * over the bound: every size it computes is part of the whole.
+ */
+function checkExpansion(input: PackedRecording, maxBytes: number, work: UnpackWork | undefined) {
+  const values = input.values;
+  const sizes: (number | undefined)[] = new Array(values.length);
+  const state = new Uint8Array(values.length); // 0 unsized · 1 sizing · 2 sized
+  const byNode = new WeakMap<object, number | undefined>();
+  const open = new Set<object>();
+  const within = (bytes: number): number => {
+    if (bytes > maxBytes) throw new PackedRecordingTooLargeError(maxBytes);
+    return bytes;
+  };
+  const sizeOfValue = (index: unknown): number | undefined => {
+    const at = checkedIndex(index, values.length);
+    if (state[at] === 2) return sizes[at];
+    if (state[at] === 1) throw selfReference(at);
+    state[at] = 1;
+    sizes[at] = sizeOf(values[at]);
+    state[at] = 2;
+    return sizes[at];
+  };
+  const sizeOfObject = (node: Record<string, unknown>): number => {
+    let bytes = 2; // {}
+    let members = 0;
+    for (const key of Object.keys(node)) {
+      const member = sizeOf(node[key]);
+      if (member === undefined) continue; // JSON writes nothing for it
+      bytes = within(bytes + (members > 0 ? 1 : 0) + jsonBytes(key) + 1 + member);
+      members += 1;
+    }
+    return bytes;
+  };
+  /** UTF-8 bytes of the node's JSON once decoded; `undefined` where JSON writes nothing. */
+  const sizeOf = (node: unknown): number | undefined => {
+    if (work !== undefined) work.measured += 1;
+    if (node === null) return 4;
+    switch (typeof node) {
+      case 'string':
+        return within(jsonBytes(node));
+      case 'number':
+        return Number.isFinite(node) ? String(node).length : 4;
+      case 'boolean':
+        return node ? 4 : 5;
+      case 'object':
+        break;
+      default:
+        return undefined; // undefined, a function, a symbol (a BigInt never parses)
+    }
+    const object = node as object;
+    if (byNode.has(object)) return byNode.get(object);
+    if (open.has(object)) {
+      throw new PackedRecordingError(
+        'This packed recording holds an object inside itself; a recording cannot hold that.',
+      );
+    }
+    open.add(object);
+    let bytes: number | undefined;
+    if (Array.isArray(object)) {
+      bytes = 2 + Math.max(0, object.length - 1); // [] and the commas
+      for (let i = 0; i < object.length; i++) {
+        bytes = within(bytes + ((i in object ? sizeOf(object[i]) : undefined) ?? 4));
+      }
+    } else {
+      const record = object as Record<string, unknown>;
+      const keys = Object.keys(record);
+      if (keys.length === 1 && keys[0] === REF) bytes = sizeOfValue(record[REF]);
+      else if (keys.length === 1 && keys[0] === ESC && isRecord(record[ESC])) {
+        bytes = sizeOfObject(record[ESC] as Record<string, unknown>);
+      } else bytes = sizeOfObject(record);
+    }
+    open.delete(object);
+    byNode.set(object, bytes);
+    return bytes;
+  };
+  within(sizeOf(input.recording) ?? 0);
+}
+
+/** UTF-8 bytes of `text` written as a JSON string — quotes and escapes included. */
+function jsonBytes(text: string): number {
+  return utf8Length(jsonString(text));
+}
+
+/** UTF-8 bytes of a well-formed string (JSON escapes every lone surrogate). */
+function utf8Length(text: string): number {
+  let bytes = 0;
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code < 0x80) bytes += 1;
+    else if (code < 0x800) bytes += 2;
+    else if (code >= 0xd800 && code <= 0xdbff && i + 1 < text.length) {
+      const next = text.charCodeAt(i + 1);
+      if (next >= 0xdc00 && next <= 0xdfff) {
+        bytes += 4;
+        i += 1;
+      } else bytes += 3;
+    } else bytes += 3;
+  }
+  return bytes;
 }
 
 // ── The walk — JSON.stringify's own reading of a value ────────────────────
@@ -451,7 +645,14 @@ function countValues(root: unknown, read: MemberReader): ValueTable {
 /** How long `text` is once written as a JSON string — its quotes and escapes
  *  included. Sizes a value for pooling; it never writes the record. */
 function jsonLength(text: string): number {
-  return JSON.stringify(text).length;
+  return jsonString(text).length;
+}
+
+/** `text` written as a JSON string — the one place this file serializes, and
+ *  only ever one string, to size it; the record is written by whoever
+ *  serializes the packed value, through `toWireJson`. */
+function jsonString(text: string): string {
+  return JSON.stringify(text);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

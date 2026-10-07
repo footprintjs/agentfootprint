@@ -8,12 +8,22 @@
  * `unpackRecording` reads it back (and hands a plain recording back
  * untouched), byte for byte the plain recording's JSON.
  *
+ * It reads a packed recording only up to a bound on the PLAIN recording it
+ * stands for: a few KB packed can stand for billions of bytes, and a reader
+ * that walks the result as a tree does that much work. A host passes the same
+ * ceiling it puts on a plain recording.
+ *
  * Run:  npm run example examples/features/94-packed-recording.ts
  */
 import assert from 'node:assert/strict';
 import { Agent, defineTool } from '../../src/index.js';
 import { mock } from '../../src/doors/providers.js';
-import { packRecording, recordRun, unpackRecording } from '../../src/doors/observe.js';
+import {
+  packRecording,
+  PackedRecordingTooLargeError,
+  recordRun,
+  unpackRecording,
+} from '../../src/doors/observe.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {
@@ -60,10 +70,26 @@ export async function run(input: string): Promise<unknown> {
 
   assert.equal(JSON.stringify(readBack), plain);
   assert.ok(packed.length * 10 < plain.length);
+
+  // #region bound
+  // A host that explains recordings other people send holds a packed one to the
+  // ceiling it puts on a plain one — measured over the packed form, before
+  // anything is expanded.
+  const ceiling = 16 * 1024 * 1024;
+  let refused = false;
+  try {
+    unpackRecording(JSON.parse(packed), { maxBytes: ceiling });
+  } catch (err) {
+    refused = err instanceof PackedRecordingTooLargeError; // ~36 MB plain: over it
+  }
+  // #endregion bound
+
+  assert.ok(refused);
   return {
     plainKB: Math.round(plain.length / 1024),
     packedKB: Math.round(packed.length / 1024),
     events: readBack.events.length,
+    refusedOver16MiB: refused,
   };
 }
 

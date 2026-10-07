@@ -51,7 +51,7 @@ const ALLOWED: Readonly<Record<string, { readonly count: number; readonly why: s
   },
   'src/recorders/observability/recordingPack.ts': {
     count: 1,
-    why: 'the JSON length of one string (`jsonLength`), to size a value for pooling — the packed recording itself is written by whoever serializes it, through toWireJson',
+    why: 'one string written as JSON (`jsonString`), to size a value — for pooling, and for the expansion bound — the packed recording itself is written by whoever serializes it, through toWireJson',
   },
   'src/recorders/observability/recordingEnvelope.ts': {
     count: 5,

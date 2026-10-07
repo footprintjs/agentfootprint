@@ -101,6 +101,16 @@ export function narrativeFrom(snapshot: {
  *                  `recordRun(...).toRecording()` — live, or parsed back
  *                  from JSON — or the same recording packed
  *                  (`packRecording`), which is expanded first.
+ *
+ * A packed recording is expanded only when its plain form is within
+ * `unpackRecording`'s default bound (`DEFAULT_UNPACK_MAX_BYTES`, 512 MiB): the
+ * toolpack previews a value by serializing it, so it walks what it reads as a
+ * tree, and a few KB packed can stand for far more than any plain recording
+ * could hold. A larger recording you trust is opened by expanding it first,
+ * with the bound you choose:
+ * `openRecording(unpackRecording(packed, { maxBytes }))`.
+ *
+ * @throws PackedRecordingTooLargeError for a packed recording over that bound.
  * @throws when the recording carries no usable snapshot. A toolpack over
  *         an empty bag would answer every question with "nothing
  *         happened", which is the one answer a debugging session must

@@ -102,14 +102,19 @@ export {
 // A recording with every repeated value written ONCE — what to store or send
 // when the run is long: plain JSON repeats the history once per place that
 // saw it (K²·R), packed it grows with K·R. `unpackRecording` reads both
-// shapes, so a reader that calls it reads every recording ever minted.
+// shapes, so a reader that calls it reads every recording ever minted — and
+// expands a packed one only when the plain recording it stands for is within
+// `maxBytes` (default `DEFAULT_UNPACK_MAX_BYTES`).
 export {
   packRecording,
   unpackRecording,
   isPackedRecording,
   PACKED_RECORDING_FORMAT,
+  DEFAULT_UNPACK_MAX_BYTES,
   PackedRecordingError,
+  PackedRecordingTooLargeError,
   type PackedRecording,
+  type UnpackRecordingOptions,
 } from './recorders/observability/recordingPack.js';
 
 // Runtime selected-policy evidence: typed subscription only, with one bounded
