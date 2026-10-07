@@ -96,6 +96,13 @@ export interface RecordRunOptions {
    * A recording that dropped events says so: `droppedEvents` counts them
    * rather than leaving a consumer to wonder why its timeline starts
    * mid-run.
+   *
+   * The cap counts DISTINCT events. Every model call re-announces each piece
+   * of its context (`agentfootprint.context.injected`); an announcement equal,
+   * field for field, to one the recording still holds is kept in its place but
+   * holds no slot, and shares that one's payload. Counted, those repeats grow
+   * with the square of the iteration count and evicted the start of a long run
+   * (a 100-iteration run opened at iteration ~33).
    */
   readonly maxEvents?: number;
   /**
@@ -155,7 +162,8 @@ export interface RunRecorder {
   readonly boundary: BoundaryRecorder;
   /** Opt-in typed trust capture; its detached facts remain readable after stop. */
   readonly trustBoundaries?: TrustBoundaryRecorder;
-  /** How many events have been captured. */
+  /** How many events have been captured — re-announced context included (see
+   *  `maxEvents`). */
   readonly eventCount: number;
   /** Events discarded to stay under `maxEvents`. `0` on a normal turn. */
   readonly droppedEvents: number;
