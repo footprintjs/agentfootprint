@@ -49,9 +49,13 @@ import { withoutQuery } from '../../src/ontology/skosJsonLd.js';
 import { countTextWork } from '../helpers/workCount.js';
 import { seeded, seededTexts } from '../helpers/seededText.js';
 import {
+  BARE_SIDE_BEFORE,
   coverage,
   englishTimeReader,
+  FROM_BEFORE,
+  MODIFIER_BEFORE,
   saysBetweenBefore,
+  windowBefore,
 } from '../../src/core/time/readers/english.js';
 
 const N = 100_000;
@@ -264,13 +268,34 @@ describe('stripTags — blanks what its regexes blanked, in linear work', () => 
     ['`<script` with no `>`', '<script'.repeat(N / 7)],
     ['comments that never close', '<!--'.repeat(N / 4)],
     ['styles that never close', '<style>'.repeat(N / 7)],
-  ])('the whole of stripTags on %s: linear counted work', (_name, html) => {
+  ])('the whole of stripTags on %s: every pass, in linear counted work', (_name, html) => {
     const { result, work } = countTextWork(() => stripTags(html));
     expect(result.length).toBe(html.length);
-    expect(work).toBeGreaterThanOrEqual(html.length);
-    expect(work).toBeLessThanOrEqual(budget(html.length, 8));
+    // At least what its four passes count when run one after another — so a
+    // stripTags that stopped calling one of them, for an inline regex the
+    // counter cannot see, comes up short here.
+    expect(work).toBeGreaterThanOrEqual(stripTagsPassesWork(html));
+    expect(work).toBeLessThanOrEqual(budget(html.length, 10));
   });
 });
+
+/** The counted work of `stripTags`' four passes, each run on the one before's output. */
+function stripTagsPassesWork(html: string): number {
+  const passes: ((text: string) => string)[] = [
+    (t) => blankRawText(t, 'script'),
+    (t) => blankRawText(t, 'style'),
+    (t) => blankDelimited(t, '<!--', '-->'),
+    (t) => blankDelimited(t, '<', '>'),
+  ];
+  let text = html;
+  let work = 0;
+  for (const pass of passes) {
+    const counted = countTextWork(() => pass(text));
+    work += counted.work;
+    text = counted.result;
+  }
+  return work;
+}
 
 // ─── Model-written code ─────────────────────────────────────────────
 
@@ -353,12 +378,22 @@ describe('codeShape — the same shape, in linear work', () => {
     ['one quote, then a run of escaped quotes', ESCAPED_QUOTES],
     ['every quote kind left open', EVERY_QUOTE_OPEN],
     ['quotes that keep closing', CLOSING_QUOTES],
-  ])('the whole of codeShape on %s: linear counted work', (_name, code) => {
+  ])('the whole of codeShape on %s: both scans, in linear counted work', (_name, code) => {
     const { work } = countTextWork(() => codeShape(code));
-    expect(work).toBeGreaterThanOrEqual(code.length);
+    // At least what its two scans count on the text each one sees — see
+    // `stripTagsPassesWork` for why the whole door is held to the sum.
+    expect(work).toBeGreaterThanOrEqual(codeShapeScansWork(code));
     expect(work).toBeLessThanOrEqual(budget(code.length, 5));
   });
 });
+
+/** The counted work of `codeShape`'s two scans, each on the text `codeShape` hands it. */
+function codeShapeScansWork(code: string): number {
+  const comments = countTextWork(() => stripBlockComments(code));
+  // The two linear regex passes `codeShape` runs between the scans, uncounted.
+  const between = comments.result.replace(/(^|[^:])\/\/[^\n]*/g, '$1 ').replace(/#[^\n]*/g, ' ');
+  return comments.work + countTextWork(() => replaceStringLiterals(between)).work;
+}
 
 // ─── A PEM bundle ───────────────────────────────────────────────────
 
@@ -631,14 +666,75 @@ describe('english reader — `between` and covered phrases, without re-reading t
     expect(reads).toBeLessThanOrEqual(4 * n * Math.log2(n) + 4 * n);
   });
 
-  it('the reader on a message of many short phrases: linear counted work', async () => {
-    // 8,000 phrases, 64 KB: the per-phrase regex over the text before it took ~0.4 s.
-    const text = 'at 1 pm '.repeat(8_000);
-    const reader = englishTimeReader();
-    const { result, work } = countTextWork(() => reader.read(text, { locale: 'en-US' }));
-    // Every phrase asks whether `between` came before it — and is seen asking.
-    expect(work).toBeGreaterThanOrEqual(8_000);
-    expect(work).toBeLessThanOrEqual(budget(text.length, 2));
-    expect((await result).mentions.length).toBeGreaterThan(0);
+  it('windowBefore keeps the leftmost match of each `…\\s*$` pattern before a group', () => {
+    const texts = seededTexts(
+      0x3b4,
+      [
+        'no',
+        'later',
+        'than',
+        'prior',
+        'to',
+        'up',
+        'as',
+        'of',
+        'from',
+        'between',
+        'and',
+        'since',
+        'starting',
+        'at',
+        'early',
+        '~',
+        '8',
+        '12',
+        ' ',
+        '  ',
+        '\t',
+        '\n',
+        '\u00a0',
+        '(',
+        ':',
+        '-',
+        'x',
+      ],
+      2_500,
+      14,
+    );
+    let matched = 0;
+    for (const text of texts) {
+      for (let end = 0; end <= text.length; end++) {
+        const from = windowBefore(text, end);
+        for (const pattern of [MODIFIER_BEFORE, BARE_SIDE_BEFORE, FROM_BEFORE]) {
+          const whole = pattern.exec(text.slice(0, end));
+          const windowed = pattern.exec(text.slice(from, end));
+          const where = `${JSON.stringify(text)} @ ${end} ${pattern.source.slice(0, 20)}`;
+          expect(windowed?.[0], where).toBe(whole?.[0]);
+          expect(windowed?.[1], where).toBe(whole?.[1]);
+          expect(windowed === null ? undefined : from + windowed.index, where).toBe(whole?.index);
+          if (whole !== null) matched++;
+        }
+      }
+    }
+    expect(matched).toBeGreaterThan(2_000);
   });
+
+  // The reader's own walks (`saysBetweenBefore`, `windowBefore`) are counted.
+  // The regexes it still runs per phrase are not — but each now reads only
+  // the few words before its phrase, so they are bounded the same way.
+  it.each([
+    // One long mention: every phrase asks whether `between` came before it.
+    ['one long mention', 'at 1 pm '.repeat(8_000)],
+    // Separate mentions: every group asks what modifies it, from the words before it.
+    ['many separate mentions', 'at 1 pm we eat. '.repeat(8_000)],
+  ])(
+    'the reader on %s of short time phrases: its walks are linear and seen',
+    async (_name, text) => {
+      const reader = englishTimeReader();
+      const { result, work } = countTextWork(() => reader.read(text, { locale: 'en-US' }));
+      expect(work).toBeGreaterThanOrEqual(8_000);
+      expect(work).toBeLessThanOrEqual(budget(text.length, 3));
+      expect((await result).mentions.length).toBeGreaterThan(0);
+    },
+  );
 });

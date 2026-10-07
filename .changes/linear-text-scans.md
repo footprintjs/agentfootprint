@@ -10,8 +10,8 @@ heading lines (`byHeading`), the HTML loader's tag stripping (`htmlLoader` / `st
 code runner's call shape (`codeShape`, run on model-written code), the evidence matcher's token
 cleanup, the constrained-pick reply parser, the pattern fact extractor's address rule and value
 cleanup, the coverage section's trim of the model's answer, the time layer's clock tokens,
-place-named zones (`London time`) and the English reader's `between` check (which re-read the
-whole message before every time phrase in it), the SKOS reader's IRI query strip, the LDAP door's
+place-named zones (`London time`) and the English reader's look at the words before each time
+phrase (which re-read the whole message once per phrase), the SKOS reader's IRI query strip, the LDAP door's
 PEM reader, and the base-URL and prefix trims in the Ollama, Foundry, Foundry Local, Azure OpenAI,
 InvokeModel gateway, Vault, OIDC discovery, GitHub bug-report and device sign-in, TypeSafe and
 artifact-prefix options.

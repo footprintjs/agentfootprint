@@ -180,21 +180,21 @@ const RANGE_WORDS = 'to|until|till|through|thru';
 const RANGE_CONNECTOR = `(?:(?:${RANGE_WORDS})(?![a-z])|[–—-])`;
 
 /** A word right before a phrase that changes what it means: the phrase is not read. */
-const MODIFIER_BEFORE = new RegExp(
+export const MODIFIER_BEFORE = new RegExp(
   '(?:^|[^\\w])(since|before|after|by|around|circa|approx(?:imately)?|until|till|earlier|later|' +
     'early|late|within|past|beyond|prior\\s+to|up\\s+to|no\\s+(?:later|earlier|sooner)\\s+than|' +
     'as\\s+of|(?:starting|beginning)(?:\\s+(?:at|from|on))?|~)\\s*$',
   'i',
 );
 /** `from` with no `to`: a time after it is where a window STARTS (`from 3 PM yesterday`), not an hour. */
-const FROM_BEFORE = /(?:^|[^\w])(from)\s*$/i;
+export const FROM_BEFORE = /(?:^|[^\w])(from)\s*$/i;
 /**
  * A bare number joined to a clock time as a range's first side the grammar
  * does not read (`8 to 9:30`, `from 8 to 9:30`, `between 8 and 9:30` — the
  * far side says no meridiem, so `8` is no time): the whole phrase is not
  * read. Reading `9:30` alone would drop the start the person said.
  */
-const BARE_SIDE_BEFORE = new RegExp(
+export const BARE_SIDE_BEFORE = new RegExp(
   `(?:^|[^\\w:./-])((?:from\\s+)?\\d{1,2}\\s*${RANGE_CONNECTOR}|between\\s+\\d{1,2}\\s+and)\\s*$`,
   'i',
 );
@@ -549,6 +549,37 @@ export function saysBetweenBefore(text: string, end: number): boolean {
   return word === 7 || !isAsciiWordCode(text.charCodeAt(word - 8));
 }
 
+/**
+ * The longest phrase `MODIFIER_BEFORE`, `BARE_SIDE_BEFORE` or `FROM_BEFORE`
+ * matches spans three words (`no later than`, `from 8 to`, `between 8 and`);
+ * one spare.
+ */
+const WORDS_BEFORE = 4;
+
+/**
+ * Where the text before `end` that those three patterns can reach starts: back
+ * over the blanks before `end`, then over `WORDS_BEFORE` words and the blanks
+ * before each. Each pattern ends at `end` (`\s*$`), spans fewer words, and
+ * takes its leading boundary from the character just before its first word —
+ * all inside this window, which starts at a blank or at 0, so the window's
+ * `^` adds no match. The leftmost match in the window is therefore the leftmost
+ * match in all the text before `end`; matching that text instead re-read the
+ * whole message once per group.
+ */
+export function windowBefore(text: string, end: number): number {
+  let at = end;
+  while (at > 0 && isBlankAt(text, at - 1)) at--;
+  for (let word = 0; word < WORDS_BEFORE && at > 0; word++) {
+    while (at > 0 && !isBlankAt(text, at - 1)) at--;
+    while (at > 0 && isBlankAt(text, at - 1)) at--;
+  }
+  return at;
+}
+
+function isBlankAt(text: string, at: number): boolean {
+  return BLANK.test(String.fromCharCode(text.charCodeAt(at)));
+}
+
 /** `\w`: ASCII letters, digits, `_`. */
 function isAsciiWordCode(code: number): boolean {
   const lower = code | 0x20;
@@ -674,7 +705,9 @@ function mergeOverlaps(groups: readonly Group[]): Group[] {
 
 /** A modifier before or after a v1 phrase changes it: the whole phrase is not read. */
 function widenForModifiers(text: string, group: Group): void {
-  const head = text.slice(0, group.start);
+  // Only the few words before the group can match (`windowBefore`).
+  const from = windowBefore(text, group.start);
+  const head = text.slice(from, group.start);
   const clock = group.items.some((i) => i.atom?.wall !== undefined);
   const startsOnWall = group.items[0]?.atom?.kind === 'wall';
   const before =
@@ -682,7 +715,7 @@ function widenForModifiers(text: string, group: Group): void {
     MODIFIER_BEFORE.exec(head) ??
     (group.rangeAt === undefined && clock ? FROM_BEFORE.exec(head) : null);
   if (before !== null) {
-    group.start = before.index + before[0].lastIndexOf(before[1] as string);
+    group.start = from + before.index + before[0].lastIndexOf(before[1] as string);
     group.unreadable = true;
   }
   const after = MODIFIER_AFTER.exec(text.slice(group.end));
