@@ -6,7 +6,7 @@ title: transformHashOf
 
 > **transformHashOf**(`runId`, `request`): `string`
 
-Defined in: [src/lib/time-travel/receipt.ts:790](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L790)
+Defined in: [src/lib/time-travel/receipt.ts:792](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L792)
 
 The fingerprint a receipt records as `cache.transformHash` for the request a
 cache strategy handed back — recompute it from that request to verify a
@@ -25,8 +25,10 @@ hash   = "chain-v1:" + H(linkₙ + "\u001F" + head)
 ```
 
 A value `stableJson` cannot produce is recorded as UNSERIALIZABLE in
-its place, never as an empty string. A receipt minted before the prefix
-existed carries a bare 16-hex value: verify that one with
+its place, never as an empty string. A request that cannot be read at all (a
+property that throws when read) is `"chain-v1:" + H(link₀ + "\u001F" +
+UNSERIALIZABLE)` — the function never throws. A receipt minted before the
+prefix existed carries a bare 16-hex value: verify that one with
 `receiptHash(runId, stableJson(request))`.
 
 ## Parameters
