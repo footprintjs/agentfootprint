@@ -2,7 +2,7 @@
 title: Variables
 ---
 
-70 exported from `agentfootprint`.
+71 exported from `agentfootprint`.
 
 - [`ABSENCE_MARKER`](/docs/api/variables/ABSENCE_MARKER)
 - [`ABSENCE_NOTE`](/docs/api/variables/ABSENCE_NOTE)
@@ -72,5 +72,6 @@ title: Variables
 - [`TOOL_RESULT_STATUSES`](/docs/api/variables/TOOL_RESULT_STATUSES)
 - [`TOOL_SESSIONS`](/docs/api/variables/TOOL_SESSIONS)
 - [`TOOL_TEARDOWN_TIMEOUT_MS`](/docs/api/variables/TOOL_TEARDOWN_TIMEOUT_MS)
+- [`TRANSFORM_HASH_PREFIX`](/docs/api/variables/TRANSFORM_HASH_PREFIX)
 - [`UNGAPPED_FIELDS`](/docs/api/variables/UNGAPPED_FIELDS)
 - [`VERDICT_RENDER_NOTE`](/docs/api/variables/VERDICT_RENDER_NOTE)

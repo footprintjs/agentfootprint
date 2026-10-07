@@ -118,7 +118,8 @@ redaction policy today):
   — `getLastSnapshot()` (`sharedState`, `commitLog`, `executionTree`,
   `subflowResults`), `getLastNarrativeEntries()`, a `recordRun` recording, a
   `BoundaryRecorder` `subflow.entry` payload, and a paused run's checkpoint
-  — `RunnerPauseOutcome.checkpoint` (`sharedState`, `executionTree`), which
+  — `RunnerPauseOutcome.checkpoint` (`sharedState`; on footprintjs before
+  9.44.0 also its `executionTree`), which
   `standingAgent` itself stores for a paused session as a `flowchart-v1`
   envelope under every durability, the default `'exit'` included (strip the
   rows by wrapping the `persist` of the store passed as `sessions`);

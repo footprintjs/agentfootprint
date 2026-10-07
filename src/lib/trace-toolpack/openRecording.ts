@@ -43,6 +43,10 @@ import type { RuntimeSnapshot } from 'footprintjs';
 
 import type { AgentfootprintEvent } from '../../events/registry.js';
 import type { TraceToolpackArtifacts } from './types.js';
+import {
+  unpackRecording,
+  type PackedRecording,
+} from '../../recorders/observability/recordingPack.js';
 
 /**
  * The recording shape — structurally the `Recording` that `recordRun`
@@ -95,13 +99,25 @@ export function narrativeFrom(snapshot: {
  *
  * @param recording the `{ snapshot, events, structure }` bundle from
  *                  `recordRun(...).toRecording()` — live, or parsed back
- *                  from JSON.
+ *                  from JSON — or the same recording packed
+ *                  (`packRecording`), which is expanded first.
+ *
+ * A packed recording is expanded only when its plain form is within
+ * `unpackRecording`'s default bound (`DEFAULT_UNPACK_MAX_BYTES`, 512 MiB): the
+ * toolpack previews a value by serializing it, so it walks what it reads as a
+ * tree, and a few KB packed can stand for far more than any plain recording
+ * could hold. A larger recording you trust is opened by expanding it first,
+ * with the bound you choose:
+ * `openRecording(unpackRecording(packed, { maxBytes }))`.
+ *
+ * @throws PackedRecordingTooLargeError for a packed recording over that bound.
  * @throws when the recording carries no usable snapshot. A toolpack over
  *         an empty bag would answer every question with "nothing
  *         happened", which is the one answer a debugging session must
  *         never be given by mistake.
  */
-export function openRecording(recording: OpenableRecording): TraceToolpackArtifacts {
+export function openRecording(input: OpenableRecording | PackedRecording): TraceToolpackArtifacts {
+  const recording = unpackRecording(input) as OpenableRecording | undefined;
   const snapshot = recording?.snapshot as
     | (RuntimeSnapshot & { recorders?: readonly RecorderRow[] })
     | undefined;
@@ -133,7 +149,7 @@ export function openRecording(recording: OpenableRecording): TraceToolpackArtifa
   }
 
   const narrative = narrativeFrom(snapshot);
-  const events = recording.events;
+  const events = recording?.events;
   return {
     snapshot,
     // controlDeps is deliberately absent — see the header. The toolpack

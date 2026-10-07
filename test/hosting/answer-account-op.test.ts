@@ -28,7 +28,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Agent, inMemoryArtifacts, recordingPutInput } from '../../src/index.js';
 import type { ArtifactMeta, ArtifactScope, ArtifactStore } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
-import { accountForAnswer, answerAccountPointerKey } from '../../src/observe.js';
+import {
+  accountForAnswer,
+  answerAccountPointerKey,
+  packRecording,
+  PACKED_RECORDING_FORMAT,
+} from '../../src/observe.js';
 import { showLeaves } from '../../src/lib/answer-account/shown.js';
 import { ANSWER_ACCOUNT_TEMPLATE_SET_VERSION } from '../../src/lib/answer-account/templates.js';
 import {
@@ -425,6 +430,50 @@ describe('answer-account — the record', () => {
     expect(gets()).toBe(2);
   });
 
+  it('a PACKED recording that stands for more than the ceiling: 413 like its plain twin, refused before expanding, never cached', async () => {
+    const { store, counts } = countingStore();
+    const { host } = await served(storeAgent(store), {
+      extra: { answerAccounts: { maxRecordingBytes: 1_000_000 } },
+    });
+    // A few KB that stand for 10^30 copies of a 100-character string: value k
+    // is ten references to value k−1. Under the ceiling as stored; far over it
+    // as the recording the account would walk.
+    const values: unknown[] = ['x'.repeat(100)];
+    for (let k = 1; k <= 30; k++) {
+      values.push(Array.from({ length: 10 }, () => ({ '$af:ref': k - 1 })));
+    }
+    const data = JSON.stringify({
+      format: PACKED_RECORDING_FORMAT,
+      values,
+      recording: { snapshot: { '$af:ref': 30 }, events: [], structure: null },
+    });
+    expect(data.length).toBeLessThan(10_000);
+    const minted = await store.put(
+      { conversationId: 's-1' },
+      { kind: 'recording/run', mediaType: 'application/json', data },
+    );
+    const first = await explain(host, 's-1', minted.meta.ref);
+    const second = await explain(host, 's-1', minted.meta.ref);
+    for (const got of [first, second]) {
+      expect(got.code).toBe('ERR_RECORDING_TOO_LARGE_FOR_ACCOUNT');
+      expect(got.error).toContain('1000000 bytes');
+    }
+    // Not cached: each request read the payload again.
+    expect(counts.get).toBe(2);
+  });
+
+  it('a PACKED recording within the ceiling explains exactly as its plain twin', async () => {
+    const store = inMemoryArtifacts();
+    const { host } = await served(storeAgent(store), { extra: { answerAccounts: {} } });
+    const plainRef = await putFlagship(store, 's-1');
+    const packed = await store.put(
+      { conversationId: 's-1' },
+      recordingPutInput(packRecording(fixtureA() as never), { runId: FLAGSHIP_RUN_ID }),
+    );
+    const plain = bodyOf(await explain(host, 's-1', plainRef));
+    expect(bodyOf(await explain(host, 's-1', packed.meta.ref))).toEqual(plain);
+  });
+
   it('an unreadable recording is the one not-found, and is never cached', async () => {
     const { store, counts } = countingStore();
     const { host } = await served(storeAgent(store), { extra: { answerAccounts: {} } });
@@ -811,6 +860,9 @@ describe('answer-account — the import fence (no model is called)', () => {
         '../lib/answer-account/templates.js',
         '../lib/answer-account/types.js',
         '../recorders/observability/recordRun.js',
+        // The packed-recording codec — pure data in, data out (it imports the
+        // wire rule and a type, nothing that runs a model).
+        '../recorders/observability/recordingPack.js',
         './artifactWire.js',
         './errors.js',
         'node:crypto',

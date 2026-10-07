@@ -40,6 +40,10 @@ import { showLeaves } from '../lib/answer-account/shown.js';
 import { ANSWER_ACCOUNT_TEMPLATE_SET_VERSION } from '../lib/answer-account/templates.js';
 import type { AnswerAccountDeclarations } from '../lib/answer-account/types.js';
 import type { Recording } from '../recorders/observability/recordRun.js';
+import {
+  PackedRecordingTooLargeError,
+  unpackRecording,
+} from '../recorders/observability/recordingPack.js';
 import type { AnswerAccountWireBody } from './artifactWire.js';
 import { RecordingTooLargeForAccountError } from './errors.js';
 
@@ -61,7 +65,10 @@ export interface AnswerAccountsOptions {
    * `bytes`). Default {@link DEFAULT_ANSWER_ACCOUNT_MAX_RECORDING_BYTES}
    * (16 MiB). A recording over it is refused with
    * `RecordingTooLargeForAccountError` before any of its payload is read — it
-   * bounds the worst single parse on the event loop every session shares.
+   * bounds the worst single parse on the event loop every session shares. A
+   * PACKED recording is held to it twice: its stored bytes, and the plain
+   * recording it stands for (measured over the packed form, before anything is
+   * expanded) — a few KB packed can stand for gigabytes.
    */
   readonly maxRecordingBytes?: number;
   /**
@@ -184,7 +191,9 @@ export function answerAccounts(options: AnswerAccountsOptions | true): AnswerAcc
         if (bytes !== undefined && bytes > maxRecordingBytes) {
           throw new RecordingTooLargeForAccountError(maxRecordingBytes);
         }
-        const body = explainRecording(loaded, declarations);
+        // …and once more on what the payload STANDS FOR: a packed recording is
+        // refused when its plain form is over the ceiling (`readRecording`).
+        const body = explainRecording(loaded, declarations, maxRecordingBytes);
         if (body !== null) remember(key, body);
         return body;
       })();
@@ -205,12 +214,23 @@ export function answerAccounts(options: AnswerAccountsOptions | true): AnswerAcc
  * Synchronous on purpose, and the reason for the ceiling: parse + fold +
  * show-me run on the event loop. Measured on the field recording in the af-3
  * worklog.
+ *
+ * The ceiling holds for a PACKED recording too, on the recording it stands for:
+ * the fold and show-me walk the expanded recording as a tree, and a few KB
+ * packed can stand for gigabytes (a value referred to ten times by values each
+ * referred to ten times, …). So a packed payload whose plain form is over
+ * `maxRecordingBytes` is refused exactly as that plain payload would be —
+ * measured over the packed form, before anything is expanded.
+ *
+ * @throws RecordingTooLargeForAccountError for a packed recording whose plain
+ *   form is over `maxRecordingBytes`.
  */
 export function explainRecording(
   loaded: LoadedRecording,
   declarations: AnswerAccountDeclarations,
+  maxRecordingBytes: number = DEFAULT_ANSWER_ACCOUNT_MAX_RECORDING_BYTES,
 ): AnswerAccountWireBody | null {
-  const recording = readRecording(loaded.data);
+  const recording = readRecording(loaded.data, maxRecordingBytes);
   if (recording === null) return null;
   try {
     const account = accountForAnswer(
@@ -228,13 +248,24 @@ export function explainRecording(
   }
 }
 
-/** The payload as a recording object — text (how recordings are minted), bytes, or an object. */
-function readRecording(data: unknown): Recording | null {
+/** The payload as a recording object — text (how recordings are minted), bytes, or an object;
+ *  plain or packed (`recordings: { packed: true }`), which is expanded here only when
+ *  its plain form is within `maxBytes`. */
+function readRecording(data: unknown, maxBytes: number): Recording | null {
   let value: unknown = data;
   try {
     if (typeof data === 'string') value = JSON.parse(data);
     else if (data instanceof Uint8Array) value = JSON.parse(new TextDecoder().decode(data));
   } catch {
+    return null;
+  }
+  try {
+    value = unpackRecording(value, { maxBytes });
+  } catch (err) {
+    // The same refusal an oversized plain recording gets — never a not-found.
+    if (err instanceof PackedRecordingTooLargeError) {
+      throw new RecordingTooLargeForAccountError(maxBytes);
+    }
     return null;
   }
   return typeof value === 'object' && value !== null && !Array.isArray(value)

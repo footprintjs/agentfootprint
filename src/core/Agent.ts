@@ -80,6 +80,8 @@ import { resilienceRecorder } from '../recorders/core/ResilienceRecorder.js';
 import { checkInEventsBridge } from '../recorders/core/CheckInRecorder.js';
 import { compactionMeter, type CompactionMeterHandle } from '../recorders/core/CompactionMeter.js';
 import { createEvictedTurnsHandle, type EvictedTurnsHandle } from './agent/window/evictedTurns.js';
+import { createReceiptDigests, type ReceiptDigests } from '../lib/time-travel/receiptDigests.js';
+import { packRecording } from '../recorders/observability/recordingPack.js';
 import { pendingDurableWrite } from './durabilityBarrier.js';
 import {
   ToolSessionTier,
@@ -986,6 +988,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   /** `AgentOptions.recordReceipt` (9.88.0) — ON by default. `false` declines
    *  the mint at `callLLM`; nothing else about the run changes. */
   private readonly recordReceiptValue: boolean = true;
+  /** The receipt memo every call of a run mints through — one per agent,
+   *  rebinding itself to each run id (`lib/time-travel/receiptDigests.ts`). */
+  private readonly receiptDigests: ReceiptDigests = createReceiptDigests();
   private readonly answerValidationConfig?: ResolvedAnswerValidation;
 
   constructor(
@@ -1538,12 +1543,16 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     const runId = this.currentRunContext?.runId;
     let input;
     try {
-      input = recordingPutInput(recorder.toRecording(), {
-        ...(runId !== undefined && { runId }),
-        ...(this.artifactRecordings.label !== undefined && {
-          label: this.artifactRecordings.label,
-        }),
-      });
+      const recording = recorder.toRecording();
+      input = recordingPutInput(
+        this.artifactRecordings.packed === true ? packRecording(recording) : recording,
+        {
+          ...(runId !== undefined && { runId }),
+          ...(this.artifactRecordings.label !== undefined && {
+            label: this.artifactRecordings.label,
+          }),
+        },
+      );
     } catch (err) {
       this.reportRecordingRefused(err, 'invalid-input');
       return;
@@ -4954,6 +4963,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // …and the window's evictions for `omittedForAttention` (9.93.0) — only
       // an agent with a window strategy has any, and only it hands the seam.
       ...(this.evictedTurnsHandle !== undefined && { evictedTurns: this.evictedTurnsHandle }),
+      // …and the receipt memo, so a run hashes each message once rather than
+      // once per call (`lib/time-travel/receiptDigests.ts`). Only where a
+      // receipt is minted at all.
+      ...(this.recordReceiptValue !== false && { receiptDigests: this.receiptDigests }),
       provider,
       model,
       ...(temperature !== undefined && { temperature }),

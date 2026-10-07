@@ -26,6 +26,8 @@ export {
   toolDigestInput,
   receiptHash,
   stableJson,
+  transformHashOf,
+  TRANSFORM_HASH_PREFIX,
   FORCED_OUTPUT_TOOL_KEY,
   RECEIPT_BOUNDARY,
   RECEIPT_HASH_CHARS,

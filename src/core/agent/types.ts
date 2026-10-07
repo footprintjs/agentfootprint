@@ -148,6 +148,19 @@ export interface AgentRecordingsOptions {
    * would be overruling the name you chose.
    */
   readonly label?: string;
+  /**
+   * Mint the recording PACKED: every value it holds in more than one place is
+   * written once (`packRecording`, format `agentfootprint.recording.packed.v1`).
+   * Default `false` — the plain `{ snapshot, events, structure }` text.
+   *
+   * A plain recording repeats the conversation once per place that saw it, so
+   * it grows with the square of the iteration count; measured with 1,000-row
+   * tool results, 808 MB at 40 iterations, and past JSON's string limit before
+   * 80. Packed, the same runs are a few MB and grow linearly. A reader expands
+   * it with `unpackRecording` (from `agentfootprint/observe`), which also reads
+   * a plain recording unchanged — adopt the reader first, then pack.
+   */
+  readonly packed?: boolean;
 }
 
 export interface AgentOptions {

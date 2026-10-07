@@ -36,12 +36,19 @@ const ROUTES = [
   },
 ];
 
+// RAISED 2026-10-07 (search gzip), for the recordings performance packet:
+// owner-approved raise under the 2026-09-27 ruling; docs-site cleanup planned.
+// CI measured the branch with EXPORT=true at 2.21 MB gzip (8.98 MB raw, 1,125
+// records) against the 2.205 MB ceiling: the packed-recording section of the
+// recordings page (pack, read back, the expansion bound), the transformHash
+// paragraph of the time-travel page, and the two new API pages. ~2% over the
+// measurement, the rule every raise here follows.
 // RAISED 2026-09-30 (search gzip): the publish run for the time-axis and
 // person-values release measured 2.16 MB gzip across 1,058 records against a
 // 2.155 MB ceiling, so the package was tagged but not published. ~2% over the
 // measurement, the rule every raise here follows. Owner-approved raise;
 // docs-site cleanup planned.
-const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_205_000, records: 2_000 };
+const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_255_000, records: 2_000 };
 // Search gzip raised 2.11 -> 2.155 MB (2026-09-27) — growth this release can
 // name: the answer's standing (`assessAnswer()` / `agent.assessment()`), its
 // section on the recordings page and its Agent API entry. Measured with
@@ -246,7 +253,16 @@ const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_205_000, records: 2_000 };
 // and facts, the ledger rows, the axis view) plus the hand-written Time guide
 // page, ~6 export files per API route. ~2% over the measurement, the rule
 // every raise here follows.
-const OUTPUT_LIMITS = { bytes: 218_700_000, files: 8_270, duplicateRscBytes: 0 };
+// RAISED 2026-10-07, bytes, for the recordings performance packet (incremental
+// receipts, the event tail that keeps a run's start, packed recordings and the
+// bound on what a packed one may expand to): owner-approved raise under the
+// 2026-09-27 ruling; docs-site cleanup planned. CI measured the branch with
+// EXPORT=true at 219.04 MB across 8,206 files (duplicate RSC pairs 0), 0.34 MB
+// over the old ceiling: two generated API pages (transformHashOf,
+// TRANSFORM_HASH_PREFIX) and the packed-recording sections of the recordings
+// and time-travel pages. ~2% over the measurement, the rule every raise here
+// follows.
+const OUTPUT_LIMITS = { bytes: 223_400_000, files: 8_270, duplicateRscBytes: 0 };
 // Raised for 9.61.0: 394.1 KB → 400.3 KB. The skill-graph demo imports
 // `defineTool` from 'agentfootprint', so the library's MAIN ENTRY and its
 // whole transitive graph ride this chunk — and this release added the

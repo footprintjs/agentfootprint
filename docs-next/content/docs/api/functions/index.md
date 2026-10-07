@@ -2,7 +2,7 @@
 title: Functions
 ---
 
-147 exported from `agentfootprint`.
+148 exported from `agentfootprint`.
 
 - [`absenceSignalOf`](/docs/api/functions/absenceSignalOf)
 - [`absent`](/docs/api/functions/absent)
@@ -146,6 +146,7 @@ title: Functions
 - [`toolSessionsOf`](/docs/api/functions/toolSessionsOf)
 - [`topK`](/docs/api/functions/topK)
 - [`tot`](/docs/api/functions/tot)
+- [`transformHashOf`](/docs/api/functions/transformHashOf)
 - [`unconfiguredArtifacts`](/docs/api/functions/unconfiguredArtifacts)
 - [`verdictRowsOf`](/docs/api/functions/verdictRowsOf)
 - [`warnIfInvalidToolName`](/docs/api/functions/warnIfInvalidToolName)

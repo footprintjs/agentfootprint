@@ -55,6 +55,50 @@ the run facts, an optional privacy statement and an optional `configuration`
 override; `run` is a `RecordingRunFacts` — the half of the truth the library
 cannot derive.
 
+## Save a long run: pack it
+
+A plain recording repeats the conversation once per place that saw it, so its
+JSON grows with the square of the iteration count. With 1,000-row tool results
+it is 67 MB at 10 iterations, 808 MB at 40, and past JSON's string limit before
+80, where it cannot be saved at all. `packRecording` writes every repeated
+value once and refers to it by index. The same runs pack to 1.3 MB, 5.6 MB and
+12.6 MB at 80, and four times the iterations cost about four times the bytes.
+
+<CodeFile path="examples/features/94-packed-recording.ts" region="pack" title="examples/features/94-packed-recording.ts (region: pack)" />
+
+`unpackRecording` reads both shapes, so call it wherever a recording is read:
+a plain recording comes back untouched, and a packed one reads back to the
+plain recording's JSON, byte for byte. A packed format it does not know is
+refused with `PackedRecordingError`, never half-read. A packed recording is a
+`PackedRecording` — `{ format, values, recording }` — whose `format` is
+`PACKED_RECORDING_FORMAT`; `isPackedRecording(value)` tells the two shapes
+apart without expanding anything. `openRecording` and the answer-account op
+already read through `unpackRecording`.
+
+A packed recording can stand for far more JSON than it holds: a value referred
+to ten times, by values each referred to ten times, is a few KB packed and
+billions of bytes unpacked. So `unpackRecording` expands one only when the plain
+recording it stands for fits a bound: `maxBytes` in its `UnpackRecordingOptions`,
+counted in UTF-8 bytes of the plain JSON. The default, `DEFAULT_UNPACK_MAX_BYTES`
+(512 MiB), is about the largest plain recording a JavaScript string can hold.
+The size is measured over the packed form before anything is built, and a
+recording over it is refused with `PackedRecordingTooLargeError`. A host that
+reads recordings other people send should pass the same ceiling it puts on a
+plain one, as the answer-account op does with its `maxRecordingBytes`.
+`openRecording` takes the default; open a larger recording you trust with
+`openRecording(unpackRecording(packed, { maxBytes }))`.
+
+<CodeFile path="examples/features/94-packed-recording.ts" region="bound" title="examples/features/94-packed-recording.ts (region: bound)" />
+
+An agent that files its recordings as artifacts packs them with
+`artifacts: { recordings: { packed: true } }`. It is off by default: switch it
+on once every reader of those artifacts (the Lens, your own viewer) calls
+`unpackRecording`.
+
+**Gotcha:** an unpacked recording SHARES one object wherever the packed one
+referred to the same value. Treat a recording as read-only, as every viewer
+does.
+
 ## What an envelope holds
 
 | field | type | what it says |

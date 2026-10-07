@@ -34,6 +34,7 @@ import {
   type Receipt,
   type SystemPieceRecord,
 } from '../../lib/time-travel/receipt.js';
+import type { ReceiptDigests } from '../../lib/time-travel/receiptDigests.js';
 
 /** What a message-API chart's `call-llm` stage hands the mint. */
 export interface MessageApiReceiptInput {
@@ -67,6 +68,10 @@ export interface MessageApiReceiptInput {
    * leave `cache-transform` off these charts.
    */
   readonly request: LLMRequest;
+  /** The chart's receipt memo (`lib/time-travel/receiptDigests.ts`), when the
+   *  chart loops: each message is then hashed once per run, not once per call.
+   *  It changes no byte of the receipt. */
+  readonly digests?: ReceiptDigests;
 }
 
 /**
@@ -91,24 +96,27 @@ export interface MessageApiReceiptInput {
  */
 export function messageApiReceipt(input: MessageApiReceiptInput): Receipt | undefined {
   if (input.runId === undefined || input.runId.length === 0) return undefined;
-  return buildReceipt({
-    runId: input.runId,
-    epoch: input.epoch,
-    model: input.model,
-    provider: input.provider,
-    systemText: input.systemText,
-    systemPieces: receiptPieces(input.systemPieces),
-    messages: input.messages,
-    // Neither chart composes a line that exists on the request only, forces an
-    // answer tool, or withholds the tool list for a wrap-up. Three facts about
-    // these charts, written as the values they are rather than left for a
-    // reader to infer from an absence.
-    requestOnly: [],
-    tools: input.tools,
-    forced: null,
-    withheld: null,
-    baseRequest: input.request,
-    preparedRequest: input.request,
-    strategy: null,
-  });
+  return buildReceipt(
+    {
+      runId: input.runId,
+      epoch: input.epoch,
+      model: input.model,
+      provider: input.provider,
+      systemText: input.systemText,
+      systemPieces: receiptPieces(input.systemPieces),
+      messages: input.messages,
+      // Neither chart composes a line that exists on the request only, forces an
+      // answer tool, or withholds the tool list for a wrap-up. Three facts about
+      // these charts, written as the values they are rather than left for a
+      // reader to infer from an absence.
+      requestOnly: [],
+      tools: input.tools,
+      forced: null,
+      withheld: null,
+      baseRequest: input.request,
+      preparedRequest: input.request,
+      strategy: null,
+    },
+    input.digests,
+  );
 }

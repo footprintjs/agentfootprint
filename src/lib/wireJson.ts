@@ -173,7 +173,7 @@ function readString(target: object, key: string): string | undefined {
  * replacer that read `value` would never see the Error at all. The root holder
  * is `{ '': value }`, so a root Error is covered too.
  */
-function wireReplacer(this: unknown, key: string, value: unknown): unknown {
+export function wireReplacer(this: unknown, key: string, value: unknown): unknown {
   // `value` first: an Error with no `toJSON`, and a `toJSON` that RETURNS an
   // Error (recheck SF1), both arrive here as the Error itself.
   if (isErrorValue(value)) return wireError(value);
