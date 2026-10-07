@@ -811,6 +811,9 @@ describe('answer-account — the import fence (no model is called)', () => {
         '../lib/answer-account/templates.js',
         '../lib/answer-account/types.js',
         '../recorders/observability/recordRun.js',
+        // The packed-recording codec — pure data in, data out (it imports the
+        // wire rule and a type, nothing that runs a model).
+        '../recorders/observability/recordingPack.js',
         './artifactWire.js',
         './errors.js',
         'node:crypto',

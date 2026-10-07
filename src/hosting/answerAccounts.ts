@@ -40,6 +40,7 @@ import { showLeaves } from '../lib/answer-account/shown.js';
 import { ANSWER_ACCOUNT_TEMPLATE_SET_VERSION } from '../lib/answer-account/templates.js';
 import type { AnswerAccountDeclarations } from '../lib/answer-account/types.js';
 import type { Recording } from '../recorders/observability/recordRun.js';
+import { unpackRecording } from '../recorders/observability/recordingPack.js';
 import type { AnswerAccountWireBody } from './artifactWire.js';
 import { RecordingTooLargeForAccountError } from './errors.js';
 
@@ -228,12 +229,14 @@ export function explainRecording(
   }
 }
 
-/** The payload as a recording object — text (how recordings are minted), bytes, or an object. */
+/** The payload as a recording object — text (how recordings are minted), bytes, or an object;
+ *  plain or packed (`recordings: { packed: true }`), which is expanded here. */
 function readRecording(data: unknown): Recording | null {
   let value: unknown = data;
   try {
     if (typeof data === 'string') value = JSON.parse(data);
     else if (data instanceof Uint8Array) value = JSON.parse(new TextDecoder().decode(data));
+    value = unpackRecording(value);
   } catch {
     return null;
   }

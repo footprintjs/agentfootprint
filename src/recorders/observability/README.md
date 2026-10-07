@@ -68,6 +68,47 @@ Two consequences worth knowing:
   store-only, so a duplicated recording is duplicated bytes against the ceiling
   the trim hints are trying to keep the reporter under.
 
+## A long run's recording: packed (`recordingPack.ts`)
+
+A plain recording repeats the conversation once per place that saw it — each
+iteration's slot subflows are seeded with the whole history, the boundary log
+keeps each subflow's input and output, `iteration_end` carries the history,
+every call re-announces its context — so iteration k writes the k results
+before it again and the JSON grows with K²·R. Measured with 1,000-row tool
+results: 67 MB at 10 iterations, 808 MB at 40, past JSON's string limit (so
+not mintable at all) before 80. `packRecording` writes every repeated value
+ONCE and refers to it by index; the same runs pack to 1.3 MB, 5.6 MB and
+12.6 MB.
+
+```ts
+import { packRecording, recordRun, unpackRecording } from 'agentfootprint/observe';
+
+const recorder = recordRun(agent);
+await agent.run({ message });
+fs.writeFileSync('run.json', JSON.stringify(packRecording(recorder.toRecording())));
+
+const recording = unpackRecording(JSON.parse(fs.readFileSync('run.json', 'utf8'))); // plain or packed
+```
+
+**The law:** `JSON.stringify(unpackRecording(JSON.parse(JSON.stringify(packRecording(r)))))`
+is `toWireJson(r)`, byte for byte — packing follows `JSON.stringify` and the
+wire rule for Errors, and an object of the recording's own that looks like a
+reference is escaped, so no recording can be mistaken for one. `unpackRecording`
+reads BOTH shapes (a plain recording comes back untouched) and refuses a packed
+format it does not know by name. `openRecording` and the answer-account op read
+through it; an Agent mints packed artifacts with `recordings: { packed: true }`
+(default off, so the Lens and other readers adopt `unpackRecording` first).
+Pinned by `test/recorders/observability/recordingPack.test.ts`, which also
+counts the packer's reads: 4× the iterations, ~4× the packed bytes, under 6×
+the reads — the residue is the per-iteration context records the in-memory
+recording really holds (equal content, new objects), which must be read to be
+found equal.
+
+A long run also keeps its START: the event tail's cap counts distinct events,
+and a re-announced piece of context (`context.injected`, equal field for field
+to one still held) is kept without taking a slot (`../../events/eventTail.ts`).
+A 100-iteration run used to open at iteration 34.
+
 ## Saving a run: `recordRun` → `RecordingEnvelope` → a sink
 
 Three files, three jobs, in the order you meet them:

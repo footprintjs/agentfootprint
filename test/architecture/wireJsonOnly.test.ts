@@ -49,6 +49,10 @@ const ALLOWED: Readonly<Record<string, { readonly count: number; readonly why: s
     count: 2,
     why: 'a run id and a directory quoted inside refusal messages — not the record',
   },
+  'src/recorders/observability/recordingPack.ts': {
+    count: 1,
+    why: 'the JSON length of one string (`jsonLength`), to size a value for pooling — the packed recording itself is written by whoever serializes it, through toWireJson',
+  },
   'src/recorders/observability/recordingEnvelope.ts': {
     count: 5,
     why: 'stated option values quoted inside refusal messages — not the record',

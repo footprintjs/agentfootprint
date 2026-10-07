@@ -99,6 +99,19 @@ export {
   type RunRecorder,
 } from './recorders/observability/recordRun.js';
 
+// A recording with every repeated value written ONCE — what to store or send
+// when the run is long: plain JSON repeats the history once per place that
+// saw it (K²·R), packed it grows with K·R. `unpackRecording` reads both
+// shapes, so a reader that calls it reads every recording ever minted.
+export {
+  packRecording,
+  unpackRecording,
+  isPackedRecording,
+  PACKED_RECORDING_FORMAT,
+  PackedRecordingError,
+  type PackedRecording,
+} from './recorders/observability/recordingPack.js';
+
 // Runtime selected-policy evidence: typed subscription only, with one bounded
 // capture owner. recordRun can own its lifecycle and snapshot bundle.
 export {
