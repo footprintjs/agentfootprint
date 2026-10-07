@@ -14,7 +14,11 @@
  *   2. On each regex's worst case — the input it was quadratic on — the
  *      scanner's work is linear and COUNTED (`test/helpers/workCount.ts`):
  *      at least the length it had to read (so the counter saw the scan), at
- *      most a small multiple of it. Never a clock.
+ *      most a small multiple of it. Never a clock. A door made of several
+ *      passes (`stripTags`, `codeShape`) is counted PASS BY PASS as well as
+ *      whole: the counter cannot see a regex, so on the whole door the other
+ *      passes' reads would cover the lower bound of one that went back to its
+ *      regex. Only its own row catches that.
  *
  * Not counted, and linear: `codeShape`'s other passes (line comments, `#`
  * comments, numbers, identifiers, whitespace — each starts at a fixed lead
@@ -28,7 +32,12 @@
 import { describe, expect, it } from 'vitest';
 import { byHeading, splitDocuments, stripTags, type LoadedDocument } from '../../src/doors/rag.js';
 import { atxHeadings, type AtxHeading } from '../../src/rag/splitters/byHeading.js';
-import { codeShape } from '../../src/core/codeRunnerTool.js';
+import {
+  codeShape,
+  replaceStringLiterals,
+  stripBlockComments,
+} from '../../src/core/codeRunnerTool.js';
+import { blankDelimited, blankRawText } from '../../src/rag/loaders/html.js';
 import {
   caPemProblem,
   intermediateCaSubjects,
@@ -38,7 +47,12 @@ import { firstEmail, patternFactExtractor } from '../../src/memory/facts/pattern
 import { placeBeforeTime } from '../../src/core/time/resolve.js';
 import { withoutQuery } from '../../src/ontology/skosJsonLd.js';
 import { countTextWork } from '../helpers/workCount.js';
-import { seededTexts } from '../helpers/seededText.js';
+import { seeded, seededTexts } from '../helpers/seededText.js';
+import {
+  coverage,
+  englishTimeReader,
+  saysBetweenBefore,
+} from '../../src/core/time/readers/english.js';
 
 const N = 100_000;
 
@@ -208,13 +222,49 @@ describe('stripTags — blanks what its regexes blanked, in linear work', () => 
     expect(stripTags('<script>a</scripts>b</script>c').trim()).toBe('c');
   });
 
+  // Pass by pass: each must read its own worst case to the end, so a pass that
+  // went back to its regex (which the counter cannot see) fails its own row.
+  it.each([
+    ['blankRawText(script): `<` repeated', '<'.repeat(N), (t: string) => blankRawText(t, 'script')],
+    [
+      'blankRawText(script): open tags, no end tag',
+      '<script>'.repeat(N / 8),
+      (t: string) => blankRawText(t, 'script'),
+    ],
+    [
+      'blankRawText(script): `<script`, no `>`',
+      '<script'.repeat(N / 7),
+      (t: string) => blankRawText(t, 'script'),
+    ],
+    [
+      'blankRawText(style): open tags, no end tag',
+      '<style>'.repeat(N / 7),
+      (t: string) => blankRawText(t, 'style'),
+    ],
+    [
+      'blankDelimited(comment): never closed',
+      '<!--'.repeat(N / 4),
+      (t: string) => blankDelimited(t, '<!--', '-->'),
+    ],
+    [
+      'blankDelimited(tag): `<` repeated',
+      '<'.repeat(N),
+      (t: string) => blankDelimited(t, '<', '>'),
+    ],
+  ])('%s: linear counted work', (_name, html, pass) => {
+    const { result, work } = countTextWork(() => pass(html));
+    expect(result.length).toBe(html.length);
+    expect(work).toBeGreaterThanOrEqual(html.length);
+    expect(work).toBeLessThanOrEqual(budget(html.length, 3));
+  });
+
   it.each([
     ['unclosed `<`', '<'.repeat(N)],
     ['open tags with no end tag', '<script>'.repeat(N / 8)],
     ['`<script` with no `>`', '<script'.repeat(N / 7)],
     ['comments that never close', '<!--'.repeat(N / 4)],
     ['styles that never close', '<style>'.repeat(N / 7)],
-  ])('%s: linear counted work', (_name, html) => {
+  ])('the whole of stripTags on %s: linear counted work', (_name, html) => {
     const { result, work } = countTextWork(() => stripTags(html));
     expect(result.length).toBe(html.length);
     expect(work).toBeGreaterThanOrEqual(html.length);
@@ -281,15 +331,29 @@ describe('codeShape — the same shape, in linear work', () => {
     expect(unclosed).toBeGreaterThan(1_000);
   });
 
+  const UNCLOSED_COMMENTS = `/*${'a/*'.repeat(N / 3)}`;
+  const ESCAPED_QUOTES = `'${"\\'".repeat(N / 2)}`;
+  const EVERY_QUOTE_OPEN = `'${"\\'".repeat(N / 6)}"${'\\"'.repeat(N / 6)}\`${'\\`'.repeat(N / 6)}`;
+  const CLOSING_QUOTES = `"${"'".repeat(N)}`;
+
+  // Pass by pass, for the reason given above `stripTags`' rows.
   it.each([
-    ['`/*` repeated, never closed', `/*${'a/*'.repeat(N / 3)}`],
-    ['one quote, then a run of escaped quotes', `'${"\\'".repeat(N / 2)}`],
-    [
-      'every quote kind left open',
-      `'${"\\'".repeat(N / 6)}"${'\\"'.repeat(N / 6)}\`${'\\`'.repeat(N / 6)}`,
-    ],
-    ['quotes that keep closing', `"${"'".repeat(N)}`],
-  ])('%s: linear counted work', (_name, code) => {
+    ['stripBlockComments: `/*` repeated, never closed', UNCLOSED_COMMENTS, stripBlockComments],
+    ['replaceStringLiterals: a quote, then escaped quotes', ESCAPED_QUOTES, replaceStringLiterals],
+    ['replaceStringLiterals: every quote kind left open', EVERY_QUOTE_OPEN, replaceStringLiterals],
+    ['replaceStringLiterals: quotes that keep closing', CLOSING_QUOTES, replaceStringLiterals],
+  ])('%s: linear counted work', (_name, code, pass) => {
+    const { work } = countTextWork(() => pass(code));
+    expect(work).toBeGreaterThanOrEqual(code.length);
+    expect(work).toBeLessThanOrEqual(budget(code.length, 3));
+  });
+
+  it.each([
+    ['`/*` repeated, never closed', UNCLOSED_COMMENTS],
+    ['one quote, then a run of escaped quotes', ESCAPED_QUOTES],
+    ['every quote kind left open', EVERY_QUOTE_OPEN],
+    ['quotes that keep closing', CLOSING_QUOTES],
+  ])('the whole of codeShape on %s: linear counted work', (_name, code) => {
     const { work } = countTextWork(() => codeShape(code));
     expect(work).toBeGreaterThanOrEqual(code.length);
     expect(work).toBeLessThanOrEqual(budget(code.length, 5));
@@ -467,5 +531,114 @@ describe('withoutQuery — an IRI up to its query, in one pass', () => {
       if (expected !== iri) cut++;
     }
     expect(cut).toBeGreaterThan(1_000);
+  });
+});
+
+// ─── A person's message: the english time reader ────────────────────
+
+describe('english reader — `between` and covered phrases, without re-reading the message', () => {
+  it('saysBetweenBefore equals `/\\bbetween\\s+$/i` on the text before every position', () => {
+    const texts = seededTexts(
+      0xbe7,
+      [
+        'between',
+        'Between',
+        'BETWEEN',
+        'xbetween',
+        '_between',
+        ' ',
+        '\t',
+        '\n',
+        '\u00a0',
+        '\u2028',
+        'a',
+        '1',
+        'betwee',
+        'n ',
+      ],
+      3_000,
+      8,
+    );
+    let says = 0;
+    for (const text of texts) {
+      for (let end = 0; end <= text.length; end++) {
+        const expected = /\bbetween\s+$/i.test(text.slice(0, end));
+        expect(saysBetweenBefore(text, end), `${JSON.stringify(text)} @ ${end}`).toBe(expected);
+        if (expected) says++;
+      }
+    }
+    expect(says).toBeGreaterThan(300);
+  });
+
+  it('every UTF-16 code unit as the blank agrees with `\\s`', () => {
+    const disagreements: number[] = [];
+    for (let code = 0; code <= 0xffff; code++) {
+      const text = `between${String.fromCharCode(code)}`;
+      if (saysBetweenBefore(text, text.length) !== /\bbetween\s+$/i.test(text))
+        disagreements.push(code);
+    }
+    expect(disagreements).toEqual([]);
+  });
+
+  it('coverage equals `some` over the covering spans', () => {
+    const next = seeded(0xc0f);
+    const span = (): { start: number; end: number } => {
+      const start = Math.floor(next() * 40);
+      return { start, end: start + Math.floor(next() * 12) };
+    };
+    let covered = 0;
+    for (let round = 0; round < 3_000; round++) {
+      const covering = Array.from({ length: Math.floor(next() * 8) }, span);
+      const coveredWhole = coverage(covering);
+      for (let q = 0; q < 10; q++) {
+        const s = span();
+        const expected = covering.some((a) => a.start <= s.start && s.end <= a.end);
+        expect(coveredWhole(s)).toBe(expected);
+        if (expected) covered++;
+      }
+    }
+    expect(covered).toBeGreaterThan(2_000);
+  });
+
+  it('saysBetweenBefore reads the blanks and the word, however long the text before them', () => {
+    const text = `${'x'.repeat(N)} between `;
+    const { result, work } = countTextWork(() => saysBetweenBefore(text, text.length));
+    expect(result).toBe(true);
+    // The blank, then the seven letters, then the character before them: the walk was seen.
+    // Each letter is compared by reading both strings, so a constant of about 17 — whatever the length before.
+    expect(work).toBeGreaterThanOrEqual(8);
+    expect(work).toBeLessThanOrEqual(24);
+  });
+
+  it('coverage reads each covering span a logarithmic number of times, never once per query', () => {
+    let reads = 0;
+    const counted = (start: number, end: number): { start: number; end: number } =>
+      new Proxy(
+        { start, end },
+        {
+          get(target, key, receiver) {
+            if (key === 'start' || key === 'end') reads++;
+            return Reflect.get(target, key, receiver) as unknown;
+          },
+        },
+      );
+    const n = 20_000;
+    const covering = Array.from({ length: n }, (_, i) => counted(i * 3, i * 3 + 2));
+    const queries = Array.from({ length: n }, (_, i) => counted(i * 3 + 1, i * 3 + 4));
+    const coveredWhole = coverage(covering);
+    expect(queries.filter((q) => coveredWhole(q))).toEqual([]);
+    // `some` once per query would read up to n × n (here 4 × 10^8) starts and ends.
+    expect(reads).toBeLessThanOrEqual(4 * n * Math.log2(n) + 4 * n);
+  });
+
+  it('the reader on a message of many short phrases: linear counted work', async () => {
+    // 8,000 phrases, 64 KB: the per-phrase regex over the text before it took ~0.4 s.
+    const text = 'at 1 pm '.repeat(8_000);
+    const reader = englishTimeReader();
+    const { result, work } = countTextWork(() => reader.read(text, { locale: 'en-US' }));
+    // Every phrase asks whether `between` came before it — and is seen asking.
+    expect(work).toBeGreaterThanOrEqual(8_000);
+    expect(work).toBeLessThanOrEqual(budget(text.length, 2));
+    expect((await result).mentions.length).toBeGreaterThan(0);
   });
 });

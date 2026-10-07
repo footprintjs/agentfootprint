@@ -489,16 +489,70 @@ interface Span {
 }
 
 function notReadSpans(text: string, atoms: readonly Atom[]): Span[] {
+  const coveredWhole = coverage(atoms);
   const out: Span[] = [];
   for (const re of NOT_READ) {
     for (const m of matches(re, text)) {
       const span = { start: m.index, end: m.index + m[0].length };
       // A span a v1 phrase covers whole is that phrase (`last 40 minutes`), not a later row.
-      if (atoms.some((a) => a.start <= span.start && span.end <= a.end)) continue;
+      if (coveredWhole(span)) continue;
       out.push(span);
     }
   }
   return out;
+}
+
+/**
+ * Whether some span of `covering` holds `span` whole — `covering.some((a) =>
+ * a.start <= span.start && span.end <= a.end)` — answered by binary search:
+ * among the spans starting at or before `span.start`, the farthest end. Asking
+ * `some` once per match cost matches × phrases, and a long message has many of
+ * both.
+ */
+export function coverage(
+  covering: readonly { readonly start: number; readonly end: number }[],
+): (span: { readonly start: number; readonly end: number }) => boolean {
+  const byStart = [...covering].sort((a, b) => a.start - b.start);
+  const starts = byStart.map((s) => s.start);
+  const farthestEnd: number[] = [];
+  let farthest = -Infinity;
+  for (const s of byStart) farthestEnd.push((farthest = Math.max(farthest, s.end)));
+  return (span) => {
+    let after = 0;
+    let past = starts.length;
+    while (after < past) {
+      const mid = (after + past) >>> 1;
+      if ((starts[mid] as number) <= span.start) after = mid + 1;
+      else past = mid;
+    }
+    return after > 0 && (farthestEnd[after - 1] as number) >= span.end;
+  };
+}
+
+/** `\s`, asked of one code unit at a time — the regex's own class, so it cannot drift. */
+const BLANK = /\s/;
+
+/**
+ * `/\bbetween\s+$/i.test(text.slice(0, end))` — `between`, then blanks right
+ * up to `end` — walked back from `end`. The regex read the whole text before
+ * each phrase it was asked about, so a message of many short phrases cost its
+ * length times their number.
+ */
+export function saysBetweenBefore(text: string, end: number): boolean {
+  let word = end;
+  while (word > 0 && BLANK.test(String.fromCharCode(text.charCodeAt(word - 1)))) word--;
+  if (word === end || word < 7) return false;
+  const spelled = 'between';
+  for (let i = 0; i < spelled.length; i++) {
+    if ((text.charCodeAt(word - 7 + i) | 0x20) !== spelled.charCodeAt(i)) return false;
+  }
+  return word === 7 || !isAsciiWordCode(text.charCodeAt(word - 8));
+}
+
+/** `\w`: ASCII letters, digits, `_`. */
+function isAsciiWordCode(code: number): boolean {
+  const lower = code | 0x20;
+  return (code >= 0x30 && code <= 0x39) || (lower >= 0x61 && lower <= 0x7a) || code === 0x5f;
 }
 
 // ─── Mentions ────────────────────────────────────────────────────────────
@@ -556,6 +610,13 @@ function groupsOf(text: string, atoms: readonly Atom[], notRead: readonly Span[]
     ...atoms.map((atom) => ({ start: atom.start, end: atom.end, atom })),
     ...notRead.map((s) => ({ start: s.start, end: s.end })),
   ].sort((a, b) => a.start - b.start || b.end - a.end);
+  // Asked for the same group start once per item, so each position is read once.
+  const betweenAt = new Map<number, boolean>();
+  const saysBetween = (end: number): boolean => {
+    let says = betweenAt.get(end);
+    if (says === undefined) betweenAt.set(end, (says = saysBetweenBefore(text, end)));
+    return says;
+  };
   const groups: Group[] = [];
   for (const item of items) {
     const group = groups[groups.length - 1];
@@ -569,9 +630,7 @@ function groupsOf(text: string, atoms: readonly Atom[], notRead: readonly Span[]
       }
       // `between` before the group, or right before its last phrase — the range's first side:
       // `today between 1 pm and 2 pm`, `yesterday between 8 and 9 AM` (a day said first).
-      const between =
-        /\bbetween\s+$/i.test(text.slice(0, group.start)) ||
-        /\bbetween\s+$/i.test(text.slice(0, last.start));
+      const between = saysBetween(group.start) || saysBetween(last.start);
       const joined = joins(text.slice(group.end, item.start), between, last, item);
       if (joined !== undefined) {
         if (joined === 'range') {

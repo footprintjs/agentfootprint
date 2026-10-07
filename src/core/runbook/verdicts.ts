@@ -91,10 +91,11 @@ export function verdictRowsOf(state: Readonly<Record<string, unknown>>): Verdict
 
 /** The one place a `—` is written for a value the source did not report — a
  *  blank cell reads as a zero; a dash reads as "not reported".
- *  Backslashes are escaped BEFORE pipes: a `\` just before a `|` would
- *  otherwise come out as `\\|`, which a parser that pairs backslashes reads as
- *  an escaped backslash and then a live column break — shifting the row's
- *  later cells. */
+ *  Backslashes are escaped too, BEFORE pipes, so markdown shows a value's
+ *  backslashes as written: unescaped, `a\_b` renders as `a_b` — an identifier
+ *  the model was told to copy verbatim, changed — and a `\` just before a `|`
+ *  comes out as `\\|`, which a parser that pairs backslashes splits as a new
+ *  column. */
 function cell(value: unknown): string {
   if (value === null || value === undefined || value === '') return '—';
   if (value === true) return 'yes';

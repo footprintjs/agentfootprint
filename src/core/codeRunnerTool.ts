@@ -197,11 +197,12 @@ export interface RecordsCodeRuns {
  * worse answer than a coarse one.
  *
  * The code is model output, so every pass is linear in it. Block comments and
- * string literals are scanned rather than matched: the lazy regexes that used
- * to find them re-read the rest of the code from every unclosed comment opener
- * or quote — quadratic on a repeated opener, or on a quote followed by a long
- * run of escaped quotes (16,000 of them took about half a second). The scans
- * produce exactly what those regexes did (`test/security/linear-scanners.test.ts`).
+ * string literals are scanned rather than matched: the regexes that used to
+ * find them re-read the rest of the code from every unclosed comment opener or
+ * quote — quadratic on openers repeated with text between them, or on a quote
+ * followed by a long run of escaped quotes (16,000 of them took about half a
+ * second). The scans produce exactly what those regexes did
+ * (`test/security/linear-scanners.test.ts`).
  */
 export function codeShape(code: string): string {
   const withoutLiterals = replaceStringLiterals(
@@ -228,7 +229,7 @@ export function codeShape(code: string): string {
  * its `/*`. Once a `/*` has no `*\/` after it, no later one has either — the
  * scan stops there instead of re-trying each.
  */
-function stripBlockComments(code: string): string {
+export function stripBlockComments(code: string): string {
   const parts: string[] = [];
   let copied = 0;
   for (;;) {
@@ -255,7 +256,7 @@ function stripBlockComments(code: string): string {
  * same way: those are skipped. Each quote's failed walks therefore cover
  * disjoint stretches, and the literals that close are jumped over.
  */
-function replaceStringLiterals(code: string): string {
+export function replaceStringLiterals(code: string): string {
   const parts: string[] = [];
   let copied = 0;
   const failsBefore = new Map<number, number>();

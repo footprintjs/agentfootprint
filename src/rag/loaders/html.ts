@@ -42,7 +42,7 @@ function blank(match: string): string {
 // Each pass is a scan, not a regex, because the file is input a deployer may
 // not trust and every lazy `open[\s\S]*?close` (and `<[^>]*>`) is quadratic on
 // it: an `open` with no `close` after it is re-tried from every later `open`,
-// and each attempt reads to the end (16,000 unclosed `<` take ~1.4 s in V8).
+// and each attempt reads to the end (64,000 unclosed `<` take ~1.4 s in V8).
 // A scan stops at the first `open` that has no `close`, because no later one
 // can have one either. Each pass blanks exactly what its regex in
 // `test/security/linear-scanners.test.ts` blanks.
@@ -52,7 +52,7 @@ function blank(match: string): string {
  * first `close` after its `open` — `/<!--[\s\S]*?-->/g`, and `/<[^>]*>/g` for
  * `<` … `>` (`[^>]*` stops at the first `>` too).
  */
-function blankDelimited(text: string, open: string, close: string): string {
+export function blankDelimited(text: string, open: string, close: string): string {
   const parts: string[] = [];
   let copied = 0;
   for (;;) {
@@ -70,11 +70,13 @@ function blankDelimited(text: string, open: string, close: string): string {
 /**
  * Every `<name …>` … `</name …>` element blanked, body included —
  * `/<name\b[^>]*>[\s\S]*?<\/name(?=[\t\n\f\r />])[^>]*>/gi`. The end tag is the
- * one an HTML tokenizer ends the element at: `</script`, then a blank, `/` or
- * `>`, then anything up to the next `>` — so `</script foo>` and `</SCRIPT\n>`
- * close the body too. (`\s*>` did not, which left the body in the text.)
+ * one an HTML tokenizer ends the element at: `</script`, then tab, LF, FF, CR,
+ * space, `/` or `>`, then anything up to the next `>` — so `</script foo>` and
+ * `</script/>` close the body too, where the old `</script\s*>` left that body
+ * in the text. Like a browser, other blanks (`</script` + U+00A0, U+2028 …)
+ * no longer end the tag name; the old `\s` did.
  */
-function blankRawText(text: string, name: 'script' | 'style'): string {
+export function blankRawText(text: string, name: 'script' | 'style'): string {
   const parts: string[] = [];
   let copied = 0;
   for (;;) {
