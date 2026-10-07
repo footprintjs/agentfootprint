@@ -4,7 +4,7 @@ title: FlowRecorder
 
 # Interface: FlowRecorder
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:450
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:450
 
 FlowRecorder — Pluggable observer for control flow events.
 
@@ -30,7 +30,7 @@ executor.attachFlowRecorder(metricsRecorder);
 
 > `readonly` **id**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:451
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:451
 
 ## Methods
 
@@ -38,7 +38,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **clear**(): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:497
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:497
 
 Called before each run to reset per-run state. Implement for stateful recorders.
 
@@ -52,7 +52,7 @@ Called before each run to reset per-run state. Implement for stateful recorders.
 
 > `optional` **onBreak**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:462
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:462
 
 #### Parameters
 
@@ -70,7 +70,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **onDecision**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:454
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:454
 
 #### Parameters
 
@@ -88,7 +88,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **onError**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:463
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:463
 
 #### Parameters
 
@@ -106,7 +106,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **onFork**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:455
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:455
 
 #### Parameters
 
@@ -124,7 +124,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **onLoop**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:461
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:461
 
 #### Parameters
 
@@ -142,7 +142,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **onNext**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:453
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:453
 
 #### Parameters
 
@@ -160,7 +160,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **onPause**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:476
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:476
 
 #### Parameters
 
@@ -178,7 +178,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **onResume**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:477
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:477
 
 #### Parameters
 
@@ -196,7 +196,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **onRunEnd**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:488
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:488
 
 Called once per top-level `executor.run()` AFTER traversal completes
 cleanly. Carries `event.payload = chart's return value`. NOT fired on
@@ -218,7 +218,7 @@ pause (the run didn't end) or uncaught error.
 
 > `optional` **onRunFailed**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:495
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:495
 
 Called once per top-level `executor.run()` when the run throws a
 non-pause error, BEFORE the exception propagates. The TERMINAL
@@ -241,7 +241,7 @@ failure instead of waiting forever. NOT fired on pause.
 
 > `optional` **onRunStart**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:482
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:482
 
 Called once per top-level `executor.run()` BEFORE traversal begins.
 Carries `event.payload = run({input})`. Subflow-traversers don't fire it.
@@ -262,7 +262,7 @@ Carries `event.payload = run({input})`. Subflow-traversers don't fire it.
 
 > `optional` **onSelected**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:456
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:456
 
 #### Parameters
 
@@ -280,7 +280,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **onStageExecuted**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:452
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:452
 
 #### Parameters
 
@@ -298,7 +298,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **onStageRetry**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:470
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:470
 
 Called once per failed attempt that WILL be retried, for stages carrying a
 declared `retry` policy. The final failure arrives via `onError` instead,
@@ -321,7 +321,7 @@ FlowStageRetryEvent for the exact event arithmetic.
 
 > `optional` **onSubflowEntry**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:457
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:457
 
 #### Parameters
 
@@ -339,7 +339,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **onSubflowExit**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:458
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:458
 
 #### Parameters
 
@@ -357,7 +357,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **onSubflowRegistered**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:460
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:460
 
 Called when a dynamic subflow is registered during traversal.
 
@@ -377,7 +377,7 @@ Called when a dynamic subflow is registered during traversal.
 
 > `optional` **onThrottled**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:475
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:475
 
 Called when a fork child's error is classified as throttling by the
 executor's `throttlingErrorChecker` — see FlowThrottledEvent.
@@ -398,7 +398,7 @@ executor's `throttlingErrorChecker` — see FlowThrottledEvent.
 
 > `optional` **toSnapshot**(): `RecorderBundle`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:499
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:499
 
 Optional: expose collected data for inclusion in snapshots.
 

@@ -4,7 +4,7 @@ title: FlowBreakEvent
 
 # Interface: FlowBreakEvent
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:284
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:284
 
 Event passed to FlowRecorder.onBreak.
 
@@ -14,7 +14,7 @@ Event passed to FlowRecorder.onBreak.
 
 > `optional` **propagatedFromSubflow?**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:300
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:300
 
 When true, this break event was raised on the PARENT because an inner
 subflow's break propagated up (via `SubflowMountOptions.propagateBreak`).
@@ -27,7 +27,7 @@ The originating inner break fires its own `onBreak` event separately
 
 > `optional` **reason?**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:293
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:293
 
 Optional free-form reason supplied by `scope.$break(reason)`. Absent
 when the stage invoked `$break()` without an argument. Propagates when
@@ -40,7 +40,7 @@ event carries the inner break's reason too.
 
 > **stageName**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:285
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:285
 
 ***
 
@@ -48,4 +48,4 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **traversalContext?**: [`TraversalContext`](/docs/api/interfaces/TraversalContext)
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:286
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:286

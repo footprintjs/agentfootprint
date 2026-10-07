@@ -4,7 +4,7 @@ title: FlowSubflowEvent
 
 # Interface: FlowSubflowEvent
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:252
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:252
 
 Event passed to FlowRecorder.onSubflow.
 
@@ -14,7 +14,7 @@ Event passed to FlowRecorder.onSubflow.
 
 > `optional` **description?**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:257
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:257
 
 Build-time description of what this subflow does.
 
@@ -24,7 +24,7 @@ Build-time description of what this subflow does.
 
 > `optional` **mappedInput?**: `Record`\<`string`, `unknown`\>
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:260
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:260
 
 Mapped input values sent INTO the subflow (from inputMapper/inputKeys). Present on entry events.
 
@@ -34,7 +34,7 @@ Mapped input values sent INTO the subflow (from inputMapper/inputKeys). Present 
 
 > **name**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:253
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:253
 
 ***
 
@@ -42,7 +42,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **outputState?**: `Record`\<`string`, `unknown`\>
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:262
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:262
 
 Subflow shared state at exit. Present on exit events.
 
@@ -52,7 +52,7 @@ Subflow shared state at exit. Present on exit events.
 
 > `optional` **subflowId?**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:255
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:255
 
 Subflow identifier — use this to look up the full spec via the manifest.
 
@@ -62,4 +62,4 @@ Subflow identifier — use this to look up the full spec via the manifest.
 
 > `optional` **traversalContext?**: [`TraversalContext`](/docs/api/interfaces/TraversalContext)
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:258
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:258

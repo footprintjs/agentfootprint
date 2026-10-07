@@ -6,4 +6,4 @@ title: ParallelOutput
 
 > **ParallelOutput** = `string`
 
-Defined in: [src/core-flow/Parallel.ts:82](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L82)
+Defined in: [src/core-flow/Parallel.ts:83](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L83)

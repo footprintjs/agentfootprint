@@ -4,7 +4,7 @@ title: ScopeRecorder
 
 # Interface: ScopeRecorder
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:91
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:91
 
 Pluggable observer for scope operations.
 
@@ -19,7 +19,7 @@ hooks of other recorders; the scope operation continues normally.
 
 > `readonly` **id**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:92
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:92
 
 ## Methods
 
@@ -27,7 +27,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:92
 
 > `optional` **clear**(): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:111
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:111
 
 Reset state before each executor.run() — prevents cross-run accumulation.
 
@@ -41,7 +41,7 @@ Reset state before each executor.run() — prevents cross-run accumulation.
 
 > `optional` **onCommit**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:95
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:95
 
 #### Parameters
 
@@ -59,7 +59,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:95
 
 > `optional` **onEmit**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:109
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:109
 
 Fires for every `scope.$emit(name, payload)` call during a stage.
 Optional — implement only if you want to observe consumer-emitted
@@ -86,7 +86,7 @@ EmitRecorder in `src/lib/recorder/EmitRecorder.ts`
 
 > `optional` **onError**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:96
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:96
 
 #### Parameters
 
@@ -104,7 +104,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:96
 
 > `optional` **onPause**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:99
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:99
 
 #### Parameters
 
@@ -122,7 +122,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:99
 
 > `optional` **onRead**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:93
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:93
 
 #### Parameters
 
@@ -140,7 +140,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:93
 
 > `optional` **onResume**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:100
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:100
 
 #### Parameters
 
@@ -158,7 +158,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:100
 
 > `optional` **onStageEnd**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:98
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:98
 
 #### Parameters
 
@@ -176,7 +176,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:98
 
 > `optional` **onStageStart**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:97
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:97
 
 #### Parameters
 
@@ -194,7 +194,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:97
 
 > `optional` **onWrite**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:94
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:94
 
 #### Parameters
 
@@ -212,7 +212,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:94
 
 > `optional` **toSnapshot**(): `RecorderBundle`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:113
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:113
 
 Expose collected data for inclusion in executor.getSnapshot().recorders.
 

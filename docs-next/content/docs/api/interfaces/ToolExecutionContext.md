@@ -102,6 +102,34 @@ Current iteration number of the ReAct loop.
 
 ***
 
+### redact?
+
+> `readonly` `optional` **redact?**: [`RedactionPolicy`](/docs/api/interfaces/RedactionPolicy)
+
+Defined in: [src/core/tools.ts:923](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L923)
+
+The redaction policy the calling run is covered by — the agent's
+`redact`, joined with any a composition or an outer caller added.
+**Absent when the run has none.**
+
+A run this tool starts is a NESTED run, and footprintjs's law is that a
+run's policy covers the runs nested in it. The library's own nested runs
+take it for you — `flowchartAsTool`, `runbookAsTool` and the
+`.selfExplain({ delegate })` debugger join it with their own. A tool that
+starts another agent hands it on, exactly as it hands `ctx.signal`:
+
+```ts
+execute: (args, ctx) => specialist.run({ message: args.text }, {
+  ...(ctx.signal && { env: { signal: ctx.signal } }),
+  ...(ctx.redact && { redact: ctx.redact }),
+})
+```
+
+It names what to keep out of RECORDS. It never touches the arguments this
+tool receives: the tool runs on real values.
+
+***
+
 ### runId?
 
 > `readonly` `optional` **runId?**: `string`
@@ -147,7 +175,7 @@ Abort signal propagated from run({ env: { signal } }).
 
 > `readonly` `optional` **teardownScopes?**: readonly [`TeardownScope`](/docs/api/type-aliases/TeardownScope)[]
 
-Defined in: [src/core/tools.ts:931](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L931)
+Defined in: [src/core/tools.ts:954](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L954)
 
 Which teardown scopes this door can actually honour — `[]` means none ever
 fires here.
@@ -218,7 +246,7 @@ different facts). The data itself is already in `args`.
 
 > `optional` **onTeardown**(`cleanup`, `options?`): `void`
 
-Defined in: [src/core/tools.ts:921](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L921)
+Defined in: [src/core/tools.ts:944](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L944)
 
 Register cleanup for work THIS call started — a code-interpreter session, a
 browser context, a lease.

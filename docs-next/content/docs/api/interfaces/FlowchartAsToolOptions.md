@@ -4,7 +4,7 @@ title: FlowchartAsToolOptions
 
 # Interface: FlowchartAsToolOptions
 
-Defined in: [src/core/flowchartAsTool.ts:183](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L183)
+Defined in: [src/core/flowchartAsTool.ts:184](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L184)
 
 Options for `flowchartAsTool`.
 
@@ -14,7 +14,7 @@ Options for `flowchartAsTool`.
 
 > `readonly` **description**: `string`
 
-Defined in: [src/core/flowchartAsTool.ts:187](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L187)
+Defined in: [src/core/flowchartAsTool.ts:188](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L188)
 
 Tool description shown to the LLM.
 
@@ -24,7 +24,7 @@ Tool description shown to the LLM.
 
 > `readonly` **flowchart**: `FlowChart`
 
-Defined in: [src/core/flowchartAsTool.ts:197](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L197)
+Defined in: [src/core/flowchartAsTool.ts:198](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L198)
 
 The footprintjs flowchart to mount as the tool's body.
 The chart's stages receive args via `scope.$getArgs()`.
@@ -35,7 +35,7 @@ The chart's stages receive args via `scope.$getArgs()`.
 
 > `readonly` `optional` **inputSchema?**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/core/flowchartAsTool.ts:192](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L192)
+Defined in: [src/core/flowchartAsTool.ts:193](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L193)
 
 JSON Schema describing the input args the LLM must produce.
 Becomes `flowchart.run({ input: args })`. Default: `{ type: 'object', properties: {} }`.
@@ -46,7 +46,7 @@ Becomes `flowchart.run({ input: args })`. Default: `{ type: 'object', properties
 
 > `readonly` `optional` **keepRecord?**: `boolean`
 
-Defined in: [src/core/flowchartAsTool.ts:260](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L260)
+Defined in: [src/core/flowchartAsTool.ts:261](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L261)
 
 KEEP the inner run's record, so the agent's trace can go THROUGH this
 tool boundary instead of stopping at it.
@@ -84,7 +84,7 @@ the two agents can mint the same id: build the tool twice instead.
 
 > `readonly` `optional` **keepRecordLimit?**: `number`
 
-Defined in: [src/core/flowchartAsTool.ts:267](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L267)
+Defined in: [src/core/flowchartAsTool.ts:268](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L268)
 
 How many invocations `keepRecord` retains. Default
 DEFAULT\_INNER\_RUN\_LIMIT (20) — a debugging window, not an
@@ -97,7 +97,7 @@ refused rather than silently ignored.
 
 > `readonly` **name**: `string`
 
-Defined in: [src/core/flowchartAsTool.ts:185](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L185)
+Defined in: [src/core/flowchartAsTool.ts:186](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L186)
 
 Tool name the LLM dispatches by. Must be unique across the agent's tools.
 
@@ -107,7 +107,7 @@ Tool name the LLM dispatches by. Must be unique across the agent's tools.
 
 > `readonly` `optional` **recorders?**: readonly [`CombinedRecorder`](/docs/api/type-aliases/CombinedRecorder)[]
 
-Defined in: [src/core/flowchartAsTool.ts:228](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L228)
+Defined in: [src/core/flowchartAsTool.ts:229](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L229)
 
 Observers to attach to the tool's INTERNAL `FlowChartExecutor`
 before each run. This is the hook that lets decide()/select()
@@ -139,7 +139,7 @@ detect the boundary via `event.traversalContext.runId !== lastRunId`
 
 > `readonly` `optional` **redact?**: [`RedactionPolicy`](/docs/api/interfaces/RedactionPolicy)
 
-Defined in: [src/core/flowchartAsTool.ts:331](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L331)
+Defined in: [src/core/flowchartAsTool.ts:339](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L339)
 
 Redaction policy for the INNER run, applied before every invocation
 (`executor.setRedactionPolicy`).
@@ -167,6 +167,13 @@ beside the raw heap for exactly this — taken through one owner,
 Independent of `keepRecord` — a chart handling secrets should carry a
 policy whether or not anyone keeps its record. Without this option the
 raw snapshot is served, byte for byte as before.
+
+JOINED WITH THE CALLER'S. The inner run is nested in the agent run that
+called the tool, and a run's policy covers the runs nested in it — so the
+policy that run is covered by (`ctx.redact`, the agent's own `redact`) is
+joined with this one for the inner run, its result and its kept record.
+Either alone is enough to keep a name out; neither can remove one the
+other selects. With neither, the tool behaves exactly as before.
 
 WHAT IT DOES NOT GOVERN — said here so nobody has to rediscover it:
 
@@ -209,7 +216,7 @@ WHAT IT DOES NOT GOVERN — said here so nobody has to rediscover it:
 
 > `readonly` `optional` **resultMapper?**: [`FlowchartResultMapper`](/docs/api/type-aliases/FlowchartResultMapper)
 
-Defined in: [src/core/flowchartAsTool.ts:202](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L202)
+Defined in: [src/core/flowchartAsTool.ts:203](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L203)
 
 Optional shaping function. Default: `JSON.stringify(snapshot.values)`.
 Errors throw into the tool's `[mapper-error: ...]` envelope.

@@ -4,7 +4,7 @@ title: EmitRecorder
 
 # Interface: EmitRecorder
 
-Defined in: node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:121
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:121
 
 Pluggable observer for consumer-emitted structured events.
 
@@ -19,7 +19,7 @@ event and the emitting stage is unaffected.
 
 > `readonly` **id**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:126
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:126
 
 Stable identifier for idempotent attach/detach. Re-attaching with the
 same id replaces the previous registration on the executor.
@@ -30,7 +30,7 @@ same id replaces the previous registration on the executor.
 
 > `optional` **clear**(): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:133
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:133
 
 Optional: reset recorder-internal state between runs. Called by the
 executor before each `run()`.
@@ -45,7 +45,7 @@ executor before each `run()`.
 
 > `optional` **onEmit**(`event`): `void`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:128
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:128
 
 Called for every `scope.$emit(name, payload)` call in any stage.
 
@@ -65,7 +65,7 @@ Called for every `scope.$emit(name, payload)` call in any stage.
 
 > `optional` **toSnapshot**(): `RecorderBundle`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:138
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:138
 
 Optional: expose collected data for inclusion in
 `executor.getSnapshot().recorders`.

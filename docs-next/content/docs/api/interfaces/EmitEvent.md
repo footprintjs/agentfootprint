@@ -4,7 +4,7 @@ title: EmitEvent
 
 # Interface: EmitEvent
 
-Defined in: node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:70
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:70
 
 Event delivered to `EmitRecorder.onEmit`.
 
@@ -18,7 +18,7 @@ stage's execution context.
 
 > `readonly` **name**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:77
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:77
 
 Consumer-supplied event name. Convention: hierarchical dotted namespace
 (e.g. `'agentfootprint.llm.tokens'`, `'myapp.billing.spend'`). Keeps
@@ -31,7 +31,7 @@ central registry.
 
 > `readonly` **payload**: `unknown`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:85
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:85
 
 Consumer-supplied payload. Shape is up to the consumer and their
 convention; library treats it as opaque and passes through unchanged
@@ -45,7 +45,7 @@ When redacted, replaced with the string `'[REDACTED]'`.
 
 > `readonly` **pipelineId**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:101
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:101
 
 Pipeline/run identifier (matches `RecorderContext.pipelineId`).
 
@@ -55,7 +55,7 @@ Pipeline/run identifier (matches `RecorderContext.pipelineId`).
 
 > `readonly` **runtimeStageId**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:92
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:92
 
 Unique per-execution-step identifier — the same value recorder events
 and commit-log entries carry. See `runtimeStageId.ts` for format.
@@ -66,7 +66,7 @@ and commit-log entries carry. See `runtimeStageId.ts` for format.
 
 > `readonly` `optional` **sourcePosition?**: `EmitSourcePosition`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:111
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:111
 
 Source-time committed prefix in this stage's own log, captured before
 observer dispatch. Not this stage's future commit or uncommitted state.
@@ -80,7 +80,7 @@ Absent on old/manual events and scopes without a bound engine log.
 
 > `readonly` **stageName**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:87
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:87
 
 Name of the stage that emitted this event.
 
@@ -90,7 +90,7 @@ Name of the stage that emitted this event.
 
 > `readonly` **subflowPath**: readonly `string`[]
 
-Defined in: node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:99
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:99
 
 Subflow path from the outermost parent down to the subflow that emitted
 this event. Empty array when the emit came from the root flowchart.
@@ -103,6 +103,6 @@ Matches the convention used by `FlowPauseEvent.subflowPath`,
 
 > `readonly` **timestamp**: `number`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:103
+Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:103
 
 Emission timestamp in milliseconds since epoch (`Date.now()`).

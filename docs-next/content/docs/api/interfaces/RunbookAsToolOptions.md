@@ -128,7 +128,7 @@ Observers attached to each invocation's fresh inner executor.
 
 > `readonly` `optional` **redact?**: [`RedactionPolicy`](/docs/api/interfaces/RedactionPolicy)
 
-Defined in: [src/core/runbook/types.ts:229](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/types.ts#L229)
+Defined in: [src/core/runbook/types.ts:233](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/types.ts#L233)
 
 Redaction policy for the inner run. One rule for everything the tool
  shows (9.89.1): the commit log is scrubbed at write time — and since
@@ -143,6 +143,10 @@ Redaction policy for the inner run. One rule for everything the tool
  carries that the served view does not scrub; the checkpoint is not a
  served view. See `FlowchartAsToolOptions.redact` for the two things it
  does not govern: the run's fold base and the resume checkpoint.
+
+ Joined with the policy the calling run is covered by (`ctx.redact` — the
+ agent's own `redact`): the procedure runs nested in that run, and a run's
+ policy covers the runs nested in it. Either alone keeps a name out.
 
 ***
 
