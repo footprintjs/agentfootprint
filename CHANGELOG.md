@@ -5,6 +5,98 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.139.0] - 2026-10-07
+
+### Added
+
+- **A packed recording is expanded only when the plain recording it stands for fits a bound.** A
+  packed recording can stand for far more JSON than it holds — a value referred to ten times, by
+  values each referred to ten times, is a few KB packed and billions of bytes unpacked — and every
+  reader that walks the result as a tree (the answer account's fold, the trace toolpack's previews,
+  any `JSON.stringify`) does that much work. `unpackRecording(value, { maxBytes })` now measures the
+  plain size over the PACKED form — each pooled value once, so the check costs the packed size — and
+  refuses with `PackedRecordingTooLargeError` (a `PackedRecordingError`) before anything is built.
+  The default, `DEFAULT_UNPACK_MAX_BYTES`, is 512 MiB: about the largest plain recording a JavaScript
+  string can hold. The answer-account op holds a packed recording to its `maxRecordingBytes` on the
+  recording it stands for, so an oversized one gets the same `RecordingTooLargeForAccountError` (413)
+  as its plain twin; `openRecording` reads through the default. Found in review before the packed
+  format shipped: without the bound, a few KB stored under the account ceiling could stand for a
+  recording the ceiling exists to refuse.
+
+- **Packed recordings: every repeated value written once, so a long run can be saved at all.** A
+  plain recording repeats the conversation once per place that saw it, so its JSON grows with the
+  square of the iteration count — with 1,000-row tool results, 67 MB at 10 iterations, 808 MB at 40,
+  and past JSON's string limit (not mintable) before 80. `packRecording(recording)` (from
+  `agentfootprint/observe`) writes each repeated value once and refers to it by index: the same runs
+  are 1.3 MB, 5.6 MB and 12.6 MB at 80, and 4× the iterations cost ~4× the bytes.
+  `unpackRecording(value)` reads both shapes — a plain recording comes back untouched — and the law is
+  exact: unpacking the packed JSON gives back the plain wire JSON byte for byte. A packed format this
+  reader does not know is refused by name (`PackedRecordingError`), never half-read; `isPackedRecording`
+  and `PACKED_RECORDING_FORMAT` (`'agentfootprint.recording.packed.v1'`) name it. `openRecording` and
+  the answer-account op read packed recordings, and an Agent mints its artifact recordings packed with
+  `artifacts: { recordings: { packed: true } }` — off by default, so readers such as the Lens adopt
+  `unpackRecording` before a writer packs.
+
+- **The receipt mint costs what each call added, not the whole conversation again — and `cache.transformHash` is a chain you can recompute with `transformHashOf`.**
+  Every model call mints a receipt, and the mint used to hash and measure the whole request again on
+  every call: on an agent run with 1,000-row tool results the hashing grew with the square of the
+  iteration count — 30 MB of SHA-256 input at 40 iterations, 120 MB at 80, the mint 45–50% of the
+  run's CPU. A per-run memo now keeps, for each message object, its entry hash, its digest and its
+  request measurement (counts and JSON size, never a copy of its text) — and its strings for two calls
+  only, so a system prompt that changes every call is not held for the run — so each call does work in
+  proportion to the messages it added: 1.5 MB at 40 iterations, 3 MB at 80, the same ~37 KB on every
+  call. Every receipt field except one is byte-identical to before, memo or no memo; the request
+  measurement equals the whole-request walk, limits included.
+
+  The one field whose VALUE changed is `cache.transformHash` (non-null only when a cache strategy
+  rewrote the request). The whole-request digest could not be extended — the strategy's markers sort
+  to the front of the canonical JSON, so call k shared nothing with call k−1 — so it is now a chain:
+  each message digested on its own, in order, then the rest of the request. The value names its
+  scheme: `'chain-v1:<16 hex>'`, recomputed by the new `transformHashOf(runId, request)` (the formula
+  is on its TSDoc). A receipt minted before carries a bare `<16 hex>` value, which still verifies as
+  `receiptHash(runId, stableJson(request))`. `TRANSFORM_HASH_PREFIX` is exported beside it. Model
+  request bodies and answers are unchanged.
+
+### Fixed
+
+- **The `auditExport` docs no longer say EU AI Act Art. 12 requires tamper-evident logs.** Art. 12 asks high-risk systems to record events automatically, for traceability; it says nothing about integrity. The hash chain's tamper evidence is this library's addition, and the module header now says so.
+
+- **A long run's recording keeps its first iterations.** Every model call re-announces each piece of
+  its context (`agentfootprint.context.injected`), so a run fires events with the square of its
+  iteration count, and the event tail's 10,000-event cap evicted the START of long runs: a
+  100-iteration agent run fired ~11,500 events and its recording opened at iteration 34. The cap now
+  counts distinct events. An announcement equal, field for field, to one the tail still holds is kept
+  in its place — the stream stays whole and in order — but holds no slot, and shares the held
+  payload object. Identity is decided on the whole payload, never on the 32-bit `contentHash`, so two
+  different pieces are never merged. The same run now keeps all of its events (`droppedEvents: 0`).
+  `eventCount` still counts every captured event, repeats included; eviction is still oldest-first, so
+  the retained events are one contiguous suffix of the stream. The tail stays bounded in memory: slots
+  and repeats together are capped at ten times `maxEvents` (100,000 events at the default), past which
+  the oldest go and are counted as dropped.
+
+### Security
+
+- **Untrusted text is scanned in one pass where a regex used to take its length squared.** Several
+  doors trimmed or scanned text the library does not write with regular expressions that a
+  backtracking engine retries from every position, so one crafted input cost its length squared —
+  seconds for a few dozen KB, minutes for a megabyte, with the process blocked throughout. Each is
+  now linear in its input and returns exactly what the regex returned: the RAG Markdown splitter's
+  heading lines (`byHeading`), the HTML loader's tag stripping (`htmlLoader` / `stripTags`), the
+  code runner's call shape (`codeShape`, run on model-written code), the evidence matcher's token
+  cleanup, the constrained-pick reply parser, the pattern fact extractor's address rule and value
+  cleanup, the coverage section's trim of the model's answer, the time layer's clock tokens,
+  place-named zones (`London time`) and the English reader's look at the words before each time
+  phrase (which re-read the whole message once per phrase), the SKOS reader's IRI query strip, the LDAP door's
+  PEM reader, and the base-URL and prefix trims in the Ollama, Foundry, Foundry Local, Azure OpenAI,
+  InvokeModel gateway, Vault, OIDC discovery, GitHub bug-report and device sign-in, TypeSafe and
+  artifact-prefix options.
+
+  `stripTags` also ends a `<script>` or `<style>` body at the end tags a browser ends it at —
+  `</script foo>`, `</script/>` — where it used to leave that body in the extracted text. As in a
+  browser, a blank other than tab, LF, FF, CR or space after `</script` (U+00A0, U+2028 …) no longer
+  ends the tag. The runbook verdict table escapes backslashes as well as pipes, so markdown shows a
+  value's backslashes as written (`a\_b` used to render as `a_b`).
+
 ## [9.138.0] - 2026-10-07
 
 ### Fixed
