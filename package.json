@@ -68,6 +68,7 @@
     "bench:tool-choice": "node bench/tool-choice.mjs",
     "bench:inputs": "node bench/inputs/run.mjs",
     "bench:results": "node bench/results/run.mjs",
+    "bench:recordings": "node --max-old-space-size=8192 bench/recordings/run.mjs",
     "test:types": "tsc -p test/type-regressions/tsconfig.json",
     "examples:readme": "node scripts/generate-examples-readme.mjs",
     "examples:readme:check": "node scripts/generate-examples-readme.mjs --check",
