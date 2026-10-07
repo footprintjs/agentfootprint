@@ -467,8 +467,15 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
           VERSION: ${{ needs.propose.outputs.version }}
+          BASE: ${{ needs.plan.outputs.sha }}
         run: |
           git fetch "$RUNNER_TEMP/release-pr/release.bundle" "release/next:release/next"
+          # The bundle is data from a job that ran dependency code: exactly one
+          # commit on the commit `plan` pinned, or nothing is pushed.
+          if [ "$(git rev-parse 'release/next^')" != "$BASE" ] || [ "$(git rev-list --count "$BASE..release/next")" != "1" ]; then
+            echo "::error::The release bundle is not one commit on $BASE. Nothing was pushed."
+            exit 1
+          fi
           git push --force origin release/next
           {
             cat "$RUNNER_TEMP/release-pr/notes.md"
