@@ -197,10 +197,10 @@ export interface RecordsCodeRuns {
  * worse answer than a coarse one.
  *
  * The code is model output, so every pass is linear in it. Block comments and
- * string literals are scanned rather than matched: their regexes
- * (`/\/\*[\s\S]*?\*\//g`, `/(['"`])(?:\\.|(?!\1)[^\\])*\1/g`) re-read the rest
- * of the code from every unclosed `/*` or quote — quadratic on `/*` repeated, or
- * on `'` followed by a long run of `\'` (16,000 of them took ~0.5 s). The scans
+ * string literals are scanned rather than matched: the lazy regexes that used
+ * to find them re-read the rest of the code from every unclosed comment opener
+ * or quote — quadratic on a repeated opener, or on a quote followed by a long
+ * run of escaped quotes (16,000 of them took about half a second). The scans
  * produce exactly what those regexes did (`test/security/linear-scanners.test.ts`).
  */
 export function codeShape(code: string): string {

@@ -6,7 +6,7 @@ title: codeShape
 
 > **codeShape**(`code`): `string`
 
-Defined in: [src/core/codeRunnerTool.ts:198](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L198)
+Defined in: [src/core/codeRunnerTool.ts:206](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L206)
 
 A program reduced to its CALL SHAPE: which operations, in what order.
 
@@ -28,6 +28,13 @@ names, and those are what go.
 Deliberately crude — a lexical reduction, not a parse. It has to work on
 whatever language the runner was configured for, and a wrong parse would be a
 worse answer than a coarse one.
+
+The code is model output, so every pass is linear in it. Block comments and
+string literals are scanned rather than matched: the lazy regexes that used
+to find them re-read the rest of the code from every unclosed comment opener
+or quote — quadratic on a repeated opener, or on a quote followed by a long
+run of escaped quotes (16,000 of them took about half a second). The scans
+produce exactly what those regexes did (`test/security/linear-scanners.test.ts`).
 
 ## Parameters
 
