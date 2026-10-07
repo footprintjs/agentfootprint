@@ -64,6 +64,15 @@ on:
 # `publish` gets id-token, `docs` gets actions write; `build` and `propose` —
 # the jobs that install dependencies — get read (propose writes only through
 # the App token, scoped to contents + pull requests).
+#
+# No cache on the release path, restored or saved. Every run here is a
+# default-branch run, so a cache it restored could have been written by any
+# other default-branch run, and `build` stages the bytes `publish` signs.
+# setup-node turns its npm cache on by itself once package.json names a
+# `packageManager`, so each setup-node below says `package-manager-cache:
+# false` instead of relying on that field staying absent. Every action is
+# pinned to a full commit SHA, because a moved tag would run with this file's
+# write and OIDC powers. Renovate keeps the pins current.
 permissions:
   contents: read
 
@@ -86,17 +95,21 @@ jobs:
     steps:
       - name: Releases are cut from main only
         if: github.event_name != 'release' && github.ref != 'refs/heads/main'
+        env:
+          REF: ${{ github.ref }}
         run: |
-          echo "::error::Run the Release workflow on main (got ${{ github.ref }})."
+          echo "::error::Run the Release workflow on main (got $REF)."
           exit 1
 
       # The TIP of main, not the commit that triggered this run: runs queue
       # behind each other, and the tip is what the next step must describe.
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event_name == 'release' && github.ref || 'main' }}
 
       - id: plan
+        env:
+          BUMP: ${{ inputs.bump || 'auto' }}
         run: |
           VERSION="$(node -p "require('./package.json').version")"
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
@@ -111,7 +124,7 @@ jobs:
             exit 0
           fi
           count=$(find .changes -maxdepth 1 -name '*.md' ! -name README.md | wc -l)
-          if [ "$count" -gt 0 ] || [ "${{ inputs.bump || 'auto' }}" != "auto" ]; then
+          if [ "$count" -gt 0 ] || [ "$BUMP" != "auto" ]; then
             echo "mode=propose" >> "$GITHUB_OUTPUT"
             echo "$count .changes/ fragment(s) waiting — opening or updating the release PR." >> "$GITHUB_STEP_SUMMARY"
           else
@@ -125,13 +138,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v7
+      # The commit `plan` pinned: the tip of main (or the release's tag), which
+      # only a merged pull request or a maintainer moves. No credentials are
+      # left in .git/config for the dependency install scripts below to read.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.plan.outputs.sha }}
+          persist-credentials: false
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 22
+          package-manager-cache: false
 
       # The tracked lock installs the exact published ContextFootprint dependency.
       - run: npm ci
@@ -140,10 +158,12 @@ jobs:
       # tag — refuse a tag that names a different one, before any gate runs.
       - name: Tag matches package.json (legacy release path)
         if: github.event_name == 'release'
+        env:
+          TAG: ${{ github.ref_name }}
         run: |
           PKG="v$(node -p "require('./package.json').version")"
-          if [ "$PKG" != "${{ github.ref_name }}" ]; then
-            echo "::error::Tag ${{ github.ref_name }} does not match package.json ($PKG). Nothing was published."
+          if [ "$PKG" != "$TAG" ]; then
+            echo "::error::Tag $TAG does not match package.json ($PKG). Nothing was published."
             exit 1
           fi
 
@@ -207,7 +227,7 @@ jobs:
           mkdir -p pkg
           tar -xzf ./*.tgz -C pkg --strip-components=1
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: package
           path: pkg/
@@ -223,7 +243,7 @@ jobs:
       contents: write # tag + GitHub release
     steps:
       # The commit the gates judged.
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.plan.outputs.sha }}
 
@@ -271,14 +291,15 @@ jobs:
       contents: read
       id-token: write # OIDC trusted publishing — granted to THIS job only
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: package
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
+          package-manager-cache: false
 
       # Upgrade npm ITSELF (trusted publishing needs >= 11.5.1) — not the project's deps.
       # Pinned to the 11.x line: npm 12.0.0 went `latest` on 2026-07-08 with a broken
@@ -345,20 +366,23 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
 
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.plan.outputs.sha }}
           token: ${{ steps.app.outputs.token }}
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 22
+          package-manager-cache: false
 
       - run: npm ci
 
       - name: Prepare version + CHANGELOG from .changes/
         id: prepare
-        run: node scripts/release-prepare.mjs --bump "${{ inputs.bump || 'auto' }}" --notes-out "$RUNNER_TEMP/notes.md"
+        env:
+          BUMP: ${{ inputs.bump || 'auto' }}
+        run: node scripts/release-prepare.mjs --bump "$BUMP" --notes-out "$RUNNER_TEMP/notes.md"
 
       - run: npm run build
 
