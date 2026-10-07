@@ -109,13 +109,23 @@ const VERDICTS: Readonly<Record<string, (mode: Mode) => Agent>> = {
       .build(),
 };
 
-/** A child that counts its runs and answers `hello` — what the agent is handed. */
-function probe(): { readonly runner: LLMCall; readonly calls: () => number } {
+/**
+ * A child that counts its runs, keeps the message it was handed, and answers
+ * `hello` — what the agent is handed when it runs after it.
+ */
+function probe(): {
+  readonly runner: LLMCall;
+  readonly calls: () => number;
+  readonly handed: () => string | undefined;
+} {
   let calls = 0;
+  let handed: string | undefined;
   const provider: LLMProvider = {
     name: 'probe',
-    complete: async () => {
+    complete: async (request) => {
       calls += 1;
+      const last = request.messages[request.messages.length - 1];
+      handed = typeof last?.content === 'string' ? last.content : undefined;
       return {
         content: 'hello',
         toolCalls: [],
@@ -127,8 +137,64 @@ function probe(): { readonly runner: LLMCall; readonly calls: () => number } {
   return {
     runner: LLMCall.create({ provider, model: 'mock' }).system('s').build(),
     calls: () => calls,
+    handed: () => handed,
   };
 }
+
+/**
+ * Runs that END ON AN ANSWER — the false positive's ground: a validated answer
+ * leaves its chart as BreakFinal's `{ finalContent, answerValidationCommitted }`
+ * and was read as the agent's state.
+ */
+const DELIVERED: Readonly<Record<string, (mode: Mode) => Agent>> = {
+  'validated answer (enforce, passed)': (mode) =>
+    Agent.create({ provider: mock({ reply: '{"n":1}' }), model: 'mock', reactMode: mode })
+      .outputSchema({ parse: (value: unknown) => value })
+      .answerValidation({
+        id: 'n',
+        version: '1',
+        mode: 'enforce',
+        validate: () => ({ checks: [{ id: 'n', disposition: 'checked-pass' }] }),
+      })
+      .build(),
+  'validated answer (observe, check failed)': (mode) =>
+    Agent.create({ provider: mock({ reply: '{"n":1}' }), model: 'mock', reactMode: mode })
+      .outputSchema({ parse: (value: unknown) => value })
+      .answerValidation({
+        id: 'n',
+        version: '1',
+        mode: 'observe',
+        validate: () => ({ checks: [{ id: 'n', disposition: 'checked-fail' }] }),
+      })
+      .build(),
+  'evidence rails, grounded answer': (mode) =>
+    Agent.create({
+      // Looks the value up, then answers with it — on every run (a Loop reruns it).
+      provider: {
+        name: 'grounded',
+        complete: async (request) =>
+          request.messages[request.messages.length - 1]?.role === 'tool'
+            ? {
+                content: 'The value is 42.',
+                toolCalls: [],
+                usage: { input: 1, output: 1 },
+                stopReason: 'end_turn',
+              }
+            : {
+                content: '',
+                toolCalls: [{ id: 't1', name: 'lookup', args: {} }],
+                usage: { input: 1, output: 1 },
+                stopReason: 'tool_use',
+              },
+      },
+      model: 'mock',
+      reactMode: mode,
+      maxIterations: 8,
+    })
+      .tool(lookup)
+      .namesAndNumbersFromEvidence({ posture: 'rails' })
+      .build(),
+};
 
 /** What a caller can read off the error: class, message and every own field but the snapshot. */
 function shapeOf(error: unknown) {
@@ -181,6 +247,112 @@ const PASS_THROUGH: Readonly<Record<string, (agent: Agent) => Composition>> = {
     return { run: () => l.run({ message: 'hello' }), later: [] };
   },
 };
+
+describe('a composed agent that ends on an answer hands the answer on', () => {
+  for (const [delivered, make] of Object.entries(DELIVERED)) {
+    for (const mode of MODES) {
+      it(`${delivered} (${mode}): every composition carries the standalone answer`, async () => {
+        const answer = await make(mode).run('hello');
+        expect(typeof answer).toBe('string');
+
+        const last = Sequence.create().step('a', probe().runner).step('b', make(mode)).build();
+        expect(await last.run({ message: 'hello' })).toBe(answer);
+        const first = probe();
+        await Sequence.create()
+          .step('a', make(mode))
+          .step('b', first.runner)
+          .build()
+          .run({ message: 'hello' });
+        expect(first.handed()).toBe(answer);
+        const next = probe();
+        await workflow(make(mode), next.runner).run({ message: 'hello' });
+        expect(next.handed()).toBe(answer);
+        const conditional = Conditional.create()
+          .when('agent', () => true, make(mode))
+          .otherwise('other', probe().runner)
+          .build();
+        expect(await conditional.run({ message: 'hello' })).toBe(answer);
+        expect(
+          await Loop.create().repeat(make(mode)).times(2).build().run({ message: 'hello' }),
+        ).toBe(answer);
+        const parallel = Parallel.create()
+          .branch('agent', make(mode))
+          .branch('other', probe().runner)
+          .mergeWithFn((results) => JSON.stringify(results))
+          .build();
+        expect(JSON.parse(String(await parallel.run({ message: 'hello' })))).toEqual({
+          agent: answer,
+          other: 'hello',
+        });
+        const after = probe();
+        const g = graph({
+          id: 'g',
+          nodes: [
+            { id: 'agent', runner: make(mode) },
+            { id: 'next', runner: after.runner },
+          ],
+          edges: [{ from: 'agent', to: 'next' }],
+        });
+        expect(await g.run({ message: 'hello' })).toMatchObject({ agent: answer });
+        expect(after.handed()).toBe(answer);
+      });
+    }
+  }
+});
+
+describe('a cancelled run inside a composition stays cancelled', () => {
+  for (const mode of MODES) {
+    it(`no retry, no reliability event, one call (${mode})`, async () => {
+      for (const compose of [
+        (agent: Agent) => Sequence.create().step('a', agent).step('b', probe().runner).build(),
+        (agent: Agent) =>
+          Parallel.create()
+            .branch('a', agent)
+            .branch('b', probe().runner)
+            .mergeWithFn((results) => JSON.stringify(results))
+            .build(),
+        (agent: Agent) => Loop.create().repeat(agent).times(3).build(),
+      ]) {
+        const controller = new AbortController();
+        let calls = 0;
+        const agent = Agent.create({
+          provider: {
+            name: 'cancelling',
+            complete: async () => {
+              calls += 1;
+              controller.abort();
+              const error = new Error('The operation was aborted');
+              error.name = 'AbortError';
+              throw error;
+            },
+          },
+          model: 'mock',
+          reactMode: mode,
+        })
+          .reliability({
+            postDecide: [{ when: (s) => s.error !== undefined, then: 'retry', kind: 'r' }],
+          })
+          .build();
+        const composition = compose(agent);
+        const events: string[] = [];
+        composition.on('*', (e: { type: string }) => {
+          if (e.type.startsWith('agentfootprint.reliability.')) events.push(e.type);
+        });
+        const error = await composition
+          .run({ message: 'hello' }, { signal: controller.signal })
+          .then(
+            () => undefined,
+            (e: unknown) => e,
+          );
+        expect((error as Error | undefined)?.name).toBe('AbortError');
+        expect(events).toEqual([]);
+        // Settle anything the loop would still run in the background.
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        expect(calls).toBe(1);
+      }
+    });
+  }
+});
 
 describe('a composed agent that ends on a terminal verdict fails the composition', () => {
   for (const [verdict, make] of Object.entries(VERDICTS)) {

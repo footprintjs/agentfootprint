@@ -60,6 +60,14 @@ type FinalStage = (scope: TypedScope<AgentState>) => void | Promise<void>;
  * answer layer's standing as data (honesty layer 4), already detached:
  * projected onto `turn_end` the same way.
  */
+/**
+ * The scopes whose capture records an answer the evidence rails REFUSED
+ * (`withRailsRefusal`). Keyed by the stage's own scope object — the
+ * per-invocation channel `interrupt()` uses — so the capture learns it
+ * without a second state read and every other turn's payload keeps its bytes.
+ */
+const RAILS_REFUSED = new WeakSet<object>();
+
 const captureTurnPayload = (
   scope: TypedScope<AgentState>,
   answer: string,
@@ -91,9 +99,11 @@ const captureTurnPayload = (
   if (commitValidated) {
     scope.answerValidationCommitted = true;
   }
-  if (commitValidated || releaseTokens) {
+  const refused = RAILS_REFUSED.has(scope);
+  if ((commitValidated || releaseTokens) && !refused) {
     // The stream carries exactly the captured candidate, including any
     // earlier output transformation. Replaying provider chunks would undo it.
+    // A refused answer is never released.
     if (answer.length > 0) {
       typedEmit(scope, 'agentfootprint.stream.token', {
         iteration,
@@ -136,6 +146,8 @@ const captureTurnPayload = (
     // The answer layer's standing (honesty layer 4) — only on an agent that
     // armed it; every other turn emits the exact payload it always did.
     ...(answerAssessment !== undefined && { answerAssessment }),
+    // A refused answer rides for the record, flagged so no consumer shows it.
+    ...(refused && { refused: { by: 'evidence-rails' as const } }),
   });
 };
 
@@ -377,6 +389,8 @@ export interface FinalStageArms {
   readonly answerLayer?: { readonly standingLine?: true };
   /** The time layer is armed — the limits block's `Period:` lines render in the clock's zone. */
   readonly timeLayer?: true;
+  /** The evidence gate's `'rails'` posture — a refused answer is recorded flagged and ends the branch. */
+  readonly evidenceRails?: true;
 }
 
 /**
@@ -389,12 +403,50 @@ export interface FinalStageArms {
 export function prepareFinalFor(
   arms: FinalStageArms,
 ): (scope: TypedScope<AgentState>) => void | Promise<void> {
-  const stage = finalStageFor(arms);
+  const composed = finalStageFor(arms);
+  // Under answer validation its guard already stops a rails refusal before the capture.
+  const stage =
+    arms.evidenceRails === true && arms.hasAnswerValidation !== true
+      ? withRailsRefusal(composed)
+      : composed;
   if (arms.releaseOutputTokens !== true) return stage;
   return (scope) => {
     if (withheldByOutputPolicy(scope)) return;
     return stage(scope);
   };
+}
+
+/**
+ * Evidence rails (9.35.0) without answer validation: an answer the rails
+ * REFUSED is captured for the record — `turn_end` carries it flagged
+ * `refused: { by: 'evidence-rails' }`, because the answer account explains the
+ * refusal from it — and then ends the branch: not written to memory, not
+ * handed back as the chart's result. The chart ends with NO answer and the
+ * verdict in its state (`core/terminalVerdict.ts`), so a composition mounting
+ * it reads the refusal, never the refused text. One read, on every rails turn.
+ */
+function withRailsRefusal(stage: FinalStage): FinalStage {
+  return async (scope) => {
+    if (scope.unsupportedValues?.refused !== true) return stage(scope);
+    RAILS_REFUSED.add(scope);
+    try {
+      await stage(scope);
+    } finally {
+      RAILS_REFUSED.delete(scope);
+    }
+    scope.$break('evidence rails refused this answer');
+  };
+}
+
+/**
+ * Answer validation's guard, for a stage that must not run on an answer the
+ * guard withholds (the answer layer's AssessAnswer, before PrepareFinal) —
+ * absent when validation is not configured.
+ */
+export function finalGuardFor(
+  arms: Pick<FinalStageArms, 'hasAnswerValidation'>,
+): ((scope: TypedScope<AgentState>) => boolean) | undefined {
+  return arms.hasAnswerValidation === true ? withheldByValidation : undefined;
 }
 
 /** Pick the existing composer; output admission wraps it without recomposing the answer. */

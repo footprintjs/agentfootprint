@@ -6,10 +6,11 @@
  * reliability fail-fast, a policy halt, a denied message, a refused answer —
  * and only its run boundary (`Agent · finalizeResult`) turns that record into
  * the error. A composition mounts the agent's CHART, so that boundary never
- * runs: the composition asks the agent for its verdict on the state the chart
- * ended with (`terminalVerdictOf`, duck-typed — `core-flow/` imports no
- * runner), carries it, and raises the SAME error (`terminalErrorOf`). One
- * translation, used by the agent's own boundary and by every composition.
+ * runs: the composition asks the agent what the mount handed back
+ * (`outcomeOf`, duck-typed — `core-flow/` imports no runner): its answer, or
+ * the verdict read off the state its chart ended with. It carries the verdict
+ * and raises the SAME error (`terminalErrorOf`). One translation, used by the
+ * agent's own boundary and by every composition.
  *
  * Leaf module: the error classes only, no runner.
  */
@@ -43,16 +44,23 @@ export function terminalErrorOf(verdict: TerminalVerdict, snapshot?: unknown): E
   }
 }
 
-/** A runner whose chart can end on a terminal verdict, and names it from that chart's state. */
-export interface EndsOnVerdict {
-  terminalVerdictOf(state: Readonly<Record<string, unknown>>): TerminalVerdict | undefined;
+/**
+ * What a mount of a runner's chart handed back: the runner's ANSWER, or the
+ * terminal verdict its chart ended on. A verdict is read ONLY from the chart's
+ * state — handed over when the chart returned no result — never from a result.
+ */
+export type ChildOutcome = { readonly answer: unknown } | { readonly verdict: TerminalVerdict };
+
+/** A runner that reads its own chart's outcome off a mount (an `Agent` does). */
+export interface ReadsItsOwnOutcome {
+  outcomeOf(sfOutput: unknown): ChildOutcome;
 }
 
-/** Whether a runner names its own terminal verdicts (an `Agent` does). */
-export function endsOnVerdict(runner: unknown): runner is EndsOnVerdict {
+/** Whether a runner reads its own chart's outcome. */
+export function readsItsOwnOutcome(runner: unknown): runner is ReadsItsOwnOutcome {
   return (
     typeof runner === 'object' &&
     runner !== null &&
-    typeof (runner as Partial<EndsOnVerdict>).terminalVerdictOf === 'function'
+    typeof (runner as Partial<ReadsItsOwnOutcome>).outcomeOf === 'function'
   );
 }

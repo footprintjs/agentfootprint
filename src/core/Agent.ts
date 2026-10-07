@@ -197,7 +197,8 @@ import { buildEvidenceRecheckStage } from './agent/stages/evidenceRecheck.js';
 import { toolWantsOf } from './agent/stagedRefs.js';
 import { wrapUpStage } from './agent/stages/wrapUp.js';
 import { failFastRecordOf } from '../reliability/failFastRecord.js';
-import { terminalErrorOf, type TerminalVerdict } from './terminalVerdict.js';
+import { terminalErrorOf, type ChildOutcome, type TerminalVerdict } from './terminalVerdict.js';
+import { isValidatedDelivery } from './agent/stages/breakFinal.js';
 import { evidenceRefusalSentence } from './agent/evidence/gate.js';
 import { UnsupportedValuesError } from './agent/evidence/errors.js';
 import type { ResolvedEvidenceGate } from './agent/evidence/types.js';
@@ -253,7 +254,7 @@ import {
 } from './time/clock.js';
 import type { ResolvedOutputEnforcement } from './agent/outputEnforcement.js';
 import { buildOutputRetryStage } from './agent/stages/outputRetry.js';
-import { RunnerBase, makeRunId } from './RunnerBase.js';
+import { RunnerBase, makeRunId, withRunSignalInEnv } from './RunnerBase.js';
 import type { Tool, ToolRegistryEntry } from './tools.js';
 import type { ToolProvider } from '../tool-providers/types.js';
 import {
@@ -4064,15 +4065,24 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   }
 
   /**
-   * @internal The terminal verdict this agent's chart ENDED on, named from the
-   * state it ended with — the one translation its own run boundary
-   * (`finalizeResult`) and a composition it runs inside both use
-   * (`core/terminalVerdict.ts`). `undefined` when the run ended on an answer.
-   * The `'tell-model'` consent record travels off tracked state, so it is
-   * raised by the run boundary only.
+   * @internal What a mount of this agent's chart handed back
+   * (`core/terminalVerdict.ts` · `ReadsItsOwnOutcome`, read by every
+   * composition): the ANSWER, or the terminal verdict the chart ended on. A
+   * string, or the validated answer's `{ finalContent, answerValidationCommitted }`,
+   * is the answer; a verdict is read ONLY from the chart's state — handed over
+   * when the chart returned no result — with the one translation this agent's
+   * own run boundary (`finalizeResult`) uses. The `'tell-model'` consent record
+   * travels off tracked state, so it is raised by the run boundary only.
    */
-  terminalVerdictOf(state: Readonly<Record<string, unknown>>): TerminalVerdict | undefined {
-    return this.refusalVerdictOf(state) ?? this.validationVerdictOf(state);
+  outcomeOf(sfOutput: unknown): ChildOutcome {
+    if (typeof sfOutput === 'string') return { answer: sfOutput };
+    if (isValidatedDelivery(sfOutput)) return { answer: sfOutput.finalContent };
+    if (typeof sfOutput === 'object' && sfOutput !== null) {
+      const state = sfOutput as Readonly<Record<string, unknown>>;
+      const verdict = this.refusalVerdictOf(state) ?? this.validationVerdictOf(state);
+      if (verdict !== undefined) return { verdict };
+    }
+    return { answer: sfOutput };
   }
 
   /** The records a run ends on in place of an answer, in the order the boundary raises them. */
@@ -5586,17 +5596,4 @@ function withoutTime<T extends { time?: unknown }>(options: T | undefined): T | 
   const { time: _time, ...rest } = options;
   void _time;
   return rest as T;
-}
-
-/**
- * One cancellation signal per run. A caller may hand it to the engine
- * (`signal`, which stops the traversal) or to the stages (`env.signal`, which
- * tools and the reliability loop read). Handed only to the engine, it is handed
- * to the stages too, so a stage never takes the run's own abort for a failure
- * (the reliability loop used to file it as a fail-fast). The SAME object when
- * there is nothing to add.
- */
-function withRunSignalInEnv<T extends RunOptions>(options: T | undefined): T | undefined {
-  if (options?.signal === undefined || options.env?.signal !== undefined) return options;
-  return { ...options, env: { ...options.env, signal: options.signal } };
 }

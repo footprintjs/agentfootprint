@@ -80,6 +80,21 @@ export function isMintedRunId(value: unknown): boolean {
   return typeof value === 'string' && /^run-\d+-\d+$/.test(value);
 }
 
+/**
+ * One cancellation signal per run, for every runner. A caller may hand it to
+ * the engine (`signal`, which stops the traversal) or to the stages
+ * (`env.signal`, which tools and the reliability loop read). Handed only to the
+ * engine, it is handed to the stages too — so a stage never takes the run's
+ * own abort for a failure (the reliability loop filed it as a fail-fast, and an
+ * agent inside a composition retried the cancelled call up to its cap). Every
+ * runner's `run` / `resume` passes its options through here. The SAME object
+ * when there is nothing to add.
+ */
+export function withRunSignalInEnv<T extends RunOptions>(options: T | undefined): T | undefined {
+  if (options?.signal === undefined || options.env?.signal !== undefined) return options;
+  return { ...options, env: { ...options.env, signal: options.signal } };
+}
+
 export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runner<TIn, TOut> {
   protected readonly dispatcher = new EventDispatcher();
   protected readonly attachedRecorders: CombinedRecorder[] = [];

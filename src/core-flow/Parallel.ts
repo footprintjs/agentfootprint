@@ -27,7 +27,7 @@ import type { GroupMember, GroupMetadata, GroupTranslator } from '../core/transl
 import type { RunnerPauseOutcome } from '../core/pause.js';
 import type { LLMMessage, LLMProvider } from '../adapters/types.js';
 import type { Runner } from '../core/runner.js';
-import { RunnerBase, makeRunId } from '../core/RunnerBase.js';
+import { RunnerBase, makeRunId, withRunSignalInEnv } from '../core/RunnerBase.js';
 import { normalizeRunInput } from '../core/runInput.js';
 import { buildEventMeta, type RunContext } from '../bridge/eventMeta.js';
 import { ContextRecorder } from '../recorders/core/ContextRecorder.js';
@@ -35,7 +35,7 @@ import { streamRecorder } from '../recorders/core/StreamRecorder.js';
 import { agentRecorder } from '../recorders/core/AgentRecorder.js';
 import { compositionRecorder } from '../recorders/core/CompositionRecorder.js';
 import { typedEmit } from '../recorders/core/typedEmit.js';
-import { throwIfChildEnded } from './childVerdict.js';
+import { childError, childOutcome } from './childOutcome.js';
 import { resilienceHooks } from '../recorders/core/resilienceHooks.js';
 import { resilienceRecorder } from '../recorders/core/ResilienceRecorder.js';
 import { composedInput, readsMessageFromIfAny } from '../core/messageFrom.js';
@@ -337,7 +337,7 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
     try {
       result = await executor.run({
         input: { message: runInput.message },
-        ...(options ?? {}),
+        ...(withRunSignalInEnv(options) ?? {}),
       });
     } catch (err) {
       this.rethrowWithBranchAttribution(err);
@@ -354,7 +354,7 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
     const executor = this.createExecutor();
     let result: unknown;
     try {
-      result = await executor.resume(checkpoint, input, options);
+      result = await executor.resume(checkpoint, input, withRunSignalInEnv(options));
     } catch (err) {
       this.rethrowWithBranchAttribution(err);
     }
@@ -611,13 +611,15 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
           const input = { message: (parent.userMessage as string) ?? '' };
           return parent.messageFrom === 'composed' ? composedInput(branch.runner, input) : input;
         },
-        // A branch that ended on a verdict is a FAILED branch (`childVerdict.ts`):
-        // its mapper throws the child's own error, which the wrapper attributes.
+        // The child reads its own outcome (`childOutcome.ts`). A branch that
+        // ended on a verdict is a FAILED branch: its mapper throws the child's
+        // own error, which the wrapper attributes.
         outputMapper: wrapBranchOutputMapper(branch.id, this.branchErrors, (sfOutput) => {
-          throwIfChildEnded(branch.runner, sfOutput);
+          const outcome = childOutcome(branch.runner, sfOutput);
+          if ('verdict' in outcome) throw childError(outcome.verdict);
           return {
             branchResults: {
-              [branch.id]: typeof sfOutput === 'string' ? sfOutput : '',
+              [branch.id]: typeof outcome.answer === 'string' ? outcome.answer : '',
             },
           };
         }),

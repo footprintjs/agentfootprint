@@ -63,8 +63,12 @@ import { readerWindowsOf } from '../time/windows.js';
 import { clockOf } from '../time/rows.js';
 import { timeLimitFactsOf, type TimeLimitFacts } from './coverage/timeLimitFacts.js';
 import type { FindingsLedger } from './findings/types.js';
-import { breakFinalFor } from './stages/breakFinal.js';
-import { prepareFinalFor } from './stages/prepareFinal.js';
+import {
+  breakFinalStage,
+  breakFinalWithValidationStage,
+  finalBranchOutput,
+} from './stages/breakFinal.js';
+import { finalGuardFor, prepareFinalFor } from './stages/prepareFinal.js';
 import { buildCacheSubflow } from './buildCacheSubflow.js';
 import {
   mountInputsLayer,
@@ -292,7 +296,7 @@ export interface AgentChartDeps {
   readonly hasAnswerValidation?: boolean;
   /** Output middleware owns delivery: publish only the final captured answer. */
   readonly releaseOutputTokens?: true;
-  /** The evidence gate's `'rails'` posture: BreakFinal hands back a refusal, never the refused text. */
+  /** The evidence gate's `'rails'` posture: a refused answer is recorded flagged and ends the branch (`prepareFinalFor`). */
   readonly evidenceRails?: true;
 
   /**
@@ -496,6 +500,7 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
     deps.answerLayer,
     prepareFinalFor(deps),
     deps.structureRecorders,
+    finalGuardFor(deps),
   );
   for (const m of deps.memories) {
     if (m.write) {
@@ -517,7 +522,12 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
     }
   }
   const finalBranchChart = finalBranchBuilder
-    .addFunction('BreakFinal', breakFinalFor(deps), 'break-final', 'Terminate the ReAct loop')
+    .addFunction(
+      'BreakFinal',
+      deps.hasAnswerValidation === true ? breakFinalWithValidationStage : breakFinalStage,
+      'break-final',
+      'Terminate the ReAct loop',
+    )
     .build();
 
   // ── Main chart ──────────────────────────────────────────────
@@ -1147,13 +1157,7 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
         }
         return rest;
       },
-      outputMapper: (sf) => ({
-        finalContent: sf.finalContent as string,
-        ...(deps.hasAnswerValidation === true &&
-          sf.answerValidationCommitted === true && {
-            answerValidationCommitted: true,
-          }),
-      }),
+      outputMapper: (sf) => finalBranchOutput(sf, deps.hasAnswerValidation === true),
       // With the branch-sourced loop, `final` is a terminal LEAF — it ends the
       // run on its own (no decider `next` to suppress). propagateBreak is kept
       // so BreakFinal's $break() still surfaces a terminal onBreak signal to the

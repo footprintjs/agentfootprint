@@ -77,7 +77,7 @@ import {
   resolveCostBudget,
   type ResolvedCostBudget,
 } from './cost.js';
-import { RunnerBase, makeRunId } from './RunnerBase.js';
+import { RunnerBase, makeRunId, withRunSignalInEnv } from './RunnerBase.js';
 import { normalizeRunInput } from './runInput.js';
 import { buildSystemPromptSlot } from './slots/buildSystemPromptSlot.js';
 import { buildMessagesSlot } from './slots/buildMessagesSlot.js';
@@ -334,7 +334,7 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
     this.lastExecutor = executor;
     const result = await executor.run({
       input: { message: runInput.message },
-      ...(options ?? {}),
+      ...(withRunSignalInEnv(options) ?? {}),
     });
     return this.finalizeResult(executor, result);
   }
@@ -347,7 +347,7 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
     this.emitPauseResume(checkpoint, input);
     const executor = this.createExecutor();
     this.lastExecutor = executor;
-    const result = await executor.resume(checkpoint, input, options);
+    const result = await executor.resume(checkpoint, input, withRunSignalInEnv(options));
     return this.finalizeResult(executor, result);
   }
 

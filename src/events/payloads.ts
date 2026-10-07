@@ -204,6 +204,15 @@ export interface AgentTurnEndPayload {
    * dispatcher carries the agent's `turn_end` but not the `answer.*` domain.
    */
   readonly answerAssessment?: AnswerAssessmentPayload;
+  /**
+   * The answer was REFUSED — present ONLY then. Under the evidence gate's
+   * `'rails'` posture (`.namesAndNumbersFromEvidence()`), an answer stating
+   * values no tool result carried is not delivered: `run()` raises
+   * `UnsupportedValuesError`. `finalContent` stays for the record (the answer
+   * account explains the refusal from it), but it is NOT the agent's answer —
+   * a consumer rendering an outcome shows the refusal, never this text.
+   */
+  readonly refused?: { readonly by: 'evidence-rails' };
 }
 
 /**
