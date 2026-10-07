@@ -70,7 +70,7 @@ Below a model's minimum cacheable prefix, a request is processed **without cachi
 
 ## Which providers can actually feed it
 
-The strategy follows what the provider declares (`promptCaching`); a wrapper that forwards it reads like the adapter it wraps:
+`cacheStrategyFor` picks the strategy from what the provider declares (`promptCaching`); a wrapper that forwards it reads like the adapter it wraps:
 
 | Declared by | Strategy | Sends markers | Reads cache usage | What `extractMetrics` says |
 |---|---|---|---|---|

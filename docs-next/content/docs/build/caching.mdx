@@ -1,13 +1,13 @@
 ---
 title: Prompt caching
-description: Stable context — steering, facts, an active skill — and the conversation so far are cached for you on providers that support it, per a policy you can override on each injection. On by default; one flag turns it off.
+description: Stable context — steering, facts, an active skill — is cached for you on providers that support it, per a policy you can override on each injection. On by default; one flag turns it off.
 ---
 
 An agent loop sends the same system prompt and tool descriptions on every
-iteration, and the conversation only grows. On providers with prompt caching,
-those repeated bytes can cost a fraction of normal input tokens — but only if
-the request marks which blocks are stable. agentfootprint does that marking
-for you, including a moving marker on the conversation's last message.
+iteration. On providers with prompt caching, those repeated bytes can cost a
+fraction of normal input tokens — but only if the request marks which blocks
+are stable. agentfootprint does that marking for you — the conversation so
+far included.
 
 **It is on by default.** Most agents never touch it.
 
@@ -74,31 +74,28 @@ Every iteration, before the model is called, a gate decides whether to place
 cache markers at all. It skips them when:
 
 1. caching is off for the agent;
-2. a recent cache hit rate below 0.3 was supplied — the agent does not compute
-   one itself yet, so this rule does not fire on its own;
+2. a supplied hit rate is below 0.3 (the agent computes none yet);
 3. three or more different skills were active in the last five iterations —
    each switch invalidates the cache, so marking would only add write cost.
 
-The conversation marker is skipped when an injection before it says
-`cache: 'never'`. Under `.findings()` no marker is placed at all: the findings
-offer changes every tool schema per call, so nothing could be read back.
-
-The gate's decision is recorded with the run, like every other decision.
+Under `.findings()` no marker is placed: its offer changes every tool schema
+per call, so nothing could be read back. The gate's decision is recorded with
+the run, like every other decision.
 
 ## Which providers, and how
 
-Each provider declares how its wire caches — `promptCaching`, a
-`PromptCaching` value from `agentfootprint/cache` — and the agent picks its
-strategy from that, never from the provider's name:
+Each provider declares how its wire caches (`promptCaching`, a `PromptCaching`
+from `agentfootprint/cache`); the agent picks its strategy from that, never
+from the provider's name:
 
-| Provider | Declares | How caching works | Cache token counts |
-|---|---|---|---|
-| `anthropic()`, `browserAnthropic()` | `mode: 'breakpoints'` | Explicit markers on stable blocks (at most 4 per request) — placed for you | reported |
-| `openai()`, Azure OpenAI, Foundry | `mode: 'automatic'` | Automatic on the provider side | not reported |
-| `bedrock()`, `ollama()`, `gemini()`, `mock()` | nothing | No-op | — |
+| Provider | Declares | Cache token counts |
+|---|---|---|
+| `anthropic()`, `browserAnthropic()` | `mode: 'breakpoints'` — up to 4 markers, placed for you | reported |
+| `openai()`, Azure OpenAI, Foundry | `mode: 'automatic'` — the provider caches on its own | not reported |
+| `bedrock()`, `ollama()`, `gemini()`, `mock()` | nothing — no-op | — |
 
-So a wrapper keeps caching when it forwards the field. `withRetry`,
-`withCircuitBreaker` and `withFallback` do; your own wrapper needs one line:
+A wrapper keeps caching when it forwards the field (`withRetry`,
+`withCircuitBreaker` and `withFallback` do):
 
 ```ts
 const routed: LLMProvider = {
@@ -108,10 +105,7 @@ const routed: LLMProvider = {
 };
 ```
 
-Without it the wrapper runs uncached, and its receipts record the strategy
-`'none'`. To choose yourself, pass `cacheStrategy` to `Agent.create`
-(`cacheStrategyFor` is the agent's own choice). A prompt below the model's
-minimum (4,096 tokens on Claude Haiku 4.5) is never cached.
+Without it the wrapper runs uncached, and its receipts say `'none'`.
 
 ## Did it pay off?
 
