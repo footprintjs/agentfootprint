@@ -77,6 +77,7 @@ import {
   ollamaThinkingHandler,
   type OllamaRawThinking,
 } from '../../thinking/OllamaThinkingHandler.js';
+import { isSlash, trimTrailing } from '../../lib/linearText.js';
 
 // ─── Wire shapes (Ollama native /api/chat) ──────────────────────────
 
@@ -507,7 +508,7 @@ function resolveBaseUrl(options: OllamaProviderOptions): string {
     (typeof process !== 'undefined' ? process.env?.OLLAMA_HOST : undefined) ??
     DEFAULT_BASE_URL;
   const withScheme = /^https?:\/\//i.test(raw) ? raw : `http://${raw}`;
-  return withScheme.replace(/\/+$/, '').replace(/\/v1$/i, '');
+  return trimTrailing(withScheme, isSlash).replace(/\/v1$/i, '');
 }
 
 interface BuildConfig {

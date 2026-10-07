@@ -33,6 +33,7 @@
  */
 
 import { sleep } from '../lib/sleep.js';
+import { isSlash, trimTrailing } from '../lib/linearText.js';
 import {
   ClassifierError,
   type ClassifyAnswer,
@@ -102,7 +103,7 @@ export function typesafe(options: TypesafeClassifierOptions = {}): Classifier {
     );
   }
   const model = options.model ?? DEFAULT_MODEL;
-  const url = `${(options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, '')}/v1/systemone`;
+  const url = `${trimTrailing(options.baseUrl ?? DEFAULT_BASE_URL, isSlash)}/v1/systemone`;
   const timeout = options.timeout ?? DEFAULT_TIMEOUT_MS;
   const maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES;
   const retryDelayMs = options.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS;

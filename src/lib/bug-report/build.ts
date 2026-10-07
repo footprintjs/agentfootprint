@@ -81,6 +81,7 @@ import { toWireJson } from '../wireJson.js';
 import { stampConversation, type EnvelopeSource } from './envelope.js';
 import { deriveTranscript, type Transcript } from './transcript.js';
 import { zipStore } from './zip.js';
+import { isHyphen, trimBoth, trimTrailing } from '../linearText.js';
 import type {
   BugReport,
   BugReportEnvironment,
@@ -933,11 +934,7 @@ export function bundleFilename(title: string, createdAt: Date): string {
 
 /** Lower-case, ASCII, hyphenated, bounded — a filename, not a sentence. */
 export function slugify(title: string): string {
-  const slug = title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 60)
-    .replace(/-+$/g, '');
+  const hyphenated = title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  const slug = trimTrailing(trimBoth(hyphenated, isHyphen).slice(0, 60), isHyphen);
   return slug || 'bug-report';
 }

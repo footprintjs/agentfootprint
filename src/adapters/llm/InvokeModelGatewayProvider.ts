@@ -72,6 +72,7 @@ import {
 import { toolManifestOf } from './wireManifest.js';
 import { anthropicThinkingHandler } from '../../thinking/AnthropicThinkingHandler.js';
 import { retryAfterMsFromHeaders } from './retryAfter.js';
+import { isSlash, trimTrailing } from '../../lib/linearText.js';
 
 /** The literal this wire requires in the body in place of a version header. */
 export const INVOKE_MODEL_ANTHROPIC_VERSION = 'bedrock-2023-05-31';
@@ -812,7 +813,7 @@ function checkedBaseUrl(raw: string): string {
       message: `baseUrl must be an http(s) URL, got ${JSON.stringify(raw)}.`,
     });
   }
-  return raw.replace(/\/+$/, '');
+  return trimTrailing(raw, isSlash);
 }
 
 function checkedHeader(raw: string): string {

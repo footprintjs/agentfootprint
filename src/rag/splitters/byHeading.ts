@@ -86,8 +86,71 @@ export interface ByHeadingOptions {
   readonly minChars?: number;
 }
 
-/** ATX headings only (`# Title`). Setext (`Title\n=====`) is rare in docs corpora. */
-const HEADING = /^(#{1,6})[ \t]+(.+?)[ \t]*$/gm;
+/** One ATX heading line (`## Title`): where it starts and ends, its level, its title. */
+export interface AtxHeading {
+  /** Offset of the line's first `#`. */
+  readonly offset: number;
+  /** Offset just past the line's last character (before its line break). */
+  readonly end: number;
+  /** How many `#` open it, 1–6. */
+  readonly level: number;
+  readonly title: string;
+}
+
+/**
+ * ATX headings only (`# Title`). Setext (`Title\n=====`) is rare in docs corpora.
+ *
+ * Exactly the lines `/^(#{1,6})[ \t]+(.+?)[ \t]*$/gm` matches, with the same
+ * title, found in one pass. The regex is not used because a document is input
+ * a deployer may not trust: on `# a` followed by a long run of blanks and one
+ * more letter, its lazy title stops at every blank and re-reads the rest of the
+ * run to see whether the line ends there — quadratic in the run (16,000 blanks
+ * take ~0.2 s in V8).
+ */
+export function atxHeadings(text: string): AtxHeading[] {
+  const found: AtxHeading[] = [];
+  let lineStart = 0;
+  for (;;) {
+    let lineEnd = lineStart;
+    while (lineEnd < text.length && !isLineBreak(text.charCodeAt(lineEnd))) lineEnd++;
+    const heading = atxHeadingOn(text, lineStart, lineEnd);
+    if (heading !== undefined) found.push(heading);
+    if (lineEnd >= text.length) return found;
+    lineStart = lineEnd + 1;
+  }
+}
+
+/** The heading on the line `[start, end)`, if it is one. */
+function atxHeadingOn(text: string, start: number, end: number): AtxHeading | undefined {
+  let level = 0;
+  while (start + level < end && text.charCodeAt(start + level) === 0x23) level++;
+  if (level === 0 || level > 6) return undefined;
+  const afterHashes = start + level;
+  if (afterHashes >= end || !isBlank(text.charCodeAt(afterHashes))) return undefined;
+  let titleStart = afterHashes;
+  while (titleStart < end && isBlank(text.charCodeAt(titleStart))) titleStart++;
+  let titleEnd = end;
+  while (titleEnd > titleStart && isBlank(text.charCodeAt(titleEnd - 1))) titleEnd--;
+  if (titleEnd > titleStart) {
+    return { offset: start, end, level, title: text.slice(titleStart, titleEnd) };
+  }
+  // Hashes and blanks only. The pattern still matches once there are two
+  // blanks: `[ \t]+` gives one back and the title is the last blank.
+  if (end - afterHashes >= 2) {
+    return { offset: start, end, level, title: text.slice(end - 1, end) };
+  }
+  return undefined;
+}
+
+/** `[ \t]` */
+function isBlank(code: number): boolean {
+  return code === 0x20 || code === 0x09;
+}
+
+/** What ends a line for `^`, `$` and `.` in a regular expression: LF, CR, U+2028, U+2029. */
+function isLineBreak(code: number): boolean {
+  return code === 0x0a || code === 0x0d || code === 0x2028 || code === 0x2029;
+}
 
 /** One section, classified for the floor pass. */
 interface Section extends Span {
@@ -107,15 +170,9 @@ export function byHeading(options: ByHeadingOptions = {}): Splitter {
       const text = doc.text;
       // Where each section starts, and what it is called.
       const starts: { offset: number; heading?: string; headingEnd: number }[] = [];
-      HEADING.lastIndex = 0;
-      let match: RegExpExecArray | null;
-      while ((match = HEADING.exec(text)) !== null) {
-        if ((match[1] ?? '').length > maxLevel) continue;
-        starts.push({
-          offset: match.index,
-          heading: match[2],
-          headingEnd: match.index + match[0].length,
-        });
+      for (const found of atxHeadings(text)) {
+        if (found.level > maxLevel) continue;
+        starts.push({ offset: found.offset, heading: found.title, headingEnd: found.end });
       }
 
       // A document with no headings at all is a paragraph document; say so by

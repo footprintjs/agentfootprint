@@ -26,6 +26,7 @@
  */
 
 import { isLoopbackBind } from '../../../hosting/doorGuard.js';
+import { isSlash, trimTrailing } from '../../../lib/linearText.js';
 
 /** The checked facts a verifier needs out of the document. */
 export interface DiscoveredIssuer {
@@ -74,7 +75,7 @@ export interface ReadDiscoveryOptions {
 
 /** `<issuer>/.well-known/openid-configuration`, a trailing `/` removed first. */
 export function discoveryUrlFor(issuer: string): string {
-  return `${issuer.replace(/\/+$/, '')}/.well-known/openid-configuration`;
+  return `${trimTrailing(issuer, isSlash)}/.well-known/openid-configuration`;
 }
 
 /**

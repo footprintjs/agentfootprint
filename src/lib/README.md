@@ -7,7 +7,8 @@ result message the library annotated). All four live here rather than beside
 their first caller so that readers in folders that cannot import each other
 cannot answer the same question differently.
 Support: `canonicalJson.ts`, `fnv1a.ts`, `lazyRequire.ts`, `libraryVersion.ts`,
-`sqliteUnavailable.ts`, `embedderMismatch.ts`, `storedPreview.ts`, `sleep.ts`.
+`sqliteUnavailable.ts`, `embedderMismatch.ts`, `storedPreview.ts`, `sleep.ts`,
+`linearText.ts`.
 Every subfolder here has its own role and its own README.
 
 Trace owner: `trust-boundaries/` projects selected typed events into a bounded,
@@ -75,6 +76,33 @@ and stays beside the work it bounds. `test/lib/sleep.test.ts` proves the law
 with a timer that fires early on purpose; `test/architecture/sleepOwner.test.ts`
 refuses a private sleep anywhere else in `src/`.
 
+## A trim from here costs one pass
+`linearText.ts` is where a run of characters comes off the end of text the
+library did not write: a base URL or prefix from configuration, a token or a
+reply from a model, a value from a person's message. Never
+`s.replace(/\/+$/, '')`: without a `^`, a backtracking engine starts that
+pattern at every position and re-reads the run each time, so a long run followed
+by one more character costs its length squared (16,000 slashes ~90 ms, a
+million — minutes, with the event loop blocked). `trimTrailing` walks in from
+the end once and returns exactly what the regex returned.
+
+```ts
+import { anyOf, isSlash, trimTrailing } from '../lib/linearText.js';
+
+trimTrailing('https://api.example.com///', isSlash); // 'https://api.example.com'
+trimTrailing('41200%.', anyOf('.,;:!?%')); // '41200'
+```
+
+The same rule holds for the scanners that live beside their one caller
+(`rag/splitters/byHeading.ts` · `atxHeadings`, `rag/loaders/html.ts` ·
+`stripTags`, `core/codeRunnerTool.ts` · `codeShape`,
+`memory/facts/patternFactExtractor.ts` · `firstEmail`,
+`adapters/identity/directory/ldapDirectory.ts` · `pemCertificateBlocks`):
+linear in the text, equal to the regex they replaced.
+`test/security/linear-text.test.ts` and `test/security/linear-scanners.test.ts`
+pin both halves — equivalence on seeded strings, and a COUNTED work bound on
+each regex's worst case (`test/helpers/workCount.ts`, never a timer).
+
 ## Files
 - `spokenIds.ts` — `named` vs `held`; `held` is required, not optional.
 - `saidByPerson.ts` — the opening registry (history frames and request-only
@@ -96,3 +124,6 @@ refuses a private sleep anywhere else in `src/`.
   somebody's stored data a refusal may quote.
 - `sleep.ts` — `sleep`, the one wait that keeps its minimum; `makeSleep` builds
   one over a test's own clock and timer.
+- `linearText.ts` — `trimLeading` / `trimTrailing` / `trimBoth` over a
+  `CharTest` (`isSlash`, `isHyphen`, `isRegExpWhitespace`, `anyOf`, `either`):
+  the regex's answer in one pass.

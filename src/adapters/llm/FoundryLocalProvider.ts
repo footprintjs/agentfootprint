@@ -94,6 +94,7 @@ import type {
   LLMToolSchema,
   WireRole,
 } from '../types.js';
+import { isSlash, trimTrailing } from '../../lib/linearText.js';
 
 // ─── Wire shapes (Foundry Local /v1 — the OpenAI dialect) ───────────
 
@@ -658,7 +659,7 @@ function resolveEndpoint(options: FoundryLocalProviderOptions): string {
       env?.FOUNDRY_LOCAL_BASE_URL,
     ) ?? DEFAULT_ENDPOINT;
   const withScheme = /^https?:\/\//i.test(raw) ? raw : `http://${raw}`;
-  return withScheme.replace(/\/+$/, '').replace(/\/v1$/i, '');
+  return trimTrailing(withScheme, isSlash).replace(/\/v1$/i, '');
 }
 
 /**

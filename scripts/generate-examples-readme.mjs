@@ -238,8 +238,9 @@ function renderFolderTable(folder, files) {
       lines.push(`| ${num} | [\`${file}\`](${rel}) | _no meta_ | — |`);
       continue;
     }
-    const title = meta.title.replace(/\|/g, '\\|');
-    const desc = meta.description.replace(/\|/g, '\\|').replace(/\n/g, ' ');
+    // Backslashes first, or a `\` before a `|` leaves the pipe a column break.
+    const title = meta.title.replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
+    const desc = meta.description.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\n/g, ' ');
     lines.push(`| ${num} | [\`${file}\`](${rel}) | ${title} | ${desc} |`);
   }
 
