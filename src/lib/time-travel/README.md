@@ -285,6 +285,7 @@ the object a served view already holds:
 | `system.hash`, `system.pieces[i].hash` | `view.system.text`, `view.system.pieces[i].text` | the text itself |
 | `messages.entries[i].hash`, `messages.requestOnly[i].hash` | `view.messages.asSent[i]`, `{ role, content: text }` | `messageDigestInput(message)` |
 | `tools.schemaHashes[name]` | `view.tools.schemas[i]` | `toolDigestInput(tool)` (9.89.0) |
+| `cache.transformHash` | the request the cache strategy returned (your provider decorator sees it) | `transformHashOf(runId, request)` — the whole fingerprint, not an input |
 
 ```ts
 import { receiptAt, receiptHash, servedAt, messageDigestInput, toolDigestInput } from 'agentfootprint';
@@ -317,6 +318,38 @@ in `schemaHashes` and NOT in `schemas`; its body is the declared
 `forced-tool-schema` gap, so there is no row to check and nothing to claim.
 `stableJson` stays off the root barrel on purpose: `hash(stableJson(tool))`
 would be the rule written a second time.
+
+**`cache.transformHash` is a CHAIN, and the value names its scheme.** A value
+`'chain-v1:<16 hex>'` is `transformHashOf(runId, request)`: each message of the
+returned request digested on its own (`receiptHash(runId, stableJson([m]))`),
+chained in order from a fixed seed, then the rest of the request — the
+formula is spelled out on `transformHashOf`'s TSDoc so a verifier in any
+language can follow it. A bare `<16 hex>` value is a receipt minted before the
+prefix existed and verifies as `receiptHash(runId, stableJson(request))`. The
+scheme changed because the whole-request digest could not be extended: the
+strategy's markers sort to the front of the canonical JSON and move every
+call, so call k shared no prefix with call k−1 and the whole history was
+hashed again on every call.
+
+### The mint is incremental — counted, never timed
+
+An agent's request at call k is call k−1's plus what the loop appended, and
+until the receipt memo the mint hashed and measured all of it again on every
+call: SHA-256 input and the request measurement grew with the square of the
+iteration count (measured with 1,000-row tool results: 30 MB hashed at 40
+iterations, the mint 48% of the run's CPU). `receiptDigests.ts` keeps, per
+message OBJECT, what the run already derived from it — its entry hash, its
+chain digest, whether it serializes, and its measurement (counts and JSON size,
+never its text) — so each call does work in proportion to what it added.
+`measureRequest` sizes the `messages` slot per element and composes the sizes
+(JSON is compositional), checking every limit against the same running counts
+a whole walk keeps. Nothing a receipt carries changes: memo on and memo off
+mint byte-identical receipts, and the measurement equals the whole walk —
+pinned by `test/lib/time-travel/receipt-incremental.test.ts`, which also
+counts the SHA-256 input and UTF-8 encoding per call on a real agent run (flat
+per call; 4× the iterations, ~4× the work). The one assumption a memo hit
+makes: a message's nested values are not edited in place while the object is
+reused — true of the agent's history, which is committed state.
 
 `epochAt` / `epochLocations` are the one owner of *where* an epoch's pieces
 live — the run's own log under `reactMode: 'dynamic'`, the turn's inner

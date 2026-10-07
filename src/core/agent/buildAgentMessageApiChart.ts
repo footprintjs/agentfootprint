@@ -31,6 +31,7 @@ import { ArrayMergeMode } from 'footprintjs/advanced';
 import type { LLMMessage, LLMProvider, LLMRequest, LLMToolSchema } from '../../adapters/types.js';
 import { RECEIPT_KEY, type Receipt } from '../../lib/time-travel/receipt.js';
 import { messageApiReceipt } from './messageApiReceipt.js';
+import { createReceiptDigests } from '../../lib/time-travel/receiptDigests.js';
 import { SUBFLOW_IDS, STAGE_IDS, milestoneTagsFor } from '../../conventions.js';
 import type { InjectionRecord } from '../../recorders/core/types.js';
 import { typedEmit } from '../../recorders/core/typedEmit.js';
@@ -102,6 +103,10 @@ export interface AgentMessageApiChartDeps {
 export function buildAgentMessageApiChart(deps: AgentMessageApiChartDeps): FlowChart {
   const { provider, model, systemPrompt, tools } = deps;
   const maxIterations = deps.maxIterations ?? 5;
+  // The receipt memo every call of a run mints through, so a loop hashes each
+  // message once per run (`lib/time-travel/receiptDigests.ts`). One per chart:
+  // it rebinds itself to each run id, so a chart reused across runs is safe.
+  const receiptDigests = createReceiptDigests();
 
   // ── Context: ROOT selector. Inits per-call state on the first turn (the
   // folded-in seed — Context is the chart's first node); on ReAct loop re-entry
@@ -181,6 +186,7 @@ export function buildAgentMessageApiChart(deps: AgentMessageApiChartDeps): FlowC
       messages,
       tools: toolSchemas,
       request,
+      digests: receiptDigests,
     });
     if (receipt !== undefined) scope[RECEIPT_KEY] = receipt;
 

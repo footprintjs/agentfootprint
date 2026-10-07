@@ -99,6 +99,7 @@ import type { ContextRole, ContextSlot, ContextSource } from '../../events/types
 import { contributingPieces } from '../../core/agent/composeRequest.js';
 import { sha256Hex } from './sha256.js';
 import { measureRequest, type RequestMeasurement } from './requestMeasurement.js';
+import type { ReceiptDigests, RunDigests } from './receiptDigests.js';
 
 export type { RequestMeasurement, RequestJsonSize } from './requestMeasurement.js';
 
@@ -356,8 +357,14 @@ export interface Receipt {
      * {@link RECEIPT_BOUNDARY}.
      */
     readonly transform: 'unchanged' | 'rewritten' | 'unknown';
-    /** Hash of the request the cache strategy handed back, when it differed
-     *  from the one it was given; `null` otherwise. */
+    /**
+     * Fingerprint of the request the cache strategy handed back, when it
+     * differed from the one it was given; `null` otherwise. Recompute it with
+     * {@link transformHashOf}. The value names its scheme: `'chain-v1:…'`
+     * (see {@link TRANSFORM_HASH_PREFIX}), or a bare 16-hex value on a receipt
+     * minted before the prefix existed, which verifies as
+     * `receiptHash(runId, stableJson(request))`.
+     */
     readonly transformHash: string | null;
     /** The breakpoints the strategy actually applied, in the order it applied
      *  them — see {@link ReceiptCacheMarker}. Empty when it applied none. */
@@ -726,6 +733,183 @@ function paramsOf(request: unknown): ReceiptParams {
 }
 
 /**
+ * The prefix a chained {@link Receipt.cache.transformHash} carries — the NAME of
+ * the scheme that produced it, inside the value, so a verifier can tell the two
+ * schemes apart without a second field:
+ *
+ * - `'chain-v1:<16 hex>'` — {@link transformHashOf}: each message of the
+ *   returned request digested on its own and chained in order, then the rest
+ *   of the request. Minted since this prefix existed.
+ * - a bare `<16 hex>` — the older WHOLE-REQUEST scheme,
+ *   `receiptHash(runId, stableJson(request))`. Every receipt minted before the
+ *   prefix carries this form, and it still verifies with that formula.
+ *
+ * WHY THE SCHEME CHANGED. The whole-request digest could not be extended: the
+ * strategy's markers sort to the front of the canonical JSON and move on every
+ * call, so call k's preimage shared no prefix with call k−1's and every byte of
+ * the history was hashed again — measured, the larger half of the receipt's
+ * SHA-256 input under a caching provider. A chain over per-message digests is
+ * extended by the messages a call added and nothing else.
+ */
+export const TRANSFORM_HASH_PREFIX = 'chain-v1:';
+
+/** The first link of the transform chain — a constant, salted like every digest. */
+const TRANSFORM_CHAIN_SEED = 'agentfootprint.transform.chain.v1';
+
+/**
+ * The fingerprint a receipt records as `cache.transformHash` for the request a
+ * cache strategy handed back — recompute it from that request to verify a
+ * receipt's claim.
+ *
+ * The scheme, so a verifier in any language can follow it (every `H` below is
+ * {@link receiptHash} with the receipt's `basis.runId`):
+ *
+ * ```text
+ * link₀  = H("agentfootprint.transform.chain.v1")
+ * dᵢ     = H(stableJson([messageᵢ]))          — each message, as one array element
+ * linkᵢ  = H(linkᵢ₋₁ + "\u001F" + dᵢ)          — in request order
+ * head   = stableJson(request without "messages")   (the whole request when it
+ *                                                    carries no messages array)
+ * hash   = "chain-v1:" + H(linkₙ + "\u001F" + head)
+ * ```
+ *
+ * A value `stableJson` cannot produce is recorded as {@link UNSERIALIZABLE} in
+ * its place, never as an empty string. A receipt minted before the prefix
+ * existed carries a bare 16-hex value: verify that one with
+ * `receiptHash(runId, stableJson(request))`.
+ *
+ * @example
+ * ```ts
+ * import { receiptAt, transformHashOf } from 'agentfootprint';
+ *
+ * const receipt = receiptAt(snapshot, 3)!;
+ * // `prepared` — the request your provider decorator saw at call 3
+ * transformHashOf(receipt.basis.runId, prepared) === receipt.cache.transformHash; // true
+ * ```
+ */
+export function transformHashOf(runId: string, request: unknown): string {
+  return chainedTransformHash(runId, request, undefined);
+}
+
+/** {@link transformHashOf}, reading and filling a run's memo when one is given. */
+function chainedTransformHash(
+  runId: string,
+  request: unknown,
+  memo: RunDigests | undefined,
+): string {
+  const hash = hasherFor(runId, memo);
+  let link = hash(TRANSFORM_CHAIN_SEED);
+  for (const message of messagesOf(request)) {
+    const digest = elementDigestOf(message, runId, memo);
+    const previous = link;
+    const next = (): string => receiptHash(runId, `${previous}${SEP}${digest}`);
+    link = memo === undefined ? next() : memo.link(previous, digest, next);
+  }
+  const head = stableJson(hasMessagesArray(request) ? headOf(request) : request);
+  return `${TRANSFORM_HASH_PREFIX}${hash(`${link}${SEP}${head ?? UNSERIALIZABLE}`)}`;
+}
+
+/** A salted hash, read from the run's memo when there is one. */
+function hasherFor(runId: string, memo: RunDigests | undefined): (content: string) => string {
+  if (memo === undefined) return (content) => receiptHash(runId, content);
+  return (content) => memo.hash(content, () => receiptHash(runId, content));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function hasMessagesArray(request: unknown): request is { readonly messages: readonly unknown[] } {
+  return isRecord(request) && Array.isArray(request.messages);
+}
+
+function messagesOf(request: unknown): readonly unknown[] {
+  return hasMessagesArray(request) ? request.messages : [];
+}
+
+/** The request without its `messages` key — what the chain's last link covers. */
+function headOf(request: unknown): unknown {
+  if (!isRecord(request)) return request;
+  const { messages: _messages, ...head } = request;
+  void _messages;
+  return head;
+}
+
+/** `H(stableJson([value]) ?? UNSERIALIZABLE)` — one message's link in the
+ *  transform chain — read from the run's memo for a message OBJECT it has
+ *  already digested. */
+function elementDigestOf(value: unknown, runId: string, memo: RunDigests | undefined): string {
+  const compute = (): string => receiptHash(runId, stableJson([value]) ?? UNSERIALIZABLE);
+  if (memo === undefined || value === null || typeof value !== 'object') return compute();
+  const digests = memo.message(value);
+  if (digests.elementDigest === undefined) digests.elementDigest = compute();
+  return digests.elementDigest;
+}
+
+/** Does `stableJson([value])` produce a value? Read from the run's memo for a
+ *  message OBJECT it has already checked. */
+function serializableElement(value: unknown, memo: RunDigests | undefined): boolean {
+  if (memo === undefined || value === null || typeof value !== 'object') {
+    return stableJson([value]) !== undefined;
+  }
+  const digests = memo.message(value);
+  if (digests.serializable === undefined) {
+    digests.serializable = stableJson([value]) !== undefined;
+  }
+  return digests.serializable;
+}
+
+/**
+ * The cache verdict, three-valued, exactly as comparing `stableJson(base)` with
+ * `stableJson(prepared)` decides it — `'unknown'` when either cannot be
+ * serialized, never `'unchanged'`.
+ *
+ * The SHORT PATH, taken when both requests carry the SAME messages array (what
+ * every built-in strategy returns: a spread of the request with a marker list
+ * added, or the request itself): the two canonical strings then share their
+ * `"messages"` part byte for byte, so they are equal exactly when the rest of
+ * the two requests is — and that rest is the small part (system prompt, tools,
+ * dials, markers). The messages still decide `'unknown'`: each one's
+ * serializability is read from the run's memo, computed once per message.
+ * Any other pair — a strategy that rebuilt the messages, a mint with no memo —
+ * takes the whole comparison, as before.
+ */
+function transformVerdict(
+  base: unknown,
+  prepared: unknown,
+  memo: RunDigests | undefined,
+): Receipt['cache']['transform'] {
+  if (
+    memo !== undefined &&
+    hasMessagesArray(base) &&
+    hasMessagesArray(prepared) &&
+    base.messages === prepared.messages
+  ) {
+    const restOfBase = stableJson(headOf(base));
+    const restOfPrepared = base === prepared ? restOfBase : stableJson(headOf(prepared));
+    if (restOfBase === undefined || restOfPrepared === undefined) return 'unknown';
+    for (const message of base.messages) {
+      if (!serializableElement(message, memo)) return 'unknown';
+    }
+    return restOfBase === restOfPrepared ? 'unchanged' : 'rewritten';
+  }
+  const whole = stableJson(base);
+  const returned = stableJson(prepared);
+  if (whole === undefined || returned === undefined) return 'unknown';
+  return whole === returned ? 'unchanged' : 'rewritten';
+}
+
+/** `hash(messageDigestInput(message))`, read from the run's memo for a message
+ *  object it has already seen. */
+function entryHashOf(message: LLMMessage, runId: string, memo: RunDigests | undefined): string {
+  const compute = (): string => receiptHash(runId, messageDigestInput(message));
+  if (memo === undefined || message === null || typeof message !== 'object') return compute();
+  const digests = memo.message(message);
+  if (digests.entryHash === undefined) digests.entryHash = compute();
+  return digests.entryHash;
+}
+
+/**
  * Mint the receipt for one composed request.
  *
  * Pure and total: every branch here is arithmetic over what it was handed, so
@@ -738,26 +922,25 @@ function paramsOf(request: unknown): ReceiptParams {
  *
  * Every value it produces is true AT THE PROVIDER PORT and nowhere past it —
  * see {@link RECEIPT_BOUNDARY}.
+ *
+ * `digests` is the run's memo (`receiptDigests.ts`): a loop that mints a
+ * receipt per call passes the same one to every call, and each message is then
+ * hashed and measured once per run instead of once per call. It changes no
+ * byte of the receipt — only how much work produces it.
  */
-export function buildReceipt(input: BuildReceiptInput): Receipt {
-  const hash = (content: string): string => receiptHash(input.runId, content);
+export function buildReceipt(input: BuildReceiptInput, digests?: ReceiptDigests): Receipt {
+  const memo = digests?.forRun(input.runId);
+  const hash = hasherFor(input.runId, memo);
 
   const schemaHashes: Record<string, string> = {};
   for (const tool of input.tools) schemaHashes[tool.name] = hash(toolDigestInput(tool));
 
   // The cache verdict, three-valued. A pair the receipt could not read is
   // 'unknown' — never 'unchanged', which is what `''` used to make it.
-  const base = stableJson(input.baseRequest);
-  const prepared = stableJson(input.preparedRequest);
-  const comparable = base !== undefined && prepared !== undefined;
-  const transform: 'unchanged' | 'rewritten' | 'unknown' = !comparable
-    ? 'unknown'
-    : base === prepared
-    ? 'unchanged'
-    : 'rewritten';
+  const transform = transformVerdict(input.baseRequest, input.preparedRequest, memo);
 
   return {
-    requestMeasurement: measureRequest(input.preparedRequest),
+    requestMeasurement: measureRequest(input.preparedRequest, memo),
     system: {
       hash: hash(input.systemText),
       chars: input.systemText.length,
@@ -771,12 +954,12 @@ export function buildReceipt(input: BuildReceiptInput): Receipt {
       count: input.messages.length + input.requestOnly.length,
       entries: input.messages.map((message) => ({
         role: message.role,
-        hash: hash(messageDigestInput(message)),
+        hash: entryHashOf(message, input.runId, memo),
         ...(message.toolCallId !== undefined && { key: message.toolCallId }),
       })),
       requestOnly: input.requestOnly.map((line) => ({
         role: line.message.role,
-        hash: hash(messageDigestInput(line.message)),
+        hash: entryHashOf(line.message, input.runId, memo),
         reason: line.reason,
       })),
     },
@@ -788,7 +971,10 @@ export function buildReceipt(input: BuildReceiptInput): Receipt {
     },
     cache: {
       transform,
-      transformHash: transform === 'rewritten' ? hash(prepared!) : null,
+      transformHash:
+        transform === 'rewritten'
+          ? chainedTransformHash(input.runId, input.preparedRequest, memo)
+          : null,
       markersApplied: (input.markersApplied ?? []).map((marker) => ({
         field: marker.field,
         boundaryIndex: marker.boundaryIndex,
@@ -808,7 +994,7 @@ export function buildReceipt(input: BuildReceiptInput): Receipt {
       input.omittedForAttention.length > 0 && {
         omittedForAttention: {
           count: input.omittedForAttention.length,
-          hashes: input.omittedForAttention.map((turn) => hash(messageDigestInput(turn))),
+          hashes: input.omittedForAttention.map((turn) => entryHashOf(turn, input.runId, memo)),
         },
       }),
     basis: {

@@ -43,6 +43,7 @@ import { evidenceConclusionLine, evidenceRecoveryPiece } from '../evidence/recov
 import { joinSystemPrompt, stripFrameworkFields } from '../composeRequest.js';
 import { toolBytesOf } from '../../../lib/toolBytes.js';
 import { buildReceipt, receiptPieces, RECEIPT_KEY } from '../../../lib/time-travel/receipt.js';
+import type { ReceiptDigests } from '../../../lib/time-travel/receiptDigests.js';
 import type { EvictedTurnsHandle } from '../window/evictedTurns.js';
 import { findStagedRefs, stagedRefsNudgeLine } from '../stagedRefs.js';
 import { fileIntegrityFindings } from '../integrityFindings.js';
@@ -393,6 +394,14 @@ export interface CallLLMStageDeps {
    * other agent hands this stage the deps object it always did.
    */
   readonly evictedTurns?: EvictedTurnsHandle;
+  /**
+   * The run's receipt memo (`lib/time-travel/receiptDigests.ts`): every call of
+   * a run mints through the same one, so each message is hashed once per run
+   * instead of once per call. Created once per agent — it rebinds itself to
+   * each new run id. Absent ⇒ every call hashes everything, as before; the
+   * receipt's bytes are the same either way.
+   */
+  readonly receiptDigests?: ReceiptDigests;
 }
 
 /**
@@ -781,35 +790,38 @@ export function buildCallLLMStage(
     // nothing.
     if (deps.recordReceipt !== false) {
       const evictedForAttention = deps.evictedTurns?.read(iteration) ?? [];
-      scope[RECEIPT_KEY] = buildReceipt({
-        runId: deps.getRunId?.() ?? '',
-        epoch: iteration,
-        model,
-        provider: provider.name,
-        systemText: systemPrompt,
-        systemPieces: receiptPieces(systemPieces),
-        messages,
-        requestOnly,
-        tools: activeToolSchemas,
-        forced: deps.schemaTool?.name ?? null,
-        withheld: scope.wrapUpAsked === true ? 'wrap-up' : null,
-        baseRequest,
-        preparedRequest: llmRequest,
-        // The breakpoints the strategy really APPLIED, not the candidates it
-        // was offered. `scope.cacheMarkers` already records the offer; which of
-        // them survived the provider's clamp is the half that decides the bill,
-        // and it existed only in this local until now.
-        markersApplied: cachePrepared.markersApplied,
-        // WHICH strategy the request went through — its `name`, which for the
-        // built-ins is the capability the provider declared (`'breakpoints'`,
-        // `'automatic'`, `'none'` for the pass-through). Every agent has one,
-        // so this is never `null` here; the charts that run none say `null` at
-        // their own mints. A strategy handed in past the type with no `name`
-        // is still a strategy, and is recorded as one under the empty name
-        // rather than denied.
-        strategy: typeof cacheStrategy.name === 'string' ? cacheStrategy.name : '',
-        ...(evictedForAttention.length > 0 && { omittedForAttention: evictedForAttention }),
-      });
+      scope[RECEIPT_KEY] = buildReceipt(
+        {
+          runId: deps.getRunId?.() ?? '',
+          epoch: iteration,
+          model,
+          provider: provider.name,
+          systemText: systemPrompt,
+          systemPieces: receiptPieces(systemPieces),
+          messages,
+          requestOnly,
+          tools: activeToolSchemas,
+          forced: deps.schemaTool?.name ?? null,
+          withheld: scope.wrapUpAsked === true ? 'wrap-up' : null,
+          baseRequest,
+          preparedRequest: llmRequest,
+          // The breakpoints the strategy really APPLIED, not the candidates it
+          // was offered. `scope.cacheMarkers` already records the offer; which of
+          // them survived the provider's clamp is the half that decides the bill,
+          // and it existed only in this local until now.
+          markersApplied: cachePrepared.markersApplied,
+          // WHICH strategy the request went through — its `name`, which for the
+          // built-ins is the capability the provider declared (`'breakpoints'`,
+          // `'automatic'`, `'none'` for the pass-through). Every agent has one,
+          // so this is never `null` here; the charts that run none say `null` at
+          // their own mints. A strategy handed in past the type with no `name`
+          // is still a strategy, and is recorded as one under the empty name
+          // rather than denied.
+          strategy: typeof cacheStrategy.name === 'string' ? cacheStrategy.name : '',
+          ...(evictedForAttention.length > 0 && { omittedForAttention: evictedForAttention }),
+        },
+        deps.receiptDigests,
+      );
     }
 
     // THE CLOSURE CHECK (9.60.0, dangling-reference). At assembly, BEFORE the

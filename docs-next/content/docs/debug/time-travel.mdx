@@ -349,6 +349,15 @@ fields the model never saw. A forced answer tool is in `schemaHashes` and not
 in `schemas`; its body is the declared `forced-tool-schema` gap, so there is no
 row to check.
 
+`cache.transformHash` — set only when a cache strategy rewrote the request — is
+recomputed with `transformHashOf(receipt.basis.runId, request)`, from the
+request the strategy handed back (a provider decorator sees it). It is a chain:
+each message digested on its own, in order, then the rest of the request, so a
+long run hashes only what each call added. The value names its scheme: it starts
+with `TRANSFORM_HASH_PREFIX` (`'chain-v1:'`). A receipt minted before the chain
+carries a bare 16-hex value, which verifies as
+`receiptHash(runId, stableJson(request))`.
+
 A gap is a `ServedGap` — `{ gap, fields, why, cause? }` — and its `gap` is a
 `ServedGapKind`. `fields` is a list because one missing fact can leave several
 fields unproved. `SERVED_GAPS` is the catalogue those sentences come from, so a
