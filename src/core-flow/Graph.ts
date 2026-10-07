@@ -138,7 +138,7 @@ import { compositionRecorder } from '../recorders/core/CompositionRecorder.js';
 import { ContextRecorder } from '../recorders/core/ContextRecorder.js';
 import { streamRecorder } from '../recorders/core/StreamRecorder.js';
 import { typedEmit } from '../recorders/core/typedEmit.js';
-import { throwIfChildFailedFast } from './childFailFast.js';
+import { throwIfChildEnded } from './childVerdict.js';
 
 // ─── Public shapes ───────────────────────────────────────────────────
 
@@ -640,14 +640,14 @@ export class Graph extends RunnerBase<GraphInput, GraphOutput> {
           // children (and the caller) receive. No string coercion — this
           // is exactly what Sequence and Parallel cannot do.
           //
-          // Except a node that failed fast: it handed back its STATE, not a
-          // result, and it is a FAILED node (`childFailFast.ts`). The mapper
-          // throws the agent's own error — recorded first, as the inputMapper
+          // Except a node that ended on a verdict: it handed back its STATE,
+          // not a result, and it is a FAILED node (`childVerdict.ts`). The mapper
+          // throws the child's own error — recorded first, as the inputMapper
           // does, because footprintjs swallows a mapper throw — so the node is
           // absent and the level join names it.
           outputMapper: (sfOutput) => {
             try {
-              throwIfChildFailedFast(sfOutput);
+              throwIfChildEnded(node.runner, sfOutput);
             } catch (err) {
               if (!nodeErrors.has(node.id)) {
                 nodeErrors.set(node.id, { message: (err as Error).message, raw: err });

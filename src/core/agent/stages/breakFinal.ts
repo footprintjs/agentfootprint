@@ -26,6 +26,34 @@ export const breakFinalStage = (scope: TypedScope<AgentState>): string => {
   return scope.finalContent;
 };
 
+/**
+ * Under the evidence gate's `'rails'` posture (mounted in place of
+ * `breakFinalStage`, so every other agent keeps its bytes): an answer the
+ * rails REFUSED was captured for the record (`turn_end`, which the answer
+ * account rates), but it is not the agent's answer, so the branch hands back
+ * the refusal instead of the text. A chart that ends on a verdict ends with no
+ * answer (`core/terminalVerdict.ts`) — a composition mounting it reads the
+ * verdict, never the refused text. (The validation variant never gets here
+ * with a refused answer: its guard stops the branch before the capture.)
+ */
+export const breakFinalUnderRailsStage = (
+  scope: TypedScope<AgentState>,
+): string | Pick<AgentState, 'unsupportedValues'> => {
+  scope.$break();
+  const refusal = scope.$getValue('unsupportedValues') as AgentState['unsupportedValues'];
+  if (refusal?.refused === true) return { unsupportedValues: structuredClone(refusal) };
+  return scope.finalContent;
+};
+
+/** The one choice of BreakFinal's body, for both chart builders. */
+export function breakFinalFor(arms: {
+  readonly hasAnswerValidation?: boolean;
+  readonly evidenceRails?: true;
+}): (scope: TypedScope<AgentState>) => unknown {
+  if (arms.hasAnswerValidation === true) return breakFinalWithValidationStage;
+  return arms.evidenceRails === true ? breakFinalUnderRailsStage : breakFinalStage;
+}
+
 /** The configured branch must carry its capture proof across the boundary.
  * A branch output mapper receives this result, not the child scope. */
 export const breakFinalWithValidationStage = (

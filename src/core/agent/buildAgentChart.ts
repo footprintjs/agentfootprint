@@ -63,7 +63,7 @@ import { readerWindowsOf } from '../time/windows.js';
 import { clockOf } from '../time/rows.js';
 import { timeLimitFactsOf, type TimeLimitFacts } from './coverage/timeLimitFacts.js';
 import type { FindingsLedger } from './findings/types.js';
-import { breakFinalStage, breakFinalWithValidationStage } from './stages/breakFinal.js';
+import { breakFinalFor } from './stages/breakFinal.js';
 import { prepareFinalFor } from './stages/prepareFinal.js';
 import { buildCacheSubflow } from './buildCacheSubflow.js';
 import {
@@ -292,6 +292,8 @@ export interface AgentChartDeps {
   readonly hasAnswerValidation?: boolean;
   /** Output middleware owns delivery: publish only the final captured answer. */
   readonly releaseOutputTokens?: true;
+  /** The evidence gate's `'rails'` posture: BreakFinal hands back a refusal, never the refused text. */
+  readonly evidenceRails?: true;
 
   /**
    * The time layer (`.time()`) is armed: under `attachCoverageLimits`, the
@@ -515,12 +517,7 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
     }
   }
   const finalBranchChart = finalBranchBuilder
-    .addFunction(
-      'BreakFinal',
-      deps.hasAnswerValidation === true ? breakFinalWithValidationStage : breakFinalStage,
-      'break-final',
-      'Terminate the ReAct loop',
-    )
+    .addFunction('BreakFinal', breakFinalFor(deps), 'break-final', 'Terminate the ReAct loop')
     .build();
 
   // ── Main chart ──────────────────────────────────────────────

@@ -65,7 +65,7 @@ import { mountMemoryRead, mountMemoryWrite } from '../../memory/wire/mountMemory
 import { withMemoryRecall } from './memoryRecallInjections.js';
 import { offeredResultIds } from './findings/offer.js';
 import type { FindingsLedger } from './findings/types.js';
-import { breakFinalStage, breakFinalWithValidationStage } from './stages/breakFinal.js';
+import { breakFinalFor } from './stages/breakFinal.js';
 import { prepareFinalFor } from './stages/prepareFinal.js';
 import { failFastRecordOf } from '../../reliability/failFastRecord.js';
 import { buildCacheSubflow } from './buildCacheSubflow.js';
@@ -205,12 +205,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
     }
   }
   const finalBranchChart = finalBranchBuilder
-    .addFunction(
-      'BreakFinal',
-      deps.hasAnswerValidation === true ? breakFinalWithValidationStage : breakFinalStage,
-      'break-final',
-      'Terminate the ReAct loop',
-    )
+    .addFunction('BreakFinal', breakFinalFor(deps), 'break-final', 'Terminate the ReAct loop')
     .build();
 
   // ── Inner sf-llm-call subflow ────────────────────────────────

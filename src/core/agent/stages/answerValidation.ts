@@ -11,7 +11,12 @@ import type { RouteBranch } from './route.js';
 
 /** Wrap only the configured agent's terminal decision, in the outer scope.
  * The final branch can consume the verdict, while snapshots retain its owner.
- * A refusal stops before conversation capture and memory writes. */
+ * A refusal stops before conversation capture and memory writes — stopped by
+ * the final branch's guard (`prepareFinal.ts` · `withheldByValidation`), not
+ * by a break here: a decider that breaks ends the chart with the branch name
+ * as its result, and a composition mounting the chart took `'final'` for the
+ * agent's answer. Routed on, the chart ends with no answer and the verdict in
+ * its state (`core/terminalVerdict.ts`). */
 export function withAnswerValidation(
   decide: (scope: TypedScope<AgentState>) => RouteBranch | Promise<RouteBranch>,
   config: ResolvedAnswerValidation,
@@ -46,7 +51,6 @@ export function withAnswerValidation(
       };
       scope.answerValidation = report;
       scope.answerValidationBlocked = true;
-      scope.$break();
       return 'final';
     }
     const identity = scope.runIdentity;
@@ -65,7 +69,6 @@ export function withAnswerValidation(
     scope.answerValidation = result.report;
     if (config.mode === 'enforce' && result.report.status !== 'passed') {
       scope.answerValidationBlocked = true;
-      scope.$break();
     } else {
       scope.llmLatestContent = result.content ?? scope.llmLatestContent;
     }

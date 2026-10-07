@@ -198,8 +198,10 @@ answer.
 boundary (`Agent · finalizeResult`) raises `ReliabilityFailFastError` from that
 record on the OUTER scope.** The record's keys, the read and the error live in
 one place, `reliability/failFastRecord.ts` (`RELIABILITY_FAIL_KEYS`,
-`failFastRecordOf`, `failFastErrorOf`); a composition the agent runs inside
-raises the same error from them (`core-flow/README.md`, Decision 11). Under
+`failFastRecordOf`, `failFastErrorOf`). It is one of the agent's terminal
+verdicts (`core/terminalVerdict.ts`), which `Agent · terminalVerdictOf` names
+from the state a chart ended with — for its own boundary and for a composition
+it runs inside (`core-flow/README.md`, Decision 11). Under
 `'dynamic-grouped'` `callLLM` runs inside `sf-llm-call`, so the mount carries
 both out: `propagateBreak: true` ends the run, and the outputMapper spreads
 `failFastRecordOf(s)` (nothing unless a fail-fast fired). Without them the break
@@ -226,6 +228,19 @@ record. The loop reads the signal from `$getEnv()`, so `Agent.run` / `resume`
 hand a signal passed as `{ signal }` to the stages too (`withRunSignalInEnv`).
 The same file pins it per mode (stream and complete, with and without a retry
 rule).
+
+### A refusal ends the chart with no answer
+
+**A run that ends on a verdict must end with no answer, so whoever mounts the
+chart finds the verdict in its state** (`core/terminalVerdict.ts`). Two paths
+used to end on a value: answer validation's decider broke the chart itself, and
+a decider that breaks ends it with the branch name (`'final'`) as its result;
+and an evidence-rails refusal ended the chart on the refused text — captured
+for the record (`turn_end`, which the answer account rates) and handed back by
+`BreakFinal` as the result. Now the decider routes on and the final branch's
+guard (`withheldByValidation`) stops before the capture, and `BreakFinal` hands
+back the refusal (`{ unsupportedValues }`) instead of the refused text — the
+record is unchanged. The standalone run raises the same error either way.
 
 ### A self-call skips the policy only while the cursor is MOUNTED
 
