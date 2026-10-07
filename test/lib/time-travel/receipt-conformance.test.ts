@@ -1463,8 +1463,9 @@ describe('a cache strategy that rewrites the request', () => {
     expect(receipt.params.toolChoice).toBeUndefined();
     const cacheGap = servedAt(r.snapshot, 1)!.gaps.find((g) => g.gap === 'cache-transform')!;
     expect(cacheGap.fields).toEqual(expect.arrayContaining(['tools.forced', 'tools.withheld']));
-    // The strategy's name rides the receipt, which is what raises the gap here.
-    expect(receipt.cache.strategy).toBe('');
+    // The strategy's name rides the receipt, which is what raises the gap here
+    // (a strategy is chosen by capability and recorded by its `name`).
+    expect(receipt.cache.strategy).toBe('unforcing-test-strategy');
     // Everything except the wire witness still conforms.
     clean(r, { wire: false });
   });

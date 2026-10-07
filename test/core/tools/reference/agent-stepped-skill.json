@@ -704,7 +704,7 @@
           },
           "cache": {
             "markersApplied": [],
-            "strategy": "*",
+            "strategy": "none",
             "transform": "unchanged",
             "transformHash": null
           },
@@ -1257,7 +1257,7 @@
           },
           "cache": {
             "markersApplied": [],
-            "strategy": "*",
+            "strategy": "none",
             "transform": "unchanged",
             "transformHash": null
           },
@@ -1709,7 +1709,7 @@
           },
           "cache": {
             "markersApplied": [],
-            "strategy": "*",
+            "strategy": "none",
             "transform": "unchanged",
             "transformHash": null
           },

@@ -35,6 +35,7 @@ import type {
   LLMProvider,
   LLMRequest,
   LLMResponse,
+  PromptCaching,
   WireRole,
 } from '../adapters/types.js';
 import { DEFAULT_CARRIES_IN_MESSAGES } from '../adapters/types.js';
@@ -48,6 +49,34 @@ function carriedByBoth(a: LLMProvider, b: LLMProvider): readonly WireRole[] {
   const left = a.carriesInMessages ?? DEFAULT_CARRIES_IN_MESSAGES;
   const right = new Set(b.carriesInMessages ?? DEFAULT_CARRIES_IN_MESSAGES);
   return Object.freeze(left.filter((role) => right.has(role)));
+}
+
+/**
+ * The prompt caching of a pair where either side may serve the call.
+ *
+ * Unlike the two capabilities above this one is a COST hint, not a meaning:
+ * a breakpoint on a wire that does not read it changes nothing, so the pair
+ * keeps breakpoints when EITHER side takes them (clamped to the smaller
+ * count when both do), and is automatic when either side caches on its own.
+ * Usage is reported when either side reports it — a call the other side
+ * served then reads as *unmeasured* on its own, never as a zero. Neither side
+ * declaring anything leaves the pair undeclared.
+ */
+function cachingOfPair(a: LLMProvider, b: LLMProvider): PromptCaching | undefined {
+  const sides = [a.promptCaching, b.promptCaching].filter(
+    (c): c is PromptCaching => c !== undefined,
+  );
+  if (sides.length === 0) return undefined;
+  const reportsUsage = sides.some((c) => c.reportsUsage);
+  const breakpoints = sides.flatMap((c) => (c.mode === 'breakpoints' ? [c.maxBreakpoints] : []));
+  if (breakpoints.length > 0) {
+    return Object.freeze({
+      mode: 'breakpoints',
+      maxBreakpoints: Math.min(...breakpoints),
+      reportsUsage,
+    });
+  }
+  return Object.freeze({ mode: 'automatic', reportsUsage });
 }
 
 export interface WithFallbackOptions {
@@ -105,6 +134,7 @@ export function withFallback(
     });
   }
 
+  const promptCaching = cachingOfPair(primary, fallback);
   const wrapped: LLMProvider = {
     name: `${primary.name}|${fallback.name}`,
     // The INTERSECTION, and only the intersection. Either provider may serve
@@ -120,6 +150,8 @@ export function withFallback(
     // some of the time, which is the shape of guarantee nobody can use.
     carriesForcedToolChoice:
       (primary.carriesForcedToolChoice ?? false) && (fallback.carriesForcedToolChoice ?? false),
+    // The combination, not the intersection — see `cachingOfPair`.
+    ...(promptCaching !== undefined && { promptCaching }),
     async complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
       try {
         return await primary.complete(req, hooks);

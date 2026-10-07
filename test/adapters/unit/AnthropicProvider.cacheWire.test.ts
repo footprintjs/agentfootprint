@@ -2,9 +2,9 @@
  * The server Anthropic adapter keeps BOTH halves of the cache contract.
  *
  * ── Why this exists ─────────────────────────────────────────────────
- * `AnthropicCacheStrategy` registers for `'anthropic'` and
- * `'browser-anthropic'` alike, and `callLLM` puts the prepared markers on
- * every request — but the server adapter used to drop them on the floor and
+ * `anthropic()` and `browserAnthropic()` both declare breakpoint caching
+ * (`promptCaching`), and `callLLM` puts the prepared markers on every
+ * request — but the server adapter used to drop them on the floor and
  * reported no cache tokens back. So on the server path a byte-identical
  * prompt prefix (measured at ~65% of every call on a real recording) was
  * paid at full rate, and the miss was not even OBSERVABLE: the usage carried

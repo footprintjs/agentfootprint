@@ -1,8 +1,9 @@
 /**
- * AnthropicCacheStrategy — 7-pattern test matrix.
+ * BreakpointCacheStrategy — 7-pattern test matrix.
  *
- * Phase 7 of v2.6 cache layer. Tests:
- *   1. unit:        capabilities + provider name + auto-registration
+ * The strategy for a provider that declares `promptCaching.mode:
+ * 'breakpoints'` (Anthropic's `cache_control`). Tests:
+ *   1. unit:        its name + it is what the Anthropic adapters select
  *   2. boundary:    empty markers, kill switch
  *   3. scenario:    realistic 1-2-3 marker cases
  *   4. property:    4-marker cap + markersApplied ⊆ candidates
@@ -13,11 +14,16 @@
 
 import { describe, expect, it } from 'vitest';
 import { isKnown } from '../../src/lib/claim/claim.js';
-import { AnthropicCacheStrategy } from '../../src/cache/strategies/AnthropicCacheStrategy';
-import { getDefaultCacheStrategy } from '../../src/cache/strategyRegistry';
+import { BreakpointCacheStrategy } from '../../src/cache/strategies/BreakpointCacheStrategy';
+import { cacheStrategyFor } from '../../src/cache/cacheStrategyFor';
+import { anthropic } from '../../src/adapters/llm/AnthropicProvider';
+import { browserAnthropic } from '../../src/adapters/llm/BrowserAnthropicProvider';
 import type { CacheMarker, CacheStrategyContext } from '../../src/cache/types';
 import type { LLMRequest } from '../../src/adapters/types';
 import { expectScalesLinearly } from '../helpers/perf.js';
+
+/** What the Anthropic adapters declare. */
+const ANTHROPIC = { mode: 'breakpoints', maxBreakpoints: 4, reportsUsage: true } as const;
 
 const ctx = (overrides: Partial<CacheStrategyContext> = {}): CacheStrategyContext => ({
   iteration: 1,
@@ -41,44 +47,36 @@ const m = (
 
 // ─── 1. Unit ──────────────────────────────────────────────────────
 
-describe('AnthropicCacheStrategy — unit', () => {
-  it('capabilities: enabled, 4 markers, both TTLs, all 3 fields', () => {
-    const s = new AnthropicCacheStrategy();
-    expect(s.capabilities.enabled).toBe(true);
-    expect(s.capabilities.maxMarkers).toBe(4);
-    expect(s.capabilities.ttls).toEqual(['short', 'long']);
-    expect(s.capabilities.fields).toEqual(['system', 'tools', 'messages']);
-    expect(s.capabilities.automatic).toBe(false);
+describe('BreakpointCacheStrategy — unit', () => {
+  it("names the capability it serves — 'breakpoints', whatever the provider is called", () => {
+    expect(new BreakpointCacheStrategy(ANTHROPIC).name).toBe('breakpoints');
   });
 
-  it("auto-registers under 'anthropic'", async () => {
-    // Force module load (idempotent thanks to module caching)
-    await import('../../src/cache/strategies/AnthropicCacheStrategy');
-    const s = getDefaultCacheStrategy('anthropic');
-    expect(s.providerName).toBe('anthropic');
-    expect(s.capabilities.enabled).toBe(true);
-  });
-
-  it("auto-registers under 'browser-anthropic'", async () => {
-    await import('../../src/cache/strategies/AnthropicCacheStrategy');
-    const s = getDefaultCacheStrategy('browser-anthropic');
-    expect(s.providerName).toBe('browser-anthropic');
-    expect(s.capabilities.enabled).toBe(true);
+  it('is what anthropic() and browserAnthropic() select — by declaration, not by name', () => {
+    const fakeClient = { messages: { create: async () => ({}), stream: () => ({}) } } as never;
+    expect(cacheStrategyFor(anthropic({ _client: fakeClient }))).toBeInstanceOf(
+      BreakpointCacheStrategy,
+    );
+    expect(
+      cacheStrategyFor(
+        browserAnthropic({ apiKey: 'k', fetch: (async () => new Response()) as never }),
+      ),
+    ).toBeInstanceOf(BreakpointCacheStrategy);
   });
 });
 
 // ─── 2. Boundary ──────────────────────────────────────────────────
 
-describe('AnthropicCacheStrategy — boundary', () => {
+describe('BreakpointCacheStrategy — boundary', () => {
   it('empty markers → request unchanged, no markers applied', async () => {
-    const s = new AnthropicCacheStrategy();
+    const s = new BreakpointCacheStrategy(ANTHROPIC, 'the Anthropic adapter');
     const result = await s.prepareRequest(baseReq, [], ctx());
     expect(result.request).toBe(baseReq); // same reference (pure pass-through)
     expect(result.markersApplied).toEqual([]);
   });
 
   it('cachingDisabled=true → request unchanged regardless of markers', async () => {
-    const s = new AnthropicCacheStrategy();
+    const s = new BreakpointCacheStrategy(ANTHROPIC, 'the Anthropic adapter');
     const result = await s.prepareRequest(
       baseReq,
       [m('system', 0)],
@@ -91,9 +89,9 @@ describe('AnthropicCacheStrategy — boundary', () => {
 
 // ─── 3. Scenario ──────────────────────────────────────────────────
 
-describe('AnthropicCacheStrategy — scenario', () => {
+describe('BreakpointCacheStrategy — scenario', () => {
   it('1 system marker → request gets cacheMarkers field with 1 entry', async () => {
-    const s = new AnthropicCacheStrategy();
+    const s = new BreakpointCacheStrategy(ANTHROPIC, 'the Anthropic adapter');
     const markers = [m('system', 0)];
     const result = await s.prepareRequest(baseReq, markers, ctx());
     expect(result.request.cacheMarkers).toEqual(markers);
@@ -101,14 +99,14 @@ describe('AnthropicCacheStrategy — scenario', () => {
   });
 
   it('2 markers (system + tools) → both attached', async () => {
-    const s = new AnthropicCacheStrategy();
+    const s = new BreakpointCacheStrategy(ANTHROPIC, 'the Anthropic adapter');
     const markers = [m('system', 4), m('tools', 1)];
     const result = await s.prepareRequest(baseReq, markers, ctx());
     expect(result.request.cacheMarkers).toEqual(markers);
   });
 
   it('long TTL marker preserved through prepareRequest', async () => {
-    const s = new AnthropicCacheStrategy();
+    const s = new BreakpointCacheStrategy(ANTHROPIC, 'the Anthropic adapter');
     const markers = [m('system', 0, 'long')];
     const result = await s.prepareRequest(baseReq, markers, ctx());
     expect(result.request.cacheMarkers?.[0].ttl).toBe('long');
@@ -117,9 +115,9 @@ describe('AnthropicCacheStrategy — scenario', () => {
 
 // ─── 4. Property ──────────────────────────────────────────────────
 
-describe('AnthropicCacheStrategy — property', () => {
+describe('BreakpointCacheStrategy — property', () => {
   it('clamps to 4 markers max (Anthropic limit)', async () => {
-    const s = new AnthropicCacheStrategy();
+    const s = new BreakpointCacheStrategy(ANTHROPIC, 'the Anthropic adapter');
     const markers = [
       m('system', 0),
       m('tools', 0),
@@ -134,7 +132,7 @@ describe('AnthropicCacheStrategy — property', () => {
   });
 
   it('markersApplied is always a SUBSET of candidates (never invents)', async () => {
-    const s = new AnthropicCacheStrategy();
+    const s = new BreakpointCacheStrategy(ANTHROPIC, 'the Anthropic adapter');
     const markers = [m('system', 0), m('tools', 0)];
     const result = await s.prepareRequest(baseReq, markers, ctx());
     for (const applied of result.markersApplied) {
@@ -145,8 +143,8 @@ describe('AnthropicCacheStrategy — property', () => {
 
 // ─── 5. Security ──────────────────────────────────────────────────
 
-describe('AnthropicCacheStrategy — security: extractMetrics defensive', () => {
-  const s = new AnthropicCacheStrategy();
+describe('BreakpointCacheStrategy — security: extractMetrics defensive', () => {
+  const s = new BreakpointCacheStrategy(ANTHROPIC, 'the Anthropic adapter');
 
   it('an absent usage payload is UNKNOWN, with its reason — never a zero', () => {
     const c = s.extractMetrics(undefined);
@@ -173,14 +171,14 @@ describe('AnthropicCacheStrategy — security: extractMetrics defensive', () => 
 
 // ─── 6. Performance ───────────────────────────────────────────────
 
-describe('AnthropicCacheStrategy — performance', () => {
+describe('BreakpointCacheStrategy — performance', () => {
   it(
     'clamping 1000 markers to 4 costs ten times what clamping 100 does',
     { timeout: 30_000, retry: 2 },
     async () => {
       // The claim: the clamp is a single pass over the markers, not a re-sort
       // or a re-walk per marker kept. Ten times the markers, ten times the work.
-      const s = new AnthropicCacheStrategy();
+      const s = new BreakpointCacheStrategy(ANTHROPIC, 'the Anthropic adapter');
       const clamp = async (count: number): Promise<void> => {
         const markers = Array.from({ length: count }, () => m('system', 0));
         await s.prepareRequest(baseReq, markers, ctx());
@@ -197,8 +195,8 @@ describe('AnthropicCacheStrategy — performance', () => {
 
 // ─── 7. ROI ───────────────────────────────────────────────────────
 
-describe('AnthropicCacheStrategy — ROI: metrics extraction', () => {
-  const s = new AnthropicCacheStrategy();
+describe('BreakpointCacheStrategy — ROI: metrics extraction', () => {
+  const s = new BreakpointCacheStrategy(ANTHROPIC, 'the Anthropic adapter');
 
   // ── THE FIXTURES ARE PORT-SHAPED, AND THAT IS THE POINT ─────────────
   // Every fixture below feeds `{ input, output, cacheRead?, cacheWrite? }` —

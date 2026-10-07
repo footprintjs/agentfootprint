@@ -422,9 +422,11 @@ describe.skipIf(!built)('each door carries every constituent name it absorbed', 
   }
 
   it('./cache and ./events stand alone — neither was ever an alias', () => {
-    // ./cache stays its own door because importing it RUNS the vendor
-    // cache-strategy registrations; side-effectful code stays opt-in.
-    expect(names('./cache').has('registerCacheStrategy')).toBe(true);
+    // ./cache stays its own door: the cache layer's surface — the strategy an
+    // agent runs, chosen from the provider's declared capability, and the
+    // meter. (It once also ran vendor registrations at import; nothing
+    // registers any more.)
+    expect(names('./cache').has('cacheStrategyFor')).toBe(true);
     // ./events is the wire vocabulary, and its `ContextSource` is a different
     // type from the one /observe carries — the collision that kept it apart.
     expect(names('./events').has('ContextSource')).toBe(true);

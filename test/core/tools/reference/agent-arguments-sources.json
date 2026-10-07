@@ -633,26 +633,12 @@
     },
     {
       "idx": 15,
-      "overwrite": {
-        "cacheMarkers": [
-          {
-            "boundaryIndex": 0,
-            "field": "system",
-            "reason": "system stable prefix (1 entries, ending at base system prompt)",
-            "ttl": "short"
-          }
-        ]
-      },
+      "overwrite": {},
       "redactedPaths": [],
       "runtimeStageId": "sf-cache#19",
       "stage": "Cache",
       "stageId": "sf-cache",
-      "trace": [
-        {
-          "path": "cacheMarkers",
-          "verb": "append"
-        }
-      ],
+      "trace": [],
       "updates": {}
     },
     {
@@ -698,7 +684,7 @@
           },
           "cache": {
             "markersApplied": [],
-            "strategy": "*",
+            "strategy": "none",
             "transform": "unchanged",
             "transformHash": null
           },
@@ -1394,7 +1380,7 @@
           },
           "cache": {
             "markersApplied": [],
-            "strategy": "*",
+            "strategy": "none",
             "transform": "unchanged",
             "transformHash": null
           },

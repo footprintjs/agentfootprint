@@ -42,7 +42,7 @@
 
 import type { LLMProvider } from '../../adapters/types.js';
 import type { CacheStrategy } from '../../cache/types.js';
-import { getDefaultCacheStrategy } from '../../cache/strategyRegistry.js';
+import { cacheStrategyFor } from '../../cache/cacheStrategyFor.js';
 import type { Injection } from '../../lib/injection-engine/types.js';
 
 /** One brain: a provider port, optionally pinned to a model. `model` absent
@@ -269,20 +269,22 @@ function describeChoice(c: SkillBrainDecl): string {
 
 /** Per-brain cache strategies, resolved ONCE at chart build (the brain set
  *  is static; cache markers are provider-aware). A brain on the agent's own
- *  provider keeps the agent's strategy — including an explicit override —
- *  rather than re-resolving the default behind the caller's back. */
+ *  provider — the same provider OBJECT — keeps the agent's strategy,
+ *  including an explicit override, rather than re-resolving behind the
+ *  caller's back; any other provider gets the strategy its own declared
+ *  `promptCaching` selects (`cacheStrategyFor`), never one looked up by name. */
 export interface BuildBrainForArgs {
   readonly brains: FoldedSkillBrains;
-  readonly agentProviderName: string;
+  readonly agentProvider: LLMProvider;
   readonly agentCacheStrategy: CacheStrategy;
 }
 
 /** Build the runtime consult. See {@link BrainFor}. */
 export function buildBrainFor(args: BuildBrainForArgs): BrainFor {
   const strategyFor = (provider: LLMProvider | undefined): CacheStrategy =>
-    provider === undefined || provider.name === args.agentProviderName
+    provider === undefined || provider === args.agentProvider
       ? args.agentCacheStrategy
-      : getDefaultCacheStrategy(provider.name);
+      : cacheStrategyFor(provider);
 
   const bySkill = new Map<string, ResolvedBrain>();
   for (const [skillId, choice] of args.brains.bySkill) {

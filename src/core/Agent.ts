@@ -33,7 +33,7 @@ import { ReliabilityFailFastError } from '../reliability/types.js';
 import { extractSequence } from '../security/extractSequence.js';
 import { PolicyHaltError } from '../security/PolicyHaltError.js';
 import { updateSkillHistory as updateSkillHistoryStage } from '../cache/CacheGateDecider.js';
-import { getDefaultCacheStrategy } from '../cache/strategyRegistry.js';
+import { cacheStrategyFor } from '../cache/cacheStrategyFor.js';
 import { buildBrainFor, describeServingBrain } from './agent/skillBrains.js';
 import { SUBFLOW_IDS } from '../conventions.js';
 import {
@@ -459,11 +459,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    */
   private readonly cachingDisabledValue: boolean;
   /**
-   * Provider-specific CacheStrategy. Auto-resolved from
-   * `getDefaultCacheStrategy(provider.name)` at agent build time
-   * unless the consumer explicitly passes one via builder option.
-   * Phase 7+ implementations (Anthropic, OpenAI, Bedrock) register
-   * themselves in the strategyRegistry on import.
+   * The CacheStrategy this agent runs. Chosen at build time from the
+   * provider's declared `promptCaching` (`cacheStrategyFor`) unless the
+   * consumer passes one explicitly.
    */
   private readonly cacheStrategy: CacheStrategy;
   private readonly registry: readonly ToolRegistryEntry[];
@@ -1061,9 +1059,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.systemPromptValue = systemPromptValue;
     this.systemPromptCachePolicy = systemPromptCachePolicy;
     this.cachingDisabledValue = cachingDisabled;
-    // Auto-resolve strategy from provider.name unless caller overrides.
-    // NoOp is the wildcard fallback so unknown providers stay safe.
-    this.cacheStrategy = cacheStrategy ?? getDefaultCacheStrategy(opts.provider.name);
+    // The strategy the provider's DECLARED prompt caching selects, unless the
+    // caller overrides it — never one looked up by `provider.name`, which a
+    // renaming decorator (`withRetry`, an app's own wrapper) rewrites. A
+    // provider that declares nothing gets the no-op strategy.
+    this.cacheStrategy = cacheStrategy ?? cacheStrategyFor(opts.provider);
     this.registry = registry;
     this.injections = injections;
     this.skillGraphNextSkill = skillGraphNextSkill;
@@ -4997,14 +4997,15 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // brain or an escalation exists, so every other agent's stage reads no
       // new scope key and resolves on the exact line it always did. The
       // per-brain cache strategies resolve HERE, once, where the agent's own
-      // strategy (override included) is known: same-name brains keep it,
-      // foreign providers get their registry default (markers are
-      // provider-aware — the one genuinely risky seam, resolved statically).
+      // strategy (override included) is known: a brain on the agent's own
+      // provider keeps it, any other provider gets the strategy its declared
+      // `promptCaching` selects (markers are provider-aware — the one
+      // genuinely risky seam, resolved statically).
       ...(this.skillBrains !== undefined &&
         (this.skillBrains.bySkill.size > 0 || this.skillBrains.escalation !== undefined) && {
           brainFor: buildBrainFor({
             brains: this.skillBrains,
-            agentProviderName: provider.name,
+            agentProvider: provider,
             agentCacheStrategy: cacheStrategy,
           }),
         }),

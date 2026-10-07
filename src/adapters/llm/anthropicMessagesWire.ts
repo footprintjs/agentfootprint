@@ -128,8 +128,8 @@ export function buildMessagesBody(
     body.tool_choice = { type: 'tool', name: req.toolChoice.name };
   }
   // Cache markers — applied AFTER body construction so the materialized
-  // fields (system / tools / messages) exist to mark. Clamped to Anthropic's
-  // 4-marker limit by AnthropicCacheStrategy before we get here.
+  // fields (system / tools / messages) exist to mark. Clamped to the declared
+  // `maxBreakpoints` (four) by BreakpointCacheStrategy before we get here.
   if (req.cacheMarkers && req.cacheMarkers.length > 0) {
     applyCacheMarkers(body, req.cacheMarkers, messageIndexMap);
   }

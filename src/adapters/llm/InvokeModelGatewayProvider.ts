@@ -314,6 +314,14 @@ export function invokeModelGateway(options: InvokeModelGatewayOptions): LLMProvi
     // `tool_choice: { type: 'tool', name }` is part of the Anthropic body this
     // wire forwards, and a field deployment verified the gateway honours it.
     carriesForcedToolChoice: true,
+    // `promptCaching` is deliberately ABSENT, for the same reason the line
+    // above is present: a capability is declared where it is true of the
+    // ENDPOINT. This adapter builds the body `anthropic()` builds, so it
+    // writes `cache_control` wherever markers point — but no deployment has
+    // verified that a gateway forwards the field to InvokeModel, and until
+    // one does the agent sends it none. An operator who has verified theirs
+    // declares it on the instance:
+    //   { ...invokeModelGateway(opts), promptCaching: { mode: 'breakpoints', maxBreakpoints: 4, reportsUsage: true } }
 
     async complete(req: LLMRequest, _hooks?: LLMCallHooks): Promise<LLMResponse> {
       const modelId = modelIdFor(req, options.model);

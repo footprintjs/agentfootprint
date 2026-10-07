@@ -411,3 +411,109 @@ describe('CacheDecision subflow — ROI', () => {
     expect(markers).toHaveLength(2);
   });
 });
+
+// ─── The moving breakpoint — the conversation tail ────────────────
+//
+// Test types: unit (where it lands) / boundary (empty history, dedupe) /
+// scenario (each fail-closed reason) / property (it always names the LAST
+// message, never a request-only line) / ROI (the findings offer).
+
+describe('CacheDecision subflow — the moving breakpoint on the conversation tail', () => {
+  const base = {
+    iteration: 2,
+    maxIterations: 5,
+    userMessage: 'go',
+    cumulativeInputTokens: 0,
+    systemPromptCachePolicy: 'always' as const,
+    cachingDisabled: false,
+  };
+  const turn = [
+    { role: 'user' as const, content: 'go' },
+    {
+      role: 'assistant' as const,
+      content: '',
+      toolCalls: [{ id: 't1', name: 'lookup', args: {} }],
+    },
+    { role: 'tool' as const, content: 'result', toolCallId: 't1', toolName: 'lookup' },
+  ];
+  const tailOf = (markers: readonly CacheMarker[]) =>
+    markers.filter((m) => m.field === 'messages' && m.reason.startsWith('conversation tail'));
+
+  it('unit: marks the LAST history message when everything before it is cacheable', () => {
+    const markers = runSubflow({ ...base, activeInjections: [], history: turn });
+    expect(tailOf(markers)).toEqual([
+      expect.objectContaining({ field: 'messages', boundaryIndex: 2, ttl: 'short' }),
+    ]);
+    // The system marker it extends is still there, first.
+    expect(markers[0]?.field).toBe('system');
+  });
+
+  it('boundary: no history → no tail marker', () => {
+    expect(tailOf(runSubflow({ ...base, activeInjections: [], history: [] }))).toEqual([]);
+    expect(tailOf(runSubflow({ ...base, activeInjections: [] }))).toEqual([]);
+  });
+
+  it("scenario: a system piece whose policy says 'never' stops it (fail-closed)", () => {
+    const volatile = makeInjection({ id: 'clock', flavor: 'instructions', systemPrompt: 'now: …' });
+    const markers = runSubflow({ ...base, activeInjections: [volatile], history: turn });
+    expect(tailOf(markers)).toEqual([]);
+  });
+
+  it("scenario: a base prompt declared 'never' stops it", () => {
+    const markers = runSubflow({
+      ...base,
+      systemPromptCachePolicy: 'never',
+      activeInjections: [],
+      history: turn,
+    });
+    expect(tailOf(markers)).toEqual([]);
+  });
+
+  it('scenario: a delivered message that is not cacheable this iteration stops it', () => {
+    const history = [
+      { ...turn[0]!, injectedBy: { injectionId: 'gone', flavor: 'instructions' } },
+      ...turn.slice(1),
+    ];
+    expect(
+      tailOf(runSubflow({ ...base, activeInjections: [], history: history as never })),
+    ).toEqual([]);
+  });
+
+  it('scenario: the findings offer (tools vary per call) places NO marker at all', () => {
+    const markers = runSubflow({
+      ...base,
+      activeInjections: [makeInjection({ id: 's', cache: 'always', systemPrompt: 'steer' })],
+      history: turn,
+      toolsVaryPerCall: true,
+    });
+    expect(markers).toEqual([]);
+  });
+
+  it('boundary: a delivered-message marker on the same index is not repeated', () => {
+    const delivered = makeInjection({
+      id: 'note',
+      cache: 'always',
+      messages: [{ role: 'user', content: 'note' }],
+    });
+    const history = [
+      { role: 'user', content: 'note', injectedBy: { injectionId: 'note', flavor: 'steering' } },
+    ];
+    const markers = runSubflow({
+      ...base,
+      activeInjections: [delivered],
+      history: history as never,
+    });
+    expect(markers.filter((m) => m.field === 'messages')).toHaveLength(1);
+  });
+
+  it('property: it always names history.length - 1, for every conversation length', () => {
+    for (let n = 1; n <= 12; n++) {
+      const history = Array.from({ length: n }, (_, i) => ({
+        role: (i % 2 === 0 ? 'user' : 'assistant') as 'user' | 'assistant',
+        content: `m${i}`,
+      }));
+      const [tail] = tailOf(runSubflow({ ...base, activeInjections: [], history }));
+      expect(tail?.boundaryIndex).toBe(n - 1);
+    }
+  });
+});

@@ -800,13 +800,14 @@ export function buildCallLLMStage(
         // them survived the provider's clamp is the half that decides the bill,
         // and it existed only in this local until now.
         markersApplied: cachePrepared.markersApplied,
-        // WHICH strategy the request went through — its registry key. Every
-        // agent has one (`'*'` is the built-in pass-through), so this is never
-        // `null` here; the charts that run none say `null` at their own mints.
-        // A strategy handed in past the type with no `providerName` is still a
-        // strategy, and is recorded as one under the empty name rather than
-        // denied.
-        strategy: typeof cacheStrategy.providerName === 'string' ? cacheStrategy.providerName : '',
+        // WHICH strategy the request went through — its `name`, which for the
+        // built-ins is the capability the provider declared (`'breakpoints'`,
+        // `'automatic'`, `'none'` for the pass-through). Every agent has one,
+        // so this is never `null` here; the charts that run none say `null` at
+        // their own mints. A strategy handed in past the type with no `name`
+        // is still a strategy, and is recorded as one under the empty name
+        // rather than denied.
+        strategy: typeof cacheStrategy.name === 'string' ? cacheStrategy.name : '',
         ...(evictedForAttention.length > 0 && { omittedForAttention: evictedForAttention }),
       });
     }

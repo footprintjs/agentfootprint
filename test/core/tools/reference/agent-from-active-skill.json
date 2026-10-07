@@ -446,6 +446,12 @@
             "field": "system",
             "reason": "system stable prefix (1 entries, ending at base system prompt)",
             "ttl": "short"
+          },
+          {
+            "boundaryIndex": 0,
+            "field": "messages",
+            "reason": "conversation tail through wire index 0 — the moving breakpoint: the next call repeats this prefix and appends after it",
+            "ttl": "short"
           }
         ]
       },
@@ -493,7 +499,7 @@
           },
           "cache": {
             "markersApplied": [],
-            "strategy": "*",
+            "strategy": "none",
             "transform": "unchanged",
             "transformHash": null
           },
@@ -984,6 +990,12 @@
             "field": "tools",
             "reason": "tools stable prefix (1 entries, ending at skill:desk)",
             "ttl": "short"
+          },
+          {
+            "boundaryIndex": 2,
+            "field": "messages",
+            "reason": "conversation tail through wire index 2 — the moving breakpoint: the next call repeats this prefix and appends after it",
+            "ttl": "short"
           }
         ]
       },
@@ -1029,7 +1041,7 @@
           },
           "cache": {
             "markersApplied": [],
-            "strategy": "*",
+            "strategy": "none",
             "transform": "unchanged",
             "transformHash": null
           },
@@ -1458,12 +1470,38 @@
     },
     {
       "idx": 50,
-      "overwrite": {},
+      "overwrite": {
+        "cacheMarkers": [
+          {
+            "boundaryIndex": 1,
+            "field": "system",
+            "reason": "system stable prefix (2 entries, ending at skill:desk)",
+            "ttl": "short"
+          },
+          {
+            "boundaryIndex": 0,
+            "field": "tools",
+            "reason": "tools stable prefix (1 entries, ending at skill:desk)",
+            "ttl": "short"
+          },
+          {
+            "boundaryIndex": 4,
+            "field": "messages",
+            "reason": "conversation tail through wire index 4 — the moving breakpoint: the next call repeats this prefix and appends after it",
+            "ttl": "short"
+          }
+        ]
+      },
       "redactedPaths": [],
       "runtimeStageId": "sf-cache#57",
       "stage": "Cache",
       "stageId": "sf-cache",
-      "trace": [],
+      "trace": [
+        {
+          "path": "cacheMarkers",
+          "verb": "set"
+        }
+      ],
       "updates": {}
     },
     {
@@ -1491,7 +1529,7 @@
           },
           "cache": {
             "markersApplied": [],
-            "strategy": "*",
+            "strategy": "none",
             "transform": "unchanged",
             "transformHash": null
           },

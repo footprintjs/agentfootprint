@@ -243,6 +243,13 @@ describe('functional: the evicted ground files ONE finding through the real loop
  *
  *   AF_DANGLING_NARRATIVE_REFERENCE=update npx vitest run test/integrity/danglingReference.test.ts -t 'narrates'
  *
+ * REGENERATED for the moving cache breakpoint (the conversation tail is
+ * marked, `CacheDecisionSubflow.ts` · `conversationTailMarker`). The whole
+ * delta is one shape — every `cacheMarkers = (1 item)` became `(2 items)`
+ * (19 lines: the decision's write, the merge-back's input, each call's
+ * read), the tail marker beside the system one. No step was added, removed
+ * or renumbered, so the law this pins still holds.
+ *
  * The one moving part, the turn's clock (`turnStartMs`), is masked.
  */
 const NARRATIVE_REFERENCE = resolve(__dirname, 'reference/dangling-trap-narrative.json');

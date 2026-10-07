@@ -1,10 +1,12 @@
-**Mixed** — per-provider prompt-cache policy: it changes what a call COSTS,
-never what the model is shown.
+**Mixed** — prompt-cache policy, served by the strategy the provider's
+DECLARED capability selects (`LLMProvider.promptCaching` →
+`cacheStrategyFor`; never its name): it changes what a call COSTS, never what
+the model is shown.
 Walker: `CacheDecisionSubflow.ts` and `CacheGateDecider.ts` run inside the loop,
 one pass per iteration.
 Trace: `cacheRecorder.ts` is the cache layer's meter — it writes the events a
 cost fold later reads.
-Support: `strategyRegistry.ts`, `strategies/`, `applyCachePolicy.ts`,
+Support: `cacheStrategyFor.ts`, `strategies/`, `applyCachePolicy.ts`,
 `portUsage.ts`, `types.ts`.
 
 ## What it reads / what it writes
@@ -23,4 +25,7 @@ does not belong here.
 - `applyCachePolicy.ts` — the helper every injection factory shares.
 - `cacheRecorder.ts` — the meter.
 - `portUsage.ts` — the one reader of port-shaped usage.
-- `strategyRegistry.ts` / `types.ts` / `index.ts` — registry and public surface.
+- `cacheStrategyFor.ts` — the one place a strategy is chosen, from the
+  provider's declaration:
+  `cacheStrategyFor(withRetry(anthropic())).name === 'breakpoints'`.
+- `types.ts` / `index.ts` — public surface.

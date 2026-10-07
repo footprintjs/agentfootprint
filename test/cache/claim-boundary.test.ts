@@ -21,9 +21,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { cacheRecorder } from '../../src/cache/cacheRecorder.js';
-import { AnthropicCacheStrategy } from '../../src/cache/strategies/AnthropicCacheStrategy.js';
-import { OpenAICacheStrategy } from '../../src/cache/strategies/OpenAICacheStrategy.js';
-import { BedrockCacheStrategy } from '../../src/cache/strategies/BedrockCacheStrategy.js';
+import { BreakpointCacheStrategy } from '../../src/cache/strategies/BreakpointCacheStrategy.js';
+import { AutomaticCacheStrategy } from '../../src/cache/strategies/AutomaticCacheStrategy.js';
 import { NoOpCacheStrategy } from '../../src/cache/strategies/NoOpCacheStrategy.js';
 import {
   isKnown,
@@ -36,11 +35,24 @@ import {
 import type { CacheStrategy } from '../../src/cache/types.js';
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
 
+/** What `anthropic()` declares — the one end-to-end breakpoint path. */
+const breakpoints = (): CacheStrategy =>
+  new BreakpointCacheStrategy(
+    { mode: 'breakpoints', maxBreakpoints: 4, reportsUsage: true },
+    'the Anthropic adapter',
+  );
+
 const ALL_STRATEGIES: ReadonlyArray<readonly [string, CacheStrategy]> = [
-  ['anthropic', new AnthropicCacheStrategy()],
-  ['openai', new OpenAICacheStrategy()],
-  ['bedrock', new BedrockCacheStrategy()],
-  ['noop', new NoOpCacheStrategy()],
+  ['breakpoints', breakpoints()],
+  [
+    'automatic (no usage)',
+    new AutomaticCacheStrategy({ mode: 'automatic', reportsUsage: false }, 'the OpenAI adapter'),
+  ],
+  [
+    'breakpoints (no usage)',
+    new BreakpointCacheStrategy({ mode: 'breakpoints', maxBreakpoints: 4, reportsUsage: false }),
+  ],
+  ['none', new NoOpCacheStrategy()],
 ];
 
 const llmEnd = (usage: unknown): AgentfootprintEvent =>
@@ -67,7 +79,7 @@ describe('R5 unit: every strategy answers with a Claim, whatever it is handed', 
   });
 
   it('the only door to a value is isKnown, and the fallback is never implicit', () => {
-    const c: Claim<number> = new AnthropicCacheStrategy().extractMetrics(undefined) as never;
+    const c: Claim<number> = breakpoints().extractMetrics(undefined) as never;
     expect(isKnown(c)).toBe(false);
     // `valueOr` takes a REQUIRED fallback. A default of `undefined` would put
     // the shrug straight back into the type that exists to remove it — so a
@@ -79,7 +91,7 @@ describe('R5 unit: every strategy answers with a Claim, whatever it is handed', 
 
 describe('R5 property: unknown PROPAGATES through every derived metric', () => {
   it('one unmeasured call cannot be averaged away into a confident number', () => {
-    const rec = cacheRecorder({ strategy: new AnthropicCacheStrategy() });
+    const rec = cacheRecorder({ strategy: breakpoints() });
     // Three measured calls, then one that reported nothing.
     for (let i = 0; i < 3; i++) rec.onEmit(llmEnd({ input: 100, output: 10, cacheRead: 900 }));
     rec.onEmit(llmEnd({ input: 100, output: 10 })); // no cache fields → unmeasured
@@ -103,7 +115,7 @@ describe('R5 property: unknown PROPAGATES through every derived metric', () => {
   });
 
   it('an adapter that CANNOT report makes the whole turn not-applicable, by name', () => {
-    const rec = cacheRecorder({ strategy: new BedrockCacheStrategy() });
+    const rec = cacheRecorder({ strategy: new NoOpCacheStrategy() });
     for (let i = 0; i < 5; i++) rec.onEmit(llmEnd({ input: 100, output: 10 }));
     const r = rec.report();
     expect(r.measuredIterations).toBe(0);
@@ -120,7 +132,7 @@ describe('R5 regression: the exact shipped defect', () => {
     // wire names off a port-shaped value, every field read undefined, and the
     // report said hitRate 0 — dishonestly, since the strategy's own comment
     // claimed it returned nothing precisely to avoid a misleading 0%.
-    const rec = cacheRecorder({ strategy: new AnthropicCacheStrategy() });
+    const rec = cacheRecorder({ strategy: breakpoints() });
     rec.onEmit(llmEnd({ input: 200, output: 30, cacheRead: 0, cacheWrite: 8000 }));
     for (let i = 0; i < 19; i++) {
       rec.onEmit(llmEnd({ input: 50, output: 30, cacheRead: 8000, cacheWrite: 0 }));
@@ -138,7 +150,7 @@ describe('R5 regression: the exact shipped defect', () => {
     // fields, so the turn is measured and the hit rate is a real 0 — which is
     // the only way this is observable at all, rather than looking exactly like
     // an unsupported adapter.
-    const silent = cacheRecorder({ strategy: new AnthropicCacheStrategy() });
+    const silent = cacheRecorder({ strategy: breakpoints() });
     for (let i = 0; i < 4; i++) {
       silent.onEmit(llmEnd({ input: 300, output: 10, cacheRead: 0, cacheWrite: 0 }));
     }
@@ -147,7 +159,7 @@ describe('R5 regression: the exact shipped defect', () => {
     expect(isKnown(s.hitRate)).toBe(true);
     expect(isKnown(s.hitRate) && s.hitRate.value).toBe(0);
 
-    const blind = cacheRecorder({ strategy: new AnthropicCacheStrategy() });
+    const blind = cacheRecorder({ strategy: breakpoints() });
     for (let i = 0; i < 4; i++) blind.onEmit(llmEnd({ input: 300, output: 10 }));
     const b = blind.report();
     expect(b.measuredIterations).toBe(0);
@@ -174,14 +186,7 @@ describe('R5 regression: the exact shipped defect', () => {
 function scriptedStrategy(claims: ReadonlyArray<Claim<never>>): CacheStrategy {
   let i = 0;
   return {
-    providerName: 'scripted',
-    capabilities: {
-      enabled: false,
-      maxMarkers: 0,
-      ttls: [] as readonly ('short' | 'long')[],
-      fields: [] as readonly ('system' | 'tools' | 'messages')[],
-      automatic: false,
-    },
+    name: 'scripted',
     prepareRequest: async (req) => ({ request: req, markersApplied: [] }),
     extractMetrics: () =>
       (claims[Math.min(i++, claims.length - 1)] ?? unknown('scripted')) as never,
@@ -223,7 +228,7 @@ describe('9.59.1: the SUMMARY carries the rows own reason, never a fabricated on
   it('unit: a strategy IS configured and the provider genuinely reported nothing', () => {
     // Here the provider really is the reason, and the summary says so — in
     // the ADAPTER's own words, not a generic sentence that happens to fit.
-    const rec = cacheRecorder({ strategy: new AnthropicCacheStrategy() });
+    const rec = cacheRecorder({ strategy: breakpoints() });
     for (let i = 0; i < 3; i++) rec.onEmit(llmEnd({ input: 100, output: 10 }));
 
     const r = rec.report();
@@ -241,7 +246,7 @@ describe('9.59.1: the SUMMARY carries the rows own reason, never a fabricated on
     // A turn can genuinely mix causes. Silently promoting the first row's
     // reason to the whole turn would state a cause for calls that stated a
     // different one — the same fault in a subtler dress.
-    const rec = cacheRecorder({ strategy: new AnthropicCacheStrategy() });
+    const rec = cacheRecorder({ strategy: breakpoints() });
     rec.onEmit(llmEnd({ input: 100, output: 10 })); // usage, but no cache fields
     rec.onEmit(llmEnd(undefined)); // no usage payload at all
 

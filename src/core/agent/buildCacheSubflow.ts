@@ -13,7 +13,8 @@
  *     provider.
  *   - The provider-SPECIFIC MECHANISM (Anthropic `cache_control`, OpenAI
  *     automatic, …) is the attached provider's `CacheStrategy`, selected by
- *     `provider.name`, applied later when the request is built.
+ *     the provider's declared `promptCaching` (`cacheStrategyFor`), applied
+ *     later when the request is built.
  *
  * Why `UpdateSkillHistory` is NOT in here: the `skillHistory` rolling window
  * must persist across loop iterations. Keeping `UpdateSkillHistory` in the
@@ -27,7 +28,10 @@
  */
 
 import { flowChart, type FlowChart } from 'footprintjs';
-import { decideCacheMarkers } from '../../cache/CacheDecisionSubflow.js';
+import {
+  cacheDecisionStage,
+  type CacheDecisionStageOptions,
+} from '../../cache/CacheDecisionSubflow.js';
 import { cacheGateDecide } from '../../cache/CacheGateDecider.js';
 import { STAGE_IDS } from '../../conventions.js';
 import type { AgentState } from './types.js';
@@ -38,13 +42,13 @@ import type { AgentState } from './types.js';
  * SUBFLOW_IDS.CACHE, buildCacheSubflow(), 'Cache', { inputMapper,
  * outputMapper, arrayMerge: Replace })`.
  */
-export function buildCacheSubflow(): FlowChart {
+export function buildCacheSubflow(options: CacheDecisionStageOptions = {}): FlowChart {
   return flowChart<AgentState>(
     'CacheDecision',
     // Root stage = the cache-decision function (a chart cannot start with a
     // nested subflow). Exported from CacheDecisionSubflow.ts and reused here —
     // the cache decision is the root of sf-cache, no logic duplication.
-    decideCacheMarkers as never,
+    cacheDecisionStage(options) as never,
     'decide-cache-markers',
     {
       description:

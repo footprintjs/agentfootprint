@@ -2,19 +2,24 @@
  * anthropicCacheWire — the cache↔wire translation both Anthropic adapters share.
  *
  * Pattern: extracted helper (was module-private inside BrowserAnthropicProvider).
- * Role:    Outer ring. Two jobs, one file:
- *   1. `applyCacheMarkers` — stamp `cache_control` onto an Anthropic request
+ * Role:    Outer ring. Three jobs, one file:
+ *   1. `ANTHROPIC_PROMPT_CACHING` — what every adapter on this wire DECLARES
+ *      (`LLMProvider.promptCaching`): explicit breakpoints, four per request,
+ *      usage reported. The agent chooses its cache strategy from it.
+ *   2. `applyCacheMarkers` — stamp `cache_control` onto an Anthropic request
  *      body where the framework's `CacheMarker`s point.
- *   2. `readCacheUsage` — lift Anthropic's cache token counts off a response
+ *   3. `readCacheUsage` — lift Anthropic's cache token counts off a response
  *      usage payload into the port's `cacheRead` / `cacheWrite` fields.
  *
  * Why it exists: the server adapter (`AnthropicProvider`) used to drop
  * `LLMRequest.cacheMarkers` on the floor and report no cache tokens, so on
  * the server path a byte-identical prompt prefix could neither be cached nor
- * even OBSERVED as uncached — `AnthropicCacheStrategy` registers for both
- * `'anthropic'` and `'browser-anthropic'`, and only the browser half kept its
- * side of the contract. One module serving both adapters removes the gap and
- * prevents byte-twin drift between them.
+ * even OBSERVED as uncached — only the browser half kept its side of the
+ * contract. One module serving every adapter on this wire removes the gap
+ * and prevents byte-twin drift between them. The declaration lives here for
+ * the same reason: the three adapters that build this body
+ * (`anthropic()`, `browserAnthropic()`, `invokeModelGateway()`) make one
+ * promise, written once.
  *
  * @example
  *   const indexMap: number[] = [];
@@ -23,6 +28,26 @@
  *   // ...and on the way back:
  *   return { usage: { input, output, ...readCacheUsage(message.usage) } };
  */
+
+import type { PromptCaching } from '../types.js';
+
+// ─── The declaration ────────────────────────────────────────────────
+
+/**
+ * What an adapter on the Anthropic Messages wire promises about prompt
+ * caching: it writes `cache_control` where the request's markers point
+ * (`applyCacheMarkers`), the API honours at most four such breakpoints per
+ * request, and the response's cache token counts reach the port
+ * (`readCacheUsage`).
+ *
+ * Declared by the adapter, not looked up by its name — so `withRetry(anthropic())`
+ * or an application's own wrapper keeps caching by forwarding this one field.
+ */
+export const ANTHROPIC_PROMPT_CACHING: PromptCaching = Object.freeze({
+  mode: 'breakpoints',
+  maxBreakpoints: 4,
+  reportsUsage: true,
+});
 
 // ─── Marker application ─────────────────────────────────────────────
 
@@ -70,8 +95,9 @@ interface MarkableBody {
  * did not survive the transform (`-1`, a system message) cannot be marked at
  * all; silently marking its neighbour would claim a boundary nobody asked for.
  *
- * Markers arrive already clamped to Anthropic's 4-marker limit by
- * `AnthropicCacheStrategy`, so no enforcement here.
+ * Markers arrive already clamped to the declared `maxBreakpoints` (four, see
+ * `ANTHROPIC_PROMPT_CACHING`) by `BreakpointCacheStrategy`, so no enforcement
+ * here.
  */
 export function applyCacheMarkers(
   body: MarkableBody,

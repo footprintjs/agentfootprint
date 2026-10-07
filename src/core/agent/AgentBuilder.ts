@@ -228,10 +228,10 @@ export class AgentBuilder {
    */
   private cachingDisabledValue = false;
   /**
-   * Optional explicit CacheStrategy override. Default: undefined,
-   * which means the agent auto-resolves from
-   * `getDefaultCacheStrategy(provider.name)` at construction. Power
-   * users override here for custom backends or test mocks.
+   * Optional explicit CacheStrategy override. Default: undefined, which
+   * means the agent chooses from the provider's declared `promptCaching`
+   * (`cacheStrategyFor`) at construction. Power users override here for
+   * custom backends or test mocks.
    */
   private cacheStrategyOverride?: CacheStrategy;
   private readonly registry: ToolRegistryEntry[] = [];

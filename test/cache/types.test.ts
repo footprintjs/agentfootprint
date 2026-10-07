@@ -120,14 +120,7 @@ describe('CacheCapabilities — boundary', () => {
 describe('CacheStrategy — scenario: defining a no-op strategy is type-clean', () => {
   it('type-checks an inline NoOp implementation', async () => {
     const noop: CacheStrategy = {
-      providerName: 'mock',
-      capabilities: {
-        enabled: false,
-        maxMarkers: 0,
-        ttls: [],
-        fields: [],
-        automatic: false,
-      },
+      name: 'mock',
       async prepareRequest(req) {
         return { request: req, markersApplied: [] };
       },

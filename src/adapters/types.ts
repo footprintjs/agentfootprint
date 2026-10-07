@@ -574,8 +574,63 @@ export interface LLMCallHooks {
   readonly onResilience?: (report: ResilienceReport) => void;
 }
 
+/**
+ * How an adapter's wire caches a repeated prompt prefix — DECLARED by the
+ * adapter, read by the agent to choose its cache strategy
+ * (`agentfootprint/cache` · `cacheStrategyFor`).
+ *
+ * - `'breakpoints'` — the provider caches a prefix only where the request
+ *   marks it (Anthropic's `cache_control`). The adapter reads
+ *   {@link LLMRequest.cacheMarkers} and writes them on its wire, at most
+ *   `maxBreakpoints` per request.
+ * - `'automatic'` — the provider caches repeated prefixes on its own (OpenAI).
+ *   Markers are inert; nothing the request says changes what is cached.
+ *
+ * `reportsUsage` says whether the adapter lifts the provider's cache token
+ * counts onto `LLMResponse.usage.cacheRead` / `cacheWrite`. The cache meter
+ * reads it: `false` makes every call's cache claim *not applicable*, never a
+ * zero.
+ *
+ * @example
+ * ```ts
+ * // A wrapper forwards what it wraps, like every other capability:
+ * const wrapped: LLMProvider = {
+ *   name: `my-app/${inner.name}`,
+ *   ...(inner.promptCaching !== undefined && { promptCaching: inner.promptCaching }),
+ *   complete: (req, hooks) => inner.complete(req, hooks),
+ * };
+ * ```
+ */
+export type PromptCaching =
+  | {
+      readonly mode: 'breakpoints';
+      /** Breakpoints the wire honours on one request (Anthropic: 4). */
+      readonly maxBreakpoints: number;
+      readonly reportsUsage: boolean;
+    }
+  | {
+      readonly mode: 'automatic';
+      readonly reportsUsage: boolean;
+    };
+
 export interface LLMProvider {
   readonly name: string;
+  /**
+   * How this provider's wire caches a repeated prompt prefix — see
+   * {@link PromptCaching}. The agent picks its cache strategy from THIS, never
+   * from `name`: a decorator that renames the provider (`withRetry`, an app's
+   * own routing wrapper) keeps caching exactly when it forwards this field.
+   *
+   * **Absence means no caching the library can drive or observe** — the agent
+   * sends no cache markers and the cache meter reports *not applicable*. That
+   * is the safe reading for an adapter that has not said: a breakpoint on a
+   * wire that ignores it costs nothing, but a promise of cache savings that
+   * never arrive is a wrong number on someone's bill.
+   *
+   * A WRAPPER must forward it (the three `src/resilience/` decorators do);
+   * `withFallback` publishes the combination of the two providers it holds.
+   */
+  readonly promptCaching?: PromptCaching;
   /**
    * v7.21 — which roles this provider carries INSIDE the `messages` array.
    *
