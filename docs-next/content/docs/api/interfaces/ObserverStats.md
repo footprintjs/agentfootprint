@@ -4,7 +4,7 @@ title: ObserverStats
 
 # Interface: ObserverStats
 
-Defined in: node\_modules/footprintjs/dist/types/lib/runner/DeferredObserverTier.d.ts:88
+Defined in: node\_modules/footprintjs/dist/types/lib/runner/DeferredObserverTier.d.ts:89
 
 The Block 9 observability surface — `snapshot.observerStats`. The A4
 dispatcher stats plus the terminal-flush stranding count from Block 8.
@@ -132,7 +132,7 @@ Per-listener time accounting — "name the hog" (A2).
 
 > `readonly` **terminalStranded**: `number`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/runner/DeferredObserverTier.d.ts:95
+Defined in: node\_modules/footprintjs/dist/types/lib/runner/DeferredObserverTier.d.ts:96
 
 Envelopes still queued when a terminal flush hit its runaway-cascade
 round cap (Block 8). `0` in any sane run — a non-zero value means a

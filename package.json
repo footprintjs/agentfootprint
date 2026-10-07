@@ -482,7 +482,7 @@
     "esbuild": "^0.28.0",
     "eslint": "^8.44.0",
     "eslint-config-prettier": "^6.15.0",
-    "footprintjs": "^9.41.0",
+    "footprintjs": "^9.44.0",
     "google-auth-library": "^11.0.1",
     "jose": "^6.2.7",
     "ldapts": "^9.2.0",

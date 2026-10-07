@@ -63,7 +63,6 @@ describe('PendingAsk — the question travels, the state does not', () => {
     const run: PausedRun = {
       checkpoint: {
         sharedState: {},
-        executionTree: {},
         pausedStageId: 'tool-calls',
         subflowPath: [],
         subflowStates: {},
@@ -105,7 +104,6 @@ describe('CheckpointEnvelope — discriminated, so a reader cannot drift', () =>
         data: {
           checkpoint: {
             sharedState: {},
-            executionTree: {},
             pausedStageId: 'tool-calls',
             subflowPath: [],
             subflowStates: {},
