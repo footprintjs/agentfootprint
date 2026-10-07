@@ -196,6 +196,7 @@ import { buildStepNudgeStage } from './agent/stages/stepNudge.js';
 import { buildEvidenceRecheckStage } from './agent/stages/evidenceRecheck.js';
 import { toolWantsOf } from './agent/stagedRefs.js';
 import { wrapUpStage } from './agent/stages/wrapUp.js';
+import type { ReliabilityFailRecord } from './agent/stages/reliabilityExecution.js';
 import { evidenceRefusalSentence } from './agent/evidence/gate.js';
 import { UnsupportedValuesError } from './agent/evidence/errors.js';
 import type { ResolvedEvidenceGate } from './agent/evidence/types.js';
@@ -4077,16 +4078,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // and branch on `.kind`.
     if (this.reliabilityConfig !== undefined) {
       const snap = executor.getSnapshot();
-      // Read via Pick<AgentState, …> so the read shape cannot drift from
-      // the typed write side (the fields are declared once on AgentState).
-      const state = snap.sharedState as Pick<
-        AgentState,
-        | 'reliabilityFailKind'
-        | 'reliabilityFailPayload'
-        | 'reliabilityFailReason'
-        | 'reliabilityFailCauseMessage'
-        | 'reliabilityFailCauseName'
-      >;
+      // Read as the one list of the record's keys (`RELIABILITY_FAIL_KEYS`,
+      // checked against AgentState) — the list a chart boundary carries out.
+      const state = snap.sharedState as ReliabilityFailRecord;
       if (state.reliabilityFailKind !== undefined) {
         // Reconstruct the cause Error from the captured message+name —
         // see the matching note in reliabilityExecution.failFast about

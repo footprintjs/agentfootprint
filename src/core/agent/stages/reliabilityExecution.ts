@@ -122,6 +122,39 @@ export class ValidationFailure extends Error {
  *  rules wanted to retry. Surfaces in `ReliabilityFailFastError.kind`. */
 export const MID_STREAM_KIND = 'mid-stream-not-retryable';
 
+/**
+ * The fail-fast RECORD: the keys `failFast` writes before it breaks, which the
+ * run boundary (`Agent · finalizeResult`) turns into `ReliabilityFailFastError`.
+ * Listed once, so a chart boundary between the call and the run boundary can
+ * carry every one of them out (`buildDynamicAgentChart`'s `sf-llm-call`). A
+ * record left behind a boundary is a run that ends with `''` and no error.
+ */
+export const RELIABILITY_FAIL_KEYS = [
+  'reliabilityFailKind',
+  'reliabilityFailPayload',
+  'reliabilityFailReason',
+  'reliabilityFailCauseMessage',
+  'reliabilityFailCauseName',
+] as const satisfies readonly (keyof AgentState)[];
+
+/** The fail-fast record as the run boundary reads it. */
+export type ReliabilityFailRecord = Pick<AgentState, (typeof RELIABILITY_FAIL_KEYS)[number]>;
+
+/**
+ * The fail-fast record a scope holds: its present keys, or nothing when no
+ * fail-fast fired — so a boundary that spreads it crosses no new key otherwise.
+ */
+export function failFastRecordOf(
+  state: Readonly<Record<string, unknown>>,
+): ReliabilityFailRecord | undefined {
+  if (state.reliabilityFailKind === undefined) return undefined;
+  const record: Record<string, unknown> = {};
+  for (const key of RELIABILITY_FAIL_KEYS) {
+    if (state[key] !== undefined) record[key] = state[key];
+  }
+  return record as ReliabilityFailRecord;
+}
+
 /** The schema-failure message a governed run's public event carries in place of parser text. */
 const WITHHELD_SCHEMA_FAILURE =
   'The draft failed the output schema; the output policy withholds its text.';

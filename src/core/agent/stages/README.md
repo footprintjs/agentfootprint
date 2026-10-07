@@ -192,6 +192,28 @@ shape is a rendering choice and must not change what the model is told —
 `test/skillGraphSelfCallGrouped.test.ts` pins the two shapes to the same
 answer.
 
+### A reliability fail-fast ends the RUN, whatever the chart shape
+
+**`reliabilityExecution.ts · failFast` writes the record (`RELIABILITY_FAIL_KEYS`)
+and breaks; the run boundary (`Agent · finalizeResult`) raises
+`ReliabilityFailFastError` from that record on the OUTER scope.** Under
+`'dynamic-grouped'` `callLLM` runs inside `sf-llm-call`, so the mount carries
+both out: `propagateBreak: true` ends the run, and the outputMapper spreads
+`failFastRecordOf(s)` (nothing unless a fail-fast fired). Without them the break
+stopped only the turn, the outer loop went on to `Final`, and the run returned
+`''`.
+
+```ts
+const agent = Agent.create({ provider, model, reactMode: 'dynamic-grouped' })
+  .reliability({ postDecide: [{ when: () => true, then: 'fail-fast', kind: 'stop' }] })
+  .build();
+await agent.run('hi'); // rejects: ReliabilityFailFastError, kind 'stop' — as in 'classic'/'dynamic'
+```
+
+`test/core/reliability-fail-fast-modes.test.ts` pins one outcome per exit (no
+rule, fail-fast rule, mid-stream, pre-check; with and without an output policy)
+across all three modes.
+
 ### A self-call skips the policy only while the cursor is MOUNTED
 
 **`read_skill` naming the cursor's own skill is answered before the `skill_read`
