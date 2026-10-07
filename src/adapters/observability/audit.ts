@@ -6,9 +6,11 @@
  * append-only, HASH-CHAINED record log: every record carries the SHA-256
  * of its own canonical serialization plus the hash of the previous
  * record. Flipping a single byte anywhere in an exported bundle makes
- * `verifyAuditBundle` name the exact record that broke — the
- * record-keeping shape EU AI Act Art. 12 asks for (events the system
- * logged, in order, demonstrably unmodified since capture).
+ * `verifyAuditBundle` name the exact record that broke. The log serves
+ * the automatic event recording EU AI Act Art. 12 asks of high-risk
+ * systems (the events the system logged, in order). The tamper evidence
+ * — showing the log is unmodified since capture — is this library's
+ * addition: Art. 12 does not require it.
  *
  * Pattern: Observability strategy (one purpose — chain accumulation)
  *          + pure offline verifier.
