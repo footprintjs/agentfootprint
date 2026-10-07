@@ -251,7 +251,7 @@ describe('thinking cross-cutting — E2E: Agent + AnthropicProvider two-turn', (
     expect(thinkingBlock!.signature).toBe(trickySig);
   });
 
-  it('redacted_thinking blocks survive round-trip with signature', async () => {
+  it('redacted_thinking blocks survive round-trip with their data', async () => {
     const sig = 'redacted-sig-XYZ-987';
     const recorder = { params: [] as unknown[] };
     const turns: FakeMessage[] = [
@@ -260,7 +260,7 @@ describe('thinking cross-cutting — E2E: Agent + AnthropicProvider two-turn', (
         model: 'claude-sonnet-4-5-20250929',
         role: 'assistant',
         content: [
-          { type: 'redacted_thinking', signature: sig },
+          { type: 'redacted_thinking', data: sig }, // Anthropic's wire: the payload is `data`
           { type: 'tool_use', id: 'tu-1', name: 'echo', input: {} },
         ],
         stop_reason: 'tool_use',
@@ -301,7 +301,9 @@ describe('thinking cross-cutting — E2E: Agent + AnthropicProvider two-turn', (
     expect(assistantMsg).toBeDefined();
     const redacted = assistantMsg!.content.find((b) => b.type === 'redacted_thinking');
     expect(redacted).toBeDefined();
-    expect(redacted!.signature).toBe(sig);
+    // Echoed as Anthropic takes it: the encrypted payload, byte-exact, as `data`.
+    expect((redacted as { data?: string }).data).toBe(sig);
+    expect(redacted!.signature).toBeUndefined();
     // redacted_thinking has NO `thinking` field on the wire
     expect(redacted!.thinking).toBeUndefined();
   });

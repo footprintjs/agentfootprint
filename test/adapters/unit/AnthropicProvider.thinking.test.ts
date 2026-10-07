@@ -116,7 +116,7 @@ describe('AnthropicProvider — unit: serialize thinkingBlocks', () => {
     });
   });
 
-  it('redacted_thinking serializes WITHOUT thinking field, signature only', async () => {
+  it('redacted_thinking serializes as Anthropic takes it: { type, data } — the encrypted payload, byte-exact', async () => {
     const recorder = { params: [] as unknown[] };
     const client = makeFakeClient(baseResponse, recorder);
     const provider = new AnthropicProvider({ apiKey: 'x', _client: client as never });
@@ -143,7 +143,7 @@ describe('AnthropicProvider — unit: serialize thinkingBlocks', () => {
     const redacted = assistantMsg.content.find((b) => b.type === 'redacted_thinking')!;
     expect(redacted).toEqual({
       type: 'redacted_thinking',
-      signature: 'sig-redacted',
+      data: 'sig-redacted',
     });
     // No thinking field on redacted blocks
     expect(redacted.thinking).toBeUndefined();

@@ -75,8 +75,9 @@ describe('AnthropicThinkingHandler — unit: normalize() input variants', () => 
     expect(blocks[0]?.signature).toBeUndefined();
   });
 
-  it('normalizes redacted_thinking blocks with empty content + signature', () => {
-    const raw = anthropicContent([{ type: 'redacted_thinking', signature: 'AwI3pRedacted999' }]);
+  it("keeps a redacted block's encrypted `data` (it rides `signature`) — dropping it made the echo a 400", () => {
+    // Anthropic's wire: { type: 'redacted_thinking', data } — no signature field.
+    const raw = anthropicContent([{ type: 'redacted_thinking', data: 'AwI3pRedacted999' }]);
     const blocks = anthropicThinkingHandler.normalize(raw);
     expect(blocks).toHaveLength(1);
     expect(blocks[0]).toEqual({
@@ -99,7 +100,7 @@ describe('AnthropicThinkingHandler — unit: normalize() input variants', () => 
     const raw = anthropicContent([
       { type: 'thinking', thinking: 'first', signature: 'sig-A' },
       { type: 'thinking', thinking: 'second', signature: 'sig-B' },
-      { type: 'redacted_thinking', signature: 'sig-C' },
+      { type: 'redacted_thinking', data: 'sig-C' },
     ]);
     const blocks = anthropicThinkingHandler.normalize(raw);
     expect(blocks).toHaveLength(3);
@@ -280,7 +281,7 @@ describe('AnthropicThinkingHandler — security: signature byte-exact', () => {
 
   it('redacted_thinking signature is also byte-exact preserved', () => {
     const sig = 'AwI3pRedacted+/==';
-    const raw = anthropicContent([{ type: 'redacted_thinking', signature: sig }]);
+    const raw = anthropicContent([{ type: 'redacted_thinking', data: sig }]);
     const blocks = anthropicThinkingHandler.normalize(raw);
     expect(blocks[0]?.signature).toBe(sig);
     expect(blocks[0]?.content).toBe('');

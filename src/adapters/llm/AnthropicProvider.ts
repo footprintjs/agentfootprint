@@ -87,7 +87,7 @@ type AnthropicContentBlock =
   // when continuing a tool-using extended-thinking conversation;
   // signature MUST be byte-exact or Anthropic returns HTTP 400.
   | { type: 'thinking'; thinking: string; signature?: string }
-  | { type: 'redacted_thinking'; signature?: string };
+  | { type: 'redacted_thinking'; data: string };
 
 interface AnthropicTool {
   name: string;

@@ -23,6 +23,7 @@ import { withCircuitBreaker } from '../../src/resilience/withCircuitBreaker.js';
 import { withFallback } from '../../src/resilience/withFallback.js';
 import { anthropicThinkingHandler } from '../../src/thinking/AnthropicThinkingHandler.js';
 import { thinkingHandlerFor } from '../../src/thinking/thinkingHandlerFor.js';
+import type { ThinkingHandler } from '../../src/thinking/types.js';
 
 const SIG = 'sig-wrapped-provider-1';
 
@@ -115,20 +116,49 @@ describe('thinking handler — declared, so a wrapper keeps it', () => {
     expect(thinkingHandlerFor(withCircuitBreaker(inner))).toBe(anthropicThinkingHandler);
   });
 
-  it('withFallback: the same handler on both sides is kept; different sides keep none', async () => {
+  it("withFallback: the same handler on both sides is the pair's", async () => {
     const same = withFallback(
       anthropic({ _client: thinkingClient() }),
       withRetry(anthropic({ _client: thinkingClient() })),
     );
     expect(same.thinkingHandler).toBe(anthropicThinkingHandler);
     expect(await signaturesAfterRun(same)).toEqual([SIG]);
-    // Nothing says which side answered, so one wire's handler is never run
-    // on the other's thinking.
+  });
+
+  it('withFallback: different handlers DISPATCH on the side that answered — the signed block still round-trips', async () => {
+    // Dropping the handler here lost the block, and the next `.thinking()` +
+    // tools call was a 400.
     const mixed = withFallback(
       anthropic({ _client: thinkingClient() }),
       openai({ _client: {} as never }),
     );
-    expect(mixed.thinkingHandler).toBeUndefined();
+    expect(mixed.thinkingHandler?.id).toBe('anthropic-or-openai');
+    expect(await signaturesAfterRun(mixed)).toEqual([SIG]);
+  });
+
+  it("withFallback: each side's thinking is read by its OWN handler", async () => {
+    const reader = (id: string): ThinkingHandler => ({
+      id,
+      normalize: (raw) => [{ type: 'thinking', content: `${id}:${String(raw)}` }],
+    });
+    const side = (handler: ThinkingHandler, down: boolean): LLMProvider => ({
+      name: handler.id,
+      thinkingHandler: handler,
+      complete: async () => {
+        if (down) throw new Error('down');
+        return { content: 'ok', toolCalls: [], usage: { input: 0, output: 0 }, rawThinking: 'x' };
+      },
+    });
+    const blocksOf = async (provider: LLMProvider) => {
+      const agent = Agent.create({ provider, model: 'm' }).system('s').build();
+      await agent.run({ message: 'go' });
+      return (
+        agent.getLastSnapshot()?.sharedState as { thinkingBlocks?: { content: string }[] }
+      ).thinkingBlocks?.map((b) => b.content);
+    };
+    const [a, b] = [reader('a'), reader('b')];
+    expect(await blocksOf(withFallback(side(a, false), side(b, false)))).toEqual(['a:x']);
+    expect(await blocksOf(withFallback(side(a, true), side(b, false)))).toEqual(['b:x']);
   });
 
   it('boundary: a declaration that is not a handler is refused at build, by provider name', () => {

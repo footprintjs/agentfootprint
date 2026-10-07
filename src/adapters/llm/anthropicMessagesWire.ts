@@ -56,7 +56,7 @@ export type AnthropicContentBlock =
   // when continuing a tool-using extended-thinking conversation;
   // signature MUST be byte-exact or Anthropic returns HTTP 400.
   | { type: 'thinking'; thinking: string; signature?: string }
-  | { type: 'redacted_thinking'; signature?: string };
+  | { type: 'redacted_thinking'; data: string };
 
 export interface AnthropicTool {
   name: string;
@@ -173,10 +173,9 @@ export function toAnthropicMessages(
       if (m.thinkingBlocks && m.thinkingBlocks.length > 0) {
         for (const tb of m.thinkingBlocks) {
           if (tb.type === 'redacted_thinking') {
-            blocks.push({
-              type: 'redacted_thinking',
-              ...(tb.signature !== undefined && { signature: tb.signature }),
-            });
+            // The encrypted payload rides `signature` on the normalized
+            // block (the handler puts it there); Anthropic takes it as `data`.
+            blocks.push({ type: 'redacted_thinking', data: tb.signature ?? '' });
           } else {
             blocks.push({
               type: 'thinking',
@@ -341,7 +340,7 @@ export async function* assembleAnthropicStream(
   >();
   const completedThinking: Array<
     | { type: 'thinking'; thinking: string; signature?: string }
-    | { type: 'redacted_thinking'; signature?: string }
+    | { type: 'redacted_thinking'; data: string }
   > = [];
   // Usage rides two places: message_start (input first) and message_delta
   // (running output). message_stop carries none.
@@ -380,7 +379,13 @@ export async function* assembleAnthropicStream(
         thinkingByIndex.set(data.index, {
           type: block.type,
           thinking: [],
-          signature: block.signature !== undefined ? [block.signature] : [],
+          // A redacted block arrives whole in its start event: its `data`.
+          signature:
+            block.type === 'redacted_thinking'
+              ? [block.data]
+              : block.signature !== undefined
+              ? [block.signature]
+              : [],
         });
       }
     } else if (event.event === 'content_block_delta') {
@@ -449,10 +454,7 @@ export async function* assembleAnthropicStream(
           const thinkingText = t.thinking.join('');
           const signature = t.signature.join('');
           if (t.type === 'redacted_thinking') {
-            completedThinking.push({
-              type: 'redacted_thinking',
-              ...(signature.length > 0 && { signature }),
-            });
+            completedThinking.push({ type: 'redacted_thinking', data: signature });
           } else {
             completedThinking.push({
               type: 'thinking',
