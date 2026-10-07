@@ -1,5 +1,0 @@
----
-type: fixed
----
-
-**A reliability fail-fast under `reactMode: 'dynamic-grouped'` now raises `ReliabilityFailFastError` instead of returning `''`.** The grouped chart runs the LLM call inside the `sf-llm-call` subflow, and its fail-fast exit — a schema failure or provider error no rule claims, a `fail-fast` rule, a mid-stream failure, a pre-check — stopped only that subflow and left its record inside it. The outer loop went on to the `Final` branch — its `turn_end` event and any final memory writes — and the run resolved with an empty answer, so a run that should have failed loudly looked like a success. The boundary now ends the run on that break and carries the record out, so all three modes raise the same error with the same `kind`, `reason`, `payload` and `cause` (masked under an output policy), `snapshot.sharedState` holds the same `reliabilityFail*` record, and no `turn_end` fires. Behaviour change: a grouped agent with `.reliability(...)` that used to return `''` on these exits now rejects.
