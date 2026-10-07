@@ -52,8 +52,23 @@
  * ── LIFETIME ────────────────────────────────────────────────────────────────
  * One memo per run, bound to the run id (the salt). `forRun` hands back the
  * current run's memo, and a different run id starts a fresh one — so a reused
- * agent never carries one run's strings into the next, and nothing here grows
- * past one run.
+ * agent never carries one run's strings into the next.
+ *
+ * Within a run, the two string memos (BY PREIMAGE, and the transform chain's
+ * links) keep TWO CALLS' worth — the call being minted and the one before it.
+ * Each `forRun` is one mint, and it rotates them. A piece that repeats from one
+ * call to the next (a system prompt, a tool schema, the chain's prefix) is
+ * found; a piece that changes every call (a system prompt with the time in it)
+ * is not kept past the next call. What the memo holds is bounded by two
+ * requests' worth — their non-message pieces and one chain link per message —
+ * never by how many calls the run made. The BY OBJECT memo is weak — it lives
+ * as long as the message objects do.
+ *
+ * ── TOTAL ───────────────────────────────────────────────────────────────────
+ * A receipt is bookkeeping and must never stop a run. A message whose fields
+ * cannot be read (a throwing getter on an object a caller handed in) is not
+ * memoized: `message()` hands back a fresh, unkept record and the mint derives
+ * everything from the message as it would with no memo at all.
  */
 
 import type { MessageMeasure, MessageMeasureCache } from './requestMeasurement.js';
@@ -88,6 +103,9 @@ export interface RunDigests extends MessageMeasureCache {
   /** The chain link after `previous` and `digest` — see `receipt.ts` ·
    *  `transformHashOf`. Computed by `compute` the first time only. */
   link(previous: string, digest: string, compute: () => string): string;
+  /** @internal Strings the two string memos hold right now — pinned by
+   *  test/lib/time-travel/receipt-incremental.test.ts (bounded by two calls). */
+  retained(): number;
 }
 
 /**
@@ -109,13 +127,14 @@ export interface ReceiptDigests {
 // FOLD · the one owner of "already hashed this run": buildReceipt reads it, and
 // nothing else re-derives a receipt digest across calls
 // detached: no — it holds the message objects of the run as WeakMap keys (never
-// keeps them alive) and the preimage strings it hashed.
+// keeps them alive) and the preimage strings of the last two calls.
 /** Start an empty memo. See {@link ReceiptDigests}. */
 export function createReceiptDigests(): ReceiptDigests {
-  let current: RunDigests | undefined;
+  let current: (RunDigests & { readonly nextCall: () => void }) | undefined;
   return {
     forRun(runId) {
       if (current === undefined || current.runId !== runId) current = runDigests(runId);
+      else current.nextCall();
       return current;
     },
   };
@@ -127,46 +146,65 @@ interface MessageEntry {
   readonly digests: MessageDigests;
 }
 
-function runDigests(runId: string): RunDigests {
-  const byPreimage = new Map<string, string>();
+function runDigests(runId: string): RunDigests & { readonly nextCall: () => void } {
+  const byPreimage = twoCalls();
+  const links = twoCalls();
   const byObject = new WeakMap<object, MessageEntry>();
-  const links = new Map<string, string>();
   const message = (value: object): MessageDigests => {
-    const keys = Object.keys(value);
-    const held = byObject.get(value);
-    if (held !== undefined && sameFields(held, value, keys)) return held.digests;
-    const entry: MessageEntry = {
-      keys,
-      values: keys.map((key) => (value as Record<string, unknown>)[key]),
-      digests: {},
-    };
-    byObject.set(value, entry);
-    return entry.digests;
+    try {
+      const keys = Object.keys(value);
+      const held = byObject.get(value);
+      if (held !== undefined && sameFields(held, value, keys)) return held.digests;
+      const entry: MessageEntry = {
+        keys,
+        values: keys.map((key) => (value as Record<string, unknown>)[key]),
+        digests: {},
+      };
+      byObject.set(value, entry);
+      return entry.digests;
+    } catch {
+      return {}; // unreadable: derive everything afresh, keep nothing (see TOTAL)
+    }
   };
   return {
     runId,
-    hash(preimage, compute) {
-      let value = byPreimage.get(preimage);
-      if (value === undefined) {
-        value = compute();
-        byPreimage.set(preimage, value);
-      }
-      return value;
-    },
+    hash: (preimage, compute) => byPreimage.get(preimage, compute),
     message,
     measureOf: (value) => message(value).measure,
     keep: (value, measure) => {
       message(value).measure = measure;
     },
-    link(previous, digest, compute) {
-      const key = `${previous}\u001F${digest}`;
-      let value = links.get(key);
+    link: (previous, digest, compute) => links.get(`${previous}\u001F${digest}`, compute),
+    retained: () => byPreimage.size() + links.size(),
+    nextCall: () => {
+      byPreimage.rotate();
+      links.rotate();
+    },
+  };
+}
+
+/**
+ * A string memo that keeps the current call's entries and the previous call's,
+ * nothing older — see LIFETIME. A hit in the previous call's entries is carried
+ * into the current one.
+ */
+function twoCalls() {
+  let current = new Map<string, string>();
+  let previous = new Map<string, string>();
+  return {
+    get(key: string, compute: () => string): string {
+      let value = current.get(key);
       if (value === undefined) {
-        value = compute();
-        links.set(key, value);
+        value = previous.get(key) ?? compute();
+        current.set(key, value);
       }
       return value;
     },
+    rotate(): void {
+      previous = current;
+      current = new Map();
+    },
+    size: (): number => current.size + previous.size,
   };
 }
 

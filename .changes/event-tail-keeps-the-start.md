@@ -10,4 +10,6 @@ in its place — the stream stays whole and in order — but holds no slot, and 
 payload object. Identity is decided on the whole payload, never on the 32-bit `contentHash`, so two
 different pieces are never merged. The same run now keeps all of its events (`droppedEvents: 0`).
 `eventCount` still counts every captured event, repeats included; eviction is still oldest-first, so
-the retained events are one contiguous suffix of the stream.
+the retained events are one contiguous suffix of the stream. The tail stays bounded in memory: slots
+and repeats together are capped at ten times `maxEvents` (100,000 events at the default), past which
+the oldest go and are counted as dropped.

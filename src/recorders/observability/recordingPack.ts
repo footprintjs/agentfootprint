@@ -461,7 +461,11 @@ const SKIP: unique symbol = Symbol('skip');
  */
 function normalize(holder: object, key: string, raw: unknown): unknown {
   let value = raw;
-  if (value !== null && (typeof value === 'object' || typeof value === 'bigint')) {
+  if (
+    value !== null &&
+    (typeof value === 'object' || typeof value === 'function' || typeof value === 'bigint')
+  ) {
+    // JSON asks a function for `toJSON` too — it is an object.
     const toJSON = (value as { toJSON?: unknown }).toJSON;
     if (typeof toJSON === 'function') value = (toJSON as (k: string) => unknown).call(value, key);
   }
@@ -477,13 +481,13 @@ function normalize(holder: object, key: string, raw: unknown): unknown {
  * A boxed primitive as `JSON.stringify` reads it — by its INTERNAL SLOT, not
  * its prototype: `new Number(3)` is `3`, `Object(1n)` is a BigInt (refused),
  * and an object that merely inherits from `Number.prototype` is an object.
- * Only an object whose prototype is not `Object.prototype` (or `null`) can be
- * one, so plain data — every recording — takes no probe at all.
+ * Only an object whose prototype is not `Object.prototype` can be one (a box
+ * keeps its slot when its prototype is set to `null`), so plain data — every
+ * recording — takes no probe at all.
  */
 function unboxed(value: unknown): unknown {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return value;
-  const prototype = Object.getPrototypeOf(value);
-  if (prototype === Object.prototype || prototype === null) return value;
+  if (Object.getPrototypeOf(value) === Object.prototype) return value;
   if (hasSlot(Number.prototype.valueOf, value)) return Number(value);
   if (hasSlot(String.prototype.valueOf, value)) return String(value);
   if (hasSlot(Boolean.prototype.valueOf, value)) return Boolean.prototype.valueOf.call(value);

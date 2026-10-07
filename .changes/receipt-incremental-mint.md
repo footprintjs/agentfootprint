@@ -6,7 +6,8 @@ Every model call mints a receipt, and the mint used to hash and measure the whol
 every call: on an agent run with 1,000-row tool results the hashing grew with the square of the
 iteration count — 30 MB of SHA-256 input at 40 iterations, 120 MB at 80, the mint 45–50% of the
 run's CPU. A per-run memo now keeps, for each message object, its entry hash, its digest and its
-request measurement (counts and JSON size, never a copy of its text), so each call does work in
+request measurement (counts and JSON size, never a copy of its text) — and its strings for two calls
+only, so a system prompt that changes every call is not held for the run — so each call does work in
 proportion to the messages it added: 1.5 MB at 40 iterations, 3 MB at 80, the same ~37 KB on every
 call. Every receipt field except one is byte-identical to before, memo or no memo; the request
 measurement equals the whole-request walk, limits included.

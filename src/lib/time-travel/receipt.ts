@@ -774,8 +774,10 @@ const TRANSFORM_CHAIN_SEED = 'agentfootprint.transform.chain.v1';
  * ```
  *
  * A value `stableJson` cannot produce is recorded as {@link UNSERIALIZABLE} in
- * its place, never as an empty string. A receipt minted before the prefix
- * existed carries a bare 16-hex value: verify that one with
+ * its place, never as an empty string. A request that cannot be read at all (a
+ * property that throws when read) is `"chain-v1:" + H(link₀ + "\u001F" +
+ * UNSERIALIZABLE)` — the function never throws. A receipt minted before the
+ * prefix existed carries a bare 16-hex value: verify that one with
  * `receiptHash(runId, stableJson(request))`.
  *
  * @example
@@ -797,16 +799,27 @@ function chainedTransformHash(
   request: unknown,
   memo: RunDigests | undefined,
 ): string {
-  const hash = hasherFor(runId, memo);
-  let link = hash(TRANSFORM_CHAIN_SEED);
-  for (const message of messagesOf(request)) {
-    const digest = elementDigestOf(message, runId, memo);
-    const previous = link;
-    const next = (): string => receiptHash(runId, `${previous}${SEP}${digest}`);
-    link = memo === undefined ? next() : memo.link(previous, digest, next);
+  const seed = hasherFor(runId, memo)(TRANSFORM_CHAIN_SEED);
+  let link = seed;
+  let head: string | undefined;
+  try {
+    for (const message of messagesOf(request)) {
+      const digest = elementDigestOf(message, runId, memo);
+      const previous = link;
+      const next = (): string => receiptHash(runId, `${previous}${SEP}${digest}`);
+      link = memo === undefined ? next() : memo.link(previous, digest, next);
+    }
+    head = stableJson(hasMessagesArray(request) ? headOf(request) : request);
+  } catch {
+    // Unreadable (a property that throws when read): the seed and the mark,
+    // never a throw — a receipt is bookkeeping and must never stop a run.
+    link = seed;
+    head = undefined;
   }
-  const head = stableJson(hasMessagesArray(request) ? headOf(request) : request);
-  return `${TRANSFORM_HASH_PREFIX}${hash(`${link}${SEP}${head ?? UNSERIALIZABLE}`)}`;
+  // The last hash is taken directly, never through the memo: its preimage
+  // holds the whole head and changes every call, so keeping it would only hold
+  // memory.
+  return `${TRANSFORM_HASH_PREFIX}${receiptHash(runId, `${link}${SEP}${head ?? UNSERIALIZABLE}`)}`;
 }
 
 /** A salted hash, read from the run's memo when there is one. */
@@ -871,27 +884,32 @@ function serializableElement(value: unknown, memo: RunDigests | undefined): bool
  * the two requests is — and that rest is the small part (system prompt, tools,
  * dials, markers). The messages still decide `'unknown'`: each one's
  * serializability is read from the run's memo, computed once per message.
- * Any other pair — a strategy that rebuilt the messages, a mint with no memo —
- * takes the whole comparison, as before.
+ * Any other pair — a strategy that rebuilt the messages, a mint with no memo, a
+ * request the short path cannot read — takes the whole comparison, as before.
  */
 function transformVerdict(
   base: unknown,
   prepared: unknown,
   memo: RunDigests | undefined,
 ): Receipt['cache']['transform'] {
-  if (
-    memo !== undefined &&
-    hasMessagesArray(base) &&
-    hasMessagesArray(prepared) &&
-    base.messages === prepared.messages
-  ) {
-    const restOfBase = stableJson(headOf(base));
-    const restOfPrepared = base === prepared ? restOfBase : stableJson(headOf(prepared));
-    if (restOfBase === undefined || restOfPrepared === undefined) return 'unknown';
-    for (const message of base.messages) {
-      if (!serializableElement(message, memo)) return 'unknown';
+  try {
+    if (
+      memo !== undefined &&
+      hasMessagesArray(base) &&
+      hasMessagesArray(prepared) &&
+      base.messages === prepared.messages
+    ) {
+      const restOfBase = stableJson(headOf(base));
+      const restOfPrepared = base === prepared ? restOfBase : stableJson(headOf(prepared));
+      if (restOfBase === undefined || restOfPrepared === undefined) return 'unknown';
+      for (const message of base.messages) {
+        if (!serializableElement(message, memo)) return 'unknown';
+      }
+      return restOfBase === restOfPrepared ? 'unchanged' : 'rewritten';
     }
-    return restOfBase === restOfPrepared ? 'unchanged' : 'rewritten';
+  } catch {
+    // A request the short path cannot read (a property that throws when read)
+    // takes the whole comparison, which `stableJson` keeps total.
   }
   const whole = stableJson(base);
   const returned = stableJson(prepared);

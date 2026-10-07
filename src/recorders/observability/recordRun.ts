@@ -102,7 +102,9 @@ export interface RecordRunOptions {
    * field for field, to one the recording still holds is kept in its place but
    * holds no slot, and shares that one's payload. Counted, those repeats grow
    * with the square of the iteration count and evicted the start of a long run
-   * (a 100-iteration run opened at iteration ~33).
+   * (a 100-iteration run opened at iteration ~33). The tail stays bounded:
+   * slots and repeats together are capped at ten times `maxEvents` (each
+   * repeat is still a small envelope), past which the oldest go, as dropped.
    */
   readonly maxEvents?: number;
   /**

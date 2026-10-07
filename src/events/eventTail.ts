@@ -45,6 +45,14 @@
  * them, so the retained events are always ONE contiguous suffix of the
  * stream and `firstRetainedIndex` still says where it starts.
  *
+ * The tail stays BOUNDED all the same. A repeat holds no slot, but it is still
+ * an envelope in memory (its own type and meta beside the shared payload), so
+ * the whole tail — slots and repeats together — is capped at
+ * {@link REPEAT_ALLOWANCE} times the cap: 100,000 events at the default. A
+ * 100-iteration run (~11,500 events, ~10,000 of them repeats) keeps every one;
+ * a run long enough to cross that loses its oldest events, reported as
+ * dropped, exactly as before this rule.
+ *
  * Internal: not exported from any barrel. Both consumers wrap it in their
  * own surface (`RunRecorder.droppedEvents`, the toolpack's ⚠ marker).
  */
@@ -110,6 +118,8 @@ export interface EventTail {
 export function eventTail(maxEvents: number = DEFAULT_MAX_EVENTS): EventTail {
   const cap =
     Number.isFinite(maxEvents) && maxEvents > 0 ? Math.floor(maxEvents) : DEFAULT_MAX_EVENTS;
+  // Slots and repeats together — the memory bound (see the module header).
+  const total = cap * REPEAT_ALLOWANCE;
   // The retained window is `events[start…]`; `slot[i]` says whether
   // `events[i]` holds a slot (a repeat does not). Eviction advances `start`
   // rather than shifting the array, and the dead prefix is cut in bulk.
@@ -143,7 +153,7 @@ export function eventTail(maxEvents: number = DEFAULT_MAX_EVENTS): EventTail {
         held += 1;
         if (event.type === ANNOUNCEMENT) announcements.hold(event.payload);
       }
-      while (held > cap) evictOldest();
+      while (held > cap || events.length - start > total) evictOldest();
       if (start > COMPACT_AT && start * 2 > events.length) {
         events.splice(0, start);
         slot.splice(0, start);
@@ -168,6 +178,13 @@ const ANNOUNCEMENT = 'agentfootprint.context.injected';
 
 /** Cut the evicted prefix once it is this long and at least half the array. */
 const COMPACT_AT = 1024;
+
+/**
+ * How many events — slots and repeats together — the tail holds per slot of
+ * its cap: the bound on memory a repeat's envelope still costs. See the module
+ * header.
+ */
+export const REPEAT_ALLOWANCE = 10;
 
 /** The announcement payloads the tail holds a slot for, findable by content. */
 function heldAnnouncements() {

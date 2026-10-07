@@ -12,6 +12,11 @@
  *                    minted without it, call after call, edits included.
  *   - CONTRACT     — `transformHashOf` recomputes `cache.transformHash`; the
  *                    value names its scheme.
+ *   - RETENTION    — the memo holds two calls' worth, never the run's: a piece
+ *                    that changes every call is gone by the next one.
+ *   - TOTAL        — a property that throws when read never makes the mint
+ *                    throw (a receipt is bookkeeping): memo or not, the same
+ *                    receipt; `transformHashOf` never throws.
  *   - WORK COUNT   — on a real agent run (mock provider, caching declared), the
  *                    SHA-256 input and the UTF-8 encoding the mint does per call
  *                    stay flat as the run grows, and 4× the iterations cost
@@ -309,6 +314,82 @@ describe('buildReceipt — the memo changes no byte', () => {
     const other = buildReceipt({ ...input!, runId: 'run-8' }, digests);
     expect(other).toEqual(buildReceipt({ ...input!, runId: 'run-8' }));
     expect(other.messages.entries[0]!.hash).not.toBe(first.messages.entries[0]!.hash);
+  });
+});
+
+describe('the memo holds two calls, never the run', () => {
+  it('RETENTION: a piece that changes every call is gone after the next; a stable one stays found', () => {
+    const tools = [{ name: 't', description: 'd', inputSchema: { type: 'object' } }];
+    const digests = createReceiptDigests();
+    const memo = digests.forRun('run-7'); // the object every mint below reads
+    const history: LLMMessage[] = [];
+    for (let call = 0; call < 40; call++) {
+      history.push({ role: 'user', content: `m${call}` } as LLMMessage);
+      const messages = [...history];
+      const baseRequest = { model: 'm', systemPrompt: `sys at ${call}`, messages, tools };
+      const preparedRequest = { ...baseRequest, cacheMarkers: [{ field: 'messages' }] };
+      buildReceipt(
+        {
+          runId: 'run-7',
+          epoch: call,
+          model: 'm',
+          provider: 'mock',
+          systemText: `sys at ${call}`,
+          systemPieces: [],
+          messages,
+          requestOnly: [],
+          tools,
+          forced: null,
+          withheld: null,
+          baseRequest,
+          preparedRequest,
+          strategy: 'breakpoints',
+        } as BuildReceiptInput,
+        digests,
+      );
+      // Two calls' worth: per call one system text, one schema, the chain's
+      // seed and one link per message — never the 40 calls behind it.
+      expect(memo.retained()).toBeLessThanOrEqual(2 * (messages.length + 3));
+    }
+    const miss = () => 'MISS';
+    expect(memo.hash('sys at 0', miss)).toBe('MISS'); // changed every call: not kept
+    expect(memo.hash('sys at 39', miss)).not.toBe('MISS'); // this call's: found
+  });
+});
+
+describe('the mint is total — a receipt never stops a run', () => {
+  const throwing = (target: object) =>
+    Object.defineProperty(target, 'x', {
+      enumerable: true,
+      get() {
+        throw new Error('boom');
+      },
+    });
+
+  it('TOTAL: a prepared request with a property that throws when read is "unknown", memo or not', () => {
+    const [input] = receiptInputs(9);
+    const prepared = throwing({ ...(input!.baseRequest as object) });
+    const odd = { ...input!, preparedRequest: prepared };
+    const plain = buildReceipt(odd);
+    expect(plain.cache.transform).toBe('unknown');
+    expect(buildReceipt(odd, createReceiptDigests())).toEqual(plain);
+  });
+
+  it('TOTAL: a message with a field that throws when read — memo or not, the same receipt', () => {
+    const [input] = receiptInputs(9);
+    const line = throwing({ role: 'user', content: 'hi' }) as LLMMessage;
+    const messages = [...input!.messages, line];
+    const baseRequest = { ...(input!.baseRequest as object), messages };
+    const odd = { ...input!, messages, baseRequest, preparedRequest: baseRequest };
+    const plain = buildReceipt(odd);
+    expect(buildReceipt(odd, createReceiptDigests())).toEqual(plain);
+  });
+
+  it('TOTAL: transformHashOf never throws — an unreadable request is the seed and the mark', () => {
+    const hostile = throwing({ messages: [] });
+    const unreadable = throwing({});
+    expect(transformHashOf('run-1', hostile)).toMatch(/^chain-v1:[0-9a-f]{16}$/);
+    expect(transformHashOf('run-1', hostile)).toBe(transformHashOf('run-1', unreadable));
   });
 });
 

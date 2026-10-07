@@ -122,6 +122,10 @@ describe('packRecording — the law', () => {
         boxed: [new Number(3), new String('s'), new Boolean(false)],
         // Inherits from Number.prototype but has no number inside: an object.
         lookalike: Object.assign(Object.create(Number.prototype) as object, { x: 1 }),
+        // A box keeps its slot with a null prototype; JSON reads a Boolean's slot.
+        nullProtoBoolean: Object.setPrototypeOf(new Boolean(true), null) as object,
+        // JSON asks a FUNCTION for toJSON too.
+        fnWithToJSON: Object.assign(() => 0, { toJSON: () => 7 }),
         holes: [1, , 3], // eslint-disable-line no-sparse-arrays
         protoKey,
         custom: { toJSON: () => ({ made: 'by toJSON', pad: 'z'.repeat(70) }) },
@@ -196,6 +200,10 @@ describe('unpackRecording — refusals', () => {
     // A boxed BigInt too — JSON reads the box by its internal slot.
     expect(() => JSON.stringify({ n: Object(1n) })).toThrow(TypeError);
     expect(() => packRecording({ snapshot: { n: Object(1n) } } as never)).toThrow(TypeError);
+    // A Number box with a null prototype: JSON cannot convert it, nor can the packer.
+    const nullProtoNumber = Object.setPrototypeOf(new Number(3), null) as object;
+    expect(() => JSON.stringify({ n: nullProtoNumber })).toThrow(TypeError);
+    expect(() => packRecording({ snapshot: { n: nullProtoNumber } } as never)).toThrow(TypeError);
   });
 });
 

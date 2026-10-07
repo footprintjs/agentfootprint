@@ -349,7 +349,11 @@ pinned by `test/lib/time-travel/receipt-incremental.test.ts`, which also
 counts the SHA-256 input and UTF-8 encoding per call on a real agent run (flat
 per call; 4× the iterations, ~4× the work). The one assumption a memo hit
 makes: a message's nested values are not edited in place while the object is
-reused — true of the agent's history, which is committed state.
+reused — true of the agent's history, which is committed state. The memo's
+strings are kept for TWO calls (the one being minted and the one before), so a
+system prompt that changes every call is not held for the run; and the mint
+stays total — a property that throws when read gives the receipt it gave
+without the memo (`'unknown'`), never a throw.
 
 `epochAt` / `epochLocations` are the one owner of *where* an epoch's pieces
 live — the run's own log under `reactMode: 'dynamic'`, the turn's inner

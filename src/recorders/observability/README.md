@@ -142,7 +142,9 @@ to the byte) and the packed 413 in `test/hosting/answer-account-op.test.ts`.
 A long run also keeps its START: the event tail's cap counts distinct events,
 and a re-announced piece of context (`context.injected`, equal field for field
 to one still held) is kept without taking a slot (`../../events/eventTail.ts`).
-A 100-iteration run used to open at iteration 34.
+A 100-iteration run used to open at iteration 34. The tail stays bounded: slots
+and repeats together are capped at ten times the cap (`REPEAT_ALLOWANCE`) —
+100,000 events at the default — past which the oldest go, as dropped.
 
 ## Saving a run: `recordRun` → `RecordingEnvelope` → a sink
 

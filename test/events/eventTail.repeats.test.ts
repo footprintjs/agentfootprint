@@ -19,7 +19,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { AgentfootprintEvent } from '../../src/events.js';
-import { eventTail } from '../../src/events/eventTail.js';
+import { eventTail, REPEAT_ALLOWANCE } from '../../src/events/eventTail.js';
 import { Agent, defineTool } from '../../src/index.js';
 import { mock } from '../../src/providers.js';
 import { recordRun } from '../../src/observe.js';
@@ -102,6 +102,18 @@ describe('eventTail — repeats', () => {
     const snap = tail.snapshot();
     expect(snap.events.map((e) => (e.meta as { n: number }).n)).toEqual([2]);
     expect(snap.dropped).toBe(2);
+  });
+
+  it('UNIT: the tail stays bounded — slots and repeats together at most REPEAT_ALLOWANCE × the cap', () => {
+    const tail = eventTail(2); // 2 slots, 20 events in all
+    for (let i = 0; i <= 100; i++) tail.push(announce('a', undefined, i));
+    const snap = tail.snapshot();
+    expect(snap.events.length).toBeLessThanOrEqual(2 * REPEAT_ALLOWANCE);
+    expect(snap.dropped + snap.events.length).toBe(101);
+    // Still one contiguous suffix, ending at the last event fired.
+    const ns = snap.events.map((e) => (e.meta as { n: number }).n);
+    expect(ns).toEqual(Array.from({ length: ns.length }, (_, i) => snap.firstRetainedIndex + i));
+    expect(ns[ns.length - 1]).toBe(100);
   });
 
   it('UNIT: count, dropped and the window agree across the bulk compaction', () => {
