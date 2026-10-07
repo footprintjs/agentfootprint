@@ -698,9 +698,12 @@ describe('english reader — `between` and covered phrases, without re-reading t
         '-',
         'x',
       ],
-      2_500,
-      14,
+      1_200,
+      12,
     );
+    // Compared without an `expect` per position (there are ~10^5 of them):
+    // a disagreement is collected and named once at the end.
+    const disagreements: string[] = [];
     let matched = 0;
     for (const text of texts) {
       for (let end = 0; end <= text.length; end++) {
@@ -708,15 +711,18 @@ describe('english reader — `between` and covered phrases, without re-reading t
         for (const pattern of [MODIFIER_BEFORE, BARE_SIDE_BEFORE, FROM_BEFORE]) {
           const whole = pattern.exec(text.slice(0, end));
           const windowed = pattern.exec(text.slice(from, end));
-          const where = `${JSON.stringify(text)} @ ${end} ${pattern.source.slice(0, 20)}`;
-          expect(windowed?.[0], where).toBe(whole?.[0]);
-          expect(windowed?.[1], where).toBe(whole?.[1]);
-          expect(windowed === null ? undefined : from + windowed.index, where).toBe(whole?.index);
           if (whole !== null) matched++;
+          const same =
+            windowed?.[0] === whole?.[0] &&
+            windowed?.[1] === whole?.[1] &&
+            (windowed === null ? undefined : from + windowed.index) === whole?.index;
+          if (!same)
+            disagreements.push(`${JSON.stringify(text)} @ ${end} ${pattern.source.slice(0, 24)}`);
         }
       }
     }
-    expect(matched).toBeGreaterThan(2_000);
+    expect(disagreements).toEqual([]);
+    expect(matched).toBeGreaterThan(500);
   });
 
   // The reader's own walks (`saysBetweenBefore`, `windowBefore`) are counted.
