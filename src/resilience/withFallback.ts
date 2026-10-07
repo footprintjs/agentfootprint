@@ -152,6 +152,15 @@ export function withFallback(
       (primary.carriesForcedToolChoice ?? false) && (fallback.carriesForcedToolChoice ?? false),
     // The combination, not the intersection — see `cachingOfPair`.
     ...(promptCaching !== undefined && { promptCaching }),
+    // The thinking handler only when BOTH sides declare the same one: it
+    // parses the raw thinking of whichever side answered, and nothing tells
+    // it which did, so one wire's handler on the other's thinking would
+    // mis-read it. Different or one-sided → none, and the run says so (no
+    // thinking stage) instead of guessing.
+    ...(primary.thinkingHandler !== undefined &&
+      primary.thinkingHandler === fallback.thinkingHandler && {
+        thinkingHandler: primary.thinkingHandler,
+      }),
     async complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
       try {
         return await primary.complete(req, hooks);

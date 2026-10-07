@@ -395,7 +395,7 @@ describe.skipIf(!built)('each door carries every constituent name it absorbed', 
   // Removal of the alias PATH must never become removal of a NAME. One sample
   // name per absorbed constituent, checked on the door that absorbed it.
   const ABSORBED: Readonly<Record<string, readonly string[]>> = {
-    './providers': ['mock', 'openaiEmbedder', 'staticTools', 'findThinkingHandler'],
+    './providers': ['mock', 'openaiEmbedder', 'staticTools', 'thinkingHandlerFor'],
     './memory': ['defineMemory', 'RedisStore'],
     './observe': [
       'recordRun',

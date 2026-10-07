@@ -28,6 +28,7 @@ import type {
   WireRole,
 } from '../types.js';
 import type { PromptCaching } from '../../cache/types.js';
+import type { ThinkingHandler } from '../../thinking/types.js';
 import { asContextWindowExceeded } from './contextWindow.js';
 import { azureChatCompletionsUrl } from './azureUrl.js';
 
@@ -282,12 +283,14 @@ export class BrowserOpenAIProvider implements LLMProvider {
   readonly carriesForcedToolChoice: boolean;
   /** Read off `inner` — it depends on the options, not on the class. */
   readonly promptCaching?: PromptCaching;
+  readonly thinkingHandler?: ThinkingHandler;
   private readonly inner: LLMProvider;
 
   constructor(options: BrowserOpenAIProviderOptions) {
     this.inner = browserOpenai(options);
     this.carriesForcedToolChoice = this.inner.carriesForcedToolChoice ?? false;
     if (this.inner.promptCaching !== undefined) this.promptCaching = this.inner.promptCaching;
+    if (this.inner.thinkingHandler !== undefined) this.thinkingHandler = this.inner.thinkingHandler;
   }
 
   // `hooks` is FORWARDED, not dropped — see LLMCallHooks in adapters/types.ts.
@@ -387,6 +390,7 @@ export function browserAzureOpenai(options: BrowserAzureOpenAIProviderOptions): 
       carriesForcedToolChoice: inner.carriesForcedToolChoice,
     }),
     ...(inner.promptCaching !== undefined && { promptCaching: inner.promptCaching }),
+    ...(inner.thinkingHandler !== undefined && { thinkingHandler: inner.thinkingHandler }),
     // `hooks` is FORWARDED, not dropped — see LLMCallHooks in adapters/types.ts.
     complete: (req, hooks) => inner.complete(withDeployment(req), hooks),
     ...(inner.stream && {
@@ -402,12 +406,14 @@ export class BrowserAzureOpenAIProvider implements LLMProvider {
   readonly carriesForcedToolChoice: boolean;
   /** Read off `inner` — it depends on the options, not on the class. */
   readonly promptCaching?: PromptCaching;
+  readonly thinkingHandler?: ThinkingHandler;
   private readonly inner: LLMProvider;
 
   constructor(options: BrowserAzureOpenAIProviderOptions) {
     this.inner = browserAzureOpenai(options);
     this.carriesForcedToolChoice = this.inner.carriesForcedToolChoice ?? false;
     if (this.inner.promptCaching !== undefined) this.promptCaching = this.inner.promptCaching;
+    if (this.inner.thinkingHandler !== undefined) this.thinkingHandler = this.inner.thinkingHandler;
   }
 
   // `hooks` is FORWARDED, not dropped — see LLMCallHooks in adapters/types.ts.

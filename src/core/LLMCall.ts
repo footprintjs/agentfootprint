@@ -82,7 +82,7 @@ import { normalizeRunInput } from './runInput.js';
 import { buildSystemPromptSlot } from './slots/buildSystemPromptSlot.js';
 import { buildMessagesSlot } from './slots/buildMessagesSlot.js';
 import { buildThinkingSubflow } from './slots/buildThinkingSubflow.js';
-import { findThinkingHandler } from '../thinking/registry.js';
+import { thinkingHandlerFor } from '../thinking/thinkingHandlerFor.js';
 import type { ThinkingBlock, ThinkingHandler } from '../thinking/types.js';
 import {
   joinSystemPrompt,
@@ -240,10 +240,9 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
   private readonly recordReceiptValue: boolean = true;
   private readonly structureRecorders?: readonly StructureRecorder[];
   private readonly groupTranslator?: GroupTranslator;
-  /** Auto-resolved from provider.name at construction time (same
-   *  convention Agent uses — see findThinkingHandler). When undefined,
-   *  sf-thinking is NOT mounted and the chart has zero thinking
-   *  overhead (build-time conditional mount). */
+  /** The provider's DECLARED handler, read at construction (same as Agent —
+   *  see thinkingHandlerFor). When undefined, sf-thinking is NOT mounted and
+   *  the chart has zero thinking overhead (build-time conditional mount). */
   private readonly thinkingHandler?: ThinkingHandler;
 
   // Run-scoped; refreshed each run().
@@ -276,13 +275,11 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
     if (opts.recordReceipt === false) this.recordReceiptValue = false;
     if (opts.structureRecorders) this.structureRecorders = opts.structureRecorders;
     if (opts.groupTranslator) this.groupTranslator = opts.groupTranslator;
-    // v2.14 alignment — auto-wire ThinkingHandler by provider.name. Same
-    // mechanism Agent uses (its own `findThinkingHandler` call in `Agent.ts`).
-    // When the registry has no
-    // handler for this provider (e.g., MockProvider), the field stays
-    // undefined and sf-thinking is not mounted.
-    const auto = findThinkingHandler(opts.provider.name);
-    if (auto) this.thinkingHandler = auto;
+    // The ThinkingHandler the provider DECLARES — the same resolution Agent
+    // uses (`thinkingHandlerFor`). A provider that declares none leaves the
+    // field undefined and sf-thinking is not mounted.
+    const declared = thinkingHandlerFor(opts.provider);
+    if (declared) this.thinkingHandler = declared;
     // Eager chart construction (footprintjs inventor convention): build
     // once at constructor time so `buildTimeStructure` is a stable
     // immutable object reference, each `StructureRecorder` fires
@@ -656,12 +653,12 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
       .tag(...milestoneTagsFor(STAGE_IDS.CALL_LLM));
 
     // Conditional sf-thinking — mounted only when a ThinkingHandler
-    // resolved (auto-wired by provider.name in the constructor). Same
+    // resolved (declared by the provider, read in the constructor). Same
     // build-time conditional pattern Agent uses (buildAgentChart.ts).
     if (thinkingHandler) {
       innerBuilder = innerBuilder.addSubFlowChartNext(
         SUBFLOW_IDS.THINKING,
-        buildThinkingSubflow(thinkingHandler),
+        buildThinkingSubflow(thinkingHandler, provider.name),
         'NormalizeThinking',
         {
           inputMapper: (parent) => ({

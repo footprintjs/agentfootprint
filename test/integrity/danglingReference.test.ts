@@ -27,6 +27,7 @@ import { dirname, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { danglingReferencesOf } from '../../src/integrity/dangling-reference/check.js';
 import { Agent, slidingWindow, defineTool } from '../../src/index.js';
+import { mockThinkingHandler } from '../../src/thinking/MockThinkingHandler.js';
 import type { LLMMessage, LLMProvider, LLMResponse } from '../../src/adapters/types.js';
 import type { AgentRunCheckpoint } from '../../src/index.js';
 import type { WindowRecord } from '../../src/core/agent/window/types.js';
@@ -156,6 +157,10 @@ function scriptedProvider(rounds: number): LLMProvider {
   let call = 0;
   return {
     name: 'mock',
+    // Declared, as `mock()` does: the reference was recorded when the name
+    // 'mock' auto-wired this handler, and its NormalizeThinking steps are part
+    // of the narrative this file pins step for step.
+    thinkingHandler: mockThinkingHandler,
     complete: async (): Promise<LLMResponse> => {
       call++;
       if (call > rounds) {

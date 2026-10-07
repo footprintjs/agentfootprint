@@ -280,6 +280,7 @@ export function foundry(options: FoundryProviderOptions = {}): LLMProvider {
       carriesForcedToolChoice: inner.carriesForcedToolChoice,
     }),
     ...(inner.promptCaching !== undefined && { promptCaching: inner.promptCaching }),
+    ...(inner.thinkingHandler !== undefined && { thinkingHandler: inner.thinkingHandler }),
     // `hooks` is FORWARDED, not dropped — see LLMCallHooks in adapters/types.ts.
     complete: (req, hooks) => inner.complete(withDeployment(req), hooks),
     ...(inner.stream && {

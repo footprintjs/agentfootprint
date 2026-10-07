@@ -307,6 +307,7 @@ export function withCircuitBreaker(
     }),
     // And for prompt caching: a breaker never changes what reaches the wire.
     ...(inner.promptCaching !== undefined && { promptCaching: inner.promptCaching }),
+    ...(inner.thinkingHandler !== undefined && { thinkingHandler: inner.thinkingHandler }),
     async complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
       rejectFastIfOpen(hooks);
       try {

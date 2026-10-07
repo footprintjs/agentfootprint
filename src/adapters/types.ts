@@ -584,6 +584,12 @@ export interface LLMProvider {
    */
   readonly promptCaching?: import('../cache/types.js').PromptCaching;
   /**
+   * The handler that normalizes this wire's thinking (`rawThinking`). The
+   * agent uses it unless `.thinkingHandler()` overrides it; absent = no
+   * thinking stage. Never chosen by `name` — a wrapper must forward it.
+   */
+  readonly thinkingHandler?: import('../thinking/types.js').ThinkingHandler;
+  /**
    * v7.21 — which roles this provider carries INSIDE the `messages` array.
    *
    * The wires disagree, and the disagreement is invisible from the outside:

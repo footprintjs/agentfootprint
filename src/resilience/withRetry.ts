@@ -131,6 +131,9 @@ export function withRetry(provider: LLMProvider, options: WithRetryOptions = {})
     // `+retry` suffix above sent every retried Anthropic call out with no
     // cache markers at all.
     ...(provider.promptCaching !== undefined && { promptCaching: provider.promptCaching }),
+    // And the thinking it returns: the agent used to look the handler up by
+    // `name`, so a retried Anthropic provider dropped its signed thinking.
+    ...(provider.thinkingHandler !== undefined && { thinkingHandler: provider.thinkingHandler }),
     async complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
       // t0 for the `recovered` report's totalDurationMs. New
       // instrumentation (the decorator did not measure this before v7.8),

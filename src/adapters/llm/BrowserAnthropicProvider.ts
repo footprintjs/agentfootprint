@@ -29,6 +29,7 @@ import type {
 } from '../types.js';
 import { asContextWindowExceeded } from './contextWindow.js';
 import { ANTHROPIC_PROMPT_CACHING } from './anthropicCacheWire.js';
+import { anthropicThinkingHandler } from '../../thinking/AnthropicThinkingHandler.js';
 import {
   assembleAnthropicStream,
   buildMessagesBody,
@@ -119,6 +120,7 @@ export function browserAnthropic(options: BrowserAnthropicProviderOptions): LLMP
     // The same body `anthropic()` builds — `buildMessagesBody` applies the
     // markers — so the same declaration (see anthropicCacheWire.ts).
     promptCaching: ANTHROPIC_PROMPT_CACHING,
+    thinkingHandler: anthropicThinkingHandler,
     async complete(req: LLMRequest): Promise<LLMResponse> {
       const body: AnthropicRequestBody = {
         ...buildBody(req, defaultModel, defaultMaxTokens, parallelToolCalls),
@@ -175,6 +177,7 @@ export class BrowserAnthropicProvider implements LLMProvider {
   readonly carriesInMessages = CARRIES_IN_MESSAGES;
   readonly carriesForcedToolChoice = true;
   readonly promptCaching = ANTHROPIC_PROMPT_CACHING;
+  readonly thinkingHandler = anthropicThinkingHandler;
   private readonly inner: LLMProvider;
 
   constructor(options: BrowserAnthropicProviderOptions) {

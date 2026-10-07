@@ -24,6 +24,7 @@
 import { isSaidByPerson } from '../../lib/saidByPerson.js';
 import { sleep } from '../../lib/sleep.js';
 import type { LLMChunk, LLMProvider, LLMRequest, LLMResponse, WireRole } from '../types.js';
+import { mockThinkingHandler } from '../../thinking/MockThinkingHandler.js';
 
 /** Either a fixed value (in ms) or a random `[min, max]` range (inclusive). */
 export type LatencyMs = number | readonly [number, number];
@@ -127,6 +128,8 @@ export class MockProvider implements LLMProvider {
    * cheap rehearsal the one path you could only rehearse in production.
    */
   readonly carriesForcedToolChoice = true;
+  /** Normalizes the scripted `rawThinking` a reply carries. */
+  readonly thinkingHandler = mockThinkingHandler;
   private readonly reply?: string;
   private readonly replies?: readonly MockReply[];
   private repliesCursor = 0;

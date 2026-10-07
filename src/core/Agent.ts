@@ -310,7 +310,7 @@ export type { SkillGraphOptions } from './agent/AgentBuilder.js';
 // Per-skill model switching (9.19.0) — the declared brain shapes.
 export type { ProviderChoice, EscalationPolicy } from './agent/skillBrains.js';
 import { buildThinkingSubflow } from './slots/buildThinkingSubflow.js';
-import { findThinkingHandler } from '../thinking/registry.js';
+import { thinkingHandlerFor } from '../thinking/thinkingHandlerFor.js';
 import type { ThinkingHandler } from '../thinking/types.js';
 export { AgentBuilder };
 
@@ -934,8 +934,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   private readonly reliabilityConfig?: ReliabilityConfig;
 
   /**
-   * Resolved ThinkingHandler (v2.14+). Auto-wired by `provider.name`
-   * via `findThinkingHandler` UNLESS the builder explicitly set one
+   * Resolved ThinkingHandler (v2.14+). The provider's DECLARED one
+   * (`thinkingHandlerFor`) UNLESS the builder explicitly set one
    * (or `null` to opt out). When undefined, the NormalizeThinking
    * sub-subflow is NOT mounted at chart build time — zero overhead
    * for non-thinking agents.
@@ -1395,19 +1395,19 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.toolTeardownTimeoutMs = opts.toolTeardownTimeoutMs ?? TOOL_TEARDOWN_TIMEOUT_MS;
     if (reliabilityConfig !== undefined) this.reliabilityConfig = reliabilityConfig;
     // v2.14 — Resolve thinking handler. Three states:
-    //   - thinkingHandlerValue === undefined → auto-wire by provider.name
+    //   - thinkingHandlerValue === undefined → the provider's DECLARED handler
     //   - thinkingHandlerValue === null      → opt out (no handler)
     //   - thinkingHandlerValue: ThinkingHandler → explicit override
-    // Auto-wire returns undefined for providers without a registered
-    // handler (gpt-4o, mistral, etc.), in which case the subflow is NOT
-    // mounted at chart build time.
+    // A provider that declares none gets no subflow at chart build time.
+    // Never chosen by `provider.name`: a renaming wrapper that forwards the
+    // declaration keeps it.
     if (thinkingHandlerValue === null) {
       // explicit opt-out
     } else if (thinkingHandlerValue !== undefined) {
       this.thinkingHandler = thinkingHandlerValue;
     } else {
-      const auto = findThinkingHandler(opts.provider.name);
-      if (auto) this.thinkingHandler = auto;
+      const declared = thinkingHandlerFor(opts.provider);
+      if (declared) this.thinkingHandler = declared;
     }
     if (thinkingBudgetValue !== undefined) this.thinkingBudget = thinkingBudgetValue;
     this.appName = voice.appName;
@@ -5357,12 +5357,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     });
 
     // v2.14 — Build the NormalizeThinking sub-subflow only when a
-    // ThinkingHandler resolved (auto-wired by provider.name OR
+    // ThinkingHandler resolved (declared by the provider OR
     // explicitly set via .thinkingHandler()). Conditional mount ensures
     // zero overhead for non-thinking agents — the chart has zero extra
     // stages when undefined.
     const thinkingSubflow = this.thinkingHandler
-      ? buildThinkingSubflow(this.thinkingHandler)
+      ? buildThinkingSubflow(this.thinkingHandler, this.provider.name)
       : undefined;
 
     // Chart composition extracted to ./agent/buildAgentChart.ts (v2.11.2).

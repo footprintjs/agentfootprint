@@ -173,7 +173,7 @@ export interface AgentChartDeps {
   /**
    * Optional thinking-normalization sub-subflow (v2.14+). Mounted as a
    * stage AFTER CallLLM, BEFORE Route, only when a `ThinkingHandler`
-   * resolved (either auto-wired by `provider.name` or explicitly set
+   * resolved (declared by the provider or explicitly set
    * via `.thinkingHandler()`). When undefined, the stage is NOT added —
    * zero overhead for non-thinking agents (build-time conditional mount).
    */
@@ -1023,7 +1023,7 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
     // stage's commit bundle, from the same table `milestoneFor` reads.
     .tag(...milestoneTagsFor(STAGE_IDS.CALL_LLM));
   // v2.14 — conditional NormalizeThinking sub-subflow. Mounted ONLY
-  // when a ThinkingHandler resolved (auto-wired by provider.name OR
+  // when a ThinkingHandler resolved (declared by the provider OR
   // explicitly set via .thinkingHandler()). When undefined, the stage
   // is NOT added — zero overhead for non-thinking agents
   // (build-time conditional mount; matches the panel's design rule).

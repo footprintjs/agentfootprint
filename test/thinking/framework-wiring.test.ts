@@ -3,7 +3,7 @@
  *
  * Pins the contract for the v2.14 Phase 3 wiring:
  *   - buildThinkingSubflow auto-wraps a ThinkingHandler in a real subflow
- *   - Auto-wire by provider.name via findThinkingHandler
+ *   - The handler the provider DECLARES (thinkingHandlerFor), never by name
  *   - Build-time conditional mount (ZERO overhead when no handler)
  *   - .thinkingHandler() builder method (override + opt-out + auto)
  *   - callLLM populates scope.rawThinking from response.rawThinking
@@ -41,15 +41,22 @@ import { expectWithinTimes, measureAsync } from '../helpers/perf.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────
 
-/** Build a mock provider that emits a configurable response per call. */
+/**
+ * Build a mock provider that emits a configurable response per call. It
+ * DECLARES `mockThinkingHandler` unless `declares: null` — the agent reads the
+ * declaration, never the name.
+ */
 function mockProvider(opts: {
   name?: string;
   rawThinking?: unknown;
   content?: string;
+  declares?: ThinkingHandler | null;
 }): LLMProvider {
   let calls = 0;
+  const declared = opts.declares === undefined ? mockThinkingHandler : opts.declares;
   return {
     name: opts.name ?? 'mock',
+    ...(declared !== null && { thinkingHandler: declared }),
     complete: async (): Promise<LLMResponse> => {
       calls += 1;
       return {
@@ -205,7 +212,6 @@ describe('framework-wiring — scenario: auto-wire emits thinking_end event', ()
     const SENTINEL = '__provider_meta_sentinel__';
     const customHandler: ThinkingHandler = {
       id: 'leak-test-event',
-      providerNames: ['leak-test-event-provider'],
       normalize: () => [
         {
           type: 'thinking',
@@ -258,6 +264,7 @@ describe('framework-wiring — integration: scope.thinkingBlocks + tool-using fl
     let calls = 0;
     const provider: LLMProvider = {
       name: 'mock',
+      thinkingHandler: mockThinkingHandler, // declared — the name decides nothing
       complete: async (): Promise<LLMResponse> => {
         calls += 1;
         if (calls === 1) {
@@ -369,7 +376,7 @@ describe('framework-wiring — performance: no overhead when no handler resolves
       // Tight loop comparing baseline (no handler) to explicit opt-out.
       // Both should be roughly equivalent. Sanity check that
       // thinkingHandler(null) doesn't add hidden cost.
-      const provider1 = mockProvider({ name: 'unknown-provider' }); // no auto-match
+      const provider1 = mockProvider({ name: 'unknown-provider', declares: null }); // declares none
       const agent1 = Agent.create({ provider: provider1, model: 'mock' }).system('s').build();
 
       const provider2 = mockProvider({ name: 'mock' });
@@ -402,7 +409,6 @@ describe('framework-wiring — ROI: custom handler override end-to-end', () => {
     let normalizeCalls = 0;
     const customHandler: ThinkingHandler = {
       id: 'custom',
-      providerNames: ['custom-provider'],
       normalize: (raw): readonly ThinkingBlock[] => {
         normalizeCalls += 1;
         if (raw === undefined) return [];
@@ -434,7 +440,6 @@ describe('framework-wiring — ROI: custom handler override end-to-end', () => {
   it('handler that throws → thinking_parse_failed event + run continues', async () => {
     const throwingHandler: ThinkingHandler = {
       id: 'throwing',
-      providerNames: ['throwing-provider'],
       normalize: () => {
         throw new Error('normalize failed');
       },

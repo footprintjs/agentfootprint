@@ -76,7 +76,6 @@ function isRawThinking(raw: unknown): raw is OllamaRawThinking {
 
 export const ollamaThinkingHandler: ThinkingHandler = {
   id: 'ollama',
-  providerNames: ['ollama'],
 
   normalize(raw: unknown): readonly ThinkingBlock[] {
     if (raw === undefined || raw === null) return [];

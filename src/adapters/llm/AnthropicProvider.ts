@@ -34,6 +34,7 @@ import {
   readCacheUsage,
 } from './anthropicCacheWire.js';
 import { toolManifestOf } from './wireManifest.js';
+import { anthropicThinkingHandler } from '../../thinking/AnthropicThinkingHandler.js';
 // The message and tool mapping has ONE owner, shared with browserAnthropic()
 // and invokeModelGateway() — a private copy here once drifted from it.
 import { toAnthropicMessages, toAnthropicTool } from './anthropicMessagesWire.js';
@@ -215,6 +216,8 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
     // Explicit `cache_control` breakpoints, four per request, usage reported —
     // the agent's cache strategy is chosen from this, never from `name`.
     promptCaching: ANTHROPIC_PROMPT_CACHING,
+    // The signed thinking blocks this wire returns, normalized for the echo.
+    thinkingHandler: anthropicThinkingHandler,
     async complete(req: LLMRequest): Promise<LLMResponse> {
       const params = buildParams(req, defaultModel, defaultMaxTokens, parallelToolCalls);
       try {
@@ -271,6 +274,7 @@ export class AnthropicProvider implements LLMProvider {
   readonly carriesInMessages = CARRIES_IN_MESSAGES;
   readonly carriesForcedToolChoice = true;
   readonly promptCaching = ANTHROPIC_PROMPT_CACHING;
+  readonly thinkingHandler = anthropicThinkingHandler;
   private readonly inner: LLMProvider;
 
   constructor(options: AnthropicProviderOptions = {}) {

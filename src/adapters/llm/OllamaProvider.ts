@@ -73,7 +73,10 @@ import type {
 // into thinking/ (the same relationship `adapters/types.ts` already has
 // with `ThinkingBlock`). ALL tag parsing lives in the handler; this file
 // only notices the shape and labels it.
-import type { OllamaRawThinking } from '../../thinking/OllamaThinkingHandler.js';
+import {
+  ollamaThinkingHandler,
+  type OllamaRawThinking,
+} from '../../thinking/OllamaThinkingHandler.js';
 
 // ─── Wire shapes (Ollama native /api/chat) ──────────────────────────
 
@@ -372,6 +375,7 @@ export function ollama(
     // would mean the same thing; saying it out loud documents that this was
     // checked rather than forgotten.
     carriesForcedToolChoice: false,
+    thinkingHandler: ollamaThinkingHandler,
 
     async complete(req: LLMRequest): Promise<LLMResponse> {
       // A signal that fired BEFORE the call stops it here, before any socket
@@ -466,6 +470,7 @@ export class OllamaProvider implements LLMProvider {
   readonly name = 'ollama';
   readonly carriesInMessages = CARRIES_IN_MESSAGES;
   readonly carriesForcedToolChoice = false;
+  readonly thinkingHandler = ollamaThinkingHandler;
   private readonly inner: LLMProvider;
 
   constructor(model?: string | OllamaProviderOptions, options?: OllamaProviderOptions) {

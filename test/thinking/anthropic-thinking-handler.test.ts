@@ -11,7 +11,7 @@
  * 7-pattern coverage:
  *   1. Unit         — normalize() per input variant
  *   2. Scenario     — full Anthropic response → ThinkingBlock[]
- *   3. Integration  — registry membership + findThinkingHandler('anthropic')
+ *   3. Integration  — registry membership + the adapters that DECLARE it
  *   4. Property     — random Anthropic content arrays produce predictable output
  *   5. Security     — signature byte-exact across multiple normalize cycles
  *   6. Performance  — normalize() x1000 of 5-block response under bound
@@ -19,9 +19,11 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import { anthropic } from '../../src/adapters/llm/AnthropicProvider.js';
+import { browserAnthropic } from '../../src/adapters/llm/BrowserAnthropicProvider.js';
+import { invokeModelGateway } from '../../src/adapters/llm/InvokeModelGatewayProvider.js';
 import {
   anthropicThinkingHandler,
-  findThinkingHandler,
   SHIPPED_THINKING_HANDLERS,
   type ThinkingBlock,
 } from '../../src/thinking/index.js';
@@ -167,18 +169,26 @@ describe('AnthropicThinkingHandler — integration: registry', () => {
     expect(SHIPPED_THINKING_HANDLERS).toContain(anthropicThinkingHandler);
   });
 
-  it('findThinkingHandler("anthropic") returns this handler', () => {
-    expect(findThinkingHandler('anthropic')).toBe(anthropicThinkingHandler);
-  });
-
-  it('handler.providerNames covers anthropic + browser-anthropic (v2.14)', () => {
-    // Both providers route through fromAnthropicResponse → same wire shape.
-    // Bedrock-via-Anthropic deferred to its own handler if its shape diverges.
-    expect(anthropicThinkingHandler.providerNames).toEqual(['anthropic', 'browser-anthropic']);
-  });
-
-  it('findThinkingHandler("browser-anthropic") returns the anthropic handler', () => {
-    expect(findThinkingHandler('browser-anthropic')).toBe(anthropicThinkingHandler);
+  it('is DECLARED by every adapter whose response carries Anthropic thinking', () => {
+    // Not matched by name any more: the adapter declares the handler for its
+    // wire, and the gateway (same response parser) gains it here.
+    expect(
+      anthropic({
+        _client: { messages: { create: async () => ({}), stream: () => ({}) } } as never,
+      }).thinkingHandler,
+    ).toBe(anthropicThinkingHandler);
+    expect(
+      browserAnthropic({ apiKey: 'k', fetch: (async () => new Response()) as never })
+        .thinkingHandler,
+    ).toBe(anthropicThinkingHandler);
+    expect(
+      invokeModelGateway({
+        baseUrl: 'https://gw.example',
+        apiKeyHeader: 'x-api-key',
+        apiKey: 'k',
+        model: 'm',
+      }).thinkingHandler,
+    ).toBe(anthropicThinkingHandler);
   });
 });
 

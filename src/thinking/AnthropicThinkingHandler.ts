@@ -99,7 +99,6 @@ export const anthropicThinkingHandler: ThinkingHandler = {
   // which sets `rawThinking` to `message.content`. Bedrock Claude
   // would also fit here but ships as a separate handler if/when its
   // shape diverges.
-  providerNames: ['anthropic', 'browser-anthropic'],
 
   normalize(raw: unknown): readonly ThinkingBlock[] {
     if (!isAnthropicContentArray(raw)) return [];

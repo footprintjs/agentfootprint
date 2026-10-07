@@ -9,19 +9,19 @@
  *                         footprintjs subflow at chart build time;
  *                         shows in trace as own runtimeStageId.
  *
- * **Auto-wire by provider name:**
+ * **Declared by the provider:**
  *
  *   ```ts
  *   import { Agent } from 'agentfootprint';
  *
- *   // Library scans SHIPPED_THINKING_HANDLERS, finds the handler
- *   // whose providerNames includes provider.name. Mounted as a
- *   // sub-subflow of sf-call-llm.
+ *   // anthropic() declares `thinkingHandler: anthropicThinkingHandler`;
+ *   // the agent mounts it as a sub-subflow of sf-call-llm. A wrapper that
+ *   // forwards the field (withRetry, withFallback, your own) keeps it.
  *   const agent = Agent.create({ provider: anthropic({...}), model: '...' })
  *     .build();
  *
  *   // Opt out:
- *   //   .thinkingHandler(undefined)
+ *   //   .thinkingHandler(null)
  *   // Override with a custom handler:
  *   //   .thinkingHandler(myCustomHandler)
  *   ```
@@ -33,10 +33,10 @@
  *
  *   export const geminiThinkingHandler: ThinkingHandler = {
  *     id: 'gemini',
- *     providerNames: ['gemini'],
  *     normalize(raw) { ... },
  *     parseChunk(chunk) { ... },  // optional
  *   };
+ *   // …declared by the adapter: { name: 'gemini', thinkingHandler: geminiThinkingHandler, … }
  *   ```
  *
  * Failure isolation: handler `normalize()` throws are caught by the
@@ -63,4 +63,5 @@ export {
   type OllamaRawThinking,
 } from './OllamaThinkingHandler.js';
 
-export { SHIPPED_THINKING_HANDLERS, findThinkingHandler } from './registry.js';
+export { SHIPPED_THINKING_HANDLERS } from './registry.js';
+export { thinkingHandlerFor } from './thinkingHandlerFor.js';

@@ -4,7 +4,7 @@ title: "~~Interface: RiskResult~~"
 
 # ~~Interface: RiskResult~~
 
-Defined in: [src/adapters/types.ts:739](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L739)
+Defined in: [src/adapters/types.ts:745](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L745)
 
 ## Deprecated
 
@@ -16,7 +16,7 @@ No implementation exists — see [RiskDetector](/docs/api/interfaces/RiskDetecto
 
 > `readonly` **category**: `"pii"` \| `"prompt_injection"` \| `"runaway_loop"` \| `"cost_overrun"` \| `"hallucination_flag"`
 
-Defined in: [src/adapters/types.ts:742](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L742)
+Defined in: [src/adapters/types.ts:748](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L748)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [src/adapters/types.ts:742](https://github.com/footprintjs/agentfoot
 
 > `readonly` **evidence**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/adapters/types.ts:748](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L748)
+Defined in: [src/adapters/types.ts:754](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L754)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: [src/adapters/types.ts:748](https://github.com/footprintjs/agentfoot
 
 > `readonly` **flagged**: `boolean`
 
-Defined in: [src/adapters/types.ts:740](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L740)
+Defined in: [src/adapters/types.ts:746](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L746)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [src/adapters/types.ts:740](https://github.com/footprintjs/agentfoot
 
 > `readonly` **severity**: `"low"` \| `"medium"` \| `"high"` \| `"critical"`
 
-Defined in: [src/adapters/types.ts:741](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L741)
+Defined in: [src/adapters/types.ts:747](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L747)
 
 ***
 
@@ -48,4 +48,4 @@ Defined in: [src/adapters/types.ts:741](https://github.com/footprintjs/agentfoot
 
 > `readonly` **suggestedAction**: `"warn"` \| `"redact"` \| `"abort"`
 
-Defined in: [src/adapters/types.ts:749](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L749)
+Defined in: [src/adapters/types.ts:755](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L755)

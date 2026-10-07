@@ -21,7 +21,7 @@ composition.
 
 > **new LLMCall**(`opts`, `systemPromptValue`): `LLMCall`
 
-Defined in: [src/core/LLMCall.ts:256](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L256)
+Defined in: [src/core/LLMCall.ts:255](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L255)
 
 #### Parameters
 
@@ -193,7 +193,7 @@ host.onSessionEnd(async (sessionId) => {
 
 > `static` **create**(`opts`): [`LLMCallBuilder`](/docs/api/classes/LLMCallBuilder)
 
-Defined in: [src/core/LLMCall.ts:295](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L295)
+Defined in: [src/core/LLMCall.ts:292](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L292)
 
 #### Parameters
 
@@ -697,7 +697,7 @@ calling if you still want them. Does NOT touch attached recorders
 
 > **resume**(`checkpoint`, `input?`, `options?`): `Promise`\<`string` \| [`RunnerPauseOutcome`](/docs/api/interfaces/RunnerPauseOutcome)\>
 
-Defined in: [src/core/LLMCall.ts:345](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L345)
+Defined in: [src/core/LLMCall.ts:342](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L342)
 
 Resume a paused run from its checkpoint. Default behavior: rebuild the
 chart, wire the same core recorders + consumer recorders, call
@@ -732,7 +732,7 @@ returning. Subclass overrides only if it needs specialized behavior.
 
 > **run**(`input`, `options?`): `Promise`\<`string` \| [`RunnerPauseOutcome`](/docs/api/interfaces/RunnerPauseOutcome)\>
 
-Defined in: [src/core/LLMCall.ts:327](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L327)
+Defined in: [src/core/LLMCall.ts:324](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L324)
 
 Execute the runner. Subclass may override for specialized input
 mapping, but default invokes getSpec() + FlowChartExecutor.
