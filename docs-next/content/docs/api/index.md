@@ -622,6 +622,7 @@ title: agentfootprint
 - [TOOL\_RESULT\_STATUSES](/docs/api/variables/TOOL_RESULT_STATUSES)
 - [TOOL\_SESSIONS](/docs/api/variables/TOOL_SESSIONS)
 - [TOOL\_TEARDOWN\_TIMEOUT\_MS](/docs/api/variables/TOOL_TEARDOWN_TIMEOUT_MS)
+- [TRANSFORM\_HASH\_PREFIX](/docs/api/variables/TRANSFORM_HASH_PREFIX)
 - [UNGAPPED\_FIELDS](/docs/api/variables/UNGAPPED_FIELDS)
 - [VERDICT\_RENDER\_NOTE](/docs/api/variables/VERDICT_RENDER_NOTE)
 
@@ -769,6 +770,7 @@ title: agentfootprint
 - [toolSessionsOf](/docs/api/functions/toolSessionsOf)
 - [topK](/docs/api/functions/topK)
 - [tot](/docs/api/functions/tot)
+- [transformHashOf](/docs/api/functions/transformHashOf)
 - [unconfiguredArtifacts](/docs/api/functions/unconfiguredArtifacts)
 - [verdictRowsOf](/docs/api/functions/verdictRowsOf)
 - [warnIfInvalidToolName](/docs/api/functions/warnIfInvalidToolName)
