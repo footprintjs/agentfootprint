@@ -328,16 +328,19 @@ describe.skipIf(!built)('the default browser graph of the root entry', () => {
   it('the sideEffects list the ESM build now carries is TRUE: every module-level registration survives', async () => {
     // With `sideEffects` finally reaching dist/esm (9.94.0), a bundler may
     // skip any module not on the list whose exports go unused. The list names
-    // the three registrations this package has and the barrels that import
-    // them; this is the proof at the graph, not the list: a root consumer
-    // still gets the three cache strategies registered (else
-    // `Agent.create({ provider: anthropic() })` would silently cache as NoOp),
-    // and a /context consumer still gets the dev-warn host bound.
+    // the one registration this package has and the barrel that imports it;
+    // this is the proof at the graph, not the list: a /context consumer still
+    // gets the dev-warn host bound. The cache strategies used to be the other
+    // registrations (keyed by provider NAME, so a root consumer that lost them
+    // cached nothing). They register nothing now — the agent IMPORTS the
+    // selection (`cacheStrategyFor`, from the provider's declared
+    // `promptCaching`), so a bundler keeps it because it is used, not because
+    // a list says so.
     const root = await splitGraph(resolve(DIST, 'index.js'));
-    for (const strategy of ['Anthropic', 'OpenAI', 'Bedrock']) {
-      expect(root.syncInputs.has(`dist/esm/cache/strategies/${strategy}CacheStrategy.js`)).toBe(
-        true,
-      );
+    expect(root.syncInputs.has('dist/esm/cache/cacheStrategyFor.js')).toBe(true);
+    expect(root.syncInputs.has('dist/esm/cache/strategies/BreakpointCacheStrategy.js')).toBe(true);
+    for (const gone of ['Anthropic', 'OpenAI', 'Bedrock']) {
+      expect(root.syncInputs.has(`dist/esm/cache/strategies/${gone}CacheStrategy.js`)).toBe(false);
     }
     const context = await splitGraph(resolve(DIST, 'doors/context.js'));
     expect(context.syncInputs.has('dist/esm/lib/injection-engine/devWarnHost.js')).toBe(true);

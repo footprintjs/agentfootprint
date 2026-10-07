@@ -4,7 +4,7 @@ title: "~~Interface: ContextSourceAdapter~~"
 
 # ~~Interface: ContextSourceAdapter~~
 
-Defined in: [src/adapters/types.ts:695](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L695)
+Defined in: [src/adapters/types.ts:750](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L750)
 
 ## Deprecated
 
@@ -24,7 +24,7 @@ port describes.
 
 > `readonly` **id**: `string`
 
-Defined in: [src/adapters/types.ts:696](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L696)
+Defined in: [src/adapters/types.ts:751](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L751)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: [src/adapters/types.ts:696](https://github.com/footprintjs/agentfoot
 
 > `readonly` **source**: `ContextSource`
 
-Defined in: [src/adapters/types.ts:698](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L698)
+Defined in: [src/adapters/types.ts:753](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L753)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [src/adapters/types.ts:698](https://github.com/footprintjs/agentfoot
 
 > `readonly` **targetSlot**: `ContextSlot`
 
-Defined in: [src/adapters/types.ts:697](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L697)
+Defined in: [src/adapters/types.ts:752](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L752)
 
 ## Methods
 
@@ -48,7 +48,7 @@ Defined in: [src/adapters/types.ts:697](https://github.com/footprintjs/agentfoot
 
 > **resolve**(`ctx`): `Promise`\<readonly [`ContextContribution`](/docs/api/interfaces/ContextContribution)[]\>
 
-Defined in: [src/adapters/types.ts:699](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L699)
+Defined in: [src/adapters/types.ts:754](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L754)
 
 #### Parameters
 

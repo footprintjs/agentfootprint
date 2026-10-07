@@ -4,7 +4,7 @@ title: CodeInput
 
 # Interface: CodeInput
 
-Defined in: [src/adapters/types.ts:1126](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1126)
+Defined in: [src/adapters/types.ts:1181](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1181)
 
 One payload staged INTO a code session before code runs (9.26.0).
 
@@ -20,7 +20,7 @@ recognition, because the manifest is keyed by what it was ASKED for.
 
 > `readonly` **data**: `string` \| `Uint8Array`
 
-Defined in: [src/adapters/types.ts:1145](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1145)
+Defined in: [src/adapters/types.ts:1200](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1200)
 
 The bytes. A string is written as UTF-8 text; a `Uint8Array` verbatim.
 
@@ -30,7 +30,7 @@ The bytes. A string is written as UTF-8 text; a `Uint8Array` verbatim.
 
 > `readonly` `optional` **fileName?**: `string`
 
-Defined in: [src/adapters/types.ts:1143](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1143)
+Defined in: [src/adapters/types.ts:1198](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1198)
 
 The file name to write it under, when it should differ from `name` — the
 tool derives one from the artifact's media type (`dataset` +
@@ -47,7 +47,7 @@ ended up being called.
 
 > `readonly` `optional` **mediaType?**: `string`
 
-Defined in: [src/adapters/types.ts:1147](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1147)
+Defined in: [src/adapters/types.ts:1202](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1202)
 
 The producer's own statement about the payload, when it has one.
 
@@ -57,7 +57,7 @@ The producer's own statement about the payload, when it has one.
 
 > `readonly` **name**: `string`
 
-Defined in: [src/adapters/types.ts:1132](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1132)
+Defined in: [src/adapters/types.ts:1187](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1187)
 
 The MANIFEST KEY — what the executing code looks this input up by. The
 tool uses the declared argument name (`dataset`), so a static description

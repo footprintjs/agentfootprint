@@ -94,8 +94,9 @@ The gate's decision is recorded with the run, like every other decision.
 
 ## Which providers, and how
 
-Each provider adapter **declares** how its wire caches (`promptCaching`), and
-the agent picks its strategy from that declaration — never from the
+Each provider adapter **declares** how its wire caches — its `promptCaching`
+field, a `PromptCaching` value (the type ships from `agentfootprint/providers`)
+— and the agent picks its strategy from that declaration, never from the
 provider's name:
 
 | Provider | Declares | How caching works | Cache token counts |

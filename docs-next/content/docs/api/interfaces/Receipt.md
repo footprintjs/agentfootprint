@@ -26,7 +26,7 @@ receipt?.params.temperature;    // the dial this turn went out on
 
 > `readonly` **basis**: `object`
 
-Defined in: [src/lib/time-travel/receipt.ts:404](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L404)
+Defined in: [src/lib/time-travel/receipt.ts:406](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L406)
 
 #### epoch
 
@@ -64,10 +64,12 @@ The breakpoints the strategy actually applied, in the order it applied
 > `readonly` **strategy**: `string` \| `null`
 
 WHICH strategy stood between assembly and the port, or `null` when none
-did (9.93.0). The value is the strategy's declared `providerName` — the
-key it registers under (`'anthropic'`, `'openai'`; `'*'` is the built-in
-pass-through every agent runs when no provider-specific strategy is
-registered).
+did (9.93.0). The value is the strategy's `name` — for the built-ins,
+the prompt-caching capability the provider declared (`'breakpoints'`,
+`'automatic'`; `'none'` is the pass-through an agent runs when the
+provider declares nothing). A receipt minted before the strategy was
+chosen by capability records the old registry key here (`'anthropic'`,
+`'openai'`, `'*'`) — a label, read the same way.
 
 `null` is a FACT, not an absence: `LLMCall` and the two message-API
 charts hand the port the request assembly built, with nothing in
@@ -132,7 +134,7 @@ Defined in: [src/lib/time-travel/receipt.ts:330](https://github.com/footprintjs/
 
 > `readonly` `optional` **omittedForAttention?**: `ReceiptAttentionOmission`
 
-Defined in: [src/lib/time-travel/receipt.ts:403](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L403)
+Defined in: [src/lib/time-travel/receipt.ts:405](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L405)
 
 What left the window for budget at this iteration's head, before this
 request was composed — one hash per evicted turn, each the turn's own
@@ -153,7 +155,7 @@ meant only that nobody had recorded a drop.
 
 > `readonly` **params**: [`ReceiptParams`](/docs/api/interfaces/ReceiptParams)
 
-Defined in: [src/lib/time-travel/receipt.ts:388](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L388)
+Defined in: [src/lib/time-travel/receipt.ts:390](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L390)
 
 The sampling knobs the call went out with — see [ReceiptParams](/docs/api/interfaces/ReceiptParams).
 

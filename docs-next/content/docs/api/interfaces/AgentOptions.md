@@ -93,10 +93,10 @@ naming this option (`ctx.hasArtifacts` is the fact to branch on).
 
 Defined in: [src/core/agent/types.ts:1107](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L1107)
 
-Optional explicit CacheStrategy override (v2.6+). Defaults to
-`getDefaultCacheStrategy(provider.name)` — so Anthropic/OpenAI/
-Bedrock/Mock providers auto-resolve to their respective strategies
-once those land in Phase 7+.
+Optional explicit CacheStrategy override. Defaults to the strategy the
+provider's declared `promptCaching` selects (`cacheStrategyFor` from
+`agentfootprint/cache`): breakpoints for `anthropic()`, automatic for
+`openai()`, none for a provider that declares nothing.
 
 ***
 

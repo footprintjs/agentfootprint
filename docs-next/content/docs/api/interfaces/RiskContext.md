@@ -4,7 +4,7 @@ title: "~~Interface: RiskContext~~"
 
 # ~~Interface: RiskContext~~
 
-Defined in: [src/adapters/types.ts:724](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L724)
+Defined in: [src/adapters/types.ts:779](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L779)
 
 ## Deprecated
 
@@ -16,7 +16,7 @@ No implementation exists — see [RiskDetector](/docs/api/interfaces/RiskDetecto
 
 > `readonly` `optional` **iterIndex?**: `number`
 
-Defined in: [src/adapters/types.ts:728](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L728)
+Defined in: [src/adapters/types.ts:783](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L783)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [src/adapters/types.ts:728](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **slot?**: `ContextSlot`
 
-Defined in: [src/adapters/types.ts:725](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L725)
+Defined in: [src/adapters/types.ts:780](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L780)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: [src/adapters/types.ts:725](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **source?**: `ContextSource`
 
-Defined in: [src/adapters/types.ts:726](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L726)
+Defined in: [src/adapters/types.ts:781](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L781)
 
 ***
 
@@ -40,4 +40,4 @@ Defined in: [src/adapters/types.ts:726](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **turnIndex?**: `number`
 
-Defined in: [src/adapters/types.ts:727](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L727)
+Defined in: [src/adapters/types.ts:782](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L782)

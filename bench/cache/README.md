@@ -41,6 +41,16 @@ token counts.
 
 `verify-haiku.mjs` runs a real agent on `claude-haiku-4-5` behind `withRetry` — two turns, four
 calls, a ~7,000-token system prompt — and prints the API's own `cache_read_input_tokens` and
-`cache_creation_input_tokens` per call. Rehearse it first for $0 (`--rehearse`, a stub client);
-the paid run needs the owner's go and a key loaded by `node --env-file`. Capped in code: Haiku
-only, at most 6 calls, no retries, `max_tokens` 300, refuses to start above $0.50 worst case.
+`cache_creation_input_tokens` per call, then PASS when every call after the first read the cache.
+Rehearse it first for $0 (`--rehearse`, a stub client); the paid run needs the owner's go and a
+key loaded by `node --env-file`:
+
+```text
+$ npm run build
+$ node bench/cache/verify-haiku.mjs --rehearse
+$ node --env-file=<file with ANTHROPIC_API_KEY> bench/cache/verify-haiku.mjs \
+    --sdk-from <a project whose node_modules has @anthropic-ai/sdk>
+```
+
+Capped in code: Haiku only, at most 6 calls, no retries, `max_tokens` 300, and it refuses to
+start above $0.50 worst case (expect about $0.02).

@@ -11,13 +11,17 @@
  *
  *   npm run build
  *   node bench/cache/verify-haiku.mjs --rehearse        # $0: a stub client, no key, no network
- *   node --env-file=<a file holding ANTHROPIC_API_KEY> bench/cache/verify-haiku.mjs
+ *   node --env-file=<a file holding ANTHROPIC_API_KEY> bench/cache/verify-haiku.mjs \
+ *     [--sdk-from <a project whose node_modules has @anthropic-ai/sdk>]
  *
  * Spend guards, all enforced in code: Haiku 4.5 only; at most 6 calls (the SDK's own retries are
  * off and `withRetry` gets one attempt, so a refused call is never paid twice); `max_tokens` 300;
  * the run refuses to start if its worst-case estimate exceeds $0.50. Expect about $0.02.
  * The key is read by the SDK from the environment and never printed.
  */
+import { createRequire } from 'node:module';
+import { join, resolve } from 'node:path';
+
 import { lookupTable } from './verify-fixture.mjs';
 
 const MODEL = 'claude-haiku-4-5';
@@ -89,8 +93,24 @@ function rehearsalClient() {
   };
 }
 
+/** `@anthropic-ai/sdk` from here, or from `--sdk-from <a project whose node_modules has it>`. */
+async function loadSdk() {
+  const at = process.argv.indexOf('--sdk-from');
+  if (at > 0 && process.argv[at + 1] !== undefined) {
+    return createRequire(join(resolve(process.argv[at + 1]), 'package.json'))('@anthropic-ai/sdk');
+  }
+  try {
+    return await import('@anthropic-ai/sdk');
+  } catch {
+    console.error(
+      '@anthropic-ai/sdk is not installed here; pass --sdk-from <a project whose node_modules has it>.',
+    );
+    process.exit(2);
+  }
+}
+
 async function realClient() {
-  const sdk = await import('@anthropic-ai/sdk');
+  const sdk = await loadSdk();
   const Anthropic = sdk.default ?? sdk.Anthropic;
   return new Anthropic({ maxRetries: 0, timeout: 60_000 });
 }

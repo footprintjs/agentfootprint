@@ -87,7 +87,8 @@ export interface CacheDecisionState {
    * tools → system → messages), so no prefix through them repeats from one
    * tool-calling iteration to the next, and every breakpoint would pay the
    * cache-write premium on bytes the next call does not send — measured on
-   * the inputs bench, 97% of request bytes marked and 3% read back. The
+   * the inputs bench (`bench/cache`), 97% of request bytes marked and 5% of
+   * the repeat calls' bytes read back. The
    * decision places none. Absent ≡ `false`. The agent charts pass it at BUILD
    * time (`cacheDecisionStage`), never through scope.
    */
