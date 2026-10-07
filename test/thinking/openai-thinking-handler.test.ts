@@ -11,7 +11,7 @@
  * 7-pattern coverage:
  *   1. Unit         — normalize() per input variant
  *   2. Scenario     — full o3 reasoning_summary → ThinkingBlock[]
- *   3. Integration  — registry membership + findThinkingHandler('openai')
+ *   3. Integration  — registry membership + the adapter that DECLARES it
  *   4. Property     — random summary configurations produce predictable output
  *   5. Security     — content unchanged; no signature in output
  *   6. Performance  — normalize() x1000 of 5-step summary under bound
@@ -19,8 +19,8 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import { openai } from '../../src/adapters/llm/OpenAIProvider.js';
 import {
-  findThinkingHandler,
   openAIThinkingHandler,
   SHIPPED_THINKING_HANDLERS,
   type ThinkingBlock,
@@ -118,12 +118,9 @@ describe('OpenAIThinkingHandler — integration: registry', () => {
     expect(SHIPPED_THINKING_HANDLERS).toContain(openAIThinkingHandler);
   });
 
-  it('findThinkingHandler("openai") returns this handler', () => {
-    expect(findThinkingHandler('openai')).toBe(openAIThinkingHandler);
-  });
-
-  it('handler.providerNames is ["openai"]', () => {
-    expect(openAIThinkingHandler.providerNames).toEqual(['openai']);
+  it('is DECLARED by openai() — and forwarded by its Azure wrapper', () => {
+    const fake = { chat: { completions: { create: async () => ({}) } } } as never;
+    expect(openai({ _client: fake }).thinkingHandler).toBe(openAIThinkingHandler);
   });
 
   it('handler does NOT implement parseChunk (OpenAI does not stream reasoning)', () => {

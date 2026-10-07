@@ -27,6 +27,7 @@ import { dirname, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { danglingReferencesOf } from '../../src/integrity/dangling-reference/check.js';
 import { Agent, slidingWindow, defineTool } from '../../src/index.js';
+import { mockThinkingHandler } from '../../src/thinking/MockThinkingHandler.js';
 import type { LLMMessage, LLMProvider, LLMResponse } from '../../src/adapters/types.js';
 import type { AgentRunCheckpoint } from '../../src/index.js';
 import type { WindowRecord } from '../../src/core/agent/window/types.js';
@@ -156,6 +157,10 @@ function scriptedProvider(rounds: number): LLMProvider {
   let call = 0;
   return {
     name: 'mock',
+    // Declared, as `mock()` does: the reference was recorded when the name
+    // 'mock' auto-wired this handler, and its NormalizeThinking steps are part
+    // of the narrative this file pins step for step.
+    thinkingHandler: mockThinkingHandler,
     complete: async (): Promise<LLMResponse> => {
       call++;
       if (call > rounds) {
@@ -242,6 +247,13 @@ describe('functional: the evicted ground files ONE finding through the real loop
  * source edit of 9.113.0) by this file in update mode:
  *
  *   AF_DANGLING_NARRATIVE_REFERENCE=update npx vitest run test/integrity/danglingReference.test.ts -t 'narrates'
+ *
+ * REGENERATED for the moving cache breakpoint (the conversation tail is
+ * marked, `CacheDecisionSubflow.ts` · `conversationTailMarker`). The whole
+ * delta is one shape — every `cacheMarkers = (1 item)` became `(2 items)`
+ * (19 lines: the decision's write, the merge-back's input, each call's
+ * read), the tail marker beside the system one. No step was added, removed
+ * or renumbered, so the law this pins still holds.
  *
  * The one moving part, the turn's clock (`turnStartMs`), is masked.
  */

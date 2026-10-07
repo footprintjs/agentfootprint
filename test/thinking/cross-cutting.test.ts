@@ -40,7 +40,7 @@ import {
 } from '../../src/index.js';
 import {
   SHIPPED_THINKING_HANDLERS,
-  findThinkingHandler,
+  mockThinkingHandler,
   type ThinkingBlock,
   type ThinkingHandler,
 } from '../../src/thinking/index.js';
@@ -120,15 +120,6 @@ describe('thinking cross-cutting — contract: SHIPPED_THINKING_HANDLERS', () =>
         expect(handler.id.length).toBeGreaterThan(0);
       });
 
-      it('providerNames is non-empty readonly array of non-empty strings', () => {
-        expect(Array.isArray(handler.providerNames)).toBe(true);
-        expect(handler.providerNames.length).toBeGreaterThan(0);
-        handler.providerNames.forEach((name) => {
-          expect(typeof name).toBe('string');
-          expect(name.length).toBeGreaterThan(0);
-        });
-      });
-
       it('normalize(undefined) returns []', () => {
         expect(handler.normalize(undefined)).toEqual([]);
       });
@@ -168,16 +159,6 @@ describe('thinking cross-cutting — contract: SHIPPED_THINKING_HANDLERS', () =>
         }
       });
 
-      it('findThinkingHandler returns this handler for each providerName', () => {
-        for (const name of handler.providerNames) {
-          // Note: first-match semantics — if two handlers claimed the
-          // same providerName, the earlier wins. Cross-checking each
-          // handler's claimed names lookup back to itself catches
-          // accidental overlap when a new handler is appended.
-          expect(findThinkingHandler(name)).toBe(handler);
-        }
-      });
-
       it('parseChunk is either undefined or a function', () => {
         // Optional field — must be either omitted entirely or callable
         // with chunk → { thinkingDelta? }.
@@ -188,21 +169,9 @@ describe('thinking cross-cutting — contract: SHIPPED_THINKING_HANDLERS', () =>
     });
   }
 
-  it('no two handlers claim the same providerName (uniqueness invariant)', () => {
-    const claimed = new Map<string, string>();
-    for (const handler of SHIPPED_THINKING_HANDLERS) {
-      for (const name of handler.providerNames) {
-        const prior = claimed.get(name);
-        if (prior !== undefined) {
-          throw new Error(
-            `Provider name "${name}" claimed by both "${prior}" and "${handler.id}". ` +
-              'findThinkingHandler() picks the first match, but overlap is confusing — ' +
-              'each provider should map to exactly one handler.',
-          );
-        }
-        claimed.set(name, handler.id);
-      }
-    }
+  it('no two shipped handlers share an id (the runtimeStageId and event key)', () => {
+    const ids = SHIPPED_THINKING_HANDLERS.map((h) => h.id);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 });
 
@@ -282,7 +251,7 @@ describe('thinking cross-cutting — E2E: Agent + AnthropicProvider two-turn', (
     expect(thinkingBlock!.signature).toBe(trickySig);
   });
 
-  it('redacted_thinking blocks survive round-trip with signature', async () => {
+  it('redacted_thinking blocks survive round-trip with their data', async () => {
     const sig = 'redacted-sig-XYZ-987';
     const recorder = { params: [] as unknown[] };
     const turns: FakeMessage[] = [
@@ -291,7 +260,7 @@ describe('thinking cross-cutting — E2E: Agent + AnthropicProvider two-turn', (
         model: 'claude-sonnet-4-5-20250929',
         role: 'assistant',
         content: [
-          { type: 'redacted_thinking', signature: sig },
+          { type: 'redacted_thinking', data: sig }, // Anthropic's wire: the payload is `data`
           { type: 'tool_use', id: 'tu-1', name: 'echo', input: {} },
         ],
         stop_reason: 'tool_use',
@@ -332,7 +301,9 @@ describe('thinking cross-cutting — E2E: Agent + AnthropicProvider two-turn', (
     expect(assistantMsg).toBeDefined();
     const redacted = assistantMsg!.content.find((b) => b.type === 'redacted_thinking');
     expect(redacted).toBeDefined();
-    expect(redacted!.signature).toBe(sig);
+    // Echoed as Anthropic takes it: the encrypted payload, byte-exact, as `data`.
+    expect((redacted as { data?: string }).data).toBe(sig);
+    expect(redacted!.signature).toBeUndefined();
     // redacted_thinking has NO `thinking` field on the wire
     expect(redacted!.thinking).toBeUndefined();
   });
@@ -349,7 +320,6 @@ describe('thinking cross-cutting — security: providerMeta never leaks into nar
     const SENTINEL = '__provider_meta_sentinel__';
     const customHandler: ThinkingHandler = {
       id: 'leak-test',
-      providerNames: ['leak-test-provider'],
       normalize: (raw): readonly ThinkingBlock[] => {
         if (raw === undefined) return [];
         return [
@@ -470,6 +440,7 @@ describe('thinking cross-cutting — ROI: refund agent with thinking', () => {
     let calls = 0;
     const provider: LLMProvider = {
       name: 'mock',
+      thinkingHandler: mockThinkingHandler, // declared — the name decides nothing
       complete: async (): Promise<LLMResponse> => {
         calls += 1;
         if (calls === 1) {

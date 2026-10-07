@@ -1,34 +1,24 @@
 /**
- * agentfootprint/cache — public surface for the cache layer (v2.6+).
+ * agentfootprint/cache — public surface for the cache layer.
  *
- * Importing this module side-effect-registers every built-in cache
- * strategy in the registry. The agentfootprint main barrel imports
- * from here so consumers get the registered strategies without
- * needing to know they exist.
- *
- * Strategies registered as of v2.6:
- *   - NoOp (wildcard '*' fallback) — always available, registered by
- *     the registry module itself
- *   - AnthropicCacheStrategy ('anthropic', 'browser-anthropic') — the one
- *     end-to-end strategy: the adapter sends markers AND reads cache usage
- *   - OpenAICacheStrategy ('openai', 'browser-openai') — pass-through
- *     (OpenAI auto-caches); reports `not-applicable` metrics until the
- *     adapter lifts `prompt_tokens_details.cached_tokens` onto the port
- *   - BedrockCacheStrategy ('bedrock') — `enabled: false`; the Bedrock
- *     adapter implements neither half of the cache contract
- *
- * Future strategies:
- *   - GeminiCacheStrategy (async handle-based)
+ * The strategy an agent runs is chosen by CAPABILITY: the provider adapter
+ * declares how its wire caches (`LLMProvider.promptCaching`) and
+ * `cacheStrategyFor(provider)` returns the one strategy that serves it —
+ *   - `BreakpointCacheStrategy` — `mode: 'breakpoints'` (Anthropic's
+ *     `cache_control`; `anthropic()`, `browserAnthropic()`);
+ *   - `AutomaticCacheStrategy` — `mode: 'automatic'` (OpenAI and Azure
+ *     OpenAI cache on their own);
+ *   - `NoOpCacheStrategy` — nothing declared (Mock, Ollama, Bedrock Converse,
+ *     Gemini, any adapter that has not said).
+ * Nothing registers at module load and nothing is keyed by provider name, so
+ * a decorator that renames its provider keeps caching by forwarding the
+ * declaration.
  *
  * Public types (re-exported for consumers):
- *   - CachePolicy, CacheMarker, CacheStrategy, CacheCapabilities,
- *     CacheMetrics, CachePolicyContext, CacheStrategyContext
+ *   - PromptCaching (the provider's declaration), CachePolicy, CacheMarker,
+ *     CacheStrategy, CacheMetrics, CachePolicyContext, CacheStrategyContext,
+ *     CacheUsage
  */
-
-// Side-effect imports — register strategies on module load.
-import './strategies/AnthropicCacheStrategy.js';
-import './strategies/OpenAICacheStrategy.js';
-import './strategies/BedrockCacheStrategy.js';
 
 // Public types
 export type {
@@ -37,9 +27,10 @@ export type {
   CacheMarker,
   CacheStrategy,
   CacheStrategyContext,
-  CacheCapabilities,
   CacheMetrics,
   CacheUsage,
+  // What a provider adapter declares about its wire (`LLMProvider.promptCaching`).
+  PromptCaching,
 } from './types.js';
 
 // The honesty primitive the meter is typed in (9.59.0). Re-exported
@@ -55,18 +46,14 @@ export {
   type Claim,
 } from '../lib/claim/claim.js';
 
-// Strategy registry
-export {
-  getDefaultCacheStrategy,
-  registerCacheStrategy,
-  listRegisteredStrategies,
-} from './strategyRegistry.js';
+// Strategy selection — by the provider's declared capability, never its name
+export { cacheStrategyFor } from './cacheStrategyFor.js';
 
-// Built-in strategy classes (for consumers who want explicit overrides)
+// Built-in strategy classes (for consumers who want explicit overrides via
+// `Agent.create({ cacheStrategy })`)
 export { NoOpCacheStrategy } from './strategies/NoOpCacheStrategy.js';
-export { AnthropicCacheStrategy } from './strategies/AnthropicCacheStrategy.js';
-export { OpenAICacheStrategy } from './strategies/OpenAICacheStrategy.js';
-export { BedrockCacheStrategy } from './strategies/BedrockCacheStrategy.js';
+export { BreakpointCacheStrategy } from './strategies/BreakpointCacheStrategy.js';
+export { AutomaticCacheStrategy } from './strategies/AutomaticCacheStrategy.js';
 
 // Recorder
 export { cacheRecorder } from './cacheRecorder.js';

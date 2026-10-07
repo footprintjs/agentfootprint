@@ -127,14 +127,11 @@ describe('MockThinkingHandler — integration: registry lookup', () => {
     expect(SHIPPED_THINKING_HANDLERS).toContain(mockThinkingHandler);
   });
 
-  it('findThinkingHandler("mock") returns mockThinkingHandler', async () => {
-    const { findThinkingHandler } = await import('../../src/thinking/registry.js');
-    expect(findThinkingHandler('mock')).toBe(mockThinkingHandler);
-  });
-
-  it('findThinkingHandler returns undefined for unknown providers', async () => {
-    const { findThinkingHandler } = await import('../../src/thinking/registry.js');
-    expect(findThinkingHandler('nonexistent')).toBeUndefined();
+  it('mock() DECLARES mockThinkingHandler; a provider that declares none gets none', async () => {
+    const { mock } = await import('../../src/adapters/llm/MockProvider.js');
+    const { thinkingHandlerFor } = await import('../../src/thinking/thinkingHandlerFor.js');
+    expect(thinkingHandlerFor(mock({ reply: 'x' }))).toBe(mockThinkingHandler);
+    expect(thinkingHandlerFor({ name: 'mock' })).toBeUndefined(); // the NAME decides nothing
   });
 });
 

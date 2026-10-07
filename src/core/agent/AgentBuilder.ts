@@ -228,10 +228,10 @@ export class AgentBuilder {
    */
   private cachingDisabledValue = false;
   /**
-   * Optional explicit CacheStrategy override. Default: undefined,
-   * which means the agent auto-resolves from
-   * `getDefaultCacheStrategy(provider.name)` at construction. Power
-   * users override here for custom backends or test mocks.
+   * Optional explicit CacheStrategy override. Default: undefined, which
+   * means the agent chooses from the provider's declared `promptCaching`
+   * (`cacheStrategyFor`) at construction. Power users override here for
+   * custom backends or test mocks.
    */
   private cacheStrategyOverride?: CacheStrategy;
   private readonly registry: ToolRegistryEntry[] = [];
@@ -404,11 +404,10 @@ export class AgentBuilder {
 
   /**
    * Optional ThinkingHandler (v2.14+). Three states:
-   *   - undefined (default): auto-wire by `provider.name` via
-   *     `findThinkingHandler` from the registry
-   *   - explicit handler: override the auto-wire
-   *   - explicit `null`: opt out (no thinking handler mounted at all,
-   *     even if the provider would auto-match)
+   *   - undefined (default): the provider's declared handler
+   *     (`LLMProvider.thinkingHandler`)
+   *   - explicit handler: override it
+   *   - explicit `null`: opt out (no thinking handler mounted at all)
    *
    * The framework wraps the configured handler in a real footprintjs
    * sub-subflow at chart build time (see `buildThinkingSubflow`).
@@ -2844,28 +2843,11 @@ export class AgentBuilder {
   }
 
   /**
-   * Wire a thinking handler (v2.14+). Three usage patterns:
-   *
-   *   • OMITTED (default) — framework auto-wires by `provider.name` via
-   *     `findThinkingHandler` from the registry. Most consumers using
-   *     a shipped provider get thinking support for free.
-   *
-   *   • EXPLICIT handler — override the auto-wire. For custom providers
-   *     or for swapping in a custom Anthropic/OpenAI handler with
-   *     different normalization (e.g. redacting blocks before they
-   *     land).
-   *
-   *   • EXPLICIT `null` — opt out entirely. The thinking subflow is NOT
-   *     mounted even if the provider would auto-match. Use when you
-   *     want to skip thinking parsing for this agent (cost / latency /
-   *     UX reasons).
-   *
-   * Calling twice throws — same shape as `.reliability()` /
-   * `.outputSchema()` to enforce single-source intent.
-   *
-   * @example
-   *   // Default — auto-wire AnthropicThinkingHandler for anthropic provider
-   *   Agent.create({ provider: anthropic({...}), model: '...' }).build();
+   * Wire a thinking handler (v2.14+). Omitted, the agent uses the handler
+   * the provider declares (`LLMProvider.thinkingHandler` — `anthropic()`
+   * declares one, and a wrapper that forwards the field keeps it). Pass a
+   * handler to override it, or `null` to mount no thinking stage at all.
+   * Calling twice throws.
    *
    * @example
    *   // Custom handler that redacts thinking content

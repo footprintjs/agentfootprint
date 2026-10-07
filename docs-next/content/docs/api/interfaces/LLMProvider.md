@@ -12,7 +12,7 @@ Defined in: [src/adapters/types.ts:577](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **carriesForcedToolChoice?**: `boolean`
 
-Defined in: [src/adapters/types.ts:628](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L628)
+Defined in: [src/adapters/types.ts:641](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L641)
 
 v7.26 — whether this adapter puts [LLMRequest.toolChoice](/docs/api/interfaces/LLMRequest#toolchoice) on its
 wire as a forced choice of one named tool.
@@ -42,7 +42,7 @@ constrained if both constrain it.
 
 > `readonly` `optional` **carriesInMessages?**: readonly [`WireRole`](/docs/api/type-aliases/WireRole)[]
 
-Defined in: [src/adapters/types.ts:604](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L604)
+Defined in: [src/adapters/types.ts:617](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L617)
 
 v7.21 — which roles this provider carries INSIDE the `messages` array.
 
@@ -76,13 +76,38 @@ because a role only one of them carries is a role the call might drop.
 
 Defined in: [src/adapters/types.ts:578](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L578)
 
+***
+
+### promptCaching?
+
+> `readonly` `optional` **promptCaching?**: `PromptCaching`
+
+Defined in: [src/adapters/types.ts:585](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L585)
+
+How this provider's wire caches a repeated prompt prefix (`PromptCaching`,
+from `agentfootprint/cache`). The agent picks its cache strategy from
+this, never from `name`. Absent = no caching the agent drives or meters.
+A wrapper must forward it, like `carriesInMessages`.
+
+***
+
+### thinkingHandler?
+
+> `readonly` `optional` **thinkingHandler?**: `ThinkingHandler`
+
+Defined in: [src/adapters/types.ts:591](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L591)
+
+The handler that normalizes this wire's thinking (`rawThinking`). The
+agent uses it unless `.thinkingHandler()` overrides it; absent = no
+thinking stage. Never chosen by `name` — a wrapper must forward it.
+
 ## Methods
 
 ### complete()
 
 > **complete**(`req`, `hooks?`): `Promise`\<[`LLMResponse`](/docs/api/interfaces/LLMResponse)\>
 
-Defined in: [src/adapters/types.ts:636](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L636)
+Defined in: [src/adapters/types.ts:649](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L649)
 
 `hooks` (v7.8) is optional and additive — implementations may declare
 `complete(req)` with no second parameter and stay assignable. A LEAF
@@ -110,7 +135,7 @@ forward it, or everything it wraps goes silently dark — see the
 
 > `optional` **stream**(`req`, `hooks?`): `AsyncIterable`\<[`LLMChunk`](/docs/api/interfaces/LLMChunk)\>
 
-Defined in: [src/adapters/types.ts:637](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L637)
+Defined in: [src/adapters/types.ts:650](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L650)
 
 #### Parameters
 

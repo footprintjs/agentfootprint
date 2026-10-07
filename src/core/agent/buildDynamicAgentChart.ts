@@ -540,27 +540,34 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
   }
 
   inner = inner
-    .addSubFlowChartNext(SUBFLOW_IDS.CACHE, buildCacheSubflow(), 'Cache', {
-      inputMapper: (parent) => ({
-        activeInjections: (parent.activeInjections as readonly Injection[] | undefined) ?? [],
-        iteration: (parent.iteration as number | undefined) ?? 1,
-        maxIterations: (parent.maxIterations as number | undefined) ?? deps.maxIterations,
-        userMessage: (parent.userMessage as string | undefined) ?? '',
-        ...(parent.lastToolResult !== undefined && {
-          lastToolName: (parent.lastToolResult as { toolName: string } | undefined)?.toolName,
+    // The findings offer re-decorates every tool per call — see
+    // buildAgentChart's mount. Closed over at build time.
+    .addSubFlowChartNext(
+      SUBFLOW_IDS.CACHE,
+      buildCacheSubflow({ toolsVaryPerCall: deps.hasFindingsLedger === true }),
+      'Cache',
+      {
+        inputMapper: (parent) => ({
+          activeInjections: (parent.activeInjections as readonly Injection[] | undefined) ?? [],
+          iteration: (parent.iteration as number | undefined) ?? 1,
+          maxIterations: (parent.maxIterations as number | undefined) ?? deps.maxIterations,
+          userMessage: (parent.userMessage as string | undefined) ?? '',
+          ...(parent.lastToolResult !== undefined && {
+            lastToolName: (parent.lastToolResult as { toolName: string } | undefined)?.toolName,
+          }),
+          cumulativeInputTokens: (parent.totalInputTokens as number | undefined) ?? 0,
+          systemPromptCachePolicy: deps.systemPromptCachePolicy,
+          cachingDisabled: (parent.cachingDisabled as boolean | undefined) ?? false,
+          // The window as it will be sent — a messages marker's index is a
+          // position in THAT array. See buildAgentChart's mount for the why.
+          history: (parent.history as readonly LLMMessage[] | undefined) ?? [],
+          recentHitRate: parent.recentHitRate as number | undefined,
+          skillHistory: (parent.skillHistory as readonly (string | undefined)[] | undefined) ?? [],
         }),
-        cumulativeInputTokens: (parent.totalInputTokens as number | undefined) ?? 0,
-        systemPromptCachePolicy: deps.systemPromptCachePolicy,
-        cachingDisabled: (parent.cachingDisabled as boolean | undefined) ?? false,
-        // The window as it will be sent — a messages marker's index is a
-        // position in THAT array. See buildAgentChart's mount for the why.
-        history: (parent.history as readonly LLMMessage[] | undefined) ?? [],
-        recentHitRate: parent.recentHitRate as number | undefined,
-        skillHistory: (parent.skillHistory as readonly (string | undefined)[] | undefined) ?? [],
-      }),
-      outputMapper: (sf) => ({ cacheMarkers: sf.cacheMarkers }),
-      arrayMerge: ArrayMergeMode.Replace,
-    })
+        outputMapper: (sf) => ({ cacheMarkers: sf.cacheMarkers }),
+        arrayMerge: ArrayMergeMode.Replace,
+      },
+    )
     // CallLLM emits the per-iteration `iteration_start` marker itself (no
     // dedicated IterationStart stage — emitting is passive observability).
     .addFunction('CallLLM', deps.callLLM as never, STAGE_IDS.CALL_LLM, 'LLM invocation')

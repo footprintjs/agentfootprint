@@ -70,6 +70,7 @@ import {
   type AnthropicStreamEvent,
 } from './anthropicMessagesWire.js';
 import { toolManifestOf } from './wireManifest.js';
+import { anthropicThinkingHandler } from '../../thinking/AnthropicThinkingHandler.js';
 import { retryAfterMsFromHeaders } from './retryAfter.js';
 
 /** The literal this wire requires in the body in place of a version header. */
@@ -314,6 +315,20 @@ export function invokeModelGateway(options: InvokeModelGatewayOptions): LLMProvi
     // `tool_choice: { type: 'tool', name }` is part of the Anthropic body this
     // wire forwards, and a field deployment verified the gateway honours it.
     carriesForcedToolChoice: true,
+    // `promptCaching` is deliberately ABSENT, for the same reason the line
+    // above is present: a capability is declared where it is true of the
+    // ENDPOINT. This adapter builds the body `anthropic()` builds, so it
+    // writes `cache_control` wherever markers point — but no deployment has
+    // verified that a gateway forwards the field to InvokeModel, and until
+    // one does the agent sends it none. An operator who has verified theirs
+    // declares it on the instance:
+    //   { ...invokeModelGateway(opts), promptCaching: { mode: 'breakpoints', maxBreakpoints: 4, reportsUsage: true } }
+    //
+    // The thinking handler IS declared: the response is Anthropic's, parsed
+    // by `fromAnthropicResponse`, which passes thinking blocks through as
+    // `rawThinking`. Matched by name until now, this adapter never had one —
+    // so its signed blocks were never normalized for the echo back.
+    thinkingHandler: anthropicThinkingHandler,
 
     async complete(req: LLMRequest, _hooks?: LLMCallHooks): Promise<LLMResponse> {
       const modelId = modelIdFor(req, options.model);
@@ -366,6 +381,7 @@ export function invokeModelGateway(options: InvokeModelGatewayOptions): LLMProvi
 export class InvokeModelGatewayProvider implements LLMProvider {
   readonly name = PROVIDER_NAME;
   readonly carriesForcedToolChoice = true;
+  readonly thinkingHandler = anthropicThinkingHandler;
   private readonly inner: LLMProvider;
 
   constructor(options: InvokeModelGatewayOptions) {

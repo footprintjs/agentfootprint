@@ -6,15 +6,15 @@ _Recorded 2026-09-25._
 
 ## In plain words
 
-The package publishes **18 import paths** carrying **2493 distinct named exports**, plus **124 typed events**. For each one this report asks three separate questions: is it really *exported* (declared), is it *described in prose on the published docs site* (documented), and does a *real run actually use it* (exercised).
+The package publishes **18 import paths** carrying **2490 distinct named exports**, plus **124 typed events**. For each one this report asks three separate questions: is it really *exported* (declared), is it *described in prose on the published docs site* (documented), and does a *real run actually use it* (exercised).
 
-**1764 of 2493 exports (71%) are described in prose on the site.** The rest split into five different problems, which is the whole point of keeping the columns apart:
+**1765 of 2490 exports (71%) are described in prose on the site.** The rest split into five different problems, which is the whole point of keeping the columns apart:
 
 - **30 exist, provably work, and are undocumented.** A reference run exercises them and no page on the site describes them. This is the honest headline number for "features that work and nobody has written about". It is the list to work through.
 - **92 are already written up, just not published.** Prose about them exists inside the repo (`docs/`, `README.md`) but never made it onto the site. These are cheap wins: the writing is done, it needs moving.
-- **18 appear only inside a code sample** and nowhere in the surrounding text. A reader scanning the page never learns they exist, and site search does not find them.
-- **589 are undocumented and no reference run touches them.** This report will not guess whether they work. They are reported as UNKNOWN, which is the honest answer, and they need a human pass.
-- **1530 are documented but no reference run exercises them.** For a function or a class that is the shape a dead or unimplemented feature has. For a type or an interface it is mostly noise, because a type is used, not called — so read that class by kind, and the tables below split it.
+- **17 appear only inside a code sample** and nowhere in the surrounding text. A reader scanning the page never learns they exist, and site search does not find them.
+- **586 are undocumented and no reference run touches them.** This report will not guess whether they work. They are reported as UNKNOWN, which is the honest answer, and they need a human pass.
+- **1531 are documented but no reference run exercises them.** For a function or a class that is the shape a dead or unimplemented feature has. For a type or an interface it is mostly noise, because a type is used, not called — so read that class by kind, and the tables below split it.
 
 On events: **70** of the 124 typed events are both described on the site and were seen firing in a real run. **23** are described but were never observed firing — that is exactly the shape the resilience events had for months (fully declared, with payload types, and zero emitters), so this number is worth a look every time it moves. **31** are not described in prose on the site at all.
 
@@ -24,15 +24,15 @@ A previous inventory put the undocumented-feature count at roughly 36. That figu
 
 | Counting rule | Undocumented |
 |---|---|
-| every named export not in site prose | 729 |
-| … of those, absent from every prose anywhere in the repo | 619 |
-| only functions and classes (things you can call) | 156 |
+| every named export not in site prose | 725 |
+| … of those, absent from every prose anywhere in the repo | 616 |
+| only functions and classes (things you can call) | 153 |
 | only exports on the root barrel | 139 |
 | **functions and classes on the root barrel** | **23** |
 | functions and classes that a reference run proves work | 9 |
 | typed events | 31 |
 
-The closest analogue to the remembered 36 is the **23 callable things on the root barrel with no prose description** — near enough that the old inventory was probably counting something like it, and far enough from 729 that quoting a single "undocumented" number without saying which rule produced it is how a figure like 36 drifts. Every table below states its rule.
+The closest analogue to the remembered 36 is the **23 callable things on the root barrel with no prose description** — near enough that the old inventory was probably counting something like it, and far enough from 725 that quoting a single "undocumented" number without saying which rule produced it is how a figure like 36 drifts. Every table below states its rule.
 
 **The worst class is empty: nowhere do the published docs tell a reader to import something that does not exist.** That check is not baselined — it fails the build immediately, always, because a reader who copies such a line is simply broken.
 
@@ -57,7 +57,7 @@ Freshness is a separate question from documentation. `docs/api-reference/` is re
 
 ## What the existing CI docs gate already covers
 
-CI's `docs` job builds docs-next, which twoslash-compiles code blocks marked `ts twoslash` against the real types. That gate is real, and where it applies nothing can drift. It just applies narrowly: **32 of the 658 TypeScript/JavaScript blocks on the site are twoslash-marked**, and **396 `import … from 'agentfootprint…'` lines sit inside blocks the compiler never sees**. Three genuinely broken imports were found in exactly that blind spot while this report was first built (plain `typescript`-tagged fences in `reference/strategy-everywhere.mdx`), which is the concrete argument for checking the export map directly rather than trusting the build to catch it.
+CI's `docs` job builds docs-next, which twoslash-compiles code blocks marked `ts twoslash` against the real types. That gate is real, and where it applies nothing can drift. It just applies narrowly: **32 of the 659 TypeScript/JavaScript blocks on the site are twoslash-marked**, and **396 `import … from 'agentfootprint…'` lines sit inside blocks the compiler never sees**. Three genuinely broken imports were found in exactly that blind spot while this report was first built (plain `typescript`-tagged fences in `reference/strategy-everywhere.mdx`), which is the concrete argument for checking the export map directly rather than trusting the build to catch it.
 
 ## What each column means
 
@@ -154,7 +154,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `agentfootprint.integrity.context_error` | `docs-next/content/docs/monitor/arming-context-integrity.mdx`, `docs-next/content/docs/monitor/column-types.mdx` |
 | `agentfootprint.integrity.external_ground_used` | `docs-next/content/docs/monitor/arming-context-integrity.mdx` |
 
-**Functions and classes described on the site but not touched by any reference run (461).** The other 1069 in this class are types, interfaces and constants, which a run cannot "call" — they are named in `docs/docs-truth/baseline.json` rather than here.
+**Functions and classes described on the site but not touched by any reference run (461).** The other 1070 in this class are types, interfaces and constants, which a run cannot "call" — they are named in `docs/docs-truth/baseline.json` rather than here.
 
 | Symbol | Kind | Exported from |
 |---|---|---|
@@ -320,6 +320,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `byHeading` | function | `agentfootprint/rag` |
 | `byParagraph` | function | `agentfootprint/rag` |
 | `cacheRecorder` | function | `agentfootprint/cache` |
+| `cacheStrategyFor` | function | `agentfootprint/cache` |
 | `canonicalJson` | function | `agentfootprint/observe` |
 | `checkArmApplication` | function | `agentfootprint/observe` |
 | `checkArmApplied` | function | `agentfootprint/observe` |
@@ -471,7 +472,6 @@ The site describes it and it really is exported, but no reference run touches it
 | `recordingFileName` | function | `agentfootprint/observe` |
 | `redactContent` | function | `agentfootprint/observe` |
 | `refuseUnknownWireOp` | function | `agentfootprint/hosting` |
-| `registerCacheStrategy` | function | `agentfootprint/cache` |
 | `renewalEvidenceOf` | function | `agentfootprint/maps` |
 | `requireCapability` | function | `agentfootprint/hosting` |
 | `resilienceRecorder` | function | `agentfootprint/observe` |
@@ -524,6 +524,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `summarizeEmbeddings` | function | `agentfootprint/observe` |
 | `summarizeVector` | function | `agentfootprint/observe` |
 | `textLoader` | function | `agentfootprint/rag` |
+| `thinkingHandlerFor` | function | `agentfootprint/providers` |
 | `toolsRecorder` | function | `agentfootprint/observe` |
 | `toSkos` | function | `agentfootprint/ontology` |
 | `trustBoundaryRecorder` | function | `agentfootprint/observe` |
@@ -544,15 +545,15 @@ The site describes it and it really is exported, but no reference run touches it
 | `xrayObservability` | function | `agentfootprint/observe` |
 | `AdmissionRefusedError` | class | `agentfootprint/hosting` |
 | `AgentCorePolicyRetiredError` | class | `agentfootprint/security` |
-| `AnthropicCacheStrategy` | class | `agentfootprint/cache` |
 | `ArtifactNotCarriedError` | class | `agentfootprint/hosting` |
 | `ArtifactNotFoundError` | class | `agentfootprint/hosting` |
 | `ArtifactOpsBusyError` | class | `agentfootprint/hosting` |
 | `ArtifactSessionRequiredError` | class | `agentfootprint/hosting` |
+| `AutomaticCacheStrategy` | class | `agentfootprint/cache` |
 | `AwaitingDecisionError` | class | `agentfootprint/hosting` |
 | `BedrockAgentMemory` | class | `agentfootprint/memory` |
-| `BedrockCacheStrategy` | class | `agentfootprint/cache` |
 | `BoundaryRecorder` | class | `agentfootprint/observe` |
+| `BreakpointCacheStrategy` | class | `agentfootprint/cache` |
 | `BrowserAnthropicProvider` | class | `agentfootprint/providers` |
 | `BrowserOpenAIProvider` | class | `agentfootprint/providers` |
 | `ClassifierError` | class | `agentfootprint/classify` |
@@ -589,7 +590,6 @@ The site describes it and it really is exported, but no reference run touches it
 | `NoPendingAskError` | class | `agentfootprint/hosting` |
 | `OidcSignInSetupError` | class | `agentfootprint/security` |
 | `OllamaProvider` | class | `agentfootprint/providers` |
-| `OpenAICacheStrategy` | class | `agentfootprint/cache` |
 | `OpenAIProvider` | class | `agentfootprint/providers` |
 | `OriginNotAllowedError` | class | `agentfootprint/hosting` |
 | `PasswordCheckUnreachableError` | class | `agentfootprint/hosting` |
@@ -721,7 +721,7 @@ Prose about these exists in the repo (`docs/`, `README.md`) but nothing on the s
 
 ### 6. Mentioned only inside a code sample
 
-The name appears in a fenced block on the site and nowhere in the surrounding text. Reported as its own class rather than silently counted either way. **18 symbols.**
+The name appears in a fenced block on the site and nowhere in the surrounding text. Reported as its own class rather than silently counted either way. **17 symbols.**
 
 | Symbol | Kind | Exported from |
 |---|---|---|
@@ -735,7 +735,6 @@ The name appears in a fenced block on the site and nowhere in the surrounding te
 | `scoreInfluence` | function | `agentfootprint/observe` |
 | `defaultStructuralRules` | const | `agentfootprint/observe` |
 | `lexicalOverlapStrategy` | const | `agentfootprint/observe` |
-| `CacheCapabilities` | interface | `agentfootprint/cache` |
 | `ContextBugArtifacts` | interface | `agentfootprint/observe` |
 | `AgentfootprintEventType` | type | `agentfootprint/events` |
 | `CredentialResult` | type | `agentfootprint/security` |
@@ -746,7 +745,7 @@ The name appears in a fenced block on the site and nowhere in the surrounding te
 
 ### 7. Declared + not documented + not exercised — unknown
 
-Nowhere in any prose, and no reference run covers them, so this report will not claim they work or that they are dead. Some are internal-shaped types that happen to be exported; some may genuinely be dead. **589 symbols.**
+Nowhere in any prose, and no reference run covers them, so this report will not claim they work or that they are dead. Some are internal-shaped types that happen to be exported; some may genuinely be dead. **586 symbols.**
 
 | Symbol | Kind | Exported from |
 |---|---|---|
@@ -870,7 +869,7 @@ Nowhere in any prose, and no reference run covers them, so this report will not 
 | `asImportance` | function | `agentfootprint/memory` |
 | `attachCostStrategy` | function | `agentfootprint/observe` |
 | `attachFlowchart` | function | `agentfootprint/observe` |
-| … | | _469 more. Every undocumented name is listed in `docs/docs-truth/baseline.json`; for the full classified table run `node scripts/docs-truth-check.mjs --json out.json`_ |
+| … | | _466 more. Every undocumented name is listed in `docs/docs-truth/baseline.json`; for the full classified table run `node scripts/docs-truth-check.mjs --json out.json`_ |
 
 ### 8. Advisory — import paths named in prose that the export map does not expose
 
@@ -898,10 +897,10 @@ Whether a symbol comes from the root barrel or only from a subpath is a document
 | Import path | Exports | Described in site prose | Coverage |
 |---|---|---|---|
 | `agentfootprint` | 756 | 617 | 82% |
-| `agentfootprint/providers` | 163 | 134 | 82% |
+| `agentfootprint/providers` | 163 | 135 | 83% |
 | `agentfootprint/memory` | 223 | 112 | 50% |
 | `agentfootprint/rag` | 49 | 49 | 100% |
-| `agentfootprint/cache` | 27 | 19 | 70% |
+| `agentfootprint/cache` | 24 | 19 | 79% |
 | `agentfootprint/observe` | 594 | 251 | 42% |
 | `agentfootprint/events` | 26 | 11 | 42% |
 | `agentfootprint/context` | 162 | 100 | 62% |

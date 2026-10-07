@@ -28,8 +28,13 @@ import type {
 import { lazyRequire } from '../../lib/lazyRequire.js';
 import { asContextWindowExceeded } from './contextWindow.js';
 import { retryAfterMsFromError } from './retryAfter.js';
-import { applyCacheMarkers, readCacheUsage } from './anthropicCacheWire.js';
+import {
+  ANTHROPIC_PROMPT_CACHING,
+  applyCacheMarkers,
+  readCacheUsage,
+} from './anthropicCacheWire.js';
 import { toolManifestOf } from './wireManifest.js';
+import { anthropicThinkingHandler } from '../../thinking/AnthropicThinkingHandler.js';
 // The message and tool mapping has ONE owner, shared with browserAnthropic()
 // and invokeModelGateway() — a private copy here once drifted from it.
 import { toAnthropicMessages, toAnthropicTool } from './anthropicMessagesWire.js';
@@ -82,7 +87,7 @@ type AnthropicContentBlock =
   // when continuing a tool-using extended-thinking conversation;
   // signature MUST be byte-exact or Anthropic returns HTTP 400.
   | { type: 'thinking'; thinking: string; signature?: string }
-  | { type: 'redacted_thinking'; signature?: string };
+  | { type: 'redacted_thinking'; data: string };
 
 interface AnthropicTool {
   name: string;
@@ -208,6 +213,11 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
     name: 'anthropic',
     carriesInMessages: CARRIES_IN_MESSAGES,
     carriesForcedToolChoice: true,
+    // Explicit `cache_control` breakpoints, four per request, usage reported —
+    // the agent's cache strategy is chosen from this, never from `name`.
+    promptCaching: ANTHROPIC_PROMPT_CACHING,
+    // The signed thinking blocks this wire returns, normalized for the echo.
+    thinkingHandler: anthropicThinkingHandler,
     async complete(req: LLMRequest): Promise<LLMResponse> {
       const params = buildParams(req, defaultModel, defaultMaxTokens, parallelToolCalls);
       try {
@@ -263,6 +273,8 @@ export class AnthropicProvider implements LLMProvider {
   readonly name = 'anthropic';
   readonly carriesInMessages = CARRIES_IN_MESSAGES;
   readonly carriesForcedToolChoice = true;
+  readonly promptCaching = ANTHROPIC_PROMPT_CACHING;
+  readonly thinkingHandler = anthropicThinkingHandler;
   private readonly inner: LLMProvider;
 
   constructor(options: AnthropicProviderOptions = {}) {
@@ -361,8 +373,8 @@ function buildParams(
     params.tool_choice = { type: 'tool', name: req.toolChoice.name };
   }
   // Cache markers — applied AFTER param construction so the materialized
-  // fields (system / tools / messages) exist to mark. Already clamped to
-  // Anthropic's 4-marker limit by AnthropicCacheStrategy. Before this, the
+  // fields (system / tools / messages) exist to mark. Already clamped to the
+  // declared `maxBreakpoints` (four) by BreakpointCacheStrategy. Before this, the
   // server path silently dropped the markers the strategy prepared, so the
   // stable prefix was paid at full rate on every call.
   if (req.cacheMarkers && req.cacheMarkers.length > 0) {

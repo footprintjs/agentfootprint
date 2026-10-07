@@ -37,6 +37,8 @@ import type {
   LLMResponse,
   WireRole,
 } from '../adapters/types.js';
+import type { PromptCaching } from '../cache/types.js';
+import type { ThinkingBlock, ThinkingHandler } from '../thinking/types.js';
 import { DEFAULT_CARRIES_IN_MESSAGES } from '../adapters/types.js';
 
 /**
@@ -48,6 +50,91 @@ function carriedByBoth(a: LLMProvider, b: LLMProvider): readonly WireRole[] {
   const left = a.carriesInMessages ?? DEFAULT_CARRIES_IN_MESSAGES;
   const right = new Set(b.carriesInMessages ?? DEFAULT_CARRIES_IN_MESSAGES);
   return Object.freeze(left.filter((role) => right.has(role)));
+}
+
+/**
+ * The prompt caching of a pair where either side may serve the call.
+ *
+ * A COST hint, not a meaning: the pair asks the agent for breakpoints when
+ * EITHER side takes them (clamped to the smaller count when both do), and is
+ * automatic when either side caches on its own. Each side is then handed only
+ * what IT declares (`requestFor`) — a side that declared nothing never sees a
+ * `cacheMarkers` field. Usage is reported when either side reports it — a
+ * call the other side served then reads as *unmeasured*, never as a zero.
+ */
+function cachingOfPair(a: LLMProvider, b: LLMProvider): PromptCaching | undefined {
+  const sides = [a.promptCaching, b.promptCaching].filter(
+    (c): c is PromptCaching => c !== undefined,
+  );
+  if (sides.length === 0) return undefined;
+  const reportsUsage = sides.some((c) => c.reportsUsage);
+  const breakpoints = sides.flatMap((c) => (c.mode === 'breakpoints' ? [c.maxBreakpoints] : []));
+  if (breakpoints.length > 0) {
+    return Object.freeze({
+      mode: 'breakpoints',
+      maxBreakpoints: Math.min(...breakpoints),
+      reportsUsage,
+    });
+  }
+  return Object.freeze({ mode: 'automatic', reportsUsage });
+}
+
+/**
+ * The request as ONE side can take it: markers only for a side that declares
+ * breakpoints, sliced to its own count; stripped for any other side.
+ */
+function requestFor(side: LLMProvider, req: LLMRequest): LLMRequest {
+  const markers = req.cacheMarkers;
+  if (markers === undefined) return req;
+  const caching = side.promptCaching;
+  if (caching?.mode === 'breakpoints') {
+    return markers.length <= caching.maxBreakpoints
+      ? req
+      : { ...req, cacheMarkers: markers.slice(0, caching.maxBreakpoints) };
+  }
+  const rest: LLMRequest = { ...req };
+  delete (rest as { cacheMarkers?: unknown }).cacheMarkers;
+  return rest;
+}
+
+type Side = 'primary' | 'fallback';
+
+/** Raw thinking of a mixed pair, tagged with the side whose wire produced it. */
+interface AnsweredThinking {
+  readonly answeredBy: Side;
+  readonly raw: unknown;
+}
+
+function isAnswered(raw: unknown): raw is AnsweredThinking {
+  if (typeof raw !== 'object' || raw === null) return false;
+  const by = (raw as { answeredBy?: unknown }).answeredBy;
+  return (by === 'primary' || by === 'fallback') && 'raw' in raw;
+}
+
+/**
+ * The thinking handler of a pair. The same handler on both sides is the
+ * pair's. Different handlers (or one side with none) get a DISPATCHING
+ * handler: the pair tags each response's `rawThinking` with the side that
+ * answered (`AnsweredThinking`), and the handler runs that side's own — one
+ * wire's handler on the other's thinking would mis-read it, and dropping
+ * both lost the signed blocks the next call must echo.
+ */
+function thinkingOfPair(a: LLMProvider, b: LLMProvider): ThinkingHandler | undefined {
+  const [ha, hb] = [a.thinkingHandler, b.thinkingHandler];
+  if (ha === hb) return ha;
+  return {
+    id: `${ha?.id ?? 'none'}-or-${hb?.id ?? 'none'}`,
+    normalize(raw: unknown): readonly ThinkingBlock[] {
+      if (!isAnswered(raw)) {
+        throw new TypeError(
+          "withFallback: this thinking does not say which side answered, so neither side's " +
+            'handler can read it',
+        );
+      }
+      const handler = raw.answeredBy === 'primary' ? ha : hb;
+      return handler === undefined ? [] : handler.normalize(raw.raw);
+    },
+  };
 }
 
 export interface WithFallbackOptions {
@@ -105,6 +192,21 @@ export function withFallback(
     });
   }
 
+  const promptCaching = cachingOfPair(primary, fallback);
+  const thinkingHandler = thinkingOfPair(primary, fallback);
+  const tagsThinking = primary.thinkingHandler !== fallback.thinkingHandler;
+  /** A response as the pair returns it: thinking tagged when the sides differ. */
+  const answered = (res: LLMResponse, side: Side): LLMResponse =>
+    tagsThinking && res.rawThinking !== undefined
+      ? { ...res, rawThinking: { answeredBy: side, raw: res.rawThinking } }
+      : res;
+  async function* answeredStream(chunks: AsyncIterable<LLMChunk>, side: Side) {
+    for await (const chunk of chunks) {
+      yield chunk.response === undefined
+        ? chunk
+        : { ...chunk, response: answered(chunk.response, side) };
+    }
+  }
   const wrapped: LLMProvider = {
     name: `${primary.name}|${fallback.name}`,
     // The INTERSECTION, and only the intersection. Either provider may serve
@@ -120,14 +222,19 @@ export function withFallback(
     // some of the time, which is the shape of guarantee nobody can use.
     carriesForcedToolChoice:
       (primary.carriesForcedToolChoice ?? false) && (fallback.carriesForcedToolChoice ?? false),
+    // The combination, not the intersection — see `cachingOfPair`.
+    ...(promptCaching !== undefined && { promptCaching }),
+    // The side that answered decides which handler reads its thinking —
+    // see `thinkingOfPair`.
+    ...(thinkingHandler !== undefined && { thinkingHandler }),
     async complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
       try {
-        return await primary.complete(req, hooks);
+        return answered(await primary.complete(requestFor(primary, req), hooks), 'primary');
       } catch (err) {
         if (!shouldFallback(err)) throw err;
         onFallback?.(err);
         reportFellBack(hooks, err);
-        return fallback.complete(req, hooks);
+        return answered(await fallback.complete(requestFor(fallback, req), hooks), 'fallback');
       }
     },
   };
@@ -144,14 +251,24 @@ export function withFallback(
       // No primary stream support → fallback's stream (or its complete-only).
       // Reports NOTHING: nothing failed here, the primary simply has no
       // `stream()`. Calling this a fallback would be a lie.
+      const fallbackReq = requestFor(fallback, req);
+      const fromFallback = (): AsyncIterable<LLMChunk> =>
+        answeredStream(
+          fallback.stream
+            ? fallback.stream(fallbackReq, hooks)
+            : completeAsStream(fallback, fallbackReq, hooks),
+          'fallback',
+        );
       if (!primary.stream) {
-        if (fallback.stream) yield* fallback.stream(req, hooks);
-        else yield* completeAsStream(fallback, req, hooks);
+        yield* fromFallback();
         return;
       }
       let yieldedAny = false;
       try {
-        for await (const chunk of primary.stream(req, hooks)) {
+        for await (const chunk of answeredStream(
+          primary.stream(requestFor(primary, req), hooks),
+          'primary',
+        )) {
           yieldedAny = true;
           yield chunk;
         }
@@ -159,8 +276,7 @@ export function withFallback(
         if (yieldedAny || !shouldFallback(err)) throw err;
         onFallback?.(err);
         reportFellBack(hooks, err);
-        if (fallback.stream) yield* fallback.stream(req, hooks);
-        else yield* completeAsStream(fallback, req, hooks);
+        yield* fromFallback();
       }
     };
   }

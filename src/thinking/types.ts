@@ -4,7 +4,7 @@
  * Mental model — TWO-LAYER architecture:
  *
  *   • CONSUMER-FACING:   `ThinkingHandler` — a simple function-pair
- *                        (id, providerNames, normalize, parseChunk?).
+ *                        (id, normalize, parseChunk?).
  *                        Provider authors and custom-LLM consumers
  *                        implement THIS shape.
  *
@@ -20,8 +20,8 @@
  * `ToolProvider` and the framework wraps `list()` in the Tools slot
  * subflow.
  *
- * @see SHIPPED_THINKING_HANDLERS for the registry the framework uses
- *      to auto-wire by `provider.name` (Phase 3 wiring).
+ * @see thinkingHandlerFor — the agent uses the handler the PROVIDER
+ *      declares (`LLMProvider.thinkingHandler`), never one looked up by name.
  * @see MockThinkingHandler for the canonical example demonstrating
  *      both Anthropic-shape (signed blocks) and OpenAI-shape (multi-
  *      block summary) inputs.
@@ -106,10 +106,10 @@ export interface ThinkingBlock {
  * time so the trace shows it as a discrete `runtimeStageId` (e.g.
  * `sf-call-llm/thinking-{id}#5`).
  *
- * The framework matches handlers to providers by `providerNames` —
- * the first handler whose `providerNames` includes the active
- * `provider.name` is auto-wired. Override per-agent via
- * `.thinkingHandler(customHandler)` (Phase 3 wiring).
+ * The provider DECLARES its handler (`LLMProvider.thinkingHandler`) and the
+ * agent uses it — never chosen by `provider.name`, so a wrapper that forwards
+ * the field (`withRetry`, an app's own) keeps it. Override per agent with
+ * `.thinkingHandler(customHandler)`; `.thinkingHandler(null)` opts out.
  */
 export interface ThinkingHandler {
   /**
@@ -119,15 +119,6 @@ export interface ThinkingHandler {
    * `'anthropic'`, `'openai'`, `'mock'`.
    */
   readonly id: string;
-
-  /**
-   * Provider names this handler matches for auto-wire. The framework
-   * scans `SHIPPED_THINKING_HANDLERS` at chart build time and selects
-   * the first handler whose `providerNames` contains the active
-   * `provider.name`. Most handlers list one name; Bedrock-via-Anthropic
-   * style handlers may list multiple.
-   */
-  readonly providerNames: readonly string[];
 
   /**
    * Pure: raw provider data → normalized blocks.

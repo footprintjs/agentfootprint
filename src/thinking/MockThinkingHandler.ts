@@ -78,9 +78,8 @@ export function mockOpenAIRaw(summarySteps: readonly string[]): MockOpenAIRaw {
 
 export const mockThinkingHandler: ThinkingHandler = {
   id: 'mock',
-  // Matches the MockProvider's name; framework auto-wires when
-  // Agent uses MockProvider in tests.
-  providerNames: ['mock'],
+  // Declared by MockProvider (`thinkingHandler`), so an agent on `mock()`
+  // normalizes the scripted thinking it returns.
 
   normalize(raw: unknown): readonly ThinkingBlock[] {
     if (!isMockRaw(raw)) return [];

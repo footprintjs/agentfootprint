@@ -29,6 +29,9 @@ import type {
   LLMToolSchema,
   WireRole,
 } from '../types.js';
+import type { PromptCaching } from '../../cache/types.js';
+import type { ThinkingHandler } from '../../thinking/types.js';
+import { openAIThinkingHandler } from '../../thinking/OpenAIThinkingHandler.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
 import { asContextWindowExceeded } from './contextWindow.js';
 import { retryAfterMsFromError } from './retryAfter.js';
@@ -260,6 +263,20 @@ export interface OpenAIProviderOptions {
 const CARRIES_IN_MESSAGES: readonly WireRole[] = Object.freeze(['system', 'user', 'assistant']);
 
 /**
+ * What the OpenAI wire promises about prompt caching: OpenAI (and Azure
+ * OpenAI) cache a repeated prefix on their own, so a breakpoint means nothing
+ * here, and this adapter does not lift `prompt_tokens_details.cached_tokens`
+ * onto the port usage — so the meter reports *not applicable*, never a zero.
+ * Declared for the real endpoints only (the `carriesForcedToolChoice` signal):
+ * what an OpenAI-COMPATIBLE server behind a custom `baseURL` caches is its own
+ * business.
+ */
+const OPENAI_PROMPT_CACHING: PromptCaching = Object.freeze({
+  mode: 'automatic',
+  reportsUsage: false,
+});
+
+/**
  * Build an `LLMProvider` backed by OpenAI's Chat Completions API.
  *
  * @example
@@ -304,6 +321,8 @@ export function openai(options: OpenAIProviderOptions = {}): LLMProvider {
     // signal the file already trusts to pick `max_tokens` vs
     // `max_completion_tokens`.
     carriesForcedToolChoice: !legacyEndpoint,
+    ...(!legacyEndpoint && { promptCaching: OPENAI_PROMPT_CACHING }),
+    thinkingHandler: openAIThinkingHandler,
     async complete(req: LLMRequest): Promise<LLMResponse> {
       const params = buildParams(req, { ...cfg, stream: false });
       // The credential is asked for HERE, per request, so a token that expired
@@ -412,11 +431,16 @@ export class OpenAIProvider implements LLMProvider {
    *  custom `baseURL` was given, and this class is only the thing its options
    *  made it. */
   readonly carriesForcedToolChoice: boolean;
+  /** Read off `inner` for the same reason. */
+  readonly promptCaching?: PromptCaching;
+  readonly thinkingHandler?: ThinkingHandler;
   private readonly inner: LLMProvider;
 
   constructor(options: OpenAIProviderOptions = {}) {
     this.inner = openai(options);
     this.carriesForcedToolChoice = this.inner.carriesForcedToolChoice ?? false;
+    if (this.inner.promptCaching !== undefined) this.promptCaching = this.inner.promptCaching;
+    if (this.inner.thinkingHandler !== undefined) this.thinkingHandler = this.inner.thinkingHandler;
   }
 
   // `hooks` is FORWARDED, not dropped — see LLMCallHooks in adapters/types.ts.
@@ -559,6 +583,8 @@ export function azureOpenai(options: AzureOpenAIProviderOptions = {}): LLMProvid
     ...(inner.carriesForcedToolChoice !== undefined && {
       carriesForcedToolChoice: inner.carriesForcedToolChoice,
     }),
+    ...(inner.promptCaching !== undefined && { promptCaching: inner.promptCaching }),
+    ...(inner.thinkingHandler !== undefined && { thinkingHandler: inner.thinkingHandler }),
     // `hooks` is FORWARDED, not dropped — see LLMCallHooks in adapters/types.ts.
     complete: (req, hooks) => inner.complete(withDeployment(req), hooks),
     ...(inner.stream && {

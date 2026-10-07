@@ -21,9 +21,10 @@ Fixing only the first would have left a meter that still cannot say *unmeasured*
 ## Reading the report
 
 ```ts
-import { cacheRecorder, isKnown, describeClaim } from 'agentfootprint/cache';
+import { cacheRecorder, cacheStrategyFor, isKnown, describeClaim } from 'agentfootprint/cache';
 
-const meter = cacheRecorder({ strategy, pricing, model });
+// The same strategy the agent runs: chosen from the provider's declared prompt caching.
+const meter = cacheRecorder({ strategy: cacheStrategyFor(provider), pricing, model });
 const agent = Agent.create({ provider, model }).watch(meter).build();
 await agent.run('…');
 
@@ -69,15 +70,14 @@ Below a model's minimum cacheable prefix, a request is processed **without cachi
 
 ## Which providers can actually feed it
 
-Naming this honestly is the point of the table:
+`cacheStrategyFor` picks the strategy from what the provider declares (`promptCaching`); a wrapper that forwards it reads like the adapter it wraps:
 
-| Strategy | Sends markers | Reads cache usage | What `extractMetrics` says |
-|---|---|---|---|
-| `AnthropicCacheStrategy` | yes | yes | `known` / `unknown` — the one end-to-end path |
-| `OpenAICacheStrategy` | n/a (auto-caches) | **no** | `not-applicable` |
-| `BedrockCacheStrategy` | **no** | **no** | `not-applicable` |
-| `NoOpCacheStrategy` | no | no | `not-applicable` |
+| Declared by | Strategy | Sends markers | Reads cache usage | What `extractMetrics` says |
+|---|---|---|---|---|
+| `anthropic()`, `browserAnthropic()` | `BreakpointCacheStrategy` | yes | yes | `known` / `unknown` — the one end-to-end path |
+| `openai()`, Azure, Foundry | `AutomaticCacheStrategy` | n/a (auto-caches) | **no** | `not-applicable` |
+| nothing declared (`bedrock()`, `ollama()`, `gemini()`, `mock()`) | `NoOpCacheStrategy` | no | no | `not-applicable` |
 
-`BedrockCacheStrategy` declares `enabled: false`, and that is a statement about **this adapter**, not about Bedrock. AWS's Converse API does support prompt caching for Claude models and does report `cacheReadInputTokens`; our Bedrock provider implements neither half. Until 9.59.0 the strategy said `enabled: true` and clamped markers onto a request field the provider then discarded — a meter attached to a provider that cannot feed it. It stays registered rather than deleted so a Bedrock consumer asking the registry what it got is told the truth by name, instead of silently falling through to the wildcard.
+"Nothing declared" is about **the adapter**, not the vendor: AWS's Converse API can cache Claude prompts, but our Bedrock provider implements neither half.
 
-OpenAI is the costliest of the three gaps, because it is the auto-caching provider: caching is happening on every call and nothing lifts `prompt_tokens_details.cached_tokens` onto the port.
+OpenAI is the costliest of the gaps, because it is the auto-caching provider: caching is happening on every call and nothing lifts `prompt_tokens_details.cached_tokens` onto the port — which is exactly what its `reportsUsage: false` says.

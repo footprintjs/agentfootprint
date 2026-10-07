@@ -50,7 +50,6 @@ function isOpenAIStructuredArray(raw: unknown): raw is readonly OpenAISummaryIte
 
 export const openAIThinkingHandler: ThinkingHandler = {
   id: 'openai',
-  providerNames: ['openai'],
 
   normalize(raw: unknown): readonly ThinkingBlock[] {
     if (raw === undefined || raw === null) return [];

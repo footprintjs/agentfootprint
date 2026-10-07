@@ -1,20 +1,14 @@
-/**
+/*
  * agentfootprint — public barrel.
  *
  * Pattern: Facade (GoF) over the typed sublayers.
  * Role:    Single entry point consumers import from.
  * Emits:   N/A.
+ *
+ * A plain block comment, not TSDoc: nothing separates it from the first
+ * export below, and TypeDoc would otherwise attach this text to the
+ * re-exported footprintjs types as their documentation.
  */
-
-// Side-effect imports — auto-register v2.6+ cache strategies in the
-// strategy registry. Without these, only the wildcard NoOp is
-// registered and `Agent.create({ provider: browserAnthropic({...}) })`
-// would silently fall back to NoOp instead of using the Anthropic
-// cache_control translator. Importing the strategy modules runs their
-// `registerCacheStrategy(...)` blocks at module load.
-import './cache/strategies/AnthropicCacheStrategy.js';
-import './cache/strategies/OpenAICacheStrategy.js';
-import './cache/strategies/BedrockCacheStrategy.js';
 
 // Substrate (footprintjs) types consumers reach for when wiring
 // recorders + custom executors. Re-exported here so consumer code

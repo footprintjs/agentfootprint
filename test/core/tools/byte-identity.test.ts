@@ -471,6 +471,19 @@
  * the added member is exactly 29 bytes/chars. The other 20 references remain
  * byte-identical. No message, body, enum, trace, normalizer or other key moved.
  *
+ * Prompt caching chosen by CAPABILITY, with a moving breakpoint: 27 of the
+ * thirty REGENERATED, diffed structurally leaf by leaf against HEAD. The
+ * whole delta is two keys. (1) `receipt.cache.strategy`, 74 leaves: `'*'` →
+ * `'none'` — the strategy is named by the capability it serves now, and a
+ * `mock()` provider declares no prompt caching. (2) `cacheMarkers`, written in
+ * the commit log (27 overwrite + 27 trace leaves, 21 array members): the
+ * conversation-tail marker (`field: 'messages'`, the last history index)
+ * beside the system/tools ones, so the list now changes every iteration and
+ * is written where an unchanged list used to commit nothing. `servedAt` did
+ * not move on any fixture, and no message, tool, system piece or other key
+ * moved anywhere — the model is served the same bytes; only the markers that
+ * say what may be cached are new.
+ *
  * Every scenario is a real run — the receipt-conformance shapes, each in the
  * configuration that has no name collision — and what is compared is the
  * whole `commitLog` plus `servedAt(k)` for every located epoch, after ONE

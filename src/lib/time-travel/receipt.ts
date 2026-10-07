@@ -364,10 +364,10 @@ export interface Receipt {
     readonly markersApplied: readonly ReceiptCacheMarker[];
     /**
      * WHICH strategy stood between assembly and the port, or `null` when none
-     * did (9.93.0). The value is the strategy's declared `providerName` — the
-     * key it registers under (`'anthropic'`, `'openai'`; `'*'` is the built-in
-     * pass-through every agent runs when no provider-specific strategy is
-     * registered).
+     * did (9.93.0). The value is the strategy's `name`: for the built-ins,
+     * the caching the provider declared (`'breakpoints'`, `'automatic'`,
+     * `'none'`); older receipts carry the old registry key (`'anthropic'`,
+     * `'openai'`, `'*'`).
      *
      * `null` is a FACT, not an absence: `LLMCall` and the two message-API
      * charts hand the port the request assembly built, with nothing in
@@ -654,7 +654,7 @@ export interface BuildReceiptInput {
     readonly boundaryIndex: number;
     readonly ttl: 'short' | 'long';
   }[];
-  /** The `providerName` of the strategy `preparedRequest` came back from, or
+  /** The `name` of the strategy `preparedRequest` came back from, or
    *  `null` when no strategy stood between assembly and the port — see
    *  {@link Receipt.cache.strategy}. A mint must say which; it may not omit. */
   readonly strategy: string | null;

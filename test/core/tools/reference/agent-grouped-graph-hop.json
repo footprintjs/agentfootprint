@@ -304,7 +304,7 @@
           },
           "cache": {
             "markersApplied": [],
-            "strategy": "*",
+            "strategy": "none",
             "transform": "unchanged",
             "transformHash": null
           },

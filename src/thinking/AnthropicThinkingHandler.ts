@@ -48,10 +48,11 @@ interface AnthropicThinkingBlock {
   readonly signature?: string;
 }
 
-/** Anthropic's wire-format redacted-thinking block (safety-filtered). */
+/** Anthropic's wire-format redacted-thinking block (safety-filtered): the
+ *  encrypted reasoning rides `data`, and must be echoed back as-is. */
 interface AnthropicRedactedThinkingBlock {
   readonly type: 'redacted_thinking';
-  readonly signature?: string;
+  readonly data?: string;
 }
 
 /** Other block types Anthropic emits — handler ignores these. */
@@ -99,7 +100,6 @@ export const anthropicThinkingHandler: ThinkingHandler = {
   // which sets `rawThinking` to `message.content`. Bedrock Claude
   // would also fit here but ships as a separate handler if/when its
   // shape diverges.
-  providerNames: ['anthropic', 'browser-anthropic'],
 
   normalize(raw: unknown): readonly ThinkingBlock[] {
     if (!isAnthropicContentArray(raw)) return [];
@@ -120,13 +120,14 @@ export const anthropicThinkingHandler: ThinkingHandler = {
           ...(block.signature !== undefined && { signature: block.signature }),
         });
       } else if (isRedactedThinkingBlock(block)) {
-        // Redacted blocks have no readable content but the signature
-        // is still REQUIRED for round-trip. Empty content is the
-        // contract (per Phase 1 ThinkingBlock JSDoc).
+        // Redacted blocks have no readable content; the encrypted `data`
+        // is what must round-trip, so it rides `signature` — the
+        // ThinkingBlock's round-trip slot — byte-exact, and the wire
+        // writes it back as `data`. Dropping it made the echo a 400.
         out.push({
           type: 'redacted_thinking',
           content: '',
-          ...(block.signature !== undefined && { signature: block.signature }),
+          ...(block.data !== undefined && { signature: block.data }),
         });
       }
       // Other block types (text, tool_use, etc.) flow through the

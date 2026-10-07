@@ -27,7 +27,14 @@
 
 import { describe, expect, it } from 'vitest';
 import { cacheRecorder } from '../../src/cache/cacheRecorder';
-import { AnthropicCacheStrategy } from '../../src/cache/strategies/AnthropicCacheStrategy';
+import { BreakpointCacheStrategy } from '../../src/cache/strategies/BreakpointCacheStrategy';
+
+/** What `anthropic()` declares — breakpoints, usage reported. */
+const breakpoints = (): BreakpointCacheStrategy =>
+  new BreakpointCacheStrategy(
+    { mode: 'breakpoints', maxBreakpoints: 4, reportsUsage: true },
+    'the Anthropic adapter',
+  );
 import type { PricingTable, TokenKind } from '../../src/adapters/types';
 import type { FlowDecisionEvent } from 'footprintjs';
 import type { AgentfootprintEvent } from '../../src/events/registry';
@@ -170,7 +177,7 @@ describe('cacheRecorder — boundary', () => {
 describe('cacheRecorder — scenario', () => {
   it('iter 1 cache write, iter 2-3 cache hits — Anthropic strategy', () => {
     const rec = cacheRecorder({
-      strategy: new AnthropicCacheStrategy(),
+      strategy: breakpoints(),
       pricing: sonnetPricing,
       model: 'claude-sonnet-4-5',
     });
@@ -227,7 +234,7 @@ describe('cacheRecorder — scenario', () => {
 describe('cacheRecorder — property', () => {
   it('hitRate is always in [0, 1]', () => {
     const rec = cacheRecorder({
-      strategy: new AnthropicCacheStrategy(),
+      strategy: breakpoints(),
       pricing: sonnetPricing,
     });
     for (let i = 0; i < 5; i++) {
@@ -248,7 +255,7 @@ describe('cacheRecorder — property', () => {
 
   it('cache spend ≤ no-cache cost (caching is never net-cost-positive when strategy works)', () => {
     const rec = cacheRecorder({
-      strategy: new AnthropicCacheStrategy(),
+      strategy: breakpoints(),
       pricing: sonnetPricing,
       model: 'sonnet',
     });
@@ -271,7 +278,7 @@ describe('cacheRecorder — property', () => {
 
 describe('cacheRecorder — security: defensive parsing', () => {
   it('llm_end with no usage → no crash, and the row says why it is unknown', () => {
-    const rec = cacheRecorder({ strategy: new AnthropicCacheStrategy() });
+    const rec = cacheRecorder({ strategy: breakpoints() });
     rec.onEmit(llmEndEvent(null));
     const r = rec.report();
     const m = r.perIter[0]!.metrics;
@@ -301,7 +308,7 @@ describe('cacheRecorder — performance', () => {
     // hundred times the work — which is what this ratio refuses.
     const record = (iterations: number): void => {
       const rec = cacheRecorder({
-        strategy: new AnthropicCacheStrategy(),
+        strategy: breakpoints(),
         pricing: sonnetPricing,
       });
       for (let i = 0; i < iterations; i++) {
@@ -324,7 +331,7 @@ describe('cacheRecorder — performance', () => {
 describe('cacheRecorder — ROI: dollar math', () => {
   it('cache hit at 90% off saves ~90% of input cost', () => {
     const rec = cacheRecorder({
-      strategy: new AnthropicCacheStrategy(),
+      strategy: breakpoints(),
       pricing: sonnetPricing,
       model: 'sonnet',
     });
@@ -344,7 +351,7 @@ describe('cacheRecorder — ROI: dollar math', () => {
 
   it('cache write costs 25% MORE; recorded as positive spend', () => {
     const rec = cacheRecorder({
-      strategy: new AnthropicCacheStrategy(),
+      strategy: breakpoints(),
       pricing: sonnetPricing,
       model: 'sonnet',
     });

@@ -16,6 +16,11 @@
  * anywhere but a final prefill) — the reference was edited by removing exactly
  * that element and nothing else. See anthropicMessagesWire · toAnthropicMessages.
  *
+ * A SECOND deliberate change: a redacted thinking block is echoed as Anthropic
+ * takes it, `{ type: 'redacted_thinking', data }` — it was sent as
+ * `{ type, signature }`, which the API rejects. The reference was edited by
+ * renaming exactly that key in the six bodies that carry the block.
+ *
  * Test type (Convention 3): byte identity.
  */
 import { describe, it, expect } from 'vitest';

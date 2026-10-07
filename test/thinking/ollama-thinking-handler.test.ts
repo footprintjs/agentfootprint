@@ -14,7 +14,7 @@ import {
   ollamaThinkingHandler,
   extractInlineThinking,
 } from '../../src/thinking/OllamaThinkingHandler.js';
-import { findThinkingHandler, SHIPPED_THINKING_HANDLERS } from '../../src/thinking/registry.js';
+import { SHIPPED_THINKING_HANDLERS } from '../../src/thinking/registry.js';
 import { ollama } from '../../src/adapters/llm/OllamaProvider.js';
 import type { LLMRequest } from '../../src/adapters/types.js';
 
@@ -42,16 +42,15 @@ function ndjsonFetch(frames: readonly unknown[]): typeof fetch {
 
 describe('ollamaThinkingHandler — unit: registry wiring', () => {
   it('auto-wires by provider name', () => {
-    expect(findThinkingHandler('ollama')).toBe(ollamaThinkingHandler);
+    expect(ollama({ model: 'llama3' }).thinkingHandler).toBe(ollamaThinkingHandler);
   });
 
   it('is in the shipped list', () => {
     expect(SHIPPED_THINKING_HANDLERS).toContain(ollamaThinkingHandler);
   });
 
-  it('declares an id and the provider it serves', () => {
+  it('declares an id', () => {
     expect(ollamaThinkingHandler.id).toBe('ollama');
-    expect(ollamaThinkingHandler.providerNames).toEqual(['ollama']);
   });
 });
 

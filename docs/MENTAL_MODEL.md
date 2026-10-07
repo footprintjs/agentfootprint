@@ -414,7 +414,7 @@ Factory: `createProvider({kind,...})`. Public subpath `agentfootprint/providers`
 (scripted multi-turn, cursor-based, exhaustion throws), `mock({respond})`, `MockProvider.realistic()`
 (latency for live-feel demos). Same interface as real providers → zero-cost tests, identical chart.
 
-**Thinking** (`src/thinking/`): consumer `ThinkingHandler{id,providerNames,normalize(raw),parseChunk?}`
+**Thinking** (`src/thinking/`): consumer `ThinkingHandler{id,normalize(raw),parseChunk?}` (declared by the provider: `LLMProvider.thinkingHandler`)
 auto-wired by `provider.name`; `buildThinkingSubflow` wraps it in a real subflow. **Signature
 round-trip**: Anthropic thinking blocks must echo byte-exact + ordered FIRST in the assistant turn
 or HTTP 400. `thinkingBlocks` persist in `scope.history`; `ephemeral` messages do not.

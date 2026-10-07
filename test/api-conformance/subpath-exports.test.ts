@@ -114,7 +114,7 @@ const REMOVED_SUBPATHS = [
     door: './providers',
     doorModule: providersDoor,
     implModule: thinking,
-    sample: 'findThinkingHandler',
+    sample: 'thinkingHandlerFor',
   },
   {
     subpath: './memory-providers',

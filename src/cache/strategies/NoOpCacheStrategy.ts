@@ -1,19 +1,14 @@
 /**
- * NoOpCacheStrategy — fallback strategy for providers without cache
- * support (Mock, unknown providers, intentional opt-out).
+ * NoOpCacheStrategy — for a provider that declares no prompt caching
+ * (`LLMProvider.promptCaching` absent): Mock, Ollama, Bedrock Converse,
+ * any adapter that has not said, or an intentional opt-out.
  *
- * Returns the request unchanged; reports no metrics. The
- * `capabilities.enabled` flag is `false` so the CacheDecision subflow
- * could choose to skip emitting markers entirely (potential v2.7
- * optimization), though current Phase 4+5 always emit markers and
- * let the strategy decide what to do with them.
- *
- * Always-available default. Registered against the special wildcard
- * `'*'` so any unrecognized provider name falls back to NoOp.
+ * Returns the request unchanged and reports *not applicable* — never a zero.
+ * Chosen by `cacheStrategyFor` when the declaration is absent; one shared
+ * instance serves every such provider (it holds no state).
  */
 
 import type {
-  CacheCapabilities,
   CacheMarker,
   CacheMetrics,
   CacheStrategy,
@@ -23,22 +18,8 @@ import type {
 import { notApplicable, type Claim } from '../../lib/claim/claim.js';
 import type { LLMRequest } from '../../adapters/types.js';
 
-const NOOP_CAPABILITIES: CacheCapabilities = Object.freeze({
-  enabled: false,
-  maxMarkers: 0,
-  ttls: [] as readonly ('short' | 'long')[],
-  fields: [] as readonly ('system' | 'tools' | 'messages')[],
-  automatic: false,
-});
-
 export class NoOpCacheStrategy implements CacheStrategy {
-  /**
-   * Wildcard provider name. The strategy registry treats this as the
-   * fallback for any provider that doesn't have a specific strategy
-   * registered.
-   */
-  readonly providerName = '*';
-  readonly capabilities = NOOP_CAPABILITIES;
+  readonly name = 'none';
 
   async prepareRequest(
     req: LLMRequest,
@@ -53,7 +34,8 @@ export class NoOpCacheStrategy implements CacheStrategy {
 
   extractMetrics(_usage: CacheUsage | undefined): Claim<CacheMetrics> {
     return notApplicable(
-      'the NoOp strategy stands in for providers with no cache reporting at all',
+      'the provider declares no prompt caching (LLMProvider.promptCaching is absent), so no ' +
+        'cache traffic is driven or reported',
     );
   }
 }

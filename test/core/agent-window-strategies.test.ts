@@ -635,9 +635,7 @@ describe('window strategies — checkpoint / resume', () => {
 // ─── Integration — tree-shakeable, registering nothing ────────────
 
 describe('window strategies — tree-shakeable', () => {
-  it('importing a factory module mutates no registry and needs no sideEffects entry', async () => {
-    const { listRegisteredStrategies } = await import('../../src/cache/strategyRegistry.js');
-    const before = JSON.stringify([...listRegisteredStrategies()].sort());
+  it('importing a factory module mutates no global and needs no sideEffects entry', async () => {
     const globalsBefore = Object.keys(globalThis).length;
 
     const mods = await Promise.all([
@@ -646,7 +644,6 @@ describe('window strategies — tree-shakeable', () => {
       import('../../src/core/agent/window/strategies/summarizeOldest.js'),
     ]);
 
-    expect(JSON.stringify([...listRegisteredStrategies()].sort())).toBe(before);
     expect(Object.keys(globalThis).length).toBe(globalsBefore);
     // Each module's only export shape is its factory (plus its name constant).
     for (const mod of mods) {

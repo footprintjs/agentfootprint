@@ -11,10 +11,11 @@
  *      `CacheDecision` subflow at runtime. Provider-independent
  *      identification of "cacheable prefix in field X up to index Y".
  *
- *   3. PROVIDER STRATEGY — one `CacheStrategy` implementation per
- *      provider (Anthropic / OpenAI / Bedrock / NoOp). Translates
- *      agnostic markers to provider-specific wire format AND extracts
- *      cache metrics from the provider's response.
+ *   3. STRATEGY — one `CacheStrategy` per CAPABILITY, chosen from what the
+ *      provider DECLARES (`LLMProvider.promptCaching`), never from its name:
+ *      explicit breakpoints, automatic prefix caching, or none. Decides
+ *      which markers reach the request AND reads cache metrics off the
+ *      port usage. The adapter owns the wire format.
  *
  * The interfaces are read-only / immutable by convention. Strategies
  * MUST be stateless across runs; per-run state lives in the
@@ -121,14 +122,16 @@ export interface CachePolicyContext {
  *
  * The CacheDecision subflow walks `activeInjections` and emits one
  * marker per slot whose entries from index 0..boundaryIndex form a
- * stable, contiguous, cacheable prefix.
+ * stable, contiguous, cacheable prefix — and one more on the conversation
+ * tail when everything before it is cacheable (the moving breakpoint).
  *
- * `field` is the request field this marker targets. Each provider
- * strategy translates it differently:
- * - `'system'` → Anthropic puts `cache_control` on a system block
- * - `'tools'` → Anthropic puts `cache_control` on a tools array entry
- * - `'messages'` → Anthropic puts `cache_control` on the LAST content
- *   block of the LAST message (Anthropic-specific positional rule)
+ * `field` is the request field this marker targets. An adapter that declares
+ * `promptCaching.mode: 'breakpoints'` encodes it on its wire; the Anthropic
+ * one does:
+ * - `'system'` → `cache_control` on a system block
+ * - `'tools'` → `cache_control` on a tools array entry
+ * - `'messages'` → `cache_control` on the LAST content block of the
+ *   message the index names (Anthropic's positional rule)
  */
 export interface CacheMarker {
   readonly field: 'system' | 'tools' | 'messages';
@@ -137,12 +140,11 @@ export interface CacheMarker {
    * cached prefix. Everything from index 0..boundaryIndex (inclusive)
    * is cacheable.
    *
-   * **Provider note for `field: 'messages'`**: Anthropic's `cache_control`
-   * on `messages` is positional — it only takes effect on the LAST
-   * content block of the LAST message in the cacheable prefix. The
-   * AnthropicCacheStrategy translates `boundaryIndex` to the right
-   * positional placement; consumers and CacheDecision subflow don't
-   * see this complexity.
+   * **Provider note for `field: 'messages'`**: the index is a position in
+   * `LLMRequest.messages`. Anthropic's `cache_control` on `messages` is
+   * positional — it takes effect on the LAST content block of a message —
+   * and the adapter translates the index into its own (coalesced) message
+   * array; consumers and the CacheDecision subflow don't see this.
    */
   readonly boundaryIndex: number;
   /**
@@ -158,34 +160,74 @@ export interface CacheMarker {
   readonly reason: string;
 }
 
-// ─── Layer 3: Provider strategy ───────────────────────────────────
+// ─── Layer 3: Strategy ────────────────────────────────────────────
 
 /**
- * Per-provider cache implementation. One strategy per provider name;
- * registered in a default map keyed by `LLMProvider.name`.
+ * How an adapter's wire caches a repeated prompt prefix — DECLARED by the
+ * adapter, read by the agent to choose its cache strategy
+ * (`agentfootprint/cache` · `cacheStrategyFor`).
  *
- * Strategies MUST be stateless across runs. Any per-run state (handle
- * cache, hit-rate tracking) lives inside the strategy instance.
+ * - `'breakpoints'` — the provider caches a prefix only where the request
+ *   marks it (Anthropic's `cache_control`). The adapter reads
+ *   `LLMRequest.cacheMarkers` and writes them on its wire, at most
+ *   `maxBreakpoints` per request.
+ * - `'automatic'` — the provider caches repeated prefixes on its own (OpenAI).
+ *   Markers are inert; nothing the request says changes what is cached.
+ *
+ * `reportsUsage` says whether the adapter lifts the provider's cache token
+ * counts onto `LLMResponse.usage.cacheRead` / `cacheWrite`. The cache meter
+ * reads it: `false` makes every call's cache claim *not applicable*, never a
+ * zero.
+ *
+ * @example
+ * ```ts
+ * // A wrapper forwards what it wraps, like every other capability:
+ * const wrapped: LLMProvider = {
+ *   name: `my-app/${inner.name}`,
+ *   ...(inner.promptCaching !== undefined && { promptCaching: inner.promptCaching }),
+ *   complete: (req, hooks) => inner.complete(req, hooks),
+ * };
+ * ```
+ */
+export type PromptCaching =
+  | {
+      readonly mode: 'breakpoints';
+      /** Breakpoints the wire honours on one request (Anthropic: 4). */
+      readonly maxBreakpoints: number;
+      readonly reportsUsage: boolean;
+    }
+  | {
+      readonly mode: 'automatic';
+      readonly reportsUsage: boolean;
+    };
+
+/**
+ * The cache strategy an agent runs between request assembly and the provider.
+ *
+ * Chosen by CAPABILITY: `cacheStrategyFor(provider)` reads the provider's
+ * declared `promptCaching` and returns `BreakpointCacheStrategy`,
+ * `AutomaticCacheStrategy` or `NoOpCacheStrategy`. Pass your own as
+ * `Agent.create({ cacheStrategy })` to override it.
+ *
+ * Strategies MUST be stateless across runs; per-run state arrives in the
+ * {@link CacheStrategyContext}.
  */
 export interface CacheStrategy {
-  /** Provider name match. e.g. `'anthropic'`, `'openai'`, `'bedrock'`. */
-  readonly providerName: string;
   /**
-   * Static description of what this strategy can do. Read by the
-   * CacheDecision subflow to know whether to bother emitting markers,
-   * and how many to emit before clamping to provider limits.
+   * What the run's receipt records as the strategy that stood between
+   * assembly and the port (`Receipt.cache.strategy`). The built-ins name the
+   * capability they serve: `'breakpoints'`, `'automatic'`, `'none'`.
    */
-  readonly capabilities: CacheCapabilities;
+  readonly name: string;
   /**
-   * Translate agnostic markers to provider-specific wire format.
+   * Decide which agnostic markers reach the request.
    *
-   * Async to support handle-based caching (Gemini does
-   * `createCachedContent` and references handles; not in v2.6 but
-   * the interface is async-ready for v2.7+).
+   * Async to support handle-based caching (Gemini's `createCachedContent`
+   * references handles) without another interface change.
    *
-   * Returns the modified request AND the markers actually applied
-   * (after capability-clamping). `markersApplied` flows into the
-   * cacheRecorder for diagnostic surfacing.
+   * Returns the request (with `cacheMarkers` set for the adapter to encode)
+   * AND the markers actually applied, after clamping. `markersApplied` flows
+   * into the receipt and the cacheRecorder.
    */
   prepareRequest(
     req: LLMRequest,
@@ -209,49 +251,11 @@ export interface CacheStrategy {
    * - `unknown(reason, …)`  — nothing measured this call (no usage payload,
    *                           or the provider reported no cache fields). The
    *                           report renders this as *unmeasured*, never 0.
-   * - `notApplicable(…)`    — this provider/adapter cannot report cache
-   *                           usage at all (NoOp; Bedrock until its adapter
-   *                           grows the read half).
+   * - `notApplicable(…)`    — this provider cannot report cache usage at
+   *                           all (it declares no `promptCaching`, or
+   *                           declares `reportsUsage: false`).
    */
   extractMetrics(usage: CacheUsage | undefined): Claim<CacheMetrics>;
-}
-
-/**
- * Static description of a strategy's capabilities. The CacheDecision
- * subflow reads this BEFORE calling `prepareRequest` so it can clamp
- * candidates to a count the strategy can actually use.
- */
-export interface CacheCapabilities {
-  /**
-   * `true` if this strategy actually does anything. `false` for NoOp,
-   * Mock, or providers we haven't built yet. CacheDecision subflow
-   * skips entirely when `enabled` is `false`.
-   */
-  readonly enabled: boolean;
-  /**
-   * Maximum number of cache markers per request. Anthropic enforces 4
-   * cache breakpoints per request; OpenAI is automatic (∞); Gemini
-   * is per-handle (∞ effectively). Strategies clamp internally.
-   */
-  readonly maxMarkers: number;
-  /**
-   * TTL values this strategy can map to. Anthropic supports both;
-   * OpenAI is fixed (~5min); some providers may only support one.
-   */
-  readonly ttls: ReadonlyArray<'short' | 'long'>;
-  /**
-   * Which request fields this strategy can mark. Most providers support
-   * all three (system / tools / messages); some are field-restricted.
-   */
-  readonly fields: ReadonlyArray<'system' | 'tools' | 'messages'>;
-  /**
-   * `true` if the provider auto-caches without explicit markers (OpenAI).
-   * In that case `prepareRequest` is a pass-through; only
-   * `extractMetrics` does meaningful work. Surfaced for documentation
-   * (so consumers know `cache: 'never'` may not actually disable caching
-   * on auto-caching providers).
-   */
-  readonly automatic: boolean;
 }
 
 /**
@@ -263,10 +267,9 @@ export interface CacheStrategyContext {
   readonly iteration: number;
   readonly iterationsRemaining: number;
   /**
-   * Hit rate across previous iterations of this run (0..1). Strategies
-   * use this for self-disable behaviors (e.g., AnthropicCacheStrategy
-   * auto-skips markers when hit rate < 30% to avoid the cache-write
-   * penalty without recoup).
+   * Hit rate across previous iterations of this run (0..1), when something
+   * supplied one. Nothing in the library writes it today, so it arrives
+   * `undefined`; the CacheGate's hit-rate rule reads the same value.
    */
   readonly recentHitRate: number | undefined;
   /**

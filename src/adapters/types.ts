@@ -577,6 +577,19 @@ export interface LLMCallHooks {
 export interface LLMProvider {
   readonly name: string;
   /**
+   * How this provider's wire caches a repeated prompt prefix (`PromptCaching`,
+   * from `agentfootprint/cache`). The agent picks its cache strategy from
+   * this, never from `name`. Absent = no caching the agent drives or meters.
+   * A wrapper must forward it, like `carriesInMessages`.
+   */
+  readonly promptCaching?: import('../cache/types.js').PromptCaching;
+  /**
+   * The handler that normalizes this wire's thinking (`rawThinking`). The
+   * agent uses it unless `.thinkingHandler()` overrides it; absent = no
+   * thinking stage. Never chosen by `name` — a wrapper must forward it.
+   */
+  readonly thinkingHandler?: import('../thinking/types.js').ThinkingHandler;
+  /**
    * v7.21 — which roles this provider carries INSIDE the `messages` array.
    *
    * The wires disagree, and the disagreement is invisible from the outside:

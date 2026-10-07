@@ -322,12 +322,32 @@
     },
     {
       "idx": 15,
-      "overwrite": {},
+      "overwrite": {
+        "cacheMarkers": [
+          {
+            "boundaryIndex": 0,
+            "field": "system",
+            "reason": "system stable prefix (1 entries, ending at base system prompt)",
+            "ttl": "short"
+          },
+          {
+            "boundaryIndex": 2,
+            "field": "messages",
+            "reason": "conversation tail through wire index 2 — the moving breakpoint: the next call repeats this prefix and appends after it",
+            "ttl": "short"
+          }
+        ]
+      },
       "redactedPaths": [],
       "runtimeStageId": "sf-cache#50",
       "stage": "Cache",
       "stageId": "sf-cache",
-      "trace": [],
+      "trace": [
+        {
+          "path": "cacheMarkers",
+          "verb": "set"
+        }
+      ],
       "updates": {}
     },
     {
@@ -355,7 +375,7 @@
           },
           "cache": {
             "markersApplied": [],
-            "strategy": "*",
+            "strategy": "none",
             "transform": "unchanged",
             "transformHash": null
           },

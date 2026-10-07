@@ -21,7 +21,7 @@ composition.
 
 > **new Agent**(`opts`, `systemPromptValue`, `registry`, `voice`, `injections?`, `memories?`, `outputSchemaParser?`, `toolProvider?`, `systemPromptCachePolicy?`, `cachingDisabled?`, `cacheStrategy?`, `outputFallbackCfg?`, `reliabilityConfig?`, `thinkingHandlerValue?`, `thinkingBudgetValue?`, `skillGraphNextSkill?`, `skillGraphReachable?`, `skillGraphScoreEntries?`, `checkInOptions?`, `runConfigFn?`, `windowStrategy?`, `toolMiddleware?`, `messageMiddleware?`, `outputEnforcement?`, `skillGraphEdgeTargets?`, `skillGraphExplainNextSkill?`, `skillGraphIsTree?`, `skillGraphSupersededEntries?`, `skillGraphCascade?`, `skillBrains?`, `evidenceGate?`, `limitsTravelWithTheAnswer?`, `recipes?`, `skillGraphDeclared?`, `mapsPlan?`, `claimContract?`, `answerValidationConfig?`): `Agent`
 
-Defined in: [src/core/Agent.ts:992](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L992)
+Defined in: [src/core/Agent.ts:990](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L990)
 
 #### Parameters
 
@@ -211,7 +211,7 @@ readonly `DeclaredClaim`[]
 
 > `readonly` **appName**: `string`
 
-Defined in: [src/core/Agent.ts:775](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L775)
+Defined in: [src/core/Agent.ts:773](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L773)
 
 Voice config — shared by viewers (Lens, ChatThinkKit, CLI tail).
 `appName` is the active actor in narration ("Chatbot called…").
@@ -225,7 +225,7 @@ Defaults to bundled English; consumer overrides via builder.
 
 > `readonly` **commentaryTemplates**: `Readonly`\<`Record`\<`string`, `string`\>\>
 
-Defined in: [src/core/Agent.ts:776](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L776)
+Defined in: [src/core/Agent.ts:774](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L774)
 
 ***
 
@@ -266,7 +266,7 @@ Defined in: [src/core/Agent.ts:440](https://github.com/footprintjs/agentfootprin
 
 > `readonly` **thinkingTemplates**: `Readonly`\<`Record`\<`string`, `string`\>\>
 
-Defined in: [src/core/Agent.ts:777](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L777)
+Defined in: [src/core/Agent.ts:775](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L775)
 
 ## Methods
 

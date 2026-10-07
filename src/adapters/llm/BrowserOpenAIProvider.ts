@@ -27,6 +27,8 @@ import type {
   LLMToolSchema,
   WireRole,
 } from '../types.js';
+import type { PromptCaching } from '../../cache/types.js';
+import type { ThinkingHandler } from '../../thinking/types.js';
 import { asContextWindowExceeded } from './contextWindow.js';
 import { azureChatCompletionsUrl } from './azureUrl.js';
 
@@ -137,6 +139,20 @@ export interface BrowserOpenAIProviderOptions {
  */
 const CARRIES_IN_MESSAGES: readonly WireRole[] = Object.freeze(['system', 'user', 'assistant']);
 
+/**
+ * What the OpenAI wire promises about prompt caching: OpenAI (and Azure
+ * OpenAI) cache a repeated prefix on their own, so a breakpoint means nothing
+ * here, and this adapter does not lift `prompt_tokens_details.cached_tokens`
+ * onto the port usage — so the meter reports *not applicable*, never a zero.
+ * Declared for the real endpoints only (the `carriesForcedToolChoice` signal):
+ * what an OpenAI-COMPATIBLE server behind a custom URL caches is its own
+ * business.
+ */
+const OPENAI_PROMPT_CACHING: PromptCaching = Object.freeze({
+  mode: 'automatic',
+  reportsUsage: false,
+});
+
 export function browserOpenai(options: BrowserOpenAIProviderOptions): LLMProvider {
   if (!options.apiKey) {
     throw new Error(
@@ -167,6 +183,7 @@ export function browserOpenai(options: BrowserOpenAIProviderOptions): LLMProvide
     // Not behind a custom baseURL — see the Node provider for why the library
     // does not promise an OpenAI-compatible server's behaviour.
     carriesForcedToolChoice: !legacyEndpoint,
+    ...(!legacyEndpoint && { promptCaching: OPENAI_PROMPT_CACHING }),
     async complete(req: LLMRequest): Promise<LLMResponse> {
       const body: OpenAIRequestBody = buildBody(req, { ...cfg, stream: false });
       let response: Response;
@@ -264,11 +281,16 @@ export class BrowserOpenAIProvider implements LLMProvider {
   readonly carriesInMessages = CARRIES_IN_MESSAGES;
   /** Read off `inner` — it depends on the options, not on the class. */
   readonly carriesForcedToolChoice: boolean;
+  /** Read off `inner` — it depends on the options, not on the class. */
+  readonly promptCaching?: PromptCaching;
+  readonly thinkingHandler?: ThinkingHandler;
   private readonly inner: LLMProvider;
 
   constructor(options: BrowserOpenAIProviderOptions) {
     this.inner = browserOpenai(options);
     this.carriesForcedToolChoice = this.inner.carriesForcedToolChoice ?? false;
+    if (this.inner.promptCaching !== undefined) this.promptCaching = this.inner.promptCaching;
+    if (this.inner.thinkingHandler !== undefined) this.thinkingHandler = this.inner.thinkingHandler;
   }
 
   // `hooks` is FORWARDED, not dropped — see LLMCallHooks in adapters/types.ts.
@@ -367,6 +389,8 @@ export function browserAzureOpenai(options: BrowserAzureOpenAIProviderOptions): 
     ...(inner.carriesForcedToolChoice !== undefined && {
       carriesForcedToolChoice: inner.carriesForcedToolChoice,
     }),
+    ...(inner.promptCaching !== undefined && { promptCaching: inner.promptCaching }),
+    ...(inner.thinkingHandler !== undefined && { thinkingHandler: inner.thinkingHandler }),
     // `hooks` is FORWARDED, not dropped — see LLMCallHooks in adapters/types.ts.
     complete: (req, hooks) => inner.complete(withDeployment(req), hooks),
     ...(inner.stream && {
@@ -380,11 +404,16 @@ export class BrowserAzureOpenAIProvider implements LLMProvider {
   readonly carriesInMessages = CARRIES_IN_MESSAGES;
   /** Read off `inner` — it depends on the options, not on the class. */
   readonly carriesForcedToolChoice: boolean;
+  /** Read off `inner` — it depends on the options, not on the class. */
+  readonly promptCaching?: PromptCaching;
+  readonly thinkingHandler?: ThinkingHandler;
   private readonly inner: LLMProvider;
 
   constructor(options: BrowserAzureOpenAIProviderOptions) {
     this.inner = browserAzureOpenai(options);
     this.carriesForcedToolChoice = this.inner.carriesForcedToolChoice ?? false;
+    if (this.inner.promptCaching !== undefined) this.promptCaching = this.inner.promptCaching;
+    if (this.inner.thinkingHandler !== undefined) this.thinkingHandler = this.inner.thinkingHandler;
   }
 
   // `hooks` is FORWARDED, not dropped — see LLMCallHooks in adapters/types.ts.

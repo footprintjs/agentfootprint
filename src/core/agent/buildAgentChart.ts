@@ -173,7 +173,7 @@ export interface AgentChartDeps {
   /**
    * Optional thinking-normalization sub-subflow (v2.14+). Mounted as a
    * stage AFTER CallLLM, BEFORE Route, only when a `ThinkingHandler`
-   * resolved (either auto-wired by `provider.name` or explicitly set
+   * resolved (declared by the provider or explicitly set
    * via `.thinkingHandler()`). When undefined, the stage is NOT added —
    * zero overhead for non-thinking agents (build-time conditional mount).
    */
@@ -979,33 +979,43 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
     // outputs only the gated cacheMarkers (Replace, not concat, across the
     // loop). The attached provider's CacheStrategy turns markers into wire
     // format later. See buildCacheSubflow.ts.
-    .addSubFlowChartNext(SUBFLOW_IDS.CACHE, buildCacheSubflow(), 'Cache', {
-      inputMapper: (parent) => ({
-        // decideCacheMarkers inputs
-        activeInjections: (parent.activeInjections as readonly Injection[] | undefined) ?? [],
-        iteration: (parent.iteration as number | undefined) ?? 1,
-        maxIterations: (parent.maxIterations as number | undefined) ?? deps.maxIterations,
-        userMessage: (parent.userMessage as string | undefined) ?? '',
-        ...(parent.lastToolResult !== undefined && {
-          lastToolName: (parent.lastToolResult as { toolName: string } | undefined)?.toolName,
+    // Under the findings door the tools slot binds the offer into every tool
+    // schema, so the tools — first on a breakpoint wire — change from one
+    // tool-calling call to the next and no breakpoint would be read back
+    // (`CacheDecisionState.toolsVaryPerCall`). A build-time fact, closed over
+    // by the decision stage: an unarmed agent's sf-cache is unchanged.
+    .addSubFlowChartNext(
+      SUBFLOW_IDS.CACHE,
+      buildCacheSubflow({ toolsVaryPerCall: deps.hasFindingsLedger === true }),
+      'Cache',
+      {
+        inputMapper: (parent) => ({
+          // decideCacheMarkers inputs
+          activeInjections: (parent.activeInjections as readonly Injection[] | undefined) ?? [],
+          iteration: (parent.iteration as number | undefined) ?? 1,
+          maxIterations: (parent.maxIterations as number | undefined) ?? deps.maxIterations,
+          userMessage: (parent.userMessage as string | undefined) ?? '',
+          ...(parent.lastToolResult !== undefined && {
+            lastToolName: (parent.lastToolResult as { toolName: string } | undefined)?.toolName,
+          }),
+          cumulativeInputTokens: (parent.totalInputTokens as number | undefined) ?? 0,
+          systemPromptCachePolicy: deps.systemPromptCachePolicy,
+          cachingDisabled: (parent.cachingDisabled as boolean | undefined) ?? false,
+          // The window AS IT WILL BE SENT (7.21). A `CacheMarker{field:'messages'}`
+          // names a position in the request's message array, so it has to be
+          // computed against that array — post-window, post-delivery — and not
+          // against a count of injections, which is what it used to be and why
+          // the marker pointed at the wrong message.
+          history: (parent.history as readonly LLMMessage[] | undefined) ?? [],
+          // CacheGate inputs (read-only: skillHistory is updated in the main
+          // loop above, so it is NOT mapped back out)
+          recentHitRate: parent.recentHitRate as number | undefined,
+          skillHistory: (parent.skillHistory as readonly (string | undefined)[] | undefined) ?? [],
         }),
-        cumulativeInputTokens: (parent.totalInputTokens as number | undefined) ?? 0,
-        systemPromptCachePolicy: deps.systemPromptCachePolicy,
-        cachingDisabled: (parent.cachingDisabled as boolean | undefined) ?? false,
-        // The window AS IT WILL BE SENT (7.21). A `CacheMarker{field:'messages'}`
-        // names a position in the request's message array, so it has to be
-        // computed against that array — post-window, post-delivery — and not
-        // against a count of injections, which is what it used to be and why
-        // the marker pointed at the wrong message.
-        history: (parent.history as readonly LLMMessage[] | undefined) ?? [],
-        // CacheGate inputs (read-only: skillHistory is updated in the main
-        // loop above, so it is NOT mapped back out)
-        recentHitRate: parent.recentHitRate as number | undefined,
-        skillHistory: (parent.skillHistory as readonly (string | undefined)[] | undefined) ?? [],
-      }),
-      outputMapper: (sf) => ({ cacheMarkers: sf.cacheMarkers }),
-      arrayMerge: ArrayMergeMode.Replace,
-    })
+        outputMapper: (sf) => ({ cacheMarkers: sf.cacheMarkers }),
+        arrayMerge: ArrayMergeMode.Replace,
+      },
+    )
     // CallLLM emits the per-iteration `iteration_start` marker itself (no
     // dedicated IterationStart stage — emitting is passive observability).
     .addFunction('CallLLM', deps.callLLM as never, STAGE_IDS.CALL_LLM, 'LLM invocation')
@@ -1013,7 +1023,7 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
     // stage's commit bundle, from the same table `milestoneFor` reads.
     .tag(...milestoneTagsFor(STAGE_IDS.CALL_LLM));
   // v2.14 — conditional NormalizeThinking sub-subflow. Mounted ONLY
-  // when a ThinkingHandler resolved (auto-wired by provider.name OR
+  // when a ThinkingHandler resolved (declared by the provider OR
   // explicitly set via .thinkingHandler()). When undefined, the stage
   // is NOT added — zero overhead for non-thinking agents
   // (build-time conditional mount; matches the panel's design rule).

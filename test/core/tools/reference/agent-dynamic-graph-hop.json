@@ -597,6 +597,12 @@
             "field": "tools",
             "reason": "tools stable prefix (1 entries, ending at skill:alpha)",
             "ttl": "short"
+          },
+          {
+            "boundaryIndex": 0,
+            "field": "messages",
+            "reason": "conversation tail through wire index 0 — the moving breakpoint: the next call repeats this prefix and appends after it",
+            "ttl": "short"
           }
         ]
       },
@@ -642,7 +648,7 @@
           },
           "cache": {
             "markersApplied": [],
-            "strategy": "*",
+            "strategy": "none",
             "transform": "unchanged",
             "transformHash": null
           },
@@ -1216,6 +1222,12 @@
             "field": "tools",
             "reason": "tools stable prefix (2 entries, ending at skill:beta)",
             "ttl": "short"
+          },
+          {
+            "boundaryIndex": 2,
+            "field": "messages",
+            "reason": "conversation tail through wire index 2 — the moving breakpoint: the next call repeats this prefix and appends after it",
+            "ttl": "short"
           }
         ]
       },
@@ -1256,7 +1268,7 @@
           },
           "cache": {
             "markersApplied": [],
-            "strategy": "*",
+            "strategy": "none",
             "transform": "unchanged",
             "transformHash": null
           },

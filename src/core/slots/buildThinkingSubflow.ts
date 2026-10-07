@@ -8,7 +8,7 @@
  *
  * Two-layer architecture (per Phase 1 panel decision):
  *   - CONSUMER-FACING:    `ThinkingHandler` — simple function-pair
- *                          (id, providerNames, normalize, parseChunk?)
+ *                          (id, normalize, parseChunk?)
  *   - FRAMEWORK-INTERNAL: this file wraps each handler in a real
  *                         footprintjs subflow with own runtimeStageId,
  *                         narrative entry, and InOutRecorder boundary.
@@ -48,9 +48,8 @@ interface NormalizeThinkingState {
  * `scope.history` — that's where the Anthropic signature round-trip
  * actually flows from.
  */
-export function buildThinkingSubflow(handler: ThinkingHandler): FlowChart {
+export function buildThinkingSubflow(handler: ThinkingHandler, providerName: string): FlowChart {
   const handlerId = handler.id;
-  const providerName = handler.providerNames[0] ?? 'unknown';
 
   return flowChart<NormalizeThinkingState>(
     'Normalize',

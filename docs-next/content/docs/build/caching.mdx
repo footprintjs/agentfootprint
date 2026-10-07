@@ -6,7 +6,8 @@ description: Stable context — steering, facts, an active skill — is cached f
 An agent loop sends the same system prompt and tool descriptions on every
 iteration. On providers with prompt caching, those repeated bytes can cost a
 fraction of normal input tokens — but only if the request marks which blocks
-are stable. agentfootprint does that marking for you.
+are stable. agentfootprint does that marking for you — the conversation so
+far included.
 
 **It is on by default.** Most agents never touch it.
 
@@ -73,27 +74,38 @@ Every iteration, before the model is called, a gate decides whether to place
 cache markers at all. It skips them when:
 
 1. caching is off for the agent;
-2. the recent cache hit rate has fallen below 0.3 — the markers aren't paying off;
+2. a supplied hit rate is below 0.3 (the agent computes none yet);
 3. three or more different skills were active in the last five iterations —
    each switch invalidates the cache, so marking would only add write cost.
 
-The gate's decision is recorded with the run, like every other decision.
+Under `.findings()` no marker is placed: its offer changes every tool schema
+per call, so nothing could be read back. The gate's decision is recorded with
+the run, like every other decision.
 
 ## Which providers, and how
 
-| Provider | How caching works | Cache token counts |
-|---|---|---|
-| Anthropic | Explicit markers on stable blocks (at most 4 per request) — placed for you | reported |
-| Bedrock, Claude models | Same markers as Anthropic | reported |
-| Bedrock, other models | Automatic on the provider side | not reported |
-| OpenAI | Automatic on the provider side | reported |
-| Anything else | No-op | — |
+Each provider declares how its wire caches (`promptCaching`, a `PromptCaching`
+from `agentfootprint/cache`); the agent picks its strategy from that, never
+from the provider's name:
 
-Each provider has a strategy, chosen automatically from `provider.name`. To
-support another provider, implement `CacheStrategy` (`providerName`,
-`capabilities`, `prepareRequest`, `extractMetrics`) and register it with
-`registerCacheStrategy` from `agentfootprint/cache` — see the
-[API reference](https://agentfootprint.dev/docs/api/) for the exact shapes.
+| Provider | Declares | Cache token counts |
+|---|---|---|
+| `anthropic()`, `browserAnthropic()` | `mode: 'breakpoints'` — up to 4 markers, placed for you | reported |
+| `openai()`, Azure OpenAI, Foundry | `mode: 'automatic'` — the provider caches on its own | not reported |
+| `bedrock()`, `ollama()`, `gemini()`, `mock()` | nothing — no-op | — |
+
+A wrapper keeps caching when it forwards the field (`withRetry`,
+`withCircuitBreaker` and `withFallback` do):
+
+```ts
+const routed: LLMProvider = {
+  name: `my-app/${inner.name}`,
+  ...(inner.promptCaching !== undefined && { promptCaching: inner.promptCaching }),
+  complete: (req, hooks) => inner.complete(req, hooks),
+};
+```
+
+Without it the wrapper runs uncached, and its receipts say `'none'`.
 
 ## Did it pay off?
 
