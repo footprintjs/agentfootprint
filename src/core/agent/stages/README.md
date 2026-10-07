@@ -246,8 +246,9 @@ from state). Two refusals used to end on a value:
 - **Answer validation** broke in the Route decider, and a decider that breaks
   ends the chart with the branch name (`'final'`) as its result. Now the decider
   routes on and the final branch's guard (`withheldByValidation`) stops before the
-  capture — and before AssessAnswer (`finalGuardFor`, `honesty/mounts.ts` ·
-  `startFinalBranch`), so the answer layer never assesses an answer it withholds.
+  capture. The answer layer's AssessAnswer, which runs first, skips an answer the
+  report withholds — decided from the `answerValidation` report its fold already
+  reads (`validatedAnswerMayDeliver`, the guard's own predicate; no extra read).
   The Final mount writes `finalContent` back only from a delivered answer
   (`finalBranchOutput`), so a refusal leaves it as it was.
 - **Evidence rails** (without answer validation, whose guard covers rails) ended
@@ -264,7 +265,7 @@ previous release over every standalone scenario in all three modes):
 | answer validation refused (or a validated answer the output policy denied) | the Final branch is entered and withheld: its frames, the `'final'` decision, and Route's own narrative lines, which the decider's break used to drop |
 | evidence rails, every turn | PrepareFinal reads `unsupportedValues` once (`Read unsupportedValues = …`) |
 | evidence rails, refused | `turn_end.refused`; the branch ends after the capture (no memory write, no BreakFinal frame) |
-| answer layer + answer validation, every turn | AssessAnswer runs the validation guard first, so its frame reads the guard's keys |
+| evidence rails, refused, under an output policy | no `stream.token`: the one token an output policy releases after acceptance is not released for a refused answer |
 | any run given `{ signal }` | `$getEnv()` callers are marked `untrackedSources: ['env']` |
 
 Pinned by `test/core/refused-answer-ending.test.ts` and

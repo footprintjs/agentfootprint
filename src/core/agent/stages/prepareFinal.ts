@@ -173,15 +173,25 @@ export const prepareFinalWithValidationStage = (scope: TypedScope<AgentState>): 
  * report, a prior refusal or a denied answer breaks the branch before the
  * capture — returns `true` when it did.
  */
-function withheldByValidation(scope: TypedScope<AgentState>): boolean {
-  const report = scope.answerValidation;
-  const mayDeliver =
+/**
+ * Whether answer validation's report lets its answer be delivered — the one
+ * predicate the final guard and the answer layer's AssessAnswer share. Every
+ * refusal under validation lands in the report (a prior refusal — denied
+ * output, a rails refusal, an outstanding consent — is filed as an unverified
+ * `'prior-refusal'` report), so the report alone decides.
+ */
+export function validatedAnswerMayDeliver(report: AgentState['answerValidation']): boolean {
+  return (
     report !== undefined &&
     (report.mode === 'observe' ||
-      (report.mode === 'enforce' && report.status === 'passed' && report.schemaAccepted === true));
+      (report.mode === 'enforce' && report.status === 'passed' && report.schemaAccepted === true))
+  );
+}
+
+function withheldByValidation(scope: TypedScope<AgentState>): boolean {
   if (
     scope.answerValidationBlocked === true ||
-    !mayDeliver ||
+    !validatedAnswerMayDeliver(scope.answerValidation) ||
     scope.messageDeniedReason !== undefined ||
     scope.unsupportedValues?.refused === true
   ) {
@@ -436,17 +446,6 @@ function withRailsRefusal(stage: FinalStage): FinalStage {
     }
     scope.$break('evidence rails refused this answer');
   };
-}
-
-/**
- * Answer validation's guard, for a stage that must not run on an answer the
- * guard withholds (the answer layer's AssessAnswer, before PrepareFinal) —
- * absent when validation is not configured.
- */
-export function finalGuardFor(
-  arms: Pick<FinalStageArms, 'hasAnswerValidation'>,
-): ((scope: TypedScope<AgentState>) => boolean) | undefined {
-  return arms.hasAnswerValidation === true ? withheldByValidation : undefined;
 }
 
 /** Pick the existing composer; output admission wraps it without recomposing the answer. */

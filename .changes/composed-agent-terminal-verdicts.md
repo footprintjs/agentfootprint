@@ -11,7 +11,7 @@ Behaviour changes:
 - The answer layer no longer assesses a withheld validated answer.
 - An evidence-rails refusal is still recorded on `turn_end`, now flagged `refused: { by: 'evidence-rails' }`. It is no longer written to memory or returned as the chart's result.
 - Every `'rails'` turn reads `unsupportedValues` once more.
-- With the answer layer and answer validation, AssessAnswer reads the validation guard's keys.
+- Under an output policy, a rails-refused answer no longer emits its `stream.token` (the one token released after acceptance).
 
 Known gaps:
 

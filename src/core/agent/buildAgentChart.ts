@@ -68,7 +68,7 @@ import {
   breakFinalWithValidationStage,
   finalBranchOutput,
 } from './stages/breakFinal.js';
-import { finalGuardFor, prepareFinalFor } from './stages/prepareFinal.js';
+import { prepareFinalFor } from './stages/prepareFinal.js';
 import { buildCacheSubflow } from './buildCacheSubflow.js';
 import {
   mountInputsLayer,
@@ -500,7 +500,6 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
     deps.answerLayer,
     prepareFinalFor(deps),
     deps.structureRecorders,
-    finalGuardFor(deps),
   );
   for (const m of deps.memories) {
     if (m.write) {

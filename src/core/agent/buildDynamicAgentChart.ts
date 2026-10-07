@@ -70,7 +70,7 @@ import {
   breakFinalWithValidationStage,
   finalBranchOutput,
 } from './stages/breakFinal.js';
-import { finalGuardFor, prepareFinalFor } from './stages/prepareFinal.js';
+import { prepareFinalFor } from './stages/prepareFinal.js';
 import { failFastRecordOf } from '../../reliability/failFastRecord.js';
 import { buildCacheSubflow } from './buildCacheSubflow.js';
 import {
@@ -188,7 +188,6 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
     deps.answerLayer,
     prepareFinalFor(deps),
     deps.structureRecorders,
-    finalGuardFor(deps),
   );
   for (const m of deps.memories) {
     if (m.write) {

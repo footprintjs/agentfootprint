@@ -5494,6 +5494,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
             toolMiddleware: this.toolMiddleware.length > 0,
           }),
           ...(this.answerLayerOption.standingLine === true && { standingLine: true as const }),
+          ...(this.answerValidationConfig !== undefined && { validated: true as const }),
         },
       }),
       // Tool choice by classifier (9.105.0): the mount args on the Tools

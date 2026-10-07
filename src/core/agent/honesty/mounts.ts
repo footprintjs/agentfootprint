@@ -654,6 +654,8 @@ export interface AnswerMountDeps {
   readonly reads: readonly AnswerFoldKey[];
   /** `.answerLayer({ standingLine: true })` — compose one line for a prose answer. */
   readonly standingLine?: true;
+  /** `.answerValidation()` is armed: an answer its report withholds is never assessed. */
+  readonly validated?: true;
 }
 
 /**
@@ -733,10 +735,6 @@ export function startFinalBranch(
   answer: AnswerMountDeps | undefined,
   prepareFinal: (scope: TypedScope<AgentState>) => void | Promise<void>,
   structureRecorders: readonly StructureRecorder[] | undefined,
-  /** Answer validation's guard (`prepareFinal.ts` · `finalGuardFor`): an answer it
-   *  withholds is never assessed — it runs BEFORE AssessAnswer, not only in
-   *  PrepareFinal. Absent → the branch it always was. */
-  withheld?: (scope: TypedScope<AgentState>) => boolean,
 ): FlowChartBuilder<any, TypedScope<AgentState>> {
   const recorders = structureRecorders !== undefined && {
     structureRecorders: [...structureRecorders],
@@ -748,10 +746,8 @@ export function startFinalBranch(
       tags: milestoneTagsFor(STAGE_IDS.PREPARE_FINAL),
     });
   }
-  const assess = async (scope: TypedScope<AgentState>): Promise<void> => {
-    if (withheld?.(scope) === true) return;
-    return (await loadAnswerStage()).assessAnswerStage(scope, answer);
-  };
+  const assess = async (scope: TypedScope<AgentState>): Promise<void> =>
+    (await loadAnswerStage()).assessAnswerStage(scope, answer);
   return flowChart<AgentState>('AssessAnswer', assess, STAGE_IDS.ASSESS_ANSWER, {
     ...recorders,
     description: "The answer's standing, folded from the run's committed record",
