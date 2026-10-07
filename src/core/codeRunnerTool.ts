@@ -53,6 +53,7 @@
  */
 
 import { fnv1a } from '../lib/fnv1a.js';
+import { isLineBreak } from '../lib/linearText.js';
 import type { CodeInput, CodeResult, CodeRunner, CodeSession } from '../adapters/types.js';
 import { canStageCodeInputs, STAGED_INPUTS_ENV } from '../adapters/types.js';
 import type { ToolWants } from '../artifacts/wants.js';
@@ -303,11 +304,6 @@ function walkLiteral(
 /** `'`, `"` or a backtick. */
 function isQuote(code: number): boolean {
   return code === 0x27 || code === 0x22 || code === 0x60;
-}
-
-/** What a regex `.` does not match: LF, CR, U+2028, U+2029. */
-function isLineBreak(code: number): boolean {
-  return code === 0x0a || code === 0x0d || code === 0x2028 || code === 0x2029;
 }
 
 /** A `Tool` that holds live sessions, keyed by isolation key. */

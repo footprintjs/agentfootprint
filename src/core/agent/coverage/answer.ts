@@ -49,6 +49,7 @@ import { mergeItems } from './items.js';
 import { copyPeriod, periodLine, type DeclaredPeriod } from './period.js';
 import type { BoundPresentation } from '../../time/present.js';
 import type { Coverage, CoverageItem, DeclaredCoverage, InProgressItem } from './types.js';
+import { isRegExpWhitespace, trimTrailing } from '../../../lib/linearText.js';
 
 /**
  * One declaring call's period, as the answer's limits carry it (honesty step
@@ -403,7 +404,8 @@ export function composeAnswerWithCoverage(
   if (coverage !== '') blocks.push(coverage);
   if (assumed !== '') blocks.push(assumed);
   if (blocks.length === 0) return answer;
-  const body = answer.replace(/\s+$/, '');
+  // The model's answer: trimmed in one pass, never `/\s+$/` (lib/linearText.ts).
+  const body = trimTrailing(answer, isRegExpWhitespace);
   const joined = blocks.join('\n\n');
   return body.length > 0 ? `${body}\n\n---\n\n${joined}` : joined;
 }

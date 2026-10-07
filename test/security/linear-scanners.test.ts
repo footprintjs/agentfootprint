@@ -35,6 +35,8 @@ import {
   pemCertificateBlocks,
 } from '../../src/adapters/identity/directory/ldapDirectory.js';
 import { firstEmail, patternFactExtractor } from '../../src/memory/facts/patternFactExtractor.js';
+import { placeBeforeTime } from '../../src/core/time/resolve.js';
+import { withoutQuery } from '../../src/ontology/skosJsonLd.js';
 import { countTextWork } from '../helpers/workCount.js';
 import { seededTexts } from '../helpers/seededText.js';
 
@@ -396,5 +398,74 @@ describe('firstEmail — the address the old rule found, one attempt per `@`', (
       'jo.smith+ops@mail.example.co.uk',
     );
     expect(firstEmail('first@a.b then second@example.com')).toBe('second@example.com');
+  });
+});
+
+// ─── A zone token, and a vocabulary IRI ─────────────────────────────
+// Counted work for both is in test/security/linear-text.test.ts (its door table).
+
+describe('placeBeforeTime — the place in `London time`, in one pass', () => {
+  it('equals `/^(.+?)\\s+time$/i.exec(token)?.[1]` on seeded tokens', () => {
+    const tokens = seededTexts(
+      0x71e,
+      [
+        'a',
+        'New',
+        'York',
+        ' ',
+        '\t',
+        '\n',
+        '\r',
+        '\u2028',
+        '\u00a0',
+        'time',
+        'TIME',
+        'Time',
+        'tim',
+        'e',
+        'x time',
+      ],
+      6_000,
+      8,
+    );
+    let places = 0;
+    for (const token of tokens) {
+      const expected = /^(.+?)\s+time$/i.exec(token)?.[1];
+      expect(placeBeforeTime(token), JSON.stringify(token)).toBe(expected);
+      if (expected !== undefined) places++;
+    }
+    expect(places).toBeGreaterThan(300);
+    expect(placeBeforeTime('New York time')).toBe('New York');
+  });
+
+  it('agrees with the regex on every UTF-16 code unit as the blank, and inside the place', () => {
+    // The blank before `time` is `\s`; a character inside the place is anything `.` matches.
+    // Together these pin the folder's restated `\s` and line-break tests on every code unit.
+    const disagreements: number[] = [];
+    for (let code = 0; code <= 0xffff; code++) {
+      const char = String.fromCharCode(code);
+      for (const token of [`a${char}time`, `a${char}b time`]) {
+        if (placeBeforeTime(token) !== /^(.+?)\s+time$/i.exec(token)?.[1]) disagreements.push(code);
+      }
+    }
+    expect(disagreements).toEqual([]);
+  });
+});
+
+describe('withoutQuery — an IRI up to its query, in one pass', () => {
+  it('equals `iri.replace(/[?].*$/, "")` on seeded IRIs', () => {
+    const iris = seededTexts(
+      0x1a1,
+      ['?', 'a', '/', '#', '\n', '\r', '\u2028', 'x?y', '%20', 'http://ex.org/'],
+      6_000,
+      10,
+    );
+    let cut = 0;
+    for (const iri of iris) {
+      const expected = iri.replace(/[?].*$/, '');
+      expect(withoutQuery(iri), JSON.stringify(iri)).toBe(expected);
+      if (expected !== iri) cut++;
+    }
+    expect(cut).toBeGreaterThan(1_000);
   });
 });

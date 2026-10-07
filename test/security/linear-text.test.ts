@@ -13,14 +13,16 @@
  *      on 16,000 slashes and minutes on a million, and a counted bound cannot
  *      be passed by a fast machine.
  *
- * Each door gets two inputs. The run the old regex choked on (a run of the
- * trimmed character, then one more character) must stay under the linear
- * bound. A run AT the end — what the scanner itself has to read — must also
- * show at least that run's length of counted reads: a door that went back to
- * a regex reads nothing the counter sees and fails there.
+ * Each door gets two inputs. The one the old regex choked on (`regexWorst`: a
+ * run of the trimmed character, then one more character) must stay under the
+ * linear bound. The one the scanner itself must read the most of
+ * (`scannerWorst`: usually that run AT the end) must also show at least N
+ * counted reads: a door that went back to a regex reads nothing the counter
+ * sees and fails there.
  *
  * Not counted, and linear: the anchored scheme checks (`/^https?:\/\//i`),
- * `/\/v1$/i`, `new URL`, `trim`, `endsWith` and the slices that build results.
+ * `/\/v1$/i`, `new URL`, `trim`, `endsWith`, the time readers' and coverage
+ * composer's other passes, and the slices that build results.
  *
  * Test types (Convention 3): security, property (seeded equivalence),
  * performance/regression (counted work).
@@ -30,12 +32,17 @@ import {
   anyOf,
   either,
   isHyphen,
+  isLineBreak,
   isRegExpWhitespace,
   isSlash,
   trimBoth,
   trimLeading,
   trimTrailing,
 } from '../../src/lib/linearText.js';
+import { composeAnswerWithCoverage } from '../../src/core/agent/coverage/answer.js';
+import { timeFormsOfText } from '../../src/core/time/textForms.js';
+import { placeBeforeTime } from '../../src/core/time/resolve.js';
+import { idFromIri } from '../../src/ontology/skosJsonLd.js';
 import { azureBaseUrl } from '../../src/adapters/llm/azureUrl.js';
 import { ollama } from '../../src/adapters/llm/OllamaProvider.js';
 import { foundryLocal } from '../../src/adapters/llm/FoundryLocalProvider.js';
@@ -70,6 +77,25 @@ describe('linearText — returns exactly what the regex returned', () => {
         disagreements.push(code);
     }
     expect(disagreements).toEqual([]);
+  });
+
+  it('isLineBreak is exactly what `.` does not match, on every UTF-16 code unit', () => {
+    const disagreements: number[] = [];
+    for (let code = 0; code <= 0xffff; code++) {
+      if (isLineBreak(code) !== !/./.test(String.fromCharCode(code))) disagreements.push(code);
+    }
+    expect(disagreements).toEqual([]);
+  });
+
+  it('trimTrailing(isRegExpWhitespace) is `/\\s+$/`', () => {
+    const texts = seededTexts(
+      0x7a11,
+      ['a', ' ', '\t', '\n', '\r\n', '\u00a0', '\u2028', '\ufeff', 'b c'],
+      3_000,
+      10,
+    );
+    for (const s of texts)
+      expect(trimTrailing(s, isRegExpWhitespace), JSON.stringify(s)).toBe(s.replace(/\s+$/, ''));
   });
 
   const slashTexts = seededTexts(0x5eed, ['/', '/', 'a', '-', ' ', '//'], 3_000, 10);
@@ -156,9 +182,9 @@ describe('linearText — returns exactly what the regex returned', () => {
 interface Door {
   readonly name: string;
   /** Text ending in a run of what the door trims, `n` long — the scanner's own worst case. */
-  readonly runAtEnd: (n: number) => string;
+  readonly scannerWorst: (n: number) => string;
   /** The same run with one more character after it — the old regex's worst case. */
-  readonly runThenChar: (n: number) => string;
+  readonly regexWorst: (n: number) => string;
   readonly call: (text: string) => unknown;
 }
 
@@ -167,32 +193,32 @@ const neverAnswers = (() => new Promise<Response>(() => {})) as typeof fetch;
 const DOORS: readonly Door[] = [
   {
     name: 'azureBaseUrl',
-    runAtEnd: (n) => `https://co.openai.azure.com${'/'.repeat(n)}`,
-    runThenChar: (n) => `https://co.openai.azure.com${'/'.repeat(n)}x`,
+    scannerWorst: (n) => `https://co.openai.azure.com${'/'.repeat(n)}`,
+    regexWorst: (n) => `https://co.openai.azure.com${'/'.repeat(n)}x`,
     call: (url) => azureBaseUrl(url),
   },
   {
     name: 'ollama({ baseURL })',
-    runAtEnd: (n) => `http://localhost:11434${'/'.repeat(n)}`,
-    runThenChar: (n) => `http://localhost:11434${'/'.repeat(n)}x`,
+    scannerWorst: (n) => `http://localhost:11434${'/'.repeat(n)}`,
+    regexWorst: (n) => `http://localhost:11434${'/'.repeat(n)}x`,
     call: (baseURL) => ollama({ model: 'm', baseURL }),
   },
   {
     name: 'foundryLocal({ endpoint })',
-    runAtEnd: (n) => `http://127.0.0.1:5273${'/'.repeat(n)}`,
-    runThenChar: (n) => `http://127.0.0.1:5273${'/'.repeat(n)}x`,
+    scannerWorst: (n) => `http://127.0.0.1:5273${'/'.repeat(n)}`,
+    regexWorst: (n) => `http://127.0.0.1:5273${'/'.repeat(n)}x`,
     call: (endpoint) => foundryLocal('m', { endpoint }),
   },
   {
     name: 'foundryInferenceUrl',
-    runAtEnd: (n) => `https://r.services.ai.azure.com/api/projects/p${'/'.repeat(n)}`,
-    runThenChar: (n) => `https://r.services.ai.azure.com/api/projects/p${'/'.repeat(n)}x`,
+    scannerWorst: (n) => `https://r.services.ai.azure.com/api/projects/p${'/'.repeat(n)}`,
+    regexWorst: (n) => `https://r.services.ai.azure.com/api/projects/p${'/'.repeat(n)}x`,
     call: (url) => foundryInferenceUrl(url),
   },
   {
     name: 'invokeModelGateway({ baseUrl })',
-    runAtEnd: (n) => `https://gateway.example.test${'/'.repeat(n)}`,
-    runThenChar: (n) => `https://gateway.example.test${'/'.repeat(n)}x`,
+    scannerWorst: (n) => `https://gateway.example.test${'/'.repeat(n)}`,
+    regexWorst: (n) => `https://gateway.example.test${'/'.repeat(n)}x`,
     call: (baseUrl) =>
       invokeModelGateway({
         baseUrl,
@@ -204,14 +230,14 @@ const DOORS: readonly Door[] = [
   },
   {
     name: 'vaultCredentials({ address })',
-    runAtEnd: (n) => `https://vault.internal:8200${'/'.repeat(n)}`,
-    runThenChar: (n) => `https://vault.internal:8200${'/'.repeat(n)}x`,
+    scannerWorst: (n) => `https://vault.internal:8200${'/'.repeat(n)}`,
+    regexWorst: (n) => `https://vault.internal:8200${'/'.repeat(n)}x`,
     call: (address) => vaultCredentials({ address, token: 'hvs.test', _fetch: neverAnswers }),
   },
   {
     name: 'vaultCredentials({ mount })',
-    runAtEnd: (n) => `kv${'/'.repeat(n)}`,
-    runThenChar: (n) => `kv${'/'.repeat(n)}x`,
+    scannerWorst: (n) => `kv${'/'.repeat(n)}`,
+    regexWorst: (n) => `kv${'/'.repeat(n)}x`,
     call: (mount) =>
       vaultCredentials({
         address: 'https://vault.internal:8200',
@@ -222,29 +248,29 @@ const DOORS: readonly Door[] = [
   },
   {
     name: 'discoveryUrlFor',
-    runAtEnd: (n) => `https://login.example.test/tenant${'/'.repeat(n)}`,
-    runThenChar: (n) => `https://login.example.test/tenant${'/'.repeat(n)}x`,
+    scannerWorst: (n) => `https://login.example.test/tenant${'/'.repeat(n)}`,
+    regexWorst: (n) => `https://login.example.test/tenant${'/'.repeat(n)}x`,
     call: (issuer) => discoveryUrlFor(issuer),
   },
   {
     name: 'githubBugReporter({ apiBase })',
-    runAtEnd: (n) => `https://api.github.com${'/'.repeat(n)}`,
-    runThenChar: (n) => `https://api.github.com${'/'.repeat(n)}x`,
+    scannerWorst: (n) => `https://api.github.com${'/'.repeat(n)}`,
+    regexWorst: (n) => `https://api.github.com${'/'.repeat(n)}x`,
     call: (apiBase) =>
       githubBugReporter({ issueRepo: 'acme/a', token: 'github_pat_test', apiBase }),
   },
   {
     name: 'githubBugReporter({ dir })',
-    runAtEnd: (n) => `bug-reports${'/'.repeat(n)}`,
-    runThenChar: (n) => `bug-reports${'/'.repeat(n)}x`,
+    scannerWorst: (n) => `bug-reports${'/'.repeat(n)}`,
+    regexWorst: (n) => `bug-reports${'/'.repeat(n)}x`,
     call: (dir) => githubBugReporter({ issueRepo: 'acme/a', token: 'github_pat_test', dir }),
   },
   {
     // Async: the trims run before its first request, inside the counted call.
     // The request never answers, so the flow parks there.
     name: 'githubDeviceSignIn({ authBase })',
-    runAtEnd: (n) => `https://github.com${'/'.repeat(n)}`,
-    runThenChar: (n) => `https://github.com${'/'.repeat(n)}x`,
+    scannerWorst: (n) => `https://github.com${'/'.repeat(n)}`,
+    regexWorst: (n) => `https://github.com${'/'.repeat(n)}x`,
     call: (authBase) =>
       githubDeviceSignIn({
         clientId: 'Iv1.0123456789abcdef',
@@ -254,8 +280,8 @@ const DOORS: readonly Door[] = [
   },
   {
     name: 'githubDeviceSignIn({ apiBase })',
-    runAtEnd: (n) => `https://api.github.com${'/'.repeat(n)}`,
-    runThenChar: (n) => `https://api.github.com${'/'.repeat(n)}x`,
+    scannerWorst: (n) => `https://api.github.com${'/'.repeat(n)}`,
+    regexWorst: (n) => `https://api.github.com${'/'.repeat(n)}x`,
     call: (apiBase) =>
       githubDeviceSignIn({ clientId: 'Iv1.0123456789abcdef', apiBase, _fetch: neverAnswers }).catch(
         () => undefined,
@@ -263,33 +289,59 @@ const DOORS: readonly Door[] = [
   },
   {
     name: 'normalizeKeyRoot (artifact prefix)',
-    runAtEnd: (n) => `tenant${'/'.repeat(n)}`,
-    runThenChar: (n) => `tenant${'/'.repeat(n)}x`,
+    scannerWorst: (n) => `tenant${'/'.repeat(n)}`,
+    regexWorst: (n) => `tenant${'/'.repeat(n)}x`,
     call: (root) => normalizeKeyRoot('s3Artifacts', root),
   },
   {
     name: 'typesafe({ baseUrl })',
-    runAtEnd: (n) => `https://api.typesafe.example${'/'.repeat(n)}`,
-    runThenChar: (n) => `https://api.typesafe.example${'/'.repeat(n)}x`,
+    scannerWorst: (n) => `https://api.typesafe.example${'/'.repeat(n)}`,
+    regexWorst: (n) => `https://api.typesafe.example${'/'.repeat(n)}x`,
     call: (baseUrl) => typesafe({ apiKey: 'k', baseUrl }),
   },
   {
     name: 'normalizeToken (a model token)',
-    runAtEnd: (n) => `41200${'!'.repeat(n)}`,
-    runThenChar: (n) => `a${'!'.repeat(n)}x`,
+    scannerWorst: (n) => `41200${'!'.repeat(n)}`,
+    regexWorst: (n) => `a${'!'.repeat(n)}x`,
     call: (token) => normalizeToken(token),
   },
   {
     name: 'parseEnumLine (a model reply)',
-    runAtEnd: (n) => `"billing${'"'.repeat(n)}`,
-    runThenChar: (n) => `a${'"'.repeat(n)}x`,
+    scannerWorst: (n) => `"billing${'"'.repeat(n)}`,
+    regexWorst: (n) => `a${'"'.repeat(n)}x`,
     call: (reply) => parseEnumLine(reply, ['billing']),
   },
   {
     name: 'cleanValue (a person’s words)',
-    runAtEnd: (n) => `San Francisco${' \t'.repeat(n / 2)}`,
-    runThenChar: (n) => `A${'\t'.repeat(n)}B`,
+    scannerWorst: (n) => `San Francisco${' \t'.repeat(n / 2)}`,
+    regexWorst: (n) => `A${'\t'.repeat(n)}B`,
     call: (value) => cleanValue(value),
+  },
+  {
+    name: 'composeAnswerWithCoverage (a model answer)',
+    scannerWorst: (n) => `The answer.${' \t'.repeat(n / 2)}`,
+    regexWorst: (n) => `a${' '.repeat(n)}x`,
+    call: (answer) => composeAnswerWithCoverage(answer, [], 'Assumed: nothing.'),
+  },
+  {
+    name: 'timeFormsOfText (a clock reading in text)',
+    scannerWorst: (n) => `12:30${'.'.repeat(n)}`,
+    regexWorst: (n) => `a${'.'.repeat(n)}x`,
+    call: (text) => timeFormsOfText(text),
+  },
+  {
+    name: 'placeBeforeTime (a zone token from a message)',
+    scannerWorst: (n) => `a${' '.repeat(n)}time`,
+    regexWorst: (n) => `a${' '.repeat(n)}b`,
+    call: (token) => placeBeforeTime(token),
+  },
+  {
+    // Its own worst case is a long last line: it walks back to the line's
+    // start, then forward looking for the `?`.
+    name: 'idFromIri (a vocabulary IRI)',
+    scannerWorst: (n) => `http://example.org/${'a'.repeat(n)}`,
+    regexWorst: (n) => `${'?'.repeat(n)}\n`,
+    call: (iri) => idFromIri(iri),
   },
 ];
 
@@ -301,13 +353,13 @@ describe('linearText — every door trims in linear, counted work', () => {
   });
 
   it.each(DOORS)('$name: the old regex’s worst case stays within the linear budget', (door) => {
-    const text = door.runThenChar(N);
+    const text = door.regexWorst(N);
     const { work } = countTextWork(() => door.call(text));
     expect(work).toBeLessThanOrEqual(linearBudget(text.length));
   });
 
   it.each(DOORS)('$name: a run at the end is read once — and the counter sees it', (door) => {
-    const text = door.runAtEnd(N);
+    const text = door.scannerWorst(N);
     const { work } = countTextWork(() => door.call(text));
     expect(work).toBeGreaterThanOrEqual(N);
     expect(work).toBeLessThanOrEqual(linearBudget(text.length));

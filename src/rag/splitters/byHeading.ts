@@ -58,6 +58,7 @@ import {
   toPieces,
   type Span,
 } from './shared.js';
+import { isLineBreak } from '../../lib/linearText.js';
 
 export interface ByHeadingOptions {
   /** Target chunk size in characters. Default 1000. Sections longer than this are packed within. */
@@ -145,11 +146,6 @@ function atxHeadingOn(text: string, start: number, end: number): AtxHeading | un
 /** `[ \t]` */
 function isBlank(code: number): boolean {
   return code === 0x20 || code === 0x09;
-}
-
-/** What ends a line for `^`, `$` and `.` in a regular expression: LF, CR, U+2028, U+2029. */
-function isLineBreak(code: number): boolean {
-  return code === 0x0a || code === 0x0d || code === 0x2028 || code === 0x2029;
 }
 
 /** One section, classified for the floor pass. */

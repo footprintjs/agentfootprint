@@ -9,7 +9,9 @@ pass that returns exactly what the regex returned: the RAG Markdown splitter's h
 (`byHeading`), the HTML loader's tag stripping (`htmlLoader` / `stripTags`), the code runner's
 call shape (`codeShape`, run on model-written code), the evidence matcher's token cleanup, the
 constrained-pick reply parser, the pattern fact extractor's address rule and value cleanup, the
-LDAP door's PEM reader, and the base-URL and prefix trims in the Ollama, Foundry, Foundry Local,
+coverage section's trim of the model's answer, the time layer's clock tokens and place-named zones
+(`London time`), the SKOS reader's IRI query strip, the LDAP door's PEM reader, and the base-URL
+and prefix trims in the Ollama, Foundry, Foundry Local,
 Azure OpenAI, InvokeModel gateway, Vault, OIDC discovery, GitHub bug-report and device sign-in,
 TypeSafe and artifact-prefix options. `stripTags` also ends a `<script>` or `<style>` body at
 every end tag a browser ends it at — `</script foo>`, `</SCRIPT\n>` — where it used to leave the

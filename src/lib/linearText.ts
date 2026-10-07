@@ -62,6 +62,14 @@ export const isRegExpWhitespace: CharTest = (code) => {
   );
 };
 
+/**
+ * What a regex `.` does not match — and where `^` and `$` see a line end under
+ * the `m` flag: LF, CR, U+2028, U+2029. A scanner that stands in for a regex
+ * reads lines by this, never by `\n` alone.
+ */
+export const isLineBreak: CharTest = (code) =>
+  code === 0x0a || code === 0x0d || code === 0x2028 || code === 0x2029;
+
 /** A test for any one of `chars` — a regex character class with no ranges. */
 export function anyOf(chars: string): CharTest {
   const codes = new Set<number>();

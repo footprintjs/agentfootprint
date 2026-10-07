@@ -97,8 +97,11 @@ The same rule holds for the scanners that live beside their one caller
 (`rag/splitters/byHeading.ts` · `atxHeadings`, `rag/loaders/html.ts` ·
 `stripTags`, `core/codeRunnerTool.ts` · `codeShape`,
 `memory/facts/patternFactExtractor.ts` · `firstEmail`,
-`adapters/identity/directory/ldapDirectory.ts` · `pemCertificateBlocks`):
-linear in the text, equal to the regex they replaced.
+`adapters/identity/directory/ldapDirectory.ts` · `pemCertificateBlocks`,
+`core/time/resolve.ts` · `placeBeforeTime`, `ontology/skosJsonLd.ts` ·
+`withoutQuery`): linear in the text, equal to the regex they replaced.
+`core/time/` imports nothing outside itself, so it restates the walk and the
+two character tests it needs instead of importing them.
 `test/security/linear-text.test.ts` and `test/security/linear-scanners.test.ts`
 pin both halves — equivalence on seeded strings, and a COUNTED work bound on
 each regex's worst case (`test/helpers/workCount.ts`, never a timer).

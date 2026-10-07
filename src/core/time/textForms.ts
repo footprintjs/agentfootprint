@@ -45,15 +45,30 @@ const TWELVE_HOUR = /(?<![\d:.])(\d{1,2})(?::(\d{2}))?\s*([ap])\.?m(?![a-z])/gi;
 const NOT_IN_TOKEN = /[^A-Za-z0-9:_\-/.,%+@#$]+/;
 const LIST_COMMA = /,(?!\d)|(?<!\d),/;
 const LEADING = /^[$#@+'"`([{<]+/;
-const TRAILING = /[.,;:!?%'"`)\]}>]+$/;
+/** The trailing decoration `normalize.ts` drops, as character codes. */
+const TRAILING = new Set(Array.from('.,;:!?%\'"`)]}>', (char) => char.charCodeAt(0)));
 const TWENTY_FOUR_HOUR = /^(\d{1,2}):(\d{2})$/;
+
+/**
+ * `piece.replace(/[.,;:!?%'"`)\]}>]+$/, '')`, walked in from the end once —
+ * `normalize.ts` · `normalizeToken` drops the same run the same way. The
+ * regex retried from every position of a long dot or comma run, which a token
+ * can be. It is the walk of `lib/linearText.ts` · `trimTrailing`, restated
+ * because this folder imports nothing; its counted work is pinned with the
+ * other doors in `test/security/linear-text.test.ts`.
+ */
+function withoutTrailingDecoration(piece: string): string {
+  let end = piece.length;
+  while (end > 0 && TRAILING.has(piece.charCodeAt(end - 1))) end--;
+  return end === piece.length ? piece : piece.slice(0, end);
+}
 
 /** The whole tokens of `text` that are a 24-hour clock reading, lower-cased as the gate reads them. */
 function clockTokens(text: string): readonly string[] {
   const out: string[] = [];
   for (const rough of text.split(NOT_IN_TOKEN)) {
     for (const piece of rough.split(LIST_COMMA)) {
-      const token = piece.toLowerCase().trim().replace(LEADING, '').replace(TRAILING, '');
+      const token = withoutTrailingDecoration(piece.toLowerCase().trim().replace(LEADING, ''));
       if (TWENTY_FOUR_HOUR.test(token)) out.push(token);
     }
   }

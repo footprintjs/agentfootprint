@@ -172,6 +172,14 @@ const PROVIDER_LEAVES: ReadonlyArray<readonly [file: string, why: string]> = [
       'never means reaching the maps kernel — two unrelated consumers (the mount kernel ' +
       'and the cache meter) share one honesty primitive, and neither depends on the other.',
   ],
+  [
+    'src/lib/linearText.ts',
+    '`trimLeading` / `trimTrailing` — `constrainedEnumPick` strips the quotes and dots a ' +
+      'model wraps a bare id in. The reply is model output, and the `/[…]+$/` it used was ' +
+      'quadratic on a long run of quotes, so the trim moved to the one linear owner every ' +
+      'door shares. Character arithmetic over a string, ZERO imports, nothing in it that ' +
+      'knows what an agent or a provider is.',
+  ],
 ];
 
 /** Files where importing the framework is the job. Listed so the zone check
