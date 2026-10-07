@@ -5,7 +5,7 @@ type: security
 doors trimmed or scanned text the library does not write with regular expressions that a
 backtracking engine retries from every position, so one crafted input cost its length squared —
 seconds for a few dozen KB, minutes for a megabyte, with the process blocked throughout. Each is
-now a single pass that returns exactly what the regex returned: the RAG Markdown splitter's
+now linear in its input and returns exactly what the regex returned: the RAG Markdown splitter's
 heading lines (`byHeading`), the HTML loader's tag stripping (`htmlLoader` / `stripTags`), the
 code runner's call shape (`codeShape`, run on model-written code), the evidence matcher's token
 cleanup, the constrained-pick reply parser, the pattern fact extractor's address rule and value
