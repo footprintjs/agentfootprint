@@ -47,7 +47,7 @@ The repo has four documentation locations and they are not equivalent. Getting t
 | Location | Files | Counts as documentation? |
 |---|---|---|
 | `docs-next/content/docs/**.mdx` (hand-written) | 115 | **Yes — the truth source.** This is what the published site renders and what a reader sees. |
-| `docs-next/content/docs/api/**` (TypeDoc-generated) | 763 | **No — excluded.** |
+| `docs-next/content/docs/api/**` (TypeDoc-generated) | 762 | **No — excluded.** |
 | `docs/api-reference/**` (TypeDoc-generated) | 0 | **No — excluded.** |
 | `docs/**.md` + `README.md` (repo-internal prose) | 61 | **No** — but tracked as its own state, "written but not published". |
 
@@ -895,11 +895,11 @@ Whether a symbol comes from the root barrel or only from a subpath is a document
 
 | Import path | Exports | Described in site prose | Coverage |
 |---|---|---|---|
-| `agentfootprint` | 757 | 618 | 82% |
-| `agentfootprint/providers` | 164 | 135 | 82% |
+| `agentfootprint` | 756 | 617 | 82% |
+| `agentfootprint/providers` | 163 | 134 | 82% |
 | `agentfootprint/memory` | 223 | 112 | 50% |
 | `agentfootprint/rag` | 49 | 49 | 100% |
-| `agentfootprint/cache` | 23 | 18 | 78% |
+| `agentfootprint/cache` | 24 | 19 | 79% |
 | `agentfootprint/observe` | 594 | 251 | 42% |
 | `agentfootprint/events` | 26 | 11 | 42% |
 | `agentfootprint/context` | 162 | 100 | 62% |

@@ -165,7 +165,4 @@ export type {
   // this subpath can name the type in their own signature.
   LLMCallHooks,
   ResilienceReport,
-  // How an adapter's wire caches a repeated prefix — declared on the provider,
-  // read by the agent to choose its cache strategy (`agentfootprint/cache`).
-  PromptCaching,
 } from './adapters/types.js';

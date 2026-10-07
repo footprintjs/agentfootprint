@@ -4,7 +4,7 @@ title: "~~Interface: EmbeddingProvider~~"
 
 # ~~Interface: EmbeddingProvider~~
 
-Defined in: [src/adapters/types.ts:770](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L770)
+Defined in: [src/adapters/types.ts:722](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L722)
 
 ## Deprecated
 
@@ -24,7 +24,7 @@ accept THAT one.
 
 > `readonly` **dimension**: `number`
 
-Defined in: [src/adapters/types.ts:772](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L772)
+Defined in: [src/adapters/types.ts:724](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L724)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: [src/adapters/types.ts:772](https://github.com/footprintjs/agentfoot
 
 > `readonly` **name**: `string`
 
-Defined in: [src/adapters/types.ts:771](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L771)
+Defined in: [src/adapters/types.ts:723](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L723)
 
 ## Methods
 
@@ -40,7 +40,7 @@ Defined in: [src/adapters/types.ts:771](https://github.com/footprintjs/agentfoot
 
 > **embed**(`inputs`, `kind`): `Promise`\<`number`[][]\>
 
-Defined in: [src/adapters/types.ts:773](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L773)
+Defined in: [src/adapters/types.ts:725](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L725)
 
 #### Parameters
 

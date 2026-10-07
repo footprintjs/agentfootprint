@@ -6,12 +6,6 @@ title: ReadEvent
 
 Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:18
 
-agentfootprint — public barrel.
-
-Pattern: Facade (GoF) over the typed sublayers.
-Role:    Single entry point consumers import from.
-Emits:   N/A.
-
 ## Extends
 
 - `RecorderContext`

@@ -27,9 +27,9 @@ import type {
   LLMRequest,
   LLMResponse,
   LLMToolSchema,
-  PromptCaching,
   WireRole,
 } from '../types.js';
+import type { PromptCaching } from '../../cache/types.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
 import { asContextWindowExceeded } from './contextWindow.js';
 import { retryAfterMsFromError } from './retryAfter.js';

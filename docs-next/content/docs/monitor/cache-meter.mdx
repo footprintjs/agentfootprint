@@ -70,14 +70,14 @@ Below a model's minimum cacheable prefix, a request is processed **without cachi
 
 ## Which providers can actually feed it
 
-The strategy comes from what the provider **declares** (`promptCaching`), so the table is by declaration, and a decorator that forwards the declaration (`withRetry`, `withFallback`, your own wrapper) reads exactly like the adapter it wraps:
+The strategy follows what the provider declares (`promptCaching`); a wrapper that forwards it reads like the adapter it wraps:
 
 | Declared by | Strategy | Sends markers | Reads cache usage | What `extractMetrics` says |
 |---|---|---|---|---|
-| `anthropic()`, `browserAnthropic()` — `mode: 'breakpoints'`, `reportsUsage: true` | `BreakpointCacheStrategy` | yes | yes | `known` / `unknown` — the one end-to-end path |
-| `openai()`, Azure, Foundry — `mode: 'automatic'`, `reportsUsage: false` | `AutomaticCacheStrategy` | n/a (auto-caches) | **no** | `not-applicable` |
-| Nothing declared — `bedrock()`, `ollama()`, `gemini()`, `mock()`, a custom adapter | `NoOpCacheStrategy` | no | no | `not-applicable` |
+| `anthropic()`, `browserAnthropic()` | `BreakpointCacheStrategy` | yes | yes | `known` / `unknown` — the one end-to-end path |
+| `openai()`, Azure, Foundry | `AutomaticCacheStrategy` | n/a (auto-caches) | **no** | `not-applicable` |
+| nothing declared (`bedrock()`, `ollama()`, `gemini()`, `mock()`) | `NoOpCacheStrategy` | no | no | `not-applicable` |
 
-"Nothing declared" is a statement about **the adapter**, not the vendor. AWS's Converse API does support prompt caching for Claude models and reports `cacheReadInputTokens`; our Bedrock provider implements neither half, so it declares nothing and the meter says *not applicable* instead of a zero.
+"Nothing declared" is about **the adapter**, not the vendor: AWS's Converse API can cache Claude prompts, but our Bedrock provider implements neither half.
 
 OpenAI is the costliest of the gaps, because it is the auto-caching provider: caching is happening on every call and nothing lifts `prompt_tokens_details.cached_tokens` onto the port — which is exactly what its `reportsUsage: false` says.

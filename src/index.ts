@@ -1,9 +1,13 @@
-/**
+/*
  * agentfootprint — public barrel.
  *
  * Pattern: Facade (GoF) over the typed sublayers.
  * Role:    Single entry point consumers import from.
  * Emits:   N/A.
+ *
+ * A plain block comment, not TSDoc: nothing separates it from the first
+ * export below, and TypeDoc would otherwise attach this text to the
+ * re-exported footprintjs types as their documentation.
  */
 
 // Substrate (footprintjs) types consumers reach for when wiring

@@ -2,7 +2,7 @@
 title: Type Aliases
 ---
 
-136 exported from `agentfootprint`.
+135 exported from `agentfootprint`.
 
 - [`ActKey`](/docs/api/type-aliases/ActKey)
 - [`AgentOutput`](/docs/api/type-aliases/AgentOutput)
@@ -85,7 +85,6 @@ title: Type Aliases
 - [`PeriodSpelling`](/docs/api/type-aliases/PeriodSpelling)
 - [`PermissionCapability`](/docs/api/type-aliases/PermissionCapability)
 - [`Predicate`](/docs/api/type-aliases/Predicate)
-- [`PromptCaching`](/docs/api/type-aliases/PromptCaching)
 - [`ProposedEffect`](/docs/api/type-aliases/ProposedEffect)
 - [`ProviderKind`](/docs/api/type-aliases/ProviderKind)
 - [`RagDocument`](/docs/api/type-aliases/RagDocument)

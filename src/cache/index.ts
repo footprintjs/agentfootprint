@@ -15,8 +15,9 @@
  * declaration.
  *
  * Public types (re-exported for consumers):
- *   - CachePolicy, CacheMarker, CacheStrategy, CacheMetrics,
- *     CachePolicyContext, CacheStrategyContext, CacheUsage
+ *   - PromptCaching (the provider's declaration), CachePolicy, CacheMarker,
+ *     CacheStrategy, CacheMetrics, CachePolicyContext, CacheStrategyContext,
+ *     CacheUsage
  */
 
 // Public types
@@ -28,6 +29,8 @@ export type {
   CacheStrategyContext,
   CacheMetrics,
   CacheUsage,
+  // What a provider adapter declares about its wire (`LLMProvider.promptCaching`).
+  PromptCaching,
 } from './types.js';
 
 // The honesty primitive the meter is typed in (9.59.0). Re-exported

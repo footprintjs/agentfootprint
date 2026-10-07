@@ -364,12 +364,10 @@ export interface Receipt {
     readonly markersApplied: readonly ReceiptCacheMarker[];
     /**
      * WHICH strategy stood between assembly and the port, or `null` when none
-     * did (9.93.0). The value is the strategy's `name` — for the built-ins,
-     * the prompt-caching capability the provider declared (`'breakpoints'`,
-     * `'automatic'`; `'none'` is the pass-through an agent runs when the
-     * provider declares nothing). A receipt minted before the strategy was
-     * chosen by capability records the old registry key here (`'anthropic'`,
-     * `'openai'`, `'*'`) — a label, read the same way.
+     * did (9.93.0). The value is the strategy's `name`: for the built-ins,
+     * the caching the provider declared (`'breakpoints'`, `'automatic'`,
+     * `'none'`); older receipts carry the old registry key (`'anthropic'`,
+     * `'openai'`, `'*'`).
      *
      * `null` is a FACT, not an absence: `LLMCall` and the two message-API
      * charts hand the port the request assembly built, with nothing in

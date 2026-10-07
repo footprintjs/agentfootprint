@@ -497,7 +497,6 @@ title: agentfootprint
 - [PeriodSpelling](/docs/api/type-aliases/PeriodSpelling)
 - [PermissionCapability](/docs/api/type-aliases/PermissionCapability)
 - [Predicate](/docs/api/type-aliases/Predicate)
-- [PromptCaching](/docs/api/type-aliases/PromptCaching)
 - [ProposedEffect](/docs/api/type-aliases/ProposedEffect)
 - [ProviderKind](/docs/api/type-aliases/ProviderKind)
 - [RagDocument](/docs/api/type-aliases/RagDocument)

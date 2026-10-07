@@ -1,15 +1,13 @@
 ---
 title: Prompt caching
-description: Stable context — steering, facts, an active skill — and the conversation so far are cached for you on providers that declare caching, per a policy you can override on each injection. On by default; one flag turns it off.
+description: Stable context — steering, facts, an active skill — and the conversation so far are cached for you on providers that support it, per a policy you can override on each injection. On by default; one flag turns it off.
 ---
 
-An agent loop sends the same system prompt, tool descriptions and conversation
-on every iteration, and only appends to it. On providers with prompt caching,
+An agent loop sends the same system prompt and tool descriptions on every
+iteration, and the conversation only grows. On providers with prompt caching,
 those repeated bytes can cost a fraction of normal input tokens — but only if
 the request marks which blocks are stable. agentfootprint does that marking
-for you: the stable head (tools and system prompt) and a **moving breakpoint**
-on the conversation's last message, so each call reads back everything the
-call before it sent.
+for you, including a moving marker on the conversation's last message.
 
 **It is on by default.** Most agents never touch it.
 
@@ -81,23 +79,17 @@ cache markers at all. It skips them when:
 3. three or more different skills were active in the last five iterations —
    each switch invalidates the cache, so marking would only add write cost.
 
-Two more cases place no marker by design. The conversation breakpoint is left
-off whenever something before it is not cacheable this iteration — an
-injection whose `cache` policy says `'never'` sits in front of every
-conversation byte, so a marker after it would write an entry the next call
-cannot read. And under `.findings()` no marker is placed at all: the findings
-offer is written into every tool's schema and changes whenever a result is
-served, and tools are the first thing in the prompt, so no cached prefix would
-ever be read back — a marker would only add the cache-write premium.
+The conversation marker is skipped when an injection before it says
+`cache: 'never'`. Under `.findings()` no marker is placed at all: the findings
+offer changes every tool schema per call, so nothing could be read back.
 
 The gate's decision is recorded with the run, like every other decision.
 
 ## Which providers, and how
 
-Each provider adapter **declares** how its wire caches — its `promptCaching`
-field, a `PromptCaching` value (the type ships from `agentfootprint/providers`)
-— and the agent picks its strategy from that declaration, never from the
-provider's name:
+Each provider declares how its wire caches — `promptCaching`, a
+`PromptCaching` value from `agentfootprint/cache` — and the agent picks its
+strategy from that, never from the provider's name:
 
 | Provider | Declares | How caching works | Cache token counts |
 |---|---|---|---|
@@ -105,10 +97,8 @@ provider's name:
 | `openai()`, Azure OpenAI, Foundry | `mode: 'automatic'` | Automatic on the provider side | not reported |
 | `bedrock()`, `ollama()`, `gemini()`, `mock()` | nothing | No-op | — |
 
-Because the choice follows the declaration, a decorator keeps caching exactly
-when it forwards it. The library's own `withRetry`, `withCircuitBreaker` and
-`withFallback` do; a wrapper you write must too — one line, beside the other
-capabilities it forwards:
+So a wrapper keeps caching when it forwards the field. `withRetry`,
+`withCircuitBreaker` and `withFallback` do; your own wrapper needs one line:
 
 ```ts
 const routed: LLMProvider = {
@@ -118,18 +108,10 @@ const routed: LLMProvider = {
 };
 ```
 
-A wrapper that drops it gets no markers — and the run's receipt names the
-strategy it ran (`'none'`), so the cause is on the record. A custom adapter
-declares its own: `{ mode: 'breakpoints', maxBreakpoints, reportsUsage }` if it
-writes `cache_control` where `LLMRequest.cacheMarkers` point, `{ mode:
-'automatic', reportsUsage }` if its provider caches on its own. To pick a
-strategy yourself, pass `cacheStrategy` to `Agent.create`; `cacheStrategyFor`
-from `agentfootprint/cache` is the selection the agent uses — see the
-[API reference](https://agentfootprint.dev/docs/api/) for the exact shapes.
-
-A cache serves only a prefix that repeats byte for byte, and only above the
-model's minimum (4,096 tokens on Claude Haiku 4.5): a shorter prompt is not
-cached, marker or not, and reports a write of zero.
+Without it the wrapper runs uncached, and its receipts record the strategy
+`'none'`. To choose yourself, pass `cacheStrategy` to `Agent.create`
+(`cacheStrategyFor` is the agent's own choice). A prompt below the model's
+minimum (4,096 tokens on Claude Haiku 4.5) is never cached.
 
 ## Did it pay off?
 

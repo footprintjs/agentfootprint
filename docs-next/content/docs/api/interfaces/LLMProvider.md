@@ -4,7 +4,7 @@ title: LLMProvider
 
 # Interface: LLMProvider
 
-Defined in: [src/adapters/types.ts:616](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L616)
+Defined in: [src/adapters/types.ts:577](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L577)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/adapters/types.ts:616](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **carriesForcedToolChoice?**: `boolean`
 
-Defined in: [src/adapters/types.ts:683](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L683)
+Defined in: [src/adapters/types.ts:635](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L635)
 
 v7.26 — whether this adapter puts [LLMRequest.toolChoice](/docs/api/interfaces/LLMRequest#toolchoice) on its
 wire as a forced choice of one named tool.
@@ -42,7 +42,7 @@ constrained if both constrain it.
 
 > `readonly` `optional` **carriesInMessages?**: readonly [`WireRole`](/docs/api/type-aliases/WireRole)[]
 
-Defined in: [src/adapters/types.ts:659](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L659)
+Defined in: [src/adapters/types.ts:611](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L611)
 
 v7.21 — which roles this provider carries INSIDE the `messages` array.
 
@@ -74,29 +74,20 @@ because a role only one of them carries is a role the call might drop.
 
 > `readonly` **name**: `string`
 
-Defined in: [src/adapters/types.ts:617](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L617)
+Defined in: [src/adapters/types.ts:578](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L578)
 
 ***
 
 ### promptCaching?
 
-> `readonly` `optional` **promptCaching?**: [`PromptCaching`](/docs/api/type-aliases/PromptCaching)
+> `readonly` `optional` **promptCaching?**: `PromptCaching`
 
-Defined in: [src/adapters/types.ts:633](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L633)
+Defined in: [src/adapters/types.ts:585](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L585)
 
-How this provider's wire caches a repeated prompt prefix — see
-[PromptCaching](/docs/api/type-aliases/PromptCaching). The agent picks its cache strategy from THIS, never
-from `name`: a decorator that renames the provider (`withRetry`, an app's
-own routing wrapper) keeps caching exactly when it forwards this field.
-
-**Absence means no caching the library can drive or observe** — the agent
-sends no cache markers and the cache meter reports *not applicable*. That
-is the safe reading for an adapter that has not said: a breakpoint on a
-wire that ignores it costs nothing, but a promise of cache savings that
-never arrive is a wrong number on someone's bill.
-
-A WRAPPER must forward it (the three `src/resilience/` decorators do);
-`withFallback` publishes the combination of the two providers it holds.
+How this provider's wire caches a repeated prompt prefix (`PromptCaching`,
+from `agentfootprint/cache`). The agent picks its cache strategy from
+this, never from `name`. Absent = no caching the agent drives or meters.
+A wrapper must forward it, like `carriesInMessages`.
 
 ## Methods
 
@@ -104,7 +95,7 @@ A WRAPPER must forward it (the three `src/resilience/` decorators do);
 
 > **complete**(`req`, `hooks?`): `Promise`\<[`LLMResponse`](/docs/api/interfaces/LLMResponse)\>
 
-Defined in: [src/adapters/types.ts:691](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L691)
+Defined in: [src/adapters/types.ts:643](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L643)
 
 `hooks` (v7.8) is optional and additive — implementations may declare
 `complete(req)` with no second parameter and stay assignable. A LEAF
@@ -132,7 +123,7 @@ forward it, or everything it wraps goes silently dark — see the
 
 > `optional` **stream**(`req`, `hooks?`): `AsyncIterable`\<[`LLMChunk`](/docs/api/interfaces/LLMChunk)\>
 
-Defined in: [src/adapters/types.ts:692](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L692)
+Defined in: [src/adapters/types.ts:644](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L644)
 
 #### Parameters
 

@@ -29,8 +29,8 @@
  * ```
  */
 
-import type { LLMProvider, PromptCaching } from '../adapters/types.js';
-import type { CacheStrategy } from './types.js';
+import type { LLMProvider } from '../adapters/types.js';
+import type { CacheStrategy, PromptCaching } from './types.js';
 import { AutomaticCacheStrategy } from './strategies/AutomaticCacheStrategy.js';
 import { BreakpointCacheStrategy } from './strategies/BreakpointCacheStrategy.js';
 import { NoOpCacheStrategy } from './strategies/NoOpCacheStrategy.js';

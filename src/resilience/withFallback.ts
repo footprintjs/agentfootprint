@@ -35,9 +35,9 @@ import type {
   LLMProvider,
   LLMRequest,
   LLMResponse,
-  PromptCaching,
   WireRole,
 } from '../adapters/types.js';
+import type { PromptCaching } from '../cache/types.js';
 import { DEFAULT_CARRIES_IN_MESSAGES } from '../adapters/types.js';
 
 /**

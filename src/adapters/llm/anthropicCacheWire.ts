@@ -29,7 +29,7 @@
  *   return { usage: { input, output, ...readCacheUsage(message.usage) } };
  */
 
-import type { PromptCaching } from '../types.js';
+import type { PromptCaching } from '../../cache/types.js';
 
 // ─── The declaration ────────────────────────────────────────────────
 

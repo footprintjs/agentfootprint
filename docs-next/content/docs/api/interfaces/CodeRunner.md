@@ -4,7 +4,7 @@ title: CodeRunner
 
 # Interface: CodeRunner
 
-Defined in: [src/adapters/types.ts:1143](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1143)
+Defined in: [src/adapters/types.ts:1095](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1095)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/adapters/types.ts:1143](https://github.com/footprintjs/agentfoo
 
 > `readonly` **id**: `string`
 
-Defined in: [src/adapters/types.ts:1146](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1146)
+Defined in: [src/adapters/types.ts:1098](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1098)
 
 Stable id — reported on every `agentfootprint.tools.session_*` event so a
  row names its backend, not just its tool.
@@ -23,7 +23,7 @@ Stable id — reported on every `agentfootprint.tools.session_*` event so a
 
 > **start**(`req`): `Promise`\<[`CodeSession`](/docs/api/interfaces/CodeSession)\>
 
-Defined in: [src/adapters/types.ts:1153](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1153)
+Defined in: [src/adapters/types.ts:1105](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1105)
 
 Open a session.
 

@@ -25,9 +25,9 @@ import type {
   LLMRequest,
   LLMResponse,
   LLMToolSchema,
-  PromptCaching,
   WireRole,
 } from '../types.js';
+import type { PromptCaching } from '../../cache/types.js';
 import { asContextWindowExceeded } from './contextWindow.js';
 import { azureChatCompletionsUrl } from './azureUrl.js';
 

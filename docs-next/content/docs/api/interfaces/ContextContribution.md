@@ -4,7 +4,7 @@ title: "~~Interface: ContextContribution~~"
 
 # ~~Interface: ContextContribution~~
 
-Defined in: [src/adapters/types.ts:729](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L729)
+Defined in: [src/adapters/types.ts:681](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L681)
 
 ## Deprecated
 
@@ -16,7 +16,7 @@ No implementation exists — see [ContextSourceAdapter](/docs/api/interfaces/Con
 
 > `readonly` `optional` **asRole?**: `ContextRole`
 
-Defined in: [src/adapters/types.ts:734](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L734)
+Defined in: [src/adapters/types.ts:686](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L686)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [src/adapters/types.ts:734](https://github.com/footprintjs/agentfoot
 
 > `readonly` **contentSummary**: `string`
 
-Defined in: [src/adapters/types.ts:730](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L730)
+Defined in: [src/adapters/types.ts:682](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L682)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: [src/adapters/types.ts:730](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **rank?**: `number`
 
-Defined in: [src/adapters/types.ts:733](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L733)
+Defined in: [src/adapters/types.ts:685](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L685)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [src/adapters/types.ts:733](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **rawContent?**: `string`
 
-Defined in: [src/adapters/types.ts:731](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L731)
+Defined in: [src/adapters/types.ts:683](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L683)
 
 ***
 
@@ -48,7 +48,7 @@ Defined in: [src/adapters/types.ts:731](https://github.com/footprintjs/agentfoot
 
 > `readonly` **reason**: `string`
 
-Defined in: [src/adapters/types.ts:736](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L736)
+Defined in: [src/adapters/types.ts:688](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L688)
 
 ***
 
@@ -56,7 +56,7 @@ Defined in: [src/adapters/types.ts:736](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **score?**: `number`
 
-Defined in: [src/adapters/types.ts:732](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L732)
+Defined in: [src/adapters/types.ts:684](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L684)
 
 ***
 
@@ -64,4 +64,4 @@ Defined in: [src/adapters/types.ts:732](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **sectionTag?**: `string`
 
-Defined in: [src/adapters/types.ts:735](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L735)
+Defined in: [src/adapters/types.ts:687](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L687)
