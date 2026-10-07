@@ -86,8 +86,8 @@ stored, exported or shown, and no consumer can reach it.
 ```typescript
 // A consumer: the record, served.
 agent.on('agentfootprint.agent.turn_end', (e) => archive(e)); // finalContent: '[REDACTED]' under redact
-// The library itself (RunnerBase · onRealEvent): the answer it streams back.
-runner.onRealEvent((e) => e.type === 'agentfootprint.stream.token' && reply.write(e.payload.content));
+// The library itself (core/runnerLive.ts · runnerLive — no barrel exports it):
+runnerLive(agent)?.onRealEvent((e) => e.type === 'agentfootprint.stream.token' && reply.write(e.payload.content));
 ```
 
 With no policy the serving is the identity: no copy, no walk, the same bytes as before.

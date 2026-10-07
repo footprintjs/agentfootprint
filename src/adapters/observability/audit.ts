@@ -422,6 +422,19 @@ const BOUND_FIELDS: Readonly<
   'agentfootprint.memory.strategy_applied': { scoreEvidence: keysMarker },
 };
 
+/**
+ * The content field names the bounded mode replaces, across every event type.
+ * Pinned against the agent's redaction vocabulary
+ * (`redaction/conversation.ts` · `conversationRedaction`): a field this table
+ * calls content is a name the conversation travels under, and the test fails
+ * when the two disagree.
+ *
+ * @internal
+ */
+export function boundedContentFieldNames(): readonly string[] {
+  return [...new Set(Object.values(BOUND_FIELDS).flatMap((rules) => Object.keys(rules)))];
+}
+
 /** Error-MESSAGE field names — bounded in EVERY event (messages can
  *  echo runtime values; mirrors #19's "stage + scope only" rule). The
  *  classifier fields (`errorName`, `errorKind`) stay verbatim. */

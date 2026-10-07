@@ -22,6 +22,7 @@ import { redactionDeclaredBy } from '../redaction/declared.js';
 import { unionRedactionPolicies } from '../redaction/policy.js';
 import { createRunRedaction, type RunRedaction } from '../redaction/runRedaction.js';
 import { servableSnapshot } from './servableSnapshot.js';
+import { registerRunnerLive } from './runnerLive.js';
 import { redactConsentUrlForEvent } from '../identity/consent.js';
 import { argumentAskReplyForEvent, isArgumentAskPause } from './agent/arguments/askMarker.js';
 import { readAskComponent } from './askComponent.js';
@@ -186,28 +187,17 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
   }
 
   /**
-   * The current run's committed root state, live and unserved — O(1), no
-   * snapshot built. For the hosting door's mid-run conversation writer
-   * (`hosting/durability.ts`), which stores what the next turn resumes from
-   * and must therefore store the real values, never the record's form.
-   *
-   * @internal
+   * Registers this runner's LIVE taps — the real-value event path and the live
+   * committed state — for the library's own mechanisms outside this class
+   * (`runnerLive.ts`: a host's streamed reply, spend ledger and session store,
+   * `toSSE({ format: 'text' })`). Deliberately not a method: no consumer can
+   * reach the real values through a runner, so none can make them a record.
    */
-  liveState(): Readonly<Record<string, unknown>> | undefined {
-    return this.lastExecutor?.getRuntime().globalStore.getState();
-  }
-
-  /**
-   * Subscribe to this runner's REAL-value event path — every event as its
-   * producer made it, never served (`EventDispatcher · onRealEvent`). For the
-   * library's own mechanisms that run on events and hand their result back to
-   * the caller or the run itself: a hosted agent's streamed reply, its spend
-   * ledger, `toSSE({ format: 'text' })`. Never a record.
-   *
-   * @internal
-   */
-  onRealEvent(listener: (event: AgentfootprintEvent) => void): Unsubscribe {
-    return this.dispatcher.onRealEvent(listener);
+  constructor() {
+    registerRunnerLive(this, {
+      onRealEvent: (listener) => this.dispatcher.onRealEvent(listener),
+      liveState: () => this.lastExecutor?.getRuntime().globalStore.getState(),
+    });
   }
 
   /**

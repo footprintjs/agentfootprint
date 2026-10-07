@@ -264,6 +264,15 @@ describe('a hosted agent: the reply and the session store are the caller’s', (
       expect(full.join('')).not.toContain(secret);
     }
   });
+
+  it('no runner method hands out the real values — the live taps are the library’s own', () => {
+    // A consumer that could subscribe to the real-value path could wire it to a
+    // store or an exporter and turn it into a record. The taps live in an
+    // unexported registry (`core/runnerLive.ts`), not on the runner.
+    const agent = fixtureAgent({ redact: conversationPolicy() });
+    expect('onRealEvent' in agent).toBe(false);
+    expect('liveState' in agent).toBe(false);
+  });
 });
 
 /** The fixture's tool, standalone (the crash test builds its own agent). */

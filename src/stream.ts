@@ -16,6 +16,7 @@
 import type { AgentfootprintEvent } from './events/registry.js';
 import type { RunnerBase } from './core/RunnerBase.js';
 import type { EventDispatcher, Unsubscribe } from './events/dispatcher.js';
+import { runnerLive } from './core/runnerLive.js';
 import { toWireJson } from './lib/wireJson.js';
 
 /**
@@ -104,8 +105,10 @@ export async function* toSSE<TIn, TOut>(
   // 'full' ships the RECORD — every event, served under the run's redaction
   // policy like every other listener. 'text' streams the REPLY to the person
   // who asked, the caller's own answer, so it reads the run's real-value path
-  // (`EventDispatcher · onRealEvent`): an agent's `redact` keeps names out of
-  // the record, never out of the answer it is giving (`src/redaction/`).
+  // (`core/runnerLive.ts` · `runnerLive`): an agent's `redact` keeps names out
+  // of the record, never out of the answer it is giving (`src/redaction/`). A
+  // runner that is not a RunnerBase has no redaction and no live taps: its
+  // events are the record and the reply at once.
   const listener = (event: AgentfootprintEvent): void => {
     if (filter && !filter(event)) return;
     queue.push(event);
@@ -121,8 +124,9 @@ export async function* toSSE<TIn, TOut>(
       wakeup();
     }
   };
+  const live = format === 'text' ? runnerLive(runner) : undefined;
   const unsub: Unsubscribe =
-    format === 'text' ? dispatcher.onRealEvent(listener) : dispatcher.on('*', listener);
+    live !== undefined ? live.onRealEvent(listener) : dispatcher.on('*', listener);
 
   let heartbeat: ReturnType<typeof setInterval> | undefined;
   if (heartbeatMs > 0) {

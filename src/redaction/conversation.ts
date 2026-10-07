@@ -144,6 +144,7 @@ const NAMES = {
     'loadedBeats',
     'newMessageEmbeddings',
     'runEvidence',
+    'scoreEvidence',
   ],
   /** Compositions: what one member hands the next. */
   compositions: [
@@ -156,6 +157,7 @@ const NAMES = {
     'echoedMessage',
     'routingReason',
     'packed',
+    'resultSummary',
   ],
 } as const;
 

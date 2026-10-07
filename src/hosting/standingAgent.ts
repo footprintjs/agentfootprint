@@ -180,6 +180,8 @@ import {
   TURN_ARTIFACTS_TIMEOUT_MS,
 } from './types.js';
 import type { Agent, AgentRunOptions } from '../core/Agent.js';
+import { runnerLive } from '../core/runnerLive.js';
+import type { AgentfootprintEvent } from '../events/registry.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
 
 /**
@@ -463,7 +465,7 @@ export async function standingAgent<TH extends HostHandle>(
     };
     // ── The lane's own events, as the run made them ──────────────────
     // Every subscription below reads the agent's REAL-value path
-    // (`RunnerBase · onRealEvent`), never the served stream: the reply is the
+    // (`core/runnerLive.ts` · `runnerLive`), never the served stream: the reply is the
     // caller's own answer and the spend ledger is an admission decision, so an
     // agent's `redact` — which governs what the RECORD keeps — must reach
     // neither (`src/redaction/runRedaction.ts`). One subscription, one switch.
@@ -482,7 +484,13 @@ export async function standingAgent<TH extends HostHandle>(
     // `llm_end` always carries TOKENS, and `cost.tick` carries MONEY only
     // where a pricing table turned tokens into it. Summing an invented rate
     // here would be a number that looks like a bill.
-    const offLane = agent.onRealEvent((event) => {
+    // Read live (`core/runnerLive.ts`): the reply goes to the person who asked
+    // and the ledger counts what was spent — neither is a record, so neither
+    // is served under the agent's `redact`.
+    const live = runnerLive(agent);
+    const subscribe = (listener: (event: AgentfootprintEvent) => void): (() => void) =>
+      live !== undefined ? live.onRealEvent(listener) : agent.on('*', listener);
+    const offLane = subscribe((event) => {
       switch (event.type) {
         case 'agentfootprint.agent.turn_start':
           lane.activeRunId = (event as { meta?: { runId?: string } }).meta?.runId;
@@ -529,7 +537,7 @@ export async function standingAgent<TH extends HostHandle>(
             // The conversation is read from the run's LIVE committed state,
             // never from the commit event's (served) values: the store holds
             // what the next turn resumes from (`hosting/durability.ts`).
-            state: () => agent.liveState(),
+            state: () => live?.liveState(),
             write: (sessionId, conversation) =>
               sessions.persist(sessionId, toEnvelope(conversation)),
           });

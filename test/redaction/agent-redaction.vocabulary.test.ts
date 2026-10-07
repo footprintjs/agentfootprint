@@ -35,6 +35,7 @@ import {
   unpackRecording,
 } from '../../src/doors/observe.js';
 import { conversationRedaction } from '../../src/doors/security.js';
+import { boundedContentFieldNames } from '../../src/adapters/observability/audit.js';
 import { CONVERSATION_FEATURES } from '../../src/redaction/conversation.js';
 import { mockThinkingHandler } from '../../src/thinking/MockThinkingHandler.js';
 import { defineMemory, MEMORY_STRATEGIES, MEMORY_TYPES } from '../../src/memory/index.js';
@@ -484,5 +485,18 @@ describe('conversationRedaction() — the value', () => {
   it('refuses what `redact` itself refuses', () => {
     expect(() => conversationRedaction({} as RedactionPolicy)).toThrow(/names nothing/);
     expect(() => conversationRedaction({ keys: 'ssn' } as never)).toThrow(/conversationRedaction/);
+  });
+});
+
+describe('the vocabulary agrees with the audit export on what is content', () => {
+  it('every field the audit bounds as content is a name the vocabulary keeps out', () => {
+    // Two owners say what is content: the audit export's bounded mode (per
+    // event type) and this vocabulary (by name). A field one calls content and
+    // the other does not would be a hole one of them misses.
+    const policy = conversationRedaction();
+    const kept = (name: string) =>
+      (policy.keys ?? []).includes(name) || (policy.patterns ?? []).some((p) => p.test(name));
+    const missing = boundedContentFieldNames().filter((name) => !kept(name));
+    expect(missing).toEqual([]);
   });
 });

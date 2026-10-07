@@ -247,9 +247,9 @@ what the next turn resumes from are never redacted, and each reads the real
 value, never the record:
 
 - the streamed reply and the spend ledger — `standingAgent.ts` reads the run
-  through `RunnerBase · onRealEvent`, the library's real-value path;
+  through `core/runnerLive.ts` · `runnerLive`, the library's real-value path;
 - the session store — `durability.ts · durableWriter` reads the conversation
-  from the run's LIVE committed state (`RunnerBase · liveState`) at the commit
+  from the run's LIVE committed state (`core/runnerLive.ts` · `RunnerLive`) at the commit
   that moved `history`; the commit event's values are the record's form.
 
 ```ts

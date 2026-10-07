@@ -64,7 +64,7 @@ export interface DurableWriterOptions {
   /** The run id to stamp on the conversation, for correlating back to the run. */
   readonly runId: () => string | undefined;
   /**
-   * The run's committed root state, live (`RunnerBase · liveState`). The
+   * The run's committed root state, live (`core/runnerLive.ts` · `RunnerLive`). The
    * conversation is READ here, at the commit that moved it — never off the
    * commit event, whose values are the RECORD's form: under an agent's
    * `redact` footprintjs serves a selected key as a placeholder there, and a

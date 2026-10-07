@@ -73,7 +73,9 @@ const agent = Agent.create({
   canary reaches a record; under the vocabulary none reaches any record, the run
   emits the SAME events, and its answer account is still told. Compositions are
   proven in `agent-redaction.propagation.test.ts`. A feature added to the list
-  needs a case there.
+  needs a case there. And it agrees with the audit export: every field the
+  audit's bounded mode treats as content (`adapters/observability/audit.ts` ·
+  `boundedContentFieldNames`) is on the list — pinned in the same file.
 - **What stays readable.** Ids, counts, kinds, tool names, timings and verdict
   words — the record still shows WHAT happened, without the words.
 - **Not on it, by design.** Error text written by code (`error`,
@@ -134,8 +136,11 @@ and that the answer account says the question and the answer are kept out.
 6. The **real-value path** (`EventDispatcher · onRealEvent`) carries each event
    as its producer made it, to the library's own mechanisms that compute on it:
    the crash-checkpoint tracker, the window's token meter, a host's streamed
-   reply and spend ledger, `toSSE({ format: 'text' })`. No consumer can reach it,
-   and nothing on it is stored, exported or shown.
+   reply and spend ledger, `toSSE({ format: 'text' })`. Outside a runner's class
+   it is reached only through `core/runnerLive.ts` (with the run's live state, for
+   a host's session store), which no barrel exports and no runner method hands
+   out — so no consumer can reach it, and nothing on it is stored, exported or
+   shown.
 
 ## Readers of a redacted record
 

@@ -2689,10 +2689,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * conversation. Keep an earlier accepted checkpoint to continue explicitly;
    * `followUp()` after input denial raises `NoConversationError`.
    *
-   * **Read from the run's own recording, not from a second copy.** The history
-   * comes from `getLastSnapshot().sharedState.history` — the state the run
-   * actually committed — cloned on the way out so a persistence layer can never
-   * mutate the live heap. The final assistant turn is appended from the answer
+   * **Read from the run's own committed state, not from a second copy.** The
+   * history comes from the LIVE snapshot's `sharedState.history` — the state
+   * the run actually committed, never the served record (an agent's `redact`
+   * keeps the conversation out of `getLastSnapshot()`, never out of the
+   * conversation it continues) — cloned on the way out so a persistence layer
+   * can never mutate the live heap. The final assistant turn is appended from the answer
    * `run()` returned, because nothing ever writes it back into `history`: the
    * loop appends assistant turns only when they carry tool calls, and the turn
    * that ends the run carries none. An agent that stored this conversation
@@ -3897,7 +3899,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * working, and the answer is sometimes real (a model can return content AND
    * tool calls). So it does not raise; it records, in committed state, where
    * it is provable after the fact — `getLastSnapshot().sharedState.stoppedEarly`
-   * is the same value, and this is the short way to it.
+   * is the same value (unless the agent's `redact` names it: this accessor
+   * reads the live run), and this is the short way to it.
    *
    * When the answer came back EMPTY the library also warns once on the
    * console, because an empty string reaching a user is indistinguishable
@@ -4048,7 +4051,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * a typed answer is JSON, and the limits block that option appends to a
    * prose answer would stop it being JSON, so for a typed answer the limits
    * travel beside it instead — here, on `turn_end.answerCoverage`, and in
-   * `getLastSnapshot().sharedState.answerCoverage`, one value three ways. The
+   * `getLastSnapshot().sharedState.answerCoverage` (served, under the agent's
+   * `redact`), one value three ways. The
    * answer string, and so `runTyped()`, is exactly the model's.
    *
    * On an agent whose inputs layer is armed (a tool declares `askOrAssume`),
