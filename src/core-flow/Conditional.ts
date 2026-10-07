@@ -25,7 +25,7 @@ import {
 import type { GroupMember, GroupMetadata, GroupTranslator } from '../core/translator.js';
 import type { RunnerPauseOutcome } from '../core/pause.js';
 import type { Runner } from '../core/runner.js';
-import { RunnerBase, makeRunId } from '../core/RunnerBase.js';
+import { RunnerBase, makeRunId, withRunSignalInEnv } from '../core/RunnerBase.js';
 import { normalizeRunInput } from '../core/runInput.js';
 import type { RunContext } from '../bridge/eventMeta.js';
 import { ContextRecorder } from '../recorders/core/ContextRecorder.js';
@@ -33,6 +33,7 @@ import { streamRecorder } from '../recorders/core/StreamRecorder.js';
 import { agentRecorder } from '../recorders/core/AgentRecorder.js';
 import { compositionRecorder } from '../recorders/core/CompositionRecorder.js';
 import { typedEmit } from '../recorders/core/typedEmit.js';
+import { carryVerdict, childOutcome, raiseChildVerdict } from './childOutcome.js';
 import { composedInput, readsMessageFromIfAny } from '../core/messageFrom.js';
 
 export interface ConditionalOptions {
@@ -167,7 +168,7 @@ export class Conditional extends RunnerBase<ConditionalInput, ConditionalOutput>
     this.lastExecutor = executor;
     const result = await executor.run({
       input: { message: runInput.message },
-      ...(options ?? {}),
+      ...(withRunSignalInEnv(options) ?? {}),
     });
     return this.finalizeResult(executor, result);
   }
@@ -179,7 +180,7 @@ export class Conditional extends RunnerBase<ConditionalInput, ConditionalOutput>
   ): Promise<ConditionalOutput | RunnerPauseOutcome> {
     this.emitPauseResume(checkpoint, input);
     const executor = this.createExecutor();
-    const result = await executor.resume(checkpoint, input, options);
+    const result = await executor.resume(checkpoint, input, withRunSignalInEnv(options));
     return this.finalizeResult(executor, result);
   }
 
@@ -286,9 +287,13 @@ export class Conditional extends RunnerBase<ConditionalInput, ConditionalOutput>
         },
         // Branch's string return becomes sfOutput; propagate to parent
         // as `result` for the Finalize stage to read.
-        outputMapper: (sfOutput) => ({
-          result: typeof sfOutput === 'string' ? sfOutput : '',
-        }),
+        // (The child reads its own outcome — `childOutcome.ts`: a verdict is
+        // carried onto the Conditional's state instead.)
+        outputMapper: (sfOutput) => {
+          const outcome = childOutcome(b.runner, sfOutput);
+          if ('verdict' in outcome) return { result: '', ...carryVerdict(outcome.verdict) };
+          return { result: typeof outcome.answer === 'string' ? outcome.answer : '' };
+        },
       });
     }
     let builder = decList.setDefault(fallbackId).end();
@@ -321,6 +326,9 @@ export class Conditional extends RunnerBase<ConditionalInput, ConditionalOutput>
         //
         // Solution: have each branch's outputMapper write scope.result,
         // then read it here.
+        //
+        // A branch that ended on a verdict raises its error instead (`childOutcome.ts`).
+        raiseChildVerdict((key) => scope.$getValue(key));
         typedEmit(scope, 'agentfootprint.composition.exit', {
           kind: 'Conditional',
           id: compositionId,

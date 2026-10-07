@@ -132,12 +132,13 @@ import type { RunContext } from '../bridge/eventMeta.js';
 import { composedInput, readsMessageFromIfAny } from '../core/messageFrom.js';
 import type { RunnerPauseOutcome } from '../core/pause.js';
 import type { Runner } from '../core/runner.js';
-import { RunnerBase, makeRunId } from '../core/RunnerBase.js';
+import { RunnerBase, makeRunId, withRunSignalInEnv } from '../core/RunnerBase.js';
 import { agentRecorder } from '../recorders/core/AgentRecorder.js';
 import { compositionRecorder } from '../recorders/core/CompositionRecorder.js';
 import { ContextRecorder } from '../recorders/core/ContextRecorder.js';
 import { streamRecorder } from '../recorders/core/StreamRecorder.js';
 import { typedEmit } from '../recorders/core/typedEmit.js';
+import { childError, childOutcome } from './childOutcome.js';
 
 // ─── Public shapes ───────────────────────────────────────────────────
 
@@ -464,7 +465,7 @@ export class Graph extends RunnerBase<GraphInput, GraphOutput> {
     this.lastExecutor = executor;
     let result: unknown;
     try {
-      result = await executor.run({ input: { ...input }, ...(options ?? {}) });
+      result = await executor.run({ input: { ...input }, ...(withRunSignalInEnv(options) ?? {}) });
     } catch (err) {
       this.rethrowWithNodeAttribution(err);
     }
@@ -481,7 +482,7 @@ export class Graph extends RunnerBase<GraphInput, GraphOutput> {
     this.lastExecutor = executor;
     let result: unknown;
     try {
-      result = await executor.resume(checkpoint, input, options);
+      result = await executor.resume(checkpoint, input, withRunSignalInEnv(options));
     } catch (err) {
       this.rethrowWithNodeAttribution(err);
     }
@@ -638,7 +639,23 @@ export class Graph extends RunnerBase<GraphInput, GraphOutput> {
           // Untouched: whatever the node's chart returned is what its
           // children (and the caller) receive. No string coercion — this
           // is exactly what Sequence and Parallel cannot do.
-          outputMapper: (sfOutput) => ({ results: { [node.id]: sfOutput } }),
+          //
+          // The child reads its own outcome (`childOutcome.ts`): an agent's
+          // validated answer arrives as its text, not the object it leaves as.
+          // A node that ended on a verdict is a FAILED node: the mapper throws
+          // the child's own error — recorded first, as the inputMapper does,
+          // because footprintjs swallows a mapper throw — so the node is
+          // absent and the level join names it.
+          outputMapper: (sfOutput) => {
+            const outcome = childOutcome(node.runner, sfOutput);
+            if ('verdict' in outcome) {
+              const err = childError(outcome.verdict);
+              if (!nodeErrors.has(node.id))
+                nodeErrors.set(node.id, { message: err.message, raw: err });
+              throw err;
+            }
+            return { results: { [node.id]: outcome.answer } };
+          },
         });
       }
 

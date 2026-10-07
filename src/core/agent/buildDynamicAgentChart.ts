@@ -65,9 +65,13 @@ import { mountMemoryRead, mountMemoryWrite } from '../../memory/wire/mountMemory
 import { withMemoryRecall } from './memoryRecallInjections.js';
 import { offeredResultIds } from './findings/offer.js';
 import type { FindingsLedger } from './findings/types.js';
-import { breakFinalStage, breakFinalWithValidationStage } from './stages/breakFinal.js';
+import {
+  breakFinalStage,
+  breakFinalWithValidationStage,
+  finalBranchOutput,
+} from './stages/breakFinal.js';
 import { prepareFinalFor } from './stages/prepareFinal.js';
-import { failFastRecordOf } from './stages/reliabilityExecution.js';
+import { failFastRecordOf } from '../../reliability/failFastRecord.js';
 import { buildCacheSubflow } from './buildCacheSubflow.js';
 import {
   timeClockArg,
@@ -1040,13 +1044,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
         }
         return rest;
       },
-      outputMapper: (sf) => ({
-        finalContent: sf.finalContent as string,
-        ...(deps.hasAnswerValidation === true &&
-          sf.answerValidationCommitted === true && {
-            answerValidationCommitted: true,
-          }),
-      }),
+      outputMapper: (sf) => finalBranchOutput(sf, deps.hasAnswerValidation === true),
       // `final` is a terminal LEAF under the branch-sourced loop; propagateBreak
       // is kept for the terminal onBreak signal (observability), not loop control.
       propagateBreak: true,

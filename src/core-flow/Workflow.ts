@@ -76,12 +76,13 @@ import type { RunContext } from '../bridge/eventMeta.js';
 import { composedInput, readsMessageFromIfAny } from '../core/messageFrom.js';
 import type { RunnerPauseOutcome } from '../core/pause.js';
 import type { Runner } from '../core/runner.js';
-import { RunnerBase, makeRunId } from '../core/RunnerBase.js';
+import { RunnerBase, makeRunId, withRunSignalInEnv } from '../core/RunnerBase.js';
 import { agentRecorder } from '../recorders/core/AgentRecorder.js';
 import { compositionRecorder } from '../recorders/core/CompositionRecorder.js';
 import { ContextRecorder } from '../recorders/core/ContextRecorder.js';
 import { streamRecorder } from '../recorders/core/StreamRecorder.js';
 import { typedEmit } from '../recorders/core/typedEmit.js';
+import { carryVerdict, childOutcome, raiseChildVerdict } from './childOutcome.js';
 
 /**
  * What the NEXT step must accept, given what the previous one returns.
@@ -171,7 +172,10 @@ export class Workflow<TIn extends object = object, TOut = unknown> extends Runne
   async run(input: TIn, options?: RunOptions): Promise<TOut | RunnerPauseOutcome> {
     const executor = this.createExecutor();
     this.lastExecutor = executor;
-    const result = await executor.run({ input: { ...input }, ...(options ?? {}) });
+    const result = await executor.run({
+      input: { ...input },
+      ...(withRunSignalInEnv(options) ?? {}),
+    });
     return this.finalizeResult(executor, result);
   }
 
@@ -183,7 +187,7 @@ export class Workflow<TIn extends object = object, TOut = unknown> extends Runne
     this.emitPauseResume(checkpoint, input);
     const executor = this.createExecutor();
     this.lastExecutor = executor;
-    const result = await executor.resume(checkpoint, input, options);
+    const result = await executor.resume(checkpoint, input, withRunSignalInEnv(options));
     return this.finalizeResult(executor, result);
   }
 
@@ -252,12 +256,23 @@ export class Workflow<TIn extends object = object, TOut = unknown> extends Runne
           // runner that reads the marker (`core/messageFrom.ts` ·
           // `composedInput`); every other runner gets the input it always did.
           inputMapper: (parent) => {
+            // A step that ended on a verdict hands nothing on (`childOutcome.ts`).
+            raiseChildVerdict((key) => (parent as Record<string, unknown>)[key]);
             const args = toStepArgs(parent.current, stepNumber);
             return stepNumber === 1 ? args : composedInput(step, args);
           },
           // Untouched: whatever the step's chart returned is what the next
           // step (or the caller) receives. No string coercion.
-          outputMapper: (sfOutput) => ({ current: sfOutput }),
+          // The child reads its own outcome (`childOutcome.ts`): its answer is
+          // handed on (an agent's validated answer as its text, never the
+          // object it leaves as), and a verdict is carried onto the
+          // workflow's state — never the failed child's state itself.
+          outputMapper: (sfOutput) => {
+            const outcome = childOutcome(step, sfOutput);
+            return 'verdict' in outcome
+              ? carryVerdict(outcome.verdict)
+              : { current: outcome.answer };
+          },
         },
       );
     });
@@ -265,6 +280,8 @@ export class Workflow<TIn extends object = object, TOut = unknown> extends Runne
     builder = builder.addFunction(
       'Finalize',
       (scope: TypedScope<WorkflowState>) => {
+        // The LAST step ended on a verdict — no next step's hand-off to raise it.
+        raiseChildVerdict((key) => scope.$getValue(key));
         typedEmit(scope, 'agentfootprint.composition.exit', {
           kind: 'Sequence',
           id: compositionId,

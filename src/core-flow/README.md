@@ -144,13 +144,33 @@ Two semantics to know when engaging all-required fail-fast:
 
 ### Decision 9: `core-flow/` has zero LLM dependency
 
-Every file in this folder depends only on: `footprintjs`, `../core/runner.ts`, `../core/RunnerBase.ts`, `../recorders/core/*`, `../bridge/eventMeta.ts`. **Never imports from `../core/LLMCall.ts` or `../core/Agent.ts`**.
+Every file in this folder depends only on: `footprintjs`, `../core/runner.ts`, `../core/RunnerBase.ts`, `../recorders/core/*`, `../bridge/eventMeta.ts`, `../core/terminalVerdict.ts` (a run's terminal verdicts, their error classes and the outcome protocol — no runner, no LLM code; Decision 11). **Never imports from `../core/LLMCall.ts` or `../core/Agent.ts`**.
 
 This is enforced by convention (no import paths cross the line). Compositions take `Runner<T>` generically — they don't know or care whether a child is LLM-backed. That makes them trivially testable with pure-function runner stubs.
 
 ### Decision 10: a composed message is marked — for the runner that reads the mark
 
 A step after the first of a `Sequence` or a `workflow()`, every `Loop` iteration after the first, and every `graph()` node that is not a root (a `join` node included) is handed ANOTHER runner's output as its message. Another model's words must never count as "the person said it" (the inputs layer's declared sources check a quote against the person's messages), and only the composition knows where the message came from. So these mappers pass `messageFrom: 'composed'` (`../core/messageFrom.ts` · `composedInput`; a `workflow()` / `graph()` structured hand-off is marked whole, a `messageFrom` it carries overwritten) — and `Parallel`, `Conditional` and a nested `Sequence` / `Loop` pass it on to the child they hand their OWN message to when they were handed a composed one, while `workflow()`'s first step and `graph()`'s roots receive the composition's whole input, the mark included. The mark goes ONLY to a runner that reads it (an `Agent` armed with declared sources — `.findings({ argumentSources: true })` or `.inputsLayer({ argumentSources: true })` — or with a time reader — `.time({ reader })`, which reads only a person's words — or a composition holding one — `readsMessageFromIfAny`): every other composition hands its children the input object it always did, byte for byte. The registry is a leaf in `core/`, so this folder still imports no LLM-backed runner. Pinned by `test/core/messageFrom.test.ts`.
+
+### Decision 11: a child reads its own outcome, and a child that ended on a terminal verdict is a FAILED child
+
+An `Agent` ends some runs on a record in its state instead of a throw — a reliability fail-fast, a policy halt, a denied message (input or output), an answer-validation refusal, an evidence-rails refusal — and only its own run boundary (`Agent · finalizeResult`) raises the typed error. A composition mounts the agent's CHART, so that boundary never runs: until this was fixed the composition carried on as if the child had answered — `Sequence.step('a', agent).step('b', next)` ran `next` on an empty input and returned ITS answer.
+
+A mount hands its outputMapper the chart's RESULT, or — when the chart returned none — the child's whole state, and only the child knows which is which (a validated agent answers with an OBJECT, which read as state looked like a refusal). So the child's own runner reads it (`../core/terminalVerdict.ts` · `ReadsItsOwnOutcome`; `Agent · outcomeOf`): its ANSWER from a result, a verdict ONLY from state, with the one translation its own boundary uses. `childOutcome.ts` asks it; a runner that does not read its own outcome hands back its result as the answer, as it always did. Each composition then fails the way it fails for any child:
+
+- `Sequence`, `workflow()`, `Conditional`, `Loop` hand a child's error on as it is, so they carry the verdict onto their own state (`carryVerdict`, landed whole) and raise the child's own error — same class, message and payload (`raiseChildVerdict`) — before anything else runs: the next step's hand-off (its inputMapper), or `Finalize` / the Loop's `Guard` after the last. A `workflow()` step never hands the failed agent's state on as the next step's input.
+- `Parallel` and `graph()` report failed children themselves, so the child's mapper throws the child's error (`childError`, attributed like any mapper throw) and the merge or the level join reports that branch or node failed with the error's message.
+
+An answer travels as the answer: a validated agent's text reaches the next step, the merge and the graph's results (it used to arrive as `''`, or as the object).
+
+```ts
+const pipeline = Sequence.create().step('draft', agent).step('send', sender).build();
+await pipeline.run({ message: 'hi' }); // agent halts on a policy → rejects: PolicyHaltError; `sender` never runs
+```
+
+Every runner hands a `{ signal }` to its stages too (`../core/RunnerBase.ts` · `withRunSignalInEnv`), so an agent inside a composition sees the run's abort and never retries a cancelled call.
+
+Pinned by `test/core-flow/composed-terminal-verdicts.test.ts`: every verdict × every composition × all three `reactMode`s against the standalone agent, the delivered answers (validated pass, observe, rails grounded) against the standalone answer, and an abort inside Sequence / Parallel / Loop. **Known gaps:** the error carries no `snapshot` (the composition's executor is still running when it is raised; the standalone fail-fast error carries the agent's); and a `'tell-model'` credential-consent record travels OFF tracked state by design (the URL is a bearer capability), so a composition cannot see it — a composed agent that finished with a consent outstanding still hands back its answer.
 
 ## Events emitted
 

@@ -37,3 +37,37 @@ export const breakFinalWithValidationStage = (
     answerValidationCommitted: scope.answerValidationCommitted === true,
   };
 };
+
+/** A validated answer, as it leaves the Final branch (`breakFinalWithValidationStage`). */
+export interface ValidatedDelivery {
+  readonly finalContent: string;
+  readonly answerValidationCommitted: boolean;
+}
+
+/** Whether a Final-branch result is a validated answer — the one object shape this file returns. */
+export function isValidatedDelivery(value: unknown): value is ValidatedDelivery {
+  if (typeof value !== 'object' || value === null) return false;
+  const v = value as Partial<ValidatedDelivery>;
+  return (
+    Object.keys(value).length === 2 &&
+    typeof v.finalContent === 'string' &&
+    typeof v.answerValidationCommitted === 'boolean'
+  );
+}
+
+/**
+ * What the Final branch writes back onto the agent's state. A validated answer
+ * leaves as {@link ValidatedDelivery} and is written; a validated run that was
+ * REFUSED ends the branch with no result and writes nothing, so the agent's
+ * `finalContent` stays as it was. An unvalidated answer leaves as the chart's
+ * RESULT (a string), and this key has always been written empty — a refused
+ * one is written empty too, never the refused text.
+ */
+export function finalBranchOutput(sf: unknown, validated: boolean): Record<string, unknown> {
+  if (!validated) return { finalContent: undefined };
+  if (!isValidatedDelivery(sf)) return {};
+  return {
+    finalContent: sf.finalContent,
+    ...(sf.answerValidationCommitted && { answerValidationCommitted: true }),
+  };
+}

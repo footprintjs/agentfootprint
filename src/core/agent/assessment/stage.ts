@@ -46,6 +46,7 @@ import type { TypedScope } from 'footprintjs';
 
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import type { AgentState } from '../types.js';
+import { validatedAnswerMayDeliver } from '../stages/prepareFinal.js';
 import { assessAnswer } from './assess.js';
 import {
   assessmentDataOf,
@@ -62,6 +63,8 @@ export interface AnswerStageDeps {
   readonly reads: readonly string[];
   /** `.answerLayer({ standingLine: true })` — compose the line for the person. */
   readonly standingLine?: true;
+  /** `.answerValidation()` is armed: an answer its report withholds is never assessed. */
+  readonly validated?: true;
 }
 
 /**
@@ -108,6 +111,15 @@ export async function assessAnswerStage(
   deps: AnswerStageDeps,
 ): Promise<void> {
   const record = committedRecordOf(scope, deps.reads);
+  // An answer answer validation withholds is never delivered, so it is never
+  // assessed — decided from the report the fold already read (no other read);
+  // PrepareFinal's guard then stops the branch.
+  if (
+    deps.validated === true &&
+    !validatedAnswerMayDeliver(record.answerValidation as AgentState['answerValidation'])
+  ) {
+    return;
+  }
   const assessed = assessAnswer({ snapshot: { sharedState: record } });
   // Filed for PrepareFinal (`turn_end.answerAssessment`), one stage later.
   scope.answerAssessment = assessmentDataOf(assessed);

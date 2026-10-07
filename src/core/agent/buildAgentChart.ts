@@ -63,7 +63,11 @@ import { readerWindowsOf } from '../time/windows.js';
 import { clockOf } from '../time/rows.js';
 import { timeLimitFactsOf, type TimeLimitFacts } from './coverage/timeLimitFacts.js';
 import type { FindingsLedger } from './findings/types.js';
-import { breakFinalStage, breakFinalWithValidationStage } from './stages/breakFinal.js';
+import {
+  breakFinalStage,
+  breakFinalWithValidationStage,
+  finalBranchOutput,
+} from './stages/breakFinal.js';
 import { prepareFinalFor } from './stages/prepareFinal.js';
 import { buildCacheSubflow } from './buildCacheSubflow.js';
 import {
@@ -292,6 +296,8 @@ export interface AgentChartDeps {
   readonly hasAnswerValidation?: boolean;
   /** Output middleware owns delivery: publish only the final captured answer. */
   readonly releaseOutputTokens?: true;
+  /** The evidence gate's `'rails'` posture: a refused answer is recorded flagged and ends the branch (`prepareFinalFor`). */
+  readonly evidenceRails?: true;
 
   /**
    * The time layer (`.time()`) is armed: under `attachCoverageLimits`, the
@@ -1150,13 +1156,7 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
         }
         return rest;
       },
-      outputMapper: (sf) => ({
-        finalContent: sf.finalContent as string,
-        ...(deps.hasAnswerValidation === true &&
-          sf.answerValidationCommitted === true && {
-            answerValidationCommitted: true,
-          }),
-      }),
+      outputMapper: (sf) => finalBranchOutput(sf, deps.hasAnswerValidation === true),
       // With the branch-sourced loop, `final` is a terminal LEAF — it ends the
       // run on its own (no decider `next` to suppress). propagateBreak is kept
       // so BreakFinal's $break() still surfaces a terminal onBreak signal to the

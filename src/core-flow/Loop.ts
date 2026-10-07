@@ -28,7 +28,7 @@ import {
 import type { GroupMember, GroupMetadata, GroupTranslator } from '../core/translator.js';
 import type { RunnerPauseOutcome } from '../core/pause.js';
 import type { Runner } from '../core/runner.js';
-import { RunnerBase, makeRunId } from '../core/RunnerBase.js';
+import { RunnerBase, makeRunId, withRunSignalInEnv } from '../core/RunnerBase.js';
 import { normalizeRunInput } from '../core/runInput.js';
 import type { RunContext } from '../bridge/eventMeta.js';
 import { ContextRecorder } from '../recorders/core/ContextRecorder.js';
@@ -36,6 +36,7 @@ import { streamRecorder } from '../recorders/core/StreamRecorder.js';
 import { agentRecorder } from '../recorders/core/AgentRecorder.js';
 import { compositionRecorder } from '../recorders/core/CompositionRecorder.js';
 import { typedEmit } from '../recorders/core/typedEmit.js';
+import { carryVerdict, childOutcome, raiseChildVerdict } from './childOutcome.js';
 import { composedInput, readsMessageFromIfAny } from '../core/messageFrom.js';
 
 export interface LoopOptions {
@@ -191,7 +192,7 @@ export class Loop extends RunnerBase<LoopInput, LoopOutput> {
     this.lastExecutor = executor;
     const result = await executor.run({
       input: { message: runInput.message },
-      ...(options ?? {}),
+      ...(withRunSignalInEnv(options) ?? {}),
     });
     return this.finalizeResult(executor, result);
   }
@@ -203,7 +204,7 @@ export class Loop extends RunnerBase<LoopInput, LoopOutput> {
   ): Promise<LoopOutput | RunnerPauseOutcome> {
     this.emitPauseResume(checkpoint, input);
     const executor = this.createExecutor();
-    const result = await executor.resume(checkpoint, input, options);
+    const result = await executor.resume(checkpoint, input, withRunSignalInEnv(options));
     return this.finalizeResult(executor, result);
   }
 
@@ -275,6 +276,8 @@ export class Loop extends RunnerBase<LoopInput, LoopOutput> {
      * the reason + $break terminates the loop.
      */
     const guard = (scope: TypedScope<LoopState>) => {
+      // A body that ended on a verdict ends the loop with its error (`childOutcome.ts`).
+      raiseChildVerdict((key) => scope.$getValue(key));
       const iteration = scope.iteration as number;
       const latestOutput = (scope.current as string) ?? '';
       const startMs = scope.startMs as number;
@@ -342,10 +345,13 @@ export class Loop extends RunnerBase<LoopInput, LoopOutput> {
             ? composedInput(body, input)
             : input;
         },
-        // Body's string return becomes next iteration's input via `current`.
-        outputMapper: (sfOutput) => ({
-          current: typeof sfOutput === 'string' ? sfOutput : '',
-        }),
+        // Body's string return becomes next iteration's input via `current`;
+        // a body that ended on a verdict carries it onto the loop's state.
+        outputMapper: (sfOutput) => {
+          const outcome = childOutcome(body, sfOutput);
+          if ('verdict' in outcome) return { current: '', ...carryVerdict(outcome.verdict) };
+          return { current: typeof outcome.answer === 'string' ? outcome.answer : '' };
+        },
       })
       .addFunction('Guard', guard, 'guard', 'Loop exit-condition guard')
       .loopTo('iteration-start')

@@ -654,6 +654,8 @@ export interface AnswerMountDeps {
   readonly reads: readonly AnswerFoldKey[];
   /** `.answerLayer({ standingLine: true })` — compose one line for a prose answer. */
   readonly standingLine?: true;
+  /** `.answerValidation()` is armed: an answer its report withholds is never assessed. */
+  readonly validated?: true;
 }
 
 /**

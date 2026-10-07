@@ -196,7 +196,9 @@ import { buildStepNudgeStage } from './agent/stages/stepNudge.js';
 import { buildEvidenceRecheckStage } from './agent/stages/evidenceRecheck.js';
 import { toolWantsOf } from './agent/stagedRefs.js';
 import { wrapUpStage } from './agent/stages/wrapUp.js';
-import type { ReliabilityFailRecord } from './agent/stages/reliabilityExecution.js';
+import { failFastRecordOf } from '../reliability/failFastRecord.js';
+import { terminalErrorOf, type ChildOutcome, type TerminalVerdict } from './terminalVerdict.js';
+import { isValidatedDelivery } from './agent/stages/breakFinal.js';
 import { evidenceRefusalSentence } from './agent/evidence/gate.js';
 import { UnsupportedValuesError } from './agent/evidence/errors.js';
 import type { ResolvedEvidenceGate } from './agent/evidence/types.js';
@@ -252,7 +254,7 @@ import {
 } from './time/clock.js';
 import type { ResolvedOutputEnforcement } from './agent/outputEnforcement.js';
 import { buildOutputRetryStage } from './agent/stages/outputRetry.js';
-import { RunnerBase, makeRunId } from './RunnerBase.js';
+import { RunnerBase, makeRunId, withRunSignalInEnv } from './RunnerBase.js';
 import type { Tool, ToolRegistryEntry } from './tools.js';
 import type { ToolProvider } from '../tool-providers/types.js';
 import {
@@ -286,7 +288,6 @@ import {
 } from '../answer-validation/index.js';
 import { buildSeedStage, type PendingResumeHistory } from './agent/stages/seed.js';
 import type { MessageMiddleware, ToolMiddleware } from './agent/middleware/types.js';
-import { MessageDeniedError } from './agent/middleware/errors.js';
 import { buildCallLLMStage } from './agent/stages/callLLM.js';
 import { buildToolCallsHandler, notServedResult } from './agent/stages/toolCalls.js';
 import { buildToolResolver } from './agent/stages/toolResolver.js';
@@ -1876,7 +1877,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // starts — a run with no zone anywhere runs with its zone UNKNOWN (G15),
     // never on the server's zone.
     const clockDraft = this.clockDraftFor(runInput.time ?? options?.time, 'Agent.run');
-    const engineOptions = withoutTime(options);
+    const engineOptions = withRunSignalInEnv(withoutTime(options));
     // Timing next, and before the executor exists: both of these refuse a call
     // that would have SUCCEEDED into corrupted per-instance state or an
     // orphaned human question. See ./conversation.ts for why they are throws.
@@ -2438,7 +2439,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // moves; it is never applied — the paused turn's clock is kept, and a
     // differing value is recorded by the ToolCalls resume door.
     const passedTime = this.passedTimeFor(options?.time, 'Agent.resume');
-    options = withoutTime(options);
+    options = withRunSignalInEnv(withoutTime(options));
     const gate = pauseDemandsDecision(checkpoint.pauseData);
     if (gate && !isCheckInDecision(input)) throw new DecisionRequiredError(gate, input);
     // One run, one identity — refused before anything moves. The paused run's
@@ -4063,141 +4064,173 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     return assessAnswer({ snapshot }, declarations);
   }
 
+  /**
+   * @internal What a mount of this agent's chart handed back
+   * (`core/terminalVerdict.ts` · `ReadsItsOwnOutcome`, read by every
+   * composition): the ANSWER, or the terminal verdict the chart ended on. A
+   * string, or the validated answer's `{ finalContent, answerValidationCommitted }`,
+   * is the answer; a verdict is read ONLY from the chart's state — handed over
+   * when the chart returned no result — with the one translation this agent's
+   * own run boundary (`finalizeResult`) uses. The `'tell-model'` consent record
+   * travels off tracked state, so it is raised by the run boundary only.
+   */
+  outcomeOf(sfOutput: unknown): ChildOutcome {
+    if (typeof sfOutput === 'string') return { answer: sfOutput };
+    if (isValidatedDelivery(sfOutput)) return { answer: sfOutput.finalContent };
+    if (typeof sfOutput === 'object' && sfOutput !== null) {
+      const state = sfOutput as Readonly<Record<string, unknown>>;
+      const verdict = this.refusalVerdictOf(state) ?? this.validationVerdictOf(state);
+      if (verdict !== undefined) return { verdict };
+    }
+    return { answer: sfOutput };
+  }
+
+  /** The records a run ends on in place of an answer, in the order the boundary raises them. */
+  private refusalVerdictOf(state: Readonly<Record<string, unknown>>): TerminalVerdict | undefined {
+    // Reliability fail-fast (v2.11.5+) — the loop in callLLM writes the record
+    // and calls $break (`reliability/failFastRecord.ts`).
+    if (this.reliabilityConfig !== undefined) {
+      const record = failFastRecordOf(state);
+      if (record !== undefined) return { kind: 'reliability-fail-fast', record };
+    }
+    // Policy halt (v2.12+) — a `PermissionChecker` returned `halt`; the
+    // toolCalls handler wrote a synthetic tool_result and the policyHalt*
+    // fields, and called $break.
+    const halt = state as {
+      policyHaltReason?: string;
+      policyHaltTellLLM?: string;
+      policyHaltTarget?: string;
+      policyHaltArgs?: Readonly<Record<string, unknown>>;
+      policyHaltIteration?: number;
+      policyHaltCheckerId?: string;
+      history?: import('../adapters/types.js').LLMMessage[];
+    };
+    if (halt.policyHaltReason !== undefined && halt.policyHaltTarget !== undefined) {
+      const history = halt.history ?? [];
+      const iteration = halt.policyHaltIteration ?? 1;
+      // Sequence at halt time — derived from history. Includes the
+      // proposed call (which DID land in history as the synthetic
+      // tool_result for protocol compliance, but the policy denied
+      // execution). Filter it out so callers see only dispatched
+      // calls, then append the proposed entry as a hint.
+      const sequenceWithoutProposed = extractSequence(history.slice(0, -1), iteration);
+      return {
+        kind: 'policy-halt',
+        halt: {
+          reason: halt.policyHaltReason,
+          ...(halt.policyHaltTellLLM !== undefined && { tellLLM: halt.policyHaltTellLLM }),
+          sequence: [
+            ...sequenceWithoutProposed,
+            { name: halt.policyHaltTarget, args: halt.policyHaltArgs, iteration },
+          ],
+          iteration,
+          history,
+          proposed: { name: halt.policyHaltTarget, args: halt.policyHaltArgs ?? {} },
+          ...(halt.policyHaltCheckerId !== undefined && { checkerId: halt.policyHaltCheckerId }),
+        },
+      };
+    }
+    // Message-boundary refusal (7.18+) — a `messageMiddleware` returned
+    // `deny`; a refusal must never be mistaken for an answer: at 'input' no
+    // model was asked, and at 'output' the middleware declined to release it.
+    if (this.messageMiddleware.length > 0) {
+      const denied = state as Pick<
+        AgentState,
+        'messageDeniedReason' | 'messageDeniedPhase' | 'messageDeniedBy'
+      >;
+      if (denied.messageDeniedReason !== undefined) {
+        return {
+          kind: 'message-denied',
+          denial: {
+            reason: denied.messageDeniedReason,
+            phase: denied.messageDeniedPhase ?? 'output',
+            middleware: denied.messageDeniedBy ?? 'middleware',
+          },
+        };
+      }
+    }
+    // Evidence rails (9.35.0) — the answer still states values no tool result
+    // carried, after the one revision the posture allows. `'assist'` and
+    // `'guard'` never end here: their verdict is committed state and an event.
+    if (this.evidenceGate?.posture === 'rails') {
+      const verdict = (state as Pick<AgentState, 'unsupportedValues'>).unsupportedValues;
+      if (verdict !== undefined && verdict.refused) {
+        return {
+          kind: 'unsupported-values',
+          refusal: {
+            values: verdict.values,
+            candidates: verdict.candidates,
+            revised: verdict.revised,
+            message: evidenceRefusalSentence(verdict.values, 'rails', verdict.revised),
+          },
+        };
+      }
+    }
+    return undefined;
+  }
+
+  /** Answer validation's verdict on a run that reached the end (7.24): blocked, or never committed. */
+  private validationVerdictOf(
+    state: Readonly<Record<string, unknown>>,
+  ): TerminalVerdict | undefined {
+    const config = this.answerValidationConfig;
+    if (config === undefined) return undefined;
+    const s = state as Partial<AgentState>;
+    if (s.answerValidationBlocked === true && s.answerValidation !== undefined) {
+      return { kind: 'answer-validation', report: s.answerValidation };
+    }
+    if (
+      s.answerValidation === undefined ||
+      s.answerValidationCommitted !== true ||
+      typeof s.finalContent !== 'string'
+    ) {
+      return {
+        kind: 'answer-validation',
+        report: {
+          validatorId: config.id,
+          validatorVersion: config.version,
+          mode: config.mode,
+          status: 'unverified',
+          checked: 0,
+          failed: 0,
+          unreachable: 0,
+          notApplicable: 0,
+          checks: [],
+          resolvedRefs: [],
+          schemaAccepted: false,
+          reason: 'delivery-incomplete',
+        },
+      };
+    }
+    return undefined;
+  }
+
   private finalizeResult(
     executor: FlowChartExecutor,
     result: unknown,
   ): AgentOutput | RunnerPauseOutcome {
     const paused = this.detectPause(executor, result);
     if (paused) return paused;
-    // Reliability fail-fast translation (v2.11.5+) — when the
-    // reliability retry loop in callLLM hits a `fail-fast` decision,
-    // it writes scope.reliabilityFailKind + payload and calls $break.
-    // The chart stops; the executor returns the last finalContent
-    // (typically empty). At the API boundary we surface the typed
-    // error so consumers can `instanceof ReliabilityFailFastError`
-    // and branch on `.kind`.
-    if (this.reliabilityConfig !== undefined) {
-      const snap = executor.getSnapshot();
-      // Read as the one list of the record's keys (`RELIABILITY_FAIL_KEYS`,
-      // checked against AgentState) — the list a chart boundary carries out.
-      const state = snap.sharedState as ReliabilityFailRecord;
-      if (state.reliabilityFailKind !== undefined) {
-        // Reconstruct the cause Error from the captured message+name —
-        // see the matching note in reliabilityExecution.failFast about
-        // why we don't keep the original Error in scope.
-        let cause: Error | undefined;
-        if (state.reliabilityFailCauseMessage !== undefined) {
-          cause = new Error(state.reliabilityFailCauseMessage);
-          if (state.reliabilityFailCauseName !== undefined) {
-            cause.name = state.reliabilityFailCauseName;
-          }
-        }
-        throw new ReliabilityFailFastError({
-          kind: state.reliabilityFailKind,
-          reason: state.reliabilityFailReason ?? state.reliabilityFailKind,
-          ...(cause !== undefined && { cause }),
-          ...(state.reliabilityFailPayload !== undefined && {
-            payload: state.reliabilityFailPayload,
-          }),
-          snapshot: snap,
+    const snap = executor.getSnapshot();
+    const state = snap.sharedState as Record<string, unknown>;
+    const refusal = this.refusalVerdictOf(state);
+    if (refusal !== undefined) {
+      if (refusal.kind === 'message-denied' && refusal.denial.phase === 'output') {
+        // The chart stopped cleanly, so ErrorBridge's onRunFailed cannot
+        // close public streams. This API boundary owns the refusal on both
+        // run and resume. Name it as a virtual stage, not a fabricated
+        // engine failure, and never echo policy text into a public stream.
+        this.dispatcher.dispatch({
+          type: 'agentfootprint.error.fatal',
+          payload: {
+            error: 'The output policy withheld this answer.',
+            stage: '__output_admission__',
+            scope: 'run',
+          },
+          meta: buildEventMeta({ runtimeStageId: '__output_admission__' }, this.currentRunContext),
         });
       }
-    }
-    // Policy-halt translation (v2.12+) — when a `PermissionChecker` returns
-    // `{ result: 'halt', ... }`, the toolCalls handler writes a synthetic
-    // tool_result, emits `agentfootprint.permission.halt`, sets
-    // scope.policyHalt* fields, and calls $break. The chart stops; we
-    // surface the typed error here so callers can `instanceof PolicyHaltError`
-    // and branch on `.reason` for alert routing.
-    {
-      const snap = executor.getSnapshot();
-      const state = snap.sharedState as {
-        policyHaltReason?: string;
-        policyHaltTellLLM?: string;
-        policyHaltTarget?: string;
-        policyHaltArgs?: Readonly<Record<string, unknown>>;
-        policyHaltIteration?: number;
-        policyHaltCheckerId?: string;
-        history?: import('../adapters/types.js').LLMMessage[];
-      };
-      if (state.policyHaltReason !== undefined && state.policyHaltTarget !== undefined) {
-        const history = state.history ?? [];
-        const iteration = state.policyHaltIteration ?? 1;
-        // Sequence at halt time — derived from history. Includes the
-        // proposed call (which DID land in history as the synthetic
-        // tool_result for protocol compliance, but the policy denied
-        // execution). Filter it out so callers see only dispatched
-        // calls, then append the proposed entry as a hint.
-        const sequenceWithoutProposed = extractSequence(history.slice(0, -1), iteration);
-        throw new PolicyHaltError({
-          reason: state.policyHaltReason,
-          ...(state.policyHaltTellLLM !== undefined && { tellLLM: state.policyHaltTellLLM }),
-          sequence: [
-            ...sequenceWithoutProposed,
-            { name: state.policyHaltTarget, args: state.policyHaltArgs, iteration },
-          ],
-          iteration,
-          history,
-          proposed: { name: state.policyHaltTarget, args: state.policyHaltArgs ?? {} },
-          ...(state.policyHaltCheckerId !== undefined && { checkerId: state.policyHaltCheckerId }),
-        });
-      }
-    }
-    // Message-boundary refusal (7.18+) — a `messageMiddleware` returned
-    // `deny`. The stage wrote the flags and stopped delivery. We
-    // surface the typed error here, the same way a policy halt is surfaced,
-    // because a refusal must never be mistaken for an answer: at 'input' no
-    // model was ever asked, and at 'output' the middleware has just declined
-    // to release what the model said.
-    if (this.messageMiddleware.length > 0) {
-      const state = executor.getSnapshot().sharedState as Pick<
-        AgentState,
-        'messageDeniedReason' | 'messageDeniedPhase' | 'messageDeniedBy'
-      >;
-      if (state.messageDeniedReason !== undefined) {
-        if (state.messageDeniedPhase === 'output') {
-          // The chart stopped cleanly, so ErrorBridge's onRunFailed cannot
-          // close public streams. This API boundary owns the refusal on both
-          // run and resume. Name it as a virtual stage, not a fabricated
-          // engine failure, and never echo policy text into a public stream.
-          this.dispatcher.dispatch({
-            type: 'agentfootprint.error.fatal',
-            payload: {
-              error: 'The output policy withheld this answer.',
-              stage: '__output_admission__',
-              scope: 'run',
-            },
-            meta: buildEventMeta(
-              { runtimeStageId: '__output_admission__' },
-              this.currentRunContext,
-            ),
-          });
-        }
-        throw new MessageDeniedError({
-          reason: state.messageDeniedReason,
-          phase: state.messageDeniedPhase ?? 'output',
-          middleware: state.messageDeniedBy ?? 'middleware',
-        });
-      }
-    }
-    // Evidence refusal (9.35.0, `posture: 'rails'` only) — the final answer
-    // still states values that appear in no tool result, after the one
-    // revision the posture allows. Surfaced the way a denied message is, and
-    // for the same reason: `rails` was chosen precisely so an answer carrying
-    // invented identifiers cannot reach the caller as a string they are free
-    // to ignore. `'assist'` and `'guard'` never reach here — their verdict is
-    // committed state and an event, and `run()` returns the answer.
-    if (this.evidenceGate?.posture === 'rails') {
-      const state = executor.getSnapshot().sharedState as Pick<AgentState, 'unsupportedValues'>;
-      const verdict = state.unsupportedValues;
-      if (verdict !== undefined && verdict.refused) {
-        throw new UnsupportedValuesError({
-          values: verdict.values,
-          candidates: verdict.candidates,
-          revised: verdict.revised,
-          message: evidenceRefusalSentence(verdict.values, 'rails', verdict.revised),
-        });
-      }
+      throw terminalErrorOf(refusal, snap);
     }
     // Credential-consent translation (8.6.0, `'tell-model'` only) — a tool
     // DECLARED a credential, the provider answered `authorization-required`,
@@ -4220,34 +4253,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       }
     }
     if (result instanceof Error) throw result;
-    if (this.answerValidationConfig !== undefined) {
-      const state = executor.getSnapshot().sharedState as Partial<AgentState>;
-      if (state.answerValidationBlocked === true && state.answerValidation !== undefined) {
-        throw new AnswerValidationError(state.answerValidation);
-      }
-      if (
-        state.answerValidation === undefined ||
-        state.answerValidationCommitted !== true ||
-        typeof state.finalContent !== 'string'
-      ) {
-        const config = this.answerValidationConfig;
-        throw new AnswerValidationError({
-          validatorId: config.id,
-          validatorVersion: config.version,
-          mode: config.mode,
-          status: 'unverified',
-          checked: 0,
-          failed: 0,
-          unreachable: 0,
-          notApplicable: 0,
-          checks: [],
-          resolvedRefs: [],
-          schemaAccepted: false,
-          reason: 'delivery-incomplete',
-        });
-      }
-      return state.finalContent;
-    }
+    const invalid = this.validationVerdictOf(state);
+    if (invalid !== undefined) throw terminalErrorOf(invalid);
+    if (this.answerValidationConfig !== undefined) return state.finalContent as string;
     if (typeof result === 'string') return result;
     throw new Error('Agent: unexpected result shape — expected final-answer string');
   }
@@ -5486,6 +5494,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
             toolMiddleware: this.toolMiddleware.length > 0,
           }),
           ...(this.answerLayerOption.standingLine === true && { standingLine: true as const }),
+          ...(this.answerValidationConfig !== undefined && { validated: true as const }),
         },
       }),
       // Tool choice by classifier (9.105.0): the mount args on the Tools
@@ -5511,6 +5520,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(inputsArmed && this.timeOptions !== undefined && { timeLimits: true as const }),
       ...(this.answerValidationConfig !== undefined && { hasAnswerValidation: true }),
       ...(governsOutput && { releaseOutputTokens: true as const }),
+      ...(this.evidenceGate?.posture === 'rails' && { evidenceRails: true as const }),
       // The out-of-budget wrap-up branch (9.56.0) — the conditional-mount law
       // above, decided once beside the Route decider that routes to it so the
       // two can never disagree about whether the branch exists.

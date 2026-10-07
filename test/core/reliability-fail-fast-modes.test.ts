@@ -167,3 +167,80 @@ describe('a reliability fail-fast ends the run the same way in every reactMode',
     }
   }
 });
+
+/** A provider that cancels the run it is serving, then fails the way a cancelled fetch does. */
+function cancelling(
+  controller: AbortController,
+  calls: { n: number },
+  streaming: boolean,
+): LLMProvider {
+  const fail = (): never => {
+    controller.abort();
+    const error = new Error('The operation was aborted');
+    error.name = 'AbortError';
+    throw error;
+  };
+  return {
+    name: 'cancelling',
+    complete: async () => {
+      calls.n += 1;
+      return fail();
+    },
+    ...(streaming && {
+      async *stream() {
+        calls.n += 1;
+        yield { content: 'partial', tokenIndex: 0, done: false };
+        fail();
+      },
+    }),
+  };
+}
+
+const ABORT_RULES: Readonly<Record<string, ReliabilityConfig>> = {
+  'no rule': { postDecide: [{ when: () => false, then: 'retry', kind: 'never' }] },
+  // A rule that would retry any error must not re-ask a cancelled run.
+  'retry rule': { postDecide: [{ when: (s) => s.error !== undefined, then: 'retry', kind: 'r' }] },
+};
+
+describe('an abort mid-call stays an abort in every reactMode', () => {
+  for (const streaming of [false, true]) {
+    for (const [name, reliability] of Object.entries(ABORT_RULES)) {
+      it(`${name} (${streaming ? 'stream' : 'complete'})`, async () => {
+        const outcomes = [];
+        for (const mode of MODES) {
+          const controller = new AbortController();
+          const calls = { n: 0 };
+          const agent = Agent.create({
+            provider: cancelling(controller, calls, streaming),
+            model: 'mock',
+            reactMode: mode,
+          })
+            .reliability(reliability)
+            .build();
+          const events: string[] = [];
+          agent.on('*', (e) => {
+            if (e.type.startsWith('agentfootprint.reliability.')) events.push(e.type);
+          });
+          const error = await agent.run('hello', { signal: controller.signal }).then(
+            () => undefined,
+            (e: unknown) => e,
+          );
+          const state = (agent.getLastSnapshot()?.sharedState ?? {}) as Record<string, unknown>;
+          outcomes.push({
+            mode,
+            errorName: (error as Error | undefined)?.name,
+            reliabilityEvents: events,
+            record: state.reliabilityFailKind,
+            calls: calls.n,
+          });
+        }
+        for (const outcome of outcomes) {
+          expect(outcome.errorName, outcome.mode).toBe('AbortError');
+          expect(outcome.reliabilityEvents, outcome.mode).toEqual([]);
+          expect(outcome.record, outcome.mode).toBeUndefined();
+          expect(outcome.calls, outcome.mode).toBe(1);
+        }
+      });
+    }
+  }
+});

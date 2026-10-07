@@ -22,7 +22,7 @@ import type { StructureRecorder } from 'footprintjs';
 import type { GroupMember, GroupMetadata, GroupTranslator } from '../core/translator.js';
 import type { RunnerPauseOutcome } from '../core/pause.js';
 import type { Runner } from '../core/runner.js';
-import { RunnerBase, makeRunId } from '../core/RunnerBase.js';
+import { RunnerBase, makeRunId, withRunSignalInEnv } from '../core/RunnerBase.js';
 import { normalizeRunInput } from '../core/runInput.js';
 import type { RunContext } from '../bridge/eventMeta.js';
 import { ContextRecorder } from '../recorders/core/ContextRecorder.js';
@@ -31,6 +31,7 @@ import { agentRecorder } from '../recorders/core/AgentRecorder.js';
 import { compositionRecorder } from '../recorders/core/CompositionRecorder.js';
 import { typedEmit } from '../recorders/core/typedEmit.js';
 import { composedInput, readsMessageFromIfAny } from '../core/messageFrom.js';
+import { carryVerdict, childOutcome, raiseChildVerdict } from './childOutcome.js';
 
 export interface SequenceOptions {
   /** Human-friendly name for events + topology. Default: 'Sequence'. */
@@ -168,7 +169,7 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
     this.lastExecutor = executor;
     const result = await executor.run({
       input: { message: runInput.message },
-      ...(options ?? {}),
+      ...(withRunSignalInEnv(options) ?? {}),
     });
     return this.finalizeResult(executor, result);
   }
@@ -180,7 +181,7 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
   ): Promise<SequenceOutput | RunnerPauseOutcome> {
     this.emitPauseResume(checkpoint, input);
     const executor = this.createExecutor();
-    const result = await executor.resume(checkpoint, input, options);
+    const result = await executor.resume(checkpoint, input, withRunSignalInEnv(options));
     return this.finalizeResult(executor, result);
   }
 
@@ -253,6 +254,9 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
         // (`core/messageFrom.ts` · `composedInput`); every other runner gets
         // the input it always did.
         inputMapper: (parent) => {
+          // A step that ended on a verdict hands nothing on: the run raises its
+          // error here, before the next step runs (`childOutcome.ts`).
+          raiseChildVerdict((key) => (parent as Record<string, unknown>)[key]);
           const input = step.mapFromPrev((parent.current as string) ?? '');
           return index === 0 && parent.messageFrom !== 'composed'
             ? input
@@ -262,9 +266,13 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
         // subflows whose last stage returns a string, sfOutput IS that
         // string. We pipe it into parent.current for the next step's
         // inputMapper to pick up.
-        outputMapper: (sfOutput) => ({
-          current: typeof sfOutput === 'string' ? sfOutput : '',
-        }),
+        // The child reads its own outcome (`childOutcome.ts`): a verdict is
+        // carried onto the Sequence's state, an answer piped on as before.
+        outputMapper: (sfOutput) => {
+          const outcome = childOutcome(step.runner, sfOutput);
+          if ('verdict' in outcome) return { current: '', ...carryVerdict(outcome.verdict) };
+          return { current: typeof outcome.answer === 'string' ? outcome.answer : '' };
+        },
       });
     });
 
@@ -273,6 +281,8 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
     builder = builder.addFunction(
       'Finalize',
       (scope: TypedScope<SequenceState>) => {
+        // The LAST step ended on a verdict — no next step's hand-off to raise it.
+        raiseChildVerdict((key) => scope.$getValue(key));
         const current = (scope.current as string) ?? '';
         typedEmit(scope, 'agentfootprint.composition.exit', {
           kind: 'Sequence',

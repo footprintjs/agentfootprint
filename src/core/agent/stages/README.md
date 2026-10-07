@@ -194,9 +194,14 @@ answer.
 
 ### A reliability fail-fast ends the RUN, whatever the chart shape
 
-**`reliabilityExecution.ts · failFast` writes the record (`RELIABILITY_FAIL_KEYS`)
-and breaks; the run boundary (`Agent · finalizeResult`) raises
-`ReliabilityFailFastError` from that record on the OUTER scope.** Under
+**`reliabilityExecution.ts · failFast` writes the record and breaks; the run
+boundary (`Agent · finalizeResult`) raises `ReliabilityFailFastError` from that
+record on the OUTER scope.** The record's keys, the read and the error live in
+one place, `reliability/failFastRecord.ts` (`RELIABILITY_FAIL_KEYS`,
+`failFastRecordOf`, `failFastErrorOf`). It is one of the agent's terminal
+verdicts (`core/terminalVerdict.ts`): `Agent · finalizeResult` raises them,
+and `Agent · outcomeOf` reads them off the state a mounted chart ended with for
+a composition it runs inside (`core-flow/README.md`, Decision 11). Under
 `'dynamic-grouped'` `callLLM` runs inside `sf-llm-call`, so the mount carries
 both out: `propagateBreak: true` ends the run, and the outputMapper spreads
 `failFastRecordOf(s)` (nothing unless a fail-fast fired). Without them the break
@@ -213,6 +218,58 @@ await agent.run('hi'); // rejects: ReliabilityFailFastError, kind 'stop' — as 
 `test/core/reliability-fail-fast-modes.test.ts` pins one outcome per exit (no
 rule, fail-fast rule, mid-stream, pre-check; with and without an output policy)
 across all three modes.
+
+**An abort is never a fail-fast.** Once the run's signal has fired, the loop
+leaves at its next step: an error the cancelled call threw is rethrown as it
+came — never classified, never handed to a rule (a retry rule used to re-ask a
+cancelled run up to the loop's cap), never counted against a breaker — and a call
+that returned anyway is not judged or retried. No `reliability.*` event, no
+record. The loop reads the signal from `$getEnv()`, so EVERY runner's `run` /
+`resume` hands a signal passed as `{ signal }` to the stages too
+(`core/RunnerBase.ts` · `withRunSignalInEnv`) — a composition included: an
+agent inside one used to retry a cancelled call up to its cap. Recorded: a
+stage that calls `$getEnv()` on such a run is marked
+`untrackedSources: ['env']`, and tools see the signal as `ctx.signal`. Pinned
+per mode by the same file (stream and complete, with and without a retry rule)
+and, inside Sequence / Parallel / Loop, by
+`test/core-flow/composed-terminal-verdicts.test.ts`.
+
+### A refusal ends the chart with no answer
+
+**A run that ends on a verdict ends with NO answer, so whoever mounts the chart
+reads the verdict off its state; a run that ends on an answer leaves it as the
+chart's result** — and only the agent tells the two apart (`Agent · outcomeOf`:
+a string, or the validated answer's `{ finalContent, answerValidationCommitted }`
+— `breakFinal.ts` · `isValidatedDelivery` — is the answer; a verdict comes only
+from state). Two refusals used to end on a value:
+
+- **Answer validation** broke in the Route decider, and a decider that breaks
+  ends the chart with the branch name (`'final'`) as its result. Now the decider
+  routes on and the final branch's guard (`withheldByValidation`) stops before the
+  capture. The answer layer's AssessAnswer, which runs first, skips an answer the
+  report withholds — decided from the `answerValidation` report its fold already
+  reads (`validatedAnswerMayDeliver`, the guard's own predicate; no extra read).
+  The Final mount writes `finalContent` back only from a delivered answer
+  (`finalBranchOutput`), so a refusal leaves it as it was.
+- **Evidence rails** (without answer validation, whose guard covers rails) ended
+  the chart on the refused text. Now `withRailsRefusal` captures it for the record
+  — `turn_end` carries it flagged `refused: { by: 'evidence-rails' }`, because the
+  answer account explains the refusal from it, and no token is released — then
+  ends the branch: no memory write, no `BreakFinal`, no result.
+
+What the record shows differently, and nothing else (measured against the
+previous release over every standalone scenario in all three modes):
+
+| run | change |
+|---|---|
+| answer validation refused (or a validated answer the output policy denied) | the Final branch is entered and withheld: its frames, the `'final'` decision, and Route's own narrative lines, which the decider's break used to drop |
+| evidence rails, every turn | PrepareFinal reads `unsupportedValues` once (`Read unsupportedValues = …`) |
+| evidence rails, refused | `turn_end.refused`; the branch ends after the capture (no memory write, no BreakFinal frame) |
+| evidence rails, refused, under an output policy | no `stream.token`: the one token an output policy releases after acceptance is not released for a refused answer |
+| any run given `{ signal }` | `$getEnv()` callers are marked `untrackedSources: ['env']` |
+
+Pinned by `test/core/refused-answer-ending.test.ts` and
+`test/core-flow/composed-terminal-verdicts.test.ts`.
 
 ### A self-call skips the policy only while the cursor is MOUNTED
 
