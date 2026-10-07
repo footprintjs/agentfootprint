@@ -99,6 +99,7 @@ import type { MemoryEntry } from '../entry/index.js';
 import type { LLMMessage as Message, LLMProvider } from '../../adapters/types.js';
 import type { MemoryStore } from '../store/index.js';
 import type { MemoryState } from './types.js';
+import { emitServed, type EmitScope } from '../../redaction/runRedaction.js';
 
 /**
  * The 2.x summarizer shape: the caller makes the call and returns the text.
@@ -315,10 +316,11 @@ function charsOf(entries: readonly MemoryEntry<Message>[]): number {
   return entries.reduce((total, e) => total + (e.value.content ?? '').length, 0);
 }
 
-/** Emit through the scope's emit channel when there is one. */
+/** Emit through the scope's emit channel when there is one — served by the run's
+ *  redaction like every typed event (`src/redaction/runRedaction.ts` · `emitServed`). */
 function emit(scope: TypedScope<MemoryState>, type: string, payload: unknown): void {
   const emitter = (scope as unknown as { $emit?: (t: string, p: unknown) => void }).$emit;
-  if (typeof emitter === 'function') emitter.call(scope, type, payload);
+  if (typeof emitter === 'function') emitServed(scope as unknown as EmitScope, type, payload);
 }
 
 /** A provider has `complete()`; a callback is a function. Duck-typed, once. */

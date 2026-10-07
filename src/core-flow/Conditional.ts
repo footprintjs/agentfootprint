@@ -35,6 +35,7 @@ import { compositionRecorder } from '../recorders/core/CompositionRecorder.js';
 import { typedEmit } from '../recorders/core/typedEmit.js';
 import { carryVerdict, childOutcome, raiseChildVerdict } from './childOutcome.js';
 import { composedInput, readsMessageFromIfAny } from '../core/messageFrom.js';
+import { adoptMemberRedaction } from '../redaction/declared.js';
 
 export interface ConditionalOptions {
   readonly name?: string;
@@ -121,6 +122,12 @@ export class Conditional extends RunnerBase<ConditionalInput, ConditionalOutput>
       this,
       branches.map((b) => b.runner),
     );
+    // A branch's redaction policy covers this composition's run — the chosen
+    // branch runs on its executor (`src/redaction/declared.ts`).
+    adoptMemberRedaction(
+      this,
+      branches.map((b) => b.runner),
+    );
     this.fallbackId = fallbackId;
     // Eager chart construction — see `RunnerBase.initChart` JSDoc.
     this.initChart(() => this.buildChart());
@@ -191,13 +198,20 @@ export class Conditional extends RunnerBase<ConditionalInput, ConditionalOutput>
       compositionPath: [`Conditional:${this.id}`],
     };
 
+    const getRunCtx = (): RunContext => this.currentRunContext;
+    // The run's redaction (`src/redaction/`): every policy a branch declared.
+    const redaction = this.openRunRedaction(undefined, getRunCtx);
+
     // Reuse the cached chart built at constructor time.
-    const executor = new FlowChartExecutor(this.getSpec());
+    const spec = this.getSpec();
+    const executor = new FlowChartExecutor(spec, { scopeFactory: redaction.scopeFactoryFor(spec) });
+    redaction.applyTo(executor);
 
     const dispatcher = this.getDispatcher();
-    const getRunCtx = (): RunContext => this.currentRunContext;
 
-    executor.attachCombinedRecorder(new ContextRecorder({ dispatcher, getRunContext: getRunCtx }));
+    executor.attachCombinedRecorder(
+      new ContextRecorder({ dispatcher, getRunContext: getRunCtx, realWrites: redaction }),
+    );
     executor.attachCombinedRecorder(streamRecorder({ dispatcher, getRunContext: getRunCtx }));
     executor.attachCombinedRecorder(agentRecorder({ dispatcher, getRunContext: getRunCtx }));
     executor.attachCombinedRecorder(compositionRecorder({ dispatcher, getRunContext: getRunCtx }));

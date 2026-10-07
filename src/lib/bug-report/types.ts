@@ -225,12 +225,15 @@ export interface BugReportManifest {
   /** Sum of every file in the bundle, uncompressed (the zip is stored). */
   readonly totalBytes: number;
   /**
-   * The state keys whose values arrived already scrubbed, BY NAME ONLY.
+   * The keys whose values arrived already scrubbed, BY NAME ONLY — state keys,
+   * and the field names of served events.
    *
-   * Redaction happens upstream at commit time (footprintjs `RedactionPolicy`),
-   * so a bundle never carries the values. This list is derived from the
-   * evidence itself — the placeholders that are actually in it — so a human
-   * can see WHICH secrets were protected and consent knowing it.
+   * Redaction happens upstream (an agent's `Agent.create({ redact })`:
+   * footprintjs scrubs state at commit time, and every event is served under
+   * the same rule before it is recorded), so a bundle never carries the
+   * values. This list is derived from the evidence itself — the placeholders
+   * that are actually in it — so a human can see WHICH secrets were protected
+   * and consent knowing it.
    */
   readonly redactedKeys: readonly string[];
   /** Loud, human-readable problems: oversize, a missing timeline, an empty run. */

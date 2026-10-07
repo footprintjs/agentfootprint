@@ -6,12 +6,14 @@
  * person's own words only when no input decision changed it; otherwise it is the
  * app's version (voucher `app`) and the raw words are said to be missing — never
  * reconstructed. A resumed leg has no `turn_start` (seed does not re-run); the
- * run's `userMessage` is then quoted, vouched by the library.
+ * run's `userMessage` is then quoted, vouched by the library. A question the
+ * record keeps out (a redaction policy's placeholder) is said to be kept out —
+ * never "not recorded", which would deny it was asked.
  */
 
 import { v } from '../render.js';
 import type { AccountFact, Sentence } from '../types.js';
-import { str } from '../view.js';
+import { keptOut, str } from '../view.js';
 import { at, stateAt, type ReadContext } from './common.js';
 
 export interface AskedRead {
@@ -49,6 +51,30 @@ export function readAsked(ctx: ReadContext): AskedRead {
           status: 'not-recorded',
           missing: 'no-event',
           pointers: [],
+        }),
+      ],
+    };
+  }
+  const keptOutAt =
+    start !== undefined && keptOut(start, 'userPrompt')
+      ? at(start, 'userPrompt')
+      : start === undefined && ctx.resumedLeg && ctx.view.isStateKeptOut('userMessage')
+      ? stateAt('userMessage')
+      : undefined;
+  if (keptOutAt !== undefined) {
+    return {
+      question: {
+        value: null,
+        source: 'library',
+        status: 'not-recorded',
+        pointers: [keptOutAt],
+        missing: 'redacted',
+      },
+      lines: [
+        ctx.say('asked.keptOut', {
+          status: 'not-recorded',
+          missing: 'redacted',
+          pointers: [keptOutAt],
         }),
       ],
     };

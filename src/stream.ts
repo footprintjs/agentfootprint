@@ -47,10 +47,14 @@ export interface ToSSEOptions {
   readonly filter?: (event: AgentfootprintEvent) => boolean;
   /**
    * Output shape:
-   *   - 'full' (default) — each event is JSON-serialized verbatim.
+   *   - 'full' (default) — each event is JSON-serialized verbatim: the run's
+   *     RECORD, so under an agent's `redact` policy it is the served event
+   *     (the placeholder wherever the policy selected a value).
    *   - 'text' — only `agentfootprint.stream.token.content` is yielded,
    *     in plain text form (no event/data prefix). Useful for piping
-   *     directly into a chat UI.
+   *     directly into a chat UI. This is the REPLY to the person who asked —
+   *     the caller's own answer, like `run()`'s return — so a redaction
+   *     policy never masks it.
    */
   readonly format?: 'full' | 'text';
   /**
@@ -97,7 +101,12 @@ export async function* toSSE<TIn, TOut>(
     }
   };
 
-  const unsub: Unsubscribe = dispatcher.on('*', (event) => {
+  // 'full' ships the RECORD — every event, served under the run's redaction
+  // policy like every other listener. 'text' streams the REPLY to the person
+  // who asked, the caller's own answer, so it reads the run's real-value path
+  // (`EventDispatcher · onRealEvent`): an agent's `redact` keeps names out of
+  // the record, never out of the answer it is giving (`src/redaction/`).
+  const listener = (event: AgentfootprintEvent): void => {
     if (filter && !filter(event)) return;
     queue.push(event);
     wakeup();
@@ -111,7 +120,9 @@ export async function* toSSE<TIn, TOut>(
       done = true;
       wakeup();
     }
-  });
+  };
+  const unsub: Unsubscribe =
+    format === 'text' ? dispatcher.onRealEvent(listener) : dispatcher.on('*', listener);
 
   let heartbeat: ReturnType<typeof setInterval> | undefined;
   if (heartbeatMs > 0) {

@@ -56,7 +56,6 @@ export {
   type DefineSemanticOptions,
   type DefineNarrativeOptions,
   type DefineCausalOptions,
-  type MemoryRedactionPolicy,
 } from './define.types.js';
 // `WindowStrategy` was this module's 7.27.0 name for `MemoryWindowStrategy`.
 // It collided with the CONVERSATION-window seam of the same name on the

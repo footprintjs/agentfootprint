@@ -176,8 +176,38 @@ import {
 import type { FindingsLedger } from '../../core/agent/findings/types.js';
 import { ontologyPiece } from '../../ontology/serve.js';
 import type { OntologyRecord } from '../../ontology/types.js';
-import { epochAt, epochLocations, readAfterCall, readAtCall, readRunConstant } from './epochs.js';
+import {
+  epochAt,
+  epochLocations,
+  readAfterCall,
+  readAtCall as foldAtCall,
+  readRunConstant as foldRunConstant,
+} from './epochs.js';
 import type { EpochLocation } from './epochs.js';
+
+/**
+ * The commit log's redaction placeholder (footprintjs writes it where a run's
+ * policy selected a key — `Agent.create({ redact })`). To this rebuild it is NO
+ * value: never a system piece, a tool list or a tool name the view could print
+ * as if the request had carried it. Read as absent, which is what the record
+ * can show. The view states the cost through the gap a redacted snapshot always
+ * carries: it travels without its fold base (footprintjs omits `initialState`
+ * from the served view), so `no-fold-base` — "unproven and may be SHORT … reads
+ * as empty rather than as unknown" — is on every view of it.
+ */
+const LOG_PLACEHOLDER = 'REDACTED';
+
+/** {@link foldAtCall}, with the placeholder read as absent. */
+function readAtCall(location: EpochLocation, key: string): unknown {
+  const value = foldAtCall(location, key);
+  return value === LOG_PLACEHOLDER ? undefined : value;
+}
+
+/** {@link foldRunConstant}, with the placeholder read as absent. */
+function readRunConstant(location: EpochLocation, key: string): unknown {
+  const value = foldRunConstant(location, key);
+  return value === LOG_PLACEHOLDER ? undefined : value;
+}
 import {
   FORCED_OUTPUT_TOOL_KEY,
   RECEIPT_BOUNDARY,

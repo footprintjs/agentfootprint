@@ -52,6 +52,7 @@
 
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
+import { conversationRedaction } from '../../../src/doors/security.js';
 import {
   Agent,
   defineTool,
@@ -1474,13 +1475,15 @@ describe('a cache strategy that rewrites the request', () => {
 // ─── (d) EDGE — redaction, JSON round-trip, an old recording ──────────
 
 // This block used to be a fiction. It passed `redact: [...]` to
-// `Agent.create`, which has no such option; `tsconfig.json` excludes `test/`,
-// so the unknown key was never typechecked and was silently dropped. The run
-// was NOT redacted, the assertion it made was about a run that does not exist,
-// and two READMEs documented the behaviour it pretended to prove. What follows
-// is what is actually true, asserted so that nobody can write the fiction back.
+// `Agent.create`, which had no such option then; `tsconfig.json` excludes
+// `test/`, so the unknown key was never typechecked and was silently dropped.
+// The run was NOT redacted, the assertion it made was about a run that did not
+// exist, and two READMEs documented the behaviour it pretended to prove. The
+// door exists now (`Agent.create({ redact })`, a footprintjs `RedactionPolicy`,
+// pinned as the one door by test/type-regressions/AgentOptionsRedaction.*).
+// What follows is what is actually true, with and without it.
 describe('what a recording actually contains', () => {
-  it('an AGENT run is not redacted — the recording carries the plaintext, verbatim', async () => {
+  it('an agent run with NO policy is not redacted — the recording carries the plaintext', async () => {
     const { provider, wire } = scripted([answer('done')]);
     const agent = Agent.create({ provider: provider as never, model: 'mock' })
       .system('bot with key sk-abc123')
@@ -1488,8 +1491,8 @@ describe('what a recording actually contains', () => {
     await agent.run({ message: 'go' });
     const r: Run = { snapshot: agent.getSnapshot()!, wire };
 
-    // There is no agent-level redaction door, so the committed pieces are the
-    // pieces. A reader handed this recording can read the key.
+    // No policy, so the committed pieces are the pieces. A reader handed this
+    // recording can read the key.
     expect(servedAt(r.snapshot, 1)!.system.text).toContain('sk-abc123');
     expect(JSON.stringify(r.snapshot.commitLog)).toContain('sk-abc123');
     // The law holds all the way to the wire, because nothing diverged.
@@ -1514,10 +1517,37 @@ describe('what a recording actually contains', () => {
     expect(receiptHash('some-other-run', 'bot with key sk-abc123')).not.toBe(receipt.system.hash);
   });
 
-  it('redaction is EXECUTOR-level and reaches an inner tool run, not an agent log', async () => {
-    // The door that does exist: `flowchartAsTool({ redact })` →
-    // `executor.setRedactionPolicy`. footprintjs scrubs at COMMIT time, so the
-    // inner record never holds the value at all.
+  it('an agent run under `redact` keeps the system prompt out of the log and the rebuild', async () => {
+    const { provider, wire } = scripted([answer('done')]);
+    const agent = Agent.create({
+      provider: provider as never,
+      model: 'mock',
+      redact: conversationRedaction(),
+    })
+      .system('bot with key sk-abc123')
+      .build();
+    await agent.run({ message: 'go' });
+    void wire;
+    const snapshot = agent.getSnapshot()!;
+    // footprintjs scrubbed the system prompt's pieces at COMMIT time…
+    expect(JSON.stringify(snapshot.commitLog)).not.toContain('sk-abc123');
+    expect(JSON.stringify(snapshot)).not.toContain('sk-abc123');
+    // …and the rebuild reads the placeholder as absent — never as the text the
+    // model was sent — under the gap that says a value it could not recover
+    // reads as empty rather than unknown.
+    const view = servedAt(snapshot, 1)!;
+    expect(view.system.text).not.toContain('REDACTED');
+    expect(view.gaps.map((g) => g.gap)).toContain('no-fold-base');
+    // The receipt is minted live, from the real pieces: hashes only, as always.
+    expect(receiptAt(snapshot, 1)!.system.hash).toBe(
+      receiptHash(receiptAt(snapshot, 1)!.basis.runId, 'bot with key sk-abc123'),
+    );
+  });
+
+  it("redaction is the EXECUTOR's and reaches an inner tool run too", async () => {
+    // `flowchartAsTool({ redact })` → `executor.setRedactionPolicy`.
+    // footprintjs scrubs at COMMIT time, so the inner record never holds the
+    // value at all.
     const chart = flowChart<{ apiKey: string; used: string }>(
       'Use the key',
       (scope) => {

@@ -30,6 +30,7 @@ src/
 │                       collision between adapter `MemoryStore` and memory store types).
 ├── recorders/core/     Semantic grouping (raw events → typed events).
 ├── recorders/observability/   Tier-3 features consumers enable (Flowchart, Logging, Thinking).
+├── redaction/          One run's redaction: the policy in force, what each record is served as.
 └── index.ts            Public barrel. Everything consumers import.
 ```
 
@@ -67,7 +68,7 @@ These invariants are preserved across every file in `src/`:
 - **A5** Observers are ALWAYS non-blocking. No observer stalls a run.
 - **A6** Provider-agnostic — LLM / memory / guardrail / policy portability built in via `adapters/`.
 - **A7** Low-cardinality event names; high-cardinality payloads fine.
-- **A8** Redaction happens in the dispatcher, before any recorder sees payloads.
+- **A8** Redaction is decided by footprintjs's rule, once, where a record is made — a typed event's payload before `$emit` (`redaction/runRedaction.ts · emitServed`), a directly dispatched fact in the dispatcher — so no recorder, listener or exporter sees a value the run's policy keeps out. Never the model's input, the caller's answer or a resume checkpoint.
 
 ## Architecture pattern name
 
@@ -92,3 +93,4 @@ Components:
 | `core/` | Consumer-facing primitives. Symmetric builder API across all runners. |
 | `recorders/core/` | Library-owned grouping — emits the domain events the library promises. |
 | `recorders/observability/` | Consumer opt-in features via `.enable.*`. Each one line. |
+| `redaction/` | One run's redaction: every record served under one policy, decided by footprintjs's rule — never the live run. |

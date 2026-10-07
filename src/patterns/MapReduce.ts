@@ -26,6 +26,7 @@ import type { Runner } from '../core/runner.js';
 import type { MergeFn, MergeWithLLMOptions } from '../core-flow/Parallel.js';
 import { Parallel } from '../core-flow/Parallel.js';
 import { Sequence } from '../core-flow/Sequence.js';
+import { adoptMemberRedaction, redactionDeclaredBy } from '../redaction/declared.js';
 
 const SHARD_DELIMITER = '\u001F'; // ASCII Unit Separator — unlikely in real text.
 
@@ -180,6 +181,9 @@ class ShardBranchRunner extends RunnerBase<{ message: string }, string> {
     this.inner = inner;
     this.id = `shard-branch-${shardIndex}`;
     this.name = `Shard ${shardIndex}`;
+    // The wrapped runner's redaction policy travels with the shard, so the
+    // `Parallel` that fans the shards out covers it (`src/redaction/declared.ts`).
+    adoptMemberRedaction(this, [inner]);
   }
 
   getSpec(): FlowChart {
@@ -216,6 +220,10 @@ class ShardBranchRunner extends RunnerBase<{ message: string }, string> {
 
   async run(input: { message: string }): Promise<string> {
     const executor = new FlowChartExecutor(this.getSpec());
+    // Run on its own (it never is inside `mapReduce`, which mounts it), it
+    // still keeps the wrapped runner's records under that runner's policy.
+    const policy = redactionDeclaredBy(this);
+    if (policy !== undefined) executor.setRedactionPolicy(policy);
     const result = await executor.run({ input: { message: input.message } });
     if (typeof result === 'string') return result;
     throw new Error('ShardBranch: unexpected result shape');

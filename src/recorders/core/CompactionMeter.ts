@@ -15,21 +15,28 @@
  * It answers two questions a stage function cannot answer for itself:
  *
  *   1. "How big was the last window, as the PROVIDER counted it?" — from the
- *      `stream.llm_end` usage the adapter reported. Counted, not guessed.
+ *      `stream.llm_end` usage the adapter reported. Counted, not guessed. Fed
+ *      by the agent's REAL-value event path (`noteLlmEnd`), never by a served
+ *      event: the window decides on this number, so a redaction policy can
+ *      never take it away (`src/redaction/runRedaction.ts`).
  *   2. "Which stage put each message in the window?" — from the
  *      `runtimeStageId` on every write to `history`. A stage function has no
  *      access to its own runtimeStageId (footprintjs exposes no such scope
  *      method), so the recorder channel is the ONLY honest source for the
- *      `removedStageIds` a strategy has to name.
+ *      `removedStageIds` a strategy has to name. That channel is a RECORD:
+ *      under a redaction policy that selects `history` whole, footprintjs
+ *      serves the write masked, the meter cannot see the window's length, and
+ *      an eviction's provenance reads as unknown (`removedStageIds` names none,
+ *      `survivalMs` is 0 — the documented "birth unknown"). The record of a
+ *      masked key loses its shape; the window's decision does not change.
  */
 
-import type { EmitEvent, WriteEvent } from 'footprintjs';
+import type { WriteEvent } from 'footprintjs';
 
 /** What the provider reported for the most recent completed LLM call. */
 export interface MeteredCall {
   readonly input: number;
   readonly output: number;
-  readonly runtimeStageId: string;
   /**
    * The ReAct iteration whose call produced this reading, from the
    * `stream.llm_end` payload. It is what makes the reading EXPIRE (8.14.0):
@@ -92,9 +99,15 @@ export interface CompactionMeterHandle {
    */
   rebaseForWindowChange(headCount: number, keptTailCount: number, insertedAtMs?: number): void;
   clear(): void;
-  // CombinedRecorder hooks (routed by method-shape detection):
+  /**
+   * Take one `stream.llm_end` reading. Fed from the agent's REAL-value event
+   * path (`EventDispatcher · onRealEvent`), never from a served event: the
+   * count is a measurement the window decides on, and a redaction policy whose
+   * pattern happens to match `input` must not quietly switch compaction off.
+   */
+  noteLlmEnd(payload: unknown): void;
+  // CombinedRecorder hook (routed by method-shape detection):
   onWrite(event: WriteEvent): void;
-  onEmit(event: EmitEvent): void;
 }
 
 export interface CompactionMeterOptions {
@@ -188,11 +201,11 @@ export function compactionMeter(options: CompactionMeterOptions = {}): Compactio
       origins = normalize(origins, length, stageId, atMs);
     },
 
-    onEmit(event: EmitEvent): void {
-      if (event.name !== 'agentfootprint.stream.llm_end') return;
-      const payload = event.payload as
-        | { usage?: { input?: number; output?: number }; iteration?: number }
-        | undefined;
+    noteLlmEnd(raw: unknown): void {
+      const payload =
+        raw !== null && typeof raw === 'object'
+          ? (raw as { usage?: { input?: number; output?: number }; iteration?: number })
+          : undefined;
       const usage = payload?.usage;
       if (typeof usage?.input !== 'number' || typeof usage?.output !== 'number') {
         // A call happened and reported nothing usable. The PREVIOUS reading is
@@ -215,7 +228,6 @@ export function compactionMeter(options: CompactionMeterOptions = {}): Compactio
       last = {
         input: usage.input,
         output: usage.output,
-        runtimeStageId: event.runtimeStageId,
         meteredAtIteration: payload.iteration,
       };
     },

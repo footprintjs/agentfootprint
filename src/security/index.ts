@@ -62,6 +62,9 @@ export { extractSequence, SYNTHETIC_DENY_PREFIX } from './extractSequence.js';
 export type { ExtractSequenceOptions } from './extractSequence.js';
 
 export { redactThinkingBlocks, REDACTED_PLACEHOLDER } from './thinkingRedaction.js';
+// The names an agent's record carries the conversation under, as one policy
+// for `Agent.create({ redact })` — the library's vocabulary, joined with yours.
+export { conversationRedaction } from '../redaction/conversation.js';
 
 // The `skill:<id>` target convention (9.11.0) — one owner, so a custom checker
 // spells a skill target exactly as the agent produces it.

@@ -179,9 +179,14 @@ export interface EmptinessReading {
    *   there nor a ticket standing for it;
    * - `uncounted-ticket` — the rows went to the artifact store and the ticket
    *   left in their place carries no whole-number count (a dataset ticket
-   *   without `rows`, or the library's placement ticket, which counts bytes).
+   *   without `rows`, or the library's placement ticket, which counts bytes);
+   * - `redacted` — the result itself is kept out of the record: a redaction
+   *   policy (an agent's `redact`) left its placeholder where the value was,
+   *   so nothing about the rows can be read. Set by the answer account's call
+   *   reader (`lib/answer-account/facts/calls.ts`), which never hands a
+   *   placeholder to this reader as if it were a result.
    */
-  readonly rowsUnread?: 'no-list' | 'uncounted-ticket';
+  readonly rowsUnread?: 'no-list' | 'uncounted-ticket' | 'redacted';
 }
 
 /** How deep `coverage(coverage(…))` is read before the reading gives up (`unknown`). */

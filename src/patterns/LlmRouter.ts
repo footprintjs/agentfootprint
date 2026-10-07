@@ -407,11 +407,18 @@ class RouterStep extends RunnerBase<{ message: string }, string> {
       runId: makeRunId(),
       compositionPath: [`Router:${this.routerId}`],
     };
-    const executor = new FlowChartExecutor(this.getSpec());
-    const dispatcher = this.getDispatcher();
     const getRunCtx = (): RunContext => this.currentRunContext;
+    // The run's redaction (`src/redaction/`) — opened for every run like every
+    // runner's, so the router call's events reach the real-value path.
+    const redaction = this.openRunRedaction(undefined, getRunCtx);
+    const spec = this.getSpec();
+    const executor = new FlowChartExecutor(spec, { scopeFactory: redaction.scopeFactoryFor(spec) });
+    redaction.applyTo(executor);
+    const dispatcher = this.getDispatcher();
 
-    executor.attachCombinedRecorder(new ContextRecorder({ dispatcher, getRunContext: getRunCtx }));
+    executor.attachCombinedRecorder(
+      new ContextRecorder({ dispatcher, getRunContext: getRunCtx, realWrites: redaction }),
+    );
     executor.attachCombinedRecorder(streamRecorder({ dispatcher, getRunContext: getRunCtx }));
     executor.attachCombinedRecorder(agentRecorder({ dispatcher, getRunContext: getRunCtx }));
     executor.attachCombinedRecorder(compositionRecorder({ dispatcher, getRunContext: getRunCtx }));

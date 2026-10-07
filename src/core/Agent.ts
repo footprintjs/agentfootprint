@@ -24,6 +24,7 @@ import {
   type FlowchartCheckpoint,
   type ObserverDrainResult,
   type ReadTrackingMode,
+  type RedactionPolicy,
   type RunOptions,
   type RuntimeSnapshot,
 } from 'footprintjs';
@@ -79,6 +80,8 @@ import { reliabilityRecorder } from '../recorders/core/ReliabilityRecorder.js';
 import { resilienceRecorder } from '../recorders/core/ResilienceRecorder.js';
 import { checkInEventsBridge } from '../recorders/core/CheckInRecorder.js';
 import { compactionMeter, type CompactionMeterHandle } from '../recorders/core/CompactionMeter.js';
+import { assertRedactionPolicy } from '../redaction/policy.js';
+import { declareRedaction } from '../redaction/declared.js';
 import { createEvictedTurnsHandle, type EvictedTurnsHandle } from './agent/window/evictedTurns.js';
 import { createReceiptDigests, type ReceiptDigests } from '../lib/time-travel/receiptDigests.js';
 import { packRecording } from '../recorders/observability/recordingPack.js';
@@ -399,6 +402,25 @@ export interface AgentRunOptions extends RunOptions {
    * differs is recorded as a `clock-on-resume` row, never applied.
    */
   time?: RunTime;
+  /**
+   * A redaction policy the CALLER adds for this run, joined with the agent's
+   * own `redact` — it can only add names, never remove one. This is how a
+   * policy reaches an agent run on someone else's behalf: a tool that runs
+   * another agent hands it the policy its own run is covered by, exactly as it
+   * hands `ctx.signal`:
+   *
+   * ```ts
+   * execute: (args, ctx) => specialist.run({ message: args.text }, {
+   *   ...(ctx.signal && { env: { signal: ctx.signal } }),
+   *   ...(ctx.redact && { redact: ctx.redact }),
+   * })
+   * ```
+   *
+   * Validated like `Agent.create({ redact })`. A `resume()` is its own leg:
+   * pass the same `redact` it was paused under (the names the paused run
+   * masked travel with the checkpoint; the policy itself does not).
+   */
+  redact?: RedactionPolicy;
 }
 
 // Public types (AgentOptions, AgentInput, AgentOutput) extracted to
@@ -1168,8 +1190,16 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // chart is built once.
     if (windowStrategy !== undefined) {
       this.windowStrategy = windowStrategy;
-      this.compactionMeterHandle = compactionMeter();
+      const meter = compactionMeter();
+      this.compactionMeterHandle = meter;
       this.evictedTurnsHandle = createEvictedTurnsHandle();
+      // The provider's token count is a MEASUREMENT the window decides on, so
+      // the meter reads it on the real-value path, never off the served event:
+      // a redaction pattern that happens to match `input` must not switch
+      // compaction off (`src/redaction/runRedaction.ts`).
+      this.dispatcher.onRealEvent((event) => {
+        if (event.type === 'agentfootprint.stream.llm_end') meter.noteLlmEnd(event.payload);
+      });
     }
     // The two governance chains. Empty arrays (not undefined) so every read
     // site is a plain `.length > 0` test rather than an optional dance.
@@ -1188,6 +1218,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // to `coverage: 'exact'` and lets `walkToRoot` hop by recorded dataflow
     // instead of embedding similarity.
     this.writeProvenance = opts.writeProvenance ?? 'off';
+    // The redaction door: refused here, where it was declared, when it is not
+    // a policy footprintjs can apply — then declared for every run of this
+    // agent and of any composition that mounts it (`src/redaction/declared.ts`).
+    if (opts.redact !== undefined) {
+      assertRedactionPolicy(opts.redact, 'Agent.create');
+      declareRedaction(this, opts.redact);
+    }
     // RFC-001 Block 10 — observer delivery tier. Fail fast on the dials
     // without the switch (no silently-ignored combinations; same policy
     // that merged reactMode/reactStructure in 6.0.0).
@@ -1604,7 +1641,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * from the artifacts it describes is a recording nobody can find.
    */
   private runArtifactScope(): ArtifactScope {
-    const identity = (this.getLastSnapshot()?.sharedState as Partial<AgentState> | undefined)
+    const identity = (this.liveSnapshot()?.sharedState as Partial<AgentState> | undefined)
       ?.runIdentity;
     if (identity === undefined) {
       // No state to read means no run happened, which this path cannot reach —
@@ -1636,9 +1673,15 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * resolving through this: evidence that is supposed to describe a FINISHED
    * turn cannot be read from a getter that also answers about an unfinished
    * one.
+   *
+   * **Under `redact` it is the SERVED snapshot** — footprintjs's redacted view
+   * (`RunnerBase.getLastSnapshot`): the placeholder wherever the policy
+   * selected a value, and no `initialState`. The agent's own logic never reads
+   * this getter; `checkpoint()`, `followUp()` and the crash checkpoint read the
+   * live run, so redaction never changes what the agent continues from.
    */
-  getLastSnapshot(): RuntimeSnapshot | undefined {
-    return this.lastExecutor?.getSnapshot();
+  override getLastSnapshot(): RuntimeSnapshot | undefined {
+    return super.getLastSnapshot();
   }
 
   /**
@@ -1647,6 +1690,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * Empty array (not `undefined`) when no run has completed — matches
    * the prop's expected shape so consumers can wire it directly without
    * a defensive guard.
+   *
+   * Under `redact`, footprintjs wrote these lines through the run's rule: a
+   * read or write of a selected key reads `[REDACTED]`, and an `[emit]` line
+   * shows the event's served payload (`src/redaction/runRedaction.ts`).
    */
   getLastNarrativeEntries(): readonly CombinedNarrativeEntry[] {
     return this.lastExecutor?.getNarrativeEntries() ?? [];
@@ -1771,7 +1818,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * `0` for "I do not know" would be an invented fact in an event payload.
    */
   private lastRunRetriesSpent(): number | undefined {
-    const state = this.getLastSnapshot()?.sharedState as
+    const state = this.liveSnapshot()?.sharedState as
       | Pick<AgentState, 'outputAttempts'>
       | undefined;
     if (state === undefined) return undefined;
@@ -1882,6 +1929,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // not at the resume of a pause it would have made impossible to resume.
     assertIdentityShape(runInput.identity, 'Agent.run');
     assertIdentityShape(options?.identity, 'Agent.run');
+    // A policy handed down for this run is refused here, before anything moves,
+    // by the same check `Agent.create({ redact })` gets.
+    if (options?.redact !== undefined) assertRedactionPolicy(options.redact, 'Agent.run');
     // The run's clock (the time layer): read or refused HERE, before the turn
     // starts — a run with no zone anywhere runs with its zone UNKNOWN (G15),
     // never on the server's zone.
@@ -2041,7 +2091,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           // are committed state. A crash checkpoint that carried the summary
           // in its history but not the span behind it would resume into a
           // conversation whose evidence the crash had quietly eaten.
-          this.foldedSpansOf(this.getLastSnapshot()?.sharedState as Partial<AgentState>),
+          this.foldedSpansOf(this.liveSnapshot()?.sharedState as Partial<AgentState>),
           // A crash checkpoint is the same conversation carrier as
           // `checkpoint()`, so it carries the same two owner facts — otherwise
           // resuming after a crash would be the one path that still lost the
@@ -2050,14 +2100,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           this.conversationOwner(),
           // …and the same graph cursor (SG-C), from the same snapshot reader —
           // one reader, two carriers, so neither can lose what the other keeps.
-          this.continuityCursorOf(this.getLastSnapshot()?.sharedState as Partial<AgentState>),
-          this.evidenceRecoveryOf(this.getLastSnapshot()?.sharedState as Partial<AgentState>),
+          this.continuityCursorOf(this.liveSnapshot()?.sharedState as Partial<AgentState>),
+          this.evidenceRecoveryOf(this.liveSnapshot()?.sharedState as Partial<AgentState>),
           // …and the findings ledger (9.101.0), from the same snapshot reader
           // `checkpoint()` uses — one reader, two carriers.
-          this.findingsLedgerOf(this.getLastSnapshot()?.sharedState as Partial<AgentState>),
+          this.findingsLedgerOf(this.liveSnapshot()?.sharedState as Partial<AgentState>),
           // …and the turn the failing run was on (honesty layers), so the
           // retry is stamped the same turn — one reader, two carriers.
-          this.turnNumberOf(this.getLastSnapshot()?.sharedState as Partial<AgentState>),
+          this.turnNumberOf(this.liveSnapshot()?.sharedState as Partial<AgentState>),
         );
         throw new RunCheckpointError(cause, checkpoint);
       }
@@ -2129,7 +2179,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // Refuse BEFORE the timing guards, so "there is nothing to follow up on"
     // is never reported as "a run is in flight" for an agent that has simply
     // not run yet.
-    if (this.getLastSnapshot() === undefined || (this.lastInputRefused() && !this.hadAdmittedRun)) {
+    if (this.liveSnapshot() === undefined || (this.lastInputRefused() && !this.hadAdmittedRun)) {
       throw new NoConversationError('Agent.followUp', 'never-run');
     }
     const conversation = this.checkpoint();
@@ -2331,78 +2381,76 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   }
 
   /**
-   * Install a per-run checkpoint tracker. Listens for the agent's
-   * own iteration_end events on `this.dispatcher` and snapshots the
-   * conversation history into the tracker. Returns a stop function.
+   * Install a per-run checkpoint tracker. Listens for the agent's own
+   * iteration and stream brackets and snapshots the conversation history into
+   * the tracker. Returns a stop function.
+   *
+   * It listens on the REAL-value path (`EventDispatcher · onRealEvent`), never
+   * on the served one: the crash checkpoint it builds is what
+   * `resumeOnError` replays to the model, and a resume checkpoint keeps real
+   * values — a redaction policy that names `history` must not turn the
+   * conversation a crash resumes into placeholders (`src/redaction/`).
    *
    * @internal
    */
   private installCheckpointTracker(tracker: RunCheckpointTracker): () => void {
-    const offIterStart = this.dispatcher.on(
-      'agentfootprint.agent.iteration_start' as never,
-      ((event: { payload?: { iterIndex?: number } }) => {
-        const p = event.payload;
-        if (typeof p?.iterIndex === 'number') tracker.inFlightIteration = p.iterIndex;
-      }) as never,
-    );
-    // Phase OBSERVATION (8.14.0) — the run's own stream brackets, on the
-    // dispatcher this tracker is already listening to. A crash inside one of
-    // these is attributable without asking the error to describe itself.
-    // `'call-llm'` is a literal and `toolName` is a name the app declared:
-    // no URL, no credential, no payload ever reaches the checkpoint.
-    const offLlmStart = this.dispatcher.on(
-      'agentfootprint.stream.llm_start' as never,
-      (() => {
-        tracker.inFlightPhase = { phase: 'llm', stage: 'call-llm' };
-      }) as never,
-    );
-    const offLlmEnd = this.dispatcher.on(
-      'agentfootprint.stream.llm_end' as never,
-      (() => {
-        tracker.inFlightPhase = undefined;
-      }) as never,
-    );
-    // A bracket carrying `notDispatched` (9.113.0) is a call a paused batch
-    // never dispatched: nothing of it was ever in flight, so it neither opens
-    // nor clears the phase. Nothing observable depends on this today — the
-    // settlement emits both halves back to back with no await between them
-    // (`toolCalls.ts` · `bracketSettled`), so a crash can never land inside
-    // one — it keeps the phase true to the marker should that ever change.
-    const offToolStart = this.dispatcher.on(
-      'agentfootprint.stream.tool_start' as never,
-      ((event: { payload?: { toolName?: string; notDispatched?: unknown } }) => {
-        if (event.payload?.notDispatched !== undefined) return;
-        const name = event.payload?.toolName;
-        tracker.inFlightPhase = { phase: 'tool', stage: typeof name === 'string' ? name : 'tool' };
-      }) as never,
-    );
-    const offToolEnd = this.dispatcher.on(
-      'agentfootprint.stream.tool_end' as never,
-      ((event: { payload?: { notDispatched?: unknown } }) => {
-        if (event.payload?.notDispatched !== undefined) return;
-        tracker.inFlightPhase = undefined;
-      }) as never,
-    );
-    const offIterEnd = this.dispatcher.on(
-      'agentfootprint.agent.iteration_end' as never,
-      ((event: { payload?: { iterIndex?: number; history?: ReadonlyArray<unknown> } }) => {
-        const p = event.payload;
-        if (typeof p?.iterIndex === 'number') tracker.lastCompletedIteration = p.iterIndex;
-        if (Array.isArray(p?.history)) {
-          tracker.history = p.history as readonly LLMMessage[];
+    return this.dispatcher.onRealEvent((event) => {
+      switch (event.type) {
+        case 'agentfootprint.agent.iteration_start': {
+          const p = event.payload as { iterIndex?: number } | undefined;
+          if (typeof p?.iterIndex === 'number') tracker.inFlightIteration = p.iterIndex;
+          return;
         }
-        tracker.inFlightIteration = undefined;
-        tracker.inFlightPhase = undefined;
-      }) as never,
-    );
-    return () => {
-      offIterStart();
-      offIterEnd();
-      offLlmStart();
-      offLlmEnd();
-      offToolStart();
-      offToolEnd();
-    };
+        // Phase OBSERVATION (8.14.0) — the run's own stream brackets. A crash
+        // inside one of these is attributable without asking the error to
+        // describe itself. `'call-llm'` is a literal and `toolName` is a name
+        // the app declared: no URL, no credential, no payload ever reaches the
+        // checkpoint.
+        case 'agentfootprint.stream.llm_start':
+          tracker.inFlightPhase = { phase: 'llm', stage: 'call-llm' };
+          return;
+        case 'agentfootprint.stream.llm_end':
+          tracker.inFlightPhase = undefined;
+          return;
+        // A bracket carrying `notDispatched` (9.113.0) is a call a paused batch
+        // never dispatched: nothing of it was ever in flight, so it neither
+        // opens nor clears the phase. Nothing observable depends on this today
+        // — the settlement emits both halves back to back with no await between
+        // them (`toolCalls.ts` · `bracketSettled`), so a crash can never land
+        // inside one — it keeps the phase true to the marker should that ever
+        // change.
+        case 'agentfootprint.stream.tool_start': {
+          const p = event.payload as { toolName?: string; notDispatched?: unknown } | undefined;
+          if (p?.notDispatched !== undefined) return;
+          const name = p?.toolName;
+          tracker.inFlightPhase = {
+            phase: 'tool',
+            stage: typeof name === 'string' ? name : 'tool',
+          };
+          return;
+        }
+        case 'agentfootprint.stream.tool_end': {
+          const p = event.payload as { notDispatched?: unknown } | undefined;
+          if (p?.notDispatched !== undefined) return;
+          tracker.inFlightPhase = undefined;
+          return;
+        }
+        case 'agentfootprint.agent.iteration_end': {
+          const p = event.payload as
+            | { iterIndex?: number; history?: ReadonlyArray<unknown> }
+            | undefined;
+          if (typeof p?.iterIndex === 'number') tracker.lastCompletedIteration = p.iterIndex;
+          if (Array.isArray(p?.history)) {
+            tracker.history = p.history as readonly LLMMessage[];
+          }
+          tracker.inFlightIteration = undefined;
+          tracker.inFlightPhase = undefined;
+          return;
+        }
+        default:
+          return;
+      }
+    });
   }
 
   /**
@@ -2444,6 +2492,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // answer is a value (often a string) and must stay accepted, so the only
     // sound question is "what was asked?".
     assertIdentityShape(options?.identity, 'Agent.resume');
+    if (options?.redact !== undefined) assertRedactionPolicy(options.redact, 'Agent.resume');
     // A resume's `time` (the time layer) is read or refused before anything
     // moves; it is never applied — the paused turn's clock is kept, and a
     // differing value is recorded by the ToolCalls resume door.
@@ -2674,7 +2723,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * ```
    */
   checkpoint(): AgentRunCheckpoint | undefined {
-    const snapshot = this.getLastSnapshot();
+    const snapshot = this.liveSnapshot();
     if (!snapshot) return undefined;
     const state = snapshot.sharedState as Partial<AgentState> | undefined;
     // Admission is decided by seed, before any conversation state is written.
@@ -2721,14 +2770,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
 
   /** Called as each run/resume ends: remember a run that got past input admission. */
   private noteAdmittedRun(): void {
-    if (this.getLastSnapshot() !== undefined && !this.lastInputRefused()) {
+    if (this.liveSnapshot() !== undefined && !this.lastInputRefused()) {
       this.hadAdmittedRun = true;
     }
   }
 
   /** Whether input middleware refused the last run's message — the one reading both doors ask. */
   private lastInputRefused(): boolean {
-    const state = this.getLastSnapshot()?.sharedState as Partial<AgentState> | undefined;
+    const state = this.liveSnapshot()?.sharedState as Partial<AgentState> | undefined;
     return state?.messageDeniedPhase === 'input';
   }
 
@@ -3377,15 +3426,26 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(actor?.tenant !== undefined && { tenant: actor.tenant }),
     };
 
+    const getRunCtx = (): RunContext => this.currentRunContext;
+    // The run's redaction (`src/redaction/`): this agent's `redact` joined
+    // with any policy the caller handed down for this run (a tool's
+    // `ctx.redact`). Opened for EVERY run — with no policy the serving is the
+    // identity, but the stages' scopes still feed the real-value path the
+    // crash checkpoint and the window's meter read.
+    const redaction = this.openRunRedaction(runOptions?.redact, getRunCtx);
+
     // Reuse the cached chart built at constructor time.
     // The Agent's executor dials: readTracking (#18/#14, snapshot stageReads),
     // commitValues (#13c-B, commit-log value encoding) and writeProvenance
     // (#P1, per-write read provenance — the exact-dataflow debugging dial).
-    const executor = new FlowChartExecutor(this.getSpec(), {
+    const spec = this.getSpec();
+    const executor = new FlowChartExecutor(spec, {
       readTracking: this.readTracking,
       commitValues: this.commitValues,
       writeProvenance: this.writeProvenance,
+      scopeFactory: redaction.scopeFactoryFor(spec),
     });
+    redaction.applyTo(executor);
     // Enable structured narrative so `getLastNarrativeEntries()` can
     // hand a populated array to consumer Trace views (ExplainableShell).
     // Cheap when no consumer reads it; the recorder accumulates only.
@@ -3393,7 +3453,6 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.lastExecutor = executor;
 
     const dispatcher = this.getDispatcher();
-    const getRunCtx = (): RunContext => this.currentRunContext;
 
     // RFC-001 Block 10 — observer delivery tier. With 'deferred', every
     // bridge below is attached onto footprintjs's bounded capture queue
@@ -3410,7 +3469,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       else executor.attachCombinedRecorder(rec);
     };
 
-    attachObserver(new ContextRecorder({ dispatcher, getRunContext: getRunCtx }));
+    attachObserver(
+      new ContextRecorder({ dispatcher, getRunContext: getRunCtx, realWrites: redaction }),
+    );
     // Evidence bridge (#5): harvest decisions/toolCalls/tokens for causal snapshots.
     // ALWAYS INLINE — never routed through the deferred queue: the memory
     // write stage consumes its accumulators MID-run (`collect()` via
@@ -3676,7 +3737,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * the very alarm it should be tripping.
    */
   private integrityWorkExisted(): boolean {
-    const state = this.getLastSnapshot()?.sharedState as { llmLatestContent?: unknown } | undefined;
+    const state = this.liveSnapshot()?.sharedState as { llmLatestContent?: unknown } | undefined;
     return state !== undefined && state.llmLatestContent !== undefined;
   }
 
@@ -3853,9 +3914,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * ```
    */
   stoppedEarly(): AgentState['stoppedEarly'] {
-    const state = this.getLastSnapshot()?.sharedState as
-      | Pick<AgentState, 'stoppedEarly'>
-      | undefined;
+    const state = this.liveSnapshot()?.sharedState as Pick<AgentState, 'stoppedEarly'> | undefined;
     return state?.stoppedEarly;
   }
 
@@ -3893,7 +3952,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * ```
    */
   outputContractUnmet(): AgentState['outputContractUnmet'] {
-    const state = this.getLastSnapshot()?.sharedState as
+    const state = this.liveSnapshot()?.sharedState as
       | Pick<AgentState, 'outputContractUnmet'>
       | undefined;
     return state?.outputContractUnmet;
@@ -3924,7 +3983,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * ```
    */
   unsupportedValues(): AgentState['unsupportedValues'] {
-    const state = this.getLastSnapshot()?.sharedState as
+    const state = this.liveSnapshot()?.sharedState as
       | Pick<AgentState, 'unsupportedValues'>
       | undefined;
     return state?.unsupportedValues;
@@ -3966,7 +4025,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * ```
    */
   findings(): AgentState['findingsLedger'] {
-    const ledger = (this.getLastSnapshot()?.sharedState as Partial<AgentState> | undefined)
+    const ledger = (this.liveSnapshot()?.sharedState as Partial<AgentState> | undefined)
       ?.findingsLedger;
     return ledger === undefined ? undefined : structuredClone(ledger);
   }
@@ -3974,7 +4033,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   /** The last run's answer checks, detached from its execution record.
    * Undefined means no terminal validation ran, never an implicit pass. */
   answerValidation(): AnswerValidationReport | undefined {
-    const report = (this.getLastSnapshot()?.sharedState as Partial<AgentState> | undefined)
+    const report = (this.liveSnapshot()?.sharedState as Partial<AgentState> | undefined)
       ?.answerValidation;
     return report === undefined ? undefined : structuredClone(report);
   }
@@ -4025,7 +4084,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * ```
    */
   answerCoverage(): AnswerCoverage | undefined {
-    const limits = (this.getLastSnapshot()?.sharedState as Partial<AgentState> | undefined)
+    const limits = (this.liveSnapshot()?.sharedState as Partial<AgentState> | undefined)
       ?.answerCoverage;
     return limits === undefined ? undefined : structuredClone(limits);
   }
@@ -4039,7 +4098,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *
    * The same pure fold as `assessAnswer` on `agentfootprint/observe`, over this
    * agent's last snapshot; it reads committed state, never events, so a later
-   * reader of the same recording folds the same standing. It resolves
+   * reader of the same recording folds the same standing. (This call folds the
+   * LIVE run. Under `redact` a recording holds the placeholder wherever the
+   * policy selected a value, and a fold of it stands only on what the policy
+   * left — the same standing unless a selected key is one the fold reads.) It resolves
    * asynchronously because the fold is loaded through `import()` on first use —
    * an agent that never asks does not carry it.
    *
@@ -4060,7 +4122,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * ```
    */
   async assessment(declarations?: AssessmentDeclarations): Promise<AnswerAssessment | undefined> {
-    const snapshot = this.getLastSnapshot();
+    const snapshot = this.liveSnapshot();
     if (snapshot === undefined) return undefined;
     // Settled before the fold, which cannot tell a crash from its committed state: an answer
     // this run RETURNED (`lastRunAnswer`, cleared at every run's start), or a pause — the fold
@@ -4239,7 +4301,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           meta: buildEventMeta({ runtimeStageId: '__output_admission__' }, this.currentRunContext),
         });
       }
-      throw terminalErrorOf(refusal, snap);
+      // The verdict was decoded from the LIVE state above; the snapshot a
+      // fail-fast error carries is the run's audit trail — "consumers persist
+      // this" (`ReliabilityFailFastError.snapshot`) — so it is the SERVED one.
+      throw terminalErrorOf(refusal, this.getLastSnapshot());
     }
     // Credential-consent translation (8.6.0, `'tell-model'` only) — a tool
     // DECLARED a credential, the provider answered `authorization-required`,

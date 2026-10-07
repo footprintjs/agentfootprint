@@ -7,7 +7,8 @@ Lens: `stages/formatDefault.ts`, `beats/formatAsNarrative.ts`,
 `facts/formatFacts.ts`, `causal/loadSnapshot.ts` — the only four files here that
 put words in front of the model. They all write `scope.formatted`, and they own
 the message role. `asRoleRefusal.ts` · `asRoleRefusal` is the record of what leaving that
-unsaid cost: `asRole` was stored, read back, and never honoured.
+unsaid cost: `asRole` was stored, read back, and never honoured. `redactRefusal.ts` ·
+`memoryRedactRefusal` is the same record for `redact`: reserved, stored, never read.
 
 # memory/
 
@@ -49,6 +50,28 @@ await agent.run('My name is Alice', {
 
 See the [Memory pipeline guide](https://agentfootprint.dev/docs/build/memory)
 for full documentation.
+
+## A memory is working state, not a record
+
+What a store keeps is what the agent's next run recalls and sends to the model —
+the class of value the redaction law never covers (live state, what the agent
+computes on). So `defineMemory({ redact })` and `defineRAG({ redact })` are
+REFUSED (`redactRefusal.ts`), on presence, for TypeScript and JavaScript callers
+alike, rather than accepted and ignored. The agent's own `redact` covers the
+RECORD of the memory stages — the snapshot's memory subflows, the
+`memory.*` / `context.*` events, recordings — and never the store:
+
+```typescript
+const agent = Agent.create({ provider, model, redact: conversationRedaction() })
+  .memory(defineMemory({ id: 'chat', type: MEMORY_TYPES.EPISODIC,
+    strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 10 }, store }))
+  .build();
+// The store holds the real turn (the next run recalls it); every record of
+// this run holds the placeholder (test/memory/redactRefusal.test.ts).
+```
+
+To keep a value out of a store, leave it out before the write, or mount the
+memory `readOnly: true`.
 
 ## Orthogonal concerns
 

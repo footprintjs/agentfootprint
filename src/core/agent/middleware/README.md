@@ -111,9 +111,13 @@ Pinned by `test/core/output-admission.test.ts`,
 ## An `'input'` scrub does not scrub the record
 The ledger row is NOT the only copy of the pre-scrub text. The model, the
 committed `history`, `checkpoint().history` and every `agentfootprint.*`
-event payload get the chain's verdict; these keep the original, and an app
-that must not keep it redacts them itself (an `Agent` exposes no footprintjs
-redaction policy today):
+event payload get the chain's verdict; these keep the original. An app that
+must not keep it in the RECORD names it in `Agent.create({ redact })` — the
+state key `middlewareDecisions` (every row), the event fields `before` /
+`after`, and the run input's key `message` for the `run.entry` payload — and
+the records in the list below then hold the placeholder. The two CHECKPOINTS
+in it keep the original whatever the policy (a resume runs on real values),
+so where the app stores one it protects it:
 - the ledger row `middlewareDecisions[i].before`, in every copy of run state
   — `getLastSnapshot()` (`sharedState`, `commitLog`, `executionTree`,
   `subflowResults`), `getLastNarrativeEntries()`, a `recordRun` recording, a

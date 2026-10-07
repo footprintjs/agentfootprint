@@ -170,6 +170,29 @@ declared key that holds no list and no ticket (`unreachable.empty.noList`).
     `what`, `short`. An author who interpolates the caller's arguments into
     them puts those arguments in the report too (the af-1 "never interpolate"
     rule, `core/agent/coverage/README.md`); the report is scoped to its owner.
+11. **A placeholder is never a value; KEPT OUT is never "not recorded".** A
+    recording of a run under a redaction policy (an agent's `redact`) holds
+    footprintjs's placeholder where the policy selected a value. The view reads
+    a kept-out field or state key as ABSENT and NAMES it (`view.ts` ·
+    `keptOut`, `RecordingView.isStateKeptOut`), and the readers that would
+    otherwise claim an absence say it is kept out (`missing: 'redacted'`): the
+    question (`asked.keptOut`), the answer — a run whose answer is kept out
+    still finished — a tool result's emptiness (`unreachable.empty.redacted`),
+    a call's outcome fields (the outcome reads `unknown`), the evidence gate's
+    flagged values (`howSure.evidence.keptOut`), the history earlier results
+    sit in (`unreachable.inView.redacted`, `beforePause.keptOut`) and the state
+    the standing rests on (`howSure.standing.keptOut`, from
+    `AnswerAssessment.keptOut`). THE GUARD: the view notes every kept-out value
+    a reader touches and every one it asks about; one touched and never asked
+    about makes the whole account refuse to tell (`account.ts` ·
+    `notToldAccount`, `scope.keptOut`) — never "no tool ran" read off a
+    placeholder `toolCallId`.
+
+    ```ts
+    // a run under conversationRedaction() (test/redaction/agent-redaction.readers.test.ts)
+    account.question; // { value: null, status: 'not-recorded', missing: 'redacted', … }
+    account.rows[0].lines[0].text; // 'The question is kept out of this record.'
+    ```
 
 ## Files
 

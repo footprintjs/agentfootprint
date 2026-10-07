@@ -154,7 +154,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `agentfootprint.integrity.context_error` | `docs-next/content/docs/monitor/arming-context-integrity.mdx`, `docs-next/content/docs/monitor/column-types.mdx` |
 | `agentfootprint.integrity.external_ground_used` | `docs-next/content/docs/monitor/arming-context-integrity.mdx` |
 
-**Functions and classes described on the site but not touched by any reference run (467).** The other 1075 in this class are types, interfaces and constants, which a run cannot "call" — they are named in `docs/docs-truth/baseline.json` rather than here.
+**Functions and classes described on the site but not touched by any reference run (468).** The other 1074 in this class are types, interfaces and constants, which a run cannot "call" — they are named in `docs/docs-truth/baseline.json` rather than here.
 
 | Symbol | Kind | Exported from |
 |---|---|---|
@@ -348,6 +348,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `contentHash` | function | `agentfootprint/observe` |
 | `contextContractForModel` | function | `agentfootprint/context` |
 | `contextEvaluatedRecorder` | function | `agentfootprint/observe` |
+| `conversationRedaction` | function | `agentfootprint/security` |
 | `convertExact` | function | `agentfootprint/time` |
 | `convertForTool` | function | `agentfootprint/time` |
 | `convertWidened` | function | `agentfootprint/time` |
@@ -904,7 +905,7 @@ Whether a symbol comes from the root barrel or only from a subpath is a document
 |---|---|---|---|
 | `agentfootprint` | 758 | 619 | 82% |
 | `agentfootprint/providers` | 163 | 135 | 83% |
-| `agentfootprint/memory` | 223 | 112 | 50% |
+| `agentfootprint/memory` | 222 | 111 | 50% |
 | `agentfootprint/rag` | 49 | 49 | 100% |
 | `agentfootprint/cache` | 24 | 19 | 79% |
 | `agentfootprint/observe` | 603 | 260 | 43% |
@@ -912,7 +913,7 @@ Whether a symbol comes from the root barrel or only from a subpath is a document
 | `agentfootprint/context` | 162 | 100 | 62% |
 | `agentfootprint/resilience` | 24 | 16 | 67% |
 | `agentfootprint/hosting` | 296 | 296 | 100% |
-| `agentfootprint/security` | 121 | 100 | 83% |
+| `agentfootprint/security` | 122 | 101 | 83% |
 | `agentfootprint/reliability` | 16 | 12 | 75% |
 | `agentfootprint/skill-graph` | 116 | 72 | 62% |
 | `agentfootprint/maps` | 24 | 24 | 100% |

@@ -350,7 +350,7 @@ export function buildReliabilityGateChart(config: ReliabilityConfig): FlowChart 
       // Routed here but no fallback configured — convert to fail-fast.
       scope.failKind = 'fallback-not-configured';
       scope.failPayload = buildFailPayload(scope, 'post-decide');
-      scope.$emit('agentfootprint.reliability.fail_fast', {
+      typedEmit(scope, 'agentfootprint.reliability.fail_fast', {
         phase: 'post-decide',
         kind: 'fallback-not-configured',
         attempt: scope.attempt,
@@ -379,7 +379,7 @@ export function buildReliabilityGateChart(config: ReliabilityConfig): FlowChart 
       // Default-path fail-fast (no rules configured but error occurred)
       scope.failKind = scope.errorKind;
       scope.failPayload = buildFailPayload(scope, 'post-decide');
-      scope.$emit('agentfootprint.reliability.fail_fast', {
+      typedEmit(scope, 'agentfootprint.reliability.fail_fast', {
         phase: 'post-decide',
         kind: scope.errorKind,
         attempt: scope.attempt,
@@ -399,7 +399,7 @@ export function buildReliabilityGateChart(config: ReliabilityConfig): FlowChart 
     const { kind, label } = matchedKindLabel(postRules, matchedIdx);
     scope.failKind = kind;
     scope.failPayload = buildFailPayload(scope, 'post-decide');
-    scope.$emit('agentfootprint.reliability.fail_fast', {
+    typedEmit(scope, 'agentfootprint.reliability.fail_fast', {
       phase: 'post-decide',
       kind,
       label,

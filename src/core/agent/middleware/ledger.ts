@@ -29,10 +29,13 @@
  * checkpoint's `originalInput` and a paused
  * run's checkpoint (`RunnerPauseOutcome.checkpoint`, which `standingAgent`
  * stores for a paused session) keep it too — the full list, and what an app
- * must redact, is in `./README.md`, the one place it is maintained. An
- * `Agent` exposes no footprintjs redaction policy today, so an app whose
- * threat model says the original must not survive strips `before` /
- * `after` from these rows where it keeps the record.
+ * must redact, is in `./README.md`, the one place it is maintained. An app
+ * whose threat model says the original must not survive in the RECORD names
+ * it in `Agent.create({ redact })`: `middlewareDecisions` (this state key)
+ * and `before` / `after` (the fields of every `middleware.decision` event)
+ * are then the placeholder in every record. The checkpoints keep the real
+ * values — a resume runs on them — so where the app stores a checkpoint, it
+ * protects it.
  */
 
 import { typedEmit } from '../../../recorders/core/typedEmit.js';

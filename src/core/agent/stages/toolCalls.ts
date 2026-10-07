@@ -61,6 +61,7 @@ import type {
 import { checkerGoverns } from '../../../adapters/types.js';
 import type { ContextRole } from '../../../events/types.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
+import { policyInForce } from '../../../redaction/runRedaction.js';
 import { bindToolSecurityEvents, type ToolSecurityEmitter } from '../toolSecurityEvents.js';
 import type { AgentfootprintEventMap, AgentfootprintEventType } from '../../../events/registry.js';
 import { extractSequence } from '../../../security/extractSequence.js';
@@ -2552,6 +2553,11 @@ export function buildToolCallsHandler(
    * Every field is ABSENT when the fact is absent: a tool branching on
    * `ctx.sessionId` must be able to tell "not session-bound" from "bound to
    * something I made up".
+   *
+   * `redact` is read off the stage's own scope — the run that is actually
+   * executing this call (`src/redaction/runRedaction.ts` · `policyInForce`),
+   * which is a composition's run when this agent is mounted in one — never
+   * off the agent's last standalone run.
    */
   const sessionContext = (
     scope: TypedScope<AgentState>,
@@ -2559,13 +2565,15 @@ export function buildToolCallsHandler(
     toolCallId: string,
   ): Pick<
     ToolExecutionContext,
-    'runId' | 'sessionId' | 'identity' | 'onTeardown' | 'teardownScopes'
+    'runId' | 'sessionId' | 'identity' | 'redact' | 'onTeardown' | 'teardownScopes'
   > => {
     const facts = deps.currentRun?.();
+    const redact = policyInForce(scope);
     return {
       ...(facts?.runId !== undefined && { runId: facts.runId }),
       ...(facts?.sessionId !== undefined && { sessionId: facts.sessionId }),
       ...(facts?.identity !== undefined && { identity: facts.identity }),
+      ...(redact !== undefined && { redact }),
       teardownScopes: AGENT_TEARDOWN_SCOPES,
       onTeardown: (cleanup: () => void | Promise<void>, options?: TeardownOptions): void => {
         const scopeAsked = options?.scope ?? 'run';
@@ -2821,10 +2829,13 @@ export function buildToolCallsHandler(
       lookup: (name) => registryByName.get(name),
       innerContext: (name, seq) => {
         const innerId = `${call.toolCallId}#inner-${seq}`;
+        // An inner call runs inside the same run, under the same policy.
+        const redact = policyInForce(scope);
         return {
           toolCallId: innerId,
           iteration: call.iteration,
           ...(signal && { signal }),
+          ...(redact !== undefined && { redact }),
           credentials: reportingCredentials(
             credentials,
             bindToolSecurityEvents(scope, { toolCallId: innerId, iteration: call.iteration }),

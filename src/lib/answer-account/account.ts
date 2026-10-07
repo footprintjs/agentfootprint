@@ -37,7 +37,15 @@ import type {
   Sentence,
 } from './types.js';
 import { validateDeclarations } from './declarations.js';
-import { isRecord, num, str, recordingView, type RecordingView, type ViewEvent } from './view.js';
+import {
+  isRecord,
+  keptOut,
+  num,
+  str,
+  recordingView,
+  type RecordingView,
+  type ViewEvent,
+} from './view.js';
 import {
   at,
   countedFields,
@@ -230,7 +238,10 @@ function readLimitsData(end: ViewEvent): AccountFact<LimitsDataFact> | undefined
  * standing line — `limitsBlock`), or a TYPED answer's limits as data
  * (`limitsData`). A typed answer's limits never read `not-applicable`: the
  * block reads `not-recorded` with `missing: 'as-data'`, and the data is
- * `recorded`.
+ * `recorded`. An answer the record keeps out (a redaction policy's
+ * placeholder on `finalContent`) reads `not-recorded` with `missing:
+ * 'redacted'` — the run still answered, so the account never reads it as a
+ * run that did not finish.
  */
 function readAnswer(view: RecordingView): {
   answer: AccountFact<string>;
@@ -252,6 +263,19 @@ function readAnswer(view: RecordingView): {
     status: 'not-applicable',
     pointers: [],
   };
+  if (end !== undefined && content === undefined && keptOut(end, 'finalContent')) {
+    const kept = {
+      value: null,
+      source: 'library',
+      status: 'not-recorded',
+      missing: 'redacted',
+    } as const;
+    return {
+      answer: { ...kept, pointers: [at(end, 'finalContent')] },
+      limits: { ...kept, pointers: [] },
+      limitsData: readLimitsData(end) ?? noData,
+    };
+  }
   if (end === undefined || content === undefined) {
     return {
       answer: none,
@@ -328,18 +352,30 @@ function readRun(view: RecordingView, resumedLeg: boolean): AccountFact<RunFact>
 }
 
 /**
- * The account of a run that owns NO event of this record — an options.runId
- * that is not this recording's, or a recording with no readable event. The
- * record's silence is not evidence: every row says the run is not in this
- * record, nothing is claimed about it (no "did not run any tools", no "did not
- * finish"), and the hosting op may map it to `summary.notAvailable@1`.
+ * The account of a run this record cannot tell about — said once per row, and
+ * nothing is claimed about the run (no "did not run any tools", no "did not
+ * finish"); the hosting op may map it to `summary.notAvailable@1`. Two causes:
+ *
+ *   - `no-own-events` — the run owns NO event of this record (an
+ *     options.runId that is not this recording's, or a recording with no
+ *     readable event). The record's silence is not evidence.
+ *   - `kept-out` — a reader touched a value the record keeps out (a
+ *     redaction policy's placeholder) without asking about it first
+ *     (`view.ts` · `keptOutRead`), so a fact read from it would be a fact
+ *     about a placeholder. The kept-out values the account DOES handle — the
+ *     question, the answer, a tool result, a call's outcome fields, the
+ *     history — never get here: each is said to be kept out where it is read.
  */
-function noOwnEventsAccount(
+function notToldAccount(
   view: RecordingView,
   say: ReadContext['say'],
   unread: () => number,
+  cause: 'no-own-events' | 'kept-out',
 ): AnswerAccount {
-  const missing = { status: 'not-recorded' as const, missing: 'no-event' as const };
+  const missing = {
+    status: 'not-recorded' as const,
+    missing: cause === 'kept-out' ? ('redacted' as const) : ('no-event' as const),
+  };
   const none = <T>(): AccountFact<T> => ({
     value: null,
     source: 'library',
@@ -349,11 +385,11 @@ function noOwnEventsAccount(
   const rows: Row[] = (Object.keys(HEADINGS) as RowId[]).map((id) =>
     row(id, [
       id === 'anything-wrong'
-        ? say('scope.noOwnEvents', {
+        ? say(cause === 'kept-out' ? 'scope.keptOut' : 'scope.noOwnEvents', {
             ...missing,
             chips: [chip('not-recorded', 'chip.notRecorded')],
           })
-        : say('row.notInRecord', missing),
+        : say(cause === 'kept-out' ? 'row.keptOut' : 'row.notInRecord', missing),
     ]),
   );
   return {
@@ -386,7 +422,10 @@ function noOwnEventsAccount(
     rows,
     signals: [],
     unreachable: [],
-    summary: { sentence: say('scope.noOwnEvents', missing), tone: 'unknown' },
+    summary: {
+      sentence: say(cause === 'kept-out' ? 'scope.keptOut' : 'scope.noOwnEvents', missing),
+      tone: 'unknown',
+    },
     unread: unread(),
     foreign: view.foreign,
     scope: view.scope,
@@ -436,7 +475,7 @@ export function buildAccount(
   const say = makeSay(internals, () => {
     unread += 1;
   });
-  if (view.events.length === 0) return noOwnEventsAccount(view, say, () => unread);
+  if (view.events.length === 0) return notToldAccount(view, say, () => unread, 'no-own-events');
   const resumedLeg =
     view.ofType('pause.resume').length > 0 ||
     (view.ofType('agent.turn_end').length > 0 && view.ofType('agent.turn_start').length === 0);
@@ -465,7 +504,12 @@ export function buildAccount(
   const checks = runChecks(ctx, understood, calls, inView, pausedLeg);
   const wrong = wrongLines(ctx, checks, calls, pausedLeg);
   const { answer, limits, limitsData } = readAnswer(view);
-  const summary = summaryOf(ctx, checks, answer.status === 'recorded', pausedLeg);
+  // A kept-out answer is still an answer the run gave (`readAnswer`).
+  const answered = answer.status === 'recorded' || answer.missing === 'redacted';
+  const summary = summaryOf(ctx, checks, answered, pausedLeg);
+  // Every reader has asked the view by now: one that touched a kept-out value
+  // without asking about it read a placeholder, not the run.
+  if (view.keptOutRead().length > 0) return notToldAccount(view, say, () => unread, 'kept-out');
 
   const firstSignal = checks.signals[0];
   const wrongChips: Chip[] =

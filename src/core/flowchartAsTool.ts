@@ -139,6 +139,7 @@ import {
   type InnerRunStore,
   type KeepsInnerRuns,
 } from '../lib/trace-toolpack/innerRunRecords.js';
+import { unionRedactionPolicies } from '../redaction/policy.js';
 import { servableSnapshot } from './servableSnapshot.js';
 import { argsRedactedBy, SHOWN_ARGS } from './toolShownArgs.js';
 import { defineTool } from './tools.js';
@@ -293,6 +294,13 @@ export interface FlowchartAsToolOptions {
    * policy whether or not anyone keeps its record. Without this option the
    * raw snapshot is served, byte for byte as before.
    *
+   * JOINED WITH THE CALLER'S. The inner run is nested in the agent run that
+   * called the tool, and a run's policy covers the runs nested in it — so the
+   * policy that run is covered by (`ctx.redact`, the agent's own `redact`) is
+   * joined with this one for the inner run, its result and its kept record.
+   * Either alone is enough to keep a name out; neither can remove one the
+   * other selects. With neither, the tool behaves exactly as before.
+   *
    * WHAT IT DOES NOT GOVERN — said here so nobody has to rediscover it:
    *
    * 1. The run's fold base. The redacted view OMITS `initialState`
@@ -401,7 +409,12 @@ export function flowchartAsTool(opts: FlowchartAsToolOptions): Tool {
     inputSchema: opts.inputSchema,
     execute: async (args, ctx: ToolExecutionContext) => {
       const executor = new FlowChartExecutor(opts.flowchart);
-      if (opts.redact) executor.setRedactionPolicy(opts.redact);
+      // This tool's own policy joined with the one the calling run is covered
+      // by (`ctx.redact`): the inner run is NESTED in the agent's, and a run's
+      // policy covers the runs nested in it. One union, used for the run AND
+      // for everything served from it below.
+      const policy = unionRedactionPolicies(opts.redact, ctx.redact);
+      if (policy) executor.setRedactionPolicy(policy);
       for (const recorder of opts.recorders ?? []) {
         executor.attachCombinedRecorder(recorder);
       }
@@ -427,7 +440,7 @@ export function flowchartAsTool(opts: FlowchartAsToolOptions): Tool {
       const keepRecordOf = (outcome: InnerRunOutcome, known?: unknown): void => {
         if (!store) return;
         try {
-          const snapshot = known ?? servableSnapshot(executor, opts.redact);
+          const snapshot = known ?? servableSnapshot(executor, policy);
           const commitLog = (snapshot as { commitLog?: readonly unknown[] }).commitLog;
           const narrative = extractNarrative(snapshot, executor)
             .map((entry) => (typeof entry.text === 'string' ? entry.text : ''))
@@ -478,7 +491,7 @@ export function flowchartAsTool(opts: FlowchartAsToolOptions): Tool {
       // ONE view for the record AND the result: with a policy set this is
       // the redacted mirror exactly as footprintjs serves it, otherwise the
       // raw snapshot — see `servableSnapshot`.
-      const served = servableSnapshot(executor, opts.redact);
+      const served = servableSnapshot(executor, policy);
       // Kept BEFORE the mapper runs: a mapper that throws still leaves a
       // complete record of the run it was mapping.
       keepRecordOf('ok', served);

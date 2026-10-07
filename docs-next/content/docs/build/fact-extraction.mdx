@@ -65,7 +65,7 @@ For **retrieval-style** reads (only inject facts relevant to the current query),
 
 - Don't use `'llm'` extractor at high write volume — every turn is an extra LLM call. Cache, batch, or fall back to `'pattern'` for the long tail.
 - Don't trust pattern extraction blindly — review the stored facts during dev (they end up in the store, queryable). Tune `minConfidence` upward if you see junk.
-- Don't extract sensitive facts you don't want persisted. Add a redaction hook before write — `MemoryRedactionPolicy` (in development) or a custom write-side filter.
+- Don't extract sensitive facts you don't want persisted. A memory store keeps what is written to it — it is working state the agent recalls on its next run, so `defineMemory({ redact })` is refused rather than accepted and ignored. Leave them out before the write (an extractor that drops them), or mount the memory `readOnly: true`. The agent's own `redact` keeps the RECORD of the memory stages clean — snapshot, events, recordings — not the store ([Keep personal data out of the record](doc:security#keep-personal-data-out-of-the-record)).
 
 ## Next steps
 

@@ -18,11 +18,18 @@
  *          (Convention 4 — executor `clear()` resets between runs; same-
  *          executor pause/resume PRESERVES pre-pause evidence by design).
  * PII note: tool args/results and decide() evidence persist into snapshots.
- *          footprintjs `RedactionPolicy.emitPatterns` redacts the emit channel
- *          BEFORE this recorder IF the consumer configures one on the executor
- *          — the Agent does NOT configure one by default. Values are bounded
- *          (`maxPreviewChars` for results, `maxFieldChars` for args/evidence);
- *          treat the snapshot store as PII-bearing and protect it accordingly.
+ *          This recorder reads the run's RECORD — the events as served and
+ *          footprintjs's decision evidence — so under an agent's `redact`
+ *          policy it sees, and the snapshot keeps, the placeholder wherever the
+ *          policy selected a value (a selected key at any depth of an event
+ *          payload; a whole event whose name `emitPatterns` selects; a selected
+ *          key's value inside decide() evidence). With no policy it sees every
+ *          value. The snapshot's question and answer are NOT harvested here:
+ *          `writeSnapshot` reads them from the conversation the run computed
+ *          on, so they are the real text whatever the policy — memory is what a
+ *          later run recalls. Values are bounded (`maxPreviewChars` for
+ *          results, `maxFieldChars` for args/evidence); treat the snapshot
+ *          store as PII-bearing and protect it accordingly.
  *
  * The Agent attaches this automatically when a CAUSAL memory is mounted and
  * threads `collect` into the memory write mount (`evidenceSource`) — so
@@ -65,7 +72,7 @@ export interface CausalEvidenceRecorderHandle {
 }
 
 function preview(value: unknown, max: number): string {
-  let s: string;
+  let s: string | undefined;
   if (typeof value === 'string') s = value;
   else {
     try {
@@ -74,6 +81,8 @@ function preview(value: unknown, max: number): string {
       s = String(value);
     }
   }
+  // `toWireJson(undefined)` has no text; an absent result previews as itself.
+  if (typeof s !== 'string') s = String(value);
   return s.length > max ? `${s.slice(0, max)}…` : s;
 }
 
@@ -130,7 +139,14 @@ export function causalEvidenceRecorder(
     id: options.id ?? 'causal-evidence',
 
     onEmit(event): void {
-      const { name, payload } = event as { name: string; payload: Record<string, unknown> };
+      const { name, payload: raw } = event as { name: string; payload: unknown };
+      // The payload is the event as the run SERVED it: under an agent's
+      // `redact` a selected field is the placeholder, and an event whose NAME
+      // `emitPatterns` selects arrives as the placeholder string whole. Nothing
+      // in that string can be read, so its fields read as absent here — the
+      // evidence keeps what the record keeps, and never more.
+      const whole = raw !== null && typeof raw === 'object' ? undefined : raw;
+      const payload = (whole === undefined ? raw : {}) as Record<string, unknown>;
       switch (name) {
         case 'agentfootprint.agent.turn_start':
           // A new turn on the same executor — start fresh (one snapshot per turn).
@@ -162,7 +178,7 @@ export function causalEvidenceRecorder(
           toolCalls.push({
             name: started?.name ?? 'unknown',
             args: started?.args ?? {},
-            resultPreview: preview(payload.result, maxPreview),
+            resultPreview: preview(whole ?? payload.result, maxPreview),
             errored: payload.error === true,
           });
           break;

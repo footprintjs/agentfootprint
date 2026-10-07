@@ -102,6 +102,7 @@ import {
   type InnerRunStore,
   type KeepsInnerRuns,
 } from '../../lib/trace-toolpack/innerRunRecords.js';
+import { unionRedactionPolicies } from '../../redaction/policy.js';
 import { servableSnapshot } from '../servableSnapshot.js';
 import { argsRedactedBy, SHOWN_ARGS } from '../toolShownArgs.js';
 import { defineTool, type Tool, type ToolExecutionContext } from '../tools.js';
@@ -329,7 +330,12 @@ export function runbookAsTool(opts: RunbookAsToolOptions): Tool {
       const dispatch = recordingDispatch(ctx.tools, opts.name);
       const chart = opts.procedure(dispatch.tools);
       const executor = new FlowChartExecutor(chart);
-      if (opts.redact) executor.setRedactionPolicy(opts.redact);
+      // This tool's own policy joined with the one the calling run is covered
+      // by (`ctx.redact`) — the procedure runs NESTED in the agent's run, and a
+      // run's policy covers the runs nested in it. One union for the run, the
+      // walk, the recording and the kept record.
+      const policy = unionRedactionPolicies(opts.redact, ctx.redact);
+      if (policy) executor.setRedactionPolicy(policy);
       for (const recorder of opts.recorders ?? []) {
         executor.attachCombinedRecorder(recorder);
       }
@@ -350,7 +356,7 @@ export function runbookAsTool(opts: RunbookAsToolOptions): Tool {
       const keepRecordOf = (outcome: InnerRunOutcome, known?: unknown): void => {
         if (!store) return;
         try {
-          const snapshot = known ?? servableSnapshot(executor, opts.redact);
+          const snapshot = known ?? servableSnapshot(executor, policy);
           const commitLog = (snapshot as { commitLog?: readonly unknown[] }).commitLog;
           const lines = (walkRecorder.getEntries() as unknown as NarrativeEntryView[])
             .map((entry) => entry.text)
@@ -413,7 +419,7 @@ export function runbookAsTool(opts: RunbookAsToolOptions): Tool {
       // ONE view for the record, the envelope's state and the recording:
       // the redacted mirror exactly as footprintjs serves it when `redact`
       // is set, the raw snapshot otherwise — see `servableSnapshot`.
-      const served = servableSnapshot(executor, opts.redact);
+      const served = servableSnapshot(executor, policy);
       keepRecordOf('ok', served);
       const state =
         (served as { sharedState?: Readonly<Record<string, unknown>> }).sharedState ??

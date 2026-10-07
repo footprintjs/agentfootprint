@@ -724,28 +724,35 @@ question, and `sliceForKey` / `causalChain` are where it is asked.
 
 ### What a recording actually contains
 
-**An agent run is not redacted.** `Agent.create(...)` has no redaction option,
-and 9.88.0 shipped with a conformance case that passed one anyway — an unknown
-key, silently dropped, asserting behaviour on a run that does not exist. What is
-true:
+**An agent run is recorded as it ran unless a policy names what to keep out.**
+9.88.0 shipped a conformance case that passed `redact` to `Agent.create` when no
+such option existed — an unknown key, silently dropped, asserting behaviour on a
+run that did not exist. The option exists now (`Agent.create({ redact })`,
+`src/redaction/`), and `test/type-regressions/AgentOptionsRedaction.assignability.test.ts`
+pins it as the one door. What is true:
 
-- The **committed pieces are the pieces.** A secret in a system prompt is in
-  `servedAt(k).system.text` and in the commit log, verbatim. Treat a recording
-  accordingly.
+- **Without a policy, the committed pieces are the pieces.** A secret in a
+  system prompt is in `servedAt(k).system.text` and in the commit log,
+  verbatim. Treat a recording accordingly.
+- **Under one** (`conversationRedaction()` names the system prompt's pieces
+  among the conversation), the commit log holds footprintjs's placeholder where
+  a selected value was, and this folder's readers take a placeholder for
+  ABSENT, never for text the model was sent (`servedView.ts` · `readAtCall`,
+  `readRunConstant`).
 - The **receipt carries no bytes** — hashes, counts and names only — and those
   hashes are **not** redacted either. The run salt is what makes that safe to
   ship: the same sentence in two runs has two fingerprints, so a digest cannot
   be dictionary-matched across recordings. It is not an assumption that
   something scrubbed it.
-- **Redaction in this library is EXECUTOR-level**, and reaches an inner run
-  through `flowchartAsTool({ redact })` / `runbookAsTool({ redact })`
+- **Redaction in this library is the EXECUTOR's**: an agent's `redact`, and
+  `flowchartAsTool({ redact })` / `runbookAsTool({ redact })` for an inner run
   (`executor.setRedactionPolicy`). footprintjs scrubs at COMMIT time, so a
-  redacted key never enters that inner **commit log**. The live `sharedState`
-  view is a different thing — only `getSnapshot({ redact: true })` serves the
-  mirror — and since 9.89.1 both tools serve THAT view for everything they
-  show (the result, the kept record, the recording; `src/core/servableSnapshot.ts`
-  · `servableSnapshot`), so an inner record is scrubbed in every field, not
-  only in its log.
+  redacted key never enters the **commit log**. The live `sharedState` view is
+  a different thing — only `getSnapshot({ redact: true })` serves the mirror —
+  and both the agent (`RunnerBase · getLastSnapshot`) and the tools serve THAT
+  view for everything they show (`src/core/servableSnapshot.ts` ·
+  `servableSnapshot`), so a record is scrubbed in every field, not only in its
+  log.
 - A snapshot taken with `redact: true` **omits `initialState`**, so a fold of it
   reports `basis: 'log-only'` and `servedAt` raises the `no-fold-base` gap
   rather than rebuilding a short view in silence.

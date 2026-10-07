@@ -307,8 +307,10 @@ Four things it is honest about:
 - **Nothing is bounded or redacted on the way out.** A payload that must not be
   on that disk must not reach the strategy: narrow it with `eventTypes` (it
   becomes the strategy's `relevantEventTypes`, so the dispatcher does not even
-  forward the rest), with `tier` / `sampleRate`, or with a footprintjs
-  `RedactionPolicy` upstream. For a record bounded by construction,
+  forward the rest), with `tier` / `sampleRate`, or with the agent's `redact`
+  (a footprintjs `RedactionPolicy`, applied to every event at its source —
+  [Keep personal data out of the record](doc:security#keep-personal-data-out-of-the-record)).
+  For a record bounded by construction,
   `auditExport({ payloadMode: 'bounded' })` is the adapter that does that job.
 - **An unwritable path is refused at construction**, naming the path — not at
   the first event, hours later, into nobody's console. Write failures after

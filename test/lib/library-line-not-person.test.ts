@@ -239,7 +239,13 @@ describe('the answer account’s "current request" is the person’s', () => {
   const ctx = {
     resumedLeg: true,
     declarations: {},
-    view: { state: { history }, pausedWith: { history } },
+    // Nothing is kept out of this record (no redaction policy).
+    view: {
+      state: { history },
+      pausedWith: { history },
+      stateKeptOut: [],
+      isStateKeptOut: () => false,
+    },
   } as unknown as ReadContext;
 
   it('names the calls answered before the pause even when a library frame follows them', () => {

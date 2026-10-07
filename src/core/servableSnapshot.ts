@@ -1,15 +1,20 @@
 /**
- * servableSnapshot — the ONE owner of what a chart-backed tool may SHOW of its
- * inner run.
+ * servableSnapshot — the ONE owner of what a run may SHOW of its snapshot:
+ * every runner's `getLastSnapshot()` (an agent's, a composition's) and every
+ * chart-backed tool's inner run.
  *
  * Pattern: a single projection function over `FlowChartExecutor.getSnapshot`.
- * Role:    every state-bearing thing `flowchartAsTool` / `runbookAsTool` hands
+ * Role:    `RunnerBase · getLastSnapshot` serves a runner's last run through
+ *          it, with the policy that run was covered by (`Agent.create({
+ *          redact })`, a composed member's, a caller's). And every
+ *          state-bearing thing `flowchartAsTool` / `runbookAsTool` hands
  *          outward — the values a `resultMapper` reads, the envelope's state,
  *          the recording beside the walk, the record `keepRecord` retains —
  *          is taken from HERE, so "what may leave the executor" is spelled
  *          once. Nothing here decides what is secret; the policy does that,
  *          footprintjs enforces it, and this function serves the view
- *          footprintjs already built for serving.
+ *          footprintjs already built for serving. What a runner computes on
+ *          is never read through here — `RunnerBase · liveSnapshot` is.
  *
  * THE DEFECT THIS CLOSES (9.89.1; entry 6 of
  * docs/design/2026-09-recorded-not-built.md). footprintjs scrubs at COMMIT
@@ -58,9 +63,11 @@ import type { FlowChartExecutor, RedactionPolicy, RuntimeSnapshot } from 'footpr
 /**
  * The snapshot a chart-backed tool may hand outward.
  *
- * @param executor the inner run's executor, after `run()` returned, threw, or paused
- * @param policy   the tool's `redact` option — `undefined` means the raw
- *                 snapshot, exactly as `executor.getSnapshot()` returns it
+ * @param executor the run's executor — in flight, or after `run()` returned,
+ *                 threw, or paused
+ * @param policy   the policy the run was covered by (the policy the executor
+ *                 was handed) — `undefined` means the raw snapshot, exactly as
+ *                 `executor.getSnapshot()` returns it
  */
 export function servableSnapshot(
   executor: FlowChartExecutor,

@@ -654,21 +654,25 @@ model-facing line written to no history — is recomposed by the same pure
 function from the same three committed inputs.
 
 <Callout type="warn" title="What a recording actually contains">
-**An agent run is not redacted.** `Agent.create(...)` has no redaction option.
-A secret in a system prompt is in `servedAt(k).system.text` and in the commit
-log, verbatim; treat a recording accordingly.
+**An agent run is recorded as it ran unless you name what to keep out.**
+Without a policy, a secret in a system prompt is in `servedAt(k).system.text`
+and in the commit log, verbatim; treat a recording accordingly. With
+`Agent.create({ redact })` — `conversationRedaction()` names the system prompt's
+pieces among the conversation — the commit log holds the placeholder where a
+selected value was, and the rebuild reads a placeholder as absent, never as text
+the model was sent ([Keep personal data out of the record](doc:security#keep-personal-data-out-of-the-record)).
 
 The **receipt** carries no bytes — hashes, counts and names only — and those
 hashes are not redacted either. The run **salt** is what makes that safe to
 ship, not an assumption that something scrubbed it.
 
-Redaction here is **executor-level**: `flowchartAsTool({ redact })` /
-`runbookAsTool({ redact })` scrub an inner run's *commit log* at write time, and
-(since 9.89.1) serve everything else the tool shows — the result, the kept
-record's `sharedState`, its subflow states — from the same redacted view. A
-snapshot taken with `redact: true` also omits `initialState`, so folding it
+Redaction is the **executor's**: an agent's `redact`, and
+`flowchartAsTool({ redact })` / `runbookAsTool({ redact })`, scrub the run's
+*commit log* at write time and serve everything else from the same redacted
+view. A snapshot served under a policy omits `initialState`, so folding it
 reports `basis: 'log-only'` and `servedAt` raises `no-fold-base` rather than
-quietly rebuilding a short view.
+quietly rebuilding a short view — the gap that already says a value it could not
+recover reads as empty rather than as unknown.
 </Callout>
 
 <Callout title="Turning the receipt off">

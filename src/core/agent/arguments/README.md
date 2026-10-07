@@ -655,8 +655,10 @@ the PERFORMANCE block), and the resume adds no model call.
   call that then pauses on its own carries its completed arguments in the pause carriers
   (`pausedCheckInArgs`, …). A full recording of such a run carries that state, as it carries
   those carriers; a single-round ask whose calls run holds no answer in committed state. A tool
-  that must keep a value out of recordings too needs a redaction policy on the run, which an
-  Agent does not expose (arguments note § 5.1).
+  that must keep a value out of recordings too needs a redaction policy on the run: the
+  agent's `redact` (`src/redaction/`) — `conversationRedaction()` names these keys
+  (`argumentAsk`, `argumentAnswersKept`, `argumentResolutions`, the pause carriers) among the
+  conversation.
 - **A kept answer that reaches a check-in rides the check-in's own evidence pack.** The
   check-in shows the person the arguments the call will run with (`core/checkin.ts` ·
   `CheckInRequest`, on its `checkin.request` event and its pause), and it does not read the

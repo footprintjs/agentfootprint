@@ -63,6 +63,15 @@ export interface DurableWriterOptions {
   readonly session: () => string | undefined;
   /** The run id to stamp on the conversation, for correlating back to the run. */
   readonly runId: () => string | undefined;
+  /**
+   * The run's committed root state, live (`RunnerBase · liveState`). The
+   * conversation is READ here, at the commit that moved it — never off the
+   * commit event, whose values are the RECORD's form: under an agent's
+   * `redact` footprintjs serves a selected key as a placeholder there, and a
+   * store that resumed from those would continue a conversation of
+   * placeholders.
+   */
+  readonly state: () => Readonly<Record<string, unknown>> | undefined;
   /** Where the conversation goes. */
   readonly write: (sessionId: string, conversation: AgentRunCheckpoint) => Promise<void>;
 }
@@ -97,7 +106,7 @@ export interface DurableWriter {
  * "we write often" into a bound on how much can re-run.
  */
 export function durableWriter(options: DurableWriterOptions): DurableWriter {
-  const { mode, session, runId, write } = options;
+  const { mode, session, runId, state, write } = options;
 
   /** The write currently on the wire, or `undefined` when nothing is. */
   let inFlight: Promise<void> | undefined;
@@ -114,11 +123,6 @@ export function durableWriter(options: DurableWriterOptions): DurableWriter {
    * describing a problem that no longer exists.
    */
   let failure: Error | undefined;
-
-  /** Per-run accumulation, rebuilt from the commits themselves. */
-  let history: readonly LLMMessage[] = [];
-  let userMessage = '';
-  let iteration = 0;
 
   function pump(): void {
     if (inFlight !== undefined || queued === undefined) return;
@@ -145,15 +149,20 @@ export function durableWriter(options: DurableWriterOptions): DurableWriter {
       });
   }
 
-  function enqueue(sessionId: string): void {
+  function enqueue(
+    sessionId: string,
+    history: readonly LLMMessage[],
+    userMessage: string,
+    iteration: number,
+  ): void {
     queued = {
       sessionId,
       conversation: {
         version: 1,
         runId: runId() ?? 'unknown',
-        // The commit event hands over the stage's retained write view. Clone on
-        // the way to a store so nothing a persistence layer does can reach back
-        // into the run's own snapshot.
+        // Read from the run's live committed state. Clone on the way to a
+        // store so nothing a persistence layer does can reach back into the
+        // run's own state.
         history: structuredClone(history) as LLMMessage[],
         lastCompletedIteration: iteration,
         originalInput: { message: userMessage },
@@ -172,31 +181,26 @@ export function durableWriter(options: DurableWriterOptions): DurableWriter {
     // same class of reason.
     delivery: 'inline',
 
+    // The conversation moved iff this commit wrote `history`. The commit event
+    // says WHICH keys moved — a key's NAME is never redacted — and the run's
+    // live state says what they now hold: real values, the conversation the
+    // next turn resumes from. The event's own values are the record's form,
+    // which an agent's `redact` may have turned into placeholders.
     onCommit(event: CommitEvent): void {
-      let conversationMoved = false;
-      for (const mutation of event.mutations) {
-        if (mutation.key === 'history' && Array.isArray(mutation.value)) {
-          history = mutation.value as readonly LLMMessage[];
-          conversationMoved = true;
-        } else if (mutation.key === 'userMessage' && typeof mutation.value === 'string') {
-          userMessage = mutation.value;
-        } else if (mutation.key === 'iteration' && typeof mutation.value === 'number') {
-          iteration = mutation.value;
-        }
-      }
-      if (!conversationMoved) return;
+      if (!event.mutations.some((mutation) => mutation.key === 'history')) return;
       const sessionId = session();
       if (sessionId === undefined) return;
-      enqueue(sessionId);
-    },
-
-    // A fresh run starts from a fresh conversation. Without this a resumed run
-    // whose first commit has not landed yet could stamp the previous run's
-    // history onto this run's id.
-    clear(): void {
-      history = [];
-      userMessage = '';
-      iteration = 0;
+      const live = state();
+      const history = live?.['history'];
+      if (!Array.isArray(history)) return;
+      const userMessage = live?.['userMessage'];
+      const iteration = live?.['iteration'];
+      enqueue(
+        sessionId,
+        history as readonly LLMMessage[],
+        typeof userMessage === 'string' ? userMessage : '',
+        typeof iteration === 'number' ? iteration : 0,
+      );
     },
   };
 

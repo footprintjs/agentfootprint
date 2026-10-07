@@ -214,7 +214,7 @@ assessAnswer(recording).standing;       // 'ask' — the saved recording alone
 accountForAnswer(recording).facts.standing.value; // 'ask'
 ```
 
-## Seven rules the fold keeps
+## Eight rules the fold keeps
 
 1. **No "known" from silence.** Nothing fired is `unrefuted`, and `checked`
    shows how little ran.
@@ -231,6 +231,19 @@ accountForAnswer(recording).facts.standing.value; // 'ask'
 6. **"Rests on" is every call of the turn.** It may over-report; it never hides.
 7. **The model's own answer-level standing never moves the value.** A lens may
    show it beside the word.
+8. **No verdict over a value the record keeps out.** A recording of a run under
+   a redaction policy (an agent's `redact`) holds footprintjs's placeholder
+   where a selected state key was. The fold reads such a key as ABSENT (a
+   `pausedToolCallId` of `'REDACTED'` is not a pause), and when it asks for one
+   at all it gives no standing: `not-assessed`, with the keys it needed in
+   `keptOut` (`assess.ts` · `keptOutGuard`). `agent.assessment()` reads the
+   live run, where nothing is kept out.
+
+   ```ts
+   const a = assessAnswer(recordingOfARunUnderRedact);
+   a.standing; // 'not-assessed'
+   a.keptOut;  // ['history', …] — test/redaction/agent-redaction.readers.test.ts
+   ```
 
 ## The layer contract (layer 4 · give the answer), as it ships
 

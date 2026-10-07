@@ -7,7 +7,7 @@
  * Emits:   N/A (types only).
  */
 
-import { isDevMode } from 'footprintjs';
+import { isDevMode, type RedactionPolicy } from 'footprintjs';
 
 import type { LLMToolSchema, ToolCapability } from '../adapters/types.js';
 import type { ToolArtifacts } from '../artifacts/capability.js';
@@ -898,6 +898,29 @@ export interface ToolExecutionContext {
    * transport actually delivered.
    */
   readonly identity?: MemoryIdentity;
+
+  /**
+   * The redaction policy the calling run is covered by — the agent's
+   * `redact`, joined with any a composition or an outer caller added.
+   * **Absent when the run has none.**
+   *
+   * A run this tool starts is a NESTED run, and footprintjs's law is that a
+   * run's policy covers the runs nested in it. The library's own nested runs
+   * take it for you — `flowchartAsTool`, `runbookAsTool` and the
+   * `.selfExplain({ delegate })` debugger join it with their own. A tool that
+   * starts another agent hands it on, exactly as it hands `ctx.signal`:
+   *
+   * ```ts
+   * execute: (args, ctx) => specialist.run({ message: args.text }, {
+   *   ...(ctx.signal && { env: { signal: ctx.signal } }),
+   *   ...(ctx.redact && { redact: ctx.redact }),
+   * })
+   * ```
+   *
+   * It names what to keep out of RECORDS. It never touches the arguments this
+   * tool receives: the tool runs on real values.
+   */
+  readonly redact?: RedactionPolicy;
 
   /**
    * Register cleanup for work THIS call started — a code-interpreter session, a

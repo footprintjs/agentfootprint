@@ -12,6 +12,7 @@ import type {
   AttachRecorderOptions,
   FlowChartExecutorOptions,
   ReadTrackingMode,
+  RedactionPolicy,
   StructureRecorder,
   CommitValuesMode,
 } from 'footprintjs';
@@ -618,6 +619,49 @@ export interface AgentOptions {
    * guess. Cost is one small array copy per write.
    */
   readonly writeProvenance?: WriteProvenanceMode;
+  /**
+   * Keep named values out of everything this agent RECORDS — a footprintjs
+   * `RedactionPolicy`, handed to the run's executor, so footprintjs's one
+   * redaction rule decides every record the agent retains or serves.
+   *
+   * **Covered** (the placeholder where a value was): the commit log, the
+   * snapshot `getLastSnapshot()` serves (the redacted mirror), the narrative,
+   * every typed event — `agent.on(...)`, `recordRun` recordings (plain and
+   * packed), observability strategies (otel, file, audit, console, CloudWatch,
+   * X-Ray, AgentCore), `enable.localObservability` traces, attached
+   * recorders, the deferred-observer tier — bug reports, answer accounts, the
+   * self-explain tools, recordings a host files and serves, and every run the
+   * agent starts on a caller's behalf through a tool (`ctx.redact`).
+   *
+   * **Never covered — what the agent computes on or hands back to you:** the
+   * model's input; the answer `run()` returns and the reply a hosted agent
+   * streams; the conversation it continues (`checkpoint()`, `followUp`,
+   * `continueFrom`, a host's session store); the resume checkpoints (a pause's
+   * `checkpoint`, `RunCheckpointError.checkpoint`); and memory, which is what a
+   * later run recalls.
+   *
+   * **It selects by NAME, never by content** — footprintjs's law. A key or
+   * pattern masks a STATE key of that name (and everything under it) and, in
+   * every record handed out whole (an event's payload, a pause's question, the
+   * run's input and answer, a thrown error), a key of that name at ANY depth.
+   * An agent's conversation is one state key, `history`: a field like `ssn`
+   * inside a tool's arguments is masked in every event, but kept out of the
+   * snapshot only by naming the key that holds it. Free text has no name —
+   * to keep what people SAY out of the record, name where the agent keeps it
+   * (see the security guide's list).
+   *
+   * Validated at construction: an unknown field, a non-RegExp pattern, a
+   * frozen global RegExp or a policy that names nothing is refused.
+   *
+   * @example
+   * ```ts
+   * Agent.create({
+   *   provider, model,
+   *   redact: { keys: ['history', 'userMessage', 'finalContent'], patterns: [/ssn|email/i] },
+   * })
+   * ```
+   */
+  readonly redact?: RedactionPolicy;
   /**
    * Record the ASSEMBLED system prompt on every LLM call (9.50.0).
    * **Opt-in. Default OFF — and the default is a privacy decision.**

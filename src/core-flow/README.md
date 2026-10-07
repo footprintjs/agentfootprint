@@ -172,6 +172,26 @@ Every runner hands a `{ signal }` to its stages too (`../core/RunnerBase.ts` · 
 
 Pinned by `test/core-flow/composed-terminal-verdicts.test.ts`: every verdict × every composition × all three `reactMode`s against the standalone agent, the delivered answers (validated pass, observe, rails grounded) against the standalone answer, and an abort inside Sequence / Parallel / Loop. **Known gaps:** the error carries no `snapshot` (the composition's executor is still running when it is raised; the standalone fail-fast error carries the agent's); and a `'tell-model'` credential-consent record travels OFF tracked state by design (the URL is a bearer capability), so a composition cannot see it — a composed agent that finished with a consent outstanding still hands back its answer.
 
+### Decision 12: a composition's records are covered by its members' redaction
+
+A composition runs its members as subflows of ONE executor, so a member's
+`Agent.create({ redact })` cannot reach the member's records on its own. Each
+composition ADOPTS its members' declarations at construction
+(`redaction/declared.ts` · `adoptMemberRedaction`, after
+`readsMessageFromIfAny`) and its one run applies their union
+(`RunnerBase · openRunRedaction`): what any member keeps out is kept out of the
+composition's snapshot, events and recordings. A composition relays its members'
+words under its OWN keys (`current`, `results`, `branchResults`, `graphInput`),
+which no member names — `conversationRedaction()` names them, so a member
+declared with it keeps the relay out too.
+
+```typescript
+const reviewer = Agent.create({ provider, model, redact: conversationRedaction() }).build();
+const pipeline = Sequence.create().step('draft', drafter).step('review', reviewer).build();
+// The pipeline's run is covered by reviewer's policy (adopted); drafter's words
+// relayed under `current` are kept out too.
+```
+
 ## Events emitted
 
 | Composition | Events |

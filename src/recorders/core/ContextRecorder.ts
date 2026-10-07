@@ -19,6 +19,7 @@ import type { AgentfootprintEventMap, AgentfootprintEventType } from '../../even
 import type { ContextSlot } from '../../events/types.js';
 import { INJECTION_KEYS, slotFromSubflowId, slotFromRuntimeStageId } from '../../conventions.js';
 import { buildEventMeta, type RunContext } from '../../bridge/eventMeta.js';
+import type { RunRedaction } from '../../redaction/runRedaction.js';
 import type {
   BudgetPressureRecord,
   EvictionRecord,
@@ -36,12 +37,23 @@ export interface ContextRecorderOptions {
   readonly dispatcher: EventDispatcher;
   readonly id?: string;
   readonly getRunContext: () => RunContext;
+  /**
+   * The run's write relay. Under a redaction policy that selects a slot key
+   * (`systemPromptInjections`, `slotCompositions`, …) the scope channel serves
+   * its write as the placeholder; the slot builders hand the value they wrote
+   * to the run (`redaction/runRedaction.ts` · `setEventSource`), and this
+   * recorder derives its events from that — so they exist, and the
+   * dispatcher serves them by name like every event. Absent (or nothing
+   * relayed): the write as the scope channel served it.
+   */
+  readonly realWrites?: Pick<RunRedaction, 'takeRealWrite'>;
 }
 
 export class ContextRecorder implements CombinedRecorder {
   readonly id: string;
   private readonly dispatcher: EventDispatcher;
   private readonly getRunContext: () => RunContext;
+  private readonly realWrites: Pick<RunRedaction, 'takeRealWrite'> | undefined;
 
   // Per-write slot attribution is resolved from each write's own
   // runtimeStageId (see onWrite) — NOT a "currently-open slot" stack.
@@ -58,6 +70,7 @@ export class ContextRecorder implements CombinedRecorder {
     this.dispatcher = options.dispatcher;
     this.id = options.id ?? 'agentfootprint.context-recorder';
     this.getRunContext = options.getRunContext;
+    this.realWrites = options.realWrites;
   }
 
   // ─── Subflow boundaries ────────────────────────────────────────
@@ -89,41 +102,51 @@ export class ContextRecorder implements CombinedRecorder {
 
     // Injection signals (INJECTION_KEYS) — per-slot arrays of InjectionRecord.
     if (key === INJECTION_KEYS.SYSTEM_PROMPT && activeSlot === 'system-prompt') {
-      this.handleInjectionsWrite(activeSlot, event);
+      this.handleInjectionsWrite(activeSlot, event, this.written(event));
       return;
     }
     if (key === INJECTION_KEYS.MESSAGES && activeSlot === 'messages') {
-      this.handleInjectionsWrite(activeSlot, event);
+      this.handleInjectionsWrite(activeSlot, event, this.written(event));
       return;
     }
     if (key === INJECTION_KEYS.TOOLS && activeSlot === 'tools') {
-      this.handleInjectionsWrite(activeSlot, event);
+      this.handleInjectionsWrite(activeSlot, event, this.written(event));
       return;
     }
 
     // Composition summary — ONE record per slot exit, written just before exit.
     if (key === COMPOSITION_KEYS.SLOT_COMPOSED) {
-      this.handleSlotComposedWrite(event);
+      this.handleSlotComposedWrite(event, this.written(event));
       return;
     }
 
     // Evictions — per-piece removals under budget pressure.
     if (key === COMPOSITION_KEYS.EVICTED) {
-      this.handleEvictionsWrite(event);
+      this.handleEvictionsWrite(event, this.written(event));
       return;
     }
 
     // Budget-pressure warnings — fired BEFORE evictions.
     if (key === COMPOSITION_KEYS.BUDGET_PRESSURE) {
-      this.handleBudgetPressureWrite(event);
+      this.handleBudgetPressureWrite(event, this.written(event));
       return;
     }
   }
 
+  /**
+   * The value the stage wrote: the one it relayed (`realWrites`), else the
+   * write as the scope channel served it. Taken ONCE per write, so a relayed
+   * value is matched to the write it came with.
+   */
+  private written(event: WriteEvent): unknown {
+    const relayed = this.realWrites?.takeRealWrite(event.runtimeStageId ?? '', event.key);
+    return relayed !== undefined ? relayed.value : event.value;
+  }
+
   // ─── Internals ─────────────────────────────────────────────────
 
-  private handleInjectionsWrite(slot: ContextSlot, event: WriteEvent): void {
-    const records = this.asInjectionArray(event.value);
+  private handleInjectionsWrite(slot: ContextSlot, event: WriteEvent, value: unknown): void {
+    const records = this.asInjectionArray(value);
     if (!records) return;
     const seen = this.seenInjections.get(slot) ?? new Set<string>();
     for (const rec of records) {
@@ -134,22 +157,22 @@ export class ContextRecorder implements CombinedRecorder {
     this.seenInjections.set(slot, seen);
   }
 
-  private handleSlotComposedWrite(event: WriteEvent): void {
-    const rec = this.asSlotComposition(event.value);
+  private handleSlotComposedWrite(event: WriteEvent, value: unknown): void {
+    const rec = this.asSlotComposition(value);
     if (!rec) return;
     this.dispatch('agentfootprint.context.slot_composed', rec, event);
   }
 
-  private handleEvictionsWrite(event: WriteEvent): void {
-    const records = this.asEvictionArray(event.value);
+  private handleEvictionsWrite(event: WriteEvent, value: unknown): void {
+    const records = this.asEvictionArray(value);
     if (!records) return;
     for (const rec of records) {
       this.dispatch('agentfootprint.context.evicted', rec, event);
     }
   }
 
-  private handleBudgetPressureWrite(event: WriteEvent): void {
-    const records = this.asPressureArray(event.value);
+  private handleBudgetPressureWrite(event: WriteEvent, value: unknown): void {
+    const records = this.asPressureArray(value);
     if (!records) return;
     for (const rec of records) {
       // The payload REQUIRES `unit`; the record does not, because slot
@@ -180,11 +203,12 @@ export class ContextRecorder implements CombinedRecorder {
     // designed to carry exactly what ContextInjectedPayload needs, so we
     // copy through directly.
     //
-    // Redaction: footprintjs's scope layer sets `event.redacted = true` if
-    // its RedactionPolicy matched the scope key. We trust that flag —
-    // `rec.rawContent` arrives already-redacted if it was going to be. We
-    // do NOT re-implement redaction here (single source of truth in
-    // footprintjs's RedactionPolicy).
+    // Redaction is never decided here. The record is the one the slot wrote
+    // (relayed when the policy selects its key — `written`), and the
+    // dispatcher serves the event like every other: a field the policy names
+    // (`rawContent`, `contentSummary`, …) at any depth of the payload is the
+    // placeholder (`src/redaction/served.ts`). One rule, footprintjs's — and
+    // a kept-out injection is still an injection the record shows.
     this.dispatch('agentfootprint.context.injected', rec, event);
   }
 

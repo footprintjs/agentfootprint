@@ -25,10 +25,12 @@
  */
 import type { TypedScope } from 'footprintjs';
 import type { EmbeddingGeneratedPayload } from '../../events/payloads.js';
+import { emitServed, type EmitScope } from '../../redaction/runRedaction.js';
 
 /**
  * Fire the event when the scope has an emit channel, and do nothing when it
- * does not.
+ * does not. Served by the run's redaction like every typed event
+ * (`src/redaction/runRedaction.ts` · `emitServed`).
  *
  * A memory pipeline can be mounted outside an Agent (`mountMemoryRead` on a
  * bare flowchart), and a stage that threw because nobody was listening would
@@ -40,6 +42,6 @@ export function emitEmbedding(
 ): void {
   const emitter = (scope as { $emit?: (type: string, payload: unknown) => void }).$emit;
   if (typeof emitter === 'function') {
-    emitter.call(scope, 'agentfootprint.embedding.generated', payload);
+    emitServed(scope as EmitScope, 'agentfootprint.embedding.generated', payload);
   }
 }

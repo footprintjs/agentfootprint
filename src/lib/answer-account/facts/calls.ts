@@ -28,7 +28,7 @@
 import { strip } from '../../../core/agent/coverage/read.js';
 import { v } from '../render.js';
 import type { RecordPointer, SentenceVar, ToolCallFact } from '../types.js';
-import { isRecord, str, type ViewEvent } from '../view.js';
+import { isRecord, keptOut, str, type ViewEvent } from '../view.js';
 import {
   at,
   countedFields,
@@ -296,6 +296,9 @@ interface Outcome {
   readonly ruleEvent?: ViewEvent;
 }
 
+/** The `tool_end` fields that say how a call ended — read by `outcomeOf`. */
+const OUTCOME_FIELDS = ['notDispatched', 'notExecuted', 'error'] as const;
+
 function outcomeOf(
   ctx: ReadContext,
   byCall: CallIndex,
@@ -321,6 +324,10 @@ function outcomeOf(
   const isPausedCall =
     ctx.resumedLeg && ((pausedId !== undefined && pausedId === id) || start === undefined);
 
+  // The record keeps out a field that says how the call ended (a redaction
+  // policy's placeholder): how it ended cannot be told, so it is not guessed.
+  if (end !== undefined && OUTCOME_FIELDS.some((field) => keptOut(end, field)))
+    return { outcome: 'unknown' };
   if (end?.payload.notDispatched !== undefined)
     return { outcome: 'not-dispatched', ruleEvent: end };
   if (checkInDeclined !== undefined) return { outcome: 'declined', ruleEvent: checkInDeclined };
@@ -362,6 +369,16 @@ export function endPointer(end: ViewEvent, emptiness: EmptinessReading): RecordP
   return emptiness.emptiness === 'unknown' ? at(end, 'toolCallId') : derived(end, '#emptiness');
 }
 
+/**
+ * Whether the result the emptiness would be read from is kept out of the
+ * record: `modelResult` when the call has one, else `result` (a kept-out
+ * field reads as absent, so a kept-out `modelResult` falls to the first arm).
+ */
+function resultIsKeptOut(end: ViewEvent): boolean {
+  if (keptOut(end, 'modelResult')) return true;
+  return !('modelResult' in end.payload) && keptOut(end, 'result');
+}
+
 function viewOf(end: ViewEvent): ToolCallFact['view'] {
   if (!('modelResult' in end.payload)) return 'result';
   return deepEqual(strip(end.payload.result), end.payload.modelResult)
@@ -384,7 +401,13 @@ function readOne(ctx: ReadContext, byCall: CallIndex, id: string): CallRead {
   const judged = outcome.outcome === 'ran' && outcome.withheldBy === undefined && end !== undefined;
   // The door THIS record holds for the call — its events — decides what was declared; a marker
   // in the bytes the run did not recognize (an envelope returned as JSON text) is plain data.
-  const emptiness: EmptinessReading = judged
+  // A result the record keeps out (a redaction policy left its placeholder
+  // there — `view.ts` · `keptOut`) is not judged: whether it was empty cannot be
+  // read, and the account says why instead of reading the placeholder.
+  const resultKeptOut = judged && resultIsKeptOut(end);
+  const emptiness: EmptinessReading = resultKeptOut
+    ? { emptiness: 'unknown', undeclaredShape: false, rowsUnread: 'redacted' }
+    : judged
     ? readEmptiness('modelResult' in end.payload ? end.payload.modelResult : end.payload.result, {
         ...(rowsAtOf(ctx.declarations, toolName) !== undefined && {
           rowsAt: rowsAtOf(ctx.declarations, toolName),
@@ -416,7 +439,7 @@ function readOne(ctx: ReadContext, byCall: CallIndex, id: string): CallRead {
     ...countedFields(emptiness),
     ...(emptiness.described !== undefined && { described: emptiness.described }),
     ...(emptiness.bounded === true && { bounded: true as const }),
-    ...(judged && { view: viewOf(end) }),
+    ...(judged && !resultKeptOut && { view: viewOf(end) }),
     ...(coverage !== undefined && {
       coverage: {
         kind: coverage.kind,

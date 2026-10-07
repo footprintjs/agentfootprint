@@ -160,7 +160,7 @@ Two surfaces of the [injection engine](doc:instructions) need care:
 6. **Your guard, at the right moment.** [Middleware](doc:middleware) is the seam for a classifier: `.act({ input })` sees the user's message before the run commits it, and `.act({ afterTool })` sees every tool result before the model reads it. Either can rewrite (`allow(value, why)`) or refuse (`deny(reason)`), and every decision leaves a `middlewareDecisions` row. The library ships the seam, not the classifier.
 7. **Evidence.** Each layer emits typed events — `permission.check`, `permission.halt`, `validation.args_invalid`, `credential.*`, `middleware.decision` — and `auditExport` produces a [tamper-evident, hash-chained bundle](doc:exporters#tamper-evident-audit-bundle). You may not stop an injection as it happens; you can always reconstruct it.
 
-**Redaction is opt-in.** An `Agent` sets no redaction policy, and `MemoryRedactionPolicy` is a reserved field whose implementation has not shipped. Scrub what you store yourself — see [Read this before you scrub secrets](doc:middleware#read-this-before-you-scrub-secrets).
+**Redaction is opt-in, through one door.** `Agent.create({ redact })` keeps what you name out of every record the library keeps or serves about the agent's runs — see [Keep personal data out of the record](#keep-personal-data-out-of-the-record) below.
 
 ### Guards to add yourself
 
@@ -169,6 +169,29 @@ Two surfaces of the [injection engine](doc:instructions) need care:
 - **Least privilege.** Per-identity `gatedTools` predicates plus `PermissionPolicy.fromRoles` keep the visible tool set small; a sequence-aware checker that answers `'halt'` turns a suspicious chain into an ended turn.
 - **Make mutating tools idempotent** (an idempotency key on stable call content). Injection aside, a model can re-issue a call after an error, and `resumeOnError` replays from history.
 - **Keep trigger predicates structural.** Route skills on fields you control — a skill-graph `guard:` condition, the iteration, a structured field of a result — rather than on free-text matches over tool output.
+
+## Keep personal data out of the record
+
+An agent's records — the snapshot, the narrative, every event, recordings, and everything built from them (traces, bug reports, answer accounts, the exporters) — hold the conversation unless you say otherwise. `Agent.create({ redact })` takes a footprintjs `RedactionPolicy` and applies it to all of them, while the model, your tools and the caller keep the real values. `conversationRedaction()` (from `agentfootprint/security`) is the library's own list of the names the conversation travels under; join the fields your own tools name:
+
+<CodeFile path="examples/features/95-agent-redaction.ts" region="redact" title="examples/features/95-agent-redaction.ts (region: redact)" />
+
+| Kept out — the placeholder where a selected value was | Never kept out — real values |
+|---|---|
+| `getLastSnapshot()`, the commit log, the narrative | what the model is sent; what your tools receive |
+| every typed event — `agent.on`, attached recorders, the exporters | the answer `run()` returns; a host's streamed reply |
+| recordings (`recordRun`, packed or plain), bug reports, answer accounts, the self-explain tools | the conversation the agent continues (`checkpoint()`, `followUp`) and the resume checkpoints |
+| | what a memory store keeps for later runs |
+
+**It selects by name.** A policy masks a state key of the name it selects, and a field of that name at any depth of an event. Free text has no name of its own, which is why the library ships the list of names that carry it — the person's message, the model's words and thinking, tool arguments and results, recalled memory, injected context, a person's reply to a pause, the draft a schema check rejected. A test runs every feature on that list with a canary in each place and fails if one reaches a record.
+
+**It reaches every run the agent's records come from.** A [composition](doc:patterns) adopts its members' policies, and a run a tool starts gets the calling run's policy as `ctx.redact` — `flowchartAsTool` and `runbookAsTool` join it with their own, and a tool that runs another agent passes it on: `specialist.run(input, { redact: ctx.redact })`.
+
+**Readers say what the record keeps out.** The answer account reads a kept-out question, answer or result as *kept out*, never as "not recorded" or "no tool ran"; `assessAnswer` gives no standing over state the record keeps out.
+
+**Memory is not a record.** A memory store is working state the agent recalls on its next run, so `defineMemory({ redact })` is refused rather than accepted and ignored: the agent's `redact` keeps the record of the memory stages clean, and a store keeps what you write to it. Filter what you write before it is stored, or mount the memory `readOnly: true`.
+
+**Named limits.** The run's answer leaves its chart as a bare string, and footprintjs serves an unnamed output as it is — a recording's `run.exit` payload carries it whatever the policy. Error text written by code (`error`, `errorMessage`) is not on the list. The full list of what is and is not covered is in [`src/redaction/README.md`](https://github.com/footprintjs/agentfootprint/blob/main/src/redaction/README.md).
 
 ## What ships today, and what does not
 
@@ -183,10 +206,11 @@ Two surfaces of the [injection engine](doc:instructions) need care:
 - Tool and message middleware (`.act()`) — the seam for your own guard or classifier
 - Tamper-evident audit export (`auditExport` / `verifyAuditBundle`)
 - Causal memory for decision-evidence retention
+- Agent redaction — `Agent.create({ redact })`, with the library's vocabulary `conversationRedaction()`
 
 **Not in core:**
 - Prompt-injection detection of any kind — no classifier, no tool-output scanner. Contain it with the layers above and plug a detector in at `.act()`.
-- A redaction policy on `Agent`; `MemoryRedactionPolicy` is a reserved field whose implementation has not shipped.
+- Scrubbing what a memory store keeps — memory is working state the agent recalls, so `defineMemory({ redact })` is refused; filter what you write before it is stored.
 
 ## Consent is work, not conversation (8.6.0)
 

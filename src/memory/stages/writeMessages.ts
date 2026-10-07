@@ -18,11 +18,14 @@
  *   pass a custom `idFrom` that produces whatever shape your app needs.
  *
  * PII / redaction:
- *   Message content is stored VERBATIM. If your messages contain PII
- *   (names, addresses, secrets), redact BEFORE writing — either by
- *   mutating `scope.newMessages` upstream or by wrapping the call site
- *   with a redaction helper. The storage layer does NOT scrub for you.
- *   Pair with footprintjs's `RedactionPolicy` for end-to-end coverage.
+ *   Message content is stored VERBATIM — a memory is the agent's working
+ *   state, what a later run recalls, and no redaction policy scrubs it
+ *   (`../redactRefusal.ts` says why `defineMemory({ redact })` is refused).
+ *   An agent's `redact` keeps named values out of the RECORD of this stage
+ *   (its commit, its `memory.*` events, the narrative); it does not change
+ *   what the store holds. If messages that contain PII must not be stored,
+ *   do not write them (a read-only memory, or none), or scrub them before
+ *   they reach the store — a `MemoryStore` wrapper whose `put` does it.
  *
  * Extended thinking blocks (Anthropic) / reasoning tokens (OpenAI):
  *   Persisting reasoning blocks is expensive — they can be 10-100× the

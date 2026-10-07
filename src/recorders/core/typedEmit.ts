@@ -11,6 +11,7 @@
 
 import { isDevMode } from 'footprintjs';
 import type { AgentfootprintEventMap, AgentfootprintEventType } from '../../events/registry.js';
+import { emitServed } from '../../redaction/runRedaction.js';
 
 /**
  * Minimal scope surface we need to emit — structurally compatible with
@@ -50,6 +51,12 @@ function devWarnIfUnclonable(type: string, payload: unknown): void {
 /**
  * Emit a typed event from inside stage code.
  *
+ * Under a run's redaction policy the payload is SERVED here, once, before it
+ * reaches footprintjs's `$emit` — so `agent.on` listeners, every recorder on
+ * the executor, the deferred tier and the narrative's `[emit]` lines all get
+ * the same served payload (`src/redaction/runRedaction.ts` · `emitServed`).
+ * With no policy the payload passes through as it is.
+ *
  * @example
  *   typedEmit(scope, 'agentfootprint.stream.llm_start', {
  *     iteration: 1,
@@ -66,5 +73,5 @@ export function typedEmit<K extends AgentfootprintEventType>(
   payload: AgentfootprintEventMap[K]['payload'],
 ): void {
   devWarnIfUnclonable(type, payload);
-  scope.$emit(type, payload);
+  emitServed(scope, type, payload);
 }

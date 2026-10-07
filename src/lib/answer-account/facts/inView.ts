@@ -85,15 +85,27 @@ export interface InViewAll {
   readonly listed: readonly InViewRead[];
   /** In view but past `MAX_IN_VIEW`. */
   readonly more: number;
+  /**
+   * Earlier results the record shows were in view (a witness names them) but
+   * that cannot be read: the record keeps the history out. Their emptiness
+   * cannot be told, and the account says so (`signals.ts`).
+   */
+  readonly keptOut: number;
 }
 
 export function readInView(ctx: ReadContext, callIds: ReadonlySet<string>): InViewAll {
   const history = historyOf(ctx.view);
+  const historyKeptOut = ctx.view.isStateKeptOut('history');
   const windowed = typeof ctx.view.first('agent.run_configured')?.payload.window === 'string';
   const reads: InViewRead[] = [];
+  let keptOut = 0;
   for (const witness of witnessesOf(ctx.view, ctx.answeringIteration)) {
     const id = witness.payload.sourceId as string;
     if (callIds.has(id)) continue;
+    if (historyKeptOut) {
+      keptOut += 1;
+      continue;
+    }
     const historyIndex = history.findIndex(
       (m) => isRecord(m) && m.role === 'tool' && m.toolCallId === id,
     );
@@ -135,5 +147,6 @@ export function readInView(ctx: ReadContext, callIds: ReadonlySet<string>): InVi
     all: reads,
     listed: reads.slice(0, MAX_IN_VIEW),
     more: Math.max(0, reads.length - MAX_IN_VIEW),
+    keptOut,
   };
 }

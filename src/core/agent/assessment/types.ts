@@ -236,6 +236,14 @@ export interface AnswerAssessment {
    * so every result in `history` was read (it may over-report; it never hides).
    */
   readonly turnFrom: 'person' | 'whole-history';
+  /**
+   * The state keys the fold needed and the record keeps out — a redaction
+   * policy (an agent's `redact`) left its placeholder where each value was.
+   * Present only then, and then the fold did not run: `standing` reads
+   * `not-assessed`, never a verdict computed over values the record does not
+   * hold (`assess.ts` · `assessAnswer`).
+   */
+  readonly keptOut?: readonly string[];
 }
 
 /**

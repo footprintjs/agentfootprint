@@ -332,9 +332,17 @@ export function beforePauseMore(
 /**
  * The committed history holds no tool result from before the pause. Said as
  * exactly that — never "nothing ran": a window strategy may have dropped an
- * earlier result, and the record cannot tell the two apart.
+ * earlier result, and the record cannot tell the two apart. A history the
+ * record keeps out (a redaction policy's placeholder) is said to be kept out.
  */
 export function noResultsBeforePause(ctx: ReadContext): Sentence {
+  if (ctx.view.isStateKeptOut('history')) {
+    return ctx.say('beforePause.keptOut', {
+      status: 'not-recorded',
+      missing: 'redacted',
+      chips: [heldChip()],
+    });
+  }
   return ctx.say('beforePause.noResults', {
     status: 'not-recorded',
     missing: 'before-pause',

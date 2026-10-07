@@ -30,7 +30,7 @@ import { MAX_REPORTED_VALUES } from '../../../core/agent/evidence/limits.js';
 import { chip, joinAnd, n, v } from '../render.js';
 import type { TemplateId } from '../templates.js';
 import type { AnswerFacts, EvidenceFact, AccountFact, RecordPointer, Sentence } from '../types.js';
-import { isRecord, num, str, type ViewEvent } from '../view.js';
+import { isRecord, keptOut, num, str, type ViewEvent } from '../view.js';
 import { at, emptinessSource, stateAt, takeItem, type ReadContext } from './common.js';
 import type { CallsRead } from './calls.js';
 import { MAX_LISTED_CALLS } from './checked.js';
@@ -323,13 +323,14 @@ const CHECK_LINES: Readonly<Record<AssessmentCheck, TemplateId>> = {
 /** A standing this record cannot give — said so, with the one template that says why. */
 function noStanding(
   ctx: ReadContext,
-  id: 'howSure.standing.none' | 'howSure.standing.noAnswer',
+  id: 'howSure.standing.none' | 'howSure.standing.noAnswer' | 'howSure.standing.keptOut',
 ): { lines: Sentence[]; fact: StandingFact } {
+  const missing = id === 'howSure.standing.keptOut' ? 'redacted' : 'no-event';
   return {
     lines: [
       ctx.say(id, {
         status: 'not-recorded',
-        missing: 'no-event',
+        missing,
         chips: [chip('not-recorded', 'chip.notRecorded')],
       }),
     ],
@@ -338,7 +339,7 @@ function noStanding(
       source: 'library',
       status: 'not-recorded',
       pointers: [],
-      missing: 'no-event',
+      missing,
     },
   };
 }
@@ -353,12 +354,16 @@ function noStanding(
  * a rule stopped it before it answered, or the recording ends early, and the
  * fold cannot tell those from the committed state (`agent.assessment()`
  * returns `undefined` there). A refused answer still has a `turn_end`: the
- * account rates the answer the record holds.
+ * account rates the answer the record holds. The fold is handed the state AS
+ * RECORDED: where it would read a key the record keeps out (a redaction
+ * policy's placeholder), it gives no standing (`AnswerAssessment.keptOut`),
+ * and neither does the account.
  */
 function standingLines(ctx: ReadContext): { lines: Sentence[]; fact: StandingFact } {
-  const state = ctx.view.state;
+  const state = ctx.view.stateAsRecorded;
   if (state === undefined) return noStanding(ctx, 'howSure.standing.none');
   const a = assessAnswer({ snapshot: { sharedState: state } }, ctx.declarations);
+  if (a.keptOut !== undefined) return noStanding(ctx, 'howSure.standing.keptOut');
   if (a.standing !== 'ask' && ctx.view.last('agent.turn_end') === undefined) {
     return noStanding(ctx, 'howSure.standing.noAnswer');
   }
@@ -442,6 +447,29 @@ export function readHowSure(ctx: ReadContext, calls: CallsRead): HowSureRead {
   const standing = standingLines(ctx);
   const lines: Sentence[] = [...standing.lines, ...expectationLines(ctx, calls)];
   const e = evidenceEvent(ctx);
+  // The check ran, and the values it flagged are kept out of the record (a
+  // redaction policy selects `unsupported`): said so — never "nothing flagged".
+  if (e !== undefined && keptOut(e, 'unsupported')) {
+    const where = at(e, 'unsupported');
+    lines.push(
+      ctx.say('howSure.evidence.keptOut', {
+        status: 'not-recorded',
+        missing: 'redacted',
+        pointers: [where],
+      }),
+    );
+    return {
+      lines,
+      standing: standing.fact,
+      evidence: {
+        value: null,
+        source: 'library',
+        status: 'not-recorded',
+        pointers: [where],
+        missing: 'redacted',
+      },
+    };
+  }
   const posture = str(e?.payload.posture);
   const candidates = num(e?.payload.candidates);
   const readable =

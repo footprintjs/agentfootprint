@@ -225,7 +225,11 @@ export interface RunbookAsToolOptions {
    *  footprintjs 9.20.0 (the floor from 9.89.3): nothing left the log
    *  carries that the served view does not scrub; the checkpoint is not a
    *  served view. See `FlowchartAsToolOptions.redact` for the two things it
-   *  does not govern: the run's fold base and the resume checkpoint. */
+   *  does not govern: the run's fold base and the resume checkpoint.
+   *
+   *  Joined with the policy the calling run is covered by (`ctx.redact` — the
+   *  agent's own `redact`): the procedure runs nested in that run, and a run's
+   *  policy covers the runs nested in it. Either alone keeps a name out. */
   readonly redact?: RedactionPolicy;
 }
 

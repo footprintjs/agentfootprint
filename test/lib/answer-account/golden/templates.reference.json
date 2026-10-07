@@ -402,6 +402,15 @@
   ],
   "source": "library"
  },
+ "asked.keptOut@1": {
+  "text": "The question is kept out of this record.",
+  "parts": [
+   {
+    "text": "The question is kept out of this record."
+   }
+  ],
+  "source": "library"
+ },
  "understood.rule@1": {
   "text": "The library's routing picked the skill-skill-id skill because one of the app's rules matched.",
   "parts": [
@@ -943,6 +952,15 @@
   "parts": [
    {
     "text": "No tool result from before the pause is in this record's history."
+   }
+  ],
+  "source": "library"
+ },
+ "beforePause.keptOut@1": {
+  "text": "This record keeps the run's history out, so what came back before the pause cannot be told.",
+  "parts": [
+   {
+    "text": "This record keeps the run's history out, so what came back before the pause cannot be told."
    }
   ],
   "source": "library"
@@ -1531,6 +1549,15 @@
   ],
   "source": "library"
  },
+ "howSure.standing.keptOut@1": {
+  "text": "How sure cannot be told: this record keeps out part of the state the standing rests on.",
+  "parts": [
+   {
+    "text": "How sure cannot be told: this record keeps out part of the state the standing rests on."
+   }
+  ],
+  "source": "library"
+ },
  "howSure.standing.known@1": {
   "text": "Known — the app's answer checks passed this exact answer.",
   "parts": [
@@ -2017,6 +2044,15 @@
   ],
   "source": "library"
  },
+ "howSure.evidence.keptOut@1": {
+  "text": "The library checked the answer's names and numbers; what it could not find is kept out of this record.",
+  "parts": [
+   {
+    "text": "The library checked the answer's names and numbers; what it could not find is kept out of this record."
+   }
+  ],
+  "source": "library"
+ },
  "howSure.evidence.notRecorded@1": {
   "text": "Whether the answer's names and numbers were checked is not recorded.",
   "parts": [
@@ -2271,6 +2307,30 @@
   ],
   "source": "library"
  },
+ "unreachable.inView.redacted@1": {
+  "text": "It cannot be told what 2 earlier results in front of the model held: this record keeps the run's history out.",
+  "parts": [
+   {
+    "text": "It cannot be told what 2 earlier results in front of the model held: this record keeps the run's history out."
+   }
+  ],
+  "source": "library"
+ },
+ "unreachable.empty.redacted@1": {
+  "text": "It cannot be told whether the result of lookup_volumes was empty: this record keeps the result out.",
+  "parts": [
+   {
+    "text": "It cannot be told whether the result of "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " was empty: this record keeps the result out."
+   }
+  ],
+  "source": "library"
+ },
  "wrong.errors@1": {
   "text": "2 tool calls did not run cleanly: 1 failed, 1 refused by a rule, 1 declined by a person, 1 not run.",
   "parts": [
@@ -2384,6 +2444,24 @@
   "parts": [
    {
     "text": "Not in this record: none of its events belong to the run asked for."
+   }
+  ],
+  "source": "library"
+ },
+ "scope.keptOut@1": {
+  "text": "This record keeps out values this report reads, so nothing about the answer can be told from it.",
+  "parts": [
+   {
+    "text": "This record keeps out values this report reads, so nothing about the answer can be told from it."
+   }
+  ],
+  "source": "library"
+ },
+ "row.keptOut@1": {
+  "text": "Not told: this record keeps out values this report reads.",
+  "parts": [
+   {
+    "text": "Not told: this record keeps out values this report reads."
    }
   ],
   "source": "library"

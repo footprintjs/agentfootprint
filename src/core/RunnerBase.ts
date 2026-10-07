@@ -13,9 +13,15 @@ import type {
   FlowChart,
   FlowChartExecutor,
   FlowchartCheckpoint,
+  RedactionPolicy,
   RunOptions,
 } from 'footprintjs';
+import type { RunContext } from '../bridge/eventMeta.js';
 import { EventDispatcher } from '../events/dispatcher.js';
+import { redactionDeclaredBy } from '../redaction/declared.js';
+import { unionRedactionPolicies } from '../redaction/policy.js';
+import { createRunRedaction, type RunRedaction } from '../redaction/runRedaction.js';
+import { servableSnapshot } from './servableSnapshot.js';
 import { redactConsentUrlForEvent } from '../identity/consent.js';
 import { argumentAskReplyForEvent, isArgumentAskPause } from './agent/arguments/askMarker.js';
 import { readAskComponent } from './askComponent.js';
@@ -150,9 +156,88 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
    * {@link RunnerBase.getSnapshot} is the same value under the name that says
    * so. Anything that must describe a FINISHED run has to capture at the
    * terminal flush instead of polling this.
+   *
+   * **Served, under a redaction policy.** When the run was covered by one
+   * (`Agent.create({ redact })`, a composed member's, or one a calling tool
+   * handed down), this is footprintjs's REDACTED view —
+   * `getSnapshot({ redact: true })`, through `servableSnapshot`, the one owner
+   * of what a run may show: `sharedState` and every subflow's state from the
+   * redacted mirror, the commit log as scrubbed at write time, and no
+   * `initialState` (the raw pre-run base never passed the policy, so a fold of
+   * it reports `basis: 'log-only'`). Without a policy it is the snapshot
+   * exactly as footprintjs builds it. The library's own logic never reads this
+   * getter — what it computes on is the live run (`liveSnapshot`).
    */
   getLastSnapshot(): ReturnType<FlowChartExecutor['getSnapshot']> | undefined {
+    return this.lastExecutor === undefined
+      ? undefined
+      : servableSnapshot(this.lastExecutor, this.lastRunPolicy);
+  }
+
+  /**
+   * The LIVE snapshot of the most recent run — real values, never served.
+   * For the runner's own logic only (continuing a conversation, building a
+   * checkpoint, decoding the run's verdict): what the agent computes on is the
+   * class the redaction law never covers. Anything handed OUT goes through
+   * {@link RunnerBase.getLastSnapshot}.
+   */
+  protected liveSnapshot(): ReturnType<FlowChartExecutor['getSnapshot']> | undefined {
     return this.lastExecutor?.getSnapshot();
+  }
+
+  /**
+   * The current run's committed root state, live and unserved — O(1), no
+   * snapshot built. For the hosting door's mid-run conversation writer
+   * (`hosting/durability.ts`), which stores what the next turn resumes from
+   * and must therefore store the real values, never the record's form.
+   *
+   * @internal
+   */
+  liveState(): Readonly<Record<string, unknown>> | undefined {
+    return this.lastExecutor?.getRuntime().globalStore.getState();
+  }
+
+  /**
+   * Subscribe to this runner's REAL-value event path — every event as its
+   * producer made it, never served (`EventDispatcher · onRealEvent`). For the
+   * library's own mechanisms that run on events and hand their result back to
+   * the caller or the run itself: a hosted agent's streamed reply, its spend
+   * ledger, `toSSE({ format: 'text' })`. Never a record.
+   *
+   * @internal
+   */
+  onRealEvent(listener: (event: AgentfootprintEvent) => void): Unsubscribe {
+    return this.dispatcher.onRealEvent(listener);
+  }
+
+  /**
+   * The redaction policy the most recent run was covered by — this runner's
+   * own declaration (an agent's `redact`, a composition's members'), joined
+   * with any policy the caller handed down for that run. `undefined` when none.
+   * Set when the run opens, so it already holds for an in-flight run.
+   */
+  private lastRunPolicy: RedactionPolicy | undefined;
+
+  /**
+   * Open the redaction for one run — called by every runner's
+   * `createExecutor`, for every run, before `new FlowChartExecutor`.
+   *
+   * The policy in force is this runner's declaration joined with `handedDown`
+   * (a policy the caller added for this run — `AgentRunOptions.redact`). The
+   * returned object supplies the executor's scope factory (so every stage's
+   * events are served at their source, `src/redaction/runRedaction.ts`) and
+   * hands the policy to footprintjs (`applyTo`). The dispatcher serves the
+   * run's direct facts by the same rule from here on.
+   */
+  protected openRunRedaction(
+    handedDown: RedactionPolicy | undefined,
+    getRunContext: () => RunContext,
+  ): RunRedaction {
+    const policy = unionRedactionPolicies(redactionDeclaredBy(this), handedDown);
+    const run = createRunRedaction({ policy, dispatcher: this.dispatcher, getRunContext });
+    this.dispatcher.useServing(run.serving);
+    this.lastRunPolicy = policy;
+    return run;
   }
 
   /**
@@ -162,9 +247,11 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
    * footprintjs executor — without having to know whether they're holding
    * an agentfootprint Runner or a raw executor.
    *
-   * During an active run, returns the live snapshot (commit log + execution
-   * tree built incrementally as stages execute). Between runs, returns the
-   * last completed run's snapshot. Undefined before any run has started.
+   * During an active run, returns the in-progress snapshot (commit log +
+   * execution tree built incrementally as stages execute). Between runs,
+   * returns the last completed run's snapshot. Undefined before any run has
+   * started. Served exactly as `getLastSnapshot()` is: under the run's
+   * redaction policy, the placeholder where a selected value was.
    */
   getSnapshot(): ReturnType<FlowChartExecutor['getSnapshot']> | undefined {
     return this.getLastSnapshot();
@@ -805,6 +892,7 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
         },
         getSnapshot: () => this.getLastSnapshot(),
         getCommitCount: () => this.getCommitCount(),
+        redactedByPolicy: () => this.lastRunPolicy !== undefined,
       }),
     // v2.8 grouped strategy enablers — see
     // `docs/inspiration/strategy-everywhere.md`.

@@ -98,10 +98,13 @@
  * `payloadMode: 'verbatim'` embeds full payloads (still
  * JSON-sanitized). For Art. 12 completeness on an access-controlled
  * store that is often the point — but the bundle then carries prompts,
- * tool args/results and model output. Treat it as PII-bearing, and
- * remember the Agent sets NO footprintjs RedactionPolicy by default
- * (policies you do set redact the emit channel UPSTREAM of this
- * strategy, so redacted events arrive here already redacted).
+ * tool args/results and model output. Treat it as PII-bearing. An agent
+ * built with `Agent.create({ redact })` serves every event before any
+ * strategy sees it, so this one receives — and chains — the placeholder
+ * wherever the policy selected a value (a selected key at any depth of a
+ * payload; a whole payload whose event NAME `emitPatterns` selects). The
+ * policy selects by name, never by content: with no policy, or under a name
+ * it does not select, the value arrives as it was.
  *
  * ## Tamper-EVIDENT, not tamper-PROOF (honest threat model)
  *
@@ -235,8 +238,9 @@ export interface AuditExportOptions {
    * module docs). `'verbatim'` — full payloads, JSON-sanitized only.
    *
    * @remarks Verbatim bundles carry prompts, tool args/results and
-   * model output. Treat the store as PII-bearing; the Agent applies NO
-   * RedactionPolicy by default.
+   * model output. Treat the store as PII-bearing; an agent applies no
+   * redaction policy unless built with `Agent.create({ redact })`, which
+   * serves every event (and so this bundle) through it.
    */
   readonly payloadMode?: 'bounded' | 'verbatim';
   /** Include `stream.token` / `stream.thinking_delta` events (high

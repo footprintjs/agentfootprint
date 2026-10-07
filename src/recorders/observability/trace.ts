@@ -51,9 +51,13 @@ import { buildStepGraphFromEvents, type StepGraph } from './FlowchartRecorder.js
 
 /**
  * How a `Trace` was redacted before serialization.
- * - `'none'`   — raw content (no `redact`). A `<Replay>` UI may warn.
+ * - `'none'`   — raw content (no `redact`, no policy). A `<Replay>` UI may warn.
  * - `'pii'`    — a consumer `redact` ran (the default label when one is given).
- * - `'policy'` — produced from a declarative `RedactionPolicy` (future).
+ * - `'policy'` — the run was covered by a declarative footprintjs
+ *   `RedactionPolicy` (an agent's `redact`), so every event this Trace holds —
+ *   and its snapshot, when it carries one — was SERVED under it: the
+ *   placeholder wherever the policy selected a value. It selects by name,
+ *   never by content: free text under a name nobody selected is still there.
  */
 export type TraceRedaction = 'none' | 'pii' | 'policy';
 
@@ -100,11 +104,12 @@ export interface Trace {
    * schema. Cast at the consumer.
    *
    * NOT redacted by `redact`, which runs per domain event and cannot reach
-   * inside a snapshot. This field carries whatever the run's own footprintjs
-   * redaction policy (`setRedactionPolicy()`) let through, so a run whose
-   * state holds secrets wants that policy set at run time — which is why
-   * `enable.localObservability({ includeSnapshot: true })` is opt-in and a
-   * redacted Trace does not quietly grow a second content surface.
+   * inside a snapshot. This field is `runner.getLastSnapshot()`, which under
+   * the run's own redaction policy (an agent's `redact`) is footprintjs's
+   * redacted view — so a run whose state holds secrets wants that policy set
+   * at run time. That is why `enable.localObservability({ includeSnapshot:
+   * true })` is opt-in and a redacted Trace does not quietly grow a second
+   * content surface.
    */
   readonly snapshot?: unknown;
   /** Optional headline totals. */
