@@ -67,6 +67,7 @@
  */
 
 import { sleep } from '../../lib/sleep.js';
+import { isSlash, trimTrailing } from '../../lib/linearText.js';
 
 /** The endpoints, so a GitHub Enterprise Server deployment can move them. */
 const DEFAULT_AUTH_BASE = 'https://github.com';
@@ -157,8 +158,8 @@ export async function githubDeviceSignIn(
     );
   }
 
-  const authBase = (options.authBase ?? DEFAULT_AUTH_BASE).replace(/\/+$/, '');
-  const apiBase = (options.apiBase ?? DEFAULT_API_BASE).replace(/\/+$/, '');
+  const authBase = trimTrailing(options.authBase ?? DEFAULT_AUTH_BASE, isSlash);
+  const apiBase = trimTrailing(options.apiBase ?? DEFAULT_API_BASE, isSlash);
   const doFetch = options._fetch ?? ((...args: Parameters<typeof fetch>) => fetch(...args));
   const sleep = options._sleep ?? defaultSleep;
   const scopes = options.scopes ?? ['public_repo'];

@@ -65,6 +65,7 @@ import { entraBearerToken, openai } from './OpenAIProvider.js';
 import type { OpenAIProviderOptions } from './OpenAIProvider.js';
 import { AZURE_AI_SCOPE } from '../identity/azure.js';
 import type { AzureIdentitySdkModule, TokenCredentialLike } from '../identity/azure.js';
+import { isSlash, trimTrailing } from '../../lib/linearText.js';
 
 /** Every refusal this file authors opens with this name. */
 const ADAPTER = 'foundry';
@@ -163,7 +164,7 @@ export interface FoundryProviderOptions {
  * `api-version`), so there is nothing legitimate to preserve.
  */
 export function foundryInferenceUrl(projectEndpoint: string): string {
-  const trimmed = projectEndpoint.replace(/\/+$/, '');
+  const trimmed = trimTrailing(projectEndpoint, isSlash);
   const loopback = /^http:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?\//i.test(trimmed);
   const shapeOk = (/^https:\/\//i.test(trimmed) || loopback) && trimmed.includes('/api/projects/');
   if (!shapeOk) {

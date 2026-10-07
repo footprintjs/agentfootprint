@@ -194,6 +194,31 @@ export function ldapDirectory(options: LdapDirectoryOptions): Directory {
   };
 }
 
+const PEM_BEGIN = '-----BEGIN CERTIFICATE-----';
+const PEM_END = '-----END CERTIFICATE-----';
+
+/**
+ * Every certificate block in a PEM bundle, in order — what
+ * `pem.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g)`
+ * finds, in one pass. The regex re-reads the rest of the bundle from every
+ * BEGIN line that has no END after it, which is quadratic on a file of
+ * repeated BEGIN lines; once a BEGIN has no END after it, no later one has
+ * either, so the scan stops there.
+ */
+export function pemCertificateBlocks(pem: string): string[] {
+  const blocks: string[] = [];
+  let from = 0;
+  for (;;) {
+    const start = pem.indexOf(PEM_BEGIN, from);
+    if (start === -1) return blocks;
+    // `[\s\S]+?` — at least one character between the two lines.
+    const end = pem.indexOf(PEM_END, start + PEM_BEGIN.length + 1);
+    if (end === -1) return blocks;
+    from = end + PEM_END.length;
+    blocks.push(pem.slice(start, from));
+  }
+}
+
 /**
  * Why a CA file is not one, or `undefined`: every PEM block must parse as an
  * X.509 certificate with the CA flag set (review idI57 N-10 — a leaf
@@ -201,8 +226,8 @@ export function ldapDirectory(options: LdapDirectoryOptions): Directory {
  */
 export function caPemProblem(caPem: unknown): string | undefined {
   if (typeof caPem !== 'string') return 'caPem must be a PEM CA certificate';
-  const blocks = caPem.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g);
-  if (blocks === null) return 'caPem must be a PEM CA certificate';
+  const blocks = pemCertificateBlocks(caPem);
+  if (blocks.length === 0) return 'caPem must be a PEM CA certificate';
   for (const block of blocks) {
     let cert: X509Certificate;
     try {
@@ -226,7 +251,7 @@ export function caPemProblem(caPem: unknown): string | undefined {
  * renewal that changes it, so boot says so (`directory-password`'s banner).
  */
 export function intermediateCaSubjects(caPem: string): string[] {
-  const blocks = caPem.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g) ?? [];
+  const blocks = pemCertificateBlocks(caPem);
   const found: string[] = [];
   for (const block of blocks) {
     let cert: X509Certificate;

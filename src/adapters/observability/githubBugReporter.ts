@@ -87,6 +87,7 @@
 
 import { formatBytes } from '../../lib/bug-report/build.js';
 import type { BugReport } from '../../lib/bug-report/index.js';
+import { isSlash, trimBoth, trimTrailing } from '../../lib/linearText.js';
 
 /** GitHub's own ceiling for a file committed through the contents API is 100 MB,
  *  but an issue attachment that large is not a bug report anybody opens. 24 MB
@@ -186,8 +187,8 @@ export function githubBugReporter(options: GithubBugReporterOptions): BugReporte
     );
   }
 
-  const apiBase = (options.apiBase ?? DEFAULT_API_BASE).replace(/\/+$/, '');
-  const dir = (options.dir ?? 'bug-reports').replace(/^\/+|\/+$/g, '');
+  const apiBase = trimTrailing(options.apiBase ?? DEFAULT_API_BASE, isSlash);
+  const dir = trimBoth(options.dir ?? 'bug-reports', isSlash);
   const maxZipBytes = options.maxZipBytes ?? DEFAULT_MAX_ZIP_BYTES;
   const doFetch = options._fetch ?? ((...args: Parameters<typeof fetch>) => fetch(...args));
 

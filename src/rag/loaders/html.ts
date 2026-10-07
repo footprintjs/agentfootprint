@@ -38,6 +38,109 @@ function blank(match: string): string {
   return match.replace(/[^\n]/g, ' ');
 }
 
+// ── The passes ──────────────────────────────────────────────────────────────
+// Each pass is a scan, not a regex, because the file is input a deployer may
+// not trust and every lazy `open[\s\S]*?close` (and `<[^>]*>`) is quadratic on
+// it: an `open` with no `close` after it is re-tried from every later `open`,
+// and each attempt reads to the end (64,000 unclosed `<` take ~1.4 s in V8).
+// A scan stops at the first `open` that has no `close`, because no later one
+// can have one either. Each pass blanks exactly what its regex in
+// `test/security/linear-scanners.test.ts` blanks.
+
+/**
+ * Every `open … close` region blanked, leftmost first, each ending at the
+ * first `close` after its `open` — `/<!--[\s\S]*?-->/g`, and `/<[^>]*>/g` for
+ * `<` … `>` (`[^>]*` stops at the first `>` too).
+ */
+export function blankDelimited(text: string, open: string, close: string): string {
+  const parts: string[] = [];
+  let copied = 0;
+  for (;;) {
+    const start = text.indexOf(open, copied);
+    if (start === -1) break;
+    const closeAt = text.indexOf(close, start + open.length);
+    if (closeAt === -1) break;
+    const end = closeAt + close.length;
+    parts.push(text.slice(copied, start), blank(text.slice(start, end)));
+    copied = end;
+  }
+  return copied === 0 ? text : parts.join('') + text.slice(copied);
+}
+
+/**
+ * Every `<name …>` … `</name …>` element blanked, body included —
+ * `/<name\b[^>]*>[\s\S]*?<\/name(?=[\t\n\f\r />])[^>]*>/gi`. The end tag is the
+ * one an HTML tokenizer ends the element at: `</script`, then tab, LF, FF, CR,
+ * space, `/` or `>`, then anything up to the next `>` — so `</script foo>` and
+ * `</script/>` close the body too, where the old `</script\s*>` left that body
+ * in the text. Like a browser, other blanks (`</script` + U+00A0, U+2028 …)
+ * no longer end the tag name; the old `\s` did.
+ */
+export function blankRawText(text: string, name: 'script' | 'style'): string {
+  const parts: string[] = [];
+  let copied = 0;
+  for (;;) {
+    const start = openTagAt(text, name, copied);
+    if (start === -1) break;
+    const openEnd = text.indexOf('>', start + 1 + name.length);
+    if (openEnd === -1) break;
+    const close = endTagAt(text, name, openEnd + 1);
+    if (close === -1) break;
+    const closeEnd = text.indexOf('>', close + 2 + name.length);
+    if (closeEnd === -1) break;
+    parts.push(text.slice(copied, start), blank(text.slice(start, closeEnd + 1)));
+    copied = closeEnd + 1;
+  }
+  return copied === 0 ? text : parts.join('') + text.slice(copied);
+}
+
+/** The next `<name` (any case) that `\b` ends, at or after `from`; -1 when none. */
+function openTagAt(text: string, name: string, from: number): number {
+  for (let at = text.indexOf('<', from); at !== -1; at = text.indexOf('<', at + 1)) {
+    const after = at + 1 + name.length;
+    if (namedAt(text, at + 1, name) && !isWordChar(text.charCodeAt(after))) return at;
+  }
+  return -1;
+}
+
+/** The next `</name` (any case) followed by a blank, `/` or `>`, at or after `from`; -1 when none. */
+function endTagAt(text: string, name: string, from: number): number {
+  for (let at = text.indexOf('</', from); at !== -1; at = text.indexOf('</', at + 1)) {
+    if (namedAt(text, at + 2, name) && endsTagName(text.charCodeAt(at + 2 + name.length))) {
+      return at;
+    }
+  }
+  return -1;
+}
+
+/** `text` spells the lower-case ASCII `name` at `at`, in any case. */
+function namedAt(text: string, at: number, name: string): boolean {
+  if (at + name.length > text.length) return false;
+  for (let i = 0; i < name.length; i++) {
+    if ((text.charCodeAt(at + i) | 0x20) !== name.charCodeAt(i)) return false;
+  }
+  return true;
+}
+
+/** `\w` — `NaN` (past the end) is not one, so `\b` holds there. */
+function isWordChar(code: number): boolean {
+  const lower = code | 0x20;
+  return (code >= 0x30 && code <= 0x39) || (lower >= 0x61 && lower <= 0x7a) || code === 0x5f;
+}
+
+/** What ends a tag name: tab, LF, FF, CR, space, `/`, `>`. `NaN` (past the end) does not. */
+function endsTagName(code: number): boolean {
+  return (
+    code === 0x09 ||
+    code === 0x0a ||
+    code === 0x0c ||
+    code === 0x0d ||
+    code === 0x20 ||
+    code === 0x2f ||
+    code === 0x3e
+  );
+}
+
 const ENTITIES: Readonly<Record<string, string>> = {
   '&amp;': '&',
   '&lt;': '<',
@@ -58,11 +161,11 @@ const ENTITIES: Readonly<Record<string, string>> = {
 export function stripTags(html: string): string {
   let out = html;
   // Script and style CONTENT is not prose. Blanked wholesale, bodies included.
-  out = out.replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, blank);
-  out = out.replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, blank);
-  out = out.replace(/<!--[\s\S]*?-->/g, blank);
+  out = blankRawText(out, 'script');
+  out = blankRawText(out, 'style');
+  out = blankDelimited(out, '<!--', '-->');
   // Every remaining tag becomes whitespace of equal length — see the header.
-  out = out.replace(/<[^>]*>/g, blank);
+  out = blankDelimited(out, '<', '>');
   // Entities are decoded LAST and only for the fixed set above. A general
   // numeric decode would let `&#60;script&#62;` reappear as a tag in text that
   // has already been stripped.

@@ -66,6 +66,7 @@
 
 import { distinctFromAbsent, IDENTITY_ABSENT } from '../memory/identity/index.js';
 import type { ArtifactScope } from './types.js';
+import { isSlash, trimBoth } from '../lib/linearText.js';
 
 /**
  * `~` → `~~`, then every uppercase ASCII letter → `~` + its lowercase form.
@@ -130,7 +131,7 @@ export function normalizeKeyRoot(adapter: string, root: string | undefined): str
         `misunderstanding waiting to be acted on. Name the prefix literally.`,
     );
   }
-  const trimmed = root.replace(/^\/+/, '').replace(/\/+$/, '');
+  const trimmed = trimBoth(root, isSlash);
   if (trimmed === '') {
     throw new TypeError(
       `[artifacts] ${adapter}({ prefix: ${JSON.stringify(root)} }) is only slashes. Name a ` +

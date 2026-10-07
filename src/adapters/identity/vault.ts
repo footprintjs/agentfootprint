@@ -75,6 +75,7 @@ import type {
   CredentialResult,
 } from '../../identity/types.js';
 import { apiKey, basic, bearer, headers } from '../../identity/kinds.js';
+import { isSlash, trimBoth, trimTrailing } from '../../lib/linearText.js';
 
 // ─── Public options ──────────────────────────────────────────────────
 
@@ -190,7 +191,7 @@ export function vaultCredentials(options: VaultCredentialsOptions): CredentialPr
     );
   }
 
-  const address = options.address.replace(/\/+$/, '');
+  const address = trimTrailing(options.address, isSlash);
   if (!/^https:\/\//i.test(address)) {
     if (!/^http:\/\//i.test(address)) {
       throw new TypeError(`${id}: \`address\` must be an http(s) URL (got '${address}').`);
@@ -473,7 +474,7 @@ function str(v: unknown): string | undefined {
 }
 
 function trimSlashes(s: string): string {
-  return s.replace(/^\/+|\/+$/g, '');
+  return trimBoth(s, isSlash);
 }
 
 /** Read one environment variable, in any runtime. Absent `process` (a browser,

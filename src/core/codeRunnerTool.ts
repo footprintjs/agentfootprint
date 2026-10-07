@@ -53,6 +53,7 @@
  */
 
 import { fnv1a } from '../lib/fnv1a.js';
+import { isLineBreak } from '../lib/linearText.js';
 import type { CodeInput, CodeResult, CodeRunner, CodeSession } from '../adapters/types.js';
 import { canStageCodeInputs, STAGED_INPUTS_ENV } from '../adapters/types.js';
 import type { ToolWants } from '../artifacts/wants.js';
@@ -194,14 +195,23 @@ export interface RecordsCodeRuns {
  * Deliberately crude — a lexical reduction, not a parse. It has to work on
  * whatever language the runner was configured for, and a wrong parse would be a
  * worse answer than a coarse one.
+ *
+ * The code is model output, so every pass is linear in it. Block comments and
+ * string literals are scanned rather than matched: the regexes that used to
+ * find them re-read the rest of the code from every unclosed comment opener or
+ * quote — quadratic on openers repeated with text between them, or on a quote
+ * followed by a long run of escaped quotes (16,000 of them took about half a
+ * second). The scans produce exactly what those regexes did
+ * (`test/security/linear-scanners.test.ts`).
  */
 export function codeShape(code: string): string {
-  return (
-    code
-      .replace(/\/\*[\s\S]*?\*\//g, ' ')
+  const withoutLiterals = replaceStringLiterals(
+    stripBlockComments(code)
       .replace(/(^|[^:])\/\/[^\n]*/g, '$1 ')
-      .replace(/#[^\n]*/g, ' ')
-      .replace(/(['"`])(?:\\.|(?!\1)[^\\])*\1/g, 'S')
+      .replace(/#[^\n]*/g, ' '),
+  );
+  return (
+    withoutLiterals
       .replace(/\b\d[\d_.eE+-]*\b/g, 'N')
       // Only identifiers that are NOT callees. The operation name is the whole
       // signal, so it stays.
@@ -212,6 +222,89 @@ export function codeShape(code: string): string {
       .replace(/\s+/g, ' ')
       .trim()
   );
+}
+
+/**
+ * Every `/* … *\/` replaced by one space, each ending at the first `*\/` after
+ * its `/*`. Once a `/*` has no `*\/` after it, no later one has either — the
+ * scan stops there instead of re-trying each.
+ */
+export function stripBlockComments(code: string): string {
+  const parts: string[] = [];
+  let copied = 0;
+  for (;;) {
+    const start = code.indexOf('/*', copied);
+    if (start === -1) break;
+    const close = code.indexOf('*/', start + 2);
+    if (close === -1) break;
+    parts.push(code.slice(copied, start), ' ');
+    copied = close + 2;
+  }
+  return copied === 0 ? code : parts.join('') + code.slice(copied);
+}
+
+/**
+ * Every string literal replaced by `S`, leftmost first: from a quote, the
+ * shortest run of escapes (`\` + anything but a line break) and other
+ * characters up to the same quote unescaped.
+ *
+ * A literal that never closes is the costly case — the walk ends at a `\`
+ * before a line break, or at the end — and the regex re-tries it from every
+ * later quote. But a later opening of the SAME quote, before where that walk
+ * stopped, walks the same tail (whether a character is escaped depends only on
+ * the backslashes just before it, and a quote is not one), so it fails the
+ * same way: those are skipped. Each quote's failed walks therefore cover
+ * disjoint stretches, and the literals that close are jumped over.
+ */
+export function replaceStringLiterals(code: string): string {
+  const parts: string[] = [];
+  let copied = 0;
+  const failsBefore = new Map<number, number>();
+  let at = 0;
+  while (at < code.length) {
+    const quote = code.charCodeAt(at);
+    if (isQuote(quote) && at >= (failsBefore.get(quote) ?? 0)) {
+      const walk = walkLiteral(code, at, quote);
+      if (walk.closed) {
+        parts.push(code.slice(copied, at), 'S');
+        copied = walk.end + 1;
+        at = walk.end + 1;
+        continue;
+      }
+      failsBefore.set(quote, walk.end);
+    }
+    at++;
+  }
+  return copied === 0 ? code : parts.join('') + code.slice(copied);
+}
+
+/**
+ * The walk `(?:\\.|(?!q)[^\\])*q` takes from the quote at `open`: `end` is the
+ * closing quote when `closed`, otherwise where the walk stopped.
+ */
+function walkLiteral(
+  code: string,
+  open: number,
+  quote: number,
+): { readonly closed: boolean; readonly end: number } {
+  let at = open + 1;
+  while (at < code.length) {
+    const char = code.charCodeAt(at);
+    if (char === quote) return { closed: true, end: at };
+    if (char !== 0x5c) {
+      at += 1;
+    } else if (at + 1 < code.length && !isLineBreak(code.charCodeAt(at + 1))) {
+      at += 2;
+    } else {
+      return { closed: false, end: at };
+    }
+  }
+  return { closed: false, end: at };
+}
+
+/** `'`, `"` or a backtick. */
+function isQuote(code: number): boolean {
+  return code === 0x27 || code === 0x22 || code === 0x60;
 }
 
 /** A `Tool` that holds live sessions, keyed by isolation key. */

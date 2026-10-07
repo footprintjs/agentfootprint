@@ -16,6 +16,7 @@
  * `baseURL`). All of those must reach the same URL. Appending a second
  * `/openai` would 404 every call: accepted, and silently wrong.
  */
+import { isSlash, trimTrailing } from '../../lib/linearText.js';
 
 /**
  * Resource root → the base every Azure OpenAI path hangs off.
@@ -28,7 +29,7 @@
  * that idempotence.
  */
 export function azureBaseUrl(endpoint: string): string {
-  const trimmed = endpoint.replace(/\/+$/, '');
+  const trimmed = trimTrailing(endpoint, isSlash);
   return trimmed.endsWith('/openai') ? trimmed : `${trimmed}/openai`;
 }
 

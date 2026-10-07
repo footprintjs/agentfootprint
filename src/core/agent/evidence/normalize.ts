@@ -1,9 +1,9 @@
 /**
  * normalize — one spelling for one value, on BOTH sides of the comparison.
  *
- * Pattern: a pure leaf module (no imports), shared by the extractor and the
- *          evidence index so the two can never disagree about what "the same
- *          value" means.
+ * Pattern: a pure leaf module (its one import, `lib/linearText.ts`, is a leaf
+ *          too), shared by the extractor and the evidence index so the two can
+ *          never disagree about what "the same value" means.
  * Role:    core/ layer, `namesAndNumbersFromEvidence` only.
  * Emits:   N/A.
  *
@@ -20,6 +20,7 @@
  * on the answer side AND on the evidence side. The rules are deliberately few
  * and each is here because a real spelling difference needed it.
  */
+import { anyOf, trimTrailing } from '../../../lib/linearText.js';
 
 /**
  * Characters that may live INSIDE one token.
@@ -49,8 +50,13 @@ const LIST_COMMA = /,(?!\d)|(?<!\d),/;
  */
 const LEADING_DECORATION = /^[$#@+'"`([{<]+/;
 
-/** Trailing punctuation: sentence ends, list separators, a trailing percent. */
-const TRAILING_DECORATION = /[.,;:!?%'"`)\]}>]+$/;
+/**
+ * Trailing punctuation: sentence ends, list separators, a trailing percent.
+ * A character test walked in from the end, not `/[…]+$/`: a token is model
+ * output, and that regex retries from every position of a long punctuation
+ * run (`lib/linearText.ts` · "Why these exist").
+ */
+const TRAILING_DECORATION = anyOf('.,;:!?%\'"`)]}>');
 
 /** `1,234` / `12,345,678` / `1,234.56` — a number wearing thousands separators. */
 const THOUSANDS = /^-?\d{1,3}(,\d{3})+(\.\d+)?$/;
@@ -74,7 +80,7 @@ const MAX_EXACT_DIGITS = 15;
 export function normalizeToken(raw: string): string {
   let v = raw.toLowerCase().trim();
   if (v === '') return '';
-  v = v.replace(LEADING_DECORATION, '').replace(TRAILING_DECORATION, '');
+  v = trimTrailing(v.replace(LEADING_DECORATION, ''), TRAILING_DECORATION);
   if (v === '') return '';
   // Thousands separators are PRESENTATION. `41,200` in prose and `41200` in
   // JSON are one value, and this is the single most common way a correct

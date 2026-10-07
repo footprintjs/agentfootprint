@@ -20,6 +20,7 @@
  */
 
 import type { LLMProvider, LLMRequest, LLMResponse, LLMToolSchema } from '../../adapters/types.js';
+import { anyOf, trimLeading, trimTrailing } from '../linearText.js';
 
 /** The synthetic pick tool, named by the caller (the wire shows this name). */
 export interface EnumPickTool {
@@ -120,9 +121,19 @@ async function pickByParse(req: ConstrainedEnumPickRequest): Promise<string> {
   return parseEnumLine(retry.content, req.allowed) ?? req.fallback;
 }
 
-/** A trimmed single-token answer that IS one of the allowed ids, else undefined. */
-function parseEnumLine(content: string, allowed: readonly string[]): string | undefined {
-  const line = content.trim().replace(/^["'`]+|["'`.,]+$/g, '');
+/** Quotes a model opens a bare id with. */
+const OPENING_QUOTE = anyOf('"\'`');
+/** Quotes and punctuation a model closes a bare id with. */
+const CLOSING_DECORATION = anyOf('"\'`.,');
+
+/**
+ * A trimmed single-token answer that IS one of the allowed ids, else undefined.
+ * The decoration is walked off each end, not matched with `/[…]+$/`: the
+ * reply is model output, and that regex retries from every position of a long
+ * run of quotes (`lib/linearText.ts` · "Why these exist").
+ */
+export function parseEnumLine(content: string, allowed: readonly string[]): string | undefined {
+  const line = trimTrailing(trimLeading(content.trim(), OPENING_QUOTE), CLOSING_DECORATION);
   return allowed.includes(line) ? line : undefined;
 }
 

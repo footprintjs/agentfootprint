@@ -6,7 +6,7 @@ title: renderVerdictTable
 
 > **renderVerdictTable**(`rows`): `string`
 
-Defined in: [src/core/runbook/verdicts.ts:109](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/verdicts.ts#L109)
+Defined in: [src/core/runbook/verdicts.ts:114](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/verdicts.ts#L114)
 
 Render the shown rows as one markdown table. Columns are the FIRST row's
 own keys in declaration order — the chart writes its rows, so the chart

@@ -2,8 +2,9 @@
  * ontology/skosJsonLd — the JSON-LD spellings a SKOS document uses, resolved
  * to IRIs with no inference.
  *
- * Pattern: pure functions over an already-parsed JSON-LD document; a
- *          zero-import leaf under `fromSkos.ts`.
+ * Pattern: pure functions over an already-parsed JSON-LD document; a leaf
+ *          under `fromSkos.ts` (its one import, `lib/linearText.ts`, is a
+ *          leaf too).
  * Role:    Map (reader side). A key is resolved by the document's own
  *          `@context` when it has one — a term mapping, a prefix, `@vocab` —
  *          else by the fixed table of the vocabularies SKOS documents lean on
@@ -16,6 +17,7 @@
  * input is an OBJECT), remote `@context` fetching (a context given by URL is
  * not resolved), OWL.
  */
+import { isLineBreak } from '../lib/linearText.js';
 
 /** The SKOS core namespace. */
 export const SKOS_NS = 'http://www.w3.org/2004/02/skos/core#';
@@ -225,11 +227,25 @@ export function inLanguage(literals: readonly Literal[], language: string): read
 }
 
 /**
+ * `iri.replace(/[?].*$/, '')` in one pass: the IRI up to its query. That
+ * regex can only finish at the end of the text and its `.` stops at a line
+ * break, so it cuts at the first `?` after the last line break — but it
+ * re-tried from every earlier `?`, which is quadratic on a run of them before a
+ * line break in a document's IRI.
+ */
+export function withoutQuery(iri: string): string {
+  let lineStart = iri.length;
+  while (lineStart > 0 && !isLineBreak(iri.charCodeAt(lineStart - 1))) lineStart--;
+  const query = iri.indexOf('?', lineStart);
+  return query === -1 ? iri : iri.slice(0, query);
+}
+
+/**
  * A concept id from its IRI: the last `/` or `#` segment, percent-decoded,
  * lower-cased, `-` and spaces to `_`. Empty when the IRI ends in a delimiter.
  */
 export function idFromIri(iri: string): string {
-  const stripped = iri.replace(/[?].*$/, '');
+  const stripped = withoutQuery(iri);
   const last = Math.max(stripped.lastIndexOf('/'), stripped.lastIndexOf('#'));
   const segment = last < 0 ? stripped : stripped.slice(last + 1);
   let decoded = segment;

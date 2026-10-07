@@ -90,12 +90,17 @@ export function verdictRowsOf(state: Readonly<Record<string, unknown>>): Verdict
 }
 
 /** The one place a `—` is written for a value the source did not report — a
- *  blank cell reads as a zero; a dash reads as "not reported". */
+ *  blank cell reads as a zero; a dash reads as "not reported".
+ *  Backslashes are escaped too, BEFORE pipes, so markdown shows a value's
+ *  backslashes as written: unescaped, `a\_b` renders as `a_b` — an identifier
+ *  the model was told to copy verbatim, changed — and a `\` just before a `|`
+ *  comes out as `\\|`, which a parser that pairs backslashes splits as a new
+ *  column. */
 function cell(value: unknown): string {
   if (value === null || value === undefined || value === '') return '—';
   if (value === true) return 'yes';
   if (value === false) return 'no';
-  return String(value).replace(/\|/g, '\\|').replace(/\n/g, ' ');
+  return String(value).replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\n/g, ' ');
 }
 
 // LENS · tool-result · persistent-history

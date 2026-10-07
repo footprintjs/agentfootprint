@@ -156,8 +156,63 @@ type ZoneRead =
       readonly shownIn?: ZoneName;
     };
 
-/** `London time`, `New York time` — a place named with the word `time` (the reader keeps it as written). */
-const PLACE_TIME = /^(.+?)\s+time$/i;
+/**
+ * `London time`, `New York time` — a place named with the word `time` (the
+ * reader keeps it as written): `/^(.+?)\s+time$/i.exec(token)?.[1]`, in one
+ * pass. That regex grew its lazy place one character at a time and, at each,
+ * re-read the blank run after it looking for `time` — quadratic on a letter, a
+ * long blank run and anything but `time`, and a token can come straight from
+ * the message. The place is everything before the blank run that ends just
+ * before `time` (at least one character), and holds no line break, which `.`
+ * would not match.
+ */
+export function placeBeforeTime(token: string): string | undefined {
+  const timeAt = token.length - 4;
+  if (timeAt < 2 || !spellsTimeAt(token, timeAt)) return undefined;
+  let blankStart = timeAt;
+  while (blankStart > 0 && isRegExpWhitespace(token.charCodeAt(blankStart - 1))) blankStart--;
+  const placeEnd = Math.max(blankStart, 1);
+  if (placeEnd >= timeAt) return undefined;
+  for (let at = 0; at < placeEnd; at++) {
+    if (isLineBreak(token.charCodeAt(at))) return undefined;
+  }
+  return token.slice(0, placeEnd);
+}
+
+/** `time`, in any ASCII case, at `at`. */
+function spellsTimeAt(token: string, at: number): boolean {
+  const word = 'time';
+  for (let i = 0; i < word.length; i++) {
+    if ((token.charCodeAt(at + i) | 0x20) !== word.charCodeAt(i)) return false;
+  }
+  return true;
+}
+
+// `lib/linearText.ts` · `isRegExpWhitespace` / `isLineBreak`, restated because
+// this folder imports nothing outside itself. Both are pinned on every UTF-16
+// code unit through `placeBeforeTime` in `test/security/linear-scanners.test.ts`.
+
+/** `\s`: WhiteSpace and LineTerminator. */
+function isRegExpWhitespace(code: number): boolean {
+  if (code <= 0x20) return code === 0x20 || (code >= 0x09 && code <= 0x0d);
+  if (code < 0xa0) return false;
+  return (
+    code === 0xa0 ||
+    code === 0x1680 ||
+    (code >= 0x2000 && code <= 0x200a) ||
+    code === 0x2028 ||
+    code === 0x2029 ||
+    code === 0x202f ||
+    code === 0x205f ||
+    code === 0x3000 ||
+    code === 0xfeff
+  );
+}
+
+/** What `.` does not match: LF, CR, U+2028, U+2029. */
+function isLineBreak(code: number): boolean {
+  return code === 0x0a || code === 0x0d || code === 0x2028 || code === 0x2029;
+}
 
 /** The policy half the resolver reads: the app's abbreviation map. */
 type ZonePolicy = Pick<TimePolicy, 'abbreviations'>;
@@ -215,8 +270,8 @@ function zoneReadsOf(
     }
     return reads;
   }
-  const place = PLACE_TIME.exec(token);
-  const zone = place === null ? undefined : zoneOfPlace(place[1] as string);
+  const place = placeBeforeTime(token);
+  const zone = place === undefined ? undefined : zoneOfPlace(place);
   if (zone !== undefined) return [{ kind: 'iana', zone, said: true, via: { token, as: 'place' } }];
   return undefined;
 }
