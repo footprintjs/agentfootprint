@@ -47,9 +47,9 @@ At `'after-tool'` this is the tool's REAL result — including on a
 refusal, because the side effect happened and a record that dropped it
 would be a record that lies. It is not the only copy: by design
 `agentfootprint.stream.tool_end` reports the same real result. If it must
-not survive in a record, redact it where you keep one (an `Agent`
-exposes no footprintjs redaction policy today): the row survives, the
-value does not.
+not survive in a record, name it in the agent's `redact`
+(`Agent.create({ redact })` — `conversationRedaction()` names
+`middlewareDecisions` and `result`): the row survives, the value does not.
 
 ***
 

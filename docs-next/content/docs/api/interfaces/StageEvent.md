@@ -4,7 +4,7 @@ title: StageEvent
 
 # Interface: StageEvent
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:62
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:62
 
 ## Extends
 
@@ -16,7 +16,7 @@ Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction
 
 > `optional` **duration?**: `number`
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:63
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:63
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction
 
 > **pipelineId**: `string`
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:15
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:15
 
 #### Inherited from
 
@@ -36,7 +36,7 @@ Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction
 
 > **runtimeStageId**: `string`
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:14
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:14
 
 Unique per-execution-step identifier. Format: [subflowPath/]stageId#executionIndex
 
@@ -50,7 +50,7 @@ Unique per-execution-step identifier. Format: [subflowPath/]stageId#executionInd
 
 > **stageId**: `string`
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:12
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:12
 
 Stable stage identifier (matches spec node id).
 
@@ -64,7 +64,7 @@ Stable stage identifier (matches spec node id).
 
 > **stageName**: `string`
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:10
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:10
 
 #### Inherited from
 
@@ -76,7 +76,7 @@ Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction
 
 > **timestamp**: `number`
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:16
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:16
 
 #### Inherited from
 

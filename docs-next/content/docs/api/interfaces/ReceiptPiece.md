@@ -4,7 +4,7 @@ title: ReceiptPiece
 
 # Interface: ReceiptPiece
 
-Defined in: [src/lib/time-travel/receipt.ts:205](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L205)
+Defined in: [src/lib/time-travel/receipt.ts:209](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L209)
 
 One piece of the composed system string.
 
@@ -14,7 +14,7 @@ One piece of the composed system string.
 
 > `readonly` **hash**: `string`
 
-Defined in: [src/lib/time-travel/receipt.ts:206](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L206)
+Defined in: [src/lib/time-travel/receipt.ts:210](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L210)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/lib/time-travel/receipt.ts:206](https://github.com/footprintjs/
 
 > `readonly` **slot**: `ContextSlot`
 
-Defined in: [src/lib/time-travel/receipt.ts:207](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L207)
+Defined in: [src/lib/time-travel/receipt.ts:211](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L211)
 
 ***
 
@@ -30,4 +30,4 @@ Defined in: [src/lib/time-travel/receipt.ts:207](https://github.com/footprintjs/
 
 > `readonly` **source**: `ContextSource`
 
-Defined in: [src/lib/time-travel/receipt.ts:208](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L208)
+Defined in: [src/lib/time-travel/receipt.ts:212](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L212)

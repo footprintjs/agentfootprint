@@ -4,7 +4,7 @@ title: RedactionReport
 
 # Interface: RedactionReport
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:102
+Defined in: node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:102
 
 State redaction report. Never includes values; emit and diagnostic
 selectors/activity are not represented here.
@@ -15,7 +15,7 @@ selectors/activity are not represented here.
 
 > **fieldRedactions**: `Record`\<`string`, `string`[]\>
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:106
+Defined in: node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:106
 
 Keys with field-level redaction → which fields were scrubbed.
 
@@ -25,7 +25,7 @@ Keys with field-level redaction → which fields were scrubbed.
 
 > **patterns**: `string`[]
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:108
+Defined in: node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:108
 
 Pattern sources that were active (e.g. ['password|secret']).
 
@@ -35,6 +35,6 @@ Pattern sources that were active (e.g. ['password|secret']).
 
 > **redactedKeys**: `string`[]
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:104
+Defined in: node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:104
 
 Keys fully redacted (exact match or pattern match).

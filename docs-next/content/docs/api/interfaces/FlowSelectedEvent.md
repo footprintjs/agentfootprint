@@ -4,7 +4,7 @@ title: FlowSelectedEvent
 
 # Interface: FlowSelectedEvent
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:243
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:243
 
 Event passed to FlowRecorder.onSelected.
 
@@ -14,7 +14,7 @@ Event passed to FlowRecorder.onSelected.
 
 > `optional` **evidence?**: `SelectionEvidence`
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:249
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:249
 
 Structured selection evidence from select() helper.
 
@@ -24,7 +24,7 @@ Structured selection evidence from select() helper.
 
 > **parent**: `string`
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:244
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:244
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction
 
 > **selected**: `string`[]
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:245
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:245
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction
 
 > **total**: `number`
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:246
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:246
 
 ***
 
@@ -48,4 +48,4 @@ Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction
 
 > `optional` **traversalContext?**: [`TraversalContext`](/docs/api/interfaces/TraversalContext)
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:247
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:247

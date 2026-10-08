@@ -4,7 +4,7 @@ title: ErrorEvent
 
 # Interface: ErrorEvent
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:44
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:44
 
 A recorder threw in a scope-channel hook (`operation` says which kind:
 a read, a write, or a commit hook). Delivered to every recorder on the
@@ -21,7 +21,7 @@ recorderFailureEvent`).
 
 > `optional` **channel?**: `"scope"`
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:60
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:60
 
 Explicit channel discriminant — `'scope'` on every engine-dispatched
 event. `isFlowEvent()` checks it first (backlog B3); optional so
@@ -34,7 +34,7 @@ back to the legacy pipelineId-presence heuristic.
 
 > **error**: `StructuredErrorInfo`
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:51
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:51
 
 What the recorder threw, in the structured form (9.39.0): `message` and
 `name` read as before; `raw` is the thrown value itself (an `Error`, a
@@ -47,7 +47,7 @@ paths passed the raw thrown value and the deferred tier a `new Error(...)`.
 
 > `optional` **key?**: `string`
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:53
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:53
 
 ***
 
@@ -55,7 +55,7 @@ Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction
 
 > **operation**: `"read"` \| `"write"` \| `"commit"`
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:52
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:52
 
 ***
 
@@ -63,7 +63,7 @@ Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction
 
 > **pipelineId**: `string`
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:15
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:15
 
 #### Inherited from
 
@@ -75,7 +75,7 @@ Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction
 
 > **runtimeStageId**: `string`
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:14
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:14
 
 Unique per-execution-step identifier. Format: [subflowPath/]stageId#executionIndex
 
@@ -89,7 +89,7 @@ Unique per-execution-step identifier. Format: [subflowPath/]stageId#executionInd
 
 > **stageId**: `string`
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:12
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:12
 
 Stable stage identifier (matches spec node id).
 
@@ -103,7 +103,7 @@ Stable stage identifier (matches spec node id).
 
 > **stageName**: `string`
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:10
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:10
 
 #### Inherited from
 
@@ -115,7 +115,7 @@ Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction
 
 > **timestamp**: `number`
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:16
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:16
 
 #### Inherited from
 

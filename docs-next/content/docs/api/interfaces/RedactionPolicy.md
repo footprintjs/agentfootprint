@@ -4,7 +4,7 @@ title: RedactionPolicy
 
 # Interface: RedactionPolicy
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:59
+Defined in: node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:59
 
 Declarative key/path redaction for recorded state and boundary records.
 
@@ -17,7 +17,7 @@ FlowChartExecutor to apply across all stages.
 
 > `optional` **diagnostics?**: `Pick`\<`RedactionPolicy`, `"keys"` \| `"patterns"` \| `"fields"`\>
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:82
+Defined in: node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:82
 
 Diagnostic-only selectors, IN ADDITION to the state selectors above (which
 already cover a diagnostic entry by its name: `keys: ['token']` masks
@@ -33,7 +33,7 @@ intact. Applied before retention, not retroactively to existing bags.
 
 > `optional` **emitPatterns?**: `RegExp`[]
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:96
+Defined in: node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:96
 
 Regex patterns matched against `EmitEvent.name` for `scope.$emit(...)`
 calls. Any emit event whose name matches has its payload replaced with
@@ -53,7 +53,7 @@ Example:
 
 > `optional` **fields?**: `Record`\<`string`, `string`[]\>
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:72
+Defined in: node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:72
 
 Field-level redaction within objects — key → array of fields to scrub.
  Supports dot-notation for nested paths (e.g. 'address.zip').
@@ -64,7 +64,7 @@ Field-level redaction within objects — key → array of fields to scrub.
 
 > `optional` **keys?**: `string`[]
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:61
+Defined in: node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:61
 
 Exact key names to always redact (e.g. ['ssn', 'creditCard']).
 
@@ -74,7 +74,7 @@ Exact key names to always redact (e.g. ['ssn', 'creditCard']).
 
 > `optional` **patterns?**: `RegExp`[]
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:69
+Defined in: node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:69
 
 Regex patterns — any key matching a pattern is auto-redacted.
 

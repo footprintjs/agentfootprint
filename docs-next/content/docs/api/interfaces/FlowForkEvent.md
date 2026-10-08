@@ -4,7 +4,7 @@ title: FlowForkEvent
 
 # Interface: FlowForkEvent
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:237
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:237
 
 Event passed to FlowRecorder.onFork.
 
@@ -14,7 +14,7 @@ Event passed to FlowRecorder.onFork.
 
 > **children**: `string`[]
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:239
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:239
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction
 
 > **parent**: `string`
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:238
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:238
 
 ***
 
@@ -30,4 +30,4 @@ Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction
 
 > `optional` **traversalContext?**: [`TraversalContext`](/docs/api/interfaces/TraversalContext)
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:240
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:240

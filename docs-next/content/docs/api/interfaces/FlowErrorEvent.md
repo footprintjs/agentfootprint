@@ -4,7 +4,7 @@ title: FlowErrorEvent
 
 # Interface: FlowErrorEvent
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:303
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:303
 
 Event passed to FlowRecorder.onError.
 
@@ -14,7 +14,7 @@ Event passed to FlowRecorder.onError.
 
 > `optional` **channel?**: `"flow"`
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:315
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:315
 
 Explicit channel discriminant — `'flow'` on every engine-dispatched
 event. `isFlowEvent()` checks it first (backlog B3); optional so
@@ -27,7 +27,7 @@ back to the legacy pipelineId-absence heuristic.
 
 > **message**: `string`
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:305
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:305
 
 ***
 
@@ -35,7 +35,7 @@ Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction
 
 > **stageName**: `string`
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:304
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:304
 
 ***
 
@@ -43,7 +43,7 @@ Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction
 
 > **structuredError**: `StructuredErrorInfo`
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:307
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:307
 
 Structured error details — preserves field-level issues, error codes, etc.
 
@@ -53,4 +53,4 @@ Structured error details — preserves field-level issues, error codes, etc.
 
 > `optional` **traversalContext?**: [`TraversalContext`](/docs/api/interfaces/TraversalContext)
 
-Defined in: ../../../../../../../Users/sanjay/github/footprintjs/af-wt-redaction/node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:308
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:308
