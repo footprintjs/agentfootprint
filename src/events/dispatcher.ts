@@ -434,11 +434,18 @@ export class EventDispatcher {
    * Install what this run's events are served as. Called by the runner when a
    * run opens (`RunnerBase · openRunRedaction`).
    *
+   * @param serving  the run's serving — every run has one, with or without a
+   *                 policy (a run with none serves by the marks it makes)
+   * @param runId    the run's id, to serve its late facts by
+   * @param covered  whether a POLICY covers the run — what makes a fact of an
+   *                 unknown run refusable here (`refusesUnknownRun`). A run
+   *                 with no policy leaves a no-policy instance serving every
+   *                 fact as it is.
    * @internal
    */
-  useServing(serving: EventServing | undefined, runId?: string): void {
+  useServing(serving: EventServing | undefined, runId?: string, covered = false): void {
     this.serving = serving;
-    if (serving !== undefined) this.coveredRunOpened = true;
+    if (covered) this.coveredRunOpened = true;
     if (runId === undefined) return;
     this.servingsByRun.delete(runId);
     this.servingsByRun.set(runId, serving);

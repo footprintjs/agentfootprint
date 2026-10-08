@@ -225,6 +225,39 @@ describe('(c) a lookup that misses fails closed; a mounted chart is bound to its
     expect(filed()?.payload).toEqual(fact);
   });
 
+  it('an instance with NO policy serves a fact for a run it never opened as it is — after its own runs too', async () => {
+    const agent = Agent.create({
+      provider: mock({ chunkDelayMs: 0, reply: 'ok' }),
+      model: 'm',
+    }).build();
+    await agent.run({ message: 'first' });
+    await agent.run({ message: 'second' });
+    const got: AgentfootprintEvent[] = [];
+    agent.on('*', (e) => got.push(e));
+    const fact = { ssn: 'SSN-NOPOLICY-8100', note: 'filed for another lane' };
+    agent.emitAttributed('app.late_fact', fact, { sessionId: 's', runId: 'run-1-999' });
+    const served = got.find((e) => (e.type as string) === 'app.late_fact');
+    // The very object dispatched: byte-identical, nothing refused.
+    expect(served?.payload).toBe(fact);
+  });
+
+  it('a run covered only per run makes the instance refuse unknown-run facts from then on', async () => {
+    const agent = Agent.create({
+      provider: mock({ chunkDelayMs: 0, reply: 'ok' }),
+      model: 'm',
+    }).build();
+    await agent.run({ message: 'open' });
+    const got: AgentfootprintEvent[] = [];
+    agent.on('*', (e) => got.push(e));
+    const fact = () => ({ ssn: 'SSN-PERRUN-8200' });
+    agent.emitAttributed('app.late_fact', fact(), { sessionId: 's', runId: 'run-1-998' });
+    await agent.run({ message: 'covered' }, { redact: { keys: ['ssn'] } });
+    agent.emitAttributed('app.late_fact', fact(), { sessionId: 's', runId: 'run-1-997' });
+    const facts = got.filter((e) => (e.type as string) === 'app.late_fact');
+    expect(facts[0]?.payload).toEqual(fact());
+    expect(facts[1]?.payload).toBe('[REDACTED]');
+  });
+
   it('a fact filed about one run after it returned is served under THAT run, never the run opened since', () => {
     const dispatcher = new EventDispatcher();
     const got: AgentfootprintEvent[] = [];

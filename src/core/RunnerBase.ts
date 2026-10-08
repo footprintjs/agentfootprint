@@ -251,7 +251,7 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
     const run = createRunRedaction({ policy, dispatcher: this.dispatcher, getRunContext });
     // Under the run's own id too: a fact it dispatches after the next run
     // opened is still served under this run's policy.
-    this.dispatcher.useServing(run.serving, getRunContext().runId);
+    this.dispatcher.useServing(run.serving, getRunContext().runId, policy !== undefined);
     return run;
   }
 
@@ -577,9 +577,8 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
     // checkpoint's marks) — returned for the runner to hand THIS leg's
     // executor (`openRunRedaction`), so nothing per-run is kept on the instance.
     const resumeLeg = unionRedactionPolicies(handedDown, policyOfMarks(checkpoint.redactionMarks));
-    this.dispatcher.useServing(
-      servingAhead(unionRedactionPolicies(redactionDeclaredBy(this), resumeLeg)),
-    );
+    const ahead = servingAhead(unionRedactionPolicies(redactionDeclaredBy(this), resumeLeg));
+    this.dispatcher.useServing(ahead, undefined, ahead !== undefined);
     const meta = this.minimalMeta();
     const pausedDurationMs = Date.now() - checkpoint.pausedAt;
     // Which registered component the paused ask nominated to collect this
