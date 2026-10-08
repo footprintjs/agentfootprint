@@ -142,7 +142,7 @@ describe('the answer account over a redacted recording', () => {
   it('a declaration whose words are kept out: its items are counted and said kept out, never printed', async () => {
     // `{ keys: ['args'] }` keeps the arguments out and leaves the result readable,
     // so the account still judges the calls — and every coverage word on the
-    // declarations' events (composed from the call: `served.ts` · `DERIVED`) is kept out.
+    // declarations' events (composed from the call: its event's words rows, `events/content.ts`) is kept out.
     const run = async (redact: RedactionPolicy | undefined) => {
       const agent = Agent.create({
         provider: mock({

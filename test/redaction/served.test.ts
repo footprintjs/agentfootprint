@@ -85,7 +85,7 @@ describe('eventServing — one event, decided once', () => {
     expect(served).toBe(SERVED_PLACEHOLDER);
   });
 
-  it("a parser's message is kept out with the draft it can quote (DERIVED)", () => {
+  it("a parser's message is kept out with the draft it can quote (words)", () => {
     const retry = {
       attempt: 1,
       stage: 'json-parse',
@@ -112,7 +112,7 @@ describe('eventServing — one event, decided once', () => {
   });
 });
 
-describe('DERIVED — content the library quotes under names of its own', () => {
+describe('words — content the library quotes under names of its own', () => {
   const issue = (path: string, value: string) => ({
     path,
     expected: 'pattern',
@@ -260,7 +260,7 @@ describe('DERIVED — content the library quotes under names of its own', () => 
   });
 });
 
-describe('DERIVED — every row, at every path it names', () => {
+describe('words — every row, at every path it names', () => {
   /**
    * A payload holding `canary` at `path` (dotted, `name[]` for a list), with a
    * structural sibling at every level — and, for a row whose value names the
@@ -309,7 +309,7 @@ describe('DERIVED — every row, at every path it names', () => {
   }
 });
 
-describe('DERIVED — fail closed where the paths cannot vouch', () => {
+describe('words — fail closed where the paths cannot vouch', () => {
   const issue = (path: unknown) => ({
     toolName: 'lookup',
     issues: [{ path, value: 'SECRET-QUOTE', expected: 'string' }],

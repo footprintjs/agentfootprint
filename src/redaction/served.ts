@@ -2,40 +2,44 @@
  * served — what an event of a run is SERVED as: its payload and the identity
  * on its meta, through the run's redaction rule.
  *
- * Pattern: one projection, decided once per event, by footprintjs's rule.
+ * Pattern: one projection, decided once per event, by footprintjs's rule,
+ *          over the event registry's own classification
+ *          (`events/content.ts` · `EVENT_CONTENT`).
  * Role:    the Lens half of `src/redaction/`. It decides nothing about what is
  *          secret — `RedactionRule` (footprintjs/advanced) does, the ONE owner
- *          of every verdict. This file only says which of the rule's own
- *          decisions applies to a typed event:
+ *          of every verdict — and it keeps nothing: no list of runs, listeners
+ *          or values, and no cache outside the one run's serving. It says which
+ *          of the rule's own decisions applies to a typed event:
  *
  *   - THE EVENT'S NAME — `retainEmit`: an event whose name `emitPatterns`
  *     selects is served with the placeholder for a payload, exactly as
  *     footprintjs serves a `$emit` payload it selects by name.
  *   - THE PAYLOAD — `retainBoundary`: a typed event's payload is a record
- *     handed out whole, the class footprintjs serves a pause payload, a run's
- *     input and output, a subflow's seed and a thrown value as — a selected
- *     key at ANY depth, and a declared field under a key of its name.
- *   - THE META'S IDENTITY — `principal` and `tenant` are who asked: values the
- *     caller passed, selected by their names like any other. Every other meta
- *     field (run, stage, session, trace, correlation ids; timestamps) is the
- *     record's ADDRESS — how an event joins its run — and is never selected:
- *     masking an address would detach the record from itself, not protect it.
+ *     handed out whole — a selected key at ANY depth, and a declared field
+ *     under a key of its name.
+ *   - THE WORDS IT QUOTES — the registry's `words` rows: content carried under
+ *     a name of its own (a parser's message quotes the model's draft) is
+ *     served as the placeholder whenever the rule keeps out any part of a
+ *     value it came from — the rule's taint law, applied to the library's
+ *     own copies.
+ *   - DEFAULT-DENY — under a rule that keeps the conversation out
+ *     (`conversationRedaction()` or more), every top-level field the registry
+ *     does not declare STRUCTURE is served as the placeholder: a field nobody
+ *     classified — on an event of the library's or the app's own — can never
+ *     carry the conversation into a record.
+ *   - THE META'S IDENTITY — `principal` and `tenant` are who asked, selected
+ *     by their names like any other value; every other meta field is the
+ *     record's ADDRESS and is never selected.
  *
  * A payload whose scrub cannot run (an uncloneable value under a selected
- * field) is served as the placeholder whole, never raw — footprintjs's own
- * rule for a pause payload it cannot scrub.
- *
- * One more decision, the rule's own TAINT law applied to the library's own
- * copies: a field the library DERIVES from another value and carries under a
- * name of its own (`DERIVED` — a parser's message quotes the model's draft)
- * is served as the placeholder whenever the rule keeps the value it was
- * derived from out. footprintjs marks a subflow mapper's computed copy of a
- * selected value the same way; the verdict is still the rule's, by name.
+ * field, a getter that throws) is served as the placeholder whole, never raw.
  */
 
 import type { RedactionRule } from 'footprintjs/advanced';
 
+import { EVENT_CONTENT, type EventContent, type EventWords } from '../events/content.js';
 import type { EventMeta } from '../events/types.js';
+import { ruleKeepsConversationOut } from './conversation.js';
 
 /** The placeholder footprintjs serves a record handed out whole with. */
 export const SERVED_PLACEHOLDER = '[REDACTED]';
@@ -62,11 +66,22 @@ export interface EventServing {
  */
 export function eventServing(ruleOf: () => RedactionRule, hasEmitNames: boolean): EventServing {
   const active = (): boolean => hasEmitNames || !ruleOf().isInert();
+  // Whether the run's rule keeps the whole conversation out — remembered for
+  // the rule that said so (a rule only ever adds names), in THIS serving's own
+  // closure: nothing about one run outlives it or reaches another.
+  let coveringRule: RedactionRule | undefined;
+  const conversationOut = (rule: RedactionRule): boolean => {
+    if (coveringRule === rule) return true;
+    if (!ruleKeepsConversationOut(rule)) return false;
+    coveringRule = rule;
+    return true;
+  };
   return {
     active,
     payload(type, payload) {
       if (!active()) return payload;
-      return servedPayload(ruleOf(), type, payload);
+      const rule = ruleOf();
+      return servedPayload(rule, type, payload, () => conversationOut(rule));
     },
     meta(meta) {
       if (meta.principal === undefined && meta.tenant === undefined) return meta;
@@ -76,202 +91,19 @@ export function eventServing(ruleOf: () => RedactionRule, hasEmitNames: boolean)
   };
 }
 
-/** One kind of content an event carries under a name of its own. */
-interface Derived {
-  /** Where it sits in the payload: dotted, `name[]` for each element of a list. */
-  readonly paths: readonly string[];
-  /** The names it is derived from: kept out whenever the rule keeps out any of them. */
-  readonly from: readonly string[];
-  /**
-   * A field beside the value that NAMES the argument it quotes (a validation
-   * issue's `path`, `'customer.ssn'`): the value is kept out too when the rule
-   * would keep out a value at that path of a call's arguments — asked of the
-   * rule itself (`retainBoundary` over `{ args: <path> }`), so a key, a
-   * pattern, a dotted-path pattern and a `fields` selector all count.
-   */
-  readonly namedBy?: string;
-  /**
-   * A path, from the payload's root, to the object the value was RENDERED from
-   * (a check-in's `willDo` writes the call's arguments as `k=v` text): the
-   * value is kept out too whenever the rule kept out ANYTHING inside that
-   * object — read off the served payload itself (the rule hands an untouched
-   * object back as the same object), so every selector counts.
-   */
-  readonly namesAt?: string;
-}
+/** An event type the registry does not know (an app's own): every field is content. */
+const UNCLASSIFIED: EventContent = Object.freeze({ structure: [] });
 
-/** The words a person or the model wrote, wherever the library quotes them. */
-const CONVERSATION_TEXT = ['userMessage', 'message', 'history'] as const;
-const MODEL_TEXT = ['llmLatestContent', 'finalContent', 'content'] as const;
-
-/**
- * The words of a coverage declaration's three lists at `at` (`''` = the
- * payload's root) — prose a tool composes at run time, often from its call's
- * arguments and its result (`coverage/absent.ts` · `absent`'s own example). The
- * lists themselves, their length and each item's `kind` stay: they are what the
- * record's readers judge on.
- */
-function coverageWords(at: string, lists: readonly string[]): readonly string[] {
-  const prefix = at === '' ? '' : `${at}.`;
-  return lists.flatMap((list) =>
-    ['what', 'why', 'short'].map((field) => `${prefix}${list}[].${field}`),
-  );
-}
-
-/** A coverage declaration's lists, as the coverage events carry them. */
-const COVERAGE_LISTS = ['checked', 'notChecked', 'cannotCover'] as const;
-
-/** A check-in's evidence pack (`core/checkin.ts` · `CheckInRequest`) at `at` in a payload. */
-function checkInPack(at: string): readonly Derived[] {
-  return [
-    { paths: [`${at}.intent`], from: MODEL_TEXT },
-    // `willDo` renders the call's arguments as text: kept out with `args`, or
-    // with any argument name the rule keeps out.
-    { paths: [`${at}.evidence.willDo`], from: ['args'], namesAt: `${at}.args` },
-    {
-      paths: [`${at}.evidence.read[].summary`, `${at}.evidence.drivers[].text`],
-      from: [...CONVERSATION_TEXT, 'result'],
-    },
-  ];
+/** The registry's classification of `type` — never a prototype property a type string happens to name. */
+function contentOf(type: string): EventContent {
+  return Object.prototype.hasOwnProperty.call(EVENT_CONTENT, type)
+    ? (EVENT_CONTENT as Readonly<Record<string, EventContent>>)[type] ?? UNCLASSIFIED
+    : UNCLASSIFIED;
 }
 
 /**
- * The content the library DERIVES from a conversation value and carries under
- * a name of its own, per event type — each kept out whenever the rule keeps out
- * a value it came from. Generic names (`value`, `note`, `text`, `payload`) are
- * never put on a policy: selected by name they would hide structure across
- * every event. Pinned per feature by
- * `test/redaction/agent-redaction.vocabulary.test.ts`.
- */
-const DERIVED: Readonly<Record<string, readonly Derived[]>> = {
-  // A parser's or a fallback's message quotes the draft it could not read.
-  'agentfootprint.agent.output_schema_validation_failed': [
-    { paths: ['message'], from: ['rawOutput'] },
-  ],
-  'agentfootprint.agent.output_schema_retry': [{ paths: ['error'], from: ['rawOutput'] }],
-  'agentfootprint.agent.output_contract_unmet': [{ paths: ['error'], from: ['rawOutput'] }],
-  'agentfootprint.reliability.fail_fast': [{ paths: ['errorMessage'], from: ['rawOutput'] }],
-  'agentfootprint.resilience.output_fallback_triggered': [
-    { paths: ['primaryErrorMessage'], from: ['rawOutput'] },
-  ],
-  'agentfootprint.resilience.output_canned_used': [
-    { paths: ['fallbackErrorMessage'], from: ['rawOutput'] },
-  ],
-  // A string argument a validation issue quotes.
-  'agentfootprint.validation.args_invalid': [
-    { paths: ['issues[].value'], from: ['args'], namedBy: 'path' },
-  ],
-  // An argument value an external ground stood in for, and a value an `assume` rule filled.
-  'agentfootprint.integrity.external_ground_used': [
-    { paths: ['value'], from: ['args'], namedBy: 'path' },
-  ],
-  'agentfootprint.agent.turn_end': [
-    { paths: ['answerCoverage.assumed[].value'], from: ['args'], namedBy: 'argument' },
-    // A typed answer's limits as data: the words of every declaration it folds.
-    { paths: coverageWords('answerCoverage', COVERAGE_LISTS), from: ['args', 'result'] },
-  ],
-  // What a tool declared it looked for, checked and did not: the words of its
-  // coverage, composed from its call and its result.
-  'agentfootprint.tools.absent': [
-    {
-      paths: [
-        'lookedFor',
-        'tryInstead',
-        'tryInsteadTool.why',
-        ...coverageWords('', COVERAGE_LISTS),
-      ],
-      from: ['args', 'result'],
-    },
-  ],
-  'agentfootprint.tools.coverage_declared': [
-    { paths: coverageWords('', [...COVERAGE_LISTS, 'inProgress']), from: ['args', 'result'] },
-  ],
-  // A described result's envelope: its data IS the tool's result (read by the
-  // record's readers only when the result is not kept out), its words are
-  // composed like a coverage declaration's.
-  'agentfootprint.tools.semantics_declared': [
-    {
-      paths: [
-        'semantics.facts',
-        'semantics.series',
-        'semantics.edges',
-        'semantics.clarify.candidates',
-      ],
-      from: ['result'],
-    },
-    {
-      paths: [
-        'semantics.clarify.question',
-        'semantics.not_covered',
-        ...coverageWords('semantics.coverage', ['checked', 'not_checked', 'cannot_cover']),
-        // A renderer's and a grain's words, and the field names a table is drawn by.
-        'semantics.render.filter_note',
-        'semantics.render.chart_hint',
-        'semantics.render.columns',
-        'semantics.render.sort',
-        'semantics.grain.collapsed',
-      ],
-      from: ['args', 'result'],
-    },
-  ],
-  // A skipped step's reason: the model's own words, passed as the `skip_step`
-  // call's argument.
-  'agentfootprint.skill.step_skipped': [{ paths: ['reason'], from: ['args'] }],
-  // A tool effect's own declared reason, and the refusal sentence that names
-  // what it proposed — both from the tool's result.
-  'agentfootprint.tools.effect': [{ paths: ['reason', 'refusalReason'], from: ['args', 'result'] }],
-  // An artifact ref the model passed, and the refusal sentence that quotes it
-  // (or describes what was passed in its place).
-  'agentfootprint.artifacts.refused': [{ paths: ['ref', 'detail'], from: ['args', 'result'] }],
-  // A presented artifact's label, as the tool wrote it.
-  'agentfootprint.artifacts.presented': [{ paths: ['snapshot.label'], from: ['args', 'result'] }],
-  // Figures the answer computed, quoted with the operands they came from.
-  'agentfootprint.agent.evidence_checked': [
-    { paths: ['computed[].value', 'computed[].from'], from: [...MODEL_TEXT, 'result'] },
-  ],
-  // A check-in's evidence pack: the model's words, the rendered arguments, the
-  // context it quotes — and the person's note on the decision. The pack rides
-  // the check-in event AND the pause it asks with (`pause.request`'s question).
-  'agentfootprint.checkin.request': checkInPack('request'),
-  'agentfootprint.pause.request': [
-    ...checkInPack('questionPayload.checkIn'),
-    // The library's own copy of the pause payload's reason (`RunnerBase ·
-    // emitPauseRequest`), beside the payload it came from.
-    { paths: ['reason'], from: ['questionPayload'] },
-  ],
-  // A permission checker's and a middleware's own words about the call they
-  // judged: composed from its arguments, its result, the person's message —
-  // and a thrown error's message in a middleware's place.
-  'agentfootprint.permission.check': [
-    { paths: ['rationale', 'reason'], from: ['args', 'result', ...CONVERSATION_TEXT] },
-  ],
-  'agentfootprint.middleware.decision': [
-    { paths: ['why'], from: ['args', 'result', ...CONVERSATION_TEXT] },
-  ],
-  'agentfootprint.checkin.decision': [{ paths: ['note'], from: ['resumeInput'] }],
-  // Words a matcher found in the conversation; a tool result a route guard judged.
-  'agentfootprint.context.evaluated': [
-    { paths: ['cursorMove.witness.text'], from: CONVERSATION_TEXT },
-    {
-      paths: [
-        'cursorMove.guard.conditions[].actualSummary',
-        'cursorMove.guardsClosed[].conditions[].actualSummary',
-      ],
-      from: ['result'],
-    },
-  ],
-  'agentfootprint.skill.turn_routed': [{ paths: ['witness.text'], from: CONVERSATION_TEXT }],
-  'agentfootprint.map.engaged': [{ paths: ['witness'], from: CONVERSATION_TEXT }],
-  'agentfootprint.map.parked': [{ paths: ['witness'], from: CONVERSATION_TEXT }],
-  // A tool's own progress report; a retrieved passage's heading.
-  'agentfootprint.stream.tool_progress': [{ paths: ['payload'], from: ['result'] }],
-  'agentfootprint.memory.retrieved': [{ paths: ['candidates[].heading'], from: ['retrieved'] }],
-};
-
-/**
- * The DERIVED table as rows — for the test that pins it against the event
- * registry and the conversation vocabulary (every row's event type exists, and
- * the vocabulary keeps out a name each row is derived from).
+ * The registry's `words` rows as rows — for the test that pins them against
+ * the event registry and the conversation vocabulary.
  *
  * @internal
  */
@@ -281,55 +113,90 @@ export function derivedRows(): readonly {
   readonly from: readonly string[];
   readonly namedBy?: string;
 }[] {
-  return Object.entries(DERIVED).flatMap(([type, entries]) =>
-    entries.map((entry) => ({ type, ...entry })),
+  return Object.entries(EVENT_CONTENT as Readonly<Record<string, EventContent>>).flatMap(
+    ([type, content]) => (content.words ?? []).map((entry) => ({ type, ...entry })),
   );
 }
 
 /** The served form of one payload — see the file header for the decisions. */
-function servedPayload(rule: RedactionRule, type: string, payload: unknown): unknown {
+function servedPayload(
+  rule: RedactionRule,
+  type: string,
+  payload: unknown,
+  conversationOut: () => boolean,
+): unknown {
   try {
     const named = rule.retainEmit(type, payload);
     if (named !== payload) return named;
-    return withDerivedKeptOut(rule, type, rule.retainBoundary(payload), payload);
+    return withContentKeptOut(
+      rule,
+      contentOf(type),
+      rule.retainBoundary(payload),
+      payload,
+      conversationOut,
+    );
   } catch {
     return SERVED_PLACEHOLDER;
   }
 }
 
 /**
- * `served` with the content derived from a kept-out value served as the
- * placeholder. `original` is the payload before the rule served it: what the
- * rule changed inside a `namesAt` object is read off the two.
+ * `served` with the content it carries kept out: the words rows by the values
+ * they come from, and — under a rule that keeps the conversation out — every
+ * top-level field not declared structure. `original` is the payload before
+ * the rule served it: what the rule changed inside a `namesAt` object is read
+ * off the two.
  */
-function withDerivedKeptOut(
+function withContentKeptOut(
   rule: RedactionRule,
-  type: string,
+  content: EventContent,
   served: unknown,
   original: unknown,
+  conversationOut: () => boolean,
 ): unknown {
-  const entries = DERIVED[type];
-  if (entries === undefined) return served;
-  const decided = entries.map((entry) => ({
+  const decided = (content.words ?? []).map((entry) => ({
     entry,
     whole:
       entry.from.some((name) => sourceKeptOut(rule, name)) ||
       (entry.namesAt !== undefined && renderedFromKeptOut(served, original, entry.namesAt)),
   }));
+  const conversation = conversationOut();
   if (!isPlainRecord(served)) {
-    // A payload the paths cannot be walked in: whole, when any content in it is kept out.
-    return decided.some((d) => d.whole) && served !== SERVED_PLACEHOLDER
+    // A payload whose fields cannot be read: whole, when anything in it is kept out.
+    return (conversation || decided.some((d) => d.whole)) && served !== SERVED_PLACEHOLDER
       ? SERVED_PLACEHOLDER
       : served;
   }
   let out: unknown = served;
   for (const { entry, whole } of decided) {
     if (!whole && entry.namedBy === undefined) continue;
-    const keptOut = (owner: Readonly<Record<string, unknown>>): boolean =>
-      whole || (entry.namedBy !== undefined && argumentKeptOut(rule, owner[entry.namedBy]));
-    for (const path of entry.paths) out = maskAt(out, path.split('.'), keptOut);
+    out = maskWords(out, entry, whole, rule);
   }
+  return conversation ? withUndeclaredKeptOut(out, content.structure) : out;
+}
+
+/** `node` with one words row's paths served as the placeholder where they are kept out. */
+function maskWords(node: unknown, entry: EventWords, whole: boolean, rule: RedactionRule): unknown {
+  const keptOut = (owner: Readonly<Record<string, unknown>>): boolean =>
+    whole || (entry.namedBy !== undefined && argumentKeptOut(rule, owner[entry.namedBy]));
+  let out = node;
+  for (const path of entry.paths) out = maskAt(out, path.split('.'), keptOut);
   return out;
+}
+
+/**
+ * DEFAULT-DENY: `node` with every top-level field not in `structure` served as
+ * the placeholder — copied on write, the SAME object when nothing changed.
+ */
+function withUndeclaredKeptOut(node: unknown, structure: readonly string[]): unknown {
+  if (!isPlainRecord(node)) return node;
+  let copy: Record<string, unknown> | undefined;
+  for (const key of Object.keys(node)) {
+    if (structure.includes(key) || node[key] === SERVED_PLACEHOLDER) continue;
+    copy ??= { ...node };
+    copy[key] = SERVED_PLACEHOLDER;
+  }
+  return copy ?? node;
 }
 
 /**

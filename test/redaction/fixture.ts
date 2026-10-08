@@ -20,6 +20,7 @@ import { Agent, defineTool, type Tool } from '../../src/index.js';
 import { mock } from '../../src/doors/providers.js';
 import { conversationRedaction } from '../../src/doors/security.js';
 import type { LLMProvider, LLMRequest } from '../../src/adapters/types.js';
+import { EVENT_CONTENT, type EventContent } from '../../src/events/content.js';
 
 export const SECRET = {
   user: 'SECRET-USER-7731',
@@ -172,4 +173,73 @@ export function leaksIn(value: unknown, secrets: readonly string[] = ALL_SECRETS
   return secrets.flatMap((secret) =>
     locationsOf(scrubbedOfLimit, secret).map((path) => `${secret} at ${path}`),
   );
+}
+
+/** The marker a structure field that CARRIES words holds beside them, at every level. */
+export const INNER_MARKER = 'structure-inner';
+
+const contentOfType = (type: string): EventContent =>
+  (EVENT_CONTENT as Readonly<Record<string, EventContent>>)[type] as EventContent;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
+
+/**
+ * `value` planted at `segments` in `node`, building the shape on the way
+ * (`name[]` = a list of one record), with {@link INNER_MARKER} beside it at
+ * every level and, when the row names its argument (`namedBy`), an unrelated
+ * path there — so only the rule's own verdict can keep the value out.
+ */
+function plantAt(
+  node: Record<string, unknown>,
+  segments: readonly string[],
+  value: unknown,
+  namedBy: string | undefined,
+): void {
+  const [head, ...rest] = segments as [string, ...string[]];
+  const list = head.endsWith('[]');
+  const key = list ? head.slice(0, -2) : head;
+  if (rest.length === 0) {
+    node[key] = list ? [value] : value;
+    if (namedBy !== undefined) node[namedBy] = 'unrelated.arg';
+    return;
+  }
+  if (list) {
+    if (!Array.isArray(node[key])) node[key] = [{ kind: INNER_MARKER }];
+    plantAt((node[key] as Record<string, unknown>[])[0]!, rest, value, namedBy);
+  } else {
+    if (!isRecord(node[key])) node[key] = { kind: INNER_MARKER };
+    plantAt(node[key] as Record<string, unknown>, rest, value, namedBy);
+  }
+}
+
+/** The top-level fields of the registered event `type` that hold words below them. */
+export function carriersOf(type: string): Set<string> {
+  return new Set(
+    (contentOfType(type).words ?? [])
+      .flatMap((row) => row.paths)
+      .filter((path) => path.includes('.'))
+      .map((path) => path.split('.')[0]!.replace(/\[\]$/, '')),
+  );
+}
+
+/**
+ * A payload for the registered event `type`, GENERATED from its classification
+ * (`src/events/content.ts` · `EVENT_CONTENT`), never listed by hand:
+ * `structure(field)` in every structure field, `quote` at every words path
+ * (a field that carries words holds a walkable shape with
+ * {@link INNER_MARKER} beside them) and in one field the type does not declare.
+ */
+export function eventPayloadFor(
+  type: string,
+  structure: (field: string) => unknown,
+  quote: unknown,
+): Record<string, unknown> {
+  const content = contentOfType(type);
+  const payload: Record<string, unknown> = { __undeclared__: quote };
+  for (const field of content.structure) payload[field] = structure(field);
+  for (const row of content.words ?? []) {
+    for (const path of row.paths) plantAt(payload, path.split('.'), quote, row.namedBy);
+  }
+  return payload;
 }

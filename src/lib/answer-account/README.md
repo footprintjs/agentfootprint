@@ -171,9 +171,9 @@ declared key that holds no list and no ticket (`unreachable.empty.noList`).
     them puts those arguments in the report too (the af-1 "never interpolate"
     rule, `core/agent/coverage/README.md`); the report is scoped to its owner.
     Under a redaction policy that keeps the call's arguments or its result
-    out, those words are kept out of the record with them
-    (`redaction/served.ts` · `DERIVED`), and the account counts the items it
-    cannot print (law 11).
+    out, those words are kept out of the record with them (each event type's
+    `words` rows, `events/content.ts` · `EVENT_CONTENT`), and the account
+    counts the items it cannot print (law 11).
 11. **A placeholder is never a value; KEPT OUT is never "not recorded".** A
     recording of a run under a redaction policy (an agent's `redact`) holds
     footprintjs's placeholder where the policy selected a value. The view reads

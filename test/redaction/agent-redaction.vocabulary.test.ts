@@ -881,7 +881,7 @@ describe('a field a tool names is kept out of every event by its name alone', ()
   // a dotted path, or as a `fields` selector. A check-in's evidence pack renders
   // the call's arguments as text (`willDo`), and a validation issue quotes the
   // argument it refuses, so both are kept out by the rule's own verdict on the
-  // arguments they came from — on every event (`served.ts` · `DERIVED`).
+  // arguments they came from — on every event (the words rows, `events/content.ts`).
   const SSN = 'SSN-CANARY-7788';
   const POLICIES: readonly [string, RedactionPolicy][] = [
     ['a pattern on the name', { patterns: [/ssn/i] }],
@@ -1033,10 +1033,10 @@ describe('the vocabulary agrees with the audit export on what is content', () =>
     expect(missing).toEqual([]);
   });
 
-  it('every DERIVED row names a real event, and the vocabulary keeps out a value it comes from', () => {
+  it('every words row names a real event, and the vocabulary keeps out a value it comes from', () => {
     // The other direction of the same question: content the library quotes
-    // under a name of its own is kept out with its source (`served.ts` ·
-    // `DERIVED`). A row whose event does not exist, or whose sources the
+    // under a name of its own is kept out with its source (its event type's
+    // words rows, `events/content.ts`). A row whose event does not exist, or whose sources the
     // vocabulary never names, would never fire under `conversationRedaction()`.
     const policy = conversationRedaction();
     const kept = (name: string) =>
