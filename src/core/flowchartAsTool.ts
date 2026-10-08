@@ -140,6 +140,7 @@ import {
   type KeepsInnerRuns,
 } from '../lib/trace-toolpack/innerRunRecords.js';
 import { unionRedactionPolicies } from '../redaction/policy.js';
+import { redactionMarker } from '../redaction/marker.js';
 import { modelFacingState, servableSnapshot, watchRunRule } from './servableSnapshot.js';
 import { argsRedactedBy, SHOWN_ARGS } from './toolShownArgs.js';
 import { defineTool } from './tools.js';
@@ -420,7 +421,12 @@ export function flowchartAsTool(opts: FlowchartAsToolOptions): Tool {
         opts.flowchart,
         watch !== undefined ? { scopeFactory: watch.scopeFactory } : undefined,
       );
-      if (policy) executor.setRedactionPolicy(policy);
+      if (policy) {
+        executor.setRedactionPolicy(policy);
+        // The kept record says it was served under a policy, so its readers
+        // read a placeholder as a value kept out (`redaction/marker.ts`).
+        executor.attachCombinedRecorder(redactionMarker());
+      }
       for (const recorder of opts.recorders ?? []) {
         executor.attachCombinedRecorder(recorder);
       }

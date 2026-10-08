@@ -186,6 +186,13 @@ export class EventDispatcher {
    */
   private readonly servingsByRun = new Map<string, EventServing | undefined>();
   /**
+   * The serving for an event dispatched before any run opened one — a
+   * consumer's `emit`, a host's fact — supplied by the runner from its DECLARED
+   * policy (`RunnerBase`). Without it such an event would go out raw even on an
+   * agent that declares a policy.
+   */
+  private defaultServing: (() => EventServing | undefined) | undefined;
+  /**
    * The REAL-value path — the library's own mechanisms that run on events
    * (the crash checkpoint, the window's token reading, the reply a host
    * streams). Never a record: see `src/redaction/runRedaction.ts`. Separate
@@ -391,6 +398,17 @@ export class EventDispatcher {
   // ─── The run's redaction (src/redaction/) ─────────────────────────
 
   /**
+   * Install the serving for events dispatched before any run opened one
+   * (`defaultServing`). Read at dispatch time, so a declaration made after the
+   * dispatcher exists still applies.
+   *
+   * @internal
+   */
+  useDefaultServing(serving: () => EventServing | undefined): void {
+    this.defaultServing = serving;
+  }
+
+  /**
    * Install what this run's events are served as. Called by the runner when a
    * run opens (`RunnerBase · openRunRedaction`).
    *
@@ -487,7 +505,7 @@ export class EventDispatcher {
     const serving =
       typeof runId === 'string' && this.servingsByRun.has(runId)
         ? this.servingsByRun.get(runId)
-        : this.serving;
+        : this.serving ?? this.defaultServing?.();
     if (serving === undefined || !serving.active()) return event;
     const payload = servePayload ? serving.payload(event.type, event.payload) : event.payload;
     const meta = event.meta === undefined ? event.meta : serving.meta(event.meta);

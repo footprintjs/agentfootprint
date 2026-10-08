@@ -320,6 +320,69 @@ const CASES: readonly FeatureCase[] = [
     drive: (agent) => agent.run({ message: 'count them' }),
   },
   {
+    // A GUARDING gate keeps the draft's unsupported values (`evidenceUnsupported`).
+    feature: 'the evidence gate (names and numbers) — guard posture',
+    canaries: ['CANARY-GUARD-ROW', '918273645'],
+    build: (redact) =>
+      create(
+        mock({
+          chunkDelayMs: 0,
+          replies: [
+            { toolCalls: [{ id: 'c1', name: 'lookup', args: { id: 'x' } }] },
+            { content: 'The count is 918273645.' },
+            { content: 'The count is 918273645, still.' },
+            { content: 'I cannot confirm the count.' },
+          ],
+        }),
+        redact,
+      )
+        .tool(lookup(() => ({ rows: ['CANARY-GUARD-ROW'] })))
+        .namesAndNumbersFromEvidence({ posture: 'guard' } as never)
+        .build(),
+    drive: (agent) => agent.run({ message: 'count them' }),
+  },
+  {
+    // A compaction folds the window and keeps the originals word for word
+    // (`foldedSpans`, the default `retain: 'conversation'`).
+    feature: 'compaction (the window folding the conversation)',
+    canaries: ['CANARY-FOLD-ASK', 'CANARY-FOLD-RESULT', 'CANARY-FOLD-SUMMARY'],
+    build: (redact) => {
+      let call = 0;
+      const main: LLMProvider = {
+        name: 'mock',
+        complete: async (): Promise<LLMResponse> => {
+          call += 1;
+          const wantsTool = call <= 4;
+          return {
+            content: wantsTool ? '' : 'final answer',
+            toolCalls: wantsTool ? [{ id: `c${call}`, name: 'lookup', args: { id: 'x' } }] : [],
+            usage: { input: 100 * call, output: 5 },
+            stopReason: 'end_turn',
+          };
+        },
+      };
+      const summarizer: LLMProvider = {
+        name: 'mock-summarizer',
+        complete: async (): Promise<LLMResponse> => ({
+          content: 'EARLIER: CANARY-FOLD-SUMMARY',
+          toolCalls: [],
+          usage: { input: 120, output: 20 },
+          stopReason: 'end_turn',
+        }),
+      };
+      return Agent.create({
+        provider: main,
+        model: 'm',
+        maxIterations: 8,
+        ...(redact && { redact }),
+      })
+        .tool(lookup(() => ({ rows: ['CANARY-FOLD-RESULT'] })))
+        .compaction({ thresholdTokens: 250, summarizer, model: 'summarizer', keepRecentTurns: 2 })
+        .build();
+    },
+    drive: (agent) => agent.run({ message: 'CANARY-FOLD-ASK, look it up' }),
+  },
+  {
     // The figures dial names what the answer computed, with its operands.
     feature: 'the evidence gate (names and numbers) — figures',
     canaries: ['7,654,322', '71.3'],

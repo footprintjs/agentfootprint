@@ -210,6 +210,7 @@ export class Loop extends RunnerBase<LoopInput, LoopOutput> {
     // The leg's policy — the paused run's marks — goes to ITS executor, never via the instance.
     const resumeLeg = this.emitPauseResume(checkpoint, input);
     const executor = this.createExecutor(resumeLeg);
+    this.lastExecutor = executor;
     const result = await executor.resume(checkpoint, input, withRunSignalInEnv(options));
     return this.finalizeResult(executor, result);
   }

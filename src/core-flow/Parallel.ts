@@ -361,6 +361,7 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
     // The leg's policy — the paused run's marks — goes to ITS executor, never via the instance.
     const resumeLeg = this.emitPauseResume(checkpoint, input);
     const executor = this.createExecutor(resumeLeg);
+    this.lastExecutor = executor;
     let result: unknown;
     try {
       result = await executor.resume(checkpoint, input, withRunSignalInEnv(options));

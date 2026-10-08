@@ -38,6 +38,7 @@ import { conversationRedaction } from '../../src/doors/security.js';
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
 import { innerRunsOf, recordRun } from '../../src/doors/observe.js';
 import { redactionDeclaredBy } from '../../src/redaction/declared.js';
+import { servedUnderPolicy } from '../../src/redaction/marker.js';
 import type { Runner } from '../../src/core/runner.js';
 import {
   ALL_SECRETS,
@@ -283,6 +284,8 @@ describe('nested through a tool: ctx.redact is the calling run’s policy', () =
     expect(kept).toBeDefined();
     expect(JSON.stringify(kept)).not.toContain('sk-INNER-SECRET-1');
     expect(JSON.stringify(kept)).toContain('REDACTED');
+    // …and it says so: its readers read the placeholder as a value kept out.
+    expect(servedUnderPolicy(kept?.recording?.snapshot)).toBe(true);
   });
 
   it('flowchartAsTool: the tool’s own `redact` and the chart’s own marks still keep values from the model', async () => {

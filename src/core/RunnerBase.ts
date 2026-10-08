@@ -199,6 +199,20 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
    * reach the real values through a runner, so none can make them a record.
    */
   constructor() {
+    // Before any run opens its redaction, an event (a consumer's `emit`, a
+    // host's fact) is served under what this runner DECLARES — read at
+    // dispatch time, since the declaration is made after this constructor.
+    let declaredServing:
+      | { policy: RedactionPolicy; serving: ReturnType<typeof servingAhead> }
+      | undefined;
+    this.dispatcher.useDefaultServing(() => {
+      const policy = redactionDeclaredBy(this);
+      if (policy === undefined) return undefined;
+      if (declaredServing?.policy !== policy) {
+        declaredServing = { policy, serving: servingAhead(policy) };
+      }
+      return declaredServing.serving;
+    });
     registerRunnerLive(this, {
       onRealEvent: (listener) => this.dispatcher.onRealEvent(listener),
       liveState: () => this.lastExecutor?.getRuntime().globalStore.getState(),

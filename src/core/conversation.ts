@@ -168,12 +168,13 @@ export type ResumeRedactionReason = 'unreadable' | 'missing';
  *    run was covered by, as plain data) is not one this library wrote;
  *  - `'missing'` — the checkpoint says its run kept values out of its records
  *    (footprintjs's `redactionMarks`: the names it masked) but carries no
- *    policy, and the resume names none either.
+ *    policy. Every leg of a covered run writes its policy into its checkpoint,
+ *    so this one was altered; a `redact` passed to the resume cannot stand in
+ *    for the policy the run was covered by, so it is refused all the same.
  *
  * Either way the resumed leg would write what the paused leg kept out into
- * every record of its own. Resume with the `redact` the run was paused under
- * (`resume(checkpoint, input, { redact })`), or with the checkpoint as this
- * library wrote it. No policy, name or value appears in the message.
+ * every record of its own. Resume with the checkpoint as this library wrote
+ * it. No policy, name or value appears in the message.
  */
 export class ResumeRedactionError extends Error {
   readonly code = 'ERR_RESUME_REDACTION' as const;
@@ -184,10 +185,10 @@ export class ResumeRedactionError extends Error {
       reason === 'unreadable'
         ? "Agent.resume: the checkpoint's redaction policy (`runRedaction`) is not one this library " +
             'wrote, so the resumed run could not keep its records covered. Resume with the checkpoint ' +
-            'as it was written, or pass the `redact` the run was paused under.'
+            'as it was written.'
         : 'Agent.resume: the checkpoint says its run kept values out of its records but carries no ' +
-            'redaction policy, so the resumed run would write them into its own. Pass the `redact` ' +
-            'the run was paused under: resume(checkpoint, input, { redact }).',
+            'redaction policy — every covered run writes its policy into its checkpoint, so this one ' +
+            'was altered. Resume with the checkpoint as it was written.',
     );
     this.name = 'ResumeRedactionError';
     this.reason = reason;

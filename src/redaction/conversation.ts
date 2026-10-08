@@ -33,6 +33,13 @@
  *     draft (`rawOutput`) is kept out (`served.ts` · `DERIVED`);
  *   - structure: ids, counts, kinds, tool names, timings and verdict words
  *     stay readable — the record still shows WHAT happened, without the words;
+ *   - a tool's coverage declaration — the words its author passes to
+ *     `coverage()` / `absent()` (`coverageDeclared`, `answerCoverage`, the
+ *     `tools.coverage_declared` / `tools.absent` events): the tool AUTHOR's
+ *     text about what it read, shown by the answer account as written, like a
+ *     tool's description. Keep the person's data out of it; to keep it out of
+ *     the record anyway, name `coverageDeclared` and `answerCoverage` yourself
+ *     (the answer account then says it cannot tell what the tools covered);
  *   - content the library quotes under names of its own (a validation issue's
  *     quoted argument, a check-in's evidence pack, a matcher's witness, a
  *     route guard's judged result, …) is not named here: generic names
@@ -59,6 +66,7 @@ export const CONVERSATION_FEATURES: readonly string[] = Object.freeze([
   'structured output (schema retries, the output fallback)',
   'memory (episodic, semantic, summarize, top-k) and retrieval (RAG)',
   'the evidence gate (names and numbers)',
+  'compaction (the window folding the conversation)',
   'a person approving a call (check-in)',
   'skill graphs (routing on the person’s words)',
   'compositions (Sequence, Parallel, Conditional, Loop, Graph)',
@@ -87,6 +95,8 @@ const NAMES = {
     'assembledSystem',
     'assembledMessages',
   ],
+  /** The window: what a compaction folded away, kept word for word beside its summary. */
+  window: ['foldedSpans'],
   /** What the model was given: injected context, the assembled system prompt. */
   context: [
     'rawContent',
@@ -140,7 +150,10 @@ const NAMES = {
     'evidenceRecovery',
     'evidence',
     'explanation',
+    // The values a guarding evidence gate found unsupported in the draft.
+    'evidenceUnsupported',
   ],
+
   /** Memory and retrieval: what was loaded, chosen, formatted and written. */
   memory: [
     'loaded',

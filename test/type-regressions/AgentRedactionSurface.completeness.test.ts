@@ -71,13 +71,14 @@ export const AGENT_PUBLIC_SURFACE: { readonly [K in keyof Agent]-?: SurfaceKind 
   parseOutput: 'callers-own',
   parseOutputAsync: 'callers-own',
   outcomeOf: 'callers-own',
+  // What was dropped — the pending question, in the person's words.
+  abandonPause: 'callers-own',
   // ── Control: nothing a record could hold ───────────────────────────────
   off: 'control',
   removeAllListeners: 'control',
   shutdown: 'control',
   drainObservers: 'control',
   closeToolSessions: 'control',
-  abandonPause: 'control',
 };
 
 describe('the Agent public surface is classified against the redaction law', () => {

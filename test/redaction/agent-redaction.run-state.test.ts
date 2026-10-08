@@ -249,6 +249,64 @@ describe('a late fact is served under the policy of the run it belongs to', () =
   });
 });
 
+describe('every leg is at least as covered as the one before it', () => {
+  it('a policy added at the first resume still covers the third leg', async () => {
+    // Pauses twice: run → resume #1 (handed Q here only) → resume #2 (handed nothing).
+    let calls = 0;
+    const provider: LLMProvider = {
+      name: 'pauses-twice',
+      complete: async (): Promise<LLMResponse> => {
+        calls += 1;
+        if (calls <= 2) {
+          return {
+            content: '',
+            toolCalls: [{ id: `p${calls}`, name: 'confirm', args: { ssn: `SSN-LEG-${calls}` } }],
+            usage: { input: 1, output: 1 },
+            stopReason: 'tool_use',
+          };
+        }
+        return {
+          content: 'confirmed',
+          toolCalls: [],
+          usage: { input: 1, output: 1 },
+          stopReason: 'stop',
+        };
+      },
+    };
+    const agent = asker(provider);
+    const first = await agent.run({ message: 'check' });
+    if (!isPaused(first)) throw new Error('leg 1 must pause');
+    const second = await agent.resume(first.checkpoint, { answer: 'yes' }, { redact: P });
+    if (!isPaused(second)) throw new Error('leg 2 must pause');
+    // Leg 2's checkpoint carries leg 2's whole policy, P included.
+    expect(JSON.stringify(second.checkpoint.sharedState)).toContain('runRedaction');
+    for (const record of await resumeRecords(asker(provider), second.checkpoint)) {
+      expect(locationsOf(record, 'SSN-LEG-2')).toEqual([]);
+    }
+  });
+});
+
+describe('before any run opens its redaction, the declared policy serves', () => {
+  it('a consumer emit on an agent that declares a policy, before its first run', () => {
+    const agent = Agent.create({
+      provider: mock({ chunkDelayMs: 0, reply: 'x' }),
+      model: 'm',
+      redact: { patterns: [/ssn/i] },
+    }).build();
+    const seen: AgentfootprintEvent[] = [];
+    agent.on('*', (e) => seen.push(e));
+    agent.emit('app.custom', { customer: { ssn: 'SSN-PRE-1212' } });
+    expect(seen).toHaveLength(1);
+    expect(locationsOf(seen, 'SSN-PRE-1212')).toEqual([]);
+    // An agent that declares none emits as it always did.
+    const plain = Agent.create({ provider: mock({ reply: 'x' }), model: 'm' }).build();
+    const raw: AgentfootprintEvent[] = [];
+    plain.on('*', (e) => raw.push(e));
+    plain.emit('app.custom', { customer: { ssn: 'SSN-PRE-1212' } });
+    expect(JSON.stringify(raw)).toContain('SSN-PRE-1212');
+  });
+});
+
 describe('one run at a time per instance — the guard', () => {
   it('a second run while one is in flight is refused (RunInFlightError)', async () => {
     let release: () => void = () => undefined;
@@ -316,9 +374,19 @@ describe('a resume that cannot carry its redaction is refused — fail closed', 
       name: 'ResumeRedactionError',
       reason: 'missing',
     });
-    // Naming the policy at the resume covers the leg: it runs.
-    const agent = asker();
-    await agent.resume(stripped, { answer: 'yes' }, { redact: P });
-    expect(locationsOf(agent.getLastSnapshot(), 'SSN-A-1111')).toEqual([]);
+    // Every leg of a covered run writes its policy into its checkpoint, so a
+    // checkpoint without one was altered — and a policy named at the resume
+    // cannot stand in for the one the run was covered by (it may be narrower).
+    for (const named of [P, { keys: ['unrelated'] }]) {
+      const agent = asker();
+      const events: AgentfootprintEvent[] = [];
+      agent.on('*', (e) => events.push(e));
+      const refusal = await agent
+        .resume(stripped, { answer: 'yes' }, { redact: named })
+        .catch((e: unknown) => e);
+      expect(refusal).toMatchObject({ name: 'ResumeRedactionError', reason: 'missing' });
+      expect(events).toEqual([]);
+      expect(agent.getLastSnapshot()).toBeUndefined();
+    }
   });
 });

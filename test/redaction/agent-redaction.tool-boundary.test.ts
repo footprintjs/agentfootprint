@@ -31,6 +31,7 @@ import { Agent, flowchartAsTool } from '../../src/index.js';
 import { mock } from '../../src/doors/providers.js';
 import { innerRunsOf } from '../../src/doors/observe.js';
 import { conversationRedaction } from '../../src/doors/security.js';
+import { servedUnderPolicy } from '../../src/redaction/marker.js';
 import { locationsOf, withoutAnswerBoundary } from './fixture.js';
 import { everySurface, servedArtifacts } from './everySurface.js';
 
@@ -100,6 +101,7 @@ async function whereTheKeyIs(redact: RedactionPolicy | undefined, answer?: strin
       'audit',
     ].filter((name) => locationsOf(withoutAnswerBoundary(artifacts[name]), KEY).length > 0),
     inKeptRecord: locationsOf(innerRunsOf(tool)?.get('t1'), KEY).length > 0,
+    keptRecordSaysServed: servedUnderPolicy(innerRunsOf(tool)?.get('t1')?.recording?.snapshot),
   };
 }
 
@@ -111,6 +113,7 @@ describe('a chart-backed tool’s result: the boundary into the calling agent’
       expect.arrayContaining(['snapshot', 'events', 'recording', 'audit', 'otel', 'bugReportZip']),
     );
     expect(at.inKeptRecord).toBe(true);
+    expect(at.keptRecordSaysServed).toBe(false);
   });
 
   it('a calling policy narrower than the conversation: the model reads the record’s view', async () => {
@@ -122,6 +125,7 @@ describe('a chart-backed tool’s result: the boundary into the calling agent’
     expect(at.modelSaw).toContain('note=used');
     expect(at.inArtifacts).toEqual([]);
     expect(at.inKeptRecord).toBe(false);
+    expect(at.keptRecordSaysServed).toBe(true);
   });
 
   it('a calling policy that keeps the conversation out: the model reads the real value, no record does', async () => {
@@ -132,6 +136,7 @@ describe('a chart-backed tool’s result: the boundary into the calling agent’
     // calling run's own names.
     expect(at.inArtifacts).toEqual([]);
     expect(at.inKeptRecord).toBe(false);
+    expect(at.keptRecordSaysServed).toBe(true);
   });
 
   it('THE NAMED LIMIT: an answer that quotes the value carries it only as the run’s output', async () => {

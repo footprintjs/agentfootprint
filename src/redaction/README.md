@@ -40,9 +40,13 @@ masks a STATE key of that name and everything under it; in every record handed
 out WHOLE — an event's payload, a pause's question, the run's input, a thrown
 error — it masks a key of that name at ANY depth (and a dotted-path pattern or
 a `fields` selector, a path). So a field like `ssn` inside a tool's arguments is
-masked wherever the arguments travel AS FIELDS — every event's `args`, and the
-copies the library renders from them (a check-in's `willDo`, a validation
-issue's quoted value — `DERIVED` below). TEXT has no name: the conversation —
+masked wherever a record hands the arguments out WHOLE — every event's `args`,
+and the copies the library renders from them (a check-in's `willDo`, a
+validation issue's quoted value — `DERIVED` below). A copy held in STATE is
+selected by its own top-level key, never by a name inside it: the history, a
+paused call's arguments (`pausedToolArgs`), the model's latest tool calls
+(`llmLatestToolCalls`) carry `ssn` under keys of their own, and are kept out
+by naming those keys — which the vocabulary does. TEXT has no name: the conversation —
 the `history` state key, a tool's result, a refusal sentence that quotes what
 it refused, the model's words — carries a value as text, and is kept out only
 by naming the keys it travels under, which is what the library's vocabulary
@@ -117,9 +121,11 @@ and that the answer account says the question and the answer are kept out.
   by. `flowchartAsTool`, `runbookAsTool` and the `.selfExplain({ delegate })`
   debugger join it with their own; a tool that runs another agent passes it on —
   `specialist.run(input, { redact: ctx.redact })`, as it passes `ctx.signal`.
-  A per-run `redact` is an `Agent`'s run option only: a composition or an
-  `LLMCall` takes none, so a tool that runs one keeps it covered by DECLARING
-  the policy on it (a member's `redact` is adopted, above).
+  A per-run `redact` is an `Agent`'s run option only: a composition takes
+  none, so a tool that runs one keeps it covered by what its members DECLARE
+  (a member's `redact` is adopted, above). An `LLMCall` and an `LlmRouter`
+  declare nothing — neither takes a `redact` — so one run on its own, or a
+  composition made only of them, is covered by nothing (named limit below).
 - **A chart-backed tool: the record, the model's view, and the boundary
   between them.** The inner run of `flowchartAsTool` / `runbookAsTool` is
   covered by the UNION — its log, narrative, kept record and recording keep out
@@ -212,7 +218,9 @@ and that the answer account says the question and the answer are kept out.
    off the run that owns the seed's scope (`policyInForce`), never an agent
    field; a resume's leg policy goes back from `emitPauseResume` to that leg's
    executor; and a fact is served under its own run's serving, by its run id
-   (`EventDispatcher · servingsByRun`). One run at a time per agent instance
+   (`EventDispatcher · servingsByRun`) — one dispatched before any run opened
+   (a consumer's `emit`, a `parseOutputAsync` fallback) under the policy the
+   runner declares (`EventDispatcher · useDefaultServing`). One run at a time per agent instance
    is the conversation law (`RunInFlightError`, `PendingQuestionError`); a
    resume that cannot carry its redaction is refused (`ResumeRedactionError`).
    Pinned by `test/redaction/agent-redaction.run-state.test.ts`.
@@ -222,9 +230,13 @@ and that the answer account says the question and the answer are kept out.
    calls, a host's streamed reply and spend ledger, `toSSE({ format: 'text' })`'s
    token text. Outside a runner's class it is reached only through
    `core/runnerLive.ts` (with the run's live state and snapshot, for a host's
-   session store and the context ledger), which no barrel exports and no runner
-   method hands out — so no consumer can reach it, and nothing on it is stored,
-   exported or shown. A consumer's `toSSE` `filter` sees the served record.
+   session store and the context ledger), which no barrel exports and no public
+   runner method hands out — so no consumer reaches it through the library's
+   API, and nothing on it is stored, exported or shown. The fence is the API,
+   not a runtime wall: TypeScript's `protected` is erased at compile time, so
+   code that casts past it (`(runner as any).dispatcher`) reaches the live
+   taps — as it reaches every value in its own process. A consumer's `toSSE`
+   `filter` sees the served record.
 
 ## Readers of a redacted record
 
@@ -333,10 +345,36 @@ bytes, for any recording — an agent's or a chart's.)
   run's own state into a pause's checkpoint (`AgentState.runRedaction`, names
   only), so a resumed leg is covered by it without being handed it again, and
   the names the paused leg kept out (footprintjs's `redactionMarks`) cover the
-  leg whatever policy it is given (`redaction/policy.ts` · `policyOfMarks`). A
+  leg whatever policy it is given (`redaction/policy.ts` · `policyOfMarks`).
+  Every resumed leg writes its WHOLE policy back (`Agent · resume`), so a
+  `redact` passed to `resume()` covers every later leg too. A
   conversation CONTINUED from a run (`followUp`, `continueFrom`,
   `resumeOnError`) is a new run, covered by what that run is given — declare
   the policy on the agent (`Agent.create({ redact })`) to cover every run.
+- **A checkpoint is not proof.** The resume refuses a carried policy it cannot
+  read (`'unreadable'`) and a missing one the checkpoint's own marks give away
+  (`'missing'`), but a checkpoint EDITED to drop both its policy and its marks,
+  or to carry a narrower policy this library could have written, resumes under
+  what it says. A host that lets checkpoints leave its trust boundary signs
+  them — as it does for the identity a checkpoint names.
+- **A tool's coverage declaration.** The words a tool's author passes to
+  `coverage()` / `absent()` are the AUTHOR's text about what the tool read
+  (`coverageDeclared`, `answerCoverage`, the `tools.coverage_declared` /
+  `tools.absent` events), served as written, like a tool's description — they
+  are not on the vocabulary, because the answer account reads them to say what
+  the tools covered. Keep the person's data out of them; to keep them out of
+  the record anyway, name `coverageDeclared` and `answerCoverage` yourself, and
+  the account then says it cannot tell what the tools covered.
+- **An `LLMCall` or an `LlmRouter` on its own.** Neither takes a `redact`, so
+  neither declares one: its records — run on its own, or in a composition made
+  only of such steps — are covered by nothing. Run the step as an `Agent`, or
+  compose it beside a member that declares the policy.
+- **Overlapping runs of one composition.** An `Agent` refuses a second run
+  while one is in flight (`RunInFlightError`); a composition does not, and it
+  stamps every event with the run it started LAST. Two overlapping runs of ONE
+  composition instance are both covered by its declared policy, but a resumed
+  leg's extra names (the paused leg's marks) can be served under the other
+  run's policy. Run a composition instance one run at a time.
 - **A chart's own marks with no policy at all.** footprintjs keeps its
   redacted mirror only under a policy: a chart-backed tool that runs with none
   (no tool `redact`, no calling policy) serves its state as it is, while its

@@ -62,6 +62,7 @@ import {
 } from '../../../src/index.js';
 import { innerRunsOf } from '../../../src/observe.js';
 import { conversationRedaction } from '../../../src/doors/security.js';
+import { servedUnderPolicy } from '../../../src/redaction/marker.js';
 import { measureArtifactBytes } from '../../../src/artifacts/payload.js';
 import {
   chartRecordingOf,
@@ -1547,6 +1548,8 @@ describe('runbookAsTool — properties and security', () => {
     const snapshot = record.recording!.snapshot as { sharedState: Record<string, unknown> };
     expect(snapshot.sharedState.apiKey).toBe('REDACTED');
     expect(snapshot.sharedState.report).toEqual({ touched: true });
+    // …and it says so: its readers read the placeholder as a value kept out.
+    expect(servedUnderPolicy(snapshot)).toBe(true);
   });
 });
 
