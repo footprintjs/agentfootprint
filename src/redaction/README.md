@@ -32,18 +32,21 @@ the agent computes on or hands back to its caller**.
 | every typed event — `agent.on`, recorders on the executor, the deferred tier | the resume checkpoints: a pause's `checkpoint`, `RunCheckpointError.checkpoint` |
 | recordings (`recordRun`, packed or plain), traces, strategies (otel, file, audit, console, CloudWatch, X-Ray, AgentCore) | memory — what a later run recalls, a causal snapshot's tool calls included (`defineMemory({ redact })` is refused; `../memory/redactRefusal.ts`) |
 | bug reports, answer accounts, the self-explain tools, recordings a host files | the run's verdict accessors (`stoppedEarly()`, `findings()`, `answerCoverage()`, …) and `agent.assessment()` |
-| the record a chart-backed tool keeps (`flowchartAsTool` / `runbookAsTool`) — under the calling run's policy too | what that tool hands the MODEL — under the tool's own `redact` only (below) |
+| the record a chart-backed tool keeps (`flowchartAsTool` / `runbookAsTool`) — under the calling run's policy too | what that tool hands the MODEL, when the calling run keeps its conversation out (below) |
 | | the context ledger's counts, whose gates decide what later runs are offered (below) |
 
 **It selects by NAME, never by content** (footprintjs's law). A key or a pattern
 masks a STATE key of that name and everything under it; in every record handed
 out WHOLE — an event's payload, a pause's question, the run's input, a thrown
-error — it masks a key of that name at ANY depth. An agent keeps its whole
-conversation in ONE state key, `history`, so a field like `ssn` inside a tool's
-arguments is masked in every event but stays inside the snapshot's `history`
-until `history` itself is named. Free text has no name: to keep what people say
-out of the record, name every key that carries it — which is what the
-library's vocabulary does.
+error — it masks a key of that name at ANY depth (and a dotted-path pattern or
+a `fields` selector, a path). So a field like `ssn` inside a tool's arguments is
+masked wherever the arguments travel AS FIELDS — every event's `args`, and the
+copies the library renders from them (a check-in's `willDo`, a validation
+issue's quoted value — `DERIVED` below). TEXT has no name: the conversation —
+the `history` state key, a tool's result, a refusal sentence that quotes what
+it refused, the model's words — carries a value as text, and is kept out only
+by naming the keys it travels under, which is what the library's vocabulary
+does.
 
 ## The vocabulary — `conversationRedaction()`
 
@@ -114,18 +117,30 @@ and that the answer account says the question and the answer are kept out.
   A per-run `redact` is an `Agent`'s run option only: a composition or an
   `LLMCall` takes none, so a tool that runs one keeps it covered by DECLARING
   the policy on it (a member's `redact` is adopted, above).
-- **A chart-backed tool: the record and the model's view.** The inner run of
-  `flowchartAsTool` / `runbookAsTool` is covered by the UNION — its log,
-  narrative, kept record and recording keep out every name either policy
-  selects. What the tool hands the MODEL (the state a `resultMapper` reads, a
-  runbook envelope's rows and report) is the model's input, which the calling
-  run's policy never reaches: it is the run's live state served under the
-  TOOL's own `redact` and the chart's own marks only
-  (`core/servableSnapshot.ts` · `modelFacingState`). The one case it cannot
-  tell apart: the rule marks a key the caller's policy selects whenever it is
-  written, so a key the chart ALSO marks itself (a per-call
-  `$setValue(key, value, true)`) reaches the model's view unmasked — name it in
-  the tool's own `redact` to keep it from the model.
+- **A chart-backed tool: the record, the model's view, and the boundary
+  between them.** The inner run of `flowchartAsTool` / `runbookAsTool` is
+  covered by the UNION — its log, narrative, kept record and recording keep out
+  every name either policy selects. What the tool hands the MODEL (the state a
+  `resultMapper` reads, a runbook envelope's rows and report) becomes the
+  tool's RESULT, which the calling run keeps in its own conversation — so the
+  model's view is decided by where that result lands
+  (`core/servableSnapshot.ts` · `modelFacingState`, the one owner):
+  - the calling run keeps its WHOLE conversation out of its records
+    (`conversation.ts` · `keepsConversationOut` — `conversationRedaction()` or
+    more): the model reads the run's live state under the TOOL's own `redact`
+    and the chart's own marks only — the live input, never redacted — and the
+    result it rides in on is kept out of every record of the calling run by
+    that run's own names. The one case it cannot tell apart: the rule marks a
+    key the caller's policy selects whenever it is written, so a key the chart
+    ALSO marks itself (a per-call `$setValue(key, value, true)`) reaches the
+    model unmasked — name it in the tool's own `redact`;
+  - a narrower calling policy: the result would carry the value into the
+    calling run's records as text, under names that policy does not select —
+    so the model reads exactly what the record reads, the placeholder. The
+    calling policy reaches this tool's model view: the price of the promise.
+
+  Pinned end to end, with every artifact of the calling agent searched, by
+  `test/redaction/agent-redaction.tool-boundary.test.ts`.
 - **The union only adds.** A run covered by several declarations masks every name
   any of them selects (`unionRedactionPolicies`).
 
@@ -174,11 +189,15 @@ and that the answer account says the question and the answer are kept out.
    `INJECTION_STRUCTURE` / `COMPOSITION_STRUCTURE`) and serves every other field
    as the placeholder. A kept-out injection is still an injection the record
    shows — without its words.
-6. **A resume serves ahead** (`servingAhead`): `pause.resume` carries the
-   person's reply and is dispatched before the resumed leg's executor exists, so
-   the runner installs the leg's serving first (its declaration joined with the
-   per-run `redact`) — a fresh instance, a later process or another pool lane
-   serves the reply as the instance that paused would.
+6. **A resume is covered like its first leg** (`servingAhead`,
+   `policyOfMarks`, `AgentState.runRedaction`): the resumed leg's policy is the
+   runner's declaration, the per-run `redact` the paused run was handed (read
+   back off the checkpoint's state), any the resume adds, and the names the
+   paused leg kept out (the checkpoint's marks). `pause.resume` carries the
+   person's reply and is dispatched before the leg's executor exists, so the
+   runner installs that serving first — a fresh instance, a later process or
+   another pool lane serves the leg as the instance that paused would. A
+   carried policy this library did not write refuses the resume.
 7. **The marker** (`marker.ts`): under a policy, the run's snapshot carries one
    recorder row, `agentfootprint.redaction` — the positive sign that a
    placeholder in the record is a value the policy kept out. Without a policy
@@ -296,7 +315,17 @@ bytes, for any recording — an agent's or a chart's.)
   run opened (a host's artifact fact, a teardown fact) is served under the run
   in force — the same declared policy, but not the per-run `redact` names the
   earlier run alone was given.
-- **A resume is its own leg.** A per-run `redact` (`run(input, { redact })`) is
-  not stored in the checkpoint: pass `resume()` the same one. The names the
-  paused run masked travel with the checkpoint; a policy the agent DECLARED
-  (`Agent.create({ redact })`) covers every leg by itself.
+- **A conversation continued is a new run.** A per-run `redact` rides the
+  run's own state into a pause's checkpoint (`AgentState.runRedaction`, names
+  only), so a resumed leg is covered by it without being handed it again, and
+  the names the paused leg kept out (footprintjs's `redactionMarks`) cover the
+  leg whatever policy it is given (`redaction/policy.ts` · `policyOfMarks`). A
+  conversation CONTINUED from a run (`followUp`, `continueFrom`,
+  `resumeOnError`) is a new run, covered by what that run is given — declare
+  the policy on the agent (`Agent.create({ redact })`) to cover every run.
+- **A chart's own marks with no policy at all.** footprintjs keeps its
+  redacted mirror only under a policy: a chart-backed tool that runs with none
+  (no tool `redact`, no calling policy) serves its state as it is, while its
+  log holds the placeholder where the chart marked a write
+  (`$setValue(key, value, true)`). Give the tool a `redact` to have its kept
+  record and recording served.

@@ -734,11 +734,17 @@ describe('conversationRedaction() — the value', () => {
 });
 
 describe('a field a tool names is kept out of every event by its name alone', () => {
-  // Not the vocabulary: a policy that names ONE argument field. A check-in's
-  // evidence pack renders the call's arguments as text (`willDo`), so the
-  // text is kept out by the names of the arguments it renders — on the
-  // check-in event and on the pause it asks with (`served.ts` · `DERIVED`).
+  // Not the vocabulary: a policy that selects ONE argument field — by name, by
+  // a dotted path, or as a `fields` selector. A check-in's evidence pack renders
+  // the call's arguments as text (`willDo`), and a validation issue quotes the
+  // argument it refuses, so both are kept out by the rule's own verdict on the
+  // arguments they came from — on every event (`served.ts` · `DERIVED`).
   const SSN = 'SSN-CANARY-7788';
+  const POLICIES: readonly [string, RedactionPolicy][] = [
+    ['a pattern on the name', { patterns: [/ssn/i] }],
+    ['a dotted-path pattern', { patterns: [/customer\.ssn/] }],
+    ['a fields selector', { fields: { customer: ['ssn'] } }],
+  ];
   const closer = (redact: RedactionPolicy | undefined, evidence: 'minimal' | 'standard') =>
     create(
       {
@@ -754,7 +760,11 @@ describe('a field a tool names is kept out of every event by its name alone', ()
             : {
                 content: 'Closing it.',
                 toolCalls: [
-                  { id: 't1', name: 'close_account', args: { ssn: SSN, reason: 'asked' } },
+                  {
+                    id: 't1',
+                    name: 'close_account',
+                    args: { customer: { ssn: SSN }, reason: 'asked' },
+                  },
                 ],
                 usage: { input: 1, output: 1 },
                 stopReason: 'tool_use',
@@ -763,12 +773,15 @@ describe('a field a tool names is kept out of every event by its name alone', ()
       redact,
     )
       .tool(
-        defineTool<{ ssn: string; reason: string }, string>({
+        defineTool<{ customer: { ssn: string }; reason: string }, string>({
           name: 'close_account',
           description: 'Close the account.',
           inputSchema: {
             type: 'object',
-            properties: { ssn: { type: 'string' }, reason: { type: 'string' } },
+            properties: {
+              customer: { type: 'object', properties: { ssn: { type: 'string' } } },
+              reason: { type: 'string' },
+            },
           },
           checkIn: 'always',
           execute: () => 'closed',
@@ -794,13 +807,73 @@ describe('a field a tool names is kept out of every event by its name alone', ()
   };
 
   for (const evidence of ['minimal', 'standard'] as const) {
-    it(`${evidence} evidence: no event carries the field's value, the events are the same`, async () => {
-      const control = await eventsOf(undefined, evidence);
-      expect(JSON.stringify(control.events)).toContain(SSN);
-      const served = await eventsOf({ patterns: [/ssn/i] }, evidence);
-      expect(locationsOf(served.events, SSN)).toEqual([]);
-      expect(locationsOf(served.recordingEvents, SSN)).toEqual([]);
-      expect(served.events.map((e) => e.type)).toEqual(control.events.map((e) => e.type));
+    for (const [label, policy] of POLICIES) {
+      it(`${evidence} evidence, ${label}: no event carries the field's value, the events are the same`, async () => {
+        const control = await eventsOf(undefined, evidence);
+        expect(JSON.stringify(control.events)).toContain(SSN);
+        const served = await eventsOf(policy, evidence);
+        expect(locationsOf(served.events, SSN)).toEqual([]);
+        expect(locationsOf(served.recordingEvents, SSN)).toEqual([]);
+        expect(served.events.map((e) => e.type)).toEqual(control.events.map((e) => e.type));
+      });
+    }
+  }
+
+  // A validation issue quotes the argument the schema refused, by its path.
+  const refusedRun = async (redact: RedactionPolicy | undefined) => {
+    const agent = create(
+      mock({
+        chunkDelayMs: 0,
+        replies: [
+          {
+            toolCalls: [{ id: 'c1', name: 'lookup', args: { customer: { ssn: `${SSN}-X` } } }],
+          },
+          { content: 'done' },
+        ],
+      }),
+      redact,
+    )
+      .tool(
+        defineTool<{ customer: { ssn: string } }, unknown>({
+          name: 'lookup',
+          description: 'Look up by a numeric SSN.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              customer: {
+                type: 'object',
+                properties: { ssn: { type: 'string', pattern: '^[0-9]+$' } },
+                required: ['ssn'],
+              },
+            },
+            required: ['customer'],
+          },
+          execute: () => 'ok',
+        }),
+      )
+      .build();
+    const events: AgentfootprintEvent[] = [];
+    agent.on('*', (e) => events.push(e));
+    await agent.run({ message: 'look it up' });
+    return events;
+  };
+
+  for (const [label, policy] of POLICIES) {
+    it(`a validation issue, ${label}: the quoted argument is kept out`, async () => {
+      const issues = (events: AgentfootprintEvent[]) =>
+        events.filter((e) => e.type === 'agentfootprint.validation.args_invalid');
+      const control = await refusedRun(undefined);
+      expect(JSON.stringify(issues(control))).toContain(SSN);
+      const served = await refusedRun(policy);
+      expect(issues(served).length).toBe(issues(control).length);
+      expect(locationsOf(issues(served), SSN)).toEqual([]);
+      // The refusal SENTENCE the model reads quotes it too — conversation
+      // text, with no field name: it rides the tool's result and the history,
+      // kept out only by naming the conversation (`conversationRedaction()`).
+      const result = served.find((e) => e.type === 'agentfootprint.stream.tool_end');
+      expect(JSON.stringify(result)).toContain(SSN);
+      const covered = await refusedRun(conversationRedaction(policy));
+      expect(locationsOf(covered, SSN)).toEqual([]);
     });
   }
 });

@@ -34,6 +34,7 @@ import {
   type ToolExecutionContext,
 } from '../../src/index.js';
 import { mock } from '../../src/doors/providers.js';
+import { conversationRedaction } from '../../src/doors/security.js';
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
 import { innerRunsOf, recordRun } from '../../src/doors/observe.js';
 import { redactionDeclaredBy } from '../../src/redaction/declared.js';
@@ -269,10 +270,13 @@ describe('nested through a tool: ctx.redact is the calling run’s policy', () =
       flowchart: chart,
       keepRecord: true,
     });
-    const { agent, answers } = callOnce(tool, { keys: ['apiKey'] });
+    // A calling run that keeps its whole conversation out of its records: the
+    // tool's result string is the MODEL's input, and the agent's policy does
+    // not reach it — the tool declared no `redact` of its own. (A narrower
+    // calling policy hands the model the record's view instead —
+    // `agent-redaction.tool-boundary.test.ts`.)
+    const { agent, answers } = callOnce(tool, conversationRedaction({ keys: ['apiKey'] }));
     await agent.run({ message: 'go' });
-    // The tool's result string is the MODEL's input: the agent's policy never
-    // reaches it — the tool declared no `redact` of its own.
     expect(answers[0]).toContain('sk-INNER-SECRET-1');
     // The kept inner record is a RECORD: the agent's policy covers it.
     const kept = innerRunsOf(tool)?.get('t1');
@@ -299,7 +303,7 @@ describe('nested through a tool: ctx.redact is the calling run’s policy', () =
       keepRecord: true,
       redact: { keys: ['apiKey'] },
     });
-    const { agent, answers } = callOnce(tool, { keys: ['note'] });
+    const { agent, answers } = callOnce(tool, conversationRedaction({ keys: ['note'] }));
     await agent.run({ message: 'go' });
     // The model's view: the tool's own policy and the chart's mark — not the agent's.
     expect(answers[0]).not.toContain('sk-INNER-SECRET-2');

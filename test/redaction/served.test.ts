@@ -205,6 +205,38 @@ describe('DERIVED — content the library quotes under names of its own', () => 
     ).toMatchObject({ request: { evidence: { willDo: plain.evidence.willDo } } });
   });
 
+  it('every selector footprintjs offers counts — a field selector and a dotted-path pattern too', () => {
+    const args = { customer: { ssn: 'SSN-1', name: 'Ada' } };
+    for (const policy of [
+      { fields: { customer: ['ssn'] } },
+      { patterns: [/customer\.ssn/] },
+      { keys: ['ssn'] },
+    ] as RedactionPolicy[]) {
+      const s = serving(policy);
+      // The check-in's rendered arguments…
+      const checkIn = s.payload('agentfootprint.checkin.request', {
+        toolName: 'close_account',
+        toolCallId: 't1',
+        iteration: 1,
+        request: {
+          tool: 'close_account',
+          args,
+          evidence: { willDo: `Close — with ${JSON.stringify(args)}` },
+        },
+      }) as { request: { evidence: { willDo: string } } };
+      expect(checkIn.request.evidence.willDo).toBe(SERVED_PLACEHOLDER);
+      // …and a validation issue quoting that argument by its path.
+      const invalid = s.payload('agentfootprint.validation.args_invalid', {
+        toolName: 'close_account',
+        issues: [
+          { path: 'customer.ssn', expected: 'pattern', got: 'string', value: 'SSN-1' },
+          { path: 'customer.name', expected: 'pattern', got: 'string', value: 'Ada' },
+        ],
+      }) as { issues: { value: string }[] };
+      expect(invalid.issues.map((i) => i.value)).toEqual([SERVED_PLACEHOLDER, 'Ada']);
+    }
+  });
+
   it('a route guard’s judged result and a matcher’s witness', () => {
     const payload = {
       iteration: 1,

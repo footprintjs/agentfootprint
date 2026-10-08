@@ -83,16 +83,19 @@ interface Derived {
   /** The names it is derived from: kept out whenever the rule keeps out any of them. */
   readonly from: readonly string[];
   /**
-   * A field beside the value that NAMES what it quotes (a validation issue's
-   * argument `path`): the value is kept out too when the rule keeps out any
-   * name on it — the by-name verdict of the value it was copied from.
+   * A field beside the value that NAMES the argument it quotes (a validation
+   * issue's `path`, `'customer.ssn'`): the value is kept out too when the rule
+   * would keep out a value at that path of a call's arguments — asked of the
+   * rule itself (`retainBoundary` over `{ args: <path> }`), so a key, a
+   * pattern, a dotted-path pattern and a `fields` selector all count.
    */
   readonly namedBy?: string;
   /**
    * A path, from the payload's root, to the object the value was RENDERED from
    * (a check-in's `willDo` writes the call's arguments as `k=v` text): the
-   * value is kept out too when the rule keeps out any key of that object, at
-   * any depth — the by-name verdict of every value the text can quote.
+   * value is kept out too whenever the rule kept out ANYTHING inside that
+   * object — read off the served payload itself (the rule hands an untouched
+   * object back as the same object), so every selector counts.
    */
   readonly namesAt?: string;
 }
@@ -200,14 +203,23 @@ function servedPayload(rule: RedactionRule, type: string, payload: unknown): unk
   try {
     const named = rule.retainEmit(type, payload);
     if (named !== payload) return named;
-    return withDerivedKeptOut(rule, type, rule.retainBoundary(payload));
+    return withDerivedKeptOut(rule, type, rule.retainBoundary(payload), payload);
   } catch {
     return SERVED_PLACEHOLDER;
   }
 }
 
-/** `served` with the content derived from a kept-out value served as the placeholder. */
-function withDerivedKeptOut(rule: RedactionRule, type: string, served: unknown): unknown {
+/**
+ * `served` with the content derived from a kept-out value served as the
+ * placeholder. `original` is the payload before the rule served it: what the
+ * rule changed inside a `namesAt` object is read off the two.
+ */
+function withDerivedKeptOut(
+  rule: RedactionRule,
+  type: string,
+  served: unknown,
+  original: unknown,
+): unknown {
   const entries = DERIVED[type];
   if (entries === undefined || !isPlainRecord(served)) return served;
   let out: unknown = served;
@@ -215,48 +227,44 @@ function withDerivedKeptOut(rule: RedactionRule, type: string, served: unknown):
     const whole =
       entry.from.some((name) => rule.isKeyRedacted(name)) ||
       (entry.namesAt !== undefined &&
-        keysAt(served, entry.namesAt).some((name) => rule.isKeyRedacted(name)));
+        valueAt(served, entry.namesAt) !== valueAt(original, entry.namesAt));
     if (!whole && entry.namedBy === undefined) continue;
     const keptOut = (owner: Readonly<Record<string, unknown>>): boolean =>
-      whole || (entry.namedBy !== undefined && namesKeptOut(rule, owner[entry.namedBy]));
+      whole || (entry.namedBy !== undefined && argumentKeptOut(rule, owner[entry.namedBy]));
     for (const path of entry.paths) out = maskAt(out, path.split('.'), keptOut);
   }
   return out;
 }
 
-/** How deep `keysAt` reads an object's keys — a call's arguments, never a deep tree. */
-const MAX_NAME_DEPTH = 16;
-
-/** Every key, at any depth, of the object at the dotted `path` in `node` (none when it is not one). */
-function keysAt(node: unknown, path: string): string[] {
+/** The value at the dotted `path` in `node` (`undefined` off the end). */
+function valueAt(node: unknown, path: string): unknown {
   let at: unknown = node;
   for (const segment of path.split('.')) {
-    if (!isPlainRecord(at)) return [];
+    if (!isPlainRecord(at)) return undefined;
     at = at[segment];
   }
-  const names: string[] = [];
-  const walk = (value: unknown, depth: number): void => {
-    if (depth > MAX_NAME_DEPTH || value === null || typeof value !== 'object') return;
-    if (Array.isArray(value)) {
-      for (const item of value) walk(item, depth + 1);
-      return;
-    }
-    for (const [key, child] of Object.entries(value)) {
-      names.push(key);
-      walk(child, depth + 1);
-    }
-  };
-  walk(at, 0);
-  return names;
+  return at;
 }
 
-/** Whether a field that names a value (`'customer.ssn'`, `'items[0].pin'`) names one the rule keeps out. */
-function namesKeptOut(rule: RedactionRule, named: unknown): boolean {
+/**
+ * Whether the rule keeps out the value at the argument path `named` names
+ * (`'customer.ssn'`, `'items[0].pin'`) — asked of the rule itself, over the
+ * shape a call's arguments travel in (`{ args: … }`, as on `tool_start`), so a
+ * key, a pattern, a dotted-path pattern and a `fields` selector all count. A
+ * path the rule cannot be asked about is kept out (fail closed).
+ */
+function argumentKeptOut(rule: RedactionRule, named: unknown): boolean {
   if (typeof named !== 'string') return false;
-  return named
-    .split(/[.[\]]/)
-    .filter((name) => name.length > 0)
-    .some((name) => rule.isKeyRedacted(name));
+  const segments = named.split(/[.[\]]/).filter((name) => name.length > 0);
+  if (segments.length === 0) return false;
+  const leaf: unknown = 'value';
+  const nested = segments.reduceRight<unknown>((inner, name) => ({ [name]: inner }), leaf);
+  const probe = { args: nested };
+  try {
+    return rule.retainBoundary(probe) !== probe;
+  } catch {
+    return true;
+  }
 }
 
 /**

@@ -59,6 +59,9 @@
  */
 
 import { createTypedScopeFactory, RedactionRule } from 'footprintjs/advanced';
+
+import { keepsConversationOut } from '../redaction/conversation.js';
+import { unionRedactionPolicies } from '../redaction/policy.js';
 import type {
   FlowChart,
   FlowChartExecutor,
@@ -89,18 +92,33 @@ export function servableSnapshot(
  *
  * The run is covered by the UNION — its commit log, mirror, narrative, kept
  * record and recording are records, and a record keeps out everything either
- * policy names. But the state the tool hands the MODEL (what a `resultMapper`
- * reads, a runbook envelope's rows and report) is the model's input, and the
- * calling run's policy never reaches the model's input. So that state is the
- * run's LIVE state served under the TOOL's own policy only — what the tool
- * author declared to keep away from the model — plus the CHART's own marks (a
- * per-call `$setValue(key, value, true)`, a subflow mapper's taint): names,
- * run-wide. A mark on a key the caller's policy selects is the caller's (the
- * rule marks a selected key when it is written), so it is left out — whole-key
- * and field marks alike. Marks are names, so two cases cannot be told apart: a
- * chart that marks a key the caller ALSO names (the value reaches the model),
- * and a mapper's field mark that came from the caller's `fields` onto a key
- * the caller does not name (the field stays hidden from the model).
+ * policy names. The state the tool hands the MODEL (what a `resultMapper`
+ * reads, a runbook envelope's rows and report) is the model's input — but it
+ * does not stop there: it becomes the tool's RESULT, which the calling run
+ * keeps in its own conversation (its history, the tool's events, whatever the
+ * model then says). So which view the model reads is decided by where that
+ * result lands:
+ *
+ *   - the calling run keeps its WHOLE conversation out of its records
+ *     (`redaction/conversation.ts` · `keepsConversationOut` — the policy is
+ *     `conversationRedaction()` or more): the result can carry a value the
+ *     caller's policy selects without that value reaching any record of the
+ *     calling run, so the model reads the run's LIVE state served under the
+ *     TOOL's own policy only — what the tool author declared to keep away from
+ *     the model — plus the CHART's own marks (a per-call
+ *     `$setValue(key, value, true)`, a subflow mapper's taint): names,
+ *     run-wide. A mark on a key the caller's policy selects is the caller's
+ *     (the rule marks a selected key when it is written), so it is left out —
+ *     whole-key and field marks alike. Marks are names, so two cases cannot be
+ *     told apart: a chart that marks a key the caller ALSO names (the value
+ *     reaches the model), and a mapper's field mark that came from the
+ *     caller's `fields` onto a key the caller does not name (the field stays
+ *     hidden from the model);
+ *   - any narrower calling policy: the result would carry the value into the
+ *     calling run's records under names that policy does not select, so the
+ *     model reads exactly what the record reads — the run served under the
+ *     UNION. The calling run's policy then reaches the model's view of this
+ *     tool: the price of keeping the promise its records make.
  *
  * With no caller policy (`callerPolicy` undefined) this is exactly the served
  * view's state, as before.
@@ -117,6 +135,9 @@ export function modelFacingState(
   runRule: RedactionRule | undefined,
 ): Readonly<Record<string, unknown>> {
   if (callerPolicy === undefined) return stateOf(servableSnapshot(executor, toolPolicy));
+  if (!keepsConversationOut(callerPolicy)) {
+    return stateOf(servableSnapshot(executor, unionRedactionPolicies(toolPolicy, callerPolicy)));
+  }
   const rule = new RedactionRule(toolPolicy);
   const marks = runRule?.marksForCheckpoint();
   if (marks !== undefined) {

@@ -80,7 +80,12 @@ import { reliabilityRecorder } from '../recorders/core/ReliabilityRecorder.js';
 import { resilienceRecorder } from '../recorders/core/ResilienceRecorder.js';
 import { checkInEventsBridge } from '../recorders/core/CheckInRecorder.js';
 import { compactionMeter, type CompactionMeterHandle } from '../recorders/core/CompactionMeter.js';
-import { assertRedactionPolicy } from '../redaction/policy.js';
+import {
+  assertRedactionPolicy,
+  carriedRedactionPolicy,
+  policyFromCarried,
+  unionRedactionPolicies,
+} from '../redaction/policy.js';
 import { declareRedaction } from '../redaction/declared.js';
 import { createEvictedTurnsHandle, type EvictedTurnsHandle } from './agent/window/evictedTurns.js';
 import { createReceiptDigests, type ReceiptDigests } from '../lib/time-travel/receiptDigests.js';
@@ -416,9 +421,11 @@ export interface AgentRunOptions extends RunOptions {
    * })
    * ```
    *
-   * Validated like `Agent.create({ redact })`. A `resume()` is its own leg:
-   * pass the same `redact` it was paused under (the names the paused run
-   * masked travel with the checkpoint; the policy itself does not).
+   * Validated like `Agent.create({ redact })`. A pause carries it: the run
+   * commits it to its own state (`runRedaction`, names only), so `resume()`
+   * covers the resumed leg by it without being handed it again — a `redact`
+   * passed to `resume()` adds to it. A conversation continued from the run
+   * (`followUp`, `continueFrom`) is a new run, covered by what it is given.
    */
   redact?: RedactionPolicy;
 }
@@ -905,6 +912,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  A resume that inherited it instead stored another person's identity on
    *  a shared agent and none on a rebuilt pooled one. */
   private lastRunIdentity?: MemoryIdentity;
+  /**
+   * The redaction policy the caller handed the current run (`run(input,
+   * { redact })`), or the one a resumed leg carries; read by seed through
+   * `getRunRedaction`. `undefined` for a run handed none.
+   */
+  private runHandedDown?: RedactionPolicy;
 
   /** Run ids this instance minted, most recent last (bounded) — evidence that a
    *  checkpoint's `{ conversationId: '<runId>' }` is the per-run default
@@ -2503,6 +2516,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // sound question is "what was asked?".
     assertIdentityShape(options?.identity, 'Agent.resume');
     if (options?.redact !== undefined) assertRedactionPolicy(options.redact, 'Agent.resume');
+    // The policy the paused run was HANDED (`run(input, { redact })`), carried
+    // in its own state — it covers this leg too, joined with any the caller
+    // adds now. Read (or refused) before anything moves.
+    const carriedRedaction = policyFromCarried(
+      (checkpoint.sharedState as { runRedaction?: unknown } | undefined)?.runRedaction,
+      'Agent.resume',
+    );
     // A resume's `time` (the time layer) is read or refused before anything
     // moves; it is never applied — the paused turn's clock is kept, and a
     // differing value is recorded by the ToolCalls resume door.
@@ -2605,10 +2625,15 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // does not file the resumed turn (its tool teardown, its events, its
     // self-explain evidence) as sessionless.
     const sessionId = options?.sessionId ?? pausedSessionOf(checkpoint.sharedState);
-    const resumeOptions: AgentRunOptions | undefined =
+    const sessionResumeOptions: AgentRunOptions | undefined =
       sessionId !== undefined && options?.sessionId === undefined
         ? { ...options, sessionId }
         : options;
+    const legRedaction = unionRedactionPolicies(carriedRedaction, sessionResumeOptions?.redact);
+    const resumeOptions: AgentRunOptions | undefined =
+      legRedaction === sessionResumeOptions?.redact
+        ? sessionResumeOptions
+        : { ...sessionResumeOptions, redact: legRedaction };
     this.emitPauseResume(checkpoint, input, resumeOptions?.redact);
     // Fresh executor — footprintjs 4.17.0+ seeds the runtime from
     // `checkpoint.sharedState` (and nested subflow states) automatically
@@ -3445,6 +3470,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // identity, but the stages' scopes still feed the real-value path the
     // crash checkpoint and the window's meter read.
     const redaction = this.openRunRedaction(runOptions?.redact, getRunCtx);
+    // What seed commits as `runRedaction`, so a pause carries it to the resumed leg.
+    this.runHandedDown = runOptions?.redact;
 
     // Reuse the cached chart built at constructor time.
     // The Agent's executor dials: readTracking (#18/#14, snapshot stageReads),
@@ -4542,6 +4569,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // the same reason the runId is: the chart is built once, and this
       // changes every run.
       getCurrentSessionId: () => this.currentRunContext?.sessionId,
+      // The policy the caller handed THIS run, as plain data — committed by seed
+      // as `runRedaction` so a pause carries it to the resumed leg.
+      getRunRedaction: () =>
+        this.runHandedDown === undefined ? undefined : carriedRedactionPolicy(this.runHandedDown),
       // WHICH TURN THIS IS (9.6.0). Only memories that WRITE the conversation
       // are consulted: they are the ones whose entry ids are turn-stamped, and
       // a corpus (`.rag(...)`, which reads under its own namespace) has no

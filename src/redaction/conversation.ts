@@ -45,6 +45,7 @@
  */
 
 import type { RedactionPolicy } from 'footprintjs';
+import { RedactionRule } from 'footprintjs/advanced';
 
 import { assertRedactionPolicy, unionRedactionPolicies } from './policy.js';
 
@@ -176,7 +177,8 @@ const NAMES = {
  * `retrievalEvidence_<id>` (`memory/define.types.ts` · `memoryInjectionKey`,
  * `retrievalEvidenceKey`) — matched by their prefix.
  */
-const PATTERNS: readonly RegExp[] = [/^memoryInjection_/, /^retrievalEvidence_/];
+const PATTERN_PREFIXES: readonly string[] = ['memoryInjection_', 'retrievalEvidence_'];
+const PATTERNS: readonly RegExp[] = PATTERN_PREFIXES.map((prefix) => new RegExp(`^${prefix}`));
 
 /**
  * State keys whose STRUCTURE stays readable while one field quotes the
@@ -225,4 +227,26 @@ export function conversationRedaction(extra?: RedactionPolicy): RedactionPolicy 
   if (extra === undefined) return CONVERSATION;
   assertRedactionPolicy(extra, 'conversationRedaction');
   return unionRedactionPolicies(CONVERSATION, extra) as RedactionPolicy;
+}
+
+/**
+ * Whether `policy` keeps an agent's WHOLE conversation out of its records —
+ * every name the vocabulary lists selected by its rule (a pattern of the
+ * policy's own that covers a name counts), `conversationRedaction()` or more.
+ *
+ * The question a chart-backed tool asks before it hands the MODEL a value the
+ * calling run's policy selects (`core/servableSnapshot.ts` ·
+ * `modelFacingState`): the value travels on in the calling run's conversation
+ * — the tool's result in its history and events, whatever the model then
+ * says — so only a calling run whose records keep the conversation out keeps
+ * that value out of them too.
+ *
+ * @internal
+ */
+export function keepsConversationOut(policy: RedactionPolicy | undefined): boolean {
+  if (policy === undefined) return false;
+  const rule = new RedactionRule(policy);
+  // Each pattern's own prefix stands for every key it names (`<prefix><id>`).
+  const names = [...(CONVERSATION.keys ?? []), ...PATTERN_PREFIXES.map((p) => `${p}x`)];
+  return names.every((name) => rule.isKeyRedacted(name));
 }

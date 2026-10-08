@@ -27,16 +27,21 @@ name the policy keeps out.
 
 The policy reaches every run the agent's records come from. A composition (`Sequence`,
 `Parallel`, `Conditional`, `Loop`, `Graph`, `Workflow`) adopts its members' policies. A run a tool
-starts gets the calling run's policy as `ToolExecutionContext.redact`: `flowchartAsTool` and
-`runbookAsTool` join it with their own for the record they keep — what they hand the MODEL is served
-under the tool's own `redact` only, since the calling run's policy never reaches the model's input —
-the `.selfExplain()` debugger takes it, and a tool that runs another agent passes it on —
-`agent.run(input, { redact: ctx.redact })`, the new per-run option, which can only add names (an
-`Agent`'s run only; a composition or `LLMCall` is covered by declaring the policy on it). A resume
-serves the person's reply under the resumed leg's policy before the leg starts, so a fresh instance
-or another process resumes as the paused one would. The policy is validated where it is declared: a misspelt field, a list of
-patterns where a policy object belongs, a frozen global RegExp (footprintjs could not reset it) or a
-policy that names nothing is refused with the reason.
+starts gets the calling run's policy as `ToolExecutionContext.redact`: the `.selfExplain()` debugger
+takes it, and a tool that runs another agent passes it on — `agent.run(input, { redact: ctx.redact })`,
+the new per-run option, which can only add names (an `Agent`'s run only; a composition or `LLMCall`
+is covered by declaring the policy on it). `flowchartAsTool` and `runbookAsTool` join it with their
+own, so every record of the inner run keeps out what either names; what they hand the MODEL becomes
+the tool's result in the calling agent's conversation, so the model reads the real value only when
+the calling agent keeps its whole conversation out of its records (`conversationRedaction()` or
+more) — under a narrower calling policy it reads the record's view, and the value reaches no record
+of the calling agent either way. A pause carries the per-run policy in the run's own state, so a
+resumed leg is covered by it without being handed it again (a carried value this library did not
+write refuses the resume), and by the names the paused leg kept out; the person's reply is served
+before the leg starts, so a fresh instance or another process resumes as the paused one would. The
+policy is validated where it is declared: a misspelt field, a list of patterns where a policy object
+belongs, a frozen global RegExp (footprintjs could not reset it) or a policy that names nothing is
+refused with the reason.
 
 Readers of a redacted record never read the placeholder as a value — and only a record that says a
 policy covered its run (a marker row in its snapshot's `recorders`) is read that way, so a run with

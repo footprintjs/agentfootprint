@@ -48,6 +48,7 @@ import type { RunTime, TimeOptions } from '../time/clock.js';
 import type { ToolChoiceLedger } from './toolChoice/types.js';
 import type { Classifier } from '../../classify/types.js';
 import type { Ontology, OntologyAsk, OntologyRecord } from '../../ontology/types.js';
+import type { CarriedRedactionPolicy } from '../../redaction/policy.js';
 
 // ─── PUBLIC types (consumer-facing) ────────────────────────────────
 
@@ -643,13 +644,13 @@ export interface AgentOptions {
    * **It selects by NAME, never by content** — footprintjs's law. A key or
    * pattern masks a STATE key of that name (and everything under it) and, in
    * every record handed out whole (an event's payload, a pause's question, the
-   * run's input, a thrown error), a key of that name at ANY depth. An agent's
-   * conversation is one state key, `history`: a field like `ssn` inside a
-   * tool's arguments is masked in every event, but kept out of the snapshot
-   * only by naming the key that holds it. Free text has no name — to keep what
-   * people SAY out of the record, name every key the agent keeps it under:
-   * `conversationRedaction()` (`agentfootprint/security`) is the library's own
-   * list. The answer the chart RETURNS is a bare string with no name, so the
+   * run's input, a thrown error), a key of that name at ANY depth. So a field
+   * like `ssn` inside a tool's arguments is masked wherever the arguments
+   * travel as fields (every event's `args`, the copies the library renders
+   * from them). TEXT has no name: the conversation — the `history` state key,
+   * a tool's result, a sentence quoting a value, the model's words — is kept
+   * out only by naming every key it travels under: `conversationRedaction()`
+   * (`agentfootprint/security`) is the library's own list. The answer the chart RETURNS is a bare string with no name, so the
    * run's exit payload carries it whatever the policy (a named limit,
    * `src/redaction/README.md`).
    *
@@ -1479,6 +1480,14 @@ export interface AgentState {
    * prove: a host that lets checkpoints leave its trust boundary signs them.
    */
   runSessionId?: string | null;
+  /**
+   * The redaction policy the caller handed this run (`agent.run(input,
+   * { redact })`), as plain data — names and pattern sources only. Committed by
+   * seed ONLY when the run was handed one, so a pause's checkpoint carries it
+   * and the resumed leg is covered by it without being handed it again
+   * (`Agent · resume`). The policy an agent DECLARES lives on the agent, not here.
+   */
+  runRedaction?: CarriedRedactionPolicy;
   // Set during the final branch — the (user, assistant) pair the
   // memory write subflows persist for cross-run recall.
   newMessages: readonly LLMMessage[];

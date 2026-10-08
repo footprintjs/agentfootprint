@@ -19,7 +19,7 @@ import type {
 import type { RunContext } from '../bridge/eventMeta.js';
 import { EventDispatcher } from '../events/dispatcher.js';
 import { redactionDeclaredBy } from '../redaction/declared.js';
-import { unionRedactionPolicies } from '../redaction/policy.js';
+import { policyOfMarks, unionRedactionPolicies } from '../redaction/policy.js';
 import { createRunRedaction, servingAhead, type RunRedaction } from '../redaction/runRedaction.js';
 import { servableSnapshot } from './servableSnapshot.js';
 import { registerRunnerLive } from './runnerLive.js';
@@ -210,6 +210,16 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
   private lastRunPolicy: RedactionPolicy | undefined;
 
   /**
+   * The names a paused run kept out of its records, as a policy
+   * (`redaction/policy.ts` · `policyOfMarks`) — set by `emitPauseResume` for the
+   * leg that resume is about to open, joined into that leg's policy by
+   * `openRunRedaction`, then cleared. Without it a leg resumed without its
+   * per-run `redact` would serve its snapshot raw while footprintjs still
+   * masked those names in its log.
+   */
+  private resumedMarks: RedactionPolicy | undefined;
+
+  /**
    * Open the redaction for one run — called by every runner's
    * `createExecutor`, for every run, before `new FlowChartExecutor`.
    *
@@ -224,7 +234,10 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
     handedDown: RedactionPolicy | undefined,
     getRunContext: () => RunContext,
   ): RunRedaction {
-    const policy = unionRedactionPolicies(redactionDeclaredBy(this), handedDown);
+    // A resumed leg is also covered by the names its paused leg kept out
+    // (`emitPauseResume` reads them off the checkpoint) — taken once.
+    const policy = unionRedactionPolicies(redactionDeclaredBy(this), handedDown, this.resumedMarks);
+    this.resumedMarks = undefined;
     const run = createRunRedaction({ policy, dispatcher: this.dispatcher, getRunContext });
     this.dispatcher.useServing(run.serving);
     this.lastRunPolicy = policy;
@@ -520,17 +533,21 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
    * before the leg's run opens its redaction. The payload is the person's
    * reply, a record like every event: it is served under the policy the
    * resumed leg is covered by (this runner's declaration joined with
-   * `handedDown`, the caller's per-run policy), installed here first —
-   * otherwise a fresh instance, a later process or another pool lane would
-   * dispatch it unserved (`runRedaction.ts` · `servingAhead`).
+   * `handedDown`, the caller's per-run policy, and the names the paused leg
+   * kept out — the checkpoint's marks), installed here first — otherwise a
+   * fresh instance, a later process or another pool lane would dispatch it
+   * unserved (`runRedaction.ts` · `servingAhead`).
    */
   protected emitPauseResume(
     checkpoint: FlowchartCheckpoint,
     input: unknown,
     handedDown?: RedactionPolicy,
   ): void {
+    this.resumedMarks = policyOfMarks(checkpoint.redactionMarks);
     this.dispatcher.useServing(
-      servingAhead(unionRedactionPolicies(redactionDeclaredBy(this), handedDown)),
+      servingAhead(
+        unionRedactionPolicies(redactionDeclaredBy(this), handedDown, this.resumedMarks),
+      ),
     );
     const meta = this.minimalMeta();
     const pausedDurationMs = Date.now() - checkpoint.pausedAt;

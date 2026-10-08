@@ -18,29 +18,18 @@
  * `agent-redaction.live.test.ts`; the policy's reach into composed and nested
  * runs is `agent-redaction.propagation.test.ts`.
  */
-import { mkdtempSync, readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-
 import { describe, expect, it } from 'vitest';
-import type { CombinedRecorder, RedactionPolicy, RuntimeSnapshot } from 'footprintjs';
+import type { RedactionPolicy, RuntimeSnapshot } from 'footprintjs';
 
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
 import {
-  auditExport,
   callTraceTool,
-  consoleObservability,
   describeBugReport,
   exportBugReport,
-  fileObservability,
-  otelObservability,
   packRecording,
   recordRun,
   traceToolpack,
   unpackRecording,
-  type OtelAttributeValue,
-  type OtelSpanLike,
-  type OtelTracerLike,
 } from '../../src/doors/observe.js';
 import { explainRecording } from '../../src/hosting/answerAccounts.js';
 import { runnerLive } from '../../src/core/runnerLive.js';
@@ -55,112 +44,16 @@ import {
   locationsOf,
   withoutAnswerBoundary,
 } from './fixture.js';
+import { everySurface, type Surfaced } from './everySurface.js';
 
-// ─── The one run, with every surface attached ────────────────────────
+// ─── The one run, with every surface attached (`./everySurface.ts`) ──
 
-interface Span {
-  readonly name: string;
-  readonly attributes: Record<string, OtelAttributeValue>;
-  readonly events: { name: string; attributes: Record<string, OtelAttributeValue> }[];
-}
-
-function tracerOf(spans: Span[]): OtelTracerLike {
-  return {
-    startSpan(name, options) {
-      const span: Span = { name, attributes: { ...(options?.attributes ?? {}) }, events: [] };
-      spans.push(span);
-      const like: OtelSpanLike = {
-        setAttribute: (key, value) => {
-          span.attributes[key] = value;
-          return undefined;
-        },
-        setStatus: () => undefined,
-        end: () => undefined,
-        spanContext: () => ({ traceId: 't', spanId: `s${spans.indexOf(span)}`, traceFlags: 1 }),
-        addEvent: (eventName, attributes) => {
-          span.events.push({ name: eventName, attributes: { ...(attributes ?? {}) } });
-          return undefined;
-        },
-      };
-      return like;
-    },
-  };
-}
-
-async function runEverySurface(redact: RedactionPolicy | undefined) {
-  const agent = fixtureAgent(redact !== undefined ? { redact } : {});
-
-  const events: AgentfootprintEvent[] = [];
-  agent.on('*', (event) => events.push(event));
-
-  // A consumer's own recorder on the executor — every footprintjs channel.
-  const attached: { hook: string; event: unknown }[] = [];
-  const hook = (name: string) => (event: unknown) => attached.push({ hook: name, event });
-  const consumerRecorder: CombinedRecorder = {
-    id: 'consumer-recorder',
-    onEmit: hook('onEmit'),
-    onWrite: hook('onWrite'),
-    onRead: hook('onRead'),
-    onCommit: hook('onCommit'),
-    onRunStart: hook('onRunStart'),
-    onRunEnd: hook('onRunEnd'),
-    onSubflowEntry: hook('onSubflowEntry'),
-    onSubflowExit: hook('onSubflowExit'),
-    onDecision: hook('onDecision'),
-  } as unknown as CombinedRecorder;
-  agent.attach(consumerRecorder);
-
-  const recorder = recordRun(agent);
-  const local = agent.enable.localObservability({ includeSnapshot: true });
-  const flowchart = agent.enable.flowchart();
-
-  const consoleLines: string[] = [];
-  agent.enable.observability({
-    strategy: consoleObservability({
-      logger: { log: (line: unknown) => consoleLines.push(String(line)) },
-    }),
-  });
-  const dir = mkdtempSync(join(tmpdir(), 'af-redaction-'));
-  const filePath = join(dir, 'events.ndjson');
-  const file = agent.enable.observability({
-    strategy: fileObservability({ path: filePath, flushIntervalMs: 0 }),
-  });
-  const audit = auditExport({ payloadMode: 'verbatim' });
-  agent.enable.observability({ strategy: audit });
-  const spans: Span[] = [];
-  agent.enable.observability({
-    strategy: otelObservability({
-      serviceName: 'redaction-suite',
-      tracer: tracerOf(spans),
-      captureContent: true,
-      captureToolContent: true,
-    }),
-  });
-
-  const answer = await agent.run({ message: MESSAGE });
-  await file.flush();
-
-  const recording = recorder.toRecording();
-  return {
-    agent,
-    answer,
-    events,
-    attached,
-    recording,
-    trace: local.getTrace(),
-    stepGraph: flowchart.getSnapshot(),
-    consoleLines,
-    fileText: readFileSync(filePath, 'utf8'),
-    auditBundle: audit.bundle(),
-    spans,
-  };
-}
+const runEverySurface = (redact: RedactionPolicy | undefined) =>
+  everySurface(fixtureAgent(redact !== undefined ? { redact } : {}), MESSAGE);
 
 const run = await runEverySurface(conversationPolicy());
 /** The same run, every surface attached, with no policy. */
 const control = await runEverySurface(undefined);
-
-type Surfaced = Awaited<ReturnType<typeof runEverySurface>>;
 
 /**
  * The surface `pick` reads: the control run's must carry a secret (so the

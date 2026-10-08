@@ -27,6 +27,7 @@ import type { AgentfootprintEvent } from '../../src/events/registry.js';
 import type { WindowRecord } from '../../src/core/agent/window/types.js';
 import { recordRun, toSSE } from '../../src/doors/observe.js';
 import { mock } from '../../src/doors/providers.js';
+import { servedUnderPolicy } from '../../src/redaction/marker.js';
 import { memorySessions, readEnvelope, standingAgent } from '../../src/hosting/index.js';
 import { inProcessHost } from '../hosting/testHost.js';
 import {
@@ -187,6 +188,67 @@ describe('the resume checkpoints are never redacted', () => {
     expect(JSON.stringify(resumed)).not.toContain(SECRET.email);
     expect(leaksIn(events, [SECRET.email])).toEqual([]);
     expect(leaksIn(recorder.toRecording(), [SECRET.email])).toEqual([]);
+  });
+
+  it('a resume WITHOUT the per-run policy: the leg is covered by the policy its first leg was handed', async () => {
+    // The paused leg ran under a per-run `redact`; the resume does not pass it
+    // again. The policy rides the run's own state into the checkpoint
+    // (`AgentState.runRedaction`) and covers the resumed leg — snapshot,
+    // events and recording alike, on the same instance or a fresh one.
+    const build = () => {
+      const ask = defineTool<{ ssn: string }, string>({
+        name: 'confirm',
+        description: 'ask a person to confirm the citizen',
+        inputSchema: { type: 'object', properties: { ssn: { type: 'string' } }, required: ['ssn'] },
+        execute: ({ ssn }) => askHuman({ question: `Is ${ssn} right?` }),
+      });
+      let calls = 0;
+      const provider: LLMProvider = {
+        name: 'pauses-then-answers',
+        complete: async (): Promise<LLMResponse> => {
+          calls += 1;
+          return calls === 1
+            ? {
+                content: '',
+                toolCalls: [{ id: 'p1', name: 'confirm', args: { ssn: SECRET.ssn } }],
+                usage: { input: 1, output: 1 },
+                stopReason: 'tool_use',
+              }
+            : {
+                content: 'confirmed',
+                toolCalls: [],
+                usage: { input: 1, output: 1 },
+                stopReason: 'stop',
+              };
+        },
+      };
+      // No DECLARED policy: the first leg's coverage is the per-run one only.
+      return Agent.create({ provider, model: 'm' }).tool(ask).build();
+    };
+    const first = build();
+    const outcome = await first.run({ message: MESSAGE }, { redact: conversationPolicy() });
+    expect(isPaused(outcome)).toBe(true);
+    if (!isPaused(outcome)) return;
+    for (const agent of [first, build()]) {
+      const events: AgentfootprintEvent[] = [];
+      agent.on('*', (e) => events.push(e));
+      const recorder = recordRun(agent);
+      await agent.resume(outcome.checkpoint, { answer: 'yes' });
+      // What the first leg kept out stays out of the second leg's records.
+      for (const record of [agent.getLastSnapshot(), recorder.toRecording(), events]) {
+        expect(leaksIn(record, [SECRET.user, SECRET.ssn])).toEqual([]);
+      }
+      expect(servedUnderPolicy(agent.getLastSnapshot())).toBe(true);
+    }
+    // A carried policy this library did not write refuses the resume — a leg
+    // its policy could not keep covered must not start.
+    const tampered = {
+      ...outcome.checkpoint,
+      sharedState: { ...outcome.checkpoint.sharedState, runRedaction: { keys: 'history' } },
+    };
+    await expect(build().resume(tampered, { answer: 'yes' })).rejects.toThrow(
+      /Agent\.resume: the checkpoint's `runRedaction` is not a redaction policy/,
+    );
   });
 
   it('a crash: RunCheckpointError.checkpoint carries the real conversation', async () => {

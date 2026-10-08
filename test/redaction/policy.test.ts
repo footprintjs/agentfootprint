@@ -12,7 +12,14 @@
 import { describe, expect, it } from 'vitest';
 import type { RedactionPolicy } from 'footprintjs';
 
-import { assertRedactionPolicy, unionRedactionPolicies } from '../../src/redaction/policy.js';
+import {
+  assertRedactionPolicy,
+  carriedRedactionPolicy,
+  policyFromCarried,
+  policyOfMarks,
+  unionRedactionPolicies,
+} from '../../src/redaction/policy.js';
+import { conversationRedaction, keepsConversationOut } from '../../src/redaction/conversation.js';
 
 const refused =
   (policy: unknown): (() => void) =>
@@ -120,5 +127,63 @@ describe('unionRedactionPolicies — one policy for a run several declarations c
   it('the union only adds — no declaration can take a name away', () => {
     const union = unionRedactionPolicies({ keys: ['history'] }, { keys: ['ssn'] })!;
     expect(union.keys).toEqual(expect.arrayContaining(['history', 'ssn']));
+  });
+});
+
+describe('a policy carried through a pause — `carriedRedactionPolicy` / `policyFromCarried`', () => {
+  it('round-trips through JSON: names and pattern sources, the same verdicts', () => {
+    const policy: RedactionPolicy = {
+      keys: ['history'],
+      patterns: [/ssn|email/i],
+      fields: { customer: ['ssn'] },
+      emitPatterns: [/^agentfootprint\.secret\./],
+      diagnostics: { keys: ['token'] },
+    };
+    const carried = JSON.parse(JSON.stringify(carriedRedactionPolicy(policy))) as unknown;
+    const back = policyFromCarried(carried, 'Agent.resume');
+    expect(back?.keys).toEqual(['history']);
+    expect(back?.patterns?.map((p) => [p.source, p.flags])).toEqual([['ssn|email', 'i']]);
+    expect(back?.fields).toEqual({ customer: ['ssn'] });
+    expect(back?.emitPatterns?.map((p) => p.source)).toEqual(['^agentfootprint\\.secret\\.']);
+    expect(back?.diagnostics).toEqual({ keys: ['token'] });
+    expect(policyFromCarried(undefined, 'Agent.resume')).toBeUndefined();
+  });
+
+  it('a carried value this library did not write refuses the resume — fail closed', () => {
+    for (const bad of [
+      'history',
+      [{ keys: ['x'] }],
+      { patterns: ['ssn'] },
+      { patterns: [{ source: '(', flags: '' }] },
+      { keys: 'history' },
+      {},
+    ]) {
+      expect(() => policyFromCarried(bad, 'Agent.resume')).toThrow(
+        /Agent\.resume: the checkpoint's `runRedaction` is not a redaction policy this library wrote/,
+      );
+    }
+  });
+});
+
+describe('policyOfMarks — the names a paused run kept out, as a policy', () => {
+  it('keys and field marks become a policy; nothing marked is no policy', () => {
+    expect(policyOfMarks(undefined)).toBeUndefined();
+    expect(policyOfMarks({ keys: [] })).toBeUndefined();
+    expect(policyOfMarks({ keys: ['history', 'history'], fields: { route: ['witness'] } })).toEqual(
+      {
+        keys: ['history'],
+        fields: { route: ['witness'] },
+      },
+    );
+  });
+});
+
+describe('keepsConversationOut — a calling run that keeps its whole conversation out', () => {
+  it('the vocabulary and anything more; never a narrower policy', () => {
+    expect(keepsConversationOut(conversationRedaction())).toBe(true);
+    expect(keepsConversationOut(conversationRedaction({ keys: ['apiKey'] }))).toBe(true);
+    expect(keepsConversationOut({ patterns: [/./] })).toBe(true);
+    expect(keepsConversationOut({ keys: ['history', 'result'] })).toBe(false);
+    expect(keepsConversationOut(undefined)).toBe(false);
   });
 });
