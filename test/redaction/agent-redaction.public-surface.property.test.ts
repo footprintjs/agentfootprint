@@ -29,15 +29,8 @@ import { ALL_EVENT_TYPES, type AgentfootprintEvent } from '../../src/events/regi
 import { mock } from '../../src/doors/providers.js';
 import { conversationRedaction } from '../../src/doors/security.js';
 import { AGENT_PUBLIC_SURFACE } from '../type-regressions/AgentRedactionSurface.completeness.test.js';
-import {
-  classificationOf,
-  eventPayloadFor,
-  kindLeaves,
-  locationsOf,
-  outOfKindValueOf,
-  withoutAnswerBoundary,
-  withValueAt,
-} from './fixture.js';
+import { adversarialStrings, locationsOf, withoutAnswerBoundary } from './fixture.js';
+import type { ToolProvider } from '../../src/tool-providers/types.js';
 import { everySurface, servedArtifacts } from './everySurface.js';
 
 /** mulberry32 — the suite's seeded PRNG (`agent-redaction.property.test.ts`). */
@@ -271,42 +264,49 @@ describe('property — the route, cost and budget events keep a selected value o
 });
 
 /**
- * EVERY event type in the registry, generated from it — the type list from
- * `events/registry.ts` · `ALL_EVENT_TYPES`, each payload from its
- * classification (`events/content.ts` · `EVENT_CONTENT`, built by
- * `fixture.ts`), never a hand list. Each type is filed through the agent's own
- * dispatcher twice — the consumer door (`emit`) and the hosting door for the
- * agent's own last run (`emitAttributed`) — with the secret everywhere a
- * person or the model could put it: in a field the type does not declare, at
- * every words path it quotes, under the selected name, and in EVERY structure
- * field at every depth as a value outside its kind — free text where a number,
- * a flag, a verdict word or an id belongs, and a NAME the model made up
- * (`invented_<secret>`) where a tool name, an argument path, a skill id or a
- * configured name belongs. Every type is delivered, and no listener receives
- * the secret.
+ * EVERY event type in the registry, filed through the agent's own dispatcher
+ * — the consumer door (`emit`) and the hosting door for the agent's own last
+ * run (`emitAttributed`) — under seeded random policies that keep the
+ * conversation out, each payload carrying the secret and adversarial strings
+ * (a name the model made up, a prefix, a case variant, a homoglyph, a trailing
+ * space, a zero-width character, a non-NFC spelling, an over-long name, a
+ * path with an injected segment) as values at every depth and as KEYS. The
+ * value-kind rule (`redaction/knownStrings.ts`): every type is delivered, no
+ * adversarial string survives anywhere, the secret appears nowhere — and the
+ * library's words and field names do. The agent's own tool name is no
+ * library word: it is the placeholder too.
  */
-describe('property — every event type in the registry keeps a selected value out', () => {
-  /** A payload for `type` with the secret in every place it could ride. */
-  const plantedPayload = (type: string, c: Case): Record<string, unknown> => {
-    let payload: unknown = eventPayloadFor(type, `said ${c.secret}`);
-    for (const leaf of kindLeaves(classificationOf(type).structure)) {
-      if (['list', 'record', 'map'].includes(leaf.kind.kind)) continue;
-      payload = withValueAt(payload, leaf.path, outOfKindValueOf(leaf.kind, c.secret));
-    }
-    for (const row of classificationOf(type).words ?? []) {
-      for (const path of row.paths) {
-        const segments = path
-          .split('.')
-          .map((s) => (s.endsWith('[]') ? [s.slice(0, -2), '[]'] : [s]))
-          .flat();
-        payload = withValueAt(payload, segments, `quoted ${c.secret}`);
+describe('property — every event type in the registry, under the value-kind rule', () => {
+  /** Every string in `value` — values and keys. */
+  const stringsIn = (value: unknown): Set<string> => {
+    const out = new Set<string>();
+    const walk = (node: unknown): void => {
+      if (typeof node === 'string') {
+        out.add(node);
+        return;
       }
-    }
-    return {
-      ...(payload as Record<string, unknown>),
-      __named__: { customer: { [c.field]: c.secret } },
+      if (node === null || typeof node !== 'object') return;
+      if (Array.isArray(node)) return node.forEach(walk);
+      for (const [key, child] of Object.entries(node as Record<string, unknown>)) {
+        out.add(key);
+        walk(child);
+      }
     };
+    walk(value);
+    return out;
   };
+
+  /** A payload with the secret and the adversarial strings everywhere they could ride. */
+  const plantedPayload = (c: Case, adversarial: readonly string[]): Record<string, unknown> => ({
+    toolName: `lookup_${c.secret}`,
+    status: 'ok',
+    iteration: 2,
+    tools: ['lookup', ...adversarial],
+    semantics: { facts: adversarial.map((text) => ({ entity: text, value: text })) },
+    withheldReasons: Object.fromEntries(adversarial.map((text) => [text, 1])),
+    customer: { [c.field]: c.secret },
+    [`note for ${c.secret}`]: 'a key that is data',
+  });
 
   for (const seed of [1, 2, 3, 5, 8]) {
     const c = caseFor(seed);
@@ -319,54 +319,70 @@ describe('property — every event type in the registry keeps a selected value o
       const runId = (ran[0]?.meta as { runId?: string } | undefined)?.runId;
       expect(typeof runId).toBe('string');
 
+      const adversarial = adversarialStrings(c.secret);
       const served: AgentfootprintEvent[] = [];
       agent.on('*', (e) => served.push(e));
       for (const type of ALL_EVENT_TYPES) {
-        agent.emit(type, plantedPayload(type, c));
-        agent.emitAttributed(type, plantedPayload(type, c), {
+        agent.emit(type, plantedPayload(c, adversarial));
+        agent.emitAttributed(type, plantedPayload(c, adversarial), {
           sessionId: 's',
           runId: runId as string,
         });
       }
       expect(served).toHaveLength(ALL_EVENT_TYPES.length * 2);
       expect(new Set(served.map((e) => e.type))).toEqual(new Set(ALL_EVENT_TYPES));
-      expect(locationsOf(served, c.secret)).toEqual([]);
+      const payloads = served.map((e) => e.payload);
+      expect(locationsOf(payloads, c.secret)).toEqual([]);
+      const survived = stringsIn(payloads);
+      expect(adversarial.filter((text) => survived.has(text))).toEqual([]);
+      // What the rule keeps: a library word, a field name — never the tool's name.
+      expect(survived.has('ok')).toBe(true);
+      expect(survived.has('withheldReasons')).toBe(true);
+      expect(survived.has('lookup')).toBe(false);
     });
   }
 
-  it('the agent’s OWN names stay readable: a declared tool and its declared argument', async () => {
-    const c = caseFor(1);
-    const { agent } = agentFor(c);
-    await agent.run({ message: 'go', identity: SCOPE });
-    const served: AgentfootprintEvent[] = [];
-    agent.on('*', (e) => served.push(e));
-    agent.emit('agentfootprint.stream.tool_start', {
-      toolName: 'lookup',
-      toolCallId: 'c9',
-      args: {},
-    });
-    agent.emit('agentfootprint.stream.tool_start', {
-      toolName: `lookup_${c.secret}`,
-      toolCallId: 'c9',
-      args: {},
-    });
-    agent.emit('agentfootprint.validation.args_invalid', {
-      toolName: 'lookup',
-      toolCallId: 'c9',
-      iteration: 1,
-      issues: [
-        { path: 'customer', expected: 'object', got: 'string' },
-        { path: `customer.note_${c.secret}`, expected: 'nothing', got: 'string' },
+  it('a tool a provider lists is content in every run', async () => {
+    const provider: ToolProvider = {
+      id: 'listing',
+      list: () => [
+        {
+          schema: {
+            name: 'listed_later',
+            description: 'A tool a server lists.',
+            inputSchema: { type: 'object', properties: { q: { type: 'string' } } },
+          },
+          execute: () => 'ok',
+        },
       ],
-      enforced: true,
-    });
-    const names = served
-      .filter((e) => e.type === 'agentfootprint.stream.tool_start')
-      .map((e) => (e.payload as { toolName: unknown }).toolName);
-    expect(names).toEqual(['lookup', '[REDACTED]']);
-    const issues = served.find((e) => e.type === 'agentfootprint.validation.args_invalid')
-      ?.payload as { issues: { path: unknown }[] };
-    expect(issues.issues.map((i) => i.path)).toEqual(['customer', '[REDACTED]']);
+    } as unknown as ToolProvider;
+    const agent = Agent.create({
+      provider: mock({
+        chunkDelayMs: 0,
+        replies: [
+          { toolCalls: [{ id: 'c1', name: 'listed_later', args: { q: 'x' } }] },
+          { content: 'done' },
+          { toolCalls: [{ id: 'c2', name: 'listed_later', args: { q: 'y' } }] },
+          { content: 'done again' },
+        ],
+      }),
+      model: 'm',
+      redact: conversationRedaction(),
+    })
+      .toolProvider(provider)
+      .build();
+    const names = async () => {
+      const events: AgentfootprintEvent[] = [];
+      const stop = agent.on('*', (e) => events.push(e));
+      await agent.run({ message: 'go' });
+      stop();
+      return events
+        .filter((e) => e.type === 'agentfootprint.stream.tool_start')
+        .map((e) => (e.payload as { toolName: unknown }).toolName);
+    };
+    // No name is a library word: a listed tool's name is the placeholder.
+    expect(await names()).toEqual(['[REDACTED]']);
+    expect(await names()).toEqual(['[REDACTED]']);
   });
 });
 

@@ -387,7 +387,17 @@ function checkPatterns(patterns: unknown, site: string, label: string): void {
   }
 }
 
-function namesAnything(policy: RedactionPolicy): boolean {
+/**
+ * Whether `policy` names anything at all — a key, a pattern, a field, an
+ * event name or a diagnostic selector. Every policy the library accepts does
+ * (`assertRedactionPolicy`); a run covered by one serves EVERY event by the
+ * value-kind rule (`served.ts`), even when footprintjs's rule has no name to
+ * select in it (a policy of event names or diagnostic selectors only).
+ *
+ * @internal
+ */
+export function namesAnything(policy: RedactionPolicy | undefined): boolean {
+  if (policy === undefined) return false;
   const selects = (s: Selectors | undefined): boolean =>
     (s?.keys?.length ?? 0) > 0 ||
     (s?.patterns?.length ?? 0) > 0 ||

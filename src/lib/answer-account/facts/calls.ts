@@ -62,10 +62,9 @@ export interface CoverageItemRead {
   readonly kind?: 'existence' | 'scope';
   /**
    * Present and `true` when the record keeps the item's WORDS out (a
-   * redaction policy left its placeholder on `what` — the event type's
-   * `words` rows, `events/content.ts` · `EVENT_CONTENT`): the item exists,
-   * with its `kind`, and a reader says its words are kept out, never prints
-   * them.
+   * redaction policy left its placeholder on `what` — under the vocabulary,
+   * the value-kind rule, `redaction/knownStrings.ts`): the item exists, with
+   * its `kind`, and a reader says its words are kept out, never prints them.
    */
   readonly keptOut?: true;
   /**

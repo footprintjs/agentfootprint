@@ -26,16 +26,16 @@
 import type { RedactionPolicy } from 'footprintjs';
 
 /** What a run's records are served under — see the file header. */
-export type Coverage =
+export type RedactionCoverage =
   | { readonly state: 'covered'; readonly policy: RedactionPolicy }
   | { readonly state: 'declared-none' }
   | { readonly state: 'unknown' };
 
 /** Positively no policy. */
-export const DECLARED_NONE: Coverage = Object.freeze({ state: 'declared-none' });
+export const DECLARED_NONE: RedactionCoverage = Object.freeze({ state: 'declared-none' });
 
 /** Not recorded by this library — fail closed. */
-export const UNKNOWN_COVERAGE: Coverage = Object.freeze({ state: 'unknown' });
+export const UNKNOWN_COVERAGE: RedactionCoverage = Object.freeze({ state: 'unknown' });
 
 /**
  * The coverage of a run THIS library opened, from the policy it computed for
@@ -43,13 +43,13 @@ export const UNKNOWN_COVERAGE: Coverage = Object.freeze({ state: 'unknown' });
  * run. Here, and only here, an absent policy is a positive fact: every input
  * of the union was itself known.
  */
-export function coverageOfOpenedRun(policy: RedactionPolicy | undefined): Coverage {
+export function coverageOfOpenedRun(policy: RedactionPolicy | undefined): RedactionCoverage {
   return policy === undefined ? DECLARED_NONE : Object.freeze({ state: 'covered', policy });
 }
 
 /** The policy a coverage serves under — `undefined` for `declared-none` only; `unknown` has none to give. */
 export function policyOfCoverage(
-  coverage: Exclude<Coverage, { state: 'unknown' }>,
+  coverage: Exclude<RedactionCoverage, { state: 'unknown' }>,
 ): RedactionPolicy | undefined {
   return coverage.state === 'covered' ? coverage.policy : undefined;
 }

@@ -7,12 +7,12 @@ conversation under — `conversationRedaction()`). Walker: `runRedaction.ts` (th
 per-run wiring every runner's `createExecutor` goes through; `emitServed`, the
 one way a typed event leaves a stage; `setEventSource`, the one way a stage
 writes a value the library derives events from; `servingAhead`, a resume's
-serving before its executor exists). Lens: `served.ts` (what an event's payload
-and meta are served as, over the event registry's own classification —
-`../events/content.ts` · `EVENT_CONTENT`: each type's structure, the words it
-quotes, and everything else content by default) and `marker.ts` (the one sign a
-record was served under a policy, which every reader of a record asks before it
-reads a placeholder as kept out).
+serving before its executor exists). Lens: `served.ts` (THE funnel: what an
+event's payload and meta are served as), `knownStrings.ts` (the ONE
+value-kind rule the funnel applies under ANY policy), `coverage.ts` (the three
+states a served record resolves to: covered, declared none, unknown) and
+`marker.ts` (the one sign a record was served under a policy, which every
+reader of a record asks before it reads a placeholder as kept out).
 
 Nothing in this folder decides what is secret. footprintjs's `RedactionRule`
 (`footprintjs/advanced`) is the one owner of every verdict; this folder only
@@ -42,9 +42,10 @@ masks a STATE key of that name and everything under it; in every record handed
 out WHOLE — an event's payload, a pause's question, the run's input, a thrown
 error — it masks a key of that name at ANY depth (and a dotted-path pattern or
 a `fields` selector, a path). So a field like `ssn` inside a tool's arguments is
-masked wherever a record hands the arguments out WHOLE — every event's `args`,
-and the copies the library renders from them (a check-in's `willDo`, a
-validation issue's quoted value — the words rows, below). A copy held in STATE is
+masked wherever a record hands the arguments out WHOLE — every event's `args`.
+A copy the library renders from them under a name of its own (a check-in's
+`willDo`, a validation issue's quoted value) is kept out of every EVENT under
+ANY policy by the value-kind rule ("How it works"). A copy held in STATE is
 selected by its own top-level key, never by a name inside it: the history, a
 paused call's arguments (`pausedToolArgs`), the model's latest tool calls
 (`llmLatestToolCalls`) carry `ssn` under keys of their own, and are kept out
@@ -92,24 +93,28 @@ const agent = Agent.create({
   with a canary in every place it moves the
   conversation: without a policy every canary reaches a record; under the
   vocabulary none reaches any record, the run emits the SAME events, and its
-  answer account is still told. Compositions are proven in
+  answer account states no absence the same run without a policy would not
+  (it refuses to tell what it cannot read). Compositions are proven in
   `agent-redaction.propagation.test.ts`. A feature added to the list needs a
-  case there. Two pins keep the list honest in both directions: every field
-  the audit's bounded mode treats as content (`adapters/observability/audit.ts`
-  · `boundedContentFieldNames`) is on it, and every words row of the event
-  classification (`../events/content.ts`) names a source the vocabulary keeps
-  out — each row checked at every path it names in `served.test.ts`, and the
-  classification itself in `event-content.test.ts`.
-- **What stays readable.** Ids, counts, kinds, tool names, timings and verdict
-  words — the record still shows WHAT happened, without the words.
+  case there. One pin keeps the list honest: every field the audit's bounded
+  mode treats as content (`adapters/observability/audit.ts` ·
+  `boundedContentFieldNames`) is on it.
+- **What stays readable on events.** Numbers, flags, and the library's own
+  words — statuses, verdicts, stop words, event types, its fixed sentences, the
+  messages' roles: the record still shows WHAT happened, without the words
+  (the value-kind rule, "How it works" below). Ids, the names your app
+  declared (a tool's name, a skill's id, the model's name) and who asked or
+  approved are NOT library words: on events they are the placeholder too.
+  That holds under ANY policy, not only the vocabulary.
 - **Not on it, by design.** Error text written by code (`error`,
   `errorMessage`, `lastError`, a provider fallback's `reason`, a fatal event's
   `error`): a message a tool or provider throws can quote what it failed on,
   and `error` also names a flag the record's readers count on
-  (`stream.tool_end`'s `error: true`). On EVENTS the vocabulary keeps it out
-  anyway — every field an event type does not declare structure is
-  (default-deny, "How it works" below); in STATE (a `lastError` key) add the
-  names yourself if your errors carry personal data. The thrown value itself,
+  (`stream.tool_end`'s `error: true`). On EVENTS any policy keeps it out
+  anyway — the value-kind rule serves every string that is not a library
+  word as the placeholder ("How it works" below); in STATE (a `lastError`
+  key) add the names yourself if your errors
+  carry personal data. The thrown value itself,
   handed to your caller by `run()`'s rejection, is the caller's own. Fields
   your own tools or rules name — join them.
 - **Names it shares with structure** are kept out with it: `permission.check`'s
@@ -186,58 +191,59 @@ and that the answer account says the question and the answer are kept out.
    artifact facts, the run manifest, `context.*`, `error.fatal`) and the identity
    on every event's meta, by the same rule — a pause request under the run whose
    executor paused (`EventDispatcher · dispatchForRun`).
-4. **Every event type is classified — DEFAULT-DENY** (`../events/content.ts` ·
-   `EVENT_CONTENT`). Each type of the ONE event registry declares, once, the
-   top-level fields that are its STRUCTURE (ids, counts, sizes, timings, kinds,
-   verdict words, names code declared) and the WORDS it quotes under names of
-   its own, with the values they come from. The table is a mapped type over
-   the registry: a new event type does not compile until it is classified, and
-   a structure name that is not a field of its payload does not compile either
-   (`event-content.test.ts` pins both at run time too). Under a policy that
-   keeps the conversation out (`conversationRedaction()` or more —
-   `conversation.ts` · `ruleKeepsConversationOut`), EVERY field an event type
-   does not declare structure is served as the placeholder — on the library's
-   events and an app's own (a type the registry does not know is content in
-   every field) — so a field nobody classified never carries the conversation
-   into a record. A narrower, by-name policy serves an event by name, as
-   footprintjs serves any record handed out whole. A field is declared
-   structure only when it cannot carry what a person, the model or a tool
-   wrote; the vocabulary test's canaries check every declaration against real
-   runs. Generated for every type, never listed by hand:
-   `event-content.test.ts` (each type's own payload with a canary in an
-   undeclared field and at every words path) and the public-surface property
-   (every type filed through an agent's dispatcher, under random policies).
-5. **Words** (each type's `words` rows): content the library computes from
-   another value and carries under a name of its own IN AN EVENT is served as
-   the placeholder whenever the rule keeps ANY part of a value it came from
-   out — under ANY policy, a narrow by-name one included — the whole of it, or
-   fields inside it (the rule's own verdict on the source's name, `served.ts` ·
-   `sourceKeptOut`) — a
-   parser's message quotes the model's draft (`rawOutput`); a validation issue,
-   an external ground and an assumed value quote an argument (`args`, or the
-   argument's own name on the row); a check-in's evidence pack quotes the
-   model, the arguments (its `willDo` text is kept out by ANY argument name the
-   rule keeps out — on the check-in event and on the pause it asks with) and the
-   conversation; a matcher's witness quotes the
-   person's words; a route guard's summary and a tool's progress report quote a
-   result, a figure the answer computed quotes the answer and its results; a
-   retrieved passage's heading quotes what was retrieved; a tool's coverage
-   declaration and a described result's envelope quote its call and its
-   result; a skipped step's reason is the model's words, a tool effect's
-   reason and an artifact's label are the tool's, an artifact refusal quotes
-   the ref the model passed; a pause request's `reason` is the payload's own;
-   a permission checker's and a middleware's words (`rationale`, `reason`,
-   `why` — a thrown message included) are composed from the call they judged. Where a path cannot be walked (a list where a record belongs, a
-   Map, a class instance, a payload that is not a record, a quoted argument
-   whose path is missing) the content is served whole as the placeholder —
-   fail closed. Generic names
-   (`value`, `note`, `text`) are never put on a policy — selected by name they
-   would hide structure in every event.
-   footprintjs's taint rule for a mapper's computed copy, applied to the
-   library's own copies; still the rule's verdict, by name. A copy the library
-   keeps in STATE (the turn's routing verdict `turnRoute`, a map's
-   `mapEngagement`) is a state key, kept out by its own name — the vocabulary
-   names both.
+4. **THE value-kind rule** (`knownStrings.ts` · `keepKnownValues`), under ANY
+   policy that selects at least one name — a name-only one (`keys`,
+   `patterns`, `fields`, `emitPatterns`, `diagnostics`) as much as the
+   vocabulary (`policy.ts` · `namesAnything`). After footprintjs's rule has
+   served the event BY NAME, every value of it is checked by its KIND,
+   wherever it sits — no field is trusted by its position, so there is no
+   list of fields, or of the copies the library derives from a value, to keep
+   complete:
+   - numbers, booleans and null pass;
+   - a string passes only when it is one of the library's own WORDS — an event
+     type, a status, verdict or stop word, a fixed sentence
+     (`FixedRouteRationale`, `FixedPauseReason`, the `absent()` note), the
+     words of its envelopes and of a message's shape (`LIBRARY_WORDS`, one
+     frozen set built from the code's own types: written by
+     `scripts/gen-known-strings.mjs` and checked EXACTLY against them, so a
+     word added to a payload union does not compile until it is listed);
+   - every other string is the placeholder, inside lists and records too — a
+     sentence the library composes around a value, an id it minted, a name
+     your app declared, who asked and who approved included;
+   - an object's KEY is a field name when the library's payload types (or its
+     envelopes, or a message's shape) name the field (`FIELD_NAMES`); any
+     other key is data, checked by the same rule — the keys that fail are kept
+     out together, as ONE placeholder entry (a reader reads that entry as a
+     positive sign: keys were kept out, so a key it looks for may be among
+     them — `coverage/emptiness.ts`);
+   - a value that is not plain data (a class instance, a Map, a Date) is the
+     placeholder;
+   - what it serves is always a FRESH copy of plain data: each value read
+     once, only own enumerable keys and list positions copied, never a
+     `__proto__` key.
+
+   A policy makes EVENTS conservative; STATE, the snapshot and the commit log
+   keep footprintjs's rule, by name, so they stay useful. For full
+   observability, run with no policy. Pinned, generated for every event type
+   in the registry under random policies — name-only ones included — and
+   adversarial strings (`value-rule.test.ts`, and the public-surface
+   property): no string but a library word survives, and every library word
+   does; every copy the library derives from a selected value (a validation
+   issue's quote, a check-in's `willDo`, a parser's message, a coverage
+   declaration's words) is kept out under a name-only policy.
+5. **Not in this release: ids, declared names and the host's identity.** A
+   run's own ids (its stage ids, its run id, the ids of the calls it took),
+   the names an app declared (its tools and their argument paths, its
+   skills, its configuration) and who asked or approved are not library
+   words, so under a policy they are the placeholder on every event. Each was
+   built and reviewed in this round and taken out again: the security review
+   found a bypass in the identity half (a check-in decision's `by` is any
+   text the resume input carries — a remote client writes it through the
+   hosting door), and the owner's line is that the rule ships simple and
+   airtight first. Each comes back later with a single owner and its own
+   review. Until then, the answer account over a redacted record cannot join
+   a call's events and refuses to tell (every row kept out, never a false
+   absence).
 6. **Relayed writes** (`setEventSource`): the context recorder derives
    `context.injected` / `slot_composed` / `budget_pressure` from the slots'
    writes, and a selected key's write reaches recorders as the placeholder. The
@@ -344,7 +350,10 @@ bytes, for any recording — an agent's or a chart's.)
   printed), a typed answer's limits. A reader that touches a kept-out
   value without asking about it would state a fact about a placeholder, so the
   view watches, and the account then refuses to tell (`notToldAccount`)
-  instead of saying "no tool ran".
+  instead of saying "no tool ran". Under a policy that is the account's usual
+  answer in this release: a call's id is kept out on every event, so the
+  account cannot join a call's events, and it refuses (every row kept out,
+  never an absence the same run without a policy would not state).
 - **`assessAnswer`** gives no standing over a state key the record keeps out
   (`AnswerAssessment.keptOut`). `agent.assessment()` folds the run's LIVE state
   as values (`core/agent/assessment/assess.ts` · `assessLive`): the live
@@ -373,10 +382,11 @@ bytes, for any recording — an agent's or a chart's.)
   policy. The vocabulary keeps it out of state and every event (`turn_end`'s
   `finalContent`, the streamed tokens); the run's output stays. Closing it needs
   a chart to name its output for footprintjs's rule — a footprintjs change.
-- **A copy under a new name inside a stage.** An event field built from a state
-  value under a different name is selected by its own name only (footprintjs's
-  rule for a stage function's copies). The vocabulary names the copies the
-  library makes; a copy your own code makes is yours to name.
+- **A copy under a new name inside a stage.** In STATE, a value written under
+  a different name is selected by its own name only (footprintjs's rule for a
+  stage function's copies): the vocabulary names the copies the library
+  makes; a copy your own code makes is yours to name. On an EVENT such a copy
+  is a free string, kept out by the value-kind rule under any policy.
 - **The window's provenance.** Under a policy that selects `history` whole, the
   window meter cannot see the window's length on the record channel, so an
   eviction's `removedStageIds` names none and its `survivalMs` is 0 ("birth
@@ -390,18 +400,45 @@ bytes, for any recording — an agent's or a chart's.)
 - **A fold of a redacted snapshot.** `getLastSnapshot()` omits `initialState`
   under a policy (footprintjs: the raw pre-run base never passed the policy), so
   a fold of it reports `basis: 'log-only'` and `servedAt` names `no-fold-base`.
-- **Event meta.** `principal` and `tenant` (who asked) are served by name; every
-  other meta field is the record's address — run, stage, session, trace ids —
-  and is never selected.
-- **Fingerprints and hashes stay.** They are structure, and the record's
-  readers join on them: a repeated call's `argsFingerprint` / `resultFingerprint`
-  (`core/agent/repeatedCall.ts` · `fingerprint`, an unsalted 32-bit FNV-1a), a
-  context piece's `contentHash` (FNV-1a over its text), and a receipt's hashes
-  (salted with the `runId` the same record carries). A hash hides a value; it
-  does not keep a GUESSABLE one secret — a short or low-entropy value the policy
-  kept out (a PIN, an SSN, a yes/no) can be confirmed offline by hashing
-  candidates. Treat a recording as confirming such a value to anyone who can
-  guess it.
+- **Who asked and who approved are kept out under a policy.** `principal` and
+  `tenant` on every event's meta, and a check-in decision's `by` (on
+  `checkin.decision` and on the `pause.resume` that brought it), are no
+  library words: under ANY policy they are the placeholder — and so is what an
+  exporter stamps from them (the OpenTelemetry adapter's
+  `agentfootprint.principal.id` / `agentfootprint.tenant.id`). Keeping them
+  readable as the host's own identity was built and reviewed, and taken out:
+  a resume input's `by` is any text (a remote client writes it through the
+  hosting door), and a checkpoint can carry any identity. With no policy the
+  record names both. Every other meta field is the record's address — run,
+  stage, session, trace ids — and is never selected; the event's NAME (an
+  app's own `emit` type) is never served differently either.
+- **Fingerprints and hashes.** Under any policy the value-kind rule keeps them
+  out of events like any string that is not a library word. In STATE they
+  stay, by name: a
+  repeated call's `argsFingerprint` / `resultFingerprint`
+  (`core/agent/repeatedCall.ts` · `fingerprint`, an unsalted 32-bit FNV-1a)
+  and a context piece's `contentHash` hide a value but do not keep a GUESSABLE
+  one secret — a short value the policy kept out (a PIN, an SSN) can be
+  confirmed offline by hashing candidates.
+- **Numbers pass the value-kind rule.** A number is never text a person, the
+  model or a tool wrote — but it can still BE personal data (a balance, an
+  age). The rule keeps numbers; a number is kept out by the NAME it travels
+  under (a tool's `result` and `args` are on the vocabulary). A number your
+  own event fields carry under names of their own is yours to name.
+- **A policy makes events conservative.** Under ANY policy — `{ keys: ['ssn'] }`
+  as much as the vocabulary — every event string that is not a library word
+  is the placeholder: the person's message, the model's words, a tool's result
+  text, a sentence the library composes around a value (a route's `rationale`
+  naming a count or a skill, a context piece's `reason` naming a position), a
+  tool's `description` and its NAME, a call's id, a stage's id, the run's id,
+  the model's and the agent's names, a validation issue's `expected` and
+  `got`. The answer account over such a record cannot join a call's events,
+  so it refuses to tell (every row kept out, never a false absence). The
+  library's FIXED sentences (`FixedRouteRationale`, `FixedPauseReason`, the
+  `absent()` note), the messages' structure (`history` is typed as the
+  messages it holds) and the `absent()` / `coverage()` envelopes are its own
+  words and stay. State, the snapshot and the commit log keep footprintjs's
+  rule, by name. For full observability, run with no policy.
 - **Causal memory's decisions.** A causal snapshot's tool calls are read on the
   real-value path (the store is working state), but the decisions it keeps
   come from footprintjs's flow channel, which serves them under the policy: a
@@ -431,13 +468,10 @@ bytes, for any recording — an agent's or a chart's.)
   (another pool lane's, an earlier process's), is refused — served as the
   placeholder — wherever a policy exists on the instance; an instance with no
   policy at all serves it as it is.
-- **An app's own event types under the vocabulary.** The classification is
-  the library's event registry; a type it does not know (your
-  `agent.emit('app.latency', …)`) is content in every field under
-  `conversationRedaction()` — served as the placeholder, its type and meta
-  kept. There is no door yet to declare an app type's structure: carry a
-  metric you need readable through your own channel, or cover the agent with
-  a narrower policy, which serves your event by name.
+- **An app's own events under a policy.** Your `agent.emit('app.x', …)` is
+  served by the same rule: its numbers and flags stay, its strings stay only
+  when they are library words, and a key the library's payload types do not
+  name is data (kept out unless it is such a word).
 - **A conversation continued is a new run.** A per-run `redact` rides the
   run's own state into a pause's checkpoint (`AgentState.runRedaction`: names,
   and patterns as references), so a resumed leg is covered by it without being
@@ -469,23 +503,25 @@ bytes, for any recording — an agent's or a chart's.)
   its narrative, the mapper's view and every record of the calling agent stay
   covered. Keep selected values out of a chart's emit payloads, or name those
   events in `emitPatterns`.
-- **What footprintjs's rule does not see.** The rule (the one owner of every
-  verdict) walks a payload's own enumerable keys, in plain objects, class
-  instances and arrays. It does not walk a Map's entries, a Set's members, an
-  Error's `cause` (an `AggregateError`'s `errors`), a non-enumerable or
-  symbol key, or a `toJSON` that writes a name the object holds privately (a
-  `#field`): a tool result of such a shape
-  keeps a value a by-name policy selects — in-process for the first four, in
-  every JSON export for `toJSON`. Name the value that carries it (`result`;
-  the vocabulary does), or return plain data from tools. Pinned, shape by
-  shape, by `test/redaction/served.shapes.test.ts`; the fix belongs in the
-  rule, never a second walk here.
+- **What footprintjs's rule does not see — in STATE.** The rule (the one owner
+  of every verdict by name) walks a value's own enumerable keys, in plain
+  objects, class instances and arrays. It does not walk a Map's entries, a
+  Set's members, an Error's `cause` (an `AggregateError`'s `errors`), a
+  non-enumerable or symbol key, or a `toJSON` that writes a name the object
+  holds privately (a `#field`): a value of such a shape in STATE keeps what a
+  by-name policy selects. On EVENTS the value-kind rule closes all of them (a
+  value that is not plain data is the placeholder; only own enumerable keys
+  are copied) — pinned, shape by shape, by
+  `test/redaction/served.shapes.test.ts`. Name the value that carries it, or
+  return plain data from tools.
 - **Names are matched exactly.** A key selects that exact name —
   case-sensitive, no Unicode folding (`SSN`, a full-width `ｓｓｎ` and
   `socialSecurityNumber` are other names); a pattern with the `i` flag covers
   case variants. footprintjs skips pattern matching for a key past its length
   cap (ReDoS protection), so a pattern-only policy does not select an
-  over-long key a model invents — name the keys that matter in `keys`.
+  over-long key a model invents — name the keys that matter in `keys`. On
+  EVENTS another spelling is a free string anyway (the value-kind rule); in
+  STATE it is another name.
 - **A runner's chart mounted into your own executor.** Its typed events are
   served under the policy the RUNNER declares (`chartBinding.ts`) — your
   executor's own policy never reaches them (footprintjs serves an emit by
@@ -503,11 +539,9 @@ bytes, for any recording — an agent's or a chart's.)
   what it says. A host that lets checkpoints leave its trust boundary signs
   them — as it does for the identity a checkpoint names.
 - **A declaration's dates and source.** A coverage declaration's or a
-  described result's `period` (the dates its read covered) and `provenance`
-  (its source, when it was measured) stay readable on their events —
-  structure the results layer's time checks judge. Whatever a tool writes
-  there travels as it is: a date taken from the person's question, or a call's
-  argument interpolated into `source`.
+  described result's `period` and `provenance` are text a tool wrote — kept
+  out of events by the value-kind rule under any policy. In STATE they travel
+  as the tool wrote them unless a name selects them.
 - **An `LLMCall` or an `LlmRouter` on its own.** Neither takes a `redact`, so
   neither declares one: its records — run on its own, or in a composition made
   only of such steps — are covered by nothing. Run the step as an `Agent`, or

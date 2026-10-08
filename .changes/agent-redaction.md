@@ -24,15 +24,20 @@ values included), a tool's declared coverage and described results (`absent()`, 
 compaction (the originals a fold keeps beside its summary, `foldedSpans`), check-ins, skill graphs,
 compositions —
 with a canary in each place and fails if one reaches a record; the run emits the same events with
-and without it. Content the library quotes in an event under names of its own (a validation
-issue's argument, a check-in's evidence, a matcher's witness, a parser's message about the draft) is
-kept out with the value it came from; a check-in's rendered arguments are kept out by any argument
-name the policy keeps out. Events are DEFAULT-DENY under the list: every event type the library
-emits is classified once — the fields that are structure, the words it quotes and what from — and a
-new event type does not compile until it is; under `conversationRedaction()` (or a policy that
-names at least as much) every field an event type does not declare structure is served as the
-placeholder, on the library's events and on your own `emit`s alike (a type the library does not
-know is content in every field). A narrower policy serves events by name.
+and without it. Under ANY policy — `{ keys: ['ssn'] }` as much as the list — events are
+DEFAULT-DENY by one value-kind rule: after the policy has served an event by name, numbers, flags
+and null pass, and a string passes only when it is one of the library's own words (statuses,
+verdicts, stop words, event types, its fixed sentences — one set generated from the code's own
+types); every other string is the placeholder, at any depth and as a key, on the library's events
+and on your own `emit`s alike. So a copy the library derives from a selected value under a name of
+its own (a validation issue's quote, a check-in's rendered arguments, a parser's message about the
+draft, the words of a tool's coverage declaration) never leaves raw — there is no list of fields, or
+of derived copies, to keep complete. Ids (a call's, a stage's, the run's), the names your app
+declared (a tool's name, a skill's id, the model's name) and who asked or approved are no library
+words, so a policy keeps them out of events too, and the answer account over such a record refuses
+to tell rather than guess which events belong to which call. A policy makes events conservative;
+state, the snapshot and the commit log keep footprintjs's rule, by name. For full observability,
+run with no policy.
 
 The policy reaches every run the agent's records come from. A composition (`Sequence`,
 `Parallel`, `Conditional`, `Loop`, `Graph`, `Workflow`) adopts its members' policies. A run a tool
@@ -88,23 +93,21 @@ it replays to the model, as every memory keeps what it stores.
 
 Named limits: the run's answer leaves its chart as a bare string and footprintjs serves an unnamed
 output as it is, so a recording's `run.exit` payload carries it whatever the policy; error text
-written by code (`error`, `errorMessage`) is not on the list (on events the list keeps it out
-anyway, as an undeclared field; in state, name it yourself); an app's own event types are content
-in every field under the list, with no door yet to declare their structure; a declaration's dates and source
-(`period`, `provenance` — whatever a tool writes there) stay readable on its events; console warnings are not records; fingerprints and content hashes stay (they are structure), so a short kept-out value can be
-confirmed by hashing guesses; a checkpoint is not proof — one edited to drop both its policy and its
+written by code (`error`, `errorMessage`) is not on the list (on events any policy keeps it out
+anyway; in state, name it yourself); under a policy, a sentence the library composes around a value
+(a route's `rationale` naming a count), a tool's `description` and name, the ids of the run, its
+stages and its calls, and who asked or approved are the placeholder on events; console warnings are not records; in STATE, fingerprints and content hashes stay,
+so a short kept-out value can be confirmed by hashing guesses; a checkpoint is not proof — one edited to drop both its policy and its
 marks, or to carry a narrower one, resumes under what it says; an `LLMCall` or `LlmRouter` takes no
 `redact`, so one run on its own is covered by nothing; a chart-backed tool's own `$emit` payloads reach the
-recorders handed to that tool as footprintjs serves an emit, by event name; footprintjs's rule reads a
-value's own enumerable keys, so a Map's or a Set's contents, an Error's `cause` (an `AggregateError`'s
-`errors`), a non-enumerable key or a `toJSON` that writes a privately held name keep a value a
-by-name policy selects (name the value that carries it — `result` — as the vocabulary does); names
-match exactly. An agent's chart mounted into an executor the app built (`getSpec()`) keeps the
+recorders handed to that tool as footprintjs serves an emit, by event name; in STATE, footprintjs's
+rule reads a value's own enumerable keys, so a Map's or a Set's contents, an Error's `cause` (an
+`AggregateError`'s `errors`), a non-enumerable key or a `toJSON` that writes a privately held name
+keep a value a by-name policy selects (on events the value-kind rule keeps every one of them out);
+names match exactly. An agent's chart mounted into an executor the app built (`getSpec()`) keeps the
 agent's declared policy on its events — each stage of a runner's chart is bound to its runner; the
 executor's own policy never reaches them, so declare the policy on the runner — while its state
 follows that executor's own policy.
-Content the library derives from a value is kept out when the rule keeps any part of the source out
-(a `fields` selector included), and served whole as the placeholder where its path cannot be walked.
 The full table is in `src/redaction/README.md`.
 
 Requires footprintjs `^9.44.1` (the peer range rises from `^9.41.0`): the door relies on 9.43.0's

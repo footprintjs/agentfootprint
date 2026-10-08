@@ -55,16 +55,17 @@ import type { FlowChart, FlowChartExecutor, RedactionPolicy, ScopeFactory } from
 
 import { buildEventMeta, type RunContext } from '../bridge/eventMeta.js';
 import type { EventDispatcher } from '../events/dispatcher.js';
+import type { EventMeta } from '../events/types.js';
 import type { AgentfootprintEvent } from '../events/registry.js';
 import { conversationRedaction } from './conversation.js';
+import { namesAnything } from './policy.js';
 import {
   coverageOfOpenedRun,
   policyOfCoverage,
   UNKNOWN_COVERAGE,
-  type Coverage,
+  type RedactionCoverage,
 } from './coverage.js';
 import { eventServing, SERVED_PLACEHOLDER, type EventServing } from './served.js';
-import { RunNames, type NameDeclarations, type NameSpace } from './names.js';
 import { redactionMarker } from './marker.js';
 
 /** One run's redaction, as the runner that owns the executor holds it. */
@@ -108,13 +109,11 @@ export interface RunRedaction {
  */
 export interface ScopeRun {
   /** What the run is covered by — `unknown` only for a runner whose declaration is unknown. */
-  readonly coverage: Coverage;
+  readonly coverage: RedactionCoverage;
   readonly serving: EventServing;
   /** Deliver an event, as made, to the real-value path — from the stage `stageId` that emitted it. */
   real(type: string, payload: unknown, stageId: string): void;
   noteWrite(runtimeStageId: string, key: string, value: unknown): void;
-  /** Record names the run declared as it composes (a provider's tools, their arguments). */
-  declare(space: NameSpace, names: Iterable<string>): void;
   /** Whether the run's rule keeps `name` out of its records. */
   keepsOut(name: string): boolean;
 }
@@ -127,7 +126,7 @@ export interface ScopeRun {
  * (`coverageOfExecutor`). An executor this map does not hold is `unknown`,
  * never "no policy". Weak: dies with the executor.
  */
-const executorCoverage = new WeakMap<object, Coverage>();
+const executorCoverage = new WeakMap<object, RedactionCoverage>();
 
 /**
  * What `executor`'s run was covered by: `covered`, `declared-none`, or
@@ -136,7 +135,7 @@ const executorCoverage = new WeakMap<object, Coverage>();
  * nothing it could guess: it refuses (`RunnerBase · getLastSnapshot` hands
  * back nothing).
  */
-export function coverageOfExecutor(executor: object): Coverage {
+export function coverageOfExecutor(executor: object): RedactionCoverage {
   return executorCoverage.get(executor) ?? UNKNOWN_COVERAGE;
 }
 
@@ -171,8 +170,6 @@ export function createRunRedaction(args: {
   readonly policy: RedactionPolicy | undefined;
   readonly dispatcher: EventDispatcher;
   readonly getRunContext: () => RunContext;
-  /** The names the runner declared at build (`names.ts`) — what a `declaredName` field may hold. */
-  readonly names?: NameDeclarations;
 }): RunRedaction {
   const { policy, dispatcher, getRunContext } = args;
   // The rule the run decides with — one built from the policy stands in until
@@ -180,10 +177,7 @@ export function createRunRedaction(args: {
   // this box and holds nothing else of the run (`servingOf`): the dispatcher
   // keeps a run's serving for its late facts, never the run's values.
   const decided = { rule: new RedactionRule(policy) };
-  // The names this run may serve as declared: its runner's, and what the run
-  // registers as it composes (`declareNames`). Names only.
-  const names = new RunNames(args.names);
-  const serving = servingOf(decided, policy, names);
+  const serving = servingOf(decided, policy);
   // Relayed writes waiting for their recorder, oldest first, per stage and key.
   // Keyed by the stage's runtimeStageId (unique per execution), so an entry no
   // recorder claims (a deferred tier that dropped the write) can never be
@@ -208,9 +202,6 @@ export function createRunRedaction(args: {
     },
     keepsOut(name) {
       return policy !== undefined && decided.rule.isKeyRedacted(name);
-    },
-    declare(space, list) {
-      names.declare(space, list);
     },
     noteWrite(runtimeStageId, key, value) {
       // No policy: the scope channel serves the write as written — nothing to relay.
@@ -295,9 +286,8 @@ export function retiredRule(
 function servingOf(
   decided: { readonly rule: RedactionRule },
   policy: RedactionPolicy | undefined,
-  names: RunNames,
 ): EventServing {
-  return eventServing(() => decided.rule, (policy?.emitPatterns?.length ?? 0) > 0, names);
+  return eventServing(() => decided.rule, namesAnything(policy));
 }
 
 /**
@@ -308,12 +298,9 @@ function servingOf(
  * built from the policy alone: no stage has run yet, so the run has marked
  * nothing.
  */
-export function servingAhead(
-  policy: RedactionPolicy | undefined,
-  names?: NameDeclarations,
-): EventServing {
+export function servingAhead(policy: RedactionPolicy | undefined): EventServing {
   const rule = new RedactionRule(policy);
-  return eventServing(() => rule, (policy?.emitPatterns?.length ?? 0) > 0, new RunNames(names));
+  return eventServing(() => rule, namesAnything(policy));
 }
 
 /**
@@ -329,7 +316,7 @@ export function servingAhead(
  */
 export interface OutsideRun {
   /** The runner's declaration this run serves under. */
-  readonly declaration: Coverage;
+  readonly declaration: RedactionCoverage;
   /** @internal */
   readonly scopeRun: ScopeRun;
 }
@@ -339,7 +326,7 @@ export interface OutsideRun {
  * `covered` serves under its policy, `declared-none` as emitted (positively
  * none), `unknown` refuses every payload — the placeholder, fail closed.
  */
-export function outsideRunFor(declaration: Coverage, declared?: NameDeclarations): OutsideRun {
+export function outsideRunFor(declaration: RedactionCoverage): OutsideRun {
   if (declaration.state === 'unknown') {
     return Object.freeze({
       declaration,
@@ -349,31 +336,39 @@ export function outsideRunFor(declaration: Coverage, declared?: NameDeclarations
         real: () => undefined,
         noteWrite: () => undefined,
         keepsOut: () => true,
-        declare: () => undefined,
       },
     });
   }
   const policy = policyOfCoverage(declaration);
   const rule = new RedactionRule(policy);
-  const names = new RunNames(declared);
   return Object.freeze({
     declaration,
     scopeRun: {
       coverage: declaration,
-      serving: eventServing(() => rule, (policy?.emitPatterns?.length ?? 0) > 0, names),
+      serving: eventServing(() => rule, namesAnything(policy)),
       real: () => undefined,
       noteWrite: () => undefined,
       keepsOut: (name: string) => rule.isKeyRedacted(name),
-      declare: (space: NameSpace, list: Iterable<string>) => names.declare(space, list),
     },
   });
 }
 
-/** The serving of a run whose state is unknown: every payload is the placeholder. */
+/**
+ * The serving of a run whose state is unknown: every payload is the
+ * placeholder, and so is the identity on its meta (who asked); the address is
+ * kept.
+ */
 const REFUSING_SERVING: EventServing = Object.freeze({
   active: () => true,
   payload: () => SERVED_PLACEHOLDER,
-  meta: <M>(meta: M) => meta,
+  meta: <M extends EventMeta>(meta: M): M =>
+    meta.principal === undefined && meta.tenant === undefined
+      ? meta
+      : {
+          ...meta,
+          ...(meta.principal !== undefined && { principal: SERVED_PLACEHOLDER }),
+          ...(meta.tenant !== undefined && { tenant: SERVED_PLACEHOLDER }),
+        },
 }) as EventServing;
 
 /**
@@ -433,17 +428,6 @@ export function setEventSource(scope: SetValueScope, key: string, value: unknown
 }
 
 /**
- * THE way a stage tells the run which names it declared as it composed — the
- * tools a provider delivered this iteration and their argument names
- * (`slots/buildToolsSlot.ts`) — so a `declaredName` field holding one is
- * served as structure. A scope no run made declares nothing (its events are
- * refused anyway). Names only, never a value.
- */
-export function declareNames(scope: object, space: NameSpace, names: Iterable<string>): void {
-  scopeRuns.get(scope)?.run.declare(space, names);
-}
-
-/**
  * Whether the run `scope` belongs to keeps `name` out of its records — asked
  * of the run's own rule. For text the library writes OUTSIDE any record from
  * a value the run keeps out (a console warning that would quote the model's
@@ -458,7 +442,7 @@ export function runKeepsOut(scope: object, name: string): boolean {
  * What the run `scope` belongs to is covered by (`coverage.ts`) — `unknown`
  * for a scope no run of this library made.
  */
-export function coverageInForce(scope: object): Coverage {
+export function coverageInForce(scope: object): RedactionCoverage {
   return scopeRuns.get(scope)?.run.coverage ?? UNKNOWN_COVERAGE;
 }
 

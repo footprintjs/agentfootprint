@@ -63,6 +63,7 @@ import type { DispositionLedger } from '../../../integrity/disposition/ledger.js
 import type { Disposition } from '../../../integrity/disposition/types.js';
 import type { InjectionRecord } from '../../../recorders/core/types.js';
 import { runKeepsOut } from '../../../redaction/runRedaction.js';
+import type { FixedRouteRationale } from '../../../events/payloads.js';
 
 export type RouteBranch =
   | 'tool-calls'
@@ -261,6 +262,12 @@ export function declaredDefaultsFrom(
   };
 }
 
+/** The fixed `route_decided` rationales — typed, so a redacted record keeps
+ *  them as the library's own words (`events/payloads.ts` · `FixedRouteRationale`). */
+const NO_TOOL_CALLS: FixedRouteRationale = 'LLM produced no tool calls — final answer';
+const FORCED_BY_ITERATIONS: FixedRouteRationale = 'maxIterations reached — forcing final';
+const FORCED_BY_COST: FixedRouteRationale = 'costBudget reached (onExceed: halt) — forcing final';
+
 /** The base decision, with the sentence that explains it. Split out so the
  *  enforcement-enabled path can decide, then judge, then announce ONCE — an
  *  agent whose answer is about to be re-asked should not have a route event
@@ -314,10 +321,10 @@ function decideBranch(scope: TypedScope<AgentState>): {
       chosen === 'tool-calls'
         ? `LLM requested ${toolCalls.length} tool call(s)`
         : outOfIterations
-        ? 'maxIterations reached — forcing final'
+        ? FORCED_BY_ITERATIONS
         : costHalt
-        ? 'costBudget reached (onExceed: halt) — forcing final'
-        : 'LLM produced no tool calls — final answer',
+        ? FORCED_BY_COST
+        : NO_TOOL_CALLS,
     ...(earlyStop !== undefined && { earlyStop }),
   };
 }

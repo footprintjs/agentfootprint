@@ -17,12 +17,14 @@
  *        limit — the answer as the chart's bare-string return, `run.exit`'s
  *        boundary payload — is removed first (`withoutAnswerBoundary`).
  *
- *   P2 — BY NAME, AT ANY DEPTH. With ONLY random field names selected (no
- *        conversation keys), a tool call's structured payloads — the
- *        `stream.tool_start` arguments and the `stream.tool_end` result, records
- *        handed out whole — never carry a leaf whose path a selected key names.
- *        (The same values inside the conversation TEXT are free text with no
- *        name; P1 is what keeps those out.)
+ *   P2 — ANY POLICY MAKES EVENTS CONSERVATIVE. With ONLY random field names
+ *        selected (no conversation keys), a tool call's structured payloads —
+ *        the `stream.tool_start` arguments and the `stream.tool_end` result,
+ *        records handed out whole — carry NO leaf: a leaf whose path a
+ *        selected key names is kept out by name, every other by its kind (the
+ *        value-kind rule, `src/redaction/served.ts`); and no event carries
+ *        one. Only the library's words stay: the tool's name and the call's
+ *        id are the placeholder too.
  *
  * Reproduce a failure with the seed printed in the test name.
  */
@@ -92,9 +94,6 @@ function generatePolicyNames(next: () => number): { keys: string[]; patterns: Re
   if (keys.length === 0 && patterns.length === 0) keys.push(FIELD_NAMES[0]);
   return { keys, patterns };
 }
-
-const selects = (names: { keys: string[]; patterns: RegExp[] }, key: string): boolean =>
-  names.keys.includes(key) || names.patterns.some((p) => p.test(key));
 
 interface CaseRun {
   readonly events: AgentfootprintEvent[];
@@ -166,7 +165,7 @@ describe('P1 — content-free: no secret in any artifact, for random policies an
   }
 });
 
-describe('P2 — by name, at any depth: a tool call’s structured payloads', () => {
+describe('P2 — any policy: a tool call’s structured payloads keep no leaf, and only library words', () => {
   for (const seed of SEEDS_P2) {
     it(`seed ${seed}`, async () => {
       const next = rng(seed);
@@ -183,15 +182,18 @@ describe('P2 — by name, at any depth: a tool call’s structured payloads', ()
       expect(end).toBeDefined();
       const startArgs = JSON.stringify((start?.payload as { args?: unknown }).args ?? null);
       const endResult = JSON.stringify((end?.payload as { result?: unknown }).result ?? null);
-      // A leaf is SELECTED when any key on its path is — footprintjs masks a
-      // selected key whole, everything under it included.
-      const selectedArgs = args.leaves.filter((l) => l.path.some((k) => selects(names, k)));
-      const clearArgs = args.leaves.filter((l) => !l.path.some((k) => selects(names, k)));
-      const selectedResult = result.leaves.filter((l) => l.path.some((k) => selects(names, k)));
-      for (const leaf of selectedArgs) expect(startArgs).not.toContain(leaf.secret);
-      for (const leaf of selectedResult) expect(endResult).not.toContain(leaf.secret);
-      // Over-masking is not the claim: a leaf no selected key names is served.
-      for (const leaf of clearArgs) expect(startArgs).toContain(leaf.secret);
+      // A leaf a selected key names is kept out by name (footprintjs masks a
+      // selected key whole); every other leaf is a free string, kept out by
+      // its kind. No leaf of either payload is served.
+      const leaves = [...args.leaves, ...result.leaves].map((l) => l.secret);
+      expect(leaves.filter((secret) => startArgs.includes(secret))).toEqual([]);
+      expect(leaves.filter((secret) => endResult.includes(secret))).toEqual([]);
+      expect(leaksIn(run.events, leaves)).toEqual([]);
+      // Some leaves ARE selected by name in most cases — the policy is real.
+      expect(names.keys.length + names.patterns.length).toBeGreaterThan(0);
+      // Not a library word: the tool's name and the call's id are kept out too.
+      expect((start?.payload as { toolName?: unknown }).toolName).toBe('[REDACTED]');
+      expect((start?.payload as { toolCallId?: unknown }).toolCallId).toBe('[REDACTED]');
     });
   }
 });

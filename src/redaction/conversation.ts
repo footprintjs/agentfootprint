@@ -28,22 +28,21 @@
  *   - error text written by code (`error`, `errorMessage`, `lastError`): a
  *     message a tool or provider throws can quote what it failed on, and
  *     `error` also names a flag the record's readers count on
- *     (`stream.tool_end`'s `error: true`). On an EVENT it is kept out anyway
- *     under this vocabulary: every field an event type does not declare
- *     structure is (default-deny, `events/content.ts` · `EVENT_CONTENT`). In
- *     STATE the name is yours to add. A parser message that quotes the
- *     model's draft is covered under any policy: it is served as the
- *     placeholder whenever the draft (`rawOutput`) is kept out (its event's
- *     `words` row);
- *   - structure: ids, counts, kinds, tool names, timings and verdict words
- *     stay readable — the record still shows WHAT happened, without the words;
+ *     (`stream.tool_end`'s `error: true`). On an EVENT it is kept out anyway,
+ *     under ANY policy: the value-kind rule serves every string that is not a
+ *     library word as the placeholder (`knownStrings.ts`) — a parser message
+ *     that quotes the model's draft included. In STATE the name is yours to
+ *     add;
+ *   - structure: counts, kinds, flags, timings and verdict words stay
+ *     readable — the record still shows WHAT happened, without the words;
  *   - content the library quotes under names of its own (a validation issue's
  *     quoted argument, a check-in's evidence pack, a matcher's witness, a
  *     route guard's judged result, the words of a tool's coverage declaration
  *     and a described result's data on their events, …) is not named here:
  *     generic names (`value`, `text`, `note`, `checked`) would hide structure
- *     across every event. It is kept out with the value it came from (the
- *     event type's `words` rows, `events/content.ts` · `EVENT_CONTENT`).
+ *     across every event. On events it is kept out under ANY policy by the
+ *     value-kind rule (`knownStrings.ts`): no string survives that is not a
+ *     library word.
  *
  * Names it shares with structure, kept out with it: `permission.check`'s
  * `result` (its verdict word — a refused call still reads as refused, from
@@ -269,11 +268,10 @@ export function carriedRunPolicy(policy: RedactionPolicy): CarriedRedactionPolic
 /**
  * A carried policy as a resumed leg is covered by it: joined with the CURRENT
  * vocabulary when its record names another version (`version`, read off the
- * checkpoint). An older list lacks the names an upgrade added, and a policy
- * that lacks one no longer reads as keeping the conversation out — so the
- * leg's events would leave default-deny. Joining the current list keeps the
- * leg at least as covered as the run that paused. Same version, or none: the
- * policy as carried.
+ * checkpoint). An older list lacks the names an upgrade added — names that
+ * keep the conversation out of the leg's STATE, its snapshot and its commit
+ * log. Joining the current list keeps the leg at least as covered as the run
+ * that paused. Same version, or none: the policy as carried.
  *
  * @internal
  */
@@ -316,6 +314,12 @@ export function conversationRedaction(extra?: RedactionPolicy): RedactionPolicy 
   return unionRedactionPolicies(CONVERSATION, extra) as RedactionPolicy;
 }
 
+/** Every name the vocabulary keeps out — each pattern by a key its prefix names (`<prefix><id>`). */
+const CONVERSATION_PROBES: readonly string[] = Object.freeze([
+  ...(CONVERSATION.keys ?? []),
+  ...PATTERN_PREFIXES.map((p) => `${p}x`),
+]);
+
 /**
  * Whether `policy` keeps an agent's WHOLE conversation out of its records —
  * every name the vocabulary lists selected by its rule (a pattern of the
@@ -332,22 +336,6 @@ export function conversationRedaction(extra?: RedactionPolicy): RedactionPolicy 
  */
 export function keepsConversationOut(policy: RedactionPolicy | undefined): boolean {
   if (policy === undefined) return false;
-  return ruleKeepsConversationOut(new RedactionRule(policy));
-}
-
-/** Every name the vocabulary keeps out — each pattern by a key its prefix names (`<prefix><id>`). */
-const CONVERSATION_PROBES: readonly string[] = Object.freeze([
-  ...(CONVERSATION.keys ?? []),
-  ...PATTERN_PREFIXES.map((p) => `${p}x`),
-]);
-
-/**
- * {@link keepsConversationOut}, asked of a run's own RULE — its policy and the
- * names it marked — rather than a policy: the served path's question before
- * it serves a field nobody classified (`served.ts`, default-deny).
- *
- * @internal
- */
-export function ruleKeepsConversationOut(rule: RedactionRule): boolean {
+  const rule = new RedactionRule(policy);
   return CONVERSATION_PROBES.every((name) => rule.isKeyRedacted(name));
 }

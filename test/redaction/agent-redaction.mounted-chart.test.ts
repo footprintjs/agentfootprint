@@ -89,10 +89,10 @@ describe('a runner’s chart mounted into the app’s own executor', () => {
   it('its typed events are served under the policy the agent declares', async () => {
     const { typed } = await runMounted({ keys: ['ssn'] });
     const control = await runMounted(undefined);
-    // A by-name policy selects the FIELD wherever an event carries it…
+    // Without the agent's policy the field travels; under it, no event carries
+    // it — by name where it rides as `ssn`, by kind everywhere else…
     expect(fieldsNamedSsn(control.typed)).toContain(SSN);
-    expect(fieldsNamedSsn(typed).length).toBeGreaterThan(0);
-    expect(fieldsNamedSsn(typed).every((v) => v === '[REDACTED]')).toBe(true);
+    expect(locationsOf(typed, SSN)).toEqual([]);
     // …and the same events go out, with or without it.
     expect(typed.map((e) => e.name)).toEqual(control.typed.map((e) => e.name));
   });

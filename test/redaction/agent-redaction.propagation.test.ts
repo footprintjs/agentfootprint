@@ -111,8 +111,12 @@ describe('composed: a member’s policy covers the composition’s one run', () 
     const { events } = await servedBy(composed);
     const toolStart = events.find((e) => e.type === 'agentfootprint.stream.tool_start');
     expect(toolStart).toBeDefined();
-    expect((toolStart?.payload as { args?: { ssn?: unknown } }).args?.ssn).toBe('[REDACTED]');
+    // The member's policy covers the composition's run: no event carries the
+    // field (by name where it rides as `ssn`, by kind everywhere else).
     expect(leaksIn(events, [SECRET.ssn])).toEqual([]);
+    // CONTROL — the same composition with a member that declares nothing.
+    const plain = await servedBy(Sequence.create().step('a', fixtureAgent()).build());
+    expect(leaksIn(plain.events, [SECRET.ssn]).length).toBeGreaterThan(0);
   });
 
   it('the union only adds: a second member’s plain run is covered too', async () => {

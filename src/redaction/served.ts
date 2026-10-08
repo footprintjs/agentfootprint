@@ -1,54 +1,52 @@
 /**
  * served — what an event of a run is SERVED as: its payload and the identity
- * on its meta, through the run's redaction rule.
+ * on its meta, through the run's redaction rule. THE funnel: every typed event
+ * leaves a stage through it (`runRedaction.ts` · `emitServed`), and every fact
+ * the dispatcher hands a listener is served by it (`EventDispatcher`).
  *
- * Pattern: one projection, decided once per event, by footprintjs's rule,
- *          over the event registry's own classification
- *          (`events/content.ts` · `EVENT_CONTENT`).
- * Role:    the Lens half of `src/redaction/`. It decides nothing about what is
- *          secret — `RedactionRule` (footprintjs/advanced) does, the ONE owner
- *          of every verdict — and it keeps nothing: no list of runs, listeners
- *          or values, and no cache outside the one run's serving. It says which
- *          of the rule's own decisions applies to a typed event:
+ * Pattern: one mapping step, decided once per event.
+ * Role:    the Lens half of `src/redaction/`. It decides nothing about what a
+ *          policy selects — footprintjs's `RedactionRule` (footprintjs/advanced)
+ *          does, the ONE owner of every verdict by name — and it keeps
+ *          nothing: no list of runs, listeners or values, and no cache outside
+ *          the one run's serving. In order:
  *
- *   - THE EVENT'S NAME — `retainEmit`: an event whose name `emitPatterns`
- *     selects is served with the placeholder for a payload, exactly as
- *     footprintjs serves a `$emit` payload it selects by name.
- *   - THE PAYLOAD — `retainBoundary`: a typed event's payload is a record
- *     handed out whole — a selected key at ANY depth, and a declared field
- *     under a key of its name.
- *   - THE WORDS IT QUOTES — the registry's `words` rows: content carried under
- *     a name of its own (a parser's message quotes the model's draft) is
- *     served as the placeholder whenever the rule keeps out any part of a
- *     value it came from — the rule's taint law, applied to the library's
- *     own copies.
- *   - DEFAULT-DENY — under a rule that keeps the conversation out
- *     (`conversationRedaction()` or more), every top-level field the registry
- *     does not declare STRUCTURE is served as the placeholder: a field nobody
- *     classified — on an event of the library's or the app's own — can never
- *     carry the conversation into a record.
- *   - THE META'S IDENTITY — `principal` and `tenant` are who asked, selected
- *     by their names like any other value; every other meta field is the
- *     record's ADDRESS and is never selected.
+ *   1. THE EVENT'S NAME — `retainEmit`: an event whose name `emitPatterns`
+ *      selects is served with the placeholder for a payload, exactly as
+ *      footprintjs serves a `$emit` payload it selects by name.
+ *   2. THE PAYLOAD, BY NAME — `retainBoundary`: a typed event's payload is a
+ *      record handed out whole — a selected key at ANY depth, a declared field
+ *      under a key of its name.
+ *   3. THE VALUE-KIND RULE — under ANY policy (one that selects at least one
+ *      name), events are DEFAULT-DENY by value kind: every value is checked by
+ *      its kind, wherever it sits (`knownStrings.ts` · `keepKnownValues`).
+ *      Numbers, booleans and null pass; a string passes only when it is one
+ *      of the library's own words (a closed set generated from its types);
+ *      everything else — ids and names included — is the placeholder. So a copy the
+ *      library derives from a selected value under a name of its own (a
+ *      validation issue's quote, a check-in's rendered arguments, a parser's
+ *      message about the draft, a coverage declaration's words) can never
+ *      leave raw — no field is trusted by its position, and there is no list
+ *      of fields, or of derived copies, to keep complete. A policy makes
+ *      EVENTS conservative; state, the snapshot and the commit log keep
+ *      footprintjs's rule, by name. For full observability, run with no policy.
+ *   4. THE META'S IDENTITY — `principal` and `tenant` (who asked) are served
+ *      by their names, then by the value-kind rule, each in its own slot: the
+ *      placeholder under any policy. Every other meta field is the record's
+ *      ADDRESS (run, stage, session, trace ids) and is never served
+ *      differently.
  *
- * A payload whose scrub cannot run (an uncloneable value under a selected
- * field, a getter that throws) is served as the placeholder whole, never raw.
+ * A payload whose serving cannot run (a getter that throws) is served as the
+ * placeholder whole, never raw.
  */
 
 import type { RedactionRule } from 'footprintjs/advanced';
 
-import {
-  EVENT_CONTENT,
-  type ClassifiedContent,
-  type EventWords,
-  type StructureKind,
-} from '../events/content.js';
 import type { EventMeta } from '../events/types.js';
-import { ruleKeepsConversationOut } from './conversation.js';
-import { NO_DECLARED_NAMES, type DeclaredNames } from './names.js';
+import { keepKnownValues, servedString } from './knownStrings.js';
+import { SERVED_PLACEHOLDER } from './placeholder.js';
 
-/** The placeholder footprintjs serves a record handed out whole with. */
-export const SERVED_PLACEHOLDER = '[REDACTED]';
+export { SERVED_PLACEHOLDER };
 
 /** What one run's events are served as. */
 export interface EventServing {
@@ -66,34 +64,27 @@ export interface EventServing {
  * leg (a resume continues the paused run's marks on a new rule).
  *
  * @param ruleOf      the rule in force for the current event
- * @param hasEmitNames whether the policy selects any event by NAME
- *                    (`emitPatterns`) — a policy with only those keeps the
- *                    state rule inert, and inertness alone would skip them
- * @param names       the names the run's runner declared (`names.ts`) — what a
- *                    `declaredName` field may hold; none given, none declared
+ * @param underPolicy whether the run is covered by a policy that names
+ *                    anything (`policy.ts` · `namesAnything`) — one of event
+ *                    names or diagnostic selectors only keeps footprintjs's
+ *                    rule inert, and inertness alone would serve its events raw
  */
-export function eventServing(
-  ruleOf: () => RedactionRule,
-  hasEmitNames: boolean,
-  names: DeclaredNames = NO_DECLARED_NAMES,
-): EventServing {
-  const active = (): boolean => hasEmitNames || !ruleOf().isInert();
-  // Whether the run's rule keeps the whole conversation out — remembered for
-  // the rule that said so (a rule only ever adds names), in THIS serving's own
-  // closure: nothing about one run outlives it or reaches another.
-  let coveringRule: RedactionRule | undefined;
-  const conversationOut = (rule: RedactionRule): boolean => {
-    if (coveringRule === rule) return true;
-    if (!ruleKeepsConversationOut(rule)) return false;
-    coveringRule = rule;
-    return true;
-  };
+export function eventServing(ruleOf: () => RedactionRule, underPolicy: boolean): EventServing {
+  // A run with no policy is active only once it marks a key (a per-call
+  // `$setValue(key, value, true)`): its rule is then no longer inert.
+  const active = (): boolean => underPolicy || !ruleOf().isInert();
   return {
     active,
     payload(type, payload) {
       if (!active()) return payload;
       const rule = ruleOf();
-      return servedPayload(rule, type, payload, () => conversationOut(rule), names);
+      try {
+        const byEvent = rule.retainEmit(type, payload);
+        if (byEvent !== payload) return byEvent;
+        return keepKnownValues(rule.retainBoundary(payload));
+      } catch {
+        return SERVED_PLACEHOLDER;
+      }
     },
     meta(meta) {
       if (meta.principal === undefined && meta.tenant === undefined) return meta;
@@ -103,323 +94,36 @@ export function eventServing(
   };
 }
 
-/** An event type the registry does not know (an app's own): every field is content. */
-const UNCLASSIFIED: ClassifiedContent = Object.freeze({ structure: Object.freeze({}) });
-
-/** The registry's classification of `type` — never a prototype property a type string happens to name. */
-function contentOf(type: string): ClassifiedContent {
-  return Object.prototype.hasOwnProperty.call(EVENT_CONTENT, type)
-    ? (EVENT_CONTENT as unknown as Readonly<Record<string, ClassifiedContent>>)[type] ??
-        UNCLASSIFIED
-    : UNCLASSIFIED;
-}
+/** The two identity fields of a meta — the meta's own names, never data. */
+const IDENTITY = ['principal', 'tenant'] as const;
 
 /**
- * The registry's `words` rows as rows — for the test that pins them against
- * the event registry and the conversation vocabulary.
- *
- * @internal
+ * The meta with its identity served — by name, then by kind; the address
+ * untouched. Each field is served IN ITS OWN SLOT: `principal` and `tenant`
+ * are the meta's names, not data, so only their values are checked — a
+ * served copy is never spread over the meta (a key the value rule collapsed
+ * would leave the raw value beside it).
  */
-export function derivedRows(): readonly {
-  readonly type: string;
-  readonly paths: readonly string[];
-  readonly from: readonly string[];
-  readonly namedBy?: string;
-}[] {
-  return Object.entries(
-    EVENT_CONTENT as unknown as Readonly<Record<string, ClassifiedContent>>,
-  ).flatMap(([type, content]) => (content.words ?? []).map((entry) => ({ type, ...entry })));
-}
-
-/** The served form of one payload — see the file header for the decisions. */
-function servedPayload(
-  rule: RedactionRule,
-  type: string,
-  payload: unknown,
-  conversationOut: () => boolean,
-  names: DeclaredNames,
-): unknown {
-  try {
-    const named = rule.retainEmit(type, payload);
-    if (named !== payload) return named;
-    return withContentKeptOut(
-      rule,
-      contentOf(type),
-      rule.retainBoundary(payload),
-      payload,
-      conversationOut,
-      names,
-    );
-  } catch {
-    return SERVED_PLACEHOLDER;
-  }
-}
-
-/**
- * `served` with the content it carries kept out: the words rows by the values
- * they come from, and — under a rule that keeps the conversation out — every
- * top-level field not declared structure. `original` is the payload before
- * the rule served it: what the rule changed inside a `namesAt` object is read
- * off the two.
- */
-function withContentKeptOut(
-  rule: RedactionRule,
-  content: ClassifiedContent,
-  served: unknown,
-  original: unknown,
-  conversationOut: () => boolean,
-  names: DeclaredNames,
-): unknown {
-  const decided = (content.words ?? []).map((entry) => ({
-    entry,
-    whole:
-      entry.from.some((name) => sourceKeptOut(rule, name)) ||
-      (entry.namesAt !== undefined && renderedFromKeptOut(served, original, entry.namesAt)),
-  }));
-  const conversation = conversationOut();
-  if (!isPlainRecord(served)) {
-    // A payload whose fields cannot be read: whole, when anything in it is kept out.
-    return (conversation || decided.some((d) => d.whole)) && served !== SERVED_PLACEHOLDER
-      ? SERVED_PLACEHOLDER
-      : served;
-  }
-  let out: unknown = served;
-  for (const { entry, whole } of decided) {
-    if (!whole && entry.namedBy === undefined) continue;
-    out = maskWords(out, entry, whole, rule);
-  }
-  return conversation ? servedByKinds(out, content.structure, names) : out;
-}
-
-/** `node` with one words row's paths served as the placeholder where they are kept out. */
-function maskWords(node: unknown, entry: EventWords, whole: boolean, rule: RedactionRule): unknown {
-  const keptOut = (owner: Readonly<Record<string, unknown>>): boolean =>
-    whole || (entry.namedBy !== undefined && argumentKeptOut(rule, owner[entry.namedBy]));
-  let out = node;
-  for (const path of entry.paths) out = maskAt(out, path.split('.'), keptOut);
-  return out;
-}
-
-/**
- * DEFAULT-DENY, BY KIND: `node` with every field the classification does not
- * declare served as the placeholder, and every declared field checked against
- * its kind — at every depth — copied on write, the SAME object when nothing
- * changed. A value that does not fit its kind is served as the placeholder: a
- * string in a count, a name nothing declared, free text where an id belongs.
- */
-function servedByKinds(
-  node: unknown,
-  structure: Readonly<Record<string, StructureKind>>,
-  names: DeclaredNames,
-): unknown {
-  return fitRecord(node, structure, names);
-}
-
-/** `value` as kind `kind` serves it — itself when it fits, the placeholder (or a copy with parts masked) when not. */
-function fitKind(value: unknown, kind: StructureKind, names: DeclaredNames): unknown {
-  if (value === undefined || value === null || value === SERVED_PLACEHOLDER) return value;
-  switch (kind.kind) {
-    case 'count':
-      return typeof value === 'number' && Number.isFinite(value) ? value : SERVED_PLACEHOLDER;
-    case 'flag':
-      return typeof value === 'boolean' ? value : SERVED_PLACEHOLDER;
-    case 'enum':
-      return typeof value === 'string' && Object.prototype.hasOwnProperty.call(kind.of, value)
-        ? value
-        : SERVED_PLACEHOLDER;
-    case 'mintedId':
-      return typeof value === 'string' && MINTED_ID.test(value) ? value : SERVED_PLACEHOLDER;
-    case 'declaredName':
-      return typeof value === 'string' && names.has(kind.of, value) ? value : SERVED_PLACEHOLDER;
-    case 'list': {
-      if (!Array.isArray(value)) return SERVED_PLACEHOLDER;
-      const items = value.map((item) => fitKind(item, kind.of, names));
-      return items.some((item, i) => item !== value[i]) ? items : value;
-    }
-    case 'record':
-      return fitRecord(value, kind.fields as Readonly<Record<string, StructureKind>>, names);
-    case 'map': {
-      if (!isPlainRecord(value)) return SERVED_PLACEHOLDER;
-      // A key is a name too: one that does not fit makes the whole map content.
-      const keys = Object.keys(value);
-      if (keys.some((key) => fitKind(key, kind.key, names) !== key)) return SERVED_PLACEHOLDER;
-      let copy: Record<string, unknown> | undefined;
-      for (const key of keys) {
-        const fitted = fitKind(value[key], kind.value, names);
-        if (fitted === value[key]) continue;
-        copy ??= { ...value };
-        copy[key] = fitted;
-      }
-      return copy ?? value;
-    }
-    case 'anyOf':
-      return kind.of.some((alternative) => fitKind(value, alternative, names) === value)
-        ? value
-        : SERVED_PLACEHOLDER;
-  }
-}
-
-/** A record checked field by field against `fields`: every other field is content. */
-function fitRecord(
-  value: unknown,
-  fields: Readonly<Record<string, StructureKind>>,
-  names: DeclaredNames,
-): unknown {
-  if (!isPlainRecord(value)) return SERVED_PLACEHOLDER;
-  let copy: Record<string, unknown> | undefined;
-  for (const key of Object.keys(value)) {
-    const kind = Object.prototype.hasOwnProperty.call(fields, key) ? fields[key] : undefined;
-    const fitted = kind === undefined ? undeclared(value[key]) : fitKind(value[key], kind, names);
-    if (fitted === value[key]) continue;
-    copy ??= { ...value };
-    copy[key] = fitted;
-  }
-  return copy ?? value;
-}
-
-/** A field nobody declared: the placeholder, unless absent or already it. */
-const undeclared = (value: unknown): unknown =>
-  value === undefined || value === SERVED_PLACEHOLDER ? value : SERVED_PLACEHOLDER;
-
-/**
- * The grammar of a minted id — a run, call, stage or artifact id, a hash, a
- * provider's ref or stop token, a library timestamp: one token of id
- * characters. Text with a space in it is never an id.
- */
-const MINTED_ID = /^[A-Za-z0-9_.:#~/@+=-]{1,256}$/;
-
-/**
- * Whether the rule keeps out ANY part of the value named `name` — the whole of
- * it (a key, a pattern on its name, a mark) or fields inside it (`fields`, or
- * fields a subflow mapper handed it): content the library derives from that
- * value may quote any part of it, so it is kept out whenever part of the source
- * is. Asked of the rule's own verdict, never decided here.
- */
-function sourceKeptOut(rule: RedactionRule, name: string): boolean {
-  return rule.verdict([name]).kind !== 'clear';
-}
-
-/**
- * Whether the rule kept out anything inside the object at `path` that a value
- * was rendered from — read off the two payloads (the rule hands an untouched
- * object back as itself). A path that cannot be walked in either is kept out:
- * what it rendered cannot be vouched for.
- */
-function renderedFromKeptOut(served: unknown, original: unknown, path: string): boolean {
-  const before = valueAt(original, path);
-  const after = valueAt(served, path);
-  if (before === UNWALKABLE || after === UNWALKABLE) return true;
-  // An object the rule cannot see into (a Map, a class instance): unvouched.
-  if (before !== null && typeof before === 'object' && !Array.isArray(before)) {
-    if (!isPlainRecord(before)) return true;
-  }
-  return before !== after;
-}
-
-/** {@link valueAt}'s answer for a path that runs into something it cannot walk. */
-const UNWALKABLE: unique symbol = Symbol('unwalkable');
-
-/**
- * The value at the dotted `path` in `node` — `undefined` off the end of plain
- * data, {@link UNWALKABLE} where it runs into a value that is not a plain record
- * (a list, a Map, a class instance).
- */
-function valueAt(node: unknown, path: string): unknown {
-  let at: unknown = node;
-  for (const segment of path.split('.')) {
-    if (at === undefined || at === null) return undefined;
-    if (!isPlainRecord(at)) return UNWALKABLE;
-    at = at[segment];
-  }
-  return at;
-}
-
-/**
- * Whether the rule keeps out the value at the argument path `named` names
- * (`'customer.ssn'`, `'items[0].pin'`) — asked of the rule itself, over the
- * shape a call's arguments travel in (`{ args: … }`, as on `tool_start`), so a
- * key, a pattern, a dotted-path pattern and a `fields` selector all count. A
- * path the rule cannot be asked about is kept out (fail closed).
- */
-function argumentKeptOut(rule: RedactionRule, named: unknown): boolean {
-  // No path to ask about (absent, or not text): the value quotes an argument
-  // nobody can name, so it is kept out — fail closed.
-  if (typeof named !== 'string') return true;
-  const segments = named.split(/[.[\]]/).filter((name) => name.length > 0);
-  // The arguments' root: the value IS the arguments, kept out with them (`whole`).
-  if (segments.length === 0) return false;
-  const leaf: unknown = 'value';
-  const nested = segments.reduceRight<unknown>((inner, name) => ({ [name]: inner }), leaf);
-  const probe = { args: nested };
-  try {
-    return rule.retainBoundary(probe) !== probe;
-  } catch {
-    return true;
-  }
-}
-
-/**
- * `node` with the value at `segments` served as the placeholder when
- * `keptOut(owner)` says so — copied on write along the path, the SAME object
- * when nothing changed. `name[]` walks each element of a list.
- */
-function maskAt(
-  node: unknown,
-  segments: readonly string[],
-  keptOut: (owner: Readonly<Record<string, unknown>>) => boolean,
-): unknown {
-  if (!isPlainRecord(node) || segments.length === 0) return node;
-  const [head, ...rest] = segments as [string, ...string[]];
-  const list = head.endsWith('[]');
-  const key = list ? head.slice(0, -2) : head;
-  const child = node[key];
-  if (child === undefined || child === null || child === SERVED_PLACEHOLDER) return node;
-  let next: unknown = child;
-  if (rest.length === 0) {
-    if (keptOut(node)) next = SERVED_PLACEHOLDER;
-  } else if (list ? !Array.isArray(child) : !isPlainRecord(child)) {
-    // A value the path cannot be walked into (a list where a record belongs,
-    // a Map, a class instance): what it holds cannot be vouched for, so it is
-    // served whole as the placeholder when the owner's content is kept out.
-    if (keptOut(node)) next = SERVED_PLACEHOLDER;
-  } else if (list) {
-    const items = (child as readonly unknown[]).map((item) =>
-      isPlainRecord(item) || item === undefined || item === null
-        ? maskAt(item, rest, keptOut)
-        : keptOut(node)
-        ? SERVED_PLACEHOLDER
-        : item,
-    );
-    if (items.some((item, i) => item !== (child as readonly unknown[])[i])) next = items;
-  } else {
-    next = maskAt(child, rest, keptOut);
-  }
-  return next === child ? node : { ...node, [key]: next };
-}
-
-/**
- * Plain data: an object whose prototype is `Object.prototype` or `null` — the
- * only shape the paths walk into. Anything else (a Map, a Set, a class
- * instance, an Error) holds what the paths cannot see.
- */
-const isPlainRecord = (value: unknown): value is Readonly<Record<string, unknown>> => {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
-  const proto = Object.getPrototypeOf(value) as unknown;
-  return proto === Object.prototype || proto === null;
-};
-
-/** The meta with its identity served by name; the address untouched. */
 function servedMeta<M extends EventMeta>(rule: RedactionRule, meta: M): M {
   const identity: { principal?: string; tenant?: string } = {
     ...(meta.principal !== undefined && { principal: meta.principal }),
     ...(meta.tenant !== undefined && { tenant: meta.tenant }),
   };
-  let kept: { principal?: unknown; tenant?: unknown };
+  let named: Record<string, unknown> | undefined;
   try {
-    kept = rule.retainBoundary(identity);
+    named = rule.retainBoundary(identity) as Record<string, unknown>;
   } catch {
-    kept = Object.fromEntries(Object.keys(identity).map((key) => [key, SERVED_PLACEHOLDER]));
+    named = undefined;
   }
-  if (kept === identity) return meta;
-  return { ...meta, ...kept } as M;
+  let served: M | undefined;
+  for (const field of IDENTITY) {
+    const value = identity[field];
+    if (value === undefined) continue;
+    const verdict = named?.[field];
+    const kept = typeof verdict === 'string' ? servedString(verdict) : SERVED_PLACEHOLDER;
+    if (kept === value) continue;
+    served ??= { ...meta };
+    (served as { [K in (typeof IDENTITY)[number]]?: string })[field] = kept;
+  }
+  return served ?? meta;
 }

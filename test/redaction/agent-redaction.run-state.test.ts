@@ -531,10 +531,11 @@ describe('a carried policy records the vocabulary version it was built under —
   it('control: the same older list stamped with the CURRENT version resumes as carried — the version is what decides', async () => {
     const forged = narrowed(await pausedUnder(P), VOCABULARY_VERSION);
     const { rationales, coverage } = await resumedRationales(forged);
-    // Without the dropped name the list no longer keeps the conversation out:
-    // default-deny is off for the leg, and the library's rationale reads as text.
-    expect(rationales.some((r) => typeof r === 'string' && r !== '[REDACTED]')).toBe(true);
+    // The list resumes as it was carried: without the dropped name. Its events
+    // are still served by the value-kind rule — under ANY policy.
+    expect(coverage.state).toBe('covered');
     if (coverage.state === 'covered') expect(coverage.policy.keys).not.toContain('userPrompt');
+    for (const rationale of rationales) expect(rationale).toBe('[REDACTED]');
   });
 
   it('a version that is not text is refused as unreadable', async () => {

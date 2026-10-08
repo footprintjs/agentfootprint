@@ -90,7 +90,6 @@ import {
   messagesFromInjections,
   stripFrameworkFields,
 } from './agent/composeRequest.js';
-import { unionNames, type NameDeclarations } from '../redaction/names.js';
 
 export interface LLMCallOptions {
   readonly provider: LLMProvider;
@@ -289,11 +288,6 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
     // on `getSpec()` work. Subsequent `getSpec()` calls return the
     // cached chart; each `run()` reuses it in a fresh executor.
     this.initChart(() => this.buildChart() as FlowChart);
-  }
-
-  /** The call's own id and name, its provider and its model. */
-  protected override redactionNames(): NameDeclarations {
-    return unionNames(super.redactionNames(), { config: [this.provider.name, this.model] });
   }
 
   static create(opts: LLMCallOptions): LLMCallBuilder {

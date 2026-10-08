@@ -96,9 +96,10 @@ describe('agent redaction — events', () => {
   it('agent.on("*") — every typed event is served', () => {
     expect(run.events.length).toBeGreaterThan(5);
     expectServed((r) => r.events);
-    // Served, not dropped: the tool call is still on the record, its argument masked.
+    // Served, not dropped: the tool call is still on the record, its argument
+    // masked — and its name too, which is no library word.
     const toolStart = run.events.find((e) => e.type === 'agentfootprint.stream.tool_start');
-    expect(toolStart?.payload).toMatchObject({ toolName: 'lookup', args: '[REDACTED]' });
+    expect(toolStart?.payload).toMatchObject({ toolName: '[REDACTED]', args: '[REDACTED]' });
     // The same events, in the same order, with and without the policy.
     expect(run.events.map((e) => e.type)).toEqual(control.events.map((e) => e.type));
   });

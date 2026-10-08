@@ -25,6 +25,7 @@ import type { RedactionPolicy } from 'footprintjs';
 
 import { Agent, absent, defineTool } from '../../src/index.js';
 import { mock } from '../../src/doors/providers.js';
+import { conversationRedaction } from '../../src/doors/security.js';
 import {
   accountForAnswer,
   assessAnswer,
@@ -37,6 +38,7 @@ import { servedViews } from '../../src/index.js';
 import type { AnswerAccount, Sentence } from '../../src/lib/answer-account/types.js';
 import { REDACTION_MARKER_ID, servedUnderPolicy } from '../../src/redaction/marker.js';
 import { assessLive } from '../../src/core/agent/assessment/assess.js';
+import { readEmptiness } from '../../src/core/agent/coverage/emptiness.js';
 import { conversationPolicy, fixtureAgent, MESSAGE } from './fixture.js';
 
 /** Every sentence of an account, as template ids. */
@@ -66,27 +68,36 @@ describe('the answer account over a redacted recording', () => {
     expect(idsOf(account)).toContain('unreachable.empty');
   });
 
-  it('the question, the answer and the result are said to be KEPT OUT', async () => {
-    const { account } = await accountOf(conversationPolicy());
-    const ids = idsOf(account);
-    expect(account.question).toMatchObject({ status: 'not-recorded', missing: 'redacted' });
-    expect(ids).toContain('asked.keptOut');
-    expect(ids).not.toContain('asked.none');
-    // The run answered; its answer is kept out — it did not stop short.
-    expect(account.answer).toMatchObject({ status: 'not-recorded', missing: 'redacted' });
-    expect(ids).not.toContain('summary.unfinished');
-    // The emptiness check cannot read a result the record keeps out — and says why.
-    expect(ids).toContain('unreachable.empty.redacted');
-    expect(ids).not.toContain('unreachable.empty');
-    expect(account.facts.calls[0]).toMatchObject({ outcome: 'ran', emptiness: 'unknown' });
-    expect(account.facts.calls[0]).not.toHaveProperty('view');
-  });
-
-  it('no standing is given over state the record keeps out', async () => {
-    const { account } = await accountOf(conversationPolicy());
-    expect(idsOf(account)).toContain('howSure.standing.keptOut');
-    expect(account.facts.standing).toMatchObject({ status: 'not-recorded', missing: 'redacted' });
-  });
+  // Under a policy the record's events keep the library's words only — a
+  // call's id and its tool's name included — so the account cannot join a
+  // call's events and refuses to tell rather than read a placeholder as a
+  // value: every row is KEPT OUT, never "not recorded", "no tool ran" or an
+  // unfinished run, and nothing of the run is quoted.
+  for (const [label, redact] of [
+    ['the vocabulary', conversationPolicy()],
+    ['a name-only policy', { keys: ['ssn'] }],
+  ] as const) {
+    it(`${label}: the account refuses to tell — every row kept out, nothing false`, async () => {
+      const { account } = await accountOf(redact as RedactionPolicy);
+      const ids = idsOf(account);
+      expect(account.summary.sentence.template.id).toBe('scope.keptOut');
+      expect(account.question).toMatchObject({ status: 'not-recorded', missing: 'redacted' });
+      expect(account.answer).toMatchObject({ status: 'not-recorded', missing: 'redacted' });
+      // No standing is given over a record that keeps the run out.
+      expect(account.facts.standing).toMatchObject({ status: 'not-recorded', missing: 'redacted' });
+      for (const id of [
+        'asked.none',
+        'checked.noCalls',
+        'found.noCalls',
+        'summary.unfinished',
+        'scope.noOwnEvents',
+        'unreachable.empty',
+      ]) {
+        expect(ids).not.toContain(id);
+      }
+      expect(JSON.stringify(account.rows)).not.toContain(MESSAGE);
+    });
+  }
 
   for (const [label, redact] of [
     ['every field name', { patterns: [/./] }],
@@ -139,10 +150,13 @@ describe('the answer account over a redacted recording', () => {
     expect(idsOf(redacted)).toContain('unreachable.inView.redacted');
   });
 
-  it('a declaration whose words are kept out: its items are counted and said kept out, never printed', async () => {
-    // `{ keys: ['args'] }` keeps the arguments out and leaves the result readable,
-    // so the account still judges the calls — and every coverage word on the
-    // declarations' events (composed from the call: its event's words rows, `events/content.ts`) is kept out.
+  it('a declaration whose words are kept out: never printed — the account refuses to tell', async () => {
+    // Under ANY policy every coverage word on the declarations' events — prose
+    // a tool composes from its call — is kept out by the value-kind rule
+    // (`redaction/served.ts`), and so is the call's id, so the account cannot
+    // join the declaration to its call: it refuses to tell, and prints none of
+    // the words. `{ keys: ['args'] }` names nothing the words are filed under:
+    // they go by their kind, not by a name.
     const run = async (redact: RedactionPolicy | undefined) => {
       const agent = Agent.create({
         provider: mock({
@@ -181,19 +195,17 @@ describe('the answer account over a redacted recording', () => {
     expect(lines(control)).toContain('ID-COV-1: the live database');
     expect(idsOf(control)).toContain('signal.existenceNotChecked.full');
 
-    const redacted = await run({ keys: ['args'] });
-    expect(idsOf(redacted)).not.toContain('scope.keptOut');
-    // The calls are still told: the declaration, its items counted, the limit signalled.
-    expect(idsOf(redacted)).toContain('checked.declared');
-    expect(idsOf(redacted)).toContain('items.keptOut');
-    expect(idsOf(redacted)).toContain('signal.existenceNotChecked.keptOut');
-    expect(redacted.facts.calls[0]?.coverage).toMatchObject({ checked: 2, notChecked: 1 });
-    expect(lines(redacted)).toContain('Kept out of this record: 2 items.');
-    // Neither the words nor the placeholder are printed as words.
-    const told = JSON.stringify(redacted.rows) + JSON.stringify(redacted.signals);
-    expect(told).not.toContain('ID-COV-1');
-    expect(told).not.toContain('REDACTED');
-    expect(redacted.facts.calls[0]?.coverage?.lookedFor).toBeUndefined();
+    for (const policy of [{ keys: ['args'] }, conversationRedaction()] as RedactionPolicy[]) {
+      const redacted = await run(policy);
+      expect(redacted.summary.sentence.template.id).toBe('scope.keptOut');
+      // Neither the words nor the placeholder are printed as words.
+      const told = JSON.stringify(redacted.rows) + JSON.stringify(redacted.signals);
+      expect(told).not.toContain('ID-COV-1');
+      expect(told).not.toContain('REDACTED');
+      // Nothing it cannot read is said to be absent.
+      expect(idsOf(redacted)).not.toContain('checked.noCalls');
+      expect(idsOf(redacted)).not.toContain('signal.existenceNotChecked.full');
+    }
   });
 });
 
@@ -319,9 +331,19 @@ describe('kept out is read from a positive sign, never from a value', () => {
 
     const served = await searchRun(rows, { keys: ['customers'] });
     const ids = idsOf(served.account);
-    expect(ids).toContain('unreachable.empty.redacted');
-    expect(served.account.facts.calls[0]).toMatchObject({ emptiness: 'unknown' });
+    // Under a policy the account refuses to tell (the call's id is kept out)…
+    expect(served.account.summary.sentence.template.id).toBe('scope.keptOut');
     expect(ids.some((id) => /noList|no-list/i.test(id))).toBe(false);
+    // …and the rows reader itself reads the folded keys as kept out, never as
+    // "no list" (`coverage/emptiness.ts` · `holdsKeptOutKeys`).
+    const reading = readEmptiness(
+      { total: 3, '[REDACTED]': '[REDACTED]' },
+      { rowsAt: 'customers', keptOut: (v) => v === '[REDACTED]' },
+    );
+    expect(reading).toMatchObject({ emptiness: 'unknown', rowsUnread: 'redacted' });
+    expect(
+      readEmptiness({ total: 3 }, { rowsAt: 'customers', keptOut: () => false }),
+    ).toMatchObject({ rowsUnread: 'no-list' });
   });
 });
 

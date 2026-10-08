@@ -1,29 +1,30 @@
 /**
  * Every input shape a typed event's payload can take, through the one served
- * path (`src/redaction/served.ts` · `eventServing`) — what is kept out, and
- * what is DECLARED as passing through (`src/redaction/README.md`, "Named
- * limits"), so a change in either direction is noticed.
+ * path (`src/redaction/served.ts` · `eventServing`) — what is kept out, so a
+ * change in either direction is noticed.
  *
- * The verdict is always footprintjs's `RedactionRule` (the one owner): this
- * file pins that served.ts hands every shape to it, and where the rule itself
- * cannot see (a Map, a Set, an Error's `cause`, a key it does not enumerate, a
- * `toJSON` that writes a name the object holds privately), the gap is named
- * there — never filled by a second walk here. Under `conversationRedaction()`
- * a tool's result is kept out WHOLE (`result`), so those shapes only bite a
- * policy that names a single field.
+ * Two steps decide it: footprintjs's `RedactionRule` (the one owner of every
+ * verdict BY NAME), then — under ANY policy — the value-kind rule
+ * (`src/redaction/knownStrings.ts` · `keepKnownValues`). The second closes,
+ * for EVENTS, what a rule by name cannot see: another spelling of a name,
+ * a value inside text, a Map, a Set, an Error's `cause`, a key it does not
+ * enumerate, a `toJSON` that writes a name the object holds privately. Those
+ * stay named limits of STATE, the snapshot and the commit log, which keep
+ * footprintjs's rule (`src/redaction/README.md`, "Named limits").
  */
 import { RedactionRule } from 'footprintjs/advanced';
 import type { RedactionPolicy } from 'footprintjs';
 import { describe, expect, it } from 'vitest';
 
 import { eventServing, SERVED_PLACEHOLDER } from '../../src/redaction/served.js';
+import { namesAnything } from '../../src/redaction/policy.js';
 
 const TYPE = 'agentfootprint.stream.tool_end';
 const SECRET = 'SECRET-1234';
 
 function served(policy: RedactionPolicy, payload: unknown): unknown {
   const rule = new RedactionRule(policy);
-  return eventServing(() => rule, (policy.emitPatterns?.length ?? 0) > 0).payload(TYPE, payload);
+  return eventServing(() => rule, namesAnything(policy)).payload(TYPE, payload);
 }
 
 /** Whether the secret survives in the served payload, read the way a consumer would. */
@@ -63,13 +64,15 @@ describe('kept out — every shape the rule walks', () => {
   }
 
   it('a shared reference — at every path that holds it', () => {
-    const shared = { ssn: SECRET };
-    const out = served(ssn, { a: shared, b: shared }) as {
-      a: { ssn: unknown };
-      b: { ssn: unknown };
+    const shared = { ssn: SECRET, attempt: 2 };
+    const out = served(ssn, { result: shared, modelResult: shared }) as {
+      result: Record<string, unknown>;
+      modelResult: Record<string, unknown>;
     };
-    expect(out.a.ssn).toBe(SERVED_PLACEHOLDER);
-    expect(out.b.ssn).toBe(SERVED_PLACEHOLDER);
+    expect(reachable(out)).toBe(false);
+    // Served alike at both paths; the count beside it stays.
+    expect(out.result).toEqual(out.modelResult);
+    expect(out.result.attempt).toBe(2);
   });
 
   it('a cycle — the edge lands on the served copy, never the original', () => {
@@ -111,32 +114,35 @@ describe('kept out — every shape the rule walks', () => {
   });
 });
 
-describe('DECLARED — what passes through, by footprintjs’s law (README, "Named limits")', () => {
+describe('closed for EVENTS by the value-kind rule — the limits of a rule by name', () => {
+  // Under a name-only policy each of these reaches STATE as footprintjs's rule
+  // leaves it (README, "Named limits"); on an event, none survives.
   const ssn = { keys: ['ssn'] };
 
-  it('a name is matched exactly: another case, another script, another name', () => {
-    expect(reachable(served(ssn, { SSN: SECRET }))).toBe(true);
-    expect(reachable(served(ssn, { ｓｓｎ: SECRET }))).toBe(true);
-    expect(reachable(served(ssn, { socialSecurityNumber: SECRET }))).toBe(true);
+  it('another spelling of the name: another case, another script, another name', () => {
+    expect(reachable(served(ssn, { SSN: SECRET }))).toBe(false);
+    expect(reachable(served(ssn, { ｓｓｎ: SECRET }))).toBe(false);
+    expect(reachable(served(ssn, { socialSecurityNumber: SECRET }))).toBe(false);
   });
 
-  it('text has no name: a value inside a string, JSON in a string, an error message', () => {
-    expect(reachable(served(ssn, { result: `ssn is ${SECRET}` }))).toBe(true);
-    expect(reachable(served(ssn, { result: JSON.stringify({ ssn: SECRET }) }))).toBe(true);
+  it('text with no name: a value inside a string, JSON in a string, an error message', () => {
+    expect(reachable(served(ssn, { result: `ssn is ${SECRET}` }))).toBe(false);
+    expect(reachable(served(ssn, { result: JSON.stringify({ ssn: SECRET }) }))).toBe(false);
+    expect(reachable(served(ssn, { error: `bad input: ${SECRET}` }))).toBe(false);
   });
 
-  it('what the rule does not enumerate: a Map, a Set, an Error’s cause, a non-enumerable key', () => {
-    expect(reachable(served(ssn, { result: new Map([['ssn', SECRET]]) }))).toBe(true);
-    expect(reachable(served(ssn, { result: new Set([{ ssn: SECRET }]) }))).toBe(true);
+  it('what a rule by name does not enumerate: a Map, a Set, an Error’s cause, a non-enumerable key', () => {
+    expect(reachable(served(ssn, { result: new Map([['ssn', SECRET]]) }))).toBe(false);
+    expect(reachable(served(ssn, { result: new Set([{ ssn: SECRET }]) }))).toBe(false);
     expect(reachable(served(ssn, { result: new Error('x', { cause: { ssn: SECRET } }) }))).toBe(
-      true,
+      false,
     );
     const hidden = {};
     Object.defineProperty(hidden, 'ssn', { value: SECRET, enumerable: false });
-    expect(reachable(served(ssn, { result: hidden }))).toBe(true);
+    expect(reachable(served(ssn, { result: hidden }))).toBe(false);
   });
 
-  it('a `toJSON` that writes a name the object holds privately reaches the JSON of the record', () => {
+  it('a `toJSON` that writes a name the object holds privately: not plain data, the placeholder', () => {
     class Citizen {
       readonly #ssn = SECRET;
       toJSON(): unknown {
@@ -144,7 +150,8 @@ describe('DECLARED — what passes through, by footprintjs’s law (README, "Nam
       }
     }
     const out = served(ssn, { result: new Citizen() });
-    expect(JSON.stringify(out)).toContain(SECRET);
+    expect(JSON.stringify(out)).not.toContain(SECRET);
+    expect((out as { result: unknown }).result).toBe(SERVED_PLACEHOLDER);
   });
 
   it('…and all of it is kept out when the policy names the value that carries it', () => {

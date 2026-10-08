@@ -20,12 +20,7 @@ import { Agent, defineTool, type Tool } from '../../src/index.js';
 import { mock } from '../../src/doors/providers.js';
 import { conversationRedaction } from '../../src/doors/security.js';
 import type { LLMProvider, LLMRequest } from '../../src/adapters/types.js';
-import {
-  EVENT_CONTENT,
-  type ClassifiedContent,
-  type StructureKind,
-} from '../../src/events/content.js';
-import { RunNames } from '../../src/redaction/names.js';
+import { FIELD_NAMES, servedString } from '../../src/redaction/knownStrings.js';
 
 export const SECRET = {
   user: 'SECRET-USER-7731',
@@ -181,156 +176,83 @@ export function leaksIn(value: unknown, secrets: readonly string[] = ALL_SECRETS
 }
 
 /**
- * The names a generated payload's `declaredName` fields hold — declared to the
- * serving under test (`declaredNamesForTests`), one per space.
+ * Every string in `value` that the value-kind rule must NOT let through: not
+ * a library word (`src/redaction/knownStrings.ts`), not the placeholder —
+ * keys included. The rule's own assertion, for any served record.
  */
-export const DECLARED = Object.freeze({
-  tool: 'declared_tool',
-  argument: 'declared_arg',
-  skill: 'declared-skill',
-  config: 'declared-config',
-});
-
-/** A names registry that declares exactly {@link DECLARED}. */
-export function declaredNamesForTests(): RunNames {
-  return new RunNames({
-    tool: [DECLARED.tool],
-    argument: [DECLARED.argument],
-    skill: [DECLARED.skill],
-    config: [DECLARED.config],
-  });
-}
-
-/** The classification of a registered type, as the served path reads it. */
-export const classificationOf = (type: string): ClassifiedContent =>
-  (EVENT_CONTENT as unknown as Readonly<Record<string, ClassifiedContent>>)[
-    type
-  ] as ClassifiedContent;
-
-/** A value that FITS `kind` — its declared names from {@link DECLARED}. */
-export function validValueOf(kind: StructureKind): unknown {
-  switch (kind.kind) {
-    case 'count':
-      return 3;
-    case 'flag':
-      return true;
-    case 'enum':
-      return Object.keys(kind.of)[0];
-    case 'mintedId':
-      return 'id_7f3c';
-    case 'declaredName':
-      return DECLARED[kind.of];
-    case 'list':
-      return [validValueOf(kind.of)];
-    case 'record':
-      return Object.fromEntries(
-        Object.entries(kind.fields as Record<string, StructureKind>).map(([field, inner]) => [
-          field,
-          validValueOf(inner),
-        ]),
-      );
-    case 'map':
-      return { [validValueOf(kind.key) as string]: validValueOf(kind.value) };
-    case 'anyOf':
-      return validValueOf(kind.of[0] as StructureKind);
-  }
-}
-
-/**
- * A value OUTSIDE `kind`, carrying `canary` — text where a number, a flag, a
- * verdict word or an id belongs; a name nothing declared; text where a list,
- * a record or a map belongs.
- */
-export function outOfKindValueOf(kind: StructureKind, canary: string): unknown {
-  switch (kind.kind) {
-    case 'count':
-    case 'flag':
-    case 'enum':
-    case 'mintedId':
-    case 'list':
-    case 'record':
-    case 'map':
-    case 'anyOf':
-      return `said ${canary} in free text`;
-    case 'declaredName':
-      // One token, like a name — but one nothing declared.
-      return `invented_${canary}`;
-  }
-}
-
-/** One leaf of a classification: its path from the payload root, and its kind. */
-export interface KindLeaf {
-  /** Field names, `[]` for a list's element, `{key}` for a map key, `{value}` for a map value. */
-  readonly path: readonly string[];
-  readonly kind: StructureKind;
-}
-
-/** Every leaf kind of `structure`, at every depth. */
-export function kindLeaves(structure: Readonly<Record<string, StructureKind>>): KindLeaf[] {
-  const out: KindLeaf[] = [];
-  const walk = (kind: StructureKind, path: readonly string[]): void => {
-    out.push({ path, kind });
-    if (kind.kind === 'list') walk(kind.of, [...path, '[]']);
-    else if (kind.kind === 'record') {
-      for (const [field, inner] of Object.entries(kind.fields as Record<string, StructureKind>)) {
-        walk(inner, [...path, field]);
-      }
-    } else if (kind.kind === 'map') {
-      out.push({ path: [...path, '{key}'], kind: kind.key });
-      walk(kind.value, [...path, '{value}']);
+export function unknownStringsIn(value: unknown): string[] {
+  const out = new Set<string>();
+  const seen = new Set<unknown>();
+  const check = (text: string): void => {
+    if (servedString(text) !== text) out.add(text);
+  };
+  const walk = (node: unknown): void => {
+    if (typeof node === 'string') return check(node);
+    if (node === null || typeof node !== 'object' || seen.has(node)) return;
+    seen.add(node);
+    if (Array.isArray(node)) return node.forEach(walk);
+    for (const [key, child] of Object.entries(node as Record<string, unknown>)) {
+      if (!Object.prototype.hasOwnProperty.call(FIELD_NAMES, key)) check(key);
+      walk(child);
     }
   };
-  for (const [field, kind] of Object.entries(structure)) walk(kind, [field]);
-  return out;
+  walk(value);
+  return [...out];
 }
 
 /**
- * `payload` with the value at `path` replaced (copy, built along the path;
- * `[]` = the first element, `{key}` = the map's one key, `{value}` = its value).
+ * Strings an app's configuration would name — a tool, an argument path, a
+ * skill, an agent — and ids the library mints: the (c) and (b) this release
+ * does NOT keep (`src/redaction/knownStrings.ts`). Under a policy, each is the
+ * placeholder like any other string.
  */
-export function withValueAt(payload: unknown, path: readonly string[], value: unknown): unknown {
-  if (path.length === 0) return value;
-  const [head, ...rest] = path as [string, ...string[]];
-  if (head === '[]') {
-    const list = Array.isArray(payload) ? [...payload] : [];
-    list[0] = withValueAt(list[0], rest, value);
-    return list;
-  }
-  const record = isRecord(payload) ? { ...payload } : {};
-  if (head === '{key}' || head === '{value}') {
-    const [key, inner] = Object.entries(record)[0] ?? ['k', undefined];
-    if (head === '{key}') return { [String(value)]: inner };
-    return { [key]: withValueAt(inner, rest, value) };
-  }
-  record[head] = withValueAt(record[head], rest, value);
-  return record;
-}
-
-/** The value at `path` (same path grammar as {@link withValueAt}). */
-export function valueAtPath(payload: unknown, path: readonly string[]): unknown {
-  let at: unknown = payload;
-  for (const segment of path) {
-    if (segment === '[]') at = Array.isArray(at) ? at[0] : undefined;
-    else if (segment === '{key}') return isRecord(at) ? Object.keys(at)[0] : undefined;
-    else if (segment === '{value}') at = isRecord(at) ? Object.values(at)[0] : undefined;
-    else at = isRecord(at) ? at[segment] : undefined;
-  }
-  return at;
-}
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === 'object' && !Array.isArray(value);
+export const NOT_KEPT = Object.freeze({
+  tool: 'lookup',
+  argument: 'customer.ssn',
+  skill: 'billing',
+  config: 'agent-under-test',
+  run: 'run-1791438565771-3',
+  stage: 'sf-tools/call-llm#12',
+  call: 'call-1',
+});
 
 /**
- * A payload for the registered event `type`, GENERATED from its classification
- * (`src/events/content.ts` · `EVENT_CONTENT`), never listed by hand: every
- * structure field holding a value that fits its kind (`validValueOf`), and
- * `quote` in one field the type does not declare.
+ * Strings an attacker would try against a closed set of words: a prefix, an
+ * extension, a case variant, a homoglyph, a trailing space, a zero-width
+ * character, a non-NFC spelling, an over-long string, an injected path
+ * segment — and strings shaped like the ids the library mints. None of them
+ * is a library word.
  */
-export function eventPayloadFor(type: string, quote: unknown): Record<string, unknown> {
-  const payload: Record<string, unknown> = { __undeclared__: quote };
-  for (const [field, kind] of Object.entries(classificationOf(type).structure)) {
-    payload[field] = validValueOf(kind);
-  }
-  return payload;
+export function adversarialStrings(secret: string): readonly string[] {
+  return [
+    `said ${secret}`,
+    secret,
+    `${NOT_KEPT.tool}_${secret}`,
+    NOT_KEPT.tool.slice(0, 3),
+    `${NOT_KEPT.tool}x`,
+    NOT_KEPT.tool.toUpperCase(),
+    'l\u043eokup', // Cyrillic о
+    `${NOT_KEPT.tool} `,
+    ` ${NOT_KEPT.tool}`,
+    `${NOT_KEPT.tool}\u200b`,
+    `look\u200bup`,
+    'billing\u0301', // combining mark — not NFC-identical
+    'bi\u0301lling',
+    'x'.repeat(300),
+    `customer.${secret}.ssn`,
+    `customer.ssn.${secret}`,
+    'customer[x].ssn',
+    'customer..ssn',
+    `run-1-1 ${secret}`,
+    `stage#1 ${secret}`,
+    // Shaped like a minted id, minted by no one in this run: content.
+    `${secret}#0`,
+    `sf-tools/${secret}#1`,
+    'sf-tools/call-llm#13',
+    'call-llm#0',
+    'run-1791438565771-4',
+    'run-1-1',
+    'call-2',
+    'toolu_01AbCdEf',
+  ];
 }

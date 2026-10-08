@@ -49,8 +49,8 @@ import {
 } from '../../src/doors/observe.js';
 import { conversationRedaction } from '../../src/doors/security.js';
 import { boundedContentFieldNames } from '../../src/adapters/observability/audit.js';
-import { derivedRows } from '../../src/redaction/served.js';
 import { ALL_EVENT_TYPES } from '../../src/events/registry.js';
+import type { AnswerAccount } from '../../src/lib/answer-account/types.js';
 import { CONVERSATION_FEATURES } from '../../src/redaction/conversation.js';
 import { mockThinkingHandler } from '../../src/thinking/MockThinkingHandler.js';
 import { defineMemory, MEMORY_STRATEGIES, MEMORY_TYPES } from '../../src/memory/index.js';
@@ -724,6 +724,25 @@ function memoryCases(): FeatureCase[] {
   ];
 }
 
+/** What the account says is absent — never because a policy kept it out. */
+const ABSENCES = [
+  'asked.none',
+  'checked.noCalls',
+  'found.noCalls',
+  'summary.unfinished',
+  'scope.noOwnEvents',
+] as const;
+
+/** Every sentence of an account, as template ids. */
+function accountIds(account: AnswerAccount): string[] {
+  return [
+    ...account.rows.flatMap((r) => [r.heading, ...r.lines, ...(r.more ? [r.more] : [])]),
+    ...account.signals.map((s) => s.sentence),
+    ...account.unreachable.map((u) => u.sentence),
+    account.summary.sentence,
+  ].map((s) => s.template.id);
+}
+
 describe('conversationRedaction — the vocabulary, per feature', () => {
   it('every feature the vocabulary claims has a case here', () => {
     const covered = new Set(CASES.map((c) => c.feature.split(' — ')[0]));
@@ -741,15 +760,17 @@ describe('conversationRedaction — the vocabulary, per feature', () => {
         expect(Object.keys(hit).sort()).toEqual([...c.canaries].sort());
       });
 
-      it('under conversationRedaction(): no canary in any record, the same events, a told account', async () => {
+      it('under conversationRedaction(): no canary in any record, the same events, an honest account', async () => {
         const control = await serve(c.build(undefined), c.drive);
         const served = await serve(c.build(conversationRedaction()), c.drive);
         expect(reached(served, c.canaries)).toEqual({});
         expect(served.types).toEqual(control.types);
-        const account = served.artifacts.account as {
-          summary: { sentence: { template: { id: string } } };
-        };
-        expect(account.summary.sentence.template.id).not.toBe('scope.keptOut');
+        // The account tells what it can read, or refuses to tell (a call's id
+        // and its tool's name are kept out under a policy) — never an absence
+        // the same run without a policy would not state.
+        const ids = accountIds(served.artifacts.account as AnswerAccount);
+        const controlIds = accountIds(control.artifacts.account as AnswerAccount);
+        for (const id of ABSENCES) if (ids.includes(id)) expect(controlIds, id).toContain(id);
       });
     });
   }
@@ -876,12 +897,14 @@ describe('conversationRedaction() — the value', () => {
   });
 });
 
-describe('a field a tool names is kept out of every event by its name alone', () => {
+describe('a field a tool names is kept out of every event under a name-only policy', () => {
   // Not the vocabulary: a policy that selects ONE argument field — by name, by
-  // a dotted path, or as a `fields` selector. A check-in's evidence pack renders
-  // the call's arguments as text (`willDo`), and a validation issue quotes the
-  // argument it refuses, so both are kept out by the rule's own verdict on the
-  // arguments they came from — on every event (the words rows, `events/content.ts`).
+  // a dotted path, or as a `fields` selector. Under its own name the field is
+  // kept out by footprintjs's rule. The copies the library derives from it
+  // under names of its own — a check-in's `willDo`, a validation issue's quoted
+  // `value`, the refusal sentence the model reads — are free strings, so the
+  // value-kind rule keeps them out of every event too (`redaction/served.ts`):
+  // under any policy, events are conservative.
   const SSN = 'SSN-CANARY-7788';
   const POLICIES: readonly [string, RedactionPolicy][] = [
     ['a pattern on the name', { patterns: [/ssn/i] }],
@@ -1002,21 +1025,19 @@ describe('a field a tool names is kept out of every event by its name alone', ()
   };
 
   for (const [label, policy] of POLICIES) {
-    it(`a validation issue, ${label}: the quoted argument is kept out`, async () => {
+    it(`a validation issue, ${label}: the quoted argument and the refusal sentence are kept out`, async () => {
       const issues = (events: AgentfootprintEvent[]) =>
         events.filter((e) => e.type === 'agentfootprint.validation.args_invalid');
       const control = await refusedRun(undefined);
       expect(JSON.stringify(issues(control))).toContain(SSN);
+      // The refusal SENTENCE the model reads quotes it too — on the tool's result.
+      expect(
+        JSON.stringify(control.filter((e) => e.type === 'agentfootprint.stream.tool_end')),
+      ).toContain(SSN);
       const served = await refusedRun(policy);
       expect(issues(served).length).toBe(issues(control).length);
-      expect(locationsOf(issues(served), SSN)).toEqual([]);
-      // The refusal SENTENCE the model reads quotes it too — conversation
-      // text, with no field name: it rides the tool's result and the history,
-      // kept out only by naming the conversation (`conversationRedaction()`).
-      const result = served.find((e) => e.type === 'agentfootprint.stream.tool_end');
-      expect(JSON.stringify(result)).toContain(SSN);
-      const covered = await refusedRun(conversationRedaction(policy));
-      expect(locationsOf(covered, SSN)).toEqual([]);
+      // No event carries it: the arguments by name, the quote and the sentence by kind.
+      expect(locationsOf(served, SSN)).toEqual([]);
     });
   }
 });
@@ -1031,20 +1052,5 @@ describe('the vocabulary agrees with the audit export on what is content', () =>
       (policy.keys ?? []).includes(name) || (policy.patterns ?? []).some((p) => p.test(name));
     const missing = boundedContentFieldNames().filter((name) => !kept(name));
     expect(missing).toEqual([]);
-  });
-
-  it('every words row names a real event, and the vocabulary keeps out a value it comes from', () => {
-    // The other direction of the same question: content the library quotes
-    // under a name of its own is kept out with its source (its event type's
-    // words rows, `events/content.ts`). A row whose event does not exist, or whose sources the
-    // vocabulary never names, would never fire under `conversationRedaction()`.
-    const policy = conversationRedaction();
-    const kept = (name: string) =>
-      (policy.keys ?? []).includes(name) || (policy.patterns ?? []).some((p) => p.test(name));
-    const types = new Set<string>(ALL_EVENT_TYPES);
-    const rows = derivedRows();
-    expect(rows.length).toBeGreaterThan(10);
-    expect(rows.filter((row) => !types.has(row.type)).map((row) => row.type)).toEqual([]);
-    expect(rows.filter((row) => !row.from.some(kept)).map((row) => row.type)).toEqual([]);
   });
 });

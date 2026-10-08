@@ -309,6 +309,12 @@ function rowsetReading(
   if (rows !== undefined && keptOut?.(rows) === true) {
     return { emptiness: 'unknown', rowsAt, undeclaredShape: false, rowsUnread: 'redacted' };
   }
+  // KEYS kept out of a served record: the value-kind rule folds the keys it
+  // cannot vouch for into one placeholder entry (`redaction/knownStrings.ts`),
+  // and the rows key may be among them — a positive sign, so not "no list".
+  if (rows === undefined && keptOut !== undefined && holdsKeptOutKeys(data, keptOut)) {
+    return { emptiness: 'unknown', rowsAt, undeclaredShape: false, rowsUnread: 'redacted' };
+  }
   // Moved, not merely beside: a key still in the value is read as the value holds it.
   const found = rows === undefined ? ticketFor(data, rowsAt) : undefined;
   if (found === undefined) {
@@ -318,6 +324,14 @@ function rowsetReading(
   return typeof n === 'number' && Number.isSafeInteger(n) && n >= 0
     ? counted(n, 'app', [...found.at, 'rows'], rowsAt)
     : { ...UNCOUNTED_TICKET, rowsAt };
+}
+
+/** Whether a served record holds the placeholder entry its kept-out keys were folded into. */
+function holdsKeptOutKeys(
+  data: Readonly<Record<string, unknown>>,
+  keptOut: (value: unknown) => boolean,
+): boolean {
+  return Object.keys(data).some((key) => keptOut(key) && keptOut(data[key]));
 }
 
 /** The data a recorded described envelope carries, per kind — or `undefined` when it cannot be read. */

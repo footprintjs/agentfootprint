@@ -25,7 +25,14 @@ import { toolBytesOf } from '../../toolBytes.js';
 import { v } from '../render.js';
 import type { InViewFact, SentenceVar } from '../types.js';
 import { FACT_TEXT_CHARS } from './calls.js';
-import { isRecord, num, str, type RecordingView, type ViewEvent } from '../view.js';
+import {
+  isRecord,
+  keptOut as isFieldKeptOut,
+  num,
+  str,
+  type RecordingView,
+  type ViewEvent,
+} from '../view.js';
 import {
   at,
   countedFields,
@@ -68,15 +75,15 @@ export function witnessesOf(view: RecordingView, iteration: number | undefined):
     .filter((e) => e.payload.slot === 'messages' && e.payload.iteration === iteration);
   const stage = str(composed[composed.length - 1]?.meta.runtimeStageId);
   if (stage === undefined) return [];
-  return view
-    .ofType('context.injected')
-    .filter(
-      (e) =>
-        e.meta.runtimeStageId === stage &&
-        e.payload.slot === 'messages' &&
-        e.payload.source === 'tool-result' &&
-        typeof e.payload.sourceId === 'string',
-    );
+  return view.ofType('context.injected').filter(
+    (e) =>
+      e.meta.runtimeStageId === stage &&
+      e.payload.slot === 'messages' &&
+      e.payload.source === 'tool-result' &&
+      // A witness whose call id the record keeps out is still a witness: a
+      // result was in view, whose call the record will not name.
+      (isFieldKeptOut(e, 'sourceId') || typeof e.payload.sourceId === 'string'),
+  );
 }
 
 export interface InViewAll {
@@ -100,6 +107,12 @@ export function readInView(ctx: ReadContext, callIds: ReadonlySet<string>): InVi
   const reads: InViewRead[] = [];
   let keptOut = 0;
   for (const witness of witnessesOf(ctx.view, ctx.answeringIteration)) {
+    // A call id the record keeps out is not one of this run's calls (those are
+    // ids the run recorded, and kept): an earlier result whose call is unnamed.
+    if (isFieldKeptOut(witness, 'sourceId')) {
+      keptOut += 1;
+      continue;
+    }
     const id = witness.payload.sourceId as string;
     if (callIds.has(id)) continue;
     if (historyKeptOut) {

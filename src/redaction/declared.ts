@@ -27,12 +27,12 @@ import {
   coverageOfOpenedRun,
   policyOfCoverage,
   UNKNOWN_COVERAGE,
-  type Coverage,
+  type RedactionCoverage,
 } from './coverage.js';
 import { unionRedactionPolicies } from './policy.js';
 
 /** Every runner → what it declares: a policy, or positively none. Weak: dies with the runner. */
-const declared = new WeakMap<object, Coverage>();
+const declared = new WeakMap<object, RedactionCoverage>();
 
 /**
  * Record what `runner` declares for every run of its own. Called by the
@@ -48,7 +48,7 @@ export function declareRedaction(runner: object, policy: RedactionPolicy | undef
  * What `runner` declares: `covered` (a policy), `declared-none`, or `unknown`
  * — an object no runner of this library registered (`coverage.ts`).
  */
-export function declarationOf(runner: object): Coverage {
+export function declarationOf(runner: object): RedactionCoverage {
   return declared.get(runner) ?? UNKNOWN_COVERAGE;
 }
 
@@ -64,35 +64,11 @@ export function redactionDeclaredBy(runner: object): RedactionPolicy | undefined
   return policyOfCoverage(declaration);
 }
 
-/** Every composition → its members and the labels it declared for them. Weak: dies with the composition. */
-const compositions = new WeakMap<
-  object,
-  { readonly members: readonly object[]; readonly labels: readonly unknown[] }
->();
-
 /**
  * A composition declares every policy its members declared. Called by each
  * composition's constructor with its members, after they exist and before the
  * composition's chart is built — the `readsMessageFromIfAny` placement.
- * `labels` are the ids and names the composition gave its members (a branch's
- * id, a step's name): names it declared, which its events carry
- * (`RunnerBase · redactionNames`).
  */
-export function adoptMemberRedaction(
-  composition: object,
-  members: readonly object[],
-  labels: readonly unknown[] = [],
-): void {
+export function adoptMemberRedaction(composition: object, members: readonly object[]): void {
   declareRedaction(composition, unionRedactionPolicies(...members.map(redactionDeclaredBy)));
-  compositions.set(composition, { members, labels });
 }
-
-/** What `composition` was built from — no members for a runner that composes none. */
-export function compositionOf(composition: object): {
-  readonly members: readonly object[];
-  readonly labels: readonly unknown[];
-} {
-  return compositions.get(composition) ?? NO_MEMBERS;
-}
-
-const NO_MEMBERS = Object.freeze({ members: Object.freeze([]), labels: Object.freeze([]) });

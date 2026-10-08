@@ -31,7 +31,7 @@ import { RedactionRule } from 'footprintjs/advanced';
 import { carriedConversationPolicy, locationsOf } from './fixture.js';
 
 /** An agent that calls `lookup` with `field: secret`, then answers. */
-function agentWith(field: string, secret: string, redact?: RedactionPolicy) {
+function agentWith(field: string, secret: string | number, redact?: RedactionPolicy) {
   return Agent.create({
     provider: mock({
       chunkDelayMs: 0,
@@ -44,10 +44,10 @@ function agentWith(field: string, secret: string, redact?: RedactionPolicy) {
     ...(redact !== undefined && { redact }),
   })
     .tool(
-      defineTool<Record<string, string>, unknown>({
+      defineTool<Record<string, unknown>, unknown>({
         name: 'lookup',
         description: 'Look it up.',
-        inputSchema: { type: 'object' },
+        inputSchema: { type: 'object', properties: { [field]: {} } },
         execute: (args) => ({ ...args, ok: true }),
       }),
     )
@@ -255,27 +255,29 @@ describe('(c) a lookup that misses fails closed; a mounted chart is bound to its
     const dispatcher = new EventDispatcher();
     const got: AgentfootprintEvent[] = [];
     dispatcher.on('*', (e) => got.push(e));
-    // The run in force now is another run, whose policy names nothing here.
-    dispatcher.useServing(servingAhead({ keys: ['somethingElse'] }), 'run-1-2');
+    // The run in force now is another run, whose policy names `iteration`.
+    dispatcher.useServing(servingAhead({ keys: ['iteration'] }), 'run-1-2');
     const pause = {
       type: 'agentfootprint.pause.request',
-      payload: { reason: 'r', questionPayload: { ssn: 'SSN-PAUSED-9000' } },
+      payload: { attempt: 2, iteration: 3, questionPayload: { ssn: 'SSN-PAUSED-9000' } },
       meta: { runId: 'consumer-scope', runtimeStageId: 'ask#paused', subflowPath: [] },
     } as unknown as AgentfootprintEvent;
-    // Served under the paused run's own serving…
-    dispatcher.dispatchForRun(pause, servingAhead({ keys: ['ssn'] }));
+    // Served under the paused run's own serving, whose policy names `attempt`…
+    dispatcher.dispatchForRun(pause, servingAhead({ keys: ['ssn', 'attempt'] }));
     // …and refused when that run has none (an executor no run opened).
     dispatcher.dispatchForRun(pause, undefined);
     expect(locationsOf(got, 'SSN-PAUSED-9000')).toEqual([]);
-    expect((got[0]?.payload as { questionPayload: unknown }).questionPayload).toEqual({
-      ssn: '[REDACTED]',
-    });
+    // The numbers tell the two policies apart: its own selects `attempt`, the
+    // run opened since would have selected `iteration`.
+    expect(got[0]?.payload).toMatchObject({ attempt: '[REDACTED]', iteration: 3 });
     expect(got[1]?.payload).toBe('[REDACTED]');
   });
 
   it('two runners’ charts mounted in one app executor: each keeps its OWN policy, no bleed', async () => {
-    const a = agentWith('ssn', 'SSN-MA-6000', { keys: ['ssn'] });
-    const b = agentWith('pin', 'PIN-MB-7000', { keys: ['pin'] });
+    // Numbers under the payload types' own field names: each policy is told
+    // apart by the one it selects (the value-kind rule keeps numbers).
+    const a = agentWith('attempt', 6000, { keys: ['attempt'] });
+    const b = agentWith('iteration', 7000, { keys: ['iteration'] });
     const app = flowChart<{ q: string }>(
       'Ask',
       (scope) => {
@@ -301,8 +303,8 @@ describe('(c) a lookup that misses fails closed; a mounted chart is bound to its
     await executor.run({ input: {} });
     const fromA = starts.find((s) => s.subflow.includes('sf-a'));
     const fromB = starts.find((s) => s.subflow.includes('sf-b'));
-    expect(fromA?.args).toEqual({ ssn: '[REDACTED]' });
-    expect(fromB?.args).toEqual({ pin: '[REDACTED]' });
+    expect(fromA?.args).toEqual({ attempt: '[REDACTED]' });
+    expect(fromB?.args).toEqual({ iteration: '[REDACTED]' });
   });
 });
 
@@ -321,7 +323,6 @@ describe('(b, d) the registries the redaction keeps: weak, keyed by identity, no
       .filter((f) => f.endsWith('.ts'))
       .map((f) => join(SRC, 'redaction', f)),
     join(SRC, 'events/dispatcher.ts'),
-    join(SRC, 'events/content.ts'),
     join(SRC, 'core/runnerLive.ts'),
     join(SRC, 'core/servableSnapshot.ts'),
   ];
@@ -360,26 +361,27 @@ describe('(b, d) the registries the redaction keeps: weak, keyed by identity, no
     const agent = Agent.create({
       provider: mock({ chunkDelayMs: 0, reply: 'ok' }),
       model: 'm',
-      redact: { keys: ['ssn'] },
+      redact: { keys: ['attempt'] },
     }).build();
     const events: AgentfootprintEvent[] = [];
     agent.on('*', (e) => events.push(e));
     await agent.run({ message: 'go' });
     const runId = (events[0]?.meta as { runId: string }).runId;
     // The executor's own LIVE rule, marked after the run settled: a serving that
-    // still held it would now keep `pin` out of the run's late facts too.
+    // still held it would now keep `iteration` out of the run's late facts too.
     const executor = (agent as unknown as { lastExecutor: FlowChartExecutor }).lastExecutor;
     const live = executor.getRuntime().rootStageContext.getRedactionRule();
     expect(live).toBeDefined();
-    live?.mark('pin');
+    live?.mark('iteration');
     agent.emitAttributed(
       'app.late_fact',
-      { ssn: 'SSN-RETIRED-8400', pin: 'PIN-8401' },
+      { attempt: 8400, iteration: 8401 },
       { sessionId: 's', runId },
     );
     const fact = events.find((e) => (e.type as string) === 'app.late_fact');
-    // Its names stay (the policy's `ssn`); the live rule is no longer read.
-    expect(fact?.payload).toEqual({ ssn: '[REDACTED]', pin: 'PIN-8401' });
+    // Its names stay (the policy's `attempt`); the live rule is no longer read,
+    // so `iteration` — a number, which the value-kind rule keeps — is not selected.
+    expect(fact?.payload).toEqual({ attempt: '[REDACTED]', iteration: 8401 });
   });
 
   it('served.ts keeps nothing at module scope but frozen constants', () => {

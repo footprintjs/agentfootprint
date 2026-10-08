@@ -487,8 +487,14 @@ describe('untrusted keys never fail a redacted run', () => {
       const events: AgentfootprintEvent[] = [];
       agent.on('*', (e) => events.push(e));
       expect(await agent.run({ message: 'probe it' })).toBe('probed');
+      // The event is there with its fields; under a policy its strings are
+      // the library's words only — the tool's name is the placeholder too.
       const start = events.find((e) => e.type === 'agentfootprint.stream.tool_start');
-      expect(start?.payload).toMatchObject({ toolName: 'probe', args: '[REDACTED]' });
+      expect(start?.payload).toMatchObject({
+        toolName: '[REDACTED]',
+        toolCallId: '[REDACTED]',
+        args: '[REDACTED]',
+      });
     });
   }
 });

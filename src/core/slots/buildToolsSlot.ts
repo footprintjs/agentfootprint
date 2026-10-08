@@ -18,8 +18,7 @@ import { INJECTION_KEYS } from '../../conventions.js';
 import type { InjectionRecord } from '../../recorders/core/types.js';
 import { COMPOSITION_KEYS } from '../../recorders/core/types.js';
 // Writes the context recorder derives its events from — relayed under a policy.
-import { declareNames, setEventSource } from '../../redaction/runRedaction.js';
-import { toolDeclarations } from '../agent/declaredNames.js';
+import { setEventSource } from '../../redaction/runRedaction.js';
 import type { ActiveInjection } from '../../lib/injection-engine/types.js';
 import { menuOutstanding, type TurnRoute } from '../../lib/injection-engine/routingPolicy.js';
 import { invariantViolationsOf } from '../../integrity/invariant-violation/check.js';
@@ -969,13 +968,6 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       })),
     ];
     const { merged, winners, losers, winningTools } = mergeWire(candidates);
-    // Every tool this iteration could put on the wire — the registry's, a
-    // provider's, a skill's, the library's — and its argument names are
-    // DECLARED names for the run's records (`redaction/names.ts`): a call to
-    // one of them is structure, a name the model made up is not.
-    const offered = toolDeclarations(candidates);
-    declareNames(scope, 'tool', offered.tool ?? []);
-    declareNames(scope, 'argument', offered.argument ?? []);
 
     // ── THE COMMIT — everything after the merge, as one closure ─────────
     // `served` is the list that goes on the record: the merged list itself
