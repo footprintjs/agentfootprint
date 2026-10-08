@@ -137,6 +137,9 @@ const NAMES = {
     'argumentAsk',
     'argumentAnswersKept',
     'argumentResolutions',
+    // The name of the tool the model called last, copied into the cache
+    // decision's state — a name the model may have made up.
+    'lastToolName',
   ],
   /**
    * What a tool declared it checked and did not, as state: words the tool
@@ -211,6 +214,9 @@ const PATTERNS: readonly RegExp[] = PATTERN_PREFIXES.map((prefix) => new RegExp(
  */
 const FIELDS: Readonly<Record<string, readonly string[]>> = {
   turnRoute: ['witness'],
+  // The injection engine's observability summary keeps its counts; the name of
+  // the tool the model called last may be one the model made up.
+  injectionContextSummary: ['lastToolName'],
 };
 
 /** The vocabulary as one frozen policy. */

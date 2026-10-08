@@ -37,9 +37,15 @@
 
 import type { RedactionRule } from 'footprintjs/advanced';
 
-import { EVENT_CONTENT, type EventContent, type EventWords } from '../events/content.js';
+import {
+  EVENT_CONTENT,
+  type ClassifiedContent,
+  type EventWords,
+  type StructureKind,
+} from '../events/content.js';
 import type { EventMeta } from '../events/types.js';
 import { ruleKeepsConversationOut } from './conversation.js';
+import { NO_DECLARED_NAMES, type DeclaredNames } from './names.js';
 
 /** The placeholder footprintjs serves a record handed out whole with. */
 export const SERVED_PLACEHOLDER = '[REDACTED]';
@@ -63,8 +69,14 @@ export interface EventServing {
  * @param hasEmitNames whether the policy selects any event by NAME
  *                    (`emitPatterns`) — a policy with only those keeps the
  *                    state rule inert, and inertness alone would skip them
+ * @param names       the names the run's runner declared (`names.ts`) — what a
+ *                    `declaredName` field may hold; none given, none declared
  */
-export function eventServing(ruleOf: () => RedactionRule, hasEmitNames: boolean): EventServing {
+export function eventServing(
+  ruleOf: () => RedactionRule,
+  hasEmitNames: boolean,
+  names: DeclaredNames = NO_DECLARED_NAMES,
+): EventServing {
   const active = (): boolean => hasEmitNames || !ruleOf().isInert();
   // Whether the run's rule keeps the whole conversation out — remembered for
   // the rule that said so (a rule only ever adds names), in THIS serving's own
@@ -81,7 +93,7 @@ export function eventServing(ruleOf: () => RedactionRule, hasEmitNames: boolean)
     payload(type, payload) {
       if (!active()) return payload;
       const rule = ruleOf();
-      return servedPayload(rule, type, payload, () => conversationOut(rule));
+      return servedPayload(rule, type, payload, () => conversationOut(rule), names);
     },
     meta(meta) {
       if (meta.principal === undefined && meta.tenant === undefined) return meta;
@@ -92,12 +104,13 @@ export function eventServing(ruleOf: () => RedactionRule, hasEmitNames: boolean)
 }
 
 /** An event type the registry does not know (an app's own): every field is content. */
-const UNCLASSIFIED: EventContent = Object.freeze({ structure: [] });
+const UNCLASSIFIED: ClassifiedContent = Object.freeze({ structure: Object.freeze({}) });
 
 /** The registry's classification of `type` — never a prototype property a type string happens to name. */
-function contentOf(type: string): EventContent {
+function contentOf(type: string): ClassifiedContent {
   return Object.prototype.hasOwnProperty.call(EVENT_CONTENT, type)
-    ? (EVENT_CONTENT as Readonly<Record<string, EventContent>>)[type] ?? UNCLASSIFIED
+    ? (EVENT_CONTENT as unknown as Readonly<Record<string, ClassifiedContent>>)[type] ??
+        UNCLASSIFIED
     : UNCLASSIFIED;
 }
 
@@ -113,9 +126,9 @@ export function derivedRows(): readonly {
   readonly from: readonly string[];
   readonly namedBy?: string;
 }[] {
-  return Object.entries(EVENT_CONTENT as Readonly<Record<string, EventContent>>).flatMap(
-    ([type, content]) => (content.words ?? []).map((entry) => ({ type, ...entry })),
-  );
+  return Object.entries(
+    EVENT_CONTENT as unknown as Readonly<Record<string, ClassifiedContent>>,
+  ).flatMap(([type, content]) => (content.words ?? []).map((entry) => ({ type, ...entry })));
 }
 
 /** The served form of one payload — see the file header for the decisions. */
@@ -124,6 +137,7 @@ function servedPayload(
   type: string,
   payload: unknown,
   conversationOut: () => boolean,
+  names: DeclaredNames,
 ): unknown {
   try {
     const named = rule.retainEmit(type, payload);
@@ -134,6 +148,7 @@ function servedPayload(
       rule.retainBoundary(payload),
       payload,
       conversationOut,
+      names,
     );
   } catch {
     return SERVED_PLACEHOLDER;
@@ -149,10 +164,11 @@ function servedPayload(
  */
 function withContentKeptOut(
   rule: RedactionRule,
-  content: EventContent,
+  content: ClassifiedContent,
   served: unknown,
   original: unknown,
   conversationOut: () => boolean,
+  names: DeclaredNames,
 ): unknown {
   const decided = (content.words ?? []).map((entry) => ({
     entry,
@@ -172,7 +188,7 @@ function withContentKeptOut(
     if (!whole && entry.namedBy === undefined) continue;
     out = maskWords(out, entry, whole, rule);
   }
-  return conversation ? withUndeclaredKeptOut(out, content.structure) : out;
+  return conversation ? servedByKinds(out, content.structure, names) : out;
 }
 
 /** `node` with one words row's paths served as the placeholder where they are kept out. */
@@ -185,19 +201,92 @@ function maskWords(node: unknown, entry: EventWords, whole: boolean, rule: Redac
 }
 
 /**
- * DEFAULT-DENY: `node` with every top-level field not in `structure` served as
- * the placeholder — copied on write, the SAME object when nothing changed.
+ * DEFAULT-DENY, BY KIND: `node` with every field the classification does not
+ * declare served as the placeholder, and every declared field checked against
+ * its kind — at every depth — copied on write, the SAME object when nothing
+ * changed. A value that does not fit its kind is served as the placeholder: a
+ * string in a count, a name nothing declared, free text where an id belongs.
  */
-function withUndeclaredKeptOut(node: unknown, structure: readonly string[]): unknown {
-  if (!isPlainRecord(node)) return node;
-  let copy: Record<string, unknown> | undefined;
-  for (const key of Object.keys(node)) {
-    if (structure.includes(key) || node[key] === SERVED_PLACEHOLDER) continue;
-    copy ??= { ...node };
-    copy[key] = SERVED_PLACEHOLDER;
-  }
-  return copy ?? node;
+function servedByKinds(
+  node: unknown,
+  structure: Readonly<Record<string, StructureKind>>,
+  names: DeclaredNames,
+): unknown {
+  return fitRecord(node, structure, names);
 }
+
+/** `value` as kind `kind` serves it — itself when it fits, the placeholder (or a copy with parts masked) when not. */
+function fitKind(value: unknown, kind: StructureKind, names: DeclaredNames): unknown {
+  if (value === undefined || value === null || value === SERVED_PLACEHOLDER) return value;
+  switch (kind.kind) {
+    case 'count':
+      return typeof value === 'number' && Number.isFinite(value) ? value : SERVED_PLACEHOLDER;
+    case 'flag':
+      return typeof value === 'boolean' ? value : SERVED_PLACEHOLDER;
+    case 'enum':
+      return typeof value === 'string' && Object.prototype.hasOwnProperty.call(kind.of, value)
+        ? value
+        : SERVED_PLACEHOLDER;
+    case 'mintedId':
+      return typeof value === 'string' && MINTED_ID.test(value) ? value : SERVED_PLACEHOLDER;
+    case 'declaredName':
+      return typeof value === 'string' && names.has(kind.of, value) ? value : SERVED_PLACEHOLDER;
+    case 'list': {
+      if (!Array.isArray(value)) return SERVED_PLACEHOLDER;
+      const items = value.map((item) => fitKind(item, kind.of, names));
+      return items.some((item, i) => item !== value[i]) ? items : value;
+    }
+    case 'record':
+      return fitRecord(value, kind.fields as Readonly<Record<string, StructureKind>>, names);
+    case 'map': {
+      if (!isPlainRecord(value)) return SERVED_PLACEHOLDER;
+      // A key is a name too: one that does not fit makes the whole map content.
+      const keys = Object.keys(value);
+      if (keys.some((key) => fitKind(key, kind.key, names) !== key)) return SERVED_PLACEHOLDER;
+      let copy: Record<string, unknown> | undefined;
+      for (const key of keys) {
+        const fitted = fitKind(value[key], kind.value, names);
+        if (fitted === value[key]) continue;
+        copy ??= { ...value };
+        copy[key] = fitted;
+      }
+      return copy ?? value;
+    }
+    case 'anyOf':
+      return kind.of.some((alternative) => fitKind(value, alternative, names) === value)
+        ? value
+        : SERVED_PLACEHOLDER;
+  }
+}
+
+/** A record checked field by field against `fields`: every other field is content. */
+function fitRecord(
+  value: unknown,
+  fields: Readonly<Record<string, StructureKind>>,
+  names: DeclaredNames,
+): unknown {
+  if (!isPlainRecord(value)) return SERVED_PLACEHOLDER;
+  let copy: Record<string, unknown> | undefined;
+  for (const key of Object.keys(value)) {
+    const kind = Object.prototype.hasOwnProperty.call(fields, key) ? fields[key] : undefined;
+    const fitted = kind === undefined ? undeclared(value[key]) : fitKind(value[key], kind, names);
+    if (fitted === value[key]) continue;
+    copy ??= { ...value };
+    copy[key] = fitted;
+  }
+  return copy ?? value;
+}
+
+/** A field nobody declared: the placeholder, unless absent or already it. */
+const undeclared = (value: unknown): unknown =>
+  value === undefined || value === SERVED_PLACEHOLDER ? value : SERVED_PLACEHOLDER;
+
+/**
+ * The grammar of a minted id — a run, call, stage or artifact id, a hash, a
+ * provider's ref or stop token, a library timestamp: one token of id
+ * characters. Text with a space in it is never an id.
+ */
+const MINTED_ID = /^[A-Za-z0-9_.:#~/@+=-]{1,256}$/;
 
 /**
  * Whether the rule keeps out ANY part of the value named `name` — the whole of

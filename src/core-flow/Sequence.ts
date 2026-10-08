@@ -131,6 +131,7 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
     adoptMemberRedaction(
       this,
       steps.map((s) => s.runner),
+      steps.flatMap((s) => [s.id, (s as { readonly name?: unknown }).name]),
     );
     // Eager chart construction — see `RunnerBase.initChart` JSDoc.
     this.initChart(() => this.buildChart());

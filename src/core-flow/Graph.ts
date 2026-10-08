@@ -457,6 +457,7 @@ export class Graph extends RunnerBase<GraphInput, GraphOutput> {
     adoptMemberRedaction(
       this,
       opts.nodes.map((n) => n.runner),
+      opts.nodes.map((n) => n.id),
     );
 
     // Eager chart construction — see `RunnerBase.initChart` JSDoc.

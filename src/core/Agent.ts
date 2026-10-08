@@ -90,6 +90,8 @@ import {
 } from '../redaction/policy.js';
 import { coverageOfExecutor } from '../redaction/runRedaction.js';
 import { policyOfCoverage } from '../redaction/coverage.js';
+import type { NameDeclarations } from '../redaction/names.js';
+import { agentDeclaredNames } from './agent/declaredNames.js';
 import { ResumeRedactionError } from './conversation.js';
 import { declareRedaction, redactionDeclaredBy } from '../redaction/declared.js';
 import {
@@ -3826,6 +3828,99 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     return state !== undefined && state.llmLatestContent !== undefined;
   }
 
+  /** The run manifest's payload — what the agent was configured with (`emitRunManifest`, `redactionNames`). */
+  private runManifestPayload() {
+    return buildRunManifest({
+      agentId: this.id,
+      providerName: this.provider.name,
+      model: this.model,
+      hasRunConfig: this.runConfigFn !== undefined,
+      hasSkillBrains: this.skillBrains !== undefined,
+      reactMode: this.reactMode,
+      memories: this.memories,
+      ...(this.windowStrategy !== undefined && {
+        windowStrategyName: this.windowStrategy.name,
+      }),
+      // A graph is mounted iff `.skillGraph()` handed over its cursor
+      // resolver. NOT `skillGraphCascade`, which a graph mounted without the
+      // turn-start cascade options never sets — reading that one would
+      // report "no graph" for a graph that routes every turn.
+      ...(this.skillGraphNextSkill !== undefined && {
+        skillGraph: {
+          ...(this.skillGraphCascade !== undefined && {
+            routing: this.skillGraphCascade.strictness,
+            continuity: this.skillGraphCascade.continuity,
+          }),
+          ...(this.skillGraphCascade?.turnRouting?.scorer !== undefined && {
+            scorerName: this.skillGraphCascade.turnRouting.scorer.name,
+          }),
+        },
+      }),
+      ...(this.evidenceGate !== undefined && {
+        evidenceGatePosture: this.evidenceGate.posture,
+      }),
+      // The compositions this agent was built from, in declaration order.
+      // Spread value-conditionally so an agent with none passes no key at all
+      // — see `RunManifestSources.recipes` for why it is absent rather than
+      // an empty list.
+      ...(this.appliedRecipes !== undefined && { recipes: this.appliedRecipes }),
+      // The store itself is never named — see RunManifestSources.artifacts.
+      ...(this.artifactStore !== undefined && {
+        artifacts: {
+          configured: true as const,
+          placement: this.artifactPlacement !== undefined,
+          recordings: this.artifactRecordings !== undefined,
+        },
+      }),
+    });
+  }
+
+  /** The names this agent declared, once (`core/agent/declaredNames.ts`). */
+  private redactionNamesCache?: NameDeclarations;
+
+  /**
+   * The names this agent DECLARED at build — its tools and their arguments,
+   * its skills, the names its configuration states (`declaredNames.ts`): what
+   * a `declaredName` field of its events may hold (`events/content.ts`).
+   */
+  protected override redactionNames(): NameDeclarations {
+    if (this.redactionNamesCache !== undefined) return this.redactionNamesCache;
+    const brains = this.skillBrains;
+    this.redactionNamesCache = agentDeclaredNames({
+      id: this.id,
+      name: this.name,
+      manifest: this.runManifestPayload(),
+      tools: this.registry.map((entry) => entry.tool),
+      injections: this.injections,
+      skillIds: [
+        ...(this.skillGraphCascade?.nodeIds ?? []),
+        ...(this.skillGraphDeclared?.nodes ?? []).map((node) => node.id),
+        ...(brains?.bySkill.keys() ?? []),
+      ],
+      configNames: [
+        this.appName,
+        ...this.toolMiddleware.map((m) => m.name),
+        ...this.messageMiddleware.map((m) => m.name),
+        ...(this.reliabilityConfig?.providers ?? []).flatMap((p) => [
+          p.name,
+          p.provider.name,
+          p.model,
+        ]),
+        ...[...(brains?.bySkill.values() ?? []), brains?.decider, brains?.escalation].flatMap(
+          (choice) => {
+            const c = choice as { provider?: { name?: unknown }; model?: unknown } | undefined;
+            return [c?.provider?.name, c?.model];
+          },
+        ),
+        this.thinkingHandler?.id,
+        (this.externalToolProvider as { readonly id?: unknown } | undefined)?.id,
+        ...(this.mapsPlan?.maps ?? []).map((map) => map.id),
+      ],
+      toolNames: (this.mapsPlan?.maps ?? []).flatMap((map) => map.toolNames),
+    });
+    return this.redactionNamesCache;
+  }
+
   /**
    * File the run's disposition rows as ONE `integrity.disposition` event and
    * clear the ledger. On the finally path of both run doors — every exit,
@@ -3863,49 +3958,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     if (!dispatcher.hasListenersFor(type)) return;
     dispatcher.dispatch({
       type,
-      payload: buildRunManifest({
-        agentId: this.id,
-        providerName: this.provider.name,
-        model: this.model,
-        hasRunConfig: this.runConfigFn !== undefined,
-        hasSkillBrains: this.skillBrains !== undefined,
-        reactMode: this.reactMode,
-        memories: this.memories,
-        ...(this.windowStrategy !== undefined && {
-          windowStrategyName: this.windowStrategy.name,
-        }),
-        // A graph is mounted iff `.skillGraph()` handed over its cursor
-        // resolver. NOT `skillGraphCascade`, which a graph mounted without the
-        // turn-start cascade options never sets — reading that one would
-        // report "no graph" for a graph that routes every turn.
-        ...(this.skillGraphNextSkill !== undefined && {
-          skillGraph: {
-            ...(this.skillGraphCascade !== undefined && {
-              routing: this.skillGraphCascade.strictness,
-              continuity: this.skillGraphCascade.continuity,
-            }),
-            ...(this.skillGraphCascade?.turnRouting?.scorer !== undefined && {
-              scorerName: this.skillGraphCascade.turnRouting.scorer.name,
-            }),
-          },
-        }),
-        ...(this.evidenceGate !== undefined && {
-          evidenceGatePosture: this.evidenceGate.posture,
-        }),
-        // The compositions this agent was built from, in declaration order.
-        // Spread value-conditionally so an agent with none passes no key at all
-        // — see `RunManifestSources.recipes` for why it is absent rather than
-        // an empty list.
-        ...(this.appliedRecipes !== undefined && { recipes: this.appliedRecipes }),
-        // The store itself is never named — see RunManifestSources.artifacts.
-        ...(this.artifactStore !== undefined && {
-          artifacts: {
-            configured: true as const,
-            placement: this.artifactPlacement !== undefined,
-            recordings: this.artifactRecordings !== undefined,
-          },
-        }),
-      }),
+      payload: this.runManifestPayload(),
       meta: buildEventMeta({ runtimeStageId: RUN_MANIFEST_STAGE_ID }, this.currentRunContext),
     });
   }

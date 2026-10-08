@@ -19,8 +19,14 @@ import type {
 import type { RunContext } from '../bridge/eventMeta.js';
 import { EventDispatcher, REFUSE } from '../events/dispatcher.js';
 import { bindChartStages } from '../redaction/chartBinding.js';
-import { declarationOf, declareRedaction, redactionDeclaredBy } from '../redaction/declared.js';
+import {
+  compositionOf,
+  declarationOf,
+  declareRedaction,
+  redactionDeclaredBy,
+} from '../redaction/declared.js';
 import { policyOfCoverage, type Coverage } from '../redaction/coverage.js';
+import { unionNames, type NameDeclarations } from '../redaction/names.js';
 import { policyOfMarks, unionRedactionPolicies } from '../redaction/policy.js';
 import {
   adoptScopeOutsideRun,
@@ -230,7 +236,10 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
       const declaration = declarationOf(this);
       if (declaration.state === 'unknown') return REFUSE;
       if (declaredServing?.declaration !== declaration) {
-        declaredServing = { declaration, serving: servingAhead(policyOfCoverage(declaration)) };
+        declaredServing = {
+          declaration,
+          serving: servingAhead(policyOfCoverage(declaration), this.redactionNames()),
+        };
       }
       return declaredServing.serving;
     });
@@ -257,11 +266,44 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
     getRunContext: () => RunContext,
   ): RunRedaction {
     const policy = unionRedactionPolicies(redactionDeclaredBy(this), handedDown);
-    const run = createRunRedaction({ policy, dispatcher: this.dispatcher, getRunContext });
+    const run = createRunRedaction({
+      policy,
+      dispatcher: this.dispatcher,
+      getRunContext,
+      names: this.redactionNames(),
+    });
     // Under the run's own id too: a fact it dispatches after the next run
     // opened is still served under this run's policy.
     this.dispatcher.useServing(run.serving, getRunContext().runId);
     return run;
+  }
+
+  /**
+   * The names this runner DECLARED at build (`redaction/names.ts`) — its own
+   * id and name, and what each runner adds (an agent's tools, their
+   * arguments, its skills, its configuration; a composition's members'). A
+   * `declaredName` field of an event is served as structure only when it
+   * holds one of them (`events/content.ts`); every run starts from these and
+   * adds what it registers as it composes.
+   */
+  protected redactionNames(): NameDeclarations {
+    const self = this as unknown as { readonly id?: unknown; readonly name?: unknown };
+    // A composition's own labels for its members (branch ids, step names),
+    // and every name each member declared — they run in its executor.
+    const { members, labels } = compositionOf(this);
+    return unionNames(
+      {
+        config: [self.id, self.name, ...labels].filter(
+          (v): v is string => typeof v === 'string' && v.length > 0,
+        ),
+      },
+      ...members.map((member) => RunnerBase.namesOf(member)),
+    );
+  }
+
+  /** The names `runner` declared — a member of a composition; none for one that is not a runner of this library. */
+  protected static namesOf(runner: unknown): NameDeclarations {
+    return runner instanceof RunnerBase ? runner.redactionNames() : {};
   }
 
   /**
@@ -449,7 +491,9 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
     let outside: OutsideRun | undefined;
     bindChartStages(this.chart, (scope) => {
       const declaration = declarationOf(this);
-      if (outside?.declaration !== declaration) outside = outsideRunFor(declaration);
+      if (outside?.declaration !== declaration) {
+        outside = outsideRunFor(declaration, this.redactionNames());
+      }
       adoptScopeOutsideRun(scope, outside);
     });
   }
@@ -587,7 +631,10 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
     // executor (`openRunRedaction`), so nothing per-run is kept on the instance.
     const resumeLeg = unionRedactionPolicies(handedDown, policyOfMarks(checkpoint.redactionMarks));
     this.dispatcher.useServing(
-      servingAhead(unionRedactionPolicies(redactionDeclaredBy(this), resumeLeg)),
+      servingAhead(
+        unionRedactionPolicies(redactionDeclaredBy(this), resumeLeg),
+        this.redactionNames(),
+      ),
     );
     const meta = this.minimalMeta();
     const pausedDurationMs = Date.now() - checkpoint.pausedAt;

@@ -20,7 +20,12 @@ import { Agent, defineTool, type Tool } from '../../src/index.js';
 import { mock } from '../../src/doors/providers.js';
 import { conversationRedaction } from '../../src/doors/security.js';
 import type { LLMProvider, LLMRequest } from '../../src/adapters/types.js';
-import { EVENT_CONTENT, type EventContent } from '../../src/events/content.js';
+import {
+  EVENT_CONTENT,
+  type ClassifiedContent,
+  type StructureKind,
+} from '../../src/events/content.js';
+import { RunNames } from '../../src/redaction/names.js';
 
 export const SECRET = {
   user: 'SECRET-USER-7731',
@@ -175,71 +180,157 @@ export function leaksIn(value: unknown, secrets: readonly string[] = ALL_SECRETS
   );
 }
 
-/** The marker a structure field that CARRIES words holds beside them, at every level. */
-export const INNER_MARKER = 'structure-inner';
+/**
+ * The names a generated payload's `declaredName` fields hold — declared to the
+ * serving under test (`declaredNamesForTests`), one per space.
+ */
+export const DECLARED = Object.freeze({
+  tool: 'declared_tool',
+  argument: 'declared_arg',
+  skill: 'declared-skill',
+  config: 'declared-config',
+});
 
-const contentOfType = (type: string): EventContent =>
-  (EVENT_CONTENT as Readonly<Record<string, EventContent>>)[type] as EventContent;
+/** A names registry that declares exactly {@link DECLARED}. */
+export function declaredNamesForTests(): RunNames {
+  return new RunNames({
+    tool: [DECLARED.tool],
+    argument: [DECLARED.argument],
+    skill: [DECLARED.skill],
+    config: [DECLARED.config],
+  });
+}
+
+/** The classification of a registered type, as the served path reads it. */
+export const classificationOf = (type: string): ClassifiedContent =>
+  (EVENT_CONTENT as unknown as Readonly<Record<string, ClassifiedContent>>)[
+    type
+  ] as ClassifiedContent;
+
+/** A value that FITS `kind` — its declared names from {@link DECLARED}. */
+export function validValueOf(kind: StructureKind): unknown {
+  switch (kind.kind) {
+    case 'count':
+      return 3;
+    case 'flag':
+      return true;
+    case 'enum':
+      return Object.keys(kind.of)[0];
+    case 'mintedId':
+      return 'id_7f3c';
+    case 'declaredName':
+      return DECLARED[kind.of];
+    case 'list':
+      return [validValueOf(kind.of)];
+    case 'record':
+      return Object.fromEntries(
+        Object.entries(kind.fields as Record<string, StructureKind>).map(([field, inner]) => [
+          field,
+          validValueOf(inner),
+        ]),
+      );
+    case 'map':
+      return { [validValueOf(kind.key) as string]: validValueOf(kind.value) };
+    case 'anyOf':
+      return validValueOf(kind.of[0] as StructureKind);
+  }
+}
+
+/**
+ * A value OUTSIDE `kind`, carrying `canary` — text where a number, a flag, a
+ * verdict word or an id belongs; a name nothing declared; text where a list,
+ * a record or a map belongs.
+ */
+export function outOfKindValueOf(kind: StructureKind, canary: string): unknown {
+  switch (kind.kind) {
+    case 'count':
+    case 'flag':
+    case 'enum':
+    case 'mintedId':
+    case 'list':
+    case 'record':
+    case 'map':
+    case 'anyOf':
+      return `said ${canary} in free text`;
+    case 'declaredName':
+      // One token, like a name — but one nothing declared.
+      return `invented_${canary}`;
+  }
+}
+
+/** One leaf of a classification: its path from the payload root, and its kind. */
+export interface KindLeaf {
+  /** Field names, `[]` for a list's element, `{key}` for a map key, `{value}` for a map value. */
+  readonly path: readonly string[];
+  readonly kind: StructureKind;
+}
+
+/** Every leaf kind of `structure`, at every depth. */
+export function kindLeaves(structure: Readonly<Record<string, StructureKind>>): KindLeaf[] {
+  const out: KindLeaf[] = [];
+  const walk = (kind: StructureKind, path: readonly string[]): void => {
+    out.push({ path, kind });
+    if (kind.kind === 'list') walk(kind.of, [...path, '[]']);
+    else if (kind.kind === 'record') {
+      for (const [field, inner] of Object.entries(kind.fields as Record<string, StructureKind>)) {
+        walk(inner, [...path, field]);
+      }
+    } else if (kind.kind === 'map') {
+      out.push({ path: [...path, '{key}'], kind: kind.key });
+      walk(kind.value, [...path, '{value}']);
+    }
+  };
+  for (const [field, kind] of Object.entries(structure)) walk(kind, [field]);
+  return out;
+}
+
+/**
+ * `payload` with the value at `path` replaced (copy, built along the path;
+ * `[]` = the first element, `{key}` = the map's one key, `{value}` = its value).
+ */
+export function withValueAt(payload: unknown, path: readonly string[], value: unknown): unknown {
+  if (path.length === 0) return value;
+  const [head, ...rest] = path as [string, ...string[]];
+  if (head === '[]') {
+    const list = Array.isArray(payload) ? [...payload] : [];
+    list[0] = withValueAt(list[0], rest, value);
+    return list;
+  }
+  const record = isRecord(payload) ? { ...payload } : {};
+  if (head === '{key}' || head === '{value}') {
+    const [key, inner] = Object.entries(record)[0] ?? ['k', undefined];
+    if (head === '{key}') return { [String(value)]: inner };
+    return { [key]: withValueAt(inner, rest, value) };
+  }
+  record[head] = withValueAt(record[head], rest, value);
+  return record;
+}
+
+/** The value at `path` (same path grammar as {@link withValueAt}). */
+export function valueAtPath(payload: unknown, path: readonly string[]): unknown {
+  let at: unknown = payload;
+  for (const segment of path) {
+    if (segment === '[]') at = Array.isArray(at) ? at[0] : undefined;
+    else if (segment === '{key}') return isRecord(at) ? Object.keys(at)[0] : undefined;
+    else if (segment === '{value}') at = isRecord(at) ? Object.values(at)[0] : undefined;
+    else at = isRecord(at) ? at[segment] : undefined;
+  }
+  return at;
+}
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 
 /**
- * `value` planted at `segments` in `node`, building the shape on the way
- * (`name[]` = a list of one record), with {@link INNER_MARKER} beside it at
- * every level and, when the row names its argument (`namedBy`), an unrelated
- * path there — so only the rule's own verdict can keep the value out.
- */
-function plantAt(
-  node: Record<string, unknown>,
-  segments: readonly string[],
-  value: unknown,
-  namedBy: string | undefined,
-): void {
-  const [head, ...rest] = segments as [string, ...string[]];
-  const list = head.endsWith('[]');
-  const key = list ? head.slice(0, -2) : head;
-  if (rest.length === 0) {
-    node[key] = list ? [value] : value;
-    if (namedBy !== undefined) node[namedBy] = 'unrelated.arg';
-    return;
-  }
-  if (list) {
-    if (!Array.isArray(node[key])) node[key] = [{ kind: INNER_MARKER }];
-    plantAt((node[key] as Record<string, unknown>[])[0]!, rest, value, namedBy);
-  } else {
-    if (!isRecord(node[key])) node[key] = { kind: INNER_MARKER };
-    plantAt(node[key] as Record<string, unknown>, rest, value, namedBy);
-  }
-}
-
-/** The top-level fields of the registered event `type` that hold words below them. */
-export function carriersOf(type: string): Set<string> {
-  return new Set(
-    (contentOfType(type).words ?? [])
-      .flatMap((row) => row.paths)
-      .filter((path) => path.includes('.'))
-      .map((path) => path.split('.')[0]!.replace(/\[\]$/, '')),
-  );
-}
-
-/**
  * A payload for the registered event `type`, GENERATED from its classification
- * (`src/events/content.ts` · `EVENT_CONTENT`), never listed by hand:
- * `structure(field)` in every structure field, `quote` at every words path
- * (a field that carries words holds a walkable shape with
- * {@link INNER_MARKER} beside them) and in one field the type does not declare.
+ * (`src/events/content.ts` · `EVENT_CONTENT`), never listed by hand: every
+ * structure field holding a value that fits its kind (`validValueOf`), and
+ * `quote` in one field the type does not declare.
  */
-export function eventPayloadFor(
-  type: string,
-  structure: (field: string) => unknown,
-  quote: unknown,
-): Record<string, unknown> {
-  const content = contentOfType(type);
+export function eventPayloadFor(type: string, quote: unknown): Record<string, unknown> {
   const payload: Record<string, unknown> = { __undeclared__: quote };
-  for (const field of content.structure) payload[field] = structure(field);
-  for (const row of content.words ?? []) {
-    for (const path of row.paths) plantAt(payload, path.split('.'), quote, row.namedBy);
+  for (const [field, kind] of Object.entries(classificationOf(type).structure)) {
+    payload[field] = validValueOf(kind);
   }
   return payload;
 }

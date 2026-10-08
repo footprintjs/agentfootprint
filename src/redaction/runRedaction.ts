@@ -64,6 +64,7 @@ import {
   type Coverage,
 } from './coverage.js';
 import { eventServing, SERVED_PLACEHOLDER, type EventServing } from './served.js';
+import { RunNames, type NameDeclarations, type NameSpace } from './names.js';
 import { redactionMarker } from './marker.js';
 
 /** One run's redaction, as the runner that owns the executor holds it. */
@@ -112,6 +113,8 @@ export interface ScopeRun {
   /** Deliver an event, as made, to the real-value path — from the stage `stageId` that emitted it. */
   real(type: string, payload: unknown, stageId: string): void;
   noteWrite(runtimeStageId: string, key: string, value: unknown): void;
+  /** Record names the run declared as it composes (a provider's tools, their arguments). */
+  declare(space: NameSpace, names: Iterable<string>): void;
   /** Whether the run's rule keeps `name` out of its records. */
   keepsOut(name: string): boolean;
 }
@@ -168,6 +171,8 @@ export function createRunRedaction(args: {
   readonly policy: RedactionPolicy | undefined;
   readonly dispatcher: EventDispatcher;
   readonly getRunContext: () => RunContext;
+  /** The names the runner declared at build (`names.ts`) — what a `declaredName` field may hold. */
+  readonly names?: NameDeclarations;
 }): RunRedaction {
   const { policy, dispatcher, getRunContext } = args;
   // The rule the run decides with — one built from the policy stands in until
@@ -175,7 +180,10 @@ export function createRunRedaction(args: {
   // this box and holds nothing else of the run (`servingOf`): the dispatcher
   // keeps a run's serving for its late facts, never the run's values.
   const decided = { rule: new RedactionRule(policy) };
-  const serving = servingOf(decided, policy);
+  // The names this run may serve as declared: its runner's, and what the run
+  // registers as it composes (`declareNames`). Names only.
+  const names = new RunNames(args.names);
+  const serving = servingOf(decided, policy, names);
   // Relayed writes waiting for their recorder, oldest first, per stage and key.
   // Keyed by the stage's runtimeStageId (unique per execution), so an entry no
   // recorder claims (a deferred tier that dropped the write) can never be
@@ -200,6 +208,9 @@ export function createRunRedaction(args: {
     },
     keepsOut(name) {
       return policy !== undefined && decided.rule.isKeyRedacted(name);
+    },
+    declare(space, list) {
+      names.declare(space, list);
     },
     noteWrite(runtimeStageId, key, value) {
       // No policy: the scope channel serves the write as written — nothing to relay.
@@ -284,8 +295,9 @@ export function retiredRule(
 function servingOf(
   decided: { readonly rule: RedactionRule },
   policy: RedactionPolicy | undefined,
+  names: RunNames,
 ): EventServing {
-  return eventServing(() => decided.rule, (policy?.emitPatterns?.length ?? 0) > 0);
+  return eventServing(() => decided.rule, (policy?.emitPatterns?.length ?? 0) > 0, names);
 }
 
 /**
@@ -296,9 +308,12 @@ function servingOf(
  * built from the policy alone: no stage has run yet, so the run has marked
  * nothing.
  */
-export function servingAhead(policy: RedactionPolicy | undefined): EventServing {
+export function servingAhead(
+  policy: RedactionPolicy | undefined,
+  names?: NameDeclarations,
+): EventServing {
   const rule = new RedactionRule(policy);
-  return eventServing(() => rule, (policy?.emitPatterns?.length ?? 0) > 0);
+  return eventServing(() => rule, (policy?.emitPatterns?.length ?? 0) > 0, new RunNames(names));
 }
 
 /**
@@ -324,7 +339,7 @@ export interface OutsideRun {
  * `covered` serves under its policy, `declared-none` as emitted (positively
  * none), `unknown` refuses every payload — the placeholder, fail closed.
  */
-export function outsideRunFor(declaration: Coverage): OutsideRun {
+export function outsideRunFor(declaration: Coverage, declared?: NameDeclarations): OutsideRun {
   if (declaration.state === 'unknown') {
     return Object.freeze({
       declaration,
@@ -334,19 +349,22 @@ export function outsideRunFor(declaration: Coverage): OutsideRun {
         real: () => undefined,
         noteWrite: () => undefined,
         keepsOut: () => true,
+        declare: () => undefined,
       },
     });
   }
   const policy = policyOfCoverage(declaration);
   const rule = new RedactionRule(policy);
+  const names = new RunNames(declared);
   return Object.freeze({
     declaration,
     scopeRun: {
       coverage: declaration,
-      serving: eventServing(() => rule, (policy?.emitPatterns?.length ?? 0) > 0),
+      serving: eventServing(() => rule, (policy?.emitPatterns?.length ?? 0) > 0, names),
       real: () => undefined,
       noteWrite: () => undefined,
       keepsOut: (name: string) => rule.isKeyRedacted(name),
+      declare: (space: NameSpace, list: Iterable<string>) => names.declare(space, list),
     },
   });
 }
@@ -412,6 +430,17 @@ export function setEventSource(scope: SetValueScope, key: string, value: unknown
   const entry = scopeRuns.get(scope as object);
   entry?.run.noteWrite(entry.stageId, key, value);
   scope.$setValue(key, value);
+}
+
+/**
+ * THE way a stage tells the run which names it declared as it composed — the
+ * tools a provider delivered this iteration and their argument names
+ * (`slots/buildToolsSlot.ts`) — so a `declaredName` field holding one is
+ * served as structure. A scope no run made declares nothing (its events are
+ * refused anyway). Names only, never a value.
+ */
+export function declareNames(scope: object, space: NameSpace, names: Iterable<string>): void {
+  scopeRuns.get(scope)?.run.declare(space, names);
 }
 
 /**

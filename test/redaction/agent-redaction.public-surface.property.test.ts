@@ -29,7 +29,15 @@ import { ALL_EVENT_TYPES, type AgentfootprintEvent } from '../../src/events/regi
 import { mock } from '../../src/doors/providers.js';
 import { conversationRedaction } from '../../src/doors/security.js';
 import { AGENT_PUBLIC_SURFACE } from '../type-regressions/AgentRedactionSurface.completeness.test.js';
-import { eventPayloadFor, locationsOf, withoutAnswerBoundary } from './fixture.js';
+import {
+  classificationOf,
+  eventPayloadFor,
+  kindLeaves,
+  locationsOf,
+  outOfKindValueOf,
+  withoutAnswerBoundary,
+  withValueAt,
+} from './fixture.js';
 import { everySurface, servedArtifacts } from './everySurface.js';
 
 /** mulberry32 — the suite's seeded PRNG (`agent-redaction.property.test.ts`). */
@@ -266,14 +274,40 @@ describe('property — the route, cost and budget events keep a selected value o
  * EVERY event type in the registry, generated from it — the type list from
  * `events/registry.ts` · `ALL_EVENT_TYPES`, each payload from its
  * classification (`events/content.ts` · `EVENT_CONTENT`, built by
- * `fixture.ts` · `eventPayloadFor`), never a hand list. Each type is filed
- * through the agent's own dispatcher twice — the consumer door (`emit`) and the
- * hosting door for the agent's own last run (`emitAttributed`) — with the
- * secret in a field the type does not declare, at every words path it quotes,
- * and under the selected name inside every structure field. Every type is
- * delivered, and no listener receives the secret.
+ * `fixture.ts`), never a hand list. Each type is filed through the agent's own
+ * dispatcher twice — the consumer door (`emit`) and the hosting door for the
+ * agent's own last run (`emitAttributed`) — with the secret everywhere a
+ * person or the model could put it: in a field the type does not declare, at
+ * every words path it quotes, under the selected name, and in EVERY structure
+ * field at every depth as a value outside its kind — free text where a number,
+ * a flag, a verdict word or an id belongs, and a NAME the model made up
+ * (`invented_<secret>`) where a tool name, an argument path, a skill id or a
+ * configured name belongs. Every type is delivered, and no listener receives
+ * the secret.
  */
 describe('property — every event type in the registry keeps a selected value out', () => {
+  /** A payload for `type` with the secret in every place it could ride. */
+  const plantedPayload = (type: string, c: Case): Record<string, unknown> => {
+    let payload: unknown = eventPayloadFor(type, `said ${c.secret}`);
+    for (const leaf of kindLeaves(classificationOf(type).structure)) {
+      if (['list', 'record', 'map'].includes(leaf.kind.kind)) continue;
+      payload = withValueAt(payload, leaf.path, outOfKindValueOf(leaf.kind, c.secret));
+    }
+    for (const row of classificationOf(type).words ?? []) {
+      for (const path of row.paths) {
+        const segments = path
+          .split('.')
+          .map((s) => (s.endsWith('[]') ? [s.slice(0, -2), '[]'] : [s]))
+          .flat();
+        payload = withValueAt(payload, segments, `quoted ${c.secret}`);
+      }
+    }
+    return {
+      ...(payload as Record<string, unknown>),
+      __named__: { customer: { [c.field]: c.secret } },
+    };
+  };
+
   for (const seed of [1, 2, 3, 5, 8]) {
     const c = caseFor(seed);
     it(`seed ${seed} (${c.form} ${c.field})`, async () => {
@@ -287,21 +321,53 @@ describe('property — every event type in the registry keeps a selected value o
 
       const served: AgentfootprintEvent[] = [];
       agent.on('*', (e) => served.push(e));
-      const payload = (type: string) =>
-        eventPayloadFor(
-          type,
-          () => ({ customer: { [c.field]: c.secret, name: 'Ada' } }),
-          `said ${c.secret}`,
-        );
       for (const type of ALL_EVENT_TYPES) {
-        agent.emit(type, payload(type));
-        agent.emitAttributed(type, payload(type), { sessionId: 's', runId: runId as string });
+        agent.emit(type, plantedPayload(type, c));
+        agent.emitAttributed(type, plantedPayload(type, c), {
+          sessionId: 's',
+          runId: runId as string,
+        });
       }
       expect(served).toHaveLength(ALL_EVENT_TYPES.length * 2);
       expect(new Set(served.map((e) => e.type))).toEqual(new Set(ALL_EVENT_TYPES));
       expect(locationsOf(served, c.secret)).toEqual([]);
     });
   }
+
+  it('the agent’s OWN names stay readable: a declared tool and its declared argument', async () => {
+    const c = caseFor(1);
+    const { agent } = agentFor(c);
+    await agent.run({ message: 'go', identity: SCOPE });
+    const served: AgentfootprintEvent[] = [];
+    agent.on('*', (e) => served.push(e));
+    agent.emit('agentfootprint.stream.tool_start', {
+      toolName: 'lookup',
+      toolCallId: 'c9',
+      args: {},
+    });
+    agent.emit('agentfootprint.stream.tool_start', {
+      toolName: `lookup_${c.secret}`,
+      toolCallId: 'c9',
+      args: {},
+    });
+    agent.emit('agentfootprint.validation.args_invalid', {
+      toolName: 'lookup',
+      toolCallId: 'c9',
+      iteration: 1,
+      issues: [
+        { path: 'customer', expected: 'object', got: 'string' },
+        { path: `customer.note_${c.secret}`, expected: 'nothing', got: 'string' },
+      ],
+      enforced: true,
+    });
+    const names = served
+      .filter((e) => e.type === 'agentfootprint.stream.tool_start')
+      .map((e) => (e.payload as { toolName: unknown }).toolName);
+    expect(names).toEqual(['lookup', '[REDACTED]']);
+    const issues = served.find((e) => e.type === 'agentfootprint.validation.args_invalid')
+      ?.payload as { issues: { path: unknown }[] };
+    expect(issues.issues.map((i) => i.path)).toEqual(['customer', '[REDACTED]']);
+  });
 });
 
 /** Every artifact the run filed under its scope (its minted recording), read back. */

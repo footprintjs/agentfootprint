@@ -279,6 +279,7 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
     adoptMemberRedaction(
       this,
       branches.map((b) => b.runner),
+      branches.flatMap((b) => [b.id, (b as { readonly name?: unknown }).name]),
     );
     this.merge = merge;
     // Set BEFORE initChart — buildChart reads both fields.

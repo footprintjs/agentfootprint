@@ -94,6 +94,7 @@ import { compositionRecorder } from '../recorders/core/CompositionRecorder.js';
 import { ContextRecorder } from '../recorders/core/ContextRecorder.js';
 import { streamRecorder } from '../recorders/core/StreamRecorder.js';
 import { typedEmit } from '../recorders/core/typedEmit.js';
+import { unionNames, type NameDeclarations } from '../redaction/names.js';
 
 // ─── Public types ────────────────────────────────────────────────────
 
@@ -374,6 +375,15 @@ class RouterStep extends RunnerBase<{ message: string }, string> {
     this.knownIds = opts.knownIds;
     this.record = opts.record;
     this.initChart(() => this.buildChart());
+  }
+
+  /** The router's own id, the agents it may route to, and its mounted LLM call's names. */
+  protected override redactionNames(): NameDeclarations {
+    return unionNames(
+      super.redactionNames(),
+      { config: [this.routerId, ...this.knownIds] },
+      RunnerBase.namesOf(this.llm),
+    );
   }
 
   async run(
