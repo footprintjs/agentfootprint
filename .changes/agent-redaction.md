@@ -27,7 +27,12 @@ with a canary in each place and fails if one reaches a record; the run emits the
 and without it. Content the library quotes in an event under names of its own (a validation
 issue's argument, a check-in's evidence, a matcher's witness, a parser's message about the draft) is
 kept out with the value it came from; a check-in's rendered arguments are kept out by any argument
-name the policy keeps out.
+name the policy keeps out. Events are DEFAULT-DENY under the list: every event type the library
+emits is classified once — the fields that are structure, the words it quotes and what from — and a
+new event type does not compile until it is; under `conversationRedaction()` (or a policy that
+names at least as much) every field an event type does not declare structure is served as the
+placeholder, on the library's events and on your own `emit`s alike (a type the library does not
+know is content in every field). A narrower policy serves events by name.
 
 The policy reaches every run the agent's records come from. A composition (`Sequence`,
 `Parallel`, `Conditional`, `Loop`, `Graph`, `Workflow`) adopts its members' policies. A run a tool
@@ -42,7 +47,10 @@ more) — under a narrower calling policy it reads the record's view, and the va
 of the calling agent either way. A run's redaction lives with the run, never on the agent
 instance: a snapshot is served under the policy its own executor was handed, a fact under the policy
 of the run it belongs to (found by its run id, even after the next run opened; before an agent's
-first run, under the policy it declares), and a pause carries the run's policy in its own state —
+first run, under the policy it declares; a fact naming a run the instance can no longer vouch for —
+more than 32 runs ago, or one another instance ran — is refused wherever a policy exists on the
+instance), events reach only the listeners of the runner that ran them, and a pause carries the
+run's policy in its own state —
 every resumed leg writes its whole policy back, a `redact` passed to `resume()` included — so every
 later leg is covered by it without being handed it again (an app pattern excepted — see below), and
 by the names the paused leg kept out.
@@ -80,12 +88,13 @@ it replays to the model, as every memory keeps what it stores.
 
 Named limits: the run's answer leaves its chart as a bare string and footprintjs serves an unnamed
 output as it is, so a recording's `run.exit` payload carries it whatever the policy; error text
-written by code (`error`, `errorMessage`) is not on the list; a declaration's dates and source
+written by code (`error`, `errorMessage`) is not on the list (on events the list keeps it out
+anyway, as an undeclared field; in state, name it yourself); an app's own event types are content
+in every field under the list, with no door yet to declare their structure; a declaration's dates and source
 (`period`, `provenance` — whatever a tool writes there) stay readable on its events; console warnings are not records; fingerprints and content hashes stay (they are structure), so a short kept-out value can be
 confirmed by hashing guesses; a checkpoint is not proof — one edited to drop both its policy and its
 marks, or to carry a narrower one, resumes under what it says; an `LLMCall` or `LlmRouter` takes no
-`redact`, so one run on its own is covered by nothing; a composition does not refuse overlapping
-runs, so run one instance one run at a time; a chart-backed tool's own `$emit` payloads reach the
+`redact`, so one run on its own is covered by nothing; a chart-backed tool's own `$emit` payloads reach the
 recorders handed to that tool as footprintjs serves an emit, by event name; footprintjs's rule reads a
 value's own enumerable keys, so a Map's or a Set's contents, an Error's `cause` (an `AggregateError`'s
 `errors`), a non-enumerable key or a `toJSON` that writes a privately held name keep a value a

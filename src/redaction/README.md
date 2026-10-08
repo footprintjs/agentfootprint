@@ -8,9 +8,11 @@ per-run wiring every runner's `createExecutor` goes through; `emitServed`, the
 one way a typed event leaves a stage; `setEventSource`, the one way a stage
 writes a value the library derives events from; `servingAhead`, a resume's
 serving before its executor exists). Lens: `served.ts` (what an event's payload
-and meta are served as — `DERIVED`, the content the library quotes under names
-of its own) and `marker.ts` (the one sign a record was served under a policy,
-which every reader of a record asks before it reads a placeholder as kept out).
+and meta are served as, over the event registry's own classification —
+`../events/content.ts` · `EVENT_CONTENT`: each type's structure, the words it
+quotes, and everything else content by default) and `marker.ts` (the one sign a
+record was served under a policy, which every reader of a record asks before it
+reads a placeholder as kept out).
 
 Nothing in this folder decides what is secret. footprintjs's `RedactionRule`
 (`footprintjs/advanced`) is the one owner of every verdict; this folder only
@@ -42,7 +44,7 @@ error — it masks a key of that name at ANY depth (and a dotted-path pattern or
 a `fields` selector, a path). So a field like `ssn` inside a tool's arguments is
 masked wherever a record hands the arguments out WHOLE — every event's `args`,
 and the copies the library renders from them (a check-in's `willDo`, a
-validation issue's quoted value — `DERIVED` below). A copy held in STATE is
+validation issue's quoted value — the words rows, below). A copy held in STATE is
 selected by its own top-level key, never by a name inside it: the history, a
 paused call's arguments (`pausedToolArgs`), the model's latest tool calls
 (`llmLatestToolCalls`) carry `ssn` under keys of their own, and are kept out
@@ -94,19 +96,22 @@ const agent = Agent.create({
   `agent-redaction.propagation.test.ts`. A feature added to the list needs a
   case there. Two pins keep the list honest in both directions: every field
   the audit's bounded mode treats as content (`adapters/observability/audit.ts`
-  · `boundedContentFieldNames`) is on it, and every `DERIVED` row names a real
-  event and a source the vocabulary keeps out — each row checked at every path
-  it names in `served.test.ts`.
+  · `boundedContentFieldNames`) is on it, and every words row of the event
+  classification (`../events/content.ts`) names a source the vocabulary keeps
+  out — each row checked at every path it names in `served.test.ts`, and the
+  classification itself in `event-content.test.ts`.
 - **What stays readable.** Ids, counts, kinds, tool names, timings and verdict
   words — the record still shows WHAT happened, without the words.
 - **Not on it, by design.** Error text written by code (`error`,
   `errorMessage`, `lastError`, a provider fallback's `reason`, a fatal event's
   `error`): a message a tool or provider throws can quote what it failed on,
   and `error` also names a flag the record's readers count on
-  (`stream.tool_end`'s `error: true`) — add those names yourself if your errors
-  carry personal data. The thrown value itself, handed to your caller by
-  `run()`'s rejection, is the caller's own. Fields your own tools or rules
-  name — join them.
+  (`stream.tool_end`'s `error: true`). On EVENTS the vocabulary keeps it out
+  anyway — every field an event type does not declare structure is
+  (default-deny, "How it works" below); in STATE (a `lastError` key) add the
+  names yourself if your errors carry personal data. The thrown value itself,
+  handed to your caller by `run()`'s rejection, is the caller's own. Fields
+  your own tools or rules name — join them.
 - **Names it shares with structure** are kept out with it: `permission.check`'s
   `result` is its verdict word, so a refused call reads as refused from
   `stream.tool_end`'s `notExecuted`, without the rule that refused it.
@@ -179,12 +184,35 @@ and that the answer account says the question and the answer are kept out.
    runner's DECLARED policy (`runRedaction.ts` · `adoptScopeOutsideRun`).
 3. The dispatcher serves every fact a runner dispatches directly (pause events,
    artifact facts, the run manifest, `context.*`, `error.fatal`) and the identity
-   on every event's meta, by the same rule.
-4. **Derived fields** (`served.ts` · `DERIVED`): content the library computes
-   from another value and carries under a name of its own IN AN EVENT is served
-   as the placeholder whenever the rule keeps ANY part of a value it came from
-   out — the whole of it, or fields inside it (the rule's own verdict on the
-   source's name, `served.ts` · `sourceKeptOut`) — a
+   on every event's meta, by the same rule — a pause request under the run whose
+   executor paused (`EventDispatcher · dispatchForRun`).
+4. **Every event type is classified — DEFAULT-DENY** (`../events/content.ts` ·
+   `EVENT_CONTENT`). Each type of the ONE event registry declares, once, the
+   top-level fields that are its STRUCTURE (ids, counts, sizes, timings, kinds,
+   verdict words, names code declared) and the WORDS it quotes under names of
+   its own, with the values they come from. The table is a mapped type over
+   the registry: a new event type does not compile until it is classified, and
+   a structure name that is not a field of its payload does not compile either
+   (`event-content.test.ts` pins both at run time too). Under a policy that
+   keeps the conversation out (`conversationRedaction()` or more —
+   `conversation.ts` · `ruleKeepsConversationOut`), EVERY field an event type
+   does not declare structure is served as the placeholder — on the library's
+   events and an app's own (a type the registry does not know is content in
+   every field) — so a field nobody classified never carries the conversation
+   into a record. A narrower, by-name policy serves an event by name, as
+   footprintjs serves any record handed out whole. A field is declared
+   structure only when it cannot carry what a person, the model or a tool
+   wrote; the vocabulary test's canaries check every declaration against real
+   runs. Generated for every type, never listed by hand:
+   `event-content.test.ts` (each type's own payload with a canary in an
+   undeclared field and at every words path) and the public-surface property
+   (every type filed through an agent's dispatcher, under random policies).
+5. **Words** (each type's `words` rows): content the library computes from
+   another value and carries under a name of its own IN AN EVENT is served as
+   the placeholder whenever the rule keeps ANY part of a value it came from
+   out — under ANY policy, a narrow by-name one included — the whole of it, or
+   fields inside it (the rule's own verdict on the source's name, `served.ts` ·
+   `sourceKeptOut`) — a
    parser's message quotes the model's draft (`rawOutput`); a validation issue,
    an external ground and an assumed value quote an argument (`args`, or the
    argument's own name on the row); a check-in's evidence pack quotes the
@@ -210,7 +238,7 @@ and that the answer account says the question and the answer are kept out.
    keeps in STATE (the turn's routing verdict `turnRoute`, a map's
    `mapEngagement`) is a state key, kept out by its own name — the vocabulary
    names both.
-5. **Relayed writes** (`setEventSource`): the context recorder derives
+6. **Relayed writes** (`setEventSource`): the context recorder derives
    `context.injected` / `slot_composed` / `budget_pressure` from the slots'
    writes, and a selected key's write reaches recorders as the placeholder. The
    slots hand the value they wrote to the run as they write it, with the rule's
@@ -220,7 +248,7 @@ and that the answer account says the question and the answer are kept out.
    `INJECTION_STRUCTURE` / `COMPOSITION_STRUCTURE`) and serves every other field
    as the placeholder. A kept-out injection is still an injection the record
    shows — without its words.
-6. **A resume is covered like its first leg** (`servingAhead`,
+7. **A resume is covered like its first leg** (`servingAhead`,
    `policyOfMarks`, `AgentState.runRedaction`): the resumed leg's policy is the
    runner's declaration, the per-run `redact` the paused run was handed (read
    back off the checkpoint's state), any the resume adds, and the names the
@@ -229,11 +257,11 @@ and that the answer account says the question and the answer are kept out.
    runner installs that serving first — a fresh instance, a later process or
    another pool lane serves the leg as the instance that paused would. A
    carried policy this library did not write refuses the resume.
-7. **The marker** (`marker.ts`): under a policy, the run's snapshot carries one
+8. **The marker** (`marker.ts`): under a policy, the run's snapshot carries one
    recorder row, `agentfootprint.redaction` — the positive sign that a
    placeholder in the record is a value the policy kept out. Without a policy
    nothing is attached and the snapshot is byte-identical.
-8. **A run's redaction is the RUN's, never the instance's.** The policy a run
+9. **A run's redaction is the RUN's, never the instance's.** The policy a run
    is covered by is handed to its executor (`applyTo`), and a snapshot is
    served under the policy of the executor it comes from (`policyOfExecutor`)
    — never whatever run came after. "This run had no policy" is an explicit
@@ -243,11 +271,34 @@ and that the answer account says the question and the answer are kept out.
    off the run that owns the seed's scope (`policyInForce`), never an agent
    field; a resume's leg policy goes back from `emitPauseResume` to that leg's
    executor; and a fact is served under its own run's serving, by its run id
-   (`EventDispatcher · servingsByRun`) — one dispatched before any run opened
-   (a consumer's `emit`, a `parseOutputAsync` fallback) under the policy the
-   runner declares (`EventDispatcher · useDefaultServing`). One run at a time per agent instance
+   (`EventDispatcher · servingsByRun` — the 32 most recent runs of ONE
+   dispatcher, so of one runner instance), a pause request under the run whose
+   executor paused (`runRedaction.ts` · `servingOfExecutor`), and one
+   dispatched before any run opened (a consumer's `emit`, a
+   `parseOutputAsync` fallback) under the policy the runner declares
+   (`EventDispatcher · useDefaultServing`). A fact stamped with a run the
+   dispatcher holds no serving for — older than those 32, or never opened on
+   this instance — is REFUSED (served as the placeholder) wherever a policy
+   exists on the instance: never served under another run's policy. Every run
+   stamps its events with its OWN run (a runner captures each run's context
+   for that run's recorders), so overlapping runs of one composition never
+   serve each other's facts. One run at a time per agent instance
    is the conversation law (`RunInFlightError`, `PendingQuestionError`); a
    resume that cannot carry its redaction is refused (`ResumeRedactionError`).
+
+   **No registry delivers one run's content to another.** Every registry this
+   folder keeps is keyed by IDENTITY and held weakly — an executor → the
+   policy and serving its run was handed, a scope → its run, a runner's chart
+   stages → that runner (bound at build, per runner) — and none is ever
+   enumerated. Listeners belong to ONE runner's dispatcher, so an event of a
+   run reaches only the listeners of the runner that ran it. A run's serving
+   holds its rule — names, never values (`runRedaction.ts` · `servingOf`) —
+   and `served.ts` holds nothing at module scope but frozen constants. Pinned
+   by `agent-redaction.isolation.test.ts`: two agents in one process, an agent
+   used as a tool by two parents, overlapping runs of one composition, a very
+   late fact, a fact for a run the instance never opened, a pause filed after
+   another run opened, two runners' charts mounted in one executor — and a
+   source scan of every registry.
    A PATTERN IS NEVER COMPILED FROM A CHECKPOINT (`policy.ts` ·
    `policyFromCarried`): a checkpoint can come back from storage someone else
    controls, and a pattern built to hang a backtracking matcher must never
@@ -258,7 +309,7 @@ and that the answer account says the question and the answer are kept out.
    (`'unknown-pattern'`). Names (keys, fields) carry as they are. Pinned by
    `test/redaction/agent-redaction.run-state.test.ts` and
    `agent-redaction.executor-registry.test.ts`.
-9. The **real-value path** (`EventDispatcher · onRealEvent`) carries each event
+10. The **real-value path** (`EventDispatcher · onRealEvent`) carries each event
    as its producer made it, to the library's own mechanisms that compute on it:
    the crash-checkpoint tracker, the window's token meter, causal memory's tool
    calls, a host's streamed reply and spend ledger, `toSSE({ format: 'text' })`'s
@@ -376,7 +427,17 @@ bytes, for any recording — an agent's or a chart's.)
 - **A very late fact.** A fact a runner dispatches after its next run opened
   (a host's artifact fact, a teardown report) is served under ITS run's policy,
   found by the run id it carries — for the 32 most recent runs a dispatcher
-  opened; one older than that is served under the run in force.
+  opened. One older than that, or naming a run this instance never opened
+  (another pool lane's, an earlier process's), is refused — served as the
+  placeholder — wherever a policy exists on the instance; an instance with no
+  policy at all serves it as it is.
+- **An app's own event types under the vocabulary.** The classification is
+  the library's event registry; a type it does not know (your
+  `agent.emit('app.latency', …)`) is content in every field under
+  `conversationRedaction()` — served as the placeholder, its type and meta
+  kept. There is no door yet to declare an app type's structure: carry a
+  metric you need readable through your own channel, or cover the agent with
+  a narrower policy, which serves your event by name.
 - **A conversation continued is a new run.** A per-run `redact` rides the
   run's own state into a pause's checkpoint (`AgentState.runRedaction`: names,
   and patterns as references), so a resumed leg is covered by it without being
@@ -451,12 +512,6 @@ bytes, for any recording — an agent's or a chart's.)
   neither declares one: its records — run on its own, or in a composition made
   only of such steps — are covered by nothing. Run the step as an `Agent`, or
   compose it beside a member that declares the policy.
-- **Overlapping runs of one composition.** An `Agent` refuses a second run
-  while one is in flight (`RunInFlightError`); a composition does not, and it
-  stamps every event with the run it started LAST. Two overlapping runs of ONE
-  composition instance are both covered by its declared policy, but a resumed
-  leg's extra names (the paused leg's marks) can be served under the other
-  run's policy. Run a composition instance one run at a time.
 - **A chart's own marks with no policy at all.** footprintjs keeps its
   redacted mirror only under a policy: a chart-backed tool that runs with none
   (no tool `redact`, no calling policy) serves its state as it is, while its
