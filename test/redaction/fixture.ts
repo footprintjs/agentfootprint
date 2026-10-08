@@ -35,6 +35,16 @@ export function conversationPolicy(): RedactionPolicy {
   return conversationRedaction({ patterns: [/ssn|email/i] });
 }
 
+/**
+ * The same coverage with the app's names as KEYS, for a run handed its policy
+ * per run and resumed without it: a checkpoint carries a pattern only as a
+ * reference to one the resuming side holds (`redaction/policy.ts` ·
+ * `policyFromCarried`), while names carry as they are.
+ */
+export function carriedConversationPolicy(): RedactionPolicy {
+  return conversationRedaction({ keys: ['ssn', 'email'] });
+}
+
 /** What a run actually handed the model and the tool — the live-input control. */
 export interface LiveTaps {
   /** Every request the provider received, JSON. */

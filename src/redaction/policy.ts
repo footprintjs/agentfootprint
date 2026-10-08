@@ -148,8 +148,9 @@ interface CarriedSelectors {
 }
 
 /**
- * A redaction policy as plain data — names and pattern sources only, exactly
- * what the policy itself is — so the policy a caller handed ONE run
+ * A redaction policy as plain data — names, and each pattern as a REFERENCE
+ * (its source and flags) to a RegExp the reading side must already hold — so
+ * the policy a caller handed ONE run
  * (`agent.run(input, { redact })`) can ride that run's state into its pause
  * checkpoint and cover the resumed leg (`Agent · resume`), wherever and
  * whenever it resumes. Written by the seed stage (`AgentState.runRedaction`).
@@ -177,24 +178,61 @@ export function carriedRedactionPolicy(policy: RedactionPolicy): CarriedRedactio
   };
 }
 
+/** Why a carried policy cannot cover a resumed leg ({@link CarriedPolicyError}). */
+export type CarriedPolicyRefusal = 'unreadable' | 'unknown-pattern';
+
+/**
+ * Thrown by {@link policyFromCarried}: the checkpoint's policy is not one this
+ * library wrote (`'unreadable'`), or it names a pattern the resuming side does
+ * not hold (`'unknown-pattern'`). The message names no policy, pattern or value.
+ */
+export class CarriedPolicyError extends Error {
+  readonly refusal: CarriedPolicyRefusal;
+  constructor(refusal: CarriedPolicyRefusal, site: string) {
+    super(
+      refusal === 'unreadable'
+        ? `${site}: the checkpoint's \`runRedaction\` is not a redaction policy this library wrote ` +
+            `— refusing to resume a run whose records the policy it was given could not keep covered.`
+        : `${site}: the checkpoint's \`runRedaction\` names a pattern the resuming side does not ` +
+            `hold — a pattern is never compiled from a checkpoint. Declare it on the agent, or pass ` +
+            `the run's \`redact\` to the resume.`,
+    );
+    this.name = 'CarriedPolicyError';
+    this.refusal = refusal;
+  }
+}
+
 /**
  * The policy a checkpoint carried ({@link carriedRedactionPolicy}), rebuilt and
  * checked like any declared one. `undefined` when it carries none. A value
  * that is not one this library wrote is REFUSED: a resumed leg whose records
  * its policy could not keep covered must not start.
  *
- * @param site where it is read, for the message (`Agent.resume`)
+ * A PATTERN IS NEVER COMPILED FROM A CHECKPOINT. A checkpoint is data that can
+ * come back from storage someone else controls, and a pattern compiled from it
+ * could be one built to hang the matcher. A carried pattern is a REFERENCE —
+ * its source and flags — to a RegExp the resuming side already holds: one of
+ * `trusted` (the agent's declared policy, the policy the resume names, the
+ * library's own vocabulary), matched exactly and handed back as THAT object. A
+ * reference to one it does not hold is refused (`'unknown-pattern'`). Keys and
+ * fields are names, matched exactly, and carried as they are.
+ *
+ * @param site    where it is read, for the message (`Agent.resume`)
+ * @param trusted the policies whose patterns a carried reference may name
+ * @throws CarriedPolicyError
  */
-export function policyFromCarried(value: unknown, site: string): RedactionPolicy | undefined {
+export function policyFromCarried(
+  value: unknown,
+  site: string,
+  trusted: readonly (RedactionPolicy | undefined)[],
+): RedactionPolicy | undefined {
   if (value === undefined || value === null) return undefined;
-  const refuse = (): never => {
-    throw new TypeError(
-      `${site}: the checkpoint's \`runRedaction\` is not a redaction policy this library wrote ` +
-        `— refusing to resume a run whose records the policy it was given could not keep covered.`,
-    );
+  const refuse = (refusal: CarriedPolicyRefusal = 'unreadable'): never => {
+    throw new CarriedPolicyError(refusal, site);
   };
   if (typeof value !== 'object' || Array.isArray(value)) refuse();
   const record = value as Record<string, unknown>;
+  const held = heldPatterns(trusted);
   const patterns = (list: unknown): RegExp[] | undefined => {
     if (list === undefined) return undefined;
     if (!Array.isArray(list)) return refuse();
@@ -208,11 +246,7 @@ export function policyFromCarried(value: unknown, site: string): RedactionPolicy
       ) {
         return refuse();
       }
-      try {
-        return new RegExp(p.source, p.flags);
-      } catch {
-        return refuse();
-      }
+      return held.get(patternKey(p.source, p.flags)) ?? refuse('unknown-pattern');
     });
   };
   const selectors = (from: Record<string, unknown>) => {
@@ -248,6 +282,30 @@ export function policyFromCarried(value: unknown, site: string): RedactionPolicy
 
 function carriedPattern(pattern: RegExp): CarriedPattern {
   return { source: pattern.source, flags: pattern.flags };
+}
+
+/** A pattern's identity as a carried reference names it: its flags and its source. */
+function patternKey(source: string, flags: string): string {
+  return `${flags}\u0000${source}`;
+}
+
+/** Every RegExp `policies` hold — state, emit and diagnostic selectors — by {@link patternKey}. */
+function heldPatterns(policies: readonly (RedactionPolicy | undefined)[]): Map<string, RegExp> {
+  const held = new Map<string, RegExp>();
+  const add = (list: readonly RegExp[] | undefined): void => {
+    for (const re of list ?? []) {
+      if (re instanceof RegExp && !held.has(patternKey(re.source, re.flags))) {
+        held.set(patternKey(re.source, re.flags), re);
+      }
+    }
+  };
+  for (const policy of policies) {
+    if (policy === undefined) continue;
+    add(policy.patterns);
+    add(policy.emitPatterns);
+    add(policy.diagnostics?.patterns);
+  }
+  return held;
 }
 
 function checkSelectors(

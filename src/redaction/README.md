@@ -195,7 +195,9 @@ and that the answer account says the question and the answer are kept out.
    result, a figure the answer computed quotes the answer and its results; a
    retrieved passage's heading quotes what was retrieved; a tool's coverage
    declaration and a described result's envelope quote its call and its
-   result. Where a path cannot be walked (a list where a record belongs, a
+   result; a skipped step's reason is the model's words, a tool effect's
+   reason and an artifact's label are the tool's, an artifact refusal quotes
+   the ref the model passed. Where a path cannot be walked (a list where a record belongs, a
    Map, a class instance, a payload that is not a record, a quoted argument
    whose path is missing) the content is served whole as the placeholder —
    fail closed. Generic names
@@ -232,7 +234,10 @@ and that the answer account says the question and the answer are kept out.
 8. **A run's redaction is the RUN's, never the instance's.** The policy a run
    is covered by is handed to its executor (`applyTo`), and a snapshot is
    served under the policy of the executor it comes from (`policyOfExecutor`)
-   — never whatever run came after; the policy a paused run carries is read
+   — never whatever run came after. "This run had no policy" is an explicit
+   entry there; an executor no run of this library opened is UNKNOWN, never
+   read as "no policy": its snapshot is not served at all (fail closed). The
+   policy a paused run carries is read
    off the run that owns the seed's scope (`policyInForce`), never an agent
    field; a resume's leg policy goes back from `emitPauseResume` to that leg's
    executor; and a fact is served under its own run's serving, by its run id
@@ -241,7 +246,16 @@ and that the answer account says the question and the answer are kept out.
    runner declares (`EventDispatcher · useDefaultServing`). One run at a time per agent instance
    is the conversation law (`RunInFlightError`, `PendingQuestionError`); a
    resume that cannot carry its redaction is refused (`ResumeRedactionError`).
-   Pinned by `test/redaction/agent-redaction.run-state.test.ts`.
+   A PATTERN IS NEVER COMPILED FROM A CHECKPOINT (`policy.ts` ·
+   `policyFromCarried`): a checkpoint can come back from storage someone else
+   controls, and a pattern built to hang a backtracking matcher must never
+   reach one. A carried pattern is a REFERENCE (its source and flags) to a
+   RegExp the resuming side already holds — the agent's declared policy, the
+   policy the resume names, the library's own vocabulary — handed back as
+   that very object; one it does not hold refuses the resume
+   (`'unknown-pattern'`). Names (keys, fields) carry as they are. Pinned by
+   `test/redaction/agent-redaction.run-state.test.ts` and
+   `agent-redaction.executor-registry.test.ts`.
 9. The **real-value path** (`EventDispatcher · onRealEvent`) carries each event
    as its producer made it, to the library's own mechanisms that compute on it:
    the crash-checkpoint tracker, the window's token meter, causal memory's tool
@@ -372,11 +386,18 @@ bytes, for any recording — an agent's or a chart's.)
   `resumeOnError`) is a new run, covered by what that run is given — declare
   the policy on the agent (`Agent.create({ redact })`) to cover every run.
 - **A carried policy is the list it paused with.** A per-run `redact` rides
-  the checkpoint as names and pattern sources (`AgentState.runRedaction`), so
-  a leg resumed after an upgrade that ADDS names to the vocabulary is covered
-  by the list the run paused with — joined with the agent's declared policy,
-  which is read fresh. Declare the vocabulary on the agent to have every leg
-  follow the installed list.
+  the checkpoint as names and pattern references (`AgentState.runRedaction`),
+  so a leg resumed after an upgrade that ADDS names to the vocabulary is
+  covered by the list the run paused with — joined with the agent's declared
+  policy, which is read fresh. Declare the vocabulary on the agent to have
+  every leg follow the installed list. An app PATTERN handed to one run
+  carries only as a reference: resume with the same `redact`
+  (`resume(checkpoint, input, { redact })`), or declare it on the agent —
+  otherwise the resume is refused (`ResumeRedactionError`, `'unknown-pattern'`).
+- **Patterns are code.** footprintjs matches a pattern against key names it
+  caps in length, and every pattern it matches came from code — declared, or
+  handed in process — never from a checkpoint. Declare patterns that run in
+  linear time; a pathological one you write yourself is yours to keep out.
 - **A chart's own emits, to the recorders a chart-backed tool is handed.** A
   `flowchartAsTool` / `runbookAsTool` chart's own `$emit` payloads reach the
   recorders passed in its `recorders` option as footprintjs serves an emit:

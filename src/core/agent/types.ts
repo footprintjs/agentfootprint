@@ -1483,7 +1483,8 @@ export interface AgentState {
   /**
    * The redaction policy this run is covered by — the agent's own `redact`
    * joined with any the caller handed it (`agent.run(input, { redact })`) — as
-   * plain data: names and pattern sources only. Committed by seed ONLY when the
+   * plain data: names, and patterns only as references to ones the resuming
+   * side holds (never compiled from here). Committed by seed ONLY when the
    * run is covered by one, read off the run itself (never the agent instance),
    * and written back by every resumed leg with that leg's whole policy (a
    * `redact` passed to `resume()` included), so a pause's checkpoint carries it

@@ -34,6 +34,7 @@ import {
   ALL_SECRETS,
   MESSAGE,
   SECRET,
+  carriedConversationPolicy,
   conversationPolicy,
   fixtureAgent,
   leaksIn,
@@ -226,7 +227,7 @@ describe('the resume checkpoints are never redacted', () => {
       return Agent.create({ provider, model: 'm' }).tool(ask).build();
     };
     const first = build();
-    const outcome = await first.run({ message: MESSAGE }, { redact: conversationPolicy() });
+    const outcome = await first.run({ message: MESSAGE }, { redact: carriedConversationPolicy() });
     expect(isPaused(outcome)).toBe(true);
     if (!isPaused(outcome)) return;
     for (const agent of [first, build()]) {

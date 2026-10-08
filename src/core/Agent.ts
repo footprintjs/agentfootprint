@@ -82,6 +82,7 @@ import { checkInEventsBridge } from '../recorders/core/CheckInRecorder.js';
 import { compactionMeter, type CompactionMeterHandle } from '../recorders/core/CompactionMeter.js';
 import {
   assertRedactionPolicy,
+  CarriedPolicyError,
   carriedRedactionPolicy,
   policyFromCarried,
   policyOfMarks,
@@ -89,7 +90,8 @@ import {
 } from '../redaction/policy.js';
 import { policyOfExecutor } from '../redaction/runRedaction.js';
 import { ResumeRedactionError } from './conversation.js';
-import { declareRedaction } from '../redaction/declared.js';
+import { declareRedaction, redactionDeclaredBy } from '../redaction/declared.js';
+import { conversationRedaction } from '../redaction/conversation.js';
 import { createEvictedTurnsHandle, type EvictedTurnsHandle } from './agent/window/evictedTurns.js';
 import { createReceiptDigests, type ReceiptDigests } from '../lib/time-travel/receiptDigests.js';
 import { packRecording } from '../recorders/observability/recordingPack.js';
@@ -2516,7 +2518,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // The policy the paused run was covered by, carried in its own state
     // (`runRedaction`) — it covers this leg too, joined with any the caller
     // adds now. Read, or refused, before anything moves (`resumeRedactionOf`).
-    const carriedRedaction = resumeRedactionOf(checkpoint);
+    const carriedRedaction = resumeRedactionOf(checkpoint, [
+      redactionDeclaredBy(this),
+      options?.redact,
+      conversationRedaction(),
+    ]);
     // A resume's `time` (the time layer) is read or refused before anything
     // moves; it is never applied — the paused turn's clock is kept, and a
     // differing value is recorded by the ToolCalls resume door.
@@ -2646,6 +2652,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     const recording = this.startRunRecording();
     this.answeredAsk = answeredAsk;
     const executor = this.createExecutor(resumeOptions);
+    // The leg's WHOLE policy rides its own state too (`runRedaction`), so a
+    // later pause carries what this leg was covered by — names the resume
+    // added included — and a third leg is never less covered than this one.
+    // `createExecutor` opened this executor's run; one it did not is refused
+    // before anything is held or runs — a leg whose policy nothing knows must
+    // not start.
+    const leg = policyOfExecutor(executor);
+    if (!leg.known) throw new ResumeRedactionError('unreadable');
     this.inFlightRunId = this.currentRunContext.runId;
     // A resumed turn is two runs, and each keeps its own ledger — exactly
     // the recording's terms one comment up.
@@ -2655,18 +2669,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.consentOutstanding.clear();
     // Beside the `try` whose `finally` clears it (the fresh-run path's terms).
     this.resumePassedTime = passedTime;
-    // The leg's WHOLE policy rides its own state too (`runRedaction`), so a
-    // later pause carries what this leg was covered by — names the resume
-    // added included — and a third leg is never less covered than this one.
-    const legPolicy = policyOfExecutor(executor);
     const legCheckpoint: FlowchartCheckpoint =
-      legPolicy === undefined
+      leg.policy === undefined
         ? checkpoint
         : {
             ...checkpoint,
             sharedState: {
               ...checkpoint.sharedState,
-              runRedaction: carriedRedactionPolicy(legPolicy),
+              runRedaction: carriedRedactionPolicy(leg.policy),
             },
           };
     try {
@@ -5749,13 +5759,22 @@ function withoutTime<T extends { time?: unknown }>(options: T | undefined): T | 
  * refuses the resume (`ResumeRedactionError`) before anything moves. A leg its
  * policy could not keep covered must never start.
  */
-function resumeRedactionOf(checkpoint: FlowchartCheckpoint): RedactionPolicy | undefined {
+function resumeRedactionOf(
+  checkpoint: FlowchartCheckpoint,
+  trusted: readonly (RedactionPolicy | undefined)[],
+): RedactionPolicy | undefined {
   const state = checkpoint.sharedState as { runRedaction?: unknown } | undefined;
   let carried: RedactionPolicy | undefined;
   try {
-    carried = policyFromCarried(state?.runRedaction, 'Agent.resume');
-  } catch {
-    throw new ResumeRedactionError('unreadable');
+    // A carried pattern is a reference to one the resuming side holds — never
+    // compiled from the checkpoint (`redaction/policy.ts` · `policyFromCarried`).
+    carried = policyFromCarried(state?.runRedaction, 'Agent.resume', trusted);
+  } catch (refusal) {
+    throw new ResumeRedactionError(
+      refusal instanceof CarriedPolicyError && refusal.refusal === 'unknown-pattern'
+        ? 'unknown-pattern'
+        : 'unreadable',
+    );
   }
   // Every leg of a covered run writes its policy into its checkpoint's state
   // (seed, and `resume` for a resumed leg), so a checkpoint whose run kept

@@ -9,11 +9,15 @@
  * several declarations (an agent's own, a composition's members', a policy
  * handed down by a tool call) gets ONE policy: every name any of them selects.
  */
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 import type { RedactionPolicy } from 'footprintjs';
 
 import {
   assertRedactionPolicy,
+  CarriedPolicyError,
   carriedRedactionPolicy,
   policyFromCarried,
   policyOfMarks,
@@ -131,22 +135,55 @@ describe('unionRedactionPolicies — one policy for a run several declarations c
 });
 
 describe('a policy carried through a pause — `carriedRedactionPolicy` / `policyFromCarried`', () => {
-  it('round-trips through JSON: names and pattern sources, the same verdicts', () => {
-    const policy: RedactionPolicy = {
-      keys: ['history'],
-      patterns: [/ssn|email/i],
-      fields: { customer: ['ssn'] },
-      emitPatterns: [/^agentfootprint\.secret\./],
-      diagnostics: { keys: ['token'] },
-    };
-    const carried = JSON.parse(JSON.stringify(carriedRedactionPolicy(policy))) as unknown;
-    const back = policyFromCarried(carried, 'Agent.resume');
+  const policy: RedactionPolicy = {
+    keys: ['history'],
+    patterns: [/ssn|email/i],
+    fields: { customer: ['ssn'] },
+    emitPatterns: [/^agentfootprint\.secret\./],
+    diagnostics: { keys: ['token'], patterns: [/^pin$/] },
+  };
+  const carry = (p: RedactionPolicy): unknown =>
+    JSON.parse(JSON.stringify(carriedRedactionPolicy(p))) as unknown;
+
+  it('round-trips through JSON: names as they are, each pattern the SAME RegExp the trusted side holds', () => {
+    const back = policyFromCarried(carry(policy), 'Agent.resume', [policy]);
     expect(back?.keys).toEqual(['history']);
-    expect(back?.patterns?.map((p) => [p.source, p.flags])).toEqual([['ssn|email', 'i']]);
+    expect(back?.patterns?.[0]).toBe(policy.patterns?.[0]);
     expect(back?.fields).toEqual({ customer: ['ssn'] });
-    expect(back?.emitPatterns?.map((p) => p.source)).toEqual(['^agentfootprint\\.secret\\.']);
-    expect(back?.diagnostics).toEqual({ keys: ['token'] });
-    expect(policyFromCarried(undefined, 'Agent.resume')).toBeUndefined();
+    expect(back?.emitPatterns?.[0]).toBe(policy.emitPatterns?.[0]);
+    expect(back?.diagnostics?.patterns?.[0]).toBe(policy.diagnostics?.patterns?.[0]);
+    expect(policyFromCarried(undefined, 'Agent.resume', [policy])).toBeUndefined();
+  });
+
+  it('a carried pattern the resuming side does not hold is refused — never compiled', () => {
+    // A pattern built to hang a backtracking matcher, as a checkpoint from
+    // storage someone else controls could carry it.
+    const hostile = { keys: ['history'], patterns: [{ source: '^(a+)+$', flags: '' }] };
+    for (const trusted of [[], [undefined], [policy], [conversationRedaction()]]) {
+      expect(() => policyFromCarried(hostile, 'Agent.resume', trusted)).toThrow(CarriedPolicyError);
+      try {
+        policyFromCarried(hostile, 'Agent.resume', trusted);
+      } catch (e) {
+        expect((e as CarriedPolicyError).refusal).toBe('unknown-pattern');
+        // The message names no pattern.
+        expect((e as Error).message).not.toContain('a+');
+      }
+    }
+    // The same source with other flags is another pattern.
+    const flagged = { patterns: [{ source: 'ssn|email', flags: 'g' }] };
+    expect(() => policyFromCarried(flagged, 'Agent.resume', [policy])).toThrow(
+      /names a pattern the resuming side does not hold/,
+    );
+  });
+
+  it('the work a hostile checkpoint can cause is bounded: the module compiles no pattern at all', () => {
+    // A work-count bound by construction: no RegExp is built from data here, so
+    // the matcher only ever runs patterns code declared (on keys footprintjs
+    // caps in length).
+    const source = readFileSync(resolve(__dirname, '../../src/redaction/policy.ts'), 'utf8');
+    const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    expect(code).not.toMatch(/new\s+RegExp\s*\(/);
+    expect(code).not.toMatch(/\bRegExp\s*\(/);
   });
 
   it('a carried value this library did not write refuses the resume — fail closed', () => {
@@ -154,11 +191,11 @@ describe('a policy carried through a pause — `carriedRedactionPolicy` / `polic
       'history',
       [{ keys: ['x'] }],
       { patterns: ['ssn'] },
-      { patterns: [{ source: '(', flags: '' }] },
+      { patterns: [{ source: 1, flags: '' }] },
       { keys: 'history' },
       {},
     ]) {
-      expect(() => policyFromCarried(bad, 'Agent.resume')).toThrow(
+      expect(() => policyFromCarried(bad, 'Agent.resume', [policy])).toThrow(
         /Agent\.resume: the checkpoint's `runRedaction` is not a redaction policy this library wrote/,
       );
     }

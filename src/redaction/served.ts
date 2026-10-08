@@ -214,6 +214,17 @@ const DERIVED: Readonly<Record<string, readonly Derived[]>> = {
       from: ['args', 'result'],
     },
   ],
+  // A skipped step's reason: the model's own words, passed as the `skip_step`
+  // call's argument.
+  'agentfootprint.skill.step_skipped': [{ paths: ['reason'], from: ['args'] }],
+  // A tool effect's own declared reason, and the refusal sentence that names
+  // what it proposed — both from the tool's result.
+  'agentfootprint.tools.effect': [{ paths: ['reason', 'refusalReason'], from: ['args', 'result'] }],
+  // An artifact ref the model passed, and the refusal sentence that quotes it
+  // (or describes what was passed in its place).
+  'agentfootprint.artifacts.refused': [{ paths: ['ref', 'detail'], from: ['args', 'result'] }],
+  // A presented artifact's label, as the tool wrote it.
+  'agentfootprint.artifacts.presented': [{ paths: ['snapshot.label'], from: ['args', 'result'] }],
   // Figures the answer computed, quoted with the operands they came from.
   'agentfootprint.agent.evidence_checked': [
     { paths: ['computed[].value', 'computed[].from'], from: [...MODEL_TEXT, 'result'] },

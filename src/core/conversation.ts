@@ -158,7 +158,7 @@ export class ResumeIdentityConflictError extends Error {
 }
 
 /** Why a resume could not carry its paused run's redaction — see `ResumeRedactionError`. */
-export type ResumeRedactionReason = 'unreadable' | 'missing';
+export type ResumeRedactionReason = 'unreadable' | 'missing' | 'unknown-pattern';
 
 /**
  * Thrown by `resume(checkpoint, input, options)` when the paused run's
@@ -170,11 +170,17 @@ export type ResumeRedactionReason = 'unreadable' | 'missing';
  *    (footprintjs's `redactionMarks`: the names it masked) but carries no
  *    policy. Every leg of a covered run writes its policy into its checkpoint,
  *    so this one was altered; a `redact` passed to the resume cannot stand in
- *    for the policy the run was covered by, so it is refused all the same.
+ *    for the policy the run was covered by, so it is refused all the same;
+ *  - `'unknown-pattern'` — the carried policy names a pattern this side does
+ *    not hold. A pattern is never compiled from a checkpoint (one built to hang
+ *    the matcher could come back from storage someone else controls): a
+ *    carried pattern is a reference to one the agent declares, the library's
+ *    vocabulary holds, or the resume names — pass the run's `redact` to
+ *    `resume(checkpoint, input, { redact })` when the run was handed one.
  *
- * Either way the resumed leg would write what the paused leg kept out into
- * every record of its own. Resume with the checkpoint as this library wrote
- * it. No policy, name or value appears in the message.
+ * Every way, the resumed leg would write what the paused leg kept out into
+ * every record of its own. No policy, pattern, name or value appears in the
+ * message.
  */
 export class ResumeRedactionError extends Error {
   readonly code = 'ERR_RESUME_REDACTION' as const;
@@ -186,9 +192,13 @@ export class ResumeRedactionError extends Error {
         ? "Agent.resume: the checkpoint's redaction policy (`runRedaction`) is not one this library " +
             'wrote, so the resumed run could not keep its records covered. Resume with the checkpoint ' +
             'as it was written.'
-        : 'Agent.resume: the checkpoint says its run kept values out of its records but carries no ' +
-            'redaction policy — every covered run writes its policy into its checkpoint, so this one ' +
-            'was altered. Resume with the checkpoint as it was written.',
+        : reason === 'missing'
+        ? 'Agent.resume: the checkpoint says its run kept values out of its records but carries no ' +
+          'redaction policy — every covered run writes its policy into its checkpoint, so this one ' +
+          'was altered. Resume with the checkpoint as it was written.'
+        : "Agent.resume: the checkpoint's redaction policy names a pattern this agent does not " +
+          'declare and the resume does not name — a pattern is never compiled from a checkpoint. ' +
+          'Pass the redaction policy the run was handed: resume(checkpoint, input, { redact }).',
     );
     this.name = 'ResumeRedactionError';
     this.reason = reason;

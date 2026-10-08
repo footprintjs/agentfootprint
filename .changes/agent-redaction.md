@@ -48,7 +48,12 @@ later leg is covered by it without being handed it again, and by the names the p
 A resume that cannot carry it is refused before anything runs: `ResumeRedactionError` (new, from
 `agentfootprint`; `reason: 'unreadable'` for a carried value this library did not write, `'missing'`
 for a checkpoint whose run kept names out but carries no policy — refused even when the resume names
-one, which cannot stand in for the policy the run was covered by). The person's reply is served before the leg starts, so a fresh instance or another process
+one, which cannot stand in for the policy the run was covered by — and `'unknown-pattern'`: a
+pattern is never compiled from a checkpoint, so a carried pattern is a reference to one the resuming
+side holds — declared on the agent, named at the resume, or the library's vocabulary; resume with
+the `redact` the run was handed when it carried an app pattern). A snapshot is served only from an
+executor a run of this library opened — "no policy" is an explicit entry, and an unknown executor
+serves nothing. The person's reply is served before the leg starts, so a fresh instance or another process
 resumes as the paused one would. Every public member of `Agent` is classified against the law by
 type — served, structure, the caller's own, or control — and the served ones are checked by a
 property test for random keys, patterns and `fields` selectors. The policy is validated where it is

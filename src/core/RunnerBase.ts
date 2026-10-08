@@ -177,9 +177,12 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
    * getter — what it computes on is the live run (`liveSnapshot`).
    */
   getLastSnapshot(): ReturnType<FlowChartExecutor['getSnapshot']> | undefined {
-    return this.lastExecutor === undefined
-      ? undefined
-      : servableSnapshot(this.lastExecutor, policyOfExecutor(this.lastExecutor));
+    if (this.lastExecutor === undefined) return undefined;
+    const handed = policyOfExecutor(this.lastExecutor);
+    // An executor no run of this runner opened: nothing says what its record
+    // may show, so none of it is served — fail closed, never raw.
+    if (!handed.known) return undefined;
+    return servableSnapshot(this.lastExecutor, handed.policy);
   }
 
   /**
@@ -921,8 +924,12 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
         },
         getSnapshot: () => this.getLastSnapshot(),
         getCommitCount: () => this.getCommitCount(),
-        redactedByPolicy: () =>
-          this.lastExecutor !== undefined && policyOfExecutor(this.lastExecutor) !== undefined,
+        redactedByPolicy: () => {
+          if (this.lastExecutor === undefined) return false;
+          const handed = policyOfExecutor(this.lastExecutor);
+          // Unknown reads as covered: a label never claims less than the record may hold.
+          return !handed.known || handed.policy !== undefined;
+        },
       }),
     // v2.8 grouped strategy enablers — see
     // `docs/inspiration/strategy-everywhere.md`.

@@ -181,6 +181,87 @@ describe('property — the Agent public surface keeps a selected value out of ev
   }
 });
 
+/**
+ * The route decider's own events — `route_decided` with its rationale, the
+ * limit and budget it reports when a turn runs out, every cost tick — under
+ * the same random policies: a turn whose model keeps asking for the tool with
+ * the secret, cut short by `maxIterations`, priced. Each event leaves through
+ * the served path (`emitServed`), and none may hold the secret; the provider's
+ * requests do.
+ */
+describe('property — the route, cost and budget events keep a selected value out', () => {
+  for (const seed of [1, 3, 8, 21, 55]) {
+    const c = caseFor(seed);
+    it(`seed ${seed} (${c.form} ${c.field})`, async () => {
+      const requests: string[] = [];
+      const provider: LLMProvider = {
+        name: 'never-finishes',
+        complete: async (req: LLMRequest) => {
+          requests.push(JSON.stringify(req));
+          // The wrap-up call is the one offered no tools.
+          if ((req.tools?.length ?? 0) === 0) {
+            return {
+              content: 'Out of steps.',
+              toolCalls: [],
+              usage: { input: 3, output: 2 },
+              stopReason: 'stop',
+            };
+          }
+          return {
+            content: '',
+            toolCalls: [
+              {
+                id: `c${requests.length}`,
+                name: 'lookup',
+                args: { customer: { [c.field]: c.secret } },
+              },
+            ],
+            usage: { input: 3, output: 2 },
+            stopReason: 'tool_use',
+          };
+        },
+      };
+      const agent = Agent.create({
+        provider,
+        model: 'm',
+        redact: c.policy,
+        pricingTable: { name: 'flat', pricePerToken: () => 0.001 },
+      })
+        .tool(
+          defineTool<{ customer: Record<string, string> }, unknown>({
+            name: 'lookup',
+            description: 'Look a customer up.',
+            inputSchema: { type: 'object', properties: { customer: { type: 'object' } } },
+            execute: ({ customer }) => ({ customer, ok: true }),
+          }),
+        )
+        .maxIterations(2)
+        .build();
+      const events: AgentfootprintEvent[] = [];
+      agent.on('*', (e) => events.push(e));
+      await agent.run({ message: `Check my ${c.field}: ${c.secret}` });
+
+      const types = new Set(events.map((e) => e.type));
+      for (const type of [
+        'agentfootprint.agent.route_decided',
+        'agentfootprint.cost.limit_hit',
+        'agentfootprint.agent.budget_exhausted',
+        'agentfootprint.cost.tick',
+      ]) {
+        expect(types.has(type as AgentfootprintEvent['type']), type).toBe(true);
+      }
+      const route = events.filter((e) => e.type === 'agentfootprint.agent.route_decided');
+      expect(
+        route.every((e) => typeof (e.payload as { rationale?: unknown }).rationale === 'string'),
+      ).toBe(true);
+      expect(locationsOf(withoutAnswerBoundary(events), c.secret)).toEqual([]);
+      expect(locationsOf(withoutAnswerBoundary(agent.getLastSnapshot()), c.secret)).toEqual([]);
+      // The live control: the model's input holds it.
+      expect(requests.join('\n')).toContain(c.secret);
+    });
+  }
+});
+
 /** Every artifact the run filed under its scope (its minted recording), read back. */
 async function mintedRecordings(store: ReturnType<typeof inMemoryArtifacts>): Promise<unknown[]> {
   const page = await store.list(SCOPE);

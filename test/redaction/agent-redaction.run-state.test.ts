@@ -33,13 +33,16 @@ import {
 import type { LLMProvider, LLMResponse } from '../../src/adapters/types.js';
 import { recordRun } from '../../src/doors/observe.js';
 import { mock } from '../../src/doors/providers.js';
+import { conversationRedaction } from '../../src/doors/security.js';
 import { servedUnderPolicy } from '../../src/redaction/marker.js';
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
-import { conversationPolicy, locationsOf } from './fixture.js';
+import { carriedConversationPolicy, locationsOf } from './fixture.js';
 
 // The conversation's names plus the tool's field: a value the person or the
-// model writes travels under many names, and the vocabulary is the list.
-const P: RedactionPolicy = conversationPolicy();
+// model writes travels under many names, and the vocabulary is the list. Names
+// only, so the paused run's checkpoint carries all of it (a carried PATTERN is
+// a reference the resuming side must hold — the block at the end).
+const P: RedactionPolicy = carriedConversationPolicy();
 const Q: RedactionPolicy = { keys: ['finalContent'] };
 
 /** An agent whose first call asks a person about `ssn`, then answers. */
@@ -344,11 +347,7 @@ describe('a resume that cannot carry its redaction is refused — fail closed', 
 
   it("'unreadable' — a carried policy this library did not write", async () => {
     const checkpoint = await paused();
-    for (const bad of [
-      { keys: 'history' },
-      'history',
-      { patterns: [{ source: '(', flags: '' }] },
-    ]) {
+    for (const bad of [{ keys: 'history' }, 'history', { patterns: [{ source: 1, flags: '' }] }]) {
       const tampered = {
         ...checkpoint,
         sharedState: { ...checkpoint.sharedState, runRedaction: bad },
@@ -388,5 +387,85 @@ describe('a resume that cannot carry its redaction is refused — fail closed', 
       expect(events).toEqual([]);
       expect(agent.getLastSnapshot()).toBeUndefined();
     }
+  });
+});
+
+describe('a carried pattern is a reference the resuming side must hold — never compiled', () => {
+  /** An agent like `asker`, with a declared policy when one is given. */
+  const declaring = (redact?: RedactionPolicy) =>
+    Agent.create({
+      provider: pausesThenAnswers('SSN-PAT-5555'),
+      model: 'm',
+      ...(redact !== undefined && { redact }),
+    })
+      .tool(
+        defineTool<{ ssn: string }, string>({
+          name: 'confirm',
+          description: 'ask a person to confirm',
+          inputSchema: {
+            type: 'object',
+            properties: { ssn: { type: 'string' } },
+            required: ['ssn'],
+          },
+          execute: ({ ssn }) => askHuman({ question: `Is ${ssn} right?` }),
+        }),
+      )
+      .build();
+  // The app's own field names, as a pattern — handed to ONE run.
+  const PER_RUN: RedactionPolicy = conversationRedaction({ patterns: [/^ssn$/i] });
+
+  const pausedUnder = async (redact: RedactionPolicy) => {
+    const outcome = await declaring().run({ message: 'check' }, { redact });
+    if (!isPaused(outcome)) throw new Error('must pause');
+    return outcome.checkpoint;
+  };
+
+  it('a hostile pattern in a tampered checkpoint is refused before anything moves', async () => {
+    const checkpoint = await pausedUnder(P);
+    const state = checkpoint.sharedState as { runRedaction?: Record<string, unknown> };
+    // A pattern built to hang a backtracking matcher, swapped in from storage.
+    const tampered = {
+      ...checkpoint,
+      sharedState: {
+        ...checkpoint.sharedState,
+        runRedaction: { ...state.runRedaction, patterns: [{ source: '^(a+)+$', flags: '' }] },
+      },
+    };
+    const agent = declaring();
+    const events: AgentfootprintEvent[] = [];
+    agent.on('*', (e) => events.push(e));
+    const refusal = await agent.resume(tampered, { answer: 'yes' }).catch((e: unknown) => e);
+    expect(refusal).toBeInstanceOf(ResumeRedactionError);
+    expect(refusal).toMatchObject({ reason: 'unknown-pattern', code: 'ERR_RESUME_REDACTION' });
+    expect((refusal as Error).message).not.toContain('a+');
+    expect(events).toEqual([]);
+    expect(agent.getLastSnapshot()).toBeUndefined();
+  });
+
+  it('the library’s own vocabulary is held everywhere: its patterns carry without being passed', async () => {
+    const checkpoint = await pausedUnder(conversationRedaction());
+    const agent = declaring();
+    await agent.resume(checkpoint, { answer: 'yes' });
+    expect(servedUnderPolicy(agent.getLastSnapshot())).toBe(true);
+    expect(locationsOf(agent.getLastSnapshot(), 'SSN-PAT-5555')).toEqual([]);
+  });
+
+  it('an app pattern handed to one run: the resume names it again, or is refused', async () => {
+    const checkpoint = await pausedUnder(PER_RUN);
+    await expect(declaring().resume(checkpoint, { answer: 'yes' })).rejects.toMatchObject({
+      name: 'ResumeRedactionError',
+      reason: 'unknown-pattern',
+    });
+    // Named again at the resume: the carried reference resolves to it.
+    const agent = declaring();
+    await agent.resume(checkpoint, { answer: 'yes' }, { redact: PER_RUN });
+    expect(locationsOf(agent.getLastSnapshot(), 'SSN-PAT-5555')).toEqual([]);
+  });
+
+  it('an app pattern the agent DECLARES carries without being passed', async () => {
+    const checkpoint = await pausedUnder(PER_RUN);
+    const agent = declaring(PER_RUN);
+    await agent.resume(checkpoint, { answer: 'yes' });
+    expect(locationsOf(agent.getLastSnapshot(), 'SSN-PAT-5555')).toEqual([]);
   });
 });

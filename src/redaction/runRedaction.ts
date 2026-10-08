@@ -104,21 +104,37 @@ interface ScopeRun {
   keepsOut(name: string): boolean;
 }
 
-/**
- * Every executor a run opened → the policy it was handed (`undefined` for one
- * handed none) — set by `applyTo`, the one place an executor gets its policy,
- * so what a snapshot is served under is a fact about THAT executor and can
- * never be another run's (`policyOfExecutor`). Weak: dies with the executor.
- */
-const executorPolicies = new WeakMap<object, RedactionPolicy | undefined>();
+/** What `executorPolicies` holds for an executor whose run was handed NO policy — never a miss. */
+const NO_POLICY: unique symbol = Symbol('agentfootprint.redaction.no-policy');
 
 /**
- * The policy `executor` was handed when its run opened — what its snapshot
- * must be served under (`RunnerBase · getLastSnapshot`). `undefined` for an
- * executor handed none, or one no run opened.
+ * Every executor a run opened → the policy it was handed, or {@link NO_POLICY}
+ * for one explicitly handed none — set by `applyTo`, the one place an executor
+ * gets its policy, so what a snapshot is served under is a fact about THAT
+ * executor and can never be another run's (`policyOfExecutor`). An executor
+ * this map does not hold is UNKNOWN, never "no policy". Weak: dies with the
+ * executor.
  */
-export function policyOfExecutor(executor: object): RedactionPolicy | undefined {
-  return executorPolicies.get(executor);
+const executorPolicies = new WeakMap<object, RedactionPolicy | typeof NO_POLICY>();
+
+/**
+ * What `executor` was handed when its run opened: `known` with its policy
+ * (`undefined` = explicitly none), or not `known` — an executor no run of
+ * this library opened, whose records nothing vouches for. A reader serves an
+ * unknown executor's records under nothing it could guess: it refuses
+ * (`RunnerBase · getLastSnapshot` hands back nothing).
+ */
+export type ExecutorPolicy =
+  | { readonly known: true; readonly policy: RedactionPolicy | undefined }
+  | { readonly known: false };
+
+const UNKNOWN_EXECUTOR: ExecutorPolicy = Object.freeze({ known: false });
+
+/** What `executor` was handed when its run opened ({@link ExecutorPolicy}). */
+export function policyOfExecutor(executor: object): ExecutorPolicy {
+  const held = executorPolicies.get(executor);
+  if (held === undefined) return UNKNOWN_EXECUTOR;
+  return { known: true, policy: held === NO_POLICY ? undefined : held };
 }
 
 /** Every scope a run's executor made → that run, and the stage it was made for. Weak: a scope dies with its stage. */
@@ -192,7 +208,7 @@ export function createRunRedaction(args: {
       };
     },
     applyTo(executor) {
-      executorPolicies.set(executor, policy);
+      executorPolicies.set(executor, policy ?? NO_POLICY);
       if (policy === undefined) return;
       executor.setRedactionPolicy(policy);
       // The served snapshot says so itself (`marker.ts`): readers of the record
