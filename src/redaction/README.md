@@ -387,8 +387,9 @@ bytes, for any recording — an agent's or a chart's.)
 - **What footprintjs's rule does not see.** The rule (the one owner of every
   verdict) walks a payload's own enumerable keys, in plain objects, class
   instances and arrays. It does not walk a Map's entries, a Set's members, an
-  Error's `cause`, a non-enumerable or symbol key, or a `toJSON` that writes a
-  name the object holds privately (a `#field`): a tool result of such a shape
+  Error's `cause` (an `AggregateError`'s `errors`), a non-enumerable or
+  symbol key, or a `toJSON` that writes a name the object holds privately (a
+  `#field`): a tool result of such a shape
   keeps a value a by-name policy selects — in-process for the first four, in
   every JSON export for `toJSON`. Name the value that carries it (`result`;
   the vocabulary does), or return plain data from tools. Pinned, shape by
@@ -401,12 +402,15 @@ bytes, for any recording — an agent's or a chart's.)
   cap (ReDoS protection), so a pattern-only policy does not select an
   over-long key a model invents — name the keys that matter in `keys`.
 - **A runner's chart mounted into your own executor.** Its typed events are
-  served under the policy the runner declares (`chartBinding.ts`), but its
-  STATE belongs to your executor: the commit log and snapshot follow that
-  executor's own policy (footprintjs's law) — hand it the same policy
-  (`executor.setRedactionPolicy(policy)`). A stage built at run time (a dynamic
-  `StageNode` return) is not part of the chart that was bound; an `LLMCall` or
-  an `LlmRouter` declares nothing, so its mounted events go out as emitted.
+  served under the policy the RUNNER declares (`chartBinding.ts`) — your
+  executor's own policy never reaches them (footprintjs serves an emit by
+  event name only), so a runner that declares nothing (an `LLMCall`, an
+  `LlmRouter`, an agent created without `redact`) has its mounted events go
+  out as emitted whatever your executor's policy: declare the policy on the
+  runner. Its STATE belongs to your executor: the commit log and snapshot
+  follow that executor's own policy (footprintjs's law) — hand it the same
+  one (`executor.setRedactionPolicy(policy)`). A stage built at run time (a
+  dynamic `StageNode` return) is not part of the chart that was bound.
 - **A checkpoint is not proof.** The resume refuses a carried policy it cannot
   read (`'unreadable'`) and a missing one the checkpoint's own marks give away
   (`'missing'`), but a checkpoint EDITED to drop both its policy and its marks,
@@ -415,9 +419,10 @@ bytes, for any recording — an agent's or a chart's.)
   them — as it does for the identity a checkpoint names.
 - **A declaration's dates and source.** A coverage declaration's or a
   described result's `period` (the dates its read covered) and `provenance`
-  (a source's name, when it was measured) stay readable on their events —
-  structure the results layer's time checks judge. A date a tool takes from
-  the person's question travels there as it is.
+  (its source, when it was measured) stay readable on their events —
+  structure the results layer's time checks judge. Whatever a tool writes
+  there travels as it is: a date taken from the person's question, or a call's
+  argument interpolated into `source`.
 - **An `LLMCall` or an `LlmRouter` on its own.** Neither takes a `redact`, so
   neither declares one: its records — run on its own, or in a composition made
   only of such steps — are covered by nothing. Run the step as an `Agent`, or

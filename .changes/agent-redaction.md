@@ -75,17 +75,19 @@ it replays to the model, as every memory keeps what it stores.
 Named limits: the run's answer leaves its chart as a bare string and footprintjs serves an unnamed
 output as it is, so a recording's `run.exit` payload carries it whatever the policy; error text
 written by code (`error`, `errorMessage`) is not on the list; a declaration's dates and source
-(`period`, `provenance`) stay readable on its events; console warnings are not records; fingerprints and content hashes stay (they are structure), so a short kept-out value can be
+(`period`, `provenance` — whatever a tool writes there) stay readable on its events; console warnings are not records; fingerprints and content hashes stay (they are structure), so a short kept-out value can be
 confirmed by hashing guesses; a checkpoint is not proof — one edited to drop both its policy and its
 marks, or to carry a narrower one, resumes under what it says; an `LLMCall` or `LlmRouter` takes no
 `redact`, so one run on its own is covered by nothing; a composition does not refuse overlapping
 runs, so run one instance one run at a time; a chart-backed tool's own `$emit` payloads reach the
 recorders handed to that tool as footprintjs serves an emit, by event name; footprintjs's rule reads a
-value's own enumerable keys, so a Map's or a Set's contents, an Error's `cause`, a non-enumerable key
-or a `toJSON` that writes a privately held name keep a value a by-name policy selects (name the value
-that carries it — `result` — as the vocabulary does); names match exactly. An agent's chart mounted
-into an executor the app built (`getSpec()`) keeps the agent's declared policy on its events — each
-stage of a runner's chart is bound to its runner — while its state follows that executor's own policy.
+value's own enumerable keys, so a Map's or a Set's contents, an Error's `cause` (an `AggregateError`'s
+`errors`), a non-enumerable key or a `toJSON` that writes a privately held name keep a value a
+by-name policy selects (name the value that carries it — `result` — as the vocabulary does); names
+match exactly. An agent's chart mounted into an executor the app built (`getSpec()`) keeps the
+agent's declared policy on its events — each stage of a runner's chart is bound to its runner; the
+executor's own policy never reaches them, so declare the policy on the runner — while its state
+follows that executor's own policy.
 Content the library derives from a value is kept out when the rule keeps any part of the source out
 (a `fields` selector included), and served whole as the placeholder where its path cannot be walked.
 The full table is in `src/redaction/README.md`.
