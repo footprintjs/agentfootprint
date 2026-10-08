@@ -197,7 +197,9 @@ and that the answer account says the question and the answer are kept out.
    declaration and a described result's envelope quote its call and its
    result; a skipped step's reason is the model's words, a tool effect's
    reason and an artifact's label are the tool's, an artifact refusal quotes
-   the ref the model passed. Where a path cannot be walked (a list where a record belongs, a
+   the ref the model passed; a pause request's `reason` is the payload's own;
+   a permission checker's and a middleware's words (`rationale`, `reason`,
+   `why` — a thrown message included) are composed from the call they judged. Where a path cannot be walked (a list where a record belongs, a
    Map, a class instance, a payload that is not a record, a quoted argument
    whose path is missing) the content is served whole as the placeholder —
    fail closed. Generic names
@@ -376,8 +378,9 @@ bytes, for any recording — an agent's or a chart's.)
   found by the run id it carries — for the 32 most recent runs a dispatcher
   opened; one older than that is served under the run in force.
 - **A conversation continued is a new run.** A per-run `redact` rides the
-  run's own state into a pause's checkpoint (`AgentState.runRedaction`, names
-  only), so a resumed leg is covered by it without being handed it again, and
+  run's own state into a pause's checkpoint (`AgentState.runRedaction`: names,
+  and patterns as references), so a resumed leg is covered by it without being
+  handed it again (an app pattern excepted — below), and
   the names the paused leg kept out (footprintjs's `redactionMarks`) cover the
   leg whatever policy it is given (`redaction/policy.ts` · `policyOfMarks`).
   Every resumed leg writes its WHOLE policy back (`Agent · resume`), so a

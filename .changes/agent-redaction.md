@@ -44,7 +44,8 @@ instance: a snapshot is served under the policy its own executor was handed, a f
 of the run it belongs to (found by its run id, even after the next run opened; before an agent's
 first run, under the policy it declares), and a pause carries the run's policy in its own state —
 every resumed leg writes its whole policy back, a `redact` passed to `resume()` included — so every
-later leg is covered by it without being handed it again, and by the names the paused leg kept out.
+later leg is covered by it without being handed it again (an app pattern excepted — see below), and
+by the names the paused leg kept out.
 A resume that cannot carry it is refused before anything runs: `ResumeRedactionError` (new, from
 `agentfootprint`; `reason: 'unreadable'` for a carried value this library did not write, `'missing'`
 for a checkpoint whose run kept names out but carries no policy — refused even when the resume names

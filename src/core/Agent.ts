@@ -427,10 +427,14 @@ export interface AgentRunOptions extends RunOptions {
    * ```
    *
    * Validated like `Agent.create({ redact })`. A pause carries it: the run
-   * commits it to its own state (`runRedaction`, names only), so `resume()`
-   * covers the resumed leg by it without being handed it again — a `redact`
-   * passed to `resume()` adds to it. A conversation continued from the run
-   * (`followUp`, `continueFrom`) is a new run, covered by what it is given.
+   * commits it to its own state (`runRedaction`: its names, and each pattern
+   * as a reference), so `resume()` covers the resumed leg by it without being
+   * handed it again — except a pattern of your own, which is never compiled
+   * from a checkpoint: pass the same `redact` to `resume()` (or declare it on
+   * the agent), or the resume is refused (`ResumeRedactionError`,
+   * `'unknown-pattern'`). A `redact` passed to `resume()` adds to it. A
+   * conversation continued from the run (`followUp`, `continueFrom`) is a new
+   * run, covered by what it is given.
    */
   redact?: RedactionPolicy;
 }
@@ -1718,7 +1722,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * shows the event's served payload (`src/redaction/runRedaction.ts`).
    */
   getLastNarrativeEntries(): readonly CombinedNarrativeEntry[] {
-    return this.lastExecutor?.getNarrativeEntries() ?? [];
+    if (this.lastExecutor === undefined) return [];
+    // The snapshot's terms: an executor no run of this agent opened serves
+    // nothing — its narrative was written under no rule anyone knows.
+    if (!policyOfExecutor(this.lastExecutor).known) return [];
+    return this.lastExecutor.getNarrativeEntries();
   }
 
   /**

@@ -233,7 +233,21 @@ const DERIVED: Readonly<Record<string, readonly Derived[]>> = {
   // context it quotes — and the person's note on the decision. The pack rides
   // the check-in event AND the pause it asks with (`pause.request`'s question).
   'agentfootprint.checkin.request': checkInPack('request'),
-  'agentfootprint.pause.request': checkInPack('questionPayload.checkIn'),
+  'agentfootprint.pause.request': [
+    ...checkInPack('questionPayload.checkIn'),
+    // The library's own copy of the pause payload's reason (`RunnerBase ·
+    // emitPauseRequest`), beside the payload it came from.
+    { paths: ['reason'], from: ['questionPayload'] },
+  ],
+  // A permission checker's and a middleware's own words about the call they
+  // judged: composed from its arguments, its result, the person's message —
+  // and a thrown error's message in a middleware's place.
+  'agentfootprint.permission.check': [
+    { paths: ['rationale', 'reason'], from: ['args', 'result', ...CONVERSATION_TEXT] },
+  ],
+  'agentfootprint.middleware.decision': [
+    { paths: ['why'], from: ['args', 'result', ...CONVERSATION_TEXT] },
+  ],
   'agentfootprint.checkin.decision': [{ paths: ['note'], from: ['resumeInput'] }],
   // Words a matcher found in the conversation; a tool result a route guard judged.
   'agentfootprint.context.evaluated': [

@@ -125,9 +125,12 @@ describe('an executor no run opened is unknown — and refused, never served raw
     expect(runner.getLastSnapshot()).toBeDefined();
     const foreign = new FlowChartExecutor(runner.getSpec());
     await foreign.run({ input: { message: 'ssn SSN-FOREIGN-1' } });
+    expect(runner.getLastNarrativeEntries().length).toBeGreaterThan(0);
     (runner as unknown as { lastExecutor: object }).lastExecutor = foreign;
     expect(runner.getLastSnapshot()).toBeUndefined();
     expect(runner.getSnapshot()).toBeUndefined();
+    // The narrative is the snapshot's twin: nothing from an executor no run opened.
+    expect(runner.getLastNarrativeEntries()).toEqual([]);
   });
 
   it('a runner with NO policy still serves its record: "none" is known, not missing', async () => {

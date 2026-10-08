@@ -1488,7 +1488,8 @@ export interface AgentState {
    * run is covered by one, read off the run itself (never the agent instance),
    * and written back by every resumed leg with that leg's whole policy (a
    * `redact` passed to `resume()` included), so a pause's checkpoint carries it
-   * and every later leg is covered by it without being handed it again
+   * and every later leg is covered by it without being handed it again — a
+   * pattern of the caller's own excepted, which the resume must name again
    * (`Agent · resume`). A value this library did not write, or none on a
    * checkpoint whose run kept names out, refuses the resume —
    * `ResumeRedactionError`.
