@@ -6,7 +6,7 @@ title: runbookAsTool
 
 > **runbookAsTool**(`opts`): [`Tool`](/docs/api/interfaces/Tool)
 
-Defined in: [src/core/runbook/runbookAsTool.ts:182](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/runbookAsTool.ts#L182)
+Defined in: [src/core/runbook/runbookAsTool.ts:183](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/runbookAsTool.ts#L183)
 
 Wrap a footprintjs procedure as a `Tool` whose every answer carries the
 honesty spine. See the module header for the envelope; see
