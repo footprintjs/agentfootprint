@@ -222,7 +222,10 @@ export class Loop extends RunnerBase<LoopInput, LoopOutput> {
       compositionPath: [`Loop:${this.id}`],
     };
 
-    const getRunCtx = (): RunContext => this.currentRunContext;
+    // THIS run's context, captured: a run that overlaps it on this instance
+    // never restamps its events, so each is served under its own run's policy.
+    const runContext = this.currentRunContext;
+    const getRunCtx = (): RunContext => runContext;
     // The run's redaction (`src/redaction/`): the policy the body declared.
     const redaction = this.openRunRedaction(resumeLeg, getRunCtx);
 

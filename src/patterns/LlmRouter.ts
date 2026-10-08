@@ -409,7 +409,10 @@ class RouterStep extends RunnerBase<{ message: string }, string> {
       runId: makeRunId(),
       compositionPath: [`Router:${this.routerId}`],
     };
-    const getRunCtx = (): RunContext => this.currentRunContext;
+    // THIS run's context, captured: a run that overlaps it on this instance
+    // never restamps its events, so each is served under its own run's policy.
+    const runContext = this.currentRunContext;
+    const getRunCtx = (): RunContext => runContext;
     // The run's redaction (`src/redaction/`) — opened for every run like every
     // runner's, so the router call's events reach the real-value path.
     const redaction = this.openRunRedaction(resumeLeg, getRunCtx);

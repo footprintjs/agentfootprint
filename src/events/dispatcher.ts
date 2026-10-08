@@ -193,6 +193,17 @@ export class EventDispatcher {
    */
   private defaultServing: (() => EventServing | undefined) | undefined;
   /**
+   * Whether a run id names a RUN (as opposed to an address that names none —
+   * a consumer's own emit, an event before the first run), supplied by the
+   * runner, which owns the id format (`RunnerBase · isMintedRunId`). A fact
+   * stamped with a run this dispatcher does not hold a serving for (past the
+   * bound, or never opened here) is served as the placeholder — never under a
+   * DIFFERENT run's policy.
+   */
+  private namesARun: ((runId: string) => boolean) | undefined;
+  /** Whether any run this dispatcher opened was covered by a policy — a miss may hide one then. */
+  private coveredRunOpened = false;
+  /**
    * The REAL-value path — the library's own mechanisms that run on events
    * (the crash checkpoint, the window's token reading, the reply a host
    * streams). Never a record: see `src/redaction/runRedaction.ts`. Separate
@@ -409,6 +420,17 @@ export class EventDispatcher {
   }
 
   /**
+   * Install the recogniser of run ids (`namesARun`): a fact stamped with a run
+   * this dispatcher holds no serving for is then refused — served as the
+   * placeholder — instead of served under the run in force.
+   *
+   * @internal
+   */
+  useRunIdRecogniser(namesARun: (runId: string) => boolean): void {
+    this.namesARun = namesARun;
+  }
+
+  /**
    * Install what this run's events are served as. Called by the runner when a
    * run opens (`RunnerBase · openRunRedaction`).
    *
@@ -416,6 +438,7 @@ export class EventDispatcher {
    */
   useServing(serving: EventServing | undefined, runId?: string): void {
     this.serving = serving;
+    if (serving !== undefined) this.coveredRunOpened = true;
     if (runId === undefined) return;
     this.servingsByRun.delete(runId);
     this.servingsByRun.set(runId, serving);
@@ -423,6 +446,24 @@ export class EventDispatcher {
       const oldest = this.servingsByRun.keys().next().value as string;
       this.servingsByRun.delete(oldest);
     }
+  }
+
+  /**
+   * Dispatch a fact the runner files about ONE run after its executor returned
+   * (its pause request) — served under THAT run's serving
+   * (`runRedaction.ts` · `servingOfExecutor`), never the run in force now: on
+   * an instance whose runs overlap, the last run opened is another run. A fact
+   * whose run has no serving (`undefined` — an executor no run of this library
+   * opened) is refused: served as the placeholder. The real-value path
+   * receives it as made.
+   *
+   * @internal
+   */
+  dispatchForRun(event: AgentfootprintEvent, serving: EventServing | undefined): void {
+    if (this.realListeners.size > 0) this.deliverReal(event);
+    this.fanOut(event, true, (made) =>
+      serving === undefined ? refusedEvent(made) : servedBy(serving, made, true),
+    );
   }
 
   /**
@@ -483,12 +524,16 @@ export class EventDispatcher {
    * once — and only when some bucket would receive it, so an event nobody
    * listens to costs no walk.
    */
-  private fanOut(event: AgentfootprintEvent, servePayload: boolean): void {
+  private fanOut(
+    event: AgentfootprintEvent,
+    servePayload: boolean,
+    serve?: (event: AgentfootprintEvent) => AgentfootprintEvent,
+  ): void {
     const typed = this.byType.get(event.type);
     const domainKey = this.domainKey(event.type);
     const domain = this.domainWildcards.get(domainKey);
     if (!typed?.size && !domain?.size && this.allWildcards.size === 0) return;
-    const served = this.served(event, servePayload);
+    const served = serve !== undefined ? serve(event) : this.served(event, servePayload);
     this.fireBucket(typed, served);
     // Prune only when once-listeners actually emptied the bucket — keeps the
     // hot path free of per-event work (incl. the `${domainKey}.*` string build).
@@ -502,15 +547,28 @@ export class EventDispatcher {
   private served(event: AgentfootprintEvent, servePayload: boolean): AgentfootprintEvent {
     // The run the event says it belongs to, when this dispatcher opened it; else the current one.
     const runId = (event.meta as { runId?: unknown } | undefined)?.runId;
-    const serving =
-      typeof runId === 'string' && this.servingsByRun.has(runId)
-        ? this.servingsByRun.get(runId)
-        : this.serving ?? this.defaultServing?.();
-    if (serving === undefined || !serving.active()) return event;
-    const payload = servePayload ? serving.payload(event.type, event.payload) : event.payload;
-    const meta = event.meta === undefined ? event.meta : serving.meta(event.meta);
-    if (payload === event.payload && meta === event.meta) return event;
-    return { ...event, payload, meta } as AgentfootprintEvent;
+    const known = typeof runId === 'string' && this.servingsByRun.has(runId);
+    if (!known && typeof runId === 'string' && this.refusesUnknownRun(runId)) {
+      return refusedEvent(event);
+    }
+    const serving = known
+      ? this.servingsByRun.get(runId as string)
+      : this.serving ?? this.defaultServing?.();
+    return servedBy(serving, event, servePayload);
+  }
+
+  /**
+   * A fact of a run this dispatcher holds no serving for — evicted past
+   * {@link RUN_SERVINGS_KEPT}, or never opened here (another instance's, an
+   * earlier process's) — on a dispatcher where a policy exists: a covered run
+   * opened here, or the runner declares one. Its own run's policy cannot be
+   * found, and the one in force is another run's or only the declaration —
+   * fail closed. Where no policy exists at all (none declared, no covered run)
+   * nothing is served differently, as before this law.
+   */
+  private refusesUnknownRun(runId: string): boolean {
+    if (this.namesARun?.(runId) !== true) return false;
+    return this.coveredRunOpened || this.defaultServing?.() !== undefined;
   }
 
   private addListener(type: string, stored: StoredListener): Unsubscribe {
@@ -643,3 +701,39 @@ function wrapForDev(
   originalsMap.set(wrapped as unknown as object, listener);
   return wrapped;
 }
+
+/** `event` as `serving` serves it — the same object when nothing was selected (or no policy). */
+function servedBy(
+  serving: EventServing | undefined,
+  event: AgentfootprintEvent,
+  servePayload: boolean,
+): AgentfootprintEvent {
+  if (serving === undefined || !serving.active()) return event;
+  const payload = servePayload ? serving.payload(event.type, event.payload) : event.payload;
+  const meta = event.meta === undefined ? event.meta : serving.meta(event.meta);
+  if (payload === event.payload && meta === event.meta) return event;
+  return { ...event, payload, meta } as AgentfootprintEvent;
+}
+
+/**
+ * An event whose run's serving cannot be found, as served: the placeholder for
+ * a payload and for the identity on its meta — the address (type, run, stage)
+ * stays, so the record still shows that something happened, and when.
+ */
+function refusedEvent(event: AgentfootprintEvent): AgentfootprintEvent {
+  const meta = event.meta as { principal?: unknown; tenant?: unknown } | undefined;
+  return {
+    ...event,
+    payload: REFUSED_PAYLOAD,
+    ...(meta !== undefined && {
+      meta: {
+        ...meta,
+        ...(meta.principal !== undefined && { principal: REFUSED_PAYLOAD }),
+        ...(meta.tenant !== undefined && { tenant: REFUSED_PAYLOAD }),
+      },
+    }),
+  } as unknown as AgentfootprintEvent;
+}
+
+/** The placeholder a refused event's payload is served as (`redaction/served.ts` · `SERVED_PLACEHOLDER`). */
+const REFUSED_PAYLOAD = '[REDACTED]';

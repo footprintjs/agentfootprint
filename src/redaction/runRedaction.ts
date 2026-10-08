@@ -93,8 +93,12 @@ export interface RunRedaction {
   ): { readonly value: unknown; readonly keptOut: boolean } | undefined;
 }
 
-/** What a stage's scope is tied to — internal to this module and its helpers. */
-interface ScopeRun {
+/**
+ * What a stage's scope is tied to — internal to this module and its helpers.
+ *
+ * @internal
+ */
+export interface ScopeRun {
   readonly policy: RedactionPolicy | undefined;
   readonly serving: EventServing;
   /** Deliver an event, as made, to the real-value path — from the stage `stageId` that emitted it. */
@@ -137,6 +141,24 @@ export function policyOfExecutor(executor: object): ExecutorPolicy {
   return { known: true, policy: held === NO_POLICY ? undefined : held };
 }
 
+/**
+ * Every executor a run opened → that run's serving, set by `applyTo` beside
+ * its policy — for a fact the runner files about THAT run after its executor
+ * returned (its pause request), whatever run opened on the instance since
+ * (`servingOfExecutor`). Weak: dies with the executor.
+ */
+const executorServings = new WeakMap<object, EventServing>();
+
+/**
+ * The serving of the run that opened `executor` — what a fact the runner
+ * files about that run is served as. `undefined` for an executor no run of
+ * this library opened: such a fact is refused (`EventDispatcher ·
+ * dispatchForRun`).
+ */
+export function servingOfExecutor(executor: object): EventServing | undefined {
+  return executorServings.get(executor);
+}
+
 /** Every scope a run's executor made → that run, and the stage it was made for. Weak: a scope dies with its stage. */
 const scopeRuns = new WeakMap<object, { readonly run: ScopeRun; readonly stageId: string }>();
 
@@ -152,9 +174,12 @@ export function createRunRedaction(args: {
   readonly getRunContext: () => RunContext;
 }): RunRedaction {
   const { policy, dispatcher, getRunContext } = args;
-  // Stands in until a stage context offers the executor's own rule.
-  let rule = new RedactionRule(policy);
-  const serving = eventServing(() => rule, (policy?.emitPatterns?.length ?? 0) > 0);
+  // The rule the run decides with — one built from the policy stands in until
+  // a stage context offers the executor's own. The serving reads it through
+  // this box and holds nothing else of the run (`servingOf`): the dispatcher
+  // keeps a run's serving for its late facts, never the run's values.
+  const decided = { rule: new RedactionRule(policy) };
+  const serving = servingOf(decided, policy);
   // Relayed writes waiting for their recorder, oldest first, per stage and key.
   // Keyed by the stage's runtimeStageId (unique per execution), so an entry no
   // recorder claims (a deferred tier that dropped the write) can never be
@@ -177,13 +202,13 @@ export function createRunRedaction(args: {
       } as unknown as AgentfootprintEvent);
     },
     keepsOut(name) {
-      return policy !== undefined && rule.isKeyRedacted(name);
+      return policy !== undefined && decided.rule.isKeyRedacted(name);
     },
     noteWrite(runtimeStageId, key, value) {
       // No policy: the scope channel serves the write as written — nothing to relay.
       if (policy === undefined) return;
       const at = slot(runtimeStageId, key);
-      const written = { value, keptOut: rule.isKeyRedacted(key) };
+      const written = { value, keptOut: decided.rule.isKeyRedacted(key) };
       const queue = waiting.get(at);
       if (queue === undefined) waiting.set(at, [written]);
       else queue.push(written);
@@ -203,12 +228,13 @@ export function createRunRedaction(args: {
           scopeRuns.set(scope as object, { run, stageId: context?.runtimeStageId ?? '' });
         }
         const own = context?.getRedactionRule?.();
-        if (own !== undefined) rule = own;
+        if (own !== undefined) decided.rule = own;
         return scope;
       };
     },
     applyTo(executor) {
       executorPolicies.set(executor, policy ?? NO_POLICY);
+      executorServings.set(executor, serving);
       if (policy === undefined) return;
       executor.setRedactionPolicy(policy);
       // The served snapshot says so itself (`marker.ts`): readers of the record
@@ -224,6 +250,19 @@ export function createRunRedaction(args: {
       return written;
     },
   };
+}
+
+/**
+ * The serving of one run, reading the rule in `decided` — built in its own
+ * scope, so what the serving holds is the box and the policy: never the run's
+ * relayed writes or its context, which `createRunRedaction`'s other closures
+ * share.
+ */
+function servingOf(
+  decided: { readonly rule: RedactionRule },
+  policy: RedactionPolicy | undefined,
+): EventServing {
+  return eventServing(() => decided.rule, (policy?.emitPatterns?.length ?? 0) > 0);
 }
 
 /**
@@ -246,35 +285,42 @@ export function servingAhead(policy: RedactionPolicy | undefined): EventServing 
  * DECLARED policy, served as a run's would be (`servingAhead`), so its stages'
  * events never leave raw because the runner was not the one running them.
  * There is no run here to feed the real-value path or a relay, so those are
- * idle. One per policy object; weak, so it dies with the declaration.
+ * idle. Built for ONE runner and held by it (`RunnerBase`) — never a registry
+ * shared between runners — and it holds no value of any run: only the
+ * declaration's rule.
  */
-const outsideRuns = new WeakMap<RedactionPolicy, ScopeRun>();
+export interface OutsideRun {
+  readonly policy: RedactionPolicy;
+  /** @internal */
+  readonly scopeRun: ScopeRun;
+}
 
-function outsideRunFor(policy: RedactionPolicy): ScopeRun {
-  const known = outsideRuns.get(policy);
-  if (known !== undefined) return known;
+/** The {@link OutsideRun} of a runner that declares `policy`. */
+export function outsideRunFor(policy: RedactionPolicy): OutsideRun {
   const rule = new RedactionRule(policy);
-  const run: ScopeRun = {
+  return Object.freeze({
     policy,
-    serving: eventServing(() => rule, (policy.emitPatterns?.length ?? 0) > 0),
-    real: () => undefined,
-    noteWrite: () => undefined,
-    keepsOut: (name) => rule.isKeyRedacted(name),
-  };
-  outsideRuns.set(policy, run);
-  return run;
+    scopeRun: {
+      policy,
+      serving: eventServing(() => rule, (policy.emitPatterns?.length ?? 0) > 0),
+      real: () => undefined,
+      noteWrite: () => undefined,
+      keepsOut: (name: string) => rule.isKeyRedacted(name),
+    },
+  });
 }
 
 /**
- * Tie `scope` to the run of a chart mounted outside any of its runner's runs
- * (`chartBinding.ts` · `bindChartStages` calls it as each stage starts) — a
- * scope a run already made keeps its run, and a runner that declares no policy
+ * Tie `scope` to `outside` — the run of its runner's chart mounted outside any
+ * of that runner's runs (`chartBinding.ts` · `bindChartStages` calls it as each
+ * stage starts, with the runner's own {@link OutsideRun}). A scope a run
+ * already made keeps its run; a runner that declares no policy (`undefined`)
  * leaves the scope as it is (byte-identical to before).
  */
-export function adoptScopeOutsideRun(scope: unknown, declared: RedactionPolicy | undefined): void {
-  if (declared === undefined || scope === null || typeof scope !== 'object') return;
+export function adoptScopeOutsideRun(scope: unknown, outside: OutsideRun | undefined): void {
+  if (outside === undefined || scope === null || typeof scope !== 'object') return;
   if (scopeRuns.has(scope)) return;
-  scopeRuns.set(scope, { run: outsideRunFor(declared), stageId: '' });
+  scopeRuns.set(scope, { run: outside.scopeRun, stageId: '' });
 }
 
 /** A scope that can emit — structurally footprintjs's `TypedScope` `$emit`. */

@@ -528,7 +528,10 @@ export class Graph extends RunnerBase<GraphInput, GraphOutput> {
     this.runEpoch += 1;
     this.nodeErrors.clear();
 
-    const getRunCtx = (): RunContext => this.currentRunContext;
+    // THIS run's context, captured: a run that overlaps it on this instance
+    // never restamps its events, so each is served under its own run's policy.
+    const runContext = this.currentRunContext;
+    const getRunCtx = (): RunContext => runContext;
     // The run's redaction (`src/redaction/`): every policy a node declared.
     const redaction = this.openRunRedaction(resumeLeg, getRunCtx);
     const spec = this.getSpec();

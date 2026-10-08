@@ -360,7 +360,10 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
       compositionPath: [`LLMCall:${this.id}`],
     };
 
-    const getRunCtx = (): RunContext => this.currentRunContext;
+    // THIS run's context, captured: a run that overlaps it on this instance
+    // never restamps its events, so each is served under its own run's policy.
+    const runContext = this.currentRunContext;
+    const getRunCtx = (): RunContext => runContext;
     // The run's redaction (`src/redaction/`). An LLMCall declares no policy of
     // its own — mounted in a composition, the composition's run decides — but
     // the redaction is opened for every run so its stages' events still reach

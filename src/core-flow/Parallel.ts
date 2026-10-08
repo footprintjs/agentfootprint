@@ -470,7 +470,10 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
     this.runEpoch += 1;
     this.branchErrors.clear();
 
-    const getRunCtx = (): RunContext => this.currentRunContext;
+    // THIS run's context, captured: a run that overlaps it on this instance
+    // never restamps its events, so each is served under its own run's policy.
+    const runContext = this.currentRunContext;
+    const getRunCtx = (): RunContext => runContext;
     // The run's redaction (`src/redaction/`): every policy a branch declared.
     const redaction = this.openRunRedaction(resumeLeg, getRunCtx);
 

@@ -24,10 +24,14 @@ import { policyOfMarks, unionRedactionPolicies } from '../redaction/policy.js';
 import {
   adoptScopeOutsideRun,
   createRunRedaction,
+  outsideRunFor,
   policyOfExecutor,
   servingAhead,
+  servingOfExecutor,
+  type OutsideRun,
   type RunRedaction,
 } from '../redaction/runRedaction.js';
+import type { EventServing } from '../redaction/served.js';
 import { servableSnapshot } from './servableSnapshot.js';
 import { registerRunnerLive } from './runnerLive.js';
 import { redactConsentUrlForEvent } from '../identity/consent.js';
@@ -210,6 +214,9 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
     let declaredServing:
       | { policy: RedactionPolicy; serving: ReturnType<typeof servingAhead> }
       | undefined;
+    // A fact of a run this dispatcher holds no serving for is refused, never
+    // served under another run's policy; the run-id format is ours to judge.
+    this.dispatcher.useRunIdRecogniser(isMintedRunId);
     this.dispatcher.useDefaultServing(() => {
       const policy = redactionDeclaredBy(this);
       if (policy === undefined) return undefined;
@@ -427,8 +434,15 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
     this.chart = builder();
     // A stage that runs outside this runner's runs (its chart mounted into an
     // executor the app built) serves its events under the policy this runner
-    // declares — read when the stage starts, never fixed here.
-    bindChartStages(this.chart, (scope) => adoptScopeOutsideRun(scope, redactionDeclaredBy(this)));
+    // declares — bound to THIS runner at build, by identity, and held by it:
+    // no registry another runner's stage could read.
+    let outside: OutsideRun | undefined;
+    bindChartStages(this.chart, (scope) => {
+      const declared = redactionDeclaredBy(this);
+      if (declared === undefined) return;
+      if (outside?.policy !== declared) outside = outsideRunFor(declared);
+      adoptScopeOutsideRun(scope, outside);
+    });
   }
 
   /**
@@ -475,7 +489,7 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
         ? (result as { pauseData?: unknown }).pauseData
         : undefined;
 
-    this.emitPauseRequest(checkpoint, pauseData);
+    this.emitPauseRequest(checkpoint, pauseData, servingOfExecutor(executor));
 
     // A check-in pause carries its typed request under `pauseData.checkIn` and a
     // middleware ask carries its question under `pauseData.ask` (the dispatch
@@ -505,15 +519,21 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
 
   /**
    * Emit `agentfootprint.pause.request` through the dispatcher. Called by
-   * `detectPause()`. Subclasses should not emit this directly.
+   * `detectPause()`. Subclasses should not emit this directly. Served under
+   * the serving of the run that paused (`runServing`, from its executor) —
+   * never the run opened last on this instance.
    */
-  private emitPauseRequest(checkpoint: FlowchartCheckpoint, pauseData: unknown): void {
+  private emitPauseRequest(
+    checkpoint: FlowchartCheckpoint,
+    pauseData: unknown,
+    runServing: EventServing | undefined,
+  ): void {
     const meta = this.minimalMeta();
     const reasonFromData =
       typeof pauseData === 'object' && pauseData !== null && 'reason' in pauseData
         ? String((pauseData as { reason: unknown }).reason)
         : 'stage requested pause';
-    this.dispatcher.dispatch({
+    const event = {
       type: 'agentfootprint.pause.request',
       payload: {
         reason: reasonFromData,
@@ -532,7 +552,8 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
         runtimeStageId: `${checkpoint.pausedStageId}#paused`,
         subflowPath: checkpoint.subflowPath,
       },
-    });
+    } as const;
+    this.dispatcher.dispatchForRun(event as unknown as AgentfootprintEvent, runServing);
   }
 
   /**

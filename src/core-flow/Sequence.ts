@@ -202,7 +202,10 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
       compositionPath: [`Sequence:${this.id}`],
     };
 
-    const getRunCtx = (): RunContext => this.currentRunContext;
+    // THIS run's context, captured: a run that overlaps it on this instance
+    // never restamps its events, so each is served under its own run's policy.
+    const runContext = this.currentRunContext;
+    const getRunCtx = (): RunContext => runContext;
     // The run's redaction (`src/redaction/`): every policy a step declared —
     // the steps run inside THIS executor, so this run's one rule covers them.
     const redaction = this.openRunRedaction(resumeLeg, getRunCtx);

@@ -204,7 +204,10 @@ export class Workflow<TIn extends object = object, TOut = unknown> extends Runne
       compositionPath: [`Workflow:${this.id}`],
     };
 
-    const getRunCtx = (): RunContext => this.currentRunContext;
+    // THIS run's context, captured: a run that overlaps it on this instance
+    // never restamps its events, so each is served under its own run's policy.
+    const runContext = this.currentRunContext;
+    const getRunCtx = (): RunContext => runContext;
     // The run's redaction (`src/redaction/`): every policy a step declared.
     const redaction = this.openRunRedaction(resumeLeg, getRunCtx);
     const spec = this.getSpec();
