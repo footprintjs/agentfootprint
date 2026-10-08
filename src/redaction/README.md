@@ -81,8 +81,10 @@ const agent = Agent.create({
 - **Proven per feature.** `test/redaction/agent-redaction.vocabulary.test.ts`
   runs each feature in `CONVERSATION_FEATURES` — the turn, tools (with argument
   validation), thinking, asking a person, the inputs layer, structured output,
-  memory and RAG, the evidence gate (with its figures), a person approving a
-  call (check-in), skill graphs — with a canary in every place it moves the
+  memory and RAG, the evidence gate (with its figures, and the `guard`
+  posture's flagged draft values), compaction (the originals a fold keeps
+  beside its summary), a person approving a call (check-in), skill graphs —
+  with a canary in every place it moves the
   conversation: without a policy every canary reaches a record; under the
   vocabulary none reaches any record, the run emits the SAME events, and its
   answer account is still told. Compositions are proven in
