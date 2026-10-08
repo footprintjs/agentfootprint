@@ -38,7 +38,7 @@ import type { Tool } from '../../tools.js';
 import type { ClockDraft } from '../../time/clock.js';
 import type { TimeReader } from '../../time/reader.js';
 import type { TimePolicy } from '../../time/resolve.js';
-import { carriedRedactionPolicy } from '../../../redaction/policy.js';
+import { carriedRunPolicy } from '../../../redaction/conversation.js';
 import { policyInForce } from '../../../redaction/runRedaction.js';
 
 /**
@@ -449,7 +449,7 @@ export function buildSeedStage(
  */
 function commitRunRedaction(scope: TypedScope<AgentState>): void {
   const runPolicy = policyInForce(scope);
-  if (runPolicy !== undefined) scope.runRedaction = carriedRedactionPolicy(runPolicy);
+  if (runPolicy !== undefined) scope.runRedaction = carriedRunPolicy(runPolicy);
 }
 
 function buildSeedBody(

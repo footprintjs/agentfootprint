@@ -83,7 +83,7 @@ import { compactionMeter, type CompactionMeterHandle } from '../recorders/core/C
 import {
   assertRedactionPolicy,
   CarriedPolicyError,
-  carriedRedactionPolicy,
+  carriedVocabularyOf,
   policyFromCarried,
   policyOfMarks,
   unionRedactionPolicies,
@@ -91,7 +91,11 @@ import {
 import { policyOfExecutor } from '../redaction/runRedaction.js';
 import { ResumeRedactionError } from './conversation.js';
 import { declareRedaction, redactionDeclaredBy } from '../redaction/declared.js';
-import { conversationRedaction } from '../redaction/conversation.js';
+import {
+  carriedRunPolicy,
+  conversationRedaction,
+  withCurrentVocabulary,
+} from '../redaction/conversation.js';
 import { createEvictedTurnsHandle, type EvictedTurnsHandle } from './agent/window/evictedTurns.js';
 import { createReceiptDigests, type ReceiptDigests } from '../lib/time-travel/receiptDigests.js';
 import { packRecording } from '../recorders/observability/recordingPack.js';
@@ -2684,7 +2688,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
             ...checkpoint,
             sharedState: {
               ...checkpoint.sharedState,
-              runRedaction: carriedRedactionPolicy(leg.policy),
+              runRedaction: carriedRunPolicy(leg.policy),
             },
           };
     try {
@@ -5777,6 +5781,9 @@ function resumeRedactionOf(
     // A carried pattern is a reference to one the resuming side holds — never
     // compiled from the checkpoint (`redaction/policy.ts` · `policyFromCarried`).
     carried = policyFromCarried(state?.runRedaction, 'Agent.resume', trusted);
+    // A policy built under ANOTHER vocabulary version is joined with the
+    // current list — the leg is never covered by an older list alone.
+    carried = withCurrentVocabulary(carried, carriedVocabularyOf(state?.runRedaction));
   } catch (refusal) {
     throw new ResumeRedactionError(
       refusal instanceof CarriedPolicyError && refusal.refusal === 'unknown-pattern'

@@ -158,6 +158,24 @@ interface CarriedSelectors {
 export interface CarriedRedactionPolicy extends CarriedSelectors {
   readonly emitPatterns?: readonly CarriedPattern[];
   readonly diagnostics?: CarriedSelectors;
+  /**
+   * The conversation vocabulary's version the policy was built under, when it
+   * keeps the conversation out (`conversation.ts` · `carriedRunPolicy`) — a
+   * resumed leg under another version is covered by the current list too.
+   */
+  readonly vocabulary?: string;
+}
+
+/**
+ * The vocabulary version a carried policy recorded ({@link CarriedRedactionPolicy}),
+ * or `undefined` when it recorded none. Read only after
+ * {@link policyFromCarried} accepted the same value — which refuses one whose
+ * version is not text.
+ */
+export function carriedVocabularyOf(value: unknown): string | undefined {
+  if (value === null || typeof value !== 'object') return undefined;
+  const version = (value as { vocabulary?: unknown }).vocabulary;
+  return typeof version === 'string' ? version : undefined;
 }
 
 /** `policy` as plain data ({@link CarriedRedactionPolicy}). */
@@ -262,6 +280,8 @@ export function policyFromCarried(
   const diagnostics = record['diagnostics'];
   if (diagnostics !== undefined && (diagnostics === null || typeof diagnostics !== 'object'))
     refuse();
+  const vocabulary = record['vocabulary'];
+  if (vocabulary !== undefined && typeof vocabulary !== 'string') refuse();
   const emit = patterns(record['emitPatterns']);
   const policy = {
     ...selectors(record),

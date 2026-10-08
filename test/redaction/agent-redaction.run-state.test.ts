@@ -34,6 +34,8 @@ import type { LLMProvider, LLMResponse } from '../../src/adapters/types.js';
 import { recordRun } from '../../src/doors/observe.js';
 import { mock } from '../../src/doors/providers.js';
 import { conversationRedaction } from '../../src/doors/security.js';
+import { VOCABULARY_VERSION } from '../../src/redaction/conversation.js';
+import { policyOfExecutor } from '../../src/redaction/runRedaction.js';
 import { servedUnderPolicy } from '../../src/redaction/marker.js';
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
 import { carriedConversationPolicy, locationsOf } from './fixture.js';
@@ -467,5 +469,87 @@ describe('a carried pattern is a reference the resuming side must hold — never
     const agent = declaring(PER_RUN);
     await agent.resume(checkpoint, { answer: 'yes' });
     expect(locationsOf(agent.getLastSnapshot(), 'SSN-PAT-5555')).toEqual([]);
+  });
+});
+
+describe('a carried policy records the vocabulary version it was built under — fail closed across versions', () => {
+  const pausedUnder = async (redact: RedactionPolicy) => {
+    const outcome = await asker().run({ message: 'check' }, { redact });
+    if (!isPaused(outcome)) throw new Error('must pause');
+    return outcome.checkpoint;
+  };
+  /** The checkpoint with its carried policy narrowed to an "older list" (one of today's names dropped). */
+  const narrowed = (
+    checkpoint: Awaited<ReturnType<typeof pausedUnder>>,
+    vocabulary: string | undefined,
+  ) => {
+    const state = checkpoint.sharedState as { runRedaction: Record<string, unknown> };
+    const keys = (state.runRedaction['keys'] as string[]).filter((k) => k !== 'userPrompt');
+    const { vocabulary: _v, ...rest } = state.runRedaction;
+    void _v;
+    return {
+      ...checkpoint,
+      sharedState: {
+        ...checkpoint.sharedState,
+        runRedaction: { ...rest, keys, ...(vocabulary !== undefined && { vocabulary }) },
+      },
+    };
+  };
+  /** The rationale of the resumed leg's route decisions — library text, content by default. */
+  const resumedRationales = async (checkpoint: Awaited<ReturnType<typeof pausedUnder>>) => {
+    const agent = asker();
+    const events: AgentfootprintEvent[] = [];
+    agent.on('*', (e) => events.push(e));
+    await agent.resume(checkpoint, { answer: 'yes' });
+    const executor = (agent as unknown as { lastExecutor: object }).lastExecutor;
+    const rationales = events
+      .filter((e) => e.type === 'agentfootprint.agent.route_decided')
+      .map((e) => (e.payload as { rationale?: unknown }).rationale);
+    return { rationales, coverage: policyOfExecutor(executor) };
+  };
+
+  it('a run under the vocabulary carries the CURRENT version; one under a narrower policy carries none', async () => {
+    const covered = await pausedUnder(P);
+    const carried = (covered.sharedState as { runRedaction: { vocabulary?: string } }).runRedaction;
+    expect(carried.vocabulary).toBe(VOCABULARY_VERSION);
+    const narrow = await pausedUnder({ keys: ['ssn'] });
+    const carriedNarrow = (narrow.sharedState as { runRedaction: { vocabulary?: string } })
+      .runRedaction;
+    expect(carriedNarrow.vocabulary).toBeUndefined();
+  });
+
+  it('a leg whose record names an OLDER version is covered by the current vocabulary — default-deny stays on', async () => {
+    const forged = narrowed(await pausedUnder(P), 'v1-00000000');
+    const { rationales, coverage } = await resumedRationales(forged);
+    expect(rationales.length).toBeGreaterThan(0);
+    for (const rationale of rationales) expect(rationale).toBe('[REDACTED]');
+    // The name the older list lacked covers the leg again.
+    expect(coverage).toMatchObject({ known: true });
+    if (coverage.known) expect(coverage.policy?.keys).toContain('userPrompt');
+  });
+
+  it('control: the same older list stamped with the CURRENT version resumes as carried — the version is what decides', async () => {
+    const forged = narrowed(await pausedUnder(P), VOCABULARY_VERSION);
+    const { rationales, coverage } = await resumedRationales(forged);
+    // Without the dropped name the list no longer keeps the conversation out:
+    // default-deny is off for the leg, and the library's rationale reads as text.
+    expect(rationales.some((r) => typeof r === 'string' && r !== '[REDACTED]')).toBe(true);
+    if (coverage.known) expect(coverage.policy?.keys).not.toContain('userPrompt');
+  });
+
+  it('a version that is not text is refused as unreadable', async () => {
+    const checkpoint = await pausedUnder(P);
+    const state = checkpoint.sharedState as { runRedaction: Record<string, unknown> };
+    const tampered = {
+      ...checkpoint,
+      sharedState: {
+        ...checkpoint.sharedState,
+        runRedaction: { ...state.runRedaction, vocabulary: 7 },
+      },
+    };
+    await expect(asker().resume(tampered, { answer: 'yes' })).rejects.toMatchObject({
+      name: 'ResumeRedactionError',
+      reason: 'unreadable',
+    });
   });
 });

@@ -53,7 +53,12 @@
 import type { RedactionPolicy } from 'footprintjs';
 import { RedactionRule } from 'footprintjs/advanced';
 
-import { assertRedactionPolicy, unionRedactionPolicies } from './policy.js';
+import {
+  assertRedactionPolicy,
+  carriedRedactionPolicy,
+  unionRedactionPolicies,
+  type CarriedRedactionPolicy,
+} from './policy.js';
 
 /** The features whose records the vocabulary is proven against, by the test above. */
 export const CONVERSATION_FEATURES: readonly string[] = Object.freeze([
@@ -216,6 +221,63 @@ const CONVERSATION: RedactionPolicy = Object.freeze({
     Object.fromEntries(Object.entries(FIELDS).map(([key, paths]) => [key, [...paths]])),
   ) as Record<string, string[]>,
 });
+
+/**
+ * The vocabulary's VERSION — derived from its own contents (every key, pattern
+ * and field selector, sorted), so it changes whenever the list does and never
+ * waits on a hand bump. A carried policy that keeps the conversation out
+ * records the version it was built under (`carriedRunPolicy`); a resumed leg
+ * whose record names another version is covered by the CURRENT vocabulary as
+ * well (`withCurrentVocabulary`) — fail closed, never the older list alone.
+ */
+export const VOCABULARY_VERSION: string = versionOf(CONVERSATION);
+
+/** A policy's selectors as one identity — FNV-1a over the sorted list; an identity, not a secret. */
+function versionOf(policy: RedactionPolicy): string {
+  const parts = [
+    ...[...(policy.keys ?? [])].sort().map((key) => `k:${key}`),
+    ...(policy.patterns ?? []).map((p) => `p:${p.flags}/${p.source}`).sort(),
+    ...Object.entries(policy.fields ?? {})
+      .map(([key, paths]) => `f:${key}=${[...paths].sort().join(',')}`)
+      .sort(),
+  ].join('\n');
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < parts.length; i += 1) {
+    hash ^= parts.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return `v1-${hash.toString(16).padStart(8, '0')}`;
+}
+
+/**
+ * `policy` as a run's state carries it (`AgentState.runRedaction`) — with the
+ * vocabulary version it was built under when it keeps the conversation out.
+ *
+ * @internal
+ */
+export function carriedRunPolicy(policy: RedactionPolicy): CarriedRedactionPolicy {
+  const carried = carriedRedactionPolicy(policy);
+  return keepsConversationOut(policy) ? { ...carried, vocabulary: VOCABULARY_VERSION } : carried;
+}
+
+/**
+ * A carried policy as a resumed leg is covered by it: joined with the CURRENT
+ * vocabulary when its record names another version (`version`, read off the
+ * checkpoint). An older list lacks the names an upgrade added, and a policy
+ * that lacks one no longer reads as keeping the conversation out — so the
+ * leg's events would leave default-deny. Joining the current list keeps the
+ * leg at least as covered as the run that paused. Same version, or none: the
+ * policy as carried.
+ *
+ * @internal
+ */
+export function withCurrentVocabulary(
+  policy: RedactionPolicy | undefined,
+  version: string | undefined,
+): RedactionPolicy | undefined {
+  if (version === undefined || version === VOCABULARY_VERSION) return policy;
+  return unionRedactionPolicies(policy, CONVERSATION);
+}
 
 /**
  * The policy that keeps an agent's conversation out of every record it
