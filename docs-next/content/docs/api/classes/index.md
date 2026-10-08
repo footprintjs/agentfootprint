@@ -2,7 +2,7 @@
 title: Classes
 ---
 
-43 exported from `agentfootprint`.
+44 exported from `agentfootprint`.
 
 - [`Agent`](/docs/api/classes/Agent)
 - [`AgentBuilder`](/docs/api/classes/AgentBuilder)
@@ -32,6 +32,7 @@ title: Classes
 - [`PauseAnswerRequiredError`](/docs/api/classes/PauseAnswerRequiredError)
 - [`PendingQuestionError`](/docs/api/classes/PendingQuestionError)
 - [`ResumeIdentityConflictError`](/docs/api/classes/ResumeIdentityConflictError)
+- [`ResumeRedactionError`](/docs/api/classes/ResumeRedactionError)
 - [`RoutingDecisionError`](/docs/api/classes/RoutingDecisionError)
 - [`RunbookAbsenceSignal`](/docs/api/classes/RunbookAbsenceSignal)
 - [`RunCheckpointError`](/docs/api/classes/RunCheckpointError)

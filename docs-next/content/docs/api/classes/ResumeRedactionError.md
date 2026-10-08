@@ -1,17 +1,24 @@
 ---
-title: NoConversationError
+title: ResumeRedactionError
 ---
 
-# Class: NoConversationError
+# Class: ResumeRedactionError
 
-Defined in: [src/core/conversation.ts:219](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L219)
+Defined in: [src/core/conversation.ts:178](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L178)
 
-Thrown by `followUp()` when there is no conversation to follow up on.
+Thrown by `resume(checkpoint, input, options)` when the paused run's
+redaction cannot be carried into the resumed leg — refused before anything
+runs, so a leg its policy could not keep covered never starts:
+ - `'unreadable'` — the checkpoint's `runRedaction` (the policy the paused
+   run was covered by, as plain data) is not one this library wrote;
+ - `'missing'` — the checkpoint says its run kept values out of its records
+   (footprintjs's `redactionMarks`: the names it masked) but carries no
+   policy, and the resume names none either.
 
-`followUp()` continues THIS agent's own last completed run. Before the first
-one there is nothing to continue, and a "follow-up" that quietly became a
-first turn would be the very confusion the door exists to remove.
-`reason` says which of those it was, so a caller can branch on it.
+Either way the resumed leg would write what the paused leg kept out into
+every record of its own. Resume with the `redact` the run was paused under
+(`resume(checkpoint, input, { redact })`), or with the checkpoint as this
+library wrote it. No policy, name or value appears in the message.
 
 ## Extends
 
@@ -21,23 +28,19 @@ first turn would be the very confusion the door exists to remove.
 
 ### Constructor
 
-> **new NoConversationError**(`door`, `reason`): `NoConversationError`
+> **new ResumeRedactionError**(`reason`): `ResumeRedactionError`
 
-Defined in: [src/core/conversation.ts:223](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L223)
+Defined in: [src/core/conversation.ts:182](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L182)
 
 #### Parameters
 
-##### door
-
-`string`
-
 ##### reason
 
-[`NoConversationReason`](/docs/api/type-aliases/NoConversationReason)
+[`ResumeRedactionReason`](/docs/api/type-aliases/ResumeRedactionReason)
 
 #### Returns
 
-`NoConversationError`
+`ResumeRedactionError`
 
 #### Overrides
 
@@ -59,9 +62,9 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 ### code
 
-> `readonly` **code**: `"ERR_NO_CONVERSATION"`
+> `readonly` **code**: `"ERR_RESUME_REDACTION"`
 
-Defined in: [src/core/conversation.ts:220](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L220)
+Defined in: [src/core/conversation.ts:179](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L179)
 
 ***
 
@@ -91,9 +94,9 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1076
 
 ### reason
 
-> `readonly` **reason**: [`NoConversationReason`](/docs/api/type-aliases/NoConversationReason)
+> `readonly` **reason**: [`ResumeRedactionReason`](/docs/api/type-aliases/ResumeRedactionReason)
 
-Defined in: [src/core/conversation.ts:221](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L221)
+Defined in: [src/core/conversation.ts:180](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L180)
 
 ***
 

@@ -4,7 +4,7 @@ title: LoopBuilder
 
 # Class: LoopBuilder
 
-Defined in: [src/core-flow/Loop.ts:391](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L391)
+Defined in: [src/core-flow/Loop.ts:393](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L393)
 
 ## Constructors
 
@@ -12,7 +12,7 @@ Defined in: [src/core-flow/Loop.ts:391](https://github.com/footprintjs/agentfoot
 
 > **new LoopBuilder**(`opts`): `LoopBuilder`
 
-Defined in: [src/core-flow/Loop.ts:399](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L399)
+Defined in: [src/core-flow/Loop.ts:401](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L401)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [src/core-flow/Loop.ts:399](https://github.com/footprintjs/agentfoot
 
 > **build**(): [`Loop`](/docs/api/classes/Loop)
 
-Defined in: [src/core-flow/Loop.ts:453](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L453)
+Defined in: [src/core-flow/Loop.ts:455](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L455)
 
 #### Returns
 
@@ -42,7 +42,7 @@ Defined in: [src/core-flow/Loop.ts:453](https://github.com/footprintjs/agentfoot
 
 > **forAtMost**(`ms`): `this`
 
-Defined in: [src/core-flow/Loop.ts:435](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L435)
+Defined in: [src/core-flow/Loop.ts:437](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L437)
 
 Wall-clock time budget in milliseconds. The loop exits at the next
 guard check after this elapses.
@@ -63,7 +63,7 @@ guard check after this elapses.
 
 > **repeat**(`runner`, `opts?`): `this`
 
-Defined in: [src/core-flow/Loop.ts:411](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L411)
+Defined in: [src/core-flow/Loop.ts:413](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L413)
 
 The runner that executes each iteration. Required.
 Each iteration's output string becomes the next iteration's input `{ message }`.
@@ -92,7 +92,7 @@ runner's own translator for THIS loop only — only its
 
 > **times**(`n`): `this`
 
-Defined in: [src/core-flow/Loop.ts:426](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L426)
+Defined in: [src/core-flow/Loop.ts:428](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L428)
 
 Maximum iteration count. Default 10 if only `.repeat()` is called.
 Hard ceiling 500 — larger values are clamped.
@@ -113,7 +113,7 @@ Hard ceiling 500 — larger values are clamped.
 
 > **until**(`guard`): `this`
 
-Defined in: [src/core-flow/Loop.ts:448](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L448)
+Defined in: [src/core-flow/Loop.ts:450](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L450)
 
 Exit predicate evaluated after each iteration. Return `true` to exit.
 Receives `{ iteration, latestOutput, startMs }`.
