@@ -25,6 +25,7 @@ import {
   type StructureRecorder,
   type TypedScope,
 } from 'footprintjs';
+import type { RedactionPolicy } from 'footprintjs';
 import type { GroupMember, GroupMetadata, GroupTranslator } from '../core/translator.js';
 import type { RunnerPauseOutcome } from '../core/pause.js';
 import type { Runner } from '../core/runner.js';
@@ -206,13 +207,14 @@ export class Loop extends RunnerBase<LoopInput, LoopOutput> {
     input?: unknown,
     options?: RunOptions,
   ): Promise<LoopOutput | RunnerPauseOutcome> {
-    this.emitPauseResume(checkpoint, input);
-    const executor = this.createExecutor();
+    // The leg's policy — the paused run's marks — goes to ITS executor, never via the instance.
+    const resumeLeg = this.emitPauseResume(checkpoint, input);
+    const executor = this.createExecutor(resumeLeg);
     const result = await executor.resume(checkpoint, input, withRunSignalInEnv(options));
     return this.finalizeResult(executor, result);
   }
 
-  private createExecutor(): FlowChartExecutor {
+  private createExecutor(resumeLeg?: RedactionPolicy): FlowChartExecutor {
     this.currentRunContext = {
       runStartMs: Date.now(),
       runId: makeRunId(),
@@ -221,7 +223,7 @@ export class Loop extends RunnerBase<LoopInput, LoopOutput> {
 
     const getRunCtx = (): RunContext => this.currentRunContext;
     // The run's redaction (`src/redaction/`): the policy the body declared.
-    const redaction = this.openRunRedaction(undefined, getRunCtx);
+    const redaction = this.openRunRedaction(resumeLeg, getRunCtx);
 
     // Reuse the cached chart built at constructor time.
     const spec = this.getSpec();

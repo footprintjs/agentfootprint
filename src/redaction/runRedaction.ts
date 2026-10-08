@@ -104,6 +104,23 @@ interface ScopeRun {
   keepsOut(name: string): boolean;
 }
 
+/**
+ * Every executor a run opened → the policy it was handed (`undefined` for one
+ * handed none) — set by `applyTo`, the one place an executor gets its policy,
+ * so what a snapshot is served under is a fact about THAT executor and can
+ * never be another run's (`policyOfExecutor`). Weak: dies with the executor.
+ */
+const executorPolicies = new WeakMap<object, RedactionPolicy | undefined>();
+
+/**
+ * The policy `executor` was handed when its run opened — what its snapshot
+ * must be served under (`RunnerBase · getLastSnapshot`). `undefined` for an
+ * executor handed none, or one no run opened.
+ */
+export function policyOfExecutor(executor: object): RedactionPolicy | undefined {
+  return executorPolicies.get(executor);
+}
+
 /** Every scope a run's executor made → that run, and the stage it was made for. Weak: a scope dies with its stage. */
 const scopeRuns = new WeakMap<object, { readonly run: ScopeRun; readonly stageId: string }>();
 
@@ -175,6 +192,7 @@ export function createRunRedaction(args: {
       };
     },
     applyTo(executor) {
+      executorPolicies.set(executor, policy);
       if (policy === undefined) return;
       executor.setRedactionPolicy(policy);
       // The served snapshot says so itself (`marker.ts`): readers of the record

@@ -153,6 +153,13 @@ function drainBucket(bucket: Set<StoredListener>): void {
 // ─── Dispatcher ──────────────────────────────────────────────────────
 
 /**
+ * How many recent runs' servings a dispatcher keeps for their late facts
+ * (`EventDispatcher · servingsByRun`). A fact later than that is served under
+ * the run in force.
+ */
+const RUN_SERVINGS_KEPT = 32;
+
+/**
  * Central event bus. One per executable runner.
  *
  * Zero-alloc fast path: if `hasListenersFor(type)` is false AND there are
@@ -169,6 +176,15 @@ export class EventDispatcher {
    * listener receives the very object that was dispatched, as before.
    */
   private serving: EventServing | undefined;
+  /**
+   * Each run's serving by its `runId` — so a fact a run dispatches AFTER the
+   * next run opened (a late artifact fact, a tool session's teardown report, a
+   * host's attributed fact; each stamped with its own run's id) is still served
+   * under ITS run's policy, never the one in force now. An event stamped with
+   * no run's id (`'consumer-scope'`, a resume's reply) is served under the
+   * current one. Bounded to the most recent runs ({@link RUN_SERVINGS_KEPT}).
+   */
+  private readonly servingsByRun = new Map<string, EventServing | undefined>();
   /**
    * The REAL-value path — the library's own mechanisms that run on events
    * (the crash checkpoint, the window's token reading, the reply a host
@@ -380,8 +396,15 @@ export class EventDispatcher {
    *
    * @internal
    */
-  useServing(serving: EventServing | undefined): void {
+  useServing(serving: EventServing | undefined, runId?: string): void {
     this.serving = serving;
+    if (runId === undefined) return;
+    this.servingsByRun.delete(runId);
+    this.servingsByRun.set(runId, serving);
+    while (this.servingsByRun.size > RUN_SERVINGS_KEPT) {
+      const oldest = this.servingsByRun.keys().next().value as string;
+      this.servingsByRun.delete(oldest);
+    }
   }
 
   /**
@@ -459,7 +482,12 @@ export class EventDispatcher {
 
   /** The event as the run's serving serves it — the same object when nothing was selected. */
   private served(event: AgentfootprintEvent, servePayload: boolean): AgentfootprintEvent {
-    const serving = this.serving;
+    // The run the event says it belongs to, when this dispatcher opened it; else the current one.
+    const runId = (event.meta as { runId?: unknown } | undefined)?.runId;
+    const serving =
+      typeof runId === 'string' && this.servingsByRun.has(runId)
+        ? this.servingsByRun.get(runId)
+        : this.serving;
     if (serving === undefined || !serving.active()) return event;
     const payload = servePayload ? serving.payload(event.type, event.payload) : event.payload;
     const meta = event.meta === undefined ? event.meta : serving.meta(event.meta);

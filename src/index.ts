@@ -712,6 +712,8 @@ export {
   type NoConversationReason,
   PendingQuestionError,
   ResumeIdentityConflictError,
+  ResumeRedactionError,
+  type ResumeRedactionReason,
   RunInFlightError,
 } from './core/conversation.js';
 export {

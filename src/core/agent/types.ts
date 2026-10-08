@@ -1481,11 +1481,13 @@ export interface AgentState {
    */
   runSessionId?: string | null;
   /**
-   * The redaction policy the caller handed this run (`agent.run(input,
-   * { redact })`), as plain data — names and pattern sources only. Committed by
-   * seed ONLY when the run was handed one, so a pause's checkpoint carries it
-   * and the resumed leg is covered by it without being handed it again
-   * (`Agent · resume`). The policy an agent DECLARES lives on the agent, not here.
+   * The redaction policy this run is covered by — the agent's own `redact`
+   * joined with any the caller handed it (`agent.run(input, { redact })`) — as
+   * plain data: names and pattern sources only. Committed by seed ONLY when the
+   * run is covered by one, read off the run itself (never the agent instance),
+   * so a pause's checkpoint carries it and the resumed leg is covered by it
+   * without being handed it again (`Agent · resume`; a value this library did
+   * not write refuses the resume — `ResumeRedactionError`).
    */
   runRedaction?: CarriedRedactionPolicy;
   // Set during the final branch — the (user, assistant) pair the

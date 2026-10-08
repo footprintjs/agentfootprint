@@ -194,7 +194,18 @@ An agent's records — the snapshot, the narrative, every event, recordings, and
 
 **Readers say what the record keeps out.** The answer account reads a kept-out question, answer or result as *kept out*, never as "not recorded" or "no tool ran"; `assessAnswer` gives no standing over state the record keeps out. They read it so only when the record says a policy covered its run, so a run without one reads exactly as before.
 
-**Memory is not a record.** A memory store is working state the agent recalls on its next run, so `defineMemory({ redact })` is refused rather than accepted and ignored: the agent's `redact` keeps the record of the memory stages clean, and a store keeps what you write to it. Filter what you write before it is stored, or mount the memory `readOnly: true`.
+**Memory is on the checkpoint's side, not the record's.** A persisted store is a record unless it is operational state — and a memory store is operational state: what it keeps is what the agent's next run recalls and sends to the model, exactly as a checkpoint is what a resume runs on. So `defineMemory({ redact })` is refused rather than accepted and ignored: the agent's `redact` keeps the RECORD of the memory stages clean (their events, the snapshot, recordings), and a store keeps what you write to it. Filter what you write before it is stored, or mount the memory `readOnly: true`. The same holds for what your own tools file in the artifact store (`ctx.artifacts`) — working state the model is handed back by reference; the recordings the agent mints there itself are records, and served.
+
+**The agent's public surface, member by member.** Every public member of `Agent` is on one side of that line, checked by type (`test/type-regressions/AgentRedactionSurface.completeness.test.ts`) so a new member cannot ship unclassified:
+
+| Side | Members |
+|---|---|
+| **Served** — no selected value, proven for random keys, patterns and `fields` selectors by `agent-redaction.public-surface.property.test.ts` | `getLastSnapshot`, `getSnapshot`, `getLastNarrativeEntries`, every event (`on`, `once`), attached recorders (`attach`), everything `enable` wires (traces, the step graph, the observability strategies), your own `emit`s, the recordings it mints into `getArtifactStore()`, the self-explain tools |
+| **Structure** — no conversation content | `id`, `name`, `appName`, `getSpec`, `getUIGroup`, `getUIGroupWith`, `getCommitCount`, `getSystemPromptCachePolicy`, the narration templates, `listenerCount`, `canExplain`, `ownsEvent` |
+| **Yours, in your process** — handed back to the caller like the answer, never served | `run`, `runTyped`, `followUp`, `resume`, `resumeOnError` (their results and rejections — a thrown error's message or `cause` is the caller's own value), `checkpoint`, `findings`, `answerCoverage`, `answerValidation`, `stoppedEarly`, `unsupportedValues`, `outputContractUnmet`, `assessment`, `parseOutput` |
+| **Control** — return nothing a record could hold | `off`, `removeAllListeners`, `shutdown`, `drainObservers`, `closeToolSessions`, `abandonPause` |
+
+What you persist from the third row is yours to protect, as with the checkpoint. Console warnings the library prints in development are not records either (named limits below).
 
 **Named limits.** The run's answer leaves its chart as a bare string, and footprintjs serves an unnamed output as it is — a recording's `run.exit` payload carries it whatever the policy. Error text written by code (`error`, `errorMessage`) is not on the list. Fingerprints and content hashes stay, because the record's readers join on them, so a short kept-out value (a PIN, an SSN) can be confirmed by hashing guesses. The full list of what is and is not covered is in [`src/redaction/README.md`](https://github.com/footprintjs/agentfootprint/blob/main/src/redaction/README.md).
 

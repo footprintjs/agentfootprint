@@ -246,9 +246,10 @@ describe('the resume checkpoints are never redacted', () => {
       ...outcome.checkpoint,
       sharedState: { ...outcome.checkpoint.sharedState, runRedaction: { keys: 'history' } },
     };
-    await expect(build().resume(tampered, { answer: 'yes' })).rejects.toThrow(
-      /Agent\.resume: the checkpoint's `runRedaction` is not a redaction policy/,
-    );
+    await expect(build().resume(tampered, { answer: 'yes' })).rejects.toMatchObject({
+      name: 'ResumeRedactionError',
+      reason: 'unreadable',
+    });
   });
 
   it('a crash: RunCheckpointError.checkpoint carries the real conversation', async () => {

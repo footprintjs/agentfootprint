@@ -48,6 +48,7 @@ import {
   type StructureRecorder,
   type TypedScope,
 } from 'footprintjs';
+import type { RedactionPolicy } from 'footprintjs';
 import { ArrayMergeMode } from 'footprintjs/advanced';
 import type { GroupMetadata, GroupTranslator } from './translator.js';
 import type { RunnerPauseOutcome } from './pause.js';
@@ -344,14 +345,15 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
     input?: unknown,
     options?: RunOptions,
   ): Promise<LLMCallOutput | RunnerPauseOutcome> {
-    this.emitPauseResume(checkpoint, input);
-    const executor = this.createExecutor();
+    // The leg's policy — the paused run's marks — goes to ITS executor, never via the instance.
+    const resumeLeg = this.emitPauseResume(checkpoint, input);
+    const executor = this.createExecutor(resumeLeg);
     this.lastExecutor = executor;
     const result = await executor.resume(checkpoint, input, withRunSignalInEnv(options));
     return this.finalizeResult(executor, result);
   }
 
-  private createExecutor(): FlowChartExecutor {
+  private createExecutor(resumeLeg?: RedactionPolicy): FlowChartExecutor {
     this.currentRunContext = {
       runStartMs: Date.now(),
       runId: makeRunId(),
@@ -363,7 +365,7 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
     // its own — mounted in a composition, the composition's run decides — but
     // the redaction is opened for every run so its stages' events still reach
     // the real-value path (a `toSSE({ format: 'text' })` reply stream).
-    const redaction = this.openRunRedaction(undefined, getRunCtx);
+    const redaction = this.openRunRedaction(resumeLeg, getRunCtx);
 
     // Reuse the cached chart built at constructor time. `getSpec()` and
     // every `run()` share the same `FlowChart` object reference.

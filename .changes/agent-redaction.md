@@ -35,13 +35,19 @@ own, so every record of the inner run keeps out what either names; what they han
 the tool's result in the calling agent's conversation, so the model reads the real value only when
 the calling agent keeps its whole conversation out of its records (`conversationRedaction()` or
 more) — under a narrower calling policy it reads the record's view, and the value reaches no record
-of the calling agent either way. A pause carries the per-run policy in the run's own state, so a
-resumed leg is covered by it without being handed it again (a carried value this library did not
-write refuses the resume), and by the names the paused leg kept out; the person's reply is served
-before the leg starts, so a fresh instance or another process resumes as the paused one would. The
-policy is validated where it is declared: a misspelt field, a list of patterns where a policy object
-belongs, a frozen global RegExp (footprintjs could not reset it) or a policy that names nothing is
-refused with the reason.
+of the calling agent either way. A run's redaction lives with the run, never on the agent
+instance: a snapshot is served under the policy its own executor was handed, a fact under the policy
+of the run it belongs to (found by its run id, even after the next run opened), and a pause carries
+the run's policy in its own state, so a resumed leg is covered by it without being handed it again —
+and by the names the paused leg kept out. A resume that cannot carry it is refused before anything
+runs: `ResumeRedactionError` (new, from `agentfootprint`; `reason: 'unreadable'` for a carried value
+this library did not write, `'missing'` for a checkpoint whose run kept names out but carries no
+policy). The person's reply is served before the leg starts, so a fresh instance or another process
+resumes as the paused one would. Every public member of `Agent` is classified against the law by
+type — served, structure, the caller's own, or control — and the served ones are checked by a
+property test for random keys, patterns and `fields` selectors. The policy is validated where it is
+declared: a misspelt field, a list of patterns where a policy object belongs, a frozen global RegExp
+(footprintjs could not reset it) or a policy that names nothing is refused with the reason.
 
 Readers of a redacted record never read the placeholder as a value — and only a record that says a
 policy covered its run (a marker row in its snapshot's `recorders`) is read that way, so a run with

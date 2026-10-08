@@ -81,6 +81,7 @@ import {
   type RunOptions,
   type TypedScope,
 } from 'footprintjs';
+import type { RedactionPolicy } from 'footprintjs';
 import type { LLMProvider } from '../adapters/types.js';
 import type { RunContext } from '../bridge/eventMeta.js';
 import { LLMCall } from '../core/LLMCall.js';
@@ -394,14 +395,15 @@ class RouterStep extends RunnerBase<{ message: string }, string> {
     input?: unknown,
     options?: RunOptions,
   ): Promise<string | RunnerPauseOutcome> {
-    this.emitPauseResume(checkpoint, input);
-    const executor = this.createExecutor();
+    // The leg's policy — the paused run's marks — goes to ITS executor, never via the instance.
+    const resumeLeg = this.emitPauseResume(checkpoint, input);
+    const executor = this.createExecutor(resumeLeg);
     this.lastExecutor = executor;
     const result = await executor.resume(checkpoint, input, withRunSignalInEnv(options));
     return this.finalizeResult(executor, result);
   }
 
-  private createExecutor(): FlowChartExecutor {
+  private createExecutor(resumeLeg?: RedactionPolicy): FlowChartExecutor {
     this.currentRunContext = {
       runStartMs: Date.now(),
       runId: makeRunId(),
@@ -410,7 +412,7 @@ class RouterStep extends RunnerBase<{ message: string }, string> {
     const getRunCtx = (): RunContext => this.currentRunContext;
     // The run's redaction (`src/redaction/`) — opened for every run like every
     // runner's, so the router call's events reach the real-value path.
-    const redaction = this.openRunRedaction(undefined, getRunCtx);
+    const redaction = this.openRunRedaction(resumeLeg, getRunCtx);
     const spec = this.getSpec();
     const executor = new FlowChartExecutor(spec, { scopeFactory: redaction.scopeFactoryFor(spec) });
     redaction.applyTo(executor);

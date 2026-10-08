@@ -23,6 +23,7 @@ import {
   type StructureRecorder,
   type TypedScope,
 } from 'footprintjs';
+import type { RedactionPolicy } from 'footprintjs';
 import type { GroupMember, GroupMetadata, GroupTranslator } from '../core/translator.js';
 import type { RunnerPauseOutcome } from '../core/pause.js';
 import type { LLMMessage, LLMProvider } from '../adapters/types.js';
@@ -357,8 +358,9 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
     input?: unknown,
     options?: RunOptions,
   ): Promise<ParallelOutput | RunnerPauseOutcome> {
-    this.emitPauseResume(checkpoint, input);
-    const executor = this.createExecutor();
+    // The leg's policy — the paused run's marks — goes to ITS executor, never via the instance.
+    const resumeLeg = this.emitPauseResume(checkpoint, input);
+    const executor = this.createExecutor(resumeLeg);
     let result: unknown;
     try {
       result = await executor.resume(checkpoint, input, withRunSignalInEnv(options));
@@ -451,7 +453,7 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
     });
   }
 
-  private createExecutor(): FlowChartExecutor {
+  private createExecutor(resumeLeg?: RedactionPolicy): FlowChartExecutor {
     this.currentRunContext = {
       runStartMs: Date.now(),
       runId: makeRunId(),
@@ -469,7 +471,7 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
 
     const getRunCtx = (): RunContext => this.currentRunContext;
     // The run's redaction (`src/redaction/`): every policy a branch declared.
-    const redaction = this.openRunRedaction(undefined, getRunCtx);
+    const redaction = this.openRunRedaction(resumeLeg, getRunCtx);
 
     // Reuse the cached chart built at constructor time.
     const spec = this.getSpec();

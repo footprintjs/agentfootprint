@@ -38,7 +38,8 @@ import type { Tool } from '../../tools.js';
 import type { ClockDraft } from '../../time/clock.js';
 import type { TimeReader } from '../../time/reader.js';
 import type { TimePolicy } from '../../time/resolve.js';
-import type { CarriedRedactionPolicy } from '../../../redaction/policy.js';
+import { carriedRedactionPolicy } from '../../../redaction/policy.js';
+import { policyInForce } from '../../../redaction/runRedaction.js';
 
 /**
  * A stored conversation handed to the next run — what
@@ -189,14 +190,6 @@ export interface SeedStageDeps {
    * `agent.run(message)` in a script.
    */
   readonly getCurrentSessionId?: () => string | undefined;
-  /**
-   * The redaction policy the CALLER handed this run (`agent.run(input,
-   * { redact })`), as plain data — `undefined` for a run handed none, which is
-   * every run without one. Seed commits it as `runRedaction`, so a pause's
-   * checkpoint carries it and the resumed leg is covered by it wherever it
-   * resumes (`Agent · resume`, `redaction/policy.ts` · `policyFromCarried`).
-   */
-  readonly getRunRedaction?: () => CarriedRedactionPolicy | undefined;
   /**
    * Per-run config resolver from `.configure()`. Seed is where run-level
    * facts are decided AND committed (identity, iteration budget, turn
@@ -645,10 +638,12 @@ function seedFrom(
   // written before the key existed (`callerIdentity.ts · pausedSessionOf`). A
   // run on the per-run default writes nothing.
   else if (args.identity !== undefined) scope.runSessionId = null;
-  // The policy the caller handed THIS run — names only — so a pause carries it
-  // to the resumed leg. A run handed none writes nothing: its keys are unchanged.
-  const runRedaction = deps.getRunRedaction?.();
-  if (runRedaction !== undefined) scope.runRedaction = runRedaction;
+  // The policy THIS run is covered by — names only, read off the run that owns
+  // this scope, never off the agent instance — so a pause's checkpoint carries
+  // it and the resumed leg is covered by it wherever it resumes (`Agent ·
+  // resume`). A run covered by none writes nothing: its keys are unchanged.
+  const runPolicy = policyInForce(scope);
+  if (runPolicy !== undefined) scope.runRedaction = carriedRedactionPolicy(runPolicy);
   scope.newMessages = [];
   // WHICH TURN THIS IS (9.6.0). Every release up to 9.5.1 wrote `1` here, on
   // every run — and memory writes key their entries on it (`msg-{turn}-{i}`),

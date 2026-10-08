@@ -20,7 +20,12 @@ import type { RunContext } from '../bridge/eventMeta.js';
 import { EventDispatcher } from '../events/dispatcher.js';
 import { redactionDeclaredBy } from '../redaction/declared.js';
 import { policyOfMarks, unionRedactionPolicies } from '../redaction/policy.js';
-import { createRunRedaction, servingAhead, type RunRedaction } from '../redaction/runRedaction.js';
+import {
+  createRunRedaction,
+  policyOfExecutor,
+  servingAhead,
+  type RunRedaction,
+} from '../redaction/runRedaction.js';
 import { servableSnapshot } from './servableSnapshot.js';
 import { registerRunnerLive } from './runnerLive.js';
 import { redactConsentUrlForEvent } from '../identity/consent.js';
@@ -172,7 +177,7 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
   getLastSnapshot(): ReturnType<FlowChartExecutor['getSnapshot']> | undefined {
     return this.lastExecutor === undefined
       ? undefined
-      : servableSnapshot(this.lastExecutor, this.lastRunPolicy);
+      : servableSnapshot(this.lastExecutor, policyOfExecutor(this.lastExecutor));
   }
 
   /**
@@ -202,24 +207,6 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
   }
 
   /**
-   * The redaction policy the most recent run was covered by — this runner's
-   * own declaration (an agent's `redact`, a composition's members'), joined
-   * with any policy the caller handed down for that run. `undefined` when none.
-   * Set when the run opens, so it already holds for an in-flight run.
-   */
-  private lastRunPolicy: RedactionPolicy | undefined;
-
-  /**
-   * The names a paused run kept out of its records, as a policy
-   * (`redaction/policy.ts` · `policyOfMarks`) — set by `emitPauseResume` for the
-   * leg that resume is about to open, joined into that leg's policy by
-   * `openRunRedaction`, then cleared. Without it a leg resumed without its
-   * per-run `redact` would serve its snapshot raw while footprintjs still
-   * masked those names in its log.
-   */
-  private resumedMarks: RedactionPolicy | undefined;
-
-  /**
    * Open the redaction for one run — called by every runner's
    * `createExecutor`, for every run, before `new FlowChartExecutor`.
    *
@@ -234,13 +221,11 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
     handedDown: RedactionPolicy | undefined,
     getRunContext: () => RunContext,
   ): RunRedaction {
-    // A resumed leg is also covered by the names its paused leg kept out
-    // (`emitPauseResume` reads them off the checkpoint) — taken once.
-    const policy = unionRedactionPolicies(redactionDeclaredBy(this), handedDown, this.resumedMarks);
-    this.resumedMarks = undefined;
+    const policy = unionRedactionPolicies(redactionDeclaredBy(this), handedDown);
     const run = createRunRedaction({ policy, dispatcher: this.dispatcher, getRunContext });
-    this.dispatcher.useServing(run.serving);
-    this.lastRunPolicy = policy;
+    // Under the run's own id too: a fact it dispatches after the next run
+    // opened is still served under this run's policy.
+    this.dispatcher.useServing(run.serving, getRunContext().runId);
     return run;
   }
 
@@ -542,12 +527,14 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
     checkpoint: FlowchartCheckpoint,
     input: unknown,
     handedDown?: RedactionPolicy,
-  ): void {
-    this.resumedMarks = policyOfMarks(checkpoint.redactionMarks);
+  ): RedactionPolicy | undefined {
+    // The resumed leg's own policy beside this runner's declaration: what the
+    // caller hands it, joined with the names the paused leg kept out (the
+    // checkpoint's marks) — returned for the runner to hand THIS leg's
+    // executor (`openRunRedaction`), so nothing per-run is kept on the instance.
+    const resumeLeg = unionRedactionPolicies(handedDown, policyOfMarks(checkpoint.redactionMarks));
     this.dispatcher.useServing(
-      servingAhead(
-        unionRedactionPolicies(redactionDeclaredBy(this), handedDown, this.resumedMarks),
-      ),
+      servingAhead(unionRedactionPolicies(redactionDeclaredBy(this), resumeLeg)),
     );
     const meta = this.minimalMeta();
     const pausedDurationMs = Date.now() - checkpoint.pausedAt;
@@ -580,6 +567,7 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
         subflowPath: checkpoint.subflowPath,
       },
     });
+    return resumeLeg;
   }
 
   // ─── Subscription API (delegates to dispatcher) ────────────────
@@ -913,7 +901,8 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
         },
         getSnapshot: () => this.getLastSnapshot(),
         getCommitCount: () => this.getCommitCount(),
-        redactedByPolicy: () => this.lastRunPolicy !== undefined,
+        redactedByPolicy: () =>
+          this.lastExecutor !== undefined && policyOfExecutor(this.lastExecutor) !== undefined,
       }),
     // v2.8 grouped strategy enablers — see
     // `docs/inspiration/strategy-everywhere.md`.

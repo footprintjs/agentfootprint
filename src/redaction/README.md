@@ -91,10 +91,13 @@ const agent = Agent.create({
 - **What stays readable.** Ids, counts, kinds, tool names, timings and verdict
   words — the record still shows WHAT happened, without the words.
 - **Not on it, by design.** Error text written by code (`error`,
-  `errorMessage`, `lastError`): a message a tool or provider throws can quote
-  what it failed on, and `error` also names a flag the record's readers count on
+  `errorMessage`, `lastError`, a provider fallback's `reason`, a fatal event's
+  `error`): a message a tool or provider throws can quote what it failed on,
+  and `error` also names a flag the record's readers count on
   (`stream.tool_end`'s `error: true`) — add those names yourself if your errors
-  carry personal data. Fields your own tools or rules name — join them.
+  carry personal data. The thrown value itself, handed to your caller by
+  `run()`'s rejection, is the caller's own. Fields your own tools or rules
+  name — join them.
 - **Names it shares with structure** are kept out with it: `permission.check`'s
   `result` is its verdict word, so a refused call reads as refused from
   `stream.tool_end`'s `notExecuted`, without the rule that refused it.
@@ -202,7 +205,18 @@ and that the answer account says the question and the answer are kept out.
    recorder row, `agentfootprint.redaction` — the positive sign that a
    placeholder in the record is a value the policy kept out. Without a policy
    nothing is attached and the snapshot is byte-identical.
-8. The **real-value path** (`EventDispatcher · onRealEvent`) carries each event
+8. **A run's redaction is the RUN's, never the instance's.** The policy a run
+   is covered by is handed to its executor (`applyTo`), and a snapshot is
+   served under the policy of the executor it comes from (`policyOfExecutor`)
+   — never whatever run came after; the policy a paused run carries is read
+   off the run that owns the seed's scope (`policyInForce`), never an agent
+   field; a resume's leg policy goes back from `emitPauseResume` to that leg's
+   executor; and a fact is served under its own run's serving, by its run id
+   (`EventDispatcher · servingsByRun`). One run at a time per agent instance
+   is the conversation law (`RunInFlightError`, `PendingQuestionError`); a
+   resume that cannot carry its redaction is refused (`ResumeRedactionError`).
+   Pinned by `test/redaction/agent-redaction.run-state.test.ts`.
+9. The **real-value path** (`EventDispatcher · onRealEvent`) carries each event
    as its producer made it, to the library's own mechanisms that compute on it:
    the crash-checkpoint tracker, the window's token meter, causal memory's tool
    calls, a host's streamed reply and spend ledger, `toSSE({ format: 'text' })`'s
@@ -311,10 +325,10 @@ bytes, for any recording — an agent's or a chart's.)
 - **A recording without its snapshot.** The marker rides the snapshot's
   `recorders`; an events-only recording carries none, so a reader quotes a
   placeholder there as it stands.
-- **A late fact of an earlier run.** A fact a runner dispatches after its next
-  run opened (a host's artifact fact, a teardown fact) is served under the run
-  in force — the same declared policy, but not the per-run `redact` names the
-  earlier run alone was given.
+- **A very late fact.** A fact a runner dispatches after its next run opened
+  (a host's artifact fact, a teardown report) is served under ITS run's policy,
+  found by the run id it carries — for the 32 most recent runs a dispatcher
+  opened; one older than that is served under the run in force.
 - **A conversation continued is a new run.** A per-run `redact` rides the
   run's own state into a pause's checkpoint (`AgentState.runRedaction`, names
   only), so a resumed leg is covered by it without being handed it again, and

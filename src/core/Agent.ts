@@ -82,10 +82,11 @@ import { checkInEventsBridge } from '../recorders/core/CheckInRecorder.js';
 import { compactionMeter, type CompactionMeterHandle } from '../recorders/core/CompactionMeter.js';
 import {
   assertRedactionPolicy,
-  carriedRedactionPolicy,
   policyFromCarried,
+  policyOfMarks,
   unionRedactionPolicies,
 } from '../redaction/policy.js';
+import { ResumeRedactionError } from './conversation.js';
 import { declareRedaction } from '../redaction/declared.js';
 import { createEvictedTurnsHandle, type EvictedTurnsHandle } from './agent/window/evictedTurns.js';
 import { createReceiptDigests, type ReceiptDigests } from '../lib/time-travel/receiptDigests.js';
@@ -912,12 +913,6 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  A resume that inherited it instead stored another person's identity on
    *  a shared agent and none on a rebuilt pooled one. */
   private lastRunIdentity?: MemoryIdentity;
-  /**
-   * The redaction policy the caller handed the current run (`run(input,
-   * { redact })`), or the one a resumed leg carries; read by seed through
-   * `getRunRedaction`. `undefined` for a run handed none.
-   */
-  private runHandedDown?: RedactionPolicy;
 
   /** Run ids this instance minted, most recent last (bounded) — evidence that a
    *  checkpoint's `{ conversationId: '<runId>' }` is the per-run default
@@ -2516,13 +2511,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // sound question is "what was asked?".
     assertIdentityShape(options?.identity, 'Agent.resume');
     if (options?.redact !== undefined) assertRedactionPolicy(options.redact, 'Agent.resume');
-    // The policy the paused run was HANDED (`run(input, { redact })`), carried
-    // in its own state — it covers this leg too, joined with any the caller
-    // adds now. Read (or refused) before anything moves.
-    const carriedRedaction = policyFromCarried(
-      (checkpoint.sharedState as { runRedaction?: unknown } | undefined)?.runRedaction,
-      'Agent.resume',
-    );
+    // The policy the paused run was covered by, carried in its own state
+    // (`runRedaction`) — it covers this leg too, joined with any the caller
+    // adds now. Read, or refused, before anything moves (`resumeRedactionOf`).
+    const carriedRedaction = resumeRedactionOf(checkpoint, options?.redact);
     // A resume's `time` (the time layer) is read or refused before anything
     // moves; it is never applied — the paused turn's clock is kept, and a
     // differing value is recorded by the ToolCalls resume door.
@@ -2629,12 +2621,18 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       sessionId !== undefined && options?.sessionId === undefined
         ? { ...options, sessionId }
         : options;
-    const legRedaction = unionRedactionPolicies(carriedRedaction, sessionResumeOptions?.redact);
+    // The leg's policy — the carried one, the caller's, and the paused leg's
+    // marks — comes back from the emitter and goes to THIS leg's executor
+    // (`createExecutor` → `openRunRedaction`); nothing per-run is held on the instance.
+    const resumeLeg = this.emitPauseResume(
+      checkpoint,
+      input,
+      unionRedactionPolicies(carriedRedaction, sessionResumeOptions?.redact),
+    );
     const resumeOptions: AgentRunOptions | undefined =
-      legRedaction === sessionResumeOptions?.redact
+      resumeLeg === sessionResumeOptions?.redact
         ? sessionResumeOptions
-        : { ...sessionResumeOptions, redact: legRedaction };
-    this.emitPauseResume(checkpoint, input, resumeOptions?.redact);
+        : { ...sessionResumeOptions, redact: resumeLeg };
     // Fresh executor — footprintjs 4.17.0+ seeds the runtime from
     // `checkpoint.sharedState` (and nested subflow states) automatically
     // on a fresh executor's `resume()`. No need to retain a paused
@@ -3470,8 +3468,6 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // identity, but the stages' scopes still feed the real-value path the
     // crash checkpoint and the window's meter read.
     const redaction = this.openRunRedaction(runOptions?.redact, getRunCtx);
-    // What seed commits as `runRedaction`, so a pause carries it to the resumed leg.
-    this.runHandedDown = runOptions?.redact;
 
     // Reuse the cached chart built at constructor time.
     // The Agent's executor dials: readTracking (#18/#14, snapshot stageReads),
@@ -4569,10 +4565,6 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // the same reason the runId is: the chart is built once, and this
       // changes every run.
       getCurrentSessionId: () => this.currentRunContext?.sessionId,
-      // The policy the caller handed THIS run, as plain data — committed by seed
-      // as `runRedaction` so a pause carries it to the resumed leg.
-      getRunRedaction: () =>
-        this.runHandedDown === undefined ? undefined : carriedRedactionPolicy(this.runHandedDown),
       // WHICH TURN THIS IS (9.6.0). Only memories that WRITE the conversation
       // are consulted: they are the ones whose entry ids are turn-stamped, and
       // a corpus (`.rag(...)`, which reads under its own namespace) has no
@@ -5731,4 +5723,29 @@ function withoutTime<T extends { time?: unknown }>(options: T | undefined): T | 
   const { time: _time, ...rest } = options;
   void _time;
   return rest as T;
+}
+
+/**
+ * The policy a paused agent run was covered by, read off its own checkpoint
+ * (`AgentState.runRedaction`, committed by seed) — FAIL CLOSED: a value this
+ * library did not write, or a checkpoint whose run kept names out of its
+ * records (`redactionMarks`) but carries no policy and is resumed without one,
+ * refuses the resume (`ResumeRedactionError`) before anything moves. A leg its
+ * policy could not keep covered must never start.
+ */
+function resumeRedactionOf(
+  checkpoint: FlowchartCheckpoint,
+  passed: RedactionPolicy | undefined,
+): RedactionPolicy | undefined {
+  const state = checkpoint.sharedState as { runRedaction?: unknown } | undefined;
+  let carried: RedactionPolicy | undefined;
+  try {
+    carried = policyFromCarried(state?.runRedaction, 'Agent.resume');
+  } catch {
+    throw new ResumeRedactionError('unreadable');
+  }
+  if (carried === undefined && passed === undefined && policyOfMarks(checkpoint.redactionMarks)) {
+    throw new ResumeRedactionError('missing');
+  }
+  return carried;
 }

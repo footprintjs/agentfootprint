@@ -66,7 +66,11 @@ export function tracerOf(spans: Span[]): OtelTracerLike {
 }
 
 /** Attach every surface to `agent`, run it once with `message`, and hand each back. */
-export async function everySurface(agent: Agent, message: string) {
+export async function everySurface(
+  agent: Agent,
+  message: string,
+  identity?: { readonly conversationId: string },
+) {
   const events: AgentfootprintEvent[] = [];
   agent.on('*', (event) => events.push(event));
 
@@ -114,7 +118,7 @@ export async function everySurface(agent: Agent, message: string) {
     }),
   });
 
-  const answer = await agent.run({ message });
+  const answer = await agent.run({ message, ...(identity !== undefined && { identity }) });
   await file.flush();
 
   const recording = recorder.toRecording();

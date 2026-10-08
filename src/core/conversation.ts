@@ -157,6 +157,43 @@ export class ResumeIdentityConflictError extends Error {
   }
 }
 
+/** Why a resume could not carry its paused run's redaction — see `ResumeRedactionError`. */
+export type ResumeRedactionReason = 'unreadable' | 'missing';
+
+/**
+ * Thrown by `resume(checkpoint, input, options)` when the paused run's
+ * redaction cannot be carried into the resumed leg — refused before anything
+ * runs, so a leg its policy could not keep covered never starts:
+ *  - `'unreadable'` — the checkpoint's `runRedaction` (the policy the paused
+ *    run was covered by, as plain data) is not one this library wrote;
+ *  - `'missing'` — the checkpoint says its run kept values out of its records
+ *    (footprintjs's `redactionMarks`: the names it masked) but carries no
+ *    policy, and the resume names none either.
+ *
+ * Either way the resumed leg would write what the paused leg kept out into
+ * every record of its own. Resume with the `redact` the run was paused under
+ * (`resume(checkpoint, input, { redact })`), or with the checkpoint as this
+ * library wrote it. No policy, name or value appears in the message.
+ */
+export class ResumeRedactionError extends Error {
+  readonly code = 'ERR_RESUME_REDACTION' as const;
+  readonly reason: ResumeRedactionReason;
+
+  constructor(reason: ResumeRedactionReason) {
+    super(
+      reason === 'unreadable'
+        ? "Agent.resume: the checkpoint's redaction policy (`runRedaction`) is not one this library " +
+            'wrote, so the resumed run could not keep its records covered. Resume with the checkpoint ' +
+            'as it was written, or pass the `redact` the run was paused under.'
+        : 'Agent.resume: the checkpoint says its run kept values out of its records but carries no ' +
+            'redaction policy, so the resumed run would write them into its own. Pass the `redact` ' +
+            'the run was paused under: resume(checkpoint, input, { redact }).',
+    );
+    this.name = 'ResumeRedactionError';
+    this.reason = reason;
+  }
+}
+
 /**
  * Why `followUp()` found no conversation to continue.
  *

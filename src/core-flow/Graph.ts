@@ -128,6 +128,7 @@ import {
   type StructureRecorder,
   type TypedScope,
 } from 'footprintjs';
+import type { RedactionPolicy } from 'footprintjs';
 import type { RunContext } from '../bridge/eventMeta.js';
 import { composedInput, readsMessageFromIfAny } from '../core/messageFrom.js';
 import { adoptMemberRedaction } from '../redaction/declared.js';
@@ -484,8 +485,9 @@ export class Graph extends RunnerBase<GraphInput, GraphOutput> {
     input?: unknown,
     options?: RunOptions,
   ): Promise<GraphOutput | RunnerPauseOutcome> {
-    this.emitPauseResume(checkpoint, input);
-    const executor = this.createExecutor();
+    // The leg's policy — the paused run's marks — goes to ITS executor, never via the instance.
+    const resumeLeg = this.emitPauseResume(checkpoint, input);
+    const executor = this.createExecutor(resumeLeg);
     this.lastExecutor = executor;
     let result: unknown;
     try {
@@ -517,7 +519,7 @@ export class Graph extends RunnerBase<GraphInput, GraphOutput> {
     throw err;
   }
 
-  private createExecutor(): FlowChartExecutor {
+  private createExecutor(resumeLeg?: RedactionPolicy): FlowChartExecutor {
     this.currentRunContext = {
       runStartMs: Date.now(),
       runId: makeRunId(),
@@ -528,7 +530,7 @@ export class Graph extends RunnerBase<GraphInput, GraphOutput> {
 
     const getRunCtx = (): RunContext => this.currentRunContext;
     // The run's redaction (`src/redaction/`): every policy a node declared.
-    const redaction = this.openRunRedaction(undefined, getRunCtx);
+    const redaction = this.openRunRedaction(resumeLeg, getRunCtx);
     const spec = this.getSpec();
     const executor = new FlowChartExecutor(spec, { scopeFactory: redaction.scopeFactoryFor(spec) });
     redaction.applyTo(executor);
