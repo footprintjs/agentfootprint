@@ -106,7 +106,7 @@ export function readPausedLeg(ctx: ReadContext, calls: CallsRead): PausedLegRead
     if (!isRecord(m)) continue;
     const name = str(m.toolName);
     if (name === undefined) continue;
-    const coverage = readStateCoverage(rows, id);
+    const coverage = readStateCoverage(rows, id, ctx.view.servedUnderPolicy);
     const rowsAt = rowsAtOf(ctx.declarations, name);
     // The door this record holds for the call is its committed declaration — the same rows the
     // standing fold reads (`assessment/assess.ts`), so the two cannot disagree about it.

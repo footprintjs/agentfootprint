@@ -27,11 +27,14 @@ import type { RedactionPolicy } from 'footprintjs';
 
 import {
   Agent,
+  absent,
   allow,
   askHuman,
   checkInApproved,
+  coverage,
   defineRAG,
   defineTool,
+  describedResult,
   isInputPause,
   isPaused,
 } from '../../src/index.js';
@@ -340,6 +343,83 @@ const CASES: readonly FeatureCase[] = [
         .namesAndNumbersFromEvidence({ posture: 'guard' } as never)
         .build(),
     drive: (agent) => agent.run({ message: 'count them' }),
+  },
+  {
+    // What a tool declares it checked is prose it composes from its call and
+    // its result — `absent()`'s own example quotes its arguments — and a
+    // described result's envelope carries the result's data. Both ride events
+    // of their own, the tracked `coverageDeclared` state, and (for a typed
+    // answer whose limits travel with it) `answerCoverage`.
+    feature: 'a tool’s declared coverage and described results (absent, coverage, describedResult)',
+    canaries: [
+      'CANARY-ABS-ARG',
+      'CANARY-COV-RESULT',
+      'CANARY-COV-WORDS',
+      'CANARY-SEM-ARG',
+      'CANARY-SEM-FACT',
+    ],
+    build: (redact) =>
+      create(
+        mock({
+          chunkDelayMs: 0,
+          replies: [
+            {
+              toolCalls: [
+                { id: 'c1', name: 'find', args: { id: 'CANARY-ABS-ARG' } },
+                { id: 'c2', name: 'verdict', args: { id: 'x' } },
+                { id: 'c3', name: 'rows', args: { vm: 'CANARY-SEM-ARG' } },
+              ],
+            },
+            { content: '{"ok":true}' },
+          ],
+        }),
+        redact,
+      )
+        .tool(
+          defineTool<{ id: string }, unknown>({
+            name: 'find',
+            description: 'Find records.',
+            inputSchema: { type: 'object', properties: { id: { type: 'string' } } },
+            execute: ({ id }) =>
+              absent({
+                what: `records for ${id}`,
+                checked: [`${id}: the live database`],
+                notChecked: [{ what: `the archive of ${id}`, why: 'older than a day' }],
+                tryInstead: `ask about ${id} tomorrow`,
+              }),
+          }),
+        )
+        .tool(
+          defineTool<{ id: string }, unknown>({
+            name: 'verdict',
+            description: 'A verdict.',
+            inputSchema: { type: 'object', properties: { id: { type: 'string' } } },
+            execute: () =>
+              coverage('CANARY-COV-RESULT is fine', {
+                checked: ['CANARY-COV-WORDS, checked'],
+                notChecked: [
+                  { what: 'CANARY-COV-WORDS, unchecked', why: 'out of scope', kind: 'existence' },
+                ],
+              }),
+          }),
+        )
+        .tool(
+          defineTool<{ vm: string }, unknown>({
+            name: 'rows',
+            description: 'Rows.',
+            inputSchema: { type: 'object', properties: { vm: { type: 'string' } } },
+            execute: ({ vm }) =>
+              describedResult({
+                facts: [{ entity: vm, note: 'CANARY-SEM-FACT' }],
+                provenance: { measuredAt: '2026-08-19T10:12:00Z', source: 'export' },
+                coverage: { checked: [`every job for ${vm}`] },
+              }),
+          }),
+        )
+        .outputSchema({ parse: (value: unknown) => value })
+        .limitsTravelWithTheAnswer()
+        .build(),
+    drive: (agent) => agent.run({ message: 'check them' }),
   },
   {
     // A compaction folds the window and keeps the originals word for word

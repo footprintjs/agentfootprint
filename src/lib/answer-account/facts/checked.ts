@@ -77,7 +77,10 @@ function itemLines(
   id: { readonly short: TemplateId; readonly full: TemplateId },
 ): Sentence[] {
   const source = `tool:${call.toolName}` as const;
-  const all = call.coverage?.items.filter((i) => i.section === section) ?? [];
+  const declared = call.coverage?.items.filter((i) => i.section === section) ?? [];
+  // Items whose words the record keeps out: counted on one line, never printed.
+  const kept = declared.filter((i) => i.keptOut === true);
+  const all = declared.filter((i) => i.keptOut !== true);
   const items: CoverageItemRead[] = [];
   for (const item of all) {
     if (!takeItem(ctx, Math.min((item.short ?? item.what).length, MAX_VAR_CHARS))) break;
@@ -105,6 +108,16 @@ function itemLines(
           item: true,
         });
   });
+  if (kept.length > 0)
+    lines.push(
+      ctx.say('items.keptOut', {
+        vars: { n: n(kept.length) },
+        status: 'not-recorded',
+        missing: 'redacted',
+        pointers: kept.slice(0, MAX_LISTED_CALLS).map((item) => itemAt(item, 'what')),
+        item: true,
+      }),
+    );
   const omitted = all.length - items.length;
   if (omitted > 0)
     lines.push(

@@ -56,9 +56,17 @@ export type CoverageSectionKey = 'checked' | 'notChecked' | 'cannotCover';
 
 export interface CoverageItemRead {
   readonly section: CoverageSectionKey;
+  /** The item's words — `''` when the record keeps them out (`keptOut`, below). */
   readonly what: string;
   readonly short?: string;
   readonly kind?: 'existence' | 'scope';
+  /**
+   * Present and `true` when the record keeps the item's WORDS out (a
+   * redaction policy left its placeholder on `what` — `redaction/served.ts` ·
+   * `DERIVED`): the item exists, with its `kind`, and a reader says its words
+   * are kept out, never prints them.
+   */
+  readonly keptOut?: true;
   /**
    * Pointer base: the declaration that holds the item — its event
    * (`tools.absent` / `tools.coverage_declared`), or, for a call before a
@@ -154,6 +162,14 @@ interface DeclarationSource {
   readonly fields: Readonly<Record<string, unknown>>;
   readonly base: (...keys: readonly (string | number)[]) => RecordPointer;
   readonly absent: boolean;
+  /**
+   * Whether the record keeps `value` — a leaf of this declaration — out: a
+   * redaction policy's placeholder, in a record served under one. Asked of
+   * every word before it is read as words.
+   */
+  readonly isKeptOut: (value: unknown) => boolean;
+  /** Whether the record keeps the declaration's top-level `field` out — ASKED before it is read. */
+  readonly keptOutField: (field: string) => boolean;
 }
 
 /**
@@ -171,9 +187,11 @@ function readDeclarations(
   const items: CoverageItemRead[] = [];
   let lookedFor: CoverageRead['lookedFor'];
   let tryInsteadTool: CoverageRead['tryInsteadTool'];
-  for (const { fields, base } of sources) {
-    const lf = str(fields.lookedFor);
-    if (lookedFor === undefined && lf !== undefined && lf.length > 0)
+  for (const { fields, base, isKeptOut: wordsKeptOut, keptOutField } of sources) {
+    // What the tool looked for, unless the record keeps those words out (then
+    // the account says what it found without them — never the placeholder).
+    const lf = keptOutField('lookedFor') ? undefined : str(fields.lookedFor);
+    if (lookedFor === undefined && lf !== undefined && lf.length > 0 && !wordsKeptOut(lf))
       lookedFor = { text: lf, pointer: base('lookedFor') };
     const tit = fields.tryInsteadTool;
     if (tryInsteadTool === undefined && isRecord(tit) && typeof tit.tool === 'string') {
@@ -184,8 +202,12 @@ function readDeclarations(
       if (!Array.isArray(list)) continue;
       list.forEach((item: unknown, position) => {
         if (!isRecord(item) || typeof item.what !== 'string') return;
+        // The item's words kept out: it still exists, with its kind — said so, never printed.
+        const kept = wordsKeptOut(item.what);
         const short =
-          typeof item.short === 'string' && item.short.trim().length > 0 ? item.short : undefined;
+          !kept && typeof item.short === 'string' && item.short.trim().length > 0
+            ? item.short
+            : undefined;
         // `kind` is refused on `checked` (a checked item is not a limit), read-never-repaired:
         // a hand-built envelope that puts one there gets no kind, no chip and no signal.
         const kind =
@@ -194,9 +216,10 @@ function readDeclarations(
             : undefined;
         items.push({
           section,
-          what: item.what,
+          what: kept ? '' : item.what,
           ...(short !== undefined && { short }),
           ...(kind !== undefined && { kind }),
+          ...(kept && { keptOut: true as const }),
           base,
           position,
         });
@@ -214,12 +237,20 @@ function readDeclarations(
   };
 }
 
-function readCoverage(events: readonly ViewEvent[]): CoverageRead | undefined {
+/**
+ * A call's declaration(s) from its events. `served`: the record was served
+ * under a redaction policy, so a placeholder in it is words kept out
+ * (`view.ts` · `isKeptOut`) — never in any other record, where a tool may
+ * have declared that string itself.
+ */
+function readCoverage(events: readonly ViewEvent[], served: boolean): CoverageRead | undefined {
   return readDeclarations(
     events.map((event) => ({
       fields: event.payload,
       base: (...keys: readonly (string | number)[]) => at(event, ...keys),
       absent: event.type.endsWith('tools.absent'),
+      isKeptOut: (value: unknown) => served && isKeptOut(value),
+      keptOutField: (field: string) => keptOut(event, field),
     })),
     events,
   );
@@ -238,14 +269,18 @@ export const COVERAGE_STATE_KEY = 'coverageDeclared';
 export function readStateCoverage(
   rows: readonly unknown[],
   toolCallId: string,
+  served: boolean,
 ): CoverageRead | undefined {
   const sources: DeclarationSource[] = [];
+  const wordsKeptOut = (value: unknown): boolean => served && isKeptOut(value);
   rows.forEach((row, index) => {
     if (!isRecord(row) || row.toolCallId !== toolCallId) return;
     sources.push({
       fields: row,
       base: (...keys: readonly (string | number)[]) => stateAt(COVERAGE_STATE_KEY, index, ...keys),
       absent: row.kind === 'absence',
+      isKeptOut: wordsKeptOut,
+      keptOutField: (field: string) => wordsKeptOut(row[field]),
     });
   });
   return readDeclarations(sources, []);
@@ -391,7 +426,7 @@ function readOne(ctx: ReadContext, byCall: CallIndex, id: string): CallRead {
   const ends = byCall('stream.tool_end', id);
   const end = ends[ends.length - 1];
   const coverageEvents = [...byCall('tools.absent', id), ...byCall('tools.coverage_declared', id)];
-  const coverage = readCoverage(coverageEvents);
+  const coverage = readCoverage(coverageEvents, ctx.view.servedUnderPolicy);
   const described = byCall('tools.semantics_declared', id)[0];
   const named = toolNameFor(ctx, id, start, coverage);
   // A call no event names is still a call: counted as unread, judged, and said to be unnamed.

@@ -80,6 +80,15 @@
   ],
   "source": "library"
  },
+ "items.keptOut@1": {
+  "text": "Kept out of this record: 2 items.",
+  "parts": [
+   {
+    "text": "Kept out of this record: 2 items."
+   }
+  ],
+  "source": "library"
+ },
  "chip.saidBy@1": {
   "text": "said by: who value",
   "parts": [
@@ -2135,6 +2144,30 @@
    },
    {
     "text": " says it can never check what value."
+   }
+  ],
+  "source": "tool:lookup_volumes"
+ },
+ "signal.existenceNotChecked.keptOut@1": {
+  "text": "lookup_volumes says it did not check everywhere the thing could be; this record keeps out where.",
+  "parts": [
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " says it did not check everywhere the thing could be; this record keeps out where."
+   }
+  ],
+  "source": "tool:lookup_volumes"
+ },
+ "signal.existenceCannotCover.keptOut@1": {
+  "text": "lookup_volumes says it can never check everywhere the thing could be; this record keeps out where.",
+  "parts": [
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " says it can never check everywhere the thing could be; this record keeps out where."
    }
   ],
   "source": "tool:lookup_volumes"

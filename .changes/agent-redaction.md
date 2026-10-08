@@ -19,8 +19,10 @@ next — joined with the fields your tools name:
 `redact: conversationRedaction({ patterns: [/ssn|email/i] })`. A test runs every feature on the list
 — the turn, tools and argument validation, thinking, asking a person, the inputs layer, structured
 output, memory and RAG, the evidence gate and its figures (the `guard` posture's flagged draft
-values included), compaction (the originals a fold keeps beside its summary, `foldedSpans`),
-check-ins, skill graphs, compositions —
+values included), a tool's declared coverage and described results (`absent()`, `coverage()`,
+`describedResult()` — words a tool composes from its call, and the data its envelope carries),
+compaction (the originals a fold keeps beside its summary, `foldedSpans`), check-ins, skill graphs,
+compositions —
 with a canary in each place and fails if one reaches a record; the run emits the same events with
 and without it. Content the library quotes in an event under names of its own (a validation
 issue's argument, a check-in's evidence, a matcher's witness, a parser's message about the draft) is
@@ -58,7 +60,8 @@ policy covered its run (a marker row in its snapshot's `recorders`, the record a
 keeps included) is read that way, so a run with
 no policy reads exactly as before, even where a tool returned the word `REDACTED`. The answer
 account says the question, the answer, a tool's result (a row set kept out inside one too), the
-flagged values of the evidence gate and the history earlier results sit in are KEPT OUT — never "not
+flagged values of the evidence gate, the history earlier results sit in, the words of what a tool
+declared it checked (its items still counted) and a typed answer's limits are KEPT OUT — never "not
 recorded", "the run did not finish" or "no tool ran" — and refuses to tell rather than read a
 placeholder it does not handle (template set 11). `assessAnswer` gives no standing over a state key
 the record keeps out and names it (`AnswerAssessment.keptOut`); `agent.assessment()` reads the live
@@ -71,13 +74,14 @@ it replays to the model, as every memory keeps what it stores.
 
 Named limits: the run's answer leaves its chart as a bare string and footprintjs serves an unnamed
 output as it is, so a recording's `run.exit` payload carries it whatever the policy; error text
-written by code (`error`, `errorMessage`) is not on the list; a tool's coverage declaration (the
-words its author passes to `coverage()` / `absent()`) is served as written; console warnings are not
-records; fingerprints and content hashes stay (they are structure), so a short kept-out value can be
+written by code (`error`, `errorMessage`) is not on the list; a declaration's dates and source
+(`period`, `provenance`) stay readable on its events; console warnings are not records; fingerprints and content hashes stay (they are structure), so a short kept-out value can be
 confirmed by hashing guesses; a checkpoint is not proof — one edited to drop both its policy and its
 marks, or to carry a narrower one, resumes under what it says; an `LLMCall` or `LlmRouter` takes no
 `redact`, so one run on its own is covered by nothing; a composition does not refuse overlapping
-runs, so run one instance one run at a time. The full table is in `src/redaction/README.md`.
+runs, so run one instance one run at a time; a chart-backed tool's own `$emit` payloads reach the
+recorders handed to that tool as footprintjs serves an emit, by event name. The full table is in
+`src/redaction/README.md`.
 
 Requires footprintjs `^9.44.1` (the peer range rises from `^9.41.0`): the door relies on 9.43.0's
 redaction law, under which pause payloads, thrown values and a subflow mapper's copies are served by

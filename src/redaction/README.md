@@ -82,8 +82,11 @@ const agent = Agent.create({
   runs each feature in `CONVERSATION_FEATURES` — the turn, tools (with argument
   validation), thinking, asking a person, the inputs layer, structured output,
   memory and RAG, the evidence gate (with its figures, and the `guard`
-  posture's flagged draft values), compaction (the originals a fold keeps
-  beside its summary), a person approving a call (check-in), skill graphs —
+  posture's flagged draft values), a tool's declared coverage and described
+  results (`absent()`, `coverage()`, `describedResult()` — words a tool
+  composes from its call, and the data its envelope carries), compaction (the
+  originals a fold keeps beside its summary), a person approving a call
+  (check-in), skill graphs —
   with a canary in every place it moves the
   conversation: without a policy every canary reaches a record; under the
   vocabulary none reaches any record, the run emits the SAME events, and its
@@ -256,7 +259,9 @@ bytes, for any recording — an agent's or a chart's.)
   otherwise say "not recorded": the question, the answer (a run whose answer is
   kept out still finished), a tool result's emptiness (a row set kept out
   INSIDE a result too), a call's outcome, the flagged values of the evidence
-  gate, the history earlier results sit in. A reader that touches a kept-out
+  gate, the history earlier results sit in, the words of what a tool declared
+  it checked (its items are counted and their kinds judged, the words never
+  printed), a typed answer's limits. A reader that touches a kept-out
   value without asking about it would state a fact about a placeholder, so the
   view watches, and the account then refuses to tell (`notToldAccount`)
   instead of saying "no tool ran".
@@ -353,20 +358,30 @@ bytes, for any recording — an agent's or a chart's.)
   conversation CONTINUED from a run (`followUp`, `continueFrom`,
   `resumeOnError`) is a new run, covered by what that run is given — declare
   the policy on the agent (`Agent.create({ redact })`) to cover every run.
+- **A carried policy is the list it paused with.** A per-run `redact` rides
+  the checkpoint as names and pattern sources (`AgentState.runRedaction`), so
+  a leg resumed after an upgrade that ADDS names to the vocabulary is covered
+  by the list the run paused with — joined with the agent's declared policy,
+  which is read fresh. Declare the vocabulary on the agent to have every leg
+  follow the installed list.
+- **A chart's own emits, to the recorders a chart-backed tool is handed.** A
+  `flowchartAsTool` / `runbookAsTool` chart's own `$emit` payloads reach the
+  recorders passed in its `recorders` option as footprintjs serves an emit:
+  by event NAME (`emitPatterns`), never by the keys inside it. The kept record,
+  its narrative, the mapper's view and every record of the calling agent stay
+  covered. Keep selected values out of a chart's emit payloads, or name those
+  events in `emitPatterns`.
 - **A checkpoint is not proof.** The resume refuses a carried policy it cannot
   read (`'unreadable'`) and a missing one the checkpoint's own marks give away
   (`'missing'`), but a checkpoint EDITED to drop both its policy and its marks,
   or to carry a narrower policy this library could have written, resumes under
   what it says. A host that lets checkpoints leave its trust boundary signs
   them — as it does for the identity a checkpoint names.
-- **A tool's coverage declaration.** The words a tool's author passes to
-  `coverage()` / `absent()` are the AUTHOR's text about what the tool read
-  (`coverageDeclared`, `answerCoverage`, the `tools.coverage_declared` /
-  `tools.absent` events), served as written, like a tool's description — they
-  are not on the vocabulary, because the answer account reads them to say what
-  the tools covered. Keep the person's data out of them; to keep them out of
-  the record anyway, name `coverageDeclared` and `answerCoverage` yourself, and
-  the account then says it cannot tell what the tools covered.
+- **A declaration's dates and source.** A coverage declaration's or a
+  described result's `period` (the dates its read covered) and `provenance`
+  (a source's name, when it was measured) stay readable on their events —
+  structure the results layer's time checks judge. A date a tool takes from
+  the person's question travels there as it is.
 - **An `LLMCall` or an `LlmRouter` on its own.** Neither takes a `redact`, so
   neither declares one: its records — run on its own, or in a composition made
   only of such steps — are covered by nothing. Run the step as an `Agent`, or

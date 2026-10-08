@@ -59,6 +59,8 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   'row.wrong': t('Anything wrong'),
   'row.more': t("…and {{count:n,'more tool call','more tool calls'}}."),
   'items.more': t("…and {{count:n,'more item','more items'}}."),
+  // A declaration's items whose words the record keeps out (a redaction policy) — set 11.
+  'items.keptOut': t("Kept out of this record: {{count:n,'item','items'}}."),
 
   // ── chips ────────────────────────────────────────────────────────────
   'chip.saidBy': t('said by: {{who}}'),
@@ -451,6 +453,15 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
     'tool',
   ),
   'signal.existenceCannotCover.full': t('{{tool:code}} says it can never check {{what}}.', 'tool'),
+  // The same, when the record keeps the item's words out (a redaction policy) — set 11.
+  'signal.existenceNotChecked.keptOut': t(
+    '{{tool:code}} says it did not check everywhere the thing could be; this record keeps out where.',
+    'tool',
+  ),
+  'signal.existenceCannotCover.keptOut': t(
+    '{{tool:code}} says it can never check everywhere the thing could be; this record keeps out where.',
+    'tool',
+  ),
   'signal.undeclaredEmptyUsed': t(
     "This answer's {{tool:code}} call returned an empty result that did not declare what it searched.",
   ),

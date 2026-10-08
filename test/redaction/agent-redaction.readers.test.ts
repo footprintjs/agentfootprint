@@ -23,7 +23,7 @@
 import { describe, expect, it } from 'vitest';
 import type { RedactionPolicy } from 'footprintjs';
 
-import { Agent, defineTool } from '../../src/index.js';
+import { Agent, absent, defineTool } from '../../src/index.js';
 import { mock } from '../../src/doors/providers.js';
 import {
   accountForAnswer,
@@ -137,6 +137,63 @@ describe('the answer account over a redacted recording', () => {
     const redacted = await run(conversationPolicy());
     expect(redacted.facts.inView).toEqual([]);
     expect(idsOf(redacted)).toContain('unreachable.inView.redacted');
+  });
+
+  it('a declaration whose words are kept out: its items are counted and said kept out, never printed', async () => {
+    // `{ keys: ['args'] }` keeps the arguments out and leaves the result readable,
+    // so the account still judges the calls — and every coverage word on the
+    // declarations' events (composed from the call: `served.ts` · `DERIVED`) is kept out.
+    const run = async (redact: RedactionPolicy | undefined) => {
+      const agent = Agent.create({
+        provider: mock({
+          chunkDelayMs: 0,
+          replies: [
+            { toolCalls: [{ id: 'c1', name: 'find', args: { id: 'ID-COV-1' } }] },
+            { content: 'Nothing for that id.' },
+          ],
+        }),
+        model: 'mock',
+        maxIterations: 4,
+        ...(redact && { redact }),
+      })
+        .tool(
+          defineTool<{ id: string }, unknown>({
+            name: 'find',
+            description: 'Find records.',
+            inputSchema: { type: 'object', properties: { id: { type: 'string' } } },
+            execute: ({ id }) =>
+              absent({
+                what: `records for ${id}`,
+                checked: [`${id}: the live database`, 'the replica'],
+                notChecked: [{ what: `the archive of ${id}`, why: 'too old', kind: 'existence' }],
+              }),
+          }),
+        )
+        .build();
+      const recorder = recordRun(agent);
+      await agent.run({ message: 'find it' });
+      return accountForAnswer(recorder.toRecording() as never);
+    };
+    const lines = (account: AnswerAccount) =>
+      account.rows.flatMap((r) => r.lines.map((l) => l.text)).join('\n');
+
+    const control = await run(undefined);
+    expect(lines(control)).toContain('ID-COV-1: the live database');
+    expect(idsOf(control)).toContain('signal.existenceNotChecked.full');
+
+    const redacted = await run({ keys: ['args'] });
+    expect(idsOf(redacted)).not.toContain('scope.keptOut');
+    // The calls are still told: the declaration, its items counted, the limit signalled.
+    expect(idsOf(redacted)).toContain('checked.declared');
+    expect(idsOf(redacted)).toContain('items.keptOut');
+    expect(idsOf(redacted)).toContain('signal.existenceNotChecked.keptOut');
+    expect(redacted.facts.calls[0]?.coverage).toMatchObject({ checked: 2, notChecked: 1 });
+    expect(lines(redacted)).toContain('Kept out of this record: 2 items.');
+    // Neither the words nor the placeholder are printed as words.
+    const told = JSON.stringify(redacted.rows) + JSON.stringify(redacted.signals);
+    expect(told).not.toContain('ID-COV-1');
+    expect(told).not.toContain('REDACTED');
+    expect(redacted.facts.calls[0]?.coverage?.lookedFor).toBeUndefined();
   });
 });
 

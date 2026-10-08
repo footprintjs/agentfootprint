@@ -175,19 +175,21 @@ export function runChecks(
     for (const item of withKind.filter((i) => i.kind === 'existence')) {
       const source = `tool:${call.toolName}` as const;
       const never = item.section === 'cannotCover';
-      const sentence =
-        item.short !== undefined
-          ? ctx.say(never ? 'signal.existenceCannotCover' : 'signal.existenceNotChecked', {
-              vars: { tool, short: v(item.short, source, itemAt(item, 'short')) },
-              pointers: [itemAt(item, 'kind')],
-            })
-          : ctx.say(
-              never ? 'signal.existenceCannotCover.full' : 'signal.existenceNotChecked.full',
-              {
-                vars: { tool, what: v(item.what, source, itemAt(item, 'what')) },
-                pointers: [itemAt(item, 'kind')],
-              },
-            );
+      const sentence = item.keptOut
+        ? // Its words are kept out of the record: the limit is said, its words never printed.
+          ctx.say(
+            never ? 'signal.existenceCannotCover.keptOut' : 'signal.existenceNotChecked.keptOut',
+            { vars: { tool }, pointers: [itemAt(item, 'kind'), itemAt(item, 'what')] },
+          )
+        : item.short !== undefined
+        ? ctx.say(never ? 'signal.existenceCannotCover' : 'signal.existenceNotChecked', {
+            vars: { tool, short: v(item.short, source, itemAt(item, 'short')) },
+            pointers: [itemAt(item, 'kind')],
+          })
+        : ctx.say(never ? 'signal.existenceCannotCover.full' : 'signal.existenceNotChecked.full', {
+            vars: { tool, what: v(item.what, source, itemAt(item, 'what')) },
+            pointers: [itemAt(item, 'kind')],
+          });
       addSignal({ id: 'existence-not-checked', check: 'existence', sentence, tone: 'warn' });
     }
   }

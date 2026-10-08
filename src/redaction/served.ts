@@ -104,6 +104,23 @@ interface Derived {
 const CONVERSATION_TEXT = ['userMessage', 'message', 'history'] as const;
 const MODEL_TEXT = ['llmLatestContent', 'finalContent', 'content'] as const;
 
+/**
+ * The words of a coverage declaration's three lists at `at` (`''` = the
+ * payload's root) — prose a tool composes at run time, often from its call's
+ * arguments and its result (`coverage/absent.ts` · `absent`'s own example). The
+ * lists themselves, their length and each item's `kind` stay: they are what the
+ * record's readers judge on.
+ */
+function coverageWords(at: string, lists: readonly string[]): readonly string[] {
+  const prefix = at === '' ? '' : `${at}.`;
+  return lists.flatMap((list) =>
+    ['what', 'why', 'short'].map((field) => `${prefix}${list}[].${field}`),
+  );
+}
+
+/** A coverage declaration's lists, as the coverage events carry them. */
+const COVERAGE_LISTS = ['checked', 'notChecked', 'cannotCover'] as const;
+
 /** A check-in's evidence pack (`core/checkin.ts` · `CheckInRequest`) at `at` in a payload. */
 function checkInPack(at: string): readonly Derived[] {
   return [
@@ -150,6 +167,46 @@ const DERIVED: Readonly<Record<string, readonly Derived[]>> = {
   ],
   'agentfootprint.agent.turn_end': [
     { paths: ['answerCoverage.assumed[].value'], from: ['args'], namedBy: 'argument' },
+    // A typed answer's limits as data: the words of every declaration it folds.
+    { paths: coverageWords('answerCoverage', COVERAGE_LISTS), from: ['args', 'result'] },
+  ],
+  // What a tool declared it looked for, checked and did not: the words of its
+  // coverage, composed from its call and its result.
+  'agentfootprint.tools.absent': [
+    {
+      paths: [
+        'lookedFor',
+        'tryInstead',
+        'tryInsteadTool.why',
+        ...coverageWords('', COVERAGE_LISTS),
+      ],
+      from: ['args', 'result'],
+    },
+  ],
+  'agentfootprint.tools.coverage_declared': [
+    { paths: coverageWords('', [...COVERAGE_LISTS, 'inProgress']), from: ['args', 'result'] },
+  ],
+  // A described result's envelope: its data IS the tool's result (read by the
+  // record's readers only when the result is not kept out), its words are
+  // composed like a coverage declaration's.
+  'agentfootprint.tools.semantics_declared': [
+    {
+      paths: [
+        'semantics.facts',
+        'semantics.series',
+        'semantics.edges',
+        'semantics.clarify.candidates',
+      ],
+      from: ['result'],
+    },
+    {
+      paths: [
+        'semantics.clarify.question',
+        'semantics.not_covered',
+        ...coverageWords('semantics.coverage', ['checked', 'not_checked', 'cannot_cover']),
+      ],
+      from: ['args', 'result'],
+    },
   ],
   // Figures the answer computed, quoted with the operands they came from.
   'agentfootprint.agent.evidence_checked': [

@@ -33,18 +33,13 @@
  *     draft (`rawOutput`) is kept out (`served.ts` · `DERIVED`);
  *   - structure: ids, counts, kinds, tool names, timings and verdict words
  *     stay readable — the record still shows WHAT happened, without the words;
- *   - a tool's coverage declaration — the words its author passes to
- *     `coverage()` / `absent()` (`coverageDeclared`, `answerCoverage`, the
- *     `tools.coverage_declared` / `tools.absent` events): the tool AUTHOR's
- *     text about what it read, shown by the answer account as written, like a
- *     tool's description. Keep the person's data out of it; to keep it out of
- *     the record anyway, name `coverageDeclared` and `answerCoverage` yourself
- *     (the answer account then says it cannot tell what the tools covered);
  *   - content the library quotes under names of its own (a validation issue's
  *     quoted argument, a check-in's evidence pack, a matcher's witness, a
- *     route guard's judged result, …) is not named here: generic names
- *     (`value`, `text`, `note`) would hide structure across every event. It is
- *     kept out with the value it came from (`served.ts` · `DERIVED`).
+ *     route guard's judged result, the words of a tool's coverage declaration
+ *     and a described result's data on their events, …) is not named here:
+ *     generic names (`value`, `text`, `note`, `checked`) would hide structure
+ *     across every event. It is kept out with the value it came from
+ *     (`served.ts` · `DERIVED`).
  *
  * Names it shares with structure, kept out with it: `permission.check`'s
  * `result` (its verdict word — a refused call still reads as refused, from
@@ -66,6 +61,7 @@ export const CONVERSATION_FEATURES: readonly string[] = Object.freeze([
   'structured output (schema retries, the output fallback)',
   'memory (episodic, semantic, summarize, top-k) and retrieval (RAG)',
   'the evidence gate (names and numbers)',
+  'a tool’s declared coverage and described results (absent, coverage, describedResult)',
   'compaction (the window folding the conversation)',
   'a person approving a call (check-in)',
   'skill graphs (routing on the person’s words)',
@@ -133,6 +129,12 @@ const NAMES = {
     'argumentAnswersKept',
     'argumentResolutions',
   ],
+  /**
+   * What a tool declared it checked and did not, as state: words the tool
+   * composes from its call and its result (`absent()`'s own example quotes its
+   * arguments) — every declaration of the run, and a typed answer's limits.
+   */
+  coverage: ['coverageDeclared', 'answerCoverage'],
   /** A person asked mid-run, and their reply. */
   pause: ['questionPayload', 'resumeInput'],
   /** Checks over the answer: the draft a schema rejected, the values a gate flagged. */

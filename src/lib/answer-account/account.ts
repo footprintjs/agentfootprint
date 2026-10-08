@@ -198,6 +198,17 @@ const listLength = (value: unknown): number => (Array.isArray(value) ? value.len
  * carries none.
  */
 function readLimitsData(end: ViewEvent): AccountFact<LimitsDataFact> | undefined {
+  // Limits the record keeps out (a redaction policy selects `answerCoverage`):
+  // they travelled as data, and their words and counts are not in this record.
+  if (keptOut(end, 'answerCoverage')) {
+    return {
+      value: null,
+      source: 'library',
+      status: 'not-recorded',
+      missing: 'redacted',
+      pointers: [at(end, 'answerCoverage')],
+    };
+  }
   const data = end.payload.answerCoverage;
   if (!isRecord(data)) return undefined;
   const pointers: RecordPointer[] = [];
