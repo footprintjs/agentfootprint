@@ -46,7 +46,13 @@ function membersOf(name) {
   return [...new Set(members)].sort();
 }
 
-const key = (word) => (/^[A-Za-z_$][\w$]*$/.test(word) ? word : `'${word.replace(/'/g, "\\'")}'`);
+/**
+ * A single-quoted key, escaped completely. JSON.stringify escapes backslashes and
+ * control characters; the double quotes it escapes need no escape inside single
+ * quotes, and the single quotes it leaves bare do.
+ */
+const quoted = (word) => `'${JSON.stringify(word).slice(1, -1).replace(/\\"/g, '"').replace(/'/g, "\\'")}'`;
+const key = (word) => (/^[A-Za-z_$][\w$]*$/.test(word) ? word : quoted(word));
 /** One entry per line, as the repo's Prettier writes it (printWidth 100: a longer key breaks after the colon). */
 const entry = (word) => {
   const line = `  ${key(word)}: true,`;
