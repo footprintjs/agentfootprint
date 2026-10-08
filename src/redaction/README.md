@@ -170,13 +170,21 @@ and that the answer account says the question and the answer are kept out.
    every recorder attached to the executor, the deferred tier and the narrative's
    `[emit]` lines all receive one served payload. footprintjs serves `$emit` by
    event name only; a typed event is a record handed out whole, so it is served
-   the way footprintjs serves those (`served.ts`).
+   the way footprintjs serves those (`served.ts`). A runner's chart mounted into
+   an executor the APP built (`parent.addSubFlowChartNext('sf-agent',
+   agent.getSpec(), …)`) runs its stages in that executor's scopes, which no
+   run of this library made: every stage of a runner's chart is bound to its
+   runner when the chart is built (`chartBinding.ts` · `bindChartStages`), and a
+   stage that starts in a scope no run tied serves its events under the
+   runner's DECLARED policy (`runRedaction.ts` · `adoptScopeOutsideRun`).
 3. The dispatcher serves every fact a runner dispatches directly (pause events,
    artifact facts, the run manifest, `context.*`, `error.fatal`) and the identity
    on every event's meta, by the same rule.
 4. **Derived fields** (`served.ts` · `DERIVED`): content the library computes
    from another value and carries under a name of its own IN AN EVENT is served
-   as the placeholder whenever the rule keeps a value it came from out — a
+   as the placeholder whenever the rule keeps ANY part of a value it came from
+   out — the whole of it, or fields inside it (the rule's own verdict on the
+   source's name, `served.ts` · `sourceKeptOut`) — a
    parser's message quotes the model's draft (`rawOutput`); a validation issue,
    an external ground and an assumed value quote an argument (`args`, or the
    argument's own name on the row); a check-in's evidence pack quotes the
@@ -185,7 +193,12 @@ and that the answer account says the question and the answer are kept out.
    conversation; a matcher's witness quotes the
    person's words; a route guard's summary and a tool's progress report quote a
    result, a figure the answer computed quotes the answer and its results; a
-   retrieved passage's heading quotes what was retrieved. Generic names
+   retrieved passage's heading quotes what was retrieved; a tool's coverage
+   declaration and a described result's envelope quote its call and its
+   result. Where a path cannot be walked (a list where a record belongs, a
+   Map, a class instance, a payload that is not a record, a quoted argument
+   whose path is missing) the content is served whole as the placeholder —
+   fail closed. Generic names
    (`value`, `note`, `text`) are never put on a policy — selected by name they
    would hide structure in every event.
    footprintjs's taint rule for a mapper's computed copy, applied to the
@@ -371,6 +384,29 @@ bytes, for any recording — an agent's or a chart's.)
   its narrative, the mapper's view and every record of the calling agent stay
   covered. Keep selected values out of a chart's emit payloads, or name those
   events in `emitPatterns`.
+- **What footprintjs's rule does not see.** The rule (the one owner of every
+  verdict) walks a payload's own enumerable keys, in plain objects, class
+  instances and arrays. It does not walk a Map's entries, a Set's members, an
+  Error's `cause`, a non-enumerable or symbol key, or a `toJSON` that writes a
+  name the object holds privately (a `#field`): a tool result of such a shape
+  keeps a value a by-name policy selects — in-process for the first four, in
+  every JSON export for `toJSON`. Name the value that carries it (`result`;
+  the vocabulary does), or return plain data from tools. Pinned, shape by
+  shape, by `test/redaction/served.shapes.test.ts`; the fix belongs in the
+  rule, never a second walk here.
+- **Names are matched exactly.** A key selects that exact name —
+  case-sensitive, no Unicode folding (`SSN`, a full-width `ｓｓｎ` and
+  `socialSecurityNumber` are other names); a pattern with the `i` flag covers
+  case variants. footprintjs skips pattern matching for a key past its length
+  cap (ReDoS protection), so a pattern-only policy does not select an
+  over-long key a model invents — name the keys that matter in `keys`.
+- **A runner's chart mounted into your own executor.** Its typed events are
+  served under the policy the runner declares (`chartBinding.ts`), but its
+  STATE belongs to your executor: the commit log and snapshot follow that
+  executor's own policy (footprintjs's law) — hand it the same policy
+  (`executor.setRedactionPolicy(policy)`). A stage built at run time (a dynamic
+  `StageNode` return) is not part of the chart that was bound; an `LLMCall` or
+  an `LlmRouter` declares nothing, so its mounted events go out as emitted.
 - **A checkpoint is not proof.** The resume refuses a carried policy it cannot
   read (`'unreadable'`) and a missing one the checkpoint's own marks give away
   (`'missing'`), but a checkpoint EDITED to drop both its policy and its marks,

@@ -18,9 +18,11 @@ import type {
 } from 'footprintjs';
 import type { RunContext } from '../bridge/eventMeta.js';
 import { EventDispatcher } from '../events/dispatcher.js';
+import { bindChartStages } from '../redaction/chartBinding.js';
 import { redactionDeclaredBy } from '../redaction/declared.js';
 import { policyOfMarks, unionRedactionPolicies } from '../redaction/policy.js';
 import {
+  adoptScopeOutsideRun,
   createRunRedaction,
   policyOfExecutor,
   servingAhead,
@@ -420,6 +422,10 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
       );
     }
     this.chart = builder();
+    // A stage that runs outside this runner's runs (its chart mounted into an
+    // executor the app built) serves its events under the policy this runner
+    // declares — read when the stage starts, never fixed here.
+    bindChartStages(this.chart, (scope) => adoptScopeOutsideRun(scope, redactionDeclaredBy(this)));
   }
 
   /**

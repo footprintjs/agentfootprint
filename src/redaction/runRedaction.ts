@@ -223,6 +223,44 @@ export function servingAhead(policy: RedactionPolicy | undefined): EventServing 
   return eventServing(() => rule, (policy.emitPatterns?.length ?? 0) > 0);
 }
 
+/**
+ * The run a stage of a runner's chart belongs to when NO run of the library
+ * made its scope — the chart mounted into an executor the app built itself
+ * (`parent.addSubFlowChartNext('sf-agent', agent.getSpec(), …)`): the runner's
+ * DECLARED policy, served as a run's would be (`servingAhead`), so its stages'
+ * events never leave raw because the runner was not the one running them.
+ * There is no run here to feed the real-value path or a relay, so those are
+ * idle. One per policy object; weak, so it dies with the declaration.
+ */
+const outsideRuns = new WeakMap<RedactionPolicy, ScopeRun>();
+
+function outsideRunFor(policy: RedactionPolicy): ScopeRun {
+  const known = outsideRuns.get(policy);
+  if (known !== undefined) return known;
+  const rule = new RedactionRule(policy);
+  const run: ScopeRun = {
+    policy,
+    serving: eventServing(() => rule, (policy.emitPatterns?.length ?? 0) > 0),
+    real: () => undefined,
+    noteWrite: () => undefined,
+    keepsOut: (name) => rule.isKeyRedacted(name),
+  };
+  outsideRuns.set(policy, run);
+  return run;
+}
+
+/**
+ * Tie `scope` to the run of a chart mounted outside any of its runner's runs
+ * (`chartBinding.ts` · `bindChartStages` calls it as each stage starts) — a
+ * scope a run already made keeps its run, and a runner that declares no policy
+ * leaves the scope as it is (byte-identical to before).
+ */
+export function adoptScopeOutsideRun(scope: unknown, declared: RedactionPolicy | undefined): void {
+  if (declared === undefined || scope === null || typeof scope !== 'object') return;
+  if (scopeRuns.has(scope)) return;
+  scopeRuns.set(scope, { run: outsideRunFor(declared), stageId: '' });
+}
+
 /** A scope that can emit — structurally footprintjs's `TypedScope` `$emit`. */
 export interface EmitScope {
   $emit(name: string, payload?: unknown): void;
@@ -231,9 +269,11 @@ export interface EmitScope {
 /**
  * THE way a typed event leaves a stage. The real value goes to the run's own
  * mechanisms (`onRealEvent`), the served value to footprintjs's `$emit` — and
- * from there to every channel at once. A scope no run made (a stage function
- * called directly, in a unit test) emits the payload as it is, exactly as
- * before this file existed.
+ * from there to every channel at once. A runner's chart mounted into an
+ * executor the app built is tied to the runner's declared policy as each
+ * stage starts (`adoptScopeOutsideRun`). A scope nothing tied (a stage
+ * function called directly, in a unit test; a runner that declares no
+ * policy) emits the payload as it is, exactly as before this file existed.
  */
 export function emitServed(scope: EmitScope, type: string, payload: unknown): void {
   const entry = scopeRuns.get(scope as object);

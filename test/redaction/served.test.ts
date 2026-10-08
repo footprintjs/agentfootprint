@@ -261,8 +261,12 @@ describe('DERIVED — content the library quotes under names of its own', () => 
 });
 
 describe('DERIVED — every row, at every path it names', () => {
-  /** A payload holding `canary` at `path` (dotted, `name[]` for a list), with a structural sibling at every level. */
-  const plant = (path: string, canary: string): Record<string, unknown> => {
+  /**
+   * A payload holding `canary` at `path` (dotted, `name[]` for a list), with a
+   * structural sibling at every level — and, for a row whose value names the
+   * argument it quotes, that name beside it (an argument nothing selects).
+   */
+  const plant = (path: string, canary: string, namedBy?: string): Record<string, unknown> => {
     const segments = path.split('.');
     const build = (i: number): unknown => {
       if (i === segments.length) return canary;
@@ -270,7 +274,11 @@ describe('DERIVED — every row, at every path it names', () => {
       const list = segment.endsWith('[]');
       const name = list ? segment.slice(0, -2) : segment;
       const child = build(i + 1);
-      return { [name]: list ? [child] : child, keep: `structure-${i}` };
+      return {
+        [name]: list ? [child] : child,
+        keep: `structure-${i}`,
+        ...(namedBy !== undefined && i === segments.length - 1 && { [namedBy]: 'unrelated.arg' }),
+      };
     };
     return build(0) as Record<string, unknown>;
   };
@@ -279,7 +287,7 @@ describe('DERIVED — every row, at every path it names', () => {
     for (const path of row.paths) {
       it(`${row.type} · ${path} — kept out with ${row.from[0]}, and only then`, () => {
         const canary = `CANARY-${path}`;
-        const payload = plant(path, canary);
+        const payload = plant(path, canary, row.namedBy);
         const served = serving({ keys: [row.from[0]!] }).payload(row.type, payload);
         expect(JSON.stringify(served)).not.toContain(canary);
         expect(JSON.stringify(served)).toContain(SERVED_PLACEHOLDER);
@@ -289,9 +297,76 @@ describe('DERIVED — every row, at every path it names', () => {
         }
         // A policy that names none of its sources leaves the payload as it is.
         expect(serving({ keys: ['nothingThisNames'] }).payload(row.type, payload)).toEqual(payload);
+        // A policy that selects only a FIELD of a source keeps the content out too:
+        // derived prose may quote any part of what it came from.
+        const field = serving({ fields: { [row.from[0]!]: ['anyField'] } }).payload(
+          row.type,
+          payload,
+        );
+        expect(JSON.stringify(field)).not.toContain(canary);
       });
     }
   }
+});
+
+describe('DERIVED — fail closed where the paths cannot vouch', () => {
+  const issue = (path: unknown) => ({
+    toolName: 'lookup',
+    issues: [{ path, value: 'SECRET-QUOTE', expected: 'string' }],
+  });
+  const served = (policy: RedactionPolicy, type: string, payload: unknown) =>
+    JSON.stringify(serving(policy).payload(type, payload));
+
+  it('a quoted argument whose path is missing or not text is kept out', () => {
+    for (const path of [undefined, 42, null]) {
+      expect(
+        served({ keys: ['ssn'] }, 'agentfootprint.validation.args_invalid', issue(path)),
+      ).not.toContain('SECRET-QUOTE');
+    }
+    // A path the rule does not select keeps the quote: it names an argument nobody chose.
+    expect(
+      served({ keys: ['ssn'] }, 'agentfootprint.validation.args_invalid', issue('customer.name')),
+    ).toContain('SECRET-QUOTE');
+    expect(
+      served({ keys: ['ssn'] }, 'agentfootprint.validation.args_invalid', issue('customer.ssn')),
+    ).not.toContain('SECRET-QUOTE');
+  });
+
+  it('a list or record the path cannot walk into is served whole when its owner is kept out', () => {
+    const type = 'agentfootprint.tools.coverage_declared';
+    const odd = [
+      { toolName: 'find', checked: new Set([{ what: 'SECRET-WORDS' }]) },
+      { toolName: 'find', checked: [new Map([['what', 'SECRET-WORDS']])] },
+      { toolName: 'find', checked: { what: 'SECRET-WORDS' } },
+    ];
+    for (const payload of odd) {
+      const out = serving({ keys: ['args'] }).payload(type, payload) as { checked: unknown };
+      expect(
+        out.checked === SERVED_PLACEHOLDER ||
+          JSON.stringify(out.checked) === `["${SERVED_PLACEHOLDER}"]`,
+      ).toBe(true);
+    }
+  });
+
+  it('a rendered-from object the path cannot walk into keeps the rendering out', () => {
+    const payload = {
+      request: { args: new Map([['ssn', '123']]), evidence: { willDo: 'lookup(ssn=123)' } },
+    };
+    const out = serving({ keys: ['ssn'] }).payload('agentfootprint.checkin.request', payload) as {
+      request: { evidence: { willDo: unknown } };
+    };
+    expect(out.request.evidence.willDo).toBe(SERVED_PLACEHOLDER);
+  });
+
+  it('a payload that is not a record is served whole when its derived content is kept out', () => {
+    const type = 'agentfootprint.stream.tool_progress';
+    expect(serving({ keys: ['result'] }).payload(type, ['progress', 'SECRET'])).toBe(
+      SERVED_PLACEHOLDER,
+    );
+    // …and as it is when nothing it derives from is kept out.
+    const list = ['progress'];
+    expect(serving({ keys: ['ssn'] }).payload(type, list)).toBe(list);
+  });
 });
 
 /** A chart whose factory hands back a bare scope — the run wrapper is what is under test. */

@@ -204,6 +204,12 @@ const DERIVED: Readonly<Record<string, readonly Derived[]>> = {
         'semantics.clarify.question',
         'semantics.not_covered',
         ...coverageWords('semantics.coverage', ['checked', 'not_checked', 'cannot_cover']),
+        // A renderer's and a grain's words, and the field names a table is drawn by.
+        'semantics.render.filter_note',
+        'semantics.render.chart_hint',
+        'semantics.render.columns',
+        'semantics.render.sort',
+        'semantics.grain.collapsed',
       ],
       from: ['args', 'result'],
     },
@@ -278,13 +284,21 @@ function withDerivedKeptOut(
   original: unknown,
 ): unknown {
   const entries = DERIVED[type];
-  if (entries === undefined || !isPlainRecord(served)) return served;
+  if (entries === undefined) return served;
+  const decided = entries.map((entry) => ({
+    entry,
+    whole:
+      entry.from.some((name) => sourceKeptOut(rule, name)) ||
+      (entry.namesAt !== undefined && renderedFromKeptOut(served, original, entry.namesAt)),
+  }));
+  if (!isPlainRecord(served)) {
+    // A payload the paths cannot be walked in: whole, when any content in it is kept out.
+    return decided.some((d) => d.whole) && served !== SERVED_PLACEHOLDER
+      ? SERVED_PLACEHOLDER
+      : served;
+  }
   let out: unknown = served;
-  for (const entry of entries) {
-    const whole =
-      entry.from.some((name) => rule.isKeyRedacted(name)) ||
-      (entry.namesAt !== undefined &&
-        valueAt(served, entry.namesAt) !== valueAt(original, entry.namesAt));
+  for (const { entry, whole } of decided) {
     if (!whole && entry.namedBy === undefined) continue;
     const keptOut = (owner: Readonly<Record<string, unknown>>): boolean =>
       whole || (entry.namedBy !== undefined && argumentKeptOut(rule, owner[entry.namedBy]));
@@ -293,11 +307,47 @@ function withDerivedKeptOut(
   return out;
 }
 
-/** The value at the dotted `path` in `node` (`undefined` off the end). */
+/**
+ * Whether the rule keeps out ANY part of the value named `name` — the whole of
+ * it (a key, a pattern on its name, a mark) or fields inside it (`fields`, or
+ * fields a subflow mapper handed it): content the library derives from that
+ * value may quote any part of it, so it is kept out whenever part of the source
+ * is. Asked of the rule's own verdict, never decided here.
+ */
+function sourceKeptOut(rule: RedactionRule, name: string): boolean {
+  return rule.verdict([name]).kind !== 'clear';
+}
+
+/**
+ * Whether the rule kept out anything inside the object at `path` that a value
+ * was rendered from — read off the two payloads (the rule hands an untouched
+ * object back as itself). A path that cannot be walked in either is kept out:
+ * what it rendered cannot be vouched for.
+ */
+function renderedFromKeptOut(served: unknown, original: unknown, path: string): boolean {
+  const before = valueAt(original, path);
+  const after = valueAt(served, path);
+  if (before === UNWALKABLE || after === UNWALKABLE) return true;
+  // An object the rule cannot see into (a Map, a class instance): unvouched.
+  if (before !== null && typeof before === 'object' && !Array.isArray(before)) {
+    if (!isPlainRecord(before)) return true;
+  }
+  return before !== after;
+}
+
+/** {@link valueAt}'s answer for a path that runs into something it cannot walk. */
+const UNWALKABLE: unique symbol = Symbol('unwalkable');
+
+/**
+ * The value at the dotted `path` in `node` — `undefined` off the end of plain
+ * data, {@link UNWALKABLE} where it runs into a value that is not a plain record
+ * (a list, a Map, a class instance).
+ */
 function valueAt(node: unknown, path: string): unknown {
   let at: unknown = node;
   for (const segment of path.split('.')) {
-    if (!isPlainRecord(at)) return undefined;
+    if (at === undefined || at === null) return undefined;
+    if (!isPlainRecord(at)) return UNWALKABLE;
     at = at[segment];
   }
   return at;
@@ -311,8 +361,11 @@ function valueAt(node: unknown, path: string): unknown {
  * path the rule cannot be asked about is kept out (fail closed).
  */
 function argumentKeptOut(rule: RedactionRule, named: unknown): boolean {
-  if (typeof named !== 'string') return false;
+  // No path to ask about (absent, or not text): the value quotes an argument
+  // nobody can name, so it is kept out — fail closed.
+  if (typeof named !== 'string') return true;
   const segments = named.split(/[.[\]]/).filter((name) => name.length > 0);
+  // The arguments' root: the value IS the arguments, kept out with them (`whole`).
   if (segments.length === 0) return false;
   const leaf: unknown = 'value';
   const nested = segments.reduceRight<unknown>((inner, name) => ({ [name]: inner }), leaf);
@@ -339,22 +392,40 @@ function maskAt(
   const list = head.endsWith('[]');
   const key = list ? head.slice(0, -2) : head;
   const child = node[key];
-  if (child === undefined) return node;
+  if (child === undefined || child === null || child === SERVED_PLACEHOLDER) return node;
   let next: unknown = child;
-  if (list) {
-    if (!Array.isArray(child) || rest.length === 0) return node;
-    const items = child.map((item) => maskAt(item, rest, keptOut));
-    if (items.some((item, i) => item !== child[i])) next = items;
-  } else if (rest.length === 0) {
-    if (keptOut(node) && child !== SERVED_PLACEHOLDER) next = SERVED_PLACEHOLDER;
+  if (rest.length === 0) {
+    if (keptOut(node)) next = SERVED_PLACEHOLDER;
+  } else if (list ? !Array.isArray(child) : !isPlainRecord(child)) {
+    // A value the path cannot be walked into (a list where a record belongs,
+    // a Map, a class instance): what it holds cannot be vouched for, so it is
+    // served whole as the placeholder when the owner's content is kept out.
+    if (keptOut(node)) next = SERVED_PLACEHOLDER;
+  } else if (list) {
+    const items = (child as readonly unknown[]).map((item) =>
+      isPlainRecord(item) || item === undefined || item === null
+        ? maskAt(item, rest, keptOut)
+        : keptOut(node)
+        ? SERVED_PLACEHOLDER
+        : item,
+    );
+    if (items.some((item, i) => item !== (child as readonly unknown[])[i])) next = items;
   } else {
     next = maskAt(child, rest, keptOut);
   }
   return next === child ? node : { ...node, [key]: next };
 }
 
-const isPlainRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  value !== null && typeof value === 'object' && !Array.isArray(value);
+/**
+ * Plain data: an object whose prototype is `Object.prototype` or `null` — the
+ * only shape the paths walk into. Anything else (a Map, a Set, a class
+ * instance, an Error) holds what the paths cannot see.
+ */
+const isPlainRecord = (value: unknown): value is Readonly<Record<string, unknown>> => {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+  const proto = Object.getPrototypeOf(value) as unknown;
+  return proto === Object.prototype || proto === null;
+};
 
 /** The meta with its identity served by name; the address untouched. */
 function servedMeta<M extends EventMeta>(rule: RedactionRule, meta: M): M {

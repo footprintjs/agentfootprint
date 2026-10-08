@@ -80,8 +80,15 @@ confirmed by hashing guesses; a checkpoint is not proof — one edited to drop b
 marks, or to carry a narrower one, resumes under what it says; an `LLMCall` or `LlmRouter` takes no
 `redact`, so one run on its own is covered by nothing; a composition does not refuse overlapping
 runs, so run one instance one run at a time; a chart-backed tool's own `$emit` payloads reach the
-recorders handed to that tool as footprintjs serves an emit, by event name. The full table is in
-`src/redaction/README.md`.
+recorders handed to that tool as footprintjs serves an emit, by event name; footprintjs's rule reads a
+value's own enumerable keys, so a Map's or a Set's contents, an Error's `cause`, a non-enumerable key
+or a `toJSON` that writes a privately held name keep a value a by-name policy selects (name the value
+that carries it — `result` — as the vocabulary does); names match exactly. An agent's chart mounted
+into an executor the app built (`getSpec()`) keeps the agent's declared policy on its events — each
+stage of a runner's chart is bound to its runner — while its state follows that executor's own policy.
+Content the library derives from a value is kept out when the rule keeps any part of the source out
+(a `fields` selector included), and served whole as the placeholder where its path cannot be walked.
+The full table is in `src/redaction/README.md`.
 
 Requires footprintjs `^9.44.1` (the peer range rises from `^9.41.0`): the door relies on 9.43.0's
 redaction law, under which pause payloads, thrown values and a subflow mapper's copies are served by
