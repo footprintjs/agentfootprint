@@ -429,6 +429,32 @@ function loadRuleDecoration(deps: SeedStageDeps): Promise<RuleDecoration> | unde
 export function buildSeedStage(
   deps: SeedStageDeps,
 ): (scope: TypedScope<AgentState>) => void | Promise<void> {
+  const body = buildSeedBody(deps);
+  // The run's redaction is committed FIRST — before the input chain, which can
+  // stop or pause the run — so every checkpoint a policy-covered run leaves
+  // carries the policy it was covered by (`Agent · resume` refuses one that
+  // kept names out without it). The body keeps its own shape: sync stays sync.
+  return (scope) => {
+    commitRunRedaction(scope);
+    return body(scope);
+  };
+}
+
+/**
+ * The policy THIS run is covered by — names only, read off the run that owns
+ * this scope, never off the agent instance — committed as `runRedaction`, so a
+ * pause's checkpoint carries it and the resumed leg is covered by it wherever
+ * it resumes (`Agent · resume`). A run covered by none writes nothing: its keys
+ * are unchanged.
+ */
+function commitRunRedaction(scope: TypedScope<AgentState>): void {
+  const runPolicy = policyInForce(scope);
+  if (runPolicy !== undefined) scope.runRedaction = carriedRedactionPolicy(runPolicy);
+}
+
+function buildSeedBody(
+  deps: SeedStageDeps,
+): (scope: TypedScope<AgentState>) => void | Promise<void> {
   const chain = deps.messageMiddleware ?? [];
   const stores = deps.conversationStores ?? [];
   // No chain and no conversation store → the same synchronous function this
@@ -638,12 +664,6 @@ function seedFrom(
   // written before the key existed (`callerIdentity.ts · pausedSessionOf`). A
   // run on the per-run default writes nothing.
   else if (args.identity !== undefined) scope.runSessionId = null;
-  // The policy THIS run is covered by — names only, read off the run that owns
-  // this scope, never off the agent instance — so a pause's checkpoint carries
-  // it and the resumed leg is covered by it wherever it resumes (`Agent ·
-  // resume`). A run covered by none writes nothing: its keys are unchanged.
-  const runPolicy = policyInForce(scope);
-  if (runPolicy !== undefined) scope.runRedaction = carriedRedactionPolicy(runPolicy);
   scope.newMessages = [];
   // WHICH TURN THIS IS (9.6.0). Every release up to 9.5.1 wrote `1` here, on
   // every run — and memory writes key their entries on it (`msg-{turn}-{i}`),
