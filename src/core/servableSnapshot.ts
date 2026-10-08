@@ -96,8 +96,11 @@ export function servableSnapshot(
  * author declared to keep away from the model — plus the CHART's own marks (a
  * per-call `$setValue(key, value, true)`, a subflow mapper's taint): names,
  * run-wide. A mark on a key the caller's policy selects is the caller's (the
- * rule marks a selected key when it is written), so it is left out — the one
- * case it cannot tell apart is a chart that marks a key the caller ALSO names.
+ * rule marks a selected key when it is written), so it is left out — whole-key
+ * and field marks alike. Marks are names, so two cases cannot be told apart: a
+ * chart that marks a key the caller ALSO names (the value reaches the model),
+ * and a mapper's field mark that came from the caller's `fields` onto a key
+ * the caller does not name (the field stays hidden from the model).
  *
  * With no caller policy (`callerPolicy` undefined) this is exactly the served
  * view's state, as before.
@@ -117,10 +120,18 @@ export function modelFacingState(
   const rule = new RedactionRule(toolPolicy);
   const marks = runRule?.marksForCheckpoint();
   if (marks !== undefined) {
+    // A mark on a key the caller's policy selects is the caller's: dropped,
+    // for whole keys and for a mapper's field marks alike.
     const callers = new RedactionRule(callerPolicy);
+    const fields =
+      marks.fields === undefined
+        ? undefined
+        : Object.fromEntries(
+            Object.entries(marks.fields).filter(([key]) => !callers.isKeyRedacted(key)),
+          );
     rule.restoreMarks({
-      ...marks,
       keys: marks.keys.filter((key) => !callers.isKeyRedacted(key)),
+      ...(fields !== undefined && Object.keys(fields).length > 0 && { fields }),
     });
   }
   // The mirror's placeholder: what the served view held where the tool's own

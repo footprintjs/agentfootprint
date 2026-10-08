@@ -88,11 +88,32 @@ interface Derived {
    * name on it — the by-name verdict of the value it was copied from.
    */
   readonly namedBy?: string;
+  /**
+   * A path, from the payload's root, to the object the value was RENDERED from
+   * (a check-in's `willDo` writes the call's arguments as `k=v` text): the
+   * value is kept out too when the rule keeps out any key of that object, at
+   * any depth — the by-name verdict of every value the text can quote.
+   */
+  readonly namesAt?: string;
 }
 
 /** The words a person or the model wrote, wherever the library quotes them. */
 const CONVERSATION_TEXT = ['userMessage', 'message', 'history'] as const;
 const MODEL_TEXT = ['llmLatestContent', 'finalContent', 'content'] as const;
+
+/** A check-in's evidence pack (`core/checkin.ts` · `CheckInRequest`) at `at` in a payload. */
+function checkInPack(at: string): readonly Derived[] {
+  return [
+    { paths: [`${at}.intent`], from: MODEL_TEXT },
+    // `willDo` renders the call's arguments as text: kept out with `args`, or
+    // with any argument name the rule keeps out.
+    { paths: [`${at}.evidence.willDo`], from: ['args'], namesAt: `${at}.args` },
+    {
+      paths: [`${at}.evidence.read[].summary`, `${at}.evidence.drivers[].text`],
+      from: [...CONVERSATION_TEXT, 'result'],
+    },
+  ];
+}
 
 /**
  * The content the library DERIVES from a conversation value and carries under
@@ -132,15 +153,10 @@ const DERIVED: Readonly<Record<string, readonly Derived[]>> = {
     { paths: ['computed[].value', 'computed[].from'], from: [...MODEL_TEXT, 'result'] },
   ],
   // A check-in's evidence pack: the model's words, the rendered arguments, the
-  // context it quotes — and the person's note on the decision.
-  'agentfootprint.checkin.request': [
-    { paths: ['request.intent'], from: MODEL_TEXT },
-    { paths: ['request.evidence.willDo'], from: ['args'] },
-    {
-      paths: ['request.evidence.read[].summary', 'request.evidence.drivers[].text'],
-      from: [...CONVERSATION_TEXT, 'result'],
-    },
-  ],
+  // context it quotes — and the person's note on the decision. The pack rides
+  // the check-in event AND the pause it asks with (`pause.request`'s question).
+  'agentfootprint.checkin.request': checkInPack('request'),
+  'agentfootprint.pause.request': checkInPack('questionPayload.checkIn'),
   'agentfootprint.checkin.decision': [{ paths: ['note'], from: ['resumeInput'] }],
   // Words a matcher found in the conversation; a tool result a route guard judged.
   'agentfootprint.context.evaluated': [
@@ -196,13 +212,42 @@ function withDerivedKeptOut(rule: RedactionRule, type: string, served: unknown):
   if (entries === undefined || !isPlainRecord(served)) return served;
   let out: unknown = served;
   for (const entry of entries) {
-    const whole = entry.from.some((name) => rule.isKeyRedacted(name));
+    const whole =
+      entry.from.some((name) => rule.isKeyRedacted(name)) ||
+      (entry.namesAt !== undefined &&
+        keysAt(served, entry.namesAt).some((name) => rule.isKeyRedacted(name)));
     if (!whole && entry.namedBy === undefined) continue;
     const keptOut = (owner: Readonly<Record<string, unknown>>): boolean =>
       whole || (entry.namedBy !== undefined && namesKeptOut(rule, owner[entry.namedBy]));
     for (const path of entry.paths) out = maskAt(out, path.split('.'), keptOut);
   }
   return out;
+}
+
+/** How deep `keysAt` reads an object's keys — a call's arguments, never a deep tree. */
+const MAX_NAME_DEPTH = 16;
+
+/** Every key, at any depth, of the object at the dotted `path` in `node` (none when it is not one). */
+function keysAt(node: unknown, path: string): string[] {
+  let at: unknown = node;
+  for (const segment of path.split('.')) {
+    if (!isPlainRecord(at)) return [];
+    at = at[segment];
+  }
+  const names: string[] = [];
+  const walk = (value: unknown, depth: number): void => {
+    if (depth > MAX_NAME_DEPTH || value === null || typeof value !== 'object') return;
+    if (Array.isArray(value)) {
+      for (const item of value) walk(item, depth + 1);
+      return;
+    }
+    for (const [key, child] of Object.entries(value)) {
+      names.push(key);
+      walk(child, depth + 1);
+    }
+  };
+  walk(at, 0);
+  return names;
 }
 
 /** Whether a field that names a value (`'customer.ssn'`, `'items[0].pin'`) names one the rule keeps out. */

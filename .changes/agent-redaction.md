@@ -20,9 +20,10 @@ next — joined with the fields your tools name:
 — the turn, tools and argument validation, thinking, asking a person, the inputs layer, structured
 output, memory and RAG, the evidence gate and its figures, check-ins, skill graphs, compositions —
 with a canary in each place and fails if one reaches a record; the run emits the same events with
-and without it. Content the library quotes under names of its own (a validation issue's argument, a
-check-in's evidence, a matcher's witness, a parser's message about the draft) is kept out with the
-value it came from.
+and without it. Content the library quotes in an event under names of its own (a validation
+issue's argument, a check-in's evidence, a matcher's witness, a parser's message about the draft) is
+kept out with the value it came from; a check-in's rendered arguments are kept out by any argument
+name the policy keeps out.
 
 The policy reaches every run the agent's records come from. A composition (`Sequence`,
 `Parallel`, `Conditional`, `Loop`, `Graph`, `Workflow`) adopts its members' policies. A run a tool

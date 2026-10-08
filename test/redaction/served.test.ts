@@ -170,6 +170,41 @@ describe('DERIVED — content the library quotes under names of its own', () => 
     expect(payload.request.intent).toContain('Ada'); // never edited in place
   });
 
+  it('a check-in’s rendered arguments: kept out with any argument name the rule keeps out', () => {
+    const pack = (args: Record<string, unknown>) => ({
+      tool: 'close_account',
+      args,
+      evidence: { willDo: `Close the account. — with ${JSON.stringify(args)}` },
+    });
+    const byName = serving({ patterns: [/ssn/i] });
+    // A top-level argument, and one nested inside another: both are names the text can quote.
+    for (const args of [{ ssn: 'SSN-1', reason: 'x' }, { customer: { ssn: 'SSN-1' } }]) {
+      const checkIn = byName.payload('agentfootprint.checkin.request', {
+        toolName: 'close_account',
+        toolCallId: 't1',
+        iteration: 1,
+        request: pack(args),
+      }) as { request: { evidence: { willDo: string } } };
+      expect(checkIn.request.evidence.willDo).toBe(SERVED_PLACEHOLDER);
+      // The same pack, riding the pause it asks with.
+      const pause = byName.payload('agentfootprint.pause.request', {
+        reason: 'check-in',
+        questionPayload: { toolCallId: 't1', toolName: 'close_account', checkIn: pack(args) },
+      }) as { questionPayload: { checkIn: { evidence: { willDo: string } } } };
+      expect(pause.questionPayload.checkIn.evidence.willDo).toBe(SERVED_PLACEHOLDER);
+    }
+    // No argument the rule names: the text stays, as it is.
+    const plain = pack({ city: 'Paris' });
+    expect(
+      byName.payload('agentfootprint.checkin.request', {
+        toolName: 'close_account',
+        toolCallId: 't1',
+        iteration: 1,
+        request: plain,
+      }),
+    ).toMatchObject({ request: { evidence: { willDo: plain.evidence.willDo } } });
+  });
+
   it('a route guard’s judged result and a matcher’s witness', () => {
     const payload = {
       iteration: 1,

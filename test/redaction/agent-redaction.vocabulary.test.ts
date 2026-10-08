@@ -733,6 +733,78 @@ describe('conversationRedaction() — the value', () => {
   });
 });
 
+describe('a field a tool names is kept out of every event by its name alone', () => {
+  // Not the vocabulary: a policy that names ONE argument field. A check-in's
+  // evidence pack renders the call's arguments as text (`willDo`), so the
+  // text is kept out by the names of the arguments it renders — on the
+  // check-in event and on the pause it asks with (`served.ts` · `DERIVED`).
+  const SSN = 'SSN-CANARY-7788';
+  const closer = (redact: RedactionPolicy | undefined, evidence: 'minimal' | 'standard') =>
+    create(
+      {
+        name: 'mock',
+        complete: async (req: { messages: { role: string }[] }): Promise<LLMResponse> =>
+          req.messages.some((m) => m.role === 'tool')
+            ? {
+                content: 'closed',
+                toolCalls: [],
+                usage: { input: 1, output: 1 },
+                stopReason: 'stop',
+              }
+            : {
+                content: 'Closing it.',
+                toolCalls: [
+                  { id: 't1', name: 'close_account', args: { ssn: SSN, reason: 'asked' } },
+                ],
+                usage: { input: 1, output: 1 },
+                stopReason: 'tool_use',
+              },
+      } as unknown as LLMProvider,
+      redact,
+    )
+      .tool(
+        defineTool<{ ssn: string; reason: string }, string>({
+          name: 'close_account',
+          description: 'Close the account.',
+          inputSchema: {
+            type: 'object',
+            properties: { ssn: { type: 'string' }, reason: { type: 'string' } },
+          },
+          checkIn: 'always',
+          execute: () => 'closed',
+        } as never),
+      )
+      .checkIn({ evidence })
+      .build();
+
+  const eventsOf = async (
+    redact: RedactionPolicy | undefined,
+    evidence: 'minimal' | 'standard',
+  ) => {
+    const agent = closer(redact, evidence);
+    const events: AgentfootprintEvent[] = [];
+    agent.on('*', (e) => events.push(e));
+    const recorder = recordRun(agent);
+    const outcome = await agent.run({ message: 'close my account' });
+    if (!isPaused(outcome)) throw new Error('the case must pause for the check-in');
+    // The caller's own outcome carries the real pack — the person deciding needs it.
+    expect(JSON.stringify(outcome)).toContain(SSN);
+    await agent.resume(outcome.checkpoint, checkInApproved({ by: 'ops' }));
+    return { events, recordingEvents: recorder.toRecording().events };
+  };
+
+  for (const evidence of ['minimal', 'standard'] as const) {
+    it(`${evidence} evidence: no event carries the field's value, the events are the same`, async () => {
+      const control = await eventsOf(undefined, evidence);
+      expect(JSON.stringify(control.events)).toContain(SSN);
+      const served = await eventsOf({ patterns: [/ssn/i] }, evidence);
+      expect(locationsOf(served.events, SSN)).toEqual([]);
+      expect(locationsOf(served.recordingEvents, SSN)).toEqual([]);
+      expect(served.events.map((e) => e.type)).toEqual(control.events.map((e) => e.type));
+    });
+  }
+});
+
 describe('the vocabulary agrees with the audit export on what is content', () => {
   it('every field the audit bounds as content is a name the vocabulary keeps out', () => {
     // Two owners say what is content: the audit export's bounded mode (per

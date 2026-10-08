@@ -337,6 +337,47 @@ describe('a hosted agent: the reply and the session store are the caller’s', (
     expect(leaksIn(filtered)).toEqual([]);
   });
 
+  it('toSSE "text": the same reply, token for token, with and without a policy, inline and deferred', async () => {
+    // Each token's text is matched to its served twin by its address (stage,
+    // iteration, index), never by arrival order: a filter that drops tokens,
+    // or a served token that never arrives, cannot shift the ones after it.
+    const replyOf = async (
+      redact: RedactionPolicy | undefined,
+      observerDelivery: 'inline' | 'deferred',
+      keep: (event: AgentfootprintEvent) => boolean,
+    ) => {
+      const agent = Agent.create({
+        provider: mock({
+          chunkDelayMs: 0,
+          replies: [{ content: `Here it is: ${SECRET.answer}, and that is all.` }],
+        }),
+        model: 'mock',
+        maxIterations: 2,
+        observerDelivery,
+        ...(redact !== undefined && { redact }),
+      }).build();
+      const chunks: string[] = [];
+      const reading = (async () => {
+        for await (const chunk of toSSE(agent, { format: 'text', filter: keep }))
+          chunks.push(chunk);
+      })();
+      await agent.run({ message: MESSAGE });
+      await reading;
+      return chunks;
+    };
+    const everyToken = () => true;
+    const evenTokens = (event: AgentfootprintEvent) =>
+      event.type !== 'agentfootprint.stream.token' ||
+      ((event.payload as { tokenIndex: number }).tokenIndex ?? 0) % 2 === 0;
+    for (const keep of [everyToken, evenTokens]) {
+      const control = await replyOf(undefined, 'inline', keep);
+      expect(control.length).toBeGreaterThan(2);
+      for (const delivery of ['inline', 'deferred'] as const) {
+        expect(await replyOf(conversationPolicy(), delivery, keep)).toEqual(control);
+      }
+    }
+  });
+
   it('no runner method hands out the real values — the live taps are the library’s own', () => {
     // A consumer that could subscribe to the real-value path could wire it to a
     // store or an exporter and turn it into a record. The taps live in an

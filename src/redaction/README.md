@@ -146,19 +146,24 @@ and that the answer account says the question and the answer are kept out.
    artifact facts, the run manifest, `context.*`, `error.fatal`) and the identity
    on every event's meta, by the same rule.
 4. **Derived fields** (`served.ts` · `DERIVED`): content the library computes
-   from another value and carries under a name of its own is served as the
-   placeholder whenever the rule keeps a value it came from out — a parser's
-   message quotes the model's draft (`rawOutput`); a validation issue, an
-   external ground and an assumed value quote an argument (`args`, or the
+   from another value and carries under a name of its own IN AN EVENT is served
+   as the placeholder whenever the rule keeps a value it came from out — a
+   parser's message quotes the model's draft (`rawOutput`); a validation issue,
+   an external ground and an assumed value quote an argument (`args`, or the
    argument's own name on the row); a check-in's evidence pack quotes the
-   model, the arguments and the conversation; a matcher's witness quotes the
+   model, the arguments (its `willDo` text is kept out by ANY argument name the
+   rule keeps out — on the check-in event and on the pause it asks with) and the
+   conversation; a matcher's witness quotes the
    person's words; a route guard's summary and a tool's progress report quote a
    result, a figure the answer computed quotes the answer and its results; a
    retrieved passage's heading quotes what was retrieved. Generic names
    (`value`, `note`, `text`) are never put on a policy — selected by name they
    would hide structure in every event.
    footprintjs's taint rule for a mapper's computed copy, applied to the
-   library's own copies; still the rule's verdict, by name.
+   library's own copies; still the rule's verdict, by name. A copy the library
+   keeps in STATE (the turn's routing verdict `turnRoute`, a map's
+   `mapEngagement`) is a state key, kept out by its own name — the vocabulary
+   names both.
 5. **Relayed writes** (`setEventSource`): the context recorder derives
    `context.injected` / `slot_composed` / `budget_pressure` from the slots'
    writes, and a selected key's write reaches recorders as the placeholder. The
@@ -274,6 +279,19 @@ bytes, for any recording — an agent's or a chart's.)
   metered while `activeInjections` is kept out (above, `RecordedRun.unmetered`):
   their gates keep offering them rather than judge on what the record cannot
   show.
+- **A chart-backed tool's narrative.** What `flowchartAsTool` hands a
+  `resultMapper` as `snapshot.narrative` is the inner run's narrative, written
+  through the run's rule — under the UNION, the caller's policy too. A mapper
+  that quotes it hands the model the placeholder where the caller's names were;
+  the state it reads (`snapshot.values`) is the model's view, above.
+- **Two copies of the package.** The live taps are a module's own registry
+  (`core/runnerLive.ts`), so a runner built by one copy of agentfootprint (CJS
+  and ESM loaded side by side, two installed versions) is not read live by the
+  other: `standingAgent` refuses it, `toSSE({ format: 'text' })` streams the
+  served tokens, the context ledger counts the served record.
+- **A recording without its snapshot.** The marker rides the snapshot's
+  `recorders`; an events-only recording carries none, so a reader quotes a
+  placeholder there as it stands.
 - **A late fact of an earlier run.** A fact a runner dispatches after its next
   run opened (a host's artifact fact, a teardown fact) is served under the run
   in force — the same declared policy, but not the per-run `redact` names the
