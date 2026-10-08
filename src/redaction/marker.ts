@@ -36,15 +36,25 @@ export function isPlaceholder(value: unknown): boolean {
 }
 
 /**
- * The marker for a run's executor. It observes nothing (one no-op hook, so
- * footprintjs lists it) and contributes one row to the served snapshot's
- * `recorders`.
+ * The marker for a run's executor. It contributes one row to the served
+ * snapshot's `recorders`, and tells the run when it has SETTLED — finished,
+ * failed or paused (`onSettled`) — so the run's serving can let go of what
+ * only the live run needed (`runRedaction.ts` · `retiredRule`).
  */
-export function redactionMarker(): CombinedRecorder {
+export function redactionMarker(onSettled: () => void = () => undefined): CombinedRecorder {
   return {
     id: REDACTION_MARKER_ID,
     onRunStart(): void {
-      // Nothing to observe: the bundle below is the whole point.
+      // Nothing to observe at the start: the bundle below is the sign.
+    },
+    onRunEnd(): void {
+      onSettled();
+    },
+    onRunFailed(): void {
+      onSettled();
+    },
+    onPause(): void {
+      onSettled();
     },
     toSnapshot: () => ({
       name: 'Redaction',

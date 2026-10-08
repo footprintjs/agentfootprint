@@ -26,7 +26,8 @@ import { mock } from '../../src/doors/providers.js';
 import { recordRun } from '../../src/doors/observe.js';
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
 import { EventDispatcher } from '../../src/events/dispatcher.js';
-import { servingAhead } from '../../src/redaction/runRedaction.js';
+import { retiredRule, servingAhead } from '../../src/redaction/runRedaction.js';
+import { RedactionRule } from 'footprintjs/advanced';
 import { carriedConversationPolicy, locationsOf } from './fixture.js';
 
 /** An agent that calls `lookup` with `field: secret`, then answers. */
@@ -342,6 +343,51 @@ describe('(b, d) the registries the redaction keeps: weak, keyed by identity, no
         expect(line, file).not.toMatch(/=\s*\[\s*\]\s*;?$/);
       }
     }
+  });
+
+  it('a settled run’s serving keeps the rule’s NAMES only — never a thrown value', () => {
+    const live = new RedactionRule({ keys: ['ssn'] });
+    live.mark('accountNo');
+    // footprintjs remembers the masked form of a thrown value it served — keyed
+    // by the thrown value itself.
+    const thrown = Object.assign(new Error('lookup failed'), { ssn: 'SSN-THROWN-8300' });
+    live.retainStageError(thrown, 'lookup failed', 'lookup failed');
+    const cache = (rule: RedactionRule) =>
+      (rule as unknown as { maskedErrors?: Map<unknown, unknown> }).maskedErrors;
+    expect(cache(live)?.has(thrown)).toBe(true);
+    const retired = retiredRule(live, { keys: ['ssn'] });
+    // The names stay: the policy's and the run's marks.
+    expect(retired.isKeyRedacted('ssn')).toBe(true);
+    expect(retired.isKeyRedacted('accountNo')).toBe(true);
+    expect(retired.marksForCheckpoint()).toEqual(live.marksForCheckpoint());
+    // The thrown value does not.
+    expect(cache(retired)).toBeUndefined();
+  });
+
+  it('a covered run retires its rule when it settles — its late facts keep its names', async () => {
+    const agent = Agent.create({
+      provider: mock({ chunkDelayMs: 0, reply: 'ok' }),
+      model: 'm',
+      redact: { keys: ['ssn'] },
+    }).build();
+    const events: AgentfootprintEvent[] = [];
+    agent.on('*', (e) => events.push(e));
+    await agent.run({ message: 'go' });
+    const runId = (events[0]?.meta as { runId: string }).runId;
+    // The executor's own LIVE rule, marked after the run settled: a serving that
+    // still held it would now keep `pin` out of the run's late facts too.
+    const executor = (agent as unknown as { lastExecutor: FlowChartExecutor }).lastExecutor;
+    const live = executor.getRuntime().rootStageContext.getRedactionRule();
+    expect(live).toBeDefined();
+    live?.mark('pin');
+    agent.emitAttributed(
+      'app.late_fact',
+      { ssn: 'SSN-RETIRED-8400', pin: 'PIN-8401' },
+      { sessionId: 's', runId },
+    );
+    const fact = events.find((e) => (e.type as string) === 'app.late_fact');
+    // Its names stay (the policy's `ssn`); the live rule is no longer read.
+    expect(fact?.payload).toEqual({ ssn: '[REDACTED]', pin: 'PIN-8401' });
   });
 
   it('served.ts keeps nothing at module scope but frozen constants', () => {

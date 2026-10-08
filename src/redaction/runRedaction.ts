@@ -239,7 +239,13 @@ export function createRunRedaction(args: {
       executor.setRedactionPolicy(policy);
       // The served snapshot says so itself (`marker.ts`): readers of the record
       // read a placeholder as kept out only when a policy covered the run.
-      executor.attachCombinedRecorder(redactionMarker());
+      // Once the run settles, its serving — kept by the dispatcher for the
+      // run's late facts — holds the rule's NAMES only (`retiredRule`).
+      executor.attachCombinedRecorder(
+        redactionMarker(() => {
+          decided.rule = retiredRule(decided.rule, policy);
+        }),
+      );
     },
     takeRealWrite(runtimeStageId, key) {
       const at = slot(runtimeStageId, key);
@@ -250,6 +256,26 @@ export function createRunRedaction(args: {
       return written;
     },
   };
+}
+
+/**
+ * A settled run's rule as its serving keeps it: the policy and the marks —
+ * names only — and nothing else of the run. footprintjs's rule also remembers
+ * the masked form of every thrown value it served (so `onRunFailed`, the
+ * logger and a fork envelope agree); the live run needed that, a late fact
+ * does not, and keeping it would keep each run's thrown values reachable for
+ * as long as the dispatcher keeps the run's serving.
+ *
+ * @internal — exported for the test that pins it.
+ */
+export function retiredRule(
+  rule: RedactionRule,
+  policy: RedactionPolicy | undefined,
+): RedactionRule {
+  const names = new RedactionRule(policy);
+  const marks = rule.marksForCheckpoint();
+  if (marks !== undefined) names.restoreMarks(marks);
+  return names;
 }
 
 /**
