@@ -1,0 +1,408 @@
+/**
+ * Property — over the Agent's WHOLE public surface: a value the policy selects
+ * appears in no record the agent retains or serves, while the live model input
+ * still holds it.
+ *
+ * Per seeded case: a random field name and a random secret, selected by a
+ * random form footprintjs offers (a key, a pattern, a `fields` selector) and
+ * joined with the conversation's names (`conversationRedaction` — a value the
+ * person, the model or a tool writes travels as TEXT too, and text is kept out
+ * only by naming the keys it travels under). The tool takes the secret as a
+ * nested argument and returns it; the person's message carries it too.
+ *
+ * Every public member is classified by type
+ * (`test/type-regressions/AgentRedactionSurface.completeness.test.ts`); every
+ * `'record'` and `'structure'` member is exercised here — directly, or through
+ * the surfaces it feeds (events for `on`/`once`, recorder rows for `attach`,
+ * the strategies for `enable`, the trace toolpack for `bindSelfExplain`) — and
+ * none may hold the secret. The `'callers-own'` members are the live control:
+ * the provider's requests and `checkpoint()` DO hold it.
+ *
+ * Reproduce a failure with the seed printed in the test name.
+ */
+import type { RedactionPolicy } from 'footprintjs';
+import { describe, expect, it } from 'vitest';
+
+import { Agent, defineTool, inMemoryArtifacts } from '../../src/index.js';
+import type { LLMProvider, LLMRequest } from '../../src/adapters/types.js';
+import { ALL_EVENT_TYPES, type AgentfootprintEvent } from '../../src/events/registry.js';
+import { mock } from '../../src/doors/providers.js';
+import { conversationRedaction } from '../../src/doors/security.js';
+import { AGENT_PUBLIC_SURFACE } from '../type-regressions/AgentRedactionSurface.completeness.test.js';
+import { adversarialStrings, locationsOf, withoutAnswerBoundary } from './fixture.js';
+import type { ToolProvider } from '../../src/tool-providers/types.js';
+import { everySurface, servedArtifacts } from './everySurface.js';
+
+/** mulberry32 — the suite's seeded PRNG (`agent-redaction.property.test.ts`). */
+function rng(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const FIELDS = ['pin', 'token', 'accountNo', 'dob', 'passport', 'iban', 'badge', 'vin'] as const;
+const SCOPE = { conversationId: 'surface-case' };
+
+interface Case {
+  readonly seed: number;
+  readonly field: string;
+  readonly secret: string;
+  readonly form: 'key' | 'pattern' | 'fields';
+  readonly policy: RedactionPolicy;
+}
+
+function caseFor(seed: number): Case {
+  const next = rng(seed);
+  const field = FIELDS[Math.floor(next() * FIELDS.length)] as string;
+  const secret = `SEC${seed}X${Math.floor(next() * 1e9)
+    .toString(36)
+    .toUpperCase()}`;
+  const form = (['key', 'pattern', 'fields'] as const)[Math.floor(next() * 3)]!;
+  const selector: RedactionPolicy =
+    form === 'key'
+      ? { keys: [field] }
+      : form === 'pattern'
+      ? { patterns: [new RegExp(`^${field}$`)] }
+      : { fields: { customer: [field] } };
+  return { seed, field, secret, form, policy: conversationRedaction(selector) };
+}
+
+/** The agent under test, with the live model input tapped. */
+function agentFor(c: Case) {
+  const requests: string[] = [];
+  const inner = mock({
+    chunkDelayMs: 0,
+    replies: [
+      {
+        toolCalls: [
+          { id: 'c1', name: 'lookup', args: { customer: { [c.field]: c.secret, name: 'Ada' } } },
+        ],
+      },
+      { content: 'Done.' },
+    ],
+  });
+  const provider: LLMProvider = {
+    name: inner.name,
+    complete: async (req: LLMRequest) => {
+      requests.push(JSON.stringify(req));
+      return inner.complete(req);
+    },
+  } as LLMProvider;
+  const store = inMemoryArtifacts();
+  const agent = Agent.create({
+    provider,
+    model: 'm',
+    redact: c.policy,
+    artifacts: { store, recordings: true },
+  })
+    .tool(
+      defineTool<{ customer: Record<string, string> }, unknown>({
+        name: 'lookup',
+        description: 'Look a customer up.',
+        inputSchema: {
+          type: 'object',
+          properties: { customer: { type: 'object' } },
+          required: ['customer'],
+        },
+        execute: ({ customer }) => ({ customer: { [c.field]: customer[c.field] }, ok: true }),
+      }),
+    )
+    .build();
+  return { agent, requests, store };
+}
+
+describe('property — the Agent public surface keeps a selected value out of every record', () => {
+  for (const seed of [1, 2, 3, 5, 8, 13, 21, 34, 55, 89]) {
+    const c = caseFor(seed);
+    it(`seed ${seed} (${c.form} ${c.field})`, async () => {
+      const { agent, requests, store } = agentFor(c);
+      const surfaced = await everySurface(agent, `Check my ${c.field}: ${c.secret}`, SCOPE);
+      const artifacts = await servedArtifacts(surfaced);
+
+      // A consumer's own emits are served too — by the selected name.
+      const emitted: AgentfootprintEvent[] = [];
+      agent.on('*', (e) => emitted.push(e));
+      agent.emit('app.custom', { customer: { [c.field]: c.secret } });
+
+      // Every 'record' and 'structure' member, exercised.
+      const exercised: Record<string, unknown> = {
+        getLastSnapshot: agent.getLastSnapshot(),
+        getSnapshot: agent.getSnapshot(),
+        getLastNarrativeEntries: agent.getLastNarrativeEntries(),
+        on: surfaced.events,
+        once: surfaced.events,
+        attach: surfaced.attached,
+        enable: [
+          artifacts.trace,
+          artifacts.stepGraph,
+          artifacts.console,
+          artifacts.file,
+          artifacts.audit,
+          artifacts.otel,
+        ],
+        emit: emitted,
+        emitAttributed: emitted,
+        // The agent's own minted recording, read back from its artifact store.
+        getArtifactStore: await mintedRecordings(store),
+        bindSelfExplain: artifacts.traceToolpack,
+        id: agent.id,
+        name: agent.name,
+        appName: agent.appName,
+        getCommitCount: agent.getCommitCount(),
+        getSpec: safeJson(agent.getSpec()),
+        getUIGroup: safeJson(agent.getUIGroup()),
+        getUIGroupWith: safeJson(agent.getUIGroupWith((metadata) => metadata)),
+        getSystemPromptCachePolicy: agent.getSystemPromptCachePolicy(),
+        commentaryTemplates: agent.commentaryTemplates,
+        thinkingTemplates: agent.thinkingTemplates,
+        ownsEvent: surfaced.events.map((e) => agent.ownsEvent(e)),
+        listenerCount: agent.listenerCount(),
+        canExplain: agent.canExplain(),
+      };
+      for (const [member, kind] of Object.entries(AGENT_PUBLIC_SURFACE)) {
+        if (kind === 'record' || kind === 'structure') {
+          expect(Object.keys(exercised), `${member} is not exercised`).toContain(member);
+        }
+      }
+
+      const holding = Object.entries({ ...exercised, ...artifacts })
+        .filter(([, value]) => locationsOf(withoutAnswerBoundary(value), c.secret).length > 0)
+        .map(([name]) => name);
+      expect(holding).toEqual([]);
+
+      // The live control: the model's input and the caller's own continuation hold it.
+      expect(requests.join('\n')).toContain(c.secret);
+      expect(JSON.stringify(agent.checkpoint())).toContain(c.secret);
+    });
+  }
+});
+
+/**
+ * The route decider's own events — `route_decided` with its rationale, the
+ * limit and budget it reports when a turn runs out, every cost tick — under
+ * the same random policies: a turn whose model keeps asking for the tool with
+ * the secret, cut short by `maxIterations`, priced. Each event leaves through
+ * the served path (`emitServed`), and none may hold the secret; the provider's
+ * requests do.
+ */
+describe('property — the route, cost and budget events keep a selected value out', () => {
+  for (const seed of [1, 3, 8, 21, 55]) {
+    const c = caseFor(seed);
+    it(`seed ${seed} (${c.form} ${c.field})`, async () => {
+      const requests: string[] = [];
+      const provider: LLMProvider = {
+        name: 'never-finishes',
+        complete: async (req: LLMRequest) => {
+          requests.push(JSON.stringify(req));
+          // The wrap-up call is the one offered no tools.
+          if ((req.tools?.length ?? 0) === 0) {
+            return {
+              content: 'Out of steps.',
+              toolCalls: [],
+              usage: { input: 3, output: 2 },
+              stopReason: 'stop',
+            };
+          }
+          return {
+            content: '',
+            toolCalls: [
+              {
+                id: `c${requests.length}`,
+                name: 'lookup',
+                args: { customer: { [c.field]: c.secret } },
+              },
+            ],
+            usage: { input: 3, output: 2 },
+            stopReason: 'tool_use',
+          };
+        },
+      };
+      const agent = Agent.create({
+        provider,
+        model: 'm',
+        redact: c.policy,
+        pricingTable: { name: 'flat', pricePerToken: () => 0.001 },
+      })
+        .tool(
+          defineTool<{ customer: Record<string, string> }, unknown>({
+            name: 'lookup',
+            description: 'Look a customer up.',
+            inputSchema: { type: 'object', properties: { customer: { type: 'object' } } },
+            execute: ({ customer }) => ({ customer, ok: true }),
+          }),
+        )
+        .maxIterations(2)
+        .build();
+      const events: AgentfootprintEvent[] = [];
+      agent.on('*', (e) => events.push(e));
+      await agent.run({ message: `Check my ${c.field}: ${c.secret}` });
+
+      const types = new Set(events.map((e) => e.type));
+      for (const type of [
+        'agentfootprint.agent.route_decided',
+        'agentfootprint.cost.limit_hit',
+        'agentfootprint.agent.budget_exhausted',
+        'agentfootprint.cost.tick',
+      ]) {
+        expect(types.has(type as AgentfootprintEvent['type']), type).toBe(true);
+      }
+      const route = events.filter((e) => e.type === 'agentfootprint.agent.route_decided');
+      expect(
+        route.every((e) => typeof (e.payload as { rationale?: unknown }).rationale === 'string'),
+      ).toBe(true);
+      expect(locationsOf(withoutAnswerBoundary(events), c.secret)).toEqual([]);
+      expect(locationsOf(withoutAnswerBoundary(agent.getLastSnapshot()), c.secret)).toEqual([]);
+      // The live control: the model's input holds it.
+      expect(requests.join('\n')).toContain(c.secret);
+    });
+  }
+});
+
+/**
+ * EVERY event type in the registry, filed through the agent's own dispatcher
+ * — the consumer door (`emit`) and the hosting door for the agent's own last
+ * run (`emitAttributed`) — under seeded random policies that keep the
+ * conversation out, each payload carrying the secret and adversarial strings
+ * (a name the model made up, a prefix, a case variant, a homoglyph, a trailing
+ * space, a zero-width character, a non-NFC spelling, an over-long name, a
+ * path with an injected segment) as values at every depth and as KEYS. The
+ * value-kind rule (`redaction/knownStrings.ts`): every type is delivered, no
+ * adversarial string survives anywhere, the secret appears nowhere — and the
+ * library's words and field names do. The agent's own tool name is no
+ * library word: it is the placeholder too.
+ */
+describe('property — every event type in the registry, under the value-kind rule', () => {
+  /** Every string in `value` — values and keys. */
+  const stringsIn = (value: unknown): Set<string> => {
+    const out = new Set<string>();
+    const walk = (node: unknown): void => {
+      if (typeof node === 'string') {
+        out.add(node);
+        return;
+      }
+      if (node === null || typeof node !== 'object') return;
+      if (Array.isArray(node)) return node.forEach(walk);
+      for (const [key, child] of Object.entries(node as Record<string, unknown>)) {
+        out.add(key);
+        walk(child);
+      }
+    };
+    walk(value);
+    return out;
+  };
+
+  /** A payload with the secret and the adversarial strings everywhere they could ride. */
+  const plantedPayload = (c: Case, adversarial: readonly string[]): Record<string, unknown> => ({
+    toolName: `lookup_${c.secret}`,
+    status: 'ok',
+    iteration: 2,
+    tools: ['lookup', ...adversarial],
+    semantics: { facts: adversarial.map((text) => ({ entity: text, value: text })) },
+    withheldReasons: Object.fromEntries(adversarial.map((text) => [text, 1])),
+    customer: { [c.field]: c.secret },
+    [`note for ${c.secret}`]: 'a key that is data',
+  });
+
+  for (const seed of [1, 2, 3, 5, 8]) {
+    const c = caseFor(seed);
+    it(`seed ${seed} (${c.form} ${c.field})`, async () => {
+      const { agent } = agentFor(c);
+      const ran: AgentfootprintEvent[] = [];
+      const stop = agent.on('*', (e) => ran.push(e));
+      await agent.run({ message: `Check my ${c.field}: ${c.secret}`, identity: SCOPE });
+      stop();
+      const runId = (ran[0]?.meta as { runId?: string } | undefined)?.runId;
+      expect(typeof runId).toBe('string');
+
+      const adversarial = adversarialStrings(c.secret);
+      const served: AgentfootprintEvent[] = [];
+      agent.on('*', (e) => served.push(e));
+      for (const type of ALL_EVENT_TYPES) {
+        agent.emit(type, plantedPayload(c, adversarial));
+        agent.emitAttributed(type, plantedPayload(c, adversarial), {
+          sessionId: 's',
+          runId: runId as string,
+        });
+      }
+      expect(served).toHaveLength(ALL_EVENT_TYPES.length * 2);
+      expect(new Set(served.map((e) => e.type))).toEqual(new Set(ALL_EVENT_TYPES));
+      const payloads = served.map((e) => e.payload);
+      expect(locationsOf(payloads, c.secret)).toEqual([]);
+      const survived = stringsIn(payloads);
+      expect(adversarial.filter((text) => survived.has(text))).toEqual([]);
+      // What the rule keeps: a library word, a field name — never the tool's name.
+      expect(survived.has('ok')).toBe(true);
+      expect(survived.has('withheldReasons')).toBe(true);
+      expect(survived.has('lookup')).toBe(false);
+    });
+  }
+
+  it('a tool a provider lists is content in every run', async () => {
+    const provider: ToolProvider = {
+      id: 'listing',
+      list: () => [
+        {
+          schema: {
+            name: 'listed_later',
+            description: 'A tool a server lists.',
+            inputSchema: { type: 'object', properties: { q: { type: 'string' } } },
+          },
+          execute: () => 'ok',
+        },
+      ],
+    } as unknown as ToolProvider;
+    const agent = Agent.create({
+      provider: mock({
+        chunkDelayMs: 0,
+        replies: [
+          { toolCalls: [{ id: 'c1', name: 'listed_later', args: { q: 'x' } }] },
+          { content: 'done' },
+          { toolCalls: [{ id: 'c2', name: 'listed_later', args: { q: 'y' } }] },
+          { content: 'done again' },
+        ],
+      }),
+      model: 'm',
+      redact: conversationRedaction(),
+    })
+      .toolProvider(provider)
+      .build();
+    const names = async () => {
+      const events: AgentfootprintEvent[] = [];
+      const stop = agent.on('*', (e) => events.push(e));
+      await agent.run({ message: 'go' });
+      stop();
+      return events
+        .filter((e) => e.type === 'agentfootprint.stream.tool_start')
+        .map((e) => (e.payload as { toolName: unknown }).toolName);
+    };
+    // No name is a library word: a listed tool's name is the placeholder.
+    expect(await names()).toEqual(['[REDACTED]']);
+    expect(await names()).toEqual(['[REDACTED]']);
+  });
+});
+
+/** Every artifact the run filed under its scope (its minted recording), read back. */
+async function mintedRecordings(store: ReturnType<typeof inMemoryArtifacts>): Promise<unknown[]> {
+  const page = await store.list(SCOPE);
+  const out: unknown[] = [];
+  for (const meta of page.artifacts) {
+    const record = await store.get(SCOPE, meta.ref);
+    out.push(record?.data);
+  }
+  expect(out.length).toBeGreaterThan(0);
+  return out;
+}
+
+/** A value as JSON, or its error, never a throw (a chart's spec can hold functions). */
+function safeJson(value: unknown): unknown {
+  try {
+    return JSON.parse(JSON.stringify(value ?? null)) as unknown;
+  } catch (e) {
+    return String(e);
+  }
+}

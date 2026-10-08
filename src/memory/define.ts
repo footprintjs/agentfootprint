@@ -25,12 +25,14 @@
  *
  * @see ./define.types.ts        for the const-objects + types
  * @see ./asRoleRefusal.ts       for why `asRole` is refused, not honoured
+ * @see ./redactRefusal.ts       for why `redact` is refused, not implemented
  * @see ./pipeline/*.ts          for the existing pipeline factories this dispatches to
  */
 
 import type { LLMProvider } from '../adapters/types.js';
 
 import { refuseAsRole } from './asRoleRefusal.js';
+import { refuseMemoryRedact } from './redactRefusal.js';
 import { assertStrategyRequirements, assertStrategyShape } from './strategies.js';
 import { resolveRankingMode } from './store/capability.js';
 
@@ -147,7 +149,6 @@ export function defineMemory(options: DefineMemoryOptions): MemoryDefinition {
     // own instance at the agent's own model — a check only the builder can
     // make. See `MemoryDefinition.billing`.
     ...(billing !== undefined && { billing }),
-    ...(options.redact !== undefined && { redact: options.redact }),
     ...(options.corpus !== undefined && { corpus: options.corpus }),
     ...(options.flavor !== undefined && { flavor: options.flavor }),
     ...(options.type === MEMORY_TYPES.CAUSAL &&
@@ -169,6 +170,9 @@ function validate(options: DefineMemoryOptions): void {
   // casts. Refused before anything else is validated so the message is
   // about the option the caller actually wrote.
   refuseAsRole(options, `defineMemory('${options.id}')`);
+  // `redact` no longer type-checks either; same reason, same placement — it
+  // was reserved and read by nothing (`./redactRefusal.ts`).
+  refuseMemoryRedact(options, `defineMemory('${options.id}')`);
   if (!options.store) {
     throw new Error(
       `defineMemory[id=${options.id}]: \`store\` is required. ` +

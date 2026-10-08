@@ -183,8 +183,10 @@ When you want the run, record it and use step 2a.
 A live, in-process model is fine to hold raw, but **serializing is a
 trust-boundary crossing** — the artifact can travel. So redaction runs at
 `getTrace()`, and the result is **self-describing**: `trace.redaction` is
-`'pii'` when a `redact` ran, `'none'` when it didn't. When a Trace carries raw
-content, `<Replay>` shows a banner so a shared trace is never mistaken for safe.
+`'pii'` when a `redact` ran, `'policy'` when the run itself was covered by an
+agent's `redact` policy (every event was served under it), `'none'` when
+neither did. When a Trace carries raw content, `<Replay>` shows a banner so a
+shared trace is never mistaken for safe.
 
 | You want… | Call |
 |---|---|
@@ -198,8 +200,10 @@ surface to leak.
 
 `redact` runs **per domain event**, which is exactly why `includeSnapshot` is
 opt-in: a snapshot's shared state is the run's raw working memory, and no
-per-event function can reach inside it. Redact that half at run time with
-footprintjs's `setRedactionPolicy()`, where the values are written.
+per-event function can reach inside it. Redact that half at run time, where
+the values are written: for an agent, `Agent.create({ redact })` (see
+[Keep personal data out of the record](doc:security#keep-personal-data-out-of-the-record));
+for a bare chart, footprintjs's `setRedactionPolicy()`.
 
 ## What a recording honestly cannot show
 

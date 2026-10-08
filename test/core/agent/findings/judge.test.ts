@@ -32,6 +32,7 @@ import {
   type JudgmentRow,
   type StandingRow,
 } from '../../../../src/core/agent/findings/types.js';
+import { noPolicyScope } from '../../../helpers/noPolicy.js';
 
 /** The 2026-09-17 probe, mapped as `typesafe()` maps it (latency measured by the adapter). */
 const PROBE: ClassifyResult = {
@@ -61,11 +62,12 @@ const BASIS: BasisRow = {
 
 function scopeWith(rows: readonly FindingsRow[] = [], userMessage = 'why is fc1/7 down?') {
   const events: { name: string; payload: unknown }[] = [];
-  const scope: JudgeScope = {
+  // A run with no policy: its events are served as made.
+  const scope: JudgeScope = noPolicyScope<JudgeScope>({
     findingsLedger: rows,
     userMessage,
     $emit: (name, payload) => events.push({ name, payload }),
-  };
+  });
   return { scope, events };
 }
 

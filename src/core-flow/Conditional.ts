@@ -22,6 +22,7 @@ import {
   type StructureRecorder,
   type TypedScope,
 } from 'footprintjs';
+import type { RedactionPolicy } from 'footprintjs';
 import type { GroupMember, GroupMetadata, GroupTranslator } from '../core/translator.js';
 import type { RunnerPauseOutcome } from '../core/pause.js';
 import type { Runner } from '../core/runner.js';
@@ -35,6 +36,7 @@ import { compositionRecorder } from '../recorders/core/CompositionRecorder.js';
 import { typedEmit } from '../recorders/core/typedEmit.js';
 import { carryVerdict, childOutcome, raiseChildVerdict } from './childOutcome.js';
 import { composedInput, readsMessageFromIfAny } from '../core/messageFrom.js';
+import { adoptMemberRedaction } from '../redaction/declared.js';
 
 export interface ConditionalOptions {
   readonly name?: string;
@@ -121,6 +123,12 @@ export class Conditional extends RunnerBase<ConditionalInput, ConditionalOutput>
       this,
       branches.map((b) => b.runner),
     );
+    // A branch's redaction policy covers this composition's run — the chosen
+    // branch runs on its executor (`src/redaction/declared.ts`).
+    adoptMemberRedaction(
+      this,
+      branches.map((b) => b.runner),
+    );
     this.fallbackId = fallbackId;
     // Eager chart construction — see `RunnerBase.initChart` JSDoc.
     this.initChart(() => this.buildChart());
@@ -178,26 +186,38 @@ export class Conditional extends RunnerBase<ConditionalInput, ConditionalOutput>
     input?: unknown,
     options?: RunOptions,
   ): Promise<ConditionalOutput | RunnerPauseOutcome> {
-    this.emitPauseResume(checkpoint, input);
-    const executor = this.createExecutor();
+    // The leg's policy — the paused run's marks — goes to ITS executor, never via the instance.
+    const resumeLeg = this.emitPauseResume(checkpoint, input);
+    const executor = this.createExecutor(resumeLeg);
+    this.lastExecutor = executor;
     const result = await executor.resume(checkpoint, input, withRunSignalInEnv(options));
     return this.finalizeResult(executor, result);
   }
 
-  private createExecutor(): FlowChartExecutor {
+  private createExecutor(resumeLeg?: RedactionPolicy): FlowChartExecutor {
     this.currentRunContext = {
       runStartMs: Date.now(),
       runId: makeRunId(),
       compositionPath: [`Conditional:${this.id}`],
     };
 
+    // THIS run's context, captured: a run that overlaps it on this instance
+    // never restamps its events, so each is served under its own run's policy.
+    const runContext = this.currentRunContext;
+    const getRunCtx = (): RunContext => runContext;
+    // The run's redaction (`src/redaction/`): every policy a branch declared.
+    const redaction = this.openRunRedaction(resumeLeg, getRunCtx);
+
     // Reuse the cached chart built at constructor time.
-    const executor = new FlowChartExecutor(this.getSpec());
+    const spec = this.getSpec();
+    const executor = new FlowChartExecutor(spec, { scopeFactory: redaction.scopeFactoryFor(spec) });
+    redaction.applyTo(executor);
 
     const dispatcher = this.getDispatcher();
-    const getRunCtx = (): RunContext => this.currentRunContext;
 
-    executor.attachCombinedRecorder(new ContextRecorder({ dispatcher, getRunContext: getRunCtx }));
+    executor.attachCombinedRecorder(
+      new ContextRecorder({ dispatcher, getRunContext: getRunCtx, realWrites: redaction }),
+    );
     executor.attachCombinedRecorder(streamRecorder({ dispatcher, getRunContext: getRunCtx }));
     executor.attachCombinedRecorder(agentRecorder({ dispatcher, getRunContext: getRunCtx }));
     executor.attachCombinedRecorder(compositionRecorder({ dispatcher, getRunContext: getRunCtx }));

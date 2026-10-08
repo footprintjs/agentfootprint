@@ -1,0 +1,3577 @@
+[
+ {
+  "type": "agentfootprint.agent.run_configured",
+  "payload": {
+   "agentId": "agent",
+   "llm": {
+    "provider": "mock",
+    "model": "m"
+   },
+   "reactMode": "dynamic",
+   "memories": []
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "run-configured#0",
+   "subflowPath": [],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.agent.turn_start",
+  "payload": {
+   "turnIndex": 0,
+   "userPrompt": "Check SSN-NOPOLICY-1 for me."
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#2",
+    "logRunId": "run#2",
+    "drillPath": [],
+    "committedThroughIdx": -1
+   },
+   "runtimeStageId": "seed#0",
+   "subflowPath": [],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.context.evaluated",
+  "payload": {
+   "iteration": 1,
+   "activeCount": 0,
+   "skippedCount": 0,
+   "evaluatedTotal": 0,
+   "activeIds": [],
+   "skippedDetails": [],
+   "triggerKindCounts": {},
+   "skillCatalog": []
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#2",
+    "logRunId": "run#2",
+    "drillPath": [
+     "sf-injection-engine#1"
+    ],
+    "committedThroughIdx": 1
+   },
+   "runtimeStageId": "sf-injection-engine/evaluate#3",
+   "subflowPath": [
+    "sf-injection-engine"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.context.slot_composed",
+  "payload": {
+   "slot": "system-prompt",
+   "iteration": 1,
+   "budget": {
+    "cap": 4000,
+    "used": 0,
+    "headroomChars": 4000
+   },
+   "sourceBreakdown": {},
+   "droppedCount": 0,
+   "droppedSummaries": []
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-system-prompt/compose#8",
+   "subflowPath": [
+    "sf-system-prompt"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.context.injected",
+  "payload": {
+   "contentSummary": "Check SSN-NOPOLICY-1 for me.",
+   "contentHash": "e70695a9",
+   "slot": "messages",
+   "source": "user",
+   "reason": "conversation history [0]",
+   "rawContent": "Check SSN-NOPOLICY-1 for me.",
+   "asRole": "user",
+   "asRecency": "latest",
+   "position": 0
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-messages/compose#10",
+   "subflowPath": [
+    "sf-messages"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.context.slot_composed",
+  "payload": {
+   "slot": "messages",
+   "iteration": 1,
+   "budget": {
+    "cap": 10000,
+    "used": 28,
+    "headroomChars": 9972
+   },
+   "sourceBreakdown": {
+    "user": {
+     "chars": 28,
+     "count": 1
+    }
+   },
+   "orderingStrategy": "history-order",
+   "droppedCount": 0,
+   "droppedSummaries": []
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-messages/compose#10",
+   "subflowPath": [
+    "sf-messages"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.context.injected",
+  "payload": {
+   "contentSummary": "lookup: Look a citizen up.",
+   "contentHash": "f4aebdcc",
+   "slot": "tools",
+   "source": "registry",
+   "sourceId": "lookup",
+   "reason": "tool registry",
+   "rawContent": "lookup: Look a citizen up.",
+   "position": 0
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-tools/compose#13",
+   "subflowPath": [
+    "sf-tools"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.context.injected",
+  "payload": {
+   "contentSummary": "confirm: Ask a person to confirm.",
+   "contentHash": "19b32f13",
+   "slot": "tools",
+   "source": "registry",
+   "sourceId": "confirm",
+   "reason": "tool registry",
+   "rawContent": "confirm: Ask a person to confirm.",
+   "position": 1
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-tools/compose#13",
+   "subflowPath": [
+    "sf-tools"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.context.slot_composed",
+  "payload": {
+   "slot": "tools",
+   "iteration": 1,
+   "budget": {
+    "cap": 2000,
+    "used": 59,
+    "headroomChars": 1941
+   },
+   "sourceBreakdown": {
+    "registry": {
+     "chars": 59,
+     "count": 2
+    }
+   },
+   "orderingStrategy": "registry+injections",
+   "droppedCount": 0,
+   "droppedSummaries": []
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-tools/compose#13",
+   "subflowPath": [
+    "sf-tools"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.agent.iteration_start",
+  "payload": {
+   "turnIndex": 0,
+   "iterIndex": 1
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#2",
+    "logRunId": "run#2",
+    "drillPath": [],
+    "committedThroughIdx": 14
+   },
+   "runtimeStageId": "call-llm#18",
+   "subflowPath": [],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.stream.llm_start",
+  "payload": {
+   "iteration": 1,
+   "provider": "mock",
+   "model": "m",
+   "systemPromptChars": 0,
+   "messagesCount": 1,
+   "toolsCount": 2,
+   "tools": [
+    {
+     "name": "lookup",
+     "description": "Look a citizen up."
+    },
+    {
+     "name": "confirm",
+     "description": "Ask a person to confirm."
+    }
+   ]
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#2",
+    "logRunId": "run#2",
+    "drillPath": [],
+    "committedThroughIdx": 14
+   },
+   "runtimeStageId": "call-llm#18",
+   "subflowPath": [],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.stream.llm_end",
+  "payload": {
+   "iteration": 1,
+   "content": "",
+   "toolCallCount": 1,
+   "usage": {
+    "input": 7,
+    "output": 0
+   },
+   "stopReason": "tool_use",
+   "durationMs": "<n>"
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#2",
+    "logRunId": "run#2",
+    "drillPath": [],
+    "committedThroughIdx": 14
+   },
+   "runtimeStageId": "call-llm#18",
+   "subflowPath": [],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.agent.route_decided",
+  "payload": {
+   "turnIndex": 0,
+   "iterIndex": 1,
+   "chosen": "tool-calls",
+   "rationale": "LLM requested 1 tool call(s)"
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#2",
+    "logRunId": "run#2",
+    "drillPath": [],
+    "committedThroughIdx": 17
+   },
+   "runtimeStageId": "sf-route#21",
+   "subflowPath": [],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.stream.tool_start",
+  "payload": {
+   "toolName": "lookup",
+   "toolCallId": "c1",
+   "args": {
+    "ssn": "SSN-NOPOLICY-1"
+   }
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#2",
+    "logRunId": "run#2",
+    "drillPath": [],
+    "committedThroughIdx": 18
+   },
+   "runtimeStageId": "tool-calls#22",
+   "subflowPath": [],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.stream.tool_end",
+  "payload": {
+   "toolCallId": "c1",
+   "result": {
+    "ssn": "SSN-NOPOLICY-1",
+    "found": true
+   },
+   "durationMs": "<n>"
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#2",
+    "logRunId": "run#2",
+    "drillPath": [],
+    "committedThroughIdx": 18
+   },
+   "runtimeStageId": "tool-calls#22",
+   "subflowPath": [],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.agent.iteration_end",
+  "payload": {
+   "turnIndex": 0,
+   "iterIndex": 1,
+   "toolCallCount": 1,
+   "history": [
+    {
+     "role": "user",
+     "content": "Check SSN-NOPOLICY-1 for me."
+    },
+    {
+     "role": "assistant",
+     "content": "",
+     "toolCalls": [
+      {
+       "id": "c1",
+       "name": "lookup",
+       "args": {
+        "ssn": "SSN-NOPOLICY-1"
+       }
+      }
+     ]
+    },
+    {
+     "role": "tool",
+     "content": "{\"ssn\":\"SSN-NOPOLICY-1\",\"found\":true}",
+     "toolCallId": "c1",
+     "toolName": "lookup"
+    }
+   ]
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#2",
+    "logRunId": "run#2",
+    "drillPath": [],
+    "committedThroughIdx": 18
+   },
+   "runtimeStageId": "tool-calls#22",
+   "subflowPath": [],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.context.evaluated",
+  "payload": {
+   "iteration": 2,
+   "activeCount": 0,
+   "skippedCount": 0,
+   "evaluatedTotal": 0,
+   "activeIds": [],
+   "skippedDetails": [],
+   "triggerKindCounts": {},
+   "skillCatalog": []
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#2",
+    "logRunId": "run#2",
+    "drillPath": [
+     "sf-injection-engine#23"
+    ],
+    "committedThroughIdx": 1
+   },
+   "runtimeStageId": "sf-injection-engine/evaluate#25",
+   "subflowPath": [
+    "sf-injection-engine"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.context.slot_composed",
+  "payload": {
+   "slot": "system-prompt",
+   "iteration": 2,
+   "budget": {
+    "cap": 4000,
+    "used": 0,
+    "headroomChars": 4000
+   },
+   "sourceBreakdown": {},
+   "droppedCount": 0,
+   "droppedSummaries": []
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-system-prompt/compose#30",
+   "subflowPath": [
+    "sf-system-prompt"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.context.injected",
+  "payload": {
+   "contentSummary": "Check SSN-NOPOLICY-1 for me.",
+   "contentHash": "e70695a9",
+   "slot": "messages",
+   "source": "user",
+   "reason": "conversation history [0]",
+   "rawContent": "Check SSN-NOPOLICY-1 for me.",
+   "asRole": "user",
+   "asRecency": "earlier",
+   "position": 0
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-messages/compose#32",
+   "subflowPath": [
+    "sf-messages"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.context.injected",
+  "payload": {
+   "contentSummary": "",
+   "contentHash": "62db47c8",
+   "slot": "messages",
+   "source": "assistant",
+   "reason": "conversation history [1]",
+   "rawContent": "",
+   "asRole": "assistant",
+   "asRecency": "earlier",
+   "position": 1
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-messages/compose#32",
+   "subflowPath": [
+    "sf-messages"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.context.injected",
+  "payload": {
+   "contentSummary": "{\"ssn\":\"SSN-NOPOLICY-1\",\"found\":true}",
+   "contentHash": "8c6ecb87",
+   "slot": "messages",
+   "source": "tool-result",
+   "reason": "conversation history [2]",
+   "rawContent": "{\"ssn\":\"SSN-NOPOLICY-1\",\"found\":true}",
+   "asRole": "tool",
+   "asRecency": "latest",
+   "position": 2,
+   "sourceId": "c1"
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-messages/compose#32",
+   "subflowPath": [
+    "sf-messages"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.context.slot_composed",
+  "payload": {
+   "slot": "messages",
+   "iteration": 2,
+   "budget": {
+    "cap": 10000,
+    "used": 65,
+    "headroomChars": 9935
+   },
+   "sourceBreakdown": {
+    "user": {
+     "chars": 28,
+     "count": 1
+    },
+    "assistant": {
+     "chars": 0,
+     "count": 1
+    },
+    "tool-result": {
+     "chars": 37,
+     "count": 1
+    }
+   },
+   "orderingStrategy": "history-order",
+   "droppedCount": 0,
+   "droppedSummaries": []
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-messages/compose#32",
+   "subflowPath": [
+    "sf-messages"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.context.injected",
+  "payload": {
+   "contentSummary": "lookup: Look a citizen up.",
+   "contentHash": "f4aebdcc",
+   "slot": "tools",
+   "source": "registry",
+   "sourceId": "lookup",
+   "reason": "tool registry",
+   "rawContent": "lookup: Look a citizen up.",
+   "position": 0
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-tools/compose#35",
+   "subflowPath": [
+    "sf-tools"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.context.injected",
+  "payload": {
+   "contentSummary": "confirm: Ask a person to confirm.",
+   "contentHash": "19b32f13",
+   "slot": "tools",
+   "source": "registry",
+   "sourceId": "confirm",
+   "reason": "tool registry",
+   "rawContent": "confirm: Ask a person to confirm.",
+   "position": 1
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-tools/compose#35",
+   "subflowPath": [
+    "sf-tools"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.context.slot_composed",
+  "payload": {
+   "slot": "tools",
+   "iteration": 2,
+   "budget": {
+    "cap": 2000,
+    "used": 59,
+    "headroomChars": 1941
+   },
+   "sourceBreakdown": {
+    "registry": {
+     "chars": 59,
+     "count": 2
+    }
+   },
+   "orderingStrategy": "registry+injections",
+   "droppedCount": 0,
+   "droppedSummaries": []
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-tools/compose#35",
+   "subflowPath": [
+    "sf-tools"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.agent.iteration_start",
+  "payload": {
+   "turnIndex": 0,
+   "iterIndex": 2
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#2",
+    "logRunId": "run#2",
+    "drillPath": [],
+    "committedThroughIdx": 33
+   },
+   "runtimeStageId": "call-llm#40",
+   "subflowPath": [],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.stream.llm_start",
+  "payload": {
+   "iteration": 2,
+   "provider": "mock",
+   "model": "m",
+   "systemPromptChars": 0,
+   "messagesCount": 3,
+   "toolsCount": 2,
+   "tools": [
+    {
+     "name": "lookup",
+     "description": "Look a citizen up."
+    },
+    {
+     "name": "confirm",
+     "description": "Ask a person to confirm."
+    }
+   ]
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#2",
+    "logRunId": "run#2",
+    "drillPath": [],
+    "committedThroughIdx": 33
+   },
+   "runtimeStageId": "call-llm#40",
+   "subflowPath": [],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.stream.llm_end",
+  "payload": {
+   "iteration": 2,
+   "content": "",
+   "toolCallCount": 1,
+   "usage": {
+    "input": 17,
+    "output": 0
+   },
+   "stopReason": "tool_use",
+   "durationMs": "<n>"
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#2",
+    "logRunId": "run#2",
+    "drillPath": [],
+    "committedThroughIdx": 33
+   },
+   "runtimeStageId": "call-llm#40",
+   "subflowPath": [],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.agent.route_decided",
+  "payload": {
+   "turnIndex": 0,
+   "iterIndex": 2,
+   "chosen": "tool-calls",
+   "rationale": "LLM requested 1 tool call(s)"
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#2",
+    "logRunId": "run#2",
+    "drillPath": [],
+    "committedThroughIdx": 36
+   },
+   "runtimeStageId": "sf-route#43",
+   "subflowPath": [],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.stream.tool_start",
+  "payload": {
+   "toolName": "made_up_tool",
+   "toolCallId": "c2",
+   "args": {
+    "note": "invented"
+   }
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#2",
+    "logRunId": "run#2",
+    "drillPath": [],
+    "committedThroughIdx": 37
+   },
+   "runtimeStageId": "tool-calls#44",
+   "subflowPath": [],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.stream.tool_end",
+  "payload": {
+   "toolCallId": "c2",
+   "result": "Unknown tool 'made_up_tool' on that call. Tool names that resolved to an implementation on that call: lookup, confirm.",
+   "durationMs": "<n>",
+   "error": true
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#2",
+    "logRunId": "run#2",
+    "drillPath": [],
+    "committedThroughIdx": 37
+   },
+   "runtimeStageId": "tool-calls#44",
+   "subflowPath": [],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.agent.iteration_end",
+  "payload": {
+   "turnIndex": 0,
+   "iterIndex": 2,
+   "toolCallCount": 1,
+   "history": [
+    {
+     "role": "user",
+     "content": "Check SSN-NOPOLICY-1 for me."
+    },
+    {
+     "role": "assistant",
+     "content": "",
+     "toolCalls": [
+      {
+       "id": "c1",
+       "name": "lookup",
+       "args": {
+        "ssn": "SSN-NOPOLICY-1"
+       }
+      }
+     ]
+    },
+    {
+     "role": "tool",
+     "content": "{\"ssn\":\"SSN-NOPOLICY-1\",\"found\":true}",
+     "toolCallId": "c1",
+     "toolName": "lookup"
+    },
+    {
+     "role": "assistant",
+     "content": "",
+     "toolCalls": [
+      {
+       "id": "c2",
+       "name": "made_up_tool",
+       "args": {
+        "note": "invented"
+       }
+      }
+     ]
+    },
+    {
+     "role": "tool",
+     "content": "Unknown tool 'made_up_tool' on that call. Tool names that resolved to an implementation on that call: lookup, confirm.",
+     "toolCallId": "c2",
+     "toolName": "made_up_tool"
+    }
+   ]
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#2",
+    "logRunId": "run#2",
+    "drillPath": [],
+    "committedThroughIdx": 37
+   },
+   "runtimeStageId": "tool-calls#44",
+   "subflowPath": [],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.context.evaluated",
+  "payload": {
+   "iteration": 3,
+   "activeCount": 0,
+   "skippedCount": 0,
+   "evaluatedTotal": 0,
+   "activeIds": [],
+   "skippedDetails": [],
+   "triggerKindCounts": {},
+   "skillCatalog": []
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#2",
+    "logRunId": "run#2",
+    "drillPath": [
+     "sf-injection-engine#45"
+    ],
+    "committedThroughIdx": 1
+   },
+   "runtimeStageId": "sf-injection-engine/evaluate#47",
+   "subflowPath": [
+    "sf-injection-engine"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.context.slot_composed",
+  "payload": {
+   "slot": "system-prompt",
+   "iteration": 3,
+   "budget": {
+    "cap": 4000,
+    "used": 0,
+    "headroomChars": 4000
+   },
+   "sourceBreakdown": {},
+   "droppedCount": 0,
+   "droppedSummaries": []
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-system-prompt/compose#52",
+   "subflowPath": [
+    "sf-system-prompt"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.context.injected",
+  "payload": {
+   "contentSummary": "Check SSN-NOPOLICY-1 for me.",
+   "contentHash": "e70695a9",
+   "slot": "messages",
+   "source": "user",
+   "reason": "conversation history [0]",
+   "rawContent": "Check SSN-NOPOLICY-1 for me.",
+   "asRole": "user",
+   "asRecency": "earlier",
+   "position": 0
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-messages/compose#54",
+   "subflowPath": [
+    "sf-messages"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.context.injected",
+  "payload": {
+   "contentSummary": "",
+   "contentHash": "62db47c8",
+   "slot": "messages",
+   "source": "assistant",
+   "reason": "conversation history [1]",
+   "rawContent": "",
+   "asRole": "assistant",
+   "asRecency": "earlier",
+   "position": 1
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-messages/compose#54",
+   "subflowPath": [
+    "sf-messages"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.context.injected",
+  "payload": {
+   "contentSummary": "{\"ssn\":\"SSN-NOPOLICY-1\",\"found\":true}",
+   "contentHash": "8c6ecb87",
+   "slot": "messages",
+   "source": "tool-result",
+   "reason": "conversation history [2]",
+   "rawContent": "{\"ssn\":\"SSN-NOPOLICY-1\",\"found\":true}",
+   "asRole": "tool",
+   "asRecency": "earlier",
+   "position": 2,
+   "sourceId": "c1"
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-messages/compose#54",
+   "subflowPath": [
+    "sf-messages"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.context.injected",
+  "payload": {
+   "contentSummary": "",
+   "contentHash": "ead60db2",
+   "slot": "messages",
+   "source": "assistant",
+   "reason": "conversation history [3]",
+   "rawContent": "",
+   "asRole": "assistant",
+   "asRecency": "earlier",
+   "position": 3
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-messages/compose#54",
+   "subflowPath": [
+    "sf-messages"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.context.injected",
+  "payload": {
+   "contentSummary": "Unknown tool 'made_up_tool' on that call. Tool names that resolved to an implem…",
+   "contentHash": "ef7eacf2",
+   "slot": "messages",
+   "source": "tool-result",
+   "reason": "conversation history [4]",
+   "rawContent": "Unknown tool 'made_up_tool' on that call. Tool names that resolved to an implementation on that call: lookup, confirm.",
+   "asRole": "tool",
+   "asRecency": "latest",
+   "position": 4,
+   "sourceId": "c2"
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-messages/compose#54",
+   "subflowPath": [
+    "sf-messages"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.context.slot_composed",
+  "payload": {
+   "slot": "messages",
+   "iteration": 3,
+   "budget": {
+    "cap": 10000,
+    "used": 183,
+    "headroomChars": 9817
+   },
+   "sourceBreakdown": {
+    "user": {
+     "chars": 28,
+     "count": 1
+    },
+    "assistant": {
+     "chars": 0,
+     "count": 2
+    },
+    "tool-result": {
+     "chars": 155,
+     "count": 2
+    }
+   },
+   "orderingStrategy": "history-order",
+   "droppedCount": 0,
+   "droppedSummaries": []
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-messages/compose#54",
+   "subflowPath": [
+    "sf-messages"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.context.injected",
+  "payload": {
+   "contentSummary": "lookup: Look a citizen up.",
+   "contentHash": "f4aebdcc",
+   "slot": "tools",
+   "source": "registry",
+   "sourceId": "lookup",
+   "reason": "tool registry",
+   "rawContent": "lookup: Look a citizen up.",
+   "position": 0
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-tools/compose#57",
+   "subflowPath": [
+    "sf-tools"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.context.injected",
+  "payload": {
+   "contentSummary": "confirm: Ask a person to confirm.",
+   "contentHash": "19b32f13",
+   "slot": "tools",
+   "source": "registry",
+   "sourceId": "confirm",
+   "reason": "tool registry",
+   "rawContent": "confirm: Ask a person to confirm.",
+   "position": 1
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-tools/compose#57",
+   "subflowPath": [
+    "sf-tools"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.context.slot_composed",
+  "payload": {
+   "slot": "tools",
+   "iteration": 3,
+   "budget": {
+    "cap": 2000,
+    "used": 59,
+    "headroomChars": 1941
+   },
+   "sourceBreakdown": {
+    "registry": {
+     "chars": 59,
+     "count": 2
+    }
+   },
+   "orderingStrategy": "registry+injections",
+   "droppedCount": 0,
+   "droppedSummaries": []
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-tools/compose#57",
+   "subflowPath": [
+    "sf-tools"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.agent.iteration_start",
+  "payload": {
+   "turnIndex": 0,
+   "iterIndex": 3
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#2",
+    "logRunId": "run#2",
+    "drillPath": [],
+    "committedThroughIdx": 52
+   },
+   "runtimeStageId": "call-llm#62",
+   "subflowPath": [],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.stream.llm_start",
+  "payload": {
+   "iteration": 3,
+   "provider": "mock",
+   "model": "m",
+   "systemPromptChars": 0,
+   "messagesCount": 5,
+   "toolsCount": 2,
+   "tools": [
+    {
+     "name": "lookup",
+     "description": "Look a citizen up."
+    },
+    {
+     "name": "confirm",
+     "description": "Ask a person to confirm."
+    }
+   ]
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#2",
+    "logRunId": "run#2",
+    "drillPath": [],
+    "committedThroughIdx": 52
+   },
+   "runtimeStageId": "call-llm#62",
+   "subflowPath": [],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.stream.llm_end",
+  "payload": {
+   "iteration": 3,
+   "content": "",
+   "toolCallCount": 1,
+   "usage": {
+    "input": 46,
+    "output": 0
+   },
+   "stopReason": "tool_use",
+   "durationMs": "<n>"
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#2",
+    "logRunId": "run#2",
+    "drillPath": [],
+    "committedThroughIdx": 52
+   },
+   "runtimeStageId": "call-llm#62",
+   "subflowPath": [],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.agent.route_decided",
+  "payload": {
+   "turnIndex": 0,
+   "iterIndex": 3,
+   "chosen": "tool-calls",
+   "rationale": "LLM requested 1 tool call(s)"
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#2",
+    "logRunId": "run#2",
+    "drillPath": [],
+    "committedThroughIdx": 55
+   },
+   "runtimeStageId": "sf-route#65",
+   "subflowPath": [],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.stream.tool_start",
+  "payload": {
+   "toolName": "lookup",
+   "toolCallId": "c3",
+   "args": {
+    "ssn": 42
+   }
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#2",
+    "logRunId": "run#2",
+    "drillPath": [],
+    "committedThroughIdx": 56
+   },
+   "runtimeStageId": "tool-calls#66",
+   "subflowPath": [],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.validation.args_invalid",
+  "payload": {
+   "toolName": "lookup",
+   "toolCallId": "c3",
+   "iteration": 3,
+   "issues": [
+    {
+     "path": "ssn",
+     "expected": "string",
+     "got": "number"
+    }
+   ],
+   "enforced": true
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#2",
+    "logRunId": "run#2",
+    "drillPath": [],
+    "committedThroughIdx": 56
+   },
+   "runtimeStageId": "tool-calls#66",
+   "subflowPath": [],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.stream.tool_end",
+  "payload": {
+   "toolCallId": "c3",
+   "result": "Invalid arguments for tool 'lookup' — the call was not executed.\n- 'ssn': expected string, got number\nFix the arguments to match the tool's input schema and call it again.",
+   "durationMs": "<n>",
+   "error": true
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#2",
+    "logRunId": "run#2",
+    "drillPath": [],
+    "committedThroughIdx": 56
+   },
+   "runtimeStageId": "tool-calls#66",
+   "subflowPath": [],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.agent.iteration_end",
+  "payload": {
+   "turnIndex": 0,
+   "iterIndex": 3,
+   "toolCallCount": 1,
+   "history": [
+    {
+     "role": "user",
+     "content": "Check SSN-NOPOLICY-1 for me."
+    },
+    {
+     "role": "assistant",
+     "content": "",
+     "toolCalls": [
+      {
+       "id": "c1",
+       "name": "lookup",
+       "args": {
+        "ssn": "SSN-NOPOLICY-1"
+       }
+      }
+     ]
+    },
+    {
+     "role": "tool",
+     "content": "{\"ssn\":\"SSN-NOPOLICY-1\",\"found\":true}",
+     "toolCallId": "c1",
+     "toolName": "lookup"
+    },
+    {
+     "role": "assistant",
+     "content": "",
+     "toolCalls": [
+      {
+       "id": "c2",
+       "name": "made_up_tool",
+       "args": {
+        "note": "invented"
+       }
+      }
+     ]
+    },
+    {
+     "role": "tool",
+     "content": "Unknown tool 'made_up_tool' on that call. Tool names that resolved to an implementation on that call: lookup, confirm.",
+     "toolCallId": "c2",
+     "toolName": "made_up_tool"
+    },
+    {
+     "role": "assistant",
+     "content": "",
+     "toolCalls": [
+      {
+       "id": "c3",
+       "name": "lookup",
+       "args": {
+        "ssn": 42
+       }
+      }
+     ]
+    },
+    {
+     "role": "tool",
+     "content": "Invalid arguments for tool 'lookup' — the call was not executed.\n- 'ssn': expected string, got number\nFix the arguments to match the tool's input schema and call it again.",
+     "toolCallId": "c3",
+     "toolName": "lookup"
+    }
+   ]
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#2",
+    "logRunId": "run#2",
+    "drillPath": [],
+    "committedThroughIdx": 56
+   },
+   "runtimeStageId": "tool-calls#66",
+   "subflowPath": [],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.context.evaluated",
+  "payload": {
+   "iteration": 4,
+   "activeCount": 0,
+   "skippedCount": 0,
+   "evaluatedTotal": 0,
+   "activeIds": [],
+   "skippedDetails": [],
+   "triggerKindCounts": {},
+   "skillCatalog": []
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#2",
+    "logRunId": "run#2",
+    "drillPath": [
+     "sf-injection-engine#67"
+    ],
+    "committedThroughIdx": 1
+   },
+   "runtimeStageId": "sf-injection-engine/evaluate#69",
+   "subflowPath": [
+    "sf-injection-engine"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.context.slot_composed",
+  "payload": {
+   "slot": "system-prompt",
+   "iteration": 4,
+   "budget": {
+    "cap": 4000,
+    "used": 0,
+    "headroomChars": 4000
+   },
+   "sourceBreakdown": {},
+   "droppedCount": 0,
+   "droppedSummaries": []
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-system-prompt/compose#74",
+   "subflowPath": [
+    "sf-system-prompt"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.context.injected",
+  "payload": {
+   "contentSummary": "Check SSN-NOPOLICY-1 for me.",
+   "contentHash": "e70695a9",
+   "slot": "messages",
+   "source": "user",
+   "reason": "conversation history [0]",
+   "rawContent": "Check SSN-NOPOLICY-1 for me.",
+   "asRole": "user",
+   "asRecency": "earlier",
+   "position": 0
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-messages/compose#76",
+   "subflowPath": [
+    "sf-messages"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.context.injected",
+  "payload": {
+   "contentSummary": "",
+   "contentHash": "62db47c8",
+   "slot": "messages",
+   "source": "assistant",
+   "reason": "conversation history [1]",
+   "rawContent": "",
+   "asRole": "assistant",
+   "asRecency": "earlier",
+   "position": 1
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-messages/compose#76",
+   "subflowPath": [
+    "sf-messages"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.context.injected",
+  "payload": {
+   "contentSummary": "{\"ssn\":\"SSN-NOPOLICY-1\",\"found\":true}",
+   "contentHash": "8c6ecb87",
+   "slot": "messages",
+   "source": "tool-result",
+   "reason": "conversation history [2]",
+   "rawContent": "{\"ssn\":\"SSN-NOPOLICY-1\",\"found\":true}",
+   "asRole": "tool",
+   "asRecency": "earlier",
+   "position": 2,
+   "sourceId": "c1"
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-messages/compose#76",
+   "subflowPath": [
+    "sf-messages"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.context.injected",
+  "payload": {
+   "contentSummary": "",
+   "contentHash": "ead60db2",
+   "slot": "messages",
+   "source": "assistant",
+   "reason": "conversation history [3]",
+   "rawContent": "",
+   "asRole": "assistant",
+   "asRecency": "earlier",
+   "position": 3
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-messages/compose#76",
+   "subflowPath": [
+    "sf-messages"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.context.injected",
+  "payload": {
+   "contentSummary": "Unknown tool 'made_up_tool' on that call. Tool names that resolved to an implem…",
+   "contentHash": "ef7eacf2",
+   "slot": "messages",
+   "source": "tool-result",
+   "reason": "conversation history [4]",
+   "rawContent": "Unknown tool 'made_up_tool' on that call. Tool names that resolved to an implementation on that call: lookup, confirm.",
+   "asRole": "tool",
+   "asRecency": "earlier",
+   "position": 4,
+   "sourceId": "c2"
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-messages/compose#76",
+   "subflowPath": [
+    "sf-messages"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.context.injected",
+  "payload": {
+   "contentSummary": "",
+   "contentHash": "ead19084",
+   "slot": "messages",
+   "source": "assistant",
+   "reason": "conversation history [5]",
+   "rawContent": "",
+   "asRole": "assistant",
+   "asRecency": "earlier",
+   "position": 5
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-messages/compose#76",
+   "subflowPath": [
+    "sf-messages"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.context.injected",
+  "payload": {
+   "contentSummary": "Invalid arguments for tool 'lookup' — the call was not executed.\n- 'ssn': expec…",
+   "contentHash": "9def6a78",
+   "slot": "messages",
+   "source": "tool-result",
+   "reason": "conversation history [6]",
+   "rawContent": "Invalid arguments for tool 'lookup' — the call was not executed.\n- 'ssn': expected string, got number\nFix the arguments to match the tool's input schema and call it again.",
+   "asRole": "tool",
+   "asRecency": "latest",
+   "position": 6,
+   "sourceId": "c3"
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-messages/compose#76",
+   "subflowPath": [
+    "sf-messages"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.context.slot_composed",
+  "payload": {
+   "slot": "messages",
+   "iteration": 4,
+   "budget": {
+    "cap": 10000,
+    "used": 354,
+    "headroomChars": 9646
+   },
+   "sourceBreakdown": {
+    "user": {
+     "chars": 28,
+     "count": 1
+    },
+    "assistant": {
+     "chars": 0,
+     "count": 3
+    },
+    "tool-result": {
+     "chars": 326,
+     "count": 3
+    }
+   },
+   "orderingStrategy": "history-order",
+   "droppedCount": 0,
+   "droppedSummaries": []
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-messages/compose#76",
+   "subflowPath": [
+    "sf-messages"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.context.injected",
+  "payload": {
+   "contentSummary": "lookup: Look a citizen up.",
+   "contentHash": "f4aebdcc",
+   "slot": "tools",
+   "source": "registry",
+   "sourceId": "lookup",
+   "reason": "tool registry",
+   "rawContent": "lookup: Look a citizen up.",
+   "position": 0
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-tools/compose#79",
+   "subflowPath": [
+    "sf-tools"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.context.injected",
+  "payload": {
+   "contentSummary": "confirm: Ask a person to confirm.",
+   "contentHash": "19b32f13",
+   "slot": "tools",
+   "source": "registry",
+   "sourceId": "confirm",
+   "reason": "tool registry",
+   "rawContent": "confirm: Ask a person to confirm.",
+   "position": 1
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-tools/compose#79",
+   "subflowPath": [
+    "sf-tools"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.context.slot_composed",
+  "payload": {
+   "slot": "tools",
+   "iteration": 4,
+   "budget": {
+    "cap": 2000,
+    "used": 59,
+    "headroomChars": 1941
+   },
+   "sourceBreakdown": {
+    "registry": {
+     "chars": 59,
+     "count": 2
+    }
+   },
+   "orderingStrategy": "registry+injections",
+   "droppedCount": 0,
+   "droppedSummaries": []
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-tools/compose#79",
+   "subflowPath": [
+    "sf-tools"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.agent.iteration_start",
+  "payload": {
+   "turnIndex": 0,
+   "iterIndex": 4
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#2",
+    "logRunId": "run#2",
+    "drillPath": [],
+    "committedThroughIdx": 71
+   },
+   "runtimeStageId": "call-llm#84",
+   "subflowPath": [],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.stream.llm_start",
+  "payload": {
+   "iteration": 4,
+   "provider": "mock",
+   "model": "m",
+   "systemPromptChars": 0,
+   "messagesCount": 7,
+   "toolsCount": 2,
+   "tools": [
+    {
+     "name": "lookup",
+     "description": "Look a citizen up."
+    },
+    {
+     "name": "confirm",
+     "description": "Ask a person to confirm."
+    }
+   ]
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#2",
+    "logRunId": "run#2",
+    "drillPath": [],
+    "committedThroughIdx": 71
+   },
+   "runtimeStageId": "call-llm#84",
+   "subflowPath": [],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.stream.llm_end",
+  "payload": {
+   "iteration": 4,
+   "content": "",
+   "toolCallCount": 1,
+   "usage": {
+    "input": 89,
+    "output": 0
+   },
+   "stopReason": "tool_use",
+   "durationMs": "<n>"
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#2",
+    "logRunId": "run#2",
+    "drillPath": [],
+    "committedThroughIdx": 71
+   },
+   "runtimeStageId": "call-llm#84",
+   "subflowPath": [],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.agent.route_decided",
+  "payload": {
+   "turnIndex": 0,
+   "iterIndex": 4,
+   "chosen": "tool-calls",
+   "rationale": "LLM requested 1 tool call(s)"
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#2",
+    "logRunId": "run#2",
+    "drillPath": [],
+    "committedThroughIdx": 74
+   },
+   "runtimeStageId": "sf-route#87",
+   "subflowPath": [],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.stream.tool_start",
+  "payload": {
+   "toolName": "confirm",
+   "toolCallId": "c4",
+   "args": {
+    "ssn": "SSN-NOPOLICY-1"
+   }
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#2",
+    "logRunId": "run#2",
+    "drillPath": [],
+    "committedThroughIdx": 75
+   },
+   "runtimeStageId": "tool-calls#88",
+   "subflowPath": [],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.pause.request",
+  "payload": {
+   "reason": "stage requested pause",
+   "questionPayload": {
+    "toolCallId": "c4",
+    "toolName": "confirm",
+    "question": "Is SSN-NOPOLICY-1 right?"
+   }
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "tool-calls#paused",
+   "subflowPath": [],
+   "compositionPath": [],
+   "runId": "consumer-scope"
+  }
+ },
+ {
+  "type": "agentfootprint.integrity.disposition",
+  "payload": {
+   "posture": "observe",
+   "workExisted": true,
+   "rows": [
+    {
+     "check": "invariant-violation",
+     "seam": "wire",
+     "checked": 4,
+     "findings": 0,
+     "notApplicable": 0,
+     "unreachable": 0,
+     "synthetic": 0
+    },
+    {
+     "check": "invariant-violation",
+     "seam": "compose",
+     "checked": 0,
+     "findings": 0,
+     "notApplicable": 1,
+     "unreachable": 0,
+     "synthetic": 0
+    },
+    {
+     "check": "dangling-reference",
+     "seam": "compose",
+     "checked": 0,
+     "findings": 0,
+     "notApplicable": 1,
+     "unreachable": 0,
+     "synthetic": 0
+    },
+    {
+     "check": "unsupported-argument",
+     "seam": "choice",
+     "checked": 0,
+     "findings": 0,
+     "notApplicable": 1,
+     "unreachable": 0,
+     "synthetic": 0
+    },
+    {
+     "check": "unsupported-claim",
+     "seam": "claim",
+     "checked": 0,
+     "findings": 0,
+     "notApplicable": 1,
+     "unreachable": 0,
+     "synthetic": 0
+    },
+    {
+     "check": "empty-lookup",
+     "seam": "write",
+     "checked": 0,
+     "findings": 0,
+     "notApplicable": 1,
+     "unreachable": 0,
+     "synthetic": 0
+    },
+    {
+     "check": "column-type-mismatch",
+     "seam": "write",
+     "checked": 0,
+     "findings": 0,
+     "notApplicable": 1,
+     "unreachable": 0,
+     "synthetic": 0
+    },
+    {
+     "check": "missing-column",
+     "seam": "write",
+     "checked": 0,
+     "findings": 0,
+     "notApplicable": 1,
+     "unreachable": 0,
+     "synthetic": 0
+    },
+    {
+     "check": "prior-turn-evidence",
+     "seam": "claim",
+     "checked": 0,
+     "findings": 0,
+     "notApplicable": 1,
+     "unreachable": 0,
+     "synthetic": 0
+    }
+   ]
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "integrity-disposition#0",
+   "subflowPath": [],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#1"
+  }
+ },
+ {
+  "type": "agentfootprint.pause.resume",
+  "payload": {
+   "resumeInput": {
+    "answer": "yes"
+   },
+   "pausedDurationMs": "<n>"
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "tool-calls#resumed",
+   "subflowPath": [],
+   "compositionPath": [],
+   "runId": "consumer-scope"
+  }
+ },
+ {
+  "type": "agentfootprint.agent.run_configured",
+  "payload": {
+   "agentId": "agent",
+   "llm": {
+    "provider": "mock",
+    "model": "m"
+   },
+   "reactMode": "dynamic",
+   "memories": []
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "run-configured#0",
+   "subflowPath": [],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#3"
+  }
+ },
+ {
+  "type": "agentfootprint.stream.tool_end",
+  "payload": {
+   "toolCallId": "c4",
+   "result": {
+    "answer": "yes"
+   },
+   "durationMs": "<n>"
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#4",
+    "logRunId": "run#4",
+    "drillPath": [],
+    "committedThroughIdx": -1
+   },
+   "runtimeStageId": "tool-calls#89",
+   "subflowPath": [],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#3"
+  }
+ },
+ {
+  "type": "agentfootprint.agent.iteration_end",
+  "payload": {
+   "turnIndex": 0,
+   "iterIndex": 4,
+   "toolCallCount": 1,
+   "history": [
+    {
+     "role": "user",
+     "content": "Check SSN-NOPOLICY-1 for me."
+    },
+    {
+     "role": "assistant",
+     "content": "",
+     "toolCalls": [
+      {
+       "id": "c1",
+       "name": "lookup",
+       "args": {
+        "ssn": "SSN-NOPOLICY-1"
+       }
+      }
+     ]
+    },
+    {
+     "role": "tool",
+     "content": "{\"ssn\":\"SSN-NOPOLICY-1\",\"found\":true}",
+     "toolCallId": "c1",
+     "toolName": "lookup"
+    },
+    {
+     "role": "assistant",
+     "content": "",
+     "toolCalls": [
+      {
+       "id": "c2",
+       "name": "made_up_tool",
+       "args": {
+        "note": "invented"
+       }
+      }
+     ]
+    },
+    {
+     "role": "tool",
+     "content": "Unknown tool 'made_up_tool' on that call. Tool names that resolved to an implementation on that call: lookup, confirm.",
+     "toolCallId": "c2",
+     "toolName": "made_up_tool"
+    },
+    {
+     "role": "assistant",
+     "content": "",
+     "toolCalls": [
+      {
+       "id": "c3",
+       "name": "lookup",
+       "args": {
+        "ssn": 42
+       }
+      }
+     ]
+    },
+    {
+     "role": "tool",
+     "content": "Invalid arguments for tool 'lookup' — the call was not executed.\n- 'ssn': expected string, got number\nFix the arguments to match the tool's input schema and call it again.",
+     "toolCallId": "c3",
+     "toolName": "lookup"
+    },
+    {
+     "role": "assistant",
+     "content": "",
+     "toolCalls": [
+      {
+       "id": "c4",
+       "name": "confirm",
+       "args": {
+        "ssn": "SSN-NOPOLICY-1"
+       }
+      }
+     ]
+    },
+    {
+     "role": "tool",
+     "content": "{\"answer\":\"yes\"}",
+     "toolCallId": "c4",
+     "toolName": "confirm"
+    }
+   ]
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#4",
+    "logRunId": "run#4",
+    "drillPath": [],
+    "committedThroughIdx": -1
+   },
+   "runtimeStageId": "tool-calls#89",
+   "subflowPath": [],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#3"
+  }
+ },
+ {
+  "type": "agentfootprint.context.evaluated",
+  "payload": {
+   "iteration": 5,
+   "activeCount": 0,
+   "skippedCount": 0,
+   "evaluatedTotal": 0,
+   "activeIds": [],
+   "skippedDetails": [],
+   "triggerKindCounts": {},
+   "skillCatalog": []
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#4",
+    "logRunId": "run#4",
+    "drillPath": [
+     "sf-injection-engine#90"
+    ],
+    "committedThroughIdx": 1
+   },
+   "runtimeStageId": "sf-injection-engine/evaluate#92",
+   "subflowPath": [
+    "sf-injection-engine"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#3"
+  }
+ },
+ {
+  "type": "agentfootprint.context.slot_composed",
+  "payload": {
+   "slot": "system-prompt",
+   "iteration": 5,
+   "budget": {
+    "cap": 4000,
+    "used": 0,
+    "headroomChars": 4000
+   },
+   "sourceBreakdown": {},
+   "droppedCount": 0,
+   "droppedSummaries": []
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-system-prompt/compose#97",
+   "subflowPath": [
+    "sf-system-prompt"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#3"
+  }
+ },
+ {
+  "type": "agentfootprint.context.injected",
+  "payload": {
+   "contentSummary": "Check SSN-NOPOLICY-1 for me.",
+   "contentHash": "e70695a9",
+   "slot": "messages",
+   "source": "user",
+   "reason": "conversation history [0]",
+   "rawContent": "Check SSN-NOPOLICY-1 for me.",
+   "asRole": "user",
+   "asRecency": "earlier",
+   "position": 0
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-messages/compose#99",
+   "subflowPath": [
+    "sf-messages"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#3"
+  }
+ },
+ {
+  "type": "agentfootprint.context.injected",
+  "payload": {
+   "contentSummary": "",
+   "contentHash": "62db47c8",
+   "slot": "messages",
+   "source": "assistant",
+   "reason": "conversation history [1]",
+   "rawContent": "",
+   "asRole": "assistant",
+   "asRecency": "earlier",
+   "position": 1
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-messages/compose#99",
+   "subflowPath": [
+    "sf-messages"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#3"
+  }
+ },
+ {
+  "type": "agentfootprint.context.injected",
+  "payload": {
+   "contentSummary": "{\"ssn\":\"SSN-NOPOLICY-1\",\"found\":true}",
+   "contentHash": "8c6ecb87",
+   "slot": "messages",
+   "source": "tool-result",
+   "reason": "conversation history [2]",
+   "rawContent": "{\"ssn\":\"SSN-NOPOLICY-1\",\"found\":true}",
+   "asRole": "tool",
+   "asRecency": "earlier",
+   "position": 2,
+   "sourceId": "c1"
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-messages/compose#99",
+   "subflowPath": [
+    "sf-messages"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#3"
+  }
+ },
+ {
+  "type": "agentfootprint.context.injected",
+  "payload": {
+   "contentSummary": "",
+   "contentHash": "ead60db2",
+   "slot": "messages",
+   "source": "assistant",
+   "reason": "conversation history [3]",
+   "rawContent": "",
+   "asRole": "assistant",
+   "asRecency": "earlier",
+   "position": 3
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-messages/compose#99",
+   "subflowPath": [
+    "sf-messages"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#3"
+  }
+ },
+ {
+  "type": "agentfootprint.context.injected",
+  "payload": {
+   "contentSummary": "Unknown tool 'made_up_tool' on that call. Tool names that resolved to an implem…",
+   "contentHash": "ef7eacf2",
+   "slot": "messages",
+   "source": "tool-result",
+   "reason": "conversation history [4]",
+   "rawContent": "Unknown tool 'made_up_tool' on that call. Tool names that resolved to an implementation on that call: lookup, confirm.",
+   "asRole": "tool",
+   "asRecency": "earlier",
+   "position": 4,
+   "sourceId": "c2"
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-messages/compose#99",
+   "subflowPath": [
+    "sf-messages"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#3"
+  }
+ },
+ {
+  "type": "agentfootprint.context.injected",
+  "payload": {
+   "contentSummary": "",
+   "contentHash": "ead19084",
+   "slot": "messages",
+   "source": "assistant",
+   "reason": "conversation history [5]",
+   "rawContent": "",
+   "asRole": "assistant",
+   "asRecency": "earlier",
+   "position": 5
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-messages/compose#99",
+   "subflowPath": [
+    "sf-messages"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#3"
+  }
+ },
+ {
+  "type": "agentfootprint.context.injected",
+  "payload": {
+   "contentSummary": "Invalid arguments for tool 'lookup' — the call was not executed.\n- 'ssn': expec…",
+   "contentHash": "9def6a78",
+   "slot": "messages",
+   "source": "tool-result",
+   "reason": "conversation history [6]",
+   "rawContent": "Invalid arguments for tool 'lookup' — the call was not executed.\n- 'ssn': expected string, got number\nFix the arguments to match the tool's input schema and call it again.",
+   "asRole": "tool",
+   "asRecency": "earlier",
+   "position": 6,
+   "sourceId": "c3"
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-messages/compose#99",
+   "subflowPath": [
+    "sf-messages"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#3"
+  }
+ },
+ {
+  "type": "agentfootprint.context.injected",
+  "payload": {
+   "contentSummary": "",
+   "contentHash": "62cc3d3e",
+   "slot": "messages",
+   "source": "assistant",
+   "reason": "conversation history [7]",
+   "rawContent": "",
+   "asRole": "assistant",
+   "asRecency": "earlier",
+   "position": 7
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-messages/compose#99",
+   "subflowPath": [
+    "sf-messages"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#3"
+  }
+ },
+ {
+  "type": "agentfootprint.context.injected",
+  "payload": {
+   "contentSummary": "{\"answer\":\"yes\"}",
+   "contentHash": "579c528e",
+   "slot": "messages",
+   "source": "tool-result",
+   "reason": "conversation history [8]",
+   "rawContent": "{\"answer\":\"yes\"}",
+   "asRole": "tool",
+   "asRecency": "latest",
+   "position": 8,
+   "sourceId": "c4"
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-messages/compose#99",
+   "subflowPath": [
+    "sf-messages"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#3"
+  }
+ },
+ {
+  "type": "agentfootprint.context.slot_composed",
+  "payload": {
+   "slot": "messages",
+   "iteration": 5,
+   "budget": {
+    "cap": 10000,
+    "used": 370,
+    "headroomChars": 9630
+   },
+   "sourceBreakdown": {
+    "user": {
+     "chars": 28,
+     "count": 1
+    },
+    "assistant": {
+     "chars": 0,
+     "count": 4
+    },
+    "tool-result": {
+     "chars": 342,
+     "count": 4
+    }
+   },
+   "orderingStrategy": "history-order",
+   "droppedCount": 0,
+   "droppedSummaries": []
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-messages/compose#99",
+   "subflowPath": [
+    "sf-messages"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#3"
+  }
+ },
+ {
+  "type": "agentfootprint.context.injected",
+  "payload": {
+   "contentSummary": "lookup: Look a citizen up.",
+   "contentHash": "f4aebdcc",
+   "slot": "tools",
+   "source": "registry",
+   "sourceId": "lookup",
+   "reason": "tool registry",
+   "rawContent": "lookup: Look a citizen up.",
+   "position": 0
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-tools/compose#102",
+   "subflowPath": [
+    "sf-tools"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#3"
+  }
+ },
+ {
+  "type": "agentfootprint.context.injected",
+  "payload": {
+   "contentSummary": "confirm: Ask a person to confirm.",
+   "contentHash": "19b32f13",
+   "slot": "tools",
+   "source": "registry",
+   "sourceId": "confirm",
+   "reason": "tool registry",
+   "rawContent": "confirm: Ask a person to confirm.",
+   "position": 1
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-tools/compose#102",
+   "subflowPath": [
+    "sf-tools"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#3"
+  }
+ },
+ {
+  "type": "agentfootprint.context.slot_composed",
+  "payload": {
+   "slot": "tools",
+   "iteration": 5,
+   "budget": {
+    "cap": 2000,
+    "used": 59,
+    "headroomChars": 1941
+   },
+   "sourceBreakdown": {
+    "registry": {
+     "chars": 59,
+     "count": 2
+    }
+   },
+   "orderingStrategy": "registry+injections",
+   "droppedCount": 0,
+   "droppedSummaries": []
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "sf-tools/compose#102",
+   "subflowPath": [
+    "sf-tools"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#3"
+  }
+ },
+ {
+  "type": "agentfootprint.agent.iteration_start",
+  "payload": {
+   "turnIndex": 0,
+   "iterIndex": 5
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#4",
+    "logRunId": "run#4",
+    "drillPath": [],
+    "committedThroughIdx": 14
+   },
+   "runtimeStageId": "call-llm#107",
+   "subflowPath": [],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#3"
+  }
+ },
+ {
+  "type": "agentfootprint.stream.llm_start",
+  "payload": {
+   "iteration": 5,
+   "provider": "mock",
+   "model": "m",
+   "systemPromptChars": 0,
+   "messagesCount": 9,
+   "toolsCount": 2,
+   "tools": [
+    {
+     "name": "lookup",
+     "description": "Look a citizen up."
+    },
+    {
+     "name": "confirm",
+     "description": "Ask a person to confirm."
+    }
+   ]
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#4",
+    "logRunId": "run#4",
+    "drillPath": [],
+    "committedThroughIdx": 14
+   },
+   "runtimeStageId": "call-llm#107",
+   "subflowPath": [],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#3"
+  }
+ },
+ {
+  "type": "agentfootprint.stream.token",
+  "payload": {
+   "iteration": 5,
+   "tokenIndex": 0,
+   "content": "All "
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#4",
+    "logRunId": "run#4",
+    "drillPath": [],
+    "committedThroughIdx": 14
+   },
+   "runtimeStageId": "call-llm#107",
+   "subflowPath": [],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#3"
+  }
+ },
+ {
+  "type": "agentfootprint.stream.token",
+  "payload": {
+   "iteration": 5,
+   "tokenIndex": 1,
+   "content": "checked."
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#4",
+    "logRunId": "run#4",
+    "drillPath": [],
+    "committedThroughIdx": 14
+   },
+   "runtimeStageId": "call-llm#107",
+   "subflowPath": [],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#3"
+  }
+ },
+ {
+  "type": "agentfootprint.stream.llm_end",
+  "payload": {
+   "iteration": 5,
+   "content": "All checked.",
+   "toolCallCount": 0,
+   "usage": {
+    "input": 93,
+    "output": 3
+   },
+   "stopReason": "stop",
+   "durationMs": "<n>"
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#4",
+    "logRunId": "run#4",
+    "drillPath": [],
+    "committedThroughIdx": 14
+   },
+   "runtimeStageId": "call-llm#107",
+   "subflowPath": [],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#3"
+  }
+ },
+ {
+  "type": "agentfootprint.agent.route_decided",
+  "payload": {
+   "turnIndex": 0,
+   "iterIndex": 5,
+   "chosen": "final",
+   "rationale": "LLM produced no tool calls — final answer"
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#4",
+    "logRunId": "run#4",
+    "drillPath": [],
+    "committedThroughIdx": 17
+   },
+   "runtimeStageId": "sf-route#110",
+   "subflowPath": [],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#3"
+  }
+ },
+ {
+  "type": "agentfootprint.agent.iteration_end",
+  "payload": {
+   "turnIndex": 0,
+   "iterIndex": 5,
+   "toolCallCount": 0
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#4",
+    "logRunId": "run#4",
+    "drillPath": [
+     "final#111"
+    ],
+    "committedThroughIdx": 0
+   },
+   "runtimeStageId": "final/prepare-final#112",
+   "subflowPath": [
+    "final"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#3"
+  }
+ },
+ {
+  "type": "agentfootprint.agent.turn_end",
+  "payload": {
+   "turnIndex": 0,
+   "finalContent": "All checked.",
+   "totalInputTokens": 252,
+   "totalOutputTokens": 3,
+   "iterationCount": 5,
+   "durationMs": "<n>"
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#4",
+    "logRunId": "run#4",
+    "drillPath": [
+     "final#111"
+    ],
+    "committedThroughIdx": 0
+   },
+   "runtimeStageId": "final/prepare-final#112",
+   "subflowPath": [
+    "final"
+   ],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#3"
+  }
+ },
+ {
+  "type": "agentfootprint.integrity.disposition",
+  "payload": {
+   "posture": "observe",
+   "workExisted": true,
+   "rows": [
+    {
+     "check": "invariant-violation",
+     "seam": "wire",
+     "checked": 1,
+     "findings": 0,
+     "notApplicable": 0,
+     "unreachable": 0,
+     "synthetic": 0
+    },
+    {
+     "check": "invariant-violation",
+     "seam": "compose",
+     "checked": 0,
+     "findings": 0,
+     "notApplicable": 1,
+     "unreachable": 0,
+     "synthetic": 0
+    },
+    {
+     "check": "dangling-reference",
+     "seam": "compose",
+     "checked": 0,
+     "findings": 0,
+     "notApplicable": 1,
+     "unreachable": 0,
+     "synthetic": 0
+    },
+    {
+     "check": "unsupported-argument",
+     "seam": "choice",
+     "checked": 0,
+     "findings": 0,
+     "notApplicable": 1,
+     "unreachable": 0,
+     "synthetic": 0
+    },
+    {
+     "check": "unsupported-claim",
+     "seam": "claim",
+     "checked": 0,
+     "findings": 0,
+     "notApplicable": 1,
+     "unreachable": 0,
+     "synthetic": 0
+    },
+    {
+     "check": "empty-lookup",
+     "seam": "write",
+     "checked": 0,
+     "findings": 0,
+     "notApplicable": 1,
+     "unreachable": 0,
+     "synthetic": 0
+    },
+    {
+     "check": "column-type-mismatch",
+     "seam": "write",
+     "checked": 0,
+     "findings": 0,
+     "notApplicable": 1,
+     "unreachable": 0,
+     "synthetic": 0
+    },
+    {
+     "check": "missing-column",
+     "seam": "write",
+     "checked": 0,
+     "findings": 0,
+     "notApplicable": 1,
+     "unreachable": 0,
+     "synthetic": 0
+    },
+    {
+     "check": "prior-turn-evidence",
+     "seam": "claim",
+     "checked": 0,
+     "findings": 0,
+     "notApplicable": 1,
+     "unreachable": 0,
+     "synthetic": 0
+    }
+   ]
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "integrity-disposition#0",
+   "subflowPath": [],
+   "compositionPath": [
+    "Agent:agent"
+   ],
+   "runId": "run#3"
+  }
+ },
+ {
+  "type": "app.custom",
+  "payload": {
+   "note": "a consumer fact",
+   "ssn": "SSN-NOPOLICY-1"
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "consumer-emit#0",
+   "subflowPath": [],
+   "compositionPath": [],
+   "runId": "consumer-scope"
+  }
+ },
+ {
+  "type": "agentfootprint.artifacts.resolved",
+  "payload": {
+   "ref": "art_1",
+   "via": "get",
+   "kind": "table",
+   "bytes": 10
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "consumer-emit#0",
+   "subflowPath": [],
+   "compositionPath": [],
+   "runId": "run#1",
+   "sessionId": "s"
+  }
+ },
+ {
+  "type": "agentfootprint.composition.enter",
+  "payload": {
+   "kind": "Sequence",
+   "id": "sequence",
+   "name": "Sequence",
+   "childCount": 1
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#5",
+    "logRunId": "run#5",
+    "drillPath": [],
+    "committedThroughIdx": -1
+   },
+   "runtimeStageId": "seed#0",
+   "subflowPath": [],
+   "compositionPath": [
+    "Sequence:sequence"
+   ],
+   "runId": "run#6"
+  }
+ },
+ {
+  "type": "agentfootprint.agent.turn_start",
+  "payload": {
+   "turnIndex": 0,
+   "userPrompt": "compose"
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#5",
+    "logRunId": "run#5",
+    "drillPath": [
+     "step-first#1"
+    ],
+    "committedThroughIdx": 0
+   },
+   "runtimeStageId": "step-first/seed#2",
+   "subflowPath": [
+    "step-first"
+   ],
+   "compositionPath": [
+    "Sequence:sequence"
+   ],
+   "runId": "run#6"
+  }
+ },
+ {
+  "type": "agentfootprint.context.slot_composed",
+  "payload": {
+   "slot": "system-prompt",
+   "iteration": 1,
+   "budget": {
+    "cap": 4000,
+    "used": 0,
+    "headroomChars": 4000
+   },
+   "sourceBreakdown": {},
+   "droppedCount": 0,
+   "droppedSummaries": []
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "step-first/sf-system-prompt/compose#10",
+   "subflowPath": [
+    "step-first",
+    "sf-system-prompt"
+   ],
+   "compositionPath": [
+    "Sequence:sequence"
+   ],
+   "runId": "run#6"
+  }
+ },
+ {
+  "type": "agentfootprint.context.injected",
+  "payload": {
+   "contentSummary": "compose",
+   "contentHash": "4939a8c6",
+   "slot": "messages",
+   "source": "user",
+   "reason": "conversation history [0]",
+   "rawContent": "compose",
+   "asRole": "user",
+   "asRecency": "latest",
+   "position": 0
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "step-first/sf-messages/compose#12",
+   "subflowPath": [
+    "step-first",
+    "sf-messages"
+   ],
+   "compositionPath": [
+    "Sequence:sequence"
+   ],
+   "runId": "run#6"
+  }
+ },
+ {
+  "type": "agentfootprint.context.slot_composed",
+  "payload": {
+   "slot": "messages",
+   "iteration": 1,
+   "budget": {
+    "cap": 10000,
+    "used": 7,
+    "headroomChars": 9993
+   },
+   "sourceBreakdown": {
+    "user": {
+     "chars": 7,
+     "count": 1
+    }
+   },
+   "orderingStrategy": "history-order",
+   "droppedCount": 0,
+   "droppedSummaries": []
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "step-first/sf-messages/compose#12",
+   "subflowPath": [
+    "step-first",
+    "sf-messages"
+   ],
+   "compositionPath": [
+    "Sequence:sequence"
+   ],
+   "runId": "run#6"
+  }
+ },
+ {
+  "type": "agentfootprint.context.slot_composed",
+  "payload": {
+   "slot": "tools",
+   "iteration": 1,
+   "budget": {
+    "cap": 2000,
+    "used": 0,
+    "headroomChars": 2000
+   },
+   "sourceBreakdown": {},
+   "orderingStrategy": "registry+injections",
+   "droppedCount": 0,
+   "droppedSummaries": []
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "runtimeStageId": "step-first/sf-tools/compose#15",
+   "subflowPath": [
+    "step-first",
+    "sf-tools"
+   ],
+   "compositionPath": [
+    "Sequence:sequence"
+   ],
+   "runId": "run#6"
+  }
+ },
+ {
+  "type": "agentfootprint.agent.iteration_start",
+  "payload": {
+   "turnIndex": 0,
+   "iterIndex": 1
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#5",
+    "logRunId": "run#5",
+    "drillPath": [
+     "step-first#1"
+    ],
+    "committedThroughIdx": 15
+   },
+   "runtimeStageId": "step-first/call-llm#20",
+   "subflowPath": [
+    "step-first"
+   ],
+   "compositionPath": [
+    "Sequence:sequence"
+   ],
+   "runId": "run#6"
+  }
+ },
+ {
+  "type": "agentfootprint.stream.llm_start",
+  "payload": {
+   "iteration": 1,
+   "provider": "mock",
+   "model": "m",
+   "systemPromptChars": 0,
+   "messagesCount": 1,
+   "toolsCount": 0
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#5",
+    "logRunId": "run#5",
+    "drillPath": [
+     "step-first#1"
+    ],
+    "committedThroughIdx": 15
+   },
+   "runtimeStageId": "step-first/call-llm#20",
+   "subflowPath": [
+    "step-first"
+   ],
+   "compositionPath": [
+    "Sequence:sequence"
+   ],
+   "runId": "run#6"
+  }
+ },
+ {
+  "type": "agentfootprint.stream.token",
+  "payload": {
+   "iteration": 1,
+   "tokenIndex": 0,
+   "content": "step "
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#5",
+    "logRunId": "run#5",
+    "drillPath": [
+     "step-first#1"
+    ],
+    "committedThroughIdx": 15
+   },
+   "runtimeStageId": "step-first/call-llm#20",
+   "subflowPath": [
+    "step-first"
+   ],
+   "compositionPath": [
+    "Sequence:sequence"
+   ],
+   "runId": "run#6"
+  }
+ },
+ {
+  "type": "agentfootprint.stream.token",
+  "payload": {
+   "iteration": 1,
+   "tokenIndex": 1,
+   "content": "one"
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#5",
+    "logRunId": "run#5",
+    "drillPath": [
+     "step-first#1"
+    ],
+    "committedThroughIdx": 15
+   },
+   "runtimeStageId": "step-first/call-llm#20",
+   "subflowPath": [
+    "step-first"
+   ],
+   "compositionPath": [
+    "Sequence:sequence"
+   ],
+   "runId": "run#6"
+  }
+ },
+ {
+  "type": "agentfootprint.stream.llm_end",
+  "payload": {
+   "iteration": 1,
+   "content": "step one",
+   "toolCallCount": 0,
+   "usage": {
+    "input": 2,
+    "output": 2
+   },
+   "stopReason": "stop",
+   "durationMs": "<n>"
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#5",
+    "logRunId": "run#5",
+    "drillPath": [
+     "step-first#1"
+    ],
+    "committedThroughIdx": 15
+   },
+   "runtimeStageId": "step-first/call-llm#20",
+   "subflowPath": [
+    "step-first"
+   ],
+   "compositionPath": [
+    "Sequence:sequence"
+   ],
+   "runId": "run#6"
+  }
+ },
+ {
+  "type": "agentfootprint.agent.route_decided",
+  "payload": {
+   "turnIndex": 0,
+   "iterIndex": 1,
+   "chosen": "final",
+   "rationale": "LLM produced no tool calls — final answer"
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#5",
+    "logRunId": "run#5",
+    "drillPath": [
+     "step-first#1"
+    ],
+    "committedThroughIdx": 18
+   },
+   "runtimeStageId": "step-first/sf-route#23",
+   "subflowPath": [
+    "step-first"
+   ],
+   "compositionPath": [
+    "Sequence:sequence"
+   ],
+   "runId": "run#6"
+  }
+ },
+ {
+  "type": "agentfootprint.agent.iteration_end",
+  "payload": {
+   "turnIndex": 0,
+   "iterIndex": 1,
+   "toolCallCount": 0
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#5",
+    "logRunId": "run#5",
+    "drillPath": [
+     "step-first#1",
+     "step-first/final#24"
+    ],
+    "committedThroughIdx": 0
+   },
+   "runtimeStageId": "step-first/final/prepare-final#25",
+   "subflowPath": [
+    "step-first",
+    "final"
+   ],
+   "compositionPath": [
+    "Sequence:sequence"
+   ],
+   "runId": "run#6"
+  }
+ },
+ {
+  "type": "agentfootprint.agent.turn_end",
+  "payload": {
+   "turnIndex": 0,
+   "finalContent": "step one",
+   "totalInputTokens": 2,
+   "totalOutputTokens": 2,
+   "iterationCount": 1,
+   "durationMs": "<n>"
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#5",
+    "logRunId": "run#5",
+    "drillPath": [
+     "step-first#1",
+     "step-first/final#24"
+    ],
+    "committedThroughIdx": 0
+   },
+   "runtimeStageId": "step-first/final/prepare-final#25",
+   "subflowPath": [
+    "step-first",
+    "final"
+   ],
+   "compositionPath": [
+    "Sequence:sequence"
+   ],
+   "runId": "run#6"
+  }
+ },
+ {
+  "type": "agentfootprint.composition.exit",
+  "payload": {
+   "kind": "Sequence",
+   "id": "sequence",
+   "name": "Sequence",
+   "status": "ok",
+   "durationMs": "<n>"
+  },
+  "meta": {
+   "wallClockMs": "<n>",
+   "runOffsetMs": "<n>",
+   "sourcePosition": {
+    "engineRunId": "run#5",
+    "logRunId": "run#5",
+    "drillPath": [],
+    "committedThroughIdx": 2
+   },
+   "runtimeStageId": "finalize#27",
+   "subflowPath": [],
+   "compositionPath": [
+    "Sequence:sequence"
+   ],
+   "runId": "run#6"
+  }
+ }
+]

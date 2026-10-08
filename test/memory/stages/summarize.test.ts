@@ -23,6 +23,7 @@ import type { MemoryState } from '../../../src/memory/stages/types';
 import type { MemoryEntry } from '../../../src/memory/entry';
 import { InMemoryStore } from '../../../src/memory/store/index.js';
 import type { Message } from '../../../src/types/messages';
+import { noPolicyScope } from '../../helpers/noPolicy.js';
 
 const ID = { tenant: 't1', conversationId: 'c1' };
 
@@ -112,7 +113,8 @@ function withEmit(scope: MemoryState): {
   (scope as unknown as { $emit: (t: string, p: unknown) => void }).$emit = (t, p) => {
     events.push({ type: t, payload: p as Record<string, unknown> });
   };
-  return { scope, events };
+  // A run with no policy: its events are served as made.
+  return { scope: noPolicyScope(scope), events };
 }
 
 // ── Unit ────────────────────────────────────────────────────

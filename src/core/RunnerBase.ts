@@ -13,9 +13,28 @@ import type {
   FlowChart,
   FlowChartExecutor,
   FlowchartCheckpoint,
+  RedactionPolicy,
   RunOptions,
 } from 'footprintjs';
-import { EventDispatcher } from '../events/dispatcher.js';
+import type { RunContext } from '../bridge/eventMeta.js';
+import { EventDispatcher, REFUSE } from '../events/dispatcher.js';
+import { bindChartStages } from '../redaction/chartBinding.js';
+import { declarationOf, declareRedaction, redactionDeclaredBy } from '../redaction/declared.js';
+import { policyOfCoverage, type RedactionCoverage } from '../redaction/coverage.js';
+import { policyOfMarks, unionRedactionPolicies } from '../redaction/policy.js';
+import {
+  adoptScopeOutsideRun,
+  coverageOfExecutor,
+  createRunRedaction,
+  outsideRunFor,
+  servingAhead,
+  servingOfExecutor,
+  type OutsideRun,
+  type RunRedaction,
+} from '../redaction/runRedaction.js';
+import type { EventServing } from '../redaction/served.js';
+import { servableSnapshot } from './servableSnapshot.js';
+import { registerRunnerLive } from './runnerLive.js';
 import { redactConsentUrlForEvent } from '../identity/consent.js';
 import { argumentAskReplyForEvent, isArgumentAskPause } from './agent/arguments/askMarker.js';
 import { readAskComponent } from './askComponent.js';
@@ -56,6 +75,11 @@ import {
 } from '../recorders/observability/localObservability.js';
 import type { EnableNamespace, Runner } from './runner.js';
 import type { TeardownReason, ToolSessionTier } from './toolSessions.js';
+import type { FixedPauseReason } from '../events/payloads.js';
+
+/** The reason a pause request names when its pause carries none — typed, so a
+ *  redacted record keeps it as the library's own words (`FixedPauseReason`). */
+const DEFAULT_PAUSE_REASON: FixedPauseReason = 'stage requested pause';
 
 let _runIdSeq = 0;
 
@@ -150,9 +174,99 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
    * {@link RunnerBase.getSnapshot} is the same value under the name that says
    * so. Anything that must describe a FINISHED run has to capture at the
    * terminal flush instead of polling this.
+   *
+   * **Served, under a redaction policy.** When the run was covered by one
+   * (`Agent.create({ redact })`, a composed member's, or one a calling tool
+   * handed down), this is footprintjs's REDACTED view —
+   * `getSnapshot({ redact: true })`, through `servableSnapshot`, the one owner
+   * of what a run may show: `sharedState` and every subflow's state from the
+   * redacted mirror, the commit log as scrubbed at write time, and no
+   * `initialState` (the raw pre-run base never passed the policy, so a fold of
+   * it reports `basis: 'log-only'`). Without a policy it is the snapshot
+   * exactly as footprintjs builds it. The library's own logic never reads this
+   * getter — what it computes on is the live run (`liveSnapshot`).
    */
   getLastSnapshot(): ReturnType<FlowChartExecutor['getSnapshot']> | undefined {
+    if (this.lastExecutor === undefined) return undefined;
+    const coverage = coverageOfExecutor(this.lastExecutor);
+    switch (coverage.state) {
+      case 'covered':
+        return servableSnapshot(this.lastExecutor, coverage.policy);
+      case 'declared-none':
+        return servableSnapshot(this.lastExecutor, undefined);
+      case 'unknown':
+        // An executor no run of this runner opened: nothing says what its
+        // record may show, so none of it is served — fail closed, never raw.
+        return undefined;
+    }
+  }
+
+  /**
+   * The LIVE snapshot of the most recent run — real values, never served.
+   * For the runner's own logic only (continuing a conversation, building a
+   * checkpoint, decoding the run's verdict): what the agent computes on is the
+   * class the redaction law never covers. Anything handed OUT goes through
+   * {@link RunnerBase.getLastSnapshot}.
+   */
+  protected liveSnapshot(): ReturnType<FlowChartExecutor['getSnapshot']> | undefined {
     return this.lastExecutor?.getSnapshot();
+  }
+
+  /**
+   * Registers this runner's LIVE taps — the real-value event path and the live
+   * committed state — for the library's own mechanisms outside this class
+   * (`runnerLive.ts`: a host's streamed reply, spend ledger and session store,
+   * `toSSE({ format: 'text' })`). Deliberately not a method: no consumer can
+   * reach the real values through a runner, so none can make them a record.
+   */
+  constructor() {
+    // Every runner DECLARES: positively none, until a subclass declares its
+    // own policy (`Agent.create({ redact })`, a composition adopting its
+    // members') — never a lookup that misses (`redaction/coverage.ts`).
+    declareRedaction(this, undefined);
+    // Before any run opens its redaction, an event of no run (a consumer's
+    // `emit`, a host's fact) is served under what this runner DECLARES — read
+    // at dispatch time, since the declaration is made after this constructor.
+    let declaredServing: { declaration: RedactionCoverage; serving: EventServing } | undefined;
+    // A fact of a run this dispatcher holds no serving for is refused, never
+    // served under another run's policy; the run-id format is ours to judge.
+    this.dispatcher.useRunIdRecogniser(isMintedRunId);
+    this.dispatcher.useInstanceServing(() => {
+      const declaration = declarationOf(this);
+      if (declaration.state === 'unknown') return REFUSE;
+      if (declaredServing?.declaration !== declaration) {
+        declaredServing = { declaration, serving: servingAhead(policyOfCoverage(declaration)) };
+      }
+      return declaredServing.serving;
+    });
+    registerRunnerLive(this, {
+      onRealEvent: (listener) => this.dispatcher.onRealEvent(listener),
+      liveState: () => this.lastExecutor?.getRuntime().globalStore.getState(),
+      liveSnapshot: () => this.liveSnapshot(),
+    });
+  }
+
+  /**
+   * Open the redaction for one run — called by every runner's
+   * `createExecutor`, for every run, before `new FlowChartExecutor`.
+   *
+   * The policy in force is this runner's declaration joined with `handedDown`
+   * (a policy the caller added for this run — `AgentRunOptions.redact`). The
+   * returned object supplies the executor's scope factory (so every stage's
+   * events are served at their source, `src/redaction/runRedaction.ts`) and
+   * hands the policy to footprintjs (`applyTo`). The dispatcher serves the
+   * run's direct facts by the same rule from here on.
+   */
+  protected openRunRedaction(
+    handedDown: RedactionPolicy | undefined,
+    getRunContext: () => RunContext,
+  ): RunRedaction {
+    const policy = unionRedactionPolicies(redactionDeclaredBy(this), handedDown);
+    const run = createRunRedaction({ policy, dispatcher: this.dispatcher, getRunContext });
+    // Under the run's own id too: a fact it dispatches after the next run
+    // opened is still served under this run's policy.
+    this.dispatcher.useServing(run.serving, getRunContext().runId);
+    return run;
   }
 
   /**
@@ -162,9 +276,11 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
    * footprintjs executor — without having to know whether they're holding
    * an agentfootprint Runner or a raw executor.
    *
-   * During an active run, returns the live snapshot (commit log + execution
-   * tree built incrementally as stages execute). Between runs, returns the
-   * last completed run's snapshot. Undefined before any run has started.
+   * During an active run, returns the in-progress snapshot (commit log +
+   * execution tree built incrementally as stages execute). Between runs,
+   * returns the last completed run's snapshot. Undefined before any run has
+   * started. Served exactly as `getLastSnapshot()` is: under the run's
+   * redaction policy, the placeholder where a selected value was.
    */
   getSnapshot(): ReturnType<FlowChartExecutor['getSnapshot']> | undefined {
     return this.getLastSnapshot();
@@ -330,6 +446,17 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
       );
     }
     this.chart = builder();
+    // A stage that runs outside this runner's runs (its chart mounted into an
+    // executor the app built) serves its events under what this runner
+    // declares — its policy, or positively none — bound to THIS runner at
+    // build, by identity, and held by it: no registry another runner's stage
+    // could read, and never left untied (an untied scope reads as unknown).
+    let outside: OutsideRun | undefined;
+    bindChartStages(this.chart, (scope) => {
+      const declaration = declarationOf(this);
+      if (outside?.declaration !== declaration) outside = outsideRunFor(declaration);
+      adoptScopeOutsideRun(scope, outside);
+    });
   }
 
   /**
@@ -376,7 +503,7 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
         ? (result as { pauseData?: unknown }).pauseData
         : undefined;
 
-    this.emitPauseRequest(checkpoint, pauseData);
+    this.emitPauseRequest(checkpoint, pauseData, servingOfExecutor(executor));
 
     // A check-in pause carries its typed request under `pauseData.checkIn` and a
     // middleware ask carries its question under `pauseData.ask` (the dispatch
@@ -406,15 +533,21 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
 
   /**
    * Emit `agentfootprint.pause.request` through the dispatcher. Called by
-   * `detectPause()`. Subclasses should not emit this directly.
+   * `detectPause()`. Subclasses should not emit this directly. Served under
+   * the serving of the run that paused (`runServing`, from its executor) —
+   * never the run opened last on this instance.
    */
-  private emitPauseRequest(checkpoint: FlowchartCheckpoint, pauseData: unknown): void {
+  private emitPauseRequest(
+    checkpoint: FlowchartCheckpoint,
+    pauseData: unknown,
+    runServing: EventServing | undefined,
+  ): void {
     const meta = this.minimalMeta();
     const reasonFromData =
       typeof pauseData === 'object' && pauseData !== null && 'reason' in pauseData
         ? String((pauseData as { reason: unknown }).reason)
-        : 'stage requested pause';
-    this.dispatcher.dispatch({
+        : DEFAULT_PAUSE_REASON;
+    const event = {
       type: 'agentfootprint.pause.request',
       payload: {
         reason: reasonFromData,
@@ -433,14 +566,34 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
         runtimeStageId: `${checkpoint.pausedStageId}#paused`,
         subflowPath: checkpoint.subflowPath,
       },
-    });
+    } as const;
+    this.dispatcher.dispatchForRun(event as unknown as AgentfootprintEvent, runServing);
   }
 
   /**
    * Emit `agentfootprint.pause.resume` through the dispatcher. Called from
-   * concrete runners' `resume()` BEFORE invoking `executor.resume()`.
+   * concrete runners' `resume()` BEFORE invoking `executor.resume()` — so
+   * before the leg's run opens its redaction. The payload is the person's
+   * reply, a record like every event: it is served under the policy the
+   * resumed leg is covered by (this runner's declaration joined with
+   * `handedDown`, the caller's per-run policy, and the names the paused leg
+   * kept out — the checkpoint's marks), installed here first — otherwise a
+   * fresh instance, a later process or another pool lane would dispatch it
+   * unserved (`runRedaction.ts` · `servingAhead`).
    */
-  protected emitPauseResume(checkpoint: FlowchartCheckpoint, input: unknown): void {
+  protected emitPauseResume(
+    checkpoint: FlowchartCheckpoint,
+    input: unknown,
+    handedDown?: RedactionPolicy,
+  ): RedactionPolicy | undefined {
+    // The resumed leg's own policy beside this runner's declaration: what the
+    // caller hands it, joined with the names the paused leg kept out (the
+    // checkpoint's marks) — returned for the runner to hand THIS leg's
+    // executor (`openRunRedaction`), so nothing per-run is kept on the instance.
+    const resumeLeg = unionRedactionPolicies(handedDown, policyOfMarks(checkpoint.redactionMarks));
+    this.dispatcher.useServing(
+      servingAhead(unionRedactionPolicies(redactionDeclaredBy(this), resumeLeg)),
+    );
     const meta = this.minimalMeta();
     const pausedDurationMs = Date.now() - checkpoint.pausedAt;
     // Which registered component the paused ask nominated to collect this
@@ -472,6 +625,7 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
         subflowPath: checkpoint.subflowPath,
       },
     });
+    return resumeLeg;
   }
 
   // ─── Subscription API (delegates to dispatcher) ────────────────
@@ -805,6 +959,11 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
         },
         getSnapshot: () => this.getLastSnapshot(),
         getCommitCount: () => this.getCommitCount(),
+        redactedByPolicy: () => {
+          if (this.lastExecutor === undefined) return false;
+          // Unknown reads as covered: a label never claims less than the record may hold.
+          return coverageOfExecutor(this.lastExecutor).state !== 'declared-none';
+        },
       }),
     // v2.8 grouped strategy enablers — see
     // `docs/inspiration/strategy-everywhere.md`.

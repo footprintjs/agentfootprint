@@ -538,10 +538,12 @@ export interface ArgumentRow {
 }
 ```
 
-- **Redaction goes through the tool's own argument view.** An agent's executor sets no state-level
-  redaction policy (only `core/flowchartAsTool.ts` and `core/runbook/runbookAsTool.ts` set one, on
-  their inner executors), and `core/Agent.ts` · `findings` hands out the committed ledger as a
-  clone. So `value`, `proposed` and `quote` are built from `core/toolShownArgs.ts` · `shownArgsOf`,
+- **Redaction goes through the tool's own argument view.** An agent's executor set no state-level
+  redaction policy when this was written (only `core/flowchartAsTool.ts` and
+  `core/runbook/runbookAsTool.ts` set one, on their inner executors — an agent takes one since
+  `Agent.create({ redact })`, `src/redaction/`, and the view still applies on top of it: the view
+  hides what a TOOL declares, the policy what the AGENT names), and `core/Agent.ts` · `findings`
+  hands out the committed ledger as a clone. So `value`, `proposed` and `quote` are built from `core/toolShownArgs.ts` · `shownArgsOf`,
   the checks run on the raw value in memory, and the raw value is never stored. The event never
   carries a value or a quote, and carries no length when the view hides the key (devil's review, a
   MUST-FIX).
@@ -1299,7 +1301,7 @@ Verdicts on the four-lens review. "Verified" means the finding's evidence was re
 | devil: a reading bypasses the ask | MUST · both | applied (a reading asks; author-declared phrases) | § 3.2 (c), (d) |
 | devil: `tokenize` over compact JSON | MUST · arguments | verified by running it; applied (the index's per-result reading) | § 3.2 (c) |
 | devil: an unvouched empty result reads as known | MUST · architecture | applied (`empty-undeclared`; four values) | § 4.2 |
-| devil: raw values bypass the argument view | MUST · arguments | verified (no agent-level redaction policy; `findings()` clones); applied | § 3.2 (h) |
+| devil: raw values bypass the argument view | MUST · arguments | verified (no agent-level redaction policy then — `Agent.create({ redact })` now; `findings()` clones); applied | § 3.2 (h) |
 | devil: the ask fires too often; answered values get evicted | SHOULD · arguments | applied (hint only; ledger rows; step-4 ask-rate bench) | § 3.2 (d); § 4.1 |
 | devil: the quote check is too strict | SHOULD · arguments | partly applied (hint kept); fallback rejected | § 3.2 (c); § 9 |
 | devil: middleware turns a guess into `app` | SHOULD · arguments | applied (checked before middleware; a rewrite reads as assumed) | § 3.2 (e); Q8 |

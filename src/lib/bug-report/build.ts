@@ -49,10 +49,13 @@
  *
  * ## Redaction is already done, and the manifest proves it
  *
- * The recording arrives ALREADY redacted: footprintjs scrubs at commit time
- * under the run's `RedactionPolicy`, so a redacted value was never in the
- * snapshot this reads. Nothing here scrubs anything — it would be too late to
- * matter and a second policy could only disagree with the first. What this
+ * The recording arrives ALREADY redacted when its run had a policy (an
+ * agent's `Agent.create({ redact })`): footprintjs scrubs state at commit
+ * time, the snapshot a recording carries is the redacted view
+ * (`getLastSnapshot()`), and every event was served under the same rule
+ * before anything recorded it — so a redacted value was never in what this
+ * reads. Nothing here scrubs anything — it would be too late to matter and a
+ * second policy could only disagree with the first. What this
  * does do is LIST the redacted keys by name, derived from the placeholders
  * actually present in the evidence, so a human consenting to the bundle can
  * see which secrets were protected. A key that is not on that list was not

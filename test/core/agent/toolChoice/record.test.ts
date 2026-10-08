@@ -21,6 +21,7 @@ import type {
   ToolChoiceEntry,
   ToolChoiceRow,
 } from '../../../../src/core/agent/toolChoice/types.js';
+import { noPolicyScope } from '../../../helpers/noPolicy.js';
 
 const PICK: ToolChoiceRow = {
   kind: 'pick',
@@ -43,10 +44,11 @@ const PICK: ToolChoiceRow = {
 
 function scopeOf(prior?: readonly ToolChoiceEntry[]) {
   const events: { name: string; payload: unknown }[] = [];
-  const scope: ToolChoiceScope = {
+  // A run with no policy: its events are served as made.
+  const scope: ToolChoiceScope = noPolicyScope<ToolChoiceScope>({
     ...(prior !== undefined && { toolChoices: prior }),
     $emit: (name, payload) => events.push({ name, payload }),
-  };
+  });
   return { scope, events };
 }
 

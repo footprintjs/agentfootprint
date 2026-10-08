@@ -41,7 +41,12 @@ export type MissingReason =
    * It travelled as DATA beside the answer, not as text in it — a typed
    * answer's limits (`turn_end.answerCoverage`, read as `limitsData`).
    */
-  | 'as-data';
+  | 'as-data'
+  /**
+   * The record keeps it out: a redaction policy (an agent's `redact`) left its
+   * placeholder where the value was.
+   */
+  | 'redacted';
 
 /**
  * Where "show me" lands. Always a LEAF: `path` names one value, never a whole

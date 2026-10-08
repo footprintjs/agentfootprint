@@ -237,6 +237,31 @@ The rules for the verifiers themselves are in `src/adapters/identity/README.md`.
 - `browserSession.ts`, `webSocketConversation.ts`, `webSocketFrames.ts`,
   `identityVerification.ts`, `durability.ts`.
 
+## A hosted agent under `redact` — the record served, the person answered
+
+A hosted agent built with `Agent.create({ redact })` keeps what its policy names
+out of everything the host files or serves about a run — the recordings it mints
+(`recording/run` artifacts), so the `answer-account` op explains from a served
+record and says what it keeps out. What the host hands back to the PERSON and
+what the next turn resumes from are never redacted, and each reads the real
+value, never the record:
+
+- the streamed reply and the spend ledger — `standingAgent.ts` reads the run
+  through `core/runnerLive.ts` · `runnerLive`, the library's real-value path;
+- the session store — `durability.ts · durableWriter` reads the conversation
+  from the run's LIVE committed state (`core/runnerLive.ts` · `RunnerLive`) at the commit
+  that moved `history`; the commit event's values are the record's form.
+
+```ts
+await standingAgent({
+  agent: Agent.create({ provider, model, redact: conversationRedaction() }).build(),
+  sessions,
+  host: nodeHost({ port: 8080 }),
+});
+// The person reads the real reply; the session resumes on the real
+// conversation; every recording the host files holds the placeholder.
+```
+
 ## Filing for a turn — the host never composes a scope
 
 A request's artifact scope has ONE owner: `standingAgent`. The artifact door

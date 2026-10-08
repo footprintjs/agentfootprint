@@ -18,6 +18,8 @@ import type { FlowChart, TypedScope } from 'footprintjs';
 import { INJECTION_KEYS } from '../../conventions.js';
 import type { InjectionRecord } from '../../recorders/core/types.js';
 import { COMPOSITION_KEYS } from '../../recorders/core/types.js';
+// Writes the context recorder derives its events from — relayed under a policy.
+import { setEventSource } from '../../redaction/runRedaction.js';
 import type { ActiveInjection } from '../../lib/injection-engine/types.js';
 import { composeSlot, fnv1a, formatOverflowWarning, slotOverflow, truncate } from './helpers.js';
 
@@ -146,14 +148,14 @@ export function buildSystemPromptSlot(config: SystemPromptSlotConfig): FlowChart
         });
       }
 
-      scope.$setValue(INJECTION_KEYS.SYSTEM_PROMPT, injections);
+      setEventSource(scope, INJECTION_KEYS.SYSTEM_PROMPT, injections);
       const composition = composeSlot('system-prompt', args.iteration ?? 1, injections, budgetCap);
-      scope.$setValue(COMPOSITION_KEYS.SLOT_COMPOSED, composition);
+      setEventSource(scope, COMPOSITION_KEYS.SLOT_COMPOSED, composition);
 
       // Overflow is LOUD — nothing here truncates (see buildToolsSlot).
       const pressure = slotOverflow(composition);
       if (pressure) {
-        scope.$setValue(COMPOSITION_KEYS.BUDGET_PRESSURE, [pressure]);
+        setEventSource(scope, COMPOSITION_KEYS.BUDGET_PRESSURE, [pressure]);
         if (!warnedOverflow) {
           warnedOverflow = true;
           console.warn(

@@ -66,9 +66,10 @@ export interface LocalObservabilityOptions {
    * automatically would have widened what a carefully redacted Trace
    * exports without a line of code changing at any call site, which is the
    * kind of quiet trust-boundary move a library has no business making.
-   * When you turn it on, redaction for the snapshot half is footprintjs's
-   * `setRedactionPolicy()` at run time — the run's own policy, applied when
-   * the values were written.
+   * When you turn it on, redaction for the snapshot half is the run's own
+   * policy — `Agent.create({ redact })` — applied by footprintjs when the
+   * values were written; the snapshot is then the redacted view
+   * (`runner.getLastSnapshot()`).
    *
    * For a viewer, prefer `recordRun()`: `{ snapshot, events, structure }`
    * is the shape the UIs consume, and it is explicit about carrying state.
@@ -97,6 +98,12 @@ export interface RunAccess {
   readonly getSnapshot?: () => unknown;
   /** `() => runner.getCommitCount()` — sampled live on every boundary. */
   readonly getCommitCount?: () => number;
+  /**
+   * `true` when the runner's most recent run was covered by a redaction
+   * policy (an agent's `redact`): the events and the snapshot this handle
+   * holds were SERVED under it, which the Trace then says (`'policy'`).
+   */
+  readonly redactedByPolicy?: () => boolean;
 }
 
 /** A `FlowchartHandle` (live) plus `getTrace()` (offline snapshot). */
@@ -136,6 +143,12 @@ export function attachLocalObservability(
       // fires from the run's own exit boundary, where it is final.
       ...(options.includeSnapshot && access.getSnapshot && { snapshot: access.getSnapshot() }),
       ...(options.redact && { redact: options.redact }),
+      // Self-describing: events served under the run's redaction policy, with
+      // no per-event `redact` of the caller's over them, say `'policy'`. A
+      // caller's function still wins the label (`'pii'`) — it ran last.
+      ...(!options.redact &&
+        override?.redact === undefined &&
+        access.redactedByPolicy?.() === true && { redactionLabel: 'policy' as const }),
       ...override,
     });
 

@@ -67,6 +67,31 @@ Bounded-leak guarantee: every removal path (unsubscribe, `off()`, signal abort, 
 
 Per-run pattern on a reused server runner: subscribe with a per-request `AbortSignal`, abort after the run. Property + load tests enforce the guarantee (`test/events/property/lifecycle-invariants.test.ts`, `test/events/roi/memory-stability.test.ts` — 1,000 sequential `agent.run()` calls hold the count at baseline).
 
+### Decision 7: Every listener gets the SERVED event; the library's own mechanisms get the real one
+
+Under a run's redaction policy (an agent's `redact`, `src/redaction/`) an event is
+a record, and every listener — `.on()`, `'*'`, an attached recorder, an exporter —
+receives it served: footprintjs's placeholder wherever the policy selects a name.
+The dispatcher serves what it fans out ONCE per event (`EventServing`, installed
+per run by `RunnerBase · openRunRedaction`); an event already served at its
+source arrives through `dispatchServed` and is not served twice.
+
+A handful of the library's own mechanisms compute on events and hand the result
+back to the run or its caller — the crash checkpoint `resumeOnError` replays, the
+window's token meter, a host's streamed reply and spend ledger,
+`toSSE({ format: 'text' })`. They subscribe with `onRealEvent` (internal) and get
+the event as its producer made it. That tier is never a record: nothing on it is
+stored, exported or shown, and no consumer can reach it.
+
+```typescript
+// A consumer: the record, served.
+agent.on('agentfootprint.agent.turn_end', (e) => archive(e)); // finalContent: '[REDACTED]' under redact
+// The library itself (core/runnerLive.ts · runnerLive — no barrel exports it):
+runnerLive(agent)?.onRealEvent((e) => e.type === 'agentfootprint.stream.token' && reply.write(e.payload.content));
+```
+
+With no policy the serving is the identity: no copy, no walk, the same bytes as before.
+
 ## What the contract promises
 
 - **Additive within a major version.** Adding a new event is non-breaking.

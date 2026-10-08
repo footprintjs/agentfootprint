@@ -164,10 +164,12 @@ conversations — which is what the trim hints name.
 
 ### Redaction already happened
 
-The recording arrives **already redacted**: footprintjs scrubs at commit time
-under the run's `RedactionPolicy`, so a redacted value was never in the snapshot
-this reads. Nothing in the export scrubs anything — it would be too late to
-matter, and a second policy could only disagree with the first.
+The recording arrives **already redacted** when the run had a policy — for an
+agent, `Agent.create({ redact })`: footprintjs scrubs at commit time under the
+run's `RedactionPolicy`, and every event is served under it at its source, so a
+redacted value was never in the snapshot or the events this reads. Nothing in
+the export scrubs anything — it would be too late to matter, and a second policy
+could only disagree with the first. A run with no policy arrives raw.
 
 What the export *does* do is list the redacted keys **by name**, derived from
 the placeholders actually present in the evidence:
@@ -177,8 +179,9 @@ the placeholders actually present in the evidence:
 ```
 
 So a human consenting to the bundle can see which secrets were protected. An
-empty list is explained rather than left to look like "nothing secret here": it
-means the run had no redaction policy, and every value in the bundle is real.
+empty list is explained rather than left to look like "nothing secret here": no
+value in the bundle is a placeholder, so every value in it is real — the run had
+no redaction policy, or its policy selected nothing the run recorded.
 
 ## Step 4 — file it
 

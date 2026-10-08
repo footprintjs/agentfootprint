@@ -39,6 +39,8 @@ import { INJECTION_KEYS } from '../../conventions.js';
 import type { ContextRecency, ContextRole, ContextSource } from '../../events/types.js';
 import type { InjectionRecord } from '../../recorders/core/types.js';
 import { COMPOSITION_KEYS } from '../../recorders/core/types.js';
+// Writes the context recorder derives its events from — relayed under a policy.
+import { setEventSource } from '../../redaction/runRedaction.js';
 import { composeSlot, fnv1a, formatOverflowWarning, slotOverflow, truncate } from './helpers.js';
 
 /**
@@ -126,7 +128,7 @@ export function buildMessagesSlot(config: MessagesSlotConfig = {}): FlowChart {
         };
       });
 
-      scope.$setValue(INJECTION_KEYS.MESSAGES, injections);
+      setEventSource(scope, INJECTION_KEYS.MESSAGES, injections);
       const composition = composeSlot(
         'messages',
         iteration,
@@ -134,12 +136,12 @@ export function buildMessagesSlot(config: MessagesSlotConfig = {}): FlowChart {
         budgetCap,
         'history-order',
       );
-      scope.$setValue(COMPOSITION_KEYS.SLOT_COMPOSED, composition);
+      setEventSource(scope, COMPOSITION_KEYS.SLOT_COMPOSED, composition);
 
       // Overflow is LOUD — nothing here truncates (see buildToolsSlot).
       const pressure = slotOverflow(composition);
       if (pressure) {
-        scope.$setValue(COMPOSITION_KEYS.BUDGET_PRESSURE, [pressure]);
+        setEventSource(scope, COMPOSITION_KEYS.BUDGET_PRESSURE, [pressure]);
         if (!warnedOverflow) {
           warnedOverflow = true;
           console.warn(

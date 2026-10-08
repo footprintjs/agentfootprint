@@ -111,15 +111,19 @@ Pinned by `test/core/output-admission.test.ts`,
 ## An `'input'` scrub does not scrub the record
 The ledger row is NOT the only copy of the pre-scrub text. The model, the
 committed `history`, `checkpoint().history` and every `agentfootprint.*`
-event payload get the chain's verdict; these keep the original, and an app
-that must not keep it redacts them itself (an `Agent` exposes no footprintjs
-redaction policy today):
+event payload get the chain's verdict; these keep the original. An app that
+must not keep it in the RECORD names it in `Agent.create({ redact })` — the
+state key `middlewareDecisions` (every row, where `before` / `after` live; the
+`middleware.decision` events carry neither) and the run input's key `message`
+for the `run.entry` payload — and the records in the list below then hold the
+placeholder. The two CHECKPOINTS
+in it keep the original whatever the policy (a resume runs on real values),
+so where the app stores one it protects it:
 - the ledger row `middlewareDecisions[i].before`, in every copy of run state
   — `getLastSnapshot()` (`sharedState`, `commitLog`, `executionTree`,
   `subflowResults`), `getLastNarrativeEntries()`, a `recordRun` recording, a
   `BoundaryRecorder` `subflow.entry` payload, and a paused run's checkpoint
-  — `RunnerPauseOutcome.checkpoint` (`sharedState`; on footprintjs before
-  9.44.0 also its `executionTree`), which
+  — `RunnerPauseOutcome.checkpoint` (`sharedState`), which
   `standingAgent` itself stores for a paused session as a `flowchart-v1`
   envelope under every durability, the default `'exit'` included (strip the
   rows by wrapping the `persist` of the store passed as `sessions`);

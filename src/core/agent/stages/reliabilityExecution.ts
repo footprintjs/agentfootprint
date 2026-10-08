@@ -391,7 +391,7 @@ export async function executeWithReliability(
             // so observability sees the failure even if a buggy rule
             // routes to fail-fast or swallows it.
             // MUST-FIX #3: payload includes attempt + cumulativeRetries.
-            scope.$emit('agentfootprint.agent.output_schema_validation_failed', {
+            typedEmit(scope, 'agentfootprint.agent.output_schema_validation_failed', {
               ...(withholdDraft
                 ? { message: WITHHELD_SCHEMA_FAILURE, draftWithheld: true as const }
                 : {

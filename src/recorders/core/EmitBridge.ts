@@ -62,7 +62,9 @@ export class EmitBridge implements CombinedRecorder {
       this.getRunContext(),
     );
 
-    this.dispatcher.dispatch({
+    // The payload was served at its source (`src/redaction/runRedaction.ts` ·
+    // `emitServed`, before `$emit`), so this hop serves only the meta.
+    this.dispatcher.dispatchServed({
       type,
       payload,
       meta,

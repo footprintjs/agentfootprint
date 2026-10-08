@@ -275,9 +275,29 @@ export interface AgentIterationEndPayload {
    *  resume — `RunCheckpointError.checkpoint` snapshots this so
    *  `agent.resumeOnError(...)` can replay from the last good
    *  iteration. Optional for back-compat with v2.x recorders that
-   *  subscribed without expecting this field. */
-  readonly history?: ReadonlyArray<unknown>;
+   *  subscribed without expecting this field. Typed as the messages it
+   *  holds, so its field names and roles are the library's own words on a
+   *  redacted record (`redaction/knownStrings.ts`). */
+  readonly history?: ReadonlyArray<LLMMessage>;
 }
+
+/**
+ * The `route_decided` rationales that are FIXED sentences — the library's own
+ * words, so a redacted record keeps them (`redaction/knownStrings.ts`). A
+ * rationale composed per turn (a count of calls, a skill's name) is a free
+ * string there, kept out under a policy like any other.
+ */
+export type FixedRouteRationale =
+  | 'LLM produced no tool calls — final answer'
+  | 'maxIterations reached — forcing final'
+  | 'costBudget reached (onExceed: halt) — forcing final';
+
+/**
+ * The `pause.request` reason the library writes when the pause carries none —
+ * the library's own words (`redaction/knownStrings.ts`). A reason the pause
+ * carries is a free string.
+ */
+export type FixedPauseReason = 'stage requested pause';
 
 export interface AgentRouteDecidedPayload {
   readonly turnIndex: number;
@@ -305,7 +325,7 @@ export interface AgentRouteDecidedPayload {
     | 'step-nudge'
     | 'evidence-recheck'
     | 'wrap-up';
-  readonly rationale?: string;
+  readonly rationale?: FixedRouteRationale | (string & Record<never, never>);
 }
 
 export interface AgentHandoffPayload {
@@ -829,7 +849,7 @@ export interface ErrorFatalPayload {
 }
 
 export interface PauseRequestPayload {
-  readonly reason: string;
+  readonly reason: FixedPauseReason | (string & Record<never, never>);
   readonly questionPayload: Readonly<Record<string, unknown>>;
 }
 

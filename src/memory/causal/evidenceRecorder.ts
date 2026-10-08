@@ -18,11 +18,18 @@
  *          (Convention 4 — executor `clear()` resets between runs; same-
  *          executor pause/resume PRESERVES pre-pause evidence by design).
  * PII note: tool args/results and decide() evidence persist into snapshots.
- *          footprintjs `RedactionPolicy.emitPatterns` redacts the emit channel
- *          BEFORE this recorder IF the consumer configures one on the executor
- *          — the Agent does NOT configure one by default. Values are bounded
- *          (`maxPreviewChars` for results, `maxFieldChars` for args/evidence);
- *          treat the snapshot store as PII-bearing and protect it accordingly.
+ *          A causal memory is working state — a later run replays it to the
+ *          model — so the Agent feeds this recorder's tool calls from its
+ *          REAL-value path: under an agent's `redact` the snapshot still keeps
+ *          the real arguments and results, as it keeps the real question and
+ *          answer (`writeSnapshot` reads those from the conversation the run
+ *          computed on). The one part it cannot read real is the DECISIONS:
+ *          footprintjs serves its flow channel (`onDecision` / `onSelected`)
+ *          under the run's policy, so a selected value inside decide()
+ *          evidence is the placeholder there (a named limit,
+ *          `src/redaction/README.md`). Values are bounded (`maxPreviewChars`
+ *          for results, `maxFieldChars` for args/evidence); treat the snapshot
+ *          store as PII-bearing and protect it accordingly.
  *
  * The Agent attaches this automatically when a CAUSAL memory is mounted and
  * threads `collect` into the memory write mount (`evidenceSource`) — so
@@ -65,7 +72,7 @@ export interface CausalEvidenceRecorderHandle {
 }
 
 function preview(value: unknown, max: number): string {
-  let s: string;
+  let s: string | undefined;
   if (typeof value === 'string') s = value;
   else {
     try {
@@ -74,6 +81,8 @@ function preview(value: unknown, max: number): string {
       s = String(value);
     }
   }
+  // `toWireJson(undefined)` has no text; an absent result previews as itself.
+  if (typeof s !== 'string') s = String(value);
   return s.length > max ? `${s.slice(0, max)}…` : s;
 }
 
@@ -130,7 +139,15 @@ export function causalEvidenceRecorder(
     id: options.id ?? 'causal-evidence',
 
     onEmit(event): void {
-      const { name, payload } = event as { name: string; payload: Record<string, unknown> };
+      const { name, payload: raw } = event as { name: string; payload: unknown };
+      // An Agent feeds this from its REAL-value path (`core/Agent.ts`): a
+      // causal memory is working state a later run replays to the model, so
+      // its evidence keeps the real tool calls whatever the agent's `redact`.
+      // Attached to an executor by hand it receives that executor's emits as
+      // served there — a placeholder string for an event `emitPatterns`
+      // selects whole, whose fields then read as absent.
+      const whole = raw !== null && typeof raw === 'object' ? undefined : raw;
+      const payload = (whole === undefined ? raw : {}) as Record<string, unknown>;
       switch (name) {
         case 'agentfootprint.agent.turn_start':
           // A new turn on the same executor — start fresh (one snapshot per turn).
@@ -162,7 +179,7 @@ export function causalEvidenceRecorder(
           toolCalls.push({
             name: started?.name ?? 'unknown',
             args: started?.args ?? {},
-            resultPreview: preview(payload.result, maxPreview),
+            resultPreview: preview(whole ?? payload.result, maxPreview),
             errored: payload.error === true,
           });
           break;

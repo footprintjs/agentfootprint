@@ -66,6 +66,7 @@ import type {
   AssessmentReason,
   AssessmentRecord,
 } from './types.js';
+import { isPlaceholder, servedUnderPolicy } from '../../../redaction/marker.js';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -103,6 +104,34 @@ function stateOf(record: AssessmentRecord): Readonly<Record<string, unknown>> {
   if (isRecord(fromSnapshot)) return fromSnapshot;
   const fromCheckpoint = isRecord(record.checkpoint) ? record.checkpoint.sharedState : undefined;
   return isRecord(fromCheckpoint) ? fromCheckpoint : {};
+}
+
+/**
+ * `state` as the fold may read it. A key the record keeps out (an agent's
+ * `redact` left its placeholder there) reads as ABSENT — the fold never takes
+ * the placeholder for a value (a `pausedToolCallId` of `'REDACTED'` is not a
+ * pause) — and every such key the fold asks for is noted in `asked`, so
+ * `assessAnswer` can refuse to give a verdict over it. A record with no
+ * placeholder is handed through untouched.
+ */
+function keptOutGuard(state: Readonly<Record<string, unknown>>): {
+  readonly state: Readonly<Record<string, unknown>>;
+  readonly asked: ReadonlySet<string>;
+} {
+  const keptOut = new Set(Object.keys(state).filter((key) => isPlaceholder(state[key])));
+  const asked = new Set<string>();
+  if (keptOut.size === 0) return { state, asked };
+  // A plain copy without the kept-out keys: a served snapshot may be frozen,
+  // and a proxy may not answer `undefined` for a frozen key that holds a value.
+  const held = Object.fromEntries(Object.entries(state).filter(([key]) => !keptOut.has(key)));
+  const note = (key: string | symbol): void => {
+    if (typeof key === 'string' && keptOut.has(key)) asked.add(key);
+  };
+  const guarded = new Proxy(held, {
+    get: (target, key, receiver) => (note(key), Reflect.get(target, key, receiver)),
+    has: (target, key) => (note(key), Reflect.has(target, key)),
+  });
+  return { state: guarded, asked };
 }
 
 /** One tool result of this turn, where it sits in `history`. */
@@ -876,6 +905,11 @@ function valueOf(g: Gathered): Pick<AnswerAssessment, 'assessment' | 'reasons'> 
  *                   malformed `rowsAt`); a record it cannot read yields
  *                   `not-applicable`, never a throw.
  *
+ * A REDACTED record (an agent's `redact`): when the fold would read a state key
+ * the record keeps out, it gives no verdict — `standing: 'not-assessed'`, with
+ * the keys it needed in `keptOut`. A verdict over the placeholder would read a
+ * kept-out pause as a pause and a kept-out history as an empty one.
+ *
  * @example
  * ```ts
  * import { assessAnswer, recordRun } from 'agentfootprint/observe';
@@ -892,7 +926,43 @@ export function assessAnswer(
   declarations?: AssessmentDeclarations,
 ): AnswerAssessment {
   checkInputs(record, declarations);
-  const state = stateOf(record);
+  // A placeholder is a kept-out value only in a snapshot served under a policy
+  // (`redaction/marker.ts`); a checkpoint is never served.
+  return foldState(stateOf(record), declarations, servedUnderPolicy(record.snapshot));
+}
+
+/**
+ * `assessAnswer` over a runner's LIVE snapshot (`Agent.assessment()`): the
+ * state is the run's own heap, never served, so a placeholder string in it is
+ * a value. The snapshot's `recorders` row says a policy covered the run — true
+ * of its commit log, never of its live state — so it is not consulted here.
+ *
+ * @internal — `Agent · assessment`'s.
+ */
+export function assessLive(
+  snapshot: unknown,
+  declarations?: AssessmentDeclarations,
+): AnswerAssessment {
+  checkInputs({ snapshot }, declarations);
+  return foldState(stateOf({ snapshot }), declarations, false);
+}
+
+/**
+ * The one fold, over a committed state already in hand. `served`: the state
+ * comes from a record served under a redaction policy, so a key holding the
+ * placeholder is a value the record keeps out (`keptOutGuard`).
+ *
+ * @internal — `assessAnswer`'s, and the answer account's, which holds the
+ *            state and the marker apart.
+ */
+export function foldState(
+  recorded: Readonly<Record<string, unknown>>,
+  declarations: AssessmentDeclarations | undefined,
+  served: boolean,
+): AnswerAssessment {
+  const { state, asked } = served
+    ? keptOutGuard(recorded)
+    : { state: recorded, asked: new Set<string>() };
   const g: Gathered = { fired: new Map(), checked: [] };
   const history = Array.isArray(state.history) ? (state.history as readonly unknown[]) : [];
   const { results, from } = turnResults(history);
@@ -912,6 +982,16 @@ export function assessAnswer(
   readConflicts(state, calls, g);
   readAnswerRows(state, g);
 
+  if (asked.size > 0) {
+    return {
+      assessment: 'not-applicable',
+      standing: 'not-assessed',
+      reasons: [],
+      checked: [],
+      turnFrom: from,
+      keptOut: [...asked].sort(),
+    };
+  }
   const { assessment, reasons } = valueOf(g);
   return {
     assessment,

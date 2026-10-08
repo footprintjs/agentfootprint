@@ -176,8 +176,46 @@ import {
 import type { FindingsLedger } from '../../core/agent/findings/types.js';
 import { ontologyPiece } from '../../ontology/serve.js';
 import type { OntologyRecord } from '../../ontology/types.js';
-import { epochAt, epochLocations, readAfterCall, readAtCall, readRunConstant } from './epochs.js';
+import {
+  epochAt,
+  epochLocations,
+  readAfterCall,
+  readAtCall as foldAtCall,
+  readRunConstant as foldRunConstant,
+  recordingOf,
+} from './epochs.js';
 import type { EpochLocation } from './epochs.js';
+import { servedUnderPolicy } from '../../redaction/marker.js';
+
+/**
+ * The commit log's redaction placeholder (footprintjs writes it where a run's
+ * policy selected a key — `Agent.create({ redact })`). To this rebuild it is NO
+ * value: never a system piece, a tool list or a tool name the view could print
+ * as if the request had carried it. Read as absent, which is what the record
+ * can show. The view states the cost through the gap a redacted snapshot always
+ * carries: it travels without its fold base (footprintjs omits `initialState`
+ * from the served view), so `no-fold-base` — "unproven and may be SHORT … reads
+ * as empty rather than as unknown" — is on every view of it.
+ *
+ * Read so only when the record says a policy covered the run — the snapshot's
+ * marker (`redaction/marker.ts` · `servedUnderPolicy`), asked once per call of
+ * `servedAt` / `servedViews` — so a value that merely spells the word (a tool
+ * NAMED `REDACTED`) is a value on a run no policy covered, as the answer
+ * account and `assessAnswer` read it.
+ */
+const LOG_PLACEHOLDER = 'REDACTED';
+
+/** {@link foldAtCall}, with the placeholder read as absent on a `served` record. */
+function readAtCall(location: EpochLocation, key: string, served: boolean): unknown {
+  const value = foldAtCall(location, key);
+  return served && value === LOG_PLACEHOLDER ? undefined : value;
+}
+
+/** {@link foldRunConstant}, with the placeholder read as absent on a `served` record. */
+function readRunConstant(location: EpochLocation, key: string, served: boolean): unknown {
+  const value = foldRunConstant(location, key);
+  return served && value === LOG_PLACEHOLDER ? undefined : value;
+}
 import {
   FORCED_OUTPUT_TOOL_KEY,
   RECEIPT_BOUNDARY,
@@ -1038,7 +1076,7 @@ function frozenView(view: ServedView): ServedView {
 }
 
 /** Rebuild one epoch's view from a located epoch. */
-function viewOf(location: EpochLocation): ServedView {
+function viewOf(location: EpochLocation, served: boolean): ServedView {
   // The receipt is read for exactly two things — WHICH model saw this, through
   // WHICH provider, salted with WHICH run id; and whether a cache strategy
   // stood between assembly and the port. Every other field below is rebuilt
@@ -1052,11 +1090,12 @@ function viewOf(location: EpochLocation): ServedView {
   // ── the system prompt ──────────────────────────────────────────────────
   // The pieces are committed; the joined string never is. Same function the
   // stage used, over the records as the stage read them.
-  const injections = (readAtCall(location, 'systemPromptInjections') ?? []) as InjectionRecord[];
-  const iteration = readAtCall(location, 'iteration') as number;
+  const injections = (readAtCall(location, 'systemPromptInjections', served) ??
+    []) as InjectionRecord[];
+  const iteration = readAtCall(location, 'iteration', served) as number;
   const recovery = evidenceRecoveryPiece(
-    readAtCall(location, 'evidenceRecovery') as Parameters<typeof evidenceRecoveryPiece>[0],
-    readAtCall(location, 'evidenceRecoveryUsed') as boolean | undefined,
+    readAtCall(location, 'evidenceRecovery', served) as Parameters<typeof evidenceRecoveryPiece>[0],
+    readAtCall(location, 'evidenceRecoveryUsed', served) as boolean | undefined,
     iteration,
   );
 
@@ -1074,8 +1113,8 @@ function viewOf(location: EpochLocation): ServedView {
   //
   // Neither present ⇒ the turns are UNKNOWN, and the gap below says so rather
   // than letting `[]` pass for a proof.
-  const committedHistory = readAtCall(location, 'history');
-  const committedInjections = readAtCall(location, 'messagesInjections');
+  const committedHistory = readAtCall(location, 'history', served);
+  const committedInjections = readAtCall(location, 'messagesInjections', served);
   const conversation: LLMMessage[] | undefined = Array.isArray(committedHistory)
     ? (committedHistory as LLMMessage[])
     : Array.isArray(committedInjections)
@@ -1100,16 +1139,16 @@ function viewOf(location: EpochLocation): ServedView {
   // constant `findingsAnswerAsk` (9.103.0), written only when the ask went
   // out. No `.findings()` ⇒ no key ⇒ all three are no-ops and the rebuild is
   // the bytes it always was; no new gap kind, `withheld` untouched.
-  const ledger = readAtCall(location, 'findingsLedger') as FindingsLedger | undefined;
+  const ledger = readAtCall(location, 'findingsLedger', served) as FindingsLedger | undefined;
   const findings = findingsLedgerPiece(
     ledger,
     servedToolCallIds(committed),
-    answerAskOf(readRunConstant(location, 'findingsAnswerAsk')),
+    answerAskOf(readRunConstant(location, 'findingsAnswerAsk', served)),
   );
   const collapsed = collapseJudged(
     committed,
     ledger,
-    servedModeOf(readRunConstant(location, 'findingsServe')),
+    servedModeOf(readRunConstant(location, 'findingsServe', served)),
   );
   const asSent = collapsed === committed ? history : stripFrameworkFields(collapsed);
 
@@ -1119,10 +1158,12 @@ function viewOf(location: EpochLocation): ServedView {
   // RECORD, never from the receipt this view is checked against). No
   // `.ontology()` ⇒ no key ⇒ no piece, and the rebuild is the bytes it
   // always was.
-  const ontologyRecord = ontologyOf(readRunConstant(location, 'ontology'));
+  const ontologyRecord = ontologyOf(readRunConstant(location, 'ontology', served));
   // The hidden skill ids the call was composed under (9.108.0) — a per-epoch
   // key the tools slot publishes, read at the call as the stage read it.
-  const hiddenAtCall = readAtCall(location, 'hiddenSkillIds') as readonly string[] | undefined;
+  const hiddenAtCall = readAtCall(location, 'hiddenSkillIds', served) as
+    | readonly string[]
+    | undefined;
   const ontology =
     ontologyRecord === undefined
       ? undefined
@@ -1163,13 +1204,13 @@ function viewOf(location: EpochLocation): ServedView {
   // Lens DENYING, about a fact the log holds perfectly well. The agent key is
   // read first and the fallback is reached only when it holds no array, so no
   // agent recording changes.
-  const withheld = readAtCall(location, 'wrapUpAsked') === true;
+  const withheld = readAtCall(location, 'wrapUpAsked', served) === true;
   const dynamic =
-    toolListOf(readAtCall(location, 'dynamicToolSchemas')) ??
-    toolListOf(readAtCall(location, 'toolSchemas')) ??
+    toolListOf(readAtCall(location, 'dynamicToolSchemas', served)) ??
+    toolListOf(readAtCall(location, 'toolSchemas', served)) ??
     [];
   const registered = withheld ? [] : dynamic;
-  const forcedRaw = readRunConstant(location, FORCED_OUTPUT_TOOL_KEY);
+  const forcedRaw = readRunConstant(location, FORCED_OUTPUT_TOOL_KEY, served);
   const forced = typeof forcedRaw === 'string' && forcedRaw.length > 0 ? forcedRaw : undefined;
 
   // ── the request-only lines ─────────────────────────────────────────────
@@ -1177,7 +1218,7 @@ function viewOf(location: EpochLocation): ServedView {
   // conversation, the tools really served this call, and the `wants`
   // declarations `seed` put on the record for exactly this reason.
   const requestOnly: ServedRequestOnly[] = [];
-  const wants = wantsMapOf(readRunConstant(location, 'toolWantsByName'));
+  const wants = wantsMapOf(readRunConstant(location, 'toolWantsByName', served));
   if (wants !== undefined) {
     const match = findStagedRefs(asSent, wants, new Set(registered.map((t) => t.name)));
     if (match !== undefined) {
@@ -1190,22 +1231,24 @@ function viewOf(location: EpochLocation): ServedView {
   }
   // The time line (step T6b) — the tools slot's committed composition, served only on the
   // iteration that composed it and never on the wrap-up call (`callLLM` · the same three tests).
-  const timeLine = readAtCall(location, 'timeLine') as
+  const timeLine = readAtCall(location, 'timeLine', served) as
     | { readonly iteration?: unknown; readonly text?: unknown }
     | undefined;
   if (
     !withheld &&
     typeof timeLine?.text === 'string' &&
     timeLine.text.length > 0 &&
-    timeLine.iteration === readAtCall(location, 'iteration')
+    timeLine.iteration === readAtCall(location, 'iteration', served)
   ) {
     requestOnly.push({ role: 'user', text: timeLine.text, reason: 'time-window-line' });
   }
   // The evidence conclusion (the figures dial) — the committed carrier's late
   // line, on the iteration its instruction is served (`callLLM` · the same test).
   const conclusion = evidenceConclusionLine(
-    readAtCall(location, 'evidenceRecovery') as Parameters<typeof evidenceConclusionLine>[0],
-    readAtCall(location, 'evidenceRecoveryUsed') as boolean | undefined,
+    readAtCall(location, 'evidenceRecovery', served) as Parameters<
+      typeof evidenceConclusionLine
+    >[0],
+    readAtCall(location, 'evidenceRecoveryUsed', served) as boolean | undefined,
     iteration,
   );
   if (conclusion !== undefined) {
@@ -1309,8 +1352,9 @@ function viewOf(location: EpochLocation): ServedView {
  * ```
  */
 export function servedAt(source: unknown, epoch: number): ServedView | undefined {
-  const location = epochAt(source, epoch);
-  return location === undefined ? undefined : viewOf(location);
+  const recording = recordingOf(source);
+  const location = epochAt(recording, epoch);
+  return location === undefined ? undefined : viewOf(location, servedUnderPolicy(recording));
 }
 
 /**
@@ -1323,7 +1367,9 @@ export function servedAt(source: unknown, epoch: number): ServedView | undefined
  * ```
  */
 export function servedViews(source: unknown): ServedView[] {
-  return epochLocations(source).map(viewOf);
+  const recording = recordingOf(source);
+  const served = servedUnderPolicy(recording);
+  return epochLocations(recording).map((location) => viewOf(location, served));
 }
 
 /**

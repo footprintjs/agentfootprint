@@ -357,21 +357,6 @@ export type Strategy =
   | DecayStrategy
   | HybridStrategy;
 
-// ─── Redaction policy hook (reserved for a future release) ──────────────────────
-
-/**
- * Reserved API surface for content redaction before memory writes.
- * Impl is deferred; the field exists now so adding redaction later
- * is non-breaking. Snapshot/episodic writes may carry PII — this is
- * the integration point.
- */
-export interface MemoryRedactionPolicy {
-  /** Patterns to mask in stored content. */
-  readonly patterns?: readonly RegExp[];
-  /** Replacement string. Default `'[REDACTED]'`. */
-  readonly replacement?: string;
-}
-
 // ─── MemoryDefinition — what defineMemory() returns ─────────────────
 
 /**
@@ -474,8 +459,9 @@ export interface MemoryDefinition<T = unknown> {
     readonly model: string;
   };
 
-  /** Reserved for a future release — patterns to redact before write. */
-  readonly redact?: MemoryRedactionPolicy;
+  // NOTE: `redact?: MemoryRedactionPolicy` used to sit here, "reserved for a
+  // future release" and read by nothing. Removed with the option — see
+  // `./redactRefusal.ts`.
 
   /** Snapshot projection — only meaningful when `type === CAUSAL`. */
   readonly projection?: SnapshotProjection;
@@ -539,7 +525,10 @@ export interface DefineMemoryOptionsBase {
   // is what makes TypeScript report the declaration at the keystroke;
   // `defineMemory` throws for JavaScript callers and casts. See
   // `./asRoleRefusal.ts` for why it is refused rather than honoured.
-  readonly redact?: MemoryRedactionPolicy;
+  // NOTE: `redact?: MemoryRedactionPolicy` sat here too — reserved, typed, and
+  // read by nothing. Removing it makes TypeScript report it at the keystroke;
+  // `defineMemory` throws for JavaScript callers. See `./redactRefusal.ts`
+  // for why it is refused rather than implemented.
 
   /**
    * Read and write under THIS namespace instead of the run's identity

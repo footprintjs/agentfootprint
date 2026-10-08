@@ -79,12 +79,10 @@ export { ABSENCE_MARKER, readAbsence };
  * was substituted, and that a retry is futile. The third clause is the one
  * that ends the loop.
  */
+// One literal on purpose: its TYPE is the sentence, so a redacted record keeps
+// it as the library's own words (`redaction/knownStrings.ts`).
 export const ABSENCE_NOTE =
-  'The search ran and matched nothing. This is an ANSWER, not an error: nothing failed, ' +
-  'nothing was substituted for what was asked, and calling this tool again with the same ' +
-  'arguments returns this same result. `checked` is the ground this answer covers; anything ' +
-  'under `not_checked` or `cannot_cover` is ground it does NOT cover, and reaching that ' +
-  'needs a different question, not a retry.';
+  'The search ran and matched nothing. This is an ANSWER, not an error: nothing failed, nothing was substituted for what was asked, and calling this tool again with the same arguments returns this same result. `checked` is the ground this answer covers; anything under `not_checked` or `cannot_cover` is ground it does NOT cover, and reaching that needs a different question, not a retry.';
 
 /**
  * The note the MODEL is served in place of {@link ABSENCE_NOTE} when the

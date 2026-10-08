@@ -148,7 +148,14 @@ const translate = defineTool<{ text: string }, string>({
   description: 'Translate text to Spanish. Returns the translation only.',
   inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
   execute: async ({ text }, ctx) => {
-    const out = await translator.run({ message: text }, ctx.signal ? { env: { signal: ctx.signal } } : undefined);
+    const out = await translator.run(
+      { message: text },
+      {
+        ...(ctx.signal && { env: { signal: ctx.signal } }),
+        // The calling run's redaction policy, handed on like the signal.
+        ...(ctx.redact && { redact: ctx.redact }),
+      },
+    );
     if (typeof out !== 'string') throw new Error('The translator paused; it cannot ask a person from inside a tool.');
     return out;
   },
@@ -159,6 +166,7 @@ Gotchas:
 
 - **One run at a time per agent instance.** A second `run()` on an agent that is already running throws `RunInFlightError`. If two callers can reach the same specialist at once, build one per caller.
 - **The inner run is its own run.** The outer trace records one `translate` call; what the translator did is on `translator.getLastNarrativeEntries()` and its own events.
+- **Hand the redaction policy on.** `ctx.redact` is the policy the calling run is covered by (its agent's `redact`); passing it as the inner run's `redact` keeps the same names out of the inner run's records. It can only add names to the inner agent's own policy. See [Keep personal data out of the record](doc:security#keep-personal-data-out-of-the-record).
 - **A pause does not cross the tool boundary.** Handle the non-string outcome, as above.
 - **Hand-offs are a different shape.** When the specialist should *take over the conversation* rather than answer one question, use [`swarm()`](doc:swarm).
 - **Remote agents.** There is no built-in client for calling another team's agent over A2A; call its endpoint from `execute` like any other HTTP API. The other direction — letting other agents call yours over A2A — ships as `agentCoreA2AHost` (see [AgentCore adapters](doc:agentcore-adapters)).

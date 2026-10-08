@@ -73,6 +73,7 @@ import type {
 } from '../retrieval/types.js';
 import type { Embedder } from './types.js';
 import { emitEmbedding } from './emitEmbedding.js';
+import { emitServed, type EmitScope } from '../../redaction/runRedaction.js';
 
 export interface LoadRelevantConfig {
   /** The vector-capable store. Must implement `search()`. */
@@ -151,10 +152,12 @@ function defaultQueryFrom(scope: TypedScope<MemoryState>): string {
   return '';
 }
 
-/** Emit through the scope's emit channel when there is one (there always is under an Agent). */
+/** Emit through the scope's emit channel when there is one (there always is under an
+ *  Agent) — served by the run's redaction like every typed event
+ *  (`src/redaction/runRedaction.ts` · `emitServed`). */
 function emit(scope: TypedScope<MemoryState>, type: string, payload: unknown): void {
   const emitter = (scope as unknown as { $emit?: (t: string, p: unknown) => void }).$emit;
-  if (typeof emitter === 'function') emitter.call(scope, type, payload);
+  if (typeof emitter === 'function') emitServed(scope as unknown as EmitScope, type, payload);
 }
 
 export function loadRelevant(config: LoadRelevantConfig) {

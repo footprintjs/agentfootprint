@@ -180,6 +180,8 @@ import {
   TURN_ARTIFACTS_TIMEOUT_MS,
 } from './types.js';
 import type { Agent, AgentRunOptions } from '../core/Agent.js';
+import { runnerLive } from '../core/runnerLive.js';
+import type { AgentfootprintEvent } from '../events/registry.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
 
 /**
@@ -461,49 +463,74 @@ export async function standingAgent<TH extends HostHandle>(
       lastUsedMs: Date.now(),
       detach: () => undefined,
     };
-    const offTurnStart = agent.on('agentfootprint.agent.turn_start', (event) => {
-      lane.activeRunId = (event as { meta?: { runId?: string } }).meta?.runId;
-    });
+    // ── The lane's own events, as the run made them ──────────────────
+    // Every subscription below reads the agent's REAL-value path
+    // (`core/runnerLive.ts` · `runnerLive`), never the served stream: the reply is the
+    // caller's own answer and the spend ledger is an admission decision, so an
+    // agent's `redact` — which governs what the RECORD keeps — must reach
+    // neither (`src/redaction/runRedaction.ts`). One subscription, one switch.
+    //
     // Tokens reach the caller only if the host streams; `emit` on a host that
     // does not is a no-op by design, so this needs no capability check. The
     // subscription is per LANE because a token event names no session — the
     // agent that produced it is the only thing that identifies whose it is,
     // and with a pool that is the whole reason two sessions' tokens cannot mix.
-    const offToken = agent.on('agentfootprint.stream.token', (event) => {
-      const content = (event as { payload?: { content?: string } }).payload?.content;
-      if (typeof content === 'string' && content.length > 0) lane.activeReply?.emit?.(content);
-    });
+    //
     // ── Spend accounting (9.26.0) ────────────────────────────────────
-    // Only with an admission policy. Without one these two subscriptions are
-    // never made — the agent is untouched and the events cost their usual
-    // nothing (the dispatcher's own no-listener fast path).
+    // Only with an admission policy. Without one the two spend arms are never
+    // taken — the agent is untouched and the events cost their usual nothing.
     //
     // Two sources, because they answer two different questions honestly:
     // `llm_end` always carries TOKENS, and `cost.tick` carries MONEY only
     // where a pricing table turned tokens into it. Summing an invented rate
     // here would be a number that looks like a bill.
-    const offUsage =
-      ledger === undefined
-        ? undefined
-        : agent.on('agentfootprint.stream.llm_end', (event) => {
-            const key = lane.activeSpendKey;
-            if (key === undefined) return;
-            const usage = (event as { payload?: { usage?: { input?: number; output?: number } } })
-              .payload?.usage;
-            ledger.add(key, {
-              inputTokens: usage?.input ?? 0,
-              outputTokens: usage?.output ?? 0,
-            });
+    // Read live (`core/runnerLive.ts`): the reply goes to the person who asked
+    // and the ledger counts what was spent — neither is a record, so neither
+    // is served under the agent's `redact`.
+    // Every `Agent` is a runner of this library, so its live taps exist; one
+    // that does not is refused here rather than served placeholders or nothing.
+    const live = runnerLive(agent);
+    if (live === undefined) {
+      throw new TypeError(
+        'standingAgent: the agent was not built by agentfootprint (Agent.create(...).build()), ' +
+          'so its run cannot be read live — the reply, the spend ledger and the session store ' +
+          'need it.',
+      );
+    }
+    const offLane = live.onRealEvent((event: AgentfootprintEvent) => {
+      switch (event.type) {
+        case 'agentfootprint.agent.turn_start':
+          lane.activeRunId = (event as { meta?: { runId?: string } }).meta?.runId;
+          return;
+        case 'agentfootprint.stream.token': {
+          const content = (event as { payload?: { content?: string } }).payload?.content;
+          if (typeof content === 'string' && content.length > 0) lane.activeReply?.emit?.(content);
+          return;
+        }
+        case 'agentfootprint.stream.llm_end': {
+          if (ledger === undefined) return;
+          const key = lane.activeSpendKey;
+          if (key === undefined) return;
+          const usage = (event as { payload?: { usage?: { input?: number; output?: number } } })
+            .payload?.usage;
+          ledger.add(key, {
+            inputTokens: usage?.input ?? 0,
+            outputTokens: usage?.output ?? 0,
           });
-    const offCost =
-      ledger === undefined
-        ? undefined
-        : agent.on('agentfootprint.cost.tick', (event) => {
-            const key = lane.activeSpendKey;
-            if (key === undefined) return;
-            const usd = (event as { payload?: { estimatedUsd?: number } }).payload?.estimatedUsd;
-            if (typeof usd === 'number' && Number.isFinite(usd)) ledger.add(key, { usd });
-          });
+          return;
+        }
+        case 'agentfootprint.cost.tick': {
+          if (ledger === undefined) return;
+          const key = lane.activeSpendKey;
+          if (key === undefined) return;
+          const usd = (event as { payload?: { estimatedUsd?: number } }).payload?.estimatedUsd;
+          if (typeof usd === 'number' && Number.isFinite(usd)) ledger.add(key, { usd });
+          return;
+        }
+        default:
+          return;
+      }
+    });
     // Under 'exit' NOTHING is built: no observer on the agent, no barrier, no
     // per-commit work. That is what "the default is byte-identical" means here —
     // not a mode that happens to write once, but wiring that is never installed.
@@ -514,6 +541,10 @@ export async function standingAgent<TH extends HostHandle>(
             mode: durability,
             session: () => lane.activeSessionId,
             runId: () => lane.activeRunId,
+            // The conversation is read from the run's LIVE committed state,
+            // never from the commit event's (served) values: the store holds
+            // what the next turn resumes from (`hosting/durability.ts`).
+            state: () => live.liveState(),
             write: (sessionId, conversation) =>
               sessions.persist(sessionId, toEnvelope(conversation)),
           });
@@ -521,10 +552,7 @@ export async function standingAgent<TH extends HostHandle>(
     const uninstallBarrier = writer?.install(agent);
     lane.writer = writer;
     lane.detach = (): void => {
-      offTurnStart();
-      offToken();
-      offUsage?.();
-      offCost?.();
+      offLane();
       uninstallBarrier?.();
       detachWriter?.();
     };

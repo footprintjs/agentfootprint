@@ -20,10 +20,12 @@
  * ## What it does NOT do
  *
  * It does not summarize, truncate or scrub. Whatever the events carry is what
- * this writes — including tool arguments and results. Redaction is upstream, at
- * commit time; the manifest lists the keys that were scrubbed so the reporter
- * can see it happened. Anything that must never leave must never reach the
- * event stream in the first place.
+ * this writes — including tool arguments and results. Redaction is upstream:
+ * under an agent's `redact` every event was served before it was recorded (a
+ * selected key at any depth is the placeholder), and the manifest lists the
+ * keys that were scrubbed so the reporter can see it happened. The policy
+ * selects by name, never by content — free text under a name it does not
+ * select (a user's sentence, a model's answer) is written as it was.
  */
 
 /** The loose event shape — these may have been through JSON. */

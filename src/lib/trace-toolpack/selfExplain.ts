@@ -429,7 +429,7 @@ function buildExplainRunTool(
       required: ['question'],
       additionalProperties: false,
     },
-    execute: async ({ question }) => {
+    execute: async ({ question }, ctx) => {
       const artifacts = binding.artifacts;
       if (!artifacts) return NO_COMPLETED_RUN_MESSAGE;
       // Dynamic import: keeps Agent out of this module's static graph
@@ -442,7 +442,13 @@ function buildExplainRunTool(
         maxIterations: delegate.maxIterations,
         toolpack,
       });
-      const out = await debuggerAgent.run({ message: question });
+      // The debugger's run is NESTED in the calling agent's run, so it is
+      // covered by the same policy — its own record (the question, what the
+      // trace tools served it, its answer) keeps out what the agent's does.
+      const out = await debuggerAgent.run(
+        { message: question },
+        ctx.redact !== undefined ? { redact: ctx.redact } : undefined,
+      );
       return typeof out === 'object' && out !== null && 'content' in out
         ? String((out as { content: unknown }).content)
         : String(out);

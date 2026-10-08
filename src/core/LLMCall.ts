@@ -48,6 +48,7 @@ import {
   type StructureRecorder,
   type TypedScope,
 } from 'footprintjs';
+import type { RedactionPolicy } from 'footprintjs';
 import { ArrayMergeMode } from 'footprintjs/advanced';
 import type { GroupMetadata, GroupTranslator } from './translator.js';
 import type { RunnerPauseOutcome } from './pause.js';
@@ -344,28 +345,42 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
     input?: unknown,
     options?: RunOptions,
   ): Promise<LLMCallOutput | RunnerPauseOutcome> {
-    this.emitPauseResume(checkpoint, input);
-    const executor = this.createExecutor();
+    // The leg's policy — the paused run's marks — goes to ITS executor, never via the instance.
+    const resumeLeg = this.emitPauseResume(checkpoint, input);
+    const executor = this.createExecutor(resumeLeg);
     this.lastExecutor = executor;
     const result = await executor.resume(checkpoint, input, withRunSignalInEnv(options));
     return this.finalizeResult(executor, result);
   }
 
-  private createExecutor(): FlowChartExecutor {
+  private createExecutor(resumeLeg?: RedactionPolicy): FlowChartExecutor {
     this.currentRunContext = {
       runStartMs: Date.now(),
       runId: makeRunId(),
       compositionPath: [`LLMCall:${this.id}`],
     };
 
+    // THIS run's context, captured: a run that overlaps it on this instance
+    // never restamps its events, so each is served under its own run's policy.
+    const runContext = this.currentRunContext;
+    const getRunCtx = (): RunContext => runContext;
+    // The run's redaction (`src/redaction/`). An LLMCall declares no policy of
+    // its own — mounted in a composition, the composition's run decides — but
+    // the redaction is opened for every run so its stages' events still reach
+    // the real-value path (a `toSSE({ format: 'text' })` reply stream).
+    const redaction = this.openRunRedaction(resumeLeg, getRunCtx);
+
     // Reuse the cached chart built at constructor time. `getSpec()` and
     // every `run()` share the same `FlowChart` object reference.
-    const executor = new FlowChartExecutor(this.getSpec());
+    const spec = this.getSpec();
+    const executor = new FlowChartExecutor(spec, { scopeFactory: redaction.scopeFactoryFor(spec) });
+    redaction.applyTo(executor);
 
     const dispatcher = this.getDispatcher();
-    const getRunCtx = (): RunContext => this.currentRunContext;
 
-    executor.attachCombinedRecorder(new ContextRecorder({ dispatcher, getRunContext: getRunCtx }));
+    executor.attachCombinedRecorder(
+      new ContextRecorder({ dispatcher, getRunContext: getRunCtx, realWrites: redaction }),
+    );
     // NOTE: no contextEvaluatedRecorder here — LLMCall composes its slots
     // directly and does NOT mount the Injection Engine, so context.evaluated
     // never fires in an LLMCall (that event is Agent-only).

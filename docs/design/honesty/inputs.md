@@ -977,8 +977,10 @@ export interface ArgumentRow {
 ```
 
 - **Redaction goes through the tool's own argument view** (devil's review, a MUST-FIX). An agent's
-  executor sets no state-level redaction policy — only `core/flowchartAsTool.ts` and
-  `core/runbook/runbookAsTool.ts` set one, on their inner executors — and `core/Agent.ts` ·
+  executor set no state-level redaction policy when this was written — only
+  `core/flowchartAsTool.ts` and `core/runbook/runbookAsTool.ts` set one, on their inner executors;
+  an agent takes one since `Agent.create({ redact })` (`src/redaction/`), and the view still
+  applies on top of it — and `core/Agent.ts` ·
   `findings` hands out the committed ledger as a clone. So `value`, `proposed` and `quote` are built
   from `core/toolShownArgs.ts` · `shownArgsOf` ("what an event may say this call ran with"): a key
   the view hides reads `'REDACTED'`, and a quote is hidden whenever its argument is. The checks run
@@ -988,8 +990,10 @@ export interface ArgumentRow {
   values, because the call must run with them. It is the same class as `pausedToolArgs` and the
   assistant message's own arguments: committed run state, which a full recording of the run
   (`recordRun`) carries exactly as it carries those — never a row, an event or a lens view. A tool
-  that must keep a value out of recordings too needs a redaction policy on the run, which an Agent
-  does not expose today; that gap predates this layer and is named, not fixed, here.
+  that must keep a value out of recordings too needs a redaction policy on the run — the gap this
+  layer named is closed by `Agent.create({ redact })`: `conversationRedaction()` names
+  `argumentResolutions`, `argumentAsk` and `argumentAnswersKept`, so every record holds the
+  placeholder while the call still runs with the real values.
 - **Clipping.** `value` and `proposed` through `integrity/argumentLeaves.ts` · `clipValue` (80
   characters); `quote` at `findings/types.ts` · `PROPOSITION_CHARS` (240).
 - **Current row.** The fold takes the last row per (turn, toolCallId, argument), keyed by a map of
@@ -1380,7 +1384,7 @@ verdict. "Verified" means its evidence was re-read in the code on 2026-09-26.
 | engineer: two doc comments change meaning | NOTE | applied | § 4.6; § 5.4 |
 | devil: any quote fragment passes the ask | MUST | applied: a reading asks; declared phrases | § 3.5 V2; § 4.1 |
 | devil: `tokenize` over compact JSON never finds numbers or booleans | MUST | verified by running it; applied: the evidence index's per-result reading | § 3.3 |
-| devil: raw values bypass the argument view | MUST | verified (no agent-level redaction policy; `findings()` clones); applied | § 5.1 |
+| devil: raw values bypass the argument view | MUST | verified (no agent-level redaction policy then — `Agent.create({ redact })` now; `findings()` clones); applied | § 5.1 |
 | devil: the ask fires too often; answers get evicted | SHOULD | applied: unarmed flags; answers on the ledger; the needless-ask bench | § 4.1; § 3.4; § 7.1 |
 | devil: the quote check is too strict | SHOULD | partly: the hint survives a failed claim; falling back to a source rejected | § 3.5; § 9 |
 | devil: a middleware turns a guess into `app` | SHOULD | applied: checked before middleware; a rewrite reads as assumed | § 4.6 |

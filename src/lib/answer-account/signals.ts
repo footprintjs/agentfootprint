@@ -175,19 +175,21 @@ export function runChecks(
     for (const item of withKind.filter((i) => i.kind === 'existence')) {
       const source = `tool:${call.toolName}` as const;
       const never = item.section === 'cannotCover';
-      const sentence =
-        item.short !== undefined
-          ? ctx.say(never ? 'signal.existenceCannotCover' : 'signal.existenceNotChecked', {
-              vars: { tool, short: v(item.short, source, itemAt(item, 'short')) },
-              pointers: [itemAt(item, 'kind')],
-            })
-          : ctx.say(
-              never ? 'signal.existenceCannotCover.full' : 'signal.existenceNotChecked.full',
-              {
-                vars: { tool, what: v(item.what, source, itemAt(item, 'what')) },
-                pointers: [itemAt(item, 'kind')],
-              },
-            );
+      const sentence = item.keptOut
+        ? // Its words are kept out of the record: the limit is said, its words never printed.
+          ctx.say(
+            never ? 'signal.existenceCannotCover.keptOut' : 'signal.existenceNotChecked.keptOut',
+            { vars: { tool }, pointers: [itemAt(item, 'kind'), itemAt(item, 'what')] },
+          )
+        : item.short !== undefined
+        ? ctx.say(never ? 'signal.existenceCannotCover' : 'signal.existenceNotChecked', {
+            vars: { tool, short: v(item.short, source, itemAt(item, 'short')) },
+            pointers: [itemAt(item, 'kind')],
+          })
+        : ctx.say(never ? 'signal.existenceCannotCover.full' : 'signal.existenceNotChecked.full', {
+            vars: { tool, what: v(item.what, source, itemAt(item, 'what')) },
+            pointers: [itemAt(item, 'kind')],
+          });
       addSignal({ id: 'existence-not-checked', check: 'existence', sentence, tone: 'warn' });
     }
   }
@@ -211,7 +213,12 @@ export function runChecks(
       c.end !== undefined &&
       !presented.has(c.fact.toolCallId),
   );
-  if (judged.length > 0 || inView.all.length > 0 || pausedLeg.calls.length > 0)
+  if (
+    judged.length > 0 ||
+    inView.all.length > 0 ||
+    inView.keptOut > 0 ||
+    pausedLeg.calls.length > 0
+  )
     states['empty-results'] = 'reachable';
   // Whether a result was empty cannot be told — and WHY, from the one reader: no shape declared;
   // the app's rows key holding no list; or a ticket to the artifact store that counts no rows
@@ -226,11 +233,19 @@ export function runChecks(
     states['empty-results'] = 'unreachable';
     const declared = reading.rowsAt !== undefined;
     // The value does not carry the rows (or their count) where the app declared them — or, with
-    // no key read, the library's placement ticket, which records bytes and no row count.
+    // no key read, the library's placement ticket, which records bytes and no row count. A
+    // result the record keeps out (a redaction policy's placeholder) is its own reason: never
+    // "not declared" of a shape nobody can see.
     const missing =
-      reading.rowsUnread === 'uncounted-ticket' && !declared ? 'not-built' : 'not-declared';
+      reading.rowsUnread === 'redacted'
+        ? 'redacted'
+        : reading.rowsUnread === 'uncounted-ticket' && !declared
+        ? 'not-built'
+        : 'not-declared';
     const id =
-      reading.rowsUnread === 'no-list'
+      reading.rowsUnread === 'redacted'
+        ? 'unreachable.empty.redacted'
+        : reading.rowsUnread === 'no-list'
         ? 'unreachable.empty.noList'
         : reading.rowsUnread === 'uncounted-ticket'
         ? 'unreachable.empty.uncountedTicket'
@@ -288,6 +303,19 @@ export function runChecks(
         basis: [emptinessSource(call.reading)],
         pointers,
         chips: [heldChip()],
+      }),
+    });
+  }
+  // Earlier results the model could see, in a history the record keeps out: unread, said so.
+  if (inView.keptOut > 0) {
+    states['empty-results'] = 'unreachable';
+    addUnreachable({
+      check: 'empty-results',
+      missing: 'redacted',
+      sentence: ctx.say('unreachable.inView.redacted', {
+        vars: { n: { value: inView.keptOut, source: 'library' } },
+        status: 'not-recorded',
+        missing: 'redacted',
       }),
     });
   }

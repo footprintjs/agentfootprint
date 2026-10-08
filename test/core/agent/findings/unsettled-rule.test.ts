@@ -55,6 +55,7 @@ import type { FindingsLedger, StandingRow } from '../../../../src/core/agent/fin
 import { readCoverageResult } from '../../../../src/core/agent/coverage/read.js';
 import type { DeclaredCoverage } from '../../../../src/core/agent/coverage/types.js';
 import { buildCheckpoint, validateCheckpoint } from '../../../../src/core/runCheckpoint.js';
+import { noPolicyScope } from '../../../helpers/noPolicy.js';
 
 // ─── fixtures ────────────────────────────────────────────────────────
 
@@ -474,11 +475,12 @@ describe('withUnsettledRows — the derived row lands beside its standing', () =
 describe('recordFindings — files the derived row and emits nothing for it', () => {
   it('the standing event is the one it always was; no event names the derived row', () => {
     const emitted: { name: string; payload: unknown }[] = [];
-    const scope: FindingsScope = {
+    // A run with no policy: its events are served as made.
+    const scope: FindingsScope = noPolicyScope<FindingsScope>({
       $emit: (name: string, payload?: unknown) => {
         emitted.push({ name, payload });
       },
-    };
+    });
     const rows = withUnsettledRows([standing('c1', 'ruled-out')], [known('c1', absent(MISS))], () =>
       door('c1', absent(MISS)),
     );

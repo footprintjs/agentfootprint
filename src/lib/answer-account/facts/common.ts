@@ -250,8 +250,15 @@ export const countedFields = (
   ...(reading.countedAt !== undefined && { countedAt: jsonPointer(...reading.countedAt) }),
 });
 
-/** `sharedState.history`, when it is an array. */
+/**
+ * `sharedState.history`, when it is an array — and EMPTY when the record keeps
+ * it out (a redaction policy's placeholder). It asks the view first, so the
+ * view's guard counts the kept-out history as handled; a reader that would
+ * otherwise say something about what the history lacks asks
+ * `view.isStateKeptOut('history')` itself (`inView.ts`, `checked.ts`).
+ */
 export function historyOf(view: RecordingView): readonly unknown[] {
+  if (view.isStateKeptOut('history')) return [];
   const history = view.state?.history;
   return Array.isArray(history) ? history : [];
 }

@@ -66,7 +66,9 @@
  * A short non-cryptographic FINGERPRINT of the arguments and the result, never
  * the values. Tool arguments routinely carry the things redaction exists for,
  * and a fingerprint answers the only question this feature asks ("is this the
- * same?") and answers nothing else.
+ * same?"). It is unsalted and 32 bits: it hides a value, it does not keep a
+ * GUESSABLE one secret — a short argument can be confirmed by hashing guesses
+ * (a named limit of an agent's `redact`, `src/redaction/README.md`).
  *
  * ── And WHERE it is stored: beside the run, never inside its state ──────────
  * The counters live in {@link repeatedCallLedgers}, a run-keyed map the

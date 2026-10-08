@@ -6,6 +6,6 @@ title: ServedGapKind
 
 > **ServedGapKind** = `"cache-transform"` \| `"forced-tool-schema"` \| `"provider-defaults"` \| `"no-fold-base"` \| `"no-conversation-on-record"` \| `"no-run-log"` \| `"no-receipt-on-chart"`
 
-Defined in: [src/lib/time-travel/servedView.ts:205](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L205)
+Defined in: [src/lib/time-travel/servedView.ts:243](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L243)
 
 The kinds of thing this view cannot prove.

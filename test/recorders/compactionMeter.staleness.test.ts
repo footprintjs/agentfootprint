@@ -20,20 +20,16 @@
 import { describe, expect, it } from 'vitest';
 
 import { compactionMeter } from '../../src/recorders/core/CompactionMeter.js';
-import type { EmitEvent } from 'footprintjs';
 
-function llmEnd(iteration: number, usage: unknown): EmitEvent {
-  return {
-    name: 'agentfootprint.stream.llm_end',
-    payload: { iteration, usage },
-    runtimeStageId: `call-llm#${iteration}`,
-  } as unknown as EmitEvent;
+/** One `stream.llm_end` payload, as the agent's real-value path hands it over. */
+function llmEnd(iteration: number, usage: unknown): unknown {
+  return { iteration, usage };
 }
 
 describe('compactionMeter — a reading is current, or it is not there', () => {
   it('a fresh reading is returned for the iteration that follows its call', () => {
     const meter = compactionMeter();
-    meter.onEmit(llmEnd(1, { input: 900, output: 10 }));
+    meter.noteLlmEnd(llmEnd(1, { input: 900, output: 10 }));
     // The window stage runs at the loop head: at iteration 2 the last
     // completed call was made during iteration 1.
     expect(meter.lastCall(2)?.input).toBe(900);
@@ -42,7 +38,7 @@ describe('compactionMeter — a reading is current, or it is not there', () => {
 
   it('the SAME reading is gone one iteration later', () => {
     const meter = compactionMeter();
-    meter.onEmit(llmEnd(1, { input: 900, output: 10 }));
+    meter.noteLlmEnd(llmEnd(1, { input: 900, output: 10 }));
     expect(meter.lastCall(2)).toBeDefined();
     // Nothing new arrived, so at iteration 3 the newest call reported nothing.
     // 900 is not a smaller answer or an older answer — it is not an answer.
@@ -52,7 +48,7 @@ describe('compactionMeter — a reading is current, or it is not there', () => {
   it('a fresh reading each iteration keeps answering, indefinitely', () => {
     const meter = compactionMeter();
     for (let i = 1; i <= 25; i++) {
-      meter.onEmit(llmEnd(i, { input: 100 * i, output: 1 }));
+      meter.noteLlmEnd(llmEnd(i, { input: 100 * i, output: 1 }));
       expect(meter.lastCall(i + 1)?.input).toBe(100 * i);
     }
     expect(meter.unmeteredSinceLastGood()).toBe(0);
@@ -60,8 +56,8 @@ describe('compactionMeter — a reading is current, or it is not there', () => {
 
   it('malformed usage does NOT overwrite a good reading — and does not preserve it either', () => {
     const meter = compactionMeter();
-    meter.onEmit(llmEnd(1, { input: 900, output: 10 }));
-    meter.onEmit(llmEnd(2, { input: undefined, output: undefined }));
+    meter.noteLlmEnd(llmEnd(1, { input: 900, output: 10 }));
+    meter.noteLlmEnd(llmEnd(2, { input: undefined, output: undefined }));
     // Still the real number at the boundary it was taken for…
     expect(meter.lastCall(2)?.input).toBe(900);
     // …and absent at the next one, because call #2 counted nothing.
@@ -71,11 +67,11 @@ describe('compactionMeter — a reading is current, or it is not there', () => {
 
   it('counts every uncounted call so the stage can say so once', () => {
     const meter = compactionMeter();
-    meter.onEmit(llmEnd(1, { input: 900, output: 10 }));
-    for (let i = 2; i <= 6; i++) meter.onEmit(llmEnd(i, {}));
+    meter.noteLlmEnd(llmEnd(1, { input: 900, output: 10 }));
+    for (let i = 2; i <= 6; i++) meter.noteLlmEnd(llmEnd(i, {}));
     expect(meter.unmeteredSinceLastGood()).toBe(5);
     // A good reading resets it: the provider started counting again.
-    meter.onEmit(llmEnd(7, { input: 42, output: 1 }));
+    meter.noteLlmEnd(llmEnd(7, { input: 42, output: 1 }));
     expect(meter.unmeteredSinceLastGood()).toBe(0);
     expect(meter.lastCall(8)?.input).toBe(42);
   });
@@ -85,32 +81,34 @@ describe('compactionMeter — a reading is current, or it is not there', () => {
     // `LLMEndPayload.iteration` is required, so this shape is not one this
     // build produces — but an unstampable reading can never be checked for
     // staleness, and a number that can never expire is the original bug.
-    meter.onEmit({
-      name: 'agentfootprint.stream.llm_end',
-      payload: { usage: { input: 5000, output: 1 } },
-      runtimeStageId: 'call-llm#1',
-    } as unknown as EmitEvent);
+    meter.noteLlmEnd({ usage: { input: 5000, output: 1 } });
     expect(meter.lastCall(2)).toBeUndefined();
     expect(meter.unmeteredSinceLastGood()).toBe(1);
   });
 
   it('clear() forgets the reading AND the uncounted tally', () => {
     const meter = compactionMeter();
-    meter.onEmit(llmEnd(1, { input: 900, output: 10 }));
-    meter.onEmit(llmEnd(2, {}));
+    meter.noteLlmEnd(llmEnd(1, { input: 900, output: 10 }));
+    meter.noteLlmEnd(llmEnd(2, {}));
     meter.clear();
     expect(meter.lastCall(2)).toBeUndefined();
     expect(meter.unmeteredSinceLastGood()).toBe(0);
   });
 
-  it('ignores events that are not llm_end', () => {
+  it('a payload that is not an object is an uncounted call, never a reading', () => {
+    // What a payload served WHOLE would look like — the meter is fed from the
+    // real-value path, so this never happens in a run, but the shape is still
+    // refused rather than read.
     const meter = compactionMeter();
-    meter.onEmit({
-      name: 'agentfootprint.stream.llm_start',
-      payload: { iteration: 1, usage: { input: 9, output: 9 } },
-      runtimeStageId: 'call-llm#1',
-    } as unknown as EmitEvent);
+    meter.noteLlmEnd('[REDACTED]');
     expect(meter.lastCall(2)).toBeUndefined();
-    expect(meter.unmeteredSinceLastGood()).toBe(0);
+    expect(meter.unmeteredSinceLastGood()).toBe(1);
+  });
+
+  it('has no record-channel hook: the reading comes ONLY from the real-value path', () => {
+    // The window decides on this number, so it must never be read off a SERVED
+    // event, where a redaction policy could mask it (`src/redaction/`).
+    const meter = compactionMeter() as unknown as Record<string, unknown>;
+    expect(meter['onEmit']).toBeUndefined();
   });
 });

@@ -38,6 +38,8 @@ import type { Tool } from '../../tools.js';
 import type { ClockDraft } from '../../time/clock.js';
 import type { TimeReader } from '../../time/reader.js';
 import type { TimePolicy } from '../../time/resolve.js';
+import { carriedRunPolicy } from '../../../redaction/conversation.js';
+import { policyInForce } from '../../../redaction/runRedaction.js';
 
 /**
  * A stored conversation handed to the next run — what
@@ -425,6 +427,32 @@ function loadRuleDecoration(deps: SeedStageDeps): Promise<RuleDecoration> | unde
  * via the deps object.
  */
 export function buildSeedStage(
+  deps: SeedStageDeps,
+): (scope: TypedScope<AgentState>) => void | Promise<void> {
+  const body = buildSeedBody(deps);
+  // The run's redaction is committed FIRST — before the input chain, which can
+  // stop or pause the run — so every checkpoint a policy-covered run leaves
+  // carries the policy it was covered by (`Agent · resume` refuses one that
+  // kept names out without it). The body keeps its own shape: sync stays sync.
+  return (scope) => {
+    commitRunRedaction(scope);
+    return body(scope);
+  };
+}
+
+/**
+ * The policy THIS run is covered by — names only, read off the run that owns
+ * this scope, never off the agent instance — committed as `runRedaction`, so a
+ * pause's checkpoint carries it and the resumed leg is covered by it wherever
+ * it resumes (`Agent · resume`). A run covered by none writes nothing: its keys
+ * are unchanged.
+ */
+function commitRunRedaction(scope: TypedScope<AgentState>): void {
+  const runPolicy = policyInForce(scope);
+  if (runPolicy !== undefined) scope.runRedaction = carriedRunPolicy(runPolicy);
+}
+
+function buildSeedBody(
   deps: SeedStageDeps,
 ): (scope: TypedScope<AgentState>) => void | Promise<void> {
   const chain = deps.messageMiddleware ?? [];

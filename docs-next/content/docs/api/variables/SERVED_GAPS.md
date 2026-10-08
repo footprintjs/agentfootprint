@@ -6,7 +6,7 @@ title: SERVED_GAPS
 
 > `const` **SERVED\_GAPS**: `Readonly`\<`Record`\<[`ServedGapKind`](/docs/api/type-aliases/ServedGapKind), `Omit`\<[`ServedGap`](/docs/api/interfaces/ServedGap), `"gap"`\>\>\>
 
-Defined in: [src/lib/time-travel/servedView.ts:352](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L352)
+Defined in: [src/lib/time-travel/servedView.ts:390](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L390)
 
 The gap catalogue. Exported because a reader that renders a served view
 renders its gaps beside it, and a renderer should print the library's own

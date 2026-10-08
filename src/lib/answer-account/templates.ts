@@ -42,7 +42,7 @@ export interface AccountTemplate {
 }
 
 /** Bumped whenever any template's words change (a pinned digest enforces it). */
-export const ANSWER_ACCOUNT_TEMPLATE_SET_VERSION = 10;
+export const ANSWER_ACCOUNT_TEMPLATE_SET_VERSION = 11;
 
 const t = (text: string, voucher: TemplateVoucher = 'library', version = 1): AccountTemplate =>
   Object.freeze({ version, text, voucher });
@@ -59,6 +59,8 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   'row.wrong': t('Anything wrong'),
   'row.more': t("…and {{count:n,'more tool call','more tool calls'}}."),
   'items.more': t("…and {{count:n,'more item','more items'}}."),
+  // A declaration's items whose words the record keeps out (a redaction policy) — set 11.
+  'items.keptOut': t("Kept out of this record: {{count:n,'item','items'}}."),
 
   // ── chips ────────────────────────────────────────────────────────────
   'chip.saidBy': t('said by: {{who}}'),
@@ -103,6 +105,7 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
     'This answer continued after a pause. The message, as the run held it: “{{question:quote}}”',
   ),
   'asked.none': t('The question is not recorded.'),
+  'asked.keptOut': t('The question is kept out of this record.'),
 
   // ── It understood ────────────────────────────────────────────────────
   'understood.rule': t(
@@ -182,6 +185,9 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
     "…and {{count:n,'more tool call','more tool calls'}} from before the pause.",
   ),
   'beforePause.noResults': t("No tool result from before the pause is in this record's history."),
+  'beforePause.keptOut': t(
+    "This record keeps the run's history out, so what came back before the pause cannot be told.",
+  ),
   'checked.unnamed': t(
     'A tool call ({{id:code}}) is in this record, but no event of it names its tool.',
   ),
@@ -284,6 +290,9 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   // recording ends early — the record cannot tell those apart, and there is no answer to rate.
   'howSure.standing.noAnswer': t(
     'How sure cannot be told: this record does not show the run giving an answer.',
+  ),
+  'howSure.standing.keptOut': t(
+    'How sure cannot be told: this record keeps out part of the state the standing rests on.',
   ),
   'howSure.standing.known': t("Known — the app's answer checks passed this exact answer."),
   'howSure.standing.consistent': t(
@@ -426,6 +435,9 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
     "The library's index of tool results was full, so this check is incomplete.",
   ),
   'howSure.evidence.off': t("The library was not set to check the answer's names and numbers."),
+  'howSure.evidence.keptOut': t(
+    "The library checked the answer's names and numbers; what it could not find is kept out of this record.",
+  ),
   'howSure.evidence.notRecorded': t(
     "Whether the answer's names and numbers were checked is not recorded.",
   ),
@@ -441,6 +453,15 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
     'tool',
   ),
   'signal.existenceCannotCover.full': t('{{tool:code}} says it can never check {{what}}.', 'tool'),
+  // The same, when the record keeps the item's words out (a redaction policy) — set 11.
+  'signal.existenceNotChecked.keptOut': t(
+    '{{tool:code}} says it did not check everywhere the thing could be; this record keeps out where.',
+    'tool',
+  ),
+  'signal.existenceCannotCover.keptOut': t(
+    '{{tool:code}} says it can never check everywhere the thing could be; this record keeps out where.',
+    'tool',
+  ),
   'signal.undeclaredEmptyUsed': t(
     "This answer's {{tool:code}} call returned an empty result that did not declare what it searched.",
   ),
@@ -481,6 +502,14 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   'unreachable.empty.uncountedTicket': t(
     'It cannot be told whether the result of {{tool:code}} was empty: it reached the model as a ticket to the artifact store, and the ticket does not say how many rows it holds.',
   ),
+  // The record keeps the result out (a redaction policy's placeholder stands where it was), so
+  // nothing about it — not even whether it was empty — can be read from this record.
+  'unreachable.inView.redacted': t(
+    "It cannot be told what {{count:n,'earlier result','earlier results'}} in front of the model held: this record keeps the run's history out.",
+  ),
+  'unreachable.empty.redacted': t(
+    'It cannot be told whether the result of {{tool:code}} was empty: this record keeps what it returned out.',
+  ),
 
   // ── Anything wrong: the row's own lines ──────────────────────────────
   'wrong.errors': t(
@@ -514,6 +543,10 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
     "None of this record's events belong to the run asked for, so nothing about that run can be told from it.",
   ),
   'row.notInRecord': t('Not in this record: none of its events belong to the run asked for.'),
+  'scope.keptOut': t(
+    'This record keeps out values this report reads, so nothing about the answer can be told from it.',
+  ),
+  'row.keptOut': t('Not told: this record keeps out values this report reads.'),
   'scope.unfiltered': t(
     'Which run these events belong to is not recorded, so this report reads every event in the record.',
   ),

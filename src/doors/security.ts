@@ -13,6 +13,9 @@
  *   • Who is calling — the inbound verifiers `jwksIdentity` and
  *     `oidcIdentity`, and `identityFromConfig` / `identityConfigFromEnv`,
  *     which pick one strategy per deployment from config at boot.
+ *   • What the record keeps out — `conversationRedaction()`, the names an
+ *     agent's record carries the conversation under, as the policy for the
+ *     agent's one redaction door, `Agent.create({ redact })`.
  *
  * A vended credential is a secret: use it locally inside a tool's `execute`
  * and never write it to tracked scope.

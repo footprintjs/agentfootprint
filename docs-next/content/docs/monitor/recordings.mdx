@@ -198,11 +198,14 @@ Redact **before** persisting instead:
 
 - `recordRun(agent, { boundaryDetail: 'lean' })` removes captured content from the BoundaryEvents bundle only; its event tail and engine state can still contain raw content;
 - `serializeTrace` and `redactContent` redact their own projection at the serialize boundary, not every field of an arbitrary recording (see [Replay a saved run](doc:offline-replay));
-- footprintjs's `setRedactionPolicy()` redacts state where it is written.
+- `Agent.create({ redact })` — with `conversationRedaction()` from `agentfootprint/security` — keeps what it names out of every record of the agent's runs, the recording included: state where it is written, every event at its source (see [Keep personal data out of the record](doc:security#keep-personal-data-out-of-the-record)). The run's output — the answer as the chart returns it — still rides `run.exit`.
 
 Review every exported channel, including errors, custom emits and recorder
 metadata. A content-minimized Trust Boundary bundle does not sanitize the
-surrounding recording either.
+surrounding recording either. A recording made under an agent's `redact` is
+still enveloped as `'full'` in v1: the label never claims more than the
+envelope can check, and the conservative label is handled with more care, not
+less.
 
 A `'full'` envelope carries `FULL_PRIVACY_POLICY_ID` as its `policyId` when you
 name none, so a retention rule can match on a stable string rather than on prose.

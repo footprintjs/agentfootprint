@@ -12,6 +12,7 @@ import type {
   AttachRecorderOptions,
   FlowChartExecutorOptions,
   ReadTrackingMode,
+  RedactionPolicy,
   StructureRecorder,
   CommitValuesMode,
 } from 'footprintjs';
@@ -47,6 +48,7 @@ import type { RunTime, TimeOptions } from '../time/clock.js';
 import type { ToolChoiceLedger } from './toolChoice/types.js';
 import type { Classifier } from '../../classify/types.js';
 import type { Ontology, OntologyAsk, OntologyRecord } from '../../ontology/types.js';
+import type { CarriedRedactionPolicy } from '../../redaction/policy.js';
 
 // ─── PUBLIC types (consumer-facing) ────────────────────────────────
 
@@ -618,6 +620,54 @@ export interface AgentOptions {
    * guess. Cost is one small array copy per write.
    */
   readonly writeProvenance?: WriteProvenanceMode;
+  /**
+   * Keep named values out of everything this agent RECORDS — a footprintjs
+   * `RedactionPolicy`, handed to the run's executor, so footprintjs's one
+   * redaction rule decides every record the agent retains or serves.
+   *
+   * **Covered** (the placeholder where a value was): the commit log, the
+   * snapshot `getLastSnapshot()` serves (the redacted mirror), the narrative,
+   * every typed event — `agent.on(...)`, `recordRun` recordings (plain and
+   * packed), observability strategies (otel, file, audit, console, CloudWatch,
+   * X-Ray, AgentCore), `enable.localObservability` traces, attached
+   * recorders, the deferred-observer tier — bug reports, answer accounts, the
+   * self-explain tools, recordings a host files and serves, and every run the
+   * agent starts on a caller's behalf through a tool (`ctx.redact`).
+   *
+   * **Never covered — what the agent computes on or hands back to you:** the
+   * model's input; the answer `run()` returns and the reply a hosted agent
+   * streams; the conversation it continues (`checkpoint()`, `followUp`,
+   * `continueFrom`, a host's session store); the resume checkpoints (a pause's
+   * `checkpoint`, `RunCheckpointError.checkpoint`); and memory, which is what a
+   * later run recalls.
+   *
+   * **It selects by NAME, never by content** — footprintjs's law. A key or
+   * pattern masks a STATE key of that name (and everything under it) and, in
+   * every record handed out whole (an event's payload, a pause's question, the
+   * run's input, a thrown error), a key of that name at ANY depth. So a field
+   * like `ssn` inside a tool's arguments is masked wherever the arguments
+   * travel as fields (every event's `args`, the copies the library renders
+   * from them). TEXT has no name: the conversation — the `history` state key,
+   * a tool's result, a sentence quoting a value, the model's words — is kept
+   * out only by naming every key it travels under: `conversationRedaction()`
+   * (`agentfootprint/security`) is the library's own list. The answer the chart RETURNS is a bare string with no name, so the
+   * run's exit payload carries it whatever the policy (a named limit,
+   * `src/redaction/README.md`).
+   *
+   * Validated at construction: an unknown field, a non-RegExp pattern, a
+   * frozen global RegExp or a policy that names nothing is refused.
+   *
+   * @example
+   * ```ts
+   * import { conversationRedaction } from 'agentfootprint/security';
+   *
+   * Agent.create({
+   *   provider, model,
+   *   redact: conversationRedaction({ patterns: [/ssn|email/i] }),
+   * })
+   * ```
+   */
+  readonly redact?: RedactionPolicy;
   /**
    * Record the ASSEMBLED system prompt on every LLM call (9.50.0).
    * **Opt-in. Default OFF — and the default is a privacy decision.**
@@ -1430,6 +1480,21 @@ export interface AgentState {
    * prove: a host that lets checkpoints leave its trust boundary signs them.
    */
   runSessionId?: string | null;
+  /**
+   * The redaction policy this run is covered by — the agent's own `redact`
+   * joined with any the caller handed it (`agent.run(input, { redact })`) — as
+   * plain data: names, and patterns only as references to ones the resuming
+   * side holds (never compiled from here). Committed by seed ONLY when the
+   * run is covered by one, read off the run itself (never the agent instance),
+   * and written back by every resumed leg with that leg's whole policy (a
+   * `redact` passed to `resume()` included), so a pause's checkpoint carries it
+   * and every later leg is covered by it without being handed it again — a
+   * pattern of the caller's own excepted, which the resume must name again
+   * (`Agent · resume`). A value this library did not write, or none on a
+   * checkpoint whose run kept names out, refuses the resume —
+   * `ResumeRedactionError`.
+   */
+  runRedaction?: CarriedRedactionPolicy;
   // Set during the final branch — the (user, assistant) pair the
   // memory write subflows persist for cross-run recall.
   newMessages: readonly LLMMessage[];

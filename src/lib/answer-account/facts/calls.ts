@@ -28,7 +28,7 @@
 import { strip } from '../../../core/agent/coverage/read.js';
 import { v } from '../render.js';
 import type { RecordPointer, SentenceVar, ToolCallFact } from '../types.js';
-import { isRecord, str, type ViewEvent } from '../view.js';
+import { isKeptOut, isRecord, keptOut, str, type ViewEvent } from '../view.js';
 import {
   at,
   countedFields,
@@ -56,9 +56,17 @@ export type CoverageSectionKey = 'checked' | 'notChecked' | 'cannotCover';
 
 export interface CoverageItemRead {
   readonly section: CoverageSectionKey;
+  /** The item's words — `''` when the record keeps them out (`keptOut`, below). */
   readonly what: string;
   readonly short?: string;
   readonly kind?: 'existence' | 'scope';
+  /**
+   * Present and `true` when the record keeps the item's WORDS out (a
+   * redaction policy left its placeholder on `what` — under the vocabulary,
+   * the value-kind rule, `redaction/knownStrings.ts`): the item exists, with
+   * its `kind`, and a reader says its words are kept out, never prints them.
+   */
+  readonly keptOut?: true;
   /**
    * Pointer base: the declaration that holds the item — its event
    * (`tools.absent` / `tools.coverage_declared`), or, for a call before a
@@ -154,6 +162,14 @@ interface DeclarationSource {
   readonly fields: Readonly<Record<string, unknown>>;
   readonly base: (...keys: readonly (string | number)[]) => RecordPointer;
   readonly absent: boolean;
+  /**
+   * Whether the record keeps `value` — a leaf of this declaration — out: a
+   * redaction policy's placeholder, in a record served under one. Asked of
+   * every word before it is read as words.
+   */
+  readonly isKeptOut: (value: unknown) => boolean;
+  /** Whether the record keeps the declaration's top-level `field` out — ASKED before it is read. */
+  readonly keptOutField: (field: string) => boolean;
 }
 
 /**
@@ -171,9 +187,11 @@ function readDeclarations(
   const items: CoverageItemRead[] = [];
   let lookedFor: CoverageRead['lookedFor'];
   let tryInsteadTool: CoverageRead['tryInsteadTool'];
-  for (const { fields, base } of sources) {
-    const lf = str(fields.lookedFor);
-    if (lookedFor === undefined && lf !== undefined && lf.length > 0)
+  for (const { fields, base, isKeptOut: wordsKeptOut, keptOutField } of sources) {
+    // What the tool looked for, unless the record keeps those words out (then
+    // the account says what it found without them — never the placeholder).
+    const lf = keptOutField('lookedFor') ? undefined : str(fields.lookedFor);
+    if (lookedFor === undefined && lf !== undefined && lf.length > 0 && !wordsKeptOut(lf))
       lookedFor = { text: lf, pointer: base('lookedFor') };
     const tit = fields.tryInsteadTool;
     if (tryInsteadTool === undefined && isRecord(tit) && typeof tit.tool === 'string') {
@@ -184,8 +202,12 @@ function readDeclarations(
       if (!Array.isArray(list)) continue;
       list.forEach((item: unknown, position) => {
         if (!isRecord(item) || typeof item.what !== 'string') return;
+        // The item's words kept out: it still exists, with its kind — said so, never printed.
+        const kept = wordsKeptOut(item.what);
         const short =
-          typeof item.short === 'string' && item.short.trim().length > 0 ? item.short : undefined;
+          !kept && typeof item.short === 'string' && item.short.trim().length > 0
+            ? item.short
+            : undefined;
         // `kind` is refused on `checked` (a checked item is not a limit), read-never-repaired:
         // a hand-built envelope that puts one there gets no kind, no chip and no signal.
         const kind =
@@ -194,9 +216,10 @@ function readDeclarations(
             : undefined;
         items.push({
           section,
-          what: item.what,
+          what: kept ? '' : item.what,
           ...(short !== undefined && { short }),
           ...(kind !== undefined && { kind }),
+          ...(kept && { keptOut: true as const }),
           base,
           position,
         });
@@ -214,12 +237,20 @@ function readDeclarations(
   };
 }
 
-function readCoverage(events: readonly ViewEvent[]): CoverageRead | undefined {
+/**
+ * A call's declaration(s) from its events. `served`: the record was served
+ * under a redaction policy, so a placeholder in it is words kept out
+ * (`view.ts` · `isKeptOut`) — never in any other record, where a tool may
+ * have declared that string itself.
+ */
+function readCoverage(events: readonly ViewEvent[], served: boolean): CoverageRead | undefined {
   return readDeclarations(
     events.map((event) => ({
       fields: event.payload,
       base: (...keys: readonly (string | number)[]) => at(event, ...keys),
       absent: event.type.endsWith('tools.absent'),
+      isKeptOut: (value: unknown) => served && isKeptOut(value),
+      keptOutField: (field: string) => keptOut(event, field),
     })),
     events,
   );
@@ -238,14 +269,18 @@ export const COVERAGE_STATE_KEY = 'coverageDeclared';
 export function readStateCoverage(
   rows: readonly unknown[],
   toolCallId: string,
+  served: boolean,
 ): CoverageRead | undefined {
   const sources: DeclarationSource[] = [];
+  const wordsKeptOut = (value: unknown): boolean => served && isKeptOut(value);
   rows.forEach((row, index) => {
     if (!isRecord(row) || row.toolCallId !== toolCallId) return;
     sources.push({
       fields: row,
       base: (...keys: readonly (string | number)[]) => stateAt(COVERAGE_STATE_KEY, index, ...keys),
       absent: row.kind === 'absence',
+      isKeptOut: wordsKeptOut,
+      keptOutField: (field: string) => wordsKeptOut(row[field]),
     });
   });
   return readDeclarations(sources, []);
@@ -296,6 +331,9 @@ interface Outcome {
   readonly ruleEvent?: ViewEvent;
 }
 
+/** The `tool_end` fields that say how a call ended — read by `outcomeOf`. */
+const OUTCOME_FIELDS = ['notDispatched', 'notExecuted', 'error'] as const;
+
 function outcomeOf(
   ctx: ReadContext,
   byCall: CallIndex,
@@ -321,6 +359,10 @@ function outcomeOf(
   const isPausedCall =
     ctx.resumedLeg && ((pausedId !== undefined && pausedId === id) || start === undefined);
 
+  // The record keeps out a field that says how the call ended (a redaction
+  // policy's placeholder): how it ended cannot be told, so it is not guessed.
+  if (end !== undefined && OUTCOME_FIELDS.some((field) => keptOut(end, field)))
+    return { outcome: 'unknown' };
   if (end?.payload.notDispatched !== undefined)
     return { outcome: 'not-dispatched', ruleEvent: end };
   if (checkInDeclined !== undefined) return { outcome: 'declined', ruleEvent: checkInDeclined };
@@ -362,6 +404,16 @@ export function endPointer(end: ViewEvent, emptiness: EmptinessReading): RecordP
   return emptiness.emptiness === 'unknown' ? at(end, 'toolCallId') : derived(end, '#emptiness');
 }
 
+/**
+ * Whether the result the emptiness would be read from is kept out of the
+ * record: `modelResult` when the call has one, else `result` (a kept-out
+ * field reads as absent, so a kept-out `modelResult` falls to the first arm).
+ */
+function resultIsKeptOut(end: ViewEvent): boolean {
+  if (keptOut(end, 'modelResult')) return true;
+  return !('modelResult' in end.payload) && keptOut(end, 'result');
+}
+
 function viewOf(end: ViewEvent): ToolCallFact['view'] {
   if (!('modelResult' in end.payload)) return 'result';
   return deepEqual(strip(end.payload.result), end.payload.modelResult)
@@ -374,7 +426,7 @@ function readOne(ctx: ReadContext, byCall: CallIndex, id: string): CallRead {
   const ends = byCall('stream.tool_end', id);
   const end = ends[ends.length - 1];
   const coverageEvents = [...byCall('tools.absent', id), ...byCall('tools.coverage_declared', id)];
-  const coverage = readCoverage(coverageEvents);
+  const coverage = readCoverage(coverageEvents, ctx.view.servedUnderPolicy);
   const described = byCall('tools.semantics_declared', id)[0];
   const named = toolNameFor(ctx, id, start, coverage);
   // A call no event names is still a call: counted as unread, judged, and said to be unnamed.
@@ -384,11 +436,19 @@ function readOne(ctx: ReadContext, byCall: CallIndex, id: string): CallRead {
   const judged = outcome.outcome === 'ran' && outcome.withheldBy === undefined && end !== undefined;
   // The door THIS record holds for the call — its events — decides what was declared; a marker
   // in the bytes the run did not recognize (an envelope returned as JSON text) is plain data.
-  const emptiness: EmptinessReading = judged
+  // A result the record keeps out (a redaction policy left its placeholder
+  // there — `view.ts` · `keptOut`) is not judged: whether it was empty cannot be
+  // read, and the account says why instead of reading the placeholder.
+  const resultKeptOut = judged && resultIsKeptOut(end);
+  const emptiness: EmptinessReading = resultKeptOut
+    ? { emptiness: 'unknown', undeclaredShape: false, rowsUnread: 'redacted' }
+    : judged
     ? readEmptiness('modelResult' in end.payload ? end.payload.modelResult : end.payload.result, {
         ...(rowsAtOf(ctx.declarations, toolName) !== undefined && {
           rowsAt: rowsAtOf(ctx.declarations, toolName),
         }),
+        // A served record's rows key holding the placeholder is kept out, never "no list".
+        ...(ctx.view.servedUnderPolicy && { keptOut: isKeptOut }),
         door: {
           absent: end.payload.status === 'absent' || coverage?.kind === 'absent',
           bounded: coverageEvents.some((e) => e.type.endsWith('tools.coverage_declared')),
@@ -416,7 +476,7 @@ function readOne(ctx: ReadContext, byCall: CallIndex, id: string): CallRead {
     ...countedFields(emptiness),
     ...(emptiness.described !== undefined && { described: emptiness.described }),
     ...(emptiness.bounded === true && { bounded: true as const }),
-    ...(judged && { view: viewOf(end) }),
+    ...(judged && !resultKeptOut && { view: viewOf(end) }),
     ...(coverage !== undefined && {
       coverage: {
         kind: coverage.kind,

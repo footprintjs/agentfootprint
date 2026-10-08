@@ -150,6 +150,14 @@ export interface EmptinessContext {
    * (`declaredByValue`).
    */
   readonly door?: ReturnedDoor;
+  /**
+   * For a reader of a record SERVED under a redaction policy (an agent's
+   * `redact`): whether a value is the policy's placeholder. The app's rows key
+   * holding one reads as kept out (`rowsUnread: 'redacted'`), never as "no
+   * list". Absent — the live run, or a record no policy covered — every
+   * value is read as the value it is.
+   */
+  readonly keptOut?: (value: unknown) => boolean;
 }
 
 export interface EmptinessReading {
@@ -179,9 +187,14 @@ export interface EmptinessReading {
    *   there nor a ticket standing for it;
    * - `uncounted-ticket` — the rows went to the artifact store and the ticket
    *   left in their place carries no whole-number count (a dataset ticket
-   *   without `rows`, or the library's placement ticket, which counts bytes).
+   *   without `rows`, or the library's placement ticket, which counts bytes);
+   * - `redacted` — the result itself is kept out of the record: a redaction
+   *   policy (an agent's `redact`) left its placeholder where the value was,
+   *   so nothing about the rows can be read. Set by the answer account's call
+   *   reader (`lib/answer-account/facts/calls.ts`), which never hands a
+   *   placeholder to this reader as if it were a result.
    */
-  readonly rowsUnread?: 'no-list' | 'uncounted-ticket';
+  readonly rowsUnread?: 'no-list' | 'uncounted-ticket' | 'redacted';
 }
 
 /** How deep `coverage(coverage(…))` is read before the reading gives up (`unknown`). */
@@ -275,8 +288,15 @@ function ticketFor(
  * A bare rowset: a top-level array (library-counted), the app's `rowsAt` key
  * or the dataset ticket left where those rows were (app-counted).
  */
-function rowsetReading(data: unknown, rowsAt: string | undefined): EmptinessReading {
+function rowsetReading(
+  data: unknown,
+  rowsAt: string | undefined,
+  keptOut: ((value: unknown) => boolean) | undefined,
+): EmptinessReading {
   if (Array.isArray(data)) return counted(data.length, 'library', []);
+  // The whole value kept out of a served record: nothing about its rows can be read.
+  if (keptOut?.(data) === true)
+    return { emptiness: 'unknown', undeclaredShape: false, rowsUnread: 'redacted' };
   if (!isRecord(data)) return { emptiness: 'unknown', undeclaredShape: false };
   // The library's own placement: the whole result is in the store, and its ticket counts bytes.
   if (isPlacedToolResult(data)) return UNCOUNTED_TICKET;
@@ -285,6 +305,16 @@ function rowsetReading(data: unknown, rowsAt: string | undefined): EmptinessRead
   // recording) drops it, and the live value must read the same.
   const rows = Object.hasOwn(data, rowsAt) ? data[rowsAt] : undefined;
   if (Array.isArray(rows)) return counted(rows.length, 'app', [rowsAt], rowsAt);
+  // The declared rows kept out of a served record — not "no list".
+  if (rows !== undefined && keptOut?.(rows) === true) {
+    return { emptiness: 'unknown', rowsAt, undeclaredShape: false, rowsUnread: 'redacted' };
+  }
+  // KEYS kept out of a served record: the value-kind rule folds the keys it
+  // cannot vouch for into one placeholder entry (`redaction/knownStrings.ts`),
+  // and the rows key may be among them — a positive sign, so not "no list".
+  if (rows === undefined && keptOut !== undefined && holdsKeptOutKeys(data, keptOut)) {
+    return { emptiness: 'unknown', rowsAt, undeclaredShape: false, rowsUnread: 'redacted' };
+  }
   // Moved, not merely beside: a key still in the value is read as the value holds it.
   const found = rows === undefined ? ticketFor(data, rowsAt) : undefined;
   if (found === undefined) {
@@ -294,6 +324,14 @@ function rowsetReading(data: unknown, rowsAt: string | undefined): EmptinessRead
   return typeof n === 'number' && Number.isSafeInteger(n) && n >= 0
     ? counted(n, 'app', [...found.at, 'rows'], rowsAt)
     : { ...UNCOUNTED_TICKET, rowsAt };
+}
+
+/** Whether a served record holds the placeholder entry its kept-out keys were folded into. */
+function holdsKeptOutKeys(
+  data: Readonly<Record<string, unknown>>,
+  keptOut: (value: unknown) => boolean,
+): boolean {
+  return Object.keys(data).some((key) => keptOut(key) && keptOut(data[key]));
 }
 
 /** The data a recorded described envelope carries, per kind — or `undefined` when it cannot be read. */
@@ -369,12 +407,13 @@ function boundedReading(
   door: ReturnedDoor,
   rowsAt: string | undefined,
   depth: number,
+  keptOut: ((value: unknown) => boolean) | undefined,
 ): EmptinessReading {
   // Only a boundary the door holds is read through: a marker the run did not recognize is data.
   const covered = door.bounded ? readCoverageLedger(data) : undefined;
-  if (covered === undefined) return rowsetReading(data, rowsAt);
+  if (covered === undefined) return rowsetReading(data, rowsAt, keptOut);
   if (depth >= MAX_BOUND_DEPTH) return { emptiness: 'unknown', undeclaredShape: false };
-  const read = boundedReading(covered.result, door, rowsAt, depth + 1);
+  const read = boundedReading(covered.result, door, rowsAt, depth + 1, keptOut);
   // The count sits under the boundary's `result`.
   const inner: EmptinessReading =
     read.countedAt !== undefined ? { ...read, countedAt: ['result', ...read.countedAt] } : read;
@@ -409,5 +448,5 @@ export function readEmptiness(value: unknown, context: EmptinessContext = {}): E
     const described = describedReading(door.described);
     if (described !== undefined) return described;
   }
-  return boundedReading(data, door, context.rowsAt, 0);
+  return boundedReading(data, door, context.rowsAt, 0, context.keptOut);
 }

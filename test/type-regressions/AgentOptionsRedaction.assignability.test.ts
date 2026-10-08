@@ -1,67 +1,85 @@
 /**
- * Compile-level regression — 9.88.0. `AgentOptions` has no redaction door, and
- * an option nobody declared must not compile.
+ * Compile-level regression — the agent's redaction door is ONE key, `redact`,
+ * and it takes a footprintjs `RedactionPolicy`.
  *
  * ── WHY THIS FILE EXISTS ──────────────────────────────────────────────────
  * The 9.88.0 conformance suite shipped with a case titled "a redacted run"
- * that passed `redact: [/sk-[a-z0-9]+/g]` to `Agent.create`. There is no such
- * option. `tsconfig.json` excludes `test/`, so the unknown key was never
+ * that passed `redact: [/sk-[a-z0-9]+/g]` to `Agent.create`. There was no such
+ * option then. `tsconfig.json` excludes `test/`, so the unknown key was never
  * typechecked and TypeScript's excess-property check never ran; the option was
  * silently dropped, the run was NOT redacted, and the assertion described a run
- * that does not exist. Two READMEs then documented the behaviour it pretended
- * to prove, and a reader was told a recording was safe to pass on.
+ * that did not exist.
  *
- * Typechecking the WHOLE of `test/` would close that hole, and it was tried:
- * 1,054 pre-existing errors across the suite and the examples it pulls in —
- * a repair of its own, not a line item in this one. So the hole is closed where
- * it actually bit, in the one place that already compiles: this directory runs
- * under `npm run test:types`, and its files also run under `npm test` for their
- * runtime half.
+ * The door exists now (`AgentOptions.redact`), and the same hole would bite a
+ * different way: a misspelt door (`redaction:`, `redactionPolicy:`) or the old
+ * array shape would compile into a run that is not redacted. This directory
+ * runs under `npm run test:types`, so each of those is a compile error here.
  *
  * What is pinned:
- *   1. `redact` is not an `AgentOptions` key — so a future `redact:` in a test
- *      is a compile error here rather than a silent no-op there.
- *   2. Excess properties on an `AgentOptions` literal are rejected at all —
- *      the check that never ran.
- *   3. `recordReceipt` IS a key, and is optional, so the off switch cannot be
- *      quietly renamed out from under `Agent.create`.
+ *   1. `redact` IS an optional `AgentOptions` key, typed footprintjs's
+ *      `RedactionPolicy` — and `AgentRunOptions.redact` is the same type.
+ *   2. The misspellings are NOT keys, and an excess property is refused.
+ *   3. The old array shape is refused by the TYPE — a policy is an object.
+ *   4. `recordReceipt` is still a key, and optional.
  *
- * Where redaction really lives is asserted at RUNTIME in
- * `test/lib/time-travel/receipt-conformance.test.ts` — `flowchartAsTool({
- * redact })` scrubs an inner run's commit log, and an agent's own log is not
- * scrubbed at all.
+ * The runtime half — every record served, the live run untouched — is
+ * `test/redaction/`.
  */
 import { describe, expect, it } from 'vitest';
+import type { RedactionPolicy } from 'footprintjs';
 import type { AgentOptions } from '../../src/index';
+import type { AgentRunOptions } from '../../src/core/Agent';
 
-// ─── 1. There is no redaction door on AgentOptions ────────────────
+// ─── 1. `redact` is the door ──────────────────────────────────────
 
 /** `true` only when `K` is NOT a key of `AgentOptions`. */
 type NotAnOption<K extends string> = K extends keyof AgentOptions ? never : true;
 
-const _noRedact: NotAnOption<'redact'> = true;
+/** `true` only when `AgentOptions[K]` is exactly `RedactionPolicy | undefined`. */
+type IsPolicy<T> = [T] extends [RedactionPolicy | undefined]
+  ? [RedactionPolicy | undefined] extends [T]
+    ? true
+    : never
+  : never;
+
+const _redactIsThePolicy: IsPolicy<AgentOptions['redact']> = true;
+const _perRunIsThePolicy: IsPolicy<AgentRunOptions['redact']> = true;
+void _redactIsThePolicy;
+void _perRunIsThePolicy;
+
+/** The two options every agent must supply, so the literals below fail for one reason only. */
+const REQUIRED = { provider: null as never, model: 'mock' };
+
+const _withPolicy: AgentOptions = {
+  ...REQUIRED,
+  redact: { keys: ['history'], patterns: [/ssn/i] },
+};
+const _withoutPolicy: AgentOptions = { ...REQUIRED };
+void _withPolicy;
+void _withoutPolicy;
+
+// ─── 2. The misspellings are not doors ────────────────────────────
+
 const _noRedaction: NotAnOption<'redaction'> = true;
 const _noRedactionPolicy: NotAnOption<'redactionPolicy'> = true;
-void _noRedact;
 void _noRedaction;
 void _noRedactionPolicy;
 
-// ─── 2. An unknown key on the literal is refused ──────────────────
+// @ts-expect-error `redaction` is not an AgentOptions key — a misspelt door would
+// otherwise build a run that is not redacted.
+const _misspelt: AgentOptions = { ...REQUIRED, redaction: { keys: ['ssn'] } };
+void _misspelt;
 
-/** The two options every agent must supply, so the literals below fail for the
- *  excess property and for nothing else. */
-const REQUIRED = { provider: null as never, model: 'mock' };
+// ─── 3. The old array shape is refused by the type ────────────────
 
-/** The excess-property check, exercised so it cannot be assumed. */
-// @ts-expect-error `redact` is not an AgentOptions key — this is the line the
-// conformance suite got away with, because `test/` was never typechecked.
-const _rejected: AgentOptions = { ...REQUIRED, redact: [/sk-[a-z0-9]+/g] };
-void _rejected;
+// @ts-expect-error a RedactionPolicy is an object of selectors, not a list of
+// patterns — this is the 9.88.0 line, and it must not compile.
+const _array: AgentOptions = { ...REQUIRED, redact: [/sk-[a-z0-9]+/g] };
+void _array;
 
-// ─── 3. The receipt's off switch is a real, optional key ──────────
+// ─── 4. The receipt's off switch is a real, optional key ──────────
 
-/** `true` only when `K` may be omitted — an agent that says nothing about the
- *  receipt still compiles. */
+/** `true` only when `K` may be omitted. */
 type IsOptional<K extends keyof AgentOptions> = Omit<AgentOptions, K> extends Omit<
   AgentOptions,
   never
@@ -70,18 +88,16 @@ type IsOptional<K extends keyof AgentOptions> = Omit<AgentOptions, K> extends Om
   : never;
 
 const _receiptSwitchExists: IsOptional<'recordReceipt'> = true;
+const _redactIsOptional: IsOptional<'redact'> = true;
 void _receiptSwitchExists;
+void _redactIsOptional;
 
-const _offSwitch: AgentOptions = { ...REQUIRED, recordReceipt: false };
-const _onByDefault: AgentOptions = { ...REQUIRED };
-void _offSwitch;
-void _onByDefault;
-
-describe('AgentOptions has no redaction door', () => {
+describe('AgentOptions has exactly one redaction door', () => {
   it('is pinned by the compiler, not by anyone remembering', () => {
     // The claims above are compile-time. This runtime half exists so the file
     // also fails loudly under `npm test` if it stops compiling at all.
-    expect(_noRedact).toBe(true);
+    expect(_redactIsThePolicy).toBe(true);
+    expect(_noRedaction).toBe(true);
     expect(_receiptSwitchExists).toBe(true);
   });
 });

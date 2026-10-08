@@ -13,7 +13,11 @@
  * HONESTY (the discipline everything here inherits):
  * - Every counter is a STRUCTURAL fact from the run's own commit log —
  *   offers are recorded commits, uses are recorded calls/activations/slice
- *   membership. Nothing is inferred from model internals.
+ *   membership. Nothing is inferred from model internals. Under an agent's
+ *   `redact`, a final value the log keeps out is read from the run's live
+ *   end state, and a kind nothing can answer for is left UNMETERED for the
+ *   run ({@link RecordedRun.unmetered}) — a placeholder never counts as
+ *   "not used".
  * - Each kind's `used` definition is explicit ({@link UsedSignal}) and rides
  *   every count — a consumer can always see WHY a piece counted as used.
  * - Slice membership is slot-granular (all injections sharing a slot share
@@ -85,6 +89,16 @@ export interface RecordedRun {
    * `footprintjs/trace`. ABSENT when every answer was exact.
    */
   readonly basis?: Readonly<Record<string, readonly ValueBasis[]>>;
+  /**
+   * The kinds this run was NOT metered for: a read their offers or uses come
+   * from rests on a redaction (`basis` names the key as `'redacted'`) that no
+   * live state answered — an agent's `redact` kept it out of the record and
+   * the source was a snapshot, or it is a value per call (what each call was
+   * offered lives only in the log). Neither the kind's offers nor its uses are
+   * counted for this run, so a gate never demotes a piece on uses the record
+   * could not show. ABSENT when every kind was metered (always, without a policy).
+   */
+  readonly unmetered?: readonly PieceKind[];
 }
 
 /** JSON-safe persisted shape (consumer owns storage). */
@@ -104,7 +118,9 @@ export interface ContextLedger {
    * Ingest one FINISHED run: walk its commit log for offers (activeInjections
    * / dynamicToolSchemas per iteration), uses (assistant tool calls,
    * activatedInjectionIds, the final answer's dependency slice), and
-   * accumulate. Accepts a runner (reads `getLastSnapshot()`) or a snapshot.
+   * accumulate. Accepts a runner or a snapshot. A runner of this library is
+   * read LIVE (its live snapshot and end state — never its served record);
+   * any other runner through `getLastSnapshot()`.
    */
   recordRun(source: RunnerLike | unknown): RecordedRun | undefined;
   /**

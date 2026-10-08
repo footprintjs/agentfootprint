@@ -193,16 +193,22 @@ describe('defineMemory — consumer scenarios', () => {
     ).toThrow(/defineMemory\('as-user'\): `asRole` has never been read/);
   });
 
-  it('redact policy passes through (impl deferred to v2.x)', () => {
-    const def = defineMemory({
-      id: 'redacted',
-      type: MEMORY_TYPES.EPISODIC,
-      strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 5 },
-      store: new InMemoryStore(),
-      redact: { patterns: [/\d{3}-\d{2}-\d{4}/], replacement: '[SSN]' },
-    });
-    expect(def.redact).toBeDefined();
-    expect(def.redact?.replacement).toBe('[SSN]');
+  it('redact is refused by name — it was reserved and never implemented', () => {
+    // Used to assert the policy "passes through (impl deferred)": it was
+    // stored on the definition and no store ever scrubbed anything because of
+    // it. A memory is working state, so it is refused rather than built —
+    // `src/memory/redactRefusal.ts`. Presence, not value: an empty one too.
+    for (const redact of [{ patterns: [/\d{3}-\d{2}-\d{4}/], replacement: '[SSN]' }, {}]) {
+      expect(() =>
+        defineMemory({
+          id: 'redacted',
+          type: MEMORY_TYPES.EPISODIC,
+          strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 5 },
+          store: new InMemoryStore(),
+          redact,
+        } as never),
+      ).toThrow(/defineMemory\('redacted'\): `redact` is not implemented/);
+    }
   });
 });
 

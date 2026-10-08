@@ -123,6 +123,12 @@ export interface Runner<TIn = unknown, TOut = unknown> {
    * `FlowChart` value directly:
    *
    *   parent.addSubFlowChartNext('sf-agent', child.getSpec(), 'Agent')
+   *
+   * Mounted into an executor you build yourself, the chart's typed events are
+   * still served under the `redact` the runner declares — your executor's own
+   * policy never reaches them, so declare it on the runner; its STATE belongs
+   * to your executor and follows that executor's own redaction policy
+   * (`src/redaction/README.md`, "A runner's chart mounted into your own executor").
    */
   getSpec(): FlowChart;
 

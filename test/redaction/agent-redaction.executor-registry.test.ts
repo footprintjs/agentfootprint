@@ -1,0 +1,148 @@
+/**
+ * Every executor a runner opens is KNOWN to the redaction — `covered` with its
+ * policy, or positively `declared-none` — and an executor no run opened is
+ * `unknown`, which a reader refuses rather than serve raw (`runRedaction.ts` ·
+ * `coverageOfExecutor`, `redaction/coverage.ts`).
+ *
+ * A snapshot is served under the coverage of the executor it comes from. A
+ * lookup that missed used to read as "no policy" and serve the record as it
+ * is; now "this run had no policy" is an explicit state, and a miss — an
+ * executor no run of this library opened — serves nothing.
+ */
+import { FlowChartExecutor } from 'footprintjs';
+import type { RedactionPolicy } from 'footprintjs';
+import { describe, expect, it } from 'vitest';
+
+import {
+  Agent,
+  Conditional,
+  LLMCall,
+  Loop,
+  Parallel,
+  Sequence,
+  graph,
+  llmRouter,
+  workflow,
+} from '../../src/index.js';
+import type { LLMProvider, LLMResponse } from '../../src/adapters/types.js';
+import type { Runner } from '../../src/core/runner.js';
+import { mock } from '../../src/doors/providers.js';
+import { coverageOfExecutor } from '../../src/redaction/runRedaction.js';
+
+const KEYS: RedactionPolicy = { keys: ['ssn'] };
+
+const text = (reply: string): LLMProvider => mock({ chunkDelayMs: 0, reply });
+
+const llm = (reply: string) =>
+  LLMCall.create({ provider: text(reply), model: 'm' })
+    .system('')
+    .build();
+
+const agent = (redact?: RedactionPolicy) =>
+  Agent.create({ provider: text('ok'), model: 'm', ...(redact !== undefined && { redact }) })
+    .system('')
+    .build();
+
+const router = () =>
+  llmRouter({
+    provider: {
+      name: 'router',
+      complete: async (): Promise<LLMResponse> => ({
+        content: JSON.stringify({ message: 'all set', reason: 'done' }),
+        toolCalls: [],
+        usage: { input: 1, output: 1 },
+        stopReason: 'stop',
+      }),
+    },
+    model: 'm',
+    agents: [
+      { id: 'billing', description: 'Invoices.' },
+      { id: 'tech', description: 'Outages.' },
+    ],
+  }).step;
+
+/** The executor a runner last opened — protected on the class, read here only. */
+const lastExecutorOf = (runner: Runner): object | undefined =>
+  (runner as unknown as { lastExecutor?: object }).lastExecutor;
+
+/** Every runner kind the library builds, with the policy its run must be known by. */
+const KINDS: readonly (readonly [string, () => Runner, RedactionPolicy | undefined])[] = [
+  ['Agent, declaring nothing', () => agent(), undefined],
+  ['Agent, declaring a policy', () => agent(KEYS), KEYS],
+  ['LLMCall', () => llm('ok'), undefined],
+  ['LlmRouter', () => router() as unknown as Runner, undefined],
+  ['Sequence', () => Sequence.create().step('a', agent(KEYS)).build(), KEYS],
+  [
+    'Parallel',
+    () =>
+      Parallel.create()
+        .branch('a', agent(KEYS))
+        .branch('b', llm('b'))
+        .mergeWithFn((r) => Object.values(r).join(' '))
+        .build(),
+    KEYS,
+  ],
+  [
+    'Conditional',
+    () =>
+      Conditional.create()
+        .when('a', () => true, agent(KEYS))
+        .otherwise('b', llm('b'))
+        .build(),
+    KEYS,
+  ],
+  ['Loop', () => Loop.create().repeat(agent(KEYS)).times(1).build(), KEYS],
+  ['Workflow', () => workflow(agent(KEYS)) as unknown as Runner, KEYS],
+  ['Graph', () => graph({ nodes: [{ id: 'a', runner: agent(KEYS) }], edges: [] }), KEYS],
+];
+
+describe('every executor a runner opens is known, with its policy or explicitly none', () => {
+  for (const [kind, make, expected] of KINDS) {
+    it(kind, async () => {
+      const runner = make();
+      await runner.run({ message: 'go' });
+      const executor = lastExecutorOf(runner);
+      expect(executor).toBeDefined();
+      const coverage = coverageOfExecutor(executor as object);
+      if (expected === undefined) expect(coverage).toEqual({ state: 'declared-none' });
+      else {
+        expect(coverage.state).toBe('covered');
+        if (coverage.state === 'covered') {
+          expect(coverage.policy.keys).toEqual(expect.arrayContaining(expected.keys ?? []));
+        }
+      }
+      // …and its snapshot is served.
+      expect(runner.getLastSnapshot()).toBeDefined();
+    });
+  }
+});
+
+describe('an executor no run opened is unknown — and refused, never served raw', () => {
+  it('a foreign executor reads as unknown, not as "no policy"', () => {
+    const foreign = new FlowChartExecutor(agent().getSpec());
+    expect(coverageOfExecutor(foreign)).toEqual({ state: 'unknown' });
+  });
+
+  it('a runner whose last executor is one no run opened serves no snapshot', async () => {
+    const runner = agent(KEYS);
+    await runner.run({ message: 'go' });
+    expect(runner.getLastSnapshot()).toBeDefined();
+    const foreign = new FlowChartExecutor(runner.getSpec());
+    await foreign.run({ input: { message: 'ssn SSN-FOREIGN-1' } });
+    expect(runner.getLastNarrativeEntries().length).toBeGreaterThan(0);
+    (runner as unknown as { lastExecutor: object }).lastExecutor = foreign;
+    expect(runner.getLastSnapshot()).toBeUndefined();
+    expect(runner.getSnapshot()).toBeUndefined();
+    // The narrative is the snapshot's twin: nothing from an executor no run opened.
+    expect(runner.getLastNarrativeEntries()).toEqual([]);
+  });
+
+  it('a runner with NO policy still serves its record: "none" is known, not missing', async () => {
+    const runner = agent();
+    await runner.run({ message: 'go' });
+    expect(coverageOfExecutor(lastExecutorOf(runner) as object)).toEqual({
+      state: 'declared-none',
+    });
+    expect(runner.getLastSnapshot()).toBeDefined();
+  });
+});

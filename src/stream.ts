@@ -16,6 +16,7 @@
 import type { AgentfootprintEvent } from './events/registry.js';
 import type { RunnerBase } from './core/RunnerBase.js';
 import type { EventDispatcher, Unsubscribe } from './events/dispatcher.js';
+import { runnerLive } from './core/runnerLive.js';
 import { toWireJson } from './lib/wireJson.js';
 
 /**
@@ -42,15 +43,21 @@ export interface ToSSEOptions {
   /**
    * Filter predicate — return false to skip an event. Default: all events.
    * Common: `event => event.type.startsWith('agentfootprint.stream.')`
-   * for a token-only feed.
+   * for a token-only feed. It sees each event as the run's RECORD serves it —
+   * under an agent's `redact`, the placeholder wherever the policy selected a
+   * value — in both formats.
    */
   readonly filter?: (event: AgentfootprintEvent) => boolean;
   /**
    * Output shape:
-   *   - 'full' (default) — each event is JSON-serialized verbatim.
+   *   - 'full' (default) — each event is JSON-serialized verbatim: the run's
+   *     RECORD, so under an agent's `redact` policy it is the served event
+   *     (the placeholder wherever the policy selected a value).
    *   - 'text' — only `agentfootprint.stream.token.content` is yielded,
    *     in plain text form (no event/data prefix). Useful for piping
-   *     directly into a chat UI.
+   *     directly into a chat UI. This is the REPLY to the person who asked —
+   *     the caller's own answer, like `run()`'s return — so a redaction
+   *     policy never masks it.
    */
   readonly format?: 'full' | 'text';
   /**
@@ -97,9 +104,46 @@ export async function* toSSE<TIn, TOut>(
     }
   };
 
-  const unsub: Unsubscribe = dispatcher.on('*', (event) => {
+  // Every event — and so every event the consumer's `filter` sees — is the
+  // RECORD: served under the run's redaction policy like every other
+  // listener's. 'text' then streams the REPLY to the person who asked, the
+  // caller's own answer, which a policy never masks: each token's text is
+  // taken from the run's real-value path (`core/runnerLive.ts` ·
+  // `runnerLive`) — matched to its served event by the token's address (its
+  // stage, iteration and index, none of which a policy selects), so a served
+  // token that never arrives cannot shift the ones after it — and never
+  // handed to consumer code. A runner that is not a RunnerBase has no
+  // redaction and no live taps: its events are the record and the reply at once.
+  const live = format === 'text' ? runnerLive(runner) : undefined;
+  const replies = new Map<string, string[]>();
+  const offReplies = live?.onRealEvent((event) => {
+    if (event.type !== 'agentfootprint.stream.token') return;
+    const content = (event as { payload?: { content?: unknown } }).payload?.content;
+    const key = tokenAddress(event);
+    const waiting = replies.get(key);
+    const text = typeof content === 'string' ? content : '';
+    if (waiting === undefined) replies.set(key, [text]);
+    else waiting.push(text);
+  });
+  const replyFor = (event: AgentfootprintEvent): string | undefined => {
+    const key = tokenAddress(event);
+    const waiting = replies.get(key);
+    const text = waiting?.shift();
+    if (waiting !== undefined && waiting.length === 0) replies.delete(key);
+    return text;
+  };
+  const listener = (event: AgentfootprintEvent): void => {
+    // Taken before the filter, so a filtered-out token still consumes its text.
+    const reply =
+      live !== undefined && event.type === 'agentfootprint.stream.token'
+        ? replyFor(event)
+        : undefined;
     if (filter && !filter(event)) return;
-    queue.push(event);
+    queue.push(
+      reply !== undefined
+        ? ({ type: event.type, payload: { content: reply } } as unknown as AgentfootprintEvent)
+        : event,
+    );
     wakeup();
     // `agent.turn_end` (or composition exit on the outermost runner)
     // ends the stream naturally; the consumer's `for await` finishes
@@ -111,7 +155,12 @@ export async function* toSSE<TIn, TOut>(
       done = true;
       wakeup();
     }
-  });
+  };
+  const offRecord: Unsubscribe = dispatcher.on('*', listener);
+  const unsub = (): void => {
+    offRecord();
+    offReplies?.();
+  };
 
   let heartbeat: ReturnType<typeof setInterval> | undefined;
   if (heartbeatMs > 0) {
@@ -181,4 +230,18 @@ export function encodeSSE(eventName: string, payload: unknown): string {
   // stays single-line. SSE's data: lines can be repeated, but the
   // canonical encoder keeps it simple.
   return `event: ${eventName}\ndata: ${json}\n\n`;
+}
+
+/**
+ * A token event's address — the stage that emitted it, its iteration and its
+ * index: the same on the real-value path and on its served twin, and never a
+ * name a redaction policy selects. `toSSE`'s 'text' pairing key.
+ */
+function tokenAddress(event: AgentfootprintEvent): string {
+  const payload = event.payload as { iteration?: unknown; tokenIndex?: unknown } | undefined;
+  return [
+    event.meta?.runtimeStageId ?? '',
+    String(payload?.iteration ?? ''),
+    String(payload?.tokenIndex ?? ''),
+  ].join('\u001f');
 }

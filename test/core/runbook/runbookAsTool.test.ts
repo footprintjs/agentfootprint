@@ -61,6 +61,8 @@ import {
   type ToolExecutionContext,
 } from '../../../src/index.js';
 import { innerRunsOf } from '../../../src/observe.js';
+import { conversationRedaction } from '../../../src/doors/security.js';
+import { servedUnderPolicy } from '../../../src/redaction/marker.js';
 import { measureArtifactBytes } from '../../../src/artifacts/payload.js';
 import {
   chartRecordingOf,
@@ -1485,6 +1487,40 @@ describe('runbookAsTool — properties and security', () => {
     expect(JSON.stringify(out)).not.toContain('secret-bytes');
   });
 
+  it('ctx.redact: the calling run’s policy covers the kept record; the envelope follows where it lands', async () => {
+    // The calling agent's policy (`ToolExecutionContext.redact`) joins the
+    // tool's for the inner run's RECORD. What the tool hands the MODEL becomes
+    // its result in the calling run's conversation (`servableSnapshot.ts` ·
+    // `modelFacingState`): a calling run that keeps its whole conversation out
+    // reads the tool's own view; a narrower one reads the record's.
+    const tool = runbookAsTool({
+      name: 'caller_policy',
+      description: 'd',
+      keepRecord: true,
+      procedure: () =>
+        flowChart<{ report: unknown }>(
+          'c',
+          (s) => {
+            s.report = { finding: 'FINDING-FOR-THE-MODEL' };
+          },
+          'a',
+        ).build(),
+    });
+    for (const [caller, modelReads] of [
+      [conversationRedaction({ keys: ['report'] }), true],
+      [{ keys: ['report'] }, false],
+    ] as const) {
+      const { ctx } = ctxWithStore({ redact: caller });
+      const out = (await tool.execute({}, ctx)) as RunbookEnvelope;
+      expect(JSON.stringify(out).includes('FINDING-FOR-THE-MODEL')).toBe(modelReads);
+      const record = innerRunsOf(tool)!.get(ctx.toolCallId)!;
+      expect(record.problem).toBeUndefined();
+      expect(JSON.stringify(record)).not.toContain('FINDING-FOR-THE-MODEL');
+      const snapshot = record.recording!.snapshot as { sharedState: Record<string, unknown> };
+      expect(snapshot.sharedState.report).toBe('REDACTED');
+    }
+  });
+
   it('redact + keepRecord: the kept record is the redacted view in EVERY field (9.89.1)', async () => {
     // Same defect as flowchartAsTool (recorded-not-built entry 6): the kept
     // record's `sharedState` was the raw heap while its log said REDACTED.
@@ -1512,6 +1548,8 @@ describe('runbookAsTool — properties and security', () => {
     const snapshot = record.recording!.snapshot as { sharedState: Record<string, unknown> };
     expect(snapshot.sharedState.apiKey).toBe('REDACTED');
     expect(snapshot.sharedState.report).toEqual({ touched: true });
+    // …and it says so: its readers read the placeholder as a value kept out.
+    expect(servedUnderPolicy(snapshot)).toBe(true);
   });
 });
 

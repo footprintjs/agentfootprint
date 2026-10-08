@@ -12,6 +12,7 @@ import type { EmitEvent } from 'footprintjs';
 import { EventDispatcher } from '../../../src/events/dispatcher.js';
 import { streamRecorder } from '../../../src/recorders/core/StreamRecorder.js';
 import { typedEmit } from '../../../src/recorders/core/typedEmit.js';
+import { noPolicyScope } from '../../helpers/noPolicy.js';
 
 describe('integration — stream pipeline round trip', () => {
   it('typedEmit -> EmitBridge -> v2 dispatcher -> consumer listener', () => {
@@ -32,7 +33,8 @@ describe('integration — stream pipeline round trip', () => {
     // would feed into the emit channel. We fake the EmitEvent footprintjs
     // would construct and hand it to the recorder.
     const captured: EmitEvent[] = [];
-    const fakeScope = {
+    // A run with no policy: its events are served as made.
+    const fakeScope = noPolicyScope({
       $emit: (name: string, payload: Record<string, unknown>) => {
         const emitEvent = {
           name,
@@ -46,7 +48,7 @@ describe('integration — stream pipeline round trip', () => {
         captured.push(emitEvent);
         rec.onEmit?.(emitEvent);
       },
-    };
+    });
 
     typedEmit(fakeScope, 'agentfootprint.stream.llm_start', {
       iteration: 1,

@@ -6,7 +6,7 @@ title: toolDigestInput
 
 > **toolDigestInput**(`tool`): `string`
 
-Defined in: [src/lib/time-travel/receipt.ts:559](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L559)
+Defined in: [src/lib/time-travel/receipt.ts:565](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L565)
 
 The bytes a tool schema's hash covers: the whole `LLMToolSchema` — `name`,
 `description`, `inputSchema` — as sorted-key JSON, so two schemas that are

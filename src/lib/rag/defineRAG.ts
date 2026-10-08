@@ -127,6 +127,7 @@ import { resolveRankingMode } from '../../memory/store/capability.js';
 import { MEMORY_TYPES, MEMORY_STRATEGIES } from '../../memory/define.types.js';
 import { defineMemory } from '../../memory/define.js';
 import { refuseAsRole } from '../../memory/asRoleRefusal.js';
+import { refuseMemoryRedact } from '../../memory/redactRefusal.js';
 
 /**
  * The namespace a corpus lives in unless told otherwise — the same one
@@ -327,6 +328,9 @@ export function defineRAG(opts: DefineRAGOptions): MemoryDefinition {
   // casts. Refused here rather than only inside `defineMemory` so the
   // message names the factory the caller actually wrote.
   refuseAsRole(opts, `defineRAG('${opts.id}')`);
+  // A memory `redact` never existed here and is refused the same way, so a
+  // JavaScript caller who copied it from `defineMemory` is told, not ignored.
+  refuseMemoryRedact(opts, `defineRAG('${opts.id}')`);
   if (!opts.store) {
     throw new Error(`defineRAG[${opts.id}]: \`store\` is required.`);
   }

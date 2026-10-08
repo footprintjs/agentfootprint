@@ -138,8 +138,10 @@ coordination: it is a disk-safety ceiling, and **retention belongs to the
 log-management daemon you already run** (omit `maxBytes` and the adapter never
 renames anything, which is the right choice when `logrotate` owns the file).
 Payloads are written verbatim, so narrow what reaches the strategy with
-`eventTypes` / `tier` / `sampleRate` or a footprintjs `RedactionPolicy` — a
-bounded record by construction is `auditExport({ payloadMode: 'bounded' })`.
+`eventTypes` / `tier` / `sampleRate`, or keep values out of every event at its
+source with the agent's `redact` (a footprintjs `RedactionPolicy`, see
+[Keep personal data out of the record](doc:security#keep-personal-data-out-of-the-record))
+— a bounded record by construction is `auditExport({ payloadMode: 'bounded' })`.
 An unwritable path is refused at **construction**, naming the path. Full detail
 on [On-premises & self-hosted](doc:on-premises).
 </Callout>

@@ -6,7 +6,7 @@ title: Predicate
 
 > **Predicate** = (`input`) => `boolean`
 
-Defined in: [src/core-flow/Conditional.ts:69](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Conditional.ts#L69)
+Defined in: [src/core-flow/Conditional.ts:71](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Conditional.ts#L71)
 
 ## Parameters
 

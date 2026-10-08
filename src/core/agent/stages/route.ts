@@ -62,6 +62,8 @@ import {
 import type { DispositionLedger } from '../../../integrity/disposition/ledger.js';
 import type { Disposition } from '../../../integrity/disposition/types.js';
 import type { InjectionRecord } from '../../../recorders/core/types.js';
+import { runKeepsOut } from '../../../redaction/runRedaction.js';
+import type { FixedRouteRationale } from '../../../events/payloads.js';
 
 export type RouteBranch =
   | 'tool-calls'
@@ -260,6 +262,12 @@ export function declaredDefaultsFrom(
   };
 }
 
+/** The fixed `route_decided` rationales — typed, so a redacted record keeps
+ *  them as the library's own words (`events/payloads.ts` · `FixedRouteRationale`). */
+const NO_TOOL_CALLS: FixedRouteRationale = 'LLM produced no tool calls — final answer';
+const FORCED_BY_ITERATIONS: FixedRouteRationale = 'maxIterations reached — forcing final';
+const FORCED_BY_COST: FixedRouteRationale = 'costBudget reached (onExceed: halt) — forcing final';
+
 /** The base decision, with the sentence that explains it. Split out so the
  *  enforcement-enabled path can decide, then judge, then announce ONCE — an
  *  agent whose answer is about to be re-asked should not have a route event
@@ -313,10 +321,10 @@ function decideBranch(scope: TypedScope<AgentState>): {
       chosen === 'tool-calls'
         ? `LLM requested ${toolCalls.length} tool call(s)`
         : outOfIterations
-        ? 'maxIterations reached — forcing final'
+        ? FORCED_BY_ITERATIONS
         : costHalt
-        ? 'costBudget reached (onExceed: halt) — forcing final'
-        : 'LLM produced no tool calls — final answer',
+        ? FORCED_BY_COST
+        : NO_TOOL_CALLS,
     ...(earlyStop !== undefined && { earlyStop }),
   };
 }
@@ -1719,10 +1727,13 @@ function recordContractUnmet(
     ...(brokenBy !== undefined && { brokenBy }),
   });
 
+  // The parser's message can quote the draft: a run that keeps the draft out
+  // of its records (`redact` selects `rawOutput`) keeps it out of this line too.
+  const quoted = runKeepsOut(scope, 'rawOutput') ? 'its message is kept out' : failure.error;
   // eslint-disable-next-line no-console
   console.warn(
     `[agentfootprint] this run's answer does NOT satisfy the output schema ` +
-      `(${failure.stage}: ${failure.error})` +
+      `(${failure.stage}: ${quoted})` +
       (brokenBy !== undefined
         ? `. The model's own answer PASSED — the output rule '${brokenBy}' rewrote it into one ` +
           `that does not, so it was not re-asked: re-asking cannot fix a rule.`

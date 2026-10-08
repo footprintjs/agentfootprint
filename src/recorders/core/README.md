@@ -69,7 +69,36 @@ When a slot subflow writes `messagesInjections` multiple times (possible during 
 
 The seen-hash set resets on slot exit — so a new iteration can re-inject the same content if it chooses.
 
-### Decision 6: Enrich with `EventMeta` at emit time
+### Decision 6: Under a redaction policy, an event exists and its values are served
+
+A run's redaction policy (an agent's `redact`, `src/redaction/`) changes VALUES in
+the record, never which events exist. The two sources are served the two ways
+their channels need:
+
+- **Typed emits** are served at their SOURCE: `typedEmit` goes through
+  `redaction/runRedaction.ts · emitServed`, which serves the payload once before
+  footprintjs's `$emit`, so the bridge, every recorder on the executor, the
+  deferred tier and the narrative's `[emit]` lines all get the same served
+  payload; `EmitBridge` hands it on with `dispatchServed`.
+- **Context events** are derived from scope writes, and footprintjs serves a
+  write of a selected key (`systemPromptInjections`, `slotCompositions`, …) to
+  recorders as the placeholder — from which no event could be derived. So the
+  slot builders write those keys through `setEventSource`, which hands the run
+  the value as written; `ContextRecorder` takes that value (`written`, once per
+  write) and dispatches the event, which the dispatcher then serves by name.
+
+```ts
+// A slot builder (core/slots/*): the write the context events come from.
+setEventSource(scope, INJECTION_KEYS.MESSAGES, injections);
+// → context.injected exists under any policy; its rawContent is '[REDACTED]'
+//   when the policy names it (conversationRedaction() does).
+```
+
+Pinned by `test/redaction/agent-redaction.vocabulary.test.ts`: under the
+library's vocabulary every feature's run emits the same events as without it,
+inline and with deferred delivery.
+
+### Decision 7: Enrich with `EventMeta` at emit time
 
 Raw footprintjs events carry structural metadata (runtimeStageId, subflowPath, stageName). The bridge enriches each outbound event with `EventMeta` (wallClockMs, runOffsetMs, compositionPath, runId, optional traceId + correlationId). Consumers get consistent metadata on every event; subscribers don't compute offsets or parse paths themselves.
 

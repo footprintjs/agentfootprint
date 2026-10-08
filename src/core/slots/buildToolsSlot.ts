@@ -17,6 +17,8 @@ import type { LLMToolSchema } from '../../adapters/types.js';
 import { INJECTION_KEYS } from '../../conventions.js';
 import type { InjectionRecord } from '../../recorders/core/types.js';
 import { COMPOSITION_KEYS } from '../../recorders/core/types.js';
+// Writes the context recorder derives its events from — relayed under a policy.
+import { setEventSource } from '../../redaction/runRedaction.js';
 import type { ActiveInjection } from '../../lib/injection-engine/types.js';
 import { menuOutstanding, type TurnRoute } from '../../lib/injection-engine/routingPolicy.js';
 import { invariantViolationsOf } from '../../integrity/invariant-violation/check.js';
@@ -981,7 +983,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       narrowedTo: ReadonlySet<string> | undefined,
       rules: RulesOnWire | undefined,
     ): void => {
-      scope.$setValue(INJECTION_KEYS.TOOLS, servedInjections);
+      setEventSource(scope, INJECTION_KEYS.TOOLS, servedInjections);
       // THE ONE DECORATION SITE (9.101.0). With `.findings()` armed, every
       // schema on the committed list gains the reserved optional `_findings`
       // property here — after the merge, so `sameContract` paired UNDECORATED
@@ -1166,7 +1168,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
         budgetCap,
         toolProvider ? 'registry+provider+injections' : 'registry+injections',
       );
-      scope.$setValue(COMPOSITION_KEYS.SLOT_COMPOSED, composition);
+      setEventSource(scope, COMPOSITION_KEYS.SLOT_COMPOSED, composition);
 
       // Overflow is LOUD. Nothing here truncates — the full tool definitions
       // always reach the LLM — so an over-budget slot is otherwise invisible
@@ -1176,7 +1178,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       // iterations.
       const pressure = slotOverflow(composition);
       if (pressure) {
-        scope.$setValue(COMPOSITION_KEYS.BUDGET_PRESSURE, [pressure]);
+        setEventSource(scope, COMPOSITION_KEYS.BUDGET_PRESSURE, [pressure]);
         if (!warnedOverflow) {
           warnedOverflow = true;
           console.warn(
