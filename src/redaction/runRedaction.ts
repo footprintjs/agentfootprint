@@ -56,7 +56,14 @@ import type { FlowChart, FlowChartExecutor, RedactionPolicy, ScopeFactory } from
 import { buildEventMeta, type RunContext } from '../bridge/eventMeta.js';
 import type { EventDispatcher } from '../events/dispatcher.js';
 import type { AgentfootprintEvent } from '../events/registry.js';
-import { eventServing, type EventServing } from './served.js';
+import { conversationRedaction } from './conversation.js';
+import {
+  coverageOfOpenedRun,
+  policyOfCoverage,
+  UNKNOWN_COVERAGE,
+  type Coverage,
+} from './coverage.js';
+import { eventServing, SERVED_PLACEHOLDER, type EventServing } from './served.js';
 import { redactionMarker } from './marker.js';
 
 /** One run's redaction, as the runner that owns the executor holds it. */
@@ -99,7 +106,8 @@ export interface RunRedaction {
  * @internal
  */
 export interface ScopeRun {
-  readonly policy: RedactionPolicy | undefined;
+  /** What the run is covered by — `unknown` only for a runner whose declaration is unknown. */
+  readonly coverage: Coverage;
   readonly serving: EventServing;
   /** Deliver an event, as made, to the real-value path — from the stage `stageId` that emitted it. */
   real(type: string, payload: unknown, stageId: string): void;
@@ -108,37 +116,25 @@ export interface ScopeRun {
   keepsOut(name: string): boolean;
 }
 
-/** What `executorPolicies` holds for an executor whose run was handed NO policy — never a miss. */
-const NO_POLICY: unique symbol = Symbol('agentfootprint.redaction.no-policy');
+/**
+ * Every executor a run opened → what the run was covered by (`coverage.ts`):
+ * `covered` with its policy, or `declared-none` — set by `applyTo`, the one
+ * place an executor gets its policy, so what a snapshot is served under is a
+ * fact about THAT executor and can never be another run's
+ * (`coverageOfExecutor`). An executor this map does not hold is `unknown`,
+ * never "no policy". Weak: dies with the executor.
+ */
+const executorCoverage = new WeakMap<object, Coverage>();
 
 /**
- * Every executor a run opened → the policy it was handed, or {@link NO_POLICY}
- * for one explicitly handed none — set by `applyTo`, the one place an executor
- * gets its policy, so what a snapshot is served under is a fact about THAT
- * executor and can never be another run's (`policyOfExecutor`). An executor
- * this map does not hold is UNKNOWN, never "no policy". Weak: dies with the
- * executor.
+ * What `executor`'s run was covered by: `covered`, `declared-none`, or
+ * `unknown` — an executor no run of this library opened, whose records
+ * nothing vouches for. A reader serves an unknown executor's records under
+ * nothing it could guess: it refuses (`RunnerBase · getLastSnapshot` hands
+ * back nothing).
  */
-const executorPolicies = new WeakMap<object, RedactionPolicy | typeof NO_POLICY>();
-
-/**
- * What `executor` was handed when its run opened: `known` with its policy
- * (`undefined` = explicitly none), or not `known` — an executor no run of
- * this library opened, whose records nothing vouches for. A reader serves an
- * unknown executor's records under nothing it could guess: it refuses
- * (`RunnerBase · getLastSnapshot` hands back nothing).
- */
-export type ExecutorPolicy =
-  | { readonly known: true; readonly policy: RedactionPolicy | undefined }
-  | { readonly known: false };
-
-const UNKNOWN_EXECUTOR: ExecutorPolicy = Object.freeze({ known: false });
-
-/** What `executor` was handed when its run opened ({@link ExecutorPolicy}). */
-export function policyOfExecutor(executor: object): ExecutorPolicy {
-  const held = executorPolicies.get(executor);
-  if (held === undefined) return UNKNOWN_EXECUTOR;
-  return { known: true, policy: held === NO_POLICY ? undefined : held };
+export function coverageOfExecutor(executor: object): Coverage {
+  return executorCoverage.get(executor) ?? UNKNOWN_COVERAGE;
 }
 
 /**
@@ -187,8 +183,9 @@ export function createRunRedaction(args: {
   // redaction is dropped when the next run opens.
   const waiting = new Map<string, { readonly value: unknown; readonly keptOut: boolean }[]>();
   const slot = (runtimeStageId: string, key: string): string => `${runtimeStageId}\u001f${key}`;
+  const coverage = coverageOfOpenedRun(policy);
   const run: ScopeRun = {
-    policy,
+    coverage,
     serving,
     real(type, payload, stageId) {
       if (!dispatcher.hasRealListeners()) return;
@@ -233,7 +230,7 @@ export function createRunRedaction(args: {
       };
     },
     applyTo(executor) {
-      executorPolicies.set(executor, policy ?? NO_POLICY);
+      executorCoverage.set(executor, coverage);
       executorServings.set(executor, serving);
       if (policy === undefined) return;
       executor.setRedactionPolicy(policy);
@@ -294,14 +291,14 @@ function servingOf(
 /**
  * The serving for facts a runner dispatches BEFORE its run's executor exists —
  * a resume's `pause.resume`, whose payload is the person's reply — under the
- * policy that run will be covered by. A rule built from the policy alone: no
- * stage has run yet, so the run has marked nothing. `undefined` with no
- * policy (the identity).
+ * policy that run will be covered by, which the runner computed from typed
+ * declarations (`undefined` there is positively none: the identity). A rule
+ * built from the policy alone: no stage has run yet, so the run has marked
+ * nothing.
  */
-export function servingAhead(policy: RedactionPolicy | undefined): EventServing | undefined {
-  if (policy === undefined) return undefined;
+export function servingAhead(policy: RedactionPolicy | undefined): EventServing {
   const rule = new RedactionRule(policy);
-  return eventServing(() => rule, (policy.emitPatterns?.length ?? 0) > 0);
+  return eventServing(() => rule, (policy?.emitPatterns?.length ?? 0) > 0);
 }
 
 /**
@@ -316,19 +313,37 @@ export function servingAhead(policy: RedactionPolicy | undefined): EventServing 
  * declaration's rule.
  */
 export interface OutsideRun {
-  readonly policy: RedactionPolicy;
+  /** The runner's declaration this run serves under. */
+  readonly declaration: Coverage;
   /** @internal */
   readonly scopeRun: ScopeRun;
 }
 
-/** The {@link OutsideRun} of a runner that declares `policy`. */
-export function outsideRunFor(policy: RedactionPolicy): OutsideRun {
+/**
+ * The {@link OutsideRun} of a runner whose declaration is `declaration`:
+ * `covered` serves under its policy, `declared-none` as emitted (positively
+ * none), `unknown` refuses every payload — the placeholder, fail closed.
+ */
+export function outsideRunFor(declaration: Coverage): OutsideRun {
+  if (declaration.state === 'unknown') {
+    return Object.freeze({
+      declaration,
+      scopeRun: {
+        coverage: declaration,
+        serving: REFUSING_SERVING,
+        real: () => undefined,
+        noteWrite: () => undefined,
+        keepsOut: () => true,
+      },
+    });
+  }
+  const policy = policyOfCoverage(declaration);
   const rule = new RedactionRule(policy);
   return Object.freeze({
-    policy,
+    declaration,
     scopeRun: {
-      policy,
-      serving: eventServing(() => rule, (policy.emitPatterns?.length ?? 0) > 0),
+      coverage: declaration,
+      serving: eventServing(() => rule, (policy?.emitPatterns?.length ?? 0) > 0),
       real: () => undefined,
       noteWrite: () => undefined,
       keepsOut: (name: string) => rule.isKeyRedacted(name),
@@ -336,15 +351,23 @@ export function outsideRunFor(policy: RedactionPolicy): OutsideRun {
   });
 }
 
+/** The serving of a run whose state is unknown: every payload is the placeholder. */
+const REFUSING_SERVING: EventServing = Object.freeze({
+  active: () => true,
+  payload: () => SERVED_PLACEHOLDER,
+  meta: <M>(meta: M) => meta,
+}) as EventServing;
+
 /**
  * Tie `scope` to `outside` — the run of its runner's chart mounted outside any
  * of that runner's runs (`chartBinding.ts` · `bindChartStages` calls it as each
  * stage starts, with the runner's own {@link OutsideRun}). A scope a run
- * already made keeps its run; a runner that declares no policy (`undefined`)
- * leaves the scope as it is (byte-identical to before).
+ * already made keeps its run. A runner that declares no policy ties the scope
+ * as positively none (served as emitted) — never left untied, which would
+ * read as unknown.
  */
-export function adoptScopeOutsideRun(scope: unknown, outside: OutsideRun | undefined): void {
-  if (outside === undefined || scope === null || typeof scope !== 'object') return;
+export function adoptScopeOutsideRun(scope: unknown, outside: OutsideRun): void {
+  if (scope === null || typeof scope !== 'object') return;
   if (scopeRuns.has(scope)) return;
   scopeRuns.set(scope, { run: outside.scopeRun, stageId: '' });
 }
@@ -358,15 +381,15 @@ export interface EmitScope {
  * THE way a typed event leaves a stage. The real value goes to the run's own
  * mechanisms (`onRealEvent`), the served value to footprintjs's `$emit` — and
  * from there to every channel at once. A runner's chart mounted into an
- * executor the app built is tied to the runner's declared policy as each
- * stage starts (`adoptScopeOutsideRun`). A scope nothing tied (a stage
- * function called directly, in a unit test; a runner that declares no
- * policy) emits the payload as it is, exactly as before this file existed.
+ * executor the app built is tied to the runner's declaration as each stage
+ * starts (`adoptScopeOutsideRun`). A scope NOTHING tied — not made by a run of
+ * this library, not bound to a runner — is a run whose state is unknown: its
+ * payload is the placeholder (fail closed), never the payload as made.
  */
 export function emitServed(scope: EmitScope, type: string, payload: unknown): void {
   const entry = scopeRuns.get(scope as object);
   if (entry === undefined) {
-    scope.$emit(type, payload);
+    scope.$emit(type, SERVED_PLACEHOLDER);
     return;
   }
   entry.run.real(type, payload, entry.stageId);
@@ -395,17 +418,29 @@ export function setEventSource(scope: SetValueScope, key: string, value: unknown
  * Whether the run `scope` belongs to keeps `name` out of its records — asked
  * of the run's own rule. For text the library writes OUTSIDE any record from
  * a value the run keeps out (a console warning that would quote the model's
- * draft): it leaves the value out too. `false` for a scope no run made.
+ * draft): it leaves the value out too. `true` for a scope no run made — its
+ * run's state is unknown, so the value is left out (fail closed).
  */
 export function runKeepsOut(scope: object, name: string): boolean {
-  return scopeRuns.get(scope)?.run.keepsOut(name) ?? false;
+  return scopeRuns.get(scope)?.run.keepsOut(name) ?? true;
+}
+
+/**
+ * What the run `scope` belongs to is covered by (`coverage.ts`) — `unknown`
+ * for a scope no run of this library made.
+ */
+export function coverageInForce(scope: object): Coverage {
+  return scopeRuns.get(scope)?.run.coverage ?? UNKNOWN_COVERAGE;
 }
 
 /**
  * The policy in force for the run `scope` belongs to — what a tool call hands
- * down to a run it starts (`ToolExecutionContext.redact`). `undefined` for a
- * run with no policy and for a scope no run made.
+ * down to a run it starts (`ToolExecutionContext.redact`), what seed commits
+ * for a pause to carry. `undefined` ONLY for a run positively covered by none;
+ * a run whose state is unknown hands down the whole conversation vocabulary —
+ * fail closed, never "none".
  */
 export function policyInForce(scope: object): RedactionPolicy | undefined {
-  return scopeRuns.get(scope)?.run.policy;
+  const coverage = coverageInForce(scope);
+  return coverage.state === 'unknown' ? conversationRedaction() : policyOfCoverage(coverage);
 }

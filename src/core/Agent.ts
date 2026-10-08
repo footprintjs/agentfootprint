@@ -88,7 +88,8 @@ import {
   policyOfMarks,
   unionRedactionPolicies,
 } from '../redaction/policy.js';
-import { policyOfExecutor } from '../redaction/runRedaction.js';
+import { coverageOfExecutor } from '../redaction/runRedaction.js';
+import { policyOfCoverage } from '../redaction/coverage.js';
 import { ResumeRedactionError } from './conversation.js';
 import { declareRedaction, redactionDeclaredBy } from '../redaction/declared.js';
 import {
@@ -1729,7 +1730,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     if (this.lastExecutor === undefined) return [];
     // The snapshot's terms: an executor no run of this agent opened serves
     // nothing — its narrative was written under no rule anyone knows.
-    if (!policyOfExecutor(this.lastExecutor).known) return [];
+    if (coverageOfExecutor(this.lastExecutor).state === 'unknown') return [];
     return this.lastExecutor.getNarrativeEntries();
   }
 
@@ -2670,8 +2671,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // `createExecutor` opened this executor's run; one it did not is refused
     // before anything is held or runs — a leg whose policy nothing knows must
     // not start.
-    const leg = policyOfExecutor(executor);
-    if (!leg.known) throw new ResumeRedactionError('unreadable');
+    const legCoverage = coverageOfExecutor(executor);
+    if (legCoverage.state === 'unknown') throw new ResumeRedactionError('unreadable');
+    const leg = { policy: policyOfCoverage(legCoverage) };
     this.inFlightRunId = this.currentRunContext.runId;
     // A resumed turn is two runs, and each keeps its own ledger — exactly
     // the recording's terms one comment up.

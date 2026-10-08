@@ -1,11 +1,12 @@
 /**
- * Every executor a runner opens is KNOWN to the redaction — with its policy,
- * or explicitly with none — and an executor no run opened is UNKNOWN, which
- * a reader refuses rather than serve raw (`runRedaction.ts` · `policyOfExecutor`).
+ * Every executor a runner opens is KNOWN to the redaction — `covered` with its
+ * policy, or positively `declared-none` — and an executor no run opened is
+ * `unknown`, which a reader refuses rather than serve raw (`runRedaction.ts` ·
+ * `coverageOfExecutor`, `redaction/coverage.ts`).
  *
- * A snapshot is served under the policy of the executor it comes from. A
+ * A snapshot is served under the coverage of the executor it comes from. A
  * lookup that missed used to read as "no policy" and serve the record as it
- * is; now "this run had no policy" is an explicit entry, and a miss — an
+ * is; now "this run had no policy" is an explicit state, and a miss — an
  * executor no run of this library opened — serves nothing.
  */
 import { FlowChartExecutor } from 'footprintjs';
@@ -26,7 +27,7 @@ import {
 import type { LLMProvider, LLMResponse } from '../../src/adapters/types.js';
 import type { Runner } from '../../src/core/runner.js';
 import { mock } from '../../src/doors/providers.js';
-import { policyOfExecutor } from '../../src/redaction/runRedaction.js';
+import { coverageOfExecutor } from '../../src/redaction/runRedaction.js';
 
 const KEYS: RedactionPolicy = { keys: ['ssn'] };
 
@@ -102,11 +103,14 @@ describe('every executor a runner opens is known, with its policy or explicitly 
       await runner.run({ message: 'go' });
       const executor = lastExecutorOf(runner);
       expect(executor).toBeDefined();
-      const handed = policyOfExecutor(executor as object);
-      expect(handed.known).toBe(true);
-      if (!handed.known) return;
-      if (expected === undefined) expect(handed.policy).toBeUndefined();
-      else expect(handed.policy?.keys).toEqual(expect.arrayContaining(expected.keys ?? []));
+      const coverage = coverageOfExecutor(executor as object);
+      if (expected === undefined) expect(coverage).toEqual({ state: 'declared-none' });
+      else {
+        expect(coverage.state).toBe('covered');
+        if (coverage.state === 'covered') {
+          expect(coverage.policy.keys).toEqual(expect.arrayContaining(expected.keys ?? []));
+        }
+      }
       // …and its snapshot is served.
       expect(runner.getLastSnapshot()).toBeDefined();
     });
@@ -116,7 +120,7 @@ describe('every executor a runner opens is known, with its policy or explicitly 
 describe('an executor no run opened is unknown — and refused, never served raw', () => {
   it('a foreign executor reads as unknown, not as "no policy"', () => {
     const foreign = new FlowChartExecutor(agent().getSpec());
-    expect(policyOfExecutor(foreign)).toEqual({ known: false });
+    expect(coverageOfExecutor(foreign)).toEqual({ state: 'unknown' });
   });
 
   it('a runner whose last executor is one no run opened serves no snapshot', async () => {
@@ -136,8 +140,9 @@ describe('an executor no run opened is unknown — and refused, never served raw
   it('a runner with NO policy still serves its record: "none" is known, not missing', async () => {
     const runner = agent();
     await runner.run({ message: 'go' });
-    const handed = policyOfExecutor(lastExecutorOf(runner) as object);
-    expect(handed).toEqual({ known: true, policy: undefined });
+    expect(coverageOfExecutor(lastExecutorOf(runner) as object)).toEqual({
+      state: 'declared-none',
+    });
     expect(runner.getLastSnapshot()).toBeDefined();
   });
 });

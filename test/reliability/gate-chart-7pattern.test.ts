@@ -29,6 +29,7 @@ import type {
 } from '../../src/reliability/types.js';
 import type { LLMProvider, LLMResponse } from '../../src/adapters/types.js';
 import { expectWithinReferenceUnits, measureAsync } from '../helpers/perf.js';
+import { noPolicyExecutor } from '../helpers/noPolicy.js';
 
 // ─── Test helpers ────────────────────────────────────────────────────
 
@@ -137,7 +138,7 @@ async function runGate(opts: {
     )
     .build();
 
-  const executor = new FlowChartExecutor(parentChart);
+  const executor = noPolicyExecutor(parentChart);
   // Attach an emit recorder
   executor.attachCombinedRecorder({
     id: 'test-emits',

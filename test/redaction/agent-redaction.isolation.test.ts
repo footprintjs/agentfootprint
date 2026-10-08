@@ -206,57 +206,49 @@ describe('(c) a lookup that misses fails closed; a mounted chart is bound to its
     expect(locationsOf(late, 'SSN-LATE-5000')).toEqual([]);
   });
 
-  it('a fact naming a run this instance never opened is refused wherever a policy exists', () => {
-    const fact = { ssn: 'SSN-ELSEWHERE-8000', note: 'filed for another instance' };
-    const filed = (redact?: RedactionPolicy) => {
-      const agent = Agent.create({
+  it('a fact naming a run this instance never opened is UNKNOWN — refused on every instance, policy or not', async () => {
+    const fact = () => ({ ssn: 'SSN-ELSEWHERE-8000', note: 'filed for another instance' });
+    const make = (redact?: RedactionPolicy) =>
+      Agent.create({
         provider: mock({ chunkDelayMs: 0, reply: 'ok' }),
         model: 'm',
         ...(redact !== undefined && { redact }),
       }).build();
+    const fileOn = (agent: ReturnType<typeof make>) => {
       const got: AgentfootprintEvent[] = [];
-      agent.on('*', (e) => got.push(e));
+      const off = agent.on('*', (e) => got.push(e));
       // A run id of this library's format, from a run this instance never ran.
-      agent.emitAttributed('app.late_fact', { ...fact }, { sessionId: 's', runId: 'run-1-999' });
-      return got.find((e) => (e.type as string) === 'app.late_fact');
+      agent.emitAttributed('app.late_fact', fact(), { sessionId: 's', runId: 'run-1-999' });
+      off();
+      return got.find((e) => (e.type as string) === 'app.late_fact')?.payload;
     };
-    // A declared policy, no run yet: the fact's own run cannot be vouched for.
-    expect(filed({ keys: ['ssn'] })?.payload).toBe('[REDACTED]');
-    // No policy anywhere on the instance: served as it is, as before.
-    expect(filed()?.payload).toEqual(fact);
+    // A declared policy, no run yet.
+    expect(fileOn(make({ keys: ['ssn'] }))).toBe('[REDACTED]');
+    // No policy at all, before and after its own runs — a lookup that misses
+    // is never "none" (`redaction/coverage.ts`).
+    const open = make();
+    expect(fileOn(open)).toBe('[REDACTED]');
+    await open.run({ message: 'first' });
+    expect(fileOn(open)).toBe('[REDACTED]');
+    // A run covered only per run.
+    await open.run({ message: 'covered' }, { redact: { keys: ['ssn'] } });
+    expect(fileOn(open)).toBe('[REDACTED]');
   });
 
-  it('an instance with NO policy serves a fact for a run it never opened as it is — after its own runs too', async () => {
+  it('a no-policy instance serves a fact of its OWN run unchanged — that run is positively declared-none', async () => {
     const agent = Agent.create({
       provider: mock({ chunkDelayMs: 0, reply: 'ok' }),
       model: 'm',
     }).build();
+    const got: AgentfootprintEvent[] = [];
+    agent.on('*', (e) => got.push(e));
     await agent.run({ message: 'first' });
+    const runId = (got[0]?.meta as { runId: string }).runId;
     await agent.run({ message: 'second' });
-    const got: AgentfootprintEvent[] = [];
-    agent.on('*', (e) => got.push(e));
-    const fact = { ssn: 'SSN-NOPOLICY-8100', note: 'filed for another lane' };
-    agent.emitAttributed('app.late_fact', fact, { sessionId: 's', runId: 'run-1-999' });
-    const served = got.find((e) => (e.type as string) === 'app.late_fact');
-    // The very object dispatched: byte-identical, nothing refused.
-    expect(served?.payload).toBe(fact);
-  });
-
-  it('a run covered only per run makes the instance refuse unknown-run facts from then on', async () => {
-    const agent = Agent.create({
-      provider: mock({ chunkDelayMs: 0, reply: 'ok' }),
-      model: 'm',
-    }).build();
-    await agent.run({ message: 'open' });
-    const got: AgentfootprintEvent[] = [];
-    agent.on('*', (e) => got.push(e));
-    const fact = () => ({ ssn: 'SSN-PERRUN-8200' });
-    agent.emitAttributed('app.late_fact', fact(), { sessionId: 's', runId: 'run-1-998' });
-    await agent.run({ message: 'covered' }, { redact: { keys: ['ssn'] } });
-    agent.emitAttributed('app.late_fact', fact(), { sessionId: 's', runId: 'run-1-997' });
-    const facts = got.filter((e) => (e.type as string) === 'app.late_fact');
-    expect(facts[0]?.payload).toEqual(fact());
-    expect(facts[1]?.payload).toBe('[REDACTED]');
+    const fact = { ssn: 'SSN-NOPOLICY-8100', note: 'filed for the first run' };
+    agent.emitAttributed('app.late_fact', fact, { sessionId: 's', runId });
+    // The very object dispatched: byte-identical.
+    expect(got.find((e) => (e.type as string) === 'app.late_fact')?.payload).toBe(fact);
   });
 
   it('a fact filed about one run after it returned is served under THAT run, never the run opened since', () => {

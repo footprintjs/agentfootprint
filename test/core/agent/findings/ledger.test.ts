@@ -39,6 +39,7 @@ import {
   type StandingRow,
 } from '../../../../src/core/agent/findings/types.js';
 import { assertionKey } from '../../../../src/integrity/assertion/types.js';
+import { noPolicyScope } from '../../../helpers/noPolicy.js';
 
 // ── Toolkit ──────────────────────────────────────────────────────────────
 
@@ -50,12 +51,13 @@ interface Emitted {
 /** A scope with the two things the writer touches: the key and `$emit`. */
 function fakeScope(): FindingsScope & { readonly events: Emitted[] } {
   const events: Emitted[] = [];
-  return {
+  // A run with no policy: its events are served as made.
+  return noPolicyScope({
     events,
     $emit(name: string, payload?: unknown) {
       events.push({ name, payload });
     },
-  };
+  });
 }
 
 function deepFreeze<T>(value: T): T {
@@ -931,9 +933,11 @@ describe('on a real TypedScope', () => {
       findingsLedger?: FindingsLedger;
     }
     const events: Emitted[] = [];
+    // Each stage's scope is a no-policy run's: its events are served as made.
     const chart = flowChart<State>(
       'first',
       (scope) => {
+        noPolicyScope(scope);
         recordFindings(
           scope,
           standingRowsFrom(
@@ -956,6 +960,7 @@ describe('on a real TypedScope', () => {
       .addFunction(
         'second',
         (scope) => {
+          noPolicyScope(scope);
           // the read of `scope.findingsLedger` here is the live proxy view
           recordFindings(
             scope,

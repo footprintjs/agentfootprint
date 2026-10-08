@@ -36,6 +36,7 @@ import type { AgentfootprintEvent } from '../../src/events/registry.js';
 import { expectScalesLinearly, expectWithinTimes, measure } from '../helpers/perf.js';
 import { settlesWithin } from '../helpers/settles.js';
 import { cloudwatchObservability } from '../../src/adapters/observability/cloudwatch.js';
+import { noPolicyScope } from '../helpers/noPolicy.js';
 
 const makeEvent = (overrides: Partial<AgentfootprintEvent> = {}): AgentfootprintEvent =>
   ({
@@ -491,14 +492,15 @@ describe('attachCostStrategy', () => {
     const off = attachCostStrategy(dispatcher, {
       strategy: { name: 'spy', capabilities: {}, recordCost },
     });
-    const scope = {
+    // A run with no policy: its events are served as made.
+    const scope = noPolicyScope({
       cumTokensInput: 0,
       cumTokensOutput: 0,
       cumEstimatedUsd: 0,
       costBudgetHit: false,
       $emit: (type: string, payload?: unknown) =>
         dispatcher.dispatch({ type, payload, meta: { iterIndex: 1 } } as never),
-    };
+    });
     const pricing = {
       name: 'test',
       pricePerToken: (_m: string, kind: string) => (kind === 'input' ? 0.000001 : 0.000005),

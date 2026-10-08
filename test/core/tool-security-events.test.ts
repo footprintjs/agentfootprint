@@ -1,15 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { bindToolSecurityEvents } from '../../src/core/agent/toolSecurityEvents.js';
+import { noPolicyScope } from '../helpers/noPolicy.js';
 
 describe('call-bound security event emitter', () => {
   for (const toolCallId of ['', 'provider/#call:雪']) {
     it(`captures the exact scalar identity at binding (${JSON.stringify(toolCallId)})`, () => {
       const emitted: { name: string; payload: unknown }[] = [];
-      const scope = {
+      // A run with no policy: its events are served as made.
+      const scope = noPolicyScope({
         $emit: (name: string, payload?: unknown) => {
           emitted.push({ name, payload });
         },
-      };
+      });
       const call = { toolCallId, iteration: 0 };
       const emit = bindToolSecurityEvents(scope, call);
       call.toolCallId = 'later-call';
@@ -27,11 +29,11 @@ describe('call-bound security event emitter', () => {
   it('stamps captured identity after any runtime payload fields without mutating the payload', () => {
     const emitted: unknown[] = [];
     const emit = bindToolSecurityEvents(
-      {
-        $emit: (_name, payload) => {
+      noPolicyScope({
+        $emit: (_name: string, payload?: unknown) => {
           emitted.push(payload);
         },
-      },
+      }),
       { toolCallId: 'actual-call', iteration: 3 },
     );
     // A structurally wider variable models a JavaScript caller supplying these fields.

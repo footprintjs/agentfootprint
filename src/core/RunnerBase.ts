@@ -17,15 +17,16 @@ import type {
   RunOptions,
 } from 'footprintjs';
 import type { RunContext } from '../bridge/eventMeta.js';
-import { EventDispatcher } from '../events/dispatcher.js';
+import { EventDispatcher, REFUSE } from '../events/dispatcher.js';
 import { bindChartStages } from '../redaction/chartBinding.js';
-import { redactionDeclaredBy } from '../redaction/declared.js';
+import { declarationOf, declareRedaction, redactionDeclaredBy } from '../redaction/declared.js';
+import { policyOfCoverage, type Coverage } from '../redaction/coverage.js';
 import { policyOfMarks, unionRedactionPolicies } from '../redaction/policy.js';
 import {
   adoptScopeOutsideRun,
+  coverageOfExecutor,
   createRunRedaction,
   outsideRunFor,
-  policyOfExecutor,
   servingAhead,
   servingOfExecutor,
   type OutsideRun,
@@ -182,11 +183,17 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
    */
   getLastSnapshot(): ReturnType<FlowChartExecutor['getSnapshot']> | undefined {
     if (this.lastExecutor === undefined) return undefined;
-    const handed = policyOfExecutor(this.lastExecutor);
-    // An executor no run of this runner opened: nothing says what its record
-    // may show, so none of it is served — fail closed, never raw.
-    if (!handed.known) return undefined;
-    return servableSnapshot(this.lastExecutor, handed.policy);
+    const coverage = coverageOfExecutor(this.lastExecutor);
+    switch (coverage.state) {
+      case 'covered':
+        return servableSnapshot(this.lastExecutor, coverage.policy);
+      case 'declared-none':
+        return servableSnapshot(this.lastExecutor, undefined);
+      case 'unknown':
+        // An executor no run of this runner opened: nothing says what its
+        // record may show, so none of it is served — fail closed, never raw.
+        return undefined;
+    }
   }
 
   /**
@@ -208,20 +215,22 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
    * reach the real values through a runner, so none can make them a record.
    */
   constructor() {
-    // Before any run opens its redaction, an event (a consumer's `emit`, a
-    // host's fact) is served under what this runner DECLARES — read at
-    // dispatch time, since the declaration is made after this constructor.
-    let declaredServing:
-      | { policy: RedactionPolicy; serving: ReturnType<typeof servingAhead> }
-      | undefined;
+    // Every runner DECLARES: positively none, until a subclass declares its
+    // own policy (`Agent.create({ redact })`, a composition adopting its
+    // members') — never a lookup that misses (`redaction/coverage.ts`).
+    declareRedaction(this, undefined);
+    // Before any run opens its redaction, an event of no run (a consumer's
+    // `emit`, a host's fact) is served under what this runner DECLARES — read
+    // at dispatch time, since the declaration is made after this constructor.
+    let declaredServing: { declaration: Coverage; serving: EventServing } | undefined;
     // A fact of a run this dispatcher holds no serving for is refused, never
     // served under another run's policy; the run-id format is ours to judge.
     this.dispatcher.useRunIdRecogniser(isMintedRunId);
-    this.dispatcher.useDefaultServing(() => {
-      const policy = redactionDeclaredBy(this);
-      if (policy === undefined) return undefined;
-      if (declaredServing?.policy !== policy) {
-        declaredServing = { policy, serving: servingAhead(policy) };
+    this.dispatcher.useInstanceServing(() => {
+      const declaration = declarationOf(this);
+      if (declaration.state === 'unknown') return REFUSE;
+      if (declaredServing?.declaration !== declaration) {
+        declaredServing = { declaration, serving: servingAhead(policyOfCoverage(declaration)) };
       }
       return declaredServing.serving;
     });
@@ -251,7 +260,7 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
     const run = createRunRedaction({ policy, dispatcher: this.dispatcher, getRunContext });
     // Under the run's own id too: a fact it dispatches after the next run
     // opened is still served under this run's policy.
-    this.dispatcher.useServing(run.serving, getRunContext().runId, policy !== undefined);
+    this.dispatcher.useServing(run.serving, getRunContext().runId);
     return run;
   }
 
@@ -433,14 +442,14 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
     }
     this.chart = builder();
     // A stage that runs outside this runner's runs (its chart mounted into an
-    // executor the app built) serves its events under the policy this runner
-    // declares — bound to THIS runner at build, by identity, and held by it:
-    // no registry another runner's stage could read.
+    // executor the app built) serves its events under what this runner
+    // declares — its policy, or positively none — bound to THIS runner at
+    // build, by identity, and held by it: no registry another runner's stage
+    // could read, and never left untied (an untied scope reads as unknown).
     let outside: OutsideRun | undefined;
     bindChartStages(this.chart, (scope) => {
-      const declared = redactionDeclaredBy(this);
-      if (declared === undefined) return;
-      if (outside?.policy !== declared) outside = outsideRunFor(declared);
+      const declaration = declarationOf(this);
+      if (outside?.declaration !== declaration) outside = outsideRunFor(declaration);
       adoptScopeOutsideRun(scope, outside);
     });
   }
@@ -577,8 +586,9 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
     // checkpoint's marks) — returned for the runner to hand THIS leg's
     // executor (`openRunRedaction`), so nothing per-run is kept on the instance.
     const resumeLeg = unionRedactionPolicies(handedDown, policyOfMarks(checkpoint.redactionMarks));
-    const ahead = servingAhead(unionRedactionPolicies(redactionDeclaredBy(this), resumeLeg));
-    this.dispatcher.useServing(ahead, undefined, ahead !== undefined);
+    this.dispatcher.useServing(
+      servingAhead(unionRedactionPolicies(redactionDeclaredBy(this), resumeLeg)),
+    );
     const meta = this.minimalMeta();
     const pausedDurationMs = Date.now() - checkpoint.pausedAt;
     // Which registered component the paused ask nominated to collect this
@@ -946,9 +956,8 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
         getCommitCount: () => this.getCommitCount(),
         redactedByPolicy: () => {
           if (this.lastExecutor === undefined) return false;
-          const handed = policyOfExecutor(this.lastExecutor);
           // Unknown reads as covered: a label never claims less than the record may hold.
-          return !handed.known || handed.policy !== undefined;
+          return coverageOfExecutor(this.lastExecutor).state !== 'declared-none';
         },
       }),
     // v2.8 grouped strategy enablers — see

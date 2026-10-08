@@ -22,18 +22,46 @@
 
 import type { RedactionPolicy } from 'footprintjs';
 
+import { conversationRedaction } from './conversation.js';
+import {
+  coverageOfOpenedRun,
+  policyOfCoverage,
+  UNKNOWN_COVERAGE,
+  type Coverage,
+} from './coverage.js';
 import { unionRedactionPolicies } from './policy.js';
 
-const declared = new WeakMap<object, RedactionPolicy>();
+/** Every runner → what it declares: a policy, or positively none. Weak: dies with the runner. */
+const declared = new WeakMap<object, Coverage>();
 
-/** Record the policy `runner` declares for every run of its own. */
+/**
+ * Record what `runner` declares for every run of its own. Called by the
+ * runner's own construction, which knows: `undefined` HERE is the declaration
+ * "none" (`RunnerBase` records it for every runner before a subclass declares
+ * its own), never a lookup that missed.
+ */
 export function declareRedaction(runner: object, policy: RedactionPolicy | undefined): void {
-  if (policy !== undefined) declared.set(runner, policy);
+  declared.set(runner, coverageOfOpenedRun(policy));
 }
 
-/** The policy `runner` declares — its own, or (for a composition) the union of its members'. */
+/**
+ * What `runner` declares: `covered` (a policy), `declared-none`, or `unknown`
+ * — an object no runner of this library registered (`coverage.ts`).
+ */
+export function declarationOf(runner: object): Coverage {
+  return declared.get(runner) ?? UNKNOWN_COVERAGE;
+}
+
+/**
+ * The policy `runner` declares, for a union — its own, or (for a composition)
+ * the union of its members'. FAIL CLOSED: a runner whose declaration this
+ * library never recorded (a member that is not a runner of this library)
+ * reads as declaring the whole conversation vocabulary, never as "none".
+ */
 export function redactionDeclaredBy(runner: object): RedactionPolicy | undefined {
-  return declared.get(runner);
+  const declaration = declarationOf(runner);
+  if (declaration.state === 'unknown') return conversationRedaction();
+  return policyOfCoverage(declaration);
 }
 
 /**

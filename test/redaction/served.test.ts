@@ -17,11 +17,14 @@ import { derivedRows, eventServing, SERVED_PLACEHOLDER } from '../../src/redacti
 import {
   createRunRedaction,
   emitServed,
+  coverageInForce,
   policyInForce,
   runKeepsOut,
   setEventSource,
 } from '../../src/redaction/runRedaction.js';
 import { EventDispatcher } from '../../src/events/dispatcher.js';
+import { conversationRedaction } from '../../src/redaction/conversation.js';
+import { noPolicyScope } from '../helpers/noPolicy.js';
 import type { EventMeta } from '../../src/events/types.js';
 
 const serving = (policy: RedactionPolicy | undefined) =>
@@ -394,14 +397,29 @@ function scopedRun(policy: RedactionPolicy | undefined) {
 }
 
 describe('runRedaction — the run wiring', () => {
-  it('a scope no run made emits as it always did, and reports no policy', () => {
+  it('a scope no run made is UNKNOWN: its payload is refused, and it hands down the whole vocabulary', () => {
     const emitted: unknown[] = [];
     const bare = { $emit: (_name: string, payload?: unknown) => emitted.push(payload) };
     const payload = { args: { ssn: '123' } };
     emitServed(bare, 'agentfootprint.stream.tool_start', payload);
+    expect(emitted).toEqual(['[REDACTED]']);
+    expect(coverageInForce(bare)).toEqual({ state: 'unknown' });
+    // A run its state cannot be resolved for never hands down "none".
+    expect(policyInForce(bare)).toBe(conversationRedaction());
+    expect(runKeepsOut(bare, 'ssn')).toBe(true);
+  });
+
+  it('a scope tied to a run with no policy emits as made — positively none', () => {
+    const emitted: unknown[] = [];
+    const tied = noPolicyScope({
+      $emit: (_name: string, payload?: unknown) => emitted.push(payload),
+    });
+    const payload = { args: { ssn: '123' } };
+    emitServed(tied, 'agentfootprint.stream.tool_start', payload);
     expect(emitted).toEqual([payload]);
-    expect(policyInForce(bare)).toBeUndefined();
-    expect(runKeepsOut(bare, 'ssn')).toBe(false);
+    expect(coverageInForce(tied)).toEqual({ state: 'declared-none' });
+    expect(policyInForce(tied)).toBeUndefined();
+    expect(runKeepsOut(tied, 'ssn')).toBe(false);
   });
 
   it("a run's scope: the real payload to the real tier, the served one to $emit", () => {

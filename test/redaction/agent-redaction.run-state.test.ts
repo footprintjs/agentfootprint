@@ -35,7 +35,7 @@ import { recordRun } from '../../src/doors/observe.js';
 import { mock } from '../../src/doors/providers.js';
 import { conversationRedaction } from '../../src/doors/security.js';
 import { VOCABULARY_VERSION } from '../../src/redaction/conversation.js';
-import { policyOfExecutor } from '../../src/redaction/runRedaction.js';
+import { coverageOfExecutor } from '../../src/redaction/runRedaction.js';
 import { servedUnderPolicy } from '../../src/redaction/marker.js';
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
 import { carriedConversationPolicy, locationsOf } from './fixture.js';
@@ -505,7 +505,7 @@ describe('a carried policy records the vocabulary version it was built under —
     const rationales = events
       .filter((e) => e.type === 'agentfootprint.agent.route_decided')
       .map((e) => (e.payload as { rationale?: unknown }).rationale);
-    return { rationales, coverage: policyOfExecutor(executor) };
+    return { rationales, coverage: coverageOfExecutor(executor) };
   };
 
   it('a run under the vocabulary carries the CURRENT version; one under a narrower policy carries none', async () => {
@@ -524,8 +524,8 @@ describe('a carried policy records the vocabulary version it was built under —
     expect(rationales.length).toBeGreaterThan(0);
     for (const rationale of rationales) expect(rationale).toBe('[REDACTED]');
     // The name the older list lacked covers the leg again.
-    expect(coverage).toMatchObject({ known: true });
-    if (coverage.known) expect(coverage.policy?.keys).toContain('userPrompt');
+    expect(coverage.state).toBe('covered');
+    if (coverage.state === 'covered') expect(coverage.policy.keys).toContain('userPrompt');
   });
 
   it('control: the same older list stamped with the CURRENT version resumes as carried — the version is what decides', async () => {
@@ -534,7 +534,7 @@ describe('a carried policy records the vocabulary version it was built under —
     // Without the dropped name the list no longer keeps the conversation out:
     // default-deny is off for the leg, and the library's rationale reads as text.
     expect(rationales.some((r) => typeof r === 'string' && r !== '[REDACTED]')).toBe(true);
-    if (coverage.known) expect(coverage.policy?.keys).not.toContain('userPrompt');
+    if (coverage.state === 'covered') expect(coverage.policy.keys).not.toContain('userPrompt');
   });
 
   it('a version that is not text is refused as unreadable', async () => {

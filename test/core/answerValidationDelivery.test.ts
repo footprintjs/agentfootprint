@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest';
-import { flowChart, FlowChartExecutor, type EmitEvent, type TypedScope } from 'footprintjs';
+import { flowChart, type EmitEvent, type TypedScope } from 'footprintjs';
 import type { AgentState } from '../../src/core/agent/types.js';
 import {
   Agent,
@@ -23,6 +23,7 @@ import {
   prepareFinalStage,
   prepareFinalWithValidationStage,
 } from '../../src/core/agent/stages/prepareFinal.js';
+import { noPolicyExecutor } from '../helpers/noPolicy.js';
 
 // A real chart boundary: a break must skip the downstream memory writer,
 // not merely set a flag a final-result getter happens to reject later.
@@ -61,7 +62,7 @@ async function capture(over: Record<string, unknown> = {}, protectedDelivery = t
       'memory',
     )
     .build();
-  const executor = new FlowChartExecutor(chart);
+  const executor = noPolicyExecutor(chart);
   executor.attachEmitRecorder({
     id: 'answer-validation-delivery-test',
     onEmit(event) {

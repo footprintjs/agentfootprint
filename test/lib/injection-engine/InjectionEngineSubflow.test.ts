@@ -10,7 +10,6 @@
  * See docs blog (injection algorithm) + memory agentfootprint_slot_plan_review.
  */
 import { describe, expect, it } from 'vitest';
-import { FlowChartExecutor } from 'footprintjs';
 
 import { Agent } from '../../../src/core/Agent.js';
 import { defineTool } from '../../../src/core/tools.js';
@@ -34,6 +33,7 @@ import {
   type ActiveInjection,
 } from '../../../src/lib/injection-engine/types.js';
 import { expectScalesLinearly } from '../../helpers/perf.js';
+import { noPolicyExecutor } from '../../helpers/noPolicy.js';
 
 // ── helpers ──────────────────────────────────────────────────────────────
 
@@ -150,7 +150,7 @@ describe('injection-engine subflow — functional', () => {
       defineInstruction({ id: 'i2', prompt: 'cite sources' }),
     ];
     const subflow = buildInjectionEngineSubflow({ injections });
-    const ex = new FlowChartExecutor(subflow);
+    const ex = noPolicyExecutor(subflow);
     await ex.run({
       input: { iteration: 1, userMessage: 'hi', history: [], activatedInjectionIds: [] },
     });
@@ -181,7 +181,7 @@ describe('injection-engine subflow — skill catalog emit', () => {
       defineSkill({ id: 'refunds', description: 'Refund policy', body: 'refunds rules' }),
     ];
     const captured: Array<Record<string, unknown>> = [];
-    const ex = new FlowChartExecutor(buildInjectionEngineSubflow({ injections }));
+    const ex = noPolicyExecutor(buildInjectionEngineSubflow({ injections }));
     ex.attachEmitRecorder({
       id: 'cap',
       onEmit: (e: { name: string; payload?: unknown }) => {
@@ -213,7 +213,7 @@ describe('injection-engine subflow — skill catalog emit', () => {
       } as Injection,
     ];
     const captured: Array<Record<string, unknown>> = [];
-    const ex = new FlowChartExecutor(buildInjectionEngineSubflow({ injections }));
+    const ex = noPolicyExecutor(buildInjectionEngineSubflow({ injections }));
     ex.attachEmitRecorder({
       id: 'cap2',
       onEmit: (e: { name: string; payload?: unknown }) => {
@@ -244,7 +244,7 @@ describe('injection-engine subflow — safety invariant', () => {
     };
     const expected = evaluateInjections(injections, ctx).active.map(projectActiveInjection);
 
-    const ex = new FlowChartExecutor(buildInjectionEngineSubflow({ injections }));
+    const ex = noPolicyExecutor(buildInjectionEngineSubflow({ injections }));
     await ex.run({ input: { ...ctx } });
     const actual = (ex.getSnapshot()?.sharedState as Record<string, unknown>).activeInjections;
 
@@ -352,7 +352,7 @@ describe('injection-engine subflow — security', () => {
         prompt: 'never',
       }),
     ];
-    const ex = new FlowChartExecutor(buildInjectionEngineSubflow({ injections }));
+    const ex = noPolicyExecutor(buildInjectionEngineSubflow({ injections }));
     await ex.run({
       input: { iteration: 1, userMessage: 'x', history: [], activatedInjectionIds: [] },
     });
