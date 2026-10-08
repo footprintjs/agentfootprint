@@ -4,7 +4,7 @@ title: ResumeRedactionReason
 
 # Type Alias: ResumeRedactionReason
 
-> **ResumeRedactionReason** = `"unreadable"` \| `"missing"`
+> **ResumeRedactionReason** = `"unreadable"` \| `"missing"` \| `"unknown-pattern"`
 
 Defined in: [src/core/conversation.ts:161](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L161)
 

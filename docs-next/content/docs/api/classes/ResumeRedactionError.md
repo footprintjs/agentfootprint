@@ -4,7 +4,7 @@ title: ResumeRedactionError
 
 # Class: ResumeRedactionError
 
-Defined in: [src/core/conversation.ts:179](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L179)
+Defined in: [src/core/conversation.ts:185](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L185)
 
 Thrown by `resume(checkpoint, input, options)` when the paused run's
 redaction cannot be carried into the resumed leg — refused before anything
@@ -15,11 +15,17 @@ runs, so a leg its policy could not keep covered never starts:
    (footprintjs's `redactionMarks`: the names it masked) but carries no
    policy. Every leg of a covered run writes its policy into its checkpoint,
    so this one was altered; a `redact` passed to the resume cannot stand in
-   for the policy the run was covered by, so it is refused all the same.
+   for the policy the run was covered by, so it is refused all the same;
+ - `'unknown-pattern'` — the carried policy names a pattern this side does
+   not hold. A pattern is never compiled from a checkpoint (one built to hang
+   the matcher could come back from storage someone else controls): a
+   carried pattern is a reference to one the agent declares, the library's
+   vocabulary holds, or the resume names — pass the run's `redact` to
+   `resume(checkpoint, input, { redact })` when the run was handed one.
 
-Either way the resumed leg would write what the paused leg kept out into
-every record of its own. Resume with the checkpoint as this library wrote
-it. No policy, name or value appears in the message.
+Every way, the resumed leg would write what the paused leg kept out into
+every record of its own. No policy, pattern, name or value appears in the
+message.
 
 ## Extends
 
@@ -31,7 +37,7 @@ it. No policy, name or value appears in the message.
 
 > **new ResumeRedactionError**(`reason`): `ResumeRedactionError`
 
-Defined in: [src/core/conversation.ts:183](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L183)
+Defined in: [src/core/conversation.ts:189](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L189)
 
 #### Parameters
 
@@ -65,7 +71,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_RESUME_REDACTION"`
 
-Defined in: [src/core/conversation.ts:180](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L180)
+Defined in: [src/core/conversation.ts:186](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L186)
 
 ***
 
@@ -97,7 +103,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1076
 
 > `readonly` **reason**: [`ResumeRedactionReason`](/docs/api/type-aliases/ResumeRedactionReason)
 
-Defined in: [src/core/conversation.ts:181](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L181)
+Defined in: [src/core/conversation.ts:187](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L187)
 
 ***
 
