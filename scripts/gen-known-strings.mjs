@@ -51,7 +51,8 @@ function membersOf(name) {
  * control characters; the double quotes it escapes need no escape inside single
  * quotes, and the single quotes it leaves bare do.
  */
-const quoted = (word) => `'${JSON.stringify(word).slice(1, -1).replace(/\\"/g, '"').replace(/'/g, "\\'")}'`;
+const quoted = (word) =>
+  `'${JSON.stringify(word).slice(1, -1).replace(/\\"/g, '"').replace(/'/g, "\\'")}'`;
 const key = (word) => (/^[A-Za-z_$][\w$]*$/.test(word) ? word : quoted(word));
 /** One entry per line, as the repo's Prettier writes it (printWidth 100: a longer key breaks after the colon). */
 const entry = (word) => {
@@ -70,10 +71,16 @@ function fill(text, marker, words) {
 }
 
 const current = readFileSync(file, 'utf8');
-const next = fill(fill(current, 'words', membersOf('LibraryWord')), 'fields', membersOf('FieldName'));
+const next = fill(
+  fill(current, 'words', membersOf('LibraryWord')),
+  'fields',
+  membersOf('FieldName'),
+);
 if (process.argv.includes('--check')) {
   if (next !== current) {
-    console.error('src/redaction/knownStrings.ts is stale — run: node scripts/gen-known-strings.mjs');
+    console.error(
+      'src/redaction/knownStrings.ts is stale — run: node scripts/gen-known-strings.mjs',
+    );
     process.exit(1);
   }
   console.log('known strings are up to date ✓');
