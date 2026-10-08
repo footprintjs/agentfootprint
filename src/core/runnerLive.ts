@@ -16,13 +16,18 @@
  *     spend ledger (`hosting/standingAgent.ts`), `toSSE({ format: 'text' })`
  *     (`stream.ts`);
  *   - `liveState` — the run's committed root state, live: the conversation a
- *     host's session store resumes from (`hosting/durability.ts`).
+ *     host's session store resumes from (`hosting/durability.ts`);
+ *   - `liveSnapshot` — the run's whole snapshot, live: what the context ledger
+ *     counts usage from, whose gates decide what later runs are offered
+ *     (`lib/context-ledger/contextLedger.ts`).
  *
  * NO BARREL EXPORTS THIS FILE, and the runner classes carry no method for it:
  * a consumer cannot reach the real values through a runner, so nothing a
  * consumer wires up — an exporter, a recorder, a sink — can turn them into a
  * record. The registry is weak: a runner that is collected takes its taps along.
  */
+
+import type { RuntimeSnapshot } from 'footprintjs';
 
 import type { AgentfootprintEvent } from '../events/registry.js';
 import type { Unsubscribe } from '../events/dispatcher.js';
@@ -33,6 +38,8 @@ export interface RunnerLive {
   onRealEvent(listener: (event: AgentfootprintEvent) => void): Unsubscribe;
   /** The current (or last) run's committed root state, live and unserved; O(1). */
   liveState(): Readonly<Record<string, unknown>> | undefined;
+  /** The current (or last) run's snapshot, live and unserved. */
+  liveSnapshot(): RuntimeSnapshot | undefined;
 }
 
 const taps = new WeakMap<object, RunnerLive>();

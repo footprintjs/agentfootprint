@@ -643,21 +643,26 @@ export interface AgentOptions {
    * **It selects by NAME, never by content** — footprintjs's law. A key or
    * pattern masks a STATE key of that name (and everything under it) and, in
    * every record handed out whole (an event's payload, a pause's question, the
-   * run's input and answer, a thrown error), a key of that name at ANY depth.
-   * An agent's conversation is one state key, `history`: a field like `ssn`
-   * inside a tool's arguments is masked in every event, but kept out of the
-   * snapshot only by naming the key that holds it. Free text has no name —
-   * to keep what people SAY out of the record, name where the agent keeps it
-   * (see the security guide's list).
+   * run's input, a thrown error), a key of that name at ANY depth. An agent's
+   * conversation is one state key, `history`: a field like `ssn` inside a
+   * tool's arguments is masked in every event, but kept out of the snapshot
+   * only by naming the key that holds it. Free text has no name — to keep what
+   * people SAY out of the record, name every key the agent keeps it under:
+   * `conversationRedaction()` (`agentfootprint/security`) is the library's own
+   * list. The answer the chart RETURNS is a bare string with no name, so the
+   * run's exit payload carries it whatever the policy (a named limit,
+   * `src/redaction/README.md`).
    *
    * Validated at construction: an unknown field, a non-RegExp pattern, a
    * frozen global RegExp or a policy that names nothing is refused.
    *
    * @example
    * ```ts
+   * import { conversationRedaction } from 'agentfootprint/security';
+   *
    * Agent.create({
    *   provider, model,
-   *   redact: { keys: ['history', 'userMessage', 'finalContent'], patterns: [/ssn|email/i] },
+   *   redact: conversationRedaction({ patterns: [/ssn|email/i] }),
    * })
    * ```
    */

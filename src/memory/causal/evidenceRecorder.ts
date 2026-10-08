@@ -18,17 +18,17 @@
  *          (Convention 4 — executor `clear()` resets between runs; same-
  *          executor pause/resume PRESERVES pre-pause evidence by design).
  * PII note: tool args/results and decide() evidence persist into snapshots.
- *          This recorder reads the run's RECORD — the events as served and
- *          footprintjs's decision evidence — so under an agent's `redact`
- *          policy it sees, and the snapshot keeps, the placeholder wherever the
- *          policy selected a value (a selected key at any depth of an event
- *          payload; a whole event whose name `emitPatterns` selects; a selected
- *          key's value inside decide() evidence). With no policy it sees every
- *          value. The snapshot's question and answer are NOT harvested here:
- *          `writeSnapshot` reads them from the conversation the run computed
- *          on, so they are the real text whatever the policy — memory is what a
- *          later run recalls. Values are bounded (`maxPreviewChars` for
- *          results, `maxFieldChars` for args/evidence); treat the snapshot
+ *          A causal memory is working state — a later run replays it to the
+ *          model — so the Agent feeds this recorder's tool calls from its
+ *          REAL-value path: under an agent's `redact` the snapshot still keeps
+ *          the real arguments and results, as it keeps the real question and
+ *          answer (`writeSnapshot` reads those from the conversation the run
+ *          computed on). The one part it cannot read real is the DECISIONS:
+ *          footprintjs serves its flow channel (`onDecision` / `onSelected`)
+ *          under the run's policy, so a selected value inside decide()
+ *          evidence is the placeholder there (a named limit,
+ *          `src/redaction/README.md`). Values are bounded (`maxPreviewChars`
+ *          for results, `maxFieldChars` for args/evidence); treat the snapshot
  *          store as PII-bearing and protect it accordingly.
  *
  * The Agent attaches this automatically when a CAUSAL memory is mounted and
@@ -140,11 +140,12 @@ export function causalEvidenceRecorder(
 
     onEmit(event): void {
       const { name, payload: raw } = event as { name: string; payload: unknown };
-      // The payload is the event as the run SERVED it: under an agent's
-      // `redact` a selected field is the placeholder, and an event whose NAME
-      // `emitPatterns` selects arrives as the placeholder string whole. Nothing
-      // in that string can be read, so its fields read as absent here — the
-      // evidence keeps what the record keeps, and never more.
+      // An Agent feeds this from its REAL-value path (`core/Agent.ts`): a
+      // causal memory is working state a later run replays to the model, so
+      // its evidence keeps the real tool calls whatever the agent's `redact`.
+      // Attached to an executor by hand it receives that executor's emits as
+      // served there — a placeholder string for an event `emitPatterns`
+      // selects whole, whose fields then read as absent.
       const whole = raw !== null && typeof raw === 'object' ? undefined : raw;
       const payload = (whole === undefined ? raw : {}) as Record<string, unknown>;
       switch (name) {

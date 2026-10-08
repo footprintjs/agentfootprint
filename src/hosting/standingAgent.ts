@@ -487,10 +487,17 @@ export async function standingAgent<TH extends HostHandle>(
     // Read live (`core/runnerLive.ts`): the reply goes to the person who asked
     // and the ledger counts what was spent — neither is a record, so neither
     // is served under the agent's `redact`.
+    // Every `Agent` is a runner of this library, so its live taps exist; one
+    // that does not is refused here rather than served placeholders or nothing.
     const live = runnerLive(agent);
-    const subscribe = (listener: (event: AgentfootprintEvent) => void): (() => void) =>
-      live !== undefined ? live.onRealEvent(listener) : agent.on('*', listener);
-    const offLane = subscribe((event) => {
+    if (live === undefined) {
+      throw new TypeError(
+        'standingAgent: the agent was not built by agentfootprint (Agent.create(...).build()), ' +
+          'so its run cannot be read live — the reply, the spend ledger and the session store ' +
+          'need it.',
+      );
+    }
+    const offLane = live.onRealEvent((event: AgentfootprintEvent) => {
       switch (event.type) {
         case 'agentfootprint.agent.turn_start':
           lane.activeRunId = (event as { meta?: { runId?: string } }).meta?.runId;
@@ -537,7 +544,7 @@ export async function standingAgent<TH extends HostHandle>(
             // The conversation is read from the run's LIVE committed state,
             // never from the commit event's (served) values: the store holds
             // what the next turn resumes from (`hosting/durability.ts`).
-            state: () => live?.liveState(),
+            state: () => live.liveState(),
             write: (sessionId, conversation) =>
               sessions.persist(sessionId, toEnvelope(conversation)),
           });

@@ -64,11 +64,14 @@
  * committed state that travels in recordings. Salted per run, the same
  * sentence in two runs has two hashes, so the fingerprint answers "is this the
  * same as THAT piece of THIS run?" — which is the only question the
- * conformance law asks — and answers nothing else.
+ * conformance law asks — and cannot be matched across runs.
  *
- * Hashes are NOT redacted, and the salt is what makes shipping THEM safe — not
- * an assumption that something scrubbed them. It says nothing about the rest of
- * the recording, and this law must not be read as if it did.
+ * Hashes are NOT redacted, and the salt is what limits THEM — not an
+ * assumption that something scrubbed them. It does not keep a GUESSABLE value
+ * secret from someone holding the recording, which carries the `runId`: a
+ * short value can be confirmed by hashing guesses (a named limit of an
+ * agent's `redact`, `src/redaction/README.md`). It says nothing about the rest
+ * of the recording, and this law must not be read as if it did.
  *
  * WHAT A RECORDING ACTUALLY CONTAINS. An agent run is redacted only when it
  * was covered by a policy — `Agent.create({ redact })`, a composed member's,
@@ -76,9 +79,10 @@
  * prompt is in the commit log and in `servedAt(k).system.text`, verbatim.
  * With one, footprintjs scrubs at COMMIT time, so a selected key never enters
  * the commit log, and `getLastSnapshot()` serves the redacted mirror
- * (`servableSnapshot`) — a redacted piece rebuilds to its placeholder, and its
- * hash no longer matches this receipt's (the receipt hashed what the model was
- * served). The same holds for `flowchartAsTool({ redact })` /
+ * (`servableSnapshot`) — the rebuilt view reads a redacted piece as ABSENT
+ * (`servedView.ts` never prints a placeholder as if the request had carried
+ * it), so the view's hash no longer matches this receipt's (the receipt hashed
+ * what the model was served). The same holds for `flowchartAsTool({ redact })` /
  * `runbookAsTool({ redact })` on an inner run. A snapshot taken with
  * `redact: true` also omits `initialState`, so folding it reports
  * `basis: 'log-only'` and `servedView.ts` raises `no-fold-base` rather than

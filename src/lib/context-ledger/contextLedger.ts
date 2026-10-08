@@ -36,6 +36,20 @@
  * pre-run state, a redaction or a delete says so on `RecordedRun.basis`
  * (per key, absent when every answer was exact) instead of being counted as
  * if it were exact.
+ *
+ * UNDER A REDACTION POLICY (an agent's `redact`, `src/redaction/`) the log
+ * holds the placeholder wherever the policy selected a value — footprintjs
+ * scrubs it as it is written. The gates decide what LATER runs are offered,
+ * so a placeholder must never read as "never used":
+ *   - a FINAL value the log keeps out (the history the tool calls are counted
+ *     from, the slot records) is read from the run's LIVE end state when the
+ *     source is a runner of this library (`sourceOf` — `core/runnerLive.ts`);
+ *     only ids and counts reach a row, never a value;
+ *   - a read nothing can answer (a value per call — the log is the only record
+ *     of what each call was offered — or any read from a snapshot handed in)
+ *     leaves its kind UNMETERED for the run (`READS_OF`): neither its offers
+ *     nor its uses are counted, `RecordedRun.unmetered` names it, and a gate
+ *     keeps offering it as it does a piece with too few offers to judge.
  */
 
 import {
@@ -61,6 +75,7 @@ import type {
   RunnerLike,
   UsedSignal,
 } from './types.js';
+import { runnerLive } from '../../core/runnerLive.js';
 
 /** chars ÷ 4 — a serialized-length ESTIMATE, deliberately rough and cheap. */
 function approxTokens(value: unknown): number {
@@ -93,13 +108,52 @@ interface SnapshotLike {
   >;
 }
 
-function snapshotOf(source: RunnerLike | unknown): SnapshotLike | undefined {
+/** What one `recordRun` reads. */
+interface LedgerSource {
+  readonly snapshot: SnapshotLike | undefined;
+  /**
+   * The run's LIVE committed root state — present for a runner of this library
+   * only (`core/runnerLive.ts`). It answers a FINAL value the log keeps out.
+   */
+  readonly liveState?: Readonly<Record<string, unknown>>;
+}
+
+/**
+ * The snapshot to count from. A runner of this library: its LIVE snapshot and
+ * state — the same run its served `getLastSnapshot()` describes, with the fold
+ * base a served snapshot omits. Any other runner: `getLastSnapshot()`. A
+ * snapshot: itself (a served one keeps its placeholders — `READS_OF`).
+ */
+function sourceOf(source: RunnerLike | unknown): LedgerSource {
+  const live = source !== null && typeof source === 'object' ? runnerLive(source) : undefined;
+  if (live !== undefined) {
+    const liveState = live.liveState();
+    return {
+      snapshot: live.liveSnapshot() as SnapshotLike | undefined,
+      ...(liveState !== undefined && { liveState }),
+    };
+  }
   const maybeRunner = source as { getLastSnapshot?: unknown };
   if (typeof maybeRunner?.getLastSnapshot === 'function') {
-    return (maybeRunner.getLastSnapshot as () => unknown)() as SnapshotLike | undefined;
+    return {
+      snapshot: (maybeRunner.getLastSnapshot as () => unknown)() as SnapshotLike | undefined,
+    };
   }
-  return source as SnapshotLike | undefined;
+  return { snapshot: source as SnapshotLike | undefined };
 }
+
+/**
+ * The state keys each kind's offers and uses are read from. A kind is
+ * UNMETERED in a run when a read of one of them rests on a redaction
+ * (`basis: 'redacted'`) that no live state answered: the ledger cannot tell
+ * what was offered or used, so it counts neither for that kind — a gate never
+ * judges a piece on a run whose uses the record kept out.
+ */
+const READS_OF: Readonly<Record<PieceKind, readonly string[]>> = {
+  tool: ['dynamicToolSchemas', 'history'],
+  skill: ['activeInjections', 'activatedInjectionIds', ...Object.values(INJECTION_KEYS)],
+  injection: ['activeInjections', ...Object.values(INJECTION_KEYS)],
+};
 
 /** Static tool registry names, duck-read from the runner's public UI-group
  *  metadata (Agent fills `extra.toolNames`). Empty for non-runner sources. */
@@ -164,13 +218,17 @@ export function contextLedger(): ContextLedger {
   }
 
   function recordRun(source: RunnerLike | unknown): RecordedRun | undefined {
-    const snapshot = snapshotOf(source);
+    const { snapshot, liveState } = sourceOf(source);
     const log = snapshot?.commitLog;
     if (!log?.length) return undefined;
 
     runsRecorded += 1;
     const runRef = `run-${runsRecorded}`;
-    const offeredKeys = new Set<string>();
+
+    // Offers and uses are COLLECTED as the folds find them and counted at the
+    // end, so a kind the record keeps out stays uncounted as a whole (`READS_OF`).
+    const offers: Array<{ kind: PieceKind; id: string; tokens: number }> = [];
+    const uses: Array<{ kind: PieceKind; id: string; via: UsedSignal }> = [];
 
     // The reason codes behind every non-exact answer read below, per key.
     const basisByKey = new Map<string, Set<ValueBasis>>();
@@ -192,10 +250,10 @@ export function contextLedger(): ContextLedger {
     };
 
     const offer = (kind: PieceKind, id: string, tokens: number): void => {
-      const row = rowOf(kind, id);
-      row.offered += 1;
-      row.approxTokensSpent += tokens;
-      offeredKeys.add(`${kind}:${id}`);
+      offers.push({ kind, id, tokens });
+    };
+    const use = (kind: PieceKind, id: string, via: UsedSignal): void => {
+      uses.push({ kind, id, via });
     };
 
     // ── OFFERS: the context IN EFFECT at each LLM call ───────────────────
@@ -271,24 +329,36 @@ export function contextLedger(): ContextLedger {
       return undefined;
     }
 
-    // ── USES: tool calls (assistant messages in the final history) ───────
+    // ── FINAL values: the log at its last commit. One the log keeps out (a
+    // redaction) is read from the run's live end state when there is one —
+    // the answer is then exact, so it notes no basis.
     const lastIdx = log.length - 1;
     const runBase = snapshot?.initialState;
-    const history = valueAt(log, runBase, lastIdx, 'history');
+    const finalValue = (key: string): unknown => {
+      const { value, basis } = commitValueAtWithBasis(log, lastIdx, key, {
+        initialState: runBase,
+      });
+      if (liveState !== undefined && basis.includes('redacted')) return liveState[key];
+      noteBasis(key, basis);
+      return value;
+    };
+
+    // ── USES: tool calls (assistant messages in the final history) ───────
+    const history = finalValue('history');
     if (Array.isArray(history)) {
       for (const msg of history as HistoryMessageLike[]) {
         if (msg?.role !== 'assistant' || !Array.isArray(msg.toolCalls)) continue;
         for (const call of msg.toolCalls) {
-          if (call?.name) markUsed('tool', call.name, 'tool-called');
+          if (call?.name) use('tool', call.name, 'tool-called');
         }
       }
     }
 
     // ── USES: skill activations ──────────────────────────────────────────
-    const activated = valueAt(log, runBase, lastIdx, 'activatedInjectionIds');
+    const activated = finalValue('activatedInjectionIds');
     if (Array.isArray(activated)) {
       for (const id of activated as string[]) {
-        if (typeof id === 'string' && id.length > 0) markUsed('skill', id, 'skill-activated');
+        if (typeof id === 'string' && id.length > 0) use('skill', id, 'skill-activated');
       }
     }
 
@@ -304,7 +374,7 @@ export function contextLedger(): ContextLedger {
       if (slice.root) {
         sliceAvailable = true;
         const memberIds = new Set(flattenCausalDAG(slice.root).map((n) => n.runtimeStageId));
-        const finalInjections = valueAt(log, runBase, lastIdx, 'activeInjections');
+        const finalInjections = finalValue('activeInjections');
         const finalBySlotKey = new Map<string, ActiveInjectionLike[]>();
         // Which slot carried each injection is projected per-slot into the
         // INJECTION_KEYS records — fold each slot key's final value.
@@ -312,7 +382,7 @@ export function contextLedger(): ContextLedger {
           const { writer, basis } = findLastWriterWithBasis(log, slotKey);
           noteBasis(slotKey, basis);
           if (!writer || !memberIds.has(writer.runtimeStageId)) continue;
-          const slotRecords = valueAt(log, runBase, lastIdx, slotKey);
+          const slotRecords = finalValue(slotKey);
           if (Array.isArray(slotRecords))
             finalBySlotKey.set(slotKey, slotRecords as ActiveInjectionLike[]);
         }
@@ -329,10 +399,27 @@ export function contextLedger(): ContextLedger {
             if (!id) continue;
             const flavor = activeById.get(id)?.flavor ?? (rec as { source?: string }).source;
             const kind: PieceKind = flavor === 'skill' ? 'skill' : 'injection';
-            markUsed(kind, id, 'answer-slice(slot)');
+            use(kind, id, 'answer-slice(slot)');
           }
         }
       }
+    }
+
+    // ── COUNT: every metered kind's offers, then its uses ────────────────
+    const keptOut = (key: string): boolean => basisByKey.get(key)?.has('redacted') === true;
+    const unmetered = (Object.keys(READS_OF) as PieceKind[]).filter((kind) =>
+      READS_OF[kind].some(keptOut),
+    );
+    const offeredKeys = new Set<string>();
+    for (const { kind, id, tokens } of offers) {
+      if (unmetered.includes(kind)) continue;
+      const row = rowOf(kind, id);
+      row.offered += 1;
+      row.approxTokensSpent += tokens;
+      offeredKeys.add(`${kind}:${id}`);
+    }
+    for (const { kind, id, via } of uses) {
+      if (!unmetered.includes(kind)) markUsed(kind, id, via);
     }
 
     // runsSeen: once per run per offered piece.
@@ -349,6 +436,7 @@ export function contextLedger(): ContextLedger {
       ...(basisByKey.size > 0 && {
         basis: Object.fromEntries([...basisByKey].map(([key, codes]) => [key, [...codes]])),
       }),
+      ...(unmetered.length > 0 && { unmetered }),
     };
   }
 

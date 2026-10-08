@@ -76,30 +76,108 @@ export function eventServing(ruleOf: () => RedactionRule, hasEmitNames: boolean)
   };
 }
 
+/** One kind of content an event carries under a name of its own. */
+interface Derived {
+  /** Where it sits in the payload: dotted, `name[]` for each element of a list. */
+  readonly paths: readonly string[];
+  /** The names it is derived from: kept out whenever the rule keeps out any of them. */
+  readonly from: readonly string[];
+  /**
+   * A field beside the value that NAMES what it quotes (a validation issue's
+   * argument `path`): the value is kept out too when the rule keeps out any
+   * name on it — the by-name verdict of the value it was copied from.
+   */
+  readonly namedBy?: string;
+}
+
+/** The words a person or the model wrote, wherever the library quotes them. */
+const CONVERSATION_TEXT = ['userMessage', 'message', 'history'] as const;
+const MODEL_TEXT = ['llmLatestContent', 'finalContent', 'content'] as const;
+
 /**
- * Fields the library derives from another value, per event type: a parser's
- * or a fallback's message can quote the model's draft (`rawOutput`) it could
- * not read, so it is kept out whenever the draft is.
+ * The content the library DERIVES from a conversation value and carries under
+ * a name of its own, per event type — each kept out whenever the rule keeps out
+ * a value it came from. Generic names (`value`, `note`, `text`, `payload`) are
+ * never put on a policy: selected by name they would hide structure across
+ * every event. Pinned per feature by
+ * `test/redaction/agent-redaction.vocabulary.test.ts`.
  */
-const DERIVED: Readonly<
-  Record<string, { readonly from: string; readonly fields: readonly string[] }>
-> = {
-  'agentfootprint.agent.output_schema_validation_failed': {
-    from: 'rawOutput',
-    fields: ['message'],
-  },
-  'agentfootprint.agent.output_schema_retry': { from: 'rawOutput', fields: ['error'] },
-  'agentfootprint.agent.output_contract_unmet': { from: 'rawOutput', fields: ['error'] },
-  'agentfootprint.reliability.fail_fast': { from: 'rawOutput', fields: ['errorMessage'] },
-  'agentfootprint.resilience.output_fallback_triggered': {
-    from: 'rawOutput',
-    fields: ['primaryErrorMessage'],
-  },
-  'agentfootprint.resilience.output_canned_used': {
-    from: 'rawOutput',
-    fields: ['fallbackErrorMessage'],
-  },
+const DERIVED: Readonly<Record<string, readonly Derived[]>> = {
+  // A parser's or a fallback's message quotes the draft it could not read.
+  'agentfootprint.agent.output_schema_validation_failed': [
+    { paths: ['message'], from: ['rawOutput'] },
+  ],
+  'agentfootprint.agent.output_schema_retry': [{ paths: ['error'], from: ['rawOutput'] }],
+  'agentfootprint.agent.output_contract_unmet': [{ paths: ['error'], from: ['rawOutput'] }],
+  'agentfootprint.reliability.fail_fast': [{ paths: ['errorMessage'], from: ['rawOutput'] }],
+  'agentfootprint.resilience.output_fallback_triggered': [
+    { paths: ['primaryErrorMessage'], from: ['rawOutput'] },
+  ],
+  'agentfootprint.resilience.output_canned_used': [
+    { paths: ['fallbackErrorMessage'], from: ['rawOutput'] },
+  ],
+  // A string argument a validation issue quotes.
+  'agentfootprint.validation.args_invalid': [
+    { paths: ['issues[].value'], from: ['args'], namedBy: 'path' },
+  ],
+  // An argument value an external ground stood in for, and a value an `assume` rule filled.
+  'agentfootprint.integrity.external_ground_used': [
+    { paths: ['value'], from: ['args'], namedBy: 'path' },
+  ],
+  'agentfootprint.agent.turn_end': [
+    { paths: ['answerCoverage.assumed[].value'], from: ['args'], namedBy: 'argument' },
+  ],
+  // Figures the answer computed, quoted with the operands they came from.
+  'agentfootprint.agent.evidence_checked': [
+    { paths: ['computed[].value', 'computed[].from'], from: [...MODEL_TEXT, 'result'] },
+  ],
+  // A check-in's evidence pack: the model's words, the rendered arguments, the
+  // context it quotes — and the person's note on the decision.
+  'agentfootprint.checkin.request': [
+    { paths: ['request.intent'], from: MODEL_TEXT },
+    { paths: ['request.evidence.willDo'], from: ['args'] },
+    {
+      paths: ['request.evidence.read[].summary', 'request.evidence.drivers[].text'],
+      from: [...CONVERSATION_TEXT, 'result'],
+    },
+  ],
+  'agentfootprint.checkin.decision': [{ paths: ['note'], from: ['resumeInput'] }],
+  // Words a matcher found in the conversation; a tool result a route guard judged.
+  'agentfootprint.context.evaluated': [
+    { paths: ['cursorMove.witness.text'], from: CONVERSATION_TEXT },
+    {
+      paths: [
+        'cursorMove.guard.conditions[].actualSummary',
+        'cursorMove.guardsClosed[].conditions[].actualSummary',
+      ],
+      from: ['result'],
+    },
+  ],
+  'agentfootprint.skill.turn_routed': [{ paths: ['witness.text'], from: CONVERSATION_TEXT }],
+  'agentfootprint.map.engaged': [{ paths: ['witness'], from: CONVERSATION_TEXT }],
+  'agentfootprint.map.parked': [{ paths: ['witness'], from: CONVERSATION_TEXT }],
+  // A tool's own progress report; a retrieved passage's heading.
+  'agentfootprint.stream.tool_progress': [{ paths: ['payload'], from: ['result'] }],
+  'agentfootprint.memory.retrieved': [{ paths: ['candidates[].heading'], from: ['retrieved'] }],
 };
+
+/**
+ * The DERIVED table as rows — for the test that pins it against the event
+ * registry and the conversation vocabulary (every row's event type exists, and
+ * the vocabulary keeps out a name each row is derived from).
+ *
+ * @internal
+ */
+export function derivedRows(): readonly {
+  readonly type: string;
+  readonly paths: readonly string[];
+  readonly from: readonly string[];
+  readonly namedBy?: string;
+}[] {
+  return Object.entries(DERIVED).flatMap(([type, entries]) =>
+    entries.map((entry) => ({ type, ...entry })),
+  );
+}
 
 /** The served form of one payload — see the file header for the decisions. */
 function servedPayload(rule: RedactionRule, type: string, payload: unknown): unknown {
@@ -112,18 +190,61 @@ function servedPayload(rule: RedactionRule, type: string, payload: unknown): unk
   }
 }
 
-/** `served` with the fields derived from a kept-out value served as the placeholder. */
+/** `served` with the content derived from a kept-out value served as the placeholder. */
 function withDerivedKeptOut(rule: RedactionRule, type: string, served: unknown): unknown {
-  const derived = DERIVED[type];
-  if (derived === undefined || !rule.isKeyRedacted(derived.from)) return served;
-  if (served === null || typeof served !== 'object' || Array.isArray(served)) return served;
-  const record = served as Record<string, unknown>;
-  const held = derived.fields.filter(
-    (field) => record[field] !== undefined && record[field] !== SERVED_PLACEHOLDER,
-  );
-  if (held.length === 0) return served;
-  return { ...record, ...Object.fromEntries(held.map((field) => [field, SERVED_PLACEHOLDER])) };
+  const entries = DERIVED[type];
+  if (entries === undefined || !isPlainRecord(served)) return served;
+  let out: unknown = served;
+  for (const entry of entries) {
+    const whole = entry.from.some((name) => rule.isKeyRedacted(name));
+    if (!whole && entry.namedBy === undefined) continue;
+    const keptOut = (owner: Readonly<Record<string, unknown>>): boolean =>
+      whole || (entry.namedBy !== undefined && namesKeptOut(rule, owner[entry.namedBy]));
+    for (const path of entry.paths) out = maskAt(out, path.split('.'), keptOut);
+  }
+  return out;
 }
+
+/** Whether a field that names a value (`'customer.ssn'`, `'items[0].pin'`) names one the rule keeps out. */
+function namesKeptOut(rule: RedactionRule, named: unknown): boolean {
+  if (typeof named !== 'string') return false;
+  return named
+    .split(/[.[\]]/)
+    .filter((name) => name.length > 0)
+    .some((name) => rule.isKeyRedacted(name));
+}
+
+/**
+ * `node` with the value at `segments` served as the placeholder when
+ * `keptOut(owner)` says so — copied on write along the path, the SAME object
+ * when nothing changed. `name[]` walks each element of a list.
+ */
+function maskAt(
+  node: unknown,
+  segments: readonly string[],
+  keptOut: (owner: Readonly<Record<string, unknown>>) => boolean,
+): unknown {
+  if (!isPlainRecord(node) || segments.length === 0) return node;
+  const [head, ...rest] = segments as [string, ...string[]];
+  const list = head.endsWith('[]');
+  const key = list ? head.slice(0, -2) : head;
+  const child = node[key];
+  if (child === undefined) return node;
+  let next: unknown = child;
+  if (list) {
+    if (!Array.isArray(child) || rest.length === 0) return node;
+    const items = child.map((item) => maskAt(item, rest, keptOut));
+    if (items.some((item, i) => item !== child[i])) next = items;
+  } else if (rest.length === 0) {
+    if (keptOut(node) && child !== SERVED_PLACEHOLDER) next = SERVED_PLACEHOLDER;
+  } else {
+    next = maskAt(child, rest, keptOut);
+  }
+  return next === child ? node : { ...node, [key]: next };
+}
+
+const isPlainRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
 
 /** The meta with its identity served by name; the address untouched. */
 function servedMeta<M extends EventMeta>(rule: RedactionRule, meta: M): M {

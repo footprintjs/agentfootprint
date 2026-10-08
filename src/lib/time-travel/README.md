@@ -375,8 +375,12 @@ an unsalted hash of a one-line system prompt, a tool schema or a two-word user
 turn is a dictionary lookup away from being read back, and a receipt travels
 inside recordings. Salted per run, the same sentence in two runs has two hashes,
 so a hash answers "is this the same as THAT piece of THIS run?" — the only
-question the law asks — and answers nothing else. A redaction pattern therefore
-does not need to (and does not) reach the receipt.
+question the law asks — and cannot be matched across runs or against a
+precomputed table. It does not keep a GUESSABLE value secret from someone who
+holds the recording, which carries the `runId` too: a short value can be
+confirmed by hashing guesses. A redaction pattern does not reach the receipt;
+that limit is named with the redaction door's (`src/redaction/README.md`,
+"Fingerprints and hashes stay").
 
 **3. No authority omissions.** A receipt never names, and never counts, what a
 caller's ROLE was not allowed to see. Committed state is readable by the trace
@@ -740,10 +744,11 @@ pins it as the one door. What is true:
   ABSENT, never for text the model was sent (`servedView.ts` · `readAtCall`,
   `readRunConstant`).
 - The **receipt carries no bytes** — hashes, counts and names only — and those
-  hashes are **not** redacted either. The run salt is what makes that safe to
-  ship: the same sentence in two runs has two fingerprints, so a digest cannot
-  be dictionary-matched across recordings. It is not an assumption that
-  something scrubbed it.
+  hashes are **not** redacted either. The run salt is what limits them: the
+  same sentence in two runs has two fingerprints, so a digest cannot be
+  dictionary-matched across recordings. It is not an assumption that something
+  scrubbed it — and a short value the policy kept out can still be confirmed by
+  hashing guesses against the recording's own `runId`.
 - **Redaction in this library is the EXECUTOR's**: an agent's `redact`, and
   `flowchartAsTool({ redact })` / `runbookAsTool({ redact })` for an inner run
   (`executor.setRedactionPolicy`). footprintjs scrubs at COMMIT time, so a

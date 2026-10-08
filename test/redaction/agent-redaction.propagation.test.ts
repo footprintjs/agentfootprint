@@ -71,7 +71,8 @@ describe('composed: a member’s policy covers the composition’s one run', () 
       Parallel.create()
         .branch('a', member)
         .branch('b', fixtureAgent())
-        .mergeWithFn((results) => Object.keys(results).join(','))
+        // The merge relays the members' words — the content a composition carries.
+        .mergeWithFn((results) => Object.values(results).join(' | '))
         .build(),
     Conditional: (member) =>
       Conditional.create()
@@ -83,6 +84,12 @@ describe('composed: a member’s policy covers the composition’s one run', () 
   };
 
   for (const [name, compose] of Object.entries(cases)) {
+    it(`${name}: CONTROL — without a policy the composition's record carries the secrets`, async () => {
+      const { recording, events } = await servedBy(compose(fixtureAgent()), { message: MESSAGE });
+      expect(leaksIn(recording).length).toBeGreaterThan(0);
+      expect(leaksIn(events).length).toBeGreaterThan(0);
+    });
+
     it(`${name}: no secret in the composition's recording or events (content-free policy)`, async () => {
       const composed = compose(fixtureAgent({ redact: contentFree() }));
       expect(redactionDeclaredBy(composed)).toBeDefined();
@@ -225,7 +232,29 @@ describe('nested through a tool: ctx.redact is the calling run’s policy', () =
     expect(JSON.stringify(specialistRecording.toRecording())).toContain(SECRET.ssn);
   });
 
-  it('flowchartAsTool joins ctx.redact: the tool result and its kept record are served', async () => {
+  /** An agent that calls `tool` once and keeps what the model read back. */
+  const callOnce = (tool: ReturnType<typeof flowchartAsTool>, redact: RedactionPolicy) => {
+    const answers: string[] = [];
+    const agent = Agent.create({
+      provider: mock({
+        respond: (req) => {
+          const last = [...req.messages].reverse().find((m) => m.role === 'tool');
+          if (last !== undefined) {
+            answers.push(String(last.content));
+            return 'done';
+          }
+          return { toolCalls: [{ id: 't1', name: 'inner_chart', args: {} }] };
+        },
+      }),
+      model: 'm',
+      redact,
+    })
+      .tool(tool)
+      .build();
+    return { agent, answers };
+  };
+
+  it('flowchartAsTool: the model reads the result the TOOL serves; the kept record keeps the agent’s names out', async () => {
     const chart = flowChart<{ apiKey: string; note: string }>(
       'Use the key',
       (scope) => {
@@ -240,32 +269,47 @@ describe('nested through a tool: ctx.redact is the calling run’s policy', () =
       flowchart: chart,
       keepRecord: true,
     });
-    const answers: string[] = [];
-    const outer = Agent.create({
-      provider: mock({
-        respond: (req) => {
-          const last = [...req.messages].reverse().find((m) => m.role === 'tool');
-          if (last !== undefined) {
-            answers.push(String(last.content));
-            return 'done';
-          }
-          return { toolCalls: [{ id: 't1', name: 'inner_chart', args: {} }] };
-        },
-      }),
-      model: 'm',
-      redact: { keys: ['apiKey'] },
-    })
-      .tool(tool)
-      .build();
-    await outer.run({ message: 'go' });
-    // The tool's result string — what the model read — is the served view.
-    expect(answers[0]).toBeDefined();
-    expect(answers[0]).not.toContain('sk-INNER-SECRET-1');
-    // The kept inner record too.
+    const { agent, answers } = callOnce(tool, { keys: ['apiKey'] });
+    await agent.run({ message: 'go' });
+    // The tool's result string is the MODEL's input: the agent's policy never
+    // reaches it — the tool declared no `redact` of its own.
+    expect(answers[0]).toContain('sk-INNER-SECRET-1');
+    // The kept inner record is a RECORD: the agent's policy covers it.
     const kept = innerRunsOf(tool)?.get('t1');
     expect(kept).toBeDefined();
     expect(JSON.stringify(kept)).not.toContain('sk-INNER-SECRET-1');
     expect(JSON.stringify(kept)).toContain('REDACTED');
+  });
+
+  it('flowchartAsTool: the tool’s own `redact` and the chart’s own marks still keep values from the model', async () => {
+    const chart = flowChart<{ apiKey: string; pin: string; note: string }>(
+      'Use the key',
+      (scope) => {
+        scope.apiKey = 'sk-INNER-SECRET-2';
+        // A per-call mark: the chart author keeps this one write out run-wide.
+        scope.$setValue('pin', 'PIN-4242', true);
+        scope.note = 'used';
+      },
+      'use-key',
+    ).build();
+    const tool = flowchartAsTool({
+      name: 'inner_chart',
+      description: 'runs the inner chart',
+      flowchart: chart,
+      keepRecord: true,
+      redact: { keys: ['apiKey'] },
+    });
+    const { agent, answers } = callOnce(tool, { keys: ['note'] });
+    await agent.run({ message: 'go' });
+    // The model's view: the tool's own policy and the chart's mark — not the agent's.
+    expect(answers[0]).not.toContain('sk-INNER-SECRET-2');
+    expect(answers[0]).not.toContain('PIN-4242');
+    expect(answers[0]).toContain('used');
+    // The record: all three kept out.
+    const kept = JSON.stringify(innerRunsOf(tool)?.get('t1'));
+    expect(kept).not.toContain('sk-INNER-SECRET-2');
+    expect(kept).not.toContain('PIN-4242');
+    expect(kept).not.toContain('"used"');
   });
 
   it('ctx.tools.call: an inner call runs under the same policy', async () => {
@@ -318,9 +362,5 @@ describe('the door refuses what it cannot apply', () => {
   it('a per-run policy is refused at run() by the same check', async () => {
     const agent = Agent.create({ provider: mock({ reply: 'x' }), model: 'm' }).build();
     await expect(agent.run({ message: 'go' }, { redact: {} })).rejects.toThrow(/names nothing/);
-  });
-
-  it('every secret check above would fail without the door (sanity)', () => {
-    expect(ALL_SECRETS.length).toBe(4);
   });
 });

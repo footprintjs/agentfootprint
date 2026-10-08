@@ -103,7 +103,7 @@ import {
   type KeepsInnerRuns,
 } from '../../lib/trace-toolpack/innerRunRecords.js';
 import { unionRedactionPolicies } from '../../redaction/policy.js';
-import { servableSnapshot } from '../servableSnapshot.js';
+import { modelFacingState, servableSnapshot, watchRunRule } from '../servableSnapshot.js';
 import { argsRedactedBy, SHOWN_ARGS } from '../toolShownArgs.js';
 import { defineTool, type Tool, type ToolExecutionContext } from '../tools.js';
 import {
@@ -329,12 +329,17 @@ export function runbookAsTool(opts: RunbookAsToolOptions): Tool {
     execute: async (args, ctx: ToolExecutionContext) => {
       const dispatch = recordingDispatch(ctx.tools, opts.name);
       const chart = opts.procedure(dispatch.tools);
-      const executor = new FlowChartExecutor(chart);
       // This tool's own policy joined with the one the calling run is covered
       // by (`ctx.redact`) — the procedure runs NESTED in the agent's run, and a
-      // run's policy covers the runs nested in it. One union for the run, the
-      // walk, the recording and the kept record.
+      // run's policy covers the runs nested in it: one union for the run, the
+      // walk, the recording and the kept record. The envelope the MODEL reads
+      // is the tool's own business (`modelFacingState`, below).
       const policy = unionRedactionPolicies(opts.redact, ctx.redact);
+      const watch = policy !== opts.redact ? watchRunRule(chart) : undefined;
+      const executor = new FlowChartExecutor(
+        chart,
+        watch !== undefined ? { scopeFactory: watch.scopeFactory } : undefined,
+      );
       if (policy) executor.setRedactionPolicy(policy);
       for (const recorder of opts.recorders ?? []) {
         executor.attachCombinedRecorder(recorder);
@@ -416,15 +421,21 @@ export function runbookAsTool(opts: RunbookAsToolOptions): Tool {
         throw err;
       }
 
-      // ONE view for the record, the envelope's state and the recording:
-      // the redacted mirror exactly as footprintjs serves it when `redact`
-      // is set, the raw snapshot otherwise — see `servableSnapshot`.
+      // The RECORD view, for the kept record and the recording: the redacted
+      // mirror exactly as footprintjs serves it when a policy is set, the raw
+      // snapshot otherwise — see `servableSnapshot`.
       const served = servableSnapshot(executor, policy);
       keepRecordOf('ok', served);
-      const state =
-        (served as { sharedState?: Readonly<Record<string, unknown>> }).sharedState ??
-        (served as { values?: Readonly<Record<string, unknown>> }).values ??
-        {};
+      // The envelope's state — rows, coverage, report: what the MODEL reads —
+      // under the tool's own `redact` only; with no caller policy joined, the
+      // served view's state, as always (`servableSnapshot.ts` ·
+      // `modelFacingState`).
+      const state = modelFacingState(
+        executor,
+        opts.redact,
+        watch !== undefined ? ctx.redact : undefined,
+        watch?.rule(),
+      );
 
       // ── The walk ────────────────────────────────────────────────────────
       const entries = walkRecorder.getEntries() as unknown as NarrativeEntryView[];

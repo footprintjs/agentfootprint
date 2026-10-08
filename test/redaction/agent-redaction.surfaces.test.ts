@@ -9,6 +9,11 @@
  * limit (the answer leaving the chart as a bare string, `run.exit`'s boundary
  * payload — README "Named limits") is taken out first and pinned on its own.
  *
+ * Every surface has its CONTROL: the same run with no policy, through the same
+ * surface, must carry the secrets — so a surface that never shows content
+ * cannot pass by being empty. And with no policy, every served surface is the
+ * run's real one, byte for byte (the last section).
+ *
  * The SERVED form is the claim. Whether the agent still RAN on real values is
  * `agent-redaction.live.test.ts`; the policy's reach into composed and nested
  * runs is `agent-redaction.propagation.test.ts`.
@@ -18,7 +23,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
-import type { CombinedRecorder, RuntimeSnapshot } from 'footprintjs';
+import type { CombinedRecorder, RedactionPolicy, RuntimeSnapshot } from 'footprintjs';
 
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
 import {
@@ -38,6 +43,8 @@ import {
   type OtelTracerLike,
 } from '../../src/doors/observe.js';
 import { explainRecording } from '../../src/hosting/answerAccounts.js';
+import { runnerLive } from '../../src/core/runnerLive.js';
+import { REDACTION_MARKER_ID } from '../../src/redaction/marker.js';
 import {
   ALL_SECRETS,
   MESSAGE,
@@ -80,8 +87,8 @@ function tracerOf(spans: Span[]): OtelTracerLike {
   };
 }
 
-async function runEverySurface() {
-  const agent = fixtureAgent({ redact: conversationPolicy() });
+async function runEverySurface(redact: RedactionPolicy | undefined) {
+  const agent = fixtureAgent(redact !== undefined ? { redact } : {});
 
   const events: AgentfootprintEvent[] = [];
   agent.on('*', (event) => events.push(event));
@@ -149,7 +156,20 @@ async function runEverySurface() {
   };
 }
 
-const run = await runEverySurface();
+const run = await runEverySurface(conversationPolicy());
+/** The same run, every surface attached, with no policy. */
+const control = await runEverySurface(undefined);
+
+type Surfaced = Awaited<ReturnType<typeof runEverySurface>>;
+
+/**
+ * The surface `pick` reads: the control run's must carry a secret (so the
+ * surface really shows content), the served run's must carry none.
+ */
+function expectServed(pick: (r: Surfaced) => unknown, secrets?: readonly string[]): void {
+  expect(leaksIn(pick(control), secrets).length).toBeGreaterThan(0);
+  expect(leaksIn(pick(run), secrets)).toEqual([]);
+}
 
 // ─── The surfaces ────────────────────────────────────────────────────
 
@@ -161,8 +181,8 @@ describe('agent redaction — the run itself', () => {
 
 describe('agent redaction — snapshot and narrative', () => {
   it('getLastSnapshot() is the redacted view: no secret, placeholders, no fold base', () => {
+    expectServed((r) => r.agent.getLastSnapshot());
     const snapshot = run.agent.getLastSnapshot() as RuntimeSnapshot;
-    expect(leaksIn(snapshot)).toEqual([]);
     expect(JSON.stringify(snapshot.commitLog)).toContain('REDACTED');
     expect((snapshot.sharedState as Record<string, unknown>)['history']).toBe('REDACTED');
     // footprintjs omits the raw pre-run base from the served view.
@@ -170,46 +190,48 @@ describe('agent redaction — snapshot and narrative', () => {
   });
 
   it('getSnapshot() is the same served view', () => {
-    expect(leaksIn(run.agent.getSnapshot())).toEqual([]);
+    expectServed((r) => r.agent.getSnapshot());
   });
 
   it('getLastNarrativeEntries() — text and every entry field', () => {
-    const entries = run.agent.getLastNarrativeEntries();
-    expect(entries.length).toBeGreaterThan(0);
-    expect(leaksIn(entries)).toEqual([]);
+    expect(run.agent.getLastNarrativeEntries().length).toBeGreaterThan(0);
+    expectServed((r) => r.agent.getLastNarrativeEntries());
   });
 });
 
 describe('agent redaction — events', () => {
   it('agent.on("*") — every typed event is served', () => {
     expect(run.events.length).toBeGreaterThan(5);
-    expect(leaksIn(run.events)).toEqual([]);
+    expectServed((r) => r.events);
     // Served, not dropped: the tool call is still on the record, its argument masked.
     const toolStart = run.events.find((e) => e.type === 'agentfootprint.stream.tool_start');
     expect(toolStart?.payload).toMatchObject({ toolName: 'lookup', args: '[REDACTED]' });
+    // The same events, in the same order, with and without the policy.
+    expect(run.events.map((e) => e.type)).toEqual(control.events.map((e) => e.type));
   });
 
   it('a recorder attached to the executor sees the same served payloads on every channel', () => {
     expect(run.attached.length).toBeGreaterThan(5);
     // `onRunEnd` carries the chart's return — the answer as a bare string, the
     // named limit — so it is checked on its own below.
-    const records = run.attached.filter((a) => a.hook !== 'onRunEnd');
-    expect(leaksIn(records)).toEqual([]);
-    const runEnd = run.attached.filter((a) => a.hook === 'onRunEnd');
-    expect(leaksIn(runEnd, [SECRET.user, SECRET.ssn, SECRET.email])).toEqual([]);
+    expectServed((r) => r.attached.filter((a) => a.hook !== 'onRunEnd'));
+    // `onRunEnd` holds the answer and nothing else of the conversation, with
+    // or without the policy: the named limit, and only it.
+    const runEnd = (r: Surfaced) => r.attached.filter((a) => a.hook === 'onRunEnd');
+    expect(locationsOf(runEnd(control), SECRET.answer).length).toBeGreaterThan(0);
+    expect(leaksIn(runEnd(run), [SECRET.user, SECRET.ssn, SECRET.email])).toEqual([]);
   });
 });
 
 describe('agent redaction — recordings', () => {
   it('recordRun → toRecording(): snapshot, events and recorder rows', () => {
-    expect(leaksIn(run.recording)).toEqual([]);
+    expectServed((r) => r.recording);
     expect(JSON.stringify(run.recording)).toContain('REDACTED');
   });
 
   it('packed and unpacked again — the same served bytes', () => {
-    const packed = packRecording(run.recording);
-    expect(leaksIn(packed)).toEqual([]);
-    expect(leaksIn(unpackRecording(packed))).toEqual([]);
+    expectServed((r) => packRecording(r.recording));
+    expectServed((r) => unpackRecording(packRecording(r.recording)));
   });
 
   it('THE NAMED LIMIT, pinned: the answer is only in the run.exit boundary payload', () => {
@@ -224,103 +246,126 @@ describe('agent redaction — recordings', () => {
 
 describe('agent redaction — local observability', () => {
   it('getTrace() with the snapshot is clean and labels itself "policy"', () => {
-    expect(leaksIn(run.trace)).toEqual([]);
+    expectServed((r) => r.trace);
     expect(run.trace.redaction).toBe('policy');
   });
 
   it('enable.flowchart() — the step graph rebuilt from served events', () => {
-    expect(leaksIn(run.stepGraph)).toEqual([]);
+    expectServed((r) => r.stepGraph);
   });
 });
 
 describe('agent redaction — observability strategies', () => {
   it('console', () => {
     expect(run.consoleLines.length).toBeGreaterThan(0);
-    expect(leaksIn(run.consoleLines)).toEqual([]);
+    expectServed((r) => r.consoleLines);
   });
 
   it('file (NDJSON on disk)', () => {
     expect(run.fileText.length).toBeGreaterThan(0);
-    expect(
-      leaksIn(
-        run.fileText
-          .split('\n')
-          .filter(Boolean)
-          .map((l) => JSON.parse(l)),
-      ),
-    ).toEqual([]);
+    expectServed((r) =>
+      r.fileText
+        .split('\n')
+        .filter(Boolean)
+        .map((l) => JSON.parse(l) as unknown),
+    );
   });
 
   it('audit (verbatim payloads, hash-chained)', () => {
     expect(run.auditBundle.records.length).toBeGreaterThan(0);
-    expect(leaksIn(run.auditBundle)).toEqual([]);
+    expectServed((r) => r.auditBundle);
   });
 
   it('otel (content capture ON)', () => {
     expect(run.spans.length).toBeGreaterThan(0);
-    expect(leaksIn(run.spans)).toEqual([]);
+    expectServed((r) => r.spans);
   });
 });
 
 describe('agent redaction — reports and accounts', () => {
   it('a bug report built from the recording: every file in the zip', () => {
-    const manifest = describeBugReport(run.recording);
+    // The named limit rides the recording file inside the zip, so the answer
+    // is left out of this check (the zip is compared as text).
+    const zipText = (r: Surfaced): string =>
+      new TextDecoder().decode(exportBugReport(r.recording, { title: 'redaction suite' }).zip);
+    const others = ALL_SECRETS.filter((secret) => secret !== SECRET.answer);
+    expect(others.some((secret) => zipText(control).includes(secret))).toBe(true);
+    for (const secret of others) expect(zipText(run)).not.toContain(secret);
     const report = exportBugReport(run.recording, { title: 'redaction suite' });
-    const text = new TextDecoder().decode(report.zip);
-    for (const secret of ALL_SECRETS) {
-      if (secret === SECRET.answer) continue; // the named limit rides the recording file
-      expect(text).not.toContain(secret);
-    }
     expect(leaksIn(report.files.map((f) => f.name))).toEqual([]);
     // The manifest names what was kept out, by name.
-    expect(manifest.redactedKeys).toEqual(expect.arrayContaining(['history']));
+    expect(describeBugReport(run.recording).redactedKeys).toEqual(
+      expect.arrayContaining(['history']),
+    );
   });
 
   it('a bug report built straight from the runner (snapshot arm)', () => {
-    const report = exportBugReport(run.agent, { title: 'redaction suite, runner arm' });
-    const files = report.files.map((f) =>
-      f.name.endsWith('.json') ? (JSON.parse(f.text) as unknown) : f.text,
-    );
     // The snapshot's recorder rows carry the run.exit boundary (the named
     // limit, removed by `leaksIn`); nothing else may carry any secret.
-    expect(leaksIn(files)).toEqual([]);
+    expectServed((r) =>
+      exportBugReport(r.agent, { title: 'redaction suite, runner arm' }).files.map((f) =>
+        f.name.endsWith('.json') ? (JSON.parse(f.text) as unknown) : f.text,
+      ),
+    );
   });
 
   it('the answer account the hosting op serves ({ account, shown })', () => {
-    const body = explainRecording({ data: JSON.stringify(run.recording) }, {});
-    expect(body).not.toBeNull();
-    expect(leaksIn(body)).toEqual([]);
+    expect(explainRecording({ data: JSON.stringify(run.recording) }, {})).not.toBeNull();
+    expectServed((r) => explainRecording({ data: JSON.stringify(r.recording) }, {}));
   });
 });
 
 describe('agent redaction — the trace toolpack (a past run served to a model)', () => {
   it('every passive view and the explicit fetch serve no secret', async () => {
-    const tools = traceToolpack({
-      snapshot: run.agent.getLastSnapshot() as RuntimeSnapshot,
-      narrative: run.agent.getLastNarrativeEntries().map((e) => e.text ?? ''),
-    });
-    const views = await Promise.all([
-      callTraceTool(tools, 'run_overview'),
-      callTraceTool(tools, 'read_narrative', { maxLines: 500 }),
-      callTraceTool(tools, 'who_wrote', { key: 'history' }),
-      callTraceTool(tools, 'find_in_trace', { query: 'SECRET', maxHits: 50 }),
-      callTraceTool(tools, 'find_in_trace', { query: 'lookup', maxHits: 50 }),
-    ]);
-    for (const view of views) {
+    const viewsOf = async (r: Surfaced): Promise<string[]> => {
+      const tools = traceToolpack({
+        snapshot: r.agent.getLastSnapshot() as RuntimeSnapshot,
+        narrative: r.agent.getLastNarrativeEntries().map((e) => e.text ?? ''),
+      });
+      return Promise.all([
+        callTraceTool(tools, 'run_overview'),
+        callTraceTool(tools, 'read_narrative', { maxLines: 500 }),
+        callTraceTool(tools, 'who_wrote', { key: 'history' }),
+        callTraceTool(tools, 'find_in_trace', { query: 'SECRET', maxHits: 50 }),
+        callTraceTool(tools, 'find_in_trace', { query: 'lookup', maxHits: 50 }),
+      ]);
+    };
+    const controlViews = (await viewsOf(control)).join('\n');
+    expect(ALL_SECRETS.some((secret) => controlViews.includes(secret))).toBe(true);
+    for (const view of await viewsOf(run)) {
       for (const secret of ALL_SECRETS) expect(view).not.toContain(secret);
     }
   });
 });
 
 describe('agent redaction — with no door, nothing changes', () => {
-  it('the same run without `redact` keeps every value (byte-identical served path)', async () => {
+  it('every served surface IS the real run: the snapshot and the events', async () => {
     const plain = fixtureAgent();
-    const recorder = recordRun(plain);
+    const live = runnerLive(plain)!;
+    const real: unknown[] = [];
+    const served: unknown[] = [];
+    live.onRealEvent((event) => real.push(event));
+    plain.on('*', (event) => served.push(event));
     await plain.run({ message: MESSAGE });
-    const recording = recorder.toRecording();
-    for (const secret of ALL_SECRETS) expect(JSON.stringify(recording)).toContain(secret);
-    expect(JSON.stringify(recording)).not.toContain('REDACTED');
-    // The fold base travels when there is no policy.
+    // The served snapshot is footprintjs's own, byte for byte — no mirror, the
+    // fold base present, no marker row.
+    expect(JSON.stringify(plain.getLastSnapshot())).toBe(JSON.stringify(live.liveSnapshot()));
     expect((plain.getLastSnapshot() as RuntimeSnapshot).initialState).toBeDefined();
+    expect(JSON.stringify(plain.getLastSnapshot())).not.toContain(REDACTION_MARKER_ID);
+    // Every event reaches a consumer as its producer made it: the same types,
+    // payloads and stage, in the same order (an emitted event's real twin is
+    // built at its source, so its meta is the stage's, not the same object).
+    const shape = (events: unknown[]) =>
+      (events as AgentfootprintEvent[]).map((e) => ({
+        type: e.type,
+        payload: e.payload,
+        runId: e.meta?.runId,
+        runtimeStageId: e.meta?.runtimeStageId,
+      }));
+    expect(served.length).toBeGreaterThan(5);
+    expect(shape(served)).toEqual(shape(real));
+    // And every surface of the control run carries the values.
+    for (const secret of ALL_SECRETS) expect(JSON.stringify(control.recording)).toContain(secret);
+    expect(JSON.stringify(control.recording)).not.toContain('REDACTED');
   });
 });

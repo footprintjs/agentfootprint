@@ -13,11 +13,12 @@
  *   - and the reason it is refused rather than built holds at runtime: a
  *     memory is working state, so under an agent's `redact` the STORE still
  *     holds the real conversation while the RECORD of the memory stages is
- *     served.
+ *     served — causal memory too, whose snapshot is replayed to the model on
+ *     later runs (its tool calls are read on the real-value path).
  */
 import { describe, expect, it } from 'vitest';
 
-import { Agent } from '../../src/index.js';
+import { Agent, defineTool } from '../../src/index.js';
 import { mock } from '../../src/doors/providers.js';
 import { defineMemory, MEMORY_STRATEGIES, MEMORY_TYPES } from '../../src/memory/index.js';
 import { defineRAG } from '../../src/index.js';
@@ -26,6 +27,8 @@ import { mockEmbedder } from '../../src/memory/embedding/index.js';
 import { memoryRedactRefusal } from '../../src/memory/redactRefusal.js';
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
 import { conversationRedaction } from '../../src/doors/security.js';
+import { SNAPSHOT_PROJECTIONS } from '../../src/memory/index.js';
+import type { RedactionPolicy } from 'footprintjs';
 
 const SECRET = 'SECRET-REMEMBERED-6620';
 
@@ -107,5 +110,77 @@ describe('why it is refused: a memory is working state, the record is not', () =
     // The RECORD of the same run: events and the served snapshot.
     expect(JSON.stringify(events)).not.toContain(SECRET);
     expect(JSON.stringify(agent.getLastSnapshot())).not.toContain(SECRET);
+  });
+});
+
+describe('causal memory keeps the real evidence under the agent’s policy', () => {
+  // A causal snapshot is replayed to the MODEL on later runs: working state.
+  // Its tool calls are read on the agent's real-value path, so the store keeps
+  // the real arguments and results while the run's records are served.
+  const IDENTITY = { tenant: 'acme', conversationId: 'conv-1' };
+  const storedSnapshot = async (redact: RedactionPolicy | undefined) => {
+    const store = new InMemoryStore();
+    const agent = Agent.create({
+      provider: mock({
+        replies: [
+          {
+            content: 'Checking credit.',
+            toolCalls: [
+              { id: 'c1', name: 'credit_score_check', args: { applicantId: 'APPLICANT-777' } },
+            ],
+            usage: { input: 1, output: 1 },
+          },
+          { content: 'REJECTED: score below 600.', toolCalls: [], usage: { input: 1, output: 1 } },
+        ],
+      }),
+      model: 'mock',
+      maxIterations: 4,
+      ...(redact && { redact }),
+    })
+      .tools([
+        defineTool<{ applicantId: string }, string>({
+          name: 'credit_score_check',
+          description: 'score',
+          inputSchema: {
+            type: 'object',
+            properties: { applicantId: { type: 'string' } },
+            required: ['applicantId'],
+          },
+          execute: async () => 'SCORE-580',
+        }),
+      ])
+      .memory(
+        defineMemory({
+          id: 'causal',
+          type: MEMORY_TYPES.CAUSAL,
+          strategy: {
+            kind: MEMORY_STRATEGIES.TOP_K,
+            topK: 1,
+            threshold: 0,
+            embedder: mockEmbedder(),
+          },
+          store,
+          projection: SNAPSHOT_PROJECTIONS.DECISIONS,
+        } as never),
+      )
+      .build();
+    const events: AgentfootprintEvent[] = [];
+    agent.on('*', (e) => events.push(e));
+    await agent.run({ message: 'underwrite loan #42', identity: IDENTITY } as never);
+    const listed = await store.list(IDENTITY as never);
+    const snapshot = listed.entries
+      .map((e) => e.value as Record<string, unknown>)
+      .find((v) => v !== null && typeof v === 'object' && 'query' in v);
+    return { snapshot: JSON.stringify(snapshot), events: JSON.stringify(events) };
+  };
+
+  it('CONTROL and policy store the same real tool calls; only the record is served', async () => {
+    const control = await storedSnapshot(undefined);
+    const served = await storedSnapshot(conversationRedaction());
+    for (const real of ['APPLICANT-777', 'SCORE-580']) {
+      expect(control.snapshot).toContain(real);
+      expect(served.snapshot).toContain(real);
+      expect(served.events).not.toContain(real);
+    }
   });
 });

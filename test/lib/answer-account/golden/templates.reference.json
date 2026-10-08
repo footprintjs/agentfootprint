@@ -2317,7 +2317,7 @@
   "source": "library"
  },
  "unreachable.empty.redacted@1": {
-  "text": "It cannot be told whether the result of lookup_volumes was empty: this record keeps the result out.",
+  "text": "It cannot be told whether the result of lookup_volumes was empty: this record keeps what it returned out.",
   "parts": [
    {
     "text": "It cannot be told whether the result of "
@@ -2326,7 +2326,7 @@
     "code": "lookup_volumes"
    },
    {
-    "text": " was empty: this record keeps the result out."
+    "text": " was empty: this record keeps what it returned out."
    }
   ],
   "source": "library"

@@ -20,7 +20,7 @@
  *     event slices `unsupported` at 12, so a full list says "at least".
  */
 
-import { assessAnswer } from '../../../core/agent/assessment/assess.js';
+import { foldState } from '../../../core/agent/assessment/assess.js';
 import type {
   AssessmentCheck,
   AssessmentPointer,
@@ -362,7 +362,7 @@ function noStanding(
 function standingLines(ctx: ReadContext): { lines: Sentence[]; fact: StandingFact } {
   const state = ctx.view.stateAsRecorded;
   if (state === undefined) return noStanding(ctx, 'howSure.standing.none');
-  const a = assessAnswer({ snapshot: { sharedState: state } }, ctx.declarations);
+  const a = foldState(state, ctx.declarations, ctx.view.servedUnderPolicy);
   if (a.keptOut !== undefined) return noStanding(ctx, 'howSure.standing.keptOut');
   if (a.standing !== 'ask' && ctx.view.last('agent.turn_end') === undefined) {
     return noStanding(ctx, 'howSure.standing.noAnswer');

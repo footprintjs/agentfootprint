@@ -126,6 +126,7 @@ describe('IMPORT-GRAPH FENCE', () => {
       'lib/plainLine.ts', // plainLineProblem — the one "plain visible line" rule for labels
       'lib/saidByPerson.ts', // isSaidByPerson — the ONE rule for which history entry a person wrote (G17)
       'lib/toolBytes.ts', // toolBytesOf — the ONE owner of where a tool's own words end in a result
+      'redaction/marker.ts', // servedUnderPolicy / isPlaceholder — the ONE sign a record was served under a policy, a leaf
     ]);
   });
 });

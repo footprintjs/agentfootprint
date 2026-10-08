@@ -32,7 +32,12 @@
  *     model's draft IS covered: it is served as the placeholder whenever the
  *     draft (`rawOutput`) is kept out (`served.ts` · `DERIVED`);
  *   - structure: ids, counts, kinds, tool names, timings and verdict words
- *     stay readable — the record still shows WHAT happened, without the words.
+ *     stay readable — the record still shows WHAT happened, without the words;
+ *   - content the library quotes under names of its own (a validation issue's
+ *     quoted argument, a check-in's evidence pack, a matcher's witness, a
+ *     route guard's judged result, …) is not named here: generic names
+ *     (`value`, `text`, `note`) would hide structure across every event. It is
+ *     kept out with the value it came from (`served.ts` · `DERIVED`).
  *
  * Names it shares with structure, kept out with it: `permission.check`'s
  * `result` (its verdict word — a refused call still reads as refused, from
@@ -49,9 +54,12 @@ export const CONVERSATION_FEATURES: readonly string[] = Object.freeze([
   'tools (arguments, results, tool-result rules, a paused call)',
   'model thinking',
   'asking a person (askHuman) and resuming',
+  'the inputs layer (an argument the person is asked for)',
   'structured output (schema retries, the output fallback)',
   'memory (episodic, semantic, summarize, top-k) and retrieval (RAG)',
   'the evidence gate (names and numbers)',
+  'a person approving a call (check-in)',
+  'skill graphs (routing on the person’s words)',
   'compositions (Sequence, Parallel, Conditional, Loop, Graph)',
 ]);
 
@@ -146,6 +154,8 @@ const NAMES = {
     'runEvidence',
     'scoreEvidence',
   ],
+  /** Mounted maps: the engagement standing quotes the words that founded it. */
+  maps: ['mapEngagement', 'nextMapEngagement'],
   /** Compositions: what one member hands the next. */
   compositions: [
     'current',
@@ -168,10 +178,22 @@ const NAMES = {
  */
 const PATTERNS: readonly RegExp[] = [/^memoryInjection_/, /^retrievalEvidence_/];
 
+/**
+ * State keys whose STRUCTURE stays readable while one field quotes the
+ * conversation: the turn's routing verdict keeps its decision and drops the
+ * words a matcher found (`fields` — footprintjs's per-key field selector).
+ */
+const FIELDS: Readonly<Record<string, readonly string[]>> = {
+  turnRoute: ['witness'],
+};
+
 /** The vocabulary as one frozen policy. */
 const CONVERSATION: RedactionPolicy = Object.freeze({
   keys: Object.freeze(Object.values(NAMES).flat()) as string[],
   patterns: Object.freeze([...PATTERNS]) as RegExp[],
+  fields: Object.freeze(
+    Object.fromEntries(Object.entries(FIELDS).map(([key, paths]) => [key, [...paths]])),
+  ) as Record<string, string[]>,
 });
 
 /**

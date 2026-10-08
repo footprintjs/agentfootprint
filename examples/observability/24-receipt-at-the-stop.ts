@@ -269,11 +269,12 @@ export async function run(): Promise<void> {
       'bytes: run-salted, so the same sentence in two runs has two fingerprints and a digest\n' +
       'cannot be matched across recordings.\n' +
       '\n' +
-      'What a recording contains, though, is the plaintext. An agent run is not redacted —\n' +
-      'Agent.create() has no redaction door — so the system prompt above is in the commit log\n' +
-      'verbatim, and the salt protects the fingerprints and only the fingerprints. Redaction here\n' +
-      "is executor-level: flowchartAsTool({ redact }) scrubs an INNER run's commit log at write\n" +
-      'time. Treat a recording accordingly before you pass one on.\n',
+      'What a recording contains, though, is the plaintext. This agent declares no `redact`, so\n' +
+      'the system prompt above is in the commit log verbatim, and the salt protects the\n' +
+      'fingerprints and only the fingerprints. To keep values out of every record of a run,\n' +
+      'name them in Agent.create({ redact }) — conversationRedaction() names the conversation;\n' +
+      'footprintjs then scrubs them at write time. Treat a recording accordingly before you\n' +
+      'pass one on.\n',
   );
 }
 

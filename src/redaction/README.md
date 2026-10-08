@@ -6,8 +6,11 @@ members') and `conversation.ts` (the names an agent's record carries the
 conversation under — `conversationRedaction()`). Walker: `runRedaction.ts` (the
 per-run wiring every runner's `createExecutor` goes through; `emitServed`, the
 one way a typed event leaves a stage; `setEventSource`, the one way a stage
-writes a value the library derives events from). Lens: `served.ts` (what an
-event's payload and meta are served as).
+writes a value the library derives events from; `servingAhead`, a resume's
+serving before its executor exists). Lens: `served.ts` (what an event's payload
+and meta are served as — `DERIVED`, the content the library quotes under names
+of its own) and `marker.ts` (the one sign a record was served under a policy,
+which every reader of a record asks before it reads a placeholder as kept out).
 
 Nothing in this folder decides what is secret. footprintjs's `RedactionRule`
 (`footprintjs/advanced`) is the one owner of every verdict; this folder only
@@ -27,8 +30,10 @@ the agent computes on or hands back to its caller**.
 | `getLastSnapshot()` — footprintjs's redacted view | the answer `run()` returns; a host's streamed reply; `toSSE({ format: 'text' })` |
 | the narrative (`getLastNarrativeEntries()`) | the conversation it continues: `checkpoint()`, `followUp`, `continueFrom`, a host's session store |
 | every typed event — `agent.on`, recorders on the executor, the deferred tier | the resume checkpoints: a pause's `checkpoint`, `RunCheckpointError.checkpoint` |
-| recordings (`recordRun`, packed or plain), traces, strategies (otel, file, audit, console, CloudWatch, X-Ray, AgentCore) | memory — what a later run recalls (`defineMemory({ redact })` is refused; `../memory/redactRefusal.ts`) |
+| recordings (`recordRun`, packed or plain), traces, strategies (otel, file, audit, console, CloudWatch, X-Ray, AgentCore) | memory — what a later run recalls, a causal snapshot's tool calls included (`defineMemory({ redact })` is refused; `../memory/redactRefusal.ts`) |
 | bug reports, answer accounts, the self-explain tools, recordings a host files | the run's verdict accessors (`stoppedEarly()`, `findings()`, `answerCoverage()`, …) and `agent.assessment()` |
+| the record a chart-backed tool keeps (`flowchartAsTool` / `runbookAsTool`) — under the calling run's policy too | what that tool hands the MODEL — under the tool's own `redact` only (below) |
+| | the context ledger's counts, whose gates decide what later runs are offered (below) |
 
 **It selects by NAME, never by content** (footprintjs's law). A key or a pattern
 masks a STATE key of that name and everything under it; in every record handed
@@ -67,15 +72,19 @@ const agent = Agent.create({
 ```
 
 - **Proven per feature.** `test/redaction/agent-redaction.vocabulary.test.ts`
-  runs each feature in `CONVERSATION_FEATURES` (the turn, tools, thinking,
-  asking a person, structured output, memory and RAG, the evidence gate) with a
-  canary in every place it moves the conversation: without a policy every
-  canary reaches a record; under the vocabulary none reaches any record, the run
-  emits the SAME events, and its answer account is still told. Compositions are
-  proven in `agent-redaction.propagation.test.ts`. A feature added to the list
-  needs a case there. And it agrees with the audit export: every field the
-  audit's bounded mode treats as content (`adapters/observability/audit.ts` ·
-  `boundedContentFieldNames`) is on the list — pinned in the same file.
+  runs each feature in `CONVERSATION_FEATURES` — the turn, tools (with argument
+  validation), thinking, asking a person, the inputs layer, structured output,
+  memory and RAG, the evidence gate (with its figures), a person approving a
+  call (check-in), skill graphs — with a canary in every place it moves the
+  conversation: without a policy every canary reaches a record; under the
+  vocabulary none reaches any record, the run emits the SAME events, and its
+  answer account is still told. Compositions are proven in
+  `agent-redaction.propagation.test.ts`. A feature added to the list needs a
+  case there. Two pins keep the list honest in both directions: every field
+  the audit's bounded mode treats as content (`adapters/observability/audit.ts`
+  · `boundedContentFieldNames`) is on it, and every `DERIVED` row names a real
+  event and a source the vocabulary keeps out — each row checked at every path
+  it names in `served.test.ts`.
 - **What stays readable.** Ids, counts, kinds, tool names, timings and verdict
   words — the record still shows WHAT happened, without the words.
 - **Not on it, by design.** Error text written by code (`error`,
@@ -102,6 +111,21 @@ and that the answer account says the question and the answer are kept out.
   by. `flowchartAsTool`, `runbookAsTool` and the `.selfExplain({ delegate })`
   debugger join it with their own; a tool that runs another agent passes it on —
   `specialist.run(input, { redact: ctx.redact })`, as it passes `ctx.signal`.
+  A per-run `redact` is an `Agent`'s run option only: a composition or an
+  `LLMCall` takes none, so a tool that runs one keeps it covered by DECLARING
+  the policy on it (a member's `redact` is adopted, above).
+- **A chart-backed tool: the record and the model's view.** The inner run of
+  `flowchartAsTool` / `runbookAsTool` is covered by the UNION — its log,
+  narrative, kept record and recording keep out every name either policy
+  selects. What the tool hands the MODEL (the state a `resultMapper` reads, a
+  runbook envelope's rows and report) is the model's input, which the calling
+  run's policy never reaches: it is the run's live state served under the
+  TOOL's own `redact` and the chart's own marks only
+  (`core/servableSnapshot.ts` · `modelFacingState`). The one case it cannot
+  tell apart: the rule marks a key the caller's policy selects whenever it is
+  written, so a key the chart ALSO marks itself (a per-call
+  `$setValue(key, value, true)`) reaches the model's view unmasked — name it in
+  the tool's own `redact` to keep it from the model.
 - **The union only adds.** A run covered by several declarations masks every name
   any of them selects (`unionRedactionPolicies`).
 
@@ -121,40 +145,87 @@ and that the answer account says the question and the answer are kept out.
 3. The dispatcher serves every fact a runner dispatches directly (pause events,
    artifact facts, the run manifest, `context.*`, `error.fatal`) and the identity
    on every event's meta, by the same rule.
-4. **Derived fields** (`served.ts` · `DERIVED`): a field the library computes
-   from another value and carries under its own name — a parser's message quotes
-   the model's draft — is served as the placeholder whenever the rule keeps the
-   value it came from out (`rawOutput`). footprintjs's taint rule for a mapper's
-   computed copy, applied to the library's own copies; still the rule's verdict,
-   by name.
+4. **Derived fields** (`served.ts` · `DERIVED`): content the library computes
+   from another value and carries under a name of its own is served as the
+   placeholder whenever the rule keeps a value it came from out — a parser's
+   message quotes the model's draft (`rawOutput`); a validation issue, an
+   external ground and an assumed value quote an argument (`args`, or the
+   argument's own name on the row); a check-in's evidence pack quotes the
+   model, the arguments and the conversation; a matcher's witness quotes the
+   person's words; a route guard's summary and a tool's progress report quote a
+   result, a figure the answer computed quotes the answer and its results; a
+   retrieved passage's heading quotes what was retrieved. Generic names
+   (`value`, `note`, `text`) are never put on a policy — selected by name they
+   would hide structure in every event.
+   footprintjs's taint rule for a mapper's computed copy, applied to the
+   library's own copies; still the rule's verdict, by name.
 5. **Relayed writes** (`setEventSource`): the context recorder derives
    `context.injected` / `slot_composed` / `budget_pressure` from the slots'
    writes, and a selected key's write reaches recorders as the placeholder. The
-   slots hand the value they wrote to the run as they write it; the recorder
-   derives from that, and the event it dispatches is served by name — so a
-   kept-out injection is still an injection the record shows.
-6. The **real-value path** (`EventDispatcher · onRealEvent`) carries each event
+   slots hand the value they wrote to the run as they write it, with the rule's
+   verdict on the key; the recorder derives the same events from that, and when
+   the key was kept out it keeps only the derived record's STRUCTURE (ids, slot,
+   source, position, counts, budget — `ContextRecorder.ts` ·
+   `INJECTION_STRUCTURE` / `COMPOSITION_STRUCTURE`) and serves every other field
+   as the placeholder. A kept-out injection is still an injection the record
+   shows — without its words.
+6. **A resume serves ahead** (`servingAhead`): `pause.resume` carries the
+   person's reply and is dispatched before the resumed leg's executor exists, so
+   the runner installs the leg's serving first (its declaration joined with the
+   per-run `redact`) — a fresh instance, a later process or another pool lane
+   serves the reply as the instance that paused would.
+7. **The marker** (`marker.ts`): under a policy, the run's snapshot carries one
+   recorder row, `agentfootprint.redaction` — the positive sign that a
+   placeholder in the record is a value the policy kept out. Without a policy
+   nothing is attached and the snapshot is byte-identical.
+8. The **real-value path** (`EventDispatcher · onRealEvent`) carries each event
    as its producer made it, to the library's own mechanisms that compute on it:
-   the crash-checkpoint tracker, the window's token meter, a host's streamed
-   reply and spend ledger, `toSSE({ format: 'text' })`. Outside a runner's class
-   it is reached only through `core/runnerLive.ts` (with the run's live state, for
-   a host's session store), which no barrel exports and no runner method hands
-   out — so no consumer can reach it, and nothing on it is stored, exported or
-   shown.
+   the crash-checkpoint tracker, the window's token meter, causal memory's tool
+   calls, a host's streamed reply and spend ledger, `toSSE({ format: 'text' })`'s
+   token text. Outside a runner's class it is reached only through
+   `core/runnerLive.ts` (with the run's live state and snapshot, for a host's
+   session store and the context ledger), which no barrel exports and no runner
+   method hands out — so no consumer can reach it, and nothing on it is stored,
+   exported or shown. A consumer's `toSSE` `filter` sees the served record.
 
 ## Readers of a redacted record
 
-A placeholder is never read as a value. The answer account
-(`lib/answer-account/view.ts`) reads a kept-out field or state key as ABSENT and
-NAMES it, so a fact says "kept out" where it would otherwise say "not recorded":
-the question, the answer (a run whose answer is kept out still finished), a tool
-result's emptiness, a call's outcome, the flagged values of the evidence gate,
-the history earlier results sit in. A reader that touches a kept-out value
-without asking about it would state a fact about a placeholder, so the view
-watches, and the account then refuses to tell (`notToldAccount`) instead of
-saying "no tool ran". `assessAnswer` gives no standing over a state key the
-record keeps out (`AnswerAssessment.keptOut`); `agent.assessment()` reads live
-state and is unaffected.
+A placeholder is never read as a value — and a value is never read as a
+placeholder. The readers that interpret a record ask its MARKER first
+(`marker.ts` · `servedUnderPolicy`): only a record served under a policy holds
+placeholders, so on a run no policy covered a tool that really returned the
+word `REDACTED` is read as what it returned, and the account is the one it
+always was. (A bug report's `redactedKeys` is different on purpose: it lists
+the keys whose value IS a placeholder string in the evidence, read off the
+bytes, for any recording — an agent's or a chart's.)
+
+- **The answer account** (`lib/answer-account/view.ts`) reads a kept-out field
+  or state key as ABSENT and NAMES it, so a fact says "kept out" where it would
+  otherwise say "not recorded": the question, the answer (a run whose answer is
+  kept out still finished), a tool result's emptiness (a row set kept out
+  INSIDE a result too), a call's outcome, the flagged values of the evidence
+  gate, the history earlier results sit in. A reader that touches a kept-out
+  value without asking about it would state a fact about a placeholder, so the
+  view watches, and the account then refuses to tell (`notToldAccount`)
+  instead of saying "no tool ran".
+- **`assessAnswer`** gives no standing over a state key the record keeps out
+  (`AnswerAssessment.keptOut`). `agent.assessment()` folds the run's LIVE state
+  as values (`core/agent/assessment/assess.ts` · `assessLive`): the live
+  snapshot carries the marker too — its commit log IS scrubbed — but its state
+  never is.
+- **The served views** (`servedAt`, `servedViews`) read a redacted piece as
+  absent, and name the fold base a served snapshot lacks (`no-fold-base`).
+- **The context ledger** (`lib/context-ledger/contextLedger.ts`) is not a
+  reader of the record but a mechanism: its gates decide what LATER runs are
+  offered, so a placeholder must never count as "never used". A runner is read
+  live — a final value the log keeps out (the history it counts tool calls
+  from, the slot records) comes from the run's end state, so the counts match
+  the run without a policy. A read nothing live can answer — what each CALL
+  was offered lives only in the log, and a snapshot handed in has no live
+  state — leaves its kind UNMETERED for that run (`RecordedRun.unmetered`):
+  neither its offers nor its uses are counted, and its gate keeps offering it.
+  Under the vocabulary that is injections and skills (`activeInjections`
+  carries their text); tools stay metered.
 
 ## Named limits
 
@@ -185,6 +256,28 @@ state and is unaffected.
 - **Event meta.** `principal` and `tenant` (who asked) are served by name; every
   other meta field is the record's address — run, stage, session, trace ids —
   and is never selected.
+- **Fingerprints and hashes stay.** They are structure, and the record's
+  readers join on them: a repeated call's `argsFingerprint` / `resultFingerprint`
+  (`core/agent/repeatedCall.ts` · `fingerprint`, an unsalted 32-bit FNV-1a), a
+  context piece's `contentHash` (FNV-1a over its text), and a receipt's hashes
+  (salted with the `runId` the same record carries). A hash hides a value; it
+  does not keep a GUESSABLE one secret — a short or low-entropy value the policy
+  kept out (a PIN, an SSN, a yes/no) can be confirmed offline by hashing
+  candidates. Treat a recording as confirming such a value to anyone who can
+  guess it.
+- **Causal memory's decisions.** A causal snapshot's tool calls are read on the
+  real-value path (the store is working state), but the decisions it keeps
+  come from footprintjs's flow channel, which serves them under the policy: a
+  decision's evidence in the store holds the placeholder where the policy
+  selected a value.
+- **The context ledger under the vocabulary.** Injections and skills are not
+  metered while `activeInjections` is kept out (above, `RecordedRun.unmetered`):
+  their gates keep offering them rather than judge on what the record cannot
+  show.
+- **A late fact of an earlier run.** A fact a runner dispatches after its next
+  run opened (a host's artifact fact, a teardown fact) is served under the run
+  in force — the same declared policy, but not the per-run `redact` names the
+  earlier run alone was given.
 - **A resume is its own leg.** A per-run `redact` (`run(input, { redact })`) is
   not stored in the checkpoint: pass `resume()` the same one. The names the
   paused run masked travel with the checkpoint; a policy the agent DECLARED

@@ -22,9 +22,11 @@
  *
  * A REDACTED recording (a run under an agent's `redact`) holds a placeholder
  * where the policy selected a value: `[REDACTED]` for a payload field (or for a
- * whole payload, under `emitPatterns`), and `REDACTED` for a state key. To this
- * view a placeholder is NO value — a field or key that holds one reads as
- * absent, never as a result to judge or a pause to report — and it is NAMED
+ * whole payload, under `emitPatterns`), and `REDACTED` for a state key. Its
+ * snapshot says it was served under a policy (`redaction/marker.ts`); in such
+ * a record — and ONLY there; a tool can return the string `'REDACTED'` too —
+ * a placeholder is NO value: a field or key that holds one reads as absent,
+ * never as a result to judge or a pause to report — and it is NAMED
  * (`ViewEvent.redacted`, `RecordingView.stateKeptOut`), so a fact that would
  * otherwise say "not recorded" can say "kept out" (`keptOut`,
  * `RecordingView.isStateKeptOut`). An event whose whole payload is kept out
@@ -41,6 +43,7 @@
  */
 
 import { eventBelongsToRun } from '../../bridge/eventMeta.js';
+import { isPlaceholder, servedUnderPolicy } from '../../redaction/marker.js';
 
 /** An event of the run, narrowed to what a reader may touch, at its recording index. */
 export interface ViewEvent {
@@ -118,6 +121,12 @@ export interface RecordingView {
   readonly foreign: number;
   /** Events passed over because their shape did not fit. */
   readonly unread: number;
+  /**
+   * The record was SERVED under a redaction policy — its snapshot carries the
+   * marker (`redaction/marker.ts`). Only then is a placeholder a value the
+   * record keeps out; in any other record it is a value like any other.
+   */
+  readonly servedUnderPolicy: boolean;
   /** `snapshot.sharedState`, when it is an object — without the keys it keeps out. */
   readonly state?: Readonly<Record<string, unknown>>;
   /** The state keys the record keeps out (they hold the redaction placeholder). */
@@ -171,13 +180,13 @@ interface RawEvent {
   readonly redacted?: readonly string[] | 'whole';
 }
 
-/** The two placeholders a redacted record carries (footprintjs's, by tier). */
-const PLACEHOLDERS: ReadonlySet<unknown> = new Set(['[REDACTED]', 'REDACTED']);
-
-/** Whether `value` is a redaction placeholder — a value the record keeps out. */
-export function isKeptOut(value: unknown): boolean {
-  return PLACEHOLDERS.has(value);
-}
+/**
+ * Whether `value` is a redaction placeholder — a value the record keeps out.
+ * Asked only of a record SERVED under a policy (`redaction/marker.ts` ·
+ * `servedUnderPolicy`): anywhere else the same string is a value a tool or a
+ * person really produced.
+ */
+export const isKeptOut = isPlaceholder;
 
 /** The names of `record`'s fields that hold a redaction placeholder. */
 function placeholderFields(record: Record<string, unknown>): string[] {
@@ -192,7 +201,15 @@ function withoutPlaceholders(record: Record<string, unknown>): Record<string, un
   return Object.fromEntries(Object.entries(record).filter(([key]) => !masked.includes(key)));
 }
 
-function narrow(events: unknown): { readonly raw: RawEvent[]; readonly unread: number } {
+/**
+ * The run's events, narrowed. `served` — the record was served under a policy
+ * (its snapshot carries the marker) — is the only case a placeholder is read
+ * as kept out; otherwise every payload is read exactly as before.
+ */
+function narrow(
+  events: unknown,
+  served: boolean,
+): { readonly raw: RawEvent[]; readonly unread: number } {
   const raw: RawEvent[] = [];
   let unread = 0;
   if (!Array.isArray(events)) return { raw, unread };
@@ -203,15 +220,15 @@ function narrow(events: unknown): { readonly raw: RawEvent[]; readonly unread: n
     }
     const meta = isRecord(event.meta) ? event.meta : {};
     if (isRecord(event.payload)) {
-      const redacted = placeholderFields(event.payload);
+      const redacted = served ? placeholderFields(event.payload) : [];
       raw.push({
         index,
         type: event.type,
-        payload: withoutPlaceholders(event.payload),
+        payload: redacted.length > 0 ? withoutPlaceholders(event.payload) : event.payload,
         meta,
         ...(redacted.length > 0 && { redacted }),
       });
-    } else if (isKeptOut(event.payload)) {
+    } else if (served && isKeptOut(event.payload)) {
       // The whole payload is kept out (`emitPatterns`): still an event of the run.
       raw.push({ index, type: event.type, payload: {}, meta, redacted: 'whole' });
     } else {
@@ -245,7 +262,10 @@ export function recordingView(
   recording: { readonly events?: unknown; readonly snapshot?: unknown },
   options: { readonly runId?: string } = {},
 ): RecordingView {
-  const { raw, unread } = narrow(recording.events);
+  const snapshot = isRecord(recording.snapshot) ? recording.snapshot : undefined;
+  // A placeholder is KEPT OUT only in a record a policy covered — the snapshot says so.
+  const served = servedUnderPolicy(snapshot);
+  const { raw, unread } = narrow(recording.events, served);
   const runId = chooseRunId(raw, options.runId);
   const sessionId =
     runId === undefined
@@ -274,12 +294,12 @@ export function recordingView(
   }
   const full = (type: string): string => (type.startsWith(PREFIX) ? type : `${PREFIX}${type}`);
   const ofType = (type: string): readonly ViewEvent[] => byType.get(full(type)) ?? [];
-  const snapshot = isRecord(recording.snapshot) ? recording.snapshot : undefined;
   const recorded = snapshot && isRecord(snapshot.sharedState) ? snapshot.sharedState : undefined;
-  const stateKeptOut = recorded !== undefined ? placeholderFields(recorded) : [];
+  const stateKeptOut = recorded !== undefined && served ? placeholderFields(recorded) : [];
   // The state's guard is noted on this object (`TOUCHED` / `ASKED`), as an event's is on the event.
   const stateOwner = {};
-  const stripped = recorded !== undefined ? withoutPlaceholders(recorded) : undefined;
+  const stripped =
+    recorded !== undefined && stateKeptOut.length > 0 ? withoutPlaceholders(recorded) : recorded;
   const state =
     stripped !== undefined && stateKeptOut.length > 0
       ? guarded(stateOwner, stripped, (key) => stateKeptOut.includes(key))
@@ -293,6 +313,7 @@ export function recordingView(
     scope: runId === undefined ? 'unfiltered' : 'own-run',
     foreign: raw.length - own.length,
     unread,
+    servedUnderPolicy: served,
     ...(state !== undefined && { state }),
     stateKeptOut,
     isStateKeptOut: (key) => {

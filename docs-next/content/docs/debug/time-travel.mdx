@@ -430,11 +430,14 @@ with both.
    this, redaction scrubs the committed mirror, a window strategy decides what
    survives — and a receipt carrying content would quietly reopen all three.
 2. **Run-salted digests.** `sha256(runId + '\u001f' + content)`, first 16 hex
-   characters. Hashes are *not* redacted, and the salt is why that is safe: an
+   characters. Hashes are *not* redacted, and the salt is what limits them: an
    unsalted hash of a one-line prompt or a two-word user turn is a dictionary
    lookup away from being read back, and receipts travel inside recordings.
    Salted per run, a hash answers "is this the same as *that* piece of *this*
-   run?" — the only question the law asks — and answers nothing else.
+   run?" — the only question the law asks — and cannot be matched across runs
+   or against a precomputed table. It does not keep a GUESSABLE value secret
+   from someone holding the recording, which carries the `runId` too: a short
+   value (a PIN, a yes/no) can still be confirmed by hashing guesses.
 3. **No authority omissions.** A receipt never names, and never counts, what a
    caller's role was not allowed to see. Committed state is readable by the
    trace toolpack's debugging tools, so a receipt carrying `hiddenSkillIds` — or
@@ -663,8 +666,10 @@ selected value was, and the rebuild reads a placeholder as absent, never as text
 the model was sent ([Keep personal data out of the record](doc:security#keep-personal-data-out-of-the-record)).
 
 The **receipt** carries no bytes — hashes, counts and names only — and those
-hashes are not redacted either. The run **salt** is what makes that safe to
-ship, not an assumption that something scrubbed it.
+hashes are not redacted either. The run **salt** keeps them from matching
+across runs, not an assumption that something scrubbed them; a short value the
+policy kept out can still be confirmed by hashing guesses against the
+recording's own `runId`.
 
 Redaction is the **executor's**: an agent's `redact`, and
 `flowchartAsTool({ redact })` / `runbookAsTool({ redact })`, scrub the run's

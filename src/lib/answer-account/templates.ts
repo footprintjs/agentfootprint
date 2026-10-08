@@ -497,7 +497,7 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
     "It cannot be told what {{count:n,'earlier result','earlier results'}} in front of the model held: this record keeps the run's history out.",
   ),
   'unreachable.empty.redacted': t(
-    'It cannot be told whether the result of {{tool:code}} was empty: this record keeps the result out.',
+    'It cannot be told whether the result of {{tool:code}} was empty: this record keeps what it returned out.',
   ),
 
   // ── Anything wrong: the row's own lines ──────────────────────────────

@@ -20,6 +20,7 @@ import type { ContextSlot } from '../../events/types.js';
 import { INJECTION_KEYS, slotFromSubflowId, slotFromRuntimeStageId } from '../../conventions.js';
 import { buildEventMeta, type RunContext } from '../../bridge/eventMeta.js';
 import type { RunRedaction } from '../../redaction/runRedaction.js';
+import { SERVED_PLACEHOLDER } from '../../redaction/served.js';
 import type {
   BudgetPressureRecord,
   EvictionRecord,
@@ -136,34 +137,42 @@ export class ContextRecorder implements CombinedRecorder {
   /**
    * The value the stage wrote: the one it relayed (`realWrites`), else the
    * write as the scope channel served it. Taken ONCE per write, so a relayed
-   * value is matched to the write it came with.
+   * value is matched to the write it came with. `keptOut`: the run's policy
+   * selects the key itself, so every record derived from the value keeps that
+   * verdict — its content is served as the placeholder, its structure stays
+   * (`structureOf`).
    */
-  private written(event: WriteEvent): unknown {
+  private written(event: WriteEvent): Written {
     const relayed = this.realWrites?.takeRealWrite(event.runtimeStageId ?? '', event.key);
-    return relayed !== undefined ? relayed.value : event.value;
+    return relayed ?? { value: event.value, keptOut: false };
   }
 
   // ─── Internals ─────────────────────────────────────────────────
 
-  private handleInjectionsWrite(slot: ContextSlot, event: WriteEvent, value: unknown): void {
-    const records = this.asInjectionArray(value);
+  private handleInjectionsWrite(slot: ContextSlot, event: WriteEvent, written: Written): void {
+    const records = this.asInjectionArray(written.value);
     if (!records) return;
     const seen = this.seenInjections.get(slot) ?? new Set<string>();
     for (const rec of records) {
       if (seen.has(rec.contentHash)) continue;
       seen.add(rec.contentHash);
-      this.emitInjected(rec, event);
+      this.emitInjected(written.keptOut ? structureOf(rec, INJECTION_STRUCTURE) : rec, event);
     }
     this.seenInjections.set(slot, seen);
   }
 
-  private handleSlotComposedWrite(event: WriteEvent, value: unknown): void {
-    const rec = this.asSlotComposition(value);
+  private handleSlotComposedWrite(event: WriteEvent, written: Written): void {
+    const rec = this.asSlotComposition(written.value);
     if (!rec) return;
-    this.dispatch('agentfootprint.context.slot_composed', rec, event);
+    this.dispatch(
+      'agentfootprint.context.slot_composed',
+      written.keptOut ? structureOf(rec, COMPOSITION_STRUCTURE) : rec,
+      event,
+    );
   }
 
-  private handleEvictionsWrite(event: WriteEvent, value: unknown): void {
+  private handleEvictionsWrite(event: WriteEvent, written: Written): void {
+    const value = written.value;
     const records = this.asEvictionArray(value);
     if (!records) return;
     for (const rec of records) {
@@ -171,8 +180,8 @@ export class ContextRecorder implements CombinedRecorder {
     }
   }
 
-  private handleBudgetPressureWrite(event: WriteEvent, value: unknown): void {
-    const records = this.asPressureArray(value);
+  private handleBudgetPressureWrite(event: WriteEvent, written: Written): void {
+    const records = this.asPressureArray(written.value);
     if (!records) return;
     for (const rec of records) {
       // The payload REQUIRES `unit`; the record does not, because slot
@@ -326,4 +335,54 @@ function readPressureNumbers(rec: BudgetPressureRecord): { cap: number; projecte
     );
   }
   return { cap, projected };
+}
+
+/** A slot's write as the recorder derives events from it (`ContextRecorder · written`). */
+interface Written {
+  readonly value: unknown;
+  /** The run's policy selects the written key itself. */
+  readonly keptOut: boolean;
+}
+
+/** The structure of an injection: who, where, why, how much — never the words. */
+const INJECTION_STRUCTURE: ReadonlySet<string> = new Set([
+  'contentHash',
+  'slot',
+  'source',
+  'sourceId',
+  'upstreamRef',
+  'reason',
+  'asRole',
+  'asRecency',
+  'position',
+  'sectionTag',
+  'retrievalScore',
+  'rankPosition',
+  'threshold',
+  'budgetSpent',
+  'expiresAfter',
+]);
+
+/** The structure of a slot composition: the counts and the budget — never the dropped text. */
+const COMPOSITION_STRUCTURE: ReadonlySet<string> = new Set([
+  'slot',
+  'iteration',
+  'budget',
+  'sourceBreakdown',
+  'orderingStrategy',
+  'droppedCount',
+]);
+
+/**
+ * `record` with every field outside `structure` served as the placeholder —
+ * the derived record of a value the run's policy keeps out. Fails closed: a
+ * field this list does not name (a custom slot builder's own) is content.
+ */
+function structureOf<T extends object>(record: T, structure: ReadonlySet<string>): T {
+  return Object.fromEntries(
+    Object.entries(record).map(([field, value]) => [
+      field,
+      structure.has(field) ? value : SERVED_PLACEHOLDER,
+    ]),
+  ) as T;
 }

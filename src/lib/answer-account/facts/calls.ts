@@ -28,7 +28,7 @@
 import { strip } from '../../../core/agent/coverage/read.js';
 import { v } from '../render.js';
 import type { RecordPointer, SentenceVar, ToolCallFact } from '../types.js';
-import { isRecord, keptOut, str, type ViewEvent } from '../view.js';
+import { isKeptOut, isRecord, keptOut, str, type ViewEvent } from '../view.js';
 import {
   at,
   countedFields,
@@ -412,6 +412,8 @@ function readOne(ctx: ReadContext, byCall: CallIndex, id: string): CallRead {
         ...(rowsAtOf(ctx.declarations, toolName) !== undefined && {
           rowsAt: rowsAtOf(ctx.declarations, toolName),
         }),
+        // A served record's rows key holding the placeholder is kept out, never "no list".
+        ...(ctx.view.servedUnderPolicy && { keptOut: isKeptOut }),
         door: {
           absent: end.payload.status === 'absent' || coverage?.kind === 'absent',
           bounded: coverageEvents.some((e) => e.type.endsWith('tools.coverage_declared')),

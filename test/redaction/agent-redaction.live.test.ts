@@ -26,6 +26,7 @@ import type { LLMProvider, LLMRequest, LLMResponse } from '../../src/adapters/ty
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
 import type { WindowRecord } from '../../src/core/agent/window/types.js';
 import { recordRun, toSSE } from '../../src/doors/observe.js';
+import { mock } from '../../src/doors/providers.js';
 import { memorySessions, readEnvelope, standingAgent } from '../../src/hosting/index.js';
 import { inProcessHost } from '../hosting/testHost.js';
 import {
@@ -139,6 +140,53 @@ describe('the resume checkpoints are never redacted', () => {
     expect(request).toBeDefined();
     expect(JSON.stringify(request?.payload)).not.toContain(`"ssn":"${SECRET.ssn}"`);
     expect(leaksIn(events, [SECRET.user, SECRET.email])).toEqual([]);
+  });
+
+  it('a resume on a FRESH instance serves the person’s reply like the same instance would', async () => {
+    // A hosted resume often runs on another instance — a later process, another
+    // pool lane — that has never run: the reply's event must still be served.
+    const build = () => {
+      const ask = defineTool<{ ssn: string }, string>({
+        name: 'confirm',
+        description: 'ask a person to confirm the citizen',
+        inputSchema: { type: 'object', properties: { ssn: { type: 'string' } }, required: ['ssn'] },
+        execute: ({ ssn }) => askHuman({ question: `Is ${ssn} right?` }),
+      });
+      let calls = 0;
+      const provider: LLMProvider = {
+        name: 'pauses-then-answers',
+        complete: async (): Promise<LLMResponse> => {
+          calls += 1;
+          return calls === 1
+            ? {
+                content: '',
+                toolCalls: [{ id: 'p1', name: 'confirm', args: { ssn: SECRET.ssn } }],
+                usage: { input: 1, output: 1 },
+                stopReason: 'tool_use',
+              }
+            : {
+                content: 'confirmed',
+                toolCalls: [],
+                usage: { input: 1, output: 1 },
+                stopReason: 'stop',
+              };
+        },
+      };
+      return Agent.create({ provider, model: 'm', redact: conversationPolicy() }).tool(ask).build();
+    };
+    const outcome = await build().run({ message: MESSAGE });
+    expect(isPaused(outcome)).toBe(true);
+    if (!isPaused(outcome)) return;
+    const fresh = build();
+    const events: AgentfootprintEvent[] = [];
+    fresh.on('*', (e) => events.push(e));
+    const recorder = recordRun(fresh);
+    await fresh.resume(outcome.checkpoint, { answer: `yes, ${SECRET.email}` });
+    const resumed = events.find((e) => e.type === 'agentfootprint.pause.resume');
+    expect(resumed).toBeDefined();
+    expect(JSON.stringify(resumed)).not.toContain(SECRET.email);
+    expect(leaksIn(events, [SECRET.email])).toEqual([]);
+    expect(leaksIn(recorder.toRecording(), [SECRET.email])).toEqual([]);
   });
 
   it('a crash: RunCheckpointError.checkpoint carries the real conversation', async () => {
@@ -265,6 +313,30 @@ describe('a hosted agent: the reply and the session store are the caller’s', (
     }
   });
 
+  it('toSSE: the consumer’s filter sees the served record, in both formats', async () => {
+    const agent = fixtureAgent({ redact: conversationPolicy() });
+    const filtered: AgentfootprintEvent[] = [];
+    const text: string[] = [];
+    const reading = (async () => {
+      for await (const chunk of toSSE(agent, {
+        format: 'text',
+        filter: (event) => {
+          filtered.push(event);
+          return true;
+        },
+      })) {
+        text.push(chunk);
+      }
+    })();
+    await agent.run({ message: MESSAGE });
+    await reading;
+    // The reply the person reads is real…
+    expect(text.join('')).toContain(SECRET.answer);
+    // …and consumer code never held a real event.
+    expect(filtered.length).toBeGreaterThan(0);
+    expect(leaksIn(filtered)).toEqual([]);
+  });
+
   it('no runner method hands out the real values — the live taps are the library’s own', () => {
     // A consumer that could subscribe to the real-value path could wire it to a
     // store or an exporter and turn it into a record. The taps live in an
@@ -273,6 +345,47 @@ describe('a hosted agent: the reply and the session store are the caller’s', (
     expect('onRealEvent' in agent).toBe(false);
     expect('liveState' in agent).toBe(false);
   });
+});
+
+describe('untrusted keys never fail a redacted run', () => {
+  // The vocabulary declares a `fields` selector (`turnRoute`), so every agent
+  // under it runs a `fields` policy. footprintjs before 9.44.1 looked a data
+  // key up in `policy.fields` through the prototype chain: a model's argument
+  // or a tool's result holding a key named `constructor` or `toString` failed
+  // the run ("fields is not iterable"), or blanked a whole event. The floor is
+  // `^9.44.1` for this.
+  for (const reactMode of ['classic', 'dynamic', 'dynamic-grouped'] as const) {
+    it(`${reactMode}: the run answers, and the record keeps its structure`, async () => {
+      const hostile = () => JSON.parse('{"constructor":"c","toString":"t","valueOf":"v"}');
+      const agent = Agent.create({
+        provider: mock({
+          chunkDelayMs: 0,
+          replies: [
+            { toolCalls: [{ id: 'c1', name: 'probe', args: { id: 'x', ...hostile() } }] },
+            { content: 'probed' },
+          ],
+        }),
+        model: 'mock',
+        maxIterations: 4,
+        reactMode,
+        redact: conversationPolicy(),
+      })
+        .tool(
+          defineTool<Record<string, unknown>, unknown>({
+            name: 'probe',
+            description: 'Probe.',
+            inputSchema: { type: 'object', properties: { id: { type: 'string' } } },
+            execute: () => ({ rows: [], ...hostile() }),
+          }),
+        )
+        .build();
+      const events: AgentfootprintEvent[] = [];
+      agent.on('*', (e) => events.push(e));
+      expect(await agent.run({ message: 'probe it' })).toBe('probed');
+      const start = events.find((e) => e.type === 'agentfootprint.stream.tool_start');
+      expect(start?.payload).toMatchObject({ toolName: 'probe', args: '[REDACTED]' });
+    });
+  }
 });
 
 /** The fixture's tool, standalone (the crash test builds its own agent). */

@@ -181,17 +181,18 @@ An agent's records — the snapshot, the narrative, every event, recordings, and
 | `getLastSnapshot()`, the commit log, the narrative | what the model is sent; what your tools receive |
 | every typed event — `agent.on`, attached recorders, the exporters | the answer `run()` returns; a host's streamed reply |
 | recordings (`recordRun`, packed or plain), bug reports, answer accounts, the self-explain tools | the conversation the agent continues (`checkpoint()`, `followUp`) and the resume checkpoints |
-| | what a memory store keeps for later runs |
+| the record a chart-backed tool keeps (`flowchartAsTool`, `runbookAsTool`) | what that tool hands the model — under the tool's own `redact` only |
+| | what a memory store keeps for later runs, a causal snapshot's tool calls included; the context ledger's counts |
 
 **It selects by name.** A policy masks a state key of the name it selects, and a field of that name at any depth of an event. Free text has no name of its own, which is why the library ships the list of names that carry it — the person's message, the model's words and thinking, tool arguments and results, recalled memory, injected context, a person's reply to a pause, the draft a schema check rejected. A test runs every feature on that list with a canary in each place and fails if one reaches a record.
 
-**It reaches every run the agent's records come from.** A [composition](doc:patterns) adopts its members' policies, and a run a tool starts gets the calling run's policy as `ctx.redact` — `flowchartAsTool` and `runbookAsTool` join it with their own, and a tool that runs another agent passes it on: `specialist.run(input, { redact: ctx.redact })`.
+**It reaches every run the agent's records come from.** A [composition](doc:patterns) adopts its members' policies, and a run a tool starts gets the calling run's policy as `ctx.redact` — `flowchartAsTool` and `runbookAsTool` join it with their own for the record they keep (what they hand the model stays under their own `redact`), and a tool that runs another agent passes it on: `specialist.run(input, { redact: ctx.redact })`. A resume serves the person's reply under the same policy, on whichever instance resumes.
 
-**Readers say what the record keeps out.** The answer account reads a kept-out question, answer or result as *kept out*, never as "not recorded" or "no tool ran"; `assessAnswer` gives no standing over state the record keeps out.
+**Readers say what the record keeps out.** The answer account reads a kept-out question, answer or result as *kept out*, never as "not recorded" or "no tool ran"; `assessAnswer` gives no standing over state the record keeps out. They read it so only when the record says a policy covered its run, so a run without one reads exactly as before.
 
 **Memory is not a record.** A memory store is working state the agent recalls on its next run, so `defineMemory({ redact })` is refused rather than accepted and ignored: the agent's `redact` keeps the record of the memory stages clean, and a store keeps what you write to it. Filter what you write before it is stored, or mount the memory `readOnly: true`.
 
-**Named limits.** The run's answer leaves its chart as a bare string, and footprintjs serves an unnamed output as it is — a recording's `run.exit` payload carries it whatever the policy. Error text written by code (`error`, `errorMessage`) is not on the list. The full list of what is and is not covered is in [`src/redaction/README.md`](https://github.com/footprintjs/agentfootprint/blob/main/src/redaction/README.md).
+**Named limits.** The run's answer leaves its chart as a bare string, and footprintjs serves an unnamed output as it is — a recording's `run.exit` payload carries it whatever the policy. Error text written by code (`error`, `errorMessage`) is not on the list. Fingerprints and content hashes stay, because the record's readers join on them, so a short kept-out value (a PIN, an SSN) can be confirmed by hashing guesses. The full list of what is and is not covered is in [`src/redaction/README.md`](https://github.com/footprintjs/agentfootprint/blob/main/src/redaction/README.md).
 
 ## What ships today, and what does not
 

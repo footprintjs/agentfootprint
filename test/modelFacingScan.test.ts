@@ -437,13 +437,6 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: 'a durability error and an unreadable-index error, both thrown at store construction',
     },
   ],
-  'src/adapters/observability/githubBugReporter.ts': [
-    {
-      kind: 'not-model-facing',
-      count: 1,
-      why: 'a line of the bug-report bundle, written for the person who opens the issue',
-    },
-  ],
   'src/artifacts/conformance/cases.ts': [
     {
       kind: 'not-model-facing',
@@ -1142,12 +1135,16 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // sentences from footprintjs's HONESTY_CODES (one owner) — its own literal,
         // and with it the file's only entry, is gone. files 100 → 99, total 195 →
         // 194, notModelFacing 132 → 131.
-        files: 99,
-        total: 194,
+        // The agent redaction door: the bug report's "no redaction policy" line
+        // now says what an empty list means (no placeholder in the bundle), and
+        // with it the file's only entry is gone. files 99 → 98, total 194 → 193,
+        // notModelFacing 131 → 130.
+        files: 98,
+        total: 193,
         registry: 8,
         ephemeral: 22,
         unrepaired: 33,
-        notModelFacing: 131,
+        notModelFacing: 130,
         unrepairedEntries: 13,
       });
       // And the ledger's own total is the number of literals the scan flagged —

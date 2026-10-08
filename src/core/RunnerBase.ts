@@ -20,7 +20,7 @@ import type { RunContext } from '../bridge/eventMeta.js';
 import { EventDispatcher } from '../events/dispatcher.js';
 import { redactionDeclaredBy } from '../redaction/declared.js';
 import { unionRedactionPolicies } from '../redaction/policy.js';
-import { createRunRedaction, type RunRedaction } from '../redaction/runRedaction.js';
+import { createRunRedaction, servingAhead, type RunRedaction } from '../redaction/runRedaction.js';
 import { servableSnapshot } from './servableSnapshot.js';
 import { registerRunnerLive } from './runnerLive.js';
 import { redactConsentUrlForEvent } from '../identity/consent.js';
@@ -197,6 +197,7 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
     registerRunnerLive(this, {
       onRealEvent: (listener) => this.dispatcher.onRealEvent(listener),
       liveState: () => this.lastExecutor?.getRuntime().globalStore.getState(),
+      liveSnapshot: () => this.liveSnapshot(),
     });
   }
 
@@ -515,9 +516,22 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
 
   /**
    * Emit `agentfootprint.pause.resume` through the dispatcher. Called from
-   * concrete runners' `resume()` BEFORE invoking `executor.resume()`.
+   * concrete runners' `resume()` BEFORE invoking `executor.resume()` — so
+   * before the leg's run opens its redaction. The payload is the person's
+   * reply, a record like every event: it is served under the policy the
+   * resumed leg is covered by (this runner's declaration joined with
+   * `handedDown`, the caller's per-run policy), installed here first —
+   * otherwise a fresh instance, a later process or another pool lane would
+   * dispatch it unserved (`runRedaction.ts` · `servingAhead`).
    */
-  protected emitPauseResume(checkpoint: FlowchartCheckpoint, input: unknown): void {
+  protected emitPauseResume(
+    checkpoint: FlowchartCheckpoint,
+    input: unknown,
+    handedDown?: RedactionPolicy,
+  ): void {
+    this.dispatcher.useServing(
+      servingAhead(unionRedactionPolicies(redactionDeclaredBy(this), handedDown)),
+    );
     const meta = this.minimalMeta();
     const pausedDurationMs = Date.now() - checkpoint.pausedAt;
     // Which registered component the paused ask nominated to collect this

@@ -57,6 +57,7 @@ import { buildEventMeta, type RunContext } from '../bridge/eventMeta.js';
 import type { EventDispatcher } from '../events/dispatcher.js';
 import type { AgentfootprintEvent } from '../events/registry.js';
 import { eventServing, type EventServing } from './served.js';
+import { redactionMarker } from './marker.js';
 
 /** One run's redaction, as the runner that owns the executor holds it. */
 export interface RunRedaction {
@@ -70,23 +71,34 @@ export interface RunRedaction {
    * path both find the run through it).
    */
   scopeFactoryFor(spec: FlowChart): ScopeFactory;
-  /** Hand the policy to the executor — before `run()` / `resume()`. */
+  /**
+   * Hand the policy to the executor — before `run()` / `resume()` — and mark
+   * its served snapshot as served under one (`marker.ts`).
+   */
   applyTo(executor: FlowChartExecutor): void;
   /**
    * The value the stage `runtimeStageId` wrote under `key` through
    * `setEventSource` — the oldest one not yet taken — for a recorder whose
-   * served write is the placeholder (`ContextRecorder`). `undefined` when
-   * none waits: the run has no policy (the served write IS the value), or the
-   * write did not come through `setEventSource`.
+   * served write is the placeholder (`ContextRecorder`). `keptOut` says the
+   * run's rule selects `key` itself: what is DERIVED from the value then keeps
+   * that verdict (footprintjs's rule for an object written under a selected
+   * name), so the recorder serves the derived record's content as the
+   * placeholder and keeps only its structure. `undefined` when none waits: the
+   * run has no policy (the served write IS the value), or the write did not
+   * come through `setEventSource`.
    */
-  takeRealWrite(runtimeStageId: string, key: string): { readonly value: unknown } | undefined;
+  takeRealWrite(
+    runtimeStageId: string,
+    key: string,
+  ): { readonly value: unknown; readonly keptOut: boolean } | undefined;
 }
 
 /** What a stage's scope is tied to — internal to this module and its helpers. */
 interface ScopeRun {
   readonly policy: RedactionPolicy | undefined;
   readonly serving: EventServing;
-  real(type: string, payload: unknown): void;
+  /** Deliver an event, as made, to the real-value path — from the stage `stageId` that emitted it. */
+  real(type: string, payload: unknown, stageId: string): void;
   noteWrite(runtimeStageId: string, key: string, value: unknown): void;
   /** Whether the run's rule keeps `name` out of its records. */
   keepsOut(name: string): boolean;
@@ -111,17 +123,24 @@ export function createRunRedaction(args: {
   let rule = new RedactionRule(policy);
   const serving = eventServing(() => rule, (policy?.emitPatterns?.length ?? 0) > 0);
   // Relayed writes waiting for their recorder, oldest first, per stage and key.
-  const waiting = new Map<string, unknown[]>();
+  // Keyed by the stage's runtimeStageId (unique per execution), so an entry no
+  // recorder claims (a deferred tier that dropped the write) can never be
+  // handed to a later write — it is held, in memory only, until this run's
+  // redaction is dropped when the next run opens.
+  const waiting = new Map<string, { readonly value: unknown; readonly keptOut: boolean }[]>();
   const slot = (runtimeStageId: string, key: string): string => `${runtimeStageId}\u001f${key}`;
   const run: ScopeRun = {
     policy,
     serving,
-    real(type, payload) {
+    real(type, payload, stageId) {
       if (!dispatcher.hasRealListeners()) return;
+      // The stage's position, as the bridge stamps it on the served twin
+      // (`buildEventMeta`); only footprintjs's `sourcePosition` is the bridge's alone.
+      const origin = stageId !== '' ? { runtimeStageId: stageId } : undefined;
       dispatcher.deliverReal({
         type,
         payload,
-        meta: buildEventMeta(undefined, getRunContext()),
+        meta: buildEventMeta(origin, getRunContext()),
       } as unknown as AgentfootprintEvent);
     },
     keepsOut(name) {
@@ -131,9 +150,10 @@ export function createRunRedaction(args: {
       // No policy: the scope channel serves the write as written — nothing to relay.
       if (policy === undefined) return;
       const at = slot(runtimeStageId, key);
+      const written = { value, keptOut: rule.isKeyRedacted(key) };
       const queue = waiting.get(at);
-      if (queue === undefined) waiting.set(at, [value]);
-      else queue.push(value);
+      if (queue === undefined) waiting.set(at, [written]);
+      else queue.push(written);
     },
   };
   return {
@@ -155,17 +175,34 @@ export function createRunRedaction(args: {
       };
     },
     applyTo(executor) {
-      if (policy !== undefined) executor.setRedactionPolicy(policy);
+      if (policy === undefined) return;
+      executor.setRedactionPolicy(policy);
+      // The served snapshot says so itself (`marker.ts`): readers of the record
+      // read a placeholder as kept out only when a policy covered the run.
+      executor.attachCombinedRecorder(redactionMarker());
     },
     takeRealWrite(runtimeStageId, key) {
       const at = slot(runtimeStageId, key);
       const queue = waiting.get(at);
       if (queue === undefined) return undefined;
-      const value = queue.shift();
+      const written = queue.shift();
       if (queue.length === 0) waiting.delete(at);
-      return { value };
+      return written;
     },
   };
+}
+
+/**
+ * The serving for facts a runner dispatches BEFORE its run's executor exists —
+ * a resume's `pause.resume`, whose payload is the person's reply — under the
+ * policy that run will be covered by. A rule built from the policy alone: no
+ * stage has run yet, so the run has marked nothing. `undefined` with no
+ * policy (the identity).
+ */
+export function servingAhead(policy: RedactionPolicy | undefined): EventServing | undefined {
+  if (policy === undefined) return undefined;
+  const rule = new RedactionRule(policy);
+  return eventServing(() => rule, (policy.emitPatterns?.length ?? 0) > 0);
 }
 
 /** A scope that can emit — structurally footprintjs's `TypedScope` `$emit`. */
@@ -181,13 +218,13 @@ export interface EmitScope {
  * before this file existed.
  */
 export function emitServed(scope: EmitScope, type: string, payload: unknown): void {
-  const run = scopeRuns.get(scope as object)?.run;
-  if (run === undefined) {
+  const entry = scopeRuns.get(scope as object);
+  if (entry === undefined) {
     scope.$emit(type, payload);
     return;
   }
-  run.real(type, payload);
-  scope.$emit(type, run.serving.payload(type, payload));
+  entry.run.real(type, payload, entry.stageId);
+  scope.$emit(type, entry.run.serving.payload(type, payload));
 }
 
 /** A scope that can set a value — structurally footprintjs's `TypedScope` `$setValue`. */

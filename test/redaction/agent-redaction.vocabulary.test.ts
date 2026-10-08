@@ -25,7 +25,17 @@
 import { describe, expect, it } from 'vitest';
 import type { RedactionPolicy } from 'footprintjs';
 
-import { Agent, allow, askHuman, defineRAG, defineTool, isPaused } from '../../src/index.js';
+import {
+  Agent,
+  allow,
+  askHuman,
+  checkInApproved,
+  defineRAG,
+  defineTool,
+  isInputPause,
+  isPaused,
+} from '../../src/index.js';
+import { defineSkill, skillGraph } from '../../src/injection-engine.js';
 import type { LLMProvider, LLMResponse } from '../../src/adapters/types.js';
 import { mock } from '../../src/doors/providers.js';
 import {
@@ -36,6 +46,8 @@ import {
 } from '../../src/doors/observe.js';
 import { conversationRedaction } from '../../src/doors/security.js';
 import { boundedContentFieldNames } from '../../src/adapters/observability/audit.js';
+import { derivedRows } from '../../src/redaction/served.js';
+import { ALL_EVENT_TYPES } from '../../src/events/registry.js';
 import { CONVERSATION_FEATURES } from '../../src/redaction/conversation.js';
 import { mockThinkingHandler } from '../../src/thinking/MockThinkingHandler.js';
 import { defineMemory, MEMORY_STRATEGIES, MEMORY_TYPES } from '../../src/memory/index.js';
@@ -207,6 +219,51 @@ const CASES: readonly FeatureCase[] = [
     },
   },
   {
+    // The inputs layer: the model leaves a ruled argument out, the person is
+    // asked, and the call runs with their answer — which travels in working
+    // state (`argumentResolutions`, `argumentAnswersKept`) and on the call.
+    feature: 'the inputs layer (an argument the person is asked for)',
+    canaries: ['CANARY-INPUT-SERVICE', 'CANARY-INPUT-ANSWER'],
+    build: (redact) =>
+      create(
+        mock({
+          chunkDelayMs: 0,
+          replies: [
+            {
+              toolCalls: [
+                { id: 'c1', name: 'search_logs', args: { service: 'CANARY-INPUT-SERVICE' } },
+              ],
+            },
+            { content: 'done' },
+          ],
+        }),
+        redact,
+      )
+        .tool(
+          defineTool<{ service: string; focus: string }, string>({
+            name: 'search_logs',
+            description: 'Error lines for one service.',
+            inputSchema: {
+              type: 'object',
+              required: ['service', 'focus'],
+              properties: { service: { type: 'string' }, focus: { type: 'string' } },
+            },
+            askOrAssume: { focus: { ask: 'What should the search look for?' } },
+            execute: ({ focus }) => `no lines for ${focus}`,
+          }),
+        )
+        .build(),
+    drive: async (agent) => {
+      const outcome = await agent.run({ message: 'any errors?' });
+      if (!isInputPause(outcome)) throw new Error('the case must ask for the argument');
+      const field = outcome.awaitingInput.fields[0]!;
+      return agent.resume(outcome.checkpoint, {
+        requestId: outcome.awaitingInput.requestId,
+        values: { [field.id]: 'CANARY-INPUT-ANSWER' },
+      });
+    },
+  },
+  {
     feature: 'structured output (schema retries, the output fallback)',
     canaries: ['CANARY-DRAFT'],
     build: (redact) =>
@@ -261,6 +318,137 @@ const CASES: readonly FeatureCase[] = [
         .namesAndNumbersFromEvidence()
         .build(),
     drive: (agent) => agent.run({ message: 'count them' }),
+  },
+  {
+    // The figures dial names what the answer computed, with its operands.
+    feature: 'the evidence gate (names and numbers) — figures',
+    canaries: ['7,654,322', '71.3'],
+    build: (redact) =>
+      create(
+        mock({
+          chunkDelayMs: 0,
+          replies: [
+            { toolCalls: [{ id: 'c1', name: 'sales', args: { id: 'q3' } }] },
+            { content: 'Q3 revenue was about 7,654,322 dollars, 71.3% of it online.' },
+            { content: 'Q3 revenue was about 7,654,322 dollars, 71.3% of it online.' },
+          ],
+        }),
+        redact,
+      )
+        .tool(
+          defineTool<{ id: string }, unknown>({
+            name: 'sales',
+            description: 'Sales figures.',
+            inputSchema: { type: 'object', properties: { id: { type: 'string' } } },
+            execute: () => ({ revenue: 7654321.6, online: 5457531.0, store: 2196790.6 }),
+          }),
+        )
+        .namesAndNumbersFromEvidence({ figures: true })
+        .build(),
+    drive: (agent) => agent.run({ message: 'Q3?' }),
+  },
+  {
+    // A tool argument the schema refuses is quoted back in the validation issue.
+    feature: 'tools (arguments, results, tool-result rules, a paused call) — argument validation',
+    canaries: ['CANARY-BADARG'],
+    build: (redact) =>
+      create(
+        mock({
+          chunkDelayMs: 0,
+          replies: [
+            { toolCalls: [{ id: 'c1', name: 'lookup', args: { code: 'CANARY-BADARG-1234' } }] },
+            { content: 'done' },
+          ],
+        }),
+        redact,
+      )
+        .tool(
+          defineTool<{ code: string }, unknown>({
+            name: 'lookup',
+            description: 'Look up by numeric code.',
+            inputSchema: {
+              type: 'object',
+              properties: { code: { type: 'string', pattern: '^[0-9]+$' } },
+              required: ['code'],
+            },
+            execute: () => 'ok',
+          }),
+        )
+        .build(),
+    drive: (agent) => agent.run({ message: 'look it up' }),
+  },
+  {
+    // A person approves a call: the evidence pack quotes the model, the
+    // arguments and the task; the decision carries the person's note.
+    feature: 'a person approving a call (check-in)',
+    canaries: ['CANARY-CI-USER', 'CANARY-CI-ARG', 'CANARY-CI-NOTE', 'CANARY-CI-MODELTEXT'],
+    build: (redact) =>
+      create(
+        {
+          name: 'mock',
+          complete: async (req: { messages: { role: string }[] }): Promise<LLMResponse> =>
+            req.messages.some((m) => m.role === 'tool')
+              ? {
+                  content: 'done',
+                  toolCalls: [],
+                  usage: { input: 1, output: 1 },
+                  stopReason: 'stop',
+                }
+              : {
+                  content: 'I will refund CANARY-CI-MODELTEXT',
+                  toolCalls: [
+                    {
+                      id: 't1',
+                      name: 'issue_refund',
+                      args: { amount: 500, reason: 'CANARY-CI-ARG' },
+                    },
+                  ],
+                  usage: { input: 1, output: 1 },
+                  stopReason: 'tool_use',
+                },
+        } as unknown as LLMProvider,
+        redact,
+      )
+        .tool(
+          defineTool<{ amount: number; reason: string }, string>({
+            name: 'issue_refund',
+            description: 'Refund.',
+            inputSchema: {
+              type: 'object',
+              properties: { amount: { type: 'number' }, reason: { type: 'string' } },
+            },
+            checkIn: 'always',
+            execute: ({ amount }) => `refunded ${amount}`,
+          } as never),
+        )
+        .checkIn({ evidence: 'standard' })
+        .build(),
+    drive: async (agent) => {
+      const outcome = await agent.run({ message: 'please refund me, CANARY-CI-USER order' });
+      if (!isPaused(outcome)) throw new Error('the case must pause for the check-in');
+      return agent.resume(
+        outcome.checkpoint,
+        checkInApproved({ by: 'ops', note: 'ok per CANARY-CI-NOTE' }),
+      );
+    },
+  },
+  {
+    // A skill graph routes on a matcher: the words it matched are its witness.
+    feature: 'skill graphs (routing on the person’s words)',
+    canaries: ['CANARY-SG-4242'],
+    build: (redact) =>
+      create(mock({ chunkDelayMs: 0, reply: 'ok' }), redact)
+        .system('You are support.')
+        .skillGraph(
+          skillGraph()
+            .entry(defineSkill({ id: 'vip', description: 'vip desk', body: 'vip body' }), {
+              match: /vip CANARY-SG-\d+/,
+            })
+            .entry(defineSkill({ id: 'other', description: 'other', body: 'other body' }))
+            .build(),
+        )
+        .build(),
+    drive: (agent) => agent.run({ message: 'hello, vip CANARY-SG-4242 here' }),
   },
 ];
 
@@ -465,6 +653,63 @@ describe('the relayed writes hold under deferred observer delivery', () => {
   });
 });
 
+describe('a policy that names a slot key keeps its derived events’ content out', () => {
+  // The slot's injection records reach the context recorder through the relay
+  // (real); a policy that selects the KEY — not the records' own field names —
+  // still keeps their content out of every `context.*` event, and keeps the
+  // events themselves (`ContextRecorder · structureOf`).
+  const run = (redact: RedactionPolicy | undefined) =>
+    serve(
+      Agent.create({
+        provider: mock({ chunkDelayMs: 0, reply: 'ok' }),
+        model: 'mock',
+        ...(redact && { redact }),
+      })
+        .system('System CANARY-SLOT-SYSTEM')
+        .build(),
+      (a) => a.run({ message: 'Please find CANARY-SLOT-USER' }),
+    );
+
+  it('the same events, structure kept, no slot content anywhere', async () => {
+    const control = await run(undefined);
+    const served = await run({
+      keys: [
+        'systemPromptInjections',
+        'messagesInjections',
+        'history',
+        'messages',
+        'userMessage',
+        'userPrompt',
+        'message',
+        'newMessages',
+        'content',
+        'llmLatestContent',
+        'finalContent',
+      ],
+    });
+    expect(Object.keys(reached(control, ['CANARY-SLOT-USER', 'CANARY-SLOT-SYSTEM']))).toHaveLength(
+      2,
+    );
+    expect(served.types).toEqual(control.types);
+    const injected = (served.artifacts.events as AgentfootprintEvent[]).filter(
+      (e) => e.type === 'agentfootprint.context.injected',
+    );
+    expect(injected.length).toBeGreaterThan(0);
+    for (const event of injected) {
+      const payload = event.payload as unknown as Record<string, unknown>;
+      expect(payload.slot).toBeDefined();
+      expect(payload.contentHash).toBeDefined();
+      expect(payload.contentSummary).toBe('[REDACTED]');
+    }
+    expect(
+      reached({ artifacts: { events: served.artifacts.events } } as Served, [
+        'CANARY-SLOT-USER',
+        'CANARY-SLOT-SYSTEM',
+      ]),
+    ).toEqual({});
+  });
+});
+
 describe('conversationRedaction() — the value', () => {
   it('is one frozen policy, the same object every call', () => {
     const policy = conversationRedaction();
@@ -498,5 +743,20 @@ describe('the vocabulary agrees with the audit export on what is content', () =>
       (policy.keys ?? []).includes(name) || (policy.patterns ?? []).some((p) => p.test(name));
     const missing = boundedContentFieldNames().filter((name) => !kept(name));
     expect(missing).toEqual([]);
+  });
+
+  it('every DERIVED row names a real event, and the vocabulary keeps out a value it comes from', () => {
+    // The other direction of the same question: content the library quotes
+    // under a name of its own is kept out with its source (`served.ts` ·
+    // `DERIVED`). A row whose event does not exist, or whose sources the
+    // vocabulary never names, would never fire under `conversationRedaction()`.
+    const policy = conversationRedaction();
+    const kept = (name: string) =>
+      (policy.keys ?? []).includes(name) || (policy.patterns ?? []).some((p) => p.test(name));
+    const types = new Set<string>(ALL_EVENT_TYPES);
+    const rows = derivedRows();
+    expect(rows.length).toBeGreaterThan(10);
+    expect(rows.filter((row) => !types.has(row.type)).map((row) => row.type)).toEqual([]);
+    expect(rows.filter((row) => !row.from.some(kept)).map((row) => row.type)).toEqual([]);
   });
 });

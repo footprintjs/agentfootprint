@@ -652,7 +652,8 @@ function issueBody(args: {
     manifest.redactedKeys.length > 0
       ? `Scrubbed at commit time by the run's redaction policy, listed by name only: ` +
           `${manifest.redactedKeys.map((key) => `\`${key}\``).join(', ')}.`
-      : 'None — this run had no redaction policy, so every value in the bundle is real.',
+      : 'None — no value in the bundle is a redaction placeholder, so every value in it is ' +
+          'real: the run had no redaction policy, or its policy selected nothing the run recorded.',
     '',
   );
 

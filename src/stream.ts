@@ -43,7 +43,9 @@ export interface ToSSEOptions {
   /**
    * Filter predicate — return false to skip an event. Default: all events.
    * Common: `event => event.type.startsWith('agentfootprint.stream.')`
-   * for a token-only feed.
+   * for a token-only feed. It sees each event as the run's RECORD serves it —
+   * under an agent's `redact`, the placeholder wherever the policy selected a
+   * value — in both formats.
    */
   readonly filter?: (event: AgentfootprintEvent) => boolean;
   /**
@@ -102,16 +104,33 @@ export async function* toSSE<TIn, TOut>(
     }
   };
 
-  // 'full' ships the RECORD — every event, served under the run's redaction
-  // policy like every other listener. 'text' streams the REPLY to the person
-  // who asked, the caller's own answer, so it reads the run's real-value path
-  // (`core/runnerLive.ts` · `runnerLive`): an agent's `redact` keeps names out
-  // of the record, never out of the answer it is giving (`src/redaction/`). A
-  // runner that is not a RunnerBase has no redaction and no live taps: its
-  // events are the record and the reply at once.
+  // Every event — and so every event the consumer's `filter` sees — is the
+  // RECORD: served under the run's redaction policy like every other
+  // listener's. 'text' then streams the REPLY to the person who asked, the
+  // caller's own answer, which a policy never masks: each token's text is
+  // taken from the run's real-value path (`core/runnerLive.ts` ·
+  // `runnerLive`), in emission order, beside its served event — never handed
+  // to consumer code. A runner that is not a RunnerBase has no redaction and
+  // no live taps: its events are the record and the reply at once.
+  const live = format === 'text' ? runnerLive(runner) : undefined;
+  const replies: string[] = [];
+  const offReplies = live?.onRealEvent((event) => {
+    if (event.type !== 'agentfootprint.stream.token') return;
+    const content = (event as { payload?: { content?: unknown } }).payload?.content;
+    replies.push(typeof content === 'string' ? content : '');
+  });
   const listener = (event: AgentfootprintEvent): void => {
+    // Taken before the filter, so a filtered-out token still consumes its text.
+    const reply =
+      live !== undefined && event.type === 'agentfootprint.stream.token'
+        ? replies.shift()
+        : undefined;
     if (filter && !filter(event)) return;
-    queue.push(event);
+    queue.push(
+      reply !== undefined
+        ? ({ type: event.type, payload: { content: reply } } as unknown as AgentfootprintEvent)
+        : event,
+    );
     wakeup();
     // `agent.turn_end` (or composition exit on the outermost runner)
     // ends the stream naturally; the consumer's `for await` finishes
@@ -124,9 +143,11 @@ export async function* toSSE<TIn, TOut>(
       wakeup();
     }
   };
-  const live = format === 'text' ? runnerLive(runner) : undefined;
-  const unsub: Unsubscribe =
-    live !== undefined ? live.onRealEvent(listener) : dispatcher.on('*', listener);
+  const offRecord: Unsubscribe = dispatcher.on('*', listener);
+  const unsub = (): void => {
+    offRecord();
+    offReplies?.();
+  };
 
   let heartbeat: ReturnType<typeof setInterval> | undefined;
   if (heartbeatMs > 0) {

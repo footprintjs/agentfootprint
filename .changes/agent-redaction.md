@@ -17,32 +17,50 @@ thinking, tool arguments and results, recalled memory and retrieval, injected co
 reply to a pause, the draft a schema check rejected, what one member of a composition hands the
 next — joined with the fields your tools name:
 `redact: conversationRedaction({ patterns: [/ssn|email/i] })`. A test runs every feature on the list
+— the turn, tools and argument validation, thinking, asking a person, the inputs layer, structured
+output, memory and RAG, the evidence gate and its figures, check-ins, skill graphs, compositions —
 with a canary in each place and fails if one reaches a record; the run emits the same events with
-and without it.
+and without it. Content the library quotes under names of its own (a validation issue's argument, a
+check-in's evidence, a matcher's witness, a parser's message about the draft) is kept out with the
+value it came from.
 
 The policy reaches every run the agent's records come from. A composition (`Sequence`,
 `Parallel`, `Conditional`, `Loop`, `Graph`, `Workflow`) adopts its members' policies. A run a tool
 starts gets the calling run's policy as `ToolExecutionContext.redact`: `flowchartAsTool` and
-`runbookAsTool` join it with their own, the `.selfExplain()` debugger takes it, and a tool that runs
-another agent passes it on — `agent.run(input, { redact: ctx.redact })`, the new per-run option,
-which can only add names. The policy is validated where it is declared: a misspelt field, a list of
+`runbookAsTool` join it with their own for the record they keep — what they hand the MODEL is served
+under the tool's own `redact` only, since the calling run's policy never reaches the model's input —
+the `.selfExplain()` debugger takes it, and a tool that runs another agent passes it on —
+`agent.run(input, { redact: ctx.redact })`, the new per-run option, which can only add names (an
+`Agent`'s run only; a composition or `LLMCall` is covered by declaring the policy on it). A resume
+serves the person's reply under the resumed leg's policy before the leg starts, so a fresh instance
+or another process resumes as the paused one would. The policy is validated where it is declared: a misspelt field, a list of
 patterns where a policy object belongs, a frozen global RegExp (footprintjs could not reset it) or a
 policy that names nothing is refused with the reason.
 
-Readers of a redacted record never read the placeholder as a value. The answer account says the
-question, the answer, a tool's result, the flagged values of the evidence gate and the history
-earlier results sit in are KEPT OUT — never "not recorded", "the run did not finish" or "no tool
-ran" — and refuses to tell rather than read a placeholder it does not handle (template set 11).
-`assessAnswer` gives no standing over a state key the record keeps out and names it
-(`AnswerAssessment.keptOut`); `agent.assessment()` reads the live run and is unaffected. The served
-views (`servedViews`, `servedAt`) read a redacted snapshot without throwing. A `Trace` of a run under
-the policy reports `redaction: 'policy'`.
+Readers of a redacted record never read the placeholder as a value — and only a record that says a
+policy covered its run (a marker row in its snapshot's `recorders`) is read that way, so a run with
+no policy reads exactly as before, even where a tool returned the word `REDACTED`. The answer
+account says the question, the answer, a tool's result (a row set kept out inside one too), the
+flagged values of the evidence gate and the history earlier results sit in are KEPT OUT — never "not
+recorded", "the run did not finish" or "no tool ran" — and refuses to tell rather than read a
+placeholder it does not handle (template set 11). `assessAnswer` gives no standing over a state key
+the record keeps out and names it (`AnswerAssessment.keptOut`); `agent.assessment()` reads the live
+run and is unaffected. The served views (`servedViews`, `servedAt`) read a redacted snapshot without
+throwing. A `Trace` of a run under the policy reports `redaction: 'policy'`. The context ledger
+counts a runner's run live, so a policy does not demote a tool the run used; a kind whose uses or
+offers the record keeps out and nothing live can answer is left unmetered for that run
+(`RecordedRun.unmetered`, new) rather than counted as unused. Causal memory keeps the real tool calls
+it replays to the model, as every memory keeps what it stores.
 
 Named limits: the run's answer leaves its chart as a bare string and footprintjs serves an unnamed
 output as it is, so a recording's `run.exit` payload carries it whatever the policy; error text
-written by code (`error`, `errorMessage`) is not on the list; console warnings are not records. The
-full table is in `src/redaction/README.md`.
+written by code (`error`, `errorMessage`) is not on the list; console warnings are not records;
+fingerprints and content hashes stay (they are structure), so a short kept-out value can be
+confirmed by hashing guesses. The full table is in `src/redaction/README.md`.
 
-Requires footprintjs `^9.43.0` (the peer range rises from `^9.41.0`): the door relies on 9.43.0's
+Requires footprintjs `^9.44.1` (the peer range rises from `^9.41.0`): the door relies on 9.43.0's
 redaction law, under which pause payloads, thrown values and a subflow mapper's copies are served by
-the policy too. footprintjs 9.42 and later run on Node 22.
+the policy too, and on 9.44.1's fix for `fields` policies — the vocabulary declares one, and before
+9.44.1 a model's argument or a tool's result holding a key named `constructor` or `toString` could
+fail such a run or blank an event whole (the dev pin and lockfile move to 9.44.1 with it). footprintjs 9.42 and later run on
+Node 22.

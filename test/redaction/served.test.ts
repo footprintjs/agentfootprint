@@ -13,7 +13,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { RedactionRule } from 'footprintjs/advanced';
 import type { FlowChart, RedactionPolicy } from 'footprintjs';
 
-import { eventServing, SERVED_PLACEHOLDER } from '../../src/redaction/served.js';
+import { derivedRows, eventServing, SERVED_PLACEHOLDER } from '../../src/redaction/served.js';
 import {
   createRunRedaction,
   emitServed,
@@ -112,6 +112,121 @@ describe('eventServing — one event, decided once', () => {
   });
 });
 
+describe('DERIVED — content the library quotes under names of its own', () => {
+  const issue = (path: string, value: string) => ({
+    path,
+    expected: 'pattern',
+    got: 'string',
+    value,
+  });
+
+  it('a validation issue quoting an argument: kept out with the arguments, or with its own name', () => {
+    const payload = {
+      toolName: 'lookup',
+      issues: [issue('ssn', 'SSN-123'), issue('city', 'Paris')],
+    };
+    const byArgs = serving({ keys: ['args'] }).payload(
+      'agentfootprint.validation.args_invalid',
+      payload,
+    ) as { issues: { value: string; path: string }[] };
+    expect(byArgs.issues.map((i) => i.value)).toEqual([SERVED_PLACEHOLDER, SERVED_PLACEHOLDER]);
+    // Selected by the app's own field name: only that argument's quote.
+    const byName = serving({ patterns: [/ssn/i] }).payload(
+      'agentfootprint.validation.args_invalid',
+      payload,
+    ) as { issues: { value: string; path: string }[] };
+    expect(byName.issues.map((i) => i.value)).toEqual([SERVED_PLACEHOLDER, 'Paris']);
+    expect(byName.issues.map((i) => i.path)).toEqual(['ssn', 'city']); // the structure stays
+    // Nothing named: the very payload.
+    expect(
+      serving({ keys: ['history'] }).payload('agentfootprint.validation.args_invalid', payload),
+    ).toEqual(payload);
+  });
+
+  it('a check-in evidence pack: the model’s words, the rendered arguments, the quoted context', () => {
+    const payload = {
+      toolName: 'refund',
+      request: {
+        tool: 'refund',
+        intent: 'Refund Ada because she asked',
+        evidence: {
+          willDo: 'Refund 40 EUR to ada@example.org',
+          read: [{ channel: 'task', summary: 'please refund me' }],
+          drivers: [{ id: 'task-1', channel: 'task', text: 'please refund me', score: 1 }],
+        },
+      },
+    };
+    const served = serving({
+      keys: ['llmLatestContent', 'args', 'history'],
+    }).payload('agentfootprint.checkin.request', payload) as typeof payload;
+    expect(served.request.intent).toBe(SERVED_PLACEHOLDER);
+    expect(served.request.evidence.willDo).toBe(SERVED_PLACEHOLDER);
+    expect(served.request.evidence.read[0]).toEqual({
+      channel: 'task',
+      summary: SERVED_PLACEHOLDER,
+    });
+    expect(served.request.evidence.drivers[0]?.text).toBe(SERVED_PLACEHOLDER);
+    expect(served.request.evidence.drivers[0]?.score).toBe(1);
+    expect(payload.request.intent).toContain('Ada'); // never edited in place
+  });
+
+  it('a route guard’s judged result and a matcher’s witness', () => {
+    const payload = {
+      iteration: 1,
+      cursorMove: {
+        by: 'route',
+        witness: { text: 'my ssn is 123', keyword: 'ssn' },
+        guard: {
+          conditions: [
+            { key: 'status', op: 'eq', value: 'ok', actualSummary: 'ok: Ada', passed: true },
+          ],
+        },
+      },
+    };
+    const served = serving({ keys: ['result', 'userMessage'] }).payload(
+      'agentfootprint.context.evaluated',
+      payload,
+    ) as typeof payload;
+    expect(served.cursorMove.witness).toEqual({ text: SERVED_PLACEHOLDER, keyword: 'ssn' });
+    expect(served.cursorMove.guard.conditions[0]?.actualSummary).toBe(SERVED_PLACEHOLDER);
+    expect(served.cursorMove.guard.conditions[0]?.value).toBe('ok'); // the declared constant stays
+  });
+});
+
+describe('DERIVED — every row, at every path it names', () => {
+  /** A payload holding `canary` at `path` (dotted, `name[]` for a list), with a structural sibling at every level. */
+  const plant = (path: string, canary: string): Record<string, unknown> => {
+    const segments = path.split('.');
+    const build = (i: number): unknown => {
+      if (i === segments.length) return canary;
+      const segment = segments[i]!;
+      const list = segment.endsWith('[]');
+      const name = list ? segment.slice(0, -2) : segment;
+      const child = build(i + 1);
+      return { [name]: list ? [child] : child, keep: `structure-${i}` };
+    };
+    return build(0) as Record<string, unknown>;
+  };
+
+  for (const row of derivedRows()) {
+    for (const path of row.paths) {
+      it(`${row.type} · ${path} — kept out with ${row.from[0]}, and only then`, () => {
+        const canary = `CANARY-${path}`;
+        const payload = plant(path, canary);
+        const served = serving({ keys: [row.from[0]!] }).payload(row.type, payload);
+        expect(JSON.stringify(served)).not.toContain(canary);
+        expect(JSON.stringify(served)).toContain(SERVED_PLACEHOLDER);
+        // The structure beside it stays, at every level.
+        for (let i = 0; i < path.split('.').length; i++) {
+          expect(JSON.stringify(served)).toContain(`structure-${i}`);
+        }
+        // A policy that names none of its sources leaves the payload as it is.
+        expect(serving({ keys: ['nothingThisNames'] }).payload(row.type, payload)).toEqual(payload);
+      });
+    }
+  }
+});
+
 /** A chart whose factory hands back a bare scope — the run wrapper is what is under test. */
 function scopedRun(policy: RedactionPolicy | undefined) {
   const dispatcher = new EventDispatcher();
@@ -168,15 +283,25 @@ describe('runRedaction — the run wiring', () => {
     setEventSource(slot, 'messagesInjections', ['second']);
     setEventSource(other, 'messagesInjections', ['other stage']);
     expect(slot.$setValue).toHaveBeenCalledTimes(2); // it still writes, as $setValue does
+    // `keptOut`: the policy selects the key itself, so what is derived from it keeps that verdict.
     expect(run.takeRealWrite('sf-messages/compose#7', 'messagesInjections')).toEqual({
       value: ['first'],
+      keptOut: true,
     });
     expect(run.takeRealWrite('sf-messages/compose#7', 'messagesInjections')).toEqual({
       value: ['second'],
+      keptOut: true,
     });
     expect(run.takeRealWrite('sf-messages/compose#7', 'messagesInjections')).toBeUndefined();
     expect(run.takeRealWrite('sf-messages/compose#9', 'messagesInjections')).toEqual({
       value: ['other stage'],
+      keptOut: true,
+    });
+    // A key the policy does not select is relayed too (any policy relays), and says so.
+    setEventSource(slot, 'slotCompositions', { slot: 'messages' });
+    expect(run.takeRealWrite('sf-messages/compose#7', 'slotCompositions')).toEqual({
+      value: { slot: 'messages' },
+      keptOut: false,
     });
   });
 

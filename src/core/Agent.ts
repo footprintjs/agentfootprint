@@ -1130,7 +1130,17 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // (decisions/toolCalls/iterations/duration/tokens). Attached per run below;
     // its `collect` is threaded into the write mount via chartDeps.
     if (memories.some((m) => m.type === 'causal')) {
-      this.causalEvidence = causalEvidenceRecorder();
+      const evidence = causalEvidenceRecorder();
+      this.causalEvidence = evidence;
+      // A causal memory is working state: its store keeps what a later run
+      // replays to the MODEL, so its tool calls are read on the real-value
+      // path, never off the served events — a policy keeps a run's records
+      // clean, never what the agent will compute on (`src/redaction/`). The
+      // decisions it keeps come from footprintjs's flow channel, which serves
+      // them under the policy (a named limit in `src/redaction/README.md`).
+      this.dispatcher.onRealEvent((event) =>
+        evidence.onEmit({ name: event.type, payload: event.payload } as never),
+      );
     }
     // A dial without its switch — refused rather than run as a no-op (8.13.0).
     // Same policy as `observerDeliveryOptions` below; the message and the check
@@ -2599,7 +2609,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       sessionId !== undefined && options?.sessionId === undefined
         ? { ...options, sessionId }
         : options;
-    this.emitPauseResume(checkpoint, input);
+    this.emitPauseResume(checkpoint, input, resumeOptions?.redact);
     // Fresh executor — footprintjs 4.17.0+ seeds the runtime from
     // `checkpoint.sharedState` (and nested subflow states) automatically
     // on a fresh executor's `resume()`. No need to retain a paused
@@ -3480,7 +3490,17 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // `evidenceSource`, mountMemoryPipeline). Deferred delivery would run
     // `collect()` before the queue flushed the turn's tool/token/decision
     // events, persisting an incomplete causal snapshot.
-    if (this.causalEvidence) executor.attachCombinedRecorder(this.causalEvidence);
+    if (this.causalEvidence) {
+      // Its emits arrive on the real-value path (constructor); the executor
+      // feeds it the flow channel's decisions and the per-run reset only.
+      const evidence = this.causalEvidence;
+      executor.attachCombinedRecorder({
+        id: evidence.id,
+        onDecision: (event) => evidence.onDecision(event),
+        onSelected: (event) => evidence.onSelected(event),
+        clear: () => evidence.clear(),
+      });
+    }
     // Compaction's instrument. ALWAYS INLINE, for the same reason the evidence
     // bridge is: the compaction stage reads it MID-run, at the loop head, to
     // decide whether this iteration's window is over budget. A measurement
@@ -4135,8 +4155,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     const paused = this.lastExecutor?.isPaused() === true;
     if (!paused && this.lastRunAnswer === undefined) return undefined;
     // Loaded on first use, off the default graph (the findings/peel.ts precedent).
-    const { assessAnswer } = await import('./agent/assessment/assess.js');
-    return assessAnswer({ snapshot }, declarations);
+    // The live state, read as values — never as a served record (`assess.ts` · `assessLive`).
+    const { assessLive } = await import('./agent/assessment/assess.js');
+    return assessLive(snapshot, declarations);
   }
 
   /**

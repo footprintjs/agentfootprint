@@ -58,7 +58,14 @@
  * own, `history[0]`).
  */
 
-import type { FlowChartExecutor, RedactionPolicy, RuntimeSnapshot } from 'footprintjs';
+import { createTypedScopeFactory, RedactionRule } from 'footprintjs/advanced';
+import type {
+  FlowChart,
+  FlowChartExecutor,
+  RedactionPolicy,
+  RuntimeSnapshot,
+  ScopeFactory,
+} from 'footprintjs';
 
 /**
  * The snapshot a chart-backed tool may hand outward.
@@ -74,4 +81,79 @@ export function servableSnapshot(
   policy: RedactionPolicy | undefined,
 ): RuntimeSnapshot {
   return policy === undefined ? executor.getSnapshot() : executor.getSnapshot({ redact: true });
+}
+
+/**
+ * THE MODEL'S VIEW of a chart-backed tool's run, when the calling run's policy
+ * (`ToolExecutionContext.redact`) joined the tool's own.
+ *
+ * The run is covered by the UNION — its commit log, mirror, narrative, kept
+ * record and recording are records, and a record keeps out everything either
+ * policy names. But the state the tool hands the MODEL (what a `resultMapper`
+ * reads, a runbook envelope's rows and report) is the model's input, and the
+ * calling run's policy never reaches the model's input. So that state is the
+ * run's LIVE state served under the TOOL's own policy only — what the tool
+ * author declared to keep away from the model — plus the CHART's own marks (a
+ * per-call `$setValue(key, value, true)`, a subflow mapper's taint): names,
+ * run-wide. A mark on a key the caller's policy selects is the caller's (the
+ * rule marks a selected key when it is written), so it is left out — the one
+ * case it cannot tell apart is a chart that marks a key the caller ALSO names.
+ *
+ * With no caller policy (`callerPolicy` undefined) this is exactly the served
+ * view's state, as before.
+ *
+ * @param executor     the finished run's executor
+ * @param toolPolicy   the tool's own `redact`, as declared
+ * @param callerPolicy the calling run's policy, when it joined the tool's
+ * @param runRule      the run's own rule, for its marks (`watchRunRule`)
+ */
+export function modelFacingState(
+  executor: FlowChartExecutor,
+  toolPolicy: RedactionPolicy | undefined,
+  callerPolicy: RedactionPolicy | undefined,
+  runRule: RedactionRule | undefined,
+): Readonly<Record<string, unknown>> {
+  if (callerPolicy === undefined) return stateOf(servableSnapshot(executor, toolPolicy));
+  const rule = new RedactionRule(toolPolicy);
+  const marks = runRule?.marksForCheckpoint();
+  if (marks !== undefined) {
+    const callers = new RedactionRule(callerPolicy);
+    rule.restoreMarks({
+      ...marks,
+      keys: marks.keys.filter((key) => !callers.isKeyRedacted(key)),
+    });
+  }
+  // The mirror's placeholder: what the served view held where the tool's own
+  // policy selected a value.
+  return rule.retainRecord(stateOf(executor.getSnapshot()), 'REDACTED');
+}
+
+/**
+ * A scope factory for a chart-backed tool's executor that remembers the run's
+ * own redaction rule (`StageContext · getRedactionRule`) — the rule whose
+ * marks `modelFacingState` carries. The chart's own factory, or the
+ * builder's default, does the scoping.
+ */
+export function watchRunRule(spec: FlowChart): {
+  readonly scopeFactory: ScopeFactory;
+  rule(): RedactionRule | undefined;
+} {
+  let seen: RedactionRule | undefined;
+  const base: ScopeFactory = spec.scopeFactory ?? createTypedScopeFactory();
+  return {
+    scopeFactory: (context, stageName, readOnlyContext, executionEnv) => {
+      seen = context?.getRedactionRule?.() ?? seen;
+      return base(context, stageName, readOnlyContext, executionEnv);
+    },
+    rule: () => seen,
+  };
+}
+
+/** A snapshot's shared state (older betas called it `values`). */
+function stateOf(snapshot: unknown): Readonly<Record<string, unknown>> {
+  return (
+    (snapshot as { sharedState?: Readonly<Record<string, unknown>> }).sharedState ??
+    (snapshot as { values?: Readonly<Record<string, unknown>> }).values ??
+    {}
+  );
 }
