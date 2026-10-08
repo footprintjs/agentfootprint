@@ -28,10 +28,12 @@ import type { RedactionPolicy } from 'footprintjs';
 import { describe, expect, it } from 'vitest';
 
 import { Agent, flowchartAsTool } from '../../src/index.js';
+import type { LLMProvider, LLMResponse } from '../../src/adapters/types.js';
 import { mock } from '../../src/doors/providers.js';
 import { innerRunsOf } from '../../src/doors/observe.js';
 import { conversationRedaction } from '../../src/doors/security.js';
 import { servedUnderPolicy } from '../../src/redaction/marker.js';
+import { runnerLive } from '../../src/core/runnerLive.js';
 import { locationsOf, withoutAnswerBoundary } from './fixture.js';
 import { everySurface, servedArtifacts } from './everySurface.js';
 
@@ -151,5 +153,99 @@ describe('a chart-backed tool’s result: the boundary into the calling agent’
     expect(at.outsideTheAnswer).toEqual([]);
     // …and in the structured records, only on the run's exit.
     expect(at.inStructuredRecordsBeyondTheOutput).toEqual([]);
+  });
+});
+
+/**
+ * The boundary holds only while the calling policy really keeps the whole
+ * conversation out — including the copies a compaction keeps word for word
+ * beside its summary (`AgentState.foldedSpans`). The tool's result is folded
+ * there after the model read it.
+ */
+describe('a chart-backed tool’s result, folded by a compaction', () => {
+  function compactingAgent(redact: RedactionPolicy) {
+    const chart = flowChart<{ apiKey: string }>(
+      'Use the key',
+      (scope) => {
+        scope.apiKey = KEY;
+      },
+      'use-key',
+    ).build();
+    const tool = flowchartAsTool({
+      name: 'inner_chart',
+      description: 'Runs the inner chart.',
+      flowchart: chart,
+      resultMapper: (snapshot) => `key=${String(snapshot.values.apiKey)}`,
+    });
+    const modelSaw: string[] = [];
+    let call = 0;
+    const provider: LLMProvider = {
+      name: 'mock',
+      complete: async (req): Promise<LLMResponse> => {
+        call += 1;
+        const last = [...req.messages].reverse().find((m) => m.role === 'tool');
+        if (last !== undefined) modelSaw.push(String(last.content));
+        const wantsTool = call <= 4;
+        return {
+          content: wantsTool ? '' : 'Done.',
+          toolCalls: wantsTool ? [{ id: `t${call}`, name: 'inner_chart', args: {} }] : [],
+          usage: { input: 100 * call, output: 5 },
+          stopReason: 'end_turn',
+        };
+      },
+    };
+    const summarizer: LLMProvider = {
+      name: 'mock-summarizer',
+      complete: async (): Promise<LLMResponse> => ({
+        content: 'EARLIER: the key was used.',
+        toolCalls: [],
+        usage: { input: 120, output: 20 },
+        stopReason: 'end_turn',
+      }),
+    };
+    const agent = Agent.create({ provider, model: 'm', maxIterations: 8, redact })
+      .tool(tool)
+      .compaction({ thresholdTokens: 250, summarizer, model: 'summarizer', keepRecentTurns: 2 })
+      .build();
+    return { agent, modelSaw };
+  }
+
+  async function run(redact: RedactionPolicy) {
+    const { agent, modelSaw } = compactingAgent(redact);
+    const surfaced = await everySurface(agent, 'use the key');
+    const artifacts = await servedArtifacts(surfaced);
+    // The run's live state (the library's own unexported tap): what the fold kept.
+    const live = runnerLive(agent)?.liveState();
+    return {
+      modelSaw: modelSaw.join('\n'),
+      folded: JSON.stringify(live?.foldedSpans ?? null),
+      served: (agent.getLastSnapshot()?.sharedState as Record<string, unknown>).foldedSpans,
+      inArtifacts: Object.entries(artifacts)
+        .filter(([, value]) => locationsOf(value, KEY).length > 0)
+        .map(([name]) => name),
+    };
+  }
+
+  it('the vocabulary: the model reads the value, the fold keeps it, no record does', async () => {
+    const at = await run(conversationRedaction({ keys: ['apiKey'] }));
+    expect(at.modelSaw).toContain(`key=${KEY}`);
+    // The fold happened, and its originals hold the tool's result…
+    expect(at.folded).toContain(KEY);
+    // …which every record keeps out by the vocabulary's own name.
+    expect(at.served).toBe('REDACTED');
+    expect(at.inArtifacts).toEqual([]);
+  });
+
+  it('a policy missing the fold’s name does not keep the conversation out: the model reads the record’s view', async () => {
+    const vocabulary = conversationRedaction({ keys: ['apiKey'] });
+    const older: RedactionPolicy = {
+      ...vocabulary,
+      keys: (vocabulary.keys ?? []).filter((k) => k !== 'foldedSpans'),
+    };
+    const at = await run(older);
+    // Fails safe: the value never enters the calling run at all.
+    expect(at.modelSaw).not.toContain(KEY);
+    expect(at.modelSaw).toContain('key=REDACTED');
+    expect(at.inArtifacts).toEqual([]);
   });
 });
