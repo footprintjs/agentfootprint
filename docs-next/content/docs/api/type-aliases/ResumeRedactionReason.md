@@ -6,6 +6,6 @@ title: ResumeRedactionReason
 
 > **ResumeRedactionReason** = `"unreadable"` \| `"missing"` \| `"unknown-pattern"`
 
-Defined in: [src/core/conversation.ts:161](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L161)
+Defined in: src/core/conversation.ts:161
 
 Why a resume could not carry its paused run's redaction — see `ResumeRedactionError`.

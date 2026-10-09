@@ -6,7 +6,7 @@ title: isLibraryAuthoredFrame
 
 > **isLibraryAuthoredFrame**(`msg`): `boolean`
 
-Defined in: [src/lib/saidByPerson.ts:170](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/saidByPerson.ts#L170)
+Defined in: src/lib/saidByPerson.ts:170
 
 True when this user-role message opens with a frame this library authored.
 

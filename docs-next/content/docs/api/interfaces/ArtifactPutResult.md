@@ -4,7 +4,7 @@ title: ArtifactPutResult
 
 # Interface: ArtifactPutResult
 
-Defined in: [src/artifacts/types.ts:158](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L158)
+Defined in: src/artifacts/types.ts:158
 
 What `put` hands back: the ticket, plus everything retention swept to admit
 it. Sweeps ride the RESULT (collect during traversal, never post-process) so
@@ -17,7 +17,7 @@ that evicted silently would be a store that lies by omission.
 
 > `readonly` **meta**: [`ArtifactMeta`](/docs/api/interfaces/ArtifactMeta)
 
-Defined in: [src/artifacts/types.ts:159](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L159)
+Defined in: src/artifacts/types.ts:159
 
 ***
 
@@ -25,4 +25,4 @@ Defined in: [src/artifacts/types.ts:159](https://github.com/footprintjs/agentfoo
 
 > `readonly` **swept**: readonly [`SweptArtifact`](/docs/api/interfaces/SweptArtifact)[]
 
-Defined in: [src/artifacts/types.ts:160](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L160)
+Defined in: src/artifacts/types.ts:160

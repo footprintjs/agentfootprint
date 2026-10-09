@@ -4,7 +4,7 @@ title: CodeRunnerToolOptions
 
 # Interface: CodeRunnerToolOptions
 
-Defined in: [src/core/codeRunnerTool.ts:69](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L69)
+Defined in: src/core/codeRunnerTool.ts:69
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/core/codeRunnerTool.ts:69](https://github.com/footprintjs/agent
 
 > `readonly` `optional` **checkIn?**: [`CheckInDemand`](/docs/api/type-aliases/CheckInDemand)\<\{ `code`: `string`; \}\>
 
-Defined in: [src/core/codeRunnerTool.ts:99](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L99)
+Defined in: src/core/codeRunnerTool.ts:99
 
 Demand a human check-in before code runs — `'always'`, or a predicate over
  the code string. A pause here does NOT tear the session down.
@@ -23,7 +23,7 @@ Demand a human check-in before code runs — `'always'`, or a predicate over
 
 > `readonly` `optional` **description?**: `string`
 
-Defined in: [src/core/codeRunnerTool.ts:77](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L77)
+Defined in: src/core/codeRunnerTool.ts:77
 
 Description the model sees. A sensible one is composed from `scope` +
  `language` when you do not pass one.
@@ -34,7 +34,7 @@ Description the model sees. A sensible one is composed from `scope` +
 
 > `readonly` `optional` **language?**: `string`
 
-Defined in: [src/core/codeRunnerTool.ts:91](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L91)
+Defined in: src/core/codeRunnerTool.ts:91
 
 Default language for the code the model writes. Default `'python'`.
 
@@ -44,7 +44,7 @@ Default language for the code the model writes. Default `'python'`.
 
 > `readonly` `optional` **maxOutputChars?**: `number`
 
-Defined in: [src/core/codeRunnerTool.ts:94](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L94)
+Defined in: src/core/codeRunnerTool.ts:94
 
 Per-stream ceiling for what reaches the model, in characters. Default 4000.
  Anything cut is STATED in the result, never dropped quietly.
@@ -55,7 +55,7 @@ Per-stream ceiling for what reaches the model, in characters. Default 4000.
 
 > `readonly` `optional` **name?**: `string`
 
-Defined in: [src/core/codeRunnerTool.ts:74](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L74)
+Defined in: src/core/codeRunnerTool.ts:74
 
 Tool name the model sees. Default `'run_code'`.
 
@@ -65,7 +65,7 @@ Tool name the model sees. Default `'run_code'`.
 
 > `readonly` `optional` **needs?**: `CredentialNeed`
 
-Defined in: [src/core/codeRunnerTool.ts:102](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L102)
+Defined in: src/core/codeRunnerTool.ts:102
 
 A credential this tool needs (declare-and-push). Resolved before execute.
  Do NOT cache it past the call: a session outliving a run outlives its token.
@@ -76,7 +76,7 @@ A credential this tool needs (declare-and-push). Resolved before execute.
 
 > `readonly` **runner**: [`CodeRunner`](/docs/api/interfaces/CodeRunner)
 
-Defined in: [src/core/codeRunnerTool.ts:72](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L72)
+Defined in: src/core/codeRunnerTool.ts:72
 
 The backend. `localCodeRunner()` for a dev loop, `agentCoreCodeRunner(...)`
  for a real sandbox — the tool is identical across the swap.
@@ -87,7 +87,7 @@ The backend. `localCodeRunner()` for a dev loop, `agentCoreCodeRunner(...)`
 
 > `readonly` `optional` **scope?**: [`CodeRunnerToolScope`](/docs/api/type-aliases/CodeRunnerToolScope)
 
-Defined in: [src/core/codeRunnerTool.ts:89](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L89)
+Defined in: src/core/codeRunnerTool.ts:89
 
 How long one session lives. Default `'run'` — a turn's worth of work shares
 one interpreter, and nothing outlives the turn.
@@ -105,7 +105,7 @@ session-bound run plus a composition root that calls
 
 > `readonly` `optional` **timeoutMs?**: `number`
 
-Defined in: [src/core/codeRunnerTool.ts:96](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L96)
+Defined in: src/core/codeRunnerTool.ts:96
 
 Per-execution ceiling handed to the runner.
 
@@ -115,7 +115,7 @@ Per-execution ceiling handed to the runner.
 
 > `readonly` `optional` **wants?**: `Readonly`\<`Record`\<`string`, `string`\>\>
 
-Defined in: [src/core/codeRunnerTool.ts:132](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L132)
+Defined in: src/core/codeRunnerTool.ts:132
 
 Artifact arguments, declared exactly as any other tool declares them
 (9.26.0): `wants: { dataset: 'dataset/rows' }`.

@@ -4,7 +4,7 @@ title: InputField
 
 # Interface: InputField
 
-Defined in: [src/core/inputRequest.ts:16](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L16)
+Defined in: src/core/inputRequest.ts:16
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/core/inputRequest.ts:16](https://github.com/footprintjs/agentfo
 
 > `readonly` `optional` **description?**: `string`
 
-Defined in: [src/core/inputRequest.ts:20](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L20)
+Defined in: src/core/inputRequest.ts:20
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/core/inputRequest.ts:20](https://github.com/footprintjs/agentfo
 
 > `readonly` `optional` **enum?**: readonly [`InputValue`](/docs/api/type-aliases/InputValue)[]
 
-Defined in: [src/core/inputRequest.ts:21](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L21)
+Defined in: src/core/inputRequest.ts:21
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [src/core/inputRequest.ts:21](https://github.com/footprintjs/agentfo
 
 > `readonly` `optional` **format?**: [`TimeFormat`](/docs/api/type-aliases/TimeFormat)
 
-Defined in: [src/core/inputRequest.ts:33](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L33)
+Defined in: src/core/inputRequest.ts:33
 
 A TIME field (time design § 6.1): the library checks the answer before the
 app sees it. `'instant'` — an ISO 8601 date-time with its offset
@@ -46,7 +46,7 @@ runs. A choice or a supplied value that fails it is refused at definition.
 
 > `readonly` **id**: `string`
 
-Defined in: [src/core/inputRequest.ts:17](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L17)
+Defined in: src/core/inputRequest.ts:17
 
 ***
 
@@ -54,7 +54,7 @@ Defined in: [src/core/inputRequest.ts:17](https://github.com/footprintjs/agentfo
 
 > `readonly` `optional` **labels?**: readonly `string`[]
 
-Defined in: [src/core/inputRequest.ts:39](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L39)
+Defined in: src/core/inputRequest.ts:39
 
 One label per `enum` choice, in its order — what a person reads beside
 the value (`'Fri, Oct 9, 2026, 8:00 – 8:40 AM PDT'`); the value is what the
@@ -66,7 +66,7 @@ answer carries. Needs `enum`.
 
 > `readonly` `optional` **required?**: `boolean`
 
-Defined in: [src/core/inputRequest.ts:19](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L19)
+Defined in: src/core/inputRequest.ts:19
 
 ***
 
@@ -74,7 +74,7 @@ Defined in: [src/core/inputRequest.ts:19](https://github.com/footprintjs/agentfo
 
 > `readonly` `optional` **strict?**: `boolean`
 
-Defined in: [src/core/inputRequest.ts:45](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L45)
+Defined in: src/core/inputRequest.ts:45
 
 A time field's choices are the only answers. Without it a `format` field
 with `enum` keeps free entry open: any answer the format check takes is
@@ -86,4 +86,4 @@ taken. Needs `format` and `enum`.
 
 > `readonly` **type**: `"string"` \| `"number"` \| `"boolean"`
 
-Defined in: [src/core/inputRequest.ts:18](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L18)
+Defined in: src/core/inputRequest.ts:18

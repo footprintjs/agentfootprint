@@ -4,7 +4,7 @@ title: JudgmentRow
 
 # Interface: JudgmentRow
 
-Defined in: [src/core/agent/findings/types.ts:256](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L256)
+Defined in: src/core/agent/findings/types.ts:256
 
 A SECOND SOURCE's reading of one result (9.104.0, `.findings({ judge })`):
 a calibrated classifier (`agentfootprint/classify`) asked what the result
@@ -27,7 +27,7 @@ measured by the adapter. Nothing here is inferred by the library.
 
 > `readonly` **against**: `"question"` \| `"proposition"`
 
-Defined in: [src/core/agent/findings/types.ts:265](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L265)
+Defined in: src/core/agent/findings/types.ts:265
 
 What the result was judged AGAINST: the call's declared proposition, or the user's question.
 
@@ -37,7 +37,7 @@ What the result was judged AGAINST: the call's declared proposition, or the user
 
 > `readonly` `optional` **clipped?**: `true`
 
-Defined in: [src/core/agent/findings/types.ts:274](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L274)
+Defined in: src/core/agent/findings/types.ts:274
 
 Set when the result text was cut at `JUDGE_RESULT_CHARS` before the judge saw it.
 
@@ -47,7 +47,7 @@ Set when the result text was cut at `JUDGE_RESULT_CHARS` before the judge saw it
 
 > `readonly` **confidence**: `number`
 
-Defined in: [src/core/agent/findings/types.ts:268](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L268)
+Defined in: src/core/agent/findings/types.ts:268
 
 ***
 
@@ -55,7 +55,7 @@ Defined in: [src/core/agent/findings/types.ts:268](https://github.com/footprintj
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/core/agent/findings/types.ts:276](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L276)
+Defined in: src/core/agent/findings/types.ts:276
 
 The iteration whose dispatch landed the result.
 
@@ -65,7 +65,7 @@ The iteration whose dispatch landed the result.
 
 > `readonly` **judge**: `object`
 
-Defined in: [src/core/agent/findings/types.ts:263](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L263)
+Defined in: src/core/agent/findings/types.ts:263
 
 The classifier's port name and the provider's resolved model string.
 
@@ -83,7 +83,7 @@ The classifier's port name and the provider's resolved model string.
 
 > `readonly` **kind**: `"judgment"`
 
-Defined in: [src/core/agent/findings/types.ts:257](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L257)
+Defined in: src/core/agent/findings/types.ts:257
 
 ***
 
@@ -91,7 +91,7 @@ Defined in: [src/core/agent/findings/types.ts:257](https://github.com/footprintj
 
 > `readonly` **latencyMs**: `number`
 
-Defined in: [src/core/agent/findings/types.ts:272](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L272)
+Defined in: src/core/agent/findings/types.ts:272
 
 ***
 
@@ -99,7 +99,7 @@ Defined in: [src/core/agent/findings/types.ts:272](https://github.com/footprintj
 
 > `readonly` **probabilities**: `Readonly`\<`Record`\<[`Standing`](/docs/api/type-aliases/Standing), `number`\>\>
 
-Defined in: [src/core/agent/findings/types.ts:267](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L267)
+Defined in: src/core/agent/findings/types.ts:267
 
 ***
 
@@ -107,7 +107,7 @@ Defined in: [src/core/agent/findings/types.ts:267](https://github.com/footprintj
 
 > `readonly` **source**: `"judge"`
 
-Defined in: [src/core/agent/findings/types.ts:261](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L261)
+Defined in: src/core/agent/findings/types.ts:261
 
 ***
 
@@ -115,7 +115,7 @@ Defined in: [src/core/agent/findings/types.ts:261](https://github.com/footprintj
 
 > `readonly` **standing**: [`Standing`](/docs/api/type-aliases/Standing)
 
-Defined in: [src/core/agent/findings/types.ts:266](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L266)
+Defined in: src/core/agent/findings/types.ts:266
 
 ***
 
@@ -123,7 +123,7 @@ Defined in: [src/core/agent/findings/types.ts:266](https://github.com/footprintj
 
 > `readonly` `optional` **testsSubject?**: `number`
 
-Defined in: [src/core/agent/findings/types.ts:270](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L270)
+Defined in: src/core/agent/findings/types.ts:270
 
 The provider's probability that the result tests the proposition / question at all.
 
@@ -133,7 +133,7 @@ The provider's probability that the result tests the proposition / question at a
 
 > `readonly` **toolCallId**: `string`
 
-Defined in: [src/core/agent/findings/types.ts:259](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L259)
+Defined in: src/core/agent/findings/types.ts:259
 
 The RESULT judged — the tool call's id, the same key `StandingRow` uses.
 
@@ -143,7 +143,7 @@ The RESULT judged — the tool call's id, the same key `StandingRow` uses.
 
 > `readonly` **toolName**: `string`
 
-Defined in: [src/core/agent/findings/types.ts:260](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L260)
+Defined in: src/core/agent/findings/types.ts:260
 
 ***
 
@@ -151,7 +151,7 @@ Defined in: [src/core/agent/findings/types.ts:260](https://github.com/footprintj
 
 > `readonly` `optional` **turn?**: `number`
 
-Defined in: [src/core/agent/findings/types.ts:283](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L283)
+Defined in: src/core/agent/findings/types.ts:283
 
 The conversation turn the row was filed in (`AgentState.turnNumber`) —
 stamped by the one writer while an honesty layer is armed (the inputs
@@ -164,7 +164,7 @@ conversation, and `iteration` restarts at 1 every run.
 
 > `readonly` `optional` **usage?**: `object`
 
-Defined in: [src/core/agent/findings/types.ts:271](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L271)
+Defined in: src/core/agent/findings/types.ts:271
 
 #### inputTokens
 

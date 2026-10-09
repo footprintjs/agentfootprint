@@ -4,7 +4,7 @@ title: WalkDescriptor
 
 # Interface: WalkDescriptor
 
-Defined in: [src/core/runbook/types.ts:243](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/types.ts#L243)
+Defined in: src/core/runbook/types.ts:243
 
 The recorded-walk descriptor — ALWAYS on the spine. The walk itself ships
 as an artifact ticket (`ref`), never as bytes in the envelope; with no
@@ -18,7 +18,7 @@ never be mistaken for a short run.
 
 > `readonly` **complete**: `boolean`
 
-Defined in: [src/core/runbook/types.ts:260](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/types.ts#L260)
+Defined in: src/core/runbook/types.ts:260
 
 ***
 
@@ -26,7 +26,7 @@ Defined in: [src/core/runbook/types.ts:260](https://github.com/footprintjs/agent
 
 > `readonly` `optional` **kind?**: `string`
 
-Defined in: [src/core/runbook/types.ts:248](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/types.ts#L248)
+Defined in: src/core/runbook/types.ts:248
 
 The artifact kind (`'recording/chart-walk'`). Present with `ref`.
 
@@ -36,7 +36,7 @@ The artifact kind (`'recording/chart-walk'`). Present with `ref`.
 
 > `readonly` **note**: `string`
 
-Defined in: [src/core/runbook/types.ts:271](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/types.ts#L271)
+Defined in: src/core/runbook/types.ts:271
 
 The human sentence: what the walk is, and (when projected) what the
  control-flow projection kept and dropped, or why there is no ticket.
@@ -47,7 +47,7 @@ The human sentence: what the walk is, and (when projected) what the
 
 > `readonly` **projection**: `"full"` \| `"control-flow"`
 
-Defined in: [src/core/runbook/types.ts:257](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/types.ts#L257)
+Defined in: src/core/runbook/types.ts:257
 
 `'full'` — every narrative entry fit under the cap; `'control-flow'` —
  it did not, and the stages/forks/subflows/decisions survived while the
@@ -59,7 +59,7 @@ Defined in: [src/core/runbook/types.ts:257](https://github.com/footprintjs/agent
 
 > `readonly` `optional` **recording\_bytes?**: `number`
 
-Defined in: [src/core/runbook/types.ts:293](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/types.ts#L293)
+Defined in: src/core/runbook/types.ts:293
 
 The recording's size in bytes. Present on the SUCCESS path (the store's
 own measurement) AND on the over-size refusal (what it measured, beside
@@ -72,7 +72,7 @@ checkable instead of mysterious.
 
 > `readonly` `optional` **recording\_kind?**: `string`
 
-Defined in: [src/core/runbook/types.ts:286](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/types.ts#L286)
+Defined in: src/core/runbook/types.ts:286
 
 The recording's artifact kind (`'recording/run'`). Present with
  `recording_ref`.
@@ -83,7 +83,7 @@ The recording's artifact kind (`'recording/run'`). Present with
 
 > `readonly` `optional` **recording\_note?**: `string`
 
-Defined in: [src/core/runbook/types.ts:300](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/types.ts#L300)
+Defined in: src/core/runbook/types.ts:300
 
 The human sentence about the recording: what a filed one CONTAINS beyond
 the walk's row projection, or the named reason there is no
@@ -96,7 +96,7 @@ not an allowed answer to "why is the ref missing".
 
 > `readonly` `optional` **recording\_ref?**: `string`
 
-Defined in: [src/core/runbook/types.ts:283](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/types.ts#L283)
+Defined in: src/core/runbook/types.ts:283
 
 The claim-ticket ref of the inner chart's own `{ snapshot, events,
 structure }` recording — what the lens/explainable-UI flow components
@@ -109,7 +109,7 @@ refused or failed; `recording_note` says which, and never stays silent.
 
 > `readonly` `optional` **ref?**: `string`
 
-Defined in: [src/core/runbook/types.ts:246](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/types.ts#L246)
+Defined in: src/core/runbook/types.ts:246
 
 The claim-ticket ref of the minted walk artifact. Absent when no store
  is attached or the mint failed — `note` says which.
@@ -120,7 +120,7 @@ The claim-ticket ref of the minted walk artifact. Absent when no store
 
 > `readonly` **rows**: `number`
 
-Defined in: [src/core/runbook/types.ts:250](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/types.ts#L250)
+Defined in: src/core/runbook/types.ts:250
 
 Rows in the minted artifact.
 
@@ -130,7 +130,7 @@ Rows in the minted artifact.
 
 > `readonly` **shown**: `number`
 
-Defined in: [src/core/runbook/types.ts:258](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/types.ts#L258)
+Defined in: src/core/runbook/types.ts:258
 
 ***
 
@@ -138,7 +138,7 @@ Defined in: [src/core/runbook/types.ts:258](https://github.com/footprintjs/agent
 
 > `readonly` **steps\_executed**: `number`
 
-Defined in: [src/core/runbook/types.ts:253](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/types.ts#L253)
+Defined in: src/core/runbook/types.ts:253
 
 Total execution steps the narrative recorder counted — spans isolated
  subflow logs, which the root commit log cannot.
@@ -149,7 +149,7 @@ Total execution steps the narrative recorder counted — spans isolated
 
 > `readonly` **total**: `number`
 
-Defined in: [src/core/runbook/types.ts:259](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/types.ts#L259)
+Defined in: src/core/runbook/types.ts:259
 
 ***
 
@@ -157,7 +157,7 @@ Defined in: [src/core/runbook/types.ts:259](https://github.com/footprintjs/agent
 
 > `readonly` **walk\_segment**: `"full"` \| `"pre-pause"` \| `"post-resume"`
 
-Defined in: [src/core/runbook/types.ts:268](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/types.ts#L268)
+Defined in: src/core/runbook/types.ts:268
 
 WHICH SEGMENT of the run this walk covers. `'full'` for an un-gated run
 (all of phase 1). When approval gates land, a resumed run's recorders

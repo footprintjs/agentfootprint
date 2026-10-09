@@ -4,7 +4,7 @@ title: KeyedFold
 
 # Interface: KeyedFold
 
-Defined in: [src/lib/time-travel/keyedFold.ts:114](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/keyedFold.ts#L114)
+Defined in: src/lib/time-travel/keyedFold.ts:114
 
 One key's value at one commit — the question, and the answers already
 computed for it.
@@ -15,7 +15,7 @@ computed for it.
 
 > `readonly` **basis**: [`FoldBasis`](/docs/api/type-aliases/FoldBasis)
 
-Defined in: [src/lib/time-travel/keyedFold.ts:116](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/keyedFold.ts#L116)
+Defined in: src/lib/time-travel/keyedFold.ts:116
 
 How this fold was derived — see [FoldBasis](/docs/api/type-aliases/FoldBasis).
 
@@ -25,7 +25,7 @@ How this fold was derived — see [FoldBasis](/docs/api/type-aliases/FoldBasis).
 
 > `readonly` **length**: `number`
 
-Defined in: [src/lib/time-travel/keyedFold.ts:118](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/keyedFold.ts#L118)
+Defined in: src/lib/time-travel/keyedFold.ts:118
 
 How many bundles the log holds.
 
@@ -35,7 +35,7 @@ How many bundles the log holds.
 
 > **valueAt**(`key`, `idx`): `unknown`
 
-Defined in: [src/lib/time-travel/keyedFold.ts:130](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/keyedFold.ts#L130)
+Defined in: src/lib/time-travel/keyedFold.ts:130
 
 The value of `key` folded through commit ARRAY INDEX `idx`, inclusive.
 `-1` (or lower) folds nothing and returns the base's value — the state

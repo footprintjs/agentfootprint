@@ -4,7 +4,7 @@ title: EvidenceRecoveryContext
 
 # Interface: EvidenceRecoveryContext
 
-Defined in: [src/core/agent/evidence/types.ts:56](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L56)
+Defined in: src/core/agent/evidence/types.ts:56
 
 Typed, detached context for the ONE internal evidence-recovery request.
 This is a token-grounding finding, not a semantic truth judgement.
@@ -15,7 +15,7 @@ This is a token-grounding finding, not a semantic truth judgement.
 
 > `readonly` **attempt**: `1`
 
-Defined in: [src/core/agent/evidence/types.ts:58](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L58)
+Defined in: src/core/agent/evidence/types.ts:58
 
 ***
 
@@ -23,7 +23,7 @@ Defined in: [src/core/agent/evidence/types.ts:58](https://github.com/footprintjs
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/core/agent/evidence/types.ts:59](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L59)
+Defined in: src/core/agent/evidence/types.ts:59
 
 ***
 
@@ -31,7 +31,7 @@ Defined in: [src/core/agent/evidence/types.ts:59](https://github.com/footprintjs
 
 > `readonly` **kind**: `"evidence"`
 
-Defined in: [src/core/agent/evidence/types.ts:57](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L57)
+Defined in: src/core/agent/evidence/types.ts:57
 
 ***
 
@@ -39,7 +39,7 @@ Defined in: [src/core/agent/evidence/types.ts:57](https://github.com/footprintjs
 
 > `readonly` **originalRequest**: `string`
 
-Defined in: [src/core/agent/evidence/types.ts:61](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L61)
+Defined in: src/core/agent/evidence/types.ts:61
 
 The authoritative input to this run, not an internally authored turn.
 
@@ -49,7 +49,7 @@ The authoritative input to this run, not an internally authored turn.
 
 > `readonly` **rejectedDraft**: `string`
 
-Defined in: [src/core/agent/evidence/types.ts:62](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L62)
+Defined in: src/core/agent/evidence/types.ts:62
 
 ***
 
@@ -57,7 +57,7 @@ Defined in: [src/core/agent/evidence/types.ts:62](https://github.com/footprintjs
 
 > `readonly` `optional` **spenderTools?**: readonly `string`[]
 
-Defined in: [src/core/agent/evidence/types.ts:65](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L65)
+Defined in: src/core/agent/evidence/types.ts:65
 
 ***
 
@@ -65,7 +65,7 @@ Defined in: [src/core/agent/evidence/types.ts:65](https://github.com/footprintjs
 
 > `readonly` `optional` **stagedRefs?**: readonly `object`[]
 
-Defined in: [src/core/agent/evidence/types.ts:64](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L64)
+Defined in: src/core/agent/evidence/types.ts:64
 
 ***
 
@@ -73,4 +73,4 @@ Defined in: [src/core/agent/evidence/types.ts:64](https://github.com/footprintjs
 
 > `readonly` **unsupported**: readonly [`UnsupportedValue`](/docs/api/interfaces/UnsupportedValue)[]
 
-Defined in: [src/core/agent/evidence/types.ts:63](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L63)
+Defined in: src/core/agent/evidence/types.ts:63

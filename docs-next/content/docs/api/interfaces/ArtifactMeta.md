@@ -4,7 +4,7 @@ title: ArtifactMeta
 
 # Interface: ArtifactMeta
 
-Defined in: [src/artifacts/types.ts:79](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L79)
+Defined in: src/artifacts/types.ts:79
 
 The claim ticket's description — what a consumer needs to DECIDE, never the
 bytes. This is what `head` returns, what `list` rows are, and what every
@@ -16,7 +16,7 @@ bytes. This is what `head` returns, what `list` rows are, and what every
 
 > `readonly` **bytes**: `number`
 
-Defined in: [src/artifacts/types.ts:88](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L88)
+Defined in: src/artifacts/types.ts:88
 
 Payload size in bytes (UTF-8 for text/JSON, byteLength for binary).
 
@@ -26,7 +26,7 @@ Payload size in bytes (UTF-8 for text/JSON, byteLength for binary).
 
 > `readonly` **createdAt**: `number`
 
-Defined in: [src/artifacts/types.ts:115](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L115)
+Defined in: src/artifacts/types.ts:115
 
 Unix ms when the artifact was stored.
 
@@ -36,7 +36,7 @@ Unix ms when the artifact was stored.
 
 > `readonly` `optional` **digest?**: `string`
 
-Defined in: [src/artifacts/types.ts:94](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L94)
+Defined in: src/artifacts/types.ts:94
 
 `sha-256:<hex>` — integrity + idempotent re-put detection, computed at
  `put` when asked. Metadata, NEVER the key. Verified on `get`; a mismatch
@@ -48,7 +48,7 @@ Defined in: [src/artifacts/types.ts:94](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **expiresAt?**: `number`
 
-Defined in: [src/artifacts/types.ts:98](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L98)
+Defined in: src/artifacts/types.ts:98
 
 Unix ms when this artifact stops resolving — STATED at mint (from the
  store's ttl or the caller's own value, whichever is sooner), so consumers
@@ -60,7 +60,7 @@ Unix ms when this artifact stops resolving — STATED at mint (from the
 
 > `readonly` **kind**: `string`
 
-Defined in: [src/artifacts/types.ts:84](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L84)
+Defined in: src/artifacts/types.ts:84
 
 Consumer vocabulary — what this IS to whoever redeems it:
  `'dataset/rows'`, `'chart/spec'`, `'report/csv'`. Declared by the
@@ -72,7 +72,7 @@ Consumer vocabulary — what this IS to whoever redeems it:
 
 > `readonly` `optional` **label?**: `string`
 
-Defined in: [src/artifacts/types.ts:90](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L90)
+Defined in: src/artifacts/types.ts:90
 
 The human name: `"Q3 sales by region"`.
 
@@ -82,7 +82,7 @@ The human name: `"Q3 sales by region"`.
 
 > `readonly` **mediaType**: `string`
 
-Defined in: [src/artifacts/types.ts:86](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L86)
+Defined in: src/artifacts/types.ts:86
 
 MIME type of the payload: `'application/json'`, `'text/csv'`, …
 
@@ -92,7 +92,7 @@ MIME type of the payload: `'application/json'`, `'text/csv'`, …
 
 > `readonly` `optional` **origin?**: [`ArtifactOrigin`](/docs/api/interfaces/ArtifactOrigin)
 
-Defined in: [src/artifacts/types.ts:100](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L100)
+Defined in: src/artifacts/types.ts:100
 
 The join to the causal record.
 
@@ -102,7 +102,7 @@ The join to the causal record.
 
 > `readonly` `optional` **parentRefs?**: readonly `string`[]
 
-Defined in: [src/artifacts/types.ts:108](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L108)
+Defined in: src/artifacts/types.ts:108
 
 Derivation FACTS — the refs this artifact was computed from. Validated at
 mint: naming a parent that does not resolve in the same scope is a
@@ -116,7 +116,7 @@ lineage-graph engine: walking parents is the consumer's fold over
 
 > `readonly` **ref**: `string`
 
-Defined in: [src/artifacts/types.ts:80](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L80)
+Defined in: src/artifacts/types.ts:80
 
 ***
 
@@ -124,7 +124,7 @@ Defined in: [src/artifacts/types.ts:80](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **timeAxis?**: [`DatasetTimeAxis`](/docs/api/interfaces/DatasetTimeAxis)
 
-Defined in: [src/artifacts/types.ts:113](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L113)
+Defined in: src/artifacts/types.ts:113
 
 The rows' TIME AXIS as the producer declared it — which column is time,
  how its values are written, and how each row summarises its interval.

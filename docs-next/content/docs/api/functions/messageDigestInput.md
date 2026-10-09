@@ -6,7 +6,7 @@ title: messageDigestInput
 
 > **messageDigestInput**(`message`): `string`
 
-Defined in: [src/lib/time-travel/receipt.ts:606](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L606)
+Defined in: src/lib/time-travel/receipt.ts:606
 
 The bytes a message's hash covers, each field behind a separator: its role,
 its text, its `toolCallId`, its `toolName`, the calls it asked for (id, name,

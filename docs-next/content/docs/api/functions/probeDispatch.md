@@ -6,7 +6,7 @@ title: probeDispatch
 
 > **probeDispatch**(`runbookName`): [`ToolDispatch`](/docs/api/interfaces/ToolDispatch)
 
-Defined in: [src/core/runbook/dispatch.ts:128](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/dispatch.ts#L128)
+Defined in: src/core/runbook/dispatch.ts:128
 
 The definition-time probe dispatch — handed to the procedure factory ONCE
 at `runbookAsTool(...)` so the bridge can read the chart's declared

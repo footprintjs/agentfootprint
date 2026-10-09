@@ -4,7 +4,7 @@ title: ClockRow
 
 # Interface: ClockRow
 
-Defined in: [src/core/time/rows.ts:58](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L58)
+Defined in: src/core/time/rows.ts:58
 
 The turn's clock stamp — one per turn (time design § 4).
 
@@ -18,7 +18,7 @@ The turn's clock stamp — one per turn (time design § 4).
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/core/time/rows.ts:63](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L63)
+Defined in: src/core/time/rows.ts:63
 
 The iteration seed filed it at (1).
 
@@ -28,7 +28,7 @@ The iteration seed filed it at (1).
 
 > `readonly` **kind**: `"clock"`
 
-Defined in: [src/core/time/rows.ts:59](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L59)
+Defined in: src/core/time/rows.ts:59
 
 ***
 
@@ -36,7 +36,7 @@ Defined in: [src/core/time/rows.ts:59](https://github.com/footprintjs/agentfootp
 
 > `readonly` **now**: `string`
 
-Defined in: [src/core/time/clock.ts:56](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/clock.ts#L56)
+Defined in: src/core/time/clock.ts:56
 
 The anchor for this turn — the app's `now`, else the turn's start.
 
@@ -50,7 +50,7 @@ The anchor for this turn — the app's `now`, else the turn's start.
 
 > `readonly` **nowSource**: `"default"` \| `"app"`
 
-Defined in: [src/core/time/clock.ts:58](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/clock.ts#L58)
+Defined in: src/core/time/clock.ts:58
 
 The app passed `now`, or the library took the turn's start.
 
@@ -64,7 +64,7 @@ The app passed `now`, or the library took the turn's start.
 
 > `readonly` **turn**: `number`
 
-Defined in: [src/core/time/rows.ts:61](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L61)
+Defined in: src/core/time/rows.ts:61
 
 `AgentState.turnNumber` when the row was filed — the conversation turn.
 
@@ -74,7 +74,7 @@ Defined in: [src/core/time/rows.ts:61](https://github.com/footprintjs/agentfootp
 
 > `readonly` `optional` **window?**: [`ControlWindow`](/docs/api/interfaces/ControlWindow)
 
-Defined in: [src/core/time/rows.ts:65](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L65)
+Defined in: src/core/time/rows.ts:65
 
 The run's `time.window`, when it passed one.
 
@@ -84,7 +84,7 @@ The run's `time.window`, when it passed one.
 
 > `readonly` **zone**: `string`
 
-Defined in: [src/core/time/clock.ts:64](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/clock.ts#L64)
+Defined in: src/core/time/clock.ts:64
 
 The person's zone for this run — an IANA name. Under `zoneSource:
 'unknown'` it is `'UTC'`: the zone instants are SPELLED in, never the
@@ -100,7 +100,7 @@ person's.
 
 > `readonly` **zoneSource**: `"unknown"` \| `"run"` \| `"answered"` \| `"builder"`
 
-Defined in: [src/core/time/clock.ts:70](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/clock.ts#L70)
+Defined in: src/core/time/clock.ts:70
 
 The run's `time.zone`, else the `.time({ zone })` fallback; with neither,
 the zone the person answered in an earlier turn of this conversation

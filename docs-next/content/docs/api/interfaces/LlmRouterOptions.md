@@ -4,7 +4,7 @@ title: LlmRouterOptions
 
 # Interface: LlmRouterOptions
 
-Defined in: [src/patterns/LlmRouter.ts:143](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/LlmRouter.ts#L143)
+Defined in: src/patterns/LlmRouter.ts:143
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/patterns/LlmRouter.ts:143](https://github.com/footprintjs/agent
 
 > `readonly` **agents**: readonly [`RouterAgent`](/docs/api/interfaces/RouterAgent)[]
 
-Defined in: [src/patterns/LlmRouter.ts:149](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/LlmRouter.ts#L149)
+Defined in: src/patterns/LlmRouter.ts:149
 
 The roster. Two or more agents; ids must be unique.
 
@@ -22,7 +22,7 @@ The roster. Two or more agents; ids must be unique.
 
 > `readonly` `optional` **id?**: `string`
 
-Defined in: [src/patterns/LlmRouter.ts:163](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/LlmRouter.ts#L163)
+Defined in: src/patterns/LlmRouter.ts:163
 
 Stable id used in events + stage ids. Default `'router'`.
 
@@ -32,7 +32,7 @@ Stable id used in events + stage ids. Default `'router'`.
 
 > `readonly` `optional` **instruction?**: `string`
 
-Defined in: [src/patterns/LlmRouter.ts:155](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/LlmRouter.ts#L155)
+Defined in: src/patterns/LlmRouter.ts:155
 
 Extra authored framing, placed before the roster ("Prefer billing for
 anything money-shaped"). Your words, trusted — unlike descriptions,
@@ -44,7 +44,7 @@ which ride as data.
 
 > `readonly` **model**: `string`
 
-Defined in: [src/patterns/LlmRouter.ts:147](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/LlmRouter.ts#L147)
+Defined in: src/patterns/LlmRouter.ts:147
 
 Model to ask.
 
@@ -54,7 +54,7 @@ Model to ask.
 
 > `readonly` `optional` **name?**: `string`
 
-Defined in: [src/patterns/LlmRouter.ts:165](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/LlmRouter.ts#L165)
+Defined in: src/patterns/LlmRouter.ts:165
 
 Display name. Default `'Router'`.
 
@@ -64,7 +64,7 @@ Display name. Default `'Router'`.
 
 > `readonly` **provider**: [`LLMProvider`](/docs/api/interfaces/LLMProvider)
 
-Defined in: [src/patterns/LlmRouter.ts:145](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/LlmRouter.ts#L145)
+Defined in: src/patterns/LlmRouter.ts:145
 
 The LLM that makes the decision.
 
@@ -74,7 +74,7 @@ The LLM that makes the decision.
 
 > `readonly` `optional` **temperature?**: `number`
 
-Defined in: [src/patterns/LlmRouter.ts:161](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/LlmRouter.ts#L161)
+Defined in: src/patterns/LlmRouter.ts:161
 
 Sampling temperature for the routing call. Defaults to `0` — routing
 is a classification, and the same message should reach the same

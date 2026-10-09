@@ -4,7 +4,7 @@ title: SemanticProvenance
 
 # Interface: SemanticProvenance
 
-Defined in: [src/lib/semantics/types.ts:108](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L108)
+Defined in: src/lib/semantics/types.ts:108
 
 Where the values came from and how old they are. `measured_at` is when the
 WORLD was measured — not when the tool ran; a tool that reads a nightly
@@ -16,7 +16,7 @@ export and answers in 4ms is serving yesterday.
 
 > `readonly` `optional` **age\_seconds?**: `number`
 
-Defined in: [src/lib/semantics/types.ts:113](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L113)
+Defined in: src/lib/semantics/types.ts:113
 
 How stale the data was when the tool answered, in seconds.
 
@@ -26,7 +26,7 @@ How stale the data was when the tool answered, in seconds.
 
 > `readonly` **measured\_at**: `string`
 
-Defined in: [src/lib/semantics/types.ts:111](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L111)
+Defined in: src/lib/semantics/types.ts:111
 
 When the world was measured (the tool's own clock words). Required
  whenever the envelope carries `series` or `facts`.
@@ -37,7 +37,7 @@ When the world was measured (the tool's own clock words). Required
 
 > `readonly` **source**: `string`
 
-Defined in: [src/lib/semantics/types.ts:116](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L116)
+Defined in: src/lib/semantics/types.ts:116
 
 The system of record the values were read from. Required with
  `measured_at`.
@@ -48,6 +48,6 @@ The system of record the values were read from. Required with
 
 > `readonly` `optional` **source\_export\_date?**: `string`
 
-Defined in: [src/lib/semantics/types.ts:118](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L118)
+Defined in: src/lib/semantics/types.ts:118
 
 For file-fed collectors: the export the values rode in on.

@@ -4,7 +4,7 @@ title: ServedGap
 
 # Interface: ServedGap
 
-Defined in: [src/lib/time-travel/servedView.ts:279](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L279)
+Defined in: src/lib/time-travel/servedView.ts:279
 
 One named limit on the rebuild, with the fields it covers — a hole the log
  cannot fill, or a boundary the record cannot see past.
@@ -15,7 +15,7 @@ One named limit on the rebuild, with the fields it covers — a hole the log
 
 > `readonly` `optional` **cause?**: [`ServedGapCause`](/docs/api/type-aliases/ServedGapCause)
 
-Defined in: [src/lib/time-travel/servedView.ts:382](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L382)
+Defined in: src/lib/time-travel/servedView.ts:382
 
 WHY this gap fired, where the site could establish it — [ServedGapCause](/docs/api/type-aliases/ServedGapCause).
 
@@ -30,7 +30,7 @@ would be the enumeration coming back as a field.
 
 > `readonly` **fields**: readonly `string`[]
 
-Defined in: [src/lib/time-travel/servedView.ts:346](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L346)
+Defined in: src/lib/time-travel/servedView.ts:346
 
 The fields this gap covers, in dotted `Receipt` form. A reader that
 renders one of them should render this gap's sentence beside it.
@@ -102,7 +102,7 @@ the tool list it belongs on, and the request-only lines composed from
 
 > `readonly` **gap**: [`ServedGapKind`](/docs/api/type-aliases/ServedGapKind)
 
-Defined in: [src/lib/time-travel/servedView.ts:280](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L280)
+Defined in: src/lib/time-travel/servedView.ts:280
 
 ***
 
@@ -110,7 +110,7 @@ Defined in: [src/lib/time-travel/servedView.ts:280](https://github.com/footprint
 
 > `readonly` **why**: `string`
 
-Defined in: [src/lib/time-travel/servedView.ts:373](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L373)
+Defined in: src/lib/time-travel/servedView.ts:373
 
 The gap in the words a renderer prints — WHICH FIELDS it covers, WHAT THEY
 MEAN ON THIS VIEW, WHAT TO DO DIFFERENTLY, and nothing else.

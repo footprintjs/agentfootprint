@@ -6,7 +6,7 @@ title: MilestoneKind
 
 > **MilestoneKind** = `"iteration"` \| `"slot"` \| `"llm-turn"` \| `"tool-call"` \| `"decision"`
 
-Defined in: [src/conventions.ts:429](https://github.com/footprintjs/agentfootprint/blob/main/src/conventions.ts#L429)
+Defined in: src/conventions.ts:429
 
 A [Milestone](/docs/api/interfaces/Milestone)'s kind — the domain vocabulary for "meaningful step you'd
 scrub to" in the agent's run.
