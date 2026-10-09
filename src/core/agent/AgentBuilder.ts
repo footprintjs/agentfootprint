@@ -2879,12 +2879,15 @@ export class AgentBuilder {
    * shape the MODEL takes, from what it declares per model
    * (`LLMProvider.thinkingMode`):
    *   - `'budget'` (Claude 4.6 and earlier): `thinking: { type: 'enabled',
-   *     budget_tokens: budget }` — the model thinks up to `budget` tokens;
-   *   - `'adaptive'` (Claude 4.7 and later, and any model the table does not
-   *     know): `thinking: { type: 'adaptive', display: 'summarized' }` — the
-   *     model decides whether and how much to think and the budget is NOT
-   *     sent (dev mode says so once per model); it only keeps `max_tokens`
-   *     above it;
+   *     budget_tokens: budget }` — a target for the thinking, not a hard cap
+   *     (`max_tokens` is the cap);
+   *   - `'adaptive'` (Claude 4.7 and later, Mythos Preview, and any id the
+   *     table does not know): `thinking: { type: 'adaptive', display:
+   *     'summarized' }` — the model decides whether and how much to think and
+   *     the budget is NOT sent (dev mode says so once per model); it only
+   *     keeps `max_tokens` above it. An adapter's `thinkingMode` option
+   *     changes the answer for one id (an alias, a profile ARN, or Opus 4.6
+   *     wanted adaptive);
    *   - `'none'` (Claude 3.x except 3.7 Sonnet): refused here at `build()`
    *     with an `UnsupportedThinkingError`.
    *

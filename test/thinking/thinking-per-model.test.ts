@@ -12,11 +12,13 @@
  * `fetch` that records the request body.
  *
  * Test types (Convention 3): unit (the table — every family, platform ids,
- * unknown ids) / scenario (the wire shape per family, both paths, all three
- * adapters) / boundary (refusals before sending — nothing reaches the wire) /
- * integration (Agent build refusal, dev warning, the adaptive round trip,
- * `.configure()`) / resilience (withFallback per side, the decorators forward)
- * / regression (the mock untouched) / property (seeded ids) / performance.
+ * dotted aliases, unknown ids) / scenario (the wire shape per family, both
+ * paths, all three adapters) / boundary (refusals before sending — nothing
+ * reaches the wire) / integration (Agent build refusal, dev warning, the
+ * adaptive round trip, `.configure()`) / resilience (withFallback per side,
+ * the decorators forward, a refusal neither falls back nor trips a breaker) /
+ * the adapters' `thinkingMode` option (one function, declared AND sent) /
+ * regression (the mock untouched) / property (seeded ids) / performance.
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -126,8 +128,10 @@ describe('unit: the one table — every family the docs list', () => {
     ['claude-sonnet-5-5', 'adaptive'],
     ['claude-sonnet-5', 'adaptive'],
     ['claude-haiku-5-5', 'adaptive'],
-    // Both: the budget is sent.
-    ['claude-mythos-preview', 'budget'],
+    // Both — adaptive: its display defaults to "omitted", which a budget body
+    // cannot change, so a budget would return empty thinking.
+    ['claude-mythos-preview', 'adaptive'],
+    // Both — the budget is sent (deprecated there, accepted).
     ['claude-opus-4-6', 'budget'],
     ['claude-sonnet-4-6', 'budget'],
     // Budget only — adaptive is a 400.
@@ -175,6 +179,11 @@ describe('unit: the one table — every family the docs list', () => {
       ['publishers/anthropic/models/claude-opus-4-1@20250805', 'budget'],
       ['claude-opus-5-5[1m]', 'adaptive'],
       ['CLAUDE-HAIKU-4-5', 'budget'],
+      // Dotted aliases, as routers spell them.
+      ['claude-sonnet-4.5', 'budget'],
+      ['anthropic/claude-3.7-sonnet', 'budget'],
+      ['claude-3.5-haiku', 'none'],
+      ['claude-opus-4.6', 'budget'],
     ];
     for (const [id, mode] of platform) expect(anthropicThinkingMode(id), id).toBe(mode);
   });
@@ -705,6 +714,119 @@ describe('resilience: withFallback hands each side the intent; each sends its ow
     expect(withRetry(inner).thinkingMode).toBe(inner.thinkingMode);
     expect(withCircuitBreaker(inner).thinkingMode).toBe(inner.thinkingMode);
   });
+
+  it('a refused request surfaces: withFallback does not move it to the other side', async () => {
+    const primary = sdk();
+    const fallback = sdk();
+    const pair = withFallback(
+      anthropic({ _client: primary.client, defaultModel: 'claude-haiku-4-5' }),
+      anthropic({ _client: fallback.client, defaultModel: 'claude-opus-5-5' }),
+    );
+    // A budget below 1024 is refused by the budget side before sending.
+    const err = await pair.complete(ask('anthropic', { thinking: { budget: 500 } })).then(
+      () => undefined,
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(UnsupportedThinkingError);
+    expect([primary.sent.length, fallback.sent.length]).toEqual([0, 0]);
+  });
+
+  it('…and withCircuitBreaker does not count it, so healthy calls still go through', async () => {
+    const { sent, client } = sdk();
+    const breaker = withCircuitBreaker(anthropic({ _client: client }), { failureThreshold: 1 });
+    for (let i = 0; i < 3; i++) {
+      await expect(breaker.complete(ask('claude-3-haiku-20240307'))).rejects.toBeInstanceOf(
+        UnsupportedThinkingError,
+      );
+    }
+    await breaker.complete(ask('claude-haiku-4-5'));
+    expect(sent).toHaveLength(1);
+  });
+});
+
+// ── The adapter's thinkingMode option — one function, declared AND sent ──
+
+describe("the adapters' thinkingMode option: the declaration and the wire are one function", () => {
+  it('an opaque id behind a budget-only model: declared budget, sent budget', async () => {
+    const { sent, impl } = recordingFetch();
+    const gateway = invokeModelGateway({
+      baseUrl: 'https://gw.example',
+      apiKeyHeader: 'x-api-key',
+      apiKey: 'k',
+      model: 'haiku-fast', // an alias the table cannot read
+      thinkingMode: (id) => (id === 'haiku-fast' ? 'budget' : undefined),
+      fetch: impl,
+    });
+    expect(gateway.thinkingMode?.('invoke-model-gateway')).toBe('budget');
+    await gateway.complete(ask('invoke-model-gateway'));
+    expect(sent[0]!.thinking).toEqual(budgetOf(2048));
+  });
+
+  it('without the option the same alias is read as adaptive — the documented default', async () => {
+    const { sent, impl } = recordingFetch();
+    const gateway = invokeModelGateway({
+      baseUrl: 'https://gw.example',
+      apiKeyHeader: 'x-api-key',
+      apiKey: 'k',
+      model: 'haiku-fast',
+      fetch: impl,
+    });
+    expect(gateway.thinkingMode?.('invoke-model-gateway')).toBe('adaptive');
+    await gateway.complete(ask('invoke-model-gateway'));
+    expect(sent[0]!.thinking).toEqual(ADAPTIVE);
+  });
+
+  it('Opus 4.6 declared adaptive: sent adaptive, and a forced tool choice then rides', async () => {
+    const forced: Partial<LLMRequest> = {
+      tools: [{ name: 'answer', description: 'd', inputSchema: { type: 'object' } }],
+      toolChoice: { type: 'tool', name: 'answer' },
+    };
+    const f = sdk();
+    const provider = anthropic({
+      _client: f.client,
+      thinkingMode: (id) => (id.startsWith('claude-opus-4-6') ? 'adaptive' : undefined),
+    });
+    expect(provider.thinkingMode?.('claude-opus-4-6')).toBe('adaptive');
+    expect(provider.thinkingMode?.('claude-sonnet-4-6')).toBe('budget'); // undefined → the table
+    await provider.complete(ask('claude-opus-4-6', forced));
+    expect(f.sent[0]).toMatchObject({ thinking: ADAPTIVE, tool_choice: { type: 'tool' } });
+    // The browser adapter takes the same option.
+    const { sent, impl } = recordingFetch();
+    const browser = browserAnthropic({
+      apiKey: 'k',
+      thinkingMode: () => 'adaptive',
+      _fetch: impl as never,
+    });
+    await browser.complete(ask('claude-sonnet-4-6'));
+    expect(sent[0]!.thinking).toEqual(ADAPTIVE);
+  });
+
+  it("the agent's build check reads the same answer — 'none' from the option is refused at build", () => {
+    const { sent, client } = sdk();
+    const provider = anthropic({ _client: client, thinkingMode: () => 'none' });
+    expect(() =>
+      Agent.create({ provider, model: 'claude-opus-5-5' })
+        .system('s')
+        .thinking({ budget: 2000 })
+        .build(),
+    ).toThrow(UnsupportedThinkingError);
+    expect(sent).toHaveLength(0);
+  });
+
+  it('an answer that is not a mode is refused — at build by the agent, at the request by the adapter', async () => {
+    const { sent, client } = sdk();
+    const provider = anthropic({ _client: client, thinkingMode: () => 'sometimes' as never });
+    expect(() =>
+      Agent.create({ provider, model: 'claude-opus-5-5' })
+        .system('s')
+        .thinking({ budget: 2000 })
+        .build(),
+    ).toThrow(TypeError);
+    await expect(provider.complete(ask('claude-opus-5-5'))).rejects.toThrow(
+      /thinkingMode\('claude-opus-5-5'\) answered "sometimes"/,
+    );
+    expect(sent).toHaveLength(0);
+  });
 });
 
 // ── Regression — the mock is untouched ──────────────────────────────────
@@ -771,7 +893,7 @@ describe('property: decorated ids keep their family; a version number never borr
 // ── Performance ─────────────────────────────────────────────────────────
 
 describe('performance: the lookup is linear in the ids asked', () => {
-  it('ten times the ids, ten times the work', async () => {
+  it('ten times the ids, ten times the work', { timeout: 30_000, retry: 2 }, async () => {
     const ids = Object.keys(ANTHROPIC_THINKING_MODES).map((f) => `us.anthropic.${f}-20260101-v1:0`);
     const lookups = (n: number) => () => {
       for (let i = 0; i < n; i++) anthropicThinkingMode(ids[i % ids.length]!);

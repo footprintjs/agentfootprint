@@ -79,7 +79,7 @@ withRetry(provider, {
 });
 ```
 
-`shouldFallback(err)` works the same way for `withFallback` — its default falls back on every error except `AbortError`.
+`shouldFallback(err)` works the same way for `withFallback` — its default falls back on every error except `AbortError` and `UnsupportedThinkingError` (a request refused before it was sent, which surfaces instead; the breaker does not count it either).
 
 ### When the failure says how long to wait
 

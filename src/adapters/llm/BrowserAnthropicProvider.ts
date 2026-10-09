@@ -29,7 +29,7 @@ import type {
 } from '../types.js';
 import { asContextWindowExceeded } from './contextWindow.js';
 import { ANTHROPIC_PROMPT_CACHING } from './anthropicCacheWire.js';
-import { anthropicThinkingMode } from './anthropicThinkingWire.js';
+import { thinkingModeWith } from './anthropicThinkingWire.js';
 import { anthropicThinkingHandler } from '../../thinking/AnthropicThinkingHandler.js';
 import type { ThinkingMode } from '../../thinking/types.js';
 import {
@@ -80,6 +80,13 @@ export interface BrowserAnthropicProviderOptions {
    * @default undefined (Anthropic's default — batching allowed)
    */
   readonly parallelToolCalls?: boolean;
+  /**
+   * Which thinking request a model takes, where the built-in table is not
+   * the answer you want — an id behind `apiUrl` it cannot read, or Opus 4.6 /
+   * Sonnet 4.6 wanted adaptive. Return `undefined` to use the table. Mirror of
+   * `AnthropicProviderOptions.thinkingMode` — see there.
+   */
+  readonly thinkingMode?: (model: string) => ThinkingMode | undefined;
   /** @internal Custom fetch implementation for tests / workers. */
   readonly _fetch?: typeof fetch;
 }
@@ -107,6 +114,8 @@ export function browserAnthropic(options: BrowserAnthropicProviderOptions): LLMP
   const defaultMaxTokens = options.defaultMaxTokens ?? 4096;
   const parallelToolCalls = options.parallelToolCalls;
   const fetchImpl = options._fetch ?? fetch;
+  /** The ONE mode function: declared below and used for every body. */
+  const modeOf = thinkingModeWith(options.thinkingMode);
 
   const headers: Record<string, string> = {
     'content-type': 'application/json',
@@ -124,10 +133,10 @@ export function browserAnthropic(options: BrowserAnthropicProviderOptions): LLMP
     promptCaching: ANTHROPIC_PROMPT_CACHING,
     thinkingHandler: anthropicThinkingHandler,
     // …and the same per-model thinking shapes (anthropicThinkingWire.ts).
-    thinkingMode: (model) => anthropicThinkingMode(modelOf(model, defaultModel)),
+    thinkingMode: (model) => modeOf(modelOf(model, defaultModel)),
     async complete(req: LLMRequest): Promise<LLMResponse> {
       const body: AnthropicRequestBody = {
-        ...buildBody(req, defaultModel, defaultMaxTokens, parallelToolCalls),
+        ...buildBody(req, defaultModel, defaultMaxTokens, modeOf, parallelToolCalls),
       };
       let response: Response;
       try {
@@ -148,7 +157,7 @@ export function browserAnthropic(options: BrowserAnthropicProviderOptions): LLMP
     },
     async *stream(req: LLMRequest): AsyncIterable<LLMChunk> {
       const body: AnthropicRequestBody = {
-        ...buildBody(req, defaultModel, defaultMaxTokens, parallelToolCalls),
+        ...buildBody(req, defaultModel, defaultMaxTokens, modeOf, parallelToolCalls),
         stream: true,
       };
       let response: Response;
@@ -213,6 +222,7 @@ function buildBody(
   req: LLMRequest,
   defaultModel: string,
   defaultMaxTokens: number,
+  thinkingMode: (model: string) => ThinkingMode,
   parallelToolCalls?: boolean,
 ): AnthropicRequestBody {
   const model = modelOf(req.model, defaultModel);
@@ -221,6 +231,7 @@ function buildBody(
     model,
     ...buildMessagesBody(req, {
       model,
+      thinkingMode,
       provider: 'browser-anthropic',
       maxTokensDefault: defaultMaxTokens,
       ...(parallelToolCalls !== undefined && { parallelToolCalls }),

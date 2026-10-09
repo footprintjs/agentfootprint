@@ -104,6 +104,7 @@ import type {
   LLMRequest,
   LLMResponse,
 } from '../adapters/types.js';
+import { UnsupportedThinkingError } from '../thinking/errors.js';
 
 // ─── Public options ──────────────────────────────────────────────────
 
@@ -116,7 +117,8 @@ export interface WithCircuitBreakerOptions {
   readonly halfOpenSuccessThreshold?: number;
   /**
    * Predicate — does this error count toward the threshold? Default:
-   * everything except AbortError counts. Override to ignore client
+   * everything except an AbortError and an `UnsupportedThinkingError` (a
+   * request the adapter refused before sending) counts. Override to ignore client
    * errors (e.g., 4xx) so a malformed request doesn't trip the
    * breaker for everyone.
    */
@@ -364,5 +366,9 @@ function defaultShouldCount(error: unknown): boolean {
   const e = error as { name?: string; code?: string } | undefined;
   if (e?.name === 'AbortError') return false;
   if (e?.code === 'ABORT_ERR') return false;
+  // Nor a request the adapter refused before sending it: that says the
+  // REQUEST is wrong, not the vendor — counting it would open the breaker
+  // on healthy calls.
+  if (error instanceof UnsupportedThinkingError) return false;
   return true;
 }

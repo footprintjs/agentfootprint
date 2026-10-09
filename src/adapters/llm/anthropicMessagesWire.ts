@@ -26,6 +26,7 @@ import type { LLMChunk, LLMMessage, LLMRequest, LLMResponse, LLMToolSchema } fro
 import { applyCacheMarkers, readCacheUsage } from './anthropicCacheWire.js';
 import { anthropicThinkingPlan, type AnthropicThinkingParam } from './anthropicThinkingWire.js';
 import type { WireToolManifest } from './wireManifest.js';
+import type { ThinkingMode } from '../../thinking/types.js';
 
 // ─── Types (Anthropic API shapes) ──────────────────────────────────
 
@@ -91,11 +92,14 @@ export interface AnthropicStreamEvent {
 
 /** How one adapter wants its Messages body built. */
 export interface MessagesBodyOptions {
-  /**
-   * The model the request goes to, the adapter's shorthand already resolved
-   * — it decides the thinking shape (anthropicThinkingWire.ts).
-   */
+  /** The model the request goes to, the adapter's shorthand already resolved. */
   readonly model: string;
+  /**
+   * The adapter's ONE mode function — the very one it declares as
+   * `LLMProvider.thinkingMode` (`thinkingModeWith`, anthropicThinkingWire.ts) —
+   * so the shape sent is the shape the agent checked.
+   */
+  readonly thinkingMode: (model: string) => ThinkingMode;
   /** The adapter's name, for the refusals the thinking plan raises. */
   readonly provider: string;
   /** `max_tokens` when the request sets none. */

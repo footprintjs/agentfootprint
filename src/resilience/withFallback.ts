@@ -40,6 +40,7 @@ import type {
 import type { PromptCaching } from '../cache/types.js';
 import type { ThinkingBlock, ThinkingHandler, ThinkingMode } from '../thinking/types.js';
 import { DEFAULT_CARRIES_IN_MESSAGES } from '../adapters/types.js';
+import { UnsupportedThinkingError } from '../thinking/errors.js';
 
 /**
  * The message roles BOTH providers carry — the only honest capability for a
@@ -169,7 +170,8 @@ function thinkingModeOfPair(
 export interface WithFallbackOptions {
   /**
    * Predicate to decide whether an error from the primary should
-   * trigger fallback. Default: every error except AbortError.
+   * trigger fallback. Default: every error except an AbortError and an
+   * `UnsupportedThinkingError` (a request the primary refused before sending).
    * Override to gate on specific status codes or error types.
    */
   readonly shouldFallback?: (error: unknown) => boolean;
@@ -322,6 +324,10 @@ function defaultShouldFallback(err: unknown): boolean {
   if (!err || typeof err !== 'object') return true;
   const e = err as { name?: string; code?: string };
   if (e.name === 'AbortError' || e.code === 'ABORT_ERR') return false;
+  // A request the primary's adapter refused before sending is a wrong
+  // REQUEST, not a failed vendor: it surfaces, rather than every call of the
+  // run quietly moving to the other side.
+  if (err instanceof UnsupportedThinkingError) return false;
   return true;
 }
 

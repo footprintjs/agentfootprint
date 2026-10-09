@@ -3,11 +3,13 @@
  * the one translation of `LLMRequest.thinking` onto the Messages body.
  *
  * Pattern: declaration + pure translation (the `anthropicCacheWire.ts` twin).
- * Role:    Outer ring. Two jobs, one file:
- *   1. `ANTHROPIC_THINKING_MODES` / `anthropicThinkingMode` — what every adapter
- *      on this wire DECLARES per model (`LLMProvider.thinkingMode`): ONE table,
- *      keyed by model family.
- *   2. `anthropicThinkingPlan` — the `thinking` field a request gets on that
+ * Role:    Outer ring. Three jobs, one file:
+ *   1. `ANTHROPIC_THINKING_MODES` / `anthropicThinkingMode` — which thinking
+ *      request each model takes: ONE table, keyed by model family.
+ *   2. `thinkingModeWith` — the ONE mode function an adapter declares
+ *      (`LLMProvider.thinkingMode`) and builds its body with: the app's own
+ *      answer for an id the table cannot read, else the table's.
+ *   3. `anthropicThinkingPlan` — the `thinking` field a request gets on that
  *      model, or a typed refusal before anything is sent.
  *
  * Why it exists: `.thinking({ budget })` used to send
@@ -73,8 +75,12 @@ export const ANTHROPIC_THINKING_MODES: Readonly<Record<string, ThinkingMode>> = 
   'claude-sonnet-5-5': 'adaptive',
   'claude-sonnet-5': 'adaptive',
   'claude-haiku-5-5': 'adaptive',
-  // Both modes: the budget is sent (deprecated on the 4.6 models, accepted).
-  'claude-mythos-preview': 'budget',
+  // Takes both. Adaptive: its thinking `display` defaults to "omitted", which
+  // a budget body cannot change, so a budget would return empty thinking.
+  'claude-mythos-preview': 'adaptive',
+  // Takes both, the budget deprecated but accepted: the budget is sent, as
+  // asked. On Opus 4.6 that means no thinking between tool calls — an app that
+  // wants it declares the model 'adaptive' with the adapter's `thinkingMode`.
   'claude-opus-4-6': 'budget',
   'claude-sonnet-4-6': 'budget',
   // Budget only — `type: 'adaptive'` is a 400.
@@ -109,17 +115,24 @@ const SAME_FAMILY = /^(?:$|-0(?![0-9])|-\d{8}(?![0-9])|-latest(?![a-z0-9])|-v\d|
  *
  * Reads the id from its `claude-` onward, so platform forms resolve like the
  * Claude API id: `anthropic.…` and `us.`/`eu.`/`global.`… Bedrock profiles,
- * inference-profile ARNs, Vertex `…@date` ids. An id no family matches
- * answers `'adaptive'` — the CURRENT behaviour: every Claude model since 4.7
- * takes adaptive thinking and rejects a budget, so a model released after
- * this table thinks instead of failing with a 400. A budget-only model this
- * table does not name would refuse adaptive instead; add its family above.
+ * inference-profile ARNs, Vertex `…@date` ids, and dotted aliases
+ * (`claude-sonnet-4.5`). An id no family matches answers `'adaptive'` — what
+ * every Claude model since 4.7 takes (they reject a budget), so a model
+ * released after this table thinks instead of failing with a 400.
+ *
+ * The cost of that default, named: an id that does not say which model it
+ * serves — an application-inference-profile ARN, a gateway alias, a
+ * deployment name — is read as adaptive too, and a budget-only model behind
+ * it (Claude 4.5 and earlier) refuses adaptive. The adapters take a
+ * `thinkingMode` option for exactly that ({@link thinkingModeWith}).
  */
 export function anthropicThinkingMode(model: string): ThinkingMode {
   const id = model.toLowerCase();
   const start = id.indexOf('claude-');
   if (start < 0) return 'adaptive';
-  const name = id.slice(start);
+  // `claude-sonnet-4.5` is `claude-sonnet-4-5`: no real id carries a dot after
+  // `claude-`, so the spelling changes nothing it could be confused with.
+  const name = id.slice(start).replace(/\./g, '-');
   // The longest family that names this id — at most one can, by SAME_FAMILY;
   // longest-wins keeps the answer independent of the table's order anyway.
   let match: readonly [string, ThinkingMode] | undefined;
@@ -129,6 +142,25 @@ export function anthropicThinkingMode(model: string): ThinkingMode {
     if (match === undefined || family.length > match[0].length) match = entry;
   }
   return match === undefined ? 'adaptive' : match[1];
+}
+
+/**
+ * An adapter's ONE mode function: the app's own answer for an id the table
+ * cannot read (the adapter's `thinkingMode` option), else the table's. The
+ * adapter declares it as `LLMProvider.thinkingMode` AND builds its body with
+ * it, so what the agent checks at build and what reaches the wire cannot
+ * disagree.
+ *
+ * @example
+ *   const modeOf = thinkingModeWith((id) => (id === 'haiku-fast' ? 'budget' : undefined));
+ *   modeOf('haiku-fast');      // 'budget' — the app's answer
+ *   modeOf('claude-opus-5-5'); // 'adaptive' — the table's
+ */
+export function thinkingModeWith(
+  own: ((model: string) => ThinkingMode | undefined) | undefined,
+): (model: string) => ThinkingMode {
+  if (own === undefined) return anthropicThinkingMode;
+  return (model) => own(model) ?? anthropicThinkingMode(model);
 }
 
 // ─── The translation ────────────────────────────────────────────────
@@ -142,6 +174,7 @@ export type AnthropicThinkingParam =
 const MIN_BUDGET_TOKENS = 1024;
 /** Visible-answer room kept above the budget when `max_tokens` would not exceed it. */
 const ANSWER_ROOM_TOKENS = 1024;
+const MODES: ReadonlySet<unknown> = new Set<ThinkingMode>(['adaptive', 'budget', 'none']);
 
 /**
  * The `thinking` field and `max_tokens` for one request on one model, or
@@ -155,14 +188,24 @@ const ANSWER_ROOM_TOKENS = 1024;
  * - Either way `max_tokens` stays above the budget: one at or below it
  *   becomes `budget + 1024` (on an adaptive model the budget only sizes this).
  *
+ * `thinkingMode` is the adapter's own mode function ({@link thinkingModeWith})
+ * — the one it declares — never the table read on the side.
+ *
  * @throws UnsupportedThinkingError — before anything is sent — when the model
  *   cannot think, when a budget model is given a budget `budget_tokens` does
  *   not accept or a forced tool choice, or when a non-default `temperature`
  *   rides along (rejected whenever thinking is on).
+ * @throws TypeError when the adapter's `thinkingMode` option answers
+ *   something other than `'adaptive'`, `'budget'` or `'none'`.
  */
 export function anthropicThinkingPlan(
   req: Pick<LLMRequest, 'thinking' | 'temperature' | 'toolChoice' | 'tools' | 'maxTokens'>,
-  args: { readonly model: string; readonly provider: string; readonly maxTokensDefault: number },
+  args: {
+    readonly model: string;
+    readonly provider: string;
+    readonly maxTokensDefault: number;
+    readonly thinkingMode: (model: string) => ThinkingMode;
+  },
 ): { readonly thinking: AnthropicThinkingParam; readonly maxTokens: number } | undefined {
   // Presence is the activation signal, as it always was (a JS caller's `null`
   // asks for nothing).
@@ -172,12 +215,18 @@ export function anthropicThinkingPlan(
   const refuse = (reason: UnsupportedThinkingError['reason'], detail: string): never => {
     throw new UnsupportedThinkingError({ provider, model, reason, detail });
   };
-  const mode = anthropicThinkingMode(model);
+  const mode: unknown = args.thinkingMode(model);
+  if (!MODES.has(mode)) {
+    throw new TypeError(
+      `the '${provider}' provider's thinkingMode('${model}') answered ${JSON.stringify(mode)}; ` +
+        "a ThinkingMode is 'adaptive', 'budget' or 'none'.",
+    );
+  }
   if (mode === 'none') {
     refuse(
       'no-thinking',
       'this model has no thinking mode, so .thinking() cannot be honoured. Use a model that ' +
-        'thinks (Claude 3.7 Sonnet or any Claude 4 or 5 model), or drop .thinking().',
+        'thinks (Claude 4.5 or later), or drop .thinking().',
     );
   }
   if (req.temperature !== undefined && req.temperature !== 1) {
@@ -203,7 +252,9 @@ export function anthropicThinkingPlan(
         'forced-tool-choice',
         'a forced tool choice cannot ride with budget thinking — this model takes tool_choice ' +
           "auto or none while thinking. .outputSchema(…, { strategy: 'tool-forced' }) sends one; " +
-          "use { strategy: 'instruct' } here, or drop .thinking().",
+          "use { strategy: 'instruct' } here, or drop .thinking(). Opus 4.6 and Sonnet 4.6 also " +
+          "take adaptive thinking, which allows it: declare them 'adaptive' with the adapter's " +
+          'thinkingMode option.',
       );
     }
   }

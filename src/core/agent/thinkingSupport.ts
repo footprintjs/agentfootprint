@@ -98,7 +98,9 @@ function warnBudgetNotSent(target: ThinkingTarget, budget: number): void {
     `agentfootprint Agent: .thinking({ budget: ${budget} }) — '${target.model}' on ` +
       `'${target.provider.name}' thinks adaptively, which takes no budget: the model decides ` +
       `whether and how much to think, and the budget is not sent. The built-in Anthropic ` +
-      `adapters still keep max_tokens above it, so a long think has room. This warning fires ` +
-      `once per model per process.`,
+      `adapters still keep max_tokens above it, so a long think has room. They also read an ` +
+      `id they do not know as adaptive: if '${target.model}' is an alias, a deployment name ` +
+      `or a profile ARN for a model that needs a budget (Claude 4.5 and earlier), declare it ` +
+      `with the adapter's thinkingMode option. This warning fires once per model per process.`,
   );
 }

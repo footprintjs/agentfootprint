@@ -3,9 +3,9 @@
  * refused by name BEFORE anything is sent.
  *
  * Models on one wire disagree about thinking (see `ThinkingMode`), and the
- * vendor's answer to the wrong shape is an HTTP 400 on every call — a 400
- * that reads like a transient failure, gets retried, and fails identically.
- * So the refusal happens here instead, with the fix in the message:
+ * vendor's answer to the wrong shape is an HTTP 400 on every call — one that
+ * names the vendor's field, not the library setting that produced it. So the
+ * refusal happens here instead, with the fix in the message:
  *
  * - at `Agent.build()`, when the provider DECLARES (`LLMProvider.thinkingMode`)
  *   that a model the agent will call cannot think (`reason: 'no-thinking'`);
@@ -14,7 +14,9 @@
  *   (`'budget'`, `'temperature'`, `'forced-tool-choice'`).
  *
  * `retryable: false` — asking again sends the same request — so `withRetry`'s
- * default policy never retries it.
+ * default policy never retries it; `withFallback` does not move the call to
+ * its other side and `withCircuitBreaker` does not count it, by default —
+ * the request is wrong, not the vendor.
  *
  * @example
  * ```ts

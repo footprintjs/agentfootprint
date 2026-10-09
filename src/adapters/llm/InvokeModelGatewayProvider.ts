@@ -70,7 +70,7 @@ import {
   type AnthropicStreamEvent,
 } from './anthropicMessagesWire.js';
 import { toolManifestOf } from './wireManifest.js';
-import { anthropicThinkingMode } from './anthropicThinkingWire.js';
+import { thinkingModeWith } from './anthropicThinkingWire.js';
 import { anthropicThinkingHandler } from '../../thinking/AnthropicThinkingHandler.js';
 import type { ThinkingMode } from '../../thinking/types.js';
 import { retryAfterMsFromHeaders } from './retryAfter.js';
@@ -136,6 +136,19 @@ export interface InvokeModelGatewayOptions {
    * Omitted sends nothing (the model's default — batching allowed).
    */
   readonly parallelToolCalls?: boolean;
+  /**
+   * Which thinking request a model takes, for an id the built-in table cannot
+   * read — the alias your gateway knows, an application-inference-profile ARN,
+   * a provisioned-model ARN. The table reads Bedrock ids
+   * (`us.anthropic.claude-…-v1:0`) itself; an id it does not know is read as
+   * adaptive (every Claude model since 4.7), so a budget-only model behind an
+   * opaque id (Claude 4.5 or earlier) is declared here. Return `undefined` to
+   * use the table. The provider declares the result AND sends that shape.
+   *
+   * @example
+   *   invokeModelGateway({ …, model: 'haiku-fast', thinkingMode: (id) => (id === 'haiku-fast' ? 'budget' : undefined) })
+   */
+  readonly thinkingMode?: (model: string) => ThinkingMode | undefined;
   /** Replace `fetch` — for an mTLS agent, a proxy, or a test. Default: global `fetch`. */
   readonly fetch?: InvokeModelGatewayFetch;
   /**
@@ -278,6 +291,8 @@ export function invokeModelGateway(options: InvokeModelGatewayOptions): LLMProvi
   const timeoutMs = checkedTimeout(options.timeoutMs);
   const defaultMaxTokens = options.defaultMaxTokens ?? DEFAULT_MAX_TOKENS;
   const fetchImpl: InvokeModelGatewayFetch = options.fetch ?? ((input, init) => fetch(input, init));
+  /** The ONE mode function: declared below and used for every body. */
+  const modeOf = thinkingModeWith(options.thinkingMode);
 
   /** POST one request; a non-2xx becomes a typed error before anything is read. */
   async function post(
@@ -288,7 +303,7 @@ export function invokeModelGateway(options: InvokeModelGatewayOptions): LLMProvi
     const modelId = modelIdFor(req, options.model);
     // Built BEFORE the key is read: a request the model cannot take is
     // refused with nothing looked up and nothing sent.
-    const body = buildInvokeBody(req, modelId, defaultMaxTokens, options.parallelToolCalls);
+    const body = buildInvokeBody(req, modelId, modeOf, defaultMaxTokens, options.parallelToolCalls);
     const key = await keyFor(options.apiKey, modelId);
     let response: Response;
     try {
@@ -337,7 +352,7 @@ export function invokeModelGateway(options: InvokeModelGatewayOptions): LLMProvi
     // Which thinking request each model takes (anthropicThinkingWire.ts). The
     // gateway's ids are Bedrock's (`us.anthropic.claude-…-v1:0`); the table
     // reads them from `claude-` on, like the Claude API id.
-    thinkingMode: (model) => anthropicThinkingMode(gatewayModelOf(model, options.model)),
+    thinkingMode: (model) => modeOf(gatewayModelOf(model, options.model)),
 
     async complete(req: LLMRequest, _hooks?: LLMCallHooks): Promise<LLMResponse> {
       const modelId = modelIdFor(req, options.model);
@@ -420,6 +435,7 @@ interface InvokeModelBody extends AnthropicMessagesBody {
 function buildInvokeBody(
   req: LLMRequest,
   modelId: string,
+  thinkingMode: (model: string) => ThinkingMode,
   defaultMaxTokens: number,
   parallelToolCalls: boolean | undefined,
 ): InvokeModelBody {
@@ -429,6 +445,7 @@ function buildInvokeBody(
     anthropic_version: INVOKE_MODEL_ANTHROPIC_VERSION,
     ...buildMessagesBody(req, {
       model: modelId,
+      thinkingMode,
       provider: PROVIDER_NAME,
       maxTokensDefault: defaultMaxTokens,
       ...(parallelToolCalls !== undefined && { parallelToolCalls }),

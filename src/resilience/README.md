@@ -18,7 +18,10 @@ markers, no thinking stage, no build-time thinking refusal). `withFallback`
 combines what both sides declare — for `thinkingMode`, the LEAST either side
 promises for the model (`'none'` < `'adaptive'` < `'budget'`), so a fallback
 that cannot think is refused at build, not on the call it serves. It never maps
-thinking itself: each side's adapter sends its own model's shape.
+thinking itself: each side's adapter sends its own model's shape. A request an
+adapter refused BEFORE sending (`UnsupportedThinkingError`) is a wrong request,
+not a failed vendor: by default `withFallback` does not move it to the other
+side and `withCircuitBreaker` does not count it.
 
 ```ts
 const pair = withFallback(anthropic({ defaultModel: 'claude-opus-5-5' }), anthropic());

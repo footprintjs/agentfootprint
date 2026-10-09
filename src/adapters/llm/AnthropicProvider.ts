@@ -29,7 +29,7 @@ import { lazyRequire } from '../../lib/lazyRequire.js';
 import { asContextWindowExceeded } from './contextWindow.js';
 import { retryAfterMsFromError } from './retryAfter.js';
 import { ANTHROPIC_PROMPT_CACHING, readCacheUsage } from './anthropicCacheWire.js';
-import { anthropicThinkingMode } from './anthropicThinkingWire.js';
+import { thinkingModeWith } from './anthropicThinkingWire.js';
 import { toolManifestOf } from './wireManifest.js';
 import { anthropicThinkingHandler } from '../../thinking/AnthropicThinkingHandler.js';
 import type { ThinkingMode } from '../../thinking/types.js';
@@ -137,6 +137,20 @@ export interface AnthropicProviderOptions {
    * @default undefined (Anthropic's default — batching allowed)
    */
   readonly parallelToolCalls?: boolean;
+  /**
+   * Which thinking request a model takes, where the built-in table is not
+   * the answer you want: an id it cannot read (a proxy's alias), or a model
+   * that takes both shapes and that you want adaptive (Opus 4.6 and Sonnet
+   * 4.6 get a budget by default; in budget mode Opus 4.6 does not think
+   * between tool calls). Return `undefined` to use the table, which reads an
+   * unknown id as adaptive. The provider declares the result
+   * (`provider.thinkingMode`) AND sends that shape, so the agent's build
+   * check and the wire cannot disagree.
+   *
+   * @example
+   *   anthropic({ thinkingMode: (id) => (id.startsWith('claude-opus-4-6') ? 'adaptive' : undefined) })
+   */
+  readonly thinkingMode?: (model: string) => ThinkingMode | undefined;
   /** @internal Pre-built client for testing. Skips SDK import. */
   readonly _client?: AnthropicClient;
 }
@@ -173,12 +187,15 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
   const parallelToolCalls = options.parallelToolCalls;
   /** The model a request goes to — the `'anthropic'` shorthand is the default. */
   const modelOf = (model: string): string => (model === 'anthropic' ? defaultModel : model);
+  /** The ONE mode function: declared below and used for every body. */
+  const modeOf = thinkingModeWith(options.thinkingMode);
   const buildParams = (req: LLMRequest): AnthropicCreateParams => {
     const model = modelOf(req.model);
     return {
       model,
       ...buildMessagesBody(req, {
         model,
+        thinkingMode: modeOf,
         provider: 'anthropic',
         maxTokensDefault: defaultMaxTokens,
         ...(parallelToolCalls !== undefined && { parallelToolCalls }),
@@ -196,8 +213,9 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
     // The signed thinking blocks this wire returns, normalized for the echo.
     thinkingHandler: anthropicThinkingHandler,
     // Which thinking request each model takes — budget, adaptive or none
-    // (anthropicThinkingWire.ts); `buildMessagesBody` sends that shape.
-    thinkingMode: (model) => anthropicThinkingMode(modelOf(model)),
+    // (anthropicThinkingWire.ts); `buildMessagesBody` sends that shape, from
+    // the same function.
+    thinkingMode: (model) => modeOf(modelOf(model)),
     async complete(req: LLMRequest): Promise<LLMResponse> {
       const params = buildParams(req);
       try {

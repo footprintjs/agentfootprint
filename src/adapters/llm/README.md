@@ -57,16 +57,21 @@ every call: 4.7 and later reject `{ type: 'enabled', budget_tokens }`, 4.5 and
 earlier reject `{ type: 'adaptive' }`, the 4.6 models take both, and Claude 3
 before 3.7 cannot think. `anthropicThinkingWire.ts` holds the ONE table
 (`ANTHROPIC_THINKING_MODES`, keyed by model family) and the one translation
-(`anthropicThinkingPlan`), called by `buildMessagesBody`; each Anthropic adapter
-declares `thinkingMode(model)` from the same table, so the agent can refuse at
-build. A request names an INTENT (`thinking: { budget }`) and the adapter sends
-the shape — which is also why `withFallback` needs no thinking logic: each side
-maps the same intent to its own model.
+(`anthropicThinkingPlan`), called by `buildMessagesBody`. Each Anthropic adapter
+builds ONE mode function (`thinkingModeWith` — its `thinkingMode` option for an
+id the table cannot read, else the table), declares it as
+`provider.thinkingMode` AND hands the same function to `buildMessagesBody`, so
+what the agent checks at build and what reaches the wire cannot disagree. A
+request names an INTENT (`thinking: { budget }`) and the adapter sends the shape
+— which is also why `withFallback` needs no thinking logic: each side maps the
+same intent to its own model.
 
 - `'budget'` → `{ type: 'enabled', budget_tokens }`, the budget a whole number ≥ 1024.
 - `'adaptive'` → `{ type: 'adaptive', display: 'summarized' }`, no budget (it
   only keeps `max_tokens` above itself). Also the answer for an UNKNOWN id: every
-  Claude model since 4.7 is adaptive, so a new one thinks instead of failing.
+  Claude model since 4.7 is adaptive, so a new one thinks instead of failing —
+  and an opaque id (an alias, a profile ARN) behind a budget-only model is
+  declared with the adapter's `thinkingMode` option.
 - `'none'`, a non-default `temperature`, a forced tool choice with a budget →
   `UnsupportedThinkingError` before anything is sent, `retryable: false`.
 
