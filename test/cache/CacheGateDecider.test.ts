@@ -1,5 +1,5 @@
 /**
- * CacheGate decider — 15-test matrix covering 7 patterns.
+ * CacheGate decider — rule, evidence, and history regression coverage.
  *
  * Phase 5 of v2.6 cache layer. Tests the decider that gates
  * cache-marker application each iteration, plus the skill-churn
@@ -16,7 +16,12 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import type { TypedScope } from 'footprintjs';
+import {
+  flowChart,
+  FlowChartExecutor,
+  type DecisionResult,
+  type FlowDecisionEvent,
+} from 'footprintjs';
 import {
   cacheGateDecide,
   detectSkillChurn,
@@ -27,43 +32,81 @@ import {
   type CacheGateState,
 } from '../../src/cache/CacheGateDecider';
 import { expectScalesLinearly } from '../helpers/perf.js';
-import { typedScope } from '../helpers/typedScope.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────
 
 /**
- * The decider records evidence through the engine's scope protocol. Use the
- * real factory rather than a lookalike object with no registered runtime.
+ * Run the real decider through the public chart API. Scope registration and
+ * read-evidence collection belong to the executor, not a hand-built test frame.
+ * Check that the emitted decision and the branch actually run agree, too.
  */
-function makeScope(state: Partial<CacheGateState>): TypedScope<CacheGateState> {
-  return typedScope({
-    cachingDisabled: false,
-    recentHitRate: undefined,
-    skillHistory: [],
-    ...state,
+async function runGate(state: Partial<CacheGateState>): Promise<DecisionResult> {
+  let decision: DecisionResult | undefined;
+  const branches: string[] = [];
+  const events: FlowDecisionEvent[] = [];
+  const chart = flowChart<CacheGateState>('Start', () => undefined, 'start')
+    .addDeciderFunction(
+      'CacheGate',
+      (scope) => {
+        decision = cacheGateDecide(scope);
+        return decision;
+      },
+      'cache-gate',
+    )
+    .addFunctionBranch('apply-markers', 'ApplyMarkers', () => {
+      branches.push('apply-markers');
+    })
+    .addFunctionBranch('no-markers', 'SkipCaching', () => {
+      branches.push('no-markers');
+    })
+    .end()
+    .build();
+  const executor = new FlowChartExecutor(chart, {
+    initialContext: {
+      cachingDisabled: false,
+      recentHitRate: undefined,
+      skillHistory: [],
+      ...state,
+    },
   });
+  executor.attachFlowRecorder({
+    id: 'cache-gate-test',
+    onDecision: (event) => {
+      events.push(event);
+    },
+  });
+  await executor.run();
+  if (!decision) throw new Error('CacheGate did not run');
+  expect(branches).toEqual([decision.branch]);
+  expect(events).toHaveLength(1);
+  expect(events[0]).toMatchObject({
+    // The event names the branch stage; the evidence retains its routing id.
+    chosen: decision.branch === 'apply-markers' ? 'ApplyMarkers' : 'SkipCaching',
+    evidence: decision.evidence,
+  });
+  return decision;
 }
 
 // ─── 1. Unit — each rule fires in isolation ───────────────────────
 
 describe('cacheGateDecide — unit: rule firing', () => {
-  it('default → "apply-markers" when no rules match', () => {
-    const result = cacheGateDecide(makeScope({}));
+  it('default → "apply-markers" when no rules match', async () => {
+    const result = await runGate({});
     expect(result.branch).toBe('apply-markers');
   });
 
-  it('kill switch → "no-markers"', () => {
-    const result = cacheGateDecide(makeScope({ cachingDisabled: true }));
+  it('kill switch → "no-markers"', async () => {
+    const result = await runGate({ cachingDisabled: true });
     expect(result.branch).toBe('no-markers');
   });
 
-  it('hit-rate floor → "no-markers" when rate below threshold', () => {
-    const result = cacheGateDecide(makeScope({ recentHitRate: 0.15 }));
+  it('hit-rate floor → "no-markers" when rate below threshold', async () => {
+    const result = await runGate({ recentHitRate: 0.15 });
     expect(result.branch).toBe('no-markers');
   });
 
-  it('hit-rate above floor → "apply-markers"', () => {
-    const result = cacheGateDecide(makeScope({ recentHitRate: 0.6 }));
+  it('hit-rate above floor → "apply-markers"', async () => {
+    const result = await runGate({ recentHitRate: 0.6 });
     expect(result.branch).toBe('apply-markers');
   });
 });
@@ -102,18 +145,18 @@ describe('detectSkillChurn — unit', () => {
 // ─── 2. Boundary — edge inputs ────────────────────────────────────
 
 describe('cacheGateDecide — boundary', () => {
-  it('empty skillHistory → no churn → falls through to "apply-markers"', () => {
-    const result = cacheGateDecide(makeScope({ skillHistory: [] }));
+  it('empty skillHistory → no churn → falls through to "apply-markers"', async () => {
+    const result = await runGate({ skillHistory: [] });
     expect(result.branch).toBe('apply-markers');
   });
 
-  it('undefined recentHitRate (no history yet) → does not trigger floor rule', () => {
-    const result = cacheGateDecide(makeScope({ recentHitRate: undefined }));
+  it('undefined recentHitRate (no history yet) → does not trigger floor rule', async () => {
+    const result = await runGate({ recentHitRate: undefined });
     expect(result.branch).toBe('apply-markers');
   });
 
-  it('hit rate exactly at floor (0.30) → does not trigger (strict <)', () => {
-    const result = cacheGateDecide(makeScope({ recentHitRate: HIT_RATE_FLOOR }));
+  it('hit rate exactly at floor (0.30) → does not trigger (strict <)', async () => {
+    const result = await runGate({ recentHitRate: HIT_RATE_FLOOR });
     expect(result.branch).toBe('apply-markers');
   });
 });
@@ -121,8 +164,8 @@ describe('cacheGateDecide — boundary', () => {
 // ─── 3. Scenario — realistic combined-state cases ─────────────────
 
 describe('cacheGateDecide — scenario', () => {
-  it('Neo-like: 5 iters all on port-error-triage + 60% hit rate → applies', () => {
-    const scope = makeScope({
+  it('Neo-like: 5 iters all on port-error-triage + 60% hit rate → applies', async () => {
+    const result = await runGate({
       recentHitRate: 0.6,
       skillHistory: [
         'port-error-triage',
@@ -132,16 +175,14 @@ describe('cacheGateDecide — scenario', () => {
         'port-error-triage',
       ],
     });
-    const result = cacheGateDecide(scope);
     expect(result.branch).toBe('apply-markers');
   });
 
-  it('Skill thrash + low hit rate → no-markers (kill rule precedence: hit rate first)', () => {
-    const scope = makeScope({
+  it('Skill thrash + low hit rate → no-markers (kill rule precedence: hit rate first)', async () => {
+    const result = await runGate({
       recentHitRate: 0.1, // below floor
       skillHistory: ['a', 'b', 'a', 'c', 'b'], // 3 unique → churn
     });
-    const result = cacheGateDecide(scope);
     expect(result.branch).toBe('no-markers');
     // Both rules would have fired; first match wins (hit rate listed first
     // in the rule order)
@@ -153,25 +194,23 @@ describe('cacheGateDecide — scenario', () => {
 // ─── 4. Property — rule precedence + default invariant ────────────
 
 describe('cacheGateDecide — property', () => {
-  it('kill switch ALWAYS wins (highest precedence)', () => {
-    const scope = makeScope({
+  it('kill switch ALWAYS wins (highest precedence)', async () => {
+    const result = await runGate({
       cachingDisabled: true,
       recentHitRate: 0.9, // would normally pass
       skillHistory: ['a', 'a', 'a'], // no churn
     });
-    const result = cacheGateDecide(scope);
     expect(result.branch).toBe('no-markers');
     const matched = result.evidence?.rules.find((r) => r.matched);
     expect(matched?.label).toContain('kill switch');
   });
 
-  it('all rules pass → default "apply-markers" (invariant: there is always a fallback)', () => {
-    const scope = makeScope({
+  it('all rules pass → default "apply-markers" (invariant: there is always a fallback)', async () => {
+    const result = await runGate({
       cachingDisabled: false,
       recentHitRate: 0.85,
       skillHistory: ['only-skill', 'only-skill', 'only-skill'],
     });
-    const result = cacheGateDecide(scope);
     expect(result.branch).toBe('apply-markers');
   });
 });
@@ -179,8 +218,8 @@ describe('cacheGateDecide — property', () => {
 // ─── 5. Security — defensive against malformed scope ──────────────
 
 describe('cacheGateDecide — security', () => {
-  it('falsy/zero hit rate (0.0) does not crash; treated as below floor', () => {
-    const result = cacheGateDecide(makeScope({ recentHitRate: 0 }));
+  it('falsy/zero hit rate (0.0) does not crash; treated as below floor', async () => {
+    const result = await runGate({ recentHitRate: 0 });
     expect(result.branch).toBe('no-markers');
   });
 });
@@ -217,8 +256,68 @@ describe('detectSkillChurn — performance', () => {
 // ─── 7. ROI — evidence captured for cacheRecorder ─────────────────
 
 describe('cacheGateDecide — ROI: evidence captures rule + inputs', () => {
-  it("matched rule's label propagates to evidence", () => {
-    const result = cacheGateDecide(makeScope({ cachingDisabled: true }));
+  it.each<{
+    name: string;
+    state: Partial<CacheGateState>;
+    matchedIndex: number;
+    inputKeys: string[];
+  }>([
+    {
+      name: 'kill switch',
+      state: { cachingDisabled: true },
+      matchedIndex: 0,
+      inputKeys: ['cachingDisabled'],
+    },
+    {
+      name: 'hit-rate floor',
+      state: { recentHitRate: 0.15 },
+      matchedIndex: 1,
+      inputKeys: ['cachingDisabled', 'recentHitRate'],
+    },
+    {
+      name: 'skill churn',
+      state: { recentHitRate: 0.6, skillHistory: ['a', 'b', 'c'] },
+      matchedIndex: 2,
+      inputKeys: ['cachingDisabled', 'recentHitRate', 'skillHistory'],
+    },
+    {
+      name: 'default',
+      state: {},
+      matchedIndex: -1,
+      inputKeys: ['cachingDisabled', 'recentHitRate', 'skillHistory'],
+    },
+  ])(
+    '$name records the evaluated inputs and winning rule',
+    async ({ state, matchedIndex, inputKeys }) => {
+      const result = await runGate(state);
+      expect(result.branch).toBe(matchedIndex === -1 ? 'apply-markers' : 'no-markers');
+      expect(result.evidence.chosen).toBe(result.branch);
+      expect(result.evidence.default).toBe('apply-markers');
+      expect(result.evidence.rules.findIndex((rule) => rule.matched)).toBe(matchedIndex);
+      expect(result.evidence.rules).toHaveLength(inputKeys.length);
+      for (const [index, rule] of result.evidence.rules.entries()) {
+        expect(rule).toMatchObject({
+          type: 'function',
+          ruleIndex: index,
+        });
+        expect(rule.matchError).toBeUndefined();
+        if (rule.type !== 'function') throw new Error('CacheGate must use function rules');
+        // A predicate may read its input more than once (the hit-rate guard
+        // does). Every recorded read must still name that rule's real input.
+        expect(rule.inputs.length).toBeGreaterThan(0);
+        for (const input of rule.inputs) {
+          expect(input).toMatchObject({
+            key: inputKeys[index],
+            redacted: false,
+            valueSummary: expect.any(String),
+          });
+        }
+      }
+    },
+  );
+
+  it("matched rule's label propagates to evidence", async () => {
+    const result = await runGate({ cachingDisabled: true });
     expect(result.evidence).toBeDefined();
     const matched = result.evidence!.rules.find((r) => r.matched);
     expect(matched?.label).toContain('kill switch');
