@@ -24,6 +24,7 @@
 
 import type { LLMChunk, LLMMessage, LLMRequest, LLMResponse, LLMToolSchema } from '../types.js';
 import { applyCacheMarkers, readCacheUsage } from './anthropicCacheWire.js';
+import { anthropicThinkingPlan, type AnthropicThinkingParam } from './anthropicThinkingWire.js';
 import type { WireToolManifest } from './wireManifest.js';
 
 // ─── Types (Anthropic API shapes) ──────────────────────────────────
@@ -36,9 +37,9 @@ export interface AnthropicMessagesBody {
   tools?: AnthropicTool[];
   temperature?: number;
   stop_sequences?: string[];
-  // v2.14 — extended-thinking activation. Presence of `thinking`
-  // tells Anthropic to emit reasoning blocks.
-  thinking?: { type: 'enabled'; budget_tokens: number };
+  // Present when the request asks to think — in the shape the MODEL takes
+  // (anthropicThinkingWire.ts): a budget, or adaptive.
+  thinking?: AnthropicThinkingParam;
   // Emitted only when `parallelToolCalls: false`, or for a forced choice.
   tool_choice?: { type: 'auto'; disable_parallel_tool_use: true } | { type: 'tool'; name: string };
 }
@@ -88,42 +89,62 @@ export interface AnthropicStreamEvent {
 
 // ─── Request ────────────────────────────────────────────────────────
 
+/** How one adapter wants its Messages body built. */
+export interface MessagesBodyOptions {
+  /**
+   * The model the request goes to, the adapter's shorthand already resolved
+   * — it decides the thinking shape (anthropicThinkingWire.ts).
+   */
+  readonly model: string;
+  /** The adapter's name, for the refusals the thinking plan raises. */
+  readonly provider: string;
+  /** `max_tokens` when the request sets none. */
+  readonly maxTokensDefault: number;
+  /** `false` caps a reply at one tool call. */
+  readonly parallelToolCalls?: boolean;
+}
+
 /**
  * Build the Messages body (minus `model`) from a framework request.
- * `maxTokens` is the adapter's default when the request sets none.
+ *
+ * ONE owner: `anthropic()`, `browserAnthropic()` and `invokeModelGateway()`
+ * all build their body here, so a rule about the body — like which thinking
+ * shape a model takes — is written once.
+ *
+ * @throws UnsupportedThinkingError before anything is sent, when the request
+ *   asks to think in a way the model cannot take (see `anthropicThinkingPlan`).
  */
 export function buildMessagesBody(
   req: LLMRequest,
-  maxTokensDefault: number,
-  parallelToolCalls?: boolean,
+  options: MessagesBodyOptions,
 ): AnthropicMessagesBody {
-  // v2.14 — auto-bump max_tokens when thinking would violate Anthropic's
-  // `max_tokens > thinking.budget_tokens` invariant. See the matching
-  // logic in AnthropicProvider.buildParams; identical heuristic.
-  let maxTokens = req.maxTokens ?? maxTokensDefault;
-  if (req.thinking && maxTokens <= req.thinking.budget) {
-    maxTokens = req.thinking.budget + 1024;
-  }
+  // The thinking shape THIS model takes, and the `max_tokens` it needs (kept
+  // above the budget). Undefined when the request does not ask to think.
+  const thinking = anthropicThinkingPlan(req, options);
   // The map is only needed when a messages marker has to be placed; building
   // it always keeps the transform single-pass and costs one number per message.
   const messageIndexMap: number[] = [];
   const body: AnthropicMessagesBody = {
-    max_tokens: maxTokens,
+    max_tokens: thinking?.maxTokens ?? req.maxTokens ?? options.maxTokensDefault,
     messages: toAnthropicMessages(req.messages, messageIndexMap),
   };
   if (req.systemPrompt) body.system = req.systemPrompt;
   if (req.tools && req.tools.length > 0) body.tools = req.tools.map(toAnthropicTool);
   if (req.temperature !== undefined) body.temperature = req.temperature;
   if (req.stop && req.stop.length > 0) body.stop_sequences = [...req.stop];
-  if (req.thinking) {
-    body.thinking = { type: 'enabled', budget_tokens: req.thinking.budget };
-  }
-  // One tool per reply — Anthropic rejects `tool_choice` on a request that
-  // carries no tools.
-  if (parallelToolCalls === false && body.tools !== undefined && body.tools.length > 0) {
+  if (thinking !== undefined) body.thinking = thinking.thinking;
+  // One tool per reply, enforced by the API rather than asked for in prose.
+  // `auto` leaves the CHOICE of tool (and of calling one at all) with the
+  // model — only the COUNT is capped. Guarded on `body.tools`: Anthropic
+  // rejects `tool_choice` on a request that carries no tools, and an agent's
+  // final answer call often has none.
+  if (options.parallelToolCalls === false && body.tools !== undefined && body.tools.length > 0) {
     body.tool_choice = { type: 'auto', disable_parallel_tool_use: true };
   }
-  // Forced choice wins over the parallel cap — see the Node provider.
+  // Forced choice of one named tool (`.outputSchema(s, { strategy:
+  // 'tool-forced' })`). Written LAST so it wins over the parallel cap:
+  // capping how many tools a reply may use is a preference, constraining
+  // WHICH tool answers is the contract the run is built on. Same guard.
   if (req.toolChoice && body.tools !== undefined && body.tools.length > 0) {
     body.tool_choice = { type: 'tool', name: req.toolChoice.name };
   }

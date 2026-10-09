@@ -38,7 +38,7 @@ import type {
   WireRole,
 } from '../adapters/types.js';
 import type { PromptCaching } from '../cache/types.js';
-import type { ThinkingBlock, ThinkingHandler } from '../thinking/types.js';
+import type { ThinkingBlock, ThinkingHandler, ThinkingMode } from '../thinking/types.js';
 import { DEFAULT_CARRIES_IN_MESSAGES } from '../adapters/types.js';
 
 /**
@@ -137,6 +137,35 @@ function thinkingOfPair(a: LLMProvider, b: LLMProvider): ThinkingHandler | undef
   };
 }
 
+/** Least to most a pair can promise about a model's thinking. */
+const THINKING_PROMISE: readonly ThinkingMode[] = ['none', 'adaptive', 'budget'];
+
+/**
+ * The thinking mode of a pair, per model: the LEAST either declared side
+ * promises — `'none'` if either side's model cannot think (the agent refuses
+ * `.thinking()` at build rather than fail on the call the fallback serves),
+ * `'adaptive'` if either side would not send the budget, `'budget'` only when
+ * both send it. An undeclared side makes no claim. The pair never maps the
+ * wire itself: each side's adapter sends ITS model's shape for the same
+ * `req.thinking`.
+ */
+function thinkingModeOfPair(
+  a: LLMProvider,
+  b: LLMProvider,
+): ((model: string) => ThinkingMode) | undefined {
+  const [ma, mb] = [a.thinkingMode, b.thinkingMode];
+  if (ma === undefined || ma === mb) return mb ?? ma;
+  if (mb === undefined) return ma;
+  return (model) => {
+    const [x, y] = [ma(model), mb(model)];
+    // An answer that is not a mode is passed on, so the agent's check refuses
+    // the malformed declaration instead of this pair hiding it.
+    if (!THINKING_PROMISE.includes(x)) return x;
+    if (!THINKING_PROMISE.includes(y)) return y;
+    return THINKING_PROMISE.indexOf(x) <= THINKING_PROMISE.indexOf(y) ? x : y;
+  };
+}
+
 export interface WithFallbackOptions {
   /**
    * Predicate to decide whether an error from the primary should
@@ -194,6 +223,7 @@ export function withFallback(
 
   const promptCaching = cachingOfPair(primary, fallback);
   const thinkingHandler = thinkingOfPair(primary, fallback);
+  const thinkingMode = thinkingModeOfPair(primary, fallback);
   const tagsThinking = primary.thinkingHandler !== fallback.thinkingHandler;
   /** A response as the pair returns it: thinking tagged when the sides differ. */
   const answered = (res: LLMResponse, side: Side): LLMResponse =>
@@ -227,6 +257,8 @@ export function withFallback(
     // The side that answered decides which handler reads its thinking —
     // see `thinkingOfPair`.
     ...(thinkingHandler !== undefined && { thinkingHandler }),
+    // The least either side promises for a model — see `thinkingModeOfPair`.
+    ...(thinkingMode !== undefined && { thinkingMode }),
     async complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
       try {
         return answered(await primary.complete(requestFor(primary, req), hooks), 'primary');

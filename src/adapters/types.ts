@@ -267,15 +267,19 @@ export interface LLMRequest {
    * v2.14 — request the LLM emit reasoning/thinking content on this call.
    *
    * Activation: presence of this field tells the provider to ASK for
-   * thinking. Anthropic translates to `thinking: { type: 'enabled',
-   * budget_tokens: budget }` on the wire. OpenAI ignores (o1/o3
-   * thinking is selected at the model id level, not per-request).
+   * thinking. It is the INTENT, never a wire shape: each adapter maps it to
+   * what the model takes. The Anthropic adapters ask their declared
+   * `thinkingMode(model)` — a `'budget'` model gets `thinking: { type:
+   * 'enabled', budget_tokens: budget }`, an `'adaptive'` model (Claude 4.7
+   * and later) gets `thinking: { type: 'adaptive', display: 'summarized' }`
+   * with no budget, and a `'none'` model is refused with an
+   * `UnsupportedThinkingError` before anything is sent. OpenAI ignores it
+   * (o1/o3 thinking is selected at the model id level, not per-request).
    *
-   * `budget` is the maximum reasoning tokens the model may spend.
-   * Anthropic requires it; recommended range 1024-32000 for
-   * claude-sonnet-4-5 / opus-4-5. Models that don't support extended
-   * thinking will reject the request with HTTP 400 — pick a supported
-   * model when setting this field.
+   * `budget` is the maximum reasoning tokens the model may spend where the
+   * model takes a budget (Anthropic: a whole number of at least 1024). On
+   * an adaptive model it is not sent; it only raises `max_tokens` to at
+   * least `budget + 1024`, so a long think has room to finish.
    *
    * Independent from `LLMMessage.thinkingBlocks` (the response side):
    *   - `request.thinking` = activation (consumer ASKS for thinking)
@@ -589,6 +593,21 @@ export interface LLMProvider {
    * thinking stage. Never chosen by `name` — a wrapper must forward it.
    */
   readonly thinkingHandler?: import('../thinking/types.js').ThinkingHandler;
+  /**
+   * Which thinking request each model takes on this wire — `'budget'`,
+   * `'adaptive'` or `'none'` (`ThinkingMode`, from `agentfootprint/providers`),
+   * asked with the model id a request names (the adapter resolves its own
+   * shorthand, e.g. `'anthropic'`). The adapter maps `LLMRequest.thinking` to
+   * the right wire shape for that model; the agent reads this at build to
+   * refuse `.thinking()` for a model that cannot think and to say, in dev
+   * mode, when `'adaptive'` will not send the budget.
+   *
+   * Absent = no per-model claim: requests carry `thinking: { budget }` and the
+   * adapter decides. A plain function of the model id — it must not use
+   * `this`, because a wrapper forwards it as a value, like `carriesInMessages`;
+   * `withFallback` answers for its pair.
+   */
+  readonly thinkingMode?: (model: string) => import('../thinking/types.js').ThinkingMode;
   /**
    * v7.21 — which roles this provider carries INSIDE the `messages` array.
    *

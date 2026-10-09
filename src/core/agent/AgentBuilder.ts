@@ -51,6 +51,7 @@ import {
   type FoldedSkillBrains,
   type ProviderChoice,
 } from './skillBrains.js';
+import { checkThinkingSupport } from './thinkingSupport.js';
 import {
   defineMenuHint,
   MENU_HINT_METADATA_KEY,
@@ -2874,10 +2875,18 @@ export class AgentBuilder {
    * emit reasoning blocks alongside its response.
    *
    * **What this does:** every LLM call carries
-   * `LLMRequest.thinking = { budget }`. The AnthropicProvider
-   * translates to `thinking: { type: 'enabled', budget_tokens: N }`
-   * on the wire. The model spends up to `budget` reasoning tokens
-   * before producing the visible response.
+   * `LLMRequest.thinking = { budget }` — the intent. The adapter sends the
+   * shape the MODEL takes, from what it declares per model
+   * (`LLMProvider.thinkingMode`):
+   *   - `'budget'` (Claude 4.6 and earlier): `thinking: { type: 'enabled',
+   *     budget_tokens: budget }` — the model thinks up to `budget` tokens;
+   *   - `'adaptive'` (Claude 4.7 and later, and any model the table does not
+   *     know): `thinking: { type: 'adaptive', display: 'summarized' }` — the
+   *     model decides whether and how much to think and the budget is NOT
+   *     sent (dev mode says so once per model); it only keeps `max_tokens`
+   *     above it;
+   *   - `'none'` (Claude 3.x except 3.7 Sonnet): refused here at `build()`
+   *     with an `UnsupportedThinkingError`.
    *
    * **Distinct from `.thinkingHandler()`:**
    *   - `.thinking({ budget })` = ASK the model to think (request side)
@@ -2889,23 +2898,24 @@ export class AgentBuilder {
    * is the typical happy path.
    *
    * **Provider compatibility:**
-   *   - Anthropic: requires claude-sonnet-4-5 / opus-4-5 (or newer).
-   *     Older models reject with HTTP 400.
+   *   - Anthropic: per model, as above. A budget model needs a whole
+   *     `budget` of at least 1024, and no thinking model takes a
+   *     `temperature` other than the default — both are refused with an
+   *     `UnsupportedThinkingError` before the request is sent.
    *   - OpenAI: ignores. o1/o3 reasoning is selected at the model id
    *     level; this field is a no-op for OpenAIProvider.
    *
-   * **Budget guidance:** Anthropic recommends 1024-32000 reasoning
-   * tokens. `budget` MUST be less than the request's `max_tokens`
-   * (defaults to 4096 in AnthropicProvider — bump via the request
-   * `maxTokens` if budget > ~3000).
+   * **`max_tokens`:** thinking counts toward it. When the request's
+   * `maxTokens` (default 4096 on the Anthropic adapters) is not above the
+   * budget, the adapter raises it to `budget + 1024`.
    *
    * Calling twice throws — same shape as `.reliability()` /
    * `.outputSchema()`.
    *
    * @example
-   *   Agent.create({ provider: anthropic({...}), model: 'claude-sonnet-4-5' })
+   *   Agent.create({ provider: anthropic({...}), model: 'claude-opus-5-5' })
    *     .system('You are a careful reasoning agent.')
-   *     .thinking({ budget: 5000 })   // ask Anthropic to think
+   *     .thinking({ budget: 5000 })   // adaptive on Opus 5.5; budget_tokens on Haiku 4.5
    *     .build();
    */
   thinking(opts: { budget: number }): this {
@@ -3788,6 +3798,18 @@ export class AgentBuilder {
       ...(this.skillGraphNodeIds !== undefined && { nodeIds: this.skillGraphNodeIds }),
       agentProviderName: opts.provider.name,
     });
+    // ── Thinking, against what each provider DECLARES for its model ──
+    // After the brains fold, because a brain's model is a model the thinking
+    // request reaches too. A model that cannot think is refused HERE, by name
+    // (`thinkingSupport.ts`), not as a vendor 400 on the first call.
+    if (this.thinkingBudgetValue !== undefined) {
+      checkThinkingSupport({
+        budget: this.thinkingBudgetValue,
+        provider: opts.provider,
+        model: opts.model,
+        ...(skillBrains !== undefined && { brains: skillBrains }),
+      });
+    }
     // A decider with no menu to resolve: only a graph that RUNS the
     // turn-start cascade (a classifier, or `continuity: 'conversation'`)
     // ever produces an outstanding menu, so a decider on any other mount

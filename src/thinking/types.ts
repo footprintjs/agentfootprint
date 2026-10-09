@@ -97,6 +97,33 @@ export interface ThinkingBlock {
   readonly providerMeta?: Readonly<Record<string, unknown>>;
 }
 
+// ─── Request side: what a model accepts ─────────────────────────────
+
+/**
+ * How one model takes a request to think — declared by the provider adapter
+ * per model (`LLMProvider.thinkingMode`), because models on the same wire
+ * disagree and the wrong shape is refused by the vendor on every call.
+ *
+ * - `'budget'`   — a token budget for the thinking (Anthropic:
+ *                  `thinking: { type: 'enabled', budget_tokens }`). The
+ *                  `.thinking({ budget })` number is sent as-is.
+ * - `'adaptive'` — thinking on, no budget: the model decides whether and how
+ *                  much to think (Anthropic: `thinking: { type: 'adaptive' }`).
+ *                  The budget is NOT sent — the wire has nowhere to put it.
+ * - `'none'`     — the model cannot think. `.thinking()` is refused, by name,
+ *                  with an `UnsupportedThinkingError`.
+ *
+ * @example
+ * ```ts
+ * import { anthropic } from 'agentfootprint/providers';
+ *
+ * const provider = anthropic();
+ * provider.thinkingMode?.('claude-opus-5-5'); // 'adaptive'
+ * provider.thinkingMode?.('claude-haiku-4-5'); // 'budget'
+ * ```
+ */
+export type ThinkingMode = 'adaptive' | 'budget' | 'none';
+
 // ─── Handler contract (consumer-facing) ─────────────────────────────
 
 /**

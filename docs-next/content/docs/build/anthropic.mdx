@@ -32,7 +32,7 @@ const agent = Agent.create({
 }).build();
 ```
 
-Model strings need date suffixes (`claude-sonnet-4-5-20250929`, `claude-haiku-4-5-20251001`) — Anthropic's API requires the explicit version for stability.
+Model ids are Anthropic's own: dateless from the 4.6 generation on (`claude-opus-5-5`), dated before it (`claude-sonnet-4-5-20250929`, or its alias `claude-sonnet-4-5`).
 
 ## Tools (native function calling)
 
@@ -58,6 +58,31 @@ On the wire this sends `tool_choice: { type: 'auto', disable_parallel_tool_use: 
 Asking for this in the system prompt ("call one tool at a time") is **not** equivalent — that is a request the model may ignore, this is a request parameter the API enforces. Cost: one extra round trip per tool.
 
 The same option exists on `browserAnthropic()`, and both adapters put the identical field on the wire.
+
+## Thinking
+
+`.thinking({ budget })` asks the model to think before it answers. Claude models disagree about how that is asked — a budget sent to Claude 4.7 or later is an HTTP 400 — so the provider sends the shape **the model** takes:
+
+| Model | On the wire |
+|---|---|
+| Opus 4.7 and later, Sonnet 5 and 5.5, Haiku 5.5, Fable, Mythos 5 and 5.1 — and any id not listed here | `thinking: { type: 'adaptive', display: 'summarized' }`, no budget |
+| Opus 4.6, Sonnet 4.6, Mythos Preview (budget deprecated there, still accepted); Opus 4.5, Sonnet 4.5, Haiku 4.5, Opus 4.1, Opus 4, Sonnet 4, Sonnet 3.7 | `thinking: { type: 'enabled', budget_tokens: budget }` |
+| Claude 3.5 Sonnet, 3.5 Haiku, 3 Opus, 3 Sonnet, 3 Haiku | refused at `build()` — they cannot think |
+
+<CodeFile path="examples/features/96-thinking-per-model.ts" region="per-model" title="examples/features/96-thinking-per-model.ts (region: per-model)" />
+
+**Adaptive thinking takes no budget.** The model decides whether and how much to think, so the budget is not sent (dev mode says so once per model) and no effort level is guessed from it. It still keeps `max_tokens` above itself — `budget + 1024` when the request's is lower — because thinking counts toward `max_tokens`. `display: 'summarized'` is what makes the thinking readable; these models otherwise return it empty.
+
+**Refused before anything is sent**, as an `UnsupportedThinkingError` (from `agentfootprint/providers`; `provider`, `model`, `reason`, `retryable: false`):
+
+- `'no-thinking'` — at `build()` for the agent's model and its skill and escalation brains; on the first call for a model `.configure()` picks at run time.
+- `'budget'` — a budget model takes a whole number of at least 1024.
+- `'temperature'` — thinking takes only the default temperature, 1.
+- `'forced-tool-choice'` — `.outputSchema(…, { strategy: 'tool-forced' })` cannot ride with a budget; use `'instruct'`.
+
+<CodeFile path="examples/features/96-thinking-per-model.ts" region="refused" title="examples/features/96-thinking-per-model.ts (region: refused)" />
+
+`browserAnthropic()` and `invokeModelGateway()` read the same table, and platform ids (`us.anthropic.claude-sonnet-4-5-20250929-v1:0`, `claude-opus-4-5@20251101`) count from `claude-` on. Ask what will be sent with `provider.thinkingMode(model)`, a `ThinkingMode`: `'adaptive'`, `'budget'` or `'none'`. Wrappers forward it; `withFallback` sends each side its own model's shape and answers the least of the two, so a fallback that cannot think is refused at build. Source: Anthropic's [thinking support by model](https://platform.claude.com/docs/en/build-with-claude/thinking-troubleshooting).
 
 ## Streaming
 

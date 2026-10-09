@@ -48,7 +48,7 @@ Defined in: [src/recorders/core/types.ts:112](https://github.com/footprintjs/age
 
 ### planAction
 
-> `readonly` **planAction**: `"abort"` \| `"evict"` \| `"summarize"` \| `"none"`
+> `readonly` **planAction**: `"none"` \| `"abort"` \| `"evict"` \| `"summarize"`
 
 Defined in: [src/recorders/core/types.ts:113](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/types.ts#L113)
 

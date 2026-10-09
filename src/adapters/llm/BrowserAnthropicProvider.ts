@@ -29,7 +29,9 @@ import type {
 } from '../types.js';
 import { asContextWindowExceeded } from './contextWindow.js';
 import { ANTHROPIC_PROMPT_CACHING } from './anthropicCacheWire.js';
+import { anthropicThinkingMode } from './anthropicThinkingWire.js';
 import { anthropicThinkingHandler } from '../../thinking/AnthropicThinkingHandler.js';
+import type { ThinkingMode } from '../../thinking/types.js';
 import {
   assembleAnthropicStream,
   buildMessagesBody,
@@ -121,6 +123,8 @@ export function browserAnthropic(options: BrowserAnthropicProviderOptions): LLMP
     // markers — so the same declaration (see anthropicCacheWire.ts).
     promptCaching: ANTHROPIC_PROMPT_CACHING,
     thinkingHandler: anthropicThinkingHandler,
+    // …and the same per-model thinking shapes (anthropicThinkingWire.ts).
+    thinkingMode: (model) => anthropicThinkingMode(modelOf(model, defaultModel)),
     async complete(req: LLMRequest): Promise<LLMResponse> {
       const body: AnthropicRequestBody = {
         ...buildBody(req, defaultModel, defaultMaxTokens, parallelToolCalls),
@@ -178,10 +182,13 @@ export class BrowserAnthropicProvider implements LLMProvider {
   readonly carriesForcedToolChoice = true;
   readonly promptCaching = ANTHROPIC_PROMPT_CACHING;
   readonly thinkingHandler = anthropicThinkingHandler;
+  /** The inner provider's own function — a closure, safe to forward unbound. */
+  readonly thinkingMode: (model: string) => ThinkingMode;
   private readonly inner: LLMProvider;
 
   constructor(options: BrowserAnthropicProviderOptions) {
     this.inner = browserAnthropic(options);
+    this.thinkingMode = this.inner.thinkingMode!;
   }
 
   // `hooks` is FORWARDED, not dropped — see LLMCallHooks in adapters/types.ts.
@@ -197,17 +204,27 @@ export class BrowserAnthropicProvider implements LLMProvider {
 
 // ─── Internals ──────────────────────────────────────────────────────
 
+/** The model a request goes to — either shorthand is the default model. */
+function modelOf(model: string, defaultModel: string): string {
+  return model === 'anthropic' || model === 'browser-anthropic' ? defaultModel : model;
+}
+
 function buildBody(
   req: LLMRequest,
   defaultModel: string,
   defaultMaxTokens: number,
   parallelToolCalls?: boolean,
 ): AnthropicRequestBody {
+  const model = modelOf(req.model, defaultModel);
   // `model` first, then the shared Messages body (anthropicMessagesWire.ts).
   return {
-    model:
-      req.model === 'anthropic' || req.model === 'browser-anthropic' ? defaultModel : req.model,
-    ...buildMessagesBody(req, defaultMaxTokens, parallelToolCalls),
+    model,
+    ...buildMessagesBody(req, {
+      model,
+      provider: 'browser-anthropic',
+      maxTokensDefault: defaultMaxTokens,
+      ...(parallelToolCalls !== undefined && { parallelToolCalls }),
+    }),
   };
 }
 

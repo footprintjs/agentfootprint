@@ -809,6 +809,13 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: 'the context-window overflow explanation thrown to the host with its three fixes — the provider refused the request before any model read it',
     },
   ],
+  'src/adapters/llm/anthropicThinkingWire.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: 'the refusal of a thinking request the model cannot take, thrown to the host by the adapter before anything is sent — no model reads it',
+    },
+  ],
   'src/adapters/memory/pgVector.ts': [
     {
       kind: 'not-model-facing',
@@ -821,6 +828,13 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       kind: 'not-model-facing',
       count: 1,
       why: 'a build-time refusal thrown when a skill brain is declared with no graph to pick it',
+    },
+  ],
+  'src/core/agent/thinkingSupport.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: 'a build-time refusal thrown when `.thinking()` reaches a model its provider declares cannot think',
     },
   ],
   'src/lib/injection-engine/factories/defineSkill.ts': [
@@ -1139,12 +1153,17 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // now says what an empty list means (no placeholder in the bundle), and
         // with it the file's only entry is gone. files 99 → 98, total 194 → 193,
         // notModelFacing 131 → 130.
-        files: 98,
-        total: 193,
+        // Thinking per model: the refusal of a thinking request a model cannot
+        // take, thrown by the Anthropic wire before sending
+        // (adapters/llm/anthropicThinkingWire.ts) and by the agent at build
+        // (core/agent/thinkingSupport.ts) — two new files, the host reads both.
+        // files 98 → 100, total 193 → 195, notModelFacing 130 → 132.
+        files: 100,
+        total: 195,
         registry: 8,
         ephemeral: 22,
         unrepaired: 33,
-        notModelFacing: 130,
+        notModelFacing: 132,
         unrepairedEntries: 13,
       });
       // And the ledger's own total is the number of literals the scan flagged —

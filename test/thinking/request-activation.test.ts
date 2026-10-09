@@ -308,9 +308,11 @@ describe('Phase 6.5 — integration: ask + receive thinking blocks', () => {
 // ─── 4. PROPERTY — random budgets ────────────────────────────────
 
 describe('Phase 6.5 — property: random valid budgets pass through unmodified', () => {
-  it('20 random positive budgets all reach API as budget_tokens', async () => {
+  it('20 random valid budgets all reach API as budget_tokens', async () => {
     for (let trial = 0; trial < 20; trial++) {
-      const budget = 1 + Math.floor(Math.random() * 64000);
+      // budget_tokens takes a whole number of at least 1024 — a smaller one is
+      // refused before sending (test/thinking/thinking-per-model.test.ts).
+      const budget = 1024 + Math.floor(Math.random() * 64000);
       const recorder = { params: [] as unknown[] };
       const client = makeClient([baseTurn], recorder);
       const provider = new AnthropicProvider({ apiKey: 'x', _client: client as never });

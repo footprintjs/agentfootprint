@@ -134,6 +134,9 @@ export function withRetry(provider: LLMProvider, options: WithRetryOptions = {})
     // And the thinking it returns: the agent used to look the handler up by
     // `name`, so a retried Anthropic provider dropped its signed thinking.
     ...(provider.thinkingHandler !== undefined && { thinkingHandler: provider.thinkingHandler }),
+    // And which thinking each model takes — dropped, the agent could no
+    // longer refuse `.thinking()` for a model that cannot think.
+    ...(provider.thinkingMode !== undefined && { thinkingMode: provider.thinkingMode }),
     async complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
       // t0 for the `recovered` report's totalDurationMs. New
       // instrumentation (the decorator did not measure this before v7.8),

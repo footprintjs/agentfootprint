@@ -28,16 +28,19 @@ import type {
 import { lazyRequire } from '../../lib/lazyRequire.js';
 import { asContextWindowExceeded } from './contextWindow.js';
 import { retryAfterMsFromError } from './retryAfter.js';
-import {
-  ANTHROPIC_PROMPT_CACHING,
-  applyCacheMarkers,
-  readCacheUsage,
-} from './anthropicCacheWire.js';
+import { ANTHROPIC_PROMPT_CACHING, readCacheUsage } from './anthropicCacheWire.js';
+import { anthropicThinkingMode } from './anthropicThinkingWire.js';
 import { toolManifestOf } from './wireManifest.js';
 import { anthropicThinkingHandler } from '../../thinking/AnthropicThinkingHandler.js';
-// The message and tool mapping has ONE owner, shared with browserAnthropic()
-// and invokeModelGateway() — a private copy here once drifted from it.
-import { toAnthropicMessages, toAnthropicTool } from './anthropicMessagesWire.js';
+import type { ThinkingMode } from '../../thinking/types.js';
+// The request body has ONE owner, shared with browserAnthropic() and
+// invokeModelGateway() — a private copy here once drifted from it, and a
+// second copy of the thinking rule would drift the same way.
+import {
+  buildMessagesBody,
+  type AnthropicContentBlock,
+  type AnthropicMessagesBody,
+} from './anthropicMessagesWire.js';
 
 // ─── Anthropic SDK shape (duck-typed; no hard import) ──────────────
 
@@ -48,51 +51,11 @@ interface AnthropicClient {
   };
 }
 
-interface AnthropicCreateParams {
+/** The shared Messages body (anthropicMessagesWire.ts) plus the `model` the
+ *  SDK sends — `system`, `tools`, `thinking`, `tool_choice` and the cache
+ *  markers are all decided there. */
+interface AnthropicCreateParams extends AnthropicMessagesBody {
   model: string;
-  max_tokens: number;
-  messages: AnthropicMessageParam[];
-  system?: string;
-  tools?: AnthropicTool[];
-  temperature?: number;
-  stop_sequences?: string[];
-  // v2.14 — extended-thinking activation. When present, the model
-  // emits thinking blocks alongside its visible response. Only
-  // claude-sonnet-4-5 / opus-4-5 (and newer) support this; older
-  // models reject with HTTP 400.
-  thinking?: { type: 'enabled'; budget_tokens: number };
-  // Emitted only when `parallelToolCalls: false`. Anthropic accepts
-  // `disable_parallel_tool_use` on any `tool_choice` variant; `auto`
-  // is the variant that leaves the CHOICE of tool (and of whether to
-  // call one at all) with the model — we only cap the COUNT.
-  /**
-   * v7.26 — a forced choice of ONE named tool, the shape
-   * `.outputSchema(s, { strategy: 'tool-forced' })` needs. Anthropic accepts
-   * `{type:'tool',name}`; it is mutually exclusive with the `auto` variant
-   * above (only one tool_choice can be sent), and the forced choice wins
-   * because it is the guarantee the consumer selected the strategy for. */
-  tool_choice?: { type: 'auto'; disable_parallel_tool_use: true } | { type: 'tool'; name: string };
-}
-
-interface AnthropicMessageParam {
-  role: 'user' | 'assistant';
-  content: string | AnthropicContentBlock[];
-}
-
-type AnthropicContentBlock =
-  | { type: 'text'; text: string }
-  | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
-  | { type: 'tool_result'; tool_use_id: string; content: string; is_error?: boolean }
-  // v2.14 — extended-thinking blocks. Round-trip on assistant turns
-  // when continuing a tool-using extended-thinking conversation;
-  // signature MUST be byte-exact or Anthropic returns HTTP 400.
-  | { type: 'thinking'; thinking: string; signature?: string }
-  | { type: 'redacted_thinking'; data: string };
-
-interface AnthropicTool {
-  name: string;
-  description: string;
-  input_schema: Record<string, unknown>;
 }
 
 interface AnthropicMessage {
@@ -208,6 +171,20 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
   const defaultModel = options.defaultModel ?? 'claude-sonnet-4-5-20250929';
   const defaultMaxTokens = options.defaultMaxTokens ?? 4096;
   const parallelToolCalls = options.parallelToolCalls;
+  /** The model a request goes to — the `'anthropic'` shorthand is the default. */
+  const modelOf = (model: string): string => (model === 'anthropic' ? defaultModel : model);
+  const buildParams = (req: LLMRequest): AnthropicCreateParams => {
+    const model = modelOf(req.model);
+    return {
+      model,
+      ...buildMessagesBody(req, {
+        model,
+        provider: 'anthropic',
+        maxTokensDefault: defaultMaxTokens,
+        ...(parallelToolCalls !== undefined && { parallelToolCalls }),
+      }),
+    };
+  };
 
   const provider: LLMProvider = {
     name: 'anthropic',
@@ -218,8 +195,11 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
     promptCaching: ANTHROPIC_PROMPT_CACHING,
     // The signed thinking blocks this wire returns, normalized for the echo.
     thinkingHandler: anthropicThinkingHandler,
+    // Which thinking request each model takes — budget, adaptive or none
+    // (anthropicThinkingWire.ts); `buildMessagesBody` sends that shape.
+    thinkingMode: (model) => anthropicThinkingMode(modelOf(model)),
     async complete(req: LLMRequest): Promise<LLMResponse> {
-      const params = buildParams(req, defaultModel, defaultMaxTokens, parallelToolCalls);
+      const params = buildParams(req);
       try {
         const message = await client.messages.create(params);
         // Manifest read from the FINAL params — after tool mapping and cache
@@ -231,7 +211,7 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
       }
     },
     async *stream(req: LLMRequest): AsyncIterable<LLMChunk> {
-      const params = buildParams(req, defaultModel, defaultMaxTokens, parallelToolCalls);
+      const params = buildParams(req);
       let stream: AnthropicStream;
       try {
         stream = client.messages.stream(params);
@@ -275,10 +255,13 @@ export class AnthropicProvider implements LLMProvider {
   readonly carriesForcedToolChoice = true;
   readonly promptCaching = ANTHROPIC_PROMPT_CACHING;
   readonly thinkingHandler = anthropicThinkingHandler;
+  /** The inner provider's own function — a closure, safe to forward unbound. */
+  readonly thinkingMode: (model: string) => ThinkingMode;
   private readonly inner: LLMProvider;
 
   constructor(options: AnthropicProviderOptions = {}) {
     this.inner = anthropic(options);
+    this.thinkingMode = this.inner.thinkingMode!;
   }
 
   // `hooks` is FORWARDED, not dropped — see LLMCallHooks in adapters/types.ts.
@@ -318,69 +301,6 @@ function resolveClient(options: AnthropicProviderOptions): AnthropicClient {
     ...(options.timeout !== undefined ? { timeout: options.timeout } : {}),
     ...(options.maxRetries !== undefined ? { maxRetries: options.maxRetries } : {}),
   });
-}
-
-function buildParams(
-  req: LLMRequest,
-  defaultModel: string,
-  defaultMaxTokens: number,
-  parallelToolCalls?: boolean,
-): AnthropicCreateParams {
-  // v2.14 — Anthropic requires `max_tokens > thinking.budget_tokens`.
-  // When thinking is enabled and the resolved max_tokens would violate
-  // that, bump max_tokens to `budget + 1024` (1024 visible-response
-  // tokens — typical for tool-using turns where the model emits a
-  // tool_use block + minimal text). Consumers who explicitly set
-  // maxTokens above budget keep their choice; only the default-resolution
-  // path auto-bumps. Otherwise consumers see an opaque HTTP 400 from
-  // Anthropic on every call (which is the bug uncovered in Neo).
-  let maxTokens = req.maxTokens ?? defaultMaxTokens;
-  if (req.thinking && maxTokens <= req.thinking.budget) {
-    maxTokens = req.thinking.budget + 1024;
-  }
-  // The map is only needed when a messages cache marker has to be placed;
-  // building it always keeps the transform single-pass and costs one number
-  // per message. Mirrors BrowserAnthropicProvider.
-  const messageIndexMap: number[] = [];
-  const params: AnthropicCreateParams = {
-    model: req.model === 'anthropic' ? defaultModel : req.model,
-    max_tokens: maxTokens,
-    messages: toAnthropicMessages(req.messages, messageIndexMap),
-  };
-  if (req.systemPrompt) params.system = req.systemPrompt;
-  if (req.tools && req.tools.length > 0) params.tools = req.tools.map(toAnthropicTool);
-  if (req.temperature !== undefined) params.temperature = req.temperature;
-  if (req.stop && req.stop.length > 0) params.stop_sequences = [...req.stop];
-  // v2.14 — extended-thinking activation. Presence of req.thinking is
-  // the activation signal; budget translates to budget_tokens. Anthropic
-  // requires max_tokens > budget_tokens — caller's responsibility, the
-  // SDK error path surfaces violations through wrapError().
-  if (req.thinking) {
-    params.thinking = { type: 'enabled', budget_tokens: req.thinking.budget };
-  }
-  // One tool per reply, enforced by the API rather than asked for in prose.
-  // Guarded on `params.tools`: Anthropic rejects `tool_choice` on a request
-  // that carries no tools, and an agent's final answer call often has none.
-  if (parallelToolCalls === false && params.tools !== undefined && params.tools.length > 0) {
-    params.tool_choice = { type: 'auto', disable_parallel_tool_use: true };
-  }
-  // Forced choice of one named tool. Written LAST so it wins over the
-  // parallel cap: capping how many tools a reply may use is a preference,
-  // constraining WHICH tool answers is the contract the run is built on.
-  // Same `params.tools` guard — Anthropic rejects any tool_choice on a
-  // request carrying no tools.
-  if (req.toolChoice && params.tools !== undefined && params.tools.length > 0) {
-    params.tool_choice = { type: 'tool', name: req.toolChoice.name };
-  }
-  // Cache markers — applied AFTER param construction so the materialized
-  // fields (system / tools / messages) exist to mark. Already clamped to the
-  // declared `maxBreakpoints` (four) by BreakpointCacheStrategy. Before this, the
-  // server path silently dropped the markers the strategy prepared, so the
-  // stable prefix was paid at full rate on every call.
-  if (req.cacheMarkers && req.cacheMarkers.length > 0) {
-    applyCacheMarkers(params, req.cacheMarkers, messageIndexMap);
-  }
-  return params;
 }
 
 function fromAnthropicResponse(message: AnthropicMessage): LLMResponse {

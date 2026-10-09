@@ -46,9 +46,39 @@ adds only its framing (URL, headers, `model` field or path, SSE line format) and
 decides what a malformed streamed tool argument becomes — `browserAnthropic` keeps
 `{}`, `invokeModelGateway` refuses. Pinned byte for byte by
 `test/adapters/unit/BrowserAnthropic.sharedWire.byte-identity.test.ts`.
-`anthropic()` (the SDK adapter) builds its messages through the same
-`toAnthropicMessages` — it once kept a private copy, and a fix to one missed the
-other.
+`anthropic()` (the SDK adapter) builds its whole body through the same
+`buildMessagesBody` — it once kept a private copy of the messages mapping, and a
+fix to one missed the other; a private copy of the body would have done the same
+to the thinking rule below.
+
+## Thinking: one shape per MODEL, declared in one table
+Claude models disagree about a thinking request, and the wrong shape is a 400 on
+every call: 4.7 and later reject `{ type: 'enabled', budget_tokens }`, 4.5 and
+earlier reject `{ type: 'adaptive' }`, the 4.6 models take both, and Claude 3
+before 3.7 cannot think. `anthropicThinkingWire.ts` holds the ONE table
+(`ANTHROPIC_THINKING_MODES`, keyed by model family) and the one translation
+(`anthropicThinkingPlan`), called by `buildMessagesBody`; each Anthropic adapter
+declares `thinkingMode(model)` from the same table, so the agent can refuse at
+build. A request names an INTENT (`thinking: { budget }`) and the adapter sends
+the shape — which is also why `withFallback` needs no thinking logic: each side
+maps the same intent to its own model.
+
+- `'budget'` → `{ type: 'enabled', budget_tokens }`, the budget a whole number ≥ 1024.
+- `'adaptive'` → `{ type: 'adaptive', display: 'summarized' }`, no budget (it
+  only keeps `max_tokens` above itself). Also the answer for an UNKNOWN id: every
+  Claude model since 4.7 is adaptive, so a new one thinks instead of failing.
+- `'none'`, a non-default `temperature`, a forced tool choice with a budget →
+  `UnsupportedThinkingError` before anything is sent, `retryable: false`.
+
+Ids are read from their `claude-` onward and a family claims only a date,
+`-0`, `-latest`, `-v1:0`, `@date` or `[…]` after it — never a version number,
+so `claude-opus-4` does not claim `claude-opus-4-5`. A new model is one row.
+
+```ts
+anthropicThinkingMode('us.anthropic.claude-sonnet-4-5-20250929-v1:0'); // 'budget'
+anthropicThinkingMode('claude-opus-5-5'); // 'adaptive'
+anthropic().thinkingMode?.('anthropic'); // its default model's mode
+```
 
 ## An empty assistant turn never reaches the wire
 `anthropicMessagesWire.ts` · `toAnthropicMessages` DROPS an assistant turn with
@@ -92,8 +122,10 @@ invokeModelGateway({ baseUrl, apiKeyHeader: 'api-key', apiKey, model, timeoutMs:
 - `InvokeModelGatewayProvider.ts` — Anthropic models behind a gateway that
   forwards the Bedrock InvokeModel operation with an API-key header (fetch, no SDK).
 - `anthropicMessagesWire.ts` — the Anthropic Messages body, response mapping and
-  stream assembly, shared by the two fetch adapters above (and the message
-  mapping by `anthropic()`).
+  stream assembly, shared by the two fetch adapters above (and the body by
+  `anthropic()`).
+- `anthropicThinkingWire.ts` — which thinking request each Claude model takes
+  (the one table) and the translation of `LLMRequest.thinking` onto the body.
 - `retryAfter.ts` — the one reader of `retry-after-ms` / `Retry-After`, for the
   `retryAfterMs` an adapter declares.
 - `contextWindow.ts` — `ContextWindowExceededError`: the budget refusal, named.

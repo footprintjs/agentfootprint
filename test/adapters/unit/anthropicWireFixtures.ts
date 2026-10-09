@@ -10,9 +10,11 @@ export const REQ: LLMRequest = {
   model: 'anthropic',
   systemPrompt: 'be brief',
   maxTokens: 50,
-  temperature: 0.2,
+  // 1 — the only temperature a thinking request may carry.
+  temperature: 1,
   stop: ['X'],
-  thinking: { budget: 100 },
+  // Above maxTokens, so the max_tokens bump still fires.
+  thinking: { budget: 1100 },
   toolChoice: { name: 't' },
   cacheMarkers: [
     { field: 'system', boundaryIndex: 0, ttl: 'short' },

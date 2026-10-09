@@ -10,6 +10,21 @@ fallback chain, circuit breaker), each preserving the port so they stack freely.
 The port survives every wrapper. A decorator that changed the request would be
 composing, and composing belongs to a Lens.
 
+## Declarations pass through; a pair answers for both
+A decorator rebuilds the provider object, so it carries every declaration
+across: `carriesInMessages`, `carriesForcedToolChoice`, `promptCaching`,
+`thinkingHandler`, `thinkingMode`. Dropping one degrades it silently (no cache
+markers, no thinking stage, no build-time thinking refusal). `withFallback`
+combines what both sides declare — for `thinkingMode`, the LEAST either side
+promises for the model (`'none'` < `'adaptive'` < `'budget'`), so a fallback
+that cannot think is refused at build, not on the call it serves. It never maps
+thinking itself: each side's adapter sends its own model's shape.
+
+```ts
+const pair = withFallback(anthropic({ defaultModel: 'claude-opus-5-5' }), anthropic());
+pair.thinkingMode?.('anthropic'); // 'adaptive' — Opus 5.5 takes no budget
+```
+
 ## The stream law: retry before the first chunk, never after
 `withRetry` re-opens a `stream()` that fails before its first chunk (a 429 or
 5xx at connect) under the SAME policy as `complete()` — `maxAttempts`,
