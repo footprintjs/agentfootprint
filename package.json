@@ -471,7 +471,7 @@
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.1",
-    "@google-cloud/storage": "^7.22.0",
+    "@google-cloud/storage": "^8.3.0",
     "@google/genai": "^2.16.0",
     "@googleapis/aiplatform": "^31.0.0",
     "@modelcontextprotocol/sdk": "^1.30.0",
