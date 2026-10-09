@@ -49,8 +49,7 @@
  * the embedder never sees the raw secret.
  */
 
-import type { CommitBundle } from 'footprintjs/advanced';
-import type { CausalNode, EdgeWeigher } from 'footprintjs/trace';
+import type { CausalNode, CommitBundle, EdgeWeigher } from 'footprintjs/trace';
 import { commitValueAt, flattenCausalDAG } from 'footprintjs/trace';
 
 import {

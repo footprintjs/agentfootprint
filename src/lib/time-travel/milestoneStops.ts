@@ -36,9 +36,9 @@
  * rather than reading one.
  */
 
-import type { CommitBundle, StageSnapshot } from 'footprintjs/advanced';
+import type { StageSnapshot } from 'footprintjs/advanced';
 import { commitStops, filterStops } from 'footprintjs/trace';
-import type { Stop, TimeTravelStrategy } from 'footprintjs/trace';
+import type { CommitBundle, Stop, TimeTravelStrategy } from 'footprintjs/trace';
 import {
   MILESTONE_KINDS,
   milestoneFor,

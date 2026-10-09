@@ -22,8 +22,7 @@
  */
 
 import { describe, expect, it, vi } from 'vitest';
-import type { CommitBundle } from 'footprintjs/advanced';
-import type { Stop } from 'footprintjs/trace';
+import type { CommitBundle, Stop } from 'footprintjs/trace';
 
 /** The stop shapes the mocked `commitStops` will hand back, one test at a time. */
 const scripted: { stops: Stop[] } = { stops: [] };

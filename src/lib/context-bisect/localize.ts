@@ -29,8 +29,8 @@
  * `trace_slice`, `get_value`) over the same artifacts bag.
  */
 
-import type { CommitBundle, StageSnapshot } from 'footprintjs/advanced';
-import type { CausalNode, ValueBasis } from 'footprintjs/trace';
+import type { StageSnapshot } from 'footprintjs/advanced';
+import type { CausalNode, CommitBundle, ValueBasis } from 'footprintjs/trace';
 import { causalChain, commitValueAtWithBasis } from 'footprintjs/trace';
 
 import {

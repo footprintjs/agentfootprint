@@ -33,8 +33,8 @@
  */
 
 import { commitStops, filterStops, tagStops, timeTravel } from 'footprintjs/trace';
-import type { Stop, TimeTravelStrategy } from 'footprintjs/trace';
-import type { CommitBundle, StageSnapshot } from 'footprintjs/advanced';
+import type { CommitBundle, Stop, TimeTravelStrategy } from 'footprintjs/trace';
+import type { StageSnapshot } from 'footprintjs/advanced';
 import {
   Agent,
   MILESTONE_TAG_PREFIX,

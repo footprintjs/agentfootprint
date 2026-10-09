@@ -112,7 +112,7 @@ dev.getTrace();                              // inherits setRedactionPolicy() if
 
 > **Redaction policy lives one layer down.** `RedactionPolicy` / `setRedactionPolicy` and the
 > fluent `.redact(policy)` are **footprint.js** surfaces (`RunnableChart`/`FlowChartExecutor`), and
-> `redactPatch` is `footprintjs/advanced`. The agentfootprint **agent does not surface a redaction
+> `redactPatch` was `footprintjs/advanced` (on no door since footprintjs 9.47.0). The agentfootprint **agent does not surface a redaction
 > setter today** — verified, `.redact(` appears nowhere in `agentfootprint/src`. So "set a trace
 > redaction policy on an agent" is itself a small **gap**: either thread it through `Agent.create`
 > or document the executor-level path. Track alongside `getTrace({ redact })`.

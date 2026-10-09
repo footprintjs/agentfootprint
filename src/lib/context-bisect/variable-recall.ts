@@ -31,7 +31,7 @@
  * change before GA.
  */
 
-import type { CommitBundle, StageSnapshot } from 'footprintjs/advanced';
+import type { StageSnapshot } from 'footprintjs/advanced';
 import {
   forwardSliceForKey,
   keyTimeline,
@@ -39,6 +39,7 @@ import {
   keysReadFromMap,
 } from 'footprintjs/trace';
 import type {
+  CommitBundle,
   ForwardEdge,
   ForwardNode,
   ForwardSlice,

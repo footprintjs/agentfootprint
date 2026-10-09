@@ -11,8 +11,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import { flowChart, FlowChartExecutor } from 'footprintjs';
-import { causalChain, type CausalNode } from 'footprintjs/trace';
-import type { CommitBundle, RuntimeSnapshot, StageSnapshot } from 'footprintjs/advanced';
+import { causalChain, type CausalNode, type CommitBundle } from 'footprintjs/trace';
+import type { RuntimeSnapshot, StageSnapshot } from 'footprintjs/advanced';
 
 import { mockEmbedder } from '../../../src/memory/embedding/mockEmbedder';
 import { embeddingCache, type Embedder } from '../../../src/lib/influence-core';

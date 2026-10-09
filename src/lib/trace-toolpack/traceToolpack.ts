@@ -34,7 +34,7 @@
  * overview → slice → node → value, paying only for what it opens.
  */
 
-import type { CommitBundle, StageSnapshot } from 'footprintjs/advanced';
+import type { StageSnapshot } from 'footprintjs/advanced';
 import {
   causalChain,
   commitValueAt,
@@ -44,7 +44,7 @@ import {
   formatCausalChain,
   HONESTY_CODES,
 } from 'footprintjs/trace';
-import type { ControlDepLookup, HonestyCode } from 'footprintjs/trace';
+import type { CommitBundle, ControlDepLookup, HonestyCode } from 'footprintjs/trace';
 import { arrayProvenance, elementProvenance, formatSlice, sliceForKey } from 'footprintjs/trace';
 
 import type { LLMMessage } from '../../adapters/types.js';

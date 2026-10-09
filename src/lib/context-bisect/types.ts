@@ -35,8 +35,8 @@
  * markers.
  */
 
-import type { CommitBundle, RuntimeSnapshot, StageSnapshot } from 'footprintjs/advanced';
-import type { ControlDepLookup, ValueBasis } from 'footprintjs/trace';
+import type { RuntimeSnapshot, StageSnapshot } from 'footprintjs/advanced';
+import type { CommitBundle, ControlDepLookup, ValueBasis } from 'footprintjs/trace';
 import type { Embedder, InfluenceWeights } from '../influence-core/index.js';
 
 // ─── Artifacts (input contract) ──────────────────────────────────────
