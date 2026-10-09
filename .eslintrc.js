@@ -1,3 +1,8 @@
+// A footprintjs door: `footprintjs` or `footprintjs/<subpath>`, never `footprintjs-<other>`.
+const FOOTPRINTJS_DOOR = String.raw`/^footprintjs(\/|$)/`;
+const NAMED_FOOTPRINTJS_ONLY =
+  'Import footprintjs names by name, never off a namespace object (`import * as`, `import()`, `require()`): a name read off a namespace can leave its door with no type error (footprintjs trace-extraction plan, E2).';
+
 module.exports = {
   env: {
     node: true,
@@ -63,6 +68,21 @@ module.exports = {
               },
             ],
           },
+        ],
+        // NAMED IMPORTS ONLY from footprintjs (footprintjs's trace-extraction plan, step E2).
+        // A name read off a namespace object (`import * as`, a value `import()` or `require()`)
+        // can be read through a cast and then leave its door with no type error; the record's
+        // readers are leaving footprintjs/trace for a package of their own, and a named import
+        // of a moved name fails tsc instead. A type query `import('footprintjs').Name` is a named
+        // read (a TSImportType node) and stays allowed. agentfootprint-lens holds the same rule
+        // as a test (test/packaging/named-imports.test.ts).
+        'no-restricted-syntax': [
+          'error',
+          ...[
+            `ImportDeclaration[source.value=${FOOTPRINTJS_DOOR}] > ImportNamespaceSpecifier`,
+            `ImportExpression[source.value=${FOOTPRINTJS_DOOR}]`,
+            `CallExpression[callee.name='require'][arguments.0.value=${FOOTPRINTJS_DOOR}]`,
+          ].map((selector) => ({ selector, message: NAMED_FOOTPRINTJS_ONLY })),
         ],
       },
     },
