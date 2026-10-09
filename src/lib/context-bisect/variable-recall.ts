@@ -32,7 +32,6 @@
  */
 
 import type { StageSnapshot } from 'footprintjs/advanced';
-import type { CommitBundle } from 'footprintjs/trace';
 import {
   forwardSliceForKey,
   keyTimeline,
@@ -40,6 +39,7 @@ import {
   keysReadFromMap,
 } from 'footprintjs/trace';
 import type {
+  CommitBundle,
   ForwardEdge,
   ForwardNode,
   ForwardSlice,
