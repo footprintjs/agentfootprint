@@ -76,6 +76,19 @@ export interface ThinkingBlock {
   readonly signature?: string;
 
   /**
+   * The conversation this block was produced in, as an opaque token only the
+   * process that wrote it can check. Never sent to the model.
+   *
+   * On Claude Fable 5.1, Opus 5.5, Sonnet 5.5 and Haiku 5.5 a thinking block
+   * stays valid only while the system prompt, the tools and every earlier
+   * message are unchanged (preserved thinking). The Anthropic adapters write
+   * this when the block arrives on such a model and send the block back only
+   * while the request still matches it — a block without one is not sent back
+   * to such a model (`adapters/llm/anthropicThinkingReplay.ts`).
+   */
+  readonly binding?: string;
+
+  /**
    * `true` when this block is a structured-summary step rather than
    * raw thinking content. Set by `OpenAIThinkingHandler` for each step
    * of `reasoning_summary`; never set by Anthropic. Consumers

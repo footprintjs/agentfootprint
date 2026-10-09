@@ -50,11 +50,14 @@
 
 import type { ThinkingBlock, ThinkingHandler } from './types.js';
 
-/** Anthropic's wire-format thinking block. */
+/** Anthropic's wire-format thinking block. `binding` is not the wire's: the
+ *  adapter adds it on a model that binds thinking to its conversation
+ *  (`adapters/llm/anthropicThinkingReplay.ts`), and it rides to the block. */
 interface AnthropicThinkingBlock {
   readonly type: 'thinking';
   readonly thinking: string;
   readonly signature?: string;
+  readonly binding?: string;
 }
 
 /** Anthropic's wire-format redacted-thinking block (safety-filtered): the
@@ -62,6 +65,7 @@ interface AnthropicThinkingBlock {
 interface AnthropicRedactedThinkingBlock {
   readonly type: 'redacted_thinking';
   readonly data?: string;
+  readonly binding?: string;
 }
 
 /** Other block types Anthropic emits — handler ignores these. */
@@ -98,6 +102,11 @@ function isRedactedThinkingBlock(b: AnthropicContentBlock): b is AnthropicRedact
   return b.type === 'redacted_thinking';
 }
 
+/** The adapter's binding token, when it wrote one — copied byte-exact, never invented. */
+function bindingOf(block: { readonly binding?: unknown }): { binding?: string } {
+  return typeof block.binding === 'string' ? { binding: block.binding } : {};
+}
+
 function isAnthropicChunk(chunk: unknown): chunk is AnthropicStreamChunk {
   return typeof chunk === 'object' && chunk !== null;
 }
@@ -127,6 +136,7 @@ export const anthropicThinkingHandler: ThinkingHandler = {
           // it's a string when the field is present.
           content: block.thinking,
           ...(block.signature !== undefined && { signature: block.signature }),
+          ...bindingOf(block),
         });
       } else if (isRedactedThinkingBlock(block)) {
         // Redacted blocks have no readable content; the encrypted `data`
@@ -137,6 +147,7 @@ export const anthropicThinkingHandler: ThinkingHandler = {
           type: 'redacted_thinking',
           content: '',
           ...(block.data !== undefined && { signature: block.data }),
+          ...bindingOf(block),
         });
       }
       // Other block types (text, tool_use, etc.) flow through the
