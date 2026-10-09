@@ -1,5 +1,6 @@
 import type { TypedScope } from 'footprintjs';
-import { createTypedScopeFactory, SharedMemory, StageContext } from 'footprintjs/advanced';
+import { createTypedScopeFactory, StageContext } from 'footprintjs/advanced';
+import { SharedMemory } from 'footprintjs/write';
 
 /** A real scope for unit tests that call helpers requiring the engine protocol. */
 export function typedScope<T extends object>(state: T): TypedScope<T> {

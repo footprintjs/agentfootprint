@@ -31,7 +31,8 @@
  * change before GA.
  */
 
-import type { CommitBundle, StageSnapshot } from 'footprintjs/advanced';
+import type { StageSnapshot } from 'footprintjs/advanced';
+import type { CommitBundle } from 'footprintjs/trace';
 import {
   forwardSliceForKey,
   keyTimeline,

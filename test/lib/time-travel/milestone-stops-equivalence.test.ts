@@ -23,8 +23,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { commitStops, filterStops, splitStageId, timeTravel } from 'footprintjs/trace';
-import type { Stop, TimeTravel, TimeTravelStrategy } from 'footprintjs/trace';
-import type { CommitBundle, StageSnapshot } from 'footprintjs/advanced';
+import type { CommitBundle, Stop, TimeTravel, TimeTravelStrategy } from 'footprintjs/trace';
+import type { StageSnapshot } from 'footprintjs/advanced';
 import {
   Agent,
   LLMCall,

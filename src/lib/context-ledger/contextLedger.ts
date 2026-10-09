@@ -59,8 +59,8 @@ import {
   keysReadFromExecutionTree,
   sliceForKey,
 } from 'footprintjs/trace';
-import type { ValueBasis } from 'footprintjs/trace';
-import type { CommitBundle, StageSnapshot } from 'footprintjs/advanced';
+import type { CommitBundle, ValueBasis } from 'footprintjs/trace';
+import type { StageSnapshot } from 'footprintjs/advanced';
 
 import { INJECTION_KEYS } from '../../conventions.js';
 // The flat/grouped fork, from its ONE owner (9.88.0). This file used to carry a
