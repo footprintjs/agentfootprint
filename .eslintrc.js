@@ -64,6 +64,19 @@ module.exports = {
             ],
           },
         ],
+        // NAMED IMPORTS ONLY from footprintjs (footprintjs's trace-extraction plan, step E2).
+        // A name read off a namespace object can be read through a cast and then leave its
+        // door with no type error; the record's readers are leaving footprintjs/trace for a
+        // package of their own, and a named import of a moved name fails tsc instead.
+        // agentfootprint-lens holds the same rule as a test (test/packaging/named-imports.test.ts).
+        'no-restricted-syntax': [
+          'error',
+          {
+            selector: 'ImportDeclaration[source.value=/^footprintjs/] > ImportNamespaceSpecifier',
+            message:
+              'Import footprintjs names by name, never `import * as …`: a name read off a namespace can leave its door with no type error (footprintjs trace-extraction plan, E2).',
+          },
+        ],
       },
     },
     {
