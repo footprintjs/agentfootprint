@@ -177,7 +177,7 @@ One line to the person, too
 
 > **answerValidation**\<`T`\>(`options`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:3268](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L3268)
+Defined in: [src/core/agent/AgentBuilder.ts:3271](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L3271)
 
 Validate a JSON answer against host-owned evidence before delivering it.
 Requires outputSchema. Enforce (default) refuses failed or unverified
@@ -232,7 +232,7 @@ commentary + thinking templates. Same place to brand a tenant
 
 > **build**(): [`Agent`](/docs/api/classes/Agent)
 
-Defined in: [src/core/agent/AgentBuilder.ts:3341](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L3341)
+Defined in: [src/core/agent/AgentBuilder.ts:3344](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L3344)
 
 #### Returns
 
@@ -244,7 +244,7 @@ Defined in: [src/core/agent/AgentBuilder.ts:3341](https://github.com/footprintjs
 
 > **checkIn**(`opts?`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:3147](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L3147)
+Defined in: [src/core/agent/AgentBuilder.ts:3150](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L3150)
 
 #### Parameters
 
@@ -963,7 +963,7 @@ The READ subflow runs at the configured `timing` (default
 
 > **messageMiddleware**(...`middleware`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:3123](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L3123)
+Defined in: [src/core/agent/AgentBuilder.ts:3126](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L3126)
 
 Wrap the message boundary in a governance chain — the input before the
 model sees it, the output before the caller receives it.
@@ -1553,7 +1553,7 @@ const agent = Agent.create({ provider, model })
 
 > **selfExplain**(`opts?`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:3155](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L3155)
+Defined in: [src/core/agent/AgentBuilder.ts:3158](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L3158)
 
 #### Parameters
 
@@ -1813,7 +1813,7 @@ Optional config. `cache` controls how the
 
 > **thinking**(`opts`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:2921](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L2921)
+Defined in: [src/core/agent/AgentBuilder.ts:2924](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L2924)
 
 v2.14+ — REQUEST-side thinking activation. Tells the provider to
 emit reasoning blocks alongside its response.
@@ -1823,12 +1823,15 @@ emit reasoning blocks alongside its response.
 shape the MODEL takes, from what it declares per model
 (`LLMProvider.thinkingMode`):
   - `'budget'` (Claude 4.6 and earlier): `thinking: { type: 'enabled',
-    budget_tokens: budget }` — the model thinks up to `budget` tokens;
-  - `'adaptive'` (Claude 4.7 and later, and any model the table does not
-    know): `thinking: { type: 'adaptive', display: 'summarized' }` — the
-    model decides whether and how much to think and the budget is NOT
-    sent (dev mode says so once per model); it only keeps `max_tokens`
-    above it;
+    budget_tokens: budget }` — a target for the thinking, not a hard cap
+    (`max_tokens` is the cap);
+  - `'adaptive'` (Claude 4.7 and later, Mythos Preview, and any id the
+    table does not know): `thinking: { type: 'adaptive', display:
+    'summarized' }` — the model decides whether and how much to think and
+    the budget is NOT sent (dev mode says so once per model); it only
+    keeps `max_tokens` above it. An adapter's `thinkingMode` option
+    changes the answer for one id (an alias, a profile ARN, or Opus 4.6
+    wanted adaptive);
   - `'none'` (Claude 3.x except 3.7 Sonnet): refused here at `build()`
     with an `UnsupportedThinkingError`.
 
@@ -2131,7 +2134,7 @@ agent.getSnapshot()?.sharedState.toolChoices; // pick → served → called, per
 
 > **toolMiddleware**(...`middleware`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:3041](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L3041)
+Defined in: [src/core/agent/AgentBuilder.ts:3044](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L3044)
 
 Wrap every tool dispatch in a governance chain.
 
