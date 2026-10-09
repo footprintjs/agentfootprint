@@ -4,7 +4,7 @@ title: LoopOptions
 
 # Interface: LoopOptions
 
-Defined in: src/core-flow/Loop.ts:44
+Defined in: [src/core-flow/Loop.ts:44](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L44)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: src/core-flow/Loop.ts:44
 
 > `readonly` `optional` **groupTranslator?**: [`GroupTranslator`](/docs/api/interfaces/GroupTranslator)\<`unknown`\>
 
-Defined in: src/core-flow/Loop.ts:62
+Defined in: [src/core-flow/Loop.ts:62](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L62)
 
 Optional per-COMPOSITION translator (UI-agnostic). See
 `core/translator.ts`. When attached, `runner.getUIGroup()` invokes
@@ -26,7 +26,7 @@ Returns `undefined` when omitted.
 
 > `readonly` `optional` **id?**: `string`
 
-Defined in: src/core-flow/Loop.ts:46
+Defined in: [src/core-flow/Loop.ts:46](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L46)
 
 ***
 
@@ -34,7 +34,7 @@ Defined in: src/core-flow/Loop.ts:46
 
 > `readonly` `optional` **name?**: `string`
 
-Defined in: src/core-flow/Loop.ts:45
+Defined in: [src/core-flow/Loop.ts:45](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L45)
 
 ***
 
@@ -42,7 +42,7 @@ Defined in: src/core-flow/Loop.ts:45
 
 > `readonly` `optional` **structureRecorders?**: readonly `StructureRecorder`[]
 
-Defined in: src/core-flow/Loop.ts:54
+Defined in: [src/core-flow/Loop.ts:54](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L54)
 
 Optional build-time recorders passed through to footprintjs's
 `flowChart()` factory. Each recorder observes per-node build

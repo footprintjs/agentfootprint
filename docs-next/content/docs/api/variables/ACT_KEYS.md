@@ -6,6 +6,6 @@ title: ACT_KEYS
 
 > `const` **ACT\_KEYS**: readonly [`ActKey`](/docs/api/type-aliases/ActKey)[]
 
-Defined in: src/core/agent/act.ts:72
+Defined in: [src/core/agent/act.ts:72](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/act.ts#L72)
 
 The keys `.act()` accepts, derived from the moment list rather than typed.

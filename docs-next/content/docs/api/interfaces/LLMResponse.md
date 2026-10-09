@@ -4,7 +4,7 @@ title: LLMResponse
 
 # Interface: LLMResponse
 
-Defined in: src/adapters/types.ts:320
+Defined in: [src/adapters/types.ts:320](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L320)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: src/adapters/types.ts:320
 
 > `readonly` **content**: `string`
 
-Defined in: src/adapters/types.ts:321
+Defined in: [src/adapters/types.ts:321](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L321)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: src/adapters/types.ts:321
 
 > `readonly` `optional` **providerRef?**: `string`
 
-Defined in: src/adapters/types.ts:373
+Defined in: [src/adapters/types.ts:373](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L373)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: src/adapters/types.ts:373
 
 > `readonly` `optional` **rawThinking?**: `unknown`
 
-Defined in: src/adapters/types.ts:388
+Defined in: [src/adapters/types.ts:388](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L388)
 
 v2.14 — Provider-specific raw thinking data, opaque to the
 framework. Providers that support extended thinking populate this
@@ -49,7 +49,7 @@ etc.). The thinking subflow's stage early-returns in this case.
 
 > `readonly` **stopReason**: `string`
 
-Defined in: src/adapters/types.ts:372
+Defined in: [src/adapters/types.ts:372](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L372)
 
 ***
 
@@ -57,7 +57,7 @@ Defined in: src/adapters/types.ts:372
 
 > `readonly` **toolCalls**: readonly `object`[]
 
-Defined in: src/adapters/types.ts:322
+Defined in: [src/adapters/types.ts:322](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L322)
 
 ***
 
@@ -65,7 +65,7 @@ Defined in: src/adapters/types.ts:322
 
 > `readonly` **usage**: `object`
 
-Defined in: src/adapters/types.ts:347
+Defined in: [src/adapters/types.ts:347](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L347)
 
 #### cacheRead?
 
@@ -110,7 +110,7 @@ are billed as a separate line item).
 
 > `readonly` `optional` **wireManifest?**: [`WireToolManifest`](/docs/api/interfaces/WireToolManifest)
 
-Defined in: src/adapters/types.ts:403
+Defined in: [src/adapters/types.ts:403](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L403)
 
 9.60.0 — what this request ACTUALLY carried, read back from the
 serialized body after every transform (see adapters/llm/wireManifest.ts,

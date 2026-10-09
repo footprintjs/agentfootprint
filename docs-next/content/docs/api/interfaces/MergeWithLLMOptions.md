@@ -4,7 +4,7 @@ title: MergeWithLLMOptions
 
 # Interface: MergeWithLLMOptions
 
-Defined in: src/core-flow/Parallel.ts:105
+Defined in: [src/core-flow/Parallel.ts:105](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L105)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: src/core-flow/Parallel.ts:105
 
 > `readonly` `optional` **maxTokens?**: `number`
 
-Defined in: src/core-flow/Parallel.ts:111
+Defined in: [src/core-flow/Parallel.ts:111](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L111)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: src/core-flow/Parallel.ts:111
 
 > `readonly` **model**: `string`
 
-Defined in: src/core-flow/Parallel.ts:107
+Defined in: [src/core-flow/Parallel.ts:107](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L107)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: src/core-flow/Parallel.ts:107
 
 > `readonly` **prompt**: `string`
 
-Defined in: src/core-flow/Parallel.ts:109
+Defined in: [src/core-flow/Parallel.ts:109](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L109)
 
 Prompt prepended to the branch results when feeding the merge LLM.
 
@@ -38,7 +38,7 @@ Prompt prepended to the branch results when feeding the merge LLM.
 
 > `readonly` **provider**: [`LLMProvider`](/docs/api/interfaces/LLMProvider)
 
-Defined in: src/core-flow/Parallel.ts:106
+Defined in: [src/core-flow/Parallel.ts:106](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L106)
 
 ***
 
@@ -46,4 +46,4 @@ Defined in: src/core-flow/Parallel.ts:106
 
 > `readonly` `optional` **temperature?**: `number`
 
-Defined in: src/core-flow/Parallel.ts:110
+Defined in: [src/core-flow/Parallel.ts:110](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L110)

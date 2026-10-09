@@ -6,7 +6,7 @@ title: assertToolWants
 
 > **assertToolWants**(`toolName`, `wants`, `inputSchema`): `void`
 
-Defined in: src/artifacts/wants.ts:47
+Defined in: [src/artifacts/wants.ts:47](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/wants.ts#L47)
 
 Refuse a `wants` declaration this library cannot honor, at definition time
 — naming the tool and the fix, never at the first dispatch of the first

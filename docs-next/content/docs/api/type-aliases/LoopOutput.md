@@ -6,4 +6,4 @@ title: LoopOutput
 
 > **LoopOutput** = `string`
 
-Defined in: src/core-flow/Loop.ts:69
+Defined in: [src/core-flow/Loop.ts:69](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L69)

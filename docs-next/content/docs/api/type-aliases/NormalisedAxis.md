@@ -6,7 +6,7 @@ title: NormalisedAxis
 
 > **NormalisedAxis** = \{ `counts`: [`AxisCounts`](/docs/api/interfaces/AxisCounts); `notes`: readonly [`AxisOverlapNote`](/docs/api/interfaces/AxisOverlapNote)[]; `points`: readonly [`AxisPoint`](/docs/api/interfaces/AxisPoint)[]; `precision`: [`AxisPrecision`](/docs/api/type-aliases/AxisPrecision); `status`: `"instants"`; \} \| \{ `count`: `number`; `counts`: [`AxisCounts`](/docs/api/interfaces/AxisCounts); `notes`: readonly [`AxisOverlapNote`](/docs/api/interfaces/AxisOverlapNote)[]; `points`: readonly [`AxisPoint`](/docs/api/interfaces/AxisPoint)[]; `precision`: [`AxisPrecision`](/docs/api/type-aliases/AxisPrecision); `status`: `"naive-values"`; \} \| \{ `count`: `number`; `counts`: [`AxisCounts`](/docs/api/interfaces/AxisCounts); `reason`: `"naive-values"`; `status`: `"refused"`; \}
 
-Defined in: src/core/time/axis.ts:374
+Defined in: [src/core/time/axis.ts:374](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/axis.ts#L374)
 
 The read-side view of a declared time column.
 

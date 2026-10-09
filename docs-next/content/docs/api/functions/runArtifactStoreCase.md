@@ -6,7 +6,7 @@ title: runArtifactStoreCase
 
 > **runArtifactStoreCase**(`testCase`, `harness`): `Promise`\<[`ArtifactStoreOutcome`](/docs/api/type-aliases/ArtifactStoreOutcome)\>
 
-Defined in: src/artifacts/conformance/run.ts:119
+Defined in: [src/artifacts/conformance/run.ts:119](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/conformance/run.ts#L119)
 
 Run ONE case against one store, building and disposing the store around it.
 

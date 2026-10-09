@@ -6,7 +6,7 @@ title: keyedFold
 
 > **keyedFold**(`source`): [`KeyedFold`](/docs/api/interfaces/KeyedFold)
 
-Defined in: src/lib/time-travel/keyedFold.ts:250
+Defined in: [src/lib/time-travel/keyedFold.ts:250](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/keyedFold.ts#L250)
 
 The keyed fold for one source, memoized on the source object.
 

@@ -4,7 +4,7 @@ title: ElicitationRequest
 
 # Interface: ElicitationRequest
 
-Defined in: src/lib/mcp/elicitation.ts:69
+Defined in: [src/lib/mcp/elicitation.ts:69](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/mcp/elicitation.ts#L69)
 
 The MCP `elicitation/create` request's params.
 
@@ -14,7 +14,7 @@ The MCP `elicitation/create` request's params.
 
 > `readonly` **message**: `string`
 
-Defined in: src/lib/mcp/elicitation.ts:70
+Defined in: [src/lib/mcp/elicitation.ts:70](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/mcp/elicitation.ts#L70)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: src/lib/mcp/elicitation.ts:70
 
 > `readonly` **requestedSchema**: `object`
 
-Defined in: src/lib/mcp/elicitation.ts:71
+Defined in: [src/lib/mcp/elicitation.ts:71](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/mcp/elicitation.ts#L71)
 
 #### properties
 

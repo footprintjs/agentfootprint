@@ -6,7 +6,7 @@ title: tokenBudget
 
 > **tokenBudget**(`options`): [`WindowStrategy`](/docs/api/interfaces/WindowStrategy)
 
-Defined in: src/core/agent/window/strategies/tokenBudget.ts:53
+Defined in: [src/core/agent/window/strategies/tokenBudget.ts:53](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategies/tokenBudget.ts#L53)
 
 Drop the oldest turns whenever the last call's adapter-reported input
 tokens exceed `thresholdTokens`.

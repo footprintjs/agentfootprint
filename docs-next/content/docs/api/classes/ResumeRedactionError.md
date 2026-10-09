@@ -4,7 +4,7 @@ title: ResumeRedactionError
 
 # Class: ResumeRedactionError
 
-Defined in: src/core/conversation.ts:185
+Defined in: [src/core/conversation.ts:185](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L185)
 
 Thrown by `resume(checkpoint, input, options)` when the paused run's
 redaction cannot be carried into the resumed leg — refused before anything
@@ -37,7 +37,7 @@ message.
 
 > **new ResumeRedactionError**(`reason`): `ResumeRedactionError`
 
-Defined in: src/core/conversation.ts:189
+Defined in: [src/core/conversation.ts:189](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L189)
 
 #### Parameters
 
@@ -71,7 +71,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_RESUME_REDACTION"`
 
-Defined in: src/core/conversation.ts:186
+Defined in: [src/core/conversation.ts:186](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L186)
 
 ***
 
@@ -103,7 +103,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1076
 
 > `readonly` **reason**: [`ResumeRedactionReason`](/docs/api/type-aliases/ResumeRedactionReason)
 
-Defined in: src/core/conversation.ts:187
+Defined in: [src/core/conversation.ts:187](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L187)
 
 ***
 

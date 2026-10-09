@@ -4,7 +4,7 @@ title: "~~Interface: ResolveCtx~~"
 
 # ~~Interface: ResolveCtx~~
 
-Defined in: src/adapters/types.ts:697
+Defined in: [src/adapters/types.ts:697](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L697)
 
 ## Deprecated
 
@@ -16,7 +16,7 @@ No implementation exists — see [ContextSourceAdapter](/docs/api/interfaces/Con
 
 > `readonly` **availableBudgetTokens**: `number`
 
-Defined in: src/adapters/types.ts:701
+Defined in: [src/adapters/types.ts:701](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L701)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: src/adapters/types.ts:701
 
 > `readonly` **iterIndex**: `number`
 
-Defined in: src/adapters/types.ts:700
+Defined in: [src/adapters/types.ts:700](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L700)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: src/adapters/types.ts:700
 
 > `readonly` `optional` **signal?**: `AbortSignal`
 
-Defined in: src/adapters/types.ts:702
+Defined in: [src/adapters/types.ts:702](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L702)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: src/adapters/types.ts:702
 
 > `readonly` **turnIndex**: `number`
 
-Defined in: src/adapters/types.ts:699
+Defined in: [src/adapters/types.ts:699](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L699)
 
 ***
 
@@ -48,4 +48,4 @@ Defined in: src/adapters/types.ts:699
 
 > `readonly` **userMessage**: `string`
 
-Defined in: src/adapters/types.ts:698
+Defined in: [src/adapters/types.ts:698](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L698)

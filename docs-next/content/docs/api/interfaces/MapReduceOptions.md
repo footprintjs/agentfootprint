@@ -4,7 +4,7 @@ title: MapReduceOptions
 
 # Interface: MapReduceOptions
 
-Defined in: src/patterns/MapReduce.ts:33
+Defined in: [src/patterns/MapReduce.ts:33](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/MapReduce.ts#L33)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: src/patterns/MapReduce.ts:33
 
 > `readonly` `optional` **id?**: `string`
 
-Defined in: src/patterns/MapReduce.ts:59
+Defined in: [src/patterns/MapReduce.ts:59](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/MapReduce.ts#L59)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: src/patterns/MapReduce.ts:59
 
 > `readonly` **mapPrompt**: `string`
 
-Defined in: src/patterns/MapReduce.ts:37
+Defined in: [src/patterns/MapReduce.ts:37](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/MapReduce.ts#L37)
 
 System prompt applied to every shard's LLMCall.
 
@@ -30,7 +30,7 @@ System prompt applied to every shard's LLMCall.
 
 > `readonly` `optional` **maxTokens?**: `number`
 
-Defined in: src/patterns/MapReduce.ts:57
+Defined in: [src/patterns/MapReduce.ts:57](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/MapReduce.ts#L57)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: src/patterns/MapReduce.ts:57
 
 > `readonly` **model**: `string`
 
-Defined in: src/patterns/MapReduce.ts:35
+Defined in: [src/patterns/MapReduce.ts:35](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/MapReduce.ts#L35)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: src/patterns/MapReduce.ts:35
 
 > `readonly` `optional` **name?**: `string`
 
-Defined in: src/patterns/MapReduce.ts:58
+Defined in: [src/patterns/MapReduce.ts:58](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/MapReduce.ts#L58)
 
 ***
 
@@ -54,7 +54,7 @@ Defined in: src/patterns/MapReduce.ts:58
 
 > `readonly` **provider**: [`LLMProvider`](/docs/api/interfaces/LLMProvider)
 
-Defined in: src/patterns/MapReduce.ts:34
+Defined in: [src/patterns/MapReduce.ts:34](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/MapReduce.ts#L34)
 
 ***
 
@@ -62,7 +62,7 @@ Defined in: src/patterns/MapReduce.ts:34
 
 > `readonly` **reduce**: \{ `fn`: [`MergeFn`](/docs/api/type-aliases/MergeFn); `kind`: `"fn"`; \} \| \{ `kind`: `"llm"`; `opts`: [`MergeWithLLMOptions`](/docs/api/interfaces/MergeWithLLMOptions); \}
 
-Defined in: src/patterns/MapReduce.ts:53
+Defined in: [src/patterns/MapReduce.ts:53](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/MapReduce.ts#L53)
 
 Reducer — either a pure fn combining the N shard outputs, OR an LLM
 synthesizer.
@@ -73,7 +73,7 @@ synthesizer.
 
 > `readonly` **shardCount**: `number`
 
-Defined in: src/patterns/MapReduce.ts:42
+Defined in: [src/patterns/MapReduce.ts:42](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/MapReduce.ts#L42)
 
 Number of shards to fan out. Must be >= 2 (for one-shard, use
 `LLMCall` directly). Fixed at build time.
@@ -84,7 +84,7 @@ Number of shards to fan out. Must be >= 2 (for one-shard, use
 
 > `readonly` **split**: (`input`, `shardCount`) => readonly `string`[]
 
-Defined in: src/patterns/MapReduce.ts:48
+Defined in: [src/patterns/MapReduce.ts:48](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/MapReduce.ts#L48)
 
 Splitter invoked at run time with `(input, shardCount)`. MUST return
 exactly `shardCount` strings. If it returns fewer, remaining shards
@@ -110,4 +110,4 @@ readonly `string`[]
 
 > `readonly` `optional` **temperature?**: `number`
 
-Defined in: src/patterns/MapReduce.ts:56
+Defined in: [src/patterns/MapReduce.ts:56](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/MapReduce.ts#L56)

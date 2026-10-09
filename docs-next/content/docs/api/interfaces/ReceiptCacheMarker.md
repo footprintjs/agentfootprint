@@ -4,7 +4,7 @@ title: ReceiptCacheMarker
 
 # Interface: ReceiptCacheMarker
 
-Defined in: src/lib/time-travel/receipt.ts:256
+Defined in: [src/lib/time-travel/receipt.ts:256](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L256)
 
 One `cache_control` breakpoint the cache strategy actually APPLIED — three
 scalars, no bytes.
@@ -38,7 +38,7 @@ at(3) === at(4); // false ⇒ the cached prefix moved, and the bill with it
 
 > `readonly` **boundaryIndex**: `number`
 
-Defined in: src/lib/time-travel/receipt.ts:258
+Defined in: [src/lib/time-travel/receipt.ts:258](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L258)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: src/lib/time-travel/receipt.ts:258
 
 > `readonly` **field**: `"system"` \| `"messages"` \| `"tools"`
 
-Defined in: src/lib/time-travel/receipt.ts:257
+Defined in: [src/lib/time-travel/receipt.ts:257](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L257)
 
 ***
 
@@ -54,4 +54,4 @@ Defined in: src/lib/time-travel/receipt.ts:257
 
 > `readonly` **ttl**: `"short"` \| `"long"`
 
-Defined in: src/lib/time-travel/receipt.ts:259
+Defined in: [src/lib/time-travel/receipt.ts:259](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L259)

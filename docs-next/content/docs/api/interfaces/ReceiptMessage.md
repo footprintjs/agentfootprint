@@ -4,7 +4,7 @@ title: ReceiptMessage
 
 # Interface: ReceiptMessage
 
-Defined in: src/lib/time-travel/receipt.ts:216
+Defined in: [src/lib/time-travel/receipt.ts:216](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L216)
 
 One message as it went out.
 
@@ -14,7 +14,7 @@ One message as it went out.
 
 > `readonly` **hash**: `string`
 
-Defined in: src/lib/time-travel/receipt.ts:218
+Defined in: [src/lib/time-travel/receipt.ts:218](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L218)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: src/lib/time-travel/receipt.ts:218
 
 > `readonly` `optional` **key?**: `string`
 
-Defined in: src/lib/time-travel/receipt.ts:221
+Defined in: [src/lib/time-travel/receipt.ts:221](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L221)
 
 The message's own join key when it has one — a tool result's
  `toolCallId`. Absent for every other message.
@@ -33,4 +33,4 @@ The message's own join key when it has one — a tool result's
 
 > `readonly` **role**: `ContextRole`
 
-Defined in: src/lib/time-travel/receipt.ts:217
+Defined in: [src/lib/time-travel/receipt.ts:217](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L217)

@@ -4,7 +4,7 @@ title: ArtifactIntegrityError
 
 # Class: ArtifactIntegrityError
 
-Defined in: src/artifacts/types.ts:322
+Defined in: [src/artifacts/types.ts:322](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L322)
 
 A stored payload no longer matches the digest minted with it. Thrown by
 `get` instead of returning the bytes — corrupt data delivered as whole data
@@ -21,7 +21,7 @@ must never do is honor a ticket with someone else's parcel.
 
 > **new ArtifactIntegrityError**(`ref`, `expected`, `actual`): `ArtifactIntegrityError`
 
-Defined in: src/artifacts/types.ts:330
+Defined in: [src/artifacts/types.ts:330](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L330)
 
 #### Parameters
 
@@ -51,7 +51,7 @@ Defined in: src/artifacts/types.ts:330
 
 > `readonly` **actual**: `string`
 
-Defined in: src/artifacts/types.ts:328
+Defined in: [src/artifacts/types.ts:328](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L328)
 
 The digest of what the store actually holds now.
 
@@ -73,7 +73,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_ARTIFACT_INTEGRITY"`
 
-Defined in: src/artifacts/types.ts:323
+Defined in: [src/artifacts/types.ts:323](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L323)
 
 ***
 
@@ -81,7 +81,7 @@ Defined in: src/artifacts/types.ts:323
 
 > `readonly` **expected**: `string`
 
-Defined in: src/artifacts/types.ts:326
+Defined in: [src/artifacts/types.ts:326](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L326)
 
 The digest minted at put.
 
@@ -115,7 +115,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1076
 
 > `readonly` **ref**: `string`
 
-Defined in: src/artifacts/types.ts:324
+Defined in: [src/artifacts/types.ts:324](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L324)
 
 ***
 

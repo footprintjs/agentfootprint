@@ -4,7 +4,7 @@ title: TimeAnswerRow
 
 # Interface: TimeAnswerRow
 
-Defined in: src/core/time/rows.ts:150
+Defined in: [src/core/time/rows.ts:150](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L150)
 
 The window the person settled for one mention in the time ask — the ONLY
 door by which a window of words becomes the person's (the owner's decision
@@ -23,7 +23,7 @@ answer binds (`arguments/ask.ts` · `bindAnswer`); read back by
 
 > `readonly` **from**: `string`
 
-Defined in: src/core/time/range.ts:60
+Defined in: [src/core/time/range.ts:60](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/range.ts#L60)
 
 #### Inherited from
 
@@ -35,7 +35,7 @@ Defined in: src/core/time/range.ts:60
 
 > `readonly` **how**: `"confirmed"` \| `"edited"`
 
-Defined in: src/core/time/rows.ts:163
+Defined in: [src/core/time/rows.ts:163](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L163)
 
 `confirmed`: the person picked a reading the library offered (the
 pre-filled choice — their click); `edited`: they wrote a window of their
@@ -47,7 +47,7 @@ own. Both are the person's answer.
 
 > `readonly` **iteration**: `number`
 
-Defined in: src/core/time/rows.ts:153
+Defined in: [src/core/time/rows.ts:153](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L153)
 
 ***
 
@@ -55,7 +55,7 @@ Defined in: src/core/time/rows.ts:153
 
 > `readonly` **kind**: `"time-answer"`
 
-Defined in: src/core/time/rows.ts:151
+Defined in: [src/core/time/rows.ts:151](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L151)
 
 ***
 
@@ -63,7 +63,7 @@ Defined in: src/core/time/rows.ts:151
 
 > `readonly` **mention**: `number`
 
-Defined in: src/core/time/rows.ts:155
+Defined in: [src/core/time/rows.ts:155](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L155)
 
 The `time-reading` row's mention the answer settles.
 
@@ -73,7 +73,7 @@ The `time-reading` row's mention the answer settles.
 
 > `readonly` **to**: `string`
 
-Defined in: src/core/time/range.ts:61
+Defined in: [src/core/time/range.ts:61](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/range.ts#L61)
 
 #### Inherited from
 
@@ -85,7 +85,7 @@ Defined in: src/core/time/range.ts:61
 
 > `readonly` **turn**: `number`
 
-Defined in: src/core/time/rows.ts:152
+Defined in: [src/core/time/rows.ts:152](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L152)
 
 ***
 
@@ -93,6 +93,6 @@ Defined in: src/core/time/rows.ts:152
 
 > `readonly` **zone**: `string`
 
-Defined in: src/core/time/rows.ts:157
+Defined in: [src/core/time/rows.ts:157](https://github.com/footprintjs/agentfootprint/blob/main/src/core/time/rows.ts#L157)
 
 The zone the window was answered in — the reading's, or the turn's clock for free entry.

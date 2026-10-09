@@ -4,7 +4,7 @@ title: InputRepeat
 
 # Interface: InputRepeat
 
-Defined in: src/core/inputRequest.ts:99
+Defined in: [src/core/inputRequest.ts:99](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L99)
 
 The runtime's mark on a RE-ASK: the same ask (same declaration
 `id`) raised again in the same turn after the person answered it. Facts
@@ -16,7 +16,7 @@ only — never a reason. Stamped by the runtime, never declarable.
 
 > `readonly` **count**: `number`
 
-Defined in: src/core/inputRequest.ts:101
+Defined in: [src/core/inputRequest.ts:101](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L101)
 
 How many times the person has already answered this ask in this turn.
 
@@ -26,7 +26,7 @@ How many times the person has already answered this ask in this turn.
 
 > `readonly` `optional` **previousAnswer?**: `Readonly`\<`Record`\<`string`, [`InputValue`](/docs/api/type-aliases/InputValue)\>\>
 
-Defined in: src/core/inputRequest.ts:108
+Defined in: [src/core/inputRequest.ts:108](https://github.com/footprintjs/agentfootprint/blob/main/src/core/inputRequest.ts#L108)
 
 The person's previous answer (the fields they supplied) as the RECORD
 holds it — after the tool-result rules, redaction first among them, ran
