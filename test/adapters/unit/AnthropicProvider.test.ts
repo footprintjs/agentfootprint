@@ -473,9 +473,11 @@ describe('AnthropicProvider — parallelToolCalls', () => {
       _client: makeFakeClient([baseResponse], recorder),
     });
     // maxTokens 1000 < budget 2000, so the thinking auto-bump must still fire.
+    // Temperature 1: the only one a thinking request may carry (another value
+    // is refused before sending — see test/thinking/thinking-per-model.test.ts).
     await p.complete({
       ...toolReq,
-      temperature: 0.2,
+      temperature: 1,
       maxTokens: 1000,
       thinking: { budget: 2000 },
     });
@@ -487,7 +489,7 @@ describe('AnthropicProvider — parallelToolCalls', () => {
     };
     expect(params.tool_choice).toEqual({ type: 'auto', disable_parallel_tool_use: true });
     expect(params.thinking).toEqual({ type: 'enabled', budget_tokens: 2000 });
-    expect(params.temperature).toBe(0.2);
+    expect(params.temperature).toBe(1);
     expect(params.max_tokens).toBe(2000 + 1024); // the thinking auto-bump still applies
   });
 

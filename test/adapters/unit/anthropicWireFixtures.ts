@@ -10,9 +10,11 @@ export const REQ: LLMRequest = {
   model: 'anthropic',
   systemPrompt: 'be brief',
   maxTokens: 50,
-  temperature: 0.2,
+  // 1 — the only temperature a thinking request may carry.
+  temperature: 1,
   stop: ['X'],
-  thinking: { budget: 100 },
+  // Above maxTokens, so the max_tokens bump still fires.
+  thinking: { budget: 1100 },
   toolChoice: { name: 't' },
   cacheMarkers: [
     { field: 'system', boundaryIndex: 0, ttl: 'short' },
@@ -86,3 +88,33 @@ export function rec(bodies: string[], stream: boolean) {
     return new Response(JSON.stringify(MSG), { status: 200 });
   }) as never;
 }
+
+/**
+ * The request a BUDGET model takes (Sonnet 4.5, the adapters' default model,
+ * via the `'anthropic'` shorthand): every branch of `REQ` that a budget body
+ * can carry — no temperature (thinking takes only the default) and no forced
+ * tool choice (budget thinking refuses it). Its bytes must not change.
+ */
+export const REQ_BUDGET: LLMRequest = (() => {
+  const {
+    temperature: _t,
+    toolChoice: _c,
+    ...rest
+  } = REQ as LLMRequest & {
+    toolChoice?: unknown;
+  };
+  void _t;
+  void _c;
+  return rest as LLMRequest;
+})();
+
+/**
+ * The same request WITHOUT thinking: temperature 0.2 and a forced tool choice
+ * ride a body that asks no thinking, on every model. Its bytes must not change
+ * either — `anthropic()` now builds this body through the shared builder.
+ */
+export const REQ_PLAIN: LLMRequest = (() => {
+  const { thinking: _th, ...rest } = REQ;
+  void _th;
+  return { ...rest, temperature: 0.2 } as LLMRequest;
+})();

@@ -6,7 +6,7 @@
  *
  *   ```ts
  *   { type: 'thinking',          thinking: 'reasoning text', signature: 'opaque-base64' }
- *   { type: 'redacted_thinking',                              signature: 'opaque-base64' }
+ *   { type: 'redacted_thinking', data: 'opaque-encrypted' }
  *   { type: 'text',              text: 'visible content' }
  *   { type: 'tool_use',          id, name, input }
  *   ```
@@ -16,6 +16,15 @@
  * signatures server-side on the next turn — any modification = HTTP 400),
  * and ignores other block types (visible text + tool calls flow through
  * the existing `LLMResponse.content` / `LLMResponse.toolCalls` paths).
+ *
+ * The same shapes in both thinking modes (budget and adaptive). Two
+ * adaptive-mode facts the echo already honours: a turn may carry NO
+ * thinking block (the model chose not to think), and a block's `thinking`
+ * text may be EMPTY — `display: 'omitted'`, the default on Claude 4.7 and
+ * later when the request does not ask to think (`.thinking()` asks for
+ * `'summarized'`), and the progress notes some models write between tool
+ * calls. An empty block is still complete — its `signature` carries the
+ * reasoning — so it is kept and echoed like any other, never dropped.
  *
  * **Critical invariant:** signature pass-through is byte-exact. The
  * handler MUST NOT trim, normalize encoding, JSON-roundtrip, or

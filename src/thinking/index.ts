@@ -49,7 +49,9 @@
  * symbols, one door. Import from the door.
  */
 
-export type { ThinkingBlock, ThinkingHandler } from './types.js';
+export type { ThinkingBlock, ThinkingHandler, ThinkingMode } from './types.js';
+
+export { UnsupportedThinkingError } from './errors.js';
 
 export { mockThinkingHandler, mockAnthropicRaw, mockOpenAIRaw } from './MockThinkingHandler.js';
 

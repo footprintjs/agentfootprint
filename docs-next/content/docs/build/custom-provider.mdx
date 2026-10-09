@@ -188,7 +188,7 @@ reads only the normalized fields, so code that works on `anthropic()` works on y
 
 A few differences are not normalized away, because they are real:
 
-- **Extended thinking.** `Agent.create(...).thinking({ budget })` puts `thinking: { budget }` on every request. Anthropic sends it as a thinking budget, Gemini as its thinking budget, Ollama turns thinking on; OpenAI ignores it, because its reasoning is picked by the model id. If your API has no such knob, ignore `req.thinking`.
+- **Extended thinking.** `Agent.create(...).thinking({ budget })` puts `thinking: { budget }` on every request — the intent, not a wire shape. Anthropic sends the shape each model takes (a budget, or adaptive thinking with none — see [Anthropic](doc:anthropic#thinking)), Gemini sends its thinking budget, Ollama turns thinking on; OpenAI ignores it, because its reasoning is picked by the model id. If your API has no such knob, ignore `req.thinking`. If your models disagree, declare `thinkingMode(model)` (`'budget'`, `'adaptive'` or `'none'`) so the agent refuses a model that cannot think at build — and forward it from any wrapper you write.
 - **System messages inside `messages`.** Some wires carry them, some drop them — that is what `carriesInMessages` (above) declares.
 - **Model ids.** They are the vendor's. A Bedrock id is not an Anthropic API id, and on Azure OpenAI or Foundry the `model` is your **deployment** name. Switching providers usually means switching the `model` string too.
 

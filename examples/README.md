@@ -315,6 +315,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 93 | [`93-trust-boundaries.ts`](features/93-trust-boundaries.ts) | Runtime trust-boundary evidence | A mock model attempts one tool call. A real permission checker refuses it; the recorder keeps the reported decision and call identity, not the private reason. |
 | 94 | [`94-packed-recording.ts`](features/94-packed-recording.ts) | Packed recordings | A mock agent calls a 500-row tool twelve times. The plain recording repeats every result once per place that saw it; the packed one writes each once and reads back to the same JSON. |
 | 95 | [`95-agent-redaction.ts`](features/95-agent-redaction.ts) | Agent redaction | A mock agent looks a citizen up by SSN. Under conversationRedaction() no message, argument, result or answer text reaches the snapshot, the narrative, the events or the recording — while the model, the tool and the caller get the real values. |
+| 96 | [`96-thinking-per-model.ts`](features/96-thinking-per-model.ts) | Thinking per model | One .thinking({ budget }) on three Claude models: adaptive thinking on Opus 5.5 (no budget on the wire), budget_tokens on Haiku 4.5, and a build-time refusal for Claude 3 Haiku, which cannot think. |
 
 ### [`canonical/`](canonical/) — end-to-end patterns
 
