@@ -22,9 +22,10 @@ const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
 // engine still lets Lens load a second record copy. The doors come from each
 // package's own `exports` field — never a hand list that a new door would
 // silently miss — and the `import` condition is the one a browser bundle takes.
-// Client compiler only: the demos mount with `ssr: false`, and the server
-// compiler externalizes node_modules, where an absolute ESM path would be
-// `require`d.
+// Webpack applies these aliases only to its client compiler: the demos mount
+// with `ssr: false`, and the server compiler externalizes node_modules, where
+// an absolute ESM path would be `require`d. Turbopack's existing global alias
+// policy also covers Foottrace, using relative paths to the same root files.
 const browserLibraryAliases = Object.fromEntries(
   ['footprintjs', 'foottrace'].flatMap((name) => {
     const root = resolve(import.meta.dirname, '../node_modules', name);
