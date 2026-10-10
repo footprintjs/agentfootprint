@@ -28,8 +28,8 @@ const recordNames = new Set(
   ),
 );
 
-function misplaced(text: string): string[] {
-  const source = ts.createSourceFile('input.ts', text, ts.ScriptTarget.Latest, true);
+function misplaced(text: string, fileName = 'input.ts'): string[] {
+  const source = ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, true);
   const found: string[] = [];
   const inspect = (node: ts.Node): void => {
     if (
@@ -110,6 +110,16 @@ describe('canonical record ownership', () => {
     ]);
   });
 
+  it('parses executable JSX demos using their actual source format', () => {
+    expect(
+      misplaced(
+        `const Demo = () => <section><span>Replay</span></section>;
+         import { commitValueAt } from 'footprintjs/trace';`,
+        'Demo.tsx',
+      ),
+    ).toEqual(['commitValueAt']);
+  });
+
   it('source, tests, examples, benchmarks and docs demos take every record name from its owner', () => {
     const files = [
       'src',
@@ -130,7 +140,7 @@ describe('canonical record ownership', () => {
     }
     expect(
       files.flatMap((file) =>
-        misplaced(readFileSync(file, 'utf8')).map((name) => `${file}: ${name}`),
+        misplaced(readFileSync(file, 'utf8'), file).map((name) => `${file}: ${name}`),
       ),
     ).toEqual([]);
   }, 30_000); // Whole-tree TypeScript parsing is slower under coverage instrumentation.
