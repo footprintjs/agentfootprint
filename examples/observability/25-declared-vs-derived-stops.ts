@@ -32,8 +32,8 @@
  * Run:  npx tsx examples/observability/25-declared-vs-derived-stops.ts
  */
 
-import { commitStops, filterStops, tagStops, timeTravel } from 'footprintjs/trace';
-import type { CommitBundle, Stop, TimeTravelStrategy } from 'footprintjs/trace';
+import { commitStops, filterStops, tagStops, timeTravel } from 'foottrace';
+import type { CommitBundle, Stop, TimeTravelStrategy } from 'foottrace';
 import type { StageSnapshot } from 'footprintjs/advanced';
 import {
   Agent,

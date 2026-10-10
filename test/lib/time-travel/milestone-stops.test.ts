@@ -19,8 +19,8 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { commitStops, timeTravel } from 'footprintjs/trace';
-import type { Stop, TimeTravel } from 'footprintjs/trace';
+import { commitStops, timeTravel } from 'foottrace';
+import type { Stop, TimeTravel } from 'foottrace';
 import {
   Agent,
   defineTool,

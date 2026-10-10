@@ -40,7 +40,7 @@ import {
   type LLMProvider,
   type WindowRecord,
 } from '../../src/index.js';
-import { commitValueAt } from 'footprintjs/trace';
+import { commitValueAt } from 'foottrace';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

@@ -22,7 +22,7 @@ at each reader slightly differently. `milestoneStops` is that join, written
 once, on the seam the port opened.
 
 ```ts
-import { timeTravel } from 'footprintjs/trace';
+import { timeTravel } from 'foottrace';
 import { milestoneStopsStrategy, milestoneOf } from 'agentfootprint';
 
 const cursor = timeTravel(agent.getSnapshot()!, { strategy: milestoneStopsStrategy });
@@ -613,7 +613,7 @@ once per epoch. The guard,
 `test/lib/time-travel/served-view-complexity.test.ts`, counts the operations
 each half is made of. For the preparation, it counts `stateAt` (a fold base
 built) and `splitStageId` (a log position walked), wrapped at
-`footprintjs/trace`, the barrel `src` imports them from. For the views, it
+`foottrace`, the barrel `src` imports them from. For the views, it
 counts `readAtCall`, `readAfterCall` and `readRunConstant` (a piece read),
 wrapped at `epochs.ts`, through which `servedView.ts` · `viewOf` reads every
 piece it rebuilds. Either way the code is measured untouched. The guard requires
@@ -634,8 +634,8 @@ const { counted, counting } = vi.hoisted(() => {
   const counting = (name, fn) => (...args) => (counted[name] += 1, fn(...args)); // fn, plus one per call
   return { counted, counting };
 });
-vi.mock('footprintjs/trace', async (importOriginal) => {
-  const real = await importOriginal<typeof import('footprintjs/trace')>();
+vi.mock('foottrace', async (importOriginal) => {
+  const real = await importOriginal<typeof import('foottrace')>();
   return { ...real, stateAt: counting('stateAt', real.stateAt), splitStageId: counting('splitStageId', real.splitStageId) };
 });
 vi.mock('../../../src/lib/time-travel/epochs.js', async (importOriginal) => {
@@ -856,7 +856,7 @@ The Map advertises the vocabulary before any run: `buildTimeStructure` lists
 the tags each stage CAN produce, so a lens draws its legend first.
 
 ```ts
-import { tagStops, timeTravel } from 'footprintjs/trace';
+import { tagStops, timeTravel } from 'foottrace';
 import { milestoneTag, milestoneStopsStrategy } from 'agentfootprint';
 
 // A reader with NO agent id conventions — footprintjs's own strategy, our word:

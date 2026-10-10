@@ -198,7 +198,7 @@ stage whose net change to a tracked array is "the old array plus a
 tail" (the agent's `history` every iteration) records ONLY the tail
 (`append` verb); key removals record a `delete` verb. LOSSLESS — any
 step's full value reconstructs by replay (`commitValueAt` from
-`footprintjs/trace`), which is why this is safe for audit trails.
+`foottrace`), which is why this is safe for audit trails.
 Retained commit-log memory becomes linear instead of quadratic.
 Set `'full'` for footprintjs's default encoding (every changed key
 stores its full final value) if a downstream consumer reads

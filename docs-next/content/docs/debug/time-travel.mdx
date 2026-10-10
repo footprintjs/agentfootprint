@@ -14,7 +14,7 @@ agent's answer to "which of those would a person scrub to?"** — the same
 `milestoneFor` classifier the library has always used, mapped onto the log.
 
 ```ts
-import { timeTravel } from 'footprintjs/trace';
+import { timeTravel } from 'foottrace';
 import { milestoneStopsStrategy, milestoneOf } from 'agentfootprint';
 
 const cursor = timeTravel(agent.getSnapshot()!, { strategy: milestoneStopsStrategy });
@@ -154,7 +154,7 @@ What it buys you: a reader needs NO agent id conventions. footprintjs's own
 recording by your word:
 
 ```ts
-import { tagStops, timeTravel } from 'footprintjs/trace';
+import { tagStops, timeTravel } from 'foottrace';
 import { milestoneTag } from 'agentfootprint';
 
 const turns = timeTravel(agent.getSnapshot()!, { strategy: tagStops([milestoneTag('llm-turn')]) });

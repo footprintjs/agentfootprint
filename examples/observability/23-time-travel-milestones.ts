@@ -35,8 +35,8 @@
  * Run:  npx tsx examples/observability/23-time-travel-milestones.ts
  */
 
-import { timeTravel } from 'footprintjs/trace';
-import type { Stop, TimeTravel } from 'footprintjs/trace';
+import { timeTravel } from 'foottrace';
+import type { Stop, TimeTravel } from 'foottrace';
 import {
   Agent,
   defineTool,
@@ -113,7 +113,7 @@ async function record(reactMode: 'dynamic' | 'dynamic-grouped') {
 }
 
 const skillAt = (cursor: TimeTravel, stop: Stop): string =>
-  ((cursor.stateAt(stop).state as { currentSkillId?: string }).currentSkillId ?? '—');
+  (cursor.stateAt(stop).state as { currentSkillId?: string }).currentSkillId ?? '—';
 
 /**
  * `changedSince` names keys by footprintjs's trace PATH, which joins nested
@@ -138,7 +138,9 @@ async function run(): Promise<void> {
   const flat = await record('dynamic');
   const outer = timeTravel(flat, { strategy: milestoneStopsStrategy });
 
-  console.log(`\n=== reactMode: 'dynamic' — ${flat.commitLog.length} commits, ${outer.stops.length} stops`);
+  console.log(
+    `\n=== reactMode: 'dynamic' — ${flat.commitLog.length} commits, ${outer.stops.length} stops`,
+  );
   printAxis(outer);
 
   const turns = outer.stops.filter((s) => milestoneOf(s)?.kind === 'llm-turn');
@@ -186,8 +188,9 @@ async function run(): Promise<void> {
   );
   printAxis(cursor);
   console.log(
-    `\n  llm-turn stops on the OUTER axis: ${cursor.stops.filter((s) => milestoneOf(s)?.kind === 'llm-turn').length}` +
-      ' — the turn committed to its own log, one drill down.',
+    `\n  llm-turn stops on the OUTER axis: ${
+      cursor.stops.filter((s) => milestoneOf(s)?.kind === 'llm-turn').length
+    }` + ' — the turn committed to its own log, one drill down.',
   );
 
   for (const mount of cursor.stops.filter((s) => milestoneOf(s)?.kind === 'iteration')) {

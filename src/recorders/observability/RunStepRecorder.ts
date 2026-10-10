@@ -28,12 +28,8 @@
  * should attach the recorder directly via `runner.attach(rec)`.
  */
 
-import {
-  ROOT_RUNTIME_STAGE_ID,
-  ROOT_SUBFLOW_ID,
-  SequenceStore,
-  splitStageId,
-} from 'footprintjs/trace';
+import { ROOT_RUNTIME_STAGE_ID, ROOT_SUBFLOW_ID, SequenceStore } from 'footprintjs/trace';
+import { splitStageId } from 'foottrace';
 import type {
   CombinedRecorder,
   FlowDecisionEvent,

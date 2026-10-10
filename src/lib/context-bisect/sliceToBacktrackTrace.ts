@@ -1,6 +1,6 @@
 /**
  * sliceToBacktrackTrace — serialize a footprintjs VARIABLE SLICE
- * (`sliceToJSON(sliceForKey(...))` from `footprintjs/trace`) into the
+ * (`sliceToJSON(sliceForKey(...))` from `foottrace`) into the
  * BacktrackTrace shape agentThinkingUI's <BacktrackView>/<BacktrackOverlay>
  * renders.
  *
@@ -26,8 +26,8 @@
  * emits this, a person confirms or overrides on the board).
  */
 
-import { HONESTY_CODES } from 'footprintjs/trace';
-import type { HonestyCode, SliceJSON } from 'footprintjs/trace';
+import { HONESTY_CODES } from 'foottrace';
+import type { HonestyCode, SliceJSON } from 'foottrace';
 
 import type { BacktrackHop, BacktrackSuspectCard, BacktrackTrace } from './toBacktrackTrace.js';
 

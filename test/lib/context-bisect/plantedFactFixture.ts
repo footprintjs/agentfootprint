@@ -13,7 +13,8 @@ import { defineTool, type Tool } from '../../../src/core/tools';
 import { defineFact } from '../../../src/lib/injection-engine/factories/defineFact';
 import type { Injection } from '../../../src/lib/injection-engine/types';
 import { mock } from '../../../src/adapters/llm/MockProvider';
-import { controlDepRecorder, type ControlDepLookup } from 'footprintjs/trace';
+import { controlDepRecorder } from 'footprintjs/trace';
+import { type ControlDepLookup } from 'foottrace';
 import type { RuntimeSnapshot } from 'footprintjs';
 import {
   applyAblations,

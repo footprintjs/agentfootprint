@@ -65,7 +65,7 @@ The helper normalizes all of them. Recorders pass whatever they have; they don't
 
 ### Decision 2: Never re-implement footprintjs parsing
 
-Runtime stage ID parsing lives in `footprintjs/trace::parseRuntimeStageId`. We import it. The bridge's `parseSubflowPath` is a thin `.split('/')` convenience — the authoritative parser is footprintjs's.
+Runtime stage ID parsing lives in `foottrace::parseRuntimeStageId`. We import it. The bridge's `parseSubflowPath` is a thin `.split('/')` convenience — the authoritative parser is footprintjs's.
 
 Why: the `/`-separator is a footprintjs-owned convention. If it ever changes, footprintjs's parser changes, and our bridge inherits the fix.
 

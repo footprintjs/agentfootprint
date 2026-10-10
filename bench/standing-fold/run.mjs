@@ -3,7 +3,7 @@
  *
  * The registered rule is `bench/standing-fold/RULE.md` (committed before this ran). This script
  * reads recordings only; it calls no model. It needs a build (`npm run build`): the fold is read
- * from `dist/esm/observe.js` · `assessAnswer`, the commit-log fold from `footprintjs/trace` ·
+ * from `dist/esm/observe.js` · `assessAnswer`, the commit-log fold from `foottrace` ·
  * `stateAt`.
  *
  *   node bench/standing-fold/run.mjs            # writes bench/standing-fold/results.json
@@ -17,7 +17,7 @@ import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { stateAt } from 'footprintjs/trace';
+import { stateAt } from 'foottrace';
 
 import { assessAnswer } from '../../dist/esm/observe.js';
 
