@@ -13,7 +13,9 @@ import {
   defineInstruction,
   defineSkill,
   defineSteering,
-} from '../../../src/lib/injection-engine/index.js';
+  type DefineSkillOptions,
+} from '../../../src/doors/context.js';
+import * as context from '../../../src/doors/context.js';
 
 describe('defineInjection — Unit: equivalence to named factories', () => {
   it('type:"instruction" === defineInstruction', () => {
@@ -39,6 +41,51 @@ describe('defineInjection — Unit: equivalence to named factories', () => {
     };
     expect(defineInjection({ type: 'skill', ...opts })).toEqual(defineSkill(opts));
   });
+
+  it('preserves supported skill metadata without forwarding the facade discriminant', () => {
+    const opts = {
+      id: 'refund',
+      title: 'Refund guidance',
+      description: 'How to issue a refund.',
+      body: 'Review the order before refunding.',
+      surfaceMode: 'both',
+      autoActivate: 'currentSkill',
+      produces: ['refund/receipt'],
+      consumes: ['order/details'],
+      model: 'review-model',
+      cache: 'never',
+    } satisfies DefineSkillOptions;
+    const input = Object.freeze({ type: 'skill' as const, ...opts });
+    const injection = defineInjection(input);
+    expect(injection).toEqual(defineSkill(opts));
+    expect(injection).not.toHaveProperty('type');
+    expect(injection.metadata).not.toHaveProperty('type');
+    expect(input.type).toBe('skill');
+  });
+
+  it('keeps class/prototype getters bound to the original options instance', () => {
+    class SkillOptions {
+      readonly type = 'skill';
+      readonly id = 'refund';
+      readonly description = 'How to issue a refund.';
+      #body = 'Review the order before refunding.';
+      get body() {
+        return this.#body;
+      }
+      get surfaceMode(): 'both' {
+        return 'both';
+      }
+    }
+    const input = Object.freeze(new SkillOptions());
+    expect(defineInjection(input)).toEqual(
+      defineSkill({
+        id: input.id,
+        description: input.description,
+        body: input.body,
+        surfaceMode: input.surfaceMode,
+      }),
+    );
+  });
 });
 
 describe('defineInjection — Functional: flavor tagging', () => {
@@ -60,9 +107,60 @@ describe('defineInjection — Functional: flavor tagging', () => {
 });
 
 describe('defineInjection — Security/validation: pass-through', () => {
+  const skill = { type: 'skill' as const, id: 'refund', description: 'd', body: 'b' };
+
   it('propagates the named factory validation (empty id throws)', () => {
     expect(() => defineInjection({ type: 'instruction', id: '', prompt: 'x' })).toThrow();
     expect(() => defineInjection({ type: 'instruction', id: 'a', prompt: '' })).toThrow();
+  });
+
+  it.each(['refreshPolicy', 'viaToolName', 'surfaceMod'])(
+    'refuses unsupported skill option %s',
+    (key) => {
+      const input = { ...skill, [key]: 'PRIVATE' };
+      expect(() => defineInjection(input)).toThrow(`unsupported option ${key}.`);
+    },
+  );
+
+  it.each([true, false])(
+    'refuses inherited unsupported options without reading them (enumerable=%s)',
+    (enumerable) => {
+      let reads = 0;
+      const prototype = Object.defineProperty({}, 'surfaceMod', {
+        enumerable,
+        get() {
+          reads += 1;
+          throw new Error('must not evaluate an unsupported option');
+        },
+      });
+      const input = Object.assign(Object.create(prototype), skill);
+      expect(() => defineInjection(input)).toThrow('unsupported option surfaceMod.');
+      expect(reads).toBe(0);
+    },
+  );
+
+  it('refuses non-enumerable own unsupported getters without evaluating them', () => {
+    let reads = 0;
+    const input = Object.defineProperty({ ...skill }, 'extra', {
+      get() {
+        reads += 1;
+        throw new Error('must not evaluate an unsupported option');
+      },
+    });
+    expect(() => defineInjection(input)).toThrow('unsupported option extra.');
+    expect(reads).toBe(0);
+  });
+
+  it('refuses symbol options and keeps the named factory vocabulary closed', () => {
+    const symbol = Symbol('extra');
+    expect(() => defineInjection({ ...skill, [symbol]: true })).toThrow(
+      'unsupported option Symbol(extra).',
+    );
+    expect(() => defineSkill(skill)).toThrow('unsupported option type.');
+  });
+
+  it('does not publish the internal facade through the context door', () => {
+    expect(context).not.toHaveProperty('defineSkillInjection');
   });
 });
 

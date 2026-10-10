@@ -6,7 +6,7 @@ title: describedResult
 
 > **describedResult**(`decl`): [`ToolSemantics`](/docs/api/interfaces/ToolSemantics)
 
-Defined in: [src/lib/semantics/described.ts:278](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/described.ts#L278)
+Defined in: [src/lib/semantics/described.ts:274](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/described.ts#L274)
 
 Return rows, a series or relationships from a system of record — WITH the
 caveats that make them honest — in a shape the framework recognizes, the
@@ -44,8 +44,7 @@ refusal starts `refused: `, names the field as you spelled it, and — inside
 the data; the run continues. A snake_case key (`measured_at`,
 `not_checked`) is refused, naming the camelCase one.
 
-Replaces `semantic()`, which mints the same envelope from snake_case names
-and is deprecated. Use `absent()` when nothing matched and `coverage()` for
+Use `absent()` when nothing matched and `coverage()` for
 any other value that has limits; never wrap one helper's result in another.
 
 ## Parameters

@@ -1,49 +1,50 @@
 /**
- * `describedResult()` — one wire, two spellings, one core.
+ * Canonical authoring, unchanged recorded wire.
  *
- * `describedResult()` takes the semantic declaration in ONE spelling,
- * camelCase (`measuredAt`, `ageSeconds`, `sourceExportDate`, `isCounter`,
- * `filterNote`, `chartHint`), and mints the unchanged snake_case wire.
- * `semantic()` — the deprecated name — keeps its snake_case declaration and
- * its bytes. The properties under test:
- *
- *   1. ONE WIRE. For every declaration, `describedResult(camelCase)` mints the
- *      bytes `semantic(snake_case)` mints: facts, a series with grain, edges,
- *      a clarify-only question, render hints, coverage.
- *   2. ONE SPELLING PER DOOR. Each door refuses the other door's spelling,
- *      quoting the key its author wrote and naming the one meant; neither
- *      takes both.
- *   3. ONE CORE. A refusal from either door is the same rule in the author's
- *      own words — the core judges once and spells the field back. The one
- *      deliberate difference: a `grain`, `provenance` or `render` that is not
- *      an object at all is named as such by the new door, while `semantic()`
- *      keeps the refusal it always gave (its own unit block below).
- *
- * Sections follow Convention 3: Unit (the wire goldens, the spelling per
- * door) · Functional (each rule's refusal, in camelCase) · Integration (the
- * real loop: what the model reads, what the record keeps) · Property (seeded
- * random declarations through both doors) · Regression (the gate's advice).
- * `semantic()`'s own bytes stay pinned where they always were:
- * test/core/agent/coverage-declaration-refusals.test.ts and
- * test/lib/semantics/envelope.test.ts.
+ * The legacy fixture was captured independently from pristine 30f7a415 before
+ * removing semantic(). It is historical evidence, not regenerated output.
+ * Six complete envelopes/model projections plus 3,000 ordered outcomes pin
+ * existing bytes and refusals without retaining a second authoring door.
+ * Unit, functional, integration, property and regression checks remain here.
  */
 
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import {
   Agent,
   defineTool,
   describedResult,
-  semantic,
+  readSemantics,
+  explainSemantics,
   SEMANTICS_NOTE,
   semanticsForModel,
   type DescribedResultDeclaration,
-  type SemanticDeclaration,
 } from '../../../src/index.js';
 import { checkSemantics } from '../../../src/lib/semantics/index.js';
 import { REFUSED_PREFIX } from '../../../src/core/agent/coverage/refusal.js';
 import type { LLMMessage, LLMRequest } from '../../../src/adapters/types.js';
 import { mock } from '../../../src/llm-providers.js';
+
+const legacy = JSON.parse(
+  readFileSync(new URL('./fixtures/legacy-wire.json', import.meta.url), 'utf8'),
+) as {
+  cases: Array<{ name: string; envelope: unknown; modelView: unknown }>;
+  property: {
+    seed: number;
+    count: number;
+    minted: number;
+    refused: number;
+    serializedUtf8Bytes: number;
+    outcomeSequenceSha256: string;
+  };
+};
+const recordedCase = (name: string) => {
+  const saved = legacy.cases.find((entry) => entry.name === name);
+  if (!saved) throw new Error('Missing independently captured legacy case: ' + name);
+  return saved;
+};
 
 // ── Toolkit ──────────────────────────────────────────────────────────────
 
@@ -61,7 +62,7 @@ const refusalOf = (mint: () => unknown): string => {
   throw new Error('expected a refusal, and the door minted');
 };
 
-/** The six names the two doors spell differently, camelCase → wire. */
+/** The six names whose declaration and wire spelling differ, camelCase → wire. */
 const SPELLED: ReadonlyArray<readonly [camel: string, snake: string]> = [
   ['isCounter', 'is_counter'],
   ['measuredAt', 'measured_at'],
@@ -71,10 +72,9 @@ const SPELLED: ReadonlyArray<readonly [camel: string, snake: string]> = [
   ['chartHint', 'chart_hint'],
 ];
 
-/** A refusal from the camelCase door in the snake_case door's words — so the
- *  two can be compared as ONE rule said twice. The one field only the new door
- *  takes (`period`, honesty step 7b — the deprecated door gains nothing) is
- *  dropped from the field list it names. */
+/** Normalize a canonical refusal into the historical spelling captured in the
+ *  independent digest. This exact normalization predates the removal: the old
+ *  declaration had no period field. Never use this on recorded data itself. */
 const inWireWords = (message: string): string =>
   [
     ...SPELLED,
@@ -83,8 +83,8 @@ const inWireWords = (message: string): string =>
     ['provenance, period, coverage', 'provenance, coverage'] as const,
   ].reduce((text, [camel, snake]) => text.split(camel).join(snake), message);
 
-/** The same declaration in both spellings — the one case table every
- *  golden below reads. The values come from the data, as a tool's would. */
+/** Canonical declarations for the independently captured legacy cases.
+ *  The values come from the data, as a tool's would. */
 const exportRows = [
   { vm: 'vm-01', datastore: 'ds-7', sizeTb: 12 },
   { vm: 'vm-02', datastore: 'ds-9', sizeTb: 3.5 },
@@ -99,7 +99,6 @@ const newestSample = samples.reduce((a, b) => (a.time > b.time ? a : b)).time;
 interface Case {
   readonly name: string;
   readonly camel: DescribedResultDeclaration;
-  readonly snake: SemanticDeclaration;
 }
 
 const CASES: readonly Case[] = [
@@ -111,14 +110,6 @@ const CASES: readonly Case[] = [
         measuredAt: exportedAt,
         source: 'RVTools export',
         sourceExportDate: '2026-09-19',
-      },
-    },
-    snake: {
-      facts: exportRows.map((r) => ({ entity: r.vm, datastore: r.datastore, size_tb: r.sizeTb })),
-      provenance: {
-        measured_at: exportedAt,
-        source: 'RVTools export',
-        source_export_date: '2026-09-19',
       },
     },
   },
@@ -134,35 +125,14 @@ const CASES: readonly Case[] = [
       grain: { interval: '30m', aggregation: 'avg', isCounter: false, collapsed: 'per-port' },
       provenance: { measuredAt: newestSample, ageSeconds: 600, source: 'InfluxDB SwitchPortStats' },
     },
-    snake: {
-      series: samples.map((s) => ({
-        t: s.time,
-        entity: s.port,
-        metric: 'avg_iops',
-        value: s.iops,
-      })),
-      grain: { interval: '30m', aggregation: 'avg', is_counter: false, collapsed: 'per-port' },
-      provenance: {
-        measured_at: newestSample,
-        age_seconds: 600,
-        source: 'InfluxDB SwitchPortStats',
-      },
-    },
   },
   {
     name: 'edges — no provenance needed',
     camel: { edges: exportRows.map((r) => ({ from: r.vm, to: r.datastore, kind: 'rides' })) },
-    snake: { edges: exportRows.map((r) => ({ from: r.vm, to: r.datastore, kind: 'rides' })) },
   },
   {
     name: 'clarify-only — two matches, which one?',
     camel: {
-      clarify: {
-        question: 'Two customers match "Acme" — which one?',
-        candidates: ['Acme Ltd', 'Acme Inc'],
-      },
-    },
-    snake: {
       clarify: {
         question: 'Two customers match "Acme" — which one?',
         candidates: ['Acme Ltd', 'Acme Inc'],
@@ -174,11 +144,6 @@ const CASES: readonly Case[] = [
     camel: {
       facts: [{ entity: 'vm-01', size_tb: 12 }],
       provenance: { measuredAt: exportedAt, source: 'RVTools export' },
-      clarify: null,
-    },
-    snake: {
-      facts: [{ entity: 'vm-01', size_tb: 12 }],
-      provenance: { measured_at: exportedAt, source: 'RVTools export' },
       clarify: null,
     },
   },
@@ -213,35 +178,6 @@ const CASES: readonly Case[] = [
         chartHint: 'line per entity',
       },
     },
-    snake: {
-      series: samples.map((s) => ({
-        t: s.time,
-        entity: s.port,
-        metric: 'frames_total',
-        value: s.iops,
-      })),
-      grain: { interval: '30m', aggregation: 'count', is_counter: true },
-      provenance: {
-        measured_at: newestSample,
-        age_seconds: 30000,
-        source: 'nightly RVTools export',
-        source_export_date: '2026-09-18',
-      },
-      coverage: {
-        checked: ['shq-fab-a: all 48 FC ports'],
-        notChecked: [{ what: 'the peer fabric', why: 'this collector is scoped to one fabric' }],
-        cannotCover: [
-          { what: 'host-side multipathing', why: 'no collector runs on the ESX hosts' },
-        ],
-      },
-      render: {
-        default: 'table',
-        columns: ['entity', 'value'],
-        sort: 'value desc',
-        filter_note: 'replicas excluded',
-        chart_hint: 'line per entity',
-      },
-    },
   },
 ];
 
@@ -249,14 +185,15 @@ const CASES: readonly Case[] = [
 // Unit — one wire: the camelCase declaration mints semantic()'s bytes
 // ─────────────────────────────────────────────────────────────────────────
 
-describe('unit: describedResult(camelCase) mints the wire semantic(snake_case) mints, byte for byte', () => {
-  it.each(CASES)('$name', ({ camel, snake }) => {
+describe('unit: canonical declarations retain independently captured legacy wire, byte for byte', () => {
+  it.each(CASES)('$name', ({ name, camel }) => {
     const described = describedResult(camel);
-    expect(JSON.stringify(described)).toBe(JSON.stringify(semantic(snake)));
+    expect(JSON.stringify(described)).toBe(JSON.stringify(recordedCase(name).envelope));
+    expect(readSemantics(recordedCase(name).envelope)).toBe(recordedCase(name).envelope);
     expect(described.note).toBe(SEMANTICS_NOTE);
     // The model's view is the same projection, byte for byte, too.
     expect(JSON.stringify(semanticsForModel(described))).toBe(
-      JSON.stringify(semanticsForModel(semantic(snake))),
+      JSON.stringify(recordedCase(name).modelView),
     );
   });
 
@@ -308,7 +245,7 @@ describe('unit: describedResult(camelCase) mints the wire semantic(snake_case) m
 // Unit — one spelling per door
 // ─────────────────────────────────────────────────────────────────────────
 
-describe("unit: each door refuses the other door's spelling, quoting the key its author wrote", () => {
+describe('unit: declarations and saved records enforce their own spelling', () => {
   /** A declaration carrying `key` inside the object that holds it, valid otherwise. */
   const carrying = (key: string): Record<string, unknown> => {
     const facts = [{ entity: 'vm-01' }];
@@ -339,15 +276,23 @@ describe("unit: each door refuses the other door's spelling, quoting the key its
     },
   );
 
-  it.each(SPELLED)('semantic() refuses the camelCase `%s`, naming `%s`', (camel, snake) => {
-    const message = refusalOf(() => semantic(carrying(camel) as never));
-    expect(message).toMatch(
-      new RegExp(`^${REFUSED_PREFIX}'${at(camel)}\\.${camel}' is not a field`),
-    );
-    expect(message).toContain(`did you mean \`${snake}\`?`);
-  });
+  it.each(SPELLED)(
+    'stored wire refuses declaration-only `%s` instead of treating it as `%s`',
+    (camel) => {
+      const record = { af_semantics: true, ...carrying(camel), note: SEMANTICS_NOTE };
+      expect(readSemantics(record)).toBeUndefined();
+      const message =
+        explainSemantics(record)?.find((issue) => issue.field === at(camel) + '.' + camel)
+          ?.message ?? '';
+      expect(message).toBe(
+        `\`${at(camel)}.${camel}\` is not a ${at(camel)} ${
+          at(camel) === 'render' ? 'hint' : 'field'
+        }.`,
+      );
+    },
+  );
 
-  it('neither door takes both spellings at once', () => {
+  it('neither the authoring door nor recorded wire takes both spellings at once', () => {
     const both = {
       facts: [{ entity: 'vm-01' }],
       provenance: { measuredAt: exportedAt, measured_at: exportedAt, source: 'RVTools export' },
@@ -355,8 +300,10 @@ describe("unit: each door refuses the other door's spelling, quoting the key its
     expect(refusalOf(() => describedResult(both as never))).toMatch(
       /'provenance\.measured_at' is not a field[\s\S]*did you mean `measuredAt`\?/,
     );
-    expect(refusalOf(() => semantic(both as never))).toMatch(
-      /'provenance\.measuredAt' is not a field[\s\S]*did you mean `measured_at`\?/,
+    const record = { af_semantics: true, ...both, note: SEMANTICS_NOTE };
+    expect(readSemantics(record)).toBeUndefined();
+    expect(explainSemantics(record)?.[0]?.message).toBe(
+      '`provenance.measuredAt` is not a provenance field.',
     );
   });
 
@@ -372,7 +319,7 @@ describe("unit: each door refuses the other door's spelling, quoting the key its
     );
   });
 
-  it('coverage lists are camelCase in both doors — not_checked is refused by each', () => {
+  it('coverage declarations refuse wire spelling; stored records retain it', () => {
     const decl = fromJson(
       JSON.stringify({
         edges: [{ from: 'a', to: 'b', kind: 'k' }],
@@ -380,7 +327,13 @@ describe("unit: each door refuses the other door's spelling, quoting the key its
       }),
     );
     expect(refusalOf(() => describedResult(decl))).toMatch(/did you mean `notChecked`\?/);
-    expect(refusalOf(() => semantic(decl))).toMatch(/did you mean `notChecked`\?/);
+    const record = {
+      af_semantics: true,
+      edges: [{ from: 'a', to: 'b', kind: 'k' }],
+      coverage: { not_checked: [{ what: 'x' }] },
+      note: SEMANTICS_NOTE,
+    };
+    expect(readSemantics(record)).toBe(record);
   });
 
   it('a hand-written not-covered list is refused as derived, quoting the key written', () => {
@@ -394,11 +347,8 @@ describe("unit: each door refuses the other door's spelling, quoting the key its
 });
 
 describe('unit: an object that is not an object is named for what it is', () => {
-  // The one place the doors deliberately differ. describedResult() hands a
-  // non-object grain/provenance/render to the rule set untouched, so the
-  // refusal says what is wrong with it. semantic() spreads it — `null` into
-  // `{}`, a string into indexed characters — and keeps the refusal it always
-  // gave, because its bytes, refusals included, do not change.
+  // Malformed declaration objects and malformed saved objects are refused;
+  // neither path repairs them into a seemingly valid record.
   const edges = [{ from: 'vm-01', to: 'ds-7', kind: 'rides' }];
 
   it('describedResult(): provenance null, grain a string, render an array', () => {
@@ -418,13 +368,18 @@ describe('unit: an object that is not an object is named for what it is', () => 
     );
   });
 
-  it('semantic() keeps the refusal it always gave for the same mistakes', () => {
-    expect(refusalOf(() => semantic({ edges, grain: 'avg' as never }))).toBe(
-      'refused: `grain.0` is not a grain field. (field: grain.0)',
-    );
-    expect(
-      refusalOf(() => semantic(fromJson('{"facts":[{"entity":"x"}],"provenance":null}'))),
-    ).toMatch(/^refused: `provenance\.measured_at` must say when the WORLD was measured/);
+  it('a malformed saved object is refused without modifying the recorded value', () => {
+    for (const [field, value] of [
+      ['provenance', null],
+      ['grain', 'avg'],
+      ['render', ['table']],
+    ] as const) {
+      const record = { af_semantics: true, edges, [field]: value, note: SEMANTICS_NOTE };
+      const before = JSON.stringify(record);
+      expect(readSemantics(record)).toBeUndefined();
+      expect(explainSemantics(record)?.[0]?.field).toBe(field);
+      expect(JSON.stringify(record)).toBe(before);
+    }
   });
 });
 
@@ -539,27 +494,25 @@ describe('functional: a refusal names the field as the author spelled it', () =>
     for (const [, snake] of SPELLED) expect(message).not.toContain(snake);
   });
 
-  it('not a declaration at all: each door names ITS fields — period only on describedResult()', () => {
+  it('not a declaration at all: the canonical door names all its fields', () => {
     expect(refusalOf(() => describedResult(null as never))).toBe(
       'refused: describedResult() takes a declaration — { series?, facts?, edges?, grain?, ' +
         'provenance?, period?, coverage?, clarify?, render? } with at least one of ' +
         'series/facts/edges/clarify.',
     );
-    // The deprecated door keeps the words it always gave.
-    expect(refusalOf(() => semantic(null as never))).toBe(
-      'refused: semantic() takes a declaration — { series?, facts?, edges?, grain?, provenance?, ' +
-        'coverage?, clarify?, render? } with at least one of series/facts/edges/clarify.',
-    );
   });
 
-  it('is the SAME rule semantic() applies — one core, only the words differ', () => {
-    for (const { camel, snake } of CASES) {
-      // Strip provenance from every data case: both doors refuse, with one rule.
+  it('authoring and historical-record reading apply the same provenance rule', () => {
+    for (const { name, camel } of CASES) {
+      // Strip provenance from every data case: mint and reader refuse with one rule.
       if (!('facts' in camel || 'series' in camel)) continue;
       const { provenance: _p1, ...camelBare } = camel as Record<string, unknown>;
-      const { provenance: _p2, ...snakeBare } = snake as Record<string, unknown>;
+      const { provenance: _p2, ...snakeBare } = recordedCase(name).envelope as Record<
+        string,
+        unknown
+      >;
       expect(inWireWords(refusalOf(() => describedResult(camelBare as never)))).toBe(
-        refusalOf(() => semantic(snakeBare as never)),
+        `${REFUSED_PREFIX}${explainSemantics(snakeBare)?.[0]?.message} (field: provenance)`,
       );
     }
   });
@@ -615,10 +568,10 @@ describe('integration: through the real loop', () => {
     return { text, recorded, answer: String(answer) };
   };
 
-  it('the model reads exactly what it reads for semantic(): the same projection, the same bytes', async () => {
+  it('the model reads unchanged bytes when a saved legacy result is played through the real loop', async () => {
     const full = CASES[5]!;
     const viaDescribed = await runOnce(() => describedResult(full.camel));
-    const viaSemantic = await runOnce(() => semantic(full.snake));
+    const viaSemantic = await runOnce(() => structuredClone(recordedCase(full.name).envelope));
     expect(viaDescribed.text).toBe(viaSemantic.text);
     // The projection: data + grain + provenance + composed not_covered + the note;
     // never the marker, the render hints or the checked list.
@@ -662,10 +615,10 @@ describe('integration: through the real loop', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────
-// Property — seeded random declarations through both doors
+// Property — seeded declarations against independently captured legacy outcomes
 // ─────────────────────────────────────────────────────────────────────────
 
-describe("property: for any declaration whose objects are objects, the two doors agree — same bytes, or the same refusal in each author's words", () => {
+describe('property: canonical results preserve the independently captured legacy outcome sequence', () => {
   let seed = 20260926;
   const rnd = (): number => {
     seed = (seed * 1103515245 + 12345) & 0x7fffffff;
@@ -684,7 +637,7 @@ describe("property: for any declaration whose objects are objects, the two doors
     ];
   };
 
-  /** A declaration both doors should mint, in both spellings. */
+  /** Original pre-removal generator, kept in both spellings for a stable seed. */
   const validPair = (): [Record<string, unknown>, Record<string, unknown>] => {
     const s: Record<string, unknown> = {};
     const c: Record<string, unknown> = {};
@@ -829,20 +782,25 @@ describe("property: for any declaration whose objects are objects, the two doors
     }
   };
 
-  it('3,000 declarations: byte-identical wire when minted, one refusal in two spellings when not', () => {
+  it('3,000 declarations retain every ordered wire byte and normalized refusal', () => {
     let minted = 0;
     let refused = 0;
-    for (let i = 0; i < 3000; i++) {
-      const [snake, camel] = declarationPair();
-      const viaSemantic = outcome(() => semantic(structuredClone(snake) as never));
+    const outcomes: string[] = [];
+    expect(seed).toBe(legacy.property.seed);
+    for (let i = 0; i < legacy.property.count; i++) {
+      const [, camel] = declarationPair();
       const viaDescribed = outcome(() => describedResult(structuredClone(camel) as never));
-      expect(inWireWords(viaDescribed)).toBe(viaSemantic);
-      if (viaSemantic.startsWith('minted')) minted += 1;
+      outcomes.push(inWireWords(viaDescribed));
+      if (viaDescribed.startsWith('minted')) minted += 1;
       else refused += 1;
     }
-    // Both halves of the property were exercised, not just one.
-    expect(minted).toBeGreaterThan(300);
-    expect(refused).toBeGreaterThan(300);
+    const serialized = JSON.stringify(outcomes);
+    expect(minted).toBe(legacy.property.minted);
+    expect(refused).toBe(legacy.property.refused);
+    expect(Buffer.byteLength(serialized, 'utf8')).toBe(legacy.property.serializedUtf8Bytes);
+    expect(createHash('sha256').update(serialized).digest('hex')).toBe(
+      legacy.property.outcomeSequenceSha256,
+    );
   });
 });
 
@@ -862,13 +820,13 @@ describe('regression: check:semantics names describedResult() in its advice', ()
     expect(finding?.message).not.toMatch(/\bsemantic\(/);
   });
 
-  it('an envelope from either door is judged identically by the gate', () => {
+  it('a newly minted envelope and a historical record are judged identically by the gate', () => {
     const full = CASES[5]!;
     const a = checkSemantics([
       { name: 'ports', resultClass: 'inventory', results: [describedResult(full.camel)] },
     ]);
     const b = checkSemantics([
-      { name: 'ports', resultClass: 'inventory', results: [semantic(full.snake)] },
+      { name: 'ports', resultClass: 'inventory', results: [recordedCase(full.name).envelope] },
     ]);
     expect(a).toEqual(b);
     expect(a.ok).toBe(true);

@@ -13,8 +13,7 @@
  *   4. **The input type is not the wire type.** `describedResult()` returns the
  *      unchanged `ToolSemantics`, whose provenance has `measured_at` and no
  *      `measuredAt` — the camelCase declaration never widened the wire.
- *   5. `semantic()`'s declaration is untouched: it still takes snake_case and
- *      still compiles without provenance (its refusal stays at run time).
+ *   5. The deprecated function and its declaration type are no longer exported.
  *
  * The `.test.ts` name lets `npm test` run the runtime assertions too.
  */
@@ -22,11 +21,14 @@ import { describe, expect, it } from 'vitest';
 
 import {
   describedResult,
-  semantic,
   type DescribedResultDeclaration,
   type SemanticProvenance,
   type ToolSemantics,
 } from '../../src/index';
+
+import * as publicAPI from '../../src/index';
+// @ts-expect-error — the legacy declaration is not part of the major-10 API
+import type { SemanticDeclaration } from '../../src/index';
 
 const rows = [{ entity: 'vm-01', size_tb: 12 }];
 const exportTime = '2026-09-19T02:00:00Z';
@@ -132,14 +134,13 @@ describe('describedResult() — the declaration type', () => {
     expect(wire?.measuredAt).toBeUndefined();
   });
 
-  it("semantic()'s declaration is untouched — snake_case, provenance still optional in its type", () => {
-    // Compiles, exactly as before; the refusal stays at run time for the deprecated name.
-    const legacy = (): ToolSemantics => semantic({ facts: rows });
-    expect(legacy).toThrow(/^refused: this result carries series\/facts with no `provenance`/);
-    const minted = semantic({
-      facts: rows,
-      provenance: { measured_at: exportTime, source: 'RVTools export' },
-    });
-    expect(minted.provenance?.measured_at).toBe(exportTime);
+  it('only the canonical authoring door is exported', () => {
+    expect(publicAPI).not.toHaveProperty('semantic');
+    // @ts-expect-error — no callable legacy export survives in the type surface
+    expect(publicAPI.semantic).toBeUndefined();
+    expect(publicAPI.describedResult).toBe(describedResult);
+    // Referencing the deliberately missing import keeps the compile witness live.
+    const removedType: SemanticDeclaration | undefined = undefined;
+    expect(removedType).toBeUndefined();
   });
 });

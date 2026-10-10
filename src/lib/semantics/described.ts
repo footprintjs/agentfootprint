@@ -2,14 +2,14 @@
  * semantics/described — `describedResult()`, the declaration door spelled the
  * way code is written.
  *
- * Pattern: one core, two doors (`envelope.ts` · `mintSemantics`). This file
+ * Pattern: one core, one authoring door (`envelope.ts` · `mintSemantics`). This file
  *          is the camelCase door: it says how its author spells the
  *          declaration and respells each object to the wire. It judges
  *          nothing itself — every rule lives in the core, once.
  * Role:    lib/ layer, pure.
  * Emits:   N/A (the caller emits `agentfootprint.tools.semantics_declared`).
  *
- * ## Why a second door, and why one spelling per door
+ * ## One authoring spelling, one unchanged wire
  *
  * `semantic()` copied the wire's snake_case names into its declaration
  * (`measured_at`, `is_counter`, `filter_note`) beside camelCase ones
@@ -19,11 +19,11 @@
  * mints the same wire, byte for byte. The wire does not change: the model and
  * any foreign process keep reading snake_case.
  *
- * Each door takes ONE spelling and refuses the other, quoting the key its
+ * The authoring door takes ONE spelling and refuses snake_case, quoting the key its
  * author wrote and naming the one meant (`provenance.measured_at` → "did you
  * mean `measuredAt`?"). A migration that swaps only the function name then
  * fails loudly at the line that needs the new spelling, instead of silently
- * minting without it. Neither door accepts both spellings in one object.
+ * minting without it. The declaration never accepts both spellings in one object.
  */
 
 import { COVERAGE_DECLARATION_KEYS } from '../../core/agent/coverage/items.js';
@@ -106,9 +106,7 @@ const CAMEL_SPELLING = {
 } as const satisfies { readonly [W in SpelledField]: DeclaredNameOf<W> };
 
 /**
- * The nine top-level fields, tied to the type in both directions. One word
- * each — the eight `semantic()` reads, plus `period` (honesty step 7b), which
- * only this door takes: the deprecated door gains no field.
+ * The nine top-level fields, tied to the type in both directions.
  */
 const DECLARATION_KEYS: readonly string[] = Object.keys({
   series: true,
@@ -127,8 +125,7 @@ const DECLARATION_KEYS: readonly string[] = Object.keys({
  * A value that is not a plain object is handed through untouched, so the rule
  * set names it for what it is — "`provenance` must be an object ({ measuredAt,
  * source, … })" — where a spread would have turned `null` into `{}` and a
- * string into indexed characters. (`semantic()`'s door still spreads, and
- * keeps the refusal it always gave.) A plain object carries only known keys
+ * string into indexed characters. A plain object carries only known keys
  * here: the door refused every other key first.
  */
 function toWire(field: RespelledObject, value: unknown): unknown {
@@ -248,8 +245,7 @@ export function readProvenance(wire: unknown): ProvenanceReading {
  * the data; the run continues. A snake_case key (`measured_at`,
  * `not_checked`) is refused, naming the camelCase one.
  *
- * Replaces `semantic()`, which mints the same envelope from snake_case names
- * and is deprecated. Use `absent()` when nothing matched and `coverage()` for
+ * Use `absent()` when nothing matched and `coverage()` for
  * any other value that has limits; never wrap one helper's result in another.
  *
  * @example rows from a nightly export — the time comes from the export

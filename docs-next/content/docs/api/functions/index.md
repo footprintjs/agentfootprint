@@ -2,7 +2,7 @@
 title: Functions
 ---
 
-148 exported from `agentfootprint`.
+147 exported from `agentfootprint`.
 
 - [`absenceSignalOf`](/docs/api/functions/absenceSignalOf)
 - [`absent`](/docs/api/functions/absent)
@@ -128,7 +128,6 @@ title: Functions
 - [`s3Artifacts`](/docs/api/functions/s3Artifacts)
 - [`selectCommentaryKey`](/docs/api/functions/selectCommentaryKey)
 - [`selfConsistency`](/docs/api/functions/selfConsistency)
-- [`semantic`](/docs/api/functions/semantic) — deprecated
 - [`semanticsForModel`](/docs/api/functions/semanticsForModel)
 - [`servedAt`](/docs/api/functions/servedAt)
 - [`servedViews`](/docs/api/functions/servedViews)

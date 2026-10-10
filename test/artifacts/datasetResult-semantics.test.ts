@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   absent,
   coverage,
-  semantic,
+  describedResult,
   bindArtifacts,
   inMemoryArtifacts,
   withDatasetArtifacts,
@@ -50,7 +50,7 @@ const bounded = () =>
     },
   );
 const clarification = () =>
-  semantic({
+  describedResult({
     clarify: {
       question: 'Which snapshot?',
       candidates: [
@@ -106,10 +106,10 @@ describe('declared semantics survive dataset projection', () => {
   });
 
   it('preserves equivalent metadata reconstructed in a different object-key order', async () => {
-    const source = semantic({
+    const source = describedResult({
       facts: [{ entity: 'one' }],
-      provenance: { measured_at: 'snapshot', source: 'fixture' },
-      grain: { aggregation: 'average', is_counter: false },
+      provenance: { measuredAt: 'snapshot', source: 'fixture' },
+      grain: { aggregation: 'average', isCounter: false },
     });
     const after = {
       ...source,
@@ -126,10 +126,10 @@ describe('declared semantics survive dataset projection', () => {
   });
 
   it('preserves known absence, semantic provenance/grain/clarification and recognized effect wrappers', async () => {
-    const sem = semantic({
+    const sem = describedResult({
       facts: [{ entity: 'one', value: 0 }],
-      provenance: { measured_at: 'snapshot', source: 'fixture' },
-      grain: { aggregation: 'average', is_counter: false },
+      provenance: { measuredAt: 'snapshot', source: 'fixture' },
+      grain: { aggregation: 'average', isCounter: false },
       clarify: { question: 'Which?', candidates: [null, 0] },
     });
     for (const source of [

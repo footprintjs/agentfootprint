@@ -125,9 +125,7 @@ const ABSENT_FROM_DOOR: Readonly<Record<string, readonly string[]>> = {
 };
 
 /** Names declared twice but resolving to the same type. See header. */
-const STRUCTURAL_TWINS: Readonly<Record<string, readonly string[]>> = {
-  './reliability': ['CircuitState'],
-};
+const STRUCTURAL_TWINS: Readonly<Record<string, readonly string[]>> = {};
 
 interface PkgExportEntry {
   readonly import: { readonly types: string; readonly default: string };
@@ -334,20 +332,39 @@ describe('the exception lists are pinned', () => {
     expect(flat).toEqual(['./reliability#CircuitOpenError']);
   });
 
-  it('exactly ONE name is a structural twin, and it is CircuitState', () => {
+  it('no deprecated structural aliases survive major 10', () => {
     const flat = Object.entries(STRUCTURAL_TWINS).flatMap(([sp, ns]) =>
       ns.map((n) => `${sp}#${n}`),
     );
-    expect(flat).toEqual(['./reliability#CircuitState']);
+    expect(flat).toEqual([]);
   });
 
-  it.skipIf(!built)('CircuitState really is the same type on both paths', () => {
-    const fromAlias = names('./reliability').get('CircuitState');
-    const fromDoor = names('./resilience').get('CircuitState');
-    expect(fromAlias?.typeText).toBe(fromDoor?.typeText);
-    expect(fromAlias?.typeText).toContain('closed');
-    expect(fromAlias?.typeText).toContain('half-open');
-  });
+  it.skipIf(!built)(
+    'only the gate error remains on reliability; all retired names have their canonical home',
+    () => {
+      expect([...names('./reliability').keys()]).toEqual(['CircuitOpenError']);
+      for (const name of [
+        'CircuitBreakerConfig',
+        'ReliabilityConfig',
+        'ReliabilityDecision',
+        'ReliabilityFallbackFn',
+        'ReliabilityProvider',
+        'ReliabilityRule',
+        'ReliabilityScope',
+        'ReliabilityFailFastError',
+        'initialBreakerState',
+        'BreakerState',
+        'CircuitState',
+        'ValidationFailure',
+        'lastNValidationErrorsMatch',
+        'defaultStuckLoopRule',
+        'OutputSchemaValidator',
+      ]) {
+        expect(names('./resilience').has(name), name).toBe(true);
+        expect(names('./reliability').has(name), name).toBe(false);
+      }
+    },
+  );
 
   it.skipIf(!built)('CircuitOpenError really is a DIFFERENT class on each path', () => {
     const fromAlias = names('./reliability').get('CircuitOpenError');
@@ -361,32 +378,15 @@ describe('the exception lists are pinned', () => {
 
 // ─── 4. Runtime identity for the retained alias ────────────────────
 
-describe.skipIf(!built)('retained-alias values are the SAME objects as the door values', () => {
-  for (const [alias, door] of Object.entries(ALIAS_TO_DOOR)) {
-    // Cold-imports two whole built barrels from dist. That is disk + module
-    // graph work whose cost belongs to the machine, not to the library, so
-    // the assertion carries its own budget rather than inheriting the 5s
-    // default and going red on a busy box.
-    it(`${alias} values === ${door} values`, async () => {
-      const aliasMod = (await import(esmPathFor(alias))) as Record<string, unknown>;
-      const doorMod = (await import(esmPathFor(door))) as Record<string, unknown>;
-      const absent = new Set(ABSENT_FROM_DOOR[alias] ?? []);
-
-      const mismatched: string[] = [];
-      let compared = 0;
-      for (const key of Object.keys(aliasMod)) {
-        if (key === 'default' || absent.has(key)) continue;
-        compared += 1;
-        if (!(key in doorMod)) {
-          mismatched.push(`${key}: missing from ${door}`);
-        } else if (aliasMod[key] !== doorMod[key]) {
-          mismatched.push(`${key}: not the same object`);
-        }
-      }
-      expect(mismatched).toEqual([]);
-      expect(compared, `${alias} exported no runtime values to compare`).toBeGreaterThan(0);
-    }, 30_000);
-  }
+describe.skipIf(!built)('reliability retains only its distinct gate error at runtime', () => {
+  it('has no duplicate runtime aliases and keeps both class identities', async () => {
+    const gate = await import(esmPathFor('./reliability'));
+    const provider = await import(esmPathFor('./resilience'));
+    expect(Object.keys(gate).sort()).toEqual(['CircuitOpenError']);
+    expect(gate.CircuitOpenError).toBeTypeOf('function');
+    expect(provider.CircuitOpenError).toBeTypeOf('function');
+    expect(gate.CircuitOpenError).not.toBe(provider.CircuitOpenError);
+  });
 });
 
 // ─── 5. Doors still carry every name they absorbed in 8.0.0 ────────

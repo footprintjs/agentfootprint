@@ -129,7 +129,7 @@ export interface ReturnedDoor {
   /** The call declared a `coverage()` boundary (a `ledger` coverage row / a `tools.coverage_declared` event). */
   readonly bounded: boolean;
   /**
-   * The `describedResult()` / `semantic()` envelope as the record keeps it —
+   * The `describedResult()` envelope as the record keeps it —
    * the `tools.semantics_declared` event's `semantics`. The model read only its
    * projection, which carries no marker, so without this the reader cannot
    * tell a described result from any other object. Committed state does not

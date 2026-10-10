@@ -4,7 +4,7 @@
  * Two defects, one file, because both are about what a result helper says
  * when it cannot honor what it was handed:
  *
- *   1. A SILENT LOSS. `absent()`, `coverage()` and `semantic()` read their
+ *   1. A SILENT LOSS. `absent()`, `coverage()` and `describedResult()` read their
  *      declarations by name. A declaration fed from plain JavaScript or JSON —
  *      where the type checker never looks — could carry `not_checked` or
  *      `cannot_cover`, and the helper minted without that list: the declared
@@ -33,7 +33,7 @@ import {
   coverage,
   COVERAGE_NOTE,
   defineTool,
-  semantic,
+  describedResult,
   SEMANTICS_NOTE,
 } from '../../../src/index.js';
 import {
@@ -50,7 +50,7 @@ import { mock } from '../../../src/llm-providers.js';
  *  the picture exactly as it is for a plain-JS or JSON-fed author. */
 const fromJson = (text: string): never => JSON.parse(text) as never;
 
-const PROVENANCE = { measured_at: '2026-09-19T02:00:00Z', source: 'RVTools export' };
+const PROVENANCE = { measuredAt: '2026-09-19T02:00:00Z', source: 'RVTools export' };
 
 /** The message a helper threw, or a failure when it did not throw. */
 const refusalOf = (mint: () => unknown): string => {
@@ -157,9 +157,9 @@ describe('unit: a JS-fed not_checked / cannot_cover is refused, naming the spell
     expect(cannotCover).toMatch(/did you mean `cannotCover`\?/);
   });
 
-  it('semantic() — the nested coverage declaration', () => {
+  it('describedResult() — the nested coverage declaration', () => {
     const notChecked = refusalOf(() =>
-      semantic(
+      describedResult(
         fromJson(
           JSON.stringify({
             facts: [{ entity: 'vm-01' }],
@@ -174,7 +174,7 @@ describe('unit: a JS-fed not_checked / cannot_cover is refused, naming the spell
     expect(notChecked).toMatch(/The fields of `coverage` are: checked, notChecked, cannotCover\./);
 
     const cannotCover = refusalOf(() =>
-      semantic(
+      describedResult(
         fromJson(
           JSON.stringify({
             facts: [{ entity: 'vm-01' }],
@@ -210,50 +210,50 @@ describe('unit: the other keys each helper reads are held to the same rule', () 
     ).toMatch(/did you mean `tryInsteadTool`\?/);
   });
 
-  it('semantic() — grain, provenance and render name their snake_case spellings', () => {
+  it('describedResult() — grain, provenance and render name their camelCase spellings', () => {
     expect(
       refusalOf(() =>
-        semantic(
+        describedResult(
           fromJson(
             JSON.stringify({
               facts: [{ entity: 'vm-01' }],
-              provenance: { measuredAt: '2026-09-19', source: 'RVTools export' },
+              provenance: { measured_at: '2026-09-19', source: 'RVTools export' },
             }),
           ),
         ),
       ),
-    ).toMatch(/'provenance\.measuredAt' is not a field[\s\S]*did you mean `measured_at`\?/);
+    ).toMatch(/'provenance\.measured_at' is not a field[\s\S]*did you mean `measuredAt`\?/);
     expect(
       refusalOf(() =>
-        semantic(
+        describedResult(
           fromJson(
             JSON.stringify({
               series: [{ t: 1, entity: 'fc1/3', metric: 'iops', value: 1 }],
-              grain: { interval: '30m', isCounter: false },
+              grain: { interval: '30m', is_counter: false },
               provenance: PROVENANCE,
             }),
           ),
         ),
       ),
-    ).toMatch(/did you mean `is_counter`\?/);
+    ).toMatch(/did you mean `isCounter`\?/);
     expect(
       refusalOf(() =>
-        semantic(
+        describedResult(
           fromJson(
             JSON.stringify({
               facts: [{ entity: 'vm-01' }],
               provenance: PROVENANCE,
-              render: { default: 'table', filterNote: 'replicas excluded' },
+              render: { default: 'table', filter_note: 'replicas excluded' },
             }),
           ),
         ),
       ),
-    ).toMatch(/did you mean `filter_note`\?/);
+    ).toMatch(/did you mean `filterNote`\?/);
   });
 
-  it('semantic() — an unknown clarify key is refused (the copy used to keep only its two keys)', () => {
+  it('describedResult() — an unknown clarify key is refused (the copy used to keep only its two keys)', () => {
     const message = refusalOf(() =>
-      semantic(
+      describedResult(
         fromJson(
           JSON.stringify({
             clarify: { question: 'Which volume?', candidates: ['v1', 'v2'], options: ['v3'] },
@@ -275,10 +275,10 @@ describe('unit: the other keys each helper reads are held to the same rule', () 
     );
   });
 
-  it('semantic() keeps its specific refusal for a hand-written not_covered', () => {
+  it('describedResult() keeps its specific refusal for a hand-written not_covered', () => {
     expect(
       refusalOf(() =>
-        semantic(fromJson('{"facts":[{"entity":"x"}],"not_covered":["the archive"]}')),
+        describedResult(fromJson('{"facts":[{"entity":"x"}],"not_covered":["the archive"]}')),
       ),
     ).toMatch(/^refused: `not_covered` is derived, never declared/);
   });
@@ -309,28 +309,30 @@ describe('functional: a refusal says what it is before anything else, never the 
     ['coverage — not an object', () => coverage(1, null as never)],
     ['coverage — item with no ground', () => coverage(1, { checked: [''] })],
     ['coverage — unknown key', () => coverage(1, fromJson('{"not_checked":["a"]}'))],
-    ['semantic — no provenance', () => semantic({ facts: [{ entity: 'x' }] })],
+    ['semantic — no provenance', () => describedResult({ facts: [{ entity: 'x' }] })],
     [
       'semantic — no source',
-      () => semantic(fromJson('{"facts":[{"entity":"x"}],"provenance":{"measured_at":"now"}}')),
+      () =>
+        describedResult(fromJson('{"facts":[{"entity":"x"}],"provenance":{"measuredAt":"now"}}')),
     ],
     [
       'semantic — series without grain',
       () =>
-        semantic({
+        describedResult({
           series: [{ t: 1, entity: 'a', metric: 'm', value: 1 }],
           provenance: PROVENANCE,
         }),
     ],
-    ['semantic — declares nothing', () => semantic({})],
-    ['semantic — not an object', () => semantic(null as never)],
+    ['semantic — declares nothing', () => describedResult({})],
+    ['semantic — not an object', () => describedResult(null as never)],
     [
       'semantic — coverage names no ground',
-      () => semantic({ facts: [{ entity: 'x' }], provenance: PROVENANCE, coverage: {} }),
+      () => describedResult({ facts: [{ entity: 'x' }], provenance: PROVENANCE, coverage: {} }),
     ],
     [
       'semantic — unknown nested key',
-      () => semantic(fromJson('{"facts":[{"entity":"x"}],"coverage":{"not_checked":["a"]}}')),
+      () =>
+        describedResult(fromJson('{"facts":[{"entity":"x"}],"coverage":{"not_checked":["a"]}}')),
     ],
   ];
 
@@ -345,9 +347,9 @@ describe('functional: a refusal says what it is before anything else, never the 
   });
 
   it('a result with no provenance reads as a refused result, naming the two required fields', () => {
-    expect(refusalOf(() => semantic({ facts: [{ entity: 'vm-01' }] }))).toBe(
+    expect(refusalOf(() => describedResult({ facts: [{ entity: 'vm-01' }] }))).toBe(
       'refused: this result carries series/facts with no `provenance` — ' +
-        '`provenance.measured_at` and `provenance.source` are required whenever the envelope ' +
+        '`provenance.measuredAt` and `provenance.source` are required whenever the envelope ' +
         'carries data: a number with no age and no source cannot be trusted or audited. ' +
         '(field: provenance)',
     );
@@ -361,8 +363,8 @@ describe('functional: a refusal says what it is before anything else, never the 
 describe('integration: the model-visible tool message starts with the refusal, and the run continues', () => {
   it('an envelope with no source: the tool message the model reads starts "refused: "', async () => {
     const { text, content, toolEnd } = await toolMessageTheModelReads(() =>
-      semantic(
-        fromJson('{"facts":[{"entity":"vm-01","size_tb":12}],"provenance":{"measured_at":"now"}}'),
+      describedResult(
+        fromJson('{"facts":[{"entity":"vm-01","size_tb":12}],"provenance":{"measuredAt":"now"}}'),
       ),
     );
     expect(text.startsWith(REFUSED_PREFIX)).toBe(true);
@@ -377,7 +379,7 @@ describe('integration: the model-visible tool message starts with the refusal, a
 
   it('an envelope with no provenance at all: "refused: this result carries series/facts with no …"', async () => {
     const { text, content } = await toolMessageTheModelReads(() =>
-      semantic({ facts: [{ entity: 'vm-01', size_tb: 12 }] }),
+      describedResult({ facts: [{ entity: 'vm-01', size_tb: 12 }] }),
     );
     expect(text).toMatch(/^refused: this result carries series\/facts with no `provenance`/);
     expect(content).toBe('I could not get that data.');
@@ -413,9 +415,9 @@ describe('property: a casing slip of a known key always names that key', () => {
   const vocabularies: ReadonlyArray<readonly string[]> = [
     ['what', 'checked', 'notChecked', 'cannotCover', 'tryInstead', 'tryInsteadTool'],
     ['checked', 'notChecked', 'cannotCover'],
-    ['interval', 'aggregation', 'is_counter', 'collapsed'],
-    ['measured_at', 'age_seconds', 'source', 'source_export_date'],
-    ['default', 'columns', 'sort', 'filter_note', 'chart_hint'],
+    ['interval', 'aggregation', 'isCounter', 'collapsed'],
+    ['measuredAt', 'ageSeconds', 'source', 'sourceExportDate'],
+    ['default', 'columns', 'sort', 'filterNote', 'chartHint'],
   ];
 
   it('snake_case, camelCase, UPPER-first and lower-case respellings all resolve to the known key', () => {
@@ -502,15 +504,15 @@ describe('regression: correct declarations are byte-identical to the tree before
     );
   });
 
-  it('semantic() — series, grain, provenance, coverage, clarify and render', () => {
-    const minted = semantic({
+  it('describedResult() — series, grain, provenance, coverage, clarify and render', () => {
+    const minted = describedResult({
       series: [{ t: '2026-08-19T02:00:00Z', entity: 'fc1/3', metric: 'avg_iops', value: 17200 }],
-      grain: { interval: '30m', aggregation: 'avg', is_counter: false },
+      grain: { interval: '30m', aggregation: 'avg', isCounter: false },
       provenance: {
-        measured_at: '2026-08-19T02:00:00Z',
-        age_seconds: 600,
+        measuredAt: '2026-08-19T02:00:00Z',
+        ageSeconds: 600,
         source: 'InfluxDB SwitchPortStats',
-        source_export_date: '2026-08-18',
+        sourceExportDate: '2026-08-18',
       },
       coverage: COVERAGE_DECL,
       clarify: { question: 'Which fabric?', candidates: ['shq-fab-a', 'shq-fab-b'] },
@@ -518,8 +520,8 @@ describe('regression: correct declarations are byte-identical to the tree before
         default: 'table',
         columns: ['entity', 'value'],
         sort: 'value desc',
-        filter_note: 'replicas excluded',
-        chart_hint: 'line per entity',
+        filterNote: 'replicas excluded',
+        chartHint: 'line per entity',
       },
     });
     expect(minted.note).toBe(SEMANTICS_NOTE);
@@ -538,11 +540,11 @@ describe('regression: correct declarations are byte-identical to the tree before
     );
   });
 
-  it('semantic() — facts, edges and a stated clarify: null', () => {
-    const minted = semantic({
+  it('describedResult() — facts, edges and a stated clarify: null', () => {
+    const minted = describedResult({
       facts: [{ entity: 'vm-01', size_tb: 12 }],
       edges: [{ from: 'vm-01', to: 'ds-7', kind: 'rides' }],
-      provenance: { measured_at: '2026-09-19', source: 'RVTools export' },
+      provenance: { measuredAt: '2026-09-19', source: 'RVTools export' },
       clarify: null,
     });
     expect(withoutNote(minted)).toBe(

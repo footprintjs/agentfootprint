@@ -1,6 +1,6 @@
 ---
 title: AgentCore adapters — runtime, sessions, policy, gateway
-description: agentCoreRuntimeHost, agentCoreSessions, agentCorePolicy and gatewayTransport — the AgentCore adapter set on ports that already existed, plus a plain statement of which parts are really verified and which are contract-mapped.
+description: agentCoreRuntimeHost, agentCoreSessions and gatewayTransport — the live AgentCore adapter set, how Gateway policy differs, and which parts are really verified or contract-mapped.
 ---
 
 > **A cloud adapter should be vendor paths, a header mapping and some SDK calls.**
@@ -16,7 +16,6 @@ first cloud adapter was written against them.
 |---|---|---|
 | `agentCoreRuntimeHost()` | `AgentHost` **and** `ConversationHost` — the container contract's two doors, `/invocations` and `/ws`, on one socket | `agentfootprint/hosting` |
 | `agentCoreSessions({ store })` | `SessionLifecycle` — where a conversation lives between requests | `agentfootprint/hosting` |
-| ~~`agentCorePolicy({ policyStoreId })`~~ | **Retired in 9.4.0** — AgentCore enforces policy at the Gateway; there was never a data-plane call to make | `agentfootprint/security` |
 | `gatewayTransport({ url, credentials })` | `McpTransport` — MCP auth headers vended **per request** | `agentfootprint/providers` |
 | `AgentCoreStore.search()` | `MemoryStore.search` — server-side semantic retrieval | `agentfootprint/memory` |
 
@@ -27,7 +26,7 @@ same conversation conformance suite, both over real sockets. That is real
 verification.
 
 Everything that talks to AWS — `agentCoreSessions({ store: 'memory' })`,
-`agentCorePolicy`, `AgentCoreStore.search()` — is **contract-mapped and
+`AgentCoreStore.search()` — is **contract-mapped and
 injection-tested**: the SDK calls are exercised through the `_client` / `_sdk`
 seams, and no test in this repo reaches AWS or pretends to. Confirm the command
 and field names against your installed `@aws-sdk/client-bedrock-agentcore`.
@@ -272,18 +271,13 @@ Both are field facts, recorded here because this is where an integrator looks:
   `/invocations`; `{ server }` remains the escape hatch for anything the ports
   do not express.
 
-## Policy: enforced at the Gateway, not here (retired 9.4.0)
+## Policy: enforced at the Gateway, not here
 
-`agentCorePolicy()` filled the `PermissionChecker` port by asking an AgentCore
-policy store to evaluate every attempted tool call. **It could never have
-worked, and as of 9.4.0 it refuses to be constructed.**
-
-```ts
-import { agentCorePolicy } from 'agentfootprint/security';
-
-agentCorePolicy({ policyStoreId });
-// throws AgentCorePolicyRetiredError — with the reason and the alternatives
-```
+`agentCorePolicy()` previously attempted to fill the `PermissionChecker`
+port by asking an AgentCore policy store to evaluate every tool call. It was
+retired in 9.4.0 and is now **removed**, together with its error and helper types.
+Remove those imports; use the supported local policy below or let the Gateway
+enforce its own policy.
 
 **Why.** It dispatched `EvaluatePolicyCommand` against
 `@aws-sdk/client-bedrock-agentcore`. That command does not exist in any version
@@ -321,21 +315,18 @@ own history. A remote checker is still perfectly possible: a `PermissionChecker`
 is an object with a `check()` method, and yours can call whatever service you
 like.
 
-<Callout type="info" title="The export stays, and refuses">
-Deleting an export breaks a build with a module-resolution error that explains
-nothing. `agentCorePolicy` and all of its types are still exported and still
-type-check; calling the factory throws `AgentCorePolicyRetiredError` (code
-`ERR_AGENTCORE_POLICY_RETIRED`) carrying the whole explanation — the phantom
-command, the Gateway, `PermissionPolicy.fromRoles`, `.toolMiddleware()`, and
-where denials really arrive. Whether the symbol is removed is a decision for
-10.0.
+<Callout type="info" title="Migrate to the live authorization contract">
+There is no compatibility factory, SDK shim or retired-error export.
+`PermissionPolicy.fromRoles` and `PermissionChecker` remain supported through
+`agentfootprint/security`; conditional rules use `.toolMiddleware()`.
+Gateway denials arrive through `mcpClient` as tool errors.
 </Callout>
 
 <Callout type="info" title="gatedTools is a different layer, and always was">
 `gatedTools(...)` decides what the model is **shown**; a `permissionChecker`
-decides what actually **runs**. A tool the gate hides is never evaluated — the
-model cannot call what it cannot see — and a tool the gate shows still has to
-get past the checker. Only a *local* policy can double as a `gatedTools`
+decides what actually **runs**. Visibility is not authorization: a fabricated
+or restored call still needs the dispatch-time checker. A tool the gate shows
+also has to get past that checker. Only a *local* policy can double as a `gatedTools`
 predicate: that predicate is synchronous.
 </Callout>
 
@@ -589,14 +580,11 @@ session store calls — implement it to inject a fake — and it yields
 of the AWS SDK the shim touches, injectable as `_sdk` to exercise the real
 mapping against a fake module.
 
-**Policy** (`agentfootprint/security`) — retired in 9.4.0 and kept exported so
-existing imports still compile. `AgentCorePolicyRetiredError` is what the
-factory throws (code `ERR_AGENTCORE_POLICY_RETIRED`). `AgentCorePolicyOptions`
-still configures `agentCorePolicy()`, including `AgentCorePolicyUnavailable`,
-the two-value type behind `onUnavailable`; `AgentCorePolicyClientLike` is the
-one-method evaluate surface returning an `AgentCorePolicyEvaluation`, and
-`BedrockAgentCorePolicySdkModule` is the SDK slice behind it. All four are
-`@deprecated`.
+**Policy** (`agentfootprint/security`) — `PermissionChecker`,
+`PermissionRequest` and `PermissionDecision` describe the live authorization
+port; `PermissionPolicy` implements the role-allowlist strategy. The retired
+AgentCore policy factory, error and option/client/evaluation/SDK types are no
+longer exported.
 
 **Gateway** (`agentfootprint/providers`) — `GatewayTransportOptions` is
 what `gatewayTransport()` takes, and `McpGatewayTransport` is the descriptor it

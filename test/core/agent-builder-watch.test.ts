@@ -163,75 +163,10 @@ describe('watch / attach are one mechanism', () => {
   });
 });
 
-// ─── 3. Refusal — .recorder() was REMOVED in 9.0.0 ─────────────────
-
-describe('.recorder() is removed in 9.0.0 — the name survives only to say so', () => {
-  it('throws instead of attaching, and the failure lands at BUILD time', () => {
-    const a = counter('legacy');
-    const builder = Agent.create({ provider: provider(), model: 'mock' }).system('s');
-
-    // Not "returns a builder that later misbehaves" — it throws on the call
-    // itself, before `.build()`, before any run. Deterministic, and it lands
-    // in development rather than in a trace nobody is watching.
-    expect(() => builder.recorder(a.observer)).toThrow();
-    expect(a.count(), 'a refused observer must never have been attached').toBe(0);
-  });
-
-  it('the message names .watch() as the replacement and 10.0.0 as the end', () => {
-    const builder = Agent.create({ provider: provider(), model: 'mock' }).system('s');
-    let message = '';
-    try {
-      builder.recorder(counter('legacy').observer);
-    } catch (error) {
-      message = (error as Error).message;
-    }
-
-    // A removal error is only useful if it carries the migration. Three
-    // things a reader needs: what happened, what to type instead, and how
-    // long this signpost stands.
-    expect(message).toContain('AgentBuilder.recorder()');
-    expect(message).toContain('removed in 9.0.0');
-    expect(message).toContain('.watch(');
-    expect(message).toContain('10.0.0');
-    // And WHY it is safe to just rename: same list, same order, same
-    // attachment. Nobody should have to read the changelog to believe it.
-    expect(message).toMatch(/same list/i);
-  });
-
-  it('.watch() is the strictly larger door — it takes the whole set at once', async () => {
-    // The thing `.recorder()` could not do, which is why the rename was worth
-    // a major: one call, several observers.
-    const a = counter('a');
-    const b = counter('b');
-    const agent = Agent.create({ provider: provider(), model: 'mock' })
-      .system('s')
-      .watch(a.observer, b.observer)
-      .build();
-
-    await agent.run({ message: 'go' });
-    expect(a.count()).toBeGreaterThan(0);
-    expect(b.count()).toBe(a.count());
-  });
-
-  it('refusing logs NOTHING — libraries throw, they do not print', () => {
-    const printed: unknown[] = [];
-    const originalWarn = console.warn;
-    const originalLog = console.log;
-    console.warn = (...args: unknown[]): void => {
-      printed.push(args);
-    };
-    console.log = (...args: unknown[]): void => {
-      printed.push(args);
-    };
-    try {
-      const builder = Agent.create({ provider: provider(), model: 'mock' }).system('s');
-      expect(() => builder.recorder(counter('quiet').observer)).toThrow();
-    } finally {
-      console.warn = originalWarn;
-      console.log = originalLog;
-    }
-    // The error IS the channel. A library that also writes to a host's stdout
-    // is a library the host cannot silence.
-    expect(printed).toEqual([]);
+describe('major 10 recorder surface', () => {
+  it('has no deprecated recorder method, including on the prototype', () => {
+    const builder = Agent.create({ provider: provider(), model: 'mock' });
+    expect('recorder' in builder).toBe(false);
+    expect(typeof builder.watch).toBe('function');
   });
 });

@@ -18,7 +18,7 @@ The stable public event contract and the central dispatcher that routes events t
 ```
 events/
 ├── types.ts         Shared value objects (EventMeta, ContextSlot, ContextSource, …)
-├── payloads.ts      payload interfaces (one per registered event — 78 as of 9.16.0; the count is pinned by test/events/unit/registry.test.ts)
+├── payloads.ts      payload interfaces (the registry count is pinned by test/events/unit/registry.test.ts)
 ├── registry.ts      EVENT_NAMES + AgentfootprintEventMap + ALL_EVENT_TYPES
 └── dispatcher.ts    EventDispatcher + .on / .off / .once + wildcards
 ```
@@ -31,9 +31,14 @@ Every event implements `AgentfootprintEventEnvelope<type, payload>`. Consumers s
 
 Trade-off: the event-type names are a **closed set** — new domain events require adding to `registry.ts` + a corresponding payload in `payloads.ts`. That's intentional. The registry IS the contract; keeping it in one file makes breakage reviewable in one diff.
 
+A declared event must also have a producer. A never-emitted safety event would
+make silence look like a successful check. The removed `risk.flagged` contract
+had no producer: use the actual permission, reliability and middleware events
+for checks performed through those mechanisms.
+
 ### Decision 2: Three-segment dotted names: `agentfootprint.<domain>.<action>`
 
-Low cardinality (~78 names total). Low cardinality is a hard requirement for observability systems (OTEL, Datadog, Prometheus) — they index by name, so explosive name growth kills them. High-cardinality fields live in the payload.
+Low cardinality, bounded by the closed registry. Low cardinality is a hard requirement for observability systems (OTEL, Datadog, Prometheus) — they index by name, so explosive name growth kills them. High-cardinality fields live in the payload.
 
 ### Decision 3: Central dispatcher, NOT DOM-style bubbling
 
@@ -59,8 +64,8 @@ Subscriptions never auto-expire per-run — a listener added to a long-lived run
 
 ```typescript
 const unsub = agent.on('agentfootprint.agent.turn_end', fn); // 1. Unsubscribe handle
-agent.on('*', fn, { signal: controller.signal });             // 2. AbortSignal (DOM addEventListener parity; also on once())
-agent.removeAllListeners();                                   // 3. bulk escape hatch for servers
+agent.on('*', fn, { signal: controller.signal }); // 2. AbortSignal (DOM addEventListener parity; also on once())
+agent.removeAllListeners(); // 3. bulk escape hatch for servers
 ```
 
 Bounded-leak guarantee: every removal path (unsubscribe, `off()`, signal abort, once-fire, `removeAllListeners()`) prunes emptied internal buckets AND detaches the abort handler from the consumer's signal — dispatcher storage is bounded by LIVE subscriptions, never subscription history. `listenerCount()` is the diagnostic: no-arg = total retained (watch this on servers), with a key = that exact subscription bucket.
@@ -87,7 +92,9 @@ stored, exported or shown, and no consumer can reach it.
 // A consumer: the record, served.
 agent.on('agentfootprint.agent.turn_end', (e) => archive(e)); // finalContent: '[REDACTED]' under redact
 // The library itself (core/runnerLive.ts · runnerLive — no barrel exports it):
-runnerLive(agent)?.onRealEvent((e) => e.type === 'agentfootprint.stream.token' && reply.write(e.payload.content));
+runnerLive(agent)?.onRealEvent(
+  (e) => e.type === 'agentfootprint.stream.token' && reply.write(e.payload.content),
+);
 ```
 
 With no policy the serving is the identity: no copy, no walk, the same bytes as before.
@@ -103,7 +110,7 @@ With no policy the serving is the identity: no copy, no walk, the same bytes as 
 
 1. Is the decision observable without this event? If yes, don't add it.
 2. Does it fit an existing domain? If yes, use that domain's prefix.
-3. Does the payload carry *evidence* (why), not just *outcome* (what)? It should.
+3. Does the payload carry _evidence_ (why), not just _outcome_ (what)? It should.
 4. Is the name low-cardinality (no interpolation like `myapp.tool.${name}`)? It must be.
 
 Then: add to `registry.ts` (EVENT_NAMES, AgentfootprintEventMap, ALL_EVENT_TYPES), add a payload interface in `payloads.ts`, add to the union in `registry.ts`. Tests enforce exhaustiveness.
@@ -132,7 +139,8 @@ agent.on('*', debugFirehose);
 // 3. Fully-typed discriminated union for exhaustive handling
 runner.on('*', (e: AgentfootprintEvent) => {
   switch (e.type) {
-    case 'agentfootprint.context.injected': /* payload typed */; break;
+    case 'agentfootprint.context.injected' /* payload typed */:
+      break;
     // …
   }
 });

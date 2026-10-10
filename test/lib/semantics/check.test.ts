@@ -14,7 +14,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { semantic, absent, coverage } from '../../../src/index.js';
+import { describedResult, absent, coverage } from '../../../src/index.js';
 import {
   checkSemantics,
   coerceSemanticsCatalog,
@@ -23,10 +23,10 @@ import {
   type SemanticsFinding,
 } from '../../../src/lib/semantics/index.js';
 
-const PROVENANCE = { measured_at: '2026-08-19T10:20:00Z', source: 'Cohesity API' };
+const PROVENANCE = { measuredAt: '2026-08-19T10:20:00Z', source: 'Cohesity API' };
 
 const goodTriage = () =>
-  semantic({
+  describedResult({
     facts: [{ entity: 'vm-01', backed_up: true, copies: 1 }],
     provenance: PROVENANCE,
     coverage: {
@@ -48,7 +48,7 @@ describe('unit: the rule table', () => {
         name: 'vm_backup_status',
         resultClass: 'triage',
         results: [
-          semantic({ facts: [{ entity: 'vm-1', backed_up: true }], provenance: PROVENANCE }),
+          describedResult({ facts: [{ entity: 'vm-1', backed_up: true }], provenance: PROVENANCE }),
         ],
       },
     ]);
@@ -79,12 +79,12 @@ describe('unit: the rule table', () => {
   });
 
   it('inventory-without-coverage ERRORS; inventory-without-render WARNS', () => {
-    const noCoverage = semantic({
+    const noCoverage = describedResult({
       facts: [{ entity: 'SHPSTRPRNFS012', shares: 2 }],
       provenance: PROVENANCE,
       render: { default: 'table' },
     });
-    const noRender = semantic({
+    const noRender = describedResult({
       facts: [{ entity: 'SHPSTRPRNFS012', shares: 2 }],
       provenance: PROVENANCE,
       coverage: { checked: ['6 arrays with file services'] },

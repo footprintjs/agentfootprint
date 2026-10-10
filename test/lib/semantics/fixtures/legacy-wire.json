@@ -1,0 +1,307 @@
+{
+  "sourceCommit": "30f7a415d127d95ef188776e6c1bd29fb8526af2",
+  "sourceTest": "test/lib/semantics/described-result.test.ts",
+  "sourceTestSha256": "19c2a8a9f52d434739a5f0eaa50147d471a7eca809e7f990d48f26b47f46496e",
+  "captureNodeVersion": "v22.23.3",
+  "method": "Mechanically extract original CASES and seeded generator with the TypeScript AST; execute compiled pristine semantic(), compare all outcomes to pristine describedResult() after original inWireWords normalization. Digest exact UTF-8 JSON.stringify(ordered outcome strings), no newline.",
+  "cases": [
+    {
+      "name": "facts from an export",
+      "envelope": {
+        "af_semantics": true,
+        "facts": [
+          {
+            "entity": "vm-01",
+            "datastore": "ds-7",
+            "size_tb": 12
+          },
+          {
+            "entity": "vm-02",
+            "datastore": "ds-9",
+            "size_tb": 3.5
+          }
+        ],
+        "provenance": {
+          "measured_at": "2026-09-19T02:00:00Z",
+          "source": "RVTools export",
+          "source_export_date": "2026-09-19"
+        },
+        "note": "Typed data, not prose. `grain` and `provenance` are caveats that travel with the numbers: check `is_counter` before summing values from a series, read `measured_at` (and `age_seconds`) as how old the data is, and treat everything under `not_covered` as ground this result does NOT cover — a clean look here says nothing about it."
+      },
+      "modelView": {
+        "facts": [
+          {
+            "entity": "vm-01",
+            "datastore": "ds-7",
+            "size_tb": 12
+          },
+          {
+            "entity": "vm-02",
+            "datastore": "ds-9",
+            "size_tb": 3.5
+          }
+        ],
+        "provenance": {
+          "measured_at": "2026-09-19T02:00:00Z",
+          "source": "RVTools export",
+          "source_export_date": "2026-09-19"
+        },
+        "note": "Typed data, not prose. `grain` and `provenance` are caveats that travel with the numbers: check `is_counter` before summing values from a series, read `measured_at` (and `age_seconds`) as how old the data is, and treat everything under `not_covered` as ground this result does NOT cover — a clean look here says nothing about it."
+      }
+    },
+    {
+      "name": "a series with grain — measuredAt is the newest sample",
+      "envelope": {
+        "af_semantics": true,
+        "series": [
+          {
+            "t": "2026-09-19T01:30:00Z",
+            "entity": "fc1/3",
+            "metric": "avg_iops",
+            "value": 18450
+          },
+          {
+            "t": "2026-09-19T02:00:00Z",
+            "entity": "fc1/3",
+            "metric": "avg_iops",
+            "value": 17200
+          }
+        ],
+        "grain": {
+          "interval": "30m",
+          "aggregation": "avg",
+          "is_counter": false,
+          "collapsed": "per-port"
+        },
+        "provenance": {
+          "measured_at": "2026-09-19T02:00:00Z",
+          "age_seconds": 600,
+          "source": "InfluxDB SwitchPortStats"
+        },
+        "note": "Typed data, not prose. `grain` and `provenance` are caveats that travel with the numbers: check `is_counter` before summing values from a series, read `measured_at` (and `age_seconds`) as how old the data is, and treat everything under `not_covered` as ground this result does NOT cover — a clean look here says nothing about it."
+      },
+      "modelView": {
+        "series": [
+          {
+            "t": "2026-09-19T01:30:00Z",
+            "entity": "fc1/3",
+            "metric": "avg_iops",
+            "value": 18450
+          },
+          {
+            "t": "2026-09-19T02:00:00Z",
+            "entity": "fc1/3",
+            "metric": "avg_iops",
+            "value": 17200
+          }
+        ],
+        "grain": {
+          "interval": "30m",
+          "aggregation": "avg",
+          "is_counter": false,
+          "collapsed": "per-port"
+        },
+        "provenance": {
+          "measured_at": "2026-09-19T02:00:00Z",
+          "age_seconds": 600,
+          "source": "InfluxDB SwitchPortStats"
+        },
+        "note": "Typed data, not prose. `grain` and `provenance` are caveats that travel with the numbers: check `is_counter` before summing values from a series, read `measured_at` (and `age_seconds`) as how old the data is, and treat everything under `not_covered` as ground this result does NOT cover — a clean look here says nothing about it."
+      }
+    },
+    {
+      "name": "edges — no provenance needed",
+      "envelope": {
+        "af_semantics": true,
+        "edges": [
+          {
+            "from": "vm-01",
+            "to": "ds-7",
+            "kind": "rides"
+          },
+          {
+            "from": "vm-02",
+            "to": "ds-9",
+            "kind": "rides"
+          }
+        ],
+        "note": "Typed data, not prose. `grain` and `provenance` are caveats that travel with the numbers: check `is_counter` before summing values from a series, read `measured_at` (and `age_seconds`) as how old the data is, and treat everything under `not_covered` as ground this result does NOT cover — a clean look here says nothing about it."
+      },
+      "modelView": {
+        "edges": [
+          {
+            "from": "vm-01",
+            "to": "ds-7",
+            "kind": "rides"
+          },
+          {
+            "from": "vm-02",
+            "to": "ds-9",
+            "kind": "rides"
+          }
+        ],
+        "note": "Typed data, not prose. `grain` and `provenance` are caveats that travel with the numbers: check `is_counter` before summing values from a series, read `measured_at` (and `age_seconds`) as how old the data is, and treat everything under `not_covered` as ground this result does NOT cover — a clean look here says nothing about it."
+      }
+    },
+    {
+      "name": "clarify-only — two matches, which one?",
+      "envelope": {
+        "af_semantics": true,
+        "clarify": {
+          "question": "Two customers match \"Acme\" — which one?",
+          "candidates": [
+            "Acme Ltd",
+            "Acme Inc"
+          ]
+        },
+        "note": "Typed data, not prose. `grain` and `provenance` are caveats that travel with the numbers: check `is_counter` before summing values from a series, read `measured_at` (and `age_seconds`) as how old the data is, and treat everything under `not_covered` as ground this result does NOT cover — a clean look here says nothing about it."
+      },
+      "modelView": {
+        "clarify": {
+          "question": "Two customers match \"Acme\" — which one?",
+          "candidates": [
+            "Acme Ltd",
+            "Acme Inc"
+          ]
+        },
+        "note": "Typed data, not prose. `grain` and `provenance` are caveats that travel with the numbers: check `is_counter` before summing values from a series, read `measured_at` (and `age_seconds`) as how old the data is, and treat everything under `not_covered` as ground this result does NOT cover — a clean look here says nothing about it."
+      }
+    },
+    {
+      "name": "a stated clarify: null beside facts",
+      "envelope": {
+        "af_semantics": true,
+        "facts": [
+          {
+            "entity": "vm-01",
+            "size_tb": 12
+          }
+        ],
+        "provenance": {
+          "measured_at": "2026-09-19T02:00:00Z",
+          "source": "RVTools export"
+        },
+        "clarify": null,
+        "note": "Typed data, not prose. `grain` and `provenance` are caveats that travel with the numbers: check `is_counter` before summing values from a series, read `measured_at` (and `age_seconds`) as how old the data is, and treat everything under `not_covered` as ground this result does NOT cover — a clean look here says nothing about it."
+      },
+      "modelView": {
+        "facts": [
+          {
+            "entity": "vm-01",
+            "size_tb": 12
+          }
+        ],
+        "provenance": {
+          "measured_at": "2026-09-19T02:00:00Z",
+          "source": "RVTools export"
+        },
+        "note": "Typed data, not prose. `grain` and `provenance` are caveats that travel with the numbers: check `is_counter` before summing values from a series, read `measured_at` (and `age_seconds`) as how old the data is, and treat everything under `not_covered` as ground this result does NOT cover — a clean look here says nothing about it."
+      }
+    },
+    {
+      "name": "render hints and coverage — every spelled field at once",
+      "envelope": {
+        "af_semantics": true,
+        "series": [
+          {
+            "t": "2026-09-19T01:30:00Z",
+            "entity": "fc1/3",
+            "metric": "frames_total",
+            "value": 18450
+          },
+          {
+            "t": "2026-09-19T02:00:00Z",
+            "entity": "fc1/3",
+            "metric": "frames_total",
+            "value": 17200
+          }
+        ],
+        "grain": {
+          "interval": "30m",
+          "aggregation": "count",
+          "is_counter": true
+        },
+        "provenance": {
+          "measured_at": "2026-09-19T02:00:00Z",
+          "age_seconds": 30000,
+          "source": "nightly RVTools export",
+          "source_export_date": "2026-09-18"
+        },
+        "coverage": {
+          "checked": [
+            {
+              "what": "shq-fab-a: all 48 FC ports"
+            }
+          ],
+          "not_checked": [
+            {
+              "what": "the peer fabric",
+              "why": "this collector is scoped to one fabric"
+            }
+          ],
+          "cannot_cover": [
+            {
+              "what": "host-side multipathing",
+              "why": "no collector runs on the ESX hosts"
+            }
+          ]
+        },
+        "not_covered": [
+          "the peer fabric — this collector is scoped to one fabric",
+          "host-side multipathing — no collector runs on the ESX hosts"
+        ],
+        "render": {
+          "default": "table",
+          "columns": [
+            "entity",
+            "value"
+          ],
+          "sort": "value desc",
+          "filter_note": "replicas excluded",
+          "chart_hint": "line per entity"
+        },
+        "note": "Typed data, not prose. `grain` and `provenance` are caveats that travel with the numbers: check `is_counter` before summing values from a series, read `measured_at` (and `age_seconds`) as how old the data is, and treat everything under `not_covered` as ground this result does NOT cover — a clean look here says nothing about it."
+      },
+      "modelView": {
+        "series": [
+          {
+            "t": "2026-09-19T01:30:00Z",
+            "entity": "fc1/3",
+            "metric": "frames_total",
+            "value": 18450
+          },
+          {
+            "t": "2026-09-19T02:00:00Z",
+            "entity": "fc1/3",
+            "metric": "frames_total",
+            "value": 17200
+          }
+        ],
+        "grain": {
+          "interval": "30m",
+          "aggregation": "count",
+          "is_counter": true
+        },
+        "provenance": {
+          "measured_at": "2026-09-19T02:00:00Z",
+          "age_seconds": 30000,
+          "source": "nightly RVTools export",
+          "source_export_date": "2026-09-18"
+        },
+        "not_covered": [
+          "the peer fabric — this collector is scoped to one fabric",
+          "host-side multipathing — no collector runs on the ESX hosts"
+        ],
+        "note": "Typed data, not prose. `grain` and `provenance` are caveats that travel with the numbers: check `is_counter` before summing values from a series, read `measured_at` (and `age_seconds`) as how old the data is, and treat everything under `not_covered` as ground this result does NOT cover — a clean look here says nothing about it."
+      }
+    }
+  ],
+  "property": {
+    "seed": 20260926,
+    "count": 3000,
+    "minted": 1870,
+    "refused": 1130,
+    "serializedUtf8Bytes": 1527607,
+    "outcomeSequenceSha256": "6359f7edeea23a58710210d628e5b39ecb8496fd1f3a698869a5776717ce0099"
+  }
+}

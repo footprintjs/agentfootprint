@@ -146,13 +146,23 @@ if (!report.ok) throw new Error(formatSemanticsReport(report));
 
 Recognition is strict: only a plain object whose `af_semantics` is exactly `true` **and** that passes the whole rule set is an envelope. Every other value any tool has ever returned — including a marker-bearing shape with faults, which is dev-warned and named by the gate but never half-applied — takes the exact path it always took, byte for byte.
 
-## `semantic()` — the deprecated name
+## Migration from the removed declaration door
 
-`semantic()` mints the same envelope, byte for byte, from a declaration that copies the wire's snake_case names through (`measured_at`, `is_counter`, `filter_note`). It keeps working unchanged, and it is deprecated: the name read as semantic search, and its declaration mixed two spellings. Each door takes one spelling and refuses the other, so switching only the name fails loudly at the line that needs the new spelling — `describedResult({ provenance: { measured_at } })` is refused, naming `measuredAt` — and nothing is minted without it.
+The deprecated `semantic()` function and `SemanticDeclaration` type have been
+removed. Use `describedResult()` and `DescribedResultDeclaration`. In declarations,
+rename `is_counter` → `isCounter`, `measured_at` → `measuredAt`,
+`age_seconds` → `ageSeconds`, `source_export_date` → `sourceExportDate`,
+`filter_note` → `filterNote` and `chart_hint` → `chartHint`. Coverage
+declarations already use `notChecked` and `cannotCover`; keep those names.
+Series and facts require provenance in the declaration type as well as at runtime.
+
+Do **not** rename keys in saved records or foreign-language wire envelopes:
+`ToolSemantics`, its snake_case fields, the marker, note and model projection
+are unchanged. `readSemantics()` continues to recognize valid saved envelopes.
 
 ## Vocabulary reference
 
-The authoring half ships on the main barrel (`agentfootprint`). `describedResult` mints the envelope from a `DescribedResultDeclaration`; the deprecated `semantic` mints the same envelope from a `SemanticDeclaration`. The rendered value is a `ToolSemantics` carrying `SemanticSeriesPoint` rows, `SemanticFact` rows, `SemanticEdge` links, a `SemanticGrain`, a `SemanticProvenance`, a `SemanticCoverage` (whose derived `not_covered` lines are composed by `composeNotCovered`), a `SemanticClarify` question and `SemanticRender` hints. `readSemantics` is the strict recognizer the dispatch loop uses; `explainSemantics` names the faults — `SemanticIssue` rows, each with a `SemanticIssueCode` — on a marker-bearing value that was not recognized; `semanticsForModel` builds the model's compact projection; `isCounterLookingAggregation` and the `COUNTER_AGGREGATION_WORDS` list decide when `is_counter` must be stated. The marker key is `SEMANTICS_MARKER` (the string `af_semantics`), the static note text is `SEMANTICS_NOTE`, the closed class set is `RESULT_CLASSES` (typed as `ToolResultClass`), and `assertResultClass` is the definition-time refusal `defineTool` runs on a declared class.
+The authoring half ships on the main barrel (`agentfootprint`). `describedResult` is the single authoring door and mints the envelope from a `DescribedResultDeclaration`. The rendered value is a `ToolSemantics` carrying `SemanticSeriesPoint` rows, `SemanticFact` rows, `SemanticEdge` links, a `SemanticGrain`, a `SemanticProvenance`, a `SemanticCoverage` (whose derived `not_covered` lines are composed by `composeNotCovered`), a `SemanticClarify` question and `SemanticRender` hints. `readSemantics` is the strict recognizer the dispatch loop uses; `explainSemantics` names the faults — `SemanticIssue` rows, each with a `SemanticIssueCode` — on a marker-bearing value that was not recognized; `semanticsForModel` builds the model's compact projection; `isCounterLookingAggregation` and the `COUNTER_AGGREGATION_WORDS` list decide when `is_counter` must be stated. The marker key is `SEMANTICS_MARKER` (the string `af_semantics`), the static note text is `SEMANTICS_NOTE`, the closed class set is `RESULT_CLASSES` (typed as `ToolResultClass`), and `assertResultClass` is the definition-time refusal `defineTool` runs on a declared class.
 
 `SEMANTICS_NOTE` and `SEMANTICS_MARKER` are also published as **data**, beside the coverage/absence notes, at `node_modules/agentfootprint/canonical-notes.json` — for a tool written in a language that cannot import them. See [reading the canonical notes from another language](doc:tools#reading-the-canonical-notes-from-another-language-9700).
 

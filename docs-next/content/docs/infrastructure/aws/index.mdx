@@ -40,7 +40,7 @@ status honestly is.
 | **AgentCore Observability** | `agentcoreObservability` | `agentfootprint/observe` | `@aws-sdk/client-cloudwatch-logs` | `CreateLogStream`, `PutLogEvents` | Shipped; contract-mapped and injection-tested | [Observability sinks](doc:observability-sinks) |
 | **CloudWatch Logs** (generic) | `cloudwatchObservability` | `agentfootprint/observe` | `@aws-sdk/client-cloudwatch-logs` | `CreateLogStream`, `PutLogEvents` | Shipped; contract-mapped and injection-tested | [Observability sinks](doc:observability-sinks) |
 | **X-Ray** | `xrayObservability` | `agentfootprint/observe` | `@aws-sdk/client-xray` | `PutTraceSegments` | Shipped; contract-mapped and injection-tested | [Observability sinks](doc:observability-sinks) |
-| **AgentCore Policy** | `agentCorePolicy` | `agentfootprint/security` | — | **nothing** | **Retired 9.4.0** — refuses at construction | [Governance & policy](doc:governance-and-policy) |
+| **AgentCore Policy** | No in-process adapter | — | — | — | Enforced at the Gateway; the retired `agentCorePolicy` export is removed | [Governance & policy](doc:governance-and-policy) |
 | **S3 Vectors** | `s3VectorsStore` | `agentfootprint/memory` | `@aws-sdk/client-s3vectors` | `GetIndex`, `PutVectors`, `QueryVectors`, `GetVectors`, `ListVectors`, `DeleteVectors` | Shipped (9.3.0); contract-mapped and injection-tested | [Memory & stores](doc:memory-and-stores) |
 | **S3** (artifact store) | `s3Artifacts` | `agentfootprint` | `@aws-sdk/client-s3` | `PutObject`, `GetObject`, `HeadObject`, `DeleteObject`, `ListObjectsV2` — plus native `putStream` / `getStream` | **9.25.0** — contract-shaped and tested; awaiting field use | [Artifacts](doc:artifacts) |
 | **Bedrock models** | `bedrock()` — Converse, model-agnostic | `agentfootprint/providers` | `@aws-sdk/client-bedrock-runtime` | `Converse`, `ConverseStream` | Shipped | [AWS Bedrock](doc:aws-bedrock) |
@@ -198,10 +198,11 @@ before a request reaches your process; a denial comes back as an **MCP error** o
 made through `mcpClient(...)` and lands in the loop as that tool's result, which the model reads
 and adapts to.
 
-`agentCorePolicy()` tried to pre-evaluate the same rule in-process and is **retired in 9.4.0**:
+`agentCorePolicy()` tried to pre-evaluate the same rule in-process and was retired in 9.4.0:
 it dispatched `EvaluatePolicyCommand`, which does not exist in
 `@aws-sdk/client-bedrock-agentcore` — AgentCore has no data-plane authorization call at all. The
-export remains and refuses at construction with the whole explanation.
+factory, its retired error and its helper types are now removed. Remove their imports;
+there is no library-side policy-evaluation SDK call to substitute.
 
 For rules you own, use `PermissionPolicy.fromRoles(...)` as the `permissionChecker`, or the
 `.toolMiddleware()` chain for conditional ones. See

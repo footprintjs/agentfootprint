@@ -32,12 +32,11 @@ most likely to get wrong here.
 
 Two more absences: there is **no runtime force-stop governor** (`routeRecorder().getTrips()`
 only *labels* a spinning run; `maxIterations` is the hard stop), and there is **no
-automatic re-delivery of an ageing skill body** (`refreshPolicy` is stored and never
-read on any version — use `surfaceMode: 'both'`).
+automatic re-delivery of an ageing skill body** (the inert `refreshPolicy` was removed in 10.0.0 — use `surfaceMode: 'both'`).
 
 ## Subpath map — 18 doors
 
-`agentfootprint` (main barrel: `Agent`, `LLMCall`, `defineTool`, control flow, patterns, `defineRAG`, pause/resume) · `/providers` (`mock`, `anthropic`, `openai`, `bedrock`, `ollama`, `mcpClient`, embedders — every provider, so bundlers never walk the vendor SDKs from the main barrel) · `/context` (`defineSkill`, `defineFact`, `defineSteering`, `defineInstruction`, `skillGraph`, `skillsFromDir`, the scorers) · `/memory` (`defineMemory`, `InMemoryStore`, `mockEmbedder`, the stores) · `/rag` (stores + loaders; `defineRAG` itself is on the main barrel) · `/observe` (recorders, tracing, `RunStep`) · `/resilience` (provider decorators) · `/reliability` (the rules-based fail-fast gate) · `/cache` (prefix-cache strategies, chosen from the provider's declared `promptCaching` by `cacheStrategyFor`) · `/security` · `/hosting` · `/events` · `/skill-graph` (the routing layer with no framework attached, for a host that is not this agent) · `/recipes` (`defineAgentRecipe` — one named, versioned agent setup, applied with `.recipe()`) · `/maps` (`Claim<T>` and the map-engagement vocabulary behind `.maps()`) · `/classify` (the calibrated-classifier port: `Classifier`, `mockClassifier`) · `/ontology` (`defineOntology` — a declared map of the domain, mounted with `.ontology()`) · `/time` (`convertForTool` + `sugarForms` + `granularityMsOf` — the time layer's own answer to whether and how a tool reads a window, for an app outside a run; the steps `convertExact`, `convertWidened`, `periodFactProblem` too). `package.json` `exports` is the complete list; a path not on it does not resolve.
+`agentfootprint` (main barrel: `Agent`, `LLMCall`, `defineTool`, control flow, patterns, `defineRAG`, pause/resume) · `/providers` (`mock`, `anthropic`, `openai`, `bedrock`, `ollama`, `mcpClient`, embedders — every provider, so bundlers never walk the vendor SDKs from the main barrel) · `/context` (`defineSkill`, `defineFact`, `defineSteering`, `defineInstruction`, `skillGraph`, `skillsFromDir`, the scorers) · `/memory` (`defineMemory`, `InMemoryStore`, `mockEmbedder`, the stores) · `/rag` (stores + loaders; `defineRAG` itself is on the main barrel) · `/observe` (recorders, tracing, `RunStep`) · `/resilience` (provider decorators) · `/reliability` (only the reliability gate's distinct `CircuitOpenError`; rules live on `/resilience`) · `/cache` (prefix-cache strategies, chosen from the provider's declared `promptCaching` by `cacheStrategyFor`) · `/security` · `/hosting` · `/events` · `/skill-graph` (the routing layer with no framework attached, for a host that is not this agent) · `/recipes` (`defineAgentRecipe` — one named, versioned agent setup, applied with `.recipe()`) · `/maps` (`Claim<T>` and the map-engagement vocabulary behind `.maps()`) · `/classify` (the calibrated-classifier port: `Classifier`, `mockClassifier`) · `/ontology` (`defineOntology` — a declared map of the domain, mounted with `.ontology()`) · `/time` (`convertForTool` + `sugarForms` + `granularityMsOf` — the time layer's own answer to whether and how a tool reads a window, for an app outside a run; the steps `convertExact`, `convertWidened`, `periodFactProblem` too). `package.json` `exports` is the complete list; a path not on it does not resolve.
 
 ## Core Concepts
 
@@ -260,8 +259,7 @@ tools that declare a period only on their results.
 `filterNote`); the envelope the model reads stays snake_case. Series need `grain`
 (`{ interval, aggregation, isCounter }` — state `isCounter` for `sum`/`count`-like
 aggregations); series or facts without `provenance` are a compile error and a run-time
-refusal. `semantic()` is the deprecated name for the same envelope with a snake_case
-declaration — do not use it in new code.
+refusal. The deprecated `semantic()` declaration was removed in 10.0.0; saved envelopes still use the same wire format.
 
 A helper that cannot honor its declaration throws inside `execute`: the model reads text
 starting `refused: ` in place of the data, and the run continues. A data list is never
@@ -288,7 +286,7 @@ const agent = Agent.create({ provider, model })
 agent.on('agentfootprint.context.evaluated', (e) => console.log(e.payload.activeIds));
 ```
 
-**124 typed events across 28 domains.** Two subscription shapes and no third:
+**123 typed events across 27 domains.** Two subscription shapes and no third:
 `'*'` (every event) and `'agentfootprint.<domain>.*'` (one domain). **`'agentfootprint.*'`
 is not a pattern** — TypeScript rejects it, and at runtime it would match nothing.
 

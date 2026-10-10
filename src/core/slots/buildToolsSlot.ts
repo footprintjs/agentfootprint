@@ -771,7 +771,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
     // A parked map's tools come off the wire here, in the STATIC list, which
     // is the only place they can be reached on the default posture.
     //
-    // With `scopeTools` false (the default for flat graphs until 10.0.0) a
+    // With `scopeTools` false (the default for flat graphs) a
     // skill's tools are pre-loaded into the static registry and ride from
     // iteration 1 whatever the cursor says. So suppressing the ACTIVE set —
     // which is all parking used to do — stopped the prompt fragment and left
@@ -779,8 +779,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
     // the park, it contradicted it, showing the model tools for a skill whose
     // instructions had just vanished.
     //
-    // This is NOT a change to `scopeTools` and does not touch the 10.0.0
-    // ledger. The two dials are orthogonal and always were: `scopeTools`
+    // This is NOT a change to the `scopeTools` default. The two dials are orthogonal and always were: `scopeTools`
     // answers "do this map's tools follow the CURSOR?", parking answers "is
     // this map talking at all?" — the kernel's whole thesis is that those are
     // different questions. Absent the kernel the set is empty and this line

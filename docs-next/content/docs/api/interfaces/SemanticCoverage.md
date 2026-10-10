@@ -10,7 +10,7 @@ The envelope's coverage, normalized — the SAME three-list vocabulary the
 `coverage()` / `absent()` primitives speak (checked / not checked / cannot
 cover), in the snake_case spelling every rendered tool shape uses because
 a model reads it more often than code does. Declared through
-[SemanticDeclaration.coverage](/docs/api/interfaces/SemanticDeclaration#coverage) with the exact `CoverageDeclaration`
+[DescribedResultDeclaration.coverage](/docs/api/type-aliases/DescribedResultDeclaration) with the exact `CoverageDeclaration`
 input the `coverage()` primitive takes; the dispatch loop declares it
 through the same channel (`tools.coverage_declared`, tracked state, the
 final-answer limits block) — absorbed, never duplicated.

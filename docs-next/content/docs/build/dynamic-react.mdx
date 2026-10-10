@@ -152,7 +152,7 @@ Iter 1 prompt has an example showing the rare edge case → iter 2 drops it beca
 
 ### 7. Skill body refresh on long-context runs
 
-System-prompt skill body decays past long contexts (~50K tokens on most providers) → re-inject via tool result so the LLM sees it fresh again. `defineSkill({ refreshPolicy: { afterTokens: 50_000, via: 'tool-result' } })` is where that intent is declared — but it is **declared only**: nothing in the engine reads `refreshPolicy` yet, so no re-injection happens today. Reach for `surfaceMode: 'both'` if you need the body returned on every `read_skill` call.
+Use `surfaceMode: 'both'` to return the body on every explicit `read_skill` call. Use `steps` to carry a procedure's current position per request. The inert `refreshPolicy` option was removed in 10.0.0; there is no automatic token-threshold body refresh.
 
 ---
 

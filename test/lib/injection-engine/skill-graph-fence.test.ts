@@ -193,6 +193,7 @@ const HOST_ZONE = [
   `${IE}/skillBodyDelivery.ts`,
   `${IE}/skillTools.ts`,
   `${IE}/skillsFromDir.ts`,
+  `${IE}/optionKeys.ts`,
   `${IE}/skillsFromDirRoutes.ts`,
   `${IE}/factories/defineFact.ts`,
   `${IE}/factories/defineInjection.ts`,

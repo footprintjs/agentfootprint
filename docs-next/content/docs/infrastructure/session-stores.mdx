@@ -253,7 +253,7 @@ against it every build.
 ### A missing runtime is not a store failing a law
 
 `sqliteSessions` needs `node:sqlite`, which ships from Node 22.5; this package
-still supports Node 20. On a runtime without it the store cannot be
+requires Node 22 or newer, including early 22.x releases without the module. On a runtime without it the store cannot be
 **constructed at all**, so there is no store to ask, and `declared` would be the
 wrong tool — a declaration answers a question about the port. The battery is
 therefore skipped **whole** for that harness, and visibly, so a runner reports it

@@ -11,7 +11,7 @@
  * Two things it pins that a name-by-name sweep cannot:
  *
  *   1. `CircuitState` is genuinely ONE type across `/resilience` and the
- *      deprecated `/reliability`. Two files declare it; if either ever drifts,
+ *      internal gate state. Two files declare it; if either ever drifts,
  *      these assignments stop compiling. That is what makes it honest to call
  *      it a "structural twin" in the door-alias exception list rather than a
  *      collision we papered over.
@@ -31,7 +31,7 @@ import { mock, staticEmbedder } from '../../src/doors/providers';
 
 // The two paths that declare CircuitState.
 import type { CircuitState as StateFromDoor } from '../../src/doors/resilience';
-import type { CircuitState as StateFromAlias } from '../../src/reliability/index';
+import type { CircuitState as StateFromAlias } from '../../src/reliability/CircuitBreaker';
 // And the one name that deliberately does NOT move.
 import { CircuitOpenError as GateError } from '../../src/reliability/index';
 import { CircuitOpenError as DecoratorError } from '../../src/doors/resilience';
@@ -71,7 +71,7 @@ describe('CircuitOpenError is TWO classes — the fact behind the pinned excepti
     expect(fromGate.name).toBe('CircuitOpenError');
 
     // ...and they are still not the same class. A consumer who catches the
-    // reliability gate's error must keep importing it from the deprecated
+    // reliability gate's error must keep importing it from
     // `agentfootprint/reliability`, which is why the door cannot carry it.
     expect(fromGate).not.toBeInstanceOf(DecoratorError);
     expect(fromDecorator).not.toBeInstanceOf(GateError);

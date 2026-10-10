@@ -18,7 +18,7 @@ import {
   explainSemantics,
   isCounterLookingAggregation,
   readSemantics,
-  semantic,
+  describedResult,
   semanticsForModel,
   SEMANTICS_MARKER,
   SEMANTICS_NOTE,
@@ -26,13 +26,13 @@ import {
   type ToolSemantics,
 } from '../../../src/index.js';
 
-const PROVENANCE = { measured_at: '2026-08-19T10:20:00Z', source: 'InfluxDB SwitchPortStats' };
+const PROVENANCE = { measuredAt: '2026-08-19T10:20:00Z', source: 'InfluxDB SwitchPortStats' };
 const POINT = { t: '2026-08-19T10:00:00Z', entity: 'fc1/3', metric: 'avg_iops', value: 18450 };
 
 const fullDecl = () => ({
   series: [POINT],
-  grain: { interval: '30m', aggregation: 'avg', is_counter: false },
-  provenance: { ...PROVENANCE, age_seconds: 600 },
+  grain: { interval: '30m', aggregation: 'avg', isCounter: false },
+  provenance: { ...PROVENANCE, ageSeconds: 600 },
   coverage: {
     checked: ['shq-fab-a: all 48 FC ports'],
     notChecked: [{ what: 'the peer fabric', why: 'this collector is scoped to one fabric' }],
@@ -45,59 +45,59 @@ const fullDecl = () => ({
 // Unit — a declaration this library cannot honor is refused where it is typed
 // ─────────────────────────────────────────────────────────────────────────
 
-describe('unit: semantic() refusals teach at the call site', () => {
+describe('unit: describedResult() refusals teach at the call site', () => {
   it('refuses series without grain — the rule the gate also enforces, one implementation', () => {
-    expect(() => semantic({ series: [POINT], provenance: PROVENANCE })).toThrow(
+    expect(() => describedResult({ series: [POINT], provenance: PROVENANCE })).toThrow(
       /series[\s\S]*grain[\s\S]*counters get summed/,
     );
   });
 
   it('refuses data without provenance, naming the two required fields', () => {
-    expect(() => semantic({ series: [POINT], grain: { interval: '30m' } })).toThrow(
-      /measured_at[\s\S]*source/,
+    expect(() => describedResult({ series: [POINT], grain: { interval: '30m' } })).toThrow(
+      /measuredAt[\s\S]*source/,
     );
-    expect(() => semantic({ facts: [{ entity: 'fc1/3', state: 'up' }] })).toThrow(
-      /measured_at[\s\S]*source/,
+    expect(() => describedResult({ facts: [{ entity: 'fc1/3', state: 'up' }] })).toThrow(
+      /measuredAt[\s\S]*source/,
     );
   });
 
   it('refuses a counter-looking aggregation with is_counter unstated — stated means true OR false', () => {
     expect(() =>
-      semantic({
+      describedResult({
         series: [POINT],
         grain: { interval: '30m', aggregation: 'sum' },
         provenance: PROVENANCE,
       }),
-    ).toThrow(/counter-looking[\s\S]*is_counter/);
+    ).toThrow(/counter-looking[\s\S]*isCounter/);
     // Stated false is a statement, not a default — it passes.
-    const ok = semantic({
+    const ok = describedResult({
       series: [POINT],
-      grain: { interval: '30m', aggregation: 'sum', is_counter: false },
+      grain: { interval: '30m', aggregation: 'sum', isCounter: false },
       provenance: PROVENANCE,
     });
     expect(ok.grain?.is_counter).toBe(false);
   });
 
   it('refuses an envelope that declares nothing — caveats with nothing to caveat', () => {
-    expect(() => semantic({ grain: { interval: '30m' } })).toThrow(/declares nothing/);
-    expect(() => semantic({})).toThrow(/declares nothing/);
+    expect(() => describedResult({ grain: { interval: '30m' } })).toThrow(/declares nothing/);
+    expect(() => describedResult({})).toThrow(/declares nothing/);
   });
 
   it('refuses hand-written not_covered — the prose is DERIVED from coverage', () => {
-    expect(() => semantic({ facts: [{ entity: 'x' }], not_covered: ['stuff'] } as never)).toThrow(
-      /derived, never declared/,
-    );
+    expect(() =>
+      describedResult({ facts: [{ entity: 'x' }], not_covered: ['stuff'] } as never),
+    ).toThrow(/derived, never declared/);
   });
 
   it('refuses unknown fields, naming the vocabulary', () => {
-    expect(() => semantic({ facts: [{ entity: 'x' }], tables: {} } as never)).toThrow(
+    expect(() => describedResult({ facts: [{ entity: 'x' }], tables: {} } as never)).toThrow(
       /'tables' is not a field this vocabulary has/,
     );
   });
 
   it('refuses a cannotCover entry with no why — the coverage() validator, absorbed not duplicated', () => {
     expect(() =>
-      semantic({
+      describedResult({
         facts: [{ entity: 'x' }],
         provenance: PROVENANCE,
         coverage: { cannotCover: ['the peer fabric'] },
@@ -106,9 +106,9 @@ describe('unit: semantic() refusals teach at the call site', () => {
   });
 
   it('refuses a facts row with no entity — every row says WHAT it is about', () => {
-    expect(() => semantic({ facts: [{ size_tb: 12 }] as never, provenance: PROVENANCE })).toThrow(
-      /entity/,
-    );
+    expect(() =>
+      describedResult({ facts: [{ size_tb: 12 }] as never, provenance: PROVENANCE }),
+    ).toThrow(/entity/);
   });
 });
 
@@ -118,7 +118,7 @@ describe('unit: semantic() refusals teach at the call site', () => {
 
 describe('functional: the rendered envelope', () => {
   it('derives not_covered from coverage (notChecked + cannotCover), what — why', () => {
-    const sem = semantic(fullDecl());
+    const sem = describedResult(fullDecl());
     expect(sem.not_covered).toEqual([
       'the peer fabric — this collector is scoped to one fabric',
       'host-side multipathing — no collector exists for it',
@@ -131,25 +131,33 @@ describe('functional: the rendered envelope', () => {
   });
 
   it('a clarify: null is KEPT — a stated non-question is a fact', () => {
-    const sem = semantic({ facts: [{ entity: 'x' }], provenance: PROVENANCE, clarify: null });
+    const sem = describedResult({
+      facts: [{ entity: 'x' }],
+      provenance: PROVENANCE,
+      clarify: null,
+    });
     expect(sem.clarify).toBeNull();
   });
 
   it('the model projection drops the marker, render and the coverage detail; keeps the caveats', () => {
-    const sem = semantic(fullDecl());
+    const sem = describedResult(fullDecl());
     const view = semanticsForModel(sem);
     expect(view).not.toHaveProperty(SEMANTICS_MARKER);
     expect(view).not.toHaveProperty('render');
     expect(view).not.toHaveProperty('coverage');
     expect(view.series).toEqual([POINT]);
     expect(view.grain).toEqual({ interval: '30m', aggregation: 'avg', is_counter: false });
-    expect(view.provenance).toEqual({ ...PROVENANCE, age_seconds: 600 });
+    expect(view.provenance).toEqual({
+      measured_at: PROVENANCE.measuredAt,
+      source: PROVENANCE.source,
+      age_seconds: 600,
+    });
     expect(view.not_covered).toEqual(sem.not_covered);
     expect(view.note).toBe(SEMANTICS_NOTE);
   });
 
   it('the projection keeps a real clarify and drops a null one', () => {
-    const asked = semantic({
+    const asked = describedResult({
       facts: [{ entity: 'vol-00EE' }],
       provenance: PROVENANCE,
       clarify: { question: 'Which array did you mean?', candidates: ['SHPMAX-1', 'SHPMAX-2'] },
@@ -158,12 +166,16 @@ describe('functional: the rendered envelope', () => {
       question: 'Which array did you mean?',
       candidates: ['SHPMAX-1', 'SHPMAX-2'],
     });
-    const silent = semantic({ facts: [{ entity: 'x' }], provenance: PROVENANCE, clarify: null });
+    const silent = describedResult({
+      facts: [{ entity: 'x' }],
+      provenance: PROVENANCE,
+      clarify: null,
+    });
     expect(semanticsForModel(silent)).not.toHaveProperty('clarify');
   });
 
   it('the projection is detached — mutating it does not touch the envelope', () => {
-    const sem = semantic(fullDecl());
+    const sem = describedResult(fullDecl());
     const view = semanticsForModel(sem) as { series: Array<Record<string, unknown>> };
     view.series[0]!.value = 0;
     expect(sem.series?.[0]?.value).toBe(18450);
@@ -175,8 +187,8 @@ describe('functional: the rendered envelope', () => {
 // ─────────────────────────────────────────────────────────────────────────
 
 describe('unit: readSemantics recognition', () => {
-  it('recognizes exactly what semantic() mints', () => {
-    const sem = semantic(fullDecl());
+  it('recognizes exactly what describedResult() mints', () => {
+    const sem = describedResult(fullDecl());
     expect(readSemantics(sem)).toBe(sem);
   });
 
@@ -201,7 +213,7 @@ describe('unit: readSemantics recognition', () => {
   });
 
   it('flags hand-written not_covered that disagrees with coverage — the derivation is the law', () => {
-    const sem = semantic(fullDecl()) as ToolSemantics;
+    const sem = describedResult(fullDecl()) as ToolSemantics;
     const drifted = { ...sem, not_covered: ['something else entirely'] };
     expect(readSemantics(drifted)).toBeUndefined();
     expect(explainSemantics(drifted)?.some((f) => f.field === 'not_covered')).toBe(true);
@@ -233,7 +245,7 @@ describe('edge: counter-word matching and composition helpers', () => {
 
 describe('regression: readCoverageResult absorbs a semantic coverage as a ledger', () => {
   it('a semantic envelope WITH coverage declares one ledger through the one funnel', () => {
-    const reading = readCoverageResult(semantic(fullDecl()));
+    const reading = readCoverageResult(describedResult(fullDecl()));
     expect(reading).toBeDefined();
     expect(reading?.status).toBeUndefined(); // a boundary says nothing about the outcome
     expect(reading?.declared).toHaveLength(1);
@@ -242,7 +254,7 @@ describe('regression: readCoverageResult absorbs a semantic coverage as a ledger
   });
 
   it('a semantic envelope WITHOUT coverage declares no boundary — exactly like a bare result', () => {
-    const sem = semantic({ facts: [{ entity: 'x' }], provenance: PROVENANCE });
+    const sem = describedResult({ facts: [{ entity: 'x' }], provenance: PROVENANCE });
     expect(readCoverageResult(sem)).toBeUndefined();
   });
 });

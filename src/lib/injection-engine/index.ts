@@ -65,7 +65,6 @@ export {
   resolveSurfaceMode,
   type DefineSkillOptions,
   type SurfaceMode,
-  type RefreshPolicy,
   type AutoActivateMode,
 } from './factories/defineSkill.js';
 
