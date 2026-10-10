@@ -14,8 +14,8 @@ import type {
   ReadTrackingMode,
   RedactionPolicy,
   StructureRecorder,
-  CommitValuesMode,
 } from 'footprintjs';
+import type { CommitValuesMode } from 'foottrace';
 import type { GroupTranslator } from '../translator.js';
 import type {
   LLMMessage,
@@ -595,7 +595,7 @@ export interface AgentOptions {
    * tail" (the agent's `history` every iteration) records ONLY the tail
    * (`append` verb); key removals record a `delete` verb. LOSSLESS — any
    * step's full value reconstructs by replay (`commitValueAt` from
-   * `footprintjs/trace`), which is why this is safe for audit trails.
+   * `foottrace`), which is why this is safe for audit trails.
    * Retained commit-log memory becomes linear instead of quadratic.
    * Set `'full'` for footprintjs's default encoding (every changed key
    * stores its full final value) if a downstream consumer reads

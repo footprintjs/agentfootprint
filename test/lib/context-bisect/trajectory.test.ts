@@ -12,8 +12,8 @@
  * exactly one frame OR the prelude (none dropped or duplicated).
  */
 import { describe, expect, it } from 'vitest';
-import type { CommitBundle } from 'footprintjs/trace';
-import { findLastWriterWithBasis } from 'footprintjs/trace';
+import type { CommitBundle } from 'foottrace';
+import { findLastWriterWithBasis } from 'foottrace';
 import { Agent, defineTool } from '../../../src/index';
 import { mock } from '../../../src/llm-providers.js';
 import {

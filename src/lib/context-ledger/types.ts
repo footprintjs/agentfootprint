@@ -29,7 +29,7 @@
  *   for it.
  */
 
-import type { ValueBasis } from 'footprintjs/trace';
+import type { ValueBasis } from 'foottrace';
 
 /** What kind of context piece a row tracks. Skills are injections with
  *  flavor 'skill' — split out because their `used` signal differs. */
@@ -86,7 +86,7 @@ export interface RecordedRun {
    * `findLastWriterWithBasis` `basis` over every read of that key in this run
    * (`'nested-rows'`, `'from-initial-state'`, `'redacted'`, `'deleted'`,
    * `'never-written'`). Each code's sentence is `HONESTY_CODES[code]` on
-   * `footprintjs/trace`. ABSENT when every answer was exact.
+   * `foottrace`. ABSENT when every answer was exact.
    */
   readonly basis?: Readonly<Record<string, readonly ValueBasis[]>>;
   /**

@@ -31,7 +31,7 @@
 
 import { describe, it, expect } from 'vitest';
 import type { CombinedRecorder, FlowSubflowEvent, StructureRecorder } from 'footprintjs';
-import { splitStageId } from 'footprintjs/trace';
+import { splitStageId } from 'foottrace';
 import { Agent } from '../../../src/core/Agent.js';
 import { MockProvider } from '../../../src/adapters/llm/MockProvider.js';
 import { defineTool } from '../../../src/core/tools.js';

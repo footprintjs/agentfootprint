@@ -20,7 +20,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { flowChart, FlowChartExecutor } from 'footprintjs';
-import { commitValueAtWithBasis, findLastWriterWithBasis } from 'footprintjs/trace';
+import { commitValueAtWithBasis, findLastWriterWithBasis } from 'foottrace';
 import { Agent, defineTool } from '../../../src/index.js';
 import { mock } from '../../../src/llm-providers.js';
 import { contextLedger } from '../../../src/lib/context-ledger/index.js';

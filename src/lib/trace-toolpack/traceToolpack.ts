@@ -43,9 +43,9 @@ import {
   findLastWriterWithBasis,
   formatCausalChain,
   HONESTY_CODES,
-} from 'footprintjs/trace';
-import type { CommitBundle, ControlDepLookup, HonestyCode } from 'footprintjs/trace';
-import { arrayProvenance, elementProvenance, formatSlice, sliceForKey } from 'footprintjs/trace';
+} from 'foottrace';
+import type { CommitBundle, ControlDepLookup, HonestyCode } from 'foottrace';
+import { arrayProvenance, elementProvenance, formatSlice, sliceForKey } from 'foottrace';
 
 import type { LLMMessage } from '../../adapters/types.js';
 import { formatToolArgIssues, validateToolArgs } from '../../core/agent/toolArgsValidation.js';
@@ -365,7 +365,7 @@ function redactionNote(bundles: readonly CommitBundle[] | undefined, path: strin
 /**
  * A footprintjs reason code as the toolpack prints it. The FIRST time a code appears in this
  * toolpack instance it is `⚠ <code>: <sentence>` — the sentence is footprintjs's own
- * (`HONESTY_CODES` on `footprintjs/trace`), this pack keeps no copy — and every later time the
+ * (`HONESTY_CODES` on `foottrace`), this pack keeps no copy — and every later time the
  * bare `⚠ <code>`: the sentence is already in the model's context, and repeating it on every
  * answer is pure token cost.
  */

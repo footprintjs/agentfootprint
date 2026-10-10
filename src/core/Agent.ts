@@ -19,7 +19,6 @@ import {
   type AttachRecorderOptions,
   type CombinedNarrativeEntry,
   type CombinedRecorder,
-  type CommitValuesMode,
   type FlowChart,
   type FlowchartCheckpoint,
   type ObserverDrainResult,
@@ -28,6 +27,7 @@ import {
   type RunOptions,
   type RuntimeSnapshot,
 } from 'footprintjs';
+import { type CommitValuesMode } from 'foottrace';
 import type { CachePolicy, CacheStrategy } from '../cache/types.js';
 import type { ReliabilityConfig } from '../reliability/types.js';
 import { ReliabilityFailFastError } from '../reliability/types.js';

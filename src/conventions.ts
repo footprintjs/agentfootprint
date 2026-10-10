@@ -10,7 +10,7 @@
  * Rename any ID here → both builders and recorders stay in sync.
  */
 
-import { splitStageId } from 'footprintjs/trace';
+import { splitStageId } from 'foottrace';
 import type { ContextSlot } from './events/types.js';
 
 /** Subflow IDs — mounted by builders, observed by recorders. */

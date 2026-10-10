@@ -8,7 +8,7 @@
  */
 
 import type { RuntimeSnapshot } from 'footprintjs';
-import type { ControlDepLookup } from 'footprintjs/trace';
+import type { ControlDepLookup } from 'foottrace';
 
 import type { AgentfootprintEvent } from '../../events/registry.js';
 import type { InnerRunLookup } from './innerRunRecords.js';

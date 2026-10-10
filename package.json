@@ -378,7 +378,7 @@
     "@modelcontextprotocol/sdk": "*",
     "@opentelemetry/api": "*",
     "@yarflam/potion-base-8m": "*",
-    "footprintjs": "^9.47.0",
+    "footprintjs": "^9.47.0 || ^10.0.0",
     "google-auth-library": "*",
     "ioredis": "*",
     "jose": "*",
@@ -500,6 +500,7 @@
     "zod": "^3.25.76"
   },
   "dependencies": {
-    "contextfootprint": "0.1.1"
+    "contextfootprint": "0.1.1",
+    "foottrace": "^1.0.0"
   }
 }

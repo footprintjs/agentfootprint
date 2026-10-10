@@ -24,7 +24,7 @@
  */
 
 import { afterEach, describe, expect, it } from 'vitest';
-import { commitValueAt } from 'footprintjs/trace';
+import { commitValueAt } from 'foottrace';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';

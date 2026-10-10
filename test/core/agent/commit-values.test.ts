@@ -4,7 +4,7 @@
  * append verb exists for; reconstruction stays lossless via commitValueAt).
  */
 import { describe, expect, it } from 'vitest';
-import { commitValueAt } from 'footprintjs/trace';
+import { commitValueAt } from 'foottrace';
 
 import { Agent, defineTool } from '../../../src/index.js';
 import { mock } from '../../../src/llm-providers.js';

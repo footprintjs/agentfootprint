@@ -25,7 +25,7 @@
  */
 
 import { Agent, defineTool, COMPACTED_FRAME_PREFIX, type LLMProvider } from '../../src/index.js';
-import { commitValueAt } from 'footprintjs/trace';
+import { commitValueAt } from 'foottrace';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {
@@ -51,8 +51,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
       properties: { id: { type: 'string' } },
       required: ['id'],
     },
-    execute: (args: { id: string }) =>
-      `DEPLOY ${args.id}\n` + `line of log output\n`.repeat(60),
+    execute: (args: { id: string }) => `DEPLOY ${args.id}\n` + `line of log output\n`.repeat(60),
   });
 
   /**
