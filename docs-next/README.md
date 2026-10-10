@@ -24,6 +24,14 @@ npm run dev      # http://localhost:3000 → /docs
 npm run build    # static/server build
 ```
 
+The browser demos share the root library's FootPrint engine and Foottrace record
+implementation. `next.config.mjs` derives exact aliases from both packages' public
+exports, so the linked AgentFootprint runtime and the installed Lens cannot load
+different physical copies. Webpack applies these aliases only to the client;
+Turbopack uses relative paths to the same files. `check:browser-demos` checks every
+public door and preserves server resolution. With `DOCS_WEBPACK_STATS=1`, the build
+also writes client module statistics for checking physical bundle ownership.
+
 ## Visual context walkthrough
 
 `/context-engineering/` teaches context preparation and conflict handling through
