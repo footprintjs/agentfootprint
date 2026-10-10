@@ -4,16 +4,15 @@
  * Pattern: Adapter (GoF, Design Patterns ch. 4) + Ports-and-Adapters
  *          (Cockburn, 2005).
  * Role:    Contracts for every external dependency the library reaches for:
- *          LLM providers, memory stores, context sources, embeddings,
- *          guardrails, policy engines, pricing tables.
+ *          LLM providers, memory stores, permission checkers, pricing tables.
  * Emits:   N/A (interfaces only).
  *
- * Concrete adapters (AnthropicProvider, PineconeStore, LlamaGuardDetector,
+ * Concrete adapters (AnthropicProvider, PineconeStore, PermissionPolicy,
  * ...) implement these contracts. `core/` and `core-flow/` depend only on
  * these interfaces — never on concrete adapters.
  */
 
-import type { ContextRole, ContextSlot, ContextSource } from '../events/types.js';
+import type { ContextRole, ContextSource } from '../events/types.js';
 import type { ThinkingBlock } from '../thinking/types.js';
 
 // ─── LLM Provider ────────────────────────────────────────────────────
@@ -667,130 +666,6 @@ export interface LLMProvider {
    */
   complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse>;
   stream?(req: LLMRequest, hooks?: LLMCallHooks): AsyncIterable<LLMChunk>;
-}
-
-// ─── Three ports with nowhere to plug in ─────────────────────────────
-//
-// `ContextSourceAdapter`, `EmbeddingProvider` and `RiskDetector` are
-// SHAPES ONLY. Nothing in the library constructs one, accepts one as an
-// option, or calls one — grep each name and the declaration below is the
-// only hit. They are exported from the root barrel, so a consumer can
-// import one, implement it perfectly, and find there is no argument
-// anywhere to hand it to.
-//
-// That is worse than a missing feature. A published interface is a
-// promise that something reads it, and these three have been quietly
-// breaking that promise since they were declared. They are marked
-// `@deprecated` rather than deleted because 9.x is additive-only and
-// removal is a compile break for anyone who imported the type; the
-// removal itself is on the 10.0.0 ledger, alongside `scopeTools`'
-// default flip and the three grace errors 9.0.0 filed there.
-//
-// The satellite value types below each port (`ResolveCtx`,
-// `ContextContribution`, `RiskContext`, `RiskResult`) are reachable
-// ONLY through their port and are on the same ledger for the same
-// reason.
-
-// ─── Context Source ──────────────────────────────────────────────────
-
-/** @deprecated No implementation exists — see {@link ContextSourceAdapter}. Removed in 10.0.0. */
-export interface ResolveCtx {
-  readonly userMessage: string;
-  readonly turnIndex: number;
-  readonly iterIndex: number;
-  readonly availableBudgetTokens: number;
-  readonly signal?: AbortSignal;
-}
-
-/** @deprecated No implementation exists — see {@link ContextSourceAdapter}. Removed in 10.0.0. */
-export interface ContextContribution {
-  readonly contentSummary: string;
-  readonly rawContent?: string;
-  readonly score?: number;
-  readonly rank?: number;
-  readonly asRole?: ContextRole;
-  readonly sectionTag?: string;
-  readonly reason: string;
-}
-
-/**
- * @deprecated **Nothing implements or calls this, and nothing ever has.**
- * There is no option that accepts a `ContextSourceAdapter`, so a correct
- * implementation has nowhere to go. Removed in 10.0.0.
- *
- * To put your own content into a slot, use the injection engine, which is
- * the seam that actually runs: `defineInjection` / `defineFact` /
- * `defineSkill` from `agentfootprint/context`. An injection names its
- * `flavor` and `trigger` and is resolved into the same three slots this
- * port describes.
- */
-export interface ContextSourceAdapter {
-  readonly id: string;
-  readonly targetSlot: ContextSlot;
-  readonly source: ContextSource;
-  resolve(ctx: ResolveCtx): Promise<readonly ContextContribution[]>;
-}
-
-// ─── Embedding Provider ─────────────────────────────────────────────
-
-/**
- * @deprecated **Nothing implements or calls this, and nothing ever has.**
- * It is a second, dead spelling of a live idea. Removed in 10.0.0.
- *
- * The port the library really uses is `Embedder`
- * (`memory/embedding/types.ts`, exported from `agentfootprint/memory`):
- * `{ dimensions, id?, embed({ text }), embedBatch? }`. Every shipped
- * embedder — `openaiEmbedder`, `localEmbedder`, `staticEmbedder`,
- * `mockEmbedder` — implements THAT one, and `defineMemory`/`defineRAG`
- * accept THAT one.
- */
-export interface EmbeddingProvider {
-  readonly name: string;
-  readonly dimension: number;
-  embed(inputs: readonly string[], kind: 'query' | 'document'): Promise<number[][]>;
-}
-
-// ─── Risk Detector (guardrails) ─────────────────────────────────────
-
-/** @deprecated No implementation exists — see {@link RiskDetector}. Removed in 10.0.0. */
-export interface RiskContext {
-  readonly slot?: ContextSlot;
-  readonly source?: ContextSource;
-  readonly turnIndex?: number;
-  readonly iterIndex?: number;
-}
-
-/** @deprecated No implementation exists — see {@link RiskDetector}. Removed in 10.0.0. */
-export interface RiskResult {
-  readonly flagged: boolean;
-  readonly severity: 'low' | 'medium' | 'high' | 'critical';
-  readonly category:
-    | 'pii'
-    | 'prompt_injection'
-    | 'runaway_loop'
-    | 'cost_overrun'
-    | 'hallucination_flag';
-  readonly evidence: Readonly<Record<string, unknown>>;
-  readonly suggestedAction: 'warn' | 'redact' | 'abort';
-}
-
-/**
- * @deprecated **Nothing implements or calls this, and nothing ever has.**
- * No guardrail stage consults a `RiskDetector`, so implementing one buys
- * no enforcement whatsoever — the most dangerous kind of dead port, since
- * a "risk detector" that is never asked looks from the outside exactly
- * like one that has found nothing. Removed in 10.0.0.
- *
- * The seams that DO gate a run: `PermissionChecker` (tool-call
- * authorization, `agentfootprint/security`), `.reliability({ preCheck })`
- * (rules evaluated before the LLM call, `agentfootprint/resilience`), and
- * `.toolMiddleware(...)` (wrap or refuse a dispatch). For content
- * screening, run your own check inside a tool's `execute` or in a message
- * middleware and refuse there.
- */
-export interface RiskDetector {
-  readonly name: string;
-  check(content: string, context: RiskContext): Promise<RiskResult>;
 }
 
 // ─── Permission Engine ──────────────────────────────────────────────

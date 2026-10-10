@@ -35,7 +35,7 @@ still reaches the LLM; the budget is a signal, not a limiter. Defaults:
 
 ### costBudget?
 
-> `readonly` `optional` **costBudget?**: `number` \| \{ `onExceed`: `"warn"` \| `"halt"`; `usd`: `number`; \}
+> `readonly` `optional` **costBudget?**: `number` \| \{ `onExceed`: `"halt"` \| `"warn"`; `usd`: `number`; \}
 
 Defined in: [src/core/LLMCall.ts:163](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L163)
 

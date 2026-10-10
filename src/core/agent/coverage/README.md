@@ -500,17 +500,15 @@ execute: () => describedResult({ facts: rows, provenance: { measuredAt: exportTi
 - **Which keys.** `absent()`: `what`, `checked`, `notChecked`, `cannotCover`,
   `tryInstead`, `tryInsteadTool`, and since honesty step 7b `provenance` and
   `period` (§ 7). `coverage()`: `checked`, `notChecked`, `cannotCover`,
-  `period`. `describedResult()`: its nine fields (`period` among them); the
-  deprecated `semantic()`: its eight — it gains no field. And the keys of each
+  `period`. `describedResult()`: its nine fields (`period` among them). And the keys of each
   object they carry — `grain`, `provenance`, `coverage`, `clarify`, `render`,
-  `period` — each door in its own spelling (`measuredAt` for one,
-  `measured_at` for the other; each refuses the other's, naming its own). The declaration key lists are tied to their
+  `period` — each declaration uses camelCase (`measuredAt`, not `measured_at`). The declaration key lists are tied to their
   types in both directions (`satisfies Record<keyof …, true>`), so a field a
   type gains cannot be refused by mistake.
 - **A suggestion only for a slip, never a guess.** `refusal.ts` ·
   `spellingMeant` folds case and `_`/`-` away and names the known key with the
-  same letters — `not_checked` and `NotChecked` → `notChecked`; `measuredAt`
-  → `measured_at` at `semantic()`, and the reverse at `describedResult()`. A
+  same letters — `not_checked` and `NotChecked` → `notChecked`; `measured_at`
+  → `measuredAt` at `describedResult()`. A
   different word gets the list of fields and nothing else.
 - **Not held to it, on purpose.** An ITEM's own keys (`{ what, why, short,
 kind }`): an unknown one is still dropped — § 3's "Not the coverage lists'
@@ -652,7 +650,7 @@ return absent({
 - **One shape, three doors, one rule set.** `absent()`, `coverage()` (inside
   `af_coverage`, before `result`, so a truncated view keeps it) and
   `describedResult()` (a top-level field) all mint it by `period.ts` ·
-  `mintPeriod`; `semantic()` gains nothing. Every value is an ISO 8601 instant
+  `mintPeriod`. Every value is an ISO 8601 instant
   WITH a zone — the library compares instants, and one with no zone is refused
   rather than guessed (read by the time layer's one parser,
   `core/time/instant.ts` · `instantOf`, in its lenient RFC 3339 profile); `from` is never after `to`; `held` is a span or the

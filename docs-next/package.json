@@ -23,7 +23,7 @@
     "postbuild": "npm run prune:export",
     "start": "next start",
     "postinstall": "fumadocs-mdx",
-    "check:browser-demos": "tsx --test scripts/test/browser-highlighter.test.mts scripts/test/skill-graph-projection.test.mts"
+    "check:browser-demos": "tsx --test scripts/test/browser-highlighter.test.mts scripts/test/skill-graph-projection.test.mts scripts/test/browser-library-aliases.test.mjs"
   },
   "dependencies": {
     "@tailwindcss/postcss": "^4.3.1",

@@ -10,8 +10,8 @@
  *
  * `describedResult({...})` makes those caveats TYPED DATA that travel with
  * the values, and `check:semantics` is the build gate that refuses a tool
- * that forgot them — by tool name and field name. (`semantic()` is the
- * deprecated name for the same envelope, declared in snake_case.)
+ * that forgot them — by tool name and field name. Declarations use camelCase;
+ * saved envelopes keep their established snake_case wire fields.
  *
  * Five things this example shows, in order:
  *

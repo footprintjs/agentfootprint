@@ -64,12 +64,9 @@ export {
   type TypedEventSource,
 } from './recorders/observability/BoundaryRecorder.js';
 export {
-  buildRunSteps,
   RunStepRecorder,
   runStepRecorder,
-  type BuildRunStepsOptions,
   type RunStep,
-  type RunStepGraph,
   type RunStepKind,
   type RunStepMeta,
   type RunStepRecorderOptions,

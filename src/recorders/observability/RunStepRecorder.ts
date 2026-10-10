@@ -13,19 +13,15 @@
  *          up." Lens consumers attach the recorder once and read
  *          `getSteps()` — no per-render re-derivation.
  *
- * Why this matters: the older `buildRunSteps(events)` walker violated
+ * Why this matters: walking a saved event log on every live update violates
  * footprintjs's core principle ("collect during traversal, never
- * post-process"). Each call walked the full event log multiple times;
- * the playground triggered a full walk on every flowchart update,
- * yielding O(N²) total work for a streaming run. The recorder pattern
+ * post-process"), yielding O(N²) total work for a streaming run. The recorder pattern
  * is O(N) — one handler call per event — and matches BoundaryRecorder /
  * FlowchartRecorder / KeyedStore idioms throughout the library.
  *
- * The `buildRunSteps(...)` function is RETAINED as a thin compatibility
- * shim that constructs a fresh recorder, replays events through it,
- * and returns the resulting entries. Useful for snapshot-from-saved-
- * events use cases (replay, testing, post-hoc analysis). Live consumers
- * should attach the recorder directly via `runner.attach(rec)`.
+ * Saved-event consumers feed a complete recording to `ingestDomainEvents`
+ * once, then read `getSteps(drillPath?)`. Live consumers attach the recorder
+ * directly via `runner.attach(rec)` instead of replaying on every update.
  */
 
 import { ROOT_RUNTIME_STAGE_ID, ROOT_SUBFLOW_ID, SequenceStore } from 'footprintjs/trace';
@@ -46,7 +42,7 @@ interface FlowRunEvent {
 }
 import type { AgentfootprintEvent, AgentfootprintEventType } from '../../events/registry.js';
 import type { EventDispatcher, Unsubscribe } from '../../events/dispatcher.js';
-import type { BoundaryRecorder, DomainEvent } from './BoundaryRecorder.js';
+import type { DomainEvent } from './BoundaryRecorder.js';
 import { createRunIdObserver, type RunIdObserver } from './observeRunId.js';
 import { ForkTracker } from './internal/ForkTracker.js';
 import { SequenceSiblingTracker } from './internal/SequenceSiblingTracker.js';
@@ -482,7 +478,7 @@ export class RunStepRecorder implements CombinedRecorder {
     );
   }
 
-  /** Internal — also called by `ingestDomainEvent` for shim replay.
+  /** Internal — also called by `ingestDomainEvent` for saved-event replay.
    *
    *  NOTE: deliberately does NOT call observeRunId(event.meta.runId).
    *  The agentfootprint dispatcher's runId is a DIFFERENT generator
@@ -529,12 +525,69 @@ export class RunStepRecorder implements CombinedRecorder {
     }
   }
 
-  // ── Replay API (for shim / tests / offline analysis) ─────────────
+  // ── Replay API (for saved recordings / tests / offline analysis) ───
+
+  /**
+   * Replay a complete saved `BoundaryRecorder` event list in recorded order.
+   * Fork branches sharing a parent and timestamp are ingested together, so
+   * one parallel fork keeps all its transitions and its matching merge.
+   *
+   * Use a fresh recorder (or call `clear()`) for each independent recording;
+   * do not split a fork's branch events across batches. Afterwards,
+   * `getSteps(drillPath?)` reads the built projection without replaying it.
+   * Live consumers should attach this recorder instead of calling this
+   * method on every update.
+   *
+   * @example
+   * const rec = runStepRecorder();
+   * rec.ingestDomainEvents(savedEvents);
+   * const steps = rec.getSteps();
+   */
+  ingestDomainEvents(events: readonly DomainEvent[]): void {
+    // BoundaryRecorder emits N fork.branch events per fork (all sharing
+    // parent+ts); onFork expects ONE event carrying all children. Preserve
+    // the recorded first occurrence and skip the remaining branch rows.
+    const forkSeen = new Set<string>();
+    for (let i = 0; i < events.length; i++) {
+      const e = events[i];
+      if (e.type === 'fork.branch') {
+        const key = `${e.parentSubflowId}@${e.ts}`;
+        if (forkSeen.has(key)) continue;
+        forkSeen.add(key);
+        const children: string[] = [];
+        for (let j = i; j < events.length; j++) {
+          const f = events[j];
+          if (
+            f.type === 'fork.branch' &&
+            f.parentSubflowId === e.parentSubflowId &&
+            f.ts === e.ts
+          ) {
+            children.push(f.childName);
+          } else if (f.ts > e.ts) {
+            break;
+          }
+        }
+        this.onFork({
+          parent: e.parentSubflowId,
+          children,
+          traversalContext: {
+            runId: 'replay',
+            stageId: lastSegment(e.subflowPath.join('/') || ROOT_SUBFLOW_ID),
+            runtimeStageId: e.runtimeStageId,
+            stageName: lastSegment(e.subflowPath.join('/') || ROOT_SUBFLOW_ID),
+            depth: e.depth,
+          },
+        });
+        continue;
+      }
+      this.ingestDomainEvent(e);
+    }
+  }
 
   /**
    * Feed a single recorded `DomainEvent` (from BoundaryRecorder) into
-   * this recorder as if it had fired live. Used by `buildRunSteps`
-   * for snapshot replay; tests use it for fixture-driven projection.
+   * this recorder as if it had fired live. For a saved event list, use
+   * `ingestDomainEvents` so a parallel fork's branches stay together.
    *
    * Live consumers should use `runner.attach(rec)` +
    * `rec.subscribe(dispatcher)` instead — the recorder's hooks fire
@@ -573,7 +626,7 @@ export class RunStepRecorder implements CombinedRecorder {
         break;
       case 'fork.branch':
         // Replay layer; coalescing is handled at the call-site
-        // (`buildRunSteps`) which groups events by parent+ts and
+        // (`ingestDomainEvents`) which groups events by parent+ts and
         // calls `onFork` once. A single fork.branch slipping through
         // to here is treated as a 1-child fork — degenerate but
         // harmless.
@@ -730,75 +783,6 @@ function isAgentInternalStageId(localStageId: string): boolean {
 /** Renumber `seq` after filtering so consumers see contiguous indices. */
 function reseq(steps: readonly RunStep[]): RunStep[] {
   return steps.map((s, i) => (s.seq === i ? s : { ...s, seq: i }));
-}
-
-// ─── Compatibility shim ────────────────────────────────────────────
-
-export interface RunStepGraph {
-  readonly steps: readonly RunStep[];
-}
-
-export interface BuildRunStepsOptions {
-  readonly drillPath?: readonly string[];
-}
-
-/**
- * Compatibility shim for snapshot-from-events use cases (replay,
- * post-hoc analysis, tests). For LIVE use, prefer attaching a
- * `RunStepRecorder` directly via `runner.attach(rec)` —
- * `buildRunSteps(events)` constructs a fresh recorder, replays the
- * events through its handlers, and returns the resulting entries.
- *
- * @deprecated Prefer `runStepRecorder()` + `runner.attach(rec)` for
- *             live consumers. This shim remains for offline / testing
- *             scenarios where only a recorded event list is available.
- */
-export function buildRunSteps(
-  source: BoundaryRecorder | readonly DomainEvent[],
-  options: BuildRunStepsOptions = {},
-): RunStep[] {
-  const events: readonly DomainEvent[] = Array.isArray(source)
-    ? (source as readonly DomainEvent[])
-    : (source as BoundaryRecorder).getEvents();
-  const rec = new RunStepRecorder();
-
-  // Coalesce fork.branch bursts before replay. BoundaryRecorder emits
-  // N fork.branch events per fork (all sharing parent+ts); the
-  // recorder expects ONE `onFork` call carrying all children. We pass
-  // through the first occurrence of each (parent, ts) pair as a single
-  // synthetic event with all children, and drop the rest.
-  const forkSeen = new Set<string>();
-  for (let i = 0; i < events.length; i++) {
-    const e = events[i];
-    if (e.type === 'fork.branch') {
-      const key = `${e.parentSubflowId}@${e.ts}`;
-      if (forkSeen.has(key)) continue;
-      forkSeen.add(key);
-      const children: string[] = [];
-      for (let j = i; j < events.length; j++) {
-        const f = events[j];
-        if (f.type === 'fork.branch' && f.parentSubflowId === e.parentSubflowId && f.ts === e.ts) {
-          children.push(f.childName);
-        } else if (f.ts > e.ts) {
-          break;
-        }
-      }
-      rec.onFork({
-        parent: e.parentSubflowId,
-        children,
-        traversalContext: {
-          runId: 'replay',
-          stageId: lastSegment(e.subflowPath.join('/') || ROOT_SUBFLOW_ID),
-          runtimeStageId: e.runtimeStageId,
-          stageName: lastSegment(e.subflowPath.join('/') || ROOT_SUBFLOW_ID),
-          depth: e.depth,
-        },
-      });
-      continue;
-    }
-    rec.ingestDomainEvent(e);
-  }
-  return [...rec.getSteps(options.drillPath)];
 }
 
 // Touch unused imports defensively for tree-shaking.

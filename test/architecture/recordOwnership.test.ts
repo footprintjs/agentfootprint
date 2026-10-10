@@ -1,7 +1,7 @@
 /**
  * Record names have one home: Foottrace. Derive the names from its published
  * declarations, not a second hand-maintained list. Engine names remain on
- * FootPrint. This also checks examples and benchmarks that CI users copy.
+ * FootPrint. This also checks examples, benchmarks and executable docs demos.
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -28,8 +28,8 @@ const recordNames = new Set(
   ),
 );
 
-function misplaced(text: string): string[] {
-  const source = ts.createSourceFile('input.ts', text, ts.ScriptTarget.Latest, true);
+function misplaced(text: string, fileName = 'input.ts'): string[] {
+  const source = ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, true);
   const found: string[] = [];
   const inspect = (node: ts.Node): void => {
     if (
@@ -68,7 +68,7 @@ function misplaced(text: string): string[] {
 function sources(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((item) => {
     const path = join(dir, item.name);
-    return item.isDirectory() ? sources(path) : /\.(?:ts|mjs)$/.test(path) ? [path] : [];
+    return item.isDirectory() ? sources(path) : /\.(?:[cm]?[jt]sx?)$/.test(path) ? [path] : [];
   });
 }
 
@@ -110,12 +110,37 @@ describe('canonical record ownership', () => {
     ]);
   });
 
-  it('source, tests, examples and benchmarks take every record name from its owner', () => {
-    const files = ['src', 'test', 'examples', 'bench'].flatMap((dir) => sources(join(root, dir)));
+  it('parses executable JSX demos using their actual source format', () => {
+    expect(
+      misplaced(
+        `const Demo = () => <section><span>Replay</span></section>;
+         import { commitValueAt } from 'footprintjs/trace';`,
+        'Demo.tsx',
+      ),
+    ).toEqual(['commitValueAt']);
+  });
+
+  it('source, tests, examples, benchmarks and docs demos take every record name from its owner', () => {
+    const files = [
+      'src',
+      'test',
+      'examples',
+      'bench',
+      'docs-next/scripts',
+      'docs-next/components',
+      'docs-next/lib',
+    ].flatMap((dir) => sources(join(root, dir)));
     expect(files.length).toBeGreaterThan(100);
+    for (const demo of [
+      'docs-next/scripts/gen-replay-trace.mjs',
+      'docs-next/scripts/gen-context-walkthrough.mjs',
+      'docs-next/components/SubflowLensTryItInner.tsx',
+    ]) {
+      expect(files, `${demo} must stay inside the ownership check`).toContain(join(root, demo));
+    }
     expect(
       files.flatMap((file) =>
-        misplaced(readFileSync(file, 'utf8')).map((name) => `${file}: ${name}`),
+        misplaced(readFileSync(file, 'utf8'), file).map((name) => `${file}: ${name}`),
       ),
     ).toEqual([]);
   }, 30_000); // Whole-tree TypeScript parsing is slower under coverage instrumentation.

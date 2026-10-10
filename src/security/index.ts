@@ -12,10 +12,8 @@
  * interface AND a sync `isAllowed(toolId)` predicate for use with
  * `gatedTools` from `agentfootprint/providers`.
  *
- * There is no shipped REMOTE policy engine. `agentCorePolicy()` was one
- * through 9.3.0 and is retired in 9.4.0 — see the note beside its export
- * below. The port stays open: a remote checker is an object with a
- * `check()` method, and anybody can write one.
+ * There is no shipped REMOTE policy engine. A remote checker implements
+ * `PermissionChecker` with a `check()` method supplied by the application.
  *
  * A local allowlist and a remote policy engine differ in one way that
  * matters here: the local one can answer synchronously, so it doubles
@@ -69,21 +67,6 @@ export { conversationRedaction } from '../redaction/conversation.js';
 // The `skill:<id>` target convention (9.11.0) — one owner, so a custom checker
 // spells a skill target exactly as the agent produces it.
 export { SKILL_TARGET_PREFIX, skillTarget, skillIdFromTarget } from './skillTarget.js';
-
-// RETIRED in 9.4.0. `agentCorePolicy()` dispatched a command that does not
-// exist in `@aws-sdk/client-bedrock-agentcore`, because AgentCore has no
-// data-plane policy-evaluation operation — policy is enforced AT THE GATEWAY.
-// The export stays and refuses at construction with the whole explanation; the
-// alternatives are `PermissionPolicy.fromRoles` above and `.toolMiddleware()`.
-export {
-  agentCorePolicy,
-  AgentCorePolicyRetiredError,
-  type AgentCorePolicyOptions,
-  type AgentCorePolicyClientLike,
-  type AgentCorePolicyEvaluation,
-  type AgentCorePolicyUnavailable,
-  type BedrockAgentCorePolicySdkModule,
-} from '../adapters/security/agentcore.js';
 
 // Re-export the permission engine interface types from adapters so
 // consumers can implement custom checkers without depending on the

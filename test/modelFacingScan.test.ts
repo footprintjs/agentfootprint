@@ -704,8 +704,8 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
   'src/lib/injection-engine/skillsFromDir.ts': [
     {
       kind: 'not-model-facing',
-      count: 3,
-      why: 'markdown-loading errors thrown at load time, the removed-`viaToolName` refusal among them',
+      count: 2,
+      why: 'markdown-loading errors thrown at load time: routes passed to the skills-only loader, and declared tool names without a supplied tool registry',
     },
   ],
   'src/lib/recorded-chat/recordedChat.ts': [
@@ -835,13 +835,6 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       kind: 'not-model-facing',
       count: 1,
       why: 'a build-time refusal thrown when `.thinking()` reaches a model its provider declares cannot think',
-    },
-  ],
-  'src/lib/injection-engine/factories/defineSkill.ts': [
-    {
-      kind: 'not-model-facing',
-      count: 1,
-      why: 'the removed-`viaToolName` refusal thrown at skill definition',
     },
   ],
   'src/lib/injection-engine/skillExamples.ts': [
@@ -1158,12 +1151,17 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // (adapters/llm/anthropicThinkingWire.ts) and by the agent at build
         // (core/agent/thinkingSupport.ts) — two new files, the host reads both.
         // files 98 → 100, total 193 → 195, notModelFacing 130 → 132.
-        files: 100,
-        total: 195,
+        // Major cleanup: the two legacy viaToolName grace refusals are gone
+        // from defineSkill and skillsFromDir. The shared optionKeys validator
+        // now throws a short author-time unsupported-option error; its literal
+        // matches no persistent rule, so it needs no blanket ledger entry.
+        // files 100 → 99, total 195 → 193, notModelFacing 132 → 130.
+        files: 99,
+        total: 193,
         registry: 8,
         ephemeral: 22,
         unrepaired: 33,
-        notModelFacing: 132,
+        notModelFacing: 130,
         unrepairedEntries: 13,
       });
       // And the ledger's own total is the number of literals the scan flagged —

@@ -8,29 +8,35 @@ import { readFileSync, writeFileSync } from 'node:fs';
 const isExport = process.env.EXPORT === 'true';
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
 
-// ONE footprintjs in the browser. docs-next links the library (`agentfootprint:
-// file:..`), so the library's dist resolves `footprintjs` from ../node_modules,
+// ONE engine and ONE record implementation in the browser. docs-next links the
+// library (`agentfootprint: file:..`), so its dist resolves from ../node_modules,
 // while everything installed HERE (the lens, explainable-ui) resolves it from
-// ./node_modules — two directories, so two engines in every demo bundle whatever
+// ./node_modules — two directories, so two copies in every demo bundle whatever
 // the two versions say (the site shipped 9.10.0 beside 9.21.1 for months; the
 // numbers are in scripts/check-site-budget.mjs, the entry after 9.94.1). Two
 // engines is not only bytes: a trace the library writes with one and the lens
 // reads with the other shares no class, symbol or WeakMap. The root's copy is
 // the one the library was built and tested against, so every browser request
-// for `footprintjs` or one of its doors is pointed at it. The doors come from
-// the package's own `exports` field — never a hand list that a new door would
+// for `footprintjs`, `foottrace` or their doors is pointed at that package's root
+// copy. Foottrace owns the extracted record implementation; aliasing only the
+// engine still lets Lens load a second record copy. The doors come from each
+// package's own `exports` field — never a hand list that a new door would
 // silently miss — and the `import` condition is the one a browser bundle takes.
-// Client compiler only: the demos mount with `ssr: false`, and the server
-// compiler externalizes node_modules, where an absolute ESM path would be
-// `require`d.
-const footprintjsRoot = resolve(import.meta.dirname, '../node_modules/footprintjs');
-const footprintjsAliases = Object.fromEntries(
-  Object.entries(JSON.parse(readFileSync(resolve(footprintjsRoot, 'package.json'), 'utf8')).exports)
-    .filter(([subpath, target]) => subpath !== './package.json' && target?.import?.default)
-    .map(([subpath, target]) => [
-      subpath === '.' ? 'footprintjs' : `footprintjs/${subpath.slice(2)}`,
-      resolve(footprintjsRoot, target.import.default),
-    ]),
+// Webpack applies these aliases only to its client compiler: the demos mount
+// with `ssr: false`, and the server compiler externalizes node_modules, where
+// an absolute ESM path would be `require`d. Turbopack's existing global alias
+// policy also covers Foottrace, using relative paths to the same root files.
+const browserLibraryAliases = Object.fromEntries(
+  ['footprintjs', 'foottrace'].flatMap((name) => {
+    const root = resolve(import.meta.dirname, '../node_modules', name);
+    const manifest = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
+    return Object.entries(manifest.exports)
+      .filter(([subpath, target]) => subpath !== './package.json' && target?.import?.default)
+      .map(([subpath, target]) => [
+        subpath === '.' ? name : `${name}/${subpath.slice(2)}`,
+        resolve(root, target.import.default),
+      ]);
+  }),
 );
 
 /** @type {import('next').NextConfig} */
@@ -62,13 +68,13 @@ const config = {
       // browser mock agent (see lib/stubs/embedder-deps.js).
       '@huggingface/transformers': './lib/stubs/embedder-deps.js',
       'fs/promises': './lib/stubs/embedder-deps.js',
-      // One footprintjs (see footprintjsAliases above). Exact keys: turbopack
+      // One copy of each library (see browserLibraryAliases above). Exact keys: turbopack
       // matches a key without `*` against the whole request. RELATIVE values:
       // turbopack reads an absolute value as a "server relative import" and
       // refuses it (`next dev` was 500 on every route that reached a
       // footprintjs door), so each file is spelled relative to docs-next.
       ...Object.fromEntries(
-        Object.entries(footprintjsAliases).map(([request, file]) => {
+        Object.entries(browserLibraryAliases).map(([request, file]) => {
           const rel = relative(import.meta.dirname, file);
           return [request, rel.startsWith('.') ? rel : `./${rel}`];
         }),
@@ -88,11 +94,13 @@ const config = {
       'node:fs/promises': browserNodeStub,
       '@huggingface/transformers': resolve(import.meta.dirname, 'lib/stubs/embedder-deps.js'),
       'fs/promises': resolve(import.meta.dirname, 'lib/stubs/embedder-deps.js'),
-      // One footprintjs (see footprintjsAliases above). The `$` makes each
+      // One copy of each library (see browserLibraryAliases above). The `$` makes each
       // alias exact, so `footprintjs` does not also rewrite `footprintjs/trace`.
       ...(isServer
         ? {}
-        : Object.fromEntries(Object.entries(footprintjsAliases).map(([request, file]) => [`${request}$`, file]))),
+        : Object.fromEntries(
+            Object.entries(browserLibraryAliases).map(([request, file]) => [`${request}$`, file]),
+          )),
     };
     config.plugins.push(
       new webpack.NormalModuleReplacementPlugin(

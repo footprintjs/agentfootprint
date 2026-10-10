@@ -153,7 +153,7 @@ export interface SemanticRender {
  * `coverage()` / `absent()` primitives speak (checked / not checked / cannot
  * cover), in the snake_case spelling every rendered tool shape uses because
  * a model reads it more often than code does. Declared through
- * {@link SemanticDeclaration.coverage} with the exact `CoverageDeclaration`
+ * {@link DescribedResultDeclaration.coverage} with the exact `CoverageDeclaration`
  * input the `coverage()` primitive takes; the dispatch loop declares it
  * through the same channel (`tools.coverage_declared`, tracked state, the
  * final-answer limits block) — absorbed, never duplicated.
@@ -164,39 +164,10 @@ export interface SemanticCoverage {
   readonly cannot_cover?: readonly CoverageItem[];
 }
 
-/**
- * What a tool author passes to `semantic()` — the deprecated name; new code
- * passes a {@link DescribedResultDeclaration} to `describedResult()`, which
- * mints the same envelope from camelCase names. At least one of `series`,
- * `facts`, `edges` or a non-null `clarify` must be present — an envelope
- * with no data and no question declares nothing.
- *
- * `not_covered` is deliberately NOT here: the prose list on the rendered
- * envelope is DERIVED from `coverage` (not checked + cannot cover), so the
- * two can never disagree. Declaring coverage is how not_covered is said.
- */
-export interface SemanticDeclaration {
-  readonly series?: readonly SemanticSeriesPoint[];
-  readonly facts?: readonly SemanticFact[];
-  readonly edges?: readonly SemanticEdge[];
-  readonly grain?: SemanticGrain;
-  readonly provenance?: SemanticProvenance;
-  /** The coverage()-vocabulary declaration this envelope absorbs. */
-  readonly coverage?: CoverageDeclaration;
-  /** `null` states "ambiguity was considered; there is none" — a fact, kept
-   *  on the record. Omit the field to say nothing. */
-  readonly clarify?: SemanticClarify | null;
-  readonly render?: SemanticRender;
-}
-
 // ── describedResult()'s declaration — the SAME fields, spelled as code ──
 //
 // The wire stays snake_case: `ToolSemantics` below is what a model and a
-// foreign process read, and its field names never change. `semantic()`'s
-// declaration copies those snake_case names through (`measured_at`,
-// `is_counter`) beside camelCase ones (`notChecked`), so a declaration mixed
-// two spellings. `describedResult()`'s declaration is camelCase throughout and
-// respelled to the unchanged wire, so these are separate INPUT types: widening
+// foreign process read, and its field names never change. Widening
 // `SemanticProvenance` with a `measuredAt` would make the wire type claim a
 // field the wire never carries. Only the three objects whose keys differ get
 // their own shapes; data rows, `clarify` and `coverage` are spelled the same
@@ -269,7 +240,7 @@ interface DescribedRender {
 
 /**
  * What a tool author passes to `describedResult()` — the
- * {@link SemanticDeclaration} fields in ONE spelling, camelCase, respelled to
+ * result fields in ONE spelling, camelCase, respelled to
  * the unchanged snake_case wire ({@link ToolSemantics}).
  *
  * `provenance` is REQUIRED whenever `series` or `facts` is present, and the
@@ -299,7 +270,7 @@ export type DescribedResultDeclaration = {
    * instants it asked for (`queried`), what the store holds (`held`, or
    * `'unknown'` said out loud) and when the read ran (`readAt`). Every value
    * is an ISO 8601 instant with a zone; the model reads it as declared, and
-   * the results layer files its verdict. `semantic()` does not take it.
+   * the results layer files its verdict.
    */
   readonly period?: DeclaredPeriod;
   /** The coverage()-vocabulary declaration this result absorbs. */

@@ -2,7 +2,7 @@
 title: Interfaces
 ---
 
-361 exported from `agentfootprint`.
+353 exported from `agentfootprint`.
 
 - [`AbsenceDeclaration`](/docs/api/interfaces/AbsenceDeclaration)
 - [`ActOptions`](/docs/api/interfaces/ActOptions)
@@ -88,9 +88,7 @@ title: Interfaces
 - [`ConflictRow`](/docs/api/interfaces/ConflictRow)
 - [`ConflictWitness`](/docs/api/interfaces/ConflictWitness)
 - [`ConsentGate`](/docs/api/interfaces/ConsentGate)
-- [`ContextContribution`](/docs/api/interfaces/ContextContribution) — deprecated
 - [`ContextEngineeringHandle`](/docs/api/interfaces/ContextEngineeringHandle)
-- [`ContextSourceAdapter`](/docs/api/interfaces/ContextSourceAdapter) — deprecated
 - [`ContingentCarrier`](/docs/api/interfaces/ContingentCarrier)
 - [`ContingentRow`](/docs/api/interfaces/ContingentRow)
 - [`ControlWindow`](/docs/api/interfaces/ControlWindow)
@@ -112,7 +110,6 @@ title: Interfaces
 - [`DefineToolOptions`](/docs/api/interfaces/DefineToolOptions)
 - [`DenyOutcome`](/docs/api/interfaces/DenyOutcome)
 - [`ElicitationRequest`](/docs/api/interfaces/ElicitationRequest)
-- [`EmbeddingProvider`](/docs/api/interfaces/EmbeddingProvider) — deprecated
 - [`EmitEvent`](/docs/api/interfaces/EmitEvent)
 - [`EmitRecorder`](/docs/api/interfaces/EmitRecorder)
 - [`EnableNamespace`](/docs/api/interfaces/EnableNamespace)
@@ -241,14 +238,10 @@ title: Interfaces
 - [`RemovalPlan`](/docs/api/interfaces/RemovalPlan)
 - [`RequestJsonSize`](/docs/api/interfaces/RequestJsonSize)
 - [`RequireInstructionEffect`](/docs/api/interfaces/RequireInstructionEffect)
-- [`ResolveCtx`](/docs/api/interfaces/ResolveCtx) — deprecated
 - [`ResolvedWindow`](/docs/api/interfaces/ResolvedWindow)
 - [`RetrievalEvidence`](/docs/api/interfaces/RetrievalEvidence)
 - [`RetrievalStrategy`](/docs/api/interfaces/RetrievalStrategy)
 - [`RetrievedCandidate`](/docs/api/interfaces/RetrievedCandidate)
-- [`RiskContext`](/docs/api/interfaces/RiskContext) — deprecated
-- [`RiskDetector`](/docs/api/interfaces/RiskDetector) — deprecated
-- [`RiskResult`](/docs/api/interfaces/RiskResult) — deprecated
 - [`RouterAgent`](/docs/api/interfaces/RouterAgent)
 - [`RoutingDecision`](/docs/api/interfaces/RoutingDecision)
 - [`RowsetReading`](/docs/api/interfaces/RowsetReading)
@@ -271,7 +264,6 @@ title: Interfaces
 - [`SelfExplainOptions`](/docs/api/interfaces/SelfExplainOptions)
 - [`SemanticClarify`](/docs/api/interfaces/SemanticClarify)
 - [`SemanticCoverage`](/docs/api/interfaces/SemanticCoverage)
-- [`SemanticDeclaration`](/docs/api/interfaces/SemanticDeclaration)
 - [`SemanticEdge`](/docs/api/interfaces/SemanticEdge)
 - [`SemanticFact`](/docs/api/interfaces/SemanticFact)
 - [`SemanticGrain`](/docs/api/interfaces/SemanticGrain)

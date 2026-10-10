@@ -989,3 +989,14 @@ turn. `defineGuardrail` is the one still hypothetical — and it is the shape
 this section describes. Same pattern. No engine change.
 
 **This is the architecture. One primitive. Many recipes.**
+
+## Option vocabulary
+
+`optionKeys.ts` is the shared validation boundary for `defineSkill` and
+the directory loaders. Each factory declares its current allowed keys with
+`satisfies Record<keyof Options, true>`; the helper refuses unknown own or
+custom-prototype properties without reading their values. This prevents a
+retired option or typo from silently promising behavior that never runs.
+The local file parser's intentional tolerance of unknown frontmatter is
+unchanged. In 10.0.0, `refreshPolicy` and the old `viaToolName` grace
+messages are removed; they are ordinary unsupported options.

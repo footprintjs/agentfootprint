@@ -38,7 +38,7 @@ import {
   readItemExtras,
 } from '../../../src/core/agent/coverage/items.js';
 import { servedToModel, strippedOnly } from '../../../src/core/agent/coverage/read.js';
-import { semantic } from '../../../src/lib/semantics/index.js';
+import { describedResult } from '../../../src/lib/semantics/index.js';
 
 const WHAT = 'whether that name is a storage array, and which VM disks are on it';
 const item = (extra: Record<string, unknown>) => ({
@@ -247,9 +247,9 @@ describe('UNIT — the strip serves every shape without the record-only keys', (
 
   it('a semantic envelope’s coverage', () => {
     const env = {
-      ...(semantic({
+      ...(describedResult({
         facts: [{ entity: 'vm-1', disks: 0 }],
-        provenance: { measured_at: '2026-09-19T00:00:00Z', source: 'rvtools' },
+        provenance: { measuredAt: '2026-09-19T00:00:00Z', source: 'rvtools' },
         coverage: { checked: [{ what: 'the export' }] },
       }) as object),
     } as Record<string, unknown>;
@@ -285,9 +285,9 @@ describe('UNIT — the strip serves every shape without the record-only keys', (
     noExtras(served);
     expect(served).toEqual(coverage(coverage({ a: 1 }, plain), plain));
     const sem = {
-      ...(semantic({
+      ...(describedResult({
         facts: [{ entity: 'vm-1', disks: 0 }],
-        provenance: { measured_at: '2026-09-19T00:00:00Z', source: 'rvtools' },
+        provenance: { measuredAt: '2026-09-19T00:00:00Z', source: 'rvtools' },
         coverage: { checked: [{ what: 'the export' }] },
       }) as object),
       coverage: { checked: [{ what: 'the export', short: 'export' }] },

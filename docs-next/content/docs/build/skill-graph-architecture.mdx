@@ -103,14 +103,7 @@ about the mechanism:
   message. `'both'` does both. **shipped**
 
 And the limitation, stated in the same breath rather than in a footnote:
-**there is no automatic re-surfacing of an ageing body.** `refreshPolicy` — the
-field designed to re-deliver a body past a token threshold — is recorded on the
-skill's metadata and has never been read by the engine on any version. It is
-deprecated pending a steps-as-data replacement, dev mode warns once when you set
-it, and nothing happens. If you need a body re-surfaced in a long run today, use
-`surfaceMode: 'both'` so every `read_skill` call returns it afresh, or keep it in
-the system prompt where it is rebuilt anyway. **planned** (re-delivery);
-**shipped** (`surfaceMode: 'both'`).
+**there is no automatic re-surfacing of an ageing body.** The inert `refreshPolicy` option was removed in 10.0.0. Use `surfaceMode: 'both'` for explicit body delivery or `steps` for the current procedure position.
 
 ### Worked example — the same body, two surfaces
 
@@ -283,7 +276,7 @@ Two statuses on that snippet, and they matter:
 | the same files carry `tools:`, `steps:` and `onSkip:`                             | **shipped** (9.36.0 — before that, prose only)                                                                                                                                                        |
 | the same files carry `routes:`, read by `runbookFromDir` into `{ skills, steps }` | **shipped** (9.43.0). `skillsFromDir` refuses a file that declares routing rather than dropping it                                                                                                    |
 | a `routes:` guard can be a `when` predicate                                       | **not supported, by design** — a predicate is code, nothing in a `SKILL.md` is evaluated; the file picks `on <tool>` / `status=<outcome>`, and any other conditional stays in `skillGraph({ steps })` |
-| `.toolsFromActiveSkill()` scopes every skill's tools to that skill's activation   | **opt-in** (default flips in 10.0.0)                                                                                                                                                                  |
+| `.toolsFromActiveSkill()` scopes every skill's tools to that skill's activation   | **opt-in**                                                                                                                                                                  |
 | a loaded skill can set its own `autoActivate` from frontmatter                    | **not supported, by design** — a directory does not decide the agent's tool posture                                                                                                                   |
 | `skillsFromDir` reads a URL                                                       | **refused by name** — authorship is a security property, so local paths only                                                                                                                          |
 
@@ -865,7 +858,7 @@ measured evidence about what a reader — human or model — will invent here.
 | `startRun(...)`                                       | **There is no `startRun`.** The door is `agent.run(input, options?)` with `AgentInput = { message, identity?, continueFrom? }`.                                                                                                                                                                                                                                                                                                      |
 | `RunStep` is the skill history                        | **`RunStep` is real and it is something else entirely** — the footprintjs flowchart **topology** slider. Its `kind` is `'sequential' \| 'fork' \| 'merge' \| 'decide' \| 'iteration' \| 'iteration-exit' \| 'react'`. Nothing in it is about skills. It is dangerous precisely because importing it succeeds. For skill history, use `routeRecorder()`.                                                                              |
 | the LLM classifier is tier 3                          | **It is a tier-2 strategy**, interchangeable with `keywordScorer()` and `embeddingScorer()`. Tier 3 is the menu the model resolves in-band through `read_skill`, and it exists for the case where tier 2 was _not_ decisive.                                                                                                                                                                                                         |
-| a skill's tools are gated to that skill automatically | **They are not, by default.** `defineSkill({ tools })` puts them in the agent's static tool list at build time, visible from iteration 1 whether the skill is ever activated or not. Ask for the gate: `.toolsFromActiveSkill()` on the agent, `skillGraph({ scopeTools: true })` on the graph, or `autoActivate: 'currentSkill'` per skill. `.tree()` leaves are the one shape that scopes by default. The default flips in 10.0.0. |
+| a skill's tools are gated to that skill automatically | **They are not, by default.** `defineSkill({ tools })` puts them in the agent's static tool list at build time, visible from iteration 1 whether the skill is ever activated or not. Ask for the gate: `.toolsFromActiveSkill()` on the agent, `skillGraph({ scopeTools: true })` on the graph, or `autoActivate: 'currentSkill'` per skill. `.tree()` leaves are the one shape that scopes by default. Scoping remains explicit in 10.0.0. |
 
 Two more absences worth naming while you are here:
 

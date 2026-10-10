@@ -21,7 +21,7 @@ forgot them.
 | file | one job |
 |---|---|
 | `types.ts` | the vocabulary, as a PURE leaf (the `toolOutcome.ts` precedent): marker, field types, the closed `ToolResultClass` set, the counter-word list, the static note. Type-only imports of the coverage vocabulary — absorbed, never duplicated |
-| `envelope.ts` | `mintSemantics` (the ONE mint behind both declaration doors, refuses at the call site) and `semantic()` (the deprecated snake_case door), `readSemantics()` (strict recognition — the zero-cost guarantee), `semanticIssues()`/`explainSemantics()` (ONE rule set for mint, recognition and the gate), `semanticsForModel()` (the model's compact rendering-free projection), `coverageOfSemantics()` (the absorb seam `readCoverageResult` uses) |
+| `envelope.ts` | `mintSemantics` (the ONE mint behind the canonical declaration door, refuses at the call site), `readSemantics()` (strict recognition — the zero-cost guarantee), `semanticIssues()`/`explainSemantics()` (ONE rule set for mint, recognition and the gate), `semanticsForModel()` (the model's compact rendering-free projection), `coverageOfSemantics()` (the absorb seam `readCoverageResult` uses) |
 | `described.ts` | `describedResult()` — the camelCase door: it says how its author spells the declaration and respells `grain`/`provenance`/`render` to the wire; it judges nothing itself |
 | `check.ts` | `checkSemantics(entries)` — the gate core over sample results; severity follows provability (the skillGraph check-up law) |
 | `projection.ts` | bounded metadata preservation shared by `withDatasetArtifacts` and optional paired gate fixtures; no row scan or fact validation |
@@ -40,40 +40,43 @@ forgot them.
   content is refused as oversized. The `coverage` field is additionally
   declared through the same channel `coverage()` uses.
 
-## One wire, two declaration doors
+## One authoring door, unchanged wire
 
-`describedResult()` takes the declaration camelCase throughout (`measuredAt`,
-`ageSeconds`, `sourceExportDate`, `isCounter`, `filterNote`, `chartHint`);
-`semantic()`, the deprecated name, takes the wire's snake_case names. Both
-hand the author's object to `envelope.ts` · `mintSemantics` with a
-`DeclarationDoor` — the only thing that differs is how the author spells
-things — and both mint the SAME bytes: the wire never changes. The input
-type (`DescribedResultDeclaration`) is separate from the wire types
-(`SemanticProvenance`, `SemanticGrain`, `SemanticRender`), so the wire never
-claims a field it does not carry; it also makes `provenance` required
-whenever `series` or `facts` is present, so a missing source is a compile
-error before it is a refusal.
+`describedResult()` takes camelCase declarations and passes them to the one
+`mintSemantics` implementation. `DeclarationDoor` describes the authoring
+spelling; the rule set stays shared with wire recognition and the build gate.
+The input type `DescribedResultDeclaration` is separate from the wire types
+`SemanticProvenance`, `SemanticGrain` and `SemanticRender`. A malformed
+object reaches that shared rule set unchanged and is refused, not repaired.
 
 ```ts
 describedResult({ facts: rows, provenance: { measuredAt: exportTime, source: 'RVTools export' } });
-// ≡ byte for byte
-semantic({ facts: rows, provenance: { measured_at: exportTime, source: 'RVTools export' } });
+// The wire still carries provenance.measured_at, never measuredAt.
 ```
 
-The one deliberate difference: a `grain`, `provenance` or `render` that is
-not an object at all (`null`, a string, an array). `describedResult()` hands
-it to the rule set untouched — "`provenance` must be an object (…)" —
-while `semantic()` spreads it, as it always did, and keeps the refusal it
-always gave.
+### Migration from the removed declaration door
 
-Pinned by `test/lib/semantics/described-result.test.ts` (goldens per shape,
-and a seeded property over random declarations: same bytes when minted, the
-same refusal in each author's words when not) and
+The deprecated `semantic()` function and `SemanticDeclaration` type have been
+removed. Use `describedResult()` and `DescribedResultDeclaration`. In declarations,
+rename `is_counter` → `isCounter`, `measured_at` → `measuredAt`,
+`age_seconds` → `ageSeconds`, `source_export_date` → `sourceExportDate`,
+`filter_note` → `filterNote` and `chart_hint` → `chartHint`. Coverage
+declarations already use `notChecked` and `cannotCover`; keep those names.
+Series and facts require provenance in the declaration type as well as at runtime.
+
+Do **not** rename keys in saved records or foreign-language wire envelopes:
+`ToolSemantics`, its snake_case fields, the marker, note and model projection
+are unchanged. `readSemantics()` continues to recognize valid saved envelopes.
+
+Pinned by `test/lib/semantics/described-result.test.ts`: six independently
+captured historical envelopes and model projections, unchanged inline goldens,
+and the original seeded generator checked against 3,000 ordered legacy outcomes.
+The provenance, wire-type and removed-export compile contracts are pinned by
 `test/type-regressions/DescribedResult.assignability.test.ts`.
 
 ## A refusal reads as a refusal; an unknown key is never dropped
 
-Both doors share the coverage helpers' law
+The declaration door shares the coverage helpers' law
 (`src/core/agent/coverage/README.md` § 5, the owner `refusal.ts`): every key
 the declaration — or its `grain`, `provenance`, `coverage`, `clarify` or
 `render` — carries is one the mint reads, or a refusal naming the spelling
@@ -95,7 +98,7 @@ describedResult(JSON.parse('{"facts":[{"entity":"vm-01"}],"provenance":{"measure
 // you mean `measuredAt`? The fields of `provenance` are: measuredAt,
 // ageSeconds, source, sourceExportDate.
 
-semantic(JSON.parse('{"facts":[{"entity":"vm-01"}],"coverage":{"not_checked":["vCenter"]}}'));
+describedResult(JSON.parse('{"facts":[{"entity":"vm-01"}],"coverage":{"not_checked":["vCenter"]}}'));
 // refused: 'coverage.not_checked' is not a field this vocabulary has — did you
 // mean `notChecked`? The fields of `coverage` are: checked, notChecked, cannotCover.
 ```
@@ -114,7 +117,7 @@ data field led straight to the next refusal ("this result declares nothing").
 And the fault is data-dependent: a tool with no empty branch passes every test
 that has rows and meets it on its first empty read in production, where the
 MODEL reads the refusal instead of "nothing matched". So it names the branch to
-write (`envelope.ts` · `emptyDataList`, one core, so both doors and the gate):
+write (`envelope.ts` · `emptyDataList`, one core for declaration, recognition and the gate):
 
 ```ts
 execute: async ({ host }) => {
@@ -148,7 +151,8 @@ foreign envelope's period to the same rule set (`period.ts` · `periodProblem`,
 wire spelling) — a fault is one more `semanticIssues` fault, so the envelope
 stays data. `readCoverageResult` absorbs it into the coverage channel like
 `coverage`: an envelope with a period and no coverage files a `'ledger'` row
-whose three lists are empty. `semantic()`, the deprecated door, gains no field.
+whose three lists are empty. Historical envelopes without a period remain valid;
+the reader never invents a period for them.
 The results layer (`core/agent/results/`) files the verdict. The provenance
 rule is shared with `absent()` the same way (`described.ts` · `mintProvenance`,
 `envelope.ts` · `provenanceIssues`).

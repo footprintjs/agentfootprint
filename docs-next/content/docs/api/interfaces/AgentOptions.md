@@ -254,7 +254,7 @@ Give a long-running support agent more room for history
 
 ### costBudget?
 
-> `readonly` `optional` **costBudget?**: `number` \| \{ `onExceed`: `"warn"` \| `"halt"`; `usd`: `number`; \}
+> `readonly` `optional` **costBudget?**: `number` \| \{ `onExceed`: `"halt"` \| `"warn"`; `usd`: `number`; \}
 
 Defined in: [src/core/agent/types.ts:213](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L213)
 

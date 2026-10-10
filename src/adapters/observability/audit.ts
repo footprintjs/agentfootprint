@@ -414,7 +414,6 @@ const BOUND_FIELDS: Readonly<
   'agentfootprint.memory.written': { contentSummary: charsMarker },
   'agentfootprint.pause.request': { questionPayload: keysMarker },
   'agentfootprint.pause.resume': { resumeInput: keysMarker },
-  'agentfootprint.risk.flagged': { evidence: keysMarker },
   // `explanation` is a judge's reason — it can quote the answer it graded
   // (`EvalScorePayload.explanation` says CONTENT). `label` is a vocabulary
   // word by contract and stays verbatim.

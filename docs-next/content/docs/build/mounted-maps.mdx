@@ -105,7 +105,7 @@ A door the model cannot see is not a door. Before this card, re-engagement was r
 
 Parking stops the prompt fragment **and** the tools, and until 9.59.0 the second half was only true on one posture.
 
-With `scopeTools: false` — the default for flat graphs until 10.0.0 — a skill's tools are pre-loaded into the static tool registry and ride from iteration 1 whatever the cursor says. So parking suppressed the fragment and every one of the parked map's tool schemas kept going out. The wire did not merely stay silent about the park; it contradicted it, showing the model tools for a skill whose instructions had just vanished.
+With `scopeTools: false` — the default for flat graphs — a skill's tools are pre-loaded into the static tool registry and ride from iteration 1 whatever the cursor says. So parking suppressed the fragment and every one of the parked map's tool schemas kept going out. The wire did not merely stay silent about the park; it contradicted it, showing the model tools for a skill whose instructions had just vanished.
 
 Parking now holds those schemas off the wire on its own authority. This is **not** a change to `scopeTools` and does not touch the 10.0.0 ledger: the two dials answer different questions. `scopeTools` asks *do this map's tools follow the cursor?* Parking asks *is this map talking at all?* Keeping those apart is the kernel's whole thesis.
 

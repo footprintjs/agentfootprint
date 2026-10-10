@@ -23,7 +23,7 @@ import { join } from 'node:path';
 import {
   Agent,
   defineTool,
-  semantic,
+  describedResult,
   SEMANTICS_NOTE,
   type ToolSemantics,
 } from '../../../src/index.js';
@@ -46,18 +46,24 @@ afterEach(() => {
 // ── Toolkit ──────────────────────────────────────────────────────────────
 
 const PROVENANCE = {
-  measured_at: '2026-08-19T02:00:00Z',
-  age_seconds: 30000,
+  measuredAt: '2026-08-19T02:00:00Z',
+  ageSeconds: 30000,
   source: 'nightly RVTools export',
-  source_export_date: '2026-08-18',
+  sourceExportDate: '2026-08-18',
 };
 
+const WIRE_PROVENANCE = {
+  measured_at: PROVENANCE.measuredAt,
+  age_seconds: PROVENANCE.ageSeconds,
+  source: PROVENANCE.source,
+  source_export_date: PROVENANCE.sourceExportDate,
+};
 const DECL = {
   series: [
     { t: '2026-08-19T01:30:00Z', entity: 'fc1/3', metric: 'avg_iops', value: 18450 },
     { t: '2026-08-19T02:00:00Z', entity: 'fc1/3', metric: 'avg_iops', value: 17200 },
   ],
-  grain: { interval: '30m', aggregation: 'avg', is_counter: false },
+  grain: { interval: '30m', aggregation: 'avg', isCounter: false },
   provenance: PROVENANCE,
   coverage: {
     checked: ['shq-fab-a: all 48 FC ports'],
@@ -121,7 +127,7 @@ const portIops = (overrides: Partial<Record<string, unknown>> = {}) =>
     name: 'port_iops',
     description: 'Per-port IOPS over the last window',
     inputSchema: { type: 'object', properties: {} },
-    execute: () => semantic(DECL),
+    execute: () => describedResult(DECL),
     ...overrides,
   });
 
@@ -164,8 +170,8 @@ describe('integration: the model reads the projection, the record keeps the enve
     expect(typeof p.iteration).toBe('number');
     const env = p.semantics as ToolSemantics;
     expect(env.af_semantics).toBe(true);
-    expect(env.grain).toEqual(DECL.grain);
-    expect(env.provenance).toEqual(PROVENANCE);
+    expect(env.grain).toEqual({ interval: '30m', aggregation: 'avg', is_counter: false });
+    expect(env.provenance).toEqual(WIRE_PROVENANCE);
     expect(env.render).toEqual(DECL.render);
     expect(env.coverage?.checked?.[0]?.what).toBe('shq-fab-a: all 48 FC ports');
     expect(env.series).toHaveLength(2);
@@ -196,7 +202,7 @@ describe('integration: the model reads the projection, the record keeps the enve
       name: 'both_channels',
       description: 'Returns an effects envelope whose content is a semantic envelope',
       inputSchema: { type: 'object', properties: {} },
-      execute: () => ({ content: semantic(DECL), effects: [], status: 'partial' as const }),
+      execute: () => ({ content: describedResult(DECL), effects: [], status: 'partial' as const }),
     });
     const { agent, semantics, toolEnds } = buildAgent({
       replies: [call('both_channels'), final('done')],
@@ -207,7 +213,11 @@ describe('integration: the model reads the projection, the record keeps the enve
     expect(toolEnds[0]!.status).toBe('partial');
     // …the semantic channel kept its envelope…
     expect(semantics).toHaveLength(1);
-    expect((semantics[0]!.semantics as ToolSemantics).grain).toEqual(DECL.grain);
+    expect((semantics[0]!.semantics as ToolSemantics).grain).toEqual({
+      interval: '30m',
+      aggregation: 'avg',
+      is_counter: false,
+    });
     // …and the model read the projection of the CONTENT.
     const text = toolTurnOf(agent);
     expect(text).toContain('"is_counter":false');
@@ -230,7 +240,7 @@ describe('integration: resultCeiling accounts for the envelope deliberately', ()
   });
 
   it('the ceiling measures the PROJECTION — an envelope whose render/coverage overhead crosses the line is not refused for it', async () => {
-    const sem = semantic(DECL);
+    const sem = describedResult(DECL);
     const projectionSize = JSON.stringify({
       series: sem.series,
       grain: sem.grain,
@@ -257,7 +267,7 @@ describe('integration: resultCeiling accounts for the envelope deliberately', ()
       description: 'Per-port IOPS over the last window',
       inputSchema: { type: 'object', properties: {} },
       resultCeiling: { maxChars: 300, narrowBy: ['entity'] },
-      execute: () => semantic(bigDecl()),
+      execute: () => describedResult(bigDecl()),
     });
     const { agent, semantics, refused } = buildAgent({
       replies: [call('port_iops'), final('done')],
@@ -273,8 +283,8 @@ describe('integration: resultCeiling accounts for the envelope deliberately', ()
     // BEFORE the ceiling, so nothing about the envelope was silently lost.
     expect(semantics).toHaveLength(1);
     const env = semantics[0]!.semantics as ToolSemantics;
-    expect(env.grain).toEqual(DECL.grain);
-    expect(env.provenance).toEqual(PROVENANCE);
+    expect(env.grain).toEqual({ interval: '30m', aggregation: 'avg', is_counter: false });
+    expect(env.provenance).toEqual(WIRE_PROVENANCE);
   });
 });
 
@@ -351,7 +361,7 @@ describe('regression: the envelope survives to the archived recording', () => {
     expect(rows[0]!.payload.toolCallId).toBe('tc-arc');
     const sem = rows[0]!.payload.semantics as ToolSemantics;
     expect(sem.grain).toEqual({ interval: '30m', aggregation: 'avg', is_counter: false });
-    expect(sem.provenance).toEqual(PROVENANCE);
+    expect(sem.provenance).toEqual(WIRE_PROVENANCE);
     expect(sem.render).toEqual(DECL.render);
   });
 });

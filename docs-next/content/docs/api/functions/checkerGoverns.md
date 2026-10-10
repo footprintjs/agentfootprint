@@ -6,7 +6,7 @@ title: checkerGoverns
 
 > **checkerGoverns**(`checker`, `capability`): `boolean`
 
-Defined in: [src/adapters/types.ts:997](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L997)
+Defined in: [src/adapters/types.ts:872](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L872)
 
 Does this checker ask to be consulted about `capability`? (9.11.0)
 

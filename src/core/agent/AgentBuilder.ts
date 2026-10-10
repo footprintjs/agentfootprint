@@ -1128,31 +1128,6 @@ export class AgentBuilder {
   }
 
   /**
-   * REMOVED in 9.0.0 — use {@link AgentBuilder.watch} instead.
-   *
-   * This is a one-release grace error, not a method. Deprecated in 8.0.0 in
-   * favour of `.watch(...)` — same list, same order, same attachment, and
-   * `.watch()` takes more than one observer. The body was deleted in 9.0.0;
-   * the NAME is kept for one major so a call site that missed the deprecation
-   * gets a sentence instead of `builder.recorder is not a function`.
-   *
-   * It throws at BUILD time, before any run, so the failure is deterministic
-   * and lands in development rather than in a trace nobody is watching.
-   *
-   * @deprecated Removed in 9.0.0 — call `.watch(rec)`. This throwing stub is
-   * deleted in 10.0.0.
-   */
-  recorder(_rec: Watcher): this {
-    throw new Error(
-      `AgentBuilder.recorder() was removed in 9.0.0 — call .watch(rec) instead. It is the ` +
-        `same list, the same order and the same attachment (both replay through ` +
-        `agent.attach() at the end of build()), under the name the agent loop already used ` +
-        `for it, and .watch() is variadic: .watch(a, b, c). This name is kept only to say ` +
-        `so, and is deleted in 10.0.0.`,
-    );
-  }
-
-  /**
    * Set the agent's display name — substituted as `{{appName}}` in
    * commentary + thinking templates. Same place to brand a tenant
    * ("Acme Bot"), distinguish multi-agent roles ("Triage" vs
@@ -2237,9 +2212,9 @@ export class AgentBuilder {
    * `scopeTools: true` fills in the skills it wires; this fills in the rest.
    * Turning it on can only remove tools from the static list, never add one.
    *
-   * **Opt-in in 9.x.** The default is unchanged — an agent that never calls
-   * this builds byte-identical bytes and emits byte-identical events. The
-   * default flips in 10.0.0, the same ledger `skillGraph({ scopeTools })` is on.
+   * **Opt-in.** The default is unchanged — an agent that never calls this
+   * keeps additive tool visibility. Version 10 retires old APIs without
+   * changing this active routing policy.
    *
    * @example
    *   const skills = await skillsFromDir('./skills', { tools: [lookupOrder, issueRefund] });
@@ -2810,7 +2785,7 @@ export class AgentBuilder {
    *
    * @example
    *   import { Agent } from 'agentfootprint';
-   *   import { ReliabilityFailFastError } from 'agentfootprint/reliability';
+   *   import { ReliabilityFailFastError } from 'agentfootprint/resilience';
    *
    *   const agent = Agent.create({ provider, model: 'mock' })
    *     .system('Triage support tickets.')
@@ -3600,7 +3575,7 @@ export class AgentBuilder {
           );
         }
       }
-      // Two dev-mode warnings about wiring that is inert rather than wrong.
+      // Warn about an iteration budget too small for the declared procedure.
       if (isDevMode()) {
         const effectiveMax = opts.maxIterations ?? 10;
         for (const plan of stepPlans.values()) {
@@ -3613,20 +3588,6 @@ export class AgentBuilder {
                 `steps but maxIterations is ${effectiveMax} — the procedure cannot complete ` +
                 `in one turn unless steps share a batch. Raise maxIterations, or expect ` +
                 `steps_unfinished { action: 'cut-short' } on the record.`,
-            );
-          }
-          const withRefresh = injections.find(
-            (i) =>
-              i.id === plan.skillId &&
-              (i.metadata as { refreshPolicy?: unknown } | undefined)?.refreshPolicy !== undefined,
-          );
-          if (withRefresh) {
-            // eslint-disable-next-line no-console
-            console.warn(
-              `agentfootprint Agent: skill '${plan.skillId}' sets both \`refreshPolicy\` ` +
-                `(deprecated, never read) and \`steps\` — steps supersede it: the banner is ` +
-                `re-sent every request and every boundary result names the current step, so ` +
-                `re-delivery happens by construction. Drop refreshPolicy.`,
             );
           }
         }

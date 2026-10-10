@@ -1,5 +1,5 @@
 /**
- * Tests — `buildRunSteps`: project a BoundaryRecorder's event stream
+ * Tests — RunStepRecorder saved-event replay: project a BoundaryRecorder's event stream
  * into the slider-ready RunStep[] consumed by Lens / CLI / future UIs.
  *
  * Pure-projection contract: same input events → same RunStep[] output.
@@ -26,7 +26,8 @@ import type {
 import type { FlowRunEvent } from 'footprintjs/dist/types/lib/engine/narrative/types.js';
 import { EventDispatcher } from '../../../src/events/dispatcher.js';
 import { BoundaryRecorder } from '../../../src/recorders/observability/BoundaryRecorder.js';
-import { buildRunSteps } from '../../../src/recorders/observability/RunStepRecorder.js';
+import { runStepRecorder, type RunStepRecorder } from '../../../src/doors/observe.js';
+import * as observe from '../../../src/doors/observe.js';
 
 // ── Test harness mirroring BoundaryRecorder.test.ts ─────────────────
 
@@ -35,6 +36,13 @@ function freshRecorder(): { rec: BoundaryRecorder; dispatcher: EventDispatcher }
   const dispatcher = new EventDispatcher();
   rec.subscribe(dispatcher);
   return { rec, dispatcher };
+}
+
+/** Replay detached saved data through the supported public recorder API. */
+function replay(source: BoundaryRecorder): RunStepRecorder {
+  const rec = runStepRecorder();
+  rec.ingestDomainEvents(structuredClone(source.getEvents()));
+  return rec;
 }
 
 function runEvt(payload?: unknown): FlowRunEvent {
@@ -114,7 +122,7 @@ function dispatchTyped(
 
 // ─── P1: Sequence ────────────────────────────────────────────────────
 
-describe('buildRunSteps — P1: Sequence(LLMCall, LLMCall)', () => {
+describe('saved-event replay — P1: Sequence(LLMCall, LLMCall)', () => {
   it('emits asks → forwards → answers (3 sequential steps)', () => {
     const { rec } = freshRecorder();
     rec.onRunStart!(runEvt({ message: 'hi' }));
@@ -126,7 +134,7 @@ describe('buildRunSteps — P1: Sequence(LLMCall, LLMCall)', () => {
     rec.onSubflowExit!(subEvt('sf-seq', 'Pipeline', 'seq#0'));
     rec.onRunEnd!(runEvt({ result: 'ok' }));
 
-    const steps = buildRunSteps(rec);
+    const steps = replay(rec).getSteps();
     const sequentials = steps.filter((s) => s.kind === 'sequential');
     expect(sequentials).toHaveLength(3);
     expect(sequentials[0].label).toBe('asks');
@@ -142,7 +150,7 @@ describe('buildRunSteps — P1: Sequence(LLMCall, LLMCall)', () => {
 
 // ─── P1b: Sequence as OUTERMOST runner (no Sequence subflow.entry) ───
 
-describe('buildRunSteps — P1b: Sequence as outermost runner', () => {
+describe('saved-event replay — P1b: Sequence as outermost runner', () => {
   it('infers implicit Sequence root from multiple sibling primitive boundaries', () => {
     // When a Sequence is the OUTERMOST runner, its OWN subflow.entry
     // never fires — only its children's. The projection must still
@@ -161,7 +169,7 @@ describe('buildRunSteps — P1b: Sequence as outermost runner', () => {
     rec.onSubflowExit!(subEvt('step-respond', 'respond', 'rsp#0'));
     rec.onRunEnd!(runEvt({ result: 'done' }));
 
-    const steps = buildRunSteps(rec);
+    const steps = replay(rec).getSteps();
     // Filter (Sequence root → keep non-react) leaves 3 sequentials.
     expect(steps).toHaveLength(3);
     expect(steps.map((s) => s.label)).toEqual(['asks', 'forwards', 'answers']);
@@ -170,7 +178,7 @@ describe('buildRunSteps — P1b: Sequence as outermost runner', () => {
 
 // ─── P2: Parallel ────────────────────────────────────────────────────
 
-describe('buildRunSteps — P2: Parallel fan-out (3 branches)', () => {
+describe('saved-event replay — P2: Parallel fan-out (3 branches)', () => {
   it('coalesces 3 fork.branch events into ONE fork step with 3 transitions', () => {
     const { rec } = freshRecorder();
     rec.onRunStart!(runEvt());
@@ -179,7 +187,7 @@ describe('buildRunSteps — P2: Parallel fan-out (3 branches)', () => {
     rec.onSubflowExit!(subEvt('sf-par', 'Committee', 'par#0'));
     rec.onRunEnd!(runEvt());
 
-    const steps = buildRunSteps(rec);
+    const steps = replay(rec).getSteps();
     const forks = steps.filter((s) => s.kind === 'fork');
     expect(forks).toHaveLength(1);
     expect(forks[0].transitions).toHaveLength(3);
@@ -205,7 +213,7 @@ describe('buildRunSteps — P2: Parallel fan-out (3 branches)', () => {
     rec.onSubflowExit!(subEvt('ethics', 'ethics', 'ethics#3'));
     rec.onRunEnd!(runEvt());
 
-    const steps = buildRunSteps(rec);
+    const steps = replay(rec).getSteps();
     expect(steps).toHaveLength(2);
     expect(steps[0].kind).toBe('fork');
     expect(steps[0].transitions).toHaveLength(3);
@@ -220,7 +228,7 @@ describe('buildRunSteps — P2: Parallel fan-out (3 branches)', () => {
 
 // ─── P3: Conditional ─────────────────────────────────────────────────
 
-describe('buildRunSteps — P3: Conditional (chosen branch only)', () => {
+describe('saved-event replay — P3: Conditional (chosen branch only)', () => {
   it('emits a decide step for the chosen branch', () => {
     const { rec } = freshRecorder();
     rec.onRunStart!(runEvt());
@@ -231,7 +239,7 @@ describe('buildRunSteps — P3: Conditional (chosen branch only)', () => {
     rec.onSubflowExit!(subEvt('sf-cond', 'Cond', 'cond#0'));
     rec.onRunEnd!(runEvt());
 
-    const steps = buildRunSteps(rec);
+    const steps = replay(rec).getSteps();
     const decides = steps.filter((s) => s.kind === 'decide');
     expect(decides).toHaveLength(1);
     expect(decides[0].meta?.kind).toBe('decide');
@@ -244,7 +252,7 @@ describe('buildRunSteps — P3: Conditional (chosen branch only)', () => {
 
 // ─── P4: Loop ────────────────────────────────────────────────────────
 
-describe('buildRunSteps — P4: Loop (3 iterations)', () => {
+describe('saved-event replay — P4: Loop (3 iterations)', () => {
   it('emits one iteration step per loop.iteration event', () => {
     const { rec } = freshRecorder();
     rec.onRunStart!(runEvt());
@@ -255,7 +263,7 @@ describe('buildRunSteps — P4: Loop (3 iterations)', () => {
     rec.onSubflowExit!(subEvt('sf-loop', 'Loop', 'loop#0'));
     rec.onRunEnd!(runEvt());
 
-    const steps = buildRunSteps(rec);
+    const steps = replay(rec).getSteps();
     const iters = steps.filter((s) => s.kind === 'iteration');
     expect(iters).toHaveLength(3);
     expect(iters.map((s) => s.meta?.kind === 'iteration' && s.meta.index)).toEqual([1, 2, 3]);
@@ -264,7 +272,7 @@ describe('buildRunSteps — P4: Loop (3 iterations)', () => {
 
 // ─── P4b: Agent + tools (ReAct, 2 iterations + 1 tool call) ────────
 
-describe('buildRunSteps — P4b: Agent ReAct (2 iters + 1 tool call)', () => {
+describe('saved-event replay — P4b: Agent ReAct (2 iters + 1 tool call)', () => {
   it('emits 4 react steps at top-level for a leaf Agent root', () => {
     // Mimics the playground's "02. Agent + tools (ReAct)" sample:
     // iter 1: user→llm (asks model)  → llm→tool (model wants weather)
@@ -356,7 +364,7 @@ describe('buildRunSteps — P4b: Agent ReAct (2 iters + 1 tool call)', () => {
     rec.onSubflowExit!(subEvt('sf-agent', 'Agent', 'agent#0'));
     rec.onRunEnd!(runEvt());
 
-    const steps = buildRunSteps(rec);
+    const steps = replay(rec).getSteps();
     expect(steps).toHaveLength(4);
     const arrows = steps.map((s) => (s.meta?.kind === 'react' ? s.meta.actorArrow : s.kind));
     expect(arrows).toEqual(['user→llm', 'llm→tool', 'tool→llm', 'llm→user']);
@@ -365,7 +373,7 @@ describe('buildRunSteps — P4b: Agent ReAct (2 iters + 1 tool call)', () => {
 
 // ─── P5: Single LLMCall ─────────────────────────────────────────────
 
-describe('buildRunSteps — P5: single LLMCall (one-shot)', () => {
+describe('saved-event replay — P5: single LLMCall (one-shot)', () => {
   it('emits user→llm and llm→user react steps from typed llm events', () => {
     const { rec, dispatcher } = freshRecorder();
     rec.onRunStart!(runEvt());
@@ -394,7 +402,7 @@ describe('buildRunSteps — P5: single LLMCall (one-shot)', () => {
     rec.onSubflowExit!(subEvt('sf-llm', 'LLMCall', 'llm#0'));
     rec.onRunEnd!(runEvt());
 
-    const steps = buildRunSteps(rec);
+    const steps = replay(rec).getSteps();
     const reacts = steps.filter((s) => s.kind === 'react');
     expect(reacts).toHaveLength(2);
     expect(reacts[0].meta?.kind === 'react' && reacts[0].meta.actorArrow).toBe('user→llm');
@@ -404,7 +412,7 @@ describe('buildRunSteps — P5: single LLMCall (one-shot)', () => {
 
 // ─── P6: drill-path filter ───────────────────────────────────────────
 
-describe('buildRunSteps — P6: drill scope filter', () => {
+describe('saved-event replay — P6: drill scope filter', () => {
   it('filters steps to those whose anchor.subflowPath matches drillPath prefix', () => {
     const { rec } = freshRecorder();
     rec.onRunStart!(runEvt());
@@ -414,14 +422,88 @@ describe('buildRunSteps — P6: drill scope filter', () => {
     rec.onSubflowExit!(subEvt('sf-seq', 'Pipeline', 'seq#0'));
     rec.onRunEnd!(runEvt());
 
-    const all = buildRunSteps(rec);
-    const drilled = buildRunSteps(rec, {
-      drillPath: ['__root__', 'sf-seq', 'sf-seq/sf-classify'],
-    });
+    const replayed = replay(rec);
+    const all = replayed.getSteps();
+    const drilled = replayed.getSteps(['__root__', 'sf-seq', 'sf-seq/sf-classify']);
     expect(drilled.length).toBeLessThanOrEqual(all.length);
     for (const s of drilled) {
       // Anchor path starts with drillPath segments.
       expect(s.anchor.subflowPath.length).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it('keeps a nonempty drilled saved-event projection and renumbers it', () => {
+    const { rec, dispatcher } = freshRecorder();
+    rec.onRunStart!(runEvt());
+    for (const path of ['other', 'kept']) {
+      dispatchTyped(
+        dispatcher,
+        'agentfootprint.stream.llm_start',
+        {
+          provider: 'mock',
+          model: 'mock',
+        },
+        `${path}#0`,
+        [path],
+      );
+      dispatchTyped(
+        dispatcher,
+        'agentfootprint.stream.llm_end',
+        {
+          provider: 'mock',
+          model: 'mock',
+          content: 'done',
+          toolCallCount: 0,
+          usage: { input: 1, output: 1 },
+        },
+        `${path}#0`,
+        [path],
+      );
+    }
+    rec.onRunEnd!(runEvt());
+
+    const replayed = replay(rec);
+    expect(replayed.getSteps()).toHaveLength(4);
+    const drilled = replayed.getSteps(['__root__', 'kept']);
+    expect(drilled).toHaveLength(2);
+    expect(drilled.map((step) => step.seq)).toEqual([0, 1]);
+    expect(drilled.map((step) => step.label)).toEqual(['user→llm', 'llm→user']);
+    expect(drilled.every((step) => step.anchor.runtimeStageId === 'kept#0')).toBe(true);
+    expect(replayed.getSteps(['__root__', 'missing'])).toEqual([]);
+  });
+});
+
+describe('supported replay surface', () => {
+  it('does not expose the retired standalone builder', () => {
+    expect(observe).not.toHaveProperty('buildRunSteps');
+  });
+
+  it('accepts an empty saved event list without inventing a step', () => {
+    const rec = runStepRecorder();
+    rec.ingestDomainEvents([]);
+    expect(rec.getSteps()).toEqual([]);
+  });
+
+  it('can replay a second independent recording after clear without retaining old forks', () => {
+    const rec = runStepRecorder();
+    for (const children of [
+      ['legal', 'ethics', 'finance'],
+      ['speed', 'cost'],
+    ]) {
+      const { rec: boundary } = freshRecorder();
+      boundary.onRunStart!(runEvt());
+      boundary.onFork!(forkEvt('Seed', children, 'Seed#0'));
+      boundary.onRunEnd!(runEvt());
+      const saved = structuredClone(boundary.getEvents());
+      const before = structuredClone(saved);
+
+      rec.clear();
+      rec.ingestDomainEvents(saved);
+      expect(saved).toEqual(before);
+      const forks = rec.getSteps().filter((step) => step.kind === 'fork');
+      expect(forks).toHaveLength(1);
+      expect(forks[0].seq).toBe(0);
+      expect(forks[0].transitions.map((transition) => transition.to)).toEqual(children);
     }
   });
 });

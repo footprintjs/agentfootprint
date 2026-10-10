@@ -18,7 +18,7 @@
  * constructor and in `instanceof`. This door carries the DECORATOR's — the
  * one a consumer catches, since it is the one that escapes a provider call.
  *
- * The gate's stays reachable at `agentfootprint/reliability` for all of 8.x.
+ * The gate's stays reachable at `agentfootprint/reliability` because it is a distinct runtime class.
  * If you `instanceof`-check the error thrown by the reliability gate, keep
  * importing it from there. Merging them would have changed the message text
  * on one path, and this release changes packaging only.
@@ -41,20 +41,19 @@ export * from '../resilience/index.js';
 // names are already spoken for above and an ambiguous `export *` would not
 // compile (TS2308). Everything else it exports is listed here.
 export type {
-  BreakerState,
   CircuitBreakerConfig,
-  OutputSchemaValidator,
   ReliabilityConfig,
   ReliabilityDecision,
   ReliabilityFallbackFn,
   ReliabilityProvider,
   ReliabilityRule,
   ReliabilityScope,
-} from '../reliability/index.js';
+} from '../reliability/types.js';
+export { ReliabilityFailFastError } from '../reliability/types.js';
+export { initialBreakerState, type BreakerState } from '../reliability/CircuitBreaker.js';
 export {
   defaultStuckLoopRule,
-  initialBreakerState,
   lastNValidationErrorsMatch,
-  ReliabilityFailFastError,
   ValidationFailure,
-} from '../reliability/index.js';
+  type OutputSchemaValidator,
+} from '../core/agent/stages/reliabilityExecution.js';

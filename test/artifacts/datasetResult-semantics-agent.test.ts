@@ -8,7 +8,7 @@ import {
   inMemoryArtifacts,
   isInputPause,
   requestInput,
-  semantic,
+  describedResult,
   withDatasetArtifacts,
 } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
@@ -75,7 +75,10 @@ describe('native dataset projection declarations', () => {
 
   it.each([
     ['absence', absence],
-    ['clarify', () => semantic({ clarify: { question: 'Which source?', candidates: ['A', 'B'] } })],
+    [
+      'clarify',
+      () => describedResult({ clarify: { question: 'Which source?', candidates: ['A', 'B'] } }),
+    ],
     [
       'explicit failure',
       () => ({ content: { reason: 'unavailable' }, effects: [], status: 'failure' }),

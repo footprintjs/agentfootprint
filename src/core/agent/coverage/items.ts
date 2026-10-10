@@ -180,7 +180,7 @@ export function listWithoutRecordOnly(list: unknown): unknown {
  * The keys a {@link CoverageDeclaration} has — the three lists, as the author
  * spells them — tied to the type in BOTH directions: a key the interface
  * gains, or one listed here that it does not have, fails to compile.
- * `coverage()` and a `describedResult()` / `semantic()` declaration's
+ * `coverage()` and a `describedResult()` declaration's
  * `coverage` refuse any other
  * key (`refusal.ts` · `refuseUnknownKeys`), so `not_checked` is refused,
  * naming `notChecked`, instead of vanishing.
