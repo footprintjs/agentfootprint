@@ -49,6 +49,7 @@ import type {
   AgentGroundingNudgedPayload,
   AgentRunConfiguredPayload,
   AgentThinkingParseFailedPayload,
+  AgentThinkingOmittedPayload,
   StreamThinkingDeltaPayload,
   StreamThinkingEndPayload,
   FallbackTriggeredPayload,
@@ -171,6 +172,7 @@ export const EVENT_NAMES = {
     groundingNudged: 'agentfootprint.agent.grounding_nudged',
     runConfigured: 'agentfootprint.agent.run_configured',
     thinkingParseFailed: 'agentfootprint.agent.thinking_parse_failed',
+    thinkingOmitted: 'agentfootprint.agent.thinking_omitted',
     budgetExhausted: 'agentfootprint.agent.budget_exhausted',
   },
   stream: {
@@ -418,6 +420,10 @@ export interface AgentfootprintEventMap {
   'agentfootprint.agent.thinking_parse_failed': AgentfootprintEventEnvelope<
     'agentfootprint.agent.thinking_parse_failed',
     AgentThinkingParseFailedPayload
+  >;
+  'agentfootprint.agent.thinking_omitted': AgentfootprintEventEnvelope<
+    'agentfootprint.agent.thinking_omitted',
+    AgentThinkingOmittedPayload
   >;
   'agentfootprint.agent.budget_exhausted': AgentfootprintEventEnvelope<
     'agentfootprint.agent.budget_exhausted',
@@ -884,6 +890,7 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.agent.grounding_nudged',
   'agentfootprint.agent.run_configured',
   'agentfootprint.agent.thinking_parse_failed',
+  'agentfootprint.agent.thinking_omitted',
   'agentfootprint.agent.budget_exhausted',
   'agentfootprint.stream.llm_start',
   'agentfootprint.stream.llm_end',

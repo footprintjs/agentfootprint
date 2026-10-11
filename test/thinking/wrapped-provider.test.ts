@@ -24,28 +24,33 @@ import { withFallback } from '../../src/resilience/withFallback.js';
 import { anthropicThinkingHandler } from '../../src/thinking/AnthropicThinkingHandler.js';
 import { thinkingHandlerFor } from '../../src/thinking/thinkingHandlerFor.js';
 import type { ThinkingHandler } from '../../src/thinking/types.js';
+import { UnsafeThinkingReplayError } from '../../src/thinking/replay.js';
 
 const SIG = 'sig-wrapped-provider-1';
 
 /** A stub SDK client: a signed thinking block + a tool call, then an answer. */
-function thinkingClient() {
+function thinkingClient(terminalOnly = false) {
   let n = 0;
   const reply = () => {
     n += 1;
-    const content =
-      n === 1
-        ? [
-            { type: 'thinking', thinking: 'look it up first', signature: SIG },
-            { type: 'tool_use', id: 'toolu_1', name: 'lookup', input: { key: 'k1' } },
-          ]
-        : [{ type: 'text', text: 'k1 is green.' }];
+    const content = terminalOnly
+      ? [
+          { type: 'thinking', thinking: 'already answered', signature: SIG },
+          { type: 'text', text: 'k1 is green.' },
+        ]
+      : n === 1
+      ? [
+          { type: 'thinking', thinking: 'look it up first', signature: SIG },
+          { type: 'tool_use', id: 'toolu_1', name: 'lookup', input: { key: 'k1' } },
+        ]
+      : [{ type: 'text', text: 'k1 is green.' }];
     return {
       id: `msg_${n}`,
       type: 'message',
       role: 'assistant',
       model: 'claude-haiku-4-5',
       content,
-      stop_reason: n === 1 ? 'tool_use' : 'end_turn',
+      stop_reason: !terminalOnly && n === 1 ? 'tool_use' : 'end_turn',
       usage: { input_tokens: 10, output_tokens: 5 },
     };
   };
@@ -172,7 +177,7 @@ describe('thinking handler — declared, so a wrapper keeps it', () => {
     );
   });
 
-  it('boundary: .thinkingHandler(null) still opts out of a declared handler', async () => {
+  it('boundary: .thinkingHandler(null) cannot replay an active turn whose blocks were discarded', async () => {
     const agent = Agent.create({
       provider: withRetry(anthropic({ _client: thinkingClient() })),
       model: 'claude-haiku-4-5',
@@ -182,9 +187,24 @@ describe('thinking handler — declared, so a wrapper keeps it', () => {
       .tool(lookup)
       .thinkingHandler(null)
       .build();
-    await agent.run({ message: 'What is k1?' });
+    await expect(agent.run({ message: 'What is k1?' })).rejects.toBeInstanceOf(
+      UnsafeThinkingReplayError,
+    );
     const history = (agent.getLastSnapshot()?.sharedState as { history?: readonly LLMMessage[] })
       ?.history;
     expect((history ?? []).some((m) => m.thinkingBlocks !== undefined)).toBe(false);
+  });
+
+  it('boundary: .thinkingHandler(null) still opts out for a terminal response', async () => {
+    const agent = Agent.create({
+      provider: withRetry(anthropic({ _client: thinkingClient(true) })),
+      model: 'claude-haiku-4-5',
+    })
+      .thinkingHandler(null)
+      .build();
+    expect(await agent.run({ message: 'What is k1?' })).toBe('k1 is green.');
+    expect(
+      agent.checkpoint()!.history.some((message) => message.thinkingBlocks !== undefined),
+    ).toBe(false);
   });
 });

@@ -86,7 +86,7 @@ describe('event registry — names + exhaustiveness', () => {
   // them by name. Completeness is proven by
   // `test/events/unit/emitted-events-are-registered.test.ts`, which derives
   // the emitted set from src/ instead of trusting a hand-maintained number.
-  it('ALL_EVENT_TYPES has exactly 123 entries (Tier 1+2+3 combined)', () => {
+  it('ALL_EVENT_TYPES has exactly 124 entries (Tier 1+2+3 combined)', () => {
     // 69 = 8 composition + 9 agent + 7 stream + 5 context + 4 memory
     //    + 6 tools + 3 skill (skill.rejected added with the read_skill gate)
     //    + 4 permission + 4 credential + 1 fallback
@@ -248,7 +248,9 @@ describe('event registry — names + exhaustiveness', () => {
     //     `.answerLayer()`: the answer's standing as data, once per answer —
     //     the value, its rendering, the reason kinds and the checks that ran.
     //     Never a value from the answer, a quote or a witness pointer.)
-    expect(ALL_EVENT_TYPES.length).toBe(123);
+    // +1 thinking_omitted: each permitted older thinking block removed before
+    // the selected adapter sends. Indices/reason only, no signed material.
+    expect(ALL_EVENT_TYPES.length).toBe(124);
   });
 
   it('every entry in ALL_EVENT_TYPES is a key of AgentfootprintEventMap', () => {

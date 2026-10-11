@@ -4,7 +4,7 @@ title: LLMRequest
 
 # Interface: LLMRequest
 
-Defined in: [src/adapters/types.ts:245](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L245)
+Defined in: [src/adapters/types.ts:247](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L247)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/adapters/types.ts:245](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **cacheMarkers?**: readonly `CacheMarker`[]
 
-Defined in: [src/adapters/types.ts:264](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L264)
+Defined in: [src/adapters/types.ts:266](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L266)
 
 Cache markers (v2.6+) — provider-agnostic prefix-cache hints
 populated by `CacheStrategy.prepareRequest` after the agent's
@@ -29,7 +29,7 @@ cache support (OpenAI auto-cache, Mock, NoOp) ignore it.
 
 > `readonly` `optional` **maxTokens?**: `number`
 
-Defined in: [src/adapters/types.ts:251](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L251)
+Defined in: [src/adapters/types.ts:253](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L253)
 
 ***
 
@@ -37,7 +37,7 @@ Defined in: [src/adapters/types.ts:251](https://github.com/footprintjs/agentfoot
 
 > `readonly` **messages**: readonly [`LLMMessage`](/docs/api/interfaces/LLMMessage)[]
 
-Defined in: [src/adapters/types.ts:247](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L247)
+Defined in: [src/adapters/types.ts:249](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L249)
 
 ***
 
@@ -45,7 +45,7 @@ Defined in: [src/adapters/types.ts:247](https://github.com/footprintjs/agentfoot
 
 > `readonly` **model**: `string`
 
-Defined in: [src/adapters/types.ts:249](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L249)
+Defined in: [src/adapters/types.ts:251](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L251)
 
 ***
 
@@ -53,7 +53,7 @@ Defined in: [src/adapters/types.ts:249](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **signal?**: `AbortSignal`
 
-Defined in: [src/adapters/types.ts:253](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L253)
+Defined in: [src/adapters/types.ts:255](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L255)
 
 ***
 
@@ -61,7 +61,7 @@ Defined in: [src/adapters/types.ts:253](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **stop?**: readonly `string`[]
 
-Defined in: [src/adapters/types.ts:252](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L252)
+Defined in: [src/adapters/types.ts:254](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L254)
 
 ***
 
@@ -69,7 +69,7 @@ Defined in: [src/adapters/types.ts:252](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **systemPrompt?**: `string`
 
-Defined in: [src/adapters/types.ts:246](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L246)
+Defined in: [src/adapters/types.ts:248](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L248)
 
 ***
 
@@ -77,7 +77,7 @@ Defined in: [src/adapters/types.ts:246](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **temperature?**: `number`
 
-Defined in: [src/adapters/types.ts:250](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L250)
+Defined in: [src/adapters/types.ts:252](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L252)
 
 ***
 
@@ -85,7 +85,7 @@ Defined in: [src/adapters/types.ts:250](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **thinking?**: `object`
 
-Defined in: [src/adapters/types.ts:292](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L292)
+Defined in: [src/adapters/types.ts:294](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L294)
 
 v2.14 — request the LLM emit reasoning/thinking content on this call.
 
@@ -123,7 +123,7 @@ LLM call the agent makes. Leave undefined to call without thinking
 
 > `readonly` `optional` **toolChoice?**: `object`
 
-Defined in: [src/adapters/types.ts:313](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L313)
+Defined in: [src/adapters/types.ts:317](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L317)
 
 v7.26 — force the model to answer through one named tool.
 
@@ -136,11 +136,13 @@ Anthropic spells it `{type:'tool',name}`, OpenAI
 `toolConfig.toolChoice.tool.name` — the field is the one word all three
 agree on, and each adapter writes its own dialect.
 
-A provider that does not declare [LLMProvider.carriesForcedToolChoice](/docs/api/interfaces/LLMProvider#carriesforcedtoolchoice)
-never receives this field: the agent refuses at run start instead,
-naming the provider. Silently sending it to a wire that ignores it would
-turn a guarantee into a suggestion with nothing in the recording to say
-so.
+If `forcedToolChoiceFor(provider, model)` answers false, the agent never
+sends this field: it refuses at
+run start instead, naming the provider and the model. Silently sending it
+to a wire that ignores it would turn a guarantee into a suggestion with
+nothing in the recording to say so — and a model that rejects it (Claude
+Opus 5.5, Sonnet 5.5, Fable 5.1, Mythos 5.1) is refused by the Anthropic
+adapters before sending, with an `UnsupportedToolChoiceError`.
 
 #### name
 
@@ -156,4 +158,4 @@ so.
 
 > `readonly` `optional` **tools?**: readonly [`LLMToolSchema`](/docs/api/interfaces/LLMToolSchema)[]
 
-Defined in: [src/adapters/types.ts:248](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L248)
+Defined in: [src/adapters/types.ts:250](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L250)

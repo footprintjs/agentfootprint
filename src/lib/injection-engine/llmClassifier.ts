@@ -5,8 +5,8 @@
  *
  * **Constrained enum, never free text.** The pick runs through
  * {@link constrainedEnumPick} (extracted from this module in 9.19.0 so the
- * tier-3 decider shares the same discipline): on a provider that declares
- * `carriesForcedToolChoice` it rides a forced synthetic tool whose single
+ * tier-3 decider shares the same discipline): when the provider declares
+ * forced-tool support for that model it rides a forced synthetic tool whose single
  * argument is `enum: [...candidateIds, 'none']` (the same machinery the
  * `'tool-forced'` output strategy uses); on any other provider it is a
  * strict single-line parse validated against the enum, ONE structured

@@ -38,6 +38,14 @@ One file per stage of the Agent chart, mounted by `buildAgentChart` /
 
 ## Tool-result wiring (9.16.0)
 
+Assistant messages carry replay evidence at their existing writers, through
+`../assistantReplay.ts`: `toolCalls`, `outputRetry`, `stepNudge` and
+`prepareFinal`. The latter keeps the accepted text, even when output policy
+edited it; it never restores raw text to make a signature match. `callLLM`
+stamps only the current response's evidence and clears stale raw thinking and
+replay on later responses that omit them. A draft that a branch never placed
+in history (`evidenceRecheck`, `wrapUp`) is not added merely to retain metadata.
+
 `toolCalls` maintains TWO scope keys as each result lands (collect during
 traversal — a pause mid-batch commits the partial batch, resume paths append):
 

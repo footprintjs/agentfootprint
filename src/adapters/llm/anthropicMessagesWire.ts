@@ -22,11 +22,17 @@
  * {@link assembleAnthropicStream}.
  */
 
-import type { LLMChunk, LLMMessage, LLMRequest, LLMResponse, LLMToolSchema } from '../types.js';
+import type { LLMChunk, LLMRequest, LLMResponse } from '../types.js';
 import { applyCacheMarkers, readCacheUsage } from './anthropicCacheWire.js';
+import { anthropicTakesForcedToolChoice } from './anthropicModels.js';
+import { UnsupportedToolChoiceError } from '../forcedToolChoice.js';
 import { anthropicThinkingPlan, type AnthropicThinkingParam } from './anthropicThinkingWire.js';
 import type { WireToolManifest } from './wireManifest.js';
 import type { ThinkingMode } from '../../thinking/types.js';
+import type { MessageReplay, ThinkingReplayOmission } from '../../thinking/replay.js';
+import { captureAnthropicResponseReplay, lossyAnthropicReplay } from './anthropicReplayLayout.js';
+import { toAnthropicMessages, toAnthropicTool } from './anthropicMessageProjection.js';
+export { toAnthropicMessages, toAnthropicTool } from './anthropicMessageProjection.js';
 
 // ─── Types (Anthropic API shapes) ──────────────────────────────────
 
@@ -125,6 +131,15 @@ export function buildMessagesBody(
   // The thinking shape THIS model takes, and the `max_tokens` it needs (kept
   // above the budget). Undefined when the request does not ask to think.
   const thinking = anthropicThinkingPlan(req, options);
+  // This wire sends a forced choice only when tools are present. Resolve the
+  // same model facts the adapter declares, before any request reaches transport.
+  if (
+    req.toolChoice !== undefined &&
+    (req.tools?.length ?? 0) > 0 &&
+    !anthropicTakesForcedToolChoice(options.model)
+  ) {
+    throw new UnsupportedToolChoiceError({ provider: options.provider, model: options.model });
+  }
   // The map is only needed when a messages marker has to be placed; building
   // it always keeps the transform single-pass and costs one number per message.
   const messageIndexMap: number[] = [];
@@ -161,111 +176,12 @@ export function buildMessagesBody(
   return body;
 }
 
-/**
- * Framework messages → Anthropic messages.
- *
- * `role: 'system'` is DROPPED: this wire takes the system prompt as a separate
- * top-level field (`LLMRequest.systemPrompt`). That is why every adapter on it
- * carries only `['user', 'assistant']` in messages. A `role: 'tool'` result
- * becomes a `tool_result` block on a user turn, coalesced with the results of
- * the same batch. An `assistant` turn with no thinking blocks, no text and no
- * tool calls is DROPPED too — the API refuses empty content anywhere but a
- * final prefill.
- *
- * ONE owner: `anthropic()`, `browserAnthropic()` and `invokeModelGateway()`
- * all build their messages here.
- */
-export function toAnthropicMessages(
-  messages: readonly LLMMessage[],
-  indexMap?: number[],
-): AnthropicMessageParam[] {
-  const result: AnthropicMessageParam[] = [];
-  for (const m of messages) {
-    if (m.role === 'system') {
-      indexMap?.push(-1);
-      continue;
-    }
-    if (m.role === 'user') {
-      indexMap?.push(result.length);
-      result.push({ role: 'user', content: m.content });
-      continue;
-    }
-    if (m.role === 'assistant') {
-      const blocks: AnthropicContentBlock[] = [];
-      // v2.14 — thinking blocks come FIRST per Anthropic's wire format
-      // ordering rule. Out-of-order = HTTP 400. Signature passes through
-      // BYTE-EXACT — no String() coercion, no JSON-roundtrip, no trim.
-      if (m.thinkingBlocks && m.thinkingBlocks.length > 0) {
-        for (const tb of m.thinkingBlocks) {
-          if (tb.type === 'redacted_thinking') {
-            // The encrypted payload rides `signature` on the normalized
-            // block (the handler puts it there); Anthropic takes it as `data`.
-            blocks.push({ type: 'redacted_thinking', data: tb.signature ?? '' });
-          } else {
-            blocks.push({
-              type: 'thinking',
-              thinking: tb.content,
-              ...(tb.signature !== undefined && { signature: tb.signature }),
-            });
-          }
-        }
-      }
-      if (m.content) blocks.push({ type: 'text', text: m.content });
-      if (m.toolCalls) {
-        for (const tc of m.toolCalls) {
-          blocks.push({ type: 'tool_use', id: tc.id, name: tc.name, input: { ...tc.args } });
-        }
-      }
-      // A turn with no thinking, no text and no tool calls has nothing to
-      // say, and the wire refuses it: `content: ''` is accepted only on a
-      // FINAL assistant message (a prefill), so one mid-history fails the
-      // whole request with a 400 that no retry can mend. Dropped like a
-      // system message (`-1` — a cache marker cannot land on it). The turns
-      // either side may now share a role; the Messages API combines
-      // consecutive same-role turns, and a dropped system message has always
-      // left the same adjacency. The library sends no prefill, and an empty
-      // one would prefill nothing.
-      if (blocks.length === 0) {
-        indexMap?.push(-1);
-        continue;
-      }
-      indexMap?.push(result.length);
-      result.push({ role: 'assistant', content: blocks });
-      continue;
-    }
-    if (m.role === 'tool') {
-      const block: AnthropicContentBlock = {
-        type: 'tool_result',
-        tool_use_id: m.toolCallId ?? '',
-        content: m.content,
-      };
-      const last = result[result.length - 1];
-      if (last && last.role === 'user' && Array.isArray(last.content)) {
-        // Coalesced into the user turn already open — several request messages
-        // share one body index.
-        indexMap?.push(result.length - 1);
-        last.content.push(block);
-      } else {
-        indexMap?.push(result.length);
-        result.push({ role: 'user', content: [block] });
-      }
-      continue;
-    }
-  }
-  return result;
-}
-
-export function toAnthropicTool(schema: LLMToolSchema): AnthropicTool {
-  return {
-    name: schema.name,
-    description: schema.description,
-    input_schema: { ...schema.inputSchema },
-  };
-}
-
 // ─── Response ───────────────────────────────────────────────────────
 
-export function fromAnthropicResponse(message: AnthropicMessage): LLMResponse {
+export function fromAnthropicResponse(
+  message: AnthropicMessage,
+  binding?: MessageReplay['binding'],
+): LLMResponse {
   const textParts: string[] = [];
   const toolCalls: { id: string; name: string; args: Record<string, unknown> }[] = [];
   // v2.14 — detect thinking presence so we can pass the full content
@@ -280,6 +196,19 @@ export function fromAnthropicResponse(message: AnthropicMessage): LLMResponse {
       hasThinking = true;
     }
   }
+  // A server-side router can serve a different model. The request hashes were
+  // captured before I/O, but only the returned model identifies their origin.
+  const actualModel = typeof message.model === 'string' ? message.model : '';
+  const originBinding =
+    binding === undefined || binding.model === actualModel
+      ? binding
+      : { ...binding, model: actualModel };
+  const replay = captureAnthropicResponseReplay(
+    message.content,
+    message.id,
+    message.stop_reason,
+    originBinding,
+  );
   return {
     content: textParts.join(''),
     toolCalls,
@@ -291,10 +220,11 @@ export function fromAnthropicResponse(message: AnthropicMessage): LLMResponse {
       ...readCacheUsage(message.usage),
     },
     stopReason: normalizeStopReason(message.stop_reason),
-    providerRef: message.id,
+    ...(message.id && { providerRef: message.id }),
     // Pass the FULL content array — handler filters by type. Undefined
     // when no thinking present so the subflow's early-return kicks in.
     ...(hasThinking && { rawThinking: message.content }),
+    ...(replay !== undefined && { replay }),
   };
 }
 
@@ -323,6 +253,10 @@ export interface MalformedToolArgs {
 }
 
 export interface StreamAssemblyOptions {
+  /** Capture binding from the actual sent body once the response identity is known. */
+  readonly bindingFactory?: (id: string) => MessageReplay['binding'];
+  /** Omissions already reported by the leaf before this attempt was sent. */
+  readonly replayOmissions?: readonly ThinkingReplayOmission[];
   /** Read off the request body that was sent — see wireManifest.ts. */
   readonly wireManifest: WireToolManifest;
   /**
@@ -331,6 +265,10 @@ export interface StreamAssemblyOptions {
    * the gateway adapter refuses rather than run a tool with its arguments lost.
    */
   readonly onMalformedToolArgs: (call: MalformedToolArgs) => Record<string, unknown>;
+}
+
+function isBlockIndex(index: unknown): index is number {
+  return typeof index === 'number' && Number.isSafeInteger(index) && index >= 0;
 }
 
 /**
@@ -350,39 +288,31 @@ export async function* assembleAnthropicStream(
   options: StreamAssemblyOptions,
 ): AsyncIterable<LLMChunk> {
   let tokenIndex = 0;
-  const accumulatedText: string[] = [];
-  // Tool-use blocks arrive in two waves: `content_block_start` carries
-  // {id, name, input: {}} (input is ALWAYS empty there), then a series
-  // of `content_block_delta` events with `delta.type === 'input_json_delta'`
-  // ship the JSON args as string fragments, parsed at `content_block_stop`.
-  const toolUseByIndex = new Map<number, { id: string; name: string; partialJson: string[] }>();
-  const completedToolUses: Array<{ id: string; name: string; input: Record<string, unknown> }> = [];
-  // v2.14 — thinking blocks arrive across several events (start, thinking_delta,
-  // signature_delta, stop). Accumulated per index; ORDER preserved.
-  const thinkingByIndex = new Map<
-    number,
-    { type: 'thinking' | 'redacted_thinking'; thinking: string[]; signature: string[] }
-  >();
-  const completedThinking: Array<
-    | { type: 'thinking'; thinking: string; signature?: string }
-    | { type: 'redacted_thinking'; data: string }
-  > = [];
-  // Usage rides two places: message_start (input first) and message_delta
-  // (running output). message_stop carries none.
-  let messageId: string | undefined;
+  // ONE source of response order, shared across text, thinking and tool blocks.
+  // A block completing early never moves it before an earlier response index.
+  const contentByIndex = new Map<number, AnthropicContentBlock>();
+  const openBlocks = new Set<number>();
+  const toolJson = new Map<number, string[]>();
+  const textParts = new Map<number, string[]>();
+  const thinkingParts = new Map<number, string[]>();
+  const signatureParts = new Map<number, string[]>();
+  const receivedText: string[] = [];
+  let hasUnindexedText = false;
+  let messageId = '';
+  let model = '';
   let stopReason: string | undefined;
-  let inputTokens = 0;
-  let outputTokens = 0;
-  let cacheUsage: { cacheRead?: number; cacheWrite?: number } = {};
+  let sawMessageStop = false;
+  let usage: AnthropicMessage['usage'] = { input_tokens: 0, output_tokens: 0 };
+  let completeLayout = true;
+  let observedThinking = false;
 
   for await (const event of events) {
     if (event.event === 'message_start') {
       const msg = (event.data as { message?: AnthropicMessage }).message;
       if (msg) {
-        messageId = msg.id;
-        inputTokens = msg.usage?.input_tokens ?? 0;
-        outputTokens = msg.usage?.output_tokens ?? 0;
-        cacheUsage = readCacheUsage(msg.usage);
+        messageId = msg.id ?? '';
+        model = msg.model ?? '';
+        usage = { ...usage, ...msg.usage };
       }
     } else if (event.event === 'message_delta') {
       const data = event.data as {
@@ -390,28 +320,25 @@ export async function* assembleAnthropicStream(
         usage?: { input_tokens?: number; output_tokens?: number };
       };
       if (data.delta?.stop_reason) stopReason = data.delta.stop_reason;
-      if (data.usage?.output_tokens !== undefined) outputTokens = data.usage.output_tokens;
-      if (data.usage?.input_tokens !== undefined) inputTokens = data.usage.input_tokens;
+      usage = { ...usage, ...data.usage };
     } else if (event.event === 'content_block_start') {
       const data = event.data as { index?: number; content_block?: AnthropicContentBlock };
       const block = data.content_block;
-      if (block?.type === 'tool_use' && typeof data.index === 'number') {
-        toolUseByIndex.set(data.index, { id: block.id, name: block.name, partialJson: [] });
-      } else if (
-        (block?.type === 'thinking' || block?.type === 'redacted_thinking') &&
-        typeof data.index === 'number'
-      ) {
-        thinkingByIndex.set(data.index, {
-          type: block.type,
-          thinking: [],
-          // A redacted block arrives whole in its start event: its `data`.
-          signature:
-            block.type === 'redacted_thinking'
-              ? [block.data]
-              : block.signature !== undefined
-              ? [block.signature]
-              : [],
-        });
+      const index = data.index;
+      if (block?.type === 'thinking' || block?.type === 'redacted_thinking')
+        observedThinking = true;
+      if (!isBlockIndex(index) || !block) {
+        completeLayout = false;
+        continue;
+      }
+      if (contentByIndex.has(index)) completeLayout = false;
+      contentByIndex.set(index, { ...block });
+      openBlocks.add(index);
+      if (block.type === 'tool_use') toolJson.set(index, []);
+      if (block.type === 'text') textParts.set(index, [block.text]);
+      if (block.type === 'thinking') {
+        thinkingParts.set(index, [block.thinking]);
+        signatureParts.set(index, block.signature === undefined ? [] : [block.signature]);
       }
     } else if (event.event === 'content_block_delta') {
       const data = event.data as {
@@ -425,84 +352,132 @@ export async function* assembleAnthropicStream(
         };
       };
       const delta = data.delta;
-      if (delta?.type === 'text_delta' && delta.text) {
-        accumulatedText.push(delta.text);
-        yield { tokenIndex, content: delta.text, done: false };
-        tokenIndex++;
-      } else if (
-        delta?.type === 'input_json_delta' &&
-        typeof data.index === 'number' &&
-        typeof delta.partial_json === 'string'
-      ) {
-        const tu = toolUseByIndex.get(data.index);
-        if (tu) tu.partialJson.push(delta.partial_json);
-      } else if (
-        delta?.type === 'thinking_delta' &&
-        typeof data.index === 'number' &&
-        typeof delta.thinking === 'string'
-      ) {
-        const t = thinkingByIndex.get(data.index);
-        if (t) t.thinking.push(delta.thinking);
-      } else if (
-        delta?.type === 'signature_delta' &&
-        typeof data.index === 'number' &&
-        typeof delta.signature === 'string'
-      ) {
-        const t = thinkingByIndex.get(data.index);
-        if (t) t.signature.push(delta.signature);
-      }
+      if (delta?.type === 'thinking_delta' || delta?.type === 'signature_delta')
+        observedThinking = true;
+      const index = data.index;
+      const validIndex = isBlockIndex(index);
+      if (!validIndex) completeLayout = false;
+      const block = validIndex ? contentByIndex.get(index) : undefined;
+      if (delta?.type === 'text_delta' && typeof delta.text === 'string') {
+        receivedText.push(delta.text);
+        if (!validIndex) hasUnindexedText = true;
+        if (validIndex) {
+          if (block?.type === 'text') {
+            textParts.get(index)?.push(delta.text);
+          } else if (block === undefined) {
+            // Legacy event fixtures omit the start. Keep their text, but never
+            // claim that an incomplete event sequence proved full fidelity.
+            contentByIndex.set(index, { type: 'text', text: delta.text });
+            textParts.set(index, [delta.text]);
+            completeLayout = false;
+          } else completeLayout = false;
+        }
+        if (delta.text.length > 0) {
+          yield { tokenIndex, content: delta.text, done: false };
+          tokenIndex++;
+        }
+      } else if (delta?.type === 'input_json_delta' && typeof delta.partial_json === 'string') {
+        const parts = validIndex ? toolJson.get(index) : undefined;
+        if (parts) parts.push(delta.partial_json);
+        else completeLayout = false;
+      } else if (delta?.type === 'thinking_delta' && typeof delta.thinking === 'string') {
+        if (validIndex && block?.type === 'thinking') {
+          thinkingParts.get(index)?.push(delta.thinking);
+        } else completeLayout = false;
+      } else if (delta?.type === 'signature_delta' && typeof delta.signature === 'string') {
+        if (validIndex && block?.type === 'thinking') {
+          signatureParts.get(index)?.push(delta.signature);
+        } else completeLayout = false;
+      } else completeLayout = false;
     } else if (event.event === 'content_block_stop') {
       const data = event.data as { index?: number };
-      if (typeof data.index === 'number') {
-        const tu = toolUseByIndex.get(data.index);
-        if (tu) {
-          const joined = tu.partialJson.join('');
-          // Empty partial_json is valid — a tool called with no arguments.
-          let parsed: Record<string, unknown> = {};
-          if (joined.length > 0) {
-            try {
-              parsed = JSON.parse(joined) as Record<string, unknown>;
-            } catch {
-              parsed = options.onMalformedToolArgs({
-                id: tu.id,
-                name: tu.name,
-                index: data.index,
-                raw: joined,
-              });
-            }
-          }
-          completedToolUses.push({ id: tu.id, name: tu.name, input: parsed });
-          toolUseByIndex.delete(data.index);
-        }
-        const t = thinkingByIndex.get(data.index);
-        if (t) {
-          const thinkingText = t.thinking.join('');
-          const signature = t.signature.join('');
-          if (t.type === 'redacted_thinking') {
-            completedThinking.push({ type: 'redacted_thinking', data: signature });
-          } else {
-            completedThinking.push({
-              type: 'thinking',
-              thinking: thinkingText,
-              ...(signature.length > 0 && { signature }),
+      const index = data.index;
+      if (!isBlockIndex(index)) {
+        completeLayout = false;
+        continue;
+      }
+      if (!openBlocks.delete(index)) completeLayout = false;
+      const block = contentByIndex.get(index);
+      const parts = toolJson.get(index);
+      if (block?.type === 'tool_use' && parts) {
+        const joined = parts.join('');
+        let input = block.input;
+        if (joined.length > 0) {
+          try {
+            input = JSON.parse(joined) as Record<string, unknown>;
+          } catch {
+            // The fallback may be a supported transport compatibility policy,
+            // but its substituted arguments are NOT an exact original response.
+            completeLayout = false;
+            input = options.onMalformedToolArgs({
+              id: block.id,
+              name: block.name,
+              index,
+              raw: joined,
             });
           }
-          thinkingByIndex.delete(data.index);
         }
+        contentByIndex.set(index, { ...block, input });
+        toolJson.delete(index);
       }
+    } else if (event.event === 'message_stop') {
+      sawMessageStop = true;
     }
   }
 
-  const response: LLMResponse = {
-    content: accumulatedText.join(''),
-    toolCalls: completedToolUses.map((t) => ({ id: t.id, name: t.name, args: t.input })),
-    usage: { input: inputTokens, output: outputTokens, ...cacheUsage },
-    stopReason: normalizeStopReason(stopReason ?? 'stop'),
-    ...(messageId && { providerRef: messageId }),
-    // v2.14 — thinking blocks pass through as `rawThinking` for the
-    // framework's NormalizeThinking subflow. Same shape as complete().
-    ...(completedThinking.length > 0 && { rawThinking: completedThinking }),
-    wireManifest: options.wireManifest,
+  const entries = [...contentByIndex.entries()].sort(([a], [b]) => a - b);
+  if (
+    openBlocks.size > 0 ||
+    stopReason === undefined ||
+    !sawMessageStop ||
+    entries.some(([index], position) => index !== position)
+  )
+    completeLayout = false;
+  const binding = messageId ? options.bindingFactory?.(messageId) : undefined;
+  const response = fromAnthropicResponse(
+    {
+      id: messageId,
+      model,
+      role: 'assistant',
+      content: entries.map(([index, block]) => {
+        if (block.type === 'text')
+          return { ...block, text: textParts.get(index)?.join('') ?? block.text };
+        if (block.type === 'thinking') {
+          const signatures = signatureParts.get(index) ?? [];
+          return {
+            ...block,
+            thinking: thinkingParts.get(index)?.join('') ?? block.thinking,
+            ...(signatures.length > 0 && { signature: signatures.join('') }),
+          };
+        }
+        return block;
+      }),
+      stop_reason: stopReason ?? 'stop',
+      usage,
+    },
+    binding,
+  );
+  // Interrupted/malformed content is durable negative evidence, not unknown
+  // caller history. Only a witnessed terminal event may certify completion.
+  if (!completeLayout)
+    (response as { replay?: MessageReplay }).replay = lossyAnthropicReplay(
+      entries.map(([, block]) => block),
+      messageId,
+      sawMessageStop ? stopReason ?? '' : '',
+      response.replay?.binding,
+      observedThinking,
+    );
+  // Preserve the old text-only compatibility behavior for incomplete custom
+  // stream transports, without certifying any order they did not provide.
+  if (hasUnindexedText) (response as { content: string }).content = receivedText.join('');
+  yield {
+    tokenIndex,
+    content: '',
+    done: true,
+    response: {
+      ...response,
+      wireManifest: options.wireManifest,
+      ...(options.replayOmissions?.length && { replayOmissions: options.replayOmissions }),
+    },
   };
-  yield { tokenIndex, content: '', done: true, response };
 }

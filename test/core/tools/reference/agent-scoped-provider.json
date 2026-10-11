@@ -2175,7 +2175,7 @@
               "params"
             ],
             "gap": "provider-defaults",
-            "why": "A dial absent below was not recorded; that is not the same as the model running without one. A receipt describes the request as this library last saw it. Whatever handled it after that could have changed it, and nothing on the receipt would show that."
+            "why": "A dial absent below was not recorded; that is not the same as the model running without one. A receipt describes the request as this library last saw it. Whatever handled it after that could have changed it; notes about later preparation do not prove what was sent or accepted."
           }
         ],
         "messages": {
@@ -2262,7 +2262,7 @@
               "params"
             ],
             "gap": "provider-defaults",
-            "why": "A dial absent below was not recorded; that is not the same as the model running without one. A receipt describes the request as this library last saw it. Whatever handled it after that could have changed it, and nothing on the receipt would show that."
+            "why": "A dial absent below was not recorded; that is not the same as the model running without one. A receipt describes the request as this library last saw it. Whatever handled it after that could have changed it; notes about later preparation do not prove what was sent or accepted."
           }
         ],
         "messages": {
@@ -2366,7 +2366,7 @@
               "params"
             ],
             "gap": "provider-defaults",
-            "why": "A dial absent below was not recorded; that is not the same as the model running without one. A receipt describes the request as this library last saw it. Whatever handled it after that could have changed it, and nothing on the receipt would show that."
+            "why": "A dial absent below was not recorded; that is not the same as the model running without one. A receipt describes the request as this library last saw it. Whatever handled it after that could have changed it; notes about later preparation do not prove what was sent or accepted."
           }
         ],
         "messages": {
@@ -2503,7 +2503,7 @@
               "params"
             ],
             "gap": "provider-defaults",
-            "why": "A dial absent below was not recorded; that is not the same as the model running without one. A receipt describes the request as this library last saw it. Whatever handled it after that could have changed it, and nothing on the receipt would show that."
+            "why": "A dial absent below was not recorded; that is not the same as the model running without one. A receipt describes the request as this library last saw it. Whatever handled it after that could have changed it; notes about later preparation do not prove what was sent or accepted."
           }
         ],
         "messages": {

@@ -63,7 +63,7 @@ Trace (provider 500s at iteration 3): iterations 1-2 emit iteration_end → trac
 | error caught | checkpoint: runId, history, lastCompletedIteration, originalInput, failurePoint | — | mid-iteration partial state |
 | resumeOnError | — | ONLY conversation history + original message | iteration counter (re-seeds 1), token/cost accumulators, runId, recorder state, failed iteration's tool side effects |
 
-Invariant: iteration boundaries are atomic — iteration_end's history fully encodes progress, so REPLAY ≡ continue. Explicitly NOT exact-state restore (Agent.ts:678-695).
+Invariant: iteration boundaries encode progress. The checkpoint owner also retains explicit prepared thinking-retirement patches before transport, even when a later request fails inside a grouped child stage. `checkpointReplayHistory` applies only those approved thinking edits to both checkpoint histories through the shared identity rule; it never adopts failed-stage tool results, output or iteration state. Explicitly NOT exact-state restore (Agent.ts:678-695).
 Breaks when: a non-idempotent tool (payment, send-email) ran inside the FAILED iteration — resume re-issues it and it executes AGAIN (no toolCallId dedup, runCheckpoint.ts:37-49). Also interleaving resumeOnError with a concurrent run() — pendingResumeHistory is one instance field, consumed by whichever seed runs first.
 
 ```
@@ -94,19 +94,20 @@ Files: `stages/reliabilityExecution.ts:130-559` `executeWithReliability` (MAX_LO
 | fail-fast | scope.reliabilityFail* + `$break(reason)` (:217-239) | — | — |
 
 Invariant: retry state stays CLOSURE-LOCAL, never scope — commits across the ReAct loop must not include attempt counters (:35-43). The trace shows one stage that "internally retried N times".
-Breaks when: **`retry-other` never actually switches providers** — callFn closes over the default provider; providerIdx only feeds telemetry/breaker keys (documented bug :503-511). A failover list + retry-other rule silently re-calls the same provider. Also any mid-stream failure after the first chunk escalates retry→fail-fast (:419-425).
+The selected-provider correction passes the actual provider/model into callFn: `retry-other` switches transport, not only bookkeeping. The same response-side selection routes thinking normalization and attributes cost/wire provenance. Request-contract refusals escape before post-rules or breaker failure accounting. A per-call replay carrier retains only leaf-approved thinking retirements while feedback remains ephemeral.
+Breaks when: a mid-stream failure occurs after the first chunk — retry/fallback still escalates to fail-fast; no provider switch may duplicate already-shown output.
 
 ```
 loop up to 50:
-  if breaker rejects: errorKind='circuit-open' else try callFn(mutableRequest) catch → classify; attempt++
+  if breaker rejects: errorKind='circuit-open' else try callFn(currentRequest, selectedProvider) catch → refuse terminal request error or classify; attempt++
   branch = evalRules(postDecide) or default
   if firstChunkSeen && branch not in {ok,fail-fast}: fail-fast('mid-stream-not-retryable')
-  ok→return | retry→maybe append ephemeral feedback; continue | retry-other→providerIdx++ (telemetry-only!) 
+  ok→return | retry→maybe append ephemeral feedback; continue | retry-other→providerIdx++ (next actual transport/model)
   fallback→fallbackFn(request, err) | fail-fast→scope.reliabilityFail*; $break(); return undefined
 ```
 
 ## M4 — Chart-level reliability gate (**UNMOUNTED**)
-`reliability/buildReliabilityGateChart.ts:147-457`: Init → PreCheck → CallProvider → PostDecide → `loopTo('pre-check')` (:455); retry state in SCOPE, round-tripping via `args.incomingBreakerStates` (:415-421). **Not exported, not mounted in any production path — editing it changes nothing in the agent's runtime today (test/reliability/gate-chart-7pattern.test.ts does import and execute it, so edits are still test-covered).** Its per-retry stage tracing is the intended fix for M3's retry-other bug. Invariant: all mutable gate state must be structured-clone-safe scope; providers/rules stay in the factory closure. Breaks when: a provider function is put into scope → structuredClone throws.
+`reliability/buildReliabilityGateChart.ts:147-457`: Init → PreCheck → CallProvider → PostDecide → `loopTo('pre-check')` (:455); retry state in SCOPE, round-tripping via `args.incomingBreakerStates` (:415-421). **Not exported, not mounted in any production path — editing it changes nothing in the agent's runtime today (test/reliability/gate-chart-7pattern.test.ts does import and execute it, so edits are still test-covered).** Its separate per-retry stage tracing is not the live M3 failover implementation; the inline selected-provider seam now owns that correction. Invariant: all mutable gate state must be structured-clone-safe scope; providers/rules stay in the factory closure. Breaks when: a provider function is put into scope → structuredClone throws.
 
 ## M4b — Transport retry decorators (stateless fixed-point)
 `resilience/withRetry.ts:61-99` (complete() only; stream() passes through UN-retried :91-97; defaultShouldRetry skips AbortError + 4xx-except-429 :116-126) · `identity/withCredentialRetry.ts:67-102` (only THROWN errors retry; result branches return immediately). Nothing saved/restored. Breaks when: the wrapped call has per-attempt side effects (billing) — retries multiply them.

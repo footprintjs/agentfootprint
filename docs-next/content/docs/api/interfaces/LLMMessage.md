@@ -20,7 +20,7 @@ Defined in: [src/adapters/types.ts:22](https://github.com/footprintjs/agentfootp
 
 > `readonly` `optional` **ephemeral?**: `boolean`
 
-Defined in: [src/adapters/types.ts:90](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L90)
+Defined in: [src/adapters/types.ts:92](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L92)
 
 v2.13 — PERSISTENCE flag (NOT a visibility flag). When `true`:
   • The message IS sent to the LLM as part of the next request
@@ -50,7 +50,7 @@ audit-invisible prompts.
 
 > `readonly` `optional` **foldedExempt?**: readonly `string`[]
 
-Defined in: [src/adapters/types.ts:217](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L217)
+Defined in: [src/adapters/types.ts:219](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L219)
 
 THE EXEMPTION LINEAGE OF A FOLD — on a compaction summary frame
 (`core/agent/window/summarize.ts` · `buildSummaryMessage`), the lookup
@@ -79,7 +79,7 @@ existed) exempts nothing. Absent when the fold carried no exempt value.
 
 > `readonly` `optional` **injectedBy?**: `object`
 
-Defined in: [src/adapters/types.ts:110](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L110)
+Defined in: [src/adapters/types.ts:112](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L112)
 
 v7.21 — WHO let this message into the window.
 
@@ -129,7 +129,7 @@ The injection's description, when it had one.
 
 > `readonly` `optional` **notDispatched?**: `object`
 
-Defined in: [src/adapters/types.ts:162](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L162)
+Defined in: [src/adapters/types.ts:164](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L164)
 
 9.113.0 — this `role: 'tool'` message answers a call that was NEVER
 DISPATCHED. The library wrote it; no gate judged the call and no tool ran.
@@ -185,6 +185,16 @@ The call in the same batch the run paused on — the one the sentence names.
 ##### pausedCall.toolName
 
 > `readonly` **toolName**: `string`
+
+***
+
+### replay?
+
+> `readonly` `optional` **replay?**: `MessageReplay`
+
+Defined in: [src/adapters/types.ts:68](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L68)
+
+Replay layout and local consistency evidence (including known loss); JSON/checkpoint safe.
 
 ***
 
@@ -257,7 +267,7 @@ is NOT stripped on the way to a provider: it exists to be sent.
 
 > `readonly` `optional` **toolChars?**: `number`
 
-Defined in: [src/adapters/types.ts:194](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L194)
+Defined in: [src/adapters/types.ts:196](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L196)
 
 THE TOOL-BYTES BOUNDARY (honesty layer 2) — on a `role: 'tool'` message
 whose `content` the library annotated with a note that carries a VALUE

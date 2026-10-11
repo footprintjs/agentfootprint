@@ -242,6 +242,7 @@ export interface ServedRequestOnly {
 /** The kinds of thing this view cannot prove. */
 export type ServedGapKind =
   | 'cache-transform'
+  | 'thinking-replay'
   | 'forced-tool-schema'
   | 'provider-defaults'
   | 'no-fold-base'
@@ -388,6 +389,12 @@ export interface ServedGap {
  * sentence rather than invent one.
  */
 export const SERVED_GAPS: Readonly<Record<ServedGapKind, Omit<ServedGap, 'gap'>>> = Object.freeze({
+  'thinking-replay': Object.freeze({
+    // The leaf reports preparation, not successful transport. Port hashes
+    // remain valid; they must not be presented as the downstream wire body.
+    fields: Object.freeze(['messages.entries', 'requestMeasurement']),
+    why: 'Saved thinking was omitted after the request shown here was prepared. The messages and size shown are before that omission, not proof of what was sent or accepted.',
+  }),
   'cache-transform': Object.freeze({
     // MECHANISM (not printed — see the header's rule). A `CacheStrategy`'s
     // `prepareRequest` is handed the whole composed request after assembly and
@@ -636,6 +643,8 @@ export const SERVED_GAPS: Readonly<Record<ServedGapKind, Omit<ServedGap, 'gap'>>
     // itself omit the optional field, and an attempted measurement may say
     // `unavailable`; receiptAt preserves those states, never zero counts.
     // Neither state means the receipt is missing or changes this gap's cause.
+    // The same applies to replayPreparations: downstream preparation was
+    // observed only when the enabled receipt carries its annotation.
     //
     // AND THE SEVENTH ROUND SCOPED THE PRINTED CLAIM TO THE LEVEL IT HOLDS AT.
     // It said the absence of these fields is "a gap in the record, never a call
@@ -659,6 +668,7 @@ export const SERVED_GAPS: Readonly<Record<ServedGapKind, Omit<ServedGap, 'gap'>>
       'cache.strategy',
       'omittedForAttention',
       'requestMeasurement',
+      'replayPreparations',
     ]),
     why:
       'Nothing on this view has been checked against what went out. Every field below is ' +
@@ -1292,6 +1302,7 @@ function viewOf(location: EpochLocation, served: boolean): ServedView {
     gaps.push(gapOf('cache-transform'));
   }
   if (receipt !== undefined) gaps.push(gapOf('provider-defaults'));
+  if (receipt?.replayPreparations !== undefined) gaps.push(gapOf('thinking-replay'));
   if (forced !== undefined) gaps.push(gapOf('forced-tool-schema'));
 
   return frozenView({

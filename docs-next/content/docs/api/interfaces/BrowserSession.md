@@ -4,7 +4,7 @@ title: BrowserSession
 
 # Interface: BrowserSession
 
-Defined in: [src/adapters/types.ts:950](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L950)
+Defined in: [src/adapters/types.ts:976](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L976)
 
 One open browser session.
 
@@ -14,7 +14,7 @@ One open browser session.
 
 > `readonly` `optional` **automationEndpoint?**: `string`
 
-Defined in: [src/adapters/types.ts:960](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L960)
+Defined in: [src/adapters/types.ts:986](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L986)
 
 Where an automation client attaches — a CDP WebSocket, for Playwright and
 friends. Absent on a backend that offers no such channel.
@@ -28,7 +28,7 @@ Playwright; it hands you the endpoint and stays out of the way.
 
 > `readonly` **id**: `string`
 
-Defined in: [src/adapters/types.ts:952](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L952)
+Defined in: [src/adapters/types.ts:978](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L978)
 
 The backend's own id for this session.
 
@@ -38,7 +38,7 @@ The backend's own id for this session.
 
 > `readonly` `optional` **liveViewEndpoint?**: `string`
 
-Defined in: [src/adapters/types.ts:962](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L962)
+Defined in: [src/adapters/types.ts:988](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L988)
 
 Where a PERSON can watch this session, when the backend offers a view.
 
@@ -48,7 +48,7 @@ Where a PERSON can watch this session, when the backend offers a view.
 
 > **click**(`req`): `Promise`\<`void`\>
 
-Defined in: [src/adapters/types.ts:964](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L964)
+Defined in: [src/adapters/types.ts:990](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L990)
 
 Click at a point, in the operating system rather than in the page.
 
@@ -82,7 +82,7 @@ Click at a point, in the operating system rather than in the page.
 
 > `optional` **handControlTo**(`driver`): `Promise`\<`void`\>
 
-Defined in: [src/adapters/types.ts:984](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L984)
+Defined in: [src/adapters/types.ts:1010](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1010)
 
 Hand the controls to a person, or take them back (optional).
 
@@ -107,7 +107,7 @@ Absent on a backend with no such notion; feature-detect before offering it.
 
 > **press**(`req`): `Promise`\<`void`\>
 
-Defined in: [src/adapters/types.ts:973](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L973)
+Defined in: [src/adapters/types.ts:999](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L999)
 
 Press a named key, optionally more than once.
 
@@ -133,7 +133,7 @@ Press a named key, optionally more than once.
 
 > **screenshot**(): `Promise`\<[`BrowserShot`](/docs/api/interfaces/BrowserShot)\>
 
-Defined in: [src/adapters/types.ts:975](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L975)
+Defined in: [src/adapters/types.ts:1001](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1001)
 
 Take a screenshot of the session as it is now.
 
@@ -147,7 +147,7 @@ Take a screenshot of the session as it is now.
 
 > **stop**(): `Promise`\<`void`\>
 
-Defined in: [src/adapters/types.ts:992](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L992)
+Defined in: [src/adapters/types.ts:1018](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1018)
 
 Release the session.
 
@@ -165,7 +165,7 @@ no-op, not an error.
 
 > **type**(`text`): `Promise`\<`void`\>
 
-Defined in: [src/adapters/types.ts:971](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L971)
+Defined in: [src/adapters/types.ts:997](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L997)
 
 Type text, as a keyboard would.
 

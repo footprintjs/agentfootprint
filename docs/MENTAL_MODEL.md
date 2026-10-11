@@ -450,10 +450,11 @@ Swarm — see §1 for their recipes. None add primitives.
 **Pipeline:** footprintjs 3 channels → recorder bridges → **`EventDispatcher`** (one per Runner,
 O(1) hash-dispatch, typed `on/off/once` + domain-wildcards + `'*'`, error-isolated) → consumers/Lens.
 
-**123 typed events / 27 domains**, all `agentfootprint.*`: `composition.*`(8) `agent.*`(14 — incl.
+**124 typed events / 27 domains**, all `agentfootprint.*`: `composition.*`(8) `agent.*`(15 — incl.
 `run_configured`, the run-configuration manifest; `budget_exhausted`, what a
 turn that ran out of budget then DID about it; and `grounding_nudged`, the
-staged-refs nudge's one record — the late line itself is request-only)
+staged-refs nudge's one record — the late line itself is request-only; and
+`thinking_omitted`, one prepared omission per block, not a vendor-acceptance claim)
 `stream.*`(8 — incl. `tool_progress`, a long tool reporting mid-call) `context.*`(5 — the thesis) `memory.*`(5) `tools.*`(16) `validation.*`(1) `skill.*`(11 — incl. `graph_declared`, the author's map as data) `permission.*`(4)
 `credential.*`(4) `cost.*`(2) `eval.*`(2) `error.*`(4) `reliability.*`(3) `resilience.*`(2 — the
 outputSchema fallback ladder; dispatched directly, not via `typedEmit`) `pause.*`(2)

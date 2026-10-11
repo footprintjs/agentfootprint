@@ -30,7 +30,7 @@
  * therefore reads as nine wires: "Foundry" is hosted + local, "Browser" is
  * Anthropic + OpenAI (`BrowserAzureOpenAIProvider` composes the latter). A
  * tenth joined later: `invokeModelGateway` puts the browser Anthropic body
- * (`anthropicMessagesWire.ts · toAnthropicTool`) on the InvokeModel wire.
+ * (`anthropicMessageProjection.ts · toAnthropicTool`) on the InvokeModel wire.
  *
  * The schema literal below is inlined ON PURPOSE. Its owner is
  * `src/core/agent/findings/reserved.ts · FINDINGS_ARGUMENT_SCHEMA`, which lands
@@ -437,7 +437,7 @@ describe('_findings survives the Browser mappings (fetch twins of Anthropic and 
 });
 
 describe('_findings survives the gateway mapping (the Anthropic body on the InvokeModel wire)', () => {
-  it('InvokeModelGatewayProvider · anthropicMessagesWire.toAnthropicTool → body.tools[].input_schema', async () => {
+  it('InvokeModelGatewayProvider · anthropicMessageProjection.toAnthropicTool → body.tools[].input_schema', async () => {
     const bodies: unknown[] = [];
     await invokeModelGateway({
       baseUrl: 'https://gateway.example.test',
@@ -702,9 +702,9 @@ describe('the served schema and the list of wires', () => {
       'GeminiProvider.ts',
       'OllamaProvider.ts',
       'OpenAIProvider.ts',
-      // The Anthropic Messages body shared by anthropic, browserAnthropic and
-      // invokeModelGateway — all three drive it above.
-      'anthropicMessagesWire.ts',
+      // The shared schema projection moved out of the body/stream assembler;
+      // anthropic, browserAnthropic and invokeModelGateway still drive it above.
+      'anthropicMessageProjection.ts',
     ]);
   });
 });

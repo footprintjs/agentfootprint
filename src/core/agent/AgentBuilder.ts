@@ -3772,6 +3772,9 @@ export class AgentBuilder {
         provider: opts.provider,
         model: opts.model,
         ...(skillBrains !== undefined && { brains: skillBrains }),
+        ...(this.reliabilityConfig?.providers !== undefined && {
+          reliabilityProviders: this.reliabilityConfig.providers,
+        }),
       });
     }
     // A decider with no menu to resolve: only a graph that RUNS the

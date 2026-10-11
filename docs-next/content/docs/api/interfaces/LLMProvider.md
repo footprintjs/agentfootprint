@@ -4,7 +4,7 @@ title: LLMProvider
 
 # Interface: LLMProvider
 
-Defined in: [src/adapters/types.ts:580](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L580)
+Defined in: [src/adapters/types.ts:596](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L596)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/adapters/types.ts:580](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **carriesForcedToolChoice?**: `boolean`
 
-Defined in: [src/adapters/types.ts:659](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L659)
+Defined in: [src/adapters/types.ts:675](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L675)
 
 v7.26 — whether this adapter puts [LLMRequest.toolChoice](/docs/api/interfaces/LLMRequest#toolchoice) on its
 wire as a forced choice of one named tool.
@@ -33,8 +33,8 @@ OpenAI-compatible server does with `tool_choice` is that server's
 business and this library does not get to promise it.
 
 A WRAPPER must forward it; `withFallback` publishes the AND of the two
-providers it holds, since a call that might be served by either is only
-constrained if both constrain it.
+providers it holds. Model-specific restrictions are declared separately
+by `supportsForcedToolChoice`; this existing wire flag remains boolean.
 
 ***
 
@@ -42,7 +42,7 @@ constrained if both constrain it.
 
 > `readonly` `optional` **carriesInMessages?**: readonly [`WireRole`](/docs/api/type-aliases/WireRole)[]
 
-Defined in: [src/adapters/types.ts:635](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L635)
+Defined in: [src/adapters/types.ts:651](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L651)
 
 v7.21 — which roles this provider carries INSIDE the `messages` array.
 
@@ -74,7 +74,7 @@ because a role only one of them carries is a role the call might drop.
 
 > `readonly` **name**: `string`
 
-Defined in: [src/adapters/types.ts:581](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L581)
+Defined in: [src/adapters/types.ts:597](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L597)
 
 ***
 
@@ -82,7 +82,7 @@ Defined in: [src/adapters/types.ts:581](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **promptCaching?**: `PromptCaching`
 
-Defined in: [src/adapters/types.ts:588](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L588)
+Defined in: [src/adapters/types.ts:604](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L604)
 
 How this provider's wire caches a repeated prompt prefix (`PromptCaching`,
 from `agentfootprint/cache`). The agent picks its cache strategy from
@@ -91,11 +91,37 @@ A wrapper must forward it, like `carriesInMessages`.
 
 ***
 
+### supportsForcedToolChoice?
+
+> `readonly` `optional` **supportsForcedToolChoice?**: (`model`) => `boolean`
+
+Defined in: [src/adapters/types.ts:685](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L685)
+
+Optional model-specific restriction on the forced-choice wire capability.
+Read with `forcedToolChoiceFor(provider, model)`: the wire flag must be
+true AND this predicate (when present) must answer true. Absence preserves
+the wire flag's existing behaviour. The adapter resolves its shorthand.
+
+Like `thinkingMode`, this function must not depend on `this`; wrappers
+forward it as a value. `withFallback` intersects both sides per model.
+
+#### Parameters
+
+##### model
+
+`string`
+
+#### Returns
+
+`boolean`
+
+***
+
 ### thinkingHandler?
 
 > `readonly` `optional` **thinkingHandler?**: `ThinkingHandler`
 
-Defined in: [src/adapters/types.ts:594](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L594)
+Defined in: [src/adapters/types.ts:610](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L610)
 
 The handler that normalizes this wire's thinking (`rawThinking`). The
 agent uses it unless `.thinkingHandler()` overrides it; absent = no
@@ -107,7 +133,7 @@ thinking stage. Never chosen by `name` — a wrapper must forward it.
 
 > `readonly` `optional` **thinkingMode?**: (`model`) => `ThinkingMode`
 
-Defined in: [src/adapters/types.ts:609](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L609)
+Defined in: [src/adapters/types.ts:625](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L625)
 
 Which thinking request each model takes on this wire — `'budget'`,
 `'adaptive'` or `'none'` (`ThinkingMode`, from `agentfootprint/providers`),
@@ -138,7 +164,7 @@ adapter decides. A plain function of the model id — it must not use
 
 > **complete**(`req`, `hooks?`): `Promise`\<[`LLMResponse`](/docs/api/interfaces/LLMResponse)\>
 
-Defined in: [src/adapters/types.ts:667](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L667)
+Defined in: [src/adapters/types.ts:693](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L693)
 
 `hooks` (v7.8) is optional and additive — implementations may declare
 `complete(req)` with no second parameter and stay assignable. A LEAF
@@ -166,7 +192,7 @@ forward it, or everything it wraps goes silently dark — see the
 
 > `optional` **stream**(`req`, `hooks?`): `AsyncIterable`\<[`LLMChunk`](/docs/api/interfaces/LLMChunk)\>
 
-Defined in: [src/adapters/types.ts:668](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L668)
+Defined in: [src/adapters/types.ts:694](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L694)
 
 #### Parameters
 

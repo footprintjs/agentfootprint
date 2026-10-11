@@ -3296,6 +3296,17 @@ export interface AgentThinkingParseFailedPayload {
   readonly iteration: number;
 }
 
+/** One completed-turn thinking block omitted before a provider request. */
+export interface AgentThinkingOmittedPayload {
+  readonly providerName: string;
+  readonly model: string;
+  readonly messageIndex: number;
+  readonly blockIndex: number;
+  readonly reason: import('../thinking/replay.js').ThinkingReplayReason;
+  /** Preparation is observable even when the subsequent transport fails. */
+  readonly phase: 'prepared';
+}
+
 // artifacts.* (4) — the claim-check lifecycle (9.21.0). Every hop of a ref —
 // minted, resolved, swept, refused — lands on the record AS IT HAPPENS, which
 // is what separates this store from "where are the bytes" systems: the trace

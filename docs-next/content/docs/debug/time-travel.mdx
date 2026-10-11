@@ -528,7 +528,7 @@ person reading the two together sees the difference.
   that went out are *unknown*, not empty: an empty `asSent` is the absence of a
   record, never a record of absence. The request-only lines are recomposed
   *from* the conversation, so they are unproved with it.
-- **`no-receipt-on-chart`** → fields: `basis.model`, `basis.provider`, `basis.runId`, `basis.epoch`, `params`, `cache.transform`, `cache.transformHash`, `cache.markersApplied`, `cache.strategy`, `omittedForAttention`, `requestMeasurement`
+- **`no-receipt-on-chart`** → fields: `basis.model`, `basis.provider`, `basis.runId`, `basis.epoch`, `params`, `cache.transform`, `cache.transformHash`, `cache.markersApplied`, `cache.strategy`, `omittedForAttention`, `requestMeasurement`, `replayPreparations`
   No *usable* receipt was read for this epoch, so nothing on the view has been
   checked against what went out. Not "none was written": the causes below differ
   on exactly that point, and the printed sentence used to get it wrong — it
@@ -600,6 +600,13 @@ person reading the two together sees the difference.
   no receipt at all. The boundary claim is now this entry's own first sentence,
   in the vocabulary of a view; the quote moved to `provider-defaults`, which is
   raised only where a receipt was read.
+- **`thinking-replay`** → fields: `messages.entries`, `requestMeasurement`
+  A leaf provider reported a thinking omission after the provider-port receipt
+  was prepared. `replayPreparations` records its boundary, phase and count,
+  without reasoning or signatures. Original hashes and size remain port-level;
+  the annotation does not reconstruct the downstream request or prove transport
+  or acceptance. With no receipt, the missing witness is covered by
+  `no-receipt-on-chart` instead; no annotation is invented.
 - **`provider-defaults`** → fields: `params`
   The sampling dials are read off the request the provider **port** was handed —
   after the cache strategy, so a rewritten dial is recorded as the port's value.
@@ -635,8 +642,8 @@ What is *not* frozen is the recording you handed in: `EpochLocation.log`,
 `RECEIPT_BOUNDARY`, exported so a renderer prints the library's own sentence:
 
 > A receipt describes the request as this library last saw it. Whatever handled
-> it after that could have changed it, and nothing on the receipt would show
-> that.
+> it after that could have changed it; notes about later preparation do not
+> prove what was sent or accepted.
 
 It is PRINTED, so it obeys the same rule as the gap sentences and names no
 module, function or call. Where "last saw it" *is*, for a reader who can open

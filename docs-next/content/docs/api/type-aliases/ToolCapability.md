@@ -6,7 +6,7 @@ title: ToolCapability
 
 > **ToolCapability** = `"memory_read"` \| `"memory_write"` \| `"external_net"` \| `"user_data"`
 
-Defined in: [src/adapters/types.ts:711](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L711)
+Defined in: [src/adapters/types.ts:737](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L737)
 
 What a tool DECLARES it touches (9.11.0).
 

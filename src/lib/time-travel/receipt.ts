@@ -188,8 +188,8 @@ export const UNSERIALIZABLE = '\u001F<unserializable>';
  */
 export const RECEIPT_BOUNDARY =
   'A receipt describes the request as this library last saw it. Whatever ' +
-  'handled it after that could have changed it, and nothing on the receipt ' +
-  'would show that.';
+  'handled it after that could have changed it; notes about later preparation ' +
+  'do not prove what was sent or accepted.';
 
 /** The scope key the receipt is committed under. */
 export const RECEIPT_KEY = 'receipt';
@@ -326,6 +326,16 @@ export interface ReceiptAttentionOmission {
  * ```
  */
 export interface Receipt {
+  /**
+   * Actual leaf-provider preparation omitted thinking after this port receipt
+   * was minted. Original hashes/measurement/cache verdict remain port-level;
+   * this is an explicit downstream gap, not proof of what a server accepted.
+   */
+  readonly replayPreparations?: readonly {
+    readonly boundary: 'provider-adapter';
+    readonly phase: 'prepared';
+    readonly omittedBlocks: number;
+  }[];
   /** Counts of the initial prepared canonical request, including full schemas.
    * Older recordings have no measurement. No payload, tokens or retry totals. */
   readonly requestMeasurement?: RequestMeasurement;

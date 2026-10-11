@@ -149,7 +149,7 @@ describe('AnthropicProvider — unit: serialize thinkingBlocks', () => {
     expect(redacted.thinking).toBeUndefined();
   });
 
-  it('thinking blocks WITHOUT signature serialize without signature field', async () => {
+  it('refuses thinking blocks WITHOUT signature before transport', async () => {
     const recorder = { params: [] as unknown[] };
     const client = makeFakeClient(baseResponse, recorder);
     const provider = new AnthropicProvider({ apiKey: 'x', _client: client as never });
@@ -166,14 +166,14 @@ describe('AnthropicProvider — unit: serialize thinkingBlocks', () => {
       ],
     };
 
-    await provider.complete(req);
-    const sent = recorder.params[0] as {
-      messages: { role: string; content: FakeContentBlock[] }[];
-    };
-    const assistantMsg = sent.messages.find((m) => m.role === 'assistant')!;
-    const block = assistantMsg.content.find((b) => b.type === 'thinking')!;
-    expect(block.thinking).toBe('unsigned reasoning');
-    expect(block.signature).toBeUndefined();
+    await expect(provider.complete(req)).rejects.toMatchObject({
+      name: 'UnsafeThinkingReplayError',
+      reason: 'missing-signature',
+      retryable: false,
+    });
+    expect(recorder.params).toEqual([]);
+    expect(req.messages.at(-1)?.thinkingBlocks?.[0]?.content).toBe('unsigned reasoning');
+    expect(req.messages.at(-1)?.thinkingBlocks?.[0]?.signature).toBeUndefined();
   });
 });
 

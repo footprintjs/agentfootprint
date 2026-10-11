@@ -34,6 +34,16 @@
  *   `MockProvider` source is the canonical reference.
  */
 
+export { forcedToolChoiceFor, UnsupportedToolChoiceError } from './adapters/forcedToolChoice.js';
+export { UnsafeThinkingReplayError } from './thinking/replay.js';
+export type {
+  MessageReplay,
+  ReplayPart,
+  ReplayPreparation,
+  ThinkingReplayOmission,
+  ThinkingReplayReason,
+} from './thinking/replay.js';
+
 export {
   MockProvider,
   mock,

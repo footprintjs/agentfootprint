@@ -33,6 +33,14 @@
  * `thinking` (`{ type: 'enabled', budget_tokens: 100 }` →
  * `{ type: 'adaptive', display: 'summarized' }`) — and nothing else.
  *
+ * A FOURTH: responses now retain JSON-safe replay evidence (the actual source
+ * model, original layout and request/content digests). Stream rawThinking now
+ * carries the same full indexed content array as complete(), not a thinking-
+ * only subset. The intentionally malformed/incomplete stream fixture records
+ * negative `lossy` evidence rather than certifying substituted arguments. Only
+ * response.replay and terminal response.rawThinking changed; all six request
+ * body strings, text chunks, tool results and usage remain byte-identical.
+ *
  * Test type (Convention 3): byte identity.
  */
 import { describe, it, expect } from 'vitest';

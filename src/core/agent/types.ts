@@ -2348,6 +2348,12 @@ export interface AgentState {
    *  `scope.history` (ensures Anthropic signature round-trip). Empty
    *  array when no thinking present. */
   thinkingBlocks: readonly ThinkingBlock[];
+  /** Latest provider-owned replay evidence. Absent until a provider reports
+   * it; cleared if a later reply supplies none. Travels with the assistant
+   * turn, including a terminal reply with no thinking blocks. */
+  // One-element array: grouped output mappers replace top-level arrays but
+  // merge object members. Replay evidence must cross as one atomic value.
+  llmLatestReplay?: readonly [NonNullable<LLMMessage['replay']>];
 
   // ── Reliability fail-fast state (v2.11.5) ──────────────────
   /** Set when the rules-based reliability loop takes the fail-fast path.

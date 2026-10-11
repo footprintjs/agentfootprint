@@ -44,7 +44,14 @@
  */
 
 import type { TypedScope } from 'footprintjs';
-import type { LLMProvider, LLMRequest, LLMResponse } from '../../../adapters/types.js';
+import type {
+  LLMCallHooks,
+  LLMProvider,
+  LLMRequest,
+  LLMResponse,
+} from '../../../adapters/types.js';
+import { isRequestRefusal } from '../../../adapters/requestRefusal.js';
+import { replayAttempts } from '../../../resilience/replayAttempt.js';
 import {
   CircuitOpenError,
   admitCall,
@@ -68,6 +75,12 @@ import type { AgentState } from '../types.js';
 export type LLMCallFn = (
   request: LLMRequest,
   hooks: {
+    /** The actual selected transport; omitted on the direct, non-reliability path. */
+    provider?: LLMProvider;
+    /** Index in an explicit provider list, for response-side thinking dispatch. */
+    providerIndex?: number;
+    /** The per-call persistence/report channel, retained across attempts. */
+    providerHooks?: LLMCallHooks;
     /** Called the first time a streaming chunk yields content. After
      *  this fires, mid-stream errors will escalate retry/fallback to
      *  fail-fast. */
@@ -150,14 +163,14 @@ export async function executeWithReliability(
    *  not passed output admission, so its text — `rawOutput`, and the parser's
    *  message, which can quote it (`JSON.parse` does) — stays off the public
    *  event stream. Rules still read it on `validationError`. */
-  options?: { readonly withholdDraftContent?: true },
+  options?: { readonly withholdDraftContent?: true; readonly providerHooks?: LLMCallHooks },
 ): Promise<LLMResponse | undefined> {
   // v2.13 — mutable so feedbackForLLM can append ephemeral messages
   // before retry. The reliabilityScope() helper captures `request` by
   // reference; reassignment makes the next iteration's call see the
   // updated messages array WITHOUT mutating the original (we always
   // construct a new request object in applyFeedback below).
-  let mutableRequest = request;
+  const attempts = replayAttempts(request, options?.providerHooks);
   const preRules = config.preCheck ?? [];
   const postRules = config.postDecide ?? [];
   const providers = config.providers ?? [];
@@ -197,7 +210,7 @@ export async function executeWithReliability(
   const reliabilityScope = (): ReliabilityScope => {
     const currentProvider = providerEntry().name;
     return {
-      request: mutableRequest,
+      request: attempts.request,
       providersCount: providers.length,
       hasFallback: fallbackFn !== undefined,
       attempt,
@@ -349,7 +362,12 @@ export async function executeWithReliability(
       // attempt produces a schema-fail).
       lastValidationError = undefined;
       try {
-        const response = await callFn(mutableRequest, {
+        if (attempts.request.model !== cur.model)
+          attempts.replaceRequest({ ...attempts.request, model: cur.model });
+        const response = await callFn(attempts.request, {
+          provider: cur.provider,
+          ...(providers.length > 0 && { providerIndex: providerIdx }),
+          providerHooks: attempts.hooks,
           onFirstChunk: () => {
             firstChunkSeen = true;
           },
@@ -420,6 +438,7 @@ export async function executeWithReliability(
         }
       } catch (err) {
         if (aborted()) throw err;
+        if (isRequestRefusal(err)) throw err;
         lastResponse = undefined;
         lastError = err instanceof Error ? err : new Error(String(err));
         lastErrorKind = classifyError(err);
@@ -475,7 +494,7 @@ export async function executeWithReliability(
             errorKind: pendingRecoveryErrorKind,
           });
         }
-        return lastResponse;
+        return attempts.response(lastResponse);
       }
       // 'ok' with no response is misconfiguration; fall through to
       // fail-fast as a defensive default.
@@ -495,10 +514,8 @@ export async function executeWithReliability(
       // it out of scope.history / memory writes — visible in the
       // request, not persisted long-term.
       if (matchedRule?.feedbackForLLM !== undefined) {
-        mutableRequest = await applyFeedback(
-          mutableRequest,
-          matchedRule.feedbackForLLM,
-          reliabilityScope(),
+        attempts.replaceRequest(
+          await applyFeedback(attempts.request, matchedRule.feedbackForLLM, reliabilityScope()),
         );
       }
       // Per-attempt visibility: same-provider retry. fromProvider ===
@@ -523,10 +540,8 @@ export async function executeWithReliability(
       // Same feedback application for retry-other — the new provider
       // sees the same accumulated context.
       if (matchedRule?.feedbackForLLM !== undefined) {
-        mutableRequest = await applyFeedback(
-          mutableRequest,
-          matchedRule.feedbackForLLM,
-          reliabilityScope(),
+        attempts.replaceRequest(
+          await applyFeedback(attempts.request, matchedRule.feedbackForLLM, reliabilityScope()),
         );
       }
       providerIdx += 1;
@@ -538,18 +553,19 @@ export async function executeWithReliability(
           'retry-other requested but no more providers',
         );
       }
-      // NOTE: no reliability.retried emit on this branch yet. The live
-      // inline path does NOT actually switch providers — `callFn`
-      // (singleProviderCall in callLLM.ts) closes over the agent's
-      // DEFAULT provider; `providerIdx` only feeds telemetry/breaker
-      // keying, not the real call. Emitting `toProvider: <next>` here
-      // would be MISLEADING telemetry (claiming a switch that never
-      // happens). retry-other visibility is deferred until the live-path
-      // failover bug is fixed (see docs/MENTAL_MODEL.md §14). We still
-      // track recovery so a subsequent success fires reliability.recovered.
+      // The next call receives the selected provider and model, not just a
+      // changed telemetry label. Report only the switch actually selected.
       priorFailures += 1;
       pendingRecoveryVia = 'retry-other';
       pendingRecoveryErrorKind = lastErrorKind;
+      typedEmit(scope, 'agentfootprint.reliability.retried', {
+        attempt,
+        action: 'retry-other',
+        errorKind: lastErrorKind,
+        ...publicErrorMessage(),
+        fromProvider: cur.name,
+        toProvider: providerEntry().name,
+      });
       continue;
     }
 
@@ -562,7 +578,7 @@ export async function executeWithReliability(
         );
       }
       try {
-        const repaired = await fallbackFn(mutableRequest, lastError);
+        const repaired = await fallbackFn(attempts.request, lastError);
         if (aborted()) throw signal?.reason;
         // Successful fallback IS a recovery — the failure that triggered
         // it counts toward priorFailures. Fire reliability.recovered then
@@ -574,9 +590,10 @@ export async function executeWithReliability(
           priorFailures,
           errorKind: lastErrorKind,
         });
-        return repaired;
+        return attempts.response(repaired);
       } catch (fallbackErr) {
         if (aborted()) throw fallbackErr;
+        if (isRequestRefusal(fallbackErr)) throw fallbackErr;
         // Fallback threw — re-classify and let next iteration's
         // post-decide rules route on the new error.
         lastError = fallbackErr instanceof Error ? fallbackErr : new Error(String(fallbackErr));

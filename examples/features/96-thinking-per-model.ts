@@ -16,7 +16,12 @@
  */
 import assert from 'node:assert/strict';
 import { Agent } from '../../src/index.js';
-import { anthropic, UnsupportedThinkingError } from '../../src/doors/providers.js';
+import {
+  anthropic,
+  forcedToolChoiceFor,
+  UnsupportedThinkingError,
+  UnsupportedToolChoiceError,
+} from '../../src/doors/providers.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {
@@ -94,6 +99,20 @@ export async function run(input: string): Promise<unknown> {
 
   assert.equal(refusal?.reason, 'no-thinking');
   assert.equal(bodies.length, 2); // the refused agent sent nothing
+
+  // #region forced-choice
+  assert.equal(forcedToolChoiceFor(provider, 'claude-opus-5-5'), false);
+  assert.equal(forcedToolChoiceFor(provider, 'claude-haiku-5-5'), true);
+  const forcedAgent = Agent.create({ provider, model: 'claude-opus-5-5' })
+    .outputSchema(
+      { parse: (value: unknown) => value },
+      { strategy: 'tool-forced', jsonSchema: { type: 'object', properties: {} } },
+    )
+    .build();
+  await assert.rejects(forcedAgent.run({ message: input }), UnsupportedToolChoiceError);
+  // Use strategy: 'instruct' explicitly if prompt-based output is acceptable.
+  // #endregion forced-choice
+  assert.equal(bodies.length, 2); // forced-choice refusal sent nothing either
 
   return {
     'claude-opus-5-5': bodies[0]!.thinking,

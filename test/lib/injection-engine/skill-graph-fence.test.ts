@@ -27,7 +27,7 @@
  *   • PROVIDER LAYER — `constrainedEnumPick` + `llmClassifier`. These make a
  *     MODEL CALL, so they need an `LLMProvider`; a port that pretends
  *     otherwise is a fake abstraction. They may import `adapters/types.js`
- *     (and the closed type-only cluster it points at) and nothing else new.
+ *     (and its closed type cluster), plus the pure capability reader below.
  *     They are deliberately NOT on the door.
  *
  * Everything else in `src/lib/injection-engine/` is the HOST zone — the
@@ -149,12 +149,24 @@ const PROVIDER_LAYER = [`${IE}/constrainedEnumPick.ts`, `${IE}/llmClassifier.ts`
 /** What the provider layer may reach on top of the pure set. */
 const PROVIDER_LEAVES: ReadonlyArray<readonly [file: string, why: string]> = [
   [
+    'src/adapters/forcedToolChoice.ts',
+    'The shared forced-choice capability reader and typed refusal: reads only the ' +
+      'already-allowed provider port, with a type-only import. No vendor, model table ' +
+      'or engine. Its import boundary is pinned separately below.',
+  ],
+  [
     'src/adapters/types.ts',
     '`LLMProvider` / `LLMRequest` / `LLMResponse` / `LLMToolSchema` — the provider PORT. ' +
       'A constrained-enum pick is one model call; there is no honest way to describe it ' +
       'without naming a provider.',
   ],
   ['src/thinking/types.ts', 'reached by `adapters/types.ts` for `ThinkingBlock`. No imports.'],
+  [
+    'src/thinking/replay.ts',
+    'Replay metadata/report types reached by the provider PORT, plus a data-only refusal ' +
+      'class. Its sole import points back to `LLMRequest` as a type: no replay planner, ' +
+      'vendor, recorder or agent loop. That closed type boundary is pinned below.',
+  ],
   [
     'src/cache/types.ts',
     'reached by `adapters/types.ts` for `CacheMarker` (`LLMRequest.cacheMarkers`), and it ' +
@@ -449,14 +461,46 @@ describe('skill-graph fence — the pure core', () => {
 });
 
 describe('skill-graph fence — the provider layer', () => {
+  it('replay declarations reach only the provider type, never replay policy or persistence', () => {
+    const file = 'src/thinking/replay.ts';
+    const source = ts.createSourceFile(
+      file,
+      readFileSync(resolve(REPO, file), 'utf8'),
+      ts.ScriptTarget.ES2022,
+      true,
+      ts.ScriptKind.TS,
+    );
+    expect(specifiersOf(resolve(REPO, file))).toEqual(['../adapters/types.js']);
+    const imports = source.statements.filter(ts.isImportDeclaration);
+    expect(imports).toHaveLength(1);
+    expect(imports[0]!.importClause?.isTypeOnly).toBe(true);
+    expect(pureAllowed.has(file)).toBe(false);
+  });
+
+  it('the capability reader reaches only the provider type, never an adapter implementation', () => {
+    const file = 'src/adapters/forcedToolChoice.ts';
+    const source = ts.createSourceFile(
+      file,
+      readFileSync(resolve(REPO, file), 'utf8'),
+      ts.ScriptTarget.ES2022,
+      true,
+      ts.ScriptKind.TS,
+    );
+    expect(specifiersOf(resolve(REPO, file))).toEqual(['./types.js']);
+    const imports = source.statements.filter(ts.isImportDeclaration);
+    expect(imports).toHaveLength(1);
+    expect(imports[0]!.importClause?.isTypeOnly).toBe(true);
+    expect(pureAllowed.has(file)).toBe(false);
+  });
+
   it.each(PROVIDER_LAYER)('%s may see the provider port, and nothing else new', (file) => {
     const { escapes } = closure([file], providerAllowed);
     const bad = violations(escapes);
     expect(
       bad.length === 0,
       `PROVIDER LAYER VIOLATION — ${file} reached past the adapter port:${bad.join('')}\n\n` +
-        `This zone exists for exactly one crossing: \`src/adapters/types.ts\`, because a ` +
-        `constrained-enum pick IS a model call. Anything else belongs in the HOST zone.\n`,
+        `This zone sees the provider port and its explicitly listed pure leaves, because a ` +
+        `constrained-enum pick IS a model call. Vendor implementations belong in the HOST zone.\n`,
     ).toBe(true);
   });
 

@@ -38,9 +38,12 @@ import type {
   WireRole,
 } from '../adapters/types.js';
 import type { PromptCaching } from '../cache/types.js';
-import type { ThinkingBlock, ThinkingHandler, ThinkingMode } from '../thinking/types.js';
+import type { ThinkingHandler, ThinkingMode } from '../thinking/types.js';
+import { dispatchThinkingHandler, tagThinkingResponse } from '../thinking/dispatch.js';
 import { DEFAULT_CARRIES_IN_MESSAGES } from '../adapters/types.js';
-import { UnsupportedThinkingError } from '../thinking/errors.js';
+import { forcedToolChoiceFor } from '../adapters/forcedToolChoice.js';
+import { isRequestRefusal } from '../adapters/requestRefusal.js';
+import { replayAttempts } from './replayAttempt.js';
 
 /**
  * The message roles BOTH providers carry — the only honest capability for a
@@ -100,42 +103,31 @@ function requestFor(side: LLMProvider, req: LLMRequest): LLMRequest {
 
 type Side = 'primary' | 'fallback';
 
-/** Raw thinking of a mixed pair, tagged with the side whose wire produced it. */
-interface AnsweredThinking {
-  readonly answeredBy: Side;
-  readonly raw: unknown;
-}
-
-function isAnswered(raw: unknown): raw is AnsweredThinking {
-  if (typeof raw !== 'object' || raw === null) return false;
-  const by = (raw as { answeredBy?: unknown }).answeredBy;
-  return (by === 'primary' || by === 'fallback') && 'raw' in raw;
-}
-
 /**
  * The thinking handler of a pair. The same handler on both sides is the
  * pair's. Different handlers (or one side with none) get a DISPATCHING
  * handler: the pair tags each response's `rawThinking` with the side that
- * answered (`AnsweredThinking`), and the handler runs that side's own — one
+ * answered, and the handler runs that side's own — one
  * wire's handler on the other's thinking would mis-read it, and dropping
  * both lost the signed blocks the next call must echo.
  */
 function thinkingOfPair(a: LLMProvider, b: LLMProvider): ThinkingHandler | undefined {
   const [ha, hb] = [a.thinkingHandler, b.thinkingHandler];
   if (ha === hb) return ha;
-  return {
-    id: `${ha?.id ?? 'none'}-or-${hb?.id ?? 'none'}`,
-    normalize(raw: unknown): readonly ThinkingBlock[] {
-      if (!isAnswered(raw)) {
+  const id = `${ha?.id ?? 'none'}-or-${hb?.id ?? 'none'}`;
+  return dispatchThinkingHandler(
+    id,
+    { primary: ha, fallback: hb },
+    {
+      id,
+      normalize() {
         throw new TypeError(
           "withFallback: this thinking does not say which side answered, so neither side's " +
             'handler can read it',
         );
-      }
-      const handler = raw.answeredBy === 'primary' ? ha : hb;
-      return handler === undefined ? [] : handler.normalize(raw.raw);
+      },
     },
-  };
+  );
 }
 
 /** Least to most a pair can promise about a model's thinking. */
@@ -171,7 +163,9 @@ export interface WithFallbackOptions {
   /**
    * Predicate to decide whether an error from the primary should
    * trigger fallback. Default: every error except an AbortError and an
-   * `UnsupportedThinkingError` (a request the primary refused before sending).
+   * `UnsupportedThinkingError`, `UnsupportedToolChoiceError` or
+   * `UnsafeThinkingReplayError` (a request the
+   * primary refused before sending).
    * Override to gate on specific status codes or error types.
    */
   readonly shouldFallback?: (error: unknown) => boolean;
@@ -229,9 +223,7 @@ export function withFallback(
   const tagsThinking = primary.thinkingHandler !== fallback.thinkingHandler;
   /** A response as the pair returns it: thinking tagged when the sides differ. */
   const answered = (res: LLMResponse, side: Side): LLMResponse =>
-    tagsThinking && res.rawThinking !== undefined
-      ? { ...res, rawThinking: { answeredBy: side, raw: res.rawThinking } }
-      : res;
+    tagsThinking ? tagThinkingResponse(res, side) : res;
   async function* answeredStream(chunks: AsyncIterable<LLMChunk>, side: Side) {
     for await (const chunk of chunks) {
       yield chunk.response === undefined
@@ -254,6 +246,13 @@ export function withFallback(
     // some of the time, which is the shape of guarantee nobody can use.
     carriesForcedToolChoice:
       (primary.carriesForcedToolChoice ?? false) && (fallback.carriesForcedToolChoice ?? false),
+    ...(primary.supportsForcedToolChoice !== undefined ||
+    fallback.supportsForcedToolChoice !== undefined
+      ? {
+          supportsForcedToolChoice: (model: string) =>
+            forcedToolChoiceFor(primary, model) && forcedToolChoiceFor(fallback, model),
+        }
+      : {}),
     // The combination, not the intersection — see `cachingOfPair`.
     ...(promptCaching !== undefined && { promptCaching }),
     // The side that answered decides which handler reads its thinking —
@@ -262,13 +261,24 @@ export function withFallback(
     // The least either side promises for a model — see `thinkingModeOfPair`.
     ...(thinkingMode !== undefined && { thinkingMode }),
     async complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
+      const attempts = replayAttempts(req, hooks);
       try {
-        return answered(await primary.complete(requestFor(primary, req), hooks), 'primary');
+        return attempts.response(
+          answered(
+            await primary.complete(requestFor(primary, attempts.request), attempts.hooks),
+            'primary',
+          ),
+        );
       } catch (err) {
         if (!shouldFallback(err)) throw err;
         onFallback?.(err);
         reportFellBack(hooks, err);
-        return answered(await fallback.complete(requestFor(fallback, req), hooks), 'fallback');
+        return attempts.response(
+          answered(
+            await fallback.complete(requestFor(fallback, attempts.request), attempts.hooks),
+            'fallback',
+          ),
+        );
       }
     },
   };
@@ -282,17 +292,20 @@ export function withFallback(
       req: LLMRequest,
       hooks?: LLMCallHooks,
     ): AsyncIterable<LLMChunk> {
+      const attempts = replayAttempts(req, hooks);
       // No primary stream support → fallback's stream (or its complete-only).
       // Reports NOTHING: nothing failed here, the primary simply has no
       // `stream()`. Calling this a fallback would be a lie.
-      const fallbackReq = requestFor(fallback, req);
-      const fromFallback = (): AsyncIterable<LLMChunk> =>
-        answeredStream(
+      const fromFallback = async function* (): AsyncIterable<LLMChunk> {
+        const fallbackReq = requestFor(fallback, attempts.request);
+        for await (const chunk of answeredStream(
           fallback.stream
-            ? fallback.stream(fallbackReq, hooks)
-            : completeAsStream(fallback, fallbackReq, hooks),
+            ? fallback.stream(fallbackReq, attempts.hooks)
+            : completeAsStream(fallback, fallbackReq, attempts.hooks),
           'fallback',
-        );
+        ))
+          yield attempts.chunk(chunk);
+      };
       if (!primary.stream) {
         yield* fromFallback();
         return;
@@ -300,11 +313,11 @@ export function withFallback(
       let yieldedAny = false;
       try {
         for await (const chunk of answeredStream(
-          primary.stream(requestFor(primary, req), hooks),
+          primary.stream(requestFor(primary, attempts.request), attempts.hooks),
           'primary',
         )) {
           yieldedAny = true;
-          yield chunk;
+          yield attempts.chunk(chunk);
         }
       } catch (err) {
         if (yieldedAny || !shouldFallback(err)) throw err;
@@ -327,8 +340,7 @@ function defaultShouldFallback(err: unknown): boolean {
   // A request the primary's adapter refused before sending is a wrong
   // REQUEST, not a failed vendor: it surfaces, rather than every call of the
   // run quietly moving to the other side.
-  if (err instanceof UnsupportedThinkingError) return false;
-  return true;
+  return !isRequestRefusal(err);
 }
 
 /**

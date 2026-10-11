@@ -4,7 +4,7 @@ title: ServedGapKind
 
 # Type Alias: ServedGapKind
 
-> **ServedGapKind** = `"cache-transform"` \| `"forced-tool-schema"` \| `"provider-defaults"` \| `"no-fold-base"` \| `"no-conversation-on-record"` \| `"no-run-log"` \| `"no-receipt-on-chart"`
+> **ServedGapKind** = `"cache-transform"` \| `"thinking-replay"` \| `"forced-tool-schema"` \| `"provider-defaults"` \| `"no-fold-base"` \| `"no-conversation-on-record"` \| `"no-run-log"` \| `"no-receipt-on-chart"`
 
 Defined in: [src/lib/time-travel/servedView.ts:243](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L243)
 

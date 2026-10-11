@@ -830,13 +830,6 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: 'a build-time refusal thrown when a skill brain is declared with no graph to pick it',
     },
   ],
-  'src/core/agent/thinkingSupport.ts': [
-    {
-      kind: 'not-model-facing',
-      count: 1,
-      why: 'a build-time refusal thrown when `.thinking()` reaches a model its provider declares cannot think',
-    },
-  ],
   'src/lib/injection-engine/skillExamples.ts': [
     {
       kind: 'not-model-facing',
@@ -1156,12 +1149,16 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // now throws a short author-time unsupported-option error; its literal
         // matches no persistent rule, so it needs no blanket ledger entry.
         // files 100 → 99, total 195 → 193, notModelFacing 132 → 130.
-        files: 99,
-        total: 193,
+        // Provider-capability refusals: thinkingSupport's neutral wording now
+        // describes the provider/model pair, not "this model cannot think".
+        // It no longer matches a persistent rule: remove its stale host-only
+        // allowance. No model-facing or unrepaired classification changes.
+        files: 98,
+        total: 192,
         registry: 8,
         ephemeral: 22,
         unrepaired: 33,
-        notModelFacing: 130,
+        notModelFacing: 129,
         unrepairedEntries: 13,
       });
       // And the ledger's own total is the number of literals the scan flagged —

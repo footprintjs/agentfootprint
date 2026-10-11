@@ -50,6 +50,28 @@ A rule's `then` field is one of six verbs:
 | `fallback`     | post-decide | Invoke `config.fallback(req, lastError)` to repair        |
 | `fail-fast`    | both        | Throw `ReliabilityFailFastError` at `agent.run()`         |
 
+## Provider selection and capability checks
+
+A nonempty `providers` list supplies the actual transports: the first entry is
+called first, and `retry-other` calls the next entry with its configured model.
+The otherwise configured default is not called. With an absent or empty list,
+the ordinary agent provider remains in use.
+
+`.thinking()` checks every listed provider/model at build time, while retaining
+the existing skill-brain checks. Message-slot injections, including runtime
+memory recall, must use roles every listed provider can deliver; an incompatible
+role is refused before delivery, never silently changed or dropped on failover.
+Forced-tool choice is checked against the provider/model selected for each call.
+Unsupported thinking, forced choice and unsafe thinking replay are terminal
+request refusals, not outages for rules or breakers to retry.
+
+For configured transport attempts, the answering provider's declared thinking
+handler and its selected model's returned-usage pricing are used. Explicit
+thinking-handler overrides and `null` remain explicit. This does **not** identify
+the hidden work of a consumer `fallback` callback: that callback can return a
+synthetic answer or call any service, so its actual provider and cost are not
+established by the library's selected-transport labels.
+
 ## Streaming + reliability — first-chunk arbitration
 
 Streaming and retry are fundamentally hard to compose. If a stream errors after token 5, retrying re-emits tokens 1-5 (duplicates) — or you buffer the whole stream first and lose progressive UX. There is no clean answer at the LLM provider boundary today.

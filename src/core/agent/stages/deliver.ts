@@ -61,6 +61,9 @@ import type { AgentState } from '../types.js';
 export interface DeliverStageDeps {
   /** The attached provider — the authority on what the wire can carry. */
   readonly provider: LLMProvider;
+  /** Every declared reliability transport must carry an injected role.
+   * Omitted preserves the single-provider delivery contract. */
+  readonly providers?: readonly LLMProvider[];
   /** Memories whose recall composes into the active set, exactly as the
    *  slots compose it (so the stage and the slots agree on what is active).
    *  A bare id keeps the historical call shape; the object form carries the
@@ -73,10 +76,23 @@ export function carriedRoles(provider: LLMProvider): readonly WireRole[] {
   return provider.carriesInMessages ?? DEFAULT_CARRIES_IN_MESSAGES;
 }
 
+/** One role rule for declared injections and runtime-only memory recall. */
+export function assertDeliverableRole(
+  providers: readonly LLMProvider[],
+  role: string,
+  site: string,
+): void {
+  for (const provider of providers) {
+    const carries = carriedRoles(provider);
+    if (!carries.includes(role as WireRole)) {
+      throw new Error(messagesRoleRefusal({ site, role, providerName: provider.name, carries }));
+    }
+  }
+}
+
 /** Build the delivery stage. */
 export function buildDeliverStage(deps: DeliverStageDeps): (scope: TypedScope<AgentState>) => void {
-  const carries = carriedRoles(deps.provider);
-  const carriesSet = new Set<WireRole>(carries);
+  const providers = deps.providers ?? [deps.provider];
 
   return (scope) => {
     const active = withMemoryRecall(
@@ -104,18 +120,9 @@ export function buildDeliverStage(deps: DeliverStageDeps): (scope: TypedScope<Ag
         if (ledger.has(key)) continue;
 
         const role = msg.role as WireRole;
-        if (!carriesSet.has(role)) {
-          // Fatal: silently re-roling would change who appears to speak, and
-          // silently dropping is the 7.19.1 lie this feature was built to end.
-          throw new Error(
-            messagesRoleRefusal({
-              site: `Agent injection '${inj.id}'`,
-              role: msg.role,
-              providerName: deps.provider.name,
-              carries,
-            }),
-          );
-        }
+        // Validate all declared retry targets before delivery, so a later
+        // provider switch cannot silently discard an already recorded role.
+        assertDeliverableRole(providers, msg.role, `Agent injection '${inj.id}'`);
 
         const refusal = refusalForPlacement(history, role);
         if (refusal !== undefined) {

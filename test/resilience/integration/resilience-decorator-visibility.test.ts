@@ -707,8 +707,9 @@ describe('resilience decorators — outside a run, nothing is emitted', () => {
   /**
    * Wrap a provider so it records the hooks object each call hands it.
    * This is the ONLY observable for "nothing was reported" when the caller
-   * passes no hooks at all: there is no sink to spy, so the question
-   * becomes whether any decorator in the stack *synthesized* one.
+   * passes no hooks at all: there is no report sink to spy, so the question
+   * becomes whether any decorator in the stack synthesized onResilience.
+   * The replay-attempt carrier independently needs its own private listener.
    */
   function recordingHooksArg(inner: LLMProvider, seen: (LLMCallHooks | undefined)[]): LLMProvider {
     return {
@@ -723,8 +724,7 @@ describe('resilience decorators — outside a run, nothing is emitted', () => {
   const stdReq = { messages: [{ role: 'user' as const, content: 'hi' }], model: 'm' };
 
   it('a full stack with NO hooks argument resolves identically and reports nothing', async () => {
-    // The primary proof is that all pre-existing test/resilience tests
-    // pass untouched. This pins the composite case explicitly — and does
+    // This pins the composite no-report case explicitly — and does
     // so with a falsifiable assertion: an earlier version of this test
     // declared an `emitted` array, never wrote to it, and asserted it was
     // empty, which could not fail.
@@ -743,10 +743,11 @@ describe('resilience decorators — outside a run, nothing is emitted', () => {
     expect(res.content).toBe('served');
     // The stack really did run — otherwise the assertion below is vacuous.
     expect(handed.length).toBeGreaterThan(0);
-    // …and no decorator invented a sink on the way down. `undefined` all
-    // the way to the leaf is what makes `hooks?.onResilience?.(…)`
-    // short-circuit at every report site.
-    expect(handed.every((h) => h === undefined)).toBe(true);
+    // No decorator invented a resilience sink on the way down. The replay
+    // carrier exists so standalone calls cannot resurrect approved omissions;
+    // it does not make an unobserved resilience decision into an event.
+    expect(handed.every((h) => h?.onResilience === undefined)).toBe(true);
+    expect(handed.every((h) => typeof h?.onReplayPrepared === 'function')).toBe(true);
   });
 
   it('POSITIVE CONTROL: the identical stack WITH hooks does report — so the empty case is real', async () => {

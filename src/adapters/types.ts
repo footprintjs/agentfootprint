@@ -64,6 +64,8 @@ export interface LLMMessage {
    * Empty array OR undefined when no thinking is present (most calls).
    */
   readonly thinkingBlocks?: readonly ThinkingBlock[];
+  /** Replay layout and local consistency evidence (including known loss); JSON/checkpoint safe. */
+  readonly replay?: import('../thinking/replay.js').MessageReplay;
   /**
    * v2.13 — PERSISTENCE flag (NOT a visibility flag). When `true`:
    *   • The message IS sent to the LLM as part of the next request
@@ -304,11 +306,13 @@ export interface LLMRequest {
    * `toolConfig.toolChoice.tool.name` — the field is the one word all three
    * agree on, and each adapter writes its own dialect.
    *
-   * A provider that does not declare {@link LLMProvider.carriesForcedToolChoice}
-   * never receives this field: the agent refuses at run start instead,
-   * naming the provider. Silently sending it to a wire that ignores it would
-   * turn a guarantee into a suggestion with nothing in the recording to say
-   * so.
+   * If `forcedToolChoiceFor(provider, model)` answers false, the agent never
+   * sends this field: it refuses at
+   * run start instead, naming the provider and the model. Silently sending it
+   * to a wire that ignores it would turn a guarantee into a suggestion with
+   * nothing in the recording to say so — and a model that rejects it (Claude
+   * Opus 5.5, Sonnet 5.5, Fable 5.1, Mythos 5.1) is refused by the Anthropic
+   * adapters before sending, with an `UnsupportedToolChoiceError`.
    */
   readonly toolChoice?: {
     readonly type: 'tool';
@@ -317,6 +321,10 @@ export interface LLMRequest {
 }
 
 export interface LLMResponse {
+  /** Ordered replay evidence, retained with the assistant message. */
+  readonly replay?: import('../thinking/replay.js').MessageReplay;
+  /** Leaf-side omissions, also available to standalone callers without hooks. */
+  readonly replayOmissions?: readonly import('../thinking/replay.js').ThinkingReplayOmission[];
   readonly content: string;
   readonly toolCalls: readonly {
     readonly id: string;
@@ -569,6 +577,14 @@ export type ResilienceReport =
  */
 export interface LLMCallHooks {
   /**
+   * The actual leaf provider omitted eligible completed-turn thinking before
+   * transport. Wrappers forward this channel unchanged, like onResilience.
+   * The run records metadata and keeps the permitted omission in its history.
+   */
+  readonly onReplayPrepared?: (
+    preparation: import('../thinking/replay.js').ReplayPreparation,
+  ) => void;
+  /**
    * Called once per resilience decision (a fallback, a retry, a
    * recovery). Decorators forward this hook inward unchanged, so a
    * stack of decorators produces one concatenated report stream with no
@@ -653,10 +669,20 @@ export interface LLMProvider {
    * business and this library does not get to promise it.
    *
    * A WRAPPER must forward it; `withFallback` publishes the AND of the two
-   * providers it holds, since a call that might be served by either is only
-   * constrained if both constrain it.
+   * providers it holds. Model-specific restrictions are declared separately
+   * by `supportsForcedToolChoice`; this existing wire flag remains boolean.
    */
   readonly carriesForcedToolChoice?: boolean;
+  /**
+   * Optional model-specific restriction on the forced-choice wire capability.
+   * Read with `forcedToolChoiceFor(provider, model)`: the wire flag must be
+   * true AND this predicate (when present) must answer true. Absence preserves
+   * the wire flag's existing behaviour. The adapter resolves its shorthand.
+   *
+   * Like `thinkingMode`, this function must not depend on `this`; wrappers
+   * forward it as a value. `withFallback` intersects both sides per model.
+   */
+  readonly supportsForcedToolChoice?: (model: string) => boolean;
   /**
    * `hooks` (v7.8) is optional and additive — implementations may declare
    * `complete(req)` with no second parameter and stay assignable. A LEAF

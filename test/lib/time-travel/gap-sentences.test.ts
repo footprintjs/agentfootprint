@@ -103,6 +103,8 @@ import {
   servedAt as readServedAt,
   servedViews as readServedViews,
   RECEIPT_BOUNDARY,
+  receiptHash,
+  messageDigestInput,
   SERVED_GAPS,
   UNGAPPED_FIELDS,
   type Receipt,
@@ -115,6 +117,7 @@ import type { LLMMessage, LLMRequest, LLMResponse } from '../../../src/adapters/
 // with. The public barrel carries the deps type and not this builder.
 import { buildMessageApiChart } from '../../../src/core/agent/buildMessageApiChart.js';
 import { isPaused, pauseHere } from '../../../src/core/pause.js';
+import { replayReceiptFixture } from '../../helpers/replayReceiptFixture.js';
 
 /** Several real runs per test, all of them tiny; the budget is stated. */
 const BUDGET = { timeout: 60_000 };
@@ -253,6 +256,15 @@ function once(make: () => Promise<Run>): () => Promise<Run> {
   let started: Promise<Run> | undefined;
   return () => (started ??= make());
 }
+
+const replayPreparedFlat = once(async () => {
+  const run = await replayReceiptFixture('dynamic');
+  return { snapshot: run.snapshot, wire: [run.prepared] };
+});
+const replayPreparedGrouped = once(async () => {
+  const run = await replayReceiptFixture('dynamic-grouped');
+  return { snapshot: run.snapshot, wire: [run.prepared] };
+});
 
 // ─── the runs ────────────────────────────────────────────────────────────
 
@@ -591,6 +603,19 @@ const STRONGER_CLAIM_OF: Readonly<
     >
   >
 > = {
+  'thinking-replay': (view, receipt, field) => {
+    // Unlike a merely possible cache change, this downstream preparation is
+    // recorded. The view still proves the port messages, not the later wire.
+    expect(field).toBe('messages.entries');
+    expect(receipt!.replayPreparations).toEqual([
+      { boundary: 'provider-adapter', phase: 'prepared', omittedBlocks: 1 },
+    ]);
+    expect(
+      view.messages.asSent.map((message) =>
+        receiptHash(receipt!.basis.runId, messageDigestInput(message)),
+      ),
+    ).toEqual(receipt!.messages.entries.map((entry) => entry.hash));
+  },
   'no-fold-base': (view, receipt, field) => {
     // The rebuild stopped before the strategy: what the view holds for the
     // field is shorter than what the receipt fingerprinted.
@@ -633,6 +658,8 @@ async function everyIntactView(): Promise<
     decorated(),
     resumed(),
     receiptless(),
+    replayPreparedFlat(),
+    replayPreparedGrouped(),
   ]);
   return runs.flatMap(({ snapshot }) =>
     servedViews(snapshot).map((view) => ({ view, receipt: receiptAt(snapshot, view.epoch) })),
@@ -685,6 +712,60 @@ interface Entry {
 const gapSentence = (kind: ServedGapKind): string => SERVED_GAPS[kind].why;
 
 const ACCOUNT: readonly Entry[] = [
+  {
+    site: 'thinking-replay',
+    sentence: gapSentence('thinking-replay'),
+    clauses: [
+      {
+        quote: 'Saved thinking was omitted after the request shown here was prepared',
+        claim:
+          'the real preparation hook records a downstream omission without rewriting the port receipt',
+        fields: ['receipt:replayPreparations', 'view:messages.asSent'],
+        assert: async () => {
+          for (const mode of ['dynamic', 'dynamic-grouped'] as const) {
+            const run = await replayReceiptFixture(mode);
+            const receipt = receiptAt(run.snapshot, 1)!;
+            const view = servedAt(run.snapshot, 1)!;
+            expect(kindsOf(view)).toContain('thinking-replay');
+            expect(receipt.replayPreparations).toEqual([
+              { boundary: 'provider-adapter', phase: 'prepared', omittedBlocks: 1 },
+            ]);
+            expect(view.messages.asSent).toEqual(run.port.messages);
+            expect(run.port.messages[1]!.thinkingBlocks).toHaveLength(1);
+            expect(run.prepared.messages[1]!.thinkingBlocks).toEqual([]);
+          }
+        },
+      },
+      {
+        quote:
+          'The messages and size shown are before that omission, not proof of what was sent or accepted',
+        claim:
+          'original hashes and measurement stay port-level even if transport fails after preparation',
+        fields: ['receipt:messages.entries', 'receipt:requestMeasurement'],
+        assert: async () => {
+          for (const mode of ['dynamic', 'dynamic-grouped'] as const) {
+            for (const failAfterPreparation of [false, true]) {
+              const run = await replayReceiptFixture(mode, { failAfterPreparation });
+              const receipt = receiptAt(run.snapshot, 1)!;
+              expect(receipt.messages.entries.map((m) => m.hash)).toEqual(
+                run.port.messages.map((m) =>
+                  receiptHash(receipt.basis.runId, messageDigestInput(m)),
+                ),
+              );
+              const size = JSON.stringify(run.port);
+              expect(receipt.requestMeasurement).toMatchObject({
+                status: 'measured',
+                boundary: 'initial-prepared-request',
+                total: { jsonChars: size.length, jsonBytes: Buffer.byteLength(size) },
+              });
+              expect(JSON.stringify(run.prepared).length).not.toBe(size.length);
+              expect(run.failure !== undefined).toBe(failAfterPreparation);
+            }
+          }
+        },
+      },
+    ],
+  },
   // ── cache-transform: on every view whose call went through a strategy
   //    (every agent view) and on every receipt-less view, where the record
   //    cannot rule one out — so every clause has to hold on both. Since
@@ -931,14 +1012,16 @@ const ACCOUNT: readonly Entry[] = [
       },
       {
         quote:
-          'Whatever handled it after that could have changed it, and nothing on the receipt ' +
-          'would show that',
-        claim: 'the receipt reads unchanged while three parts of the request had moved',
+          'Whatever handled it after that could have changed it; notes about later preparation ' +
+          'do not prove what was sent or accepted',
+        claim:
+          'port fields remain unchanged, and preparation can be recorded before a failed transport',
         fields: [
           'receipt:cache.transform',
           'receipt:cache.transformHash',
           'receipt:tools.names',
           'receipt:params',
+          'receipt:replayPreparations',
         ],
         assert: async () => {
           const { snapshot, wire } = await decorated();
@@ -949,6 +1032,13 @@ const ACCOUNT: readonly Entry[] = [
           expect(receipt.params.temperature).toBeUndefined();
           expect(wire[0]!.systemPrompt).toContain('<<injected by a decorator>>');
           expect(wire[0]!.temperature).toBe(0.9);
+          const failed = await replayReceiptFixture('dynamic-grouped', {
+            failAfterPreparation: true,
+          });
+          expect(receiptAt(failed.snapshot, 1)!.replayPreparations).toEqual([
+            { boundary: 'provider-adapter', phase: 'prepared', omittedBlocks: 1 },
+          ]);
+          expect(failed.failure).toBeInstanceOf(Error);
         },
       },
     ],

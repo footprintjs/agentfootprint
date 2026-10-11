@@ -3,23 +3,42 @@ fallback chain, circuit breaker), each preserving the port so they stack freely.
 
 ## What it reads / what it writes
 - Reads the request as composed, and the provider's failure.
-- Writes nothing on scope and changes nothing in the request. A fallback swaps
-  WHO answers, never WHAT was asked.
+- Writes nothing on scope and never mutates the caller's request. A fallback
+  swaps WHO answers, never WHAT was asked. A leaf-approved thinking omission
+  is retained for later attempts of that call, as described below.
 
 ## The one law here
 The port survives every wrapper. A decorator that changed the request would be
-composing, and composing belongs to a Lens.
+composing, and composing belongs to a Lens. Remembering a retirement the leaf
+already approved is not permission to compose or choose new omissions.
+
+## A failed attempt cannot resurrect retired thinking
+`replayAttempt.ts` owns one per-call request carrier for retry and fallback.
+It observes the actual leaf's `onReplayPrepared`, applies only reported
+retirements through `retireReplayHistory`, and forwards that same report once.
+It commits its local carrier only after the upstream callback succeeds; a failed
+durable write cannot be bypassed by an omission-free subsequent attempt.
+The next attempt reads the carrier, even if the previous transport failed
+after preparation. Nested decorators carry the same approved decision outward;
+they never prepare an unused fallback or decide an omission themselves.
+
+The caller's request stays untouched. Without a retirement every attempt gets
+the original request object. With one, only the affected message fields change;
+leaf-local model resolution and cache adjustments are not copied into the next
+provider's request. Complete and pre-first-chunk streaming retries use the same
+carrier. A new call starts fresh; post-first-chunk failures still never retry.
 
 ## Declarations pass through; a pair answers for both
 A decorator rebuilds the provider object, so it carries every declaration
-across: `carriesInMessages`, `carriesForcedToolChoice`, `promptCaching`,
+across: `carriesInMessages`, `carriesForcedToolChoice`, `supportsForcedToolChoice`, `promptCaching`,
 `thinkingHandler`, `thinkingMode`. Dropping one degrades it silently (no cache
 markers, no thinking stage, no build-time thinking refusal). `withFallback`
 combines what both sides declare — for `thinkingMode`, the LEAST either side
 promises for the model (`'none'` < `'adaptive'` < `'budget'`), so a fallback
 that cannot think is refused at build, not on the call it serves. It never maps
 thinking itself: each side's adapter sends its own model's shape. A request an
-adapter refused BEFORE sending (`UnsupportedThinkingError`) is a wrong request,
+adapter refused BEFORE sending (`UnsupportedThinkingError`, `UnsupportedToolChoiceError`
+or `UnsafeThinkingReplayError`) is a wrong request,
 not a failed vendor: by default `withFallback` does not move it to the other
 side and `withCircuitBreaker` does not count it.
 
@@ -27,6 +46,11 @@ side and `withCircuitBreaker` does not count it.
 const pair = withFallback(anthropic({ defaultModel: 'claude-opus-5-5' }), anthropic());
 pair.thinkingMode?.('anthropic'); // 'adaptive' — Opus 5.5 takes no budget
 ```
+
+For forced tools, the existing boolean wire flag is still the first gate.
+`forcedToolChoiceFor(provider, model)` additionally reads the optional model
+predicate. `withFallback` requires both sides to accept the model; it does not
+turn an explicitly forced request into a prompt-only request.
 
 ## The stream law: retry before the first chunk, never after
 `withRetry` re-opens a `stream()` that fails before its first chunk (a 429 or
@@ -82,3 +106,7 @@ throw Object.assign(new Error('429'), { status: 429, retryAfterMs: 4000 });
 - `withRetry.ts`, `withFallback.ts`, `withCircuitBreaker.ts`,
   `fallbackProvider.ts`, `index.ts`.
 - `statedWait.ts` — the one reader of a failure's stated wait.
+- `replayAttempt.ts` — the per-call carrier for already-approved retirements.
+  It also attaches deduplicated, metadata-only omission reports to a successful
+  response or terminal chunk, including reports from an earlier prepared
+  attempt whose transport failed. It never re-emits a report hook.

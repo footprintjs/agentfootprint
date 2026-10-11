@@ -325,6 +325,7 @@ describe('stream() — SSE from /model/{id}/invoke-with-response-stream', () => 
       stopReason: 'stop',
       providerRef: 'msg_2',
     });
+    expect(last.response?.replay?.binding?.model).toBe('');
   });
 
   it('reassembles tool arguments from interleaved input_json_delta fragments', async () => {
@@ -375,7 +376,14 @@ describe('stream() — SSE from /model/{id}/invoke-with-response-stream', () => 
       usage: { input_tokens: 20, output_tokens: 7 },
     };
     const complete = await gateway([], [json(reply)]).complete(ask());
-    const chunks = await drain(gateway([], [sse([dataLines(TEXT_EVENTS)])]).stream!(ask()));
+    // This equality fixture represents the SAME response, including its
+    // provider-reported origin. Unreported models remain unknown above.
+    const sameMessageEvents = TEXT_EVENTS.map((event) =>
+      event.type === 'message_start'
+        ? { ...event, message: { ...event.message, model: reply.model } }
+        : event,
+    );
+    const chunks = await drain(gateway([], [sse([dataLines(sameMessageEvents)])]).stream!(ask()));
     const { wireManifest: _w1, ...streamed } = chunks[chunks.length - 1]!.response!;
     const { wireManifest: _w2, ...completed } = complete;
     expect(streamed).toStrictEqual(completed);

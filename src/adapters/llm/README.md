@@ -5,13 +5,14 @@ shape. The transport of the Lens, not the composition of it.
 ## What it reads / what it writes
 Reads the request `callLLM` assembled
 (`src/core/agent/stages/callLLM.ts` · `buildCallLLMStage`);
-returns content, tool calls, thinking blocks and usage. It adds no clause and
-removes none.
+returns content, tool calls, thinking blocks, optional replay evidence and usage.
+It adds no clause. The narrowly permitted completed-turn thinking omission below
+is explicit, observed and persisted, never a silent context rewrite.
 
 ## The one law here
-No adapter may narrow what the model is shown. If a request does not fit, that
-is a refusal a human reads, and `contextWindow.ts` owns its words — an attention
-omission, which must be visible.
+No adapter silently narrows what the model is shown. Budget failures refuse;
+`contextWindow.ts` owns those words. Thinking replay has its own documented
+protocol rule below; it is not a budget workaround.
 
 ## Adapters make one attempt
 An adapter makes ONE attempt per call and never carries its own retry loop.
@@ -55,9 +56,10 @@ to the thinking rule below.
 Claude models disagree about a thinking request, and the wrong shape is a 400 on
 every call: 4.7 and later reject `{ type: 'enabled', budget_tokens }`, 4.5 and
 earlier reject `{ type: 'adaptive' }`, the 4.6 models take both, and Claude 3
-before 3.7 cannot think. `anthropicThinkingWire.ts` holds the ONE table
-(`ANTHROPIC_THINKING_MODES`, keyed by model family) and the one translation
-(`anthropicThinkingPlan`), called by `buildMessagesBody`. Each Anthropic adapter
+before 3.7 cannot think. `anthropicModels.ts` holds the ONE model-facts table
+(with `ANTHROPIC_THINKING_MODES` derived from its thinking column).
+`anthropicThinkingWire.ts` holds the one translation (`anthropicThinkingPlan`),
+called by `buildMessagesBody`. Each Anthropic adapter
 builds ONE mode function (`thinkingModeWith` — its `thinkingMode` option for an
 id the table cannot read, else the table), declares it as
 `provider.thinkingMode` AND hands the same function to `buildMessagesBody`, so
@@ -84,6 +86,27 @@ anthropicThinkingMode('us.anthropic.claude-sonnet-4-5-20250929-v1:0'); // 'budge
 anthropicThinkingMode('claude-opus-5-5'); // 'adaptive'
 anthropic().thinkingMode?.('anthropic'); // its default model's mode
 ```
+
+## Replay: one protocol owner, real runtime observations
+
+`anthropicThinkingReplay.ts` checks local evidence at the selected adapter, not
+at an unused fallback. `anthropicReplayLayout.ts` preserves exact content order
+without storing a second copy; `anthropicMessageProjection.ts` owns normalized
+messages-to-wire conversion. SDK and fetch replies use the same response mapper.
+Unknown provenance is unknown, not a signature-authentication failure.
+
+A witnessed unfinished tool turn keeps its signed content intact. A locally
+proven mismatch raises `UnsafeThinkingReplayError` before sending. A witnessed
+completed turn can lose invalid thinking: `onReplayPrepared` tells the run before
+transport, `replayHooks.ts` persists the retirement and emits a typed event for
+each block. The receipt annotation says **prepared**, not sent or accepted;
+`servedAt` names the downstream gap. A final reply with no thinking still carries
+completion evidence. Checkpoints keep that JSON evidence, not a closure registry.
+
+No beta header or server drop policy is installed. The rule follows Anthropic's
+[tool workflow](https://platform.claude.com/docs/en/build-with-claude/thinking-tool-workflows)
+and [preserved-thinking](https://platform.claude.com/docs/en/build-with-claude/preserved-thinking)
+contracts; the user-facing guide names the recovery path and limits.
 
 ## An empty assistant turn never reaches the wire
 `anthropicMessagesWire.ts` · `toAnthropicMessages` DROPS an assistant turn with
@@ -129,8 +152,10 @@ invokeModelGateway({ baseUrl, apiKeyHeader: 'api-key', apiKey, model, timeoutMs:
 - `anthropicMessagesWire.ts` — the Anthropic Messages body, response mapping and
   stream assembly, shared by the two fetch adapters above (and the body by
   `anthropic()`).
-- `anthropicThinkingWire.ts` — which thinking request each Claude model takes
-  (the one table) and the translation of `LLMRequest.thinking` onto the body.
+- `anthropicModels.ts` — the one table of thinking and forced-tool facts.
+  New forced-tool refusals require complete recognized model IDs; the thinking
+  column preserves its established permissive alias lookup for compatibility.
+- `anthropicThinkingWire.ts` — the translation of `LLMRequest.thinking` onto the body.
 - `retryAfter.ts` — the one reader of `retry-after-ms` / `Retry-After`, for the
   `retryAfterMs` an adapter declares.
 - `contextWindow.ts` — `ContextWindowExceededError`: the budget refusal, named.

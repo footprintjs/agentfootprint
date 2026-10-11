@@ -30,6 +30,8 @@ import type {
 import { asContextWindowExceeded } from './contextWindow.js';
 import { ANTHROPIC_PROMPT_CACHING } from './anthropicCacheWire.js';
 import { thinkingModeWith } from './anthropicThinkingWire.js';
+import { anthropicTakesForcedToolChoice } from './anthropicModels.js';
+import { prepareAnthropicReplay, thinkingReplayBinding } from './anthropicThinkingReplay.js';
 import { anthropicThinkingHandler } from '../../thinking/AnthropicThinkingHandler.js';
 import type { ThinkingMode } from '../../thinking/types.js';
 import {
@@ -128,22 +130,38 @@ export function browserAnthropic(options: BrowserAnthropicProviderOptions): LLMP
     name: 'browser-anthropic',
     carriesInMessages: CARRIES_IN_MESSAGES,
     carriesForcedToolChoice: true,
+    supportsForcedToolChoice: (model) =>
+      anthropicTakesForcedToolChoice(modelOf(model, defaultModel)),
     // The same body `anthropic()` builds — `buildMessagesBody` applies the
     // markers — so the same declaration (see anthropicCacheWire.ts).
     promptCaching: ANTHROPIC_PROMPT_CACHING,
     thinkingHandler: anthropicThinkingHandler,
     // …and the same per-model thinking shapes (anthropicThinkingWire.ts).
     thinkingMode: (model) => modeOf(modelOf(model, defaultModel)),
-    async complete(req: LLMRequest): Promise<LLMResponse> {
+    async complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
+      const preparation = prepareAnthropicReplay(
+        req,
+        modelOf(req.model, defaultModel),
+        'browser-anthropic',
+      );
       const body: AnthropicRequestBody = {
-        ...buildBody(req, defaultModel, defaultMaxTokens, modeOf, parallelToolCalls),
+        ...buildBody(
+          preparation.request,
+          defaultModel,
+          defaultMaxTokens,
+          modeOf,
+          parallelToolCalls,
+        ),
       };
+      const bindingFactory = thinkingReplayBinding(body, body.model);
+      const serializedBody = JSON.stringify(body);
+      if (preparation.omissions.length > 0) hooks?.onReplayPrepared?.(preparation);
       let response: Response;
       try {
         response = await fetchImpl(apiUrl, {
           method: 'POST',
           headers,
-          body: JSON.stringify(body),
+          body: serializedBody,
           ...(req.signal && { signal: req.signal }),
         });
       } catch (err) {
@@ -153,19 +171,37 @@ export function browserAnthropic(options: BrowserAnthropicProviderOptions): LLMP
       const json = (await response.json()) as AnthropicMessage;
       // Manifest read from the FINAL body — the very object JSON.stringify
       // sent — after every transform (wireManifest.ts).
-      return { ...fromAnthropicResponse(json), wireManifest: toolManifestOf(body.tools) };
+      return {
+        ...fromAnthropicResponse(json, json.id ? bindingFactory(json.id) : undefined),
+        wireManifest: toolManifestOf(body.tools),
+        ...(preparation.omissions.length > 0 && { replayOmissions: preparation.omissions }),
+      };
     },
-    async *stream(req: LLMRequest): AsyncIterable<LLMChunk> {
+    async *stream(req: LLMRequest, hooks?: LLMCallHooks): AsyncIterable<LLMChunk> {
+      const preparation = prepareAnthropicReplay(
+        req,
+        modelOf(req.model, defaultModel),
+        'browser-anthropic',
+      );
       const body: AnthropicRequestBody = {
-        ...buildBody(req, defaultModel, defaultMaxTokens, modeOf, parallelToolCalls),
+        ...buildBody(
+          preparation.request,
+          defaultModel,
+          defaultMaxTokens,
+          modeOf,
+          parallelToolCalls,
+        ),
         stream: true,
       };
+      const bindingFactory = thinkingReplayBinding(body, body.model);
+      const serializedBody = JSON.stringify(body);
+      if (preparation.omissions.length > 0) hooks?.onReplayPrepared?.(preparation);
       let response: Response;
       try {
         response = await fetchImpl(apiUrl, {
           method: 'POST',
           headers,
-          body: JSON.stringify(body),
+          body: serializedBody,
           ...(req.signal && { signal: req.signal }),
         });
       } catch (err) {
@@ -177,6 +213,8 @@ export function browserAnthropic(options: BrowserAnthropicProviderOptions): LLMP
       // Malformed tool-argument JSON becomes `{}` here — this adapter's
       // behaviour since it shipped (the gateway adapter refuses instead).
       yield* assembleAnthropicStream(parseSSE(response.body), {
+        bindingFactory,
+        replayOmissions: preparation.omissions,
         wireManifest: toolManifestOf(body.tools),
         onMalformedToolArgs: () => ({}),
       });
@@ -189,6 +227,8 @@ export class BrowserAnthropicProvider implements LLMProvider {
   readonly name = 'browser-anthropic';
   readonly carriesInMessages = CARRIES_IN_MESSAGES;
   readonly carriesForcedToolChoice = true;
+  /** The inner declaration resolves this adapter's shorthand before looking up the model. */
+  readonly supportsForcedToolChoice: (model: string) => boolean;
   readonly promptCaching = ANTHROPIC_PROMPT_CACHING;
   readonly thinkingHandler = anthropicThinkingHandler;
   /** The inner provider's own function — a closure, safe to forward unbound. */
@@ -198,6 +238,7 @@ export class BrowserAnthropicProvider implements LLMProvider {
   constructor(options: BrowserAnthropicProviderOptions) {
     this.inner = browserAnthropic(options);
     this.thinkingMode = this.inner.thinkingMode!;
+    this.supportsForcedToolChoice = this.inner.supportsForcedToolChoice!;
   }
 
   // `hooks` is FORWARDED, not dropped — see LLMCallHooks in adapters/types.ts.

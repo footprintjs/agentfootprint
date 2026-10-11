@@ -164,17 +164,10 @@ describe('Task 2 — reliability per-attempt visibility', () => {
   });
 
   // ── Integration ────────────────────────────────────────────────────
-  // NOTE: retry-other does NOT emit reliability.retried yet — the live
-  // inline path (executeWithReliability) does not actually switch providers
-  // (callFn closes over the agent's default provider; providerIdx only feeds
-  // telemetry/breaker keying). Emitting a `toProvider` switch would be
-  // misleading. This test pins the HONEST current behavior: retry-other
-  // retries the SAME provider, emits NO retried event, but a subsequent
-  // success still fires reliability.recovered(via:'retry-other'). When the
-  // live-path failover bug is fixed, add the retry-other emit + assert it.
-  it('integration: retry-other (live path) does not emit retried but does fire recovered', async () => {
-    // primary fails once then succeeds on its 2nd call (proving retry-other
-    // currently re-calls the SAME provider, not secondary).
+  // This used to characterize a bug: providerIdx changed only bookkeeping,
+  // and the default provider was called twice. The selected-provider seam
+  // now actually switches, so both the answer and its event must prove that.
+  it('integration: retry-other calls the secondary and reports the actual switch', async () => {
     const primary = flakyProvider({ name: 'primary', failTimes: 1, content: 'from-primary-2nd' });
     const secondary = flakyProvider({ name: 'secondary', failTimes: 0, content: 'from-secondary' });
     const agent = Agent.create({ provider: primary as never, model: 'm' })
@@ -205,10 +198,13 @@ describe('Task 2 — reliability per-attempt visibility', () => {
 
     const out = await agent.run({ message: 'hi' });
 
-    // The live path re-called PRIMARY (not secondary) — documenting the bug.
-    expect(out).toBe('from-primary-2nd');
-    // No retried event for retry-other (we don't emit misleading telemetry).
-    expect(retried).toHaveLength(0);
+    expect(out).toBe('from-secondary');
+    expect(retried).toHaveLength(1);
+    expect(retried[0]).toMatchObject({
+      action: 'retry-other',
+      fromProvider: 'primary',
+      toProvider: 'secondary',
+    });
     // But recovery IS observable, tagged with the route taken.
     expect(recovered?.recoveredVia).toBe('retry-other');
     expect(recovered?.priorFailures).toBe(1);

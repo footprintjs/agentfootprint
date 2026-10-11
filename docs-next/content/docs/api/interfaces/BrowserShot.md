@@ -4,7 +4,7 @@ title: BrowserShot
 
 # Interface: BrowserShot
 
-Defined in: [src/adapters/types.ts:916](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L916)
+Defined in: [src/adapters/types.ts:942](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L942)
 
 One screenshot a browser session took.
 
@@ -14,7 +14,7 @@ One screenshot a browser session took.
 
 > `readonly` **data**: `Uint8Array`
 
-Defined in: [src/adapters/types.ts:918](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L918)
+Defined in: [src/adapters/types.ts:944](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L944)
 
 Image bytes.
 
@@ -24,6 +24,6 @@ Image bytes.
 
 > `readonly` **format**: `string`
 
-Defined in: [src/adapters/types.ts:920](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L920)
+Defined in: [src/adapters/types.ts:946](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L946)
 
 Image format, lower-case (`'png'`).

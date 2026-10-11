@@ -71,6 +71,9 @@ import {
 } from './anthropicMessagesWire.js';
 import { toolManifestOf } from './wireManifest.js';
 import { thinkingModeWith } from './anthropicThinkingWire.js';
+import { anthropicTakesForcedToolChoice } from './anthropicModels.js';
+import { prepareAnthropicReplay, thinkingReplayBinding } from './anthropicThinkingReplay.js';
+import type { ReplayPreparation } from '../../thinking/replay.js';
 import { anthropicThinkingHandler } from '../../thinking/AnthropicThinkingHandler.js';
 import type { ThinkingMode } from '../../thinking/types.js';
 import { retryAfterMsFromHeaders } from './retryAfter.js';
@@ -299,11 +302,29 @@ export function invokeModelGateway(options: InvokeModelGatewayOptions): LLMProvi
     req: LLMRequest,
     operation: 'invoke' | 'invoke-with-response-stream',
     deadline: Deadline,
-  ): Promise<{ response: Response; body: InvokeModelBody }> {
+    hooks?: LLMCallHooks,
+  ): Promise<{
+    response: Response;
+    body: InvokeModelBody;
+    bindingFactory: ReturnType<typeof thinkingReplayBinding>;
+    omissions: ReplayPreparation['omissions'];
+  }> {
     const modelId = modelIdFor(req, options.model);
     // Built BEFORE the key is read: a request the model cannot take is
     // refused with nothing looked up and nothing sent.
-    const body = buildInvokeBody(req, modelId, modeOf, defaultMaxTokens, options.parallelToolCalls);
+    const preparation = prepareAnthropicReplay(req, modelId, PROVIDER_NAME);
+    const body = buildInvokeBody(
+      preparation.request,
+      modelId,
+      modeOf,
+      defaultMaxTokens,
+      options.parallelToolCalls,
+    );
+    const bindingFactory = thinkingReplayBinding(body, modelId);
+    // Capture and send the same body even if caller-owned nested values change
+    // while an asynchronous key source is resolving.
+    const serializedBody = JSON.stringify(body);
+    if (preparation.omissions.length > 0) hooks?.onReplayPrepared?.(preparation);
     const key = await keyFor(options.apiKey, modelId);
     let response: Response;
     try {
@@ -311,7 +332,7 @@ export function invokeModelGateway(options: InvokeModelGatewayOptions): LLMProvi
         fetchImpl(`${baseUrl}/model/${encodeURIComponent(modelId)}/${operation}`, {
           method: 'POST',
           headers: { 'content-type': 'application/json', [apiKeyHeader]: key },
-          body: JSON.stringify(body),
+          body: serializedBody,
           ...(deadline.signal && { signal: deadline.signal }),
         }),
         'the response',
@@ -320,7 +341,7 @@ export function invokeModelGateway(options: InvokeModelGatewayOptions): LLMProvi
       throw networkError(err, modelId);
     }
     if (!response.ok) throw await deadline.within(statusError(response, modelId), 'the response');
-    return { response, body };
+    return { response, body, bindingFactory, omissions: preparation.omissions };
   }
 
   return {
@@ -335,6 +356,8 @@ export function invokeModelGateway(options: InvokeModelGatewayOptions): LLMProvi
     // `tool_choice: { type: 'tool', name }` is part of the Anthropic body this
     // wire forwards, and a field deployment verified the gateway honours it.
     carriesForcedToolChoice: true,
+    supportsForcedToolChoice: (model) =>
+      anthropicTakesForcedToolChoice(gatewayModelOf(model, options.model)),
     // `promptCaching` is deliberately ABSENT, for the same reason the line
     // above is present: a capability is declared where it is true of the
     // ENDPOINT. This adapter builds the body `anthropic()` builds, so it
@@ -354,23 +377,37 @@ export function invokeModelGateway(options: InvokeModelGatewayOptions): LLMProvi
     // reads them from `claude-` on, like the Claude API id.
     thinkingMode: (model) => modeOf(gatewayModelOf(model, options.model)),
 
-    async complete(req: LLMRequest, _hooks?: LLMCallHooks): Promise<LLMResponse> {
+    async complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
       const modelId = modelIdFor(req, options.model);
       const deadline = deadlineFor(timeoutMs, req.signal, modelId);
       try {
-        const { response, body } = await post(req, 'invoke', deadline);
+        const { response, body, bindingFactory, omissions } = await post(
+          req,
+          'invoke',
+          deadline,
+          hooks,
+        );
         const message = await deadline.within(readMessage(response, modelId), 'the response body');
-        return { ...fromAnthropicResponse(message), wireManifest: toolManifestOf(body.tools) };
+        return {
+          ...fromAnthropicResponse(message, message.id ? bindingFactory(message.id) : undefined),
+          wireManifest: toolManifestOf(body.tools),
+          ...(omissions.length > 0 && { replayOmissions: omissions }),
+        };
       } finally {
         deadline.dispose();
       }
     },
 
-    async *stream(req: LLMRequest, _hooks?: LLMCallHooks): AsyncIterable<LLMChunk> {
+    async *stream(req: LLMRequest, hooks?: LLMCallHooks): AsyncIterable<LLMChunk> {
       const modelId = modelIdFor(req, options.model);
       const deadline = deadlineFor(timeoutMs, req.signal, modelId);
       try {
-        const { response, body } = await post(req, 'invoke-with-response-stream', deadline);
+        const { response, body, bindingFactory, omissions } = await post(
+          req,
+          'invoke-with-response-stream',
+          deadline,
+          hooks,
+        );
         if (!response.body) {
           throw new InvokeModelGatewayError({
             reason: 'stream',
@@ -379,6 +416,8 @@ export function invokeModelGateway(options: InvokeModelGatewayOptions): LLMProvi
           });
         }
         yield* assembleAnthropicStream(readGatewayEvents(response.body, modelId, deadline), {
+          bindingFactory,
+          replayOmissions: omissions,
           wireManifest: toolManifestOf(body.tools),
           onMalformedToolArgs: (call) => {
             throw new InvokeModelGatewayError({
@@ -405,6 +444,8 @@ export function invokeModelGateway(options: InvokeModelGatewayOptions): LLMProvi
 export class InvokeModelGatewayProvider implements LLMProvider {
   readonly name = PROVIDER_NAME;
   readonly carriesForcedToolChoice = true;
+  /** The inner declaration resolves this adapter's shorthand before looking up the model. */
+  readonly supportsForcedToolChoice: (model: string) => boolean;
   readonly thinkingHandler = anthropicThinkingHandler;
   /** The inner provider's own function — a closure, safe to forward unbound. */
   readonly thinkingMode: (model: string) => ThinkingMode;
@@ -413,6 +454,7 @@ export class InvokeModelGatewayProvider implements LLMProvider {
   constructor(options: InvokeModelGatewayOptions) {
     this.inner = invokeModelGateway(options);
     this.thinkingMode = this.inner.thinkingMode!;
+    this.supportsForcedToolChoice = this.inner.supportsForcedToolChoice!;
   }
 
   // `hooks` is FORWARDED, not dropped — see LLMCallHooks in adapters/types.ts.
