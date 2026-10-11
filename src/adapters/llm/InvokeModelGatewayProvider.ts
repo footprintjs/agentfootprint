@@ -71,6 +71,7 @@ import {
 } from './anthropicMessagesWire.js';
 import { toolManifestOf } from './wireManifest.js';
 import { thinkingModeWith } from './anthropicThinkingWire.js';
+import { anthropicTakesForcedToolChoice } from './anthropicModels.js';
 import { anthropicThinkingHandler } from '../../thinking/AnthropicThinkingHandler.js';
 import type { ThinkingMode } from '../../thinking/types.js';
 import { retryAfterMsFromHeaders } from './retryAfter.js';
@@ -299,11 +300,17 @@ export function invokeModelGateway(options: InvokeModelGatewayOptions): LLMProvi
     req: LLMRequest,
     operation: 'invoke' | 'invoke-with-response-stream',
     deadline: Deadline,
-  ): Promise<{ response: Response; body: InvokeModelBody }> {
+  ): Promise<{ response: Response; body: InvokeModelBody; thinkingBinding?: string }> {
     const modelId = modelIdFor(req, options.model);
     // Built BEFORE the key is read: a request the model cannot take is
     // refused with nothing looked up and nothing sent.
-    const body = buildInvokeBody(req, modelId, modeOf, defaultMaxTokens, options.parallelToolCalls);
+    const { body, thinkingBinding } = buildInvokeBody(
+      req,
+      modelId,
+      modeOf,
+      defaultMaxTokens,
+      options.parallelToolCalls,
+    );
     const key = await keyFor(options.apiKey, modelId);
     let response: Response;
     try {
@@ -320,7 +327,7 @@ export function invokeModelGateway(options: InvokeModelGatewayOptions): LLMProvi
       throw networkError(err, modelId);
     }
     if (!response.ok) throw await deadline.within(statusError(response, modelId), 'the response');
-    return { response, body };
+    return { response, body, ...(thinkingBinding !== undefined && { thinkingBinding }) };
   }
 
   return {
@@ -333,8 +340,12 @@ export function invokeModelGateway(options: InvokeModelGatewayOptions): LLMProvi
     // instead of being refused at run start, by name.
     //
     // `tool_choice: { type: 'tool', name }` is part of the Anthropic body this
-    // wire forwards, and a field deployment verified the gateway honours it.
-    carriesForcedToolChoice: true,
+    // wire forwards, and a field deployment verified the gateway honours it —
+    // per model: Opus 5.5, Sonnet 5.5, Fable 5.1 and Mythos 5.1 reject it on
+    // every request (anthropicModels.ts), and `buildMessagesBody` refuses it
+    // for them from the same table.
+    carriesForcedToolChoice: (model) =>
+      anthropicTakesForcedToolChoice(gatewayModelOf(model, options.model)),
     // `promptCaching` is deliberately ABSENT, for the same reason the line
     // above is present: a capability is declared where it is true of the
     // ENDPOINT. This adapter builds the body `anthropic()` builds, so it
@@ -358,9 +369,12 @@ export function invokeModelGateway(options: InvokeModelGatewayOptions): LLMProvi
       const modelId = modelIdFor(req, options.model);
       const deadline = deadlineFor(timeoutMs, req.signal, modelId);
       try {
-        const { response, body } = await post(req, 'invoke', deadline);
+        const { response, body, thinkingBinding } = await post(req, 'invoke', deadline);
         const message = await deadline.within(readMessage(response, modelId), 'the response body');
-        return { ...fromAnthropicResponse(message), wireManifest: toolManifestOf(body.tools) };
+        return {
+          ...fromAnthropicResponse(message, thinkingBinding),
+          wireManifest: toolManifestOf(body.tools),
+        };
       } finally {
         deadline.dispose();
       }
@@ -370,7 +384,11 @@ export function invokeModelGateway(options: InvokeModelGatewayOptions): LLMProvi
       const modelId = modelIdFor(req, options.model);
       const deadline = deadlineFor(timeoutMs, req.signal, modelId);
       try {
-        const { response, body } = await post(req, 'invoke-with-response-stream', deadline);
+        const { response, body, thinkingBinding } = await post(
+          req,
+          'invoke-with-response-stream',
+          deadline,
+        );
         if (!response.body) {
           throw new InvokeModelGatewayError({
             reason: 'stream',
@@ -380,6 +398,7 @@ export function invokeModelGateway(options: InvokeModelGatewayOptions): LLMProvi
         }
         yield* assembleAnthropicStream(readGatewayEvents(response.body, modelId, deadline), {
           wireManifest: toolManifestOf(body.tools),
+          ...(thinkingBinding !== undefined && { thinkingBinding }),
           onMalformedToolArgs: (call) => {
             throw new InvokeModelGatewayError({
               reason: 'malformed-tool-args',
@@ -404,7 +423,8 @@ export function invokeModelGateway(options: InvokeModelGatewayOptions): LLMProvi
  */
 export class InvokeModelGatewayProvider implements LLMProvider {
   readonly name = PROVIDER_NAME;
-  readonly carriesForcedToolChoice = true;
+  /** The inner provider's own function — per model, a closure, safe to forward unbound. */
+  readonly carriesForcedToolChoice: (model: string) => boolean;
   readonly thinkingHandler = anthropicThinkingHandler;
   /** The inner provider's own function — a closure, safe to forward unbound. */
   readonly thinkingMode: (model: string) => ThinkingMode;
@@ -413,6 +433,7 @@ export class InvokeModelGatewayProvider implements LLMProvider {
   constructor(options: InvokeModelGatewayOptions) {
     this.inner = invokeModelGateway(options);
     this.thinkingMode = this.inner.thinkingMode!;
+    this.carriesForcedToolChoice = this.inner.carriesForcedToolChoice as (model: string) => boolean;
   }
 
   // `hooks` is FORWARDED, not dropped — see LLMCallHooks in adapters/types.ts.
@@ -432,24 +453,26 @@ interface InvokeModelBody extends AnthropicMessagesBody {
   anthropic_version: typeof INVOKE_MODEL_ANTHROPIC_VERSION;
 }
 
+/** The InvokeModel body, and the stamp the reply's thinking gets (a model that binds it). */
 function buildInvokeBody(
   req: LLMRequest,
   modelId: string,
   thinkingMode: (model: string) => ThinkingMode,
   defaultMaxTokens: number,
   parallelToolCalls: boolean | undefined,
-): InvokeModelBody {
+): { readonly body: InvokeModelBody; readonly thinkingBinding?: string } {
   // No `model` field: the id is in the path, and this wire rejects it here.
   // The id still decides the thinking shape the body carries.
+  const { body, thinkingBinding } = buildMessagesBody(req, {
+    model: modelId,
+    thinkingMode,
+    provider: PROVIDER_NAME,
+    maxTokensDefault: defaultMaxTokens,
+    ...(parallelToolCalls !== undefined && { parallelToolCalls }),
+  });
   return {
-    anthropic_version: INVOKE_MODEL_ANTHROPIC_VERSION,
-    ...buildMessagesBody(req, {
-      model: modelId,
-      thinkingMode,
-      provider: PROVIDER_NAME,
-      maxTokensDefault: defaultMaxTokens,
-      ...(parallelToolCalls !== undefined && { parallelToolCalls }),
-    }),
+    body: { anthropic_version: INVOKE_MODEL_ANTHROPIC_VERSION, ...body },
+    ...(thinkingBinding !== undefined && { thinkingBinding }),
   };
 }
 

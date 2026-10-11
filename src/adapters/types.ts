@@ -305,10 +305,12 @@ export interface LLMRequest {
    * agree on, and each adapter writes its own dialect.
    *
    * A provider that does not declare {@link LLMProvider.carriesForcedToolChoice}
-   * never receives this field: the agent refuses at run start instead,
-   * naming the provider. Silently sending it to a wire that ignores it would
-   * turn a guarantee into a suggestion with nothing in the recording to say
-   * so.
+   * for the request's model never receives this field: the agent refuses at
+   * run start instead, naming the provider and the model. Silently sending it
+   * to a wire that ignores it would turn a guarantee into a suggestion with
+   * nothing in the recording to say so — and a model that rejects it (Claude
+   * Opus 5.5, Sonnet 5.5, Fable 5.1, Mythos 5.1) is refused by the Anthropic
+   * adapters before sending, with an `UnsupportedToolChoiceError`.
    */
   readonly toolChoice?: {
     readonly type: 'tool';
@@ -652,11 +654,21 @@ export interface LLMProvider {
    * OpenAI-compatible server does with `tool_choice` is that server's
    * business and this library does not get to promise it.
    *
+   * **Per model where the models disagree.** A function of the model id (the
+   * id a request names; the adapter resolves its own shorthand) answers for
+   * each model: Claude Opus 5.5, Sonnet 5.5, Fable 5.1 and Mythos 5.1 reject a
+   * forced choice on every request, so the Anthropic adapters and `bedrock()`
+   * answer `false` for them. Read it through `forcedToolChoiceFor(provider,
+   * model)` — a function is truthy, so a bare truthiness check says yes to
+   * every model. Like `thinkingMode`, the function must not use `this`: a
+   * wrapper forwards it as a value.
+   *
    * A WRAPPER must forward it; `withFallback` publishes the AND of the two
-   * providers it holds, since a call that might be served by either is only
-   * constrained if both constrain it.
+   * providers it holds (per model when either side declares per model), since
+   * a call that might be served by either is only constrained if both
+   * constrain it.
    */
-  readonly carriesForcedToolChoice?: boolean;
+  readonly carriesForcedToolChoice?: boolean | ((model: string) => boolean);
   /**
    * `hooks` (v7.8) is optional and additive — implementations may declare
    * `complete(req)` with no second parameter and stay assignable. A LEAF

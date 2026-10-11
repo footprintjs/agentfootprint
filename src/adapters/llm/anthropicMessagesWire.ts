@@ -25,6 +25,14 @@
 import type { LLMChunk, LLMMessage, LLMRequest, LLMResponse, LLMToolSchema } from '../types.js';
 import { applyCacheMarkers, readCacheUsage } from './anthropicCacheWire.js';
 import { anthropicThinkingPlan, type AnthropicThinkingParam } from './anthropicThinkingWire.js';
+import { anthropicBindsThinking, anthropicTakesForcedToolChoice } from './anthropicModels.js';
+import {
+  planThinkingReplay,
+  stampReply,
+  stampThinkingBlock,
+  warnWithheld,
+} from './anthropicThinkingReplay.js';
+import { UnsupportedToolChoiceError } from '../forcedToolChoice.js';
 import type { WireToolManifest } from './wireManifest.js';
 import type { ThinkingMode } from '../../thinking/types.js';
 
@@ -82,6 +90,19 @@ export interface AnthropicMessage {
   };
 }
 
+/** What `buildMessagesBody` hands an adapter. */
+export interface AnthropicMessagesRequest {
+  /** The Messages body, minus `model` — each transport adds its own framing. */
+  readonly body: AnthropicMessagesBody;
+  /**
+   * The stamp the reply's thinking blocks get, on a model that binds them to
+   * their conversation (`anthropicThinkingReplay.ts`) — hand it to
+   * `fromAnthropicResponse` / `assembleAnthropicStream`. Absent on every
+   * other model.
+   */
+  readonly thinkingBinding?: string;
+}
+
 /** One decoded stream event: its name (the SSE `event:` line, or the JSON's `type`) and its data. */
 export interface AnthropicStreamEvent {
   readonly event: string;
@@ -112,25 +133,43 @@ export interface MessagesBodyOptions {
  * Build the Messages body (minus `model`) from a framework request.
  *
  * ONE owner: `anthropic()`, `browserAnthropic()` and `invokeModelGateway()`
- * all build their body here, so a rule about the body — like which thinking
- * shape a model takes — is written once.
+ * all build their body here, so a rule about the body — which thinking shape
+ * a model takes, whether it takes a forced tool choice, which earlier thinking
+ * it may be sent back — is written once.
  *
  * @throws UnsupportedThinkingError before anything is sent, when the request
  *   asks to think in a way the model cannot take (see `anthropicThinkingPlan`).
+ * @throws UnsupportedToolChoiceError before anything is sent, when the request
+ *   forces a tool choice on a model that rejects one (`anthropicModels.ts`).
  */
 export function buildMessagesBody(
   req: LLMRequest,
   options: MessagesBodyOptions,
-): AnthropicMessagesBody {
+): AnthropicMessagesRequest {
   // The thinking shape THIS model takes, and the `max_tokens` it needs (kept
   // above the budget). Undefined when the request does not ask to think.
   const thinking = anthropicThinkingPlan(req, options);
+  // Only a choice that reaches the wire conflicts: `tool_choice` rides only a
+  // request that carries tools (below).
+  if (
+    req.toolChoice !== undefined &&
+    (req.tools?.length ?? 0) > 0 &&
+    !anthropicTakesForcedToolChoice(options.model)
+  ) {
+    throw new UnsupportedToolChoiceError({ provider: options.provider, model: options.model });
+  }
+  // Which earlier thinking goes back, on a model that binds it to its
+  // conversation — and the stamp the reply gets. No plan on any other model.
+  const replay = anthropicBindsThinking(options.model, options.thinkingMode)
+    ? planThinkingReplay(req)
+    : undefined;
+  if (replay !== undefined) warnWithheld(options.provider, options.model, replay);
   // The map is only needed when a messages marker has to be placed; building
   // it always keeps the transform single-pass and costs one number per message.
   const messageIndexMap: number[] = [];
   const body: AnthropicMessagesBody = {
     max_tokens: thinking?.maxTokens ?? req.maxTokens ?? options.maxTokensDefault,
-    messages: toAnthropicMessages(req.messages, messageIndexMap),
+    messages: toAnthropicMessages(req.messages, messageIndexMap, replay?.withheld),
   };
   if (req.systemPrompt) body.system = req.systemPrompt;
   if (req.tools && req.tools.length > 0) body.tools = req.tools.map(toAnthropicTool);
@@ -158,7 +197,7 @@ export function buildMessagesBody(
   if (req.cacheMarkers && req.cacheMarkers.length > 0) {
     applyCacheMarkers(body, req.cacheMarkers, messageIndexMap);
   }
-  return body;
+  return replay === undefined ? { body } : { body, thinkingBinding: replay.binding };
 }
 
 /**
@@ -172,15 +211,20 @@ export function buildMessagesBody(
  * tool calls is DROPPED too — the API refuses empty content anywhere but a
  * final prefill.
  *
+ * `withheld` names the assistant turns (indices into `messages`) whose
+ * thinking stays home — the replay plan of a model that binds thinking to its
+ * conversation (`anthropicThinkingReplay.ts`). Absent, every block goes back.
+ *
  * ONE owner: `anthropic()`, `browserAnthropic()` and `invokeModelGateway()`
  * all build their messages here.
  */
 export function toAnthropicMessages(
   messages: readonly LLMMessage[],
   indexMap?: number[],
+  withheld?: ReadonlySet<number>,
 ): AnthropicMessageParam[] {
   const result: AnthropicMessageParam[] = [];
-  for (const m of messages) {
+  for (const [i, m] of messages.entries()) {
     if (m.role === 'system') {
       indexMap?.push(-1);
       continue;
@@ -195,7 +239,8 @@ export function toAnthropicMessages(
       // v2.14 — thinking blocks come FIRST per Anthropic's wire format
       // ordering rule. Out-of-order = HTTP 400. Signature passes through
       // BYTE-EXACT — no String() coercion, no JSON-roundtrip, no trim.
-      if (m.thinkingBlocks && m.thinkingBlocks.length > 0) {
+      // `binding` never rides: it is the replay rule's, not the wire's.
+      if (m.thinkingBlocks && m.thinkingBlocks.length > 0 && withheld?.has(i) !== true) {
         for (const tb of m.thinkingBlocks) {
           if (tb.type === 'redacted_thinking') {
             // The encrypted payload rides `signature` on the normalized
@@ -265,7 +310,16 @@ export function toAnthropicTool(schema: LLMToolSchema): AnthropicTool {
 
 // ─── Response ───────────────────────────────────────────────────────
 
-export function fromAnthropicResponse(message: AnthropicMessage): LLMResponse {
+/**
+ * A Messages response → `LLMResponse`. `thinkingBinding` (from
+ * `buildMessagesBody`, on a model that binds thinking to its conversation)
+ * stamps the reply's thinking blocks, so a later request knows whether it may
+ * send them back.
+ */
+export function fromAnthropicResponse(
+  message: AnthropicMessage,
+  thinkingBinding?: string,
+): LLMResponse {
   const textParts: string[] = [];
   const toolCalls: { id: string; name: string; args: Record<string, unknown> }[] = [];
   // v2.14 — detect thinking presence so we can pass the full content
@@ -294,7 +348,12 @@ export function fromAnthropicResponse(message: AnthropicMessage): LLMResponse {
     providerRef: message.id,
     // Pass the FULL content array — handler filters by type. Undefined
     // when no thinking present so the subflow's early-return kicks in.
-    ...(hasThinking && { rawThinking: message.content }),
+    ...(hasThinking && {
+      rawThinking:
+        thinkingBinding === undefined
+          ? message.content
+          : stampReply(message.content, thinkingBinding),
+    }),
   };
 }
 
@@ -325,6 +384,12 @@ export interface MalformedToolArgs {
 export interface StreamAssemblyOptions {
   /** Read off the request body that was sent — see wireManifest.ts. */
   readonly wireManifest: WireToolManifest;
+  /**
+   * The stamp for the reply's thinking blocks (`buildMessagesBody`'s
+   * `thinkingBinding`), on a model that binds thinking to its conversation.
+   * Absent, the blocks pass through as they streamed.
+   */
+  readonly thinkingBinding?: string;
   /**
    * What to do with tool arguments that do not parse: return the args to use,
    * or throw. Each adapter decides — the browser adapter has always used `{}`;
@@ -361,12 +426,21 @@ export async function* assembleAnthropicStream(
   // signature_delta, stop). Accumulated per index; ORDER preserved.
   const thinkingByIndex = new Map<
     number,
-    { type: 'thinking' | 'redacted_thinking'; thinking: string[]; signature: string[] }
+    {
+      type: 'thinking' | 'redacted_thinking';
+      thinking: string[];
+      signature: string[];
+      /** Whether text or a tool call opened before it in this reply. */
+      afterContent: boolean;
+    }
   >();
   const completedThinking: Array<
-    | { type: 'thinking'; thinking: string; signature?: string }
-    | { type: 'redacted_thinking'; data: string }
+    | { type: 'thinking'; thinking: string; signature?: string; binding?: string }
+    | { type: 'redacted_thinking'; data: string; binding?: string }
   > = [];
+  // Has any block other than thinking opened yet? A thinking block that opens
+  // after one cannot go back in the place it came from (`anthropicThinkingReplay.ts`).
+  let contentOpened = false;
   // Usage rides two places: message_start (input first) and message_delta
   // (running output). message_stop carries none.
   let messageId: string | undefined;
@@ -411,7 +485,11 @@ export async function* assembleAnthropicStream(
               : block.signature !== undefined
               ? [block.signature]
               : [],
+          afterContent: contentOpened,
         });
+      }
+      if (block !== undefined && block.type !== 'thinking' && block.type !== 'redacted_thinking') {
+        contentOpened = true;
       }
     } else if (event.event === 'content_block_delta') {
       const data = event.data as {
@@ -478,15 +556,19 @@ export async function* assembleAnthropicStream(
         if (t) {
           const thinkingText = t.thinking.join('');
           const signature = t.signature.join('');
-          if (t.type === 'redacted_thinking') {
-            completedThinking.push({ type: 'redacted_thinking', data: signature });
-          } else {
-            completedThinking.push({
-              type: 'thinking',
-              thinking: thinkingText,
-              ...(signature.length > 0 && { signature }),
-            });
-          }
+          const done =
+            t.type === 'redacted_thinking'
+              ? { type: 'redacted_thinking' as const, data: signature }
+              : {
+                  type: 'thinking' as const,
+                  thinking: thinkingText,
+                  ...(signature.length > 0 && { signature }),
+                };
+          completedThinking.push(
+            options.thinkingBinding === undefined
+              ? done
+              : stampThinkingBlock(done, options.thinkingBinding, t.afterContent),
+          );
           thinkingByIndex.delete(data.index);
         }
       }
