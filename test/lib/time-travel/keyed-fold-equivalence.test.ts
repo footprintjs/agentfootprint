@@ -21,7 +21,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { commitValueAt, stateAt } from 'footprintjs/trace';
+import { commitValueAt, stateAt } from 'foottrace';
 import { FlowChartExecutor, flowChart } from 'footprintjs';
 import { Agent } from '../../../src/index.js';
 import { isPaused, pauseHere } from '../../../src/core/pause.js';

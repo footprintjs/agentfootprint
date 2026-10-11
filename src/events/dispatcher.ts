@@ -94,7 +94,6 @@ export type DomainWildcard =
   // wildcard in the same change (the credential.* lesson above, applied).
   | 'agentfootprint.map.*'
   | 'agentfootprint.integrity.*'
-  | 'agentfootprint.risk.*'
   | 'agentfootprint.fallback.*'
   | 'agentfootprint.cost.*'
   | 'agentfootprint.eval.*'

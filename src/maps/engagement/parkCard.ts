@@ -10,7 +10,7 @@
  * Parking was invisible on the wire, and on the default posture it was worse
  * than invisible — it was CONTRADICTED. `.maps()` documents that parking stops
  * "the prompt fragment AND tools"; with `scopeTools` false (the default for
- * flat graphs until 10.0.0) only the fragment stopped, and every one of the
+ * flat graphs) only the fragment stopped, and every one of the
  * parked map's tool schemas kept riding. So the model saw four tools it was
  * being invited to call, belonging to a skill whose instructions had silently
  * vanished, with nothing anywhere saying why or how to get them back.

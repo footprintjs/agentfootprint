@@ -945,18 +945,17 @@ describe('regression: the build checkup', () => {
     expect(() => buildWith([notesSkill()], { tools: [skipImpostor] }).build()).not.toThrow();
   });
 
-  it('dev-warns when the procedure cannot complete inside maxIterations, and when refreshPolicy rides beside steps', async () => {
+  it('dev-warns when the procedure cannot complete inside maxIterations', async () => {
     const { enableDevMode, disableDevMode } = await import('footprintjs');
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     enableDevMode();
     try {
       Agent.create({ provider: mock({ reply: 'ok' }), model: 'mock', maxIterations: 2 })
         .system('s')
-        .injection(refundSkill({ refreshPolicy: { afterTokens: 50_000, via: 'tool-result' } }))
+        .injection(refundSkill())
         .build();
       const lines = warn.mock.calls.map((c) => String(c[0]));
       expect(lines.some((l) => l.includes('cannot complete in one turn'))).toBe(true);
-      expect(lines.some((l) => l.includes('steps supersede it'))).toBe(true);
     } finally {
       disableDevMode();
       warn.mockRestore();

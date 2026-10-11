@@ -6,7 +6,7 @@ title: ReadTrackingMode
 
 > **ReadTrackingMode** = `RetentionPolicy`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/memory/types.d.ts:178
+Defined in: node\_modules/footprintjs/dist/types/lib/memory/frameTypes.d.ts:47
 
 Policy for how tracked reads are recorded into `StageSnapshot.stageReads`.
 

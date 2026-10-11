@@ -101,13 +101,8 @@
  * ```
  */
 
-import {
-  ROOT_RUNTIME_STAGE_ID,
-  ROOT_SUBFLOW_ID,
-  SequenceStore,
-  CommitRangeIndex,
-  type RangeToken,
-} from 'footprintjs/trace';
+import { ROOT_RUNTIME_STAGE_ID, ROOT_SUBFLOW_ID, SequenceStore } from 'footprintjs/trace';
+import { CommitRangeIndex, type RangeToken } from 'foottrace';
 import type {
   CombinedRecorder,
   FlowDecisionEvent,

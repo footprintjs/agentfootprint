@@ -24,6 +24,7 @@
 
 import type { LLMCallHooks } from '../../adapters/types.js';
 import { typedEmit, type EmitableScope } from './typedEmit.js';
+import { replayPreparedHook, type ReplayReportScope } from './replayHooks.js';
 
 /**
  * Build the per-call hooks object for one stage. Hoist it once per stage
@@ -34,8 +35,13 @@ import { typedEmit, type EmitableScope } from './typedEmit.js';
  *   const providerHooks = resilienceHooks(scope);
  *   const response = await provider.complete(request, providerHooks);
  */
-export function resilienceHooks(scope: EmitableScope): LLMCallHooks {
+export function resilienceHooks(
+  scope: EmitableScope & ReplayReportScope,
+  receiptMinted = false,
+  onReplayPersisted?: LLMCallHooks['onReplayPrepared'],
+): LLMCallHooks {
   return {
+    onReplayPrepared: replayPreparedHook(scope, receiptMinted, onReplayPersisted),
     onResilience(report): void {
       // The library owns THIS sink, and it is the only one that runs
       // in-run — so guard it once here. Telemetry must never break an

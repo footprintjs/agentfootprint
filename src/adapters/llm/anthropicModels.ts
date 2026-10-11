@@ -1,38 +1,32 @@
 /**
  * anthropicModels — what each Claude model takes on the Anthropic wire: ONE
- * table, three facts per model family, each one a 400 when it is wrong.
+ * table of thinking, tool-choice and documented replay-prefix facts.
  *
- * Pattern: declaration + one family matcher (the `anthropicCacheWire.ts` twin).
+ * Pattern: declaration + shared family lookup with explicit matching policies.
  * Role:    Outer ring. The facts the adapters declare and send from:
  *   - `thinking` — which thinking request the model takes (`'adaptive'`,
  *     `'budget'` or `'none'`; translated by `anthropicThinkingWire.ts`);
  *   - `forcedToolChoice` — whether it takes `tool_choice: { type: 'tool' }`
- *     (the `'tool-forced'` output strategy and the constrained pick send one);
- *   - `boundThinking` — whether its thinking blocks are bound to the
- *     conversation they were produced in (`anthropicThinkingReplay.ts`).
+ *     (the `'tool-forced'` output strategy and the constrained pick send one).
  *
  * A model is added here, and nowhere else.
  *
  * The facts, from Anthropic's documentation (fetched 2026-10-09):
  * - thinking per model — see `anthropicThinkingWire.ts` (unchanged from the
  *   9.141.0 table);
- * - "Forced tool use … works with adaptive thinking. The exceptions are Claude
- *   Opus 5.5, Claude Sonnet 5.5, Claude Fable 5.1, and Claude Mythos 5.1,
- *   which reject forced tool use on every request with a 400 error" —
+ * - Opus 5.5, Sonnet 5.5, Fable 5.1 and Mythos 5.1 reject forced tools:
  *   https://platform.claude.com/docs/en/build-with-claude/thinking ("Response
- *   prefill and forced tool use"); "Claude Haiku 5.5 accepts a forced
- *   `tool_choice`" — https://platform.claude.com/docs/en/models/haiku-5-5/migration-guide;
- * - "On Claude Fable 5.1, Claude Opus 5.5, Claude Sonnet 5.5, and Claude Haiku
- *   5.5, a thinking block stays valid only while everything you sent before it
- *   is unchanged on later requests. Claude Mythos 5.1 and models before Claude
- *   Fable 5.1 don't run the prefix check" —
+ *   prefill and forced tool use"); Haiku 5.5 accepts them:
+ *   https://platform.claude.com/docs/en/models/haiku-5-5/migration-guide.
+ * - Prefix binding is documented for Fable 5.1, Opus 5.5, Sonnet 5.5 and
+ *   Haiku 5.5, not inferred for other families:
  *   https://platform.claude.com/docs/en/build-with-claude/preserved-thinking.
  *
  * @example
  *   anthropicModelFacts('claude-opus-5-5');
- *   // { thinking: 'adaptive', forcedToolChoice: false, boundThinking: true }
+ *   // { thinking: 'adaptive', forcedToolChoice: false, thinkingPrefixBinding: true }
  *   anthropicModelFacts('us.anthropic.claude-haiku-4-5-20251001-v1:0');
- *   // { thinking: 'budget', forcedToolChoice: true, boundThinking: false }
+ *   // { thinking: 'budget', forcedToolChoice: true }
  *   anthropicModelFacts('claude-opus-6'); // undefined — not in the table
  */
 
@@ -44,19 +38,20 @@ export interface AnthropicModelFacts {
   readonly thinking: ThinkingMode;
   /** Whether it takes a forced tool choice (`tool_choice: { type: 'tool' | 'any' }`). */
   readonly forcedToolChoice: boolean;
-  /**
-   * Whether its thinking blocks are bound to the conversation that produced
-   * them: valid only while the system prompt, the tools and every earlier
-   * message are unchanged (preserved thinking's prefix check).
-   */
-  readonly boundThinking: boolean;
+  /** This family documents preserved-thinking prefix checking. */
+  readonly thinkingPrefixBinding?: true;
 }
 
 const row = (
   thinking: ThinkingMode,
   forcedToolChoice = true,
-  boundThinking = false,
-): AnthropicModelFacts => Object.freeze({ thinking, forcedToolChoice, boundThinking });
+  thinkingPrefixBinding = false,
+): AnthropicModelFacts =>
+  Object.freeze({
+    thinking,
+    forcedToolChoice,
+    ...(thinkingPrefixBinding && { thinkingPrefixBinding: true as const }),
+  });
 
 /**
  * The facts per Claude model family, keyed by the family id (the model id
@@ -66,8 +61,7 @@ const row = (
 export const ANTHROPIC_MODELS: Readonly<Record<string, AnthropicModelFacts>> = Object.freeze({
   // Adaptive only — `budget_tokens` is a 400 (Claude 4.7 and later). Opus 5.5,
   // Sonnet 5.5, Fable 5.1 and Mythos 5.1 also reject a forced tool choice on
-  // every request; Fable 5.1, Opus 5.5, Sonnet 5.5 and Haiku 5.5 run the
-  // prefix check on replayed thinking (Mythos 5.1 does not).
+  // every request.
   'claude-fable-5-1': row('adaptive', false, true),
   'claude-mythos-5-1': row('adaptive', false),
   'claude-fable-5': row('adaptive'),
@@ -110,38 +104,56 @@ export const ANTHROPIC_THINKING_MODES: Readonly<Record<string, ThinkingMode>> = 
   Object.fromEntries(Object.entries(ANTHROPIC_MODELS).map(([family, f]) => [family, f.thinking])),
 );
 
-/**
- * What may follow a family id and still name that family: nothing; a date
- * (`-20250929`, Vertex `@20251101`); the `-0` alias of an x.0 model
- * (`claude-opus-4-0`); `-latest`; a Bedrock version (`-v1`, `-v1:0`); or a
- * separator that starts a suffix (`:`, `[`). Never another version number —
- * so `claude-opus-4` does not claim `claude-opus-4-5`, or a future `-4-9`.
- */
-const SAME_FAMILY = /^(?:$|-0(?![0-9])|-\d{8}(?![0-9])|-latest(?![a-z0-9])|-v\d|[@:[])/;
+// The existing thinking lookup intentionally accepts decorated/dotted aliases.
+// Preserve that compatibility, but never use it to assert hard model facts.
+const THINKING_SUFFIX = /^(?:$|-0(?![0-9])|-\d{8}(?![0-9])|-latest(?![a-z0-9])|-v\d|[@:[])/;
+const API_SUFFIX = /^(?:|-0|-\d{8}|-latest|@\d{8})$/;
+const BEDROCK_SUFFIX = /^(?:|-\d{8})(?:-v\d+(?::\d+)?)?$/;
+const BEDROCK_ID = /^(?:(?:us|eu|apac|global|jp|au)\.)?anthropic\.(claude-[a-z0-9:-]+)$/;
+const FOUNDATION_ARN = /^arn:aws(?:-us-gov|-cn)?:bedrock:[a-z0-9-]+::foundation-model\/([^/]+)$/;
+const PROFILE_ARN =
+  /^arn:aws(?:-us-gov|-cn)?:bedrock:[a-z0-9-]+:\d{12}:inference-profile\/([^/]+)$/;
+const VERTEX_ID =
+  /^(?:projects\/[a-z0-9-]+\/locations\/[a-z0-9-]+\/)?publishers\/anthropic\/models\/(claude-[a-z0-9@-]+)$/;
+
+/** Longest match keeps the one table independent of declaration order. */
+function familyMatching(name: string, suffix: RegExp): string | undefined {
+  let match: string | undefined;
+  for (const family of Object.keys(ANTHROPIC_MODELS)) {
+    if (!name.startsWith(family) || !suffix.test(name.slice(family.length))) continue;
+    if (match === undefined || family.length > match.length) match = family;
+  }
+  return match;
+}
 
 /**
  * The table family a Claude model id names, or `undefined` when none does.
  *
- * Reads the id from its `claude-` onward, so platform forms resolve like the
- * Claude API id: `anthropic.…` and `us.`/`eu.`/`global.`… Bedrock profiles,
- * inference-profile ARNs, Vertex `…@date` ids, and dotted aliases
- * (`claude-sonnet-4.5`).
+ * Accepts complete Claude API, Bedrock foundation/system-profile and Vertex
+ * model identifiers. Application profiles, deployment names and router aliases
+ * are opaque: a Claude-looking substring is not evidence of the served model.
+ * This recognizes a family, not its availability in a particular region.
  */
 export function anthropicModelFamily(model: string): string | undefined {
+  // Besides refusing decorated aliases, this prevents `$` in the anchored
+  // matchers from accepting a final newline as part of a valid identifier.
+  if (model !== model.trim()) return undefined;
+  if (model.startsWith('claude-')) return familyMatching(model, API_SUFFIX);
+
+  const vertex = VERTEX_ID.exec(model);
+  if (vertex) return familyMatching(vertex[1], API_SUFFIX);
+
+  const arn = FOUNDATION_ARN.exec(model) ?? PROFILE_ARN.exec(model);
+  const bedrock = BEDROCK_ID.exec(arn ? arn[1] : model);
+  return bedrock ? familyMatching(bedrock[1], BEDROCK_SUFFIX) : undefined;
+}
+
+/** Compatibility only: do not use this permissive lookup for hard refusals. */
+function thinkingFamily(model: string): string | undefined {
   const id = model.toLowerCase();
   const start = id.indexOf('claude-');
   if (start < 0) return undefined;
-  // `claude-sonnet-4.5` is `claude-sonnet-4-5`: no real id carries a dot after
-  // `claude-`, so the spelling changes nothing it could be confused with.
-  const name = id.slice(start).replace(/\./g, '-');
-  // The longest family that names this id — at most one can, by SAME_FAMILY;
-  // longest-wins keeps the answer independent of the table's order anyway.
-  let match: string | undefined;
-  for (const family of Object.keys(ANTHROPIC_MODELS)) {
-    if (!name.startsWith(family) || !SAME_FAMILY.test(name.slice(family.length))) continue;
-    if (match === undefined || family.length > match.length) match = family;
-  }
-  return match;
+  return familyMatching(id.slice(start).replace(/\./g, '-'), THINKING_SUFFIX);
 }
 
 /** The table's facts for a model id, or `undefined` for an id it does not know. */
@@ -164,6 +176,10 @@ export function anthropicModelFacts(model: string): AnthropicModelFacts | undefi
  * `thinkingMode` option for exactly that (`anthropicThinkingWire.ts` ·
  * `thinkingModeWith`).
  *
+ * Historical dotted and decorated aliases retain their existing thinking
+ * lookup. That compatibility behavior is not a hard fact about the model
+ * behind an opaque deployment and does not control forced-tool refusals.
+ *
  * @example
  *   anthropicThinkingMode('claude-opus-5-5');                            // 'adaptive'
  *   anthropicThinkingMode('us.anthropic.claude-sonnet-4-5-20250929-v1:0'); // 'budget'
@@ -171,7 +187,8 @@ export function anthropicModelFacts(model: string): AnthropicModelFacts | undefi
  *   anthropicThinkingMode('claude-opus-6');                               // 'adaptive' — unknown
  */
 export function anthropicThinkingMode(model: string): ThinkingMode {
-  return anthropicModelFacts(model)?.thinking ?? 'adaptive';
+  const family = thinkingFamily(model);
+  return family === undefined ? 'adaptive' : ANTHROPIC_MODELS[family].thinking;
 }
 
 /**
@@ -186,28 +203,4 @@ export function anthropicThinkingMode(model: string): ThinkingMode {
  */
 export function anthropicTakesForcedToolChoice(model: string): boolean {
   return anthropicModelFacts(model)?.forcedToolChoice ?? true;
-}
-
-/**
- * Whether a model's thinking blocks are bound to the conversation that
- * produced them. An id the table does not know is read as bound when the
- * adapter's mode function (`thinkingModeWith`) answers `'adaptive'` for it —
- * the conservative reading: holding back a block that would have been
- * accepted costs that block's reasoning, sending one that is bound costs a
- * 400. A budget model never is: none runs the check, and manual mode needs the
- * final turn's thinking sent back.
- *
- * @example
- *   const modeOf = thinkingModeWith((id) => (id === 'haiku-fast' ? 'budget' : undefined));
- *   anthropicBindsThinking('claude-opus-5-5', modeOf);   // true
- *   anthropicBindsThinking('claude-mythos-5-1', modeOf); // false — the table says so
- *   anthropicBindsThinking('haiku-fast', modeOf);        // false — declared a budget model
- *   anthropicBindsThinking('claude-opus-6', modeOf);     // true — unknown, adaptive
- */
-export function anthropicBindsThinking(
-  model: string,
-  modeOf: (model: string) => ThinkingMode,
-): boolean {
-  const facts = anthropicModelFacts(model);
-  return facts !== undefined ? facts.boundThinking : modeOf(model) === 'adaptive';
 }

@@ -104,7 +104,7 @@ import type {
   LLMRequest,
   LLMResponse,
 } from '../adapters/types.js';
-import { UnsupportedThinkingError } from '../thinking/errors.js';
+import { isRequestRefusal } from '../adapters/requestRefusal.js';
 
 // ─── Public options ──────────────────────────────────────────────────
 
@@ -117,7 +117,8 @@ export interface WithCircuitBreakerOptions {
   readonly halfOpenSuccessThreshold?: number;
   /**
    * Predicate — does this error count toward the threshold? Default:
-   * everything except an AbortError and an `UnsupportedThinkingError` (a
+   * everything except an AbortError, `UnsupportedThinkingError`,
+   * `UnsupportedToolChoiceError` or `UnsafeThinkingReplayError` (a
    * request the adapter refused before sending) counts. Override to ignore client
    * errors (e.g., 4xx) so a malformed request doesn't trip the
    * breaker for everyone.
@@ -307,6 +308,9 @@ export function withCircuitBreaker(
     ...(inner.carriesForcedToolChoice !== undefined && {
       carriesForcedToolChoice: inner.carriesForcedToolChoice,
     }),
+    ...(inner.supportsForcedToolChoice !== undefined && {
+      supportsForcedToolChoice: inner.supportsForcedToolChoice,
+    }),
     // And for prompt caching: a breaker never changes what reaches the wire.
     ...(inner.promptCaching !== undefined && { promptCaching: inner.promptCaching }),
     ...(inner.thinkingHandler !== undefined && { thinkingHandler: inner.thinkingHandler }),
@@ -369,6 +373,6 @@ function defaultShouldCount(error: unknown): boolean {
   // Nor a request the adapter refused before sending it: that says the
   // REQUEST is wrong, not the vendor — counting it would open the breaker
   // on healthy calls.
-  if (error instanceof UnsupportedThinkingError) return false;
+  if (isRequestRefusal(error)) return false;
   return true;
 }

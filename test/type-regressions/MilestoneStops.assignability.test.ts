@@ -15,8 +15,8 @@
  *   4. and the new part: `meta` on a milestone stop is `Milestone | undefined`.
  */
 import { describe, expect, it } from 'vitest';
-import type { Stop, TimeTravelStrategy } from 'footprintjs/trace';
-import { commitStops } from 'footprintjs/trace';
+import type { Stop, TimeTravelStrategy } from 'foottrace';
+import { commitStops } from 'foottrace';
 
 import {
   milestoneOf,

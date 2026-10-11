@@ -35,7 +35,7 @@
 
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { CommitRangeIndex, type RangeToken } from 'footprintjs/trace';
+import { CommitRangeIndex, type RangeToken } from 'foottrace';
 import type { FlowSubflowEvent } from 'footprintjs';
 import { EventDispatcher } from '../../../src/events/dispatcher.js';
 import {

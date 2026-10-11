@@ -25,7 +25,7 @@
 import { describe, expect, it } from 'vitest';
 import { unsupportedClaimsOf } from '../../src/integrity/unsupported-claim/check.js';
 import { Agent, defineTool } from '../../src/index.js';
-import { semantic } from '../../src/lib/semantics/envelope.js';
+import { describedResult } from '../../src/lib/semantics/described.js';
 import { mock } from '../../src/llm-providers.js';
 import { unknown as unknownClaim } from '../../src/lib/claim/claim.js';
 import { contextErrorIdentity, dedupeContextErrors } from '../../src/integrity/finding/types.js';
@@ -186,9 +186,9 @@ function screenTool() {
     description: 'inspects the screen',
     inputSchema: { type: 'object', properties: {} },
     execute: () =>
-      semantic({
+      describedResult({
         facts: [{ entity: 'screen2', nav: 2 }],
-        provenance: { measured_at: '2026-08-20T00:00:00Z', source: 'test-harness' },
+        provenance: { measuredAt: '2026-08-20T00:00:00Z', source: 'test-harness' },
       }),
   });
 }

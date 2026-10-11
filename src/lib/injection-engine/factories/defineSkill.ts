@@ -43,7 +43,7 @@
  */
 
 import { plainLineProblem } from '../../plainLine.js';
-import { isDevMode } from 'footprintjs';
+import { assertKnownOptions } from '../optionKeys.js';
 import type { Injection } from '../types.js';
 import type { Tool } from '../../../core/tools.js';
 import { resolveCachePolicy } from '../../../cache/applyCachePolicy.js';
@@ -82,40 +82,6 @@ import { assertArtifactVocabulary } from '../skillVocabulary.js';
  */
 export type SurfaceMode = 'auto' | 'system-prompt' | 'tool-only' | 'both';
 
-/**
- * When (if ever) to re-deliver a Skill's body in long-running runs.
- *
- * Even on providers with strong system-prompt adherence, attention to
- * the system slot decays past long contexts. `refreshPolicy` was declared
- * to re-inject the body via tool result past a token threshold so the LLM
- * sees it fresh again.
- *
- * @deprecated **DEPRECATED-pending-steps (9.16.0) — stored, never read, and
- * it will stay that way.** `defineSkill` records what you pass on
- * `skill.metadata.refreshPolicy` and nothing in the engine has ever read it:
- * no re-injection happens today, on any version. The hook is superseded by a
- * planned steps-as-data feature, which will own re-delivery declaratively —
- * this field will NOT be wired up in the meantime, and will be removed in the
- * next major after steps ship. The field stays accepted (additive-only law)
- * so existing declarations keep compiling; dev mode warns once per process
- * when one is set. If you need a body re-surfaced in a long run today,
- * deliver it yourself (e.g. `surfaceMode: 'both'`, so every `read_skill`
- * call returns the body afresh).
- */
-export interface RefreshPolicy {
-  /**
-   * Re-inject the Skill body once the run has consumed this many input
-   * tokens since the Skill was last surfaced. Recommended: 50_000 for
-   * 200k-context models; 20_000 for 32k-context models.
-   */
-  readonly afterTokens: number;
-  /**
-   * How to re-inject. `'tool-result'` synthesizes a fresh tool result
-   * carrying the body text (recency-first). Other modes reserved.
-   */
-  readonly via: 'tool-result';
-}
-
 export interface DefineSkillOptions {
   readonly id: string;
   /** Visible to the LLM via the activation tool's description. */
@@ -148,16 +114,6 @@ export interface DefineSkillOptions {
    * explicitly to get the other channels.
    */
   readonly surfaceMode?: SurfaceMode;
-  /**
-   * Intent to re-deliver the body past a token threshold, to defend
-   * against long-context attention decay. Default: undefined.
-   *
-   * @deprecated DEPRECATED-pending-steps (9.16.0): recorded on the Skill's
-   * metadata, never acted on by the engine, and superseded by a planned
-   * steps-as-data feature — it will not be wired up. Dev mode warns once per
-   * process when set. See `RefreshPolicy` for what to do instead today.
-   */
-  readonly refreshPolicy?: RefreshPolicy;
   /**
    * Per-skill tool gating — the field that makes this Skill's `tools`
    * appear only while the Skill is active.
@@ -318,56 +274,28 @@ export function resolveSurfaceMode(provider: string, model?: string): SurfaceMod
   return 'tool-only';
 }
 
-/**
- * Refuse a `viaToolName` option that no longer exists (9.0.0 grace error).
- *
- * The option was deprecated in 8.7.0 and removed here. `'read_skill'` is the
- * only activation tool this library has ever built: the evaluator activates an
- * `llm-activated` skill by matching `ctx.activatedInjectionIds`, only
- * `read_skill` writes that array, and nothing ever read the field. 8.7.0 made
- * a non-`read_skill` value a mount-time refusal; 9.0.0 deletes the option.
- *
- * Deleting a type member alone would have been a silent DOWNGRADE: an object
- * literal gets an excess-property error, but an options bag arriving through a
- * variable does not — and the value would then be ignored where 8.7.0 refused
- * it. So the field is read at run time exactly once more, to say it is gone.
- *
- * Deleted in 10.0.0.
- */
-function assertNoViaToolName(where: string, opts: object): void {
-  const legacy = (opts as { readonly viaToolName?: unknown }).viaToolName;
-  if (legacy === undefined) return;
-  throw new Error(
-    `${where}: \`viaToolName\` was removed in 9.0.0 (deprecated since 8.7.0), and this call ` +
-      `passes '${String(legacy)}'. It never did anything: 'read_skill' is the only activation ` +
-      `tool this library builds, the evaluator matches on ctx.activatedInjectionIds — which ` +
-      `only read_skill writes — and no tool was ever created from this name. Drop the option: ` +
-      `skills already share ONE activation tool and the model picks WHICH skill by id. If you ` +
-      `need the skill gated on something else, use a \`rule\` trigger or a skillGraph() edge.`,
-  );
-}
+const SKILL_OPTION_KEYS = {
+  id: true,
+  description: true,
+  title: true,
+  body: true,
+  tools: true,
+  surfaceMode: true,
+  autoActivate: true,
+  steps: true,
+  onSkip: true,
+  produces: true,
+  consumes: true,
+  provider: true,
+  model: true,
+  cache: true,
+} satisfies Record<keyof DefineSkillOptions, true>;
 
-/** One warn per process for the deprecated `refreshPolicy` — the field is
- *  accepted (additive-only law) but a declaration that does nothing should
- *  say so ONCE, not on every skill of a 40-skill catalog. */
-let warnedRefreshPolicyDeprecated = false;
-
-/**
- * The dev-mode deprecation warn for `refreshPolicy` (9.16.0). Named, not
- * inlined, so the once-flag and the message live beside each other.
- */
-function warnRefreshPolicyDeprecated(skillId: string): void {
-  if (warnedRefreshPolicyDeprecated || !isDevMode()) return;
-  warnedRefreshPolicyDeprecated = true;
-  // eslint-disable-next-line no-console
-  console.warn(
-    `agentfootprint defineSkill('${skillId}'): \`refreshPolicy\` is DEPRECATED-pending-steps — ` +
-      'it is stored on skill.metadata and nothing in the engine reads it, so NO re-injection ' +
-      'happens. It is superseded by a planned steps-as-data feature and will not be wired up. ' +
-      "To re-surface a body in a long run today, use surfaceMode: 'both' (read_skill returns " +
-      'the body afresh) or deliver it yourself. This warning fires once per process.',
-  );
-}
+/** The unified facade consumes `type`; all skill options keep one owner. */
+const SKILL_INJECTION_OPTION_KEYS = { ...SKILL_OPTION_KEYS, type: true } satisfies Record<
+  keyof (DefineSkillOptions & { readonly type: 'skill' }),
+  true
+>;
 
 /** The longest skill title a report prints. */
 const MAX_SKILL_TITLE_CHARS = 60;
@@ -395,6 +323,25 @@ function readSkillTitle(id: string, raw: unknown): string | undefined {
 }
 
 export function defineSkill(opts: DefineSkillOptions): Injection {
+  return createSkill(opts, SKILL_OPTION_KEYS);
+}
+
+/**
+ * Internal facade entry, deliberately absent from every public barrel.
+ * Validate the original declaration, preserving inherited options and getter
+ * receivers. Only this entry consumes the unified factory's discriminant.
+ */
+export function defineSkillInjection(
+  opts: DefineSkillOptions & { readonly type: 'skill' },
+): Injection {
+  return createSkill(opts, SKILL_INJECTION_OPTION_KEYS);
+}
+
+/** One validation/construction path for named and discriminated declarations. */
+function createSkill(
+  opts: DefineSkillOptions,
+  optionKeys: Readonly<Record<string, true>>,
+): Injection {
   if (!opts.id || opts.id.trim().length === 0) {
     throw new Error('defineSkill: `id` is required and must be non-empty.');
   }
@@ -406,9 +353,8 @@ export function defineSkill(opts: DefineSkillOptions): Injection {
   if (!opts.body || opts.body.length === 0) {
     throw new Error(`defineSkill(${opts.id}): \`body\` is required.`);
   }
-  assertNoViaToolName(`defineSkill(${opts.id})`, opts);
+  assertKnownOptions(`defineSkill(${opts.id})`, opts, optionKeys);
   const title = readSkillTitle(opts.id, opts.title);
-  if (opts.refreshPolicy) warnRefreshPolicyDeprecated(opts.id);
   // Steps checkup (9.18.0) — all the data is in hand HERE, so every step
   // refusal happens here: unknown tool, empty note/tool, steps:[], steps
   // without tools, onSkip without steps. See skillSteps.ts, the grammar owner.
@@ -441,14 +387,11 @@ export function defineSkill(opts: DefineSkillOptions): Injection {
     },
     // Skill-specific options live in metadata. The engine reads them
     // when present; absent metadata = current behavior. `surfaceMode` and
-    // `autoActivate` are read at runtime; `refreshPolicy` is recorded here
-    // and not yet acted on by anything (see its docstring — it is stored,
-    // not honoured).
+    // `autoActivate` are read at runtime.
     //
     // `cache` also rides this bag when a caller sets it.
     metadata: Object.freeze({
       surfaceMode: opts.surfaceMode ?? 'auto',
-      ...(opts.refreshPolicy && { refreshPolicy: opts.refreshPolicy }),
       ...(opts.autoActivate && { autoActivate: opts.autoActivate }),
       // The skill's brain (9.19.0) — rides the metadata bag like every other
       // per-skill option. NEVER projected (`projectActiveInjection`'s

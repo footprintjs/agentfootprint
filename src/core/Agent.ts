@@ -19,7 +19,6 @@ import {
   type AttachRecorderOptions,
   type CombinedNarrativeEntry,
   type CombinedRecorder,
-  type CommitValuesMode,
   type FlowChart,
   type FlowchartCheckpoint,
   type ObserverDrainResult,
@@ -28,6 +27,7 @@ import {
   type RunOptions,
   type RuntimeSnapshot,
 } from 'footprintjs';
+import { type CommitValuesMode } from 'foottrace';
 import type { CachePolicy, CacheStrategy } from '../cache/types.js';
 import type { ReliabilityConfig } from '../reliability/types.js';
 import { ReliabilityFailFastError } from '../reliability/types.js';
@@ -35,6 +35,9 @@ import { extractSequence } from '../security/extractSequence.js';
 import { PolicyHaltError } from '../security/PolicyHaltError.js';
 import { updateSkillHistory as updateSkillHistoryStage } from '../cache/CacheGateDecider.js';
 import { cacheStrategyFor } from '../cache/cacheStrategyFor.js';
+import { forcedToolChoiceFor, UnsupportedToolChoiceError } from '../adapters/forcedToolChoice.js';
+import { isRequestRefusal } from '../adapters/requestRefusal.js';
+import { assistantReplayFields } from './agent/assistantReplay.js';
 import { buildBrainFor, describeServingBrain } from './agent/skillBrains.js';
 import { SUBFLOW_IDS } from '../conventions.js';
 import {
@@ -177,11 +180,9 @@ const GRAPH_DECLARED_STAGE_ID = 'graph-declared#0';
 import { EmitBridge } from '../recorders/core/EmitBridge.js';
 import { buildWindowStage } from './agent/stages/window.js';
 import { requireKeepLastToolResults } from './agent/window/options.js';
-import { buildDeliverStage, carriedRoles } from './agent/stages/deliver.js';
-import {
-  messagesContentRefusal,
-  messagesRoleRefusal,
-} from '../lib/injection-engine/messagesSlotRefusal.js';
+import { assertDeliverableRole, buildDeliverStage } from './agent/stages/deliver.js';
+import { providerTargets } from './agent/providerTargets.js';
+import { messagesContentRefusal } from '../lib/injection-engine/messagesSlotRefusal.js';
 import { CompactionUnmeasurableError } from './agent/window/errors.js';
 import type { WindowStrategy } from './agent/window/strategy.js';
 import type { FoldedSpan } from './agent/window/types.js';
@@ -241,6 +242,8 @@ import {
 import {
   assertContinuable,
   buildCheckpoint,
+  checkpointReplayHistory,
+  retainReplayRetirements,
   classifyFailurePhase,
   RunCheckpointError,
   validateCheckpoint,
@@ -331,7 +334,7 @@ export type { SkillGraphOptions } from './agent/AgentBuilder.js';
 // Per-skill model switching (9.19.0) — the declared brain shapes.
 export type { ProviderChoice, EscalationPolicy } from './agent/skillBrains.js';
 import { buildThinkingSubflow } from './slots/buildThinkingSubflow.js';
-import { thinkingHandlerFor } from '../thinking/thinkingHandlerFor.js';
+import { thinkingForProviders } from '../thinking/dispatch.js';
 import type { ThinkingHandler } from '../thinking/types.js';
 export { AgentBuilder };
 
@@ -904,6 +907,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  kept here rather than read back from the recording. Undefined after a run
    *  that failed or paused. */
   private lastRunAnswer?: string;
+  /** Last run's checkpoint owner, including explicit replay edits from a failed child stage. */
+  private checkpointTracker?: RunCheckpointTracker;
   /** Whether any run on this instance got past input admission — so a
    *  refused FIRST turn is reported as 'never-run', never as "continue from
    *  your earlier accepted checkpoint" when there is none. */
@@ -1475,14 +1480,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // A provider that declares none gets no subflow at chart build time.
     // Never chosen by `provider.name`: a renaming wrapper that forwards the
     // declaration keeps it.
-    if (thinkingHandlerValue === null) {
-      // explicit opt-out
-    } else if (thinkingHandlerValue !== undefined) {
-      this.thinkingHandler = thinkingHandlerValue;
-    } else {
-      const declared = thinkingHandlerFor(opts.provider);
-      if (declared) this.thinkingHandler = declared;
-    }
+    const handler = thinkingForProviders(
+      opts.provider,
+      reliabilityConfig?.providers?.map((entry) => entry.provider),
+      thinkingHandlerValue,
+    );
+    if (handler !== undefined) this.thinkingHandler = handler;
     if (thinkingBudgetValue !== undefined) this.thinkingBudget = thinkingBudgetValue;
     this.appName = voice.appName;
     this.commentaryTemplates = voice.commentaryTemplates;
@@ -2022,6 +2025,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       history: [],
       lastCompletedIteration: 0,
     };
+    this.checkpointTracker = tracker;
     const stopTracking = this.installCheckpointTracker(tracker);
     // The answer this run produces is the only place the final assistant turn
     // exists (nothing writes it back into `scope.history`), so `checkpoint()`
@@ -2091,6 +2095,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           // either — wrapping this in a checkpoint would invite the caller to
           // retry into the same wall.
           cause instanceof CompactionUnmeasurableError ||
+          // A forced-output capability refusal is terminal even after a
+          // correction turn: a checkpoint cannot repair this model contract.
+          isRequestRefusal(cause) ||
           // 8.6.0 — a consent block is answered by a PERSON at the identity
           // provider, not by replaying the run. Wrapping it in a crash
           // checkpoint would hand the caller a retry handle for a wall, and
@@ -2679,6 +2686,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // the recording's terms one comment up.
     this.beginIntegrityLedger();
     this.lastRunAnswer = undefined;
+    this.checkpointTracker = {
+      runId: this.currentRunContext.runId,
+      originalInput: { message: '' },
+      history: [],
+      lastCompletedIteration: 0,
+    };
     // One run can never raise on another run's consent block.
     this.consentOutstanding.clear();
     // Beside the `try` whose `finally` clears it (the fresh-run path's terms).
@@ -2773,7 +2786,15 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * that ends the run carries none. An agent that stored this conversation
    * without that append would drop its own reply every turn and answer the next
    * one having forgotten what it just said.
+   * Provider replay evidence and its normalized thinking travel with that
+   * accepted answer, including a terminal proof with empty text. The answer
+   * remains the delivered text, including output-policy edits; raw provider
+   * text is never substituted back. Evidence comes from live state, not the
+   * redacted observation. Denied, failed and paused runs append no final turn.
    *
+   * Explicit thinking retirements recorded before transport also apply here:
+   * a failed grouped call cannot restore reasoning omitted from its request.
+   * This copies no other failed-stage state or tool effects into the history.
    * Adds no events, no scope writes and no capture: every recording is
    * byte-identical to an agent that never calls this.
    *
@@ -2805,9 +2826,16 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // Do not manufacture a blank replay carrier for an unadmitted attempt.
     if (this.lastInputRefused()) return undefined;
     const recorded = (state?.history ?? []) as readonly LLMMessage[];
-    const history = structuredClone(recorded) as LLMMessage[];
-    if (this.lastRunAnswer !== undefined && this.lastRunAnswer.length > 0) {
-      history.push({ role: 'assistant', content: this.lastRunAnswer });
+    const history: LLMMessage[] = [...recorded];
+    if (
+      this.lastRunAnswer !== undefined &&
+      (this.lastRunAnswer.length > 0 || state?.llmLatestReplay !== undefined)
+    ) {
+      history.push({
+        role: 'assistant',
+        content: this.lastRunAnswer,
+        ...assistantReplayFields(state ?? {}),
+      });
     }
     const folded = this.foldedSpansOf(state);
     const owner = this.conversationOwner();
@@ -2818,7 +2846,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     return {
       version: 1,
       runId: this.currentRunContext.runId,
-      history,
+      history: structuredClone(checkpointReplayHistory(history, this.checkpointTracker)),
       lastCompletedIteration: typeof state?.iteration === 'number' ? state.iteration : 0,
       originalInput: { message: typeof state?.userMessage === 'string' ? state.userMessage : '' },
       checkpointedAt: Date.now(),
@@ -3388,20 +3416,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   }
 
   private assertDeliverableRoles(): void {
-    const carries = carriedRoles(this.provider);
-    const carried = new Set(carries);
+    const providers = providerTargets(
+      this.provider,
+      this.model,
+      this.reliabilityConfig?.providers,
+    ).map((target) => target.provider);
     for (const inj of this.injections) {
       for (const msg of inj.inject?.messages ?? []) {
-        if (!carried.has(msg.role as (typeof carries)[number])) {
-          throw new Error(
-            messagesRoleRefusal({
-              site: `Agent injection '${inj.id}'`,
-              role: msg.role,
-              providerName: this.provider.name,
-              carries,
-            }),
-          );
-        }
+        assertDeliverableRole(providers, msg.role, `Agent injection '${inj.id}'`);
         // Content, judged at the same funnel as role (8.18.0). The named
         // factories refuse empty content; a hand-built Injection reached the
         // delivery stage unchecked and put a contentless turn on the wire.
@@ -3441,10 +3463,22 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    */
   private assertForcedToolChoiceSupported(): void {
     if (this.outputEnforcement?.schemaTool === undefined) return;
-    if (this.provider.carriesForcedToolChoice === true) return;
+    const first = this.reliabilityConfig?.providers?.[0];
+    const provider = first?.provider ?? this.provider;
+    const model = first?.model ?? this.model;
+    if (provider.carriesForcedToolChoice === true) {
+      // Configuration resolves the actual model at seed, after this check.
+      // Keep the early wire refusal, but let callLLM judge that final model.
+      if (
+        (first === undefined && this.runConfigFn !== undefined) ||
+        forcedToolChoiceFor(provider, model)
+      )
+        return;
+      throw new UnsupportedToolChoiceError({ provider: provider.name, model });
+    }
     throw new Error(
       `Agent: .outputSchema(parser, { strategy: 'tool-forced' }) needs a provider that puts ` +
-        `a forced tool choice on its wire, and '${this.provider.name}' does not declare one. ` +
+        `a forced tool choice on its wire, and '${provider.name}' does not declare one. ` +
         `Anthropic, Bedrock, real OpenAI/Azure and the mock do; an OpenAI-COMPATIBLE endpoint ` +
         `behind a custom baseURL (Ollama, vLLM, …) deliberately does not, because what that ` +
         `server does with tool_choice is not this library's to promise. Use ` +
@@ -5069,6 +5103,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // callLLM extracted to ./agent/stages/callLLM.ts (v2.11.2). Same
     // late-binding pattern as seed for toolSchemas (computed below).
     const callLLM = buildCallLLMStage({
+      onReplayPrepared: (preparation) => {
+        if (
+          this.checkpointTracker !== undefined &&
+          this.inFlightRunId === this.checkpointTracker.runId
+        )
+          retainReplayRetirements(this.checkpointTracker, preparation);
+      },
       ...(this.evidenceGate !== undefined &&
         this.evidenceGate.posture !== 'assist' && {
           hasEvidenceRecovery: true,
@@ -5704,6 +5745,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         this.memories.length > 0) && {
         deliverStage: buildDeliverStage({
           provider: this.provider,
+          ...(this.reliabilityConfig?.providers !== undefined && {
+            providers: providerTargets(
+              this.provider,
+              this.model,
+              this.reliabilityConfig.providers,
+            ).map((target) => target.provider),
+          }),
           memoryIds: this.memories.map((m) => m.id),
         }) as (scope: never) => void,
       }),

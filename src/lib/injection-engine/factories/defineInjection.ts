@@ -25,7 +25,7 @@
 import type { Injection } from '../types.js';
 import { defineFact, type DefineFactOptions } from './defineFact.js';
 import { defineInstruction, type DefineInstructionOptions } from './defineInstruction.js';
-import { defineSkill, type DefineSkillOptions } from './defineSkill.js';
+import { defineSkillInjection, type DefineSkillOptions } from './defineSkill.js';
 import { defineSteering, type DefineSteeringOptions } from './defineSteering.js';
 
 /** Discriminated union — `type` picks the flavor; the rest are that flavor's options. */
@@ -39,13 +39,14 @@ export type DefineInjectionOptions =
 export type InjectionFlavor = DefineInjectionOptions['type'];
 
 export function defineInjection(opts: DefineInjectionOptions): Injection {
-  // Each named factory reads only the fields it knows and constructs a fresh
-  // frozen Injection, so the extra `type` discriminant on `opts` is ignored.
+  // The facade owns `type`; the skill constructor validates it alongside the
+  // skill vocabulary on the original bag. Never spread options to remove it:
+  // that would read unknown getters and drop inherited/non-enumerable options.
   switch (opts.type) {
     case 'instruction':
       return defineInstruction(opts);
     case 'skill':
-      return defineSkill(opts);
+      return defineSkillInjection(opts);
     case 'steering':
       return defineSteering(opts);
     case 'fact':

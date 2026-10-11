@@ -5,7 +5,7 @@
  * with HTTP 400; they take `{ type: 'adaptive' }`. The 4.6 models take both
  * (budget deprecated), 4.5 and earlier take only the budget, and the Claude 3
  * models before 3.7 cannot think. So the Anthropic adapters DECLARE the mode
- * per model (`thinkingMode`, one table in anthropicThinkingWire.ts) and send
+ * per model (`thinkingMode`, one table in anthropicModels.ts) and send
  * that shape; the agent refuses a model that cannot think at build.
  *
  * No live API calls: every adapter runs against a fake SDK client or a fake
@@ -31,7 +31,7 @@ import { invokeModelGateway } from '../../src/adapters/llm/InvokeModelGatewayPro
 import {
   ANTHROPIC_THINKING_MODES,
   anthropicThinkingMode,
-} from '../../src/adapters/llm/anthropicThinkingWire.js';
+} from '../../src/adapters/llm/anthropicModels.js';
 import { mock } from '../../src/doors/providers.js';
 import { withFallback } from '../../src/resilience/withFallback.js';
 import { withRetry } from '../../src/resilience/withRetry.js';

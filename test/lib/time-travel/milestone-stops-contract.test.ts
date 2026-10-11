@@ -22,13 +22,13 @@
  */
 
 import { describe, expect, it, vi } from 'vitest';
-import type { CommitBundle, Stop } from 'footprintjs/trace';
+import type { CommitBundle, Stop } from 'foottrace';
 
 /** The stop shapes the mocked `commitStops` will hand back, one test at a time. */
 const scripted: { stops: Stop[] } = { stops: [] };
 
-vi.mock('footprintjs/trace', async () => {
-  const actual = await vi.importActual<typeof import('footprintjs/trace')>('footprintjs/trace');
+vi.mock('foottrace', async () => {
+  const actual = await vi.importActual<typeof import('foottrace')>('foottrace');
   return { ...actual, commitStops: () => scripted.stops };
 });
 

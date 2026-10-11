@@ -80,7 +80,8 @@ export interface OutputSchemaParser<T> {
  *   • `'tool-forced'` — the shape is presented as a synthetic tool and the
  *     provider's tool choice is FORCED to it, so generation is constrained
  *     at the source instead of requested in prose. Requires a provider that
- *     declares `carriesForcedToolChoice`; a provider that does not is
+ *     declares `carriesForcedToolChoice` and permits the selected model
+ *     through its optional `supportsForcedToolChoice`; a provider that does not is
  *     refused BY NAME at run start rather than quietly downgraded, because
  *     a strategy that silently falls back to the other one is config that
  *     lies.

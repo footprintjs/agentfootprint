@@ -191,7 +191,7 @@ export class ContextRecorder implements CombinedRecorder {
       // slot composition, and a slot composition counts `String.length`. A
       // window strategy never travels this path — it emits the event
       // directly, with `unit: 'tokens'`.
-      const { cap, projected } = readPressureNumbers(rec);
+      const { cap, projected } = rec;
       this.dispatch(
         'agentfootprint.context.budget_pressure',
         {
@@ -280,61 +280,12 @@ export class ContextRecorder implements CombinedRecorder {
     if (!Array.isArray(value)) return undefined;
     for (const r of value) {
       if (!r || typeof r !== 'object') return undefined;
-      const rec = r as Partial<LegacyBudgetPressureRecord>;
+      const rec = r as Partial<BudgetPressureRecord>;
       if (typeof rec.slot !== 'string') return undefined;
-      if (typeof rec.cap !== 'number' && typeof rec.capTokens !== 'number') return undefined;
+      if (typeof rec.cap !== 'number' || typeof rec.projected !== 'number') return undefined;
     }
     return value as readonly BudgetPressureRecord[];
   }
-}
-
-/**
- * A `BudgetPressureRecord` as an 8.x slot builder may still write it.
- *
- * `capTokens` / `projectedTokens` were removed from the published type in
- * 9.0.0, but a third-party slot builder compiled against 8.x still WRITES
- * them, and a record is data — nothing recompiles it on the way in.
- */
-interface LegacyBudgetPressureRecord extends BudgetPressureRecord {
-  readonly capTokens?: number;
-  readonly projectedTokens?: number;
-}
-
-let warnedLegacyPressureNames = false;
-
-/**
- * Read a pressure record's two numbers, accepting the 8.x spelling once more.
- *
- * 9.0.0 grace, not support: `cap` / `projected` win whenever they are present,
- * and a record carrying only the old names is read AND reported — once per
- * process, because a slot builder that writes them writes them on every
- * composition and a warning per event is a warning nobody reads.
- *
- * A refusal would have been the wrong shape here. This is a recorder: a throw
- * is isolated by footprintjs and swallowed, so refusing would delete the
- * consumer's budget signal and say nothing about why. Reading the value and
- * naming the new fields is the version of "teach" that survives the channel.
- *
- * The fallback is deleted in 10.0.0; then a legacy-only record fails
- * `asPressureArray` and no event is emitted at all.
- */
-function readPressureNumbers(rec: BudgetPressureRecord): { cap: number; projected: number } {
-  const legacy = rec as LegacyBudgetPressureRecord;
-  const cap = legacy.cap ?? legacy.capTokens ?? 0;
-  const projected = legacy.projected ?? legacy.projectedTokens ?? 0;
-  if (legacy.cap === undefined && legacy.capTokens !== undefined && !warnedLegacyPressureNames) {
-    warnedLegacyPressureNames = true;
-    // eslint-disable-next-line no-console
-    console.warn(
-      `[agentfootprint] a budget-pressure record for slot '${rec.slot}' carries the 8.x field ` +
-        `names \`capTokens\` / \`projectedTokens\`, which were removed in 9.0.0. They are read ` +
-        `this once so your budget signal still fires, and the fallback is deleted in 10.0.0. ` +
-        `Write \`cap\` / \`projected\` with \`unit\` instead — the old names asserted TOKENS on ` +
-        `a channel that counts CHARACTERS. Whichever slot builder produced this record needs ` +
-        `the three-field shape.`,
-    );
-  }
-  return { cap, projected };
 }
 
 /** A slot's write as the recorder derives events from it (`ContextRecorder · written`). */

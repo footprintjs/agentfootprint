@@ -3,7 +3,7 @@
  *
  * footprintjs answers "what happened to this variable?" in the address space it
  * owns: commit indices, runtimeStageIds, state keys (`keyTimeline` /
- * `forwardSliceForKey`, `footprintjs/trace`). An agent debugger asks the same
+ * `forwardSliceForKey`, `foottrace`). An agent debugger asks the same
  * question in a DIFFERENT vocabulary: which LOOP was that, which injected fact
  * or tool result is that write, and what would REMOVING it cost. This module is
  * the join between the two — and nothing more:
@@ -37,7 +37,7 @@ import {
   keyTimeline,
   keysReadFromExecutionTree,
   keysReadFromMap,
-} from 'footprintjs/trace';
+} from 'foottrace';
 import type {
   CommitBundle,
   ForwardEdge,
@@ -50,7 +50,7 @@ import type {
   ReadsCoverage,
   StateKey,
   ValueBasis,
-} from 'footprintjs/trace';
+} from 'foottrace';
 
 import { ablationForSuspect } from './ablation.js';
 import {

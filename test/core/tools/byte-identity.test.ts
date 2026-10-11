@@ -2,6 +2,13 @@
  * BYTE-IDENTITY — a run with NO tool-name collision records exactly what it
  * recorded before 9.92.0.
  *
+ * THINKING REPLAY: the `provider-defaults` reader gap's boundary sentence now
+ * says that later preparation notes do not prove what was sent or accepted.
+ * Exactly 79 `served[n].view.gaps[n].why` values across 30 references were
+ * changed by literal replacement, not recapture. Structural comparison against
+ * main verified every other value, including every commit log, is unchanged.
+ * The assertions and volatile-field normalizer below remain unchanged.
+ *
  * 9.92.0 changed how a tool call is RESOLVED (dispatch follows the offer) and
  * what the tools slot REPORTS (`tools.shadowed` re-subjected, `tools.claim_swallowed`
  * added). Neither may touch a run in which every tool name has one claimant:

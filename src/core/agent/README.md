@@ -4,7 +4,7 @@ Map: `buildAgentChart.ts`, `buildDynamicAgentChart.ts`,
 `buildAgentMessageApiChart.ts`, `buildMessageApiChart.ts`, `buildCacheSubflow.ts`,
 `buildToolRegistry.ts`, `AgentBuilder.ts`, `skillGraphDeclared.ts`,
 `skillBrains.ts`, `types.ts`.
-Walker: `toolDispatch.ts`, `toolEffects.ts`, `toolArgsValidation.ts`,
+Walker: `assistantReplay.ts`, `toolDispatch.ts`, `toolEffects.ts`, `toolArgsValidation.ts`,
 `validators.ts`, `act.ts`, `moments.ts`.
 Trace: `runManifest.ts`, `integrityFindings.ts`, `watch.ts`, `toolSecurityEvents.ts`.
 Fold: `memoryRecallInjections.ts`, `toolsFromActiveSkill.ts`.
@@ -96,6 +96,33 @@ notDispatchedResult('fetch_invoices', { toolName: 'collect_input', toolCallId: '
 ```
 
 ## Files
+
+`providerTargets.ts` selects declared reliability transports for capability
+checks: a nonempty list replaces the default, an absent/empty list keeps it.
+`thinkingSupport.ts` checks those pairs and the existing skill/escalation brains.
+The run-start injection check and `stages/deliver.ts` use the same role rule for
+every listed provider. A runtime-only memory recall cannot enter history with a
+role a later retry target would discard. Content and placement checks retain
+their existing owners; no provider list changes no delivery bytes.
+
+`assistantReplay.ts` carries provider-owned replay evidence when an assistant
+message is written: tool calls, schema corrections, step nudges and accepted
+final replies. It does not judge or regenerate that evidence. `callLLM` owns
+the latest-response lifetime, clearing prior raw thinking and replay only
+when a later response omits them. `Agent.checkpoint()` takes the accepted text
+and current metadata from live state, not the redacted observation; JSON
+restart and follow-up keep both. An empty terminal reply can still carry proof
+that a provider turn finished. A denied or paused run gains no final reply.
+No-replay providers gain no replay state key or message field.
+The existing run checkpoint tracker retains only explicit thinking-retirement
+patches before transport. Both checkpoint readers apply those patches to their
+own histories, including after a failed grouped child stage; they never adopt
+that stage's partial tool results, output or iteration state. The patches reset
+for each run/resume and use the same identity matching as live history.
+Internally `llmLatestReplay` is an optional one-element tuple, unwrapped by
+the helper at message writing. The grouped chart's `ArrayMergeMode.Replace`
+replaces top-level arrays but deep-merges objects; the tuple makes each proof
+atomic, so a previous layout or binding cannot survive inside a later proof.
 
 `toolArgsValidation.ts` owns the supported schema rules and correction text.
 `stages/toolCalls.ts` · `argumentRefusal` applies the Agent's mode and emits

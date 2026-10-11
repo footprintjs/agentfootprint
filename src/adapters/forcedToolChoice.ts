@@ -4,8 +4,7 @@
  *
  * Pattern: capability declaration + its one reader (the `thinkingModeFor`
  *          twin). The adapter declares `LLMProvider.carriesForcedToolChoice`
- *          — a boolean when every model on its wire answers the same, a
- *          function of the model id when they disagree — and everything that
+ *          plus `supportsForcedToolChoice(model)` where models disagree, and everything that
  *          sends `LLMRequest.toolChoice` asks HERE, with the model it will
  *          call: the agent's `'tool-forced'` output strategy at run start, the
  *          constrained pick (`constrainedEnumPick`), and `withFallback`.
@@ -34,11 +33,14 @@ import type { LLMProvider } from './types.js';
  * quietly vanishes costs the guarantee it was asked for.
  */
 export function forcedToolChoiceFor(
-  provider: Pick<LLMProvider, 'carriesForcedToolChoice'>,
+  provider: Pick<LLMProvider, 'carriesForcedToolChoice' | 'supportsForcedToolChoice'>,
   model: string,
 ): boolean {
-  const declared = provider.carriesForcedToolChoice;
-  return typeof declared === 'function' ? declared(model) === true : declared === true;
+  return (
+    provider.carriesForcedToolChoice === true &&
+    (provider.supportsForcedToolChoice === undefined ||
+      provider.supportsForcedToolChoice(model) === true)
+  );
 }
 
 /**
@@ -72,9 +74,8 @@ export class UnsupportedToolChoiceError extends Error {
 
   constructor(args: { readonly provider: string; readonly model: string }) {
     super(
-      `[${args.provider}] '${args.model}' takes no forced tool choice — the API rejects ` +
-        `tool_choice { type: 'tool' } on every request to this model, with or without ` +
-        `thinking. .outputSchema(…, { strategy: 'tool-forced' }) sends one; use ` +
+      `[${args.provider}] '${args.model}' does not support forced tool choice on this adapter. ` +
+        `.outputSchema(…, { strategy: 'tool-forced' }) requires it; use ` +
         `{ strategy: 'instruct' } on this model, or a model that takes a forced choice.`,
     );
     this.name = 'UnsupportedToolChoiceError';

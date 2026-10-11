@@ -8,10 +8,10 @@
  */
 
 import type { TraversalContext } from 'footprintjs';
-import { parseRuntimeStageId } from 'footprintjs/trace';
+import { parseRuntimeStageId } from 'foottrace';
 import type { EventMeta, EventSourcePosition } from '../events/types.js';
 
-// NOTE: runtimeStageId parsing lives in footprintjs/trace
+// NOTE: runtimeStageId parsing lives in foottrace
 // (parseRuntimeStageId, buildRuntimeStageId). We reuse their helper instead
 // of re-implementing the split.
 
@@ -158,7 +158,7 @@ export function eventBelongsToRun(
  * Parse footprintjs's `/`-separated subflow path into a readonly array.
  *
  * The source of truth for runtimeStageId parsing lives in footprintjs at
- * `footprintjs/trace::parseRuntimeStageId`. We only need the path-split
+ * `foottrace::parseRuntimeStageId`. We only need the path-split
  * convenience here; the `/` separator is stable across footprintjs
  * versions (covered by their `parseRuntimeStageId` tests).
  */

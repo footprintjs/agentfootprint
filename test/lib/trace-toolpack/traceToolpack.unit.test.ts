@@ -12,7 +12,8 @@
  */
 
 import { decide, flowChart, FlowChartExecutor } from 'footprintjs';
-import { controlDepRecorder, HONESTY_CODES } from 'footprintjs/trace';
+import { controlDepRecorder } from 'footprintjs/trace';
+import { HONESTY_CODES } from 'foottrace';
 import type { RuntimeSnapshot, StageSnapshot } from 'footprintjs/advanced';
 import { describe, expect, it } from 'vitest';
 

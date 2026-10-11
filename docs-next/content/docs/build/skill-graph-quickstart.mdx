@@ -92,7 +92,7 @@ text. Each rule takes exactly one of the two.
 **Tools that follow the graph.** `scopeTools: true` stamps every wired skill with
 `autoActivate: 'currentSkill'`, so `process_refund` is offered to the model only
 while the graph is on `refunds` — not on every iteration from the start. The
-default is `false` (today's behavior) until 10.0.0 flips it.
+default remains `false`; ask for scoped visibility explicitly.
 
 **A check-up you didn't have to write.** Because the rules are data, the build
 checks them: a rule routing to a skill that isn't in `skills[]` refuses to build

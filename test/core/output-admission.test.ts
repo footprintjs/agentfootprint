@@ -9,7 +9,7 @@ import {
   type MessageMiddleware,
   type MessageOutcome,
 } from '../../src/index.js';
-import { ReliabilityFailFastError } from '../../src/reliability/index.js';
+import { ReliabilityFailFastError } from '../../src/doors/resilience.js';
 
 const draft = 'private-output-canary';
 const accepted = 'public answer';

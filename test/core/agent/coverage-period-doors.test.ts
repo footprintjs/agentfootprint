@@ -5,8 +5,8 @@
  * The properties under test:
  *   1. ONE SHAPE, THREE DOORS. `absent({ …, period })`, `coverage(v, { …,
  *      period })` and `describedResult({ …, period })` mint the same wire
- *      period (`queried`, `held`, `read_at`) by the one rule set; `semantic()`,
- *      the deprecated door, gains nothing (its unknown-key refusal refuses it).
+ *      period (`queried`, `held`, `read_at`) by the one rule set; historical
+ *      envelopes without a period remain readable without inventing one.
  *   2. ONE PROVENANCE. `absent({ …, provenance })` takes the shape, the
  *      spelling and the rule set `describedResult()` takes, and mints the same
  *      snake_case wire. `coverage()` takes none (adopted Q34).
@@ -42,7 +42,6 @@ import {
   explainSemantics,
   readCoverageResult,
   readSemantics,
-  semantic,
   semanticsForModel,
 } from '../../../src/index.js';
 import { checkSemantics as gate } from '../../../src/lib/semantics/index.js';
@@ -209,7 +208,7 @@ describe('unit: coverage(value, { …, period })', () => {
   });
 });
 
-describe('unit: describedResult({ …, period }) — and semantic() gains nothing', () => {
+describe('unit: describedResult({ …, period }) — historical records remain readable', () => {
   it('a top-level period on af_semantics, after provenance', () => {
     const env = describedResult({
       facts: [{ entity: 'host-103', ok: false }],
@@ -247,19 +246,15 @@ describe('unit: describedResult({ …, period }) — and semantic() gains nothin
     ).toMatch(/^refused: `period\.queried\.from` must be an ISO 8601 instant with a zone/);
   });
 
-  it('semantic(), the deprecated door, refuses the key — its declaration gains no field', () => {
-    expect(
-      refusalOf(() =>
-        semantic({
-          facts: [{ entity: 'h' }],
-          provenance: { measured_at: 'now', source: 's' },
-          period: PERIOD,
-        } as never),
-      ),
-    ).toBe(
-      `${REFUSED_PREFIX}'period' is not a field this vocabulary has. The fields are: series, ` +
-        'facts, edges, grain, provenance, coverage, clarify, render.',
-    );
+  it('a historical wire envelope with no period remains readable without inventing one', () => {
+    const record = {
+      af_semantics: true,
+      facts: [{ entity: 'h' }],
+      provenance: { measured_at: 'now', source: 's' },
+      note: 'historical record',
+    };
+    expect(readSemantics(record)).toBe(record);
+    expect(readSemantics(record)).not.toHaveProperty('period');
   });
 
   it('check:semantics: a triage result that declares a period states a boundary (in time)', () => {

@@ -56,7 +56,6 @@ import {
   inMemoryArtifacts,
   isInputPause,
   requestInput,
-  semantic,
   type ArtifactScope,
   type CodeRunner,
 } from '../src/index.js';
@@ -1287,7 +1286,10 @@ function emptyDataRefusals(): readonly string[] {
     ),
     refusalOf(() => describedResult({ edges: [] })),
     refusalOf(() =>
-      semantic({ facts: [], provenance: { measured_at: '2026-09-26T02:00:00Z', source: 'x' } }),
+      describedResult({
+        facts: [],
+        provenance: { measuredAt: '2026-09-26T02:00:00Z', source: 'x' },
+      }),
     ),
   ];
 }

@@ -113,7 +113,7 @@
  *
  *   no-fold-base                 7 of 11 named fields move
  *   no-conversation-on-record    3 of 3
- *   no-receipt-on-chart          3 of 11
+ *   no-receipt-on-chart          3 of 12
  *   no-run-log                   1 of 4
  *
  * `no-conversation-on-record` is the only row that reaches every field its gap
@@ -222,6 +222,7 @@ import {
 } from '../../../src/index.js';
 import type { LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
 import { isPaused, pauseHere } from '../../../src/core/pause.js';
+import { replayReceiptFixture } from '../../helpers/replayReceiptFixture.js';
 // The receipt-LESS shape a shipped chart still produces (9.91.0) — the public
 // barrel carries this chart's deps type and not the builder itself.
 import { buildMessageApiChart } from '../../../src/core/agent/buildMessageApiChart.js';
@@ -515,6 +516,9 @@ async function realRuns(): Promise<readonly Walked[]> {
   // the one that supplies `omittedForAttention`.
   collect(await windowedRun());
 
+  // The adapter reports an actual thinking omission after the port receipt.
+  collect((await replayReceiptFixture('dynamic-grouped')).snapshot);
+
   return walked;
 }
 
@@ -635,6 +639,7 @@ describe('the field list is derived, not written down', () => {
     expect(paths).toContain('params.maxTokens');
     expect(paths).toContain('omittedForAttention.hashes');
     expect(paths).toContain('basis.epoch');
+    expect(paths).toContain('replayPreparations.omittedBlocks');
     // And that it STOPS where the shape stops being ours.
     expect(VIEW_FIELDS.map((f) => f.path)).toContain('messages.asSent');
     expect(VIEW_FIELDS.map((f) => f.path).some((p) => p.startsWith('messages.asSent.'))).toBe(
@@ -705,6 +710,7 @@ describe('the field list is derived, not written down', () => {
       'basis.runId',
       'cache.strategy',
       'omittedForAttention.hashes',
+      'replayPreparations.omittedBlocks',
     ]) {
       expect(produced, `no scenario produced ${path}`).toContain(path);
     }
@@ -779,6 +785,15 @@ describe('every field of a Receipt and a ServedView is accounted for', () => {
     // Cache rewrites are already INCLUDED in this initial prepared-request
     // measurement. The composition gap must not claim these counts precede it.
     expect(SERVED_GAPS['cache-transform'].fields).not.toContain('requestMeasurement');
+  });
+
+  it('replay preparation is receipt-only; its downstream changes have a separate gap', () => {
+    expect(SERVED_GAPS['no-receipt-on-chart'].fields).toContain('replayPreparations');
+    expect(coveredBy(UNGAPPED, 'replayPreparations')).toBe(false);
+    expect(SERVED_GAPS['thinking-replay'].fields).toEqual([
+      'messages.entries',
+      'requestMeasurement',
+    ]);
   });
 
   it(
@@ -1145,7 +1160,31 @@ describe('the catalogue and the code that raises it are the same set', () => {
     // `provider-defaults` is the OTHER half of the same pair: the caveat when
     // a receipt recorded the dials. Never both.
     expect(view.gaps.map((g) => g.gap)).not.toContain('provider-defaults');
+    expect(view.gaps.map((g) => g.gap)).not.toContain('thinking-replay');
   });
+
+  it(
+    'reports real preparation only when a receipt records it, not a fabricated no-receipt witness',
+    WALK_BUDGET,
+    async () => {
+      for (const mode of ['dynamic', 'dynamic-grouped'] as const) {
+        const recorded = await replayReceiptFixture(mode);
+        const receiptless = await replayReceiptFixture(mode, { recordReceipt: false });
+        expect(receiptAt(recorded.snapshot, 1)?.replayPreparations).toEqual([
+          { boundary: 'provider-adapter', phase: 'prepared', omittedBlocks: 1 },
+        ]);
+        expect(servedAt(recorded.snapshot, 1)!.gaps.map((g) => g.gap)).toContain('thinking-replay');
+        expect(receiptAt(receiptless.snapshot, 1)).toBeUndefined();
+        expect(servedAt(receiptless.snapshot, 1)!.gaps.map((g) => g.gap)).toContain(
+          'no-receipt-on-chart',
+        );
+        expect(servedAt(receiptless.snapshot, 1)!.gaps.map((g) => g.gap)).not.toContain(
+          'thinking-replay',
+        );
+        expect(receiptless.prepared.messages[1]?.thinkingBlocks).toEqual([]);
+      }
+    },
+  );
 });
 
 // ─── Contract: the cause is a value, one test per value ──────────────────
@@ -1669,7 +1708,7 @@ describe('each gap names the fields its own damage actually moves', () => {
       expect(measured).toEqual({
         'no-fold-base': '7 of 11',
         'no-conversation-on-record': '3 of 3',
-        'no-receipt-on-chart': '3 of 11',
+        'no-receipt-on-chart': '3 of 12',
         'no-run-log': '1 of 4',
       });
     },

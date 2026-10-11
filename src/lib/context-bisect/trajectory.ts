@@ -23,8 +23,8 @@
  *     primitives run correctly over the isolated log. Such frames carry `subflowScope`.
  */
 import type { StageSnapshot } from 'footprintjs/advanced';
-import { commitValueAtWithBasis, findLastWriterWithBasis, splitStageId } from 'footprintjs/trace';
-import type { CommitBundle, UntrackedSource, ValueBasis } from 'footprintjs/trace';
+import { commitValueAtWithBasis, findLastWriterWithBasis, splitStageId } from 'foottrace';
+import type { CommitBundle, UntrackedSource, ValueBasis } from 'foottrace';
 import { STAGE_IDS, SUBFLOW_IDS } from '../../conventions.js';
 // The flat/grouped fork, from its ONE owner (9.88.0) — see time-travel/epochs.ts.
 import { llmCallMountKeys } from '../time-travel/epochs.js';
@@ -47,7 +47,7 @@ export interface ContextSource {
   /**
    * Why `writerId` / `value` are not exact, when they are not — the writer's and the value's
    * footprintjs basis codes, writer's first (`findLastWriterWithBasis` then
-   * `commitValueAtWithBasis`; sentences in `HONESTY_CODES` on `footprintjs/trace`). E.g.
+   * `commitValueAtWithBasis`; sentences in `HONESTY_CODES` on `foottrace`). E.g.
    * `['nested-rows']` when the writer reached the key only through paths inside it (a subflow
    * seed or merge-back). ABSENT when both answers are exact.
    */

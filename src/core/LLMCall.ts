@@ -592,7 +592,7 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
         request,
         // Resilience-report channel: a decorated provider's fallback /
         // retry / recovery becomes an in-run typed event here.
-        resilienceHooks(scope),
+        resilienceHooks(scope, recordReceipt),
       );
       const durationMs = Date.now() - startMs;
 

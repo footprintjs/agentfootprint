@@ -21,7 +21,7 @@
  */
 
 import { describe, expect, it, vi } from 'vitest';
-import { commitValueAt } from 'footprintjs/trace';
+import { commitValueAt } from 'foottrace';
 
 import {
   Agent,

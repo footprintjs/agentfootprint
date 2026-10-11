@@ -33,7 +33,7 @@ import {
   lastNValidationErrorsMatch,
   type ReliabilityRule,
   type ReliabilityScope,
-} from '../../src/reliability/index.js';
+} from '../../src/doors/resilience.js';
 import { expectWithinTimes, measureAsync } from '../helpers/perf.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────

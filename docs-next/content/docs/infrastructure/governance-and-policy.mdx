@@ -1,6 +1,6 @@
 ---
 title: Governance & policy
-description: Four places a tool call can be stopped — visibility, the in-process permission gate, the middleware chain, and a gateway upstream where this library has nothing to attach. What enforces what, the exact refusal each one hands the model, and why agentCorePolicy was retired.
+description: Four places a tool call can be stopped — visibility, the in-process permission gate, the middleware chain, and a gateway upstream where this library has nothing to attach. What enforces what, the exact refusal each one hands the model, and how to replace the removed agentCorePolicy adapter.
 ---
 
 "Can the agent do this?" is not one question, and answering it in one place is
@@ -335,7 +335,7 @@ correct amount of machinery: a denial comes back as an **MCP error** on the tool
 call made through `mcpClient(...)`, lands in the loop as that tool's result, and
 the model reads it and adapts — the same shape as a local refusal.
 
-<Callout type="warn" title="agentCorePolicy is retired (9.4.0)">
+<Callout type="warn" title="agentCorePolicy is removed">
 `agentCorePolicy()` tried to pre-evaluate the same rule in-process. It dispatched
 `EvaluatePolicyCommand` against `@aws-sdk/client-bedrock-agentcore` — **and that
 command does not exist in any version of that package.** AgentCore has no
@@ -347,11 +347,10 @@ fail-closed — which means it denied every tool call and reported the policy
 engine as unreachable. It compiled, it passed its tests (all of which injected
 `_client` past the SDK), and it could never have worked.
 
-The export remains and refuses at construction with
-`AgentCorePolicyRetiredError` (`code: 'ERR_AGENTCORE_POLICY_RETIRED'`), carrying
-the whole explanation. Removal is deferred to 10.0. Its row stays in the AWS
-command pin with `commands: []`, so re-adding an SDK call there is a decision
-somebody has to record.
+The factory, its retired error and its helper types are no longer exported.
+Remove their imports; no runtime stub remains. The AWS command pin still
+forbids the fictitious `EvaluatePolicyCommand`, and every real SDK adapter
+must name the commands it actually dispatches.
 </Callout>
 
 For rules you own, the answer is `PermissionPolicy.fromRoles(...)` as the
@@ -384,7 +383,7 @@ For rules you own, the answer is `PermissionPolicy.fromRoles(...)` as the
 | `skill:<id>` target convention (`skillTarget` / `skillIdFromTarget`) | `agentfootprint/security` | Shipped (9.11.0) |
 | Permission gating of the **memory pipeline** | — | Not built; memory is isolated by `MemoryIdentity` instead |
 | Gateway-enforced policy | — | Not a data-plane call; nothing to attach |
-| `agentCorePolicy` | `agentfootprint/security` | **Retired 9.4.0** — refuses at construction |
+| `agentCorePolicy` | — | **Removed** — use the live permission or middleware boundaries above |
 
 ## Next
 

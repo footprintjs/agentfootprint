@@ -162,7 +162,7 @@ export interface BuildOptions {
    * leaves — so a skill's tools reach the LLM only while the graph is on it, instead
    * of every skill's tools landing in the always-on registry from iteration 1.
    *
-   * Default `false` — today's additive behavior (10.0.0 flips the default to `true`).
+   * Default `false` — additive behavior. Set `true` to scope tools explicitly.
    * A skill that declared its OWN `autoActivate` in `defineSkill(...)` always keeps
    * it: this fills the default, it never overrides. A listed-but-unwired skill is
    * not stamped — the graph does not route it, so the graph does not scope it.
@@ -270,7 +270,7 @@ export interface SkillGraphFlatConfig {
    * entry or a step mentions), exactly as the tree arm already stamps its leaves —
    * a skill's tools reach the LLM only while the graph is on it. **Default `false`**
    * (today's additive behavior — every skill's tools visible from iteration 1);
-   * 10.0.0 flips the default to `true`. A skill whose author set its own
+   * A skill whose author set its own
    * `autoActivate` keeps it: the graph level is a default, never an override.
    * See {@link BuildOptions.scopeTools}.
    */
@@ -1659,7 +1659,7 @@ export function skillGraph(config?: SkillGraphConfig): SkillGraphBuilder | Skill
         // DEFAULT (`existingAuto ?? …`), never an override of a skill's own declaration.
         // A listed-but-unwired skill stays additive — the graph does not route it, so
         // the graph does not scope it (it remains an OPEN, read_skill-reachable skill).
-        // Default `false` keeps today's bytes; 10.0.0 flips the default.
+        // Default `false` preserves additive behavior; scoping stays explicit.
         const scopedIds =
           opts.scopeTools === true
             ? new Set([...entries.map((e) => e.id), ...routes.flatMap((r) => [r.fromId, r.toId])])

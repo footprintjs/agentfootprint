@@ -7,7 +7,7 @@
  *          understand is a convention, and a convention cannot ride the
  *          record, feed a UI, or be refused by a build gate.
  * Role:    lib/ layer, pure. The dispatch loop calls `readSemantics` at the
- *          execute boundary; `semantic()` is what a tool author writes;
+ *          execute boundary; `describedResult()` is what a tool author writes;
  *          `checkSemantics` (check.ts) judges the same shapes offline.
  * Emits:   N/A (the caller emits `agentfootprint.tools.semantics_declared`).
  *
@@ -32,7 +32,7 @@
  * `coverage()` primitive uses (`tools.coverage_declared`, tracked state, the
  * final-answer limits block) — absorbed, never duplicated.
  *
- * ## One rule set, two doors
+ * ## One rule set for authoring and recognition
  *
  * The mint refuses a declaration this vocabulary cannot honor at the
  * CALL SITE (the `absent()` law) — so a minted envelope is honest by
@@ -45,22 +45,14 @@
  * the data path (dev-warned, and named field-by-field by the gate), because
  * this library does not half-apply a shape it cannot fully honor.
  *
- * ## One core, two declaration doors
+ * ## One authoring door, one unchanged wire
  *
- * `mintSemantics` is the ONE mint. Two doors hand it a declaration:
- * `describedResult()` (described.ts — camelCase names, respelled to the wire)
- * and `semantic()` below (the deprecated name — snake_case names copied
- * through, byte for byte what it always minted). A door says only how its
- * author spells things ({@link DeclarationDoor}); every rule is judged once,
- * over the wire-spelled candidate, and every refusal quotes the author's own
- * spelling back (`grain.isCounter` from one door, `grain.is_counter` from the
- * other), so neither door ever answers in words its author did not write.
+ * `describedResult()` declares camelCase names, then `mintSemantics` applies
+ * the same rule set used to recognize stored snake_case envelopes. Validation
+ * and record reading keep one owner; old wire records never need an adapter.
  */
 
-import {
-  COVERAGE_DECLARATION_KEYS,
-  normalizeCoverageList,
-} from '../../core/agent/coverage/items.js';
+import { normalizeCoverageList } from '../../core/agent/coverage/items.js';
 import {
   copyPeriod,
   mintPeriod,
@@ -83,7 +75,6 @@ import {
   type DescribedResultDeclaration,
   type SemanticClarify,
   type SemanticCoverage,
-  type SemanticDeclaration,
   type ToolSemantics,
 } from './types.js';
 
@@ -141,9 +132,8 @@ const GRAIN_KEYS = new Set(['interval', 'aggregation', 'is_counter', 'collapsed'
 const PROVENANCE_KEYS = new Set(['measured_at', 'age_seconds', 'source', 'source_export_date']);
 const COVERAGE_KEYS = new Set(['checked', 'not_checked', 'cannot_cover']);
 /**
- * The keys a {@link SemanticClarify} has — spelled the same in both
- * declaration doors — tied to the type in BOTH directions, like
- * `DECLARATION_KEYS` below.
+ * The keys a {@link SemanticClarify} has — spelled the same in declarations
+ * and recorded envelopes — tied to the type in BOTH directions.
  */
 export const CLARIFY_DECLARATION_KEYS: readonly string[] = Object.keys({
   question: true,
@@ -170,7 +160,7 @@ export type SpelledField =
 export type Spelling = Readonly<Record<SpelledField, string>>;
 
 /** The wire's own spelling — what `semanticIssues`, recognition, the gate
- *  and `semantic()` speak. */
+ *  speak. */
 export const WIRE_SPELLING: Spelling = {
   is_counter: 'is_counter',
   measured_at: 'measured_at',
@@ -187,9 +177,9 @@ export type DeclaredObject = 'grain' | 'provenance' | 'coverage' | 'clarify' | '
 export type RespelledObject = 'grain' | 'provenance' | 'render';
 
 /**
- * How one declaration door spells the declaration it takes — everything that
- * differs between `describedResult()` and `semantic()`. The rules do not
- * differ; only the words do.
+ * How the authoring door spells its declaration and translates it to the
+ * wire. The rule set is shared with record recognition; only field spelling
+ * differs between authoring refusals and stored-record findings.
  */
 export interface DeclarationDoor {
   /** The helper's name, for the one refusal that names the call itself. */
@@ -208,41 +198,6 @@ export interface DeclarationDoor {
   /** How this door's author spells the six snake_case wire fields. */
   readonly spelling: Spelling;
 }
-
-/**
- * The keys a {@link SemanticDeclaration} has, tied to the type in BOTH
- * directions: a key the interface gains, or one listed here that it does not
- * have, fails to compile. `semantic()` refuses any other key.
- */
-const DECLARATION_KEYS: readonly string[] = Object.keys({
-  series: true,
-  facts: true,
-  edges: true,
-  grain: true,
-  provenance: true,
-  coverage: true,
-  clarify: true,
-  render: true,
-} satisfies Record<keyof SemanticDeclaration, true>);
-
-/**
- * Each object a declaration may carry, with the keys it has — refused at the
- * mint BEFORE anything is copied. Two of them would otherwise lose an
- * unknown key without a word: the coverage lists are read by name (so
- * `not_checked` minted nothing) and `copyClarify` keeps only its two keys.
- * The other three reach `semanticIssues`, which refuses the key too — here
- * the refusal can also name the spelling meant (`measuredAt` →
- * `measured_at`), because the author's own object is still in hand.
- */
-const DECLARED_OBJECT_KEYS: ReadonlyArray<
-  readonly [field: DeclaredObject, known: readonly string[]]
-> = [
-  ['grain', [...GRAIN_KEYS]],
-  ['provenance', [...PROVENANCE_KEYS]],
-  ['coverage', COVERAGE_DECLARATION_KEYS],
-  ['clarify', CLARIFY_DECLARATION_KEYS],
-  ['render', [...RENDER_KEYS]],
-];
 
 /** Compose the `not_covered` prose lines FROM coverage — the one derivation,
  *  used by the mint and by the drift check, so the two can never disagree. */
@@ -267,7 +222,7 @@ function malformed(field: string, message: string): SemanticIssue {
  * branch passes every test that has rows and refuses on its first empty read
  * in production, where the MODEL reads this text in place of the data — so it
  * says the branch to write, in the author's own helper names. One core, so
- * both declaration doors and the `check:semantics` gate say the same.
+ * the declaration door and the `check:semantics` gate say the same.
  */
 function emptyDataList(field: 'series' | 'facts' | 'edges'): SemanticIssue {
   return malformed(
@@ -434,7 +389,7 @@ export function semanticIssues(value: unknown): readonly SemanticIssue[] {
 
 /**
  * The rule set itself, over the wire-spelled `value`, naming each field the
- * way `s` spells it. Recognition, the gate and `semantic()` pass the wire's
+ * way `s` spells it. Recognition and the gate pass the wire's
  * own spelling; `describedResult()` passes camelCase, so its author reads
  * `grain.isCounter` for the field they wrote. Only the six {@link
  * SpelledField}s differ, and only in the words — never in what is judged.
@@ -882,8 +837,7 @@ function mintedCoverage(declared: unknown): SemanticCoverage | undefined {
 }
 
 /**
- * The ONE mint behind both declaration doors — `describedResult()` and
- * `semantic()`. Refuses (throws, at the call site — the `absent()` law) any
+ * The ONE mint behind `describedResult()`. Refuses (throws, at the call site — the `absent()` law) any
  * declaration this vocabulary cannot honor, in the door's own words; returns
  * the rendered envelope otherwise.
  *
@@ -894,15 +848,14 @@ function mintedCoverage(declared: unknown): SemanticCoverage | undefined {
  * set judges it, naming each field as the door's author spelled it.
  */
 export function mintSemantics(
-  decl: SemanticDeclaration | DescribedResultDeclaration,
+  decl: DescribedResultDeclaration,
   door: DeclarationDoor,
 ): ToolSemantics {
   // Deliberately not the isPlainObject guard: its predicate would REPLACE
   // the declared field types with an index signature for the rest of the
   // function (each declaration type is assignable to it, so it narrows).
   if (typeof decl !== 'object' || decl === null || Array.isArray(decl)) {
-    // The fields this door takes, from its own list — so `describedResult()`
-    // names `period?` and `semantic()` keeps the words it always gave.
+    // The accepted fields come from the authoring vocabulary itself.
     const fields = door.declarationKeys.map((key) => `${key}?`).join(', ');
     throw refusal(
       `${door.name}() takes a declaration — { ${fields} } with at least one of ` +
@@ -926,9 +879,7 @@ export function mintSemantics(
   const coverage = mintedCoverage(decl.coverage);
   const notCovered = coverage !== undefined ? composeNotCovered(coverage) : [];
   // Honesty step 7b: a top-level `period`, minted by the ONE period rule set
-  // (refused in the author's own camelCase words). Only `describedResult()`'s
-  // declaration has the key — `semantic()`, the deprecated door, gains no
-  // field, and its unknown-key refusal above already refused one.
+  // (refused in the author's own camelCase words).
   const period = 'period' in decl ? mintPeriod((decl as { period?: unknown }).period) : undefined;
   const candidate: Record<string, unknown> = {
     [SEMANTICS_MARKER]: true,
@@ -959,71 +910,6 @@ export function mintSemantics(
     throw refusal(`${first.message} (field: ${first.field})`);
   }
   return candidate as unknown as ToolSemantics;
-}
-
-/** `semantic()`'s door: the snake_case names are the wire's own, so each
- *  declared object is copied through as written — spread, whatever it is, as
- *  it always was, so a malformed one keeps the refusal it always got. */
-const SEMANTIC_DOOR: DeclarationDoor = {
-  name: 'semantic',
-  declarationKeys: DECLARATION_KEYS,
-  derivedKeys: ['not_covered'],
-  objectKeys: DECLARED_OBJECT_KEYS,
-  toWire: (_field, value) => ({ ...(value as object) }),
-  spelling: WIRE_SPELLING,
-};
-
-/**
- * Say "here is typed data, with the caveats that make it honest" in a shape
- * the framework recognizes, the record keeps whole, and a build gate can
- * refuse — from a declaration that copies the wire's snake_case names
- * through (`measured_at`, `is_counter`, `filter_note`).
- *
- * Returns the value a tool's `execute` should return. The framework
- * recognizes it at the dispatch boundary: the MODEL reads the compact
- * projection ({@link semanticsForModel}), the FULL envelope rides the typed
- * `agentfootprint.tools.semantics_declared` event, and a declared `coverage`
- * flows through the same channel `coverage()` uses.
- *
- * Refuses (throws, at the call site — the `absent()` law) any declaration
- * this vocabulary cannot honor: series without grain, data without
- * provenance, a counter-looking aggregation with `is_counter` unstated, and
- * every malformed shape — each refusal names the field and the fix. A key
- * the declaration, or one of its objects (`grain`, `provenance`,
- * `coverage`, `clarify`, `render`), does not have is refused too, naming the
- * spelling meant when it is a casing slip (`not_checked` → `notChecked`),
- * so nothing declared from plain JavaScript or JSON vanishes without a word.
- * A camelCase `measuredAt` is refused here, naming `measured_at`: this door
- * takes one spelling.
- *
- * Every refusal starts `refused: ` and never with this function's name:
- * inside a tool's `execute` it becomes the call's error result, and the
- * model reads it. "refused: this result carries series/facts with no
- * provenance — …" reads as a refusal, where "semantic: carries …" read like
- * a finding.
- *
- * @deprecated Use {@link describedResult} — the same envelope, byte for
- * byte, from a declaration spelled the way code is written (`measuredAt`,
- * `ageSeconds`, `sourceExportDate`, `isCounter`, `filterNote`, `chartHint`),
- * with a missing `provenance` caught by the compiler. The name `semantic`
- * read as semantic search. This function keeps working unchanged, and
- * keeps its own spelling: switching the name alone makes each
- * `measured_at` a refusal that names `measuredAt`, never a silent loss.
- *
- * @example a per-port IOPS tool
- *   return semantic({
- *     series: rows.map((r) => ({ t: r.time, entity: r.port, metric: 'avg_iops', value: r.iops })),
- *     grain: { interval: '30m', aggregation: 'avg', is_counter: false },
- *     provenance: { measured_at: latestSampleTime, source: 'InfluxDB SwitchPortStats' },
- *     coverage: {
- *       checked: ['shq-fab-a: all 48 FC ports'],
- *       notChecked: [{ what: 'the peer fabric', why: 'this collector is scoped to one fabric' }],
- *     },
- *     render: { default: 'table', columns: ['entity', 'value'], sort: 'value desc' },
- *   });
- */
-export function semantic(decl: SemanticDeclaration): ToolSemantics {
-  return mintSemantics(decl, SEMANTIC_DOOR);
 }
 
 /**

@@ -23,12 +23,17 @@ import type { TypedScope } from 'footprintjs';
 import { iterationsRemainingOf } from '../../../lib/iterationBudget.js';
 import type {
   LLMMessage,
+  LLMCallHooks,
   LLMProvider,
   LLMRequest,
   LLMResponse,
   LLMToolSchema,
   PricingTable,
 } from '../../../adapters/types.js';
+import {
+  forcedToolChoiceFor,
+  UnsupportedToolChoiceError,
+} from '../../../adapters/forcedToolChoice.js';
 import type { CacheMarker, CacheStrategy } from '../../../cache/types.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import { wireViolationsOf } from '../../../integrity/invariant-violation/wire.js';
@@ -48,6 +53,8 @@ import type { EvictedTurnsHandle } from '../window/evictedTurns.js';
 import { findStagedRefs, stagedRefsNudgeLine } from '../stagedRefs.js';
 import { fileIntegrityFindings } from '../integrityFindings.js';
 import { resilienceHooks } from '../../../recorders/core/resilienceHooks.js';
+import { replayAttempts } from '../../../resilience/replayAttempt.js';
+import { tagThinkingResponse } from '../../../thinking/dispatch.js';
 import type { InjectionRecord } from '../../../recorders/core/types.js';
 import { emitCostTick, type ResolvedCostBudget } from '../../cost.js';
 import type { ReliabilityConfig } from '../../../reliability/types.js';
@@ -73,12 +80,20 @@ import {
   executeWithReliability,
   ValidationFailure,
   type OutputSchemaValidator,
+  type LLMCallFn,
 } from './reliabilityExecution.js';
 import type { AgentState } from '../types.js';
 
 /** The wrap-up call's tool list (9.56.0). A frozen module constant so the
  *  withholding allocates nothing on the one call it applies to. */
 const EMPTY_TOOL_SCHEMAS: readonly LLMToolSchema[] = Object.freeze([]);
+
+/** One capability rule at both request boundaries, before cache or model I/O. */
+function assertForcedRequestSupported(provider: LLMProvider, request: LLMRequest): void {
+  if (request.toolChoice !== undefined && !forcedToolChoiceFor(provider, request.model)) {
+    throw new UnsupportedToolChoiceError({ provider: provider.name, model: request.model });
+  }
+}
 
 /**
  * Consult the app's external-ground provider, throw-proof by law (9.72.0): a
@@ -102,6 +117,8 @@ function readExternalGrounds(
 }
 
 export interface CallLLMStageDeps {
+  /** Preserve approved replay retirement for recovery before transport. */
+  readonly onReplayPrepared?: LLMCallHooks['onReplayPrepared'];
   /** The LLM provider to invoke. */
   readonly provider: LLMProvider;
   /** Model identifier passed to provider.complete/stream. */
@@ -474,7 +491,8 @@ export function buildCallLLMStage(
           scope.skillEscalated === true,
         )
       : undefined;
-    const provider = brain?.provider ?? deps.provider;
+    const firstReliabilityProvider = deps.reliability?.providers?.[0];
+    const provider = firstReliabilityProvider?.provider ?? brain?.provider ?? deps.provider;
     const cacheStrategy = brain?.cacheStrategy ?? deps.cacheStrategy;
 
     // The model for this run. `.configure()` resolved it at seed and
@@ -484,6 +502,7 @@ export function buildCallLLMStage(
     // build-time model and scope is never touched. A winning brain rung
     // (9.19.0) outranks both — the stated precedence chain.
     const model =
+      firstReliabilityProvider?.model ??
       brain?.model ??
       (deps.runConfigured ? (scope.resolvedModel as string | undefined) : undefined) ??
       deps.model;
@@ -758,6 +777,9 @@ export function buildCallLLMStage(
     // hints. CacheGate has already routed (apply-markers / no-markers)
     // and populated scope.cacheMarkers accordingly. Strategy.prepareRequest
     // is a pass-through for empty markers.
+    // A custom strategy can create remote cache handles, so refuse a known
+    // unsupported effective request before even that preparation does I/O.
+    assertForcedRequestSupported(provider, baseRequest);
     const cacheMarkers = (scope.cacheMarkers as readonly CacheMarker[] | undefined) ?? [];
     const cachePrepared = await cacheStrategy.prepareRequest(baseRequest, cacheMarkers, {
       iteration,
@@ -766,6 +788,10 @@ export function buildCallLLMStage(
       cachingDisabled: scope.cachingDisabled ?? false,
     });
     const llmRequest = cachePrepared.request;
+    // Judge the final request on the effective brain/configured model, not
+    // the agent's build-time default. This is before provider I/O and outside
+    // the reliability loop: retrying cannot repair an unsupported contract.
+    assertForcedRequestSupported(provider, llmRequest);
 
     // ── THE RECEIPT ──────────────────────────────────────────────────────
     // Written HERE, immediately before the provider is called, so it is
@@ -910,14 +936,19 @@ export function buildCallLLMStage(
     // provider on every call. When `deps.provider` is decorated
     // (withFallback / withRetry / withCircuitBreaker) its reports become
     // in-run typed events with this stage's real runtimeStageId. Built
-    // once per stage — stateless, reused across reliability-loop
+    // once per stage — reused across reliability-loop
     // iterations. Named to avoid shadowing `singleProviderCall`'s own
     // `hooks` parameter, which is the unrelated `{ onFirstChunk }` bag.
-    const providerHooks = resilienceHooks(scope);
-    const singleProviderCall = async (
-      req: LLMRequest,
-      hooks: { onFirstChunk?: () => void },
-    ): Promise<LLMResponse> => {
+    const providerHooks = resilienceHooks(
+      scope,
+      deps.recordReceipt !== false,
+      deps.onReplayPrepared,
+    );
+    let answeredBy = { provider: provider.name, model };
+    const singleProviderCall: LLMCallFn = async (req, hooks): Promise<LLMResponse> => {
+      const selectedProvider = hooks.provider ?? provider;
+      assertForcedRequestSupported(selectedProvider, req);
+      const attempts = replayAttempts(req, hooks.providerHooks ?? providerHooks);
       let resp: LLMResponse | undefined;
       let firstChunkFired = false;
       // THE STREAM CARRIES WHAT STANDS (9.114.2, `.findings()`): each chunk
@@ -931,8 +962,8 @@ export function buildCallLLMStage(
           ? peel.reservedMemberFilter()
           : undefined;
       let lastTokenIndex = -1;
-      if (provider.stream) {
-        for await (const chunk of provider.stream(req, providerHooks)) {
+      if (selectedProvider.stream) {
+        for await (const chunk of selectedProvider.stream(attempts.request, attempts.hooks)) {
           if (chunk.done) {
             if (chunk.response) resp = chunk.response;
             break;
@@ -946,7 +977,7 @@ export function buildCallLLMStage(
           // refusal says what the terminal chunk looks like.
           if (typeof (chunk.content as unknown) !== 'string') {
             throw new TypeError(
-              `provider '${provider.name}' yielded a stream chunk whose \`content\` is ` +
+              `provider '${selectedProvider.name}' yielded a stream chunk whose \`content\` is ` +
                 `${chunk.content === undefined ? 'missing' : `a ${typeof chunk.content}`}. ` +
                 `Every chunk from LLMProvider.stream() is ` +
                 `{ tokenIndex: number, content: string, done: boolean }, and the LAST one is ` +
@@ -994,7 +1025,7 @@ export function buildCallLLMStage(
         // those are two genuinely billed calls and collapsing them would
         // hide real double-billing. (That this branch can re-call at all
         // after a stream is a pre-existing quirk; see MENTAL_MODEL §14.)
-        resp = await provider.complete(req, providerHooks);
+        resp = await selectedProvider.complete(attempts.request, attempts.hooks);
       }
       // `'tool-forced'`: the answer arrived as the synthetic tool's ARGUMENTS,
       // so it is moved into `content` and the call is taken off the list here,
@@ -1015,7 +1046,12 @@ export function buildCallLLMStage(
           };
         }
       }
-      return resp;
+      const answered =
+        hooks.providerIndex === undefined
+          ? resp
+          : tagThinkingResponse(resp, String(hooks.providerIndex));
+      answeredBy = { provider: selectedProvider.name, model: req.model };
+      return attempts.response(answered);
     };
 
     // v2.13 — build the output-schema validator hook when both
@@ -1084,7 +1120,10 @@ export function buildCallLLMStage(
         model,
         singleProviderCall,
         postValidate,
-        deps.withholdDraftContent === true ? { withholdDraftContent: true } : undefined,
+        {
+          ...(deps.withholdDraftContent === true && { withholdDraftContent: true }),
+          providerHooks,
+        },
       );
       // `executeWithReliability` returns `undefined` when it took the
       // fail-fast path. It already wrote scope state and called
@@ -1110,11 +1149,16 @@ export function buildCallLLMStage(
     }
     scope.llmLatestContent = response.content;
     scope.llmLatestToolCalls = response.toolCalls;
+    // A response owns its replay evidence, never the previous response's.
+    // The presence trap does not record a read on never-replay providers.
+    if (response.replay !== undefined || 'llmLatestReplay' in scope) {
+      scope.llmLatestReplay = response.replay === undefined ? undefined : [response.replay];
+    }
     // v2.14 — hand provider-specific raw thinking data to the
     // NormalizeThinking sub-subflow (the next stage in sf-call-llm
     // when a ThinkingHandler is configured). Undefined when the
     // provider has no thinking content for this call (most calls).
-    if (response.rawThinking !== undefined) {
+    if (response.rawThinking !== undefined || 'rawThinking' in scope) {
       (scope as TypedScope<AgentState> & { rawThinking: unknown }).rawThinking =
         response.rawThinking;
     }
@@ -1154,7 +1198,7 @@ export function buildCallLLMStage(
       },
       response.wireManifest === undefined
         ? undefined
-        : { names: response.wireManifest.toolNames, provenance: provider.name },
+        : { names: response.wireManifest.toolNames, provenance: answeredBy.provider },
       iteration,
     );
     // The disposition: a provider stating no manifest leaves this call
@@ -1343,14 +1387,7 @@ export function buildCallLLMStage(
       }
     }
 
-    // `provider` here is the EFFECTIVE one — a per-skill `brain` overrides the
-    // agent's, and the bill follows the call, not the configuration.
-    emitCostTick(
-      scope,
-      deps.pricingTable,
-      deps.costBudget,
-      { provider: provider.name, model },
-      response.usage,
-    );
+    // Attribute the successful response to its actual selected transport/model.
+    emitCostTick(scope, deps.pricingTable, deps.costBudget, answeredBy, response.usage);
   };
 }

@@ -26,7 +26,7 @@ receipt?.params.temperature;    // the dial this turn went out on
 
 > `readonly` **basis**: `object`
 
-Defined in: [src/lib/time-travel/receipt.ts:417](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L417)
+Defined in: [src/lib/time-travel/receipt.ts:427](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L427)
 
 #### epoch
 
@@ -50,7 +50,7 @@ Defined in: [src/lib/time-travel/receipt.ts:417](https://github.com/footprintjs/
 
 > `readonly` **cache**: `object`
 
-Defined in: [src/lib/time-travel/receipt.ts:350](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L350)
+Defined in: [src/lib/time-travel/receipt.ts:360](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L360)
 
 #### markersApplied
 
@@ -116,7 +116,7 @@ minted before the prefix existed, which verifies as
 
 > `readonly` **messages**: `object`
 
-Defined in: [src/lib/time-travel/receipt.ts:337](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L337)
+Defined in: [src/lib/time-travel/receipt.ts:347](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L347)
 
 #### count
 
@@ -136,7 +136,7 @@ Defined in: [src/lib/time-travel/receipt.ts:337](https://github.com/footprintjs/
 
 > `readonly` `optional` **omittedForAttention?**: `ReceiptAttentionOmission`
 
-Defined in: [src/lib/time-travel/receipt.ts:416](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L416)
+Defined in: [src/lib/time-travel/receipt.ts:426](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L426)
 
 What left the window for budget at this iteration's head, before this
 request was composed — one hash per evicted turn, each the turn's own
@@ -157,9 +157,21 @@ meant only that nobody had recorded a drop.
 
 > `readonly` **params**: [`ReceiptParams`](/docs/api/interfaces/ReceiptParams)
 
-Defined in: [src/lib/time-travel/receipt.ts:401](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L401)
+Defined in: [src/lib/time-travel/receipt.ts:411](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L411)
 
 The sampling knobs the call went out with — see [ReceiptParams](/docs/api/interfaces/ReceiptParams).
+
+***
+
+### replayPreparations?
+
+> `readonly` `optional` **replayPreparations?**: readonly `object`[]
+
+Defined in: [src/lib/time-travel/receipt.ts:334](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L334)
+
+Actual leaf-provider preparation omitted thinking after this port receipt
+was minted. Original hashes/measurement/cache verdict remain port-level;
+this is an explicit downstream gap, not proof of what a server accepted.
 
 ***
 
@@ -167,7 +179,7 @@ The sampling knobs the call went out with — see [ReceiptParams](/docs/api/inte
 
 > `readonly` `optional` **requestMeasurement?**: [`RequestMeasurement`](/docs/api/type-aliases/RequestMeasurement)
 
-Defined in: [src/lib/time-travel/receipt.ts:331](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L331)
+Defined in: [src/lib/time-travel/receipt.ts:341](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L341)
 
 Counts of the initial prepared canonical request, including full schemas.
 Older recordings have no measurement. No payload, tokens or retry totals.
@@ -178,7 +190,7 @@ Older recordings have no measurement. No payload, tokens or retry totals.
 
 > `readonly` **system**: `object`
 
-Defined in: [src/lib/time-travel/receipt.ts:332](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L332)
+Defined in: [src/lib/time-travel/receipt.ts:342](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L342)
 
 #### chars
 
@@ -198,7 +210,7 @@ Defined in: [src/lib/time-travel/receipt.ts:332](https://github.com/footprintjs/
 
 > `readonly` **tools**: `object`
 
-Defined in: [src/lib/time-travel/receipt.ts:342](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L342)
+Defined in: [src/lib/time-travel/receipt.ts:352](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L352)
 
 #### forced
 

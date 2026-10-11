@@ -35,6 +35,7 @@ import {
   type ResolvedOutputEnforcement,
 } from '../outputEnforcement.js';
 import type { AgentState } from '../types.js';
+import { assistantReplayFields } from '../assistantReplay.js';
 
 /**
  * Build the retry stage. `enforcement.retries` is the cap the decider already
@@ -73,7 +74,7 @@ export function buildOutputRetryStage(
     // detached plain data.
     const newHistory: LLMMessage[] = [
       ...(scope.history as readonly LLMMessage[]),
-      answerTurn,
+      { ...answerTurn, ...assistantReplayFields(scope) },
       correctionTurn,
     ];
     scope.history = newHistory;

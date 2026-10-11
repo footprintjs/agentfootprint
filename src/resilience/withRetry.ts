@@ -52,6 +52,7 @@ import type {
 } from '../adapters/types.js';
 import { sleep } from '../lib/sleep.js';
 import { statedRetryAfterMs } from './statedWait.js';
+import { replayAttempts } from './replayAttempt.js';
 
 export interface WithRetryOptions {
   /** Total attempts including the first. Default 3. Must be >= 1. */
@@ -126,6 +127,9 @@ export function withRetry(provider: LLMProvider, options: WithRetryOptions = {})
     ...(provider.carriesForcedToolChoice !== undefined && {
       carriesForcedToolChoice: provider.carriesForcedToolChoice,
     }),
+    ...(provider.supportsForcedToolChoice !== undefined && {
+      supportsForcedToolChoice: provider.supportsForcedToolChoice,
+    }),
     // Same wire, same cache. The agent chooses its cache strategy from this
     // declaration — it used to look the strategy up by `name`, and the
     // `+retry` suffix above sent every retried Anthropic call out with no
@@ -138,15 +142,16 @@ export function withRetry(provider: LLMProvider, options: WithRetryOptions = {})
     // longer refuse `.thinking()` for a model that cannot think.
     ...(provider.thinkingMode !== undefined && { thinkingMode: provider.thinkingMode }),
     async complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
+      const attempts = replayAttempts(req, hooks);
       // t0 for the `recovered` report's totalDurationMs. New
       // instrumentation (the decorator did not measure this before v7.8),
       // not a recovered fact.
       const startedMs = Date.now();
       for (let attempt = 1; ; attempt++) {
         try {
-          const res = await provider.complete(req, hooks);
+          const res = await provider.complete(attempts.request, attempts.hooks);
           reportRecovered(hooks, attempt, startedMs);
-          return res;
+          return attempts.response(res);
         } catch (err) {
           await backOffOrThrow(err, attempt, req, hooks);
         }
@@ -204,10 +209,13 @@ export function withRetry(provider: LLMProvider, options: WithRetryOptions = {})
       req: LLMRequest,
       hooks: LLMCallHooks | undefined,
     ): Promise<{ iterator: AsyncIterator<LLMChunk>; first: IteratorResult<LLMChunk> }> => {
+      const attempts = replayAttempts(req, hooks);
       const startedMs = Date.now();
       for (let attempt = 1; ; attempt++) {
         try {
-          const iterator = innerStream(req, hooks)[Symbol.asyncIterator]();
+          const iterator = attempts.iterator(
+            innerStream(attempts.request, attempts.hooks)[Symbol.asyncIterator](),
+          );
           const first = await iterator.next();
           // The stream got through: its first step arrived. Reported here —
           // not at the terminal chunk — because this is where retrying ends

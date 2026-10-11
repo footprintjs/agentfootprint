@@ -68,8 +68,8 @@ it moves. That is what the port is for.
 SQLite is *inside Node* — `node:sqlite`, no install, no native build, no peer
 dependency. The price is a version floor this package does not otherwise have:
 the module ships with **Node 22.5 and newer** (as-is from 22.13 and 23.4; behind
-`--experimental-sqlite` on 22.5–22.12). agentfootprint still supports Node 20,
-so `engines` did not move for one optional adapter. The module is loaded when
+`--experimental-sqlite` on 22.5–22.12). agentfootprint 10 requires Node 22 or newer, but this optional adapter
+also needs the built-in module available in that specific Node release. The module is loaded when
 you actually construct a store, and its absence is refused by name:
 
 ```

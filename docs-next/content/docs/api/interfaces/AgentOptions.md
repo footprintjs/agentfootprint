@@ -198,7 +198,7 @@ stage whose net change to a tracked array is "the old array plus a
 tail" (the agent's `history` every iteration) records ONLY the tail
 (`append` verb); key removals record a `delete` verb. LOSSLESS — any
 step's full value reconstructs by replay (`commitValueAt` from
-`footprintjs/trace`), which is why this is safe for audit trails.
+`foottrace`), which is why this is safe for audit trails.
 Retained commit-log memory becomes linear instead of quadratic.
 Set `'full'` for footprintjs's default encoding (every changed key
 stores its full final value) if a downstream consumer reads
@@ -254,7 +254,7 @@ Give a long-running support agent more room for history
 
 ### costBudget?
 
-> `readonly` `optional` **costBudget?**: `number` \| \{ `onExceed`: `"warn"` \| `"halt"`; `usd`: `number`; \}
+> `readonly` `optional` **costBudget?**: `number` \| \{ `onExceed`: `"halt"` \| `"warn"`; `usd`: `number`; \}
 
 Defined in: [src/core/agent/types.ts:213](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L213)
 

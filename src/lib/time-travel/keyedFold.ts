@@ -48,8 +48,8 @@
  * one shape that cannot be folded at all without the base.
  */
 
-import { applySmartMerge, stateAt } from 'footprintjs/trace';
-import type { CommitBundle } from 'footprintjs/trace';
+import { applySmartMerge, stateAt } from 'foottrace';
+import type { CommitBundle } from 'foottrace';
 
 /**
  * How a fold was derived — footprintjs's own two answers, restated here so a

@@ -4,16 +4,15 @@
  * Pattern: Adapter (GoF, Design Patterns ch. 4) + Ports-and-Adapters
  *          (Cockburn, 2005).
  * Role:    Contracts for every external dependency the library reaches for:
- *          LLM providers, memory stores, context sources, embeddings,
- *          guardrails, policy engines, pricing tables.
+ *          LLM providers, memory stores, permission checkers, pricing tables.
  * Emits:   N/A (interfaces only).
  *
- * Concrete adapters (AnthropicProvider, PineconeStore, LlamaGuardDetector,
+ * Concrete adapters (AnthropicProvider, PineconeStore, PermissionPolicy,
  * ...) implement these contracts. `core/` and `core-flow/` depend only on
  * these interfaces — never on concrete adapters.
  */
 
-import type { ContextRole, ContextSlot, ContextSource } from '../events/types.js';
+import type { ContextRole, ContextSource } from '../events/types.js';
 import type { ThinkingBlock } from '../thinking/types.js';
 
 // ─── LLM Provider ────────────────────────────────────────────────────
@@ -65,6 +64,8 @@ export interface LLMMessage {
    * Empty array OR undefined when no thinking is present (most calls).
    */
   readonly thinkingBlocks?: readonly ThinkingBlock[];
+  /** Replay layout and local consistency evidence (including known loss); JSON/checkpoint safe. */
+  readonly replay?: import('../thinking/replay.js').MessageReplay;
   /**
    * v2.13 — PERSISTENCE flag (NOT a visibility flag). When `true`:
    *   • The message IS sent to the LLM as part of the next request
@@ -305,8 +306,8 @@ export interface LLMRequest {
    * `toolConfig.toolChoice.tool.name` — the field is the one word all three
    * agree on, and each adapter writes its own dialect.
    *
-   * A provider that does not declare {@link LLMProvider.carriesForcedToolChoice}
-   * for the request's model never receives this field: the agent refuses at
+   * If `forcedToolChoiceFor(provider, model)` answers false, the agent never
+   * sends this field: it refuses at
    * run start instead, naming the provider and the model. Silently sending it
    * to a wire that ignores it would turn a guarantee into a suggestion with
    * nothing in the recording to say so — and a model that rejects it (Claude
@@ -320,6 +321,10 @@ export interface LLMRequest {
 }
 
 export interface LLMResponse {
+  /** Ordered replay evidence, retained with the assistant message. */
+  readonly replay?: import('../thinking/replay.js').MessageReplay;
+  /** Leaf-side omissions, also available to standalone callers without hooks. */
+  readonly replayOmissions?: readonly import('../thinking/replay.js').ThinkingReplayOmission[];
   readonly content: string;
   readonly toolCalls: readonly {
     readonly id: string;
@@ -572,6 +577,14 @@ export type ResilienceReport =
  */
 export interface LLMCallHooks {
   /**
+   * The actual leaf provider omitted eligible completed-turn thinking before
+   * transport. Wrappers forward this channel unchanged, like onResilience.
+   * The run records metadata and keeps the permitted omission in its history.
+   */
+  readonly onReplayPrepared?: (
+    preparation: import('../thinking/replay.js').ReplayPreparation,
+  ) => void;
+  /**
    * Called once per resilience decision (a fallback, a retry, a
    * recovery). Decorators forward this hook inward unchanged, so a
    * stack of decorators produces one concatenated report stream with no
@@ -655,21 +668,21 @@ export interface LLMProvider {
    * OpenAI-compatible server does with `tool_choice` is that server's
    * business and this library does not get to promise it.
    *
-   * **Per model where the models disagree.** A function of the model id (the
-   * id a request names; the adapter resolves its own shorthand) answers for
-   * each model: Claude Opus 5.5, Sonnet 5.5, Fable 5.1 and Mythos 5.1 reject a
-   * forced choice on every request, so the Anthropic adapters and `bedrock()`
-   * answer `false` for them. Read it through `forcedToolChoiceFor(provider,
-   * model)` — a function is truthy, so a bare truthiness check says yes to
-   * every model. Like `thinkingMode`, the function must not use `this`: a
-   * wrapper forwards it as a value.
-   *
    * A WRAPPER must forward it; `withFallback` publishes the AND of the two
-   * providers it holds (per model when either side declares per model), since
-   * a call that might be served by either is only constrained if both
-   * constrain it.
+   * providers it holds. Model-specific restrictions are declared separately
+   * by `supportsForcedToolChoice`; this existing wire flag remains boolean.
    */
-  readonly carriesForcedToolChoice?: boolean | ((model: string) => boolean);
+  readonly carriesForcedToolChoice?: boolean;
+  /**
+   * Optional model-specific restriction on the forced-choice wire capability.
+   * Read with `forcedToolChoiceFor(provider, model)`: the wire flag must be
+   * true AND this predicate (when present) must answer true. Absence preserves
+   * the wire flag's existing behaviour. The adapter resolves its shorthand.
+   *
+   * Like `thinkingMode`, this function must not depend on `this`; wrappers
+   * forward it as a value. `withFallback` intersects both sides per model.
+   */
+  readonly supportsForcedToolChoice?: (model: string) => boolean;
   /**
    * `hooks` (v7.8) is optional and additive — implementations may declare
    * `complete(req)` with no second parameter and stay assignable. A LEAF
@@ -679,130 +692,6 @@ export interface LLMProvider {
    */
   complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse>;
   stream?(req: LLMRequest, hooks?: LLMCallHooks): AsyncIterable<LLMChunk>;
-}
-
-// ─── Three ports with nowhere to plug in ─────────────────────────────
-//
-// `ContextSourceAdapter`, `EmbeddingProvider` and `RiskDetector` are
-// SHAPES ONLY. Nothing in the library constructs one, accepts one as an
-// option, or calls one — grep each name and the declaration below is the
-// only hit. They are exported from the root barrel, so a consumer can
-// import one, implement it perfectly, and find there is no argument
-// anywhere to hand it to.
-//
-// That is worse than a missing feature. A published interface is a
-// promise that something reads it, and these three have been quietly
-// breaking that promise since they were declared. They are marked
-// `@deprecated` rather than deleted because 9.x is additive-only and
-// removal is a compile break for anyone who imported the type; the
-// removal itself is on the 10.0.0 ledger, alongside `scopeTools`'
-// default flip and the three grace errors 9.0.0 filed there.
-//
-// The satellite value types below each port (`ResolveCtx`,
-// `ContextContribution`, `RiskContext`, `RiskResult`) are reachable
-// ONLY through their port and are on the same ledger for the same
-// reason.
-
-// ─── Context Source ──────────────────────────────────────────────────
-
-/** @deprecated No implementation exists — see {@link ContextSourceAdapter}. Removed in 10.0.0. */
-export interface ResolveCtx {
-  readonly userMessage: string;
-  readonly turnIndex: number;
-  readonly iterIndex: number;
-  readonly availableBudgetTokens: number;
-  readonly signal?: AbortSignal;
-}
-
-/** @deprecated No implementation exists — see {@link ContextSourceAdapter}. Removed in 10.0.0. */
-export interface ContextContribution {
-  readonly contentSummary: string;
-  readonly rawContent?: string;
-  readonly score?: number;
-  readonly rank?: number;
-  readonly asRole?: ContextRole;
-  readonly sectionTag?: string;
-  readonly reason: string;
-}
-
-/**
- * @deprecated **Nothing implements or calls this, and nothing ever has.**
- * There is no option that accepts a `ContextSourceAdapter`, so a correct
- * implementation has nowhere to go. Removed in 10.0.0.
- *
- * To put your own content into a slot, use the injection engine, which is
- * the seam that actually runs: `defineInjection` / `defineFact` /
- * `defineSkill` from `agentfootprint/context`. An injection names its
- * `flavor` and `trigger` and is resolved into the same three slots this
- * port describes.
- */
-export interface ContextSourceAdapter {
-  readonly id: string;
-  readonly targetSlot: ContextSlot;
-  readonly source: ContextSource;
-  resolve(ctx: ResolveCtx): Promise<readonly ContextContribution[]>;
-}
-
-// ─── Embedding Provider ─────────────────────────────────────────────
-
-/**
- * @deprecated **Nothing implements or calls this, and nothing ever has.**
- * It is a second, dead spelling of a live idea. Removed in 10.0.0.
- *
- * The port the library really uses is `Embedder`
- * (`memory/embedding/types.ts`, exported from `agentfootprint/memory`):
- * `{ dimensions, id?, embed({ text }), embedBatch? }`. Every shipped
- * embedder — `openaiEmbedder`, `localEmbedder`, `staticEmbedder`,
- * `mockEmbedder` — implements THAT one, and `defineMemory`/`defineRAG`
- * accept THAT one.
- */
-export interface EmbeddingProvider {
-  readonly name: string;
-  readonly dimension: number;
-  embed(inputs: readonly string[], kind: 'query' | 'document'): Promise<number[][]>;
-}
-
-// ─── Risk Detector (guardrails) ─────────────────────────────────────
-
-/** @deprecated No implementation exists — see {@link RiskDetector}. Removed in 10.0.0. */
-export interface RiskContext {
-  readonly slot?: ContextSlot;
-  readonly source?: ContextSource;
-  readonly turnIndex?: number;
-  readonly iterIndex?: number;
-}
-
-/** @deprecated No implementation exists — see {@link RiskDetector}. Removed in 10.0.0. */
-export interface RiskResult {
-  readonly flagged: boolean;
-  readonly severity: 'low' | 'medium' | 'high' | 'critical';
-  readonly category:
-    | 'pii'
-    | 'prompt_injection'
-    | 'runaway_loop'
-    | 'cost_overrun'
-    | 'hallucination_flag';
-  readonly evidence: Readonly<Record<string, unknown>>;
-  readonly suggestedAction: 'warn' | 'redact' | 'abort';
-}
-
-/**
- * @deprecated **Nothing implements or calls this, and nothing ever has.**
- * No guardrail stage consults a `RiskDetector`, so implementing one buys
- * no enforcement whatsoever — the most dangerous kind of dead port, since
- * a "risk detector" that is never asked looks from the outside exactly
- * like one that has found nothing. Removed in 10.0.0.
- *
- * The seams that DO gate a run: `PermissionChecker` (tool-call
- * authorization, `agentfootprint/security`), `.reliability({ preCheck })`
- * (rules evaluated before the LLM call, `agentfootprint/resilience`), and
- * `.toolMiddleware(...)` (wrap or refuse a dispatch). For content
- * screening, run your own check inside a tool's `execute` or in a message
- * middleware and refuse there.
- */
-export interface RiskDetector {
-  readonly name: string;
-  check(content: string, context: RiskContext): Promise<RiskResult>;
 }
 
 // ─── Permission Engine ──────────────────────────────────────────────

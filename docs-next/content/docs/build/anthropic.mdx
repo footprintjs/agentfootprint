@@ -92,6 +92,81 @@ The same option exists on `browserAnthropic()`, and both adapters put the identi
 invokeModelGateway({ /* … */ model: 'haiku-fast', thinkingMode: (id) => (id === 'haiku-fast' ? 'budget' : undefined) });
 ```
 
+## Forced tool choice is model-specific
+
+`carriesForcedToolChoice` still says whether the adapter writes a forced
+choice on its wire. `forcedToolChoiceFor(provider, model)` also reads the
+optional `supportsForcedToolChoice(model)` restriction.
+
+Claude Opus 5.5, Sonnet 5.5, Fable 5.1 and Mythos 5.1 reject forced tool choice,
+with or without a thinking request. Haiku 5.5 accepts it. The SDK, browser and
+InvokeModel gateway adapters use one model table and refuse an unsupported
+choice before sending anything, with `UnsupportedToolChoiceError` from
+`agentfootprint/providers` (`provider`, `model`, `retryable: false`).
+This follows Anthropic's [forced-tool compatibility rules](https://platform.claude.com/docs/en/build-with-claude/thinking#response-prefill-and-forced-tool-use).
+
+<CodeFile path="examples/features/96-thinking-per-model.ts" region="forced-choice" title="Check the model before forcing a tool" />
+
+An explicit `.outputSchema(…, { strategy: 'tool-forced' })` refuses at run
+start when the provider/model does not support it. Choose `'instruct'`
+explicitly if prompt-based output fits your use case. The internal constrained
+classifier already has a strict text-parsing path and uses that path for these
+models; it does not weaken its allowed-value check.
+
+Wrappers preserve the declaration; a fallback pair requires support on both
+sides. The default resilience policies do not retry this refusal, switch
+providers or count it as a circuit failure. Custom policies remain yours.
+Unknown deployment aliases keep their previous behavior: the table does not
+claim to know the model hidden behind them, and the service may still refuse.
+The thinking-mode option controls only thinking, not forced-tool support.
+
+## Thinking replay: stop only when unsafe
+
+During a tool turn, Anthropic requires the preceding assistant content,
+including signed and redacted thinking, in its original order. A tool result
+does not finish that turn. Earlier completed turns can omit thinking; see the
+[tool-workflow contract](https://platform.claude.com/docs/en/build-with-claude/thinking-tool-workflows).
+
+The SDK, browser and InvokeModel gateway share one replay check at the adapter
+that actually sends the call. If saved evidence proves that required active-turn
+thinking was changed, removed or reintroduced, the call raises
+`UnsafeThinkingReplayError` from `agentfootprint/providers` before sending.
+Keep system instructions, tools and earlier messages stable until the turn
+finishes; retain the original assistant blocks. Default resilience wrappers do
+not retry or hide this refusal. Unknown local provenance is not proof that an
+opaque signature is invalid; server authentication remains the server's job.
+
+For a witnessed completed turn, eligible invalid thinking is removed explicitly.
+`agentfootprint.agent.thinking_omitted` records every removed block's indices,
+reason, provider and model, with `phase: 'prepared'`: it proves preparation,
+not delivery or acceptance. No reasoning or signature appears in this event.
+The run persists retirement into its history so saving and resuming cannot
+silently bring those blocks back. Standalone provider callers can use
+`onReplayPrepared`; successful responses also carry `replayOmissions`.
+
+`LLMMessage.replay` holds optional JSON layout and consistency evidence, not a
+copy of the signed content. Preserve it alongside `thinkingBlocks` when managing
+history yourself. Complete and streaming replies retain the same block order;
+a no-thinking `end_turn` reply also records completion. The receipt stays at the
+provider-port boundary; `servedAt` reports a `thinking-replay` gap when a later
+adapter omission means it cannot prove the downstream message body.
+
+For a standalone integration, import the replay types from
+`agentfootprint/providers`. `MessageReplay` describes the saved evidence;
+each `ReplayPart` identifies a text span, thinking block or tool call in its
+ordered layout. A layout marked `lossy` is negative evidence, not a promise of
+recoverable content. `ReplayPreparation` is the pre-transport hook payload:
+the prepared request plus its omissions. Each `ThinkingReplayOmission` names
+one removed block without its contents, and `ThinkingReplayReason` describes
+the locally observed inconsistency. These types do not authenticate signatures
+or prove that a prepared request was sent.
+
+Only documented bound model families get the local prefix check. Older models,
+unknown aliases and cross-model signature compatibility are not guessed. No
+preserved-thinking beta or server drop policy is enabled. Prefix and contiguous
+sequence rules follow Anthropic's
+[preserved-thinking documentation](https://platform.claude.com/docs/en/build-with-claude/preserved-thinking).
+
 ## Streaming
 
 `provider.stream(req)` uses the SDK's native iterator; chunks land as they arrive. Final chunk carries the full `LLMResponse` (toolCalls + usage + stopReason) — single round-trip serves UI tokens AND ReAct decisioning.

@@ -15,7 +15,7 @@
  * back-compat · integration · re-export.
  */
 import { describe, expect, it } from 'vitest';
-import type { ForwardNode, ForwardSlice, KeyTimeline, KeyMoment } from 'footprintjs/trace';
+import type { ForwardNode, ForwardSlice, KeyTimeline, KeyMoment } from 'foottrace';
 
 import { Agent, defineTool } from '../../../src/index';
 import { defineFact } from '../../../src/injection-engine.js';

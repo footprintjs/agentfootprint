@@ -42,8 +42,8 @@
  * confident empty view.
  */
 
-import type { CommitBundle } from 'footprintjs/trace';
-import { parseRuntimeStageId, splitStageId } from 'footprintjs/trace';
+import type { CommitBundle } from 'foottrace';
+import { parseRuntimeStageId, splitStageId } from 'foottrace';
 import { STAGE_IDS, SUBFLOW_IDS } from '../../conventions.js';
 import { keyedFold, type FoldBasis, type FoldSourceLike } from './keyedFold.js';
 

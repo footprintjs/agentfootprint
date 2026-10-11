@@ -113,6 +113,13 @@ which prefix was committed, not that the emitting stage had finished.
 
 ## Fast-path invariant
 
+`replayHooks.ts` translates adapter preparation reports at the runtime boundary.
+It persists explicit history retirements, informs the existing checkpoint owner,
+annotates only this call's freshly minted receipt, and emits one
+`agent.thinking_omitted` event per removed block before transport. Persistence
+failures propagate; event-sink failures do not undo persistence. No post-run
+walk, signature verification or second replay policy lives in the recorder.
+
 Every recorder checks `dispatcher.hasListenersFor(type)` before constructing the typed event. When nothing subscribes, zero allocations happen. This is critical for production runs where observability is optional.
 
 ## When to add a new core recorder

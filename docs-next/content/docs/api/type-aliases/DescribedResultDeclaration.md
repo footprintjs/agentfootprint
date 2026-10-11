@@ -6,10 +6,10 @@ title: DescribedResultDeclaration
 
 > **DescribedResultDeclaration** = `object` & \{ `provenance`: \{ `ageSeconds?`: `number`; `measuredAt`: `string`; `source`: `string`; `sourceExportDate?`: `string`; \}; \} \| \{ `facts?`: `undefined`; `series?`: `undefined`; \}
 
-Defined in: [src/lib/semantics/types.ts:285](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L285)
+Defined in: [src/lib/semantics/types.ts:256](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L256)
 
 What a tool author passes to `describedResult()` — the
-[SemanticDeclaration](/docs/api/interfaces/SemanticDeclaration) fields in ONE spelling, camelCase, respelled to
+result fields in ONE spelling, camelCase, respelled to
 the unchanged snake_case wire ([ToolSemantics](/docs/api/interfaces/ToolSemantics)).
 
 `provenance` is REQUIRED whenever `series` or `facts` is present, and the
@@ -90,7 +90,7 @@ What the READ behind the data covered in time (honesty step 7b) — the
 instants it asked for (`queried`), what the store holds (`held`, or
 `'unknown'` said out loud) and when the read ran (`readAt`). Every value
 is an ISO 8601 instant with a zone; the model reads it as declared, and
-the results layer files its verdict. `semantic()` does not take it.
+the results layer files its verdict.
 
 ### provenance?
 

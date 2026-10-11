@@ -40,6 +40,38 @@
           }
         }
       ],
+      "replay": {
+        "version": 1,
+        "protocol": "anthropic-messages",
+        "id": "m",
+        "layout": [
+          {
+            "type": "thinking",
+            "index": 0
+          },
+          {
+            "type": "text",
+            "length": 2
+          },
+          {
+            "type": "tool",
+            "index": 0
+          }
+        ],
+        "stopReason": "end_turn",
+        "contentDigest": "a0b3c587e44fbeab8e4db23dd765966f72653a7493419b925a8c0e2dbd8f457b",
+        "binding": {
+          "model": "x",
+          "salt": "m",
+          "system": "50e680528fa0c47d3e08bdd55d28f2bcd87885f59df7d0617d96dd32757c6b49",
+          "tools": "0aa4994a2f2529a7a0e7912c81fd41ad6495d352df214bbfb85fc348c0bbbc1c",
+          "messages": "52616a62451f3eb5314c35f73b65a6f63cf8f11df8c2bb184f04e10e76971b5e",
+          "priorThinking": [
+            "1680bd17d5c9c14baea3cd69d3b9c6a4a86b3da533e49568b0b251a3509b4f1d",
+            "876ef2a20bdd0b4e22e1d8b4f3b8d1031f469484f1e46e110eb0bb1c125ff95a"
+          ]
+        }
+      },
       "wireManifest": {
         "toolNames": [
           "t"
@@ -89,8 +121,51 @@
               "type": "thinking",
               "thinking": "th",
               "signature": "S"
+            },
+            {
+              "type": "text",
+              "text": "Hello"
+            },
+            {
+              "type": "tool_use",
+              "id": "t1",
+              "name": "t",
+              "input": {
+                "a": "x"
+              }
+            },
+            {
+              "type": "tool_use",
+              "id": "t2",
+              "name": "t",
+              "input": {}
             }
           ],
+          "replay": {
+            "version": 1,
+            "protocol": "anthropic-messages",
+            "id": "m1",
+            "layout": [
+              {
+                "type": "thinking",
+                "index": 0
+              }
+            ],
+            "stopReason": "tool_use",
+            "contentDigest": "",
+            "lossy": true,
+            "binding": {
+              "model": "",
+              "salt": "m1",
+              "system": "fa18b0eb7d2ebd9021e93207c561e97688aa610daf8320209c030d8f8aae8596",
+              "tools": "a626ea64b297ad77f6884300013a21ea21303e07cb04d2cc156568dd0d4cc903",
+              "messages": "b0d9334da3fb16e95be1c5c409f3c4bdde3b374a15bcfaffc7a7e974f7d73c73",
+              "priorThinking": [
+                "1680bd17d5c9c14baea3cd69d3b9c6a4a86b3da533e49568b0b251a3509b4f1d",
+                "876ef2a20bdd0b4e22e1d8b4f3b8d1031f469484f1e46e110eb0bb1c125ff95a"
+              ]
+            }
+          },
           "wireManifest": {
             "toolNames": [
               "t"
@@ -141,6 +216,38 @@
           }
         }
       ],
+      "replay": {
+        "version": 1,
+        "protocol": "anthropic-messages",
+        "id": "m",
+        "layout": [
+          {
+            "type": "thinking",
+            "index": 0
+          },
+          {
+            "type": "text",
+            "length": 2
+          },
+          {
+            "type": "tool",
+            "index": 0
+          }
+        ],
+        "stopReason": "end_turn",
+        "contentDigest": "a0b3c587e44fbeab8e4db23dd765966f72653a7493419b925a8c0e2dbd8f457b",
+        "binding": {
+          "model": "x",
+          "salt": "m",
+          "system": "50e680528fa0c47d3e08bdd55d28f2bcd87885f59df7d0617d96dd32757c6b49",
+          "tools": "0aa4994a2f2529a7a0e7912c81fd41ad6495d352df214bbfb85fc348c0bbbc1c",
+          "messages": "52616a62451f3eb5314c35f73b65a6f63cf8f11df8c2bb184f04e10e76971b5e",
+          "priorThinking": [
+            "1680bd17d5c9c14baea3cd69d3b9c6a4a86b3da533e49568b0b251a3509b4f1d",
+            "876ef2a20bdd0b4e22e1d8b4f3b8d1031f469484f1e46e110eb0bb1c125ff95a"
+          ]
+        }
+      },
       "wireManifest": {
         "toolNames": [
           "t"
@@ -190,8 +297,51 @@
               "type": "thinking",
               "thinking": "th",
               "signature": "S"
+            },
+            {
+              "type": "text",
+              "text": "Hello"
+            },
+            {
+              "type": "tool_use",
+              "id": "t1",
+              "name": "t",
+              "input": {
+                "a": "x"
+              }
+            },
+            {
+              "type": "tool_use",
+              "id": "t2",
+              "name": "t",
+              "input": {}
             }
           ],
+          "replay": {
+            "version": 1,
+            "protocol": "anthropic-messages",
+            "id": "m1",
+            "layout": [
+              {
+                "type": "thinking",
+                "index": 0
+              }
+            ],
+            "stopReason": "tool_use",
+            "contentDigest": "",
+            "lossy": true,
+            "binding": {
+              "model": "",
+              "salt": "m1",
+              "system": "fa18b0eb7d2ebd9021e93207c561e97688aa610daf8320209c030d8f8aae8596",
+              "tools": "a626ea64b297ad77f6884300013a21ea21303e07cb04d2cc156568dd0d4cc903",
+              "messages": "b0d9334da3fb16e95be1c5c409f3c4bdde3b374a15bcfaffc7a7e974f7d73c73",
+              "priorThinking": [
+                "1680bd17d5c9c14baea3cd69d3b9c6a4a86b3da533e49568b0b251a3509b4f1d",
+                "876ef2a20bdd0b4e22e1d8b4f3b8d1031f469484f1e46e110eb0bb1c125ff95a"
+              ]
+            }
+          },
           "wireManifest": {
             "toolNames": [
               "t"
@@ -242,6 +392,38 @@
           }
         }
       ],
+      "replay": {
+        "version": 1,
+        "protocol": "anthropic-messages",
+        "id": "m",
+        "layout": [
+          {
+            "type": "thinking",
+            "index": 0
+          },
+          {
+            "type": "text",
+            "length": 2
+          },
+          {
+            "type": "tool",
+            "index": 0
+          }
+        ],
+        "stopReason": "end_turn",
+        "contentDigest": "a0b3c587e44fbeab8e4db23dd765966f72653a7493419b925a8c0e2dbd8f457b",
+        "binding": {
+          "model": "x",
+          "salt": "m",
+          "system": "50e680528fa0c47d3e08bdd55d28f2bcd87885f59df7d0617d96dd32757c6b49",
+          "tools": "0aa4994a2f2529a7a0e7912c81fd41ad6495d352df214bbfb85fc348c0bbbc1c",
+          "messages": "52616a62451f3eb5314c35f73b65a6f63cf8f11df8c2bb184f04e10e76971b5e",
+          "priorThinking": [
+            "1680bd17d5c9c14baea3cd69d3b9c6a4a86b3da533e49568b0b251a3509b4f1d",
+            "876ef2a20bdd0b4e22e1d8b4f3b8d1031f469484f1e46e110eb0bb1c125ff95a"
+          ]
+        }
+      },
       "wireManifest": {
         "toolNames": [
           "t"
@@ -291,8 +473,51 @@
               "type": "thinking",
               "thinking": "th",
               "signature": "S"
+            },
+            {
+              "type": "text",
+              "text": "Hello"
+            },
+            {
+              "type": "tool_use",
+              "id": "t1",
+              "name": "t",
+              "input": {
+                "a": "x"
+              }
+            },
+            {
+              "type": "tool_use",
+              "id": "t2",
+              "name": "t",
+              "input": {}
             }
           ],
+          "replay": {
+            "version": 1,
+            "protocol": "anthropic-messages",
+            "id": "m1",
+            "layout": [
+              {
+                "type": "thinking",
+                "index": 0
+              }
+            ],
+            "stopReason": "tool_use",
+            "contentDigest": "",
+            "lossy": true,
+            "binding": {
+              "model": "",
+              "salt": "m1",
+              "system": "fa18b0eb7d2ebd9021e93207c561e97688aa610daf8320209c030d8f8aae8596",
+              "tools": "a626ea64b297ad77f6884300013a21ea21303e07cb04d2cc156568dd0d4cc903",
+              "messages": "b0d9334da3fb16e95be1c5c409f3c4bdde3b374a15bcfaffc7a7e974f7d73c73",
+              "priorThinking": [
+                "1680bd17d5c9c14baea3cd69d3b9c6a4a86b3da533e49568b0b251a3509b4f1d",
+                "876ef2a20bdd0b4e22e1d8b4f3b8d1031f469484f1e46e110eb0bb1c125ff95a"
+              ]
+            }
+          },
           "wireManifest": {
             "toolNames": [
               "t"

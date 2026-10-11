@@ -4,7 +4,7 @@ description: Skills are context engineering for instructions — abstracted so y
 ---
 
 <Aside type="note" title="What ships today">
-Every API surface this essay describes — `defineSkill({ id, description, body, tools, surfaceMode, refreshPolicy })`, `resolveSurfaceMode(provider, model)`, and `SkillRegistry` — is shipped and runnable. Per-mode runtime dispatch is live: `surfaceMode: 'tool-only'` now suppresses the body from the system slot and delivers it via the `read_skill` tool result; `'both'` does both. The one field that never got wired is `refreshPolicy` — DEPRECATED-pending-steps as of 9.16.0: it is stored and never read, a planned steps-as-data feature supersedes it, and dev mode warns once when it is set. Use `surfaceMode: 'both'` to re-surface a body today.
+Every API surface this essay describes — `defineSkill({ id, description, body, tools, surfaceMode })`, `resolveSurfaceMode(provider, model)`, and `SkillRegistry` — is shipped and runnable. Per-mode runtime dispatch is live: `surfaceMode: 'tool-only'` now suppresses the body from the system slot and delivers it via the `read_skill` tool result; `'both'` does both. The one field that never got wired is `refreshPolicy` — DEPRECATED-pending-steps as of 9.16.0: it is stored and never read, a planned steps-as-data feature supersedes it, and dev mode warns once when it is set. Use `surfaceMode: 'both'` to re-surface a body today.
 </Aside>
 
 ## In one line
@@ -74,7 +74,7 @@ These are not equivalent primitives. Skills is a discovery-and-dispatch pattern.
 
 <CodeFile path="examples/context-engineering/02-skill.ts" region="define-skill" title="examples/context-engineering/02-skill.ts (region: define-skill)" />
 
-That's the foundation. The rest of this essay explains *why* this design + what's built on top of it (`surfaceMode`, `refreshPolicy`, `SkillRegistry`).
+That's the foundation. The rest of this essay explains *why* this design + what's built on top of it (`surfaceMode`, `SkillRegistry`).
 
 ## The actual anatomy — three stages over Messages API
 
@@ -189,18 +189,13 @@ agentfootprint already shipped the `Injection` primitive with an `on-tool-return
 
 That text lands in the freshest possible position by protocol, not by training. Skills inherit this for free because every `Skill` IS-A `Injection` and shares the same trigger machinery.
 
-### 3. Refresh policy for long contexts
+### 3. Delivery in long contexts
 
-```ts
-defineSkill({
-  id: 'critical-rule',
-  description: 'Critical reasoning rule for long-context runs',
-  body: '...',
-  refreshPolicy: { afterTokens: 50_000, via: 'tool-result' },
-});
-```
-
-Belt-and-suspenders: even if system-prompt anchoring was honored at turn 1, by turn 40 on a non-Claude provider it's drifted out of effective attention. Re-injecting the body as a fresh tool result past a token threshold is the *idea* — but the hook never shipped, and it now never will in this form: `refreshPolicy` is **DEPRECATED-pending-steps** (9.16.0). The engine stores the field and ignores it; a planned steps-as-data feature owns re-delivery instead; dev mode warns once per process when the field is set. Today, `surfaceMode: 'both'` is the working way to re-surface a body (every `read_skill` call returns it afresh, recency-first).
+Use `surfaceMode: 'both'` to return a skill's body on each explicit
+`read_skill` call. For a procedure, `steps` carries the current step in
+every request's tool description and each boundary result. Neither means
+automatic token-threshold refresh: `refreshPolicy` never implemented that
+behavior and was removed in 10.0.0.
 
 ### 4. Auto-generated loader tools + centralized governance
 
@@ -275,8 +270,7 @@ User turn arrives
 └────────────────────────────────────────────────────────┘
          │
          ▼
-  [ deprecated-pending-steps: refreshPolicy never wired; ]
-  [ a steps-as-data feature will own re-delivery instead ]
+  [ steps carry the current procedure position per request ]
 ```
 
 No primitive is invented. Every step uses a field the Messages API has always had. The library's work is packaging — putting the right descriptions in the right surface for the right provider, with recency guarantees where provider training can't carry them.
@@ -303,7 +297,7 @@ If you're:
 
 - **Building a Skills-style system without Claude in the stack** — the Agent SDK pattern degrades. Use `surfaceMode: 'tool-only'` and put skill content in tool results, not the system prompt.
 - **Writing evals on `mock()` that should predict production** — `surfaceMode: 'auto'` resolves to `'tool-only'` on `mock()`, matching the behavior you'll see on any provider whose training you can't bank on. If you'd coded descriptions into the system prompt yourself, `mock()` would trivially follow them and production would drift.
-- **Running agents for 6+ hours with large contexts** — even on Claude, system-prompt anchoring decays past ~100K dense tokens. This is why `refreshPolicy` exists (its runtime hook is still reserved). Design your Skill bodies to be re-surfaceable via tool result, not just discoverable via system prompt.
+- **Running agents for 6+ hours with large contexts** — even on Claude, system-prompt anchoring decays past ~100K dense tokens. Use `surfaceMode: 'both'` for explicit body delivery and `steps` for procedure position; no automatic refresh is promised.
 - **Wondering why your framework's "Skills" feature doesn't compose with your instruction system** — because they're the same thing. Skills are `Injection`s (the same primitive `defineInstruction` builds) with a discovery layer bolted on. If your framework treats them as separate primitives, you're paying for parallel abstractions.
 
 ## See also

@@ -174,18 +174,6 @@ export const AWS_COMMAND_PINS: readonly AwsAdapterPin[] = [
       'names wherever the peer dep is installed.',
   },
   {
-    adapter: 'agentCorePolicy (retired 9.4.0)',
-    sources: ['src/adapters/security/agentcore.ts'],
-    sdkPackage: '@aws-sdk/client-bedrock-agentcore',
-    client: 'BedrockAgentCoreClient',
-    commands: [],
-    note:
-      'Dispatches nothing: the factory refuses at construction. It used to send ' +
-      'EvaluatePolicyCommand, which does not exist — AgentCore has no data-plane ' +
-      'policy evaluation, because policy is enforced at the Gateway. The row stays ' +
-      'so that re-adding an SDK call here is a decision somebody has to record.',
-  },
-  {
     adapter: 'BedrockAgentMemory',
     sources: ['src/adapters/memory/bedrockAgentMemory.ts'],
     sdkPackage: '@aws-sdk/client-bedrock-agent-runtime',

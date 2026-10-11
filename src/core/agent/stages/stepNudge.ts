@@ -39,6 +39,7 @@ import {
   type StepPlanFor,
 } from '../../../lib/injection-engine/skillSteps.js';
 import type { AgentState } from '../types.js';
+import { assistantReplayFields } from '../assistantReplay.js';
 
 // LENS · injected-turn · persistent-history
 // reads: ptr ← pointerOf(scope.stepPointer); plan ← stepPlanFor(ptr.skillId); the sentence ← skillSteps.ts · nudgeTeachingMessage
@@ -74,7 +75,7 @@ export function buildStepNudgeStage(
     // must be detached plain data.
     const newHistory: LLMMessage[] = [
       ...(scope.history as readonly LLMMessage[]),
-      { role: 'assistant', content: prematureAnswer },
+      { role: 'assistant', content: prematureAnswer, ...assistantReplayFields(scope) },
       { role: 'user', content: teaching },
     ];
     scope.history = newHistory;

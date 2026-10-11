@@ -207,7 +207,7 @@ export function buildAgentMessageApiChart(deps: AgentMessageApiChartDeps): FlowC
       // specifically for `agent.on(...)`. Pinned by the two bare-executor
       // cases in
       // test/resilience/integration/resilience-decorator-visibility.test.ts.
-      resilienceHooks(scope),
+      resilienceHooks(scope, receipt !== undefined),
     );
     scope.answer = response.content;
     scope.toolCalls = response.toolCalls;

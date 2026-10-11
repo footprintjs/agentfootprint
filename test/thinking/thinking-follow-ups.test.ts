@@ -1,14 +1,12 @@
 /**
- * The three follow-ups #93 ("thinking per model") named, each reproduced
+ * The two provider-capability follow-ups #93 ("thinking per model") named, each reproduced
  * against the bytes an adapter hands its transport.
  *
  *   1. `bedrock()` (the Converse API) silently ignored `.thinking()`.
  *   2. A forced tool choice reached Claude Opus 5.5, Sonnet 5.5, Fable 5.1 and
  *      Mythos 5.1, which reject it on every request (HTTP 400).
- *   3. A thinking block was sent back after the system prompt, the tools or an
- *      earlier message had changed — on Fable 5.1, Opus 5.5, Sonnet 5.5 and
- *      Haiku 5.5 that is a 400 for accounts created on or after 2026-08-31
- *      (preserved thinking's prefix check).
+ * The third follow-up is covered by anthropic-replay-policy.test.ts,
+ * replay-checkpoint.test.ts and the saved-body adapter tests.
  *
  * No live API calls: a fake SDK client, a recording `fetch` or a fake Converse
  * client records every request body.
@@ -16,11 +14,10 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { Agent, defineTool, type LLMRequest } from '../../src/index.js';
+import { Agent, type LLMRequest } from '../../src/index.js';
 import { anthropic } from '../../src/adapters/llm/AnthropicProvider.js';
 import { bedrock } from '../../src/adapters/llm/BedrockProvider.js';
 import { constrainedEnumPick } from '../../src/lib/injection-engine/constrainedEnumPick.js';
-import { defineInstruction } from '../../src/injection-engine.js';
 import { UnsupportedThinkingError } from '../../src/thinking/index.js';
 
 // ── Fakes ──────────────────────────────────────────────────────────────
@@ -81,38 +78,10 @@ function converse() {
       usage: { inputTokens: 1, outputTokens: 1 },
     }),
   };
-  return { inputs, provider: bedrock({ _client: client, _commands: { Converse, ConverseStream: Converse } }) };
-}
-
-const lookup = defineTool<{ key: string }, string>({
-  name: 'lookup',
-  description: 'Look a key up.',
-  inputSchema: {
-    type: 'object',
-    properties: { key: { type: 'string' } },
-    required: ['key'],
-    additionalProperties: false,
-  },
-  execute: async ({ key }) => `${key} is green`,
-});
-
-/** The text of a body's `system`, whichever form the cache markers left it in. */
-function systemText(body: Body): string {
-  const s = body.system;
-  if (typeof s === 'string') return s;
-  if (Array.isArray(s)) return s.map((b) => (b as { text?: string }).text ?? '').join('');
-  return '';
-}
-
-/** Every thinking block a body sends back, in order. */
-function replayedThinking(body: Body): unknown[] {
-  return (body.messages ?? []).flatMap((m) =>
-    m.role === 'assistant' && Array.isArray(m.content)
-      ? (m.content as { type: string }[]).filter(
-          (b) => b.type === 'thinking' || b.type === 'redacted_thinking',
-        )
-      : [],
-  );
+  return {
+    inputs,
+    provider: bedrock({ _client: client, _commands: { Converse, ConverseStream: Converse } }),
+  };
 }
 
 // ── 1. bedrock() and .thinking() ───────────────────────────────────────
@@ -170,7 +139,10 @@ describe('follow-up 2 — a forced tool choice on Opus 5.5, Sonnet 5.5, Fable 5.
 
   it("the agent's 'tool-forced' strategy on Opus 5.5 is refused at run start; nothing is sent", async () => {
     const { sent, client } = sdk();
-    const agent = Agent.create({ provider: anthropic({ _client: client }), model: 'claude-opus-5-5' })
+    const agent = Agent.create({
+      provider: anthropic({ _client: client }),
+      model: 'claude-opus-5-5',
+    })
       .outputSchema(
         { parse: (v: unknown) => v },
         { strategy: 'tool-forced', jsonSchema: { type: 'object', properties: {} } },
@@ -193,60 +165,5 @@ describe('follow-up 2 — a forced tool choice on Opus 5.5, Sonnet 5.5, Fable 5.
     });
     expect(picked).toBe('billing');
     expect(sent.map((b) => b.tool_choice)).toEqual([undefined]);
-  });
-});
-
-// ── 3. A thinking block sent back after the conversation before it changed ─
-
-const SIG = 'sig-opus-5-5-turn-1';
-
-/** Turn 1 thinks (an empty, signed block — display omitted) and calls `lookup`. */
-const THINK_THEN_LOOKUP = {
-  ...TEXT_REPLY,
-  content: [
-    { type: 'thinking', thinking: '', signature: SIG },
-    { type: 'tool_use', id: 'tu_1', name: 'lookup', input: { key: 'k' } },
-  ],
-  stop_reason: 'tool_use',
-};
-const FINAL = { ...TEXT_REPLY, content: [{ type: 'text', text: 'k is green.' }] };
-
-/** An instruction that joins the system prompt once `lookup` has returned — a dynamic system prompt. */
-const citeAfterLookup = defineInstruction({
-  id: 'cite-after-lookup',
-  activeWhen: (ctx) => ctx.lastToolResult?.toolName === 'lookup',
-  prompt: 'Cite the lookup you used.',
-});
-
-async function twoCalls(opts: { readonly model: string; readonly dynamic: boolean }): Promise<Body[]> {
-  const { sent, client } = sdk([THINK_THEN_LOOKUP, FINAL]);
-  const builder = Agent.create({ provider: anthropic({ _client: client }), model: opts.model, maxIterations: 3 })
-    .system('Look things up.')
-    .tool(lookup);
-  const agent = (opts.dynamic ? builder.instruction(citeAfterLookup) : builder).build();
-  await agent.run({ message: 'is k green?' });
-  return sent;
-}
-
-describe('follow-up 3 — preserved thinking: a block goes back only while everything before it is unchanged', () => {
-  it('Opus 5.5, the system prompt changes after the first tool call: call 2 does not send the stale block back', async () => {
-    const sent = await twoCalls({ model: 'claude-opus-5-5', dynamic: true });
-    expect(sent).toHaveLength(2);
-    // The prefix the block was produced under changed between the two calls…
-    expect(systemText(sent[1]!)).not.toBe(systemText(sent[0]!));
-    // …so the API (accounts created on or after 2026-08-31) would reject the
-    // block with a 400. It must not be sent back.
-    expect(replayedThinking(sent[1]!)).toEqual([]);
-  });
-
-  it('control: the same conversation with an unchanged system prompt sends the block back, byte-exact', async () => {
-    const sent = await twoCalls({ model: 'claude-opus-5-5', dynamic: false });
-    expect(systemText(sent[1]!)).toBe(systemText(sent[0]!));
-    expect(replayedThinking(sent[1]!)).toEqual([{ type: 'thinking', thinking: '', signature: SIG }]);
-  });
-
-  it('a model that does not run the check (Opus 4.8) sends the block back as before', async () => {
-    const sent = await twoCalls({ model: 'claude-opus-4-8', dynamic: true });
-    expect(replayedThinking(sent[1]!)).toEqual([{ type: 'thinking', thinking: '', signature: SIG }]);
   });
 });

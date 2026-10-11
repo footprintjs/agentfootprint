@@ -1,5 +1,5 @@
 /**
- * Skills v2.4 Phase 4 features — tests for surfaceMode + refreshPolicy +
+ * Skills v2.4 Phase 4 features — tests for surfaceMode +
  * SkillRegistry + resolveSurfaceMode.
  *
  * Covers the new typed API surface added in v2.4. Full per-mode runtime
@@ -68,16 +68,14 @@ describe('defineSkill — refreshPolicy option', () => {
     expect(md.refreshPolicy).toBeUndefined();
   });
 
-  it('passes refreshPolicy through to metadata', () => {
-    const s = defineSkill({
+  it('refuses the retired refresh option rather than storing inert metadata', () => {
+    const options = {
       id: 'billing',
       description: 'd',
       body: 'b',
       refreshPolicy: { afterTokens: 50_000, via: 'tool-result' },
-    });
-    const md = s.metadata as { refreshPolicy: { afterTokens: number; via: string } };
-    expect(md.refreshPolicy.afterTokens).toBe(50_000);
-    expect(md.refreshPolicy.via).toBe('tool-result');
+    };
+    expect(() => defineSkill(options)).toThrow('unsupported option refreshPolicy');
   });
 });
 
@@ -232,7 +230,7 @@ describe('Skills v2.4 features — ROI', () => {
     expect(registry.list().length).toBe(3);
   });
 
-  it('surfaceMode + refreshPolicy let consumers express intent before runtime supports it', () => {
+  it('surfaceMode explicitly selects supported delivery behavior', () => {
     // The API surface is stable. The runtime polish (per-mode routing
     // diversity) lands in v2.5 without API change. Code written today
     // continues to work; behavior tightens silently.
@@ -241,10 +239,9 @@ describe('Skills v2.4 features — ROI', () => {
       description: 'Used in 100k+ token runs',
       body: 'Critical reasoning rule.',
       surfaceMode: 'both',
-      refreshPolicy: { afterTokens: 50_000, via: 'tool-result' },
     });
-    const md = s.metadata as { surfaceMode: string; refreshPolicy: unknown };
+    const md = s.metadata as { surfaceMode: string };
     expect(md.surfaceMode).toBe('both');
-    expect(md.refreshPolicy).toBeDefined();
+    expect(Object.hasOwn(md, 'refreshPolicy')).toBe(false);
   });
 });

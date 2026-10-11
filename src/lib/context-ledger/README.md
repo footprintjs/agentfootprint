@@ -53,7 +53,7 @@ that writer in the answer's `sliceForKey` DAG is the signal.
   twins, so a non-exact answer says why on `RecordedRun.basis` (per key,
   absent when all exact). Example: a redacted `history` →
   `basis: { history: ['redacted'] }` — the placeholder is not read as data.
-  Each code's sentence is `HONESTY_CODES[code]` (`footprintjs/trace`).
+  Each code's sentence is `HONESTY_CODES[code]` (`foottrace`).
 - **No causal claims.** `earnRate` is bookkeeping; outcome columns are
   presence-correlation. Ablation (`localizeContextBug` / context-bisect) can
   upgrade individual rows to causal verdicts when you pay for the reruns.

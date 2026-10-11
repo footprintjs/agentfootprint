@@ -18,7 +18,7 @@ import {
   sliceForKey,
   sliceToJSON,
   type SliceJSON,
-} from 'footprintjs/trace';
+} from 'foottrace';
 import { describe, expect, it } from 'vitest';
 
 import { sliceToBacktrackTrace } from '../../../src/debug.js';

@@ -297,6 +297,8 @@ describe('withRetry — resilience reports', () => {
       // drain
     }
 
-    expect(seen).toEqual([hooks]);
+    // Replay retirement adds one per-call callback; the existing report
+    // callback itself still passes through by identity, without a new sink.
+    expect(seen).toEqual([{ ...hooks, onReplayPrepared: expect.any(Function) }]);
   });
 });

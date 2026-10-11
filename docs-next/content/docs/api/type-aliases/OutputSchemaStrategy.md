@@ -6,7 +6,7 @@ title: OutputSchemaStrategy
 
 > **OutputSchemaStrategy** = `"instruct"` \| `"tool-forced"`
 
-Defined in: [src/core/outputSchema.ts:88](https://github.com/footprintjs/agentfootprint/blob/main/src/core/outputSchema.ts#L88)
+Defined in: [src/core/outputSchema.ts:89](https://github.com/footprintjs/agentfootprint/blob/main/src/core/outputSchema.ts#L89)
 
 How the schema reaches the model.
 
@@ -16,7 +16,8 @@ How the schema reaches the model.
   • `'tool-forced'` — the shape is presented as a synthetic tool and the
     provider's tool choice is FORCED to it, so generation is constrained
     at the source instead of requested in prose. Requires a provider that
-    declares `carriesForcedToolChoice`; a provider that does not is
+    declares `carriesForcedToolChoice` and permits the selected model
+    through its optional `supportsForcedToolChoice`; a provider that does not is
     refused BY NAME at run start rather than quietly downgraded, because
     a strategy that silently falls back to the other one is config that
     lies.

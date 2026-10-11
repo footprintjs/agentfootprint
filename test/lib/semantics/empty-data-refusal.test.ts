@@ -15,16 +15,16 @@
  *   refused: `facts` is empty — if nothing matched, return absent({ what, checked }) instead.
  *
  * One core (`lib/semantics/envelope.ts` · `semanticIssues`), so both
- * declaration doors — `describedResult()` and the deprecated `semantic()` —
+ * declaration and wire-reading paths — `describedResult()` and `readSemantics()` —
  * refuse in the same words, the `check:semantics` gate names the same fault on
  * a sample that exercises an empty branch, and a marker-bearing envelope minted
  * elsewhere with an empty list stays data (dev-warned with the same words).
  *
- * Sections follow Convention 3: Unit (the words, per field and per door; a
+ * Sections follow Convention 3: Unit (the words, per field and per path; a
  * non-array keeps the message it always had) · Functional (the gate; the
  * recognizer) · Integration (the real loop: what the model reads, and that the
  * run continues; the branch the refusal asks for) · Property (every field ×
- * every door × arbitrary sibling fields: the same refusal, never the old
+ * each path × arbitrary sibling fields: the same refusal, never the old
  * advice) · Security (the refusal quotes nothing the caller declared) ·
  * Byte identity (a well-formed envelope mints what it always minted — the
  * existing goldens, test/lib/semantics/described-result.test.ts and
@@ -42,7 +42,7 @@ import {
   describedResult,
   explainSemantics,
   readSemantics,
-  semantic,
+  SEMANTICS_NOTE,
 } from '../../../src/index.js';
 import { checkSemantics } from '../../../src/lib/semantics/index.js';
 import { REFUSED_PREFIX } from '../../../src/core/agent/coverage/refusal.js';
@@ -67,7 +67,7 @@ const refusalOf = (mint: () => unknown): string => {
 };
 
 /** A declaration whose ONLY problem is one empty data list, in each door's spelling. */
-function emptyDeclaration(field: DataField, door: 'described' | 'semantic'): never {
+function emptyDeclaration(field: DataField, door: 'described' | 'wire'): never {
   const provenance =
     door === 'described'
       ? { measuredAt: '2026-09-26T02:00:00Z', source: 'nightly export' }
@@ -93,8 +93,15 @@ describe('unit: an empty data list is refused naming absent()', () => {
       expect(message).toBe(`${REFUSED_PREFIX}${EMPTY(field)} (field: ${field})`);
     });
 
-    it(`semantic({ ${field}: [] }) — the deprecated door, the same words (one core)`, () => {
-      const viaSemantic = refusalOf(() => semantic(emptyDeclaration(field, 'semantic')));
+    it(`a saved ${field}: [] is refused by the reader with the same shared rule`, () => {
+      const record = {
+        af_semantics: true,
+        ...(emptyDeclaration(field, 'wire') as Record<string, unknown>),
+        note: SEMANTICS_NOTE,
+      };
+      expect(readSemantics(record)).toBeUndefined();
+      const fault = explainSemantics(record)?.[0];
+      const viaSemantic = `${REFUSED_PREFIX}${fault?.message} (field: ${fault?.field})`;
       const viaDescribed = refusalOf(() => describedResult(emptyDeclaration(field, 'described')));
       expect(viaSemantic).toBe(viaDescribed);
     });
@@ -118,7 +125,7 @@ describe('unit: an empty data list is refused naming absent()', () => {
     // A plain object or a number used to throw a TypeError ("… is not iterable"),
     // which does not read as a refusal in the one place the model reads it.
     for (const value of [{}, 5, true]) {
-      const viaSemantic = refusalOf(() => semantic({ edges: value as never }));
+      const viaSemantic = refusalOf(() => describedResult({ edges: value as never }));
       expect(viaSemantic.startsWith(REFUSED_PREFIX)).toBe(true);
       expect(viaSemantic).toContain('`edges` must be a non-empty array of { from, to, kind }');
       const viaDescribed = refusalOf(() => describedResult({ series: value as never } as never));
@@ -248,7 +255,7 @@ describe('integration: through the real loop', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────
-// Property — every field × every door × arbitrary siblings
+// Property — every field × each path × arbitrary siblings
 // ─────────────────────────────────────────────────────────────────────────
 
 describe('property: an empty data list refuses the same way whatever else the declaration holds', () => {
@@ -259,14 +266,14 @@ describe('property: an empty data list refuses the same way whatever else the de
   };
   const pick = <T>(xs: readonly T[]): T => xs[Math.floor(rnd() * xs.length)]!;
 
-  it('500 declarations: the first fault is the empty list, in the same words through both doors', () => {
+  it('500 declarations: the first fault is the empty list, in the same words through authoring and recorded-wire reading', () => {
     for (let i = 0; i < 500; i += 1) {
       const field = pick(DATA_FIELDS);
       // The empty list is the FIRST data field the rule set judges when it is
       // `series`; for the others, keep the earlier data fields absent so the
       // empty one is the first fault, and vary everything that follows it.
       const described = { ...(emptyDeclaration(field, 'described') as Record<string, unknown>) };
-      const snake = { ...(emptyDeclaration(field, 'semantic') as Record<string, unknown>) };
+      const snake = { ...(emptyDeclaration(field, 'wire') as Record<string, unknown>) };
       if (rnd() < 0.5) {
         described.clarify = null;
         snake.clarify = null;
@@ -277,7 +284,10 @@ describe('property: an empty data list refuses the same way whatever else the de
         snake.coverage = coverage;
       }
       const a = refusalOf(() => describedResult(described as never));
-      const b = refusalOf(() => semantic(snake as never));
+      const record = { af_semantics: true, ...snake, note: SEMANTICS_NOTE };
+      expect(readSemantics(record)).toBeUndefined();
+      const fault = explainSemantics(record)?.[0];
+      const b = `${REFUSED_PREFIX}${fault?.message} (field: ${fault?.field})`;
       expect(a).toBe(`${REFUSED_PREFIX}${EMPTY(field)} (field: ${field})`);
       expect(b).toBe(a);
     }

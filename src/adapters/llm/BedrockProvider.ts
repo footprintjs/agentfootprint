@@ -25,6 +25,9 @@
  * • Multi-modal NOT supported  (text content only).
  * • Guardrail integration NOT exposed yet — pass via the SDK client
  *   directly if needed.
+ * • Thinking is NOT implemented: Converse reasoning blocks and their signed
+ *   replay are not carried by this adapter. A request to think is refused
+ *   before sending, never silently dropped.
  */
 
 import type {
@@ -40,6 +43,9 @@ import type {
 import { lazyRequire } from '../../lib/lazyRequire.js';
 import { asContextWindowExceeded } from './contextWindow.js';
 import { retryAfterMsFromError } from './retryAfter.js';
+import { anthropicTakesForcedToolChoice } from './anthropicModels.js';
+import { forcedToolChoiceFor, UnsupportedToolChoiceError } from '../forcedToolChoice.js';
+import { UnsupportedThinkingError } from '../../thinking/errors.js';
 
 // ─── Bedrock Converse SDK shape (duck-typed) ───────────────────────
 
@@ -198,17 +204,18 @@ export function bedrock(options: BedrockProviderOptions = {}): LLMProvider {
   const { client, Commands } = resolveClient(options);
   const defaultModel = options.defaultModel ?? 'anthropic.claude-sonnet-4-5-20250929-v1:0';
   const defaultMaxTokens = options.defaultMaxTokens ?? 4096;
+  const modelOf = (model: string): string => (model === 'bedrock' ? defaultModel : model);
 
   const provider: LLMProvider = {
     name: 'bedrock',
     carriesInMessages: CARRIES_IN_MESSAGES,
-    // Converse carries `toolConfig.toolChoice`. Whether the MODEL behind it
-    // honours a forced choice is the model's business — the same caveat that
-    // applies to every Converse feature — but the adapter does put it on the
-    // wire, which is what this capability claims.
+    // The existing boolean describes the wire. The optional model predicate
+    // narrows it where the shared Claude table knows a model rejects it.
     carriesForcedToolChoice: true,
+    supportsForcedToolChoice: (model) => anthropicTakesForcedToolChoice(modelOf(model)),
+    thinkingMode: () => 'none',
     async complete(req: LLMRequest): Promise<LLMResponse> {
-      const input = buildInput(req, defaultModel, defaultMaxTokens);
+      const input = buildInput(req, modelOf(req.model), defaultMaxTokens);
       try {
         const cmd = new Commands.Converse(input);
         const response = (await client.send(cmd)) as BedrockConverseResponse;
@@ -218,7 +225,7 @@ export function bedrock(options: BedrockProviderOptions = {}): LLMProvider {
       }
     },
     async *stream(req: LLMRequest): AsyncIterable<LLMChunk> {
-      const input = buildInput(req, defaultModel, defaultMaxTokens);
+      const input = buildInput(req, modelOf(req.model), defaultMaxTokens);
       let response: BedrockStreamResponse;
       try {
         const cmd = new Commands.ConverseStream(input);
@@ -330,10 +337,13 @@ export class BedrockProvider implements LLMProvider {
   readonly name = 'bedrock';
   readonly carriesInMessages = CARRIES_IN_MESSAGES;
   readonly carriesForcedToolChoice = true;
+  readonly thinkingMode: (model: string) => 'none' = () => 'none';
+  readonly supportsForcedToolChoice: (model: string) => boolean;
   private readonly inner: LLMProvider;
 
   constructor(options: BedrockProviderOptions = {}) {
     this.inner = bedrock(options);
+    this.supportsForcedToolChoice = (model) => forcedToolChoiceFor(this.inner, model);
   }
 
   // `hooks` is FORWARDED, not dropped — see LLMCallHooks in adapters/types.ts.
@@ -405,11 +415,33 @@ function resolveClient(options: BedrockProviderOptions): {
 
 function buildInput(
   req: LLMRequest,
-  defaultModel: string,
+  model: string,
   defaultMaxTokens: number,
 ): BedrockConverseCommand {
+  // Converse accepts provider-specific thinking parameters, but enabling one
+  // without carrying its signed reasoning through response/tool-result replay
+  // would still break the conversation. Refuse this adapter's unsupported
+  // intent before constructing a command on either transport path.
+  if (req.thinking) {
+    throw new UnsupportedThinkingError({
+      provider: 'bedrock',
+      model,
+      reason: 'no-thinking',
+      detail:
+        'this Converse adapter does not implement thinking response and signed replay, so ' +
+        '.thinking() cannot be honoured. Drop .thinking(), or use invokeModelGateway for ' +
+        'a supported Claude Messages route through your gateway.',
+    });
+  }
+  if (
+    req.toolChoice !== undefined &&
+    (req.tools?.length ?? 0) > 0 &&
+    !anthropicTakesForcedToolChoice(model)
+  ) {
+    throw new UnsupportedToolChoiceError({ provider: 'bedrock', model });
+  }
   const input: BedrockConverseCommand = {
-    modelId: req.model === 'bedrock' ? defaultModel : req.model,
+    modelId: model,
     messages: toBedrockMessages(req.messages),
   };
   if (req.systemPrompt) input.system = [{ text: req.systemPrompt }];

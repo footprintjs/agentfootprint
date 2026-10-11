@@ -4,7 +4,7 @@
  * decider (RouteTurn's out-of-band menu resolver) and the classifier share
  * one enum discipline instead of two drifting copies:
  *
- *   • On a provider that declares `carriesForcedToolChoice`, the pick rides
+ *   • When `forcedToolChoiceFor(provider, model)` permits it, the pick rides
  *     a forced synthetic tool whose single argument is `enum: allowed` —
  *     the same mechanism the `'tool-forced'` output strategy uses. The
  *     provider constrains generation; an answer outside the enum cannot be
@@ -20,6 +20,7 @@
  */
 
 import type { LLMProvider, LLMRequest, LLMResponse, LLMToolSchema } from '../../adapters/types.js';
+import { forcedToolChoiceFor } from '../../adapters/forcedToolChoice.js';
 import { anyOf, trimLeading, trimTrailing } from '../linearText.js';
 
 /** The synthetic pick tool, named by the caller (the wire shows this name). */
@@ -55,7 +56,9 @@ export interface ConstrainedEnumPickRequest {
 
 /** Run the pick. Resolves to a member of `allowed`, else `fallback`. */
 export async function constrainedEnumPick(req: ConstrainedEnumPickRequest): Promise<string> {
-  return req.provider.carriesForcedToolChoice === true ? pickByForcedTool(req) : pickByParse(req);
+  return forcedToolChoiceFor(req.provider, req.model ?? '')
+    ? pickByForcedTool(req)
+    : pickByParse(req);
 }
 
 /** The forced-tool path: the provider constrains generation to the enum. */

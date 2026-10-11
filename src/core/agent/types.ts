@@ -14,8 +14,8 @@ import type {
   ReadTrackingMode,
   RedactionPolicy,
   StructureRecorder,
-  CommitValuesMode,
 } from 'footprintjs';
+import type { CommitValuesMode } from 'foottrace';
 import type { GroupTranslator } from '../translator.js';
 import type {
   LLMMessage,
@@ -595,7 +595,7 @@ export interface AgentOptions {
    * tail" (the agent's `history` every iteration) records ONLY the tail
    * (`append` verb); key removals record a `delete` verb. LOSSLESS — any
    * step's full value reconstructs by replay (`commitValueAt` from
-   * `footprintjs/trace`), which is why this is safe for audit trails.
+   * `foottrace`), which is why this is safe for audit trails.
    * Retained commit-log memory becomes linear instead of quadratic.
    * Set `'full'` for footprintjs's default encoding (every changed key
    * stores its full final value) if a downstream consumer reads
@@ -2348,6 +2348,12 @@ export interface AgentState {
    *  `scope.history` (ensures Anthropic signature round-trip). Empty
    *  array when no thinking present. */
   thinkingBlocks: readonly ThinkingBlock[];
+  /** Latest provider-owned replay evidence. Absent until a provider reports
+   * it; cleared if a later reply supplies none. Travels with the assistant
+   * turn, including a terminal reply with no thinking blocks. */
+  // One-element array: grouped output mappers replace top-level arrays but
+  // merge object members. Replay evidence must cross as one atomic value.
+  llmLatestReplay?: readonly [NonNullable<LLMMessage['replay']>];
 
   // ── Reliability fail-fast state (v2.11.5) ──────────────────
   /** Set when the rules-based reliability loop takes the fail-fast path.

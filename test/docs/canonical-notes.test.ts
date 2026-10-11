@@ -2,7 +2,7 @@
  * canonical-notes.json (9.70.0) — the canonical wire strings, as DATA.
  *
  * The property under test is that the JSON cannot lie. `absent()`,
- * `coverage()` and `semantic()` mint shapes carrying a static note and a
+ * `coverage()` and `describedResult()` mint shapes carrying a static note and a
  * reserved marker key, and those bytes are a contract: a strict recognizer
  * takes the marker verbatim, and the note is what the docs promise a model
  * reads. A tool written in another language has to reproduce them exactly —

@@ -270,6 +270,37 @@ describe('ContextRecorder — eviction emit', () => {
 });
 
 describe('ContextRecorder — budget pressure emit', () => {
+  it('does not accept retired budget fields, but still records canonical pressure', () => {
+    const dispatcher = new EventDispatcher();
+    const fn = vi.fn();
+    dispatcher.on('agentfootprint.context.budget_pressure', fn);
+    const rec = new ContextRecorder({ dispatcher, getRunContext: makeRun });
+    rec.onSubflowEntry(subflowEntry(SUBFLOW_IDS.TOOLS));
+    const shared = { slot: 'tools', overflowBy: 500, planAction: 'evict' };
+    rec.onWrite(
+      writeEvent(
+        COMPOSITION_KEYS.BUDGET_PRESSURE,
+        [{ ...shared, capTokens: 2000, projectedTokens: 2500 }],
+        SUBFLOW_IDS.TOOLS,
+      ),
+    );
+    expect(fn).not.toHaveBeenCalled();
+    rec.onWrite(
+      writeEvent(
+        COMPOSITION_KEYS.BUDGET_PRESSURE,
+        [{ ...shared, cap: 2000, projected: 2500 }],
+        SUBFLOW_IDS.TOOLS,
+      ),
+    );
+    expect(fn).toHaveBeenCalledOnce();
+    expect(fn.mock.calls[0][0].payload).toEqual({
+      ...shared,
+      cap: 2000,
+      projected: 2500,
+      unit: 'chars',
+    });
+  });
+
   it('emits one context.budget_pressure per pressure record', () => {
     const dispatcher = new EventDispatcher();
     const fn = vi.fn();

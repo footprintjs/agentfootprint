@@ -18,7 +18,7 @@ Runtime container contract since 7.15.0. AWS provisioning (**control plane** —
 
 - An AWS account with **Bedrock model access** (e.g. `us.anthropic.claude-sonnet-4-5`), a region (`us-west-2` here).
 - The AgentCore **resources provisioned** (control plane — Memory, WorkloadIdentity, Gateway). Do this with the AWS SDK or CDK; you'll reference them by id/ARN below.
-- Node 20+.
+- Node 22+.
 
 ## Step 1 — Install
 
@@ -165,8 +165,8 @@ outlives its bearer token. The token is used once and never stored.
 
 **Policy needs no step here.** AgentCore enforces it at the Gateway, in front of the tool: a
 denial arrives as an MCP error on the tool call and lands in the loop as that tool's result,
-which the model reads and adapts to. (`agentCorePolicy()` is retired in 9.4.0 — it dispatched
-`EvaluatePolicyCommand`, which AgentCore does not have.) For rules **you** own, the same
+which the model reads and adapts to. The retired `agentCorePolicy()` export is removed;
+do not import it. For rules **you** own, the same
 `permissionChecker` port takes a local policy:
 
 ```ts

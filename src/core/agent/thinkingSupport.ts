@@ -3,7 +3,8 @@
  * provider declares for the model it will call (`LLMProvider.thinkingMode`).
  *
  * Every (provider, model) pair the agent's thinking request can reach is
- * asked: the agent's own, each per-skill brain, the escalation brain. A
+ * asked: the declared reliability list (or the agent's own pair), each
+ * per-skill brain, the escalation brain. A
  * model that cannot think (`'none'`) is refused here, by name, with an
  * `UnsupportedThinkingError` — rather than on the first call, or on the call
  * a fallback serves. An `'adaptive'` model takes no budget, and dev mode says
@@ -19,6 +20,8 @@ import type { LLMProvider } from '../../adapters/types.js';
 import { UnsupportedThinkingError } from '../../thinking/errors.js';
 import { thinkingModeFor } from '../../thinking/thinkingModeFor.js';
 import type { FoldedSkillBrains } from './skillBrains.js';
+import type { ReliabilityProvider } from '../../reliability/types.js';
+import { providerTargets } from './providerTargets.js';
 
 /** One (provider, model) pair a thinking request can reach, and who declared it. */
 interface ThinkingTarget {
@@ -33,7 +36,7 @@ const adaptiveWarned = new Set<string>();
 
 /**
  * Refuse `.thinking()` for any reachable model whose provider declares it
- * cannot think; dev-warn for one that thinks adaptively (no budget).
+ * cannot honor thinking for it; dev-warn for one that thinks adaptively (no budget).
  *
  * @throws UnsupportedThinkingError (`reason: 'no-thinking'`)
  * @throws TypeError when a provider's `thinkingMode` declaration is malformed
@@ -43,6 +46,7 @@ export function checkThinkingSupport(args: {
   readonly provider: LLMProvider;
   readonly model: string;
   readonly brains?: FoldedSkillBrains;
+  readonly reliabilityProviders?: readonly ReliabilityProvider[];
 }): void {
   for (const target of thinkingTargets(args)) {
     const mode = thinkingModeFor(target.provider, target.model);
@@ -52,22 +56,23 @@ export function checkThinkingSupport(args: {
         model: target.model,
         reason: 'no-thinking',
         detail:
-          `the provider declares this model cannot think, so .thinking({ budget: ${args.budget} }) ` +
-          `cannot be honoured for ${target.site}. Use a model that thinks, or drop .thinking().`,
+          `this provider cannot honor thinking for this model, so .thinking({ budget: ${args.budget} }) ` +
+          `cannot be honoured for ${target.site}. Choose a provider/model pair that supports thinking, or drop .thinking().`,
       });
     }
     if (mode === 'adaptive') warnBudgetNotSent(target, args.budget);
   }
 }
 
-/** The agent's own pair, then each brain's — a brain inherits what it leaves out. */
+/** Selected transport pairs, then each brain's — a brain inherits what it leaves out. */
 function thinkingTargets(args: {
   readonly provider: LLMProvider;
   readonly model: string;
   readonly brains?: FoldedSkillBrains;
+  readonly reliabilityProviders?: readonly ReliabilityProvider[];
 }): readonly ThinkingTarget[] {
   const targets: ThinkingTarget[] = [
-    { provider: args.provider, model: args.model, site: 'the agent' },
+    ...providerTargets(args.provider, args.model, args.reliabilityProviders),
   ];
   for (const [skillId, brain] of args.brains?.bySkill ?? []) {
     targets.push({

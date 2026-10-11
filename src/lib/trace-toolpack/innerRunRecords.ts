@@ -44,7 +44,7 @@
  * key or a tool built in one half would be invisible to the other.
  */
 
-import type { ControlDepLookup } from 'footprintjs/trace';
+import type { ControlDepLookup } from 'foottrace';
 
 /**
  * How many invocations one tool keeps by default.

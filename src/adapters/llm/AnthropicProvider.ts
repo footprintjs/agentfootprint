@@ -28,10 +28,10 @@ import type {
 import { lazyRequire } from '../../lib/lazyRequire.js';
 import { asContextWindowExceeded } from './contextWindow.js';
 import { retryAfterMsFromError } from './retryAfter.js';
-import { ANTHROPIC_PROMPT_CACHING, readCacheUsage } from './anthropicCacheWire.js';
+import { ANTHROPIC_PROMPT_CACHING } from './anthropicCacheWire.js';
 import { thinkingModeWith } from './anthropicThinkingWire.js';
 import { anthropicTakesForcedToolChoice } from './anthropicModels.js';
-import { stampReply } from './anthropicThinkingReplay.js';
+import { prepareAnthropicReplay, thinkingReplayBinding } from './anthropicThinkingReplay.js';
 import { toolManifestOf } from './wireManifest.js';
 import { anthropicThinkingHandler } from '../../thinking/AnthropicThinkingHandler.js';
 import type { ThinkingMode } from '../../thinking/types.js';
@@ -40,7 +40,8 @@ import type { ThinkingMode } from '../../thinking/types.js';
 // second copy of the thinking rule would drift the same way.
 import {
   buildMessagesBody,
-  type AnthropicContentBlock,
+  fromAnthropicResponse,
+  type AnthropicMessage,
   type AnthropicMessagesBody,
 } from './anthropicMessagesWire.js';
 
@@ -58,22 +59,6 @@ interface AnthropicClient {
  *  markers are all decided there. */
 interface AnthropicCreateParams extends AnthropicMessagesBody {
   model: string;
-}
-
-interface AnthropicMessage {
-  id: string;
-  model: string;
-  role: 'assistant';
-  content: AnthropicContentBlock[];
-  stop_reason: 'end_turn' | 'tool_use' | 'max_tokens' | string;
-  usage: {
-    input_tokens: number;
-    output_tokens: number;
-    // Cache traffic — present only when the request carried cache_control.
-    // Absent means "no caching asked for", never zero. See anthropicCacheWire.
-    cache_read_input_tokens?: number;
-    cache_creation_input_tokens?: number;
-  };
 }
 
 interface AnthropicStream {
@@ -191,28 +176,25 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
   const modelOf = (model: string): string => (model === 'anthropic' ? defaultModel : model);
   /** The ONE mode function: declared below and used for every body. */
   const modeOf = thinkingModeWith(options.thinkingMode);
-  /** The SDK params, and the stamp the reply's thinking gets (a model that binds it). */
-  const buildParams = (
-    req: LLMRequest,
-  ): { readonly params: AnthropicCreateParams; readonly thinkingBinding?: string } => {
+  const buildParams = (req: LLMRequest): AnthropicCreateParams => {
     const model = modelOf(req.model);
-    const { body, thinkingBinding } = buildMessagesBody(req, {
+    return {
       model,
-      thinkingMode: modeOf,
-      provider: 'anthropic',
-      maxTokensDefault: defaultMaxTokens,
-      ...(parallelToolCalls !== undefined && { parallelToolCalls }),
-    });
-    return { params: { model, ...body }, ...(thinkingBinding !== undefined && { thinkingBinding }) };
+      ...buildMessagesBody(req, {
+        model,
+        thinkingMode: modeOf,
+        provider: 'anthropic',
+        maxTokensDefault: defaultMaxTokens,
+        ...(parallelToolCalls !== undefined && { parallelToolCalls }),
+      }),
+    };
   };
 
   const provider: LLMProvider = {
     name: 'anthropic',
     carriesInMessages: CARRIES_IN_MESSAGES,
-    // Per model: Opus 5.5, Sonnet 5.5, Fable 5.1 and Mythos 5.1 reject a
-    // forced choice on every request (anthropicModels.ts); `buildMessagesBody`
-    // refuses one for them from the same table.
-    carriesForcedToolChoice: (model) => anthropicTakesForcedToolChoice(modelOf(model)),
+    carriesForcedToolChoice: true,
+    supportsForcedToolChoice: (model) => anthropicTakesForcedToolChoice(modelOf(model)),
     // Explicit `cache_control` breakpoints, four per request, usage reported —
     // the agent's cache strategy is chosen from this, never from `name`.
     promptCaching: ANTHROPIC_PROMPT_CACHING,
@@ -222,23 +204,30 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
     // (anthropicThinkingWire.ts); `buildMessagesBody` sends that shape, from
     // the same function.
     thinkingMode: (model) => modeOf(modelOf(model)),
-    async complete(req: LLMRequest): Promise<LLMResponse> {
-      const { params, thinkingBinding } = buildParams(req);
+    async complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
+      const preparation = prepareAnthropicReplay(req, modelOf(req.model), 'anthropic');
+      const params = buildParams(preparation.request);
+      const bindingFactory = thinkingReplayBinding(params, params.model);
+      if (preparation.omissions.length > 0) hooks?.onReplayPrepared?.(preparation);
       try {
         const message = await client.messages.create(params);
         // Manifest read from the FINAL params — after tool mapping and cache
         // markers — because the whole point is catching what the body says,
         // not what the request intended (wireManifest.ts).
         return {
-          ...fromAnthropicResponse(message, thinkingBinding),
+          ...fromAnthropicResponse(message, message.id ? bindingFactory(message.id) : undefined),
           wireManifest: toolManifestOf(params.tools),
+          ...(preparation.omissions.length > 0 && { replayOmissions: preparation.omissions }),
         };
       } catch (err) {
         throw wrapError(err);
       }
     },
-    async *stream(req: LLMRequest): AsyncIterable<LLMChunk> {
-      const { params, thinkingBinding } = buildParams(req);
+    async *stream(req: LLMRequest, hooks?: LLMCallHooks): AsyncIterable<LLMChunk> {
+      const preparation = prepareAnthropicReplay(req, modelOf(req.model), 'anthropic');
+      const params = buildParams(preparation.request);
+      const bindingFactory = thinkingReplayBinding(params, params.model);
+      if (preparation.omissions.length > 0) hooks?.onReplayPrepared?.(preparation);
       let stream: AnthropicStream;
       try {
         stream = client.messages.stream(params);
@@ -259,8 +248,9 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
         }
         const final = await stream.finalMessage();
         const response: LLMResponse = {
-          ...fromAnthropicResponse(final, thinkingBinding),
+          ...fromAnthropicResponse(final, final.id ? bindingFactory(final.id) : undefined),
           wireManifest: toolManifestOf(params.tools),
+          ...(preparation.omissions.length > 0 && { replayOmissions: preparation.omissions }),
         };
         yield { tokenIndex, content: '', done: true, response };
       } catch (err) {
@@ -279,8 +269,9 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
 export class AnthropicProvider implements LLMProvider {
   readonly name = 'anthropic';
   readonly carriesInMessages = CARRIES_IN_MESSAGES;
-  /** The inner provider's own function — per model, a closure, safe to forward unbound. */
-  readonly carriesForcedToolChoice: (model: string) => boolean;
+  readonly carriesForcedToolChoice = true;
+  /** The inner declaration resolves this adapter's shorthand before looking up the model. */
+  readonly supportsForcedToolChoice: (model: string) => boolean;
   readonly promptCaching = ANTHROPIC_PROMPT_CACHING;
   readonly thinkingHandler = anthropicThinkingHandler;
   /** The inner provider's own function — a closure, safe to forward unbound. */
@@ -290,7 +281,7 @@ export class AnthropicProvider implements LLMProvider {
   constructor(options: AnthropicProviderOptions = {}) {
     this.inner = anthropic(options);
     this.thinkingMode = this.inner.thinkingMode!;
-    this.carriesForcedToolChoice = this.inner.carriesForcedToolChoice as (model: string) => boolean;
+    this.supportsForcedToolChoice = this.inner.supportsForcedToolChoice!;
   }
 
   // `hooks` is FORWARDED, not dropped — see LLMCallHooks in adapters/types.ts.
@@ -330,69 +321,6 @@ function resolveClient(options: AnthropicProviderOptions): AnthropicClient {
     ...(options.timeout !== undefined ? { timeout: options.timeout } : {}),
     ...(options.maxRetries !== undefined ? { maxRetries: options.maxRetries } : {}),
   });
-}
-
-/** `thinkingBinding` stamps the reply's thinking (a model that binds it — anthropicThinkingReplay.ts). */
-function fromAnthropicResponse(message: AnthropicMessage, thinkingBinding?: string): LLMResponse {
-  const textParts: string[] = [];
-  const toolCalls: { id: string; name: string; args: Record<string, unknown> }[] = [];
-  // v2.14 — detect whether the response contains any thinking blocks.
-  // When present, surface the FULL `message.content` array as
-  // `rawThinking` so AnthropicThinkingHandler can normalize it.
-  // (Handler filters for thinking + redacted_thinking blocks; passes
-  // through other types without modification — but the handler
-  // expects the full array as input shape per Phase 4a contract.)
-  let hasThinking = false;
-  for (const block of message.content) {
-    if (block.type === 'text') textParts.push(block.text);
-    else if (block.type === 'tool_use') {
-      toolCalls.push({ id: block.id, name: block.name, args: block.input });
-    } else if (block.type === 'thinking' || block.type === 'redacted_thinking') {
-      hasThinking = true;
-    }
-  }
-  return {
-    content: textParts.join(''),
-    toolCalls,
-    usage: {
-      input: message.usage.input_tokens,
-      output: message.usage.output_tokens,
-      // Cache traffic, when Anthropic reported it. Absent stays absent —
-      // see anthropicCacheWire.readCacheUsage.
-      ...readCacheUsage(message.usage),
-      // v2.14 — Anthropic doesn't expose thinking tokens as a separate
-      // field today (bundled in output_tokens). When the API surfaces
-      // a dedicated field in the future, populate here. Per Phase 2
-      // contract: undefined means "provider doesn't expose / no thinking".
-    },
-    stopReason: normalizeStopReason(message.stop_reason),
-    providerRef: message.id,
-    // v2.14 — when thinking blocks present, hand the full content array
-    // to the framework's NormalizeThinking sub-subflow (which routes to
-    // AnthropicThinkingHandler). Undefined when no thinking — the
-    // subflow's early-return path skips work.
-    ...(hasThinking && {
-      rawThinking:
-        thinkingBinding === undefined
-          ? message.content
-          : stampReply(message.content, thinkingBinding),
-    }),
-  };
-}
-
-function normalizeStopReason(raw: string): string {
-  // Map Anthropic's vocabulary onto agentfootprint's vocabulary.
-  // Keep unknown values as-is so providers can surface novel reasons.
-  switch (raw) {
-    case 'end_turn':
-      return 'stop';
-    case 'tool_use':
-      return 'tool_use';
-    case 'max_tokens':
-      return 'max_tokens';
-    default:
-      return raw;
-  }
 }
 
 function wrapError(err: unknown): Error {

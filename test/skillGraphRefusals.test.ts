@@ -437,13 +437,7 @@ describe('viaToolName is refused by the FACTORY (9.0.0)', () => {
         viaToolName: 'open_playbook',
       } as never);
 
-    expect(build).toThrow(/`viaToolName` was removed in 9\.0\.0/);
-    expect(build).toThrow(/deprecated since 8\.7\.0/);
-    expect(build).toThrow(/open_playbook/);
-    // The message has to carry the migration, because there is no rename to
-    // reach for: the answer is "delete it", and the reason it is safe.
-    expect(build).toThrow(/read_skill/);
-    expect(build).toThrow(/rule` trigger or a skillGraph\(\) edge/);
+    expect(build).toThrow(/unsupported option viaToolName/);
   });
 
   it('edge: even the value that WAS the default is refused — the option is gone, not narrowed', () => {
@@ -452,7 +446,7 @@ describe('viaToolName is refused by the FACTORY (9.0.0)', () => {
     // who believes the field does something.
     expect(() =>
       defineSkill({ id: 'b', description: 'use b', body: 'b', viaToolName: 'read_skill' } as never),
-    ).toThrow(/`viaToolName` was removed in 9\.0\.0/);
+    ).toThrow(/unsupported option viaToolName/);
   });
 
   it('functional: a skill declared WITHOUT the option is untouched', () => {
@@ -472,7 +466,8 @@ describe('viaToolName is refused by the FACTORY (9.0.0)', () => {
       expect.unreachable('should have thrown');
     } catch (err) {
       const message = (err as Error).message;
-      expect(message).toContain('open_x');
+      expect(message).toContain('viaToolName');
+      expect(message).not.toContain('open_x');
       expect(message).not.toContain('INTERNAL ESCALATION PROCEDURE');
     }
   });

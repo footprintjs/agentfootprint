@@ -1,5 +1,5 @@
 /**
- * UnsupportedThinkingError — a request to think that the model cannot take,
+ * UnsupportedThinkingError — a thinking request the provider/model pair cannot honor,
  * refused by name BEFORE anything is sent.
  *
  * Models on one wire disagree about thinking (see `ThinkingMode`), and the
@@ -8,7 +8,7 @@
  * refusal happens here instead, with the fix in the message:
  *
  * - at `Agent.build()`, when the provider DECLARES (`LLMProvider.thinkingMode`)
- *   that a model the agent will call cannot think (`reason: 'no-thinking'`);
+ *   that thinking is unsupported for a model the agent will call (`reason: 'no-thinking'`);
  * - in the adapter, before the request leaves, for a model chosen at run time
  *   and for the combinations the wire rejects whenever thinking is on
  *   (`'budget'`, `'temperature'`, `'forced-tool-choice'`).
@@ -36,7 +36,7 @@ export class UnsupportedThinkingError extends Error {
   readonly model: string;
   /**
    * Why the request cannot be sent:
-   * - `'no-thinking'` — the model cannot think at all;
+   * - `'no-thinking'` — thinking is unsupported by the provider/model pair;
    * - `'budget'` — the budget is not one the model's `budget_tokens` accepts;
    * - `'temperature'` — a temperature other than the default, which the wire
    *   rejects while thinking is on;

@@ -458,7 +458,7 @@ scopeTools: true })` (fluent: `.build({ scopeTools: true })`) stamps every **wir
 skill — everything an entry or a step mentions — so a skill's tools reach the LLM only
 while the graph is on it, instead of every skill's tools landing in the always-on
 registry from iteration 1. The default is `false` (today's behavior, byte-identical
-builds) until 10.0.0 flips it. A skill whose author set `autoActivate` explicitly
+builds); version 10 keeps scoping explicit. A skill whose author set `autoActivate` explicitly
 always keeps its own setting — the graph level fills a default, it never overrides —
 and a listed-but-unwired skill is not stamped (the graph does not route it, so it does
 not scope it).
@@ -892,28 +892,13 @@ From `agentfootprint/context`, the decider's machinery — shared with
 - `EnumPickTool` — the synthetic pick tool's name/description/argument, as
   the wire shows them.
 
-## Long-context refresh (`refreshPolicy`)
+## Long-context delivery
 
-```ts
-defineSkill({
-  id: 'critical-rule',
-  description: 'Critical reasoning rule for long-context runs',
-  body: 'When the value is ambiguous, ask for clarification before acting.',
-  refreshPolicy: { afterTokens: 50_000, via: 'tool-result' },
-});
-```
-
-**DEPRECATED (9.16.0), superseded by [`steps`](#steps-as-data-steps-9180).**
-The field is stored on `skill.metadata.refreshPolicy` and nothing in the
-engine has ever read it — no re-injection happens, on any version. Since
-9.18.0 the steps feature delivers what this field promised, by construction:
-the step banner is re-sent in the tool description on every request, and
-every boundary result carries the fresh position line — recency that cannot
-decay. The field stays accepted so existing declarations keep compiling (dev
-mode warns once per process when one is set, and once more at `Agent.build()`
-when it rides beside `steps`), and it will be removed in the next major. To
-re-surface a body without steps, use `surfaceMode: 'both'` — every
-`read_skill` call returns the body afresh, recency-first.
+The inert `refreshPolicy` option was removed in 10.0.0. It never caused
+automatic re-injection. Use [steps](#steps-as-data-steps-9180) for a procedure:
+the tool description carries the current step on every request, and each
+boundary result carries its fresh position. To return the whole skill body
+on each explicit `read_skill` call, use `surfaceMode: 'both'`.
 
 ## SkillRegistry — centralized governance
 

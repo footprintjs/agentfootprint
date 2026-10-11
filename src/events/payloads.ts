@@ -2331,8 +2331,7 @@ export interface CoverageItemPayload {
 }
 
 /**
- * A tool returned a semantic envelope (`describedResult(…)`, or the
- * deprecated `semantic(…)`; 9.53.0) — typed
+ * A tool returned a semantic envelope (`describedResult(…)`) — typed
  * series/facts/edges with the caveats that make them honest (grain,
  * provenance, coverage) as data.
  *
@@ -2445,24 +2444,7 @@ export interface PermissionHaltPayload extends Partial<ToolCallEventIdentity> {
   readonly sequenceLength: number;
 }
 
-// risk.* + fallback.* (2)
-/**
- * @deprecated Payload of `agentfootprint.risk.flagged`, which nothing emits —
- * see that event. Removed in 10.0.0.
- */
-export interface RiskFlaggedPayload {
-  readonly severity: 'low' | 'medium' | 'high' | 'critical';
-  readonly category:
-    | 'pii'
-    | 'prompt_injection'
-    | 'runaway_loop'
-    | 'cost_overrun'
-    | 'hallucination_flag';
-  readonly detector: 'nemo_guardrails' | 'llama_guard' | 'custom' | 'heuristic';
-  readonly evidence: Readonly<Record<string, unknown>>;
-  readonly action: 'warn' | 'redact' | 'abort';
-}
-
+// fallback.* (1)
 export interface FallbackTriggeredPayload {
   readonly kind: 'provider' | 'tool' | 'skill';
   readonly primary: string;
@@ -3312,6 +3294,17 @@ export interface AgentThinkingParseFailedPayload {
   readonly error: string;
   readonly errorName: string;
   readonly iteration: number;
+}
+
+/** One completed-turn thinking block omitted before a provider request. */
+export interface AgentThinkingOmittedPayload {
+  readonly providerName: string;
+  readonly model: string;
+  readonly messageIndex: number;
+  readonly blockIndex: number;
+  readonly reason: import('../thinking/replay.js').ThinkingReplayReason;
+  /** Preparation is observable even when the subsequent transport fails. */
+  readonly phase: 'prepared';
 }
 
 // artifacts.* (4) — the claim-check lifecycle (9.21.0). Every hop of a ref —

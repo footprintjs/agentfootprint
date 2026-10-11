@@ -15,7 +15,7 @@ import {
   allow,
   defineTool,
   deny,
-  semantic,
+  describedResult,
   type LLMProvider,
   type LLMRequest,
   type SemanticFact,
@@ -89,11 +89,11 @@ function probe(options: ProbeOptions) {
         description: 'Read the synthetic facts for this request.',
         inputSchema: { type: 'object', properties: {} },
         execute: () => {
-          const result = semantic({
+          const result = describedResult({
             facts: options.facts,
             provenance: {
               source: 'synthetic-answer-boundary',
-              measured_at: '2026-01-01T00:00:00Z',
+              measuredAt: '2026-01-01T00:00:00Z',
             },
           });
           // A host may validate against data from its own executed tool. This

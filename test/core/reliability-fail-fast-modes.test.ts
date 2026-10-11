@@ -14,7 +14,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { Agent, allow, type LLMProvider } from '../../src/index.js';
-import { ReliabilityFailFastError, type ReliabilityConfig } from '../../src/reliability/index.js';
+import { ReliabilityFailFastError, type ReliabilityConfig } from '../../src/doors/resilience.js';
 
 const MODES = ['classic', 'dynamic', 'dynamic-grouped'] as const;
 type Mode = (typeof MODES)[number];

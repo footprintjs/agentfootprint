@@ -135,14 +135,7 @@ describe('skillsFromDir — unit', () => {
     writeSkill(dir, 'billing', skillFile('billing', 'Refunds.', 'Body.'));
 
     await expect(skillsFromDir(dir, { viaToolName: 'open_playbook' } as never)).rejects.toThrow(
-      /`viaToolName` was removed in 9\.0\.0/,
-    );
-    // The message carries the value, the deprecation history, and the fix.
-    await expect(skillsFromDir(dir, { viaToolName: 'open_playbook' } as never)).rejects.toThrow(
-      /open_playbook/,
-    );
-    await expect(skillsFromDir(dir, { viaToolName: 'open_playbook' } as never)).rejects.toThrow(
-      /read_skill/,
+      /unsupported option viaToolName/,
     );
   });
 

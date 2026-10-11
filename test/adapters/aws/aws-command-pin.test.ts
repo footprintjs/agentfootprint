@@ -37,7 +37,6 @@ import { cloudwatchObservability } from '../../../src/adapters/observability/clo
 import { xrayObservability } from '../../../src/adapters/observability/xray.js';
 import { bedrockEmbedder } from '../../../src/embedders/index.js';
 import { bedrock } from '../../../src/adapters/llm/BedrockProvider.js';
-import { agentCorePolicy } from '../../../src/security/index.js';
 import { s3Artifacts } from '../../../src/index.js';
 import type { MemoryEntry } from '../../../src/memory/entry/index.js';
 import type { MemoryIdentity } from '../../../src/memory/identity/index.js';
@@ -436,14 +435,6 @@ describe('AWS adapters dispatch exactly the commands they are pinned to', () => 
     }
     expect(sdk.names()).toEqual(['ConverseCommand', 'ConverseStreamCommand']);
   });
-
-  it('agentCorePolicy dispatches NOTHING — the pin records a retirement too', () => {
-    const row = pin('agentCorePolicy (retired 9.4.0)');
-    expect(row.commands).toEqual([]);
-    expect(row.note).toMatch(/EvaluatePolicyCommand/);
-    // Nothing can be dispatched from a factory that refuses to be built.
-    expect(() => agentCorePolicy({ policyStoreId: 'p' })).toThrow(/retired/i);
-  });
 });
 
 // ─── 2. REALITY ──────────────────────────────────────────────────────
@@ -529,8 +520,6 @@ describe('the registry covers every AWS adapter in the source tree', () => {
   it('every pin points at a file that exists, and at the package that file loads', () => {
     for (const [file, row] of covered) {
       const loads = loadSites.get(file);
-      // The retired policy adapter loads nothing on purpose — that IS its pin.
-      if (row.commands.length === 0 && loads === undefined) continue;
       expect(loads, `${file} is pinned but loads no @aws-sdk package`).toBeDefined();
       expect([...(loads ?? [])], `${file} loads a package its pin does not name`).toContain(
         row.sdkPackage,

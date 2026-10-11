@@ -55,6 +55,12 @@
  */
 
 import type { LLMMessage } from '../adapters/types.js';
+import type { ReplayPreparation } from '../thinking/replay.js';
+import {
+  applyReplayRetirements,
+  replayRetirements,
+  type ReplayRetirement,
+} from '../thinking/replayHistory.js';
 import {
   isContextWindowExceeded,
   looksLikeContextWindowExceeded,
@@ -525,6 +531,8 @@ export interface RunCheckpointTracker {
   readonly originalInput: { readonly message: string };
   /** Updated on every `agentfootprint.agent.iteration_end`. */
   history: readonly LLMMessage[];
+  /** Explicit prepared thinking edits only; no failed-iteration tool/output state. */
+  replayRetirements?: readonly ReplayRetirement[];
   /** Updated on every `agentfootprint.agent.iteration_end`. */
   lastCompletedIteration: number;
   /** Set when an iteration begins (used to attribute the failure
@@ -543,6 +551,24 @@ export interface RunCheckpointTracker {
    * `stage` holds `'call-llm'` or a declared tool name. Never a URL.
    */
   inFlightPhase?: { readonly phase: 'llm' | 'tool'; readonly stage: string };
+}
+
+/** A transport preparation is durable even if its request subsequently fails. */
+export function retainReplayRetirements(
+  tracker: RunCheckpointTracker,
+  preparation: ReplayPreparation,
+): void {
+  const edits = replayRetirements(preparation);
+  if (edits.length === 0) return;
+  tracker.replayRetirements = [...(tracker.replayRetirements ?? []), ...structuredClone(edits)];
+}
+
+/** Read only approved replay edits onto the history each checkpoint already owns. */
+export function checkpointReplayHistory(
+  history: readonly LLMMessage[],
+  tracker?: RunCheckpointTracker,
+): readonly LLMMessage[] {
+  return applyReplayRetirements(history, tracker?.replayRetirements ?? []);
 }
 
 /**
@@ -596,7 +622,7 @@ export function buildCheckpoint(
   return {
     version: 1,
     runId: tracker.runId,
-    history: tracker.history,
+    history: checkpointReplayHistory(tracker.history, tracker),
     lastCompletedIteration: tracker.lastCompletedIteration,
     originalInput: tracker.originalInput,
     checkpointedAt: Date.now(),

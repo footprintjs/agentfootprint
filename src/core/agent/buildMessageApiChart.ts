@@ -198,7 +198,7 @@ export function buildMessageApiChart(deps: MessageApiChartDeps): FlowChart {
     const response = await provider.complete(
       request,
       // Resilience-report channel — see buildAgentMessageApiChart.
-      resilienceHooks(scope),
+      resilienceHooks(scope, receipt !== undefined),
     );
     scope.answer = response.content;
     typedEmit(scope, 'agentfootprint.stream.llm_end', {

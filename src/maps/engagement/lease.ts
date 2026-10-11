@@ -59,7 +59,7 @@ export interface EngagementAdvance {
    * answers "do this map's tools follow the CURSOR?", parking answers "is this
    * map talking at all?". Before this field, parking answered only the first
    * half of its own promise — with `scopeTools` false (the default for flat
-   * graphs until 10.0.0) a parked map's prompt stopped and all four of its
+   * graphs) a parked map's prompt stopped and all four of its
    * tool schemas kept riding, so the wire actively contradicted the park.
    */
   readonly parkedToolNames: readonly string[];

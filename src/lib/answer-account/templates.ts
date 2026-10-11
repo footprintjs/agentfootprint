@@ -223,7 +223,7 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
     '{{tool:code}} returned an empty result and did not declare what it searched.',
   ),
   'found.rows': t("{{tool:code}} returned {{count:n,'item','items'}}."),
-  // A described result (`describedResult()` / `semantic()`): the counts are the library's, read
+  // A described result (`describedResult()`): the counts are the library's, read
   // from the envelope the record keeps; the source and the time are the tool's own words.
   'found.described.facts': t("{{tool:code}} returned {{count:n,'fact','facts'}}."),
   'found.described.series': t("{{tool:code}} returned {{count:n,'series','series'}}."),

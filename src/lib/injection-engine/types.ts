@@ -456,10 +456,6 @@ export interface Injection {
    *   - `steps` / `onSkip` (Skill, 9.18.0) — the declared procedure; folded
    *     into a frozen StepPlan map at Agent build (skillSteps.ts owns the
    *     grammar)
-   *   - `refreshPolicy` (Skill) — `{ afterTokens, via }`; DEPRECATED-pending-steps:
-   *     stored, never read, and staying that way — superseded by `steps`
-   *     (9.18.0), whose banner + result suffixes re-deliver by construction
-   *     (see `RefreshPolicy`'s docstring)
    */
   readonly metadata?: Readonly<Record<string, unknown>>;
 }

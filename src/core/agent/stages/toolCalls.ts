@@ -225,6 +225,7 @@ import {
   type ToolResultStatus,
 } from '../toolEffects.js';
 import type { AgentState } from '../types.js';
+import { assistantReplayFields } from '../assistantReplay.js';
 import { joinSystemPrompt } from '../composeRequest.js';
 
 export interface ToolCallsHandlerDeps {
@@ -4006,6 +4007,7 @@ export function buildToolCallsHandler(
           ...(toolCalls.length > 0 && { toolCalls }),
           // Spread = materialize the proxy view (see toolCalls above).
           ...(hasThinking && { thinkingBlocks: [...thinkingBlocks] as never }),
+          ...assistantReplayFields(scope),
         });
       }
       // `lookupTool` is hoisted to the handler closure (shared with resume).

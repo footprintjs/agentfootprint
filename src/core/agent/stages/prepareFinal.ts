@@ -39,6 +39,7 @@ import type { FindingsLedger } from '../findings/types.js';
 import { presentationZoneOf } from '../../time/rows.js';
 import type { BoundPresentation } from '../../time/present.js';
 import { withheldByOutputPolicy } from './outputAdmission.js';
+import { assistantReplayFields } from '../assistantReplay.js';
 
 type FinalStage = (scope: TypedScope<AgentState>) => void | Promise<void>;
 
@@ -93,6 +94,7 @@ const captureTurnPayload = (
       role: 'assistant',
       content: scope.finalContent,
       ...(hasThinking && { thinkingBlocks }),
+      ...assistantReplayFields(scope),
     },
   ];
 

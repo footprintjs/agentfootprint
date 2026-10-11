@@ -15,7 +15,7 @@ The recorded runs, every one the repository holds (a tracked JSON that carries c
 
 | Tier | Source | How the committed state is read |
 |---|---|---|
-| full | the 21 byte references, `test/core/tools/reference/*.json` | `footprintjs/trace` · `stateAt` over the whole `commitLog` |
+| full | the 21 byte references, `test/core/tools/reference/*.json` | `foottrace` · `stateAt` over the whole `commitLog` |
 | full | fixture A, `test/lib/answer-account/fixtures/turn2.recorded.json` (the one real field recording) | its `snapshot.sharedState`, with the app's declarations (`test/lib/answer-account/helpers.ts` · `NEO_DECLARATIONS`) |
 | full | `test/recorders/observability/fixtures/demo-turn.json` | its `finalState` |
 | excerpt | `test/core/agent/reference/coverage-record-only-bytes.json` (20 variants), `test/core/scenario/reference/batch-pause-last-call.json` (4), `test/core/agent/reference/paused-lookup-no-absence.json`, `test/core/agent/fixtures/absent-try-instead-sentence.reference.json` | only the committed keys the reference retained (`history`, `coverageDeclared` where kept); the missing keys are listed per record, never rebuilt |

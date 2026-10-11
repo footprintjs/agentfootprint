@@ -758,9 +758,8 @@ const LAST_WINS_BY_DECISION = [
   'thinkingTemplates',
 ] as const;
 
-/** Neither a setter nor a policy: the terminal, and a removed name kept as a
- *  throwing signpost. */
-const NOT_A_SETTER = ['build', 'recorder'] as const;
+/** The terminal operation, not a setter or a policy. */
+const NOT_A_SETTER = ['build'] as const;
 
 describe('silent success — the doctrine sweep', () => {
   /**

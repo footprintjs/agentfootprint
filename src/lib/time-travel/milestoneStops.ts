@@ -37,8 +37,8 @@
  */
 
 import type { StageSnapshot } from 'footprintjs/advanced';
-import { commitStops, filterStops } from 'footprintjs/trace';
-import type { CommitBundle, Stop, TimeTravelStrategy } from 'footprintjs/trace';
+import { commitStops, filterStops } from 'foottrace';
+import type { CommitBundle, Stop, TimeTravelStrategy } from 'foottrace';
 import {
   MILESTONE_KINDS,
   milestoneFor,
@@ -145,7 +145,7 @@ export function milestoneOf(stop: Stop<unknown>): Milestone | null {
  *
  * @example
  * ```ts
- * import { timeTravel } from 'footprintjs/trace';
+ * import { timeTravel } from 'foottrace';
  * import { milestoneStopsStrategy } from 'agentfootprint';
  *
  * const cursor = timeTravel(agent.getSnapshot()!, { strategy: milestoneStopsStrategy });

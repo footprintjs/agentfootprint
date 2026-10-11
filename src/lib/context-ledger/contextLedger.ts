@@ -58,8 +58,8 @@ import {
   flattenCausalDAG,
   keysReadFromExecutionTree,
   sliceForKey,
-} from 'footprintjs/trace';
-import type { CommitBundle, ValueBasis } from 'footprintjs/trace';
+} from 'foottrace';
+import type { CommitBundle, ValueBasis } from 'foottrace';
 import type { StageSnapshot } from 'footprintjs/advanced';
 
 import { INJECTION_KEYS } from '../../conventions.js';

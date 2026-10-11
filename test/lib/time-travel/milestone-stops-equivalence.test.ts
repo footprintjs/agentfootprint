@@ -22,8 +22,8 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { commitStops, filterStops, splitStageId, timeTravel } from 'footprintjs/trace';
-import type { CommitBundle, Stop, TimeTravel, TimeTravelStrategy } from 'footprintjs/trace';
+import { commitStops, filterStops, splitStageId, timeTravel } from 'foottrace';
+import type { CommitBundle, Stop, TimeTravel, TimeTravelStrategy } from 'foottrace';
 import type { StageSnapshot } from 'footprintjs/advanced';
 import {
   Agent,

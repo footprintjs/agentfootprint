@@ -30,8 +30,8 @@
  */
 
 import type { StageSnapshot } from 'footprintjs/advanced';
-import type { CausalNode, CommitBundle, ValueBasis } from 'footprintjs/trace';
-import { causalChain, commitValueAtWithBasis } from 'footprintjs/trace';
+import type { CausalNode, CommitBundle, ValueBasis } from 'foottrace';
+import { causalChain, commitValueAtWithBasis } from 'foottrace';
 
 import {
   scoreInfluence,
@@ -102,7 +102,7 @@ export interface ClassifyContext {
   /**
    * Why `valueOf(key)` is not exact, when it is not — footprintjs's
    * `commitValueAtWithBasis` codes for the same fold (`HONESTY_CODES` on
-   * `footprintjs/trace` has each sentence). `[]` = exact. ABSENT = unknown (a hand-built
+   * `foottrace` has each sentence). `[]` = exact. ABSENT = unknown (a hand-built
    * context): no `valueBasis` is attached.
    */
   readonly basisOf?: (key: string) => readonly ValueBasis[];

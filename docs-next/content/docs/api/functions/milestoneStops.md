@@ -91,7 +91,7 @@ the run's `executionTree`, when the caller has it — it
 ## Example
 
 ```ts
-import { timeTravel } from 'footprintjs/trace';
+import { timeTravel } from 'foottrace';
 import { milestoneStopsStrategy } from 'agentfootprint';
 
 const cursor = timeTravel(agent.getSnapshot()!, { strategy: milestoneStopsStrategy });

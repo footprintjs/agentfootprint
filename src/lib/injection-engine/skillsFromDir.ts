@@ -71,7 +71,7 @@
  *     (9.36.0), which scopes every skill's tools to that skill's activation.
  *     Without it, a loaded skill's tools are on the wire from iteration 1, the
  *     same as any hand-written `defineSkill({ tools })`.
- *   - **no per-file `surfaceMode`, `cache` or `refreshPolicy`** — `surfaceMode`
+ *   - **no per-file `surfaceMode` or `cache`** — `surfaceMode`
  *     is settable for the WHOLE directory via `opts`, all of them or none; the
  *     others take `defineSkill`'s defaults.
  *   - unknown frontmatter keys are still IGNORED, not rejected, so a file
@@ -136,6 +136,7 @@
  * import detonates a browser bundle at module-eval even when nothing calls it.
  */
 
+import { assertKnownOptions } from './optionKeys.js';
 import type { Injection } from './types.js';
 import type { Tool } from '../../core/tools.js';
 import type { OnSkipPolicy, SkillStep } from './skillSteps.js';
@@ -334,7 +335,7 @@ async function loadSkillDir(
   opts: SkillsFromDirOptions,
 ): Promise<{ parsed: readonly ParsedSkillFile[]; skills: readonly Injection[] }> {
   assertLocalDirectoryArgument(dir);
-  assertNoViaToolNameOption(opts);
+  assertKnownOptions('skillsFromDir', opts, DIRECTORY_OPTION_KEYS);
 
   // Lazy node imports (browser-compat) — see module header.
   const { readdir, readFile, stat } = await import('node:fs/promises');
@@ -424,27 +425,10 @@ async function loadSkillDir(
 
 // ─── Authorship guard ──────────────────────────────────────────────
 
-/**
- * Refuse a `viaToolName` option that no longer exists (9.0.0 grace error).
- *
- * Deprecated in 8.7.0, removed here — see the same guard in `defineSkill` for
- * the whole story. It is refused rather than ignored because a directory
- * loaded with this option used to produce skills that an agent then REFUSED at
- * mount, and silently accepting them now would be a downgrade: the caller
- * would believe a per-directory activation tool exists. It never did.
- *
- * Deleted in 10.0.0.
- */
-function assertNoViaToolNameOption(opts: object): void {
-  const legacy = (opts as { readonly viaToolName?: unknown }).viaToolName;
-  if (legacy === undefined) return;
-  throw new Error(
-    `skillsFromDir: \`viaToolName\` was removed in 9.0.0 (deprecated since 8.7.0), and this ` +
-      `call passes '${String(legacy)}'. Nothing ever read it — 'read_skill' is the only ` +
-      `activation tool this library builds, and every skill loaded here already shares it. ` +
-      `Drop the option; the model picks WHICH skill by id.`,
-  );
-}
+const DIRECTORY_OPTION_KEYS = {
+  surfaceMode: true,
+  tools: true,
+} satisfies Record<keyof SkillsFromDirOptions, true>;
 
 /**
  * Refuse anything that is not a local path, BY NAME. The message quotes what

@@ -895,8 +895,8 @@ export type { InProgressInput, InProgressItem } from './core/agent/coverage/type
 // `tools.semantics_declared` event; a declared `coverage` flows through the
 // same channel `coverage()` uses. The gate half (`checkSemantics`, the
 // `agentfootprint-check-semantics` bin) ships through `/observe`.
-// `describedResult()` mints it from a camelCase declaration; `semantic()`,
-// the deprecated name, from the snake_case one — one core, the same wire.
+// `describedResult()` mints it from a camelCase declaration; the saved
+// snake_case wire format remains unchanged.
 export {
   composeNotCovered,
   COUNTER_AGGREGATION_WORDS,
@@ -905,14 +905,12 @@ export {
   isCounterLookingAggregation,
   readSemantics,
   RESULT_CLASSES,
-  semantic,
   SEMANTICS_MARKER,
   SEMANTICS_NOTE,
   semanticsForModel,
   type DescribedResultDeclaration,
   type SemanticClarify,
   type SemanticCoverage,
-  type SemanticDeclaration,
   type SemanticEdge,
   type SemanticFact,
   type SemanticGrain,

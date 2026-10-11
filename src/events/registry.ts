@@ -49,6 +49,7 @@ import type {
   AgentGroundingNudgedPayload,
   AgentRunConfiguredPayload,
   AgentThinkingParseFailedPayload,
+  AgentThinkingOmittedPayload,
   StreamThinkingDeltaPayload,
   StreamThinkingEndPayload,
   FallbackTriggeredPayload,
@@ -82,7 +83,6 @@ import type {
   ReliabilityRecoveredPayload,
   ResilienceOutputFallbackTriggeredPayload,
   ResilienceOutputCannedUsedPayload,
-  RiskFlaggedPayload,
   SkillActivatedPayload,
   SkillDeactivatedPayload,
   SkillEscalatedPayload,
@@ -172,6 +172,7 @@ export const EVENT_NAMES = {
     groundingNudged: 'agentfootprint.agent.grounding_nudged',
     runConfigured: 'agentfootprint.agent.run_configured',
     thinkingParseFailed: 'agentfootprint.agent.thinking_parse_failed',
+    thinkingOmitted: 'agentfootprint.agent.thinking_omitted',
     budgetExhausted: 'agentfootprint.agent.budget_exhausted',
   },
   stream: {
@@ -256,19 +257,6 @@ export const EVENT_NAMES = {
     acquired: 'agentfootprint.credential.acquired',
     authorizationRequired: 'agentfootprint.credential.authorization_required',
     failed: 'agentfootprint.credential.failed',
-  },
-  risk: {
-    /**
-     * @deprecated **Nothing emits this event, and nothing ever has** — a listener
-     * on it hears silence, which looks exactly like "no risk found". It was the
-     * output of the risk-detector adapter port, which is also deprecated and has no caller.
-     * Removed in 10.0.0. To screen content, refuse in a `PermissionChecker`
-     * (`agentfootprint/security`), a `.reliability({ preCheck })` rule
-     * (`agentfootprint/resilience`) or a `.messageMiddleware(...)`, and listen to
-     * the events those already emit (`permission.halt`, `reliability.*`,
-     * `middleware.decision`).
-     */
-    flagged: 'agentfootprint.risk.flagged',
   },
   fallback: {
     triggered: 'agentfootprint.fallback.triggered',
@@ -432,6 +420,10 @@ export interface AgentfootprintEventMap {
   'agentfootprint.agent.thinking_parse_failed': AgentfootprintEventEnvelope<
     'agentfootprint.agent.thinking_parse_failed',
     AgentThinkingParseFailedPayload
+  >;
+  'agentfootprint.agent.thinking_omitted': AgentfootprintEventEnvelope<
+    'agentfootprint.agent.thinking_omitted',
+    AgentThinkingOmittedPayload
   >;
   'agentfootprint.agent.budget_exhausted': AgentfootprintEventEnvelope<
     'agentfootprint.agent.budget_exhausted',
@@ -677,21 +669,7 @@ export interface AgentfootprintEventMap {
     'agentfootprint.credential.failed',
     CredentialFailedPayload
   >;
-  // risk + fallback
-  /**
-   * @deprecated **Nothing emits this event, and nothing ever has** — a listener
-   * on it hears silence, which looks exactly like "no risk found". It was the
-   * output of the risk-detector adapter port, which is also deprecated and has no caller.
-   * Removed in 10.0.0. To screen content, refuse in a `PermissionChecker`
-   * (`agentfootprint/security`), a `.reliability({ preCheck })` rule
-   * (`agentfootprint/resilience`) or a `.messageMiddleware(...)`, and listen to
-   * the events those already emit (`permission.halt`, `reliability.*`,
-   * `middleware.decision`).
-   */
-  'agentfootprint.risk.flagged': AgentfootprintEventEnvelope<
-    'agentfootprint.risk.flagged',
-    RiskFlaggedPayload
-  >;
+  // fallback
   'agentfootprint.fallback.triggered': AgentfootprintEventEnvelope<
     'agentfootprint.fallback.triggered',
     FallbackTriggeredPayload
@@ -912,6 +890,7 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.agent.grounding_nudged',
   'agentfootprint.agent.run_configured',
   'agentfootprint.agent.thinking_parse_failed',
+  'agentfootprint.agent.thinking_omitted',
   'agentfootprint.agent.budget_exhausted',
   'agentfootprint.stream.llm_start',
   'agentfootprint.stream.llm_end',
@@ -971,7 +950,6 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.credential.acquired',
   'agentfootprint.credential.authorization_required',
   'agentfootprint.credential.failed',
-  'agentfootprint.risk.flagged',
   'agentfootprint.fallback.triggered',
   'agentfootprint.cost.tick',
   'agentfootprint.cost.limit_hit',

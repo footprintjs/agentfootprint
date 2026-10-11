@@ -36,7 +36,7 @@
  * on (see the calibration).
  *
  * ── WHAT IS COUNTED ────────────────────────────────────────────────────────
- * The recording's preparation, wrapped at `footprintjs/trace`, the barrel
+ * The recording's preparation, wrapped at `foottrace`, the barrel
  * `src` imports them from (footprintjs's calls to its own functions do not
  * pass through it and are not counted):
  * - `stateAt` — a FOLD BASE BUILT. `keyedFold.ts` · `keyedFold` calls it once
@@ -126,8 +126,8 @@ const { counted, counting } = vi.hoisted(() => {
   return { counted, counting };
 });
 
-vi.mock('footprintjs/trace', async (importOriginal) => {
-  const real = await importOriginal<typeof import('footprintjs/trace')>();
+vi.mock('foottrace', async (importOriginal) => {
+  const real = await importOriginal<typeof import('foottrace')>();
   return {
     ...real,
     stateAt: counting('stateAt', real.stateAt),

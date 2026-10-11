@@ -5,6 +5,109 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.0.0] - 2026-10-10
+
+### Breaking
+
+- **Breaking: boundary indexes now use Foottrace's `CommitRangeIndex` class.**
+  AgentFootprint depends on `foottrace ^1.0.0` and accepts `footprintjs ^9.47.0 || ^10.0.0`.
+  Time travel, causal queries, boundary indexes and record types use their canonical package;
+  engine execution, recorders and stores remain with FootPrint. This ownership change alone
+  removes no AgentFootprint export (the other breaking changes below retire deprecated APIs),
+  but `BoundaryRecorder.boundaryIndex` has a new nominal type and runtime class
+  identity. Recorded values and query behavior are unchanged.
+
+  Migration: import `CommitRangeIndex` from `foottrace`, not `footprintjs/trace`, for
+  boundary-index type annotations and `instanceof` checks. Likewise, catch errors from
+  AgentFootprint's record readers with `UnknownVerbError` from `foottrace`, because
+  the old engine class no longer matches those errors. Import other record readers
+  and types directly from `foottrace` as shown in the updated examples and documentation;
+  keep engine imports on their existing FootPrint doors.
+
+- **Remove expired compatibility surfaces; require Node.js 22 or newer.**
+  The Node floor now matches the required Foottrace and FootPrint packages;
+  CI verifies Node 22 and 24.
+
+  Migration: update to Node.js 22 or newer, then replace the retired calls,
+  options and import paths as follows:
+
+  - The `AgentBuilder.recorder()` grace stub is gone. Use `.watch(...observers)`.
+  - `RefreshPolicy` and `defineSkill({ refreshPolicy })` are removed. This
+    option never refreshed anything. Use skill `steps` for procedure position,
+    or `surfaceMode: 'both'` to return the body on an explicit `read_skill` call.
+  - The special `viaToolName` removal guards are gone. Skill factory and directory
+    options are checked against their current declared keys by one shared validator.
+    Unknown options (including inherited declarations) fail without reading or
+    printing their values. Unknown SKILL.md frontmatter remains tolerated.
+  - The budget recorder no longer adapts 8.x `capTokens/projectedTokens`.
+    Slot builders must write `cap/projected` (numbers), with `unit` when needed.
+    Legacy-only records emit no budget-pressure event, as promised in 9.x.
+  - `agentfootprint/reliability` now exports only the gate's distinct
+    `CircuitOpenError`. Import the other fifteen reliability helpers and types
+    from `agentfootprint/resilience`; their implementations are unchanged.
+
+  The active `scopeTools` default remains false. The earlier documentation
+  promising an automatic 10.0.0 flip is corrected: API retirement does not
+  change tool-visibility policy. Saved record formats and supported live
+  execution remain unchanged.
+
+- **Remove unused adapter contracts and the retired AgentCore policy shim.**
+  The unused `ContextSourceAdapter`, `EmbeddingProvider`, and `RiskDetector`
+  ports and their helper types (`ResolveCtx`, `ContextContribution`,
+  `RiskContext`, `RiskResult`) are no longer exported. None had a runtime
+  caller. The never-emitted `agentfootprint.risk.flagged` event, its payload,
+  and the `agentfootprint.risk.*` subscription domain are removed too.
+  The always-throwing `agentCorePolicy` factory, `AgentCorePolicyRetiredError`,
+  and its five option/client/evaluation/SDK types are deleted rather than kept
+  as callable stubs.
+
+  Migration: Use `defineInjection`, `defineFact`, or `defineSkill` from
+  `agentfootprint/context` for context contributions; use the live `Embedder`
+  contract from `agentfootprint/providers` for embeddings. For authorization,
+  use `PermissionPolicy.fromRoles` or implement `PermissionChecker` from
+  `agentfootprint/security` and supply it as `permissionChecker`.
+  Application-specific screening can run in tool/message middleware or a
+  `reliability({ preCheck })` rule. Subscribe to the actual permission,
+  reliability, or middleware decision events instead of the removed risk event;
+  absence of that unproduced event never proved a successful safety check.
+  For AgentCore Gateway tools, handle the tool errors returned by `mcpClient`;
+  there is no replacement library-side policy-evaluation SDK call.
+
+- **One authoring API for described tool results.** Removed the deprecated
+  `semantic()` helper and `SemanticDeclaration` type. `describedResult()` remains
+  the canonical authoring API. Saved `ToolSemantics` envelopes, snake_case wire
+  fields, recognition and model projections are unchanged.
+
+  Migration: import `describedResult` and `DescribedResultDeclaration` instead.
+  Rename declaration keys `is_counter`, `measured_at`, `age_seconds`,
+  `source_export_date`, `filter_note` and `chart_hint` to `isCounter`, `measuredAt`,
+  `ageSeconds`, `sourceExportDate`, `filterNote` and `chartHint`. Coverage declaration
+  keys `notChecked` and `cannotCover` stay as they are. Provide provenance for
+  series or facts; the canonical declaration type checks this before runtime.
+  Do not rename fields in saved wire envelopes: `readSemantics()` still reads them.
+
+- **Retire the deprecated standalone run-step builder without losing saved-event replay.**
+  `buildRunSteps`, `BuildRunStepsOptions`, and `RunStepGraph` are removed from
+  `agentfootprint/observe`. The supported `RunStepRecorder.ingestDomainEvents`
+  method now owns the existing saved-event replay, including grouping parallel
+  fork branches. Live recording and the existing single-event ingestion and
+  step-projection methods are unchanged.
+
+  Migration: create a fresh `runStepRecorder()`, call
+  `rec.ingestDomainEvents(events)` (or `boundary.getEvents()` when starting from a
+  `BoundaryRecorder`), then read `rec.getSteps(drillPath)`; omit `drillPath` for the
+  whole run. Pass one complete saved recording, with each fork's branches in the
+  same batch. Use `clear()` before replaying another independent recording. Live
+  consumers should attach the recorder and read `getSteps()` without replaying.
+
+### Fixed
+
+- **Docs demos share one record implementation.** The browser bundler now resolves
+  every public Foottrace door to the same installed copy used by the linked agent
+  runtime, alongside the existing one-engine rule. Lens and the agent no longer
+  bundle separate copies of the record code. Webpack's server resolution is
+  unchanged; Turbopack's existing global alias policy also covers Foottrace.
+
 ## [9.142.0] - 2026-10-09
 
 ### Changed

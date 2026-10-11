@@ -320,3 +320,12 @@ Criteria for a new `enable.<feature>`:
 4. It has a bounded config surface — 2–5 options max. Bigger = probably needs its own adapter interface.
 
 Pattern: add a factory function in this folder + one method on `EnableNamespace` in `../../core/runner.ts` + one line in `RunnerBase.enable` to wire it.
+
+## Saved run-step replay
+
+Live step capture remains incremental at the recorder hooks. For an already
+saved complete `DomainEvent[]`, `RunStepRecorder.ingestDomainEvents` owns the
+batch adaptation: sibling fork events are grouped once before entering the
+same recorder. `getSteps(drillPath?)` projects the result; `clear()` resets it.
+The old `buildRunSteps` facade and its two wrapper types are removed in 10.
+No finished-event scan is introduced on the live recording path.
