@@ -45,6 +45,7 @@ import type {
   TimeReadingRow,
 } from '../../time/rows.js';
 import type { CoverageItem } from '../coverage/types.js';
+import type { ClaimVerificationRow } from './verificationTypes.js';
 
 /** The reserved optional property every SERVED tool schema carries when armed. */
 export const RESERVED_ARGUMENT = '_findings' as const;
@@ -454,6 +455,9 @@ export type FindingsRow =
   | JudgmentErrorRow
   | ContingentRow
   | UnsettledByAbsenceRow
+  // The optional deterministic checker files its own scoped observation beside
+  // the model's declaration. It never participates in standing/conflict folds.
+  | ClaimVerificationRow
   // The inputs layer's verdict on one ruled argument of one call (honesty
   // layer 2) — filed by the `sf-inputs` subflow, not by the model. Readers
   // that switch over every kind must skip one they do not know.

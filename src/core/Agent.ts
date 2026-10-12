@@ -251,6 +251,7 @@ import {
   type EvidenceRecoveryCheckpoint,
   type RunCheckpointTracker,
 } from './runCheckpoint.js';
+import { requireVerificationOnResume } from './agent/findings/verificationCheckpoint.js';
 import {
   NoConversationError,
   PendingQuestionError,
@@ -2535,6 +2536,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // sound question is "what was asked?".
     assertIdentityShape(options?.identity, 'Agent.resume');
     if (options?.redact !== undefined) assertRedactionPolicy(options.redact, 'Agent.resume');
+    // Native guard lands with the new checkpoint protocol, before its runtime
+    // opt-in is mounted. Until then no Agent is armed to consume this carrier.
+    requireVerificationOnResume(checkpoint.sharedState ?? {}, false);
     // The policy the paused run was covered by, carried in its own state
     // (`runRedaction`) — it covers this leg too, joined with any the caller
     // adds now. Read, or refused, before anything moves (`resumeRedactionOf`).
@@ -3034,6 +3038,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    */
   private applyContinuation(cp: AgentRunCheckpoint, door: string, appendsUserTurn: boolean): void {
     assertContinuable(cp, this.explicitId, door);
+    requireVerificationOnResume(cp, false);
     this.pendingResumeHistory = {
       history: cp.history as readonly LLMMessage[],
       appendsUserTurn,

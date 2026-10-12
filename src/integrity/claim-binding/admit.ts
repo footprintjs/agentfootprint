@@ -45,7 +45,8 @@ export function bindingRuleOf(raw: unknown): ClaimBindingRule {
   });
 }
 
-function validateCoverage(raw: unknown): void {
+/** Closed coverage admission shared by receipts and saved verification rows. */
+export function validateCoverage(raw: unknown): void {
   const coverage = ownData(raw, ['checked', 'notChecked', 'cannotCover']);
   for (const section of ['checked', 'notChecked', 'cannotCover'] as const) {
     const list = coverage[section];
