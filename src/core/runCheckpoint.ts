@@ -78,6 +78,13 @@ import {
   type FindingsLedger,
 } from './agent/findings/types.js';
 import { MAX_EVIDENCE_RECOVERY_CHARS } from './agent/evidence/recovery.js';
+import {
+  isClaimVerificationRow,
+  readClaimVerificationRow,
+} from './agent/findings/verificationRow.js';
+import { verificationCheckpointOf } from './agent/findings/verificationCheckpoint.js';
+import type { ClaimVerificationState } from './agent/findings/verificationState.js';
+import { ownConfigArray } from '../integrity/claim-binding/scope.js';
 
 // ─── Public types ────────────────────────────────────────────────────
 
@@ -170,6 +177,13 @@ export interface AgentRunCheckpoint {
    * {@link skillCursor}.
    */
   readonly findingsLedger?: FindingsLedger;
+  /**
+   * Private, opt-in exact evidence and reservation counters. Unlike historical
+   * observations, this carrier can support later checks. A newest-version
+   * continuation must explicitly keep verification enabled, never discard it.
+   * Storage ownership/authenticity remains the checkpoint caller's obligation.
+   */
+  readonly claimVerification?: ClaimVerificationState;
   /**
    * The conversation TURN the stored history ends on — the stored run's
    * `AgentState.turnNumber` — carried while an honesty layer is armed.
@@ -618,7 +632,13 @@ export function buildCheckpoint(
    * layer is armed; see {@link AgentRunCheckpoint.turnNumber}.
    */
   turnNumber?: number,
+  /** Private evidence beside the same committed ledger; absent unless explicitly opted in. */
+  claimVerification?: ClaimVerificationState,
 ): AgentRunCheckpoint {
+  const verification =
+    claimVerification === undefined
+      ? undefined
+      : verificationCheckpointOf({ claimVerification, findingsLedger: findingsLedger ?? [] });
   return {
     version: 1,
     runId: tracker.runId,
@@ -634,6 +654,7 @@ export function buildCheckpoint(
     ...(evidenceRecovery !== undefined && { evidenceRecovery }),
     ...(findingsLedger !== undefined && findingsLedger.length > 0 && { findingsLedger }),
     ...(turnNumber !== undefined && { turnNumber }),
+    ...(verification !== undefined && { claimVerification: verification }),
   };
 }
 
@@ -647,6 +668,11 @@ export function buildCheckpoint(
  */
 function ledgerRowIsWellFormed(row: unknown): boolean {
   if (row === null || typeof row !== 'object' || Array.isArray(row)) return false;
+  // Admit the new closed protocol before legacy field reads. Its reader refuses
+  // accessors and unsafe values, and never runs a checker while restoring.
+  const kind = Object.getOwnPropertyDescriptor(row, 'kind');
+  if (kind !== undefined && !('value' in kind)) return false;
+  if (kind?.value === 'claim-verification') return isClaimVerificationRow(row);
   const r = row as Record<string, unknown>;
   const isIn = (value: unknown, vocabulary: readonly string[]) =>
     typeof value === 'string' && vocabulary.includes(value);
@@ -857,8 +883,13 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
   // say) would fail deep inside that fold. So the door checks the fields the
   // fold consumes, per kind — never the values the model wrote.
   if (c.findingsLedger !== undefined) {
-    const ledger = c.findingsLedger as unknown;
-    if (!Array.isArray(ledger) || !ledger.every(ledgerRowIsWellFormed)) {
+    let ledger: readonly unknown[] | undefined;
+    try {
+      ledger = ownConfigArray(c.findingsLedger, Number.MAX_SAFE_INTEGER);
+    } catch {
+      // A saved array cannot run a getter/iterator to choose the rows admitted.
+    }
+    if (ledger === undefined || !ledger.every(ledgerRowIsWellFormed)) {
       throw new TypeError(
         '[resumeOnError] checkpoint `findingsLedger` must be an array of ledger rows when ' +
           "present — each a plain object whose `kind` is 'basis' (with toolCallId, toolName, " +
@@ -881,11 +912,20 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
           "'time-reading' (with turn, iteration, reader, tzdata, mentions and, per mention, " +
           'mention with quote, parses, candidates and choice, or refused) or ' +
           "'time-answer' (with turn, iteration, mention, from, to, zone, how: confirmed | edited); " +
+          "or 'claim-verification' (the closed scoped-comparison protocol); " +
           'a row of any kind may carry a numeric turn. ' +
           'It is written by an agent with `.findings()`, an honesty layer or `.time()` armed, and ' +
           're-seeded verbatim on continuation.',
       );
     }
+  }
+  // The two checkpoint carriers use one admission rule. Only a present opted-in
+  // carrier is copied/validated; every old checkpoint keeps its return identity.
+  let claimVerification: ClaimVerificationState | undefined;
+  try {
+    claimVerification = verificationCheckpointOf(c);
+  } catch {
+    throw new TypeError('[resumeOnError] checkpoint claimVerification is malformed.');
   }
   // The turn the stored history ends on (honesty layers), by the same
   // present-only rule: a checkpoint without the key is every conversation
@@ -925,7 +965,18 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
       );
     }
   }
-  return c as AgentRunCheckpoint;
+  const hasVerificationRows = c.findingsLedger?.some((row) => row.kind === 'claim-verification');
+  return claimVerification === undefined && !hasVerificationRows
+    ? (c as AgentRunCheckpoint)
+    : ({
+        ...c,
+        ...(claimVerification !== undefined && { claimVerification }),
+        ...(hasVerificationRows && {
+          findingsLedger: c.findingsLedger?.map((row) =>
+            row.kind === 'claim-verification' ? readClaimVerificationRow(row) : row,
+          ),
+        }),
+      } as AgentRunCheckpoint);
 }
 
 /**
