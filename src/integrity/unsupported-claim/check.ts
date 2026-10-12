@@ -33,10 +33,10 @@
  */
 
 import type { Assertion, SubjectRef } from '../assertion/types.js';
-import { comparableValueOf, participates } from '../assertion/types.js';
-import { conflictsOf } from '../assertion/conflicts.js';
+import { comparableValueOf } from '../assertion/types.js';
 import type { ContextError } from '../finding/types.js';
 import type { Disposition } from '../disposition/types.js';
+import { evaluateClaimPair } from './evaluate.js';
 
 /** One entry of the operator's declared contract: answer field → ledger fact. */
 export interface DeclaredClaim {
@@ -74,18 +74,6 @@ function readPath(answer: unknown, path: string): unknown {
   return cursor;
 }
 
-const isDoubt = (value: unknown): boolean => value === null || value === 'unknown';
-
-/** The stated one-direction leniency: '30' claims 30. */
-function numericallyEqual(claimed: unknown, settled: unknown): boolean {
-  return (
-    typeof settled === 'number' &&
-    typeof claimed === 'string' &&
-    claimed.trim() !== '' &&
-    Number(claimed) === settled
-  );
-}
-
 /**
  * Compare the parsed answer's declared claims against the ledger.
  * Pure; the caller files findings and dispositions.
@@ -108,29 +96,42 @@ export function unsupportedClaimsOf(
     }
     const rows = ledger.filter((r) => r.entity === claim.entity && r.field === claim.field);
     const settledRow = rows[rows.length - 1];
-    if (settledRow === undefined || !participates(settledRow.value)) {
-      // Never collected, or collected as an honest unknown — incomparable.
+    if (settledRow === undefined) {
+      // Never collected — incomparable, never an accusation.
       dispositions.push({ claim: claim.answerField, disposition: 'unreachable' });
       continue;
     }
 
     const subject: SubjectRef = { kind: 'entity', id: claim.entity };
-    const settledValue = comparableValueOf(settledRow.value);
     const ledgerProvenance =
       `${settledRow.toolName} (call ${settledRow.toolCallId}, iteration ` +
       `${String(settledRow.iteration)})` +
       (settledRow.measuredAt !== undefined ? `, measured_at ${String(settledRow.measuredAt)}` : '');
 
-    if (isDoubt(claimed)) {
-      // …unless the RUN settled a non-reading too. Reporting `null` for a
-      // fact whose settled value is `null` is agreement, not doubt — the
-      // model declined nothing. Checked here rather than by falling through
-      // to the comparison below, because the advisory's whole premise is
-      // "a verified value existed and the answer declined it".
-      if (isDoubt(settledValue)) {
-        dispositions.push({ claim: claim.answerField, disposition: 'checked-pass' });
-        continue;
-      }
+    const evidence: Assertion = {
+      subject,
+      predicate: claim.field,
+      value: settledRow.value,
+      epoch,
+      stratum: 'asserted',
+      provenance: ledgerProvenance,
+    };
+    const assertion: Assertion = {
+      subject,
+      predicate: claim.field,
+      value: claimed,
+      epoch,
+      stratum: 'asserted',
+      provenance: `answer field '${claim.answerField}'`,
+    };
+    const evaluation = evaluateClaimPair(evidence, assertion);
+    if (evaluation === 'evidence-unavailable') {
+      dispositions.push({ claim: claim.answerField, disposition: 'unreachable' });
+      continue;
+    }
+    const settledValue = comparableValueOf(settledRow.value);
+
+    if (evaluation === 'doubt-against-value') {
       // The model declined to claim a fact the run verified — an advisory.
       findings.push({
         kind: 'unsupported-claim',
@@ -141,16 +142,7 @@ export function unsupportedClaimsOf(
         // predicate their identities collide and the second is deduplicated
         // away, leaving the event channel disagreeing with the ledger.
         predicate: claim.field,
-        witnesses: [
-          {
-            subject,
-            predicate: claim.field,
-            value: settledRow.value,
-            epoch,
-            stratum: 'asserted',
-            provenance: ledgerProvenance,
-          },
-        ],
+        witnesses: [evidence],
         epoch,
         message:
           `The answer's '${claim.answerField}' says ${JSON.stringify(claimed)} while the run ` +
@@ -162,29 +154,16 @@ export function unsupportedClaimsOf(
       continue;
     }
 
-    if (numericallyEqual(claimed, settledValue)) {
+    if (evaluation !== 'conflict') {
+      // Preserve the existing diagnostic mapping, including both-doubt and
+      // claim-nonparticipating. checked-pass here is NOT a support certificate.
       dispositions.push({ claim: claim.answerField, disposition: 'checked-pass' });
       continue;
     }
 
-    // The algebra decides "contradict" — the fences apply for free.
     const witnesses: Assertion[] = [
-      {
-        subject,
-        predicate: claim.field,
-        value: settledRow.value,
-        epoch,
-        stratum: 'asserted',
-        provenance: ledgerProvenance,
-      },
-      {
-        subject,
-        predicate: claim.field,
-        value: claimed,
-        epoch,
-        stratum: 'asserted',
-        provenance: `answer field '${claim.answerField}'`,
-      },
+      evidence,
+      assertion,
       // Earlier values ride as QUOTED history: legitimately superseded, on
       // the record so a reader sees the fact's whole life, never firing.
       ...rows.slice(0, -1).map(
@@ -197,10 +176,6 @@ export function unsupportedClaimsOf(
         }),
       ),
     ];
-    if (conflictsOf(witnesses).length === 0) {
-      dispositions.push({ claim: claim.answerField, disposition: 'checked-pass' });
-      continue;
-    }
     findings.push({
       kind: 'unsupported-claim',
       seam: 'claim',
