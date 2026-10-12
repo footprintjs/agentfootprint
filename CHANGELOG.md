@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.1.1] - 2026-10-12
+
+### Fixed
+
+- **Preserve standard Anthropic response metadata during thinking replay.**
+  Tool turns could stop with `UnsafeThinkingReplayError` even when the application
+  had not changed the response: empty citation metadata, direct tool callers or a
+  null toolset name were incorrectly treated as lost content. The shared adapter
+  now preserves these fields exactly through normalization and JSON checkpoints,
+  including the difference between absent, null and empty values. Changed content
+  and unsupported metadata still refuse unsafe active-turn replay before sending.
+
 ## [10.1.0] - 2026-10-11
 
 ### Fixed
