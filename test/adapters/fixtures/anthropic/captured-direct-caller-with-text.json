@@ -1,0 +1,18 @@
+[
+  {
+    "type": "thinking",
+    "thinking": "Synthetic reasoning for replay regression.",
+    "signature": "synthetic-signature-not-for-api"
+  },
+  {
+    "type": "text",
+    "text": "Synthetic tool request."
+  },
+  {
+    "type": "tool_use",
+    "id": "tool-call-1",
+    "name": "lookup",
+    "input": { "id": "synthetic" },
+    "caller": { "type": "direct" }
+  }
+]

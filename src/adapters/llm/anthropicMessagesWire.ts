@@ -57,8 +57,15 @@ export interface AnthropicMessageParam {
 }
 
 export type AnthropicContentBlock =
-  | { type: 'text'; text: string }
-  | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
+  | { type: 'text'; text: string; citations?: null | readonly [] }
+  | {
+      type: 'tool_use';
+      id: string;
+      name: string;
+      input: Record<string, unknown>;
+      caller?: { readonly type: 'direct' };
+      toolset_name?: null;
+    }
   | { type: 'tool_result'; tool_use_id: string; content: string; is_error?: boolean }
   // v2.14 — extended-thinking blocks. Round-trip on assistant turns
   // when continuing a tool-using extended-thinking conversation;

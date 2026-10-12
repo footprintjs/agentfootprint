@@ -1,6 +1,6 @@
 /**
  * Lossless layout of the Messages content this adapter actually understands.
- * The carrier stores indices/lengths and digests, never a second content copy.
+ * The carrier stores indices/lengths, inert metadata and digests, never a second content copy.
  * Replay policy lives elsewhere: undefined here means no fidelity proof.
  */
 import type { LLMMessage } from '../types.js';
@@ -29,14 +29,14 @@ export function captureAnthropicReplay(
     if (!isSupportedBlock(block)) return undefined;
     switch (block.type) {
       case 'text':
-        layout.push({ type: 'text', length: block.text.length });
+        layout.push({ type: 'text', length: block.text.length, ...textMetadata(block) });
         break;
       case 'thinking':
       case 'redacted_thinking':
         layout.push({ type: 'thinking', index: thinking++ });
         break;
       case 'tool_use':
-        layout.push({ type: 'tool', index: tools++ });
+        layout.push({ type: 'tool', index: tools++, ...toolMetadata(block) });
         break;
     }
   }
@@ -135,7 +135,10 @@ function reconstructCurrentLayout(message: LLMMessage): AnthropicContentBlock[] 
   for (const part of replay.layout) {
     if (part === null || typeof part !== 'object') return undefined;
     if (part.type === 'text') {
+      const metadata = textMetadata(part);
       if (
+        metadata === undefined ||
+        !hasOnlyFields(part, ['type', 'length', 'citations']) ||
         !Number.isSafeInteger(part.length) ||
         part.length < 0 ||
         part.length > message.content.length - textOffset
@@ -144,10 +147,11 @@ function reconstructCurrentLayout(message: LLMMessage): AnthropicContentBlock[] 
       blocks.push({
         type: 'text',
         text: message.content.slice(textOffset, textOffset + part.length),
+        ...metadata,
       });
       textOffset += part.length;
     } else if (part.type === 'thinking') {
-      if (part.index !== thinkingIndex) return undefined;
+      if (part.index !== thinkingIndex || !hasOnlyFields(part, ['type', 'index'])) return undefined;
       const block = thinking[thinkingIndex++];
       if (!block || typeof block.content !== 'string') return undefined;
       if (block.type === 'redacted_thinking') {
@@ -162,7 +166,13 @@ function reconstructCurrentLayout(message: LLMMessage): AnthropicContentBlock[] 
         });
       } else return undefined;
     } else if (part.type === 'tool') {
-      if (part.index !== toolIndex) return undefined;
+      const metadata = toolMetadata(part);
+      if (
+        metadata === undefined ||
+        part.index !== toolIndex ||
+        !hasOnlyFields(part, ['type', 'index', 'caller', 'toolset_name'])
+      )
+        return undefined;
       const tool = tools[toolIndex++];
       if (
         !tool ||
@@ -173,7 +183,13 @@ function reconstructCurrentLayout(message: LLMMessage): AnthropicContentBlock[] 
         Array.isArray(tool.args)
       )
         return undefined;
-      blocks.push({ type: 'tool_use', id: tool.id, name: tool.name, input: { ...tool.args } });
+      blocks.push({
+        type: 'tool_use',
+        id: tool.id,
+        name: tool.name,
+        input: { ...tool.args },
+        ...metadata,
+      });
     } else return undefined;
   }
   if (
@@ -221,14 +237,61 @@ export function omitAnthropicThinking(message: LLMMessage): LLMMessage {
   return { ...rest, replay: { ...(replacement ?? replay), thinkingRetired: true } };
 }
 
-/** Guard the exact represented fields; citations/server-tool blocks need another carrier. */
+const owns = (value: object, key: string): boolean =>
+  Object.prototype.hasOwnProperty.call(value, key);
+const hasOnlyFields = (value: object, fields: readonly string[]): boolean =>
+  Object.keys(value).every((key) => fields.includes(key));
+
+/** Preserve absent/null/empty distinctly. Citation contents require a different carrier. */
+function textMetadata(value: {
+  readonly citations?: unknown;
+}): { citations?: null | readonly [] } | undefined {
+  if (!owns(value, 'citations')) return {};
+  if (value.citations === null) return { citations: null };
+  if (
+    Array.isArray(value.citations) &&
+    value.citations.length === 0 &&
+    Object.keys(value.citations).length === 0
+  )
+    return { citations: [] };
+  return undefined;
+}
+
+/** Only direct calls with no named toolset are representable; never retain an open metadata bag. */
+function toolMetadata(value: {
+  readonly caller?: unknown;
+  readonly toolset_name?: unknown;
+}): { caller?: { type: 'direct' }; toolset_name?: null } | undefined {
+  const metadata: { caller?: { type: 'direct' }; toolset_name?: null } = {};
+  if (owns(value, 'caller')) {
+    const caller = value.caller;
+    if (
+      caller === null ||
+      typeof caller !== 'object' ||
+      Array.isArray(caller) ||
+      !owns(caller, 'type') ||
+      !('type' in caller) ||
+      caller.type !== 'direct' ||
+      !hasOnlyFields(caller, ['type'])
+    )
+      return undefined;
+    metadata.caller = { type: 'direct' };
+  }
+  if (owns(value, 'toolset_name')) {
+    if (value.toolset_name !== null) return undefined;
+    metadata.toolset_name = null;
+  }
+  return metadata;
+}
+
+/** Guard exact represented fields; populated citations/server-tool blocks need another carrier. */
 function isSupportedBlock(block: AnthropicContentBlock): boolean {
   if (block === null || typeof block !== 'object') return false;
   let fields: readonly string[];
   switch (block.type) {
     case 'text':
-      if (typeof block.text !== 'string') return false;
-      fields = ['type', 'text'];
+      if (typeof block.text !== 'string' || textMetadata(block) === undefined) return false;
+      fields = ['type', 'text', 'citations'];
       break;
     case 'thinking':
       if (
@@ -248,13 +311,14 @@ function isSupportedBlock(block: AnthropicContentBlock): boolean {
         typeof block.name !== 'string' ||
         block.input === null ||
         typeof block.input !== 'object' ||
-        Array.isArray(block.input)
+        Array.isArray(block.input) ||
+        toolMetadata(block) === undefined
       )
         return false;
-      fields = ['type', 'id', 'name', 'input'];
+      fields = ['type', 'id', 'name', 'input', 'caller', 'toolset_name'];
       break;
     default:
       return false;
   }
-  return Object.keys(block).every((key) => fields.includes(key));
+  return hasOnlyFields(block, fields);
 }
