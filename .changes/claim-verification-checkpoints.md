@@ -1,0 +1,4 @@
+---
+type: added
+---
+**Additive public types for scoped claim-verification records and saved checkpoints.** FindingsRow includes independent verification observations, and AgentRunCheckpoint can carry their optional receipt state. Paired readers and writers validate exact occurrence identities, scope, lineage and counters; historical observations are read without judging them again. Current runtimes refuse an unarmed continuation rather than silently discard retained verification state. Old checkpoints remain readable. Receipt retention shares admitted immutable history instead of repeatedly copying it, while preserving all size, depth and restored-data checks. Runtime opt-in, compact model declarations and delivered-answer binding are not mounted in this phase; no new model request emits these rows yet.

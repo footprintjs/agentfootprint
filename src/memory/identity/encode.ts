@@ -93,3 +93,20 @@ export function encodeIdentityField(raw: string | undefined | null): string {
   const escaped = raw.replace(/%/g, '%25').replace(/\//g, '%2F');
   return distinctFromAbsent(escaped);
 }
+
+/**
+ * Read a required present segment with the encoder's canonical spelling.
+ * One-pass decoding matters: an escaped percent must not acquire a second
+ * meaning as a slash escape. Absence and alternative spellings are refused.
+ * Internal restored-data readers share this rule; errors never quote an id.
+ */
+export function decodePresentIdentityField(encoded: unknown): string {
+  if (typeof encoded !== 'string' || encoded === IDENTITY_ABSENT || encoded.length === 0)
+    throw new TypeError('Invalid present identity segment.');
+  const raw = encoded.replace(/%25|%2F|%5F/g, (escape) =>
+    escape === '%25' ? '%' : escape === '%2F' ? '/' : '_',
+  );
+  if (encodeIdentityField(raw) !== encoded)
+    throw new TypeError('Noncanonical present identity segment.');
+  return raw;
+}
