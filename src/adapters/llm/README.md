@@ -95,6 +95,17 @@ without storing a second copy; `anthropicMessageProjection.ts` owns normalized
 messages-to-wire conversion. SDK and fetch replies use the same response mapper.
 Unknown provenance is unknown, not a signature-authentication failure.
 
+The layout also keeps the Messages API's inert block metadata: absent, `null`
+and empty `citations` are distinct; `caller: { type: 'direct' }` and an explicit
+`toolset_name: null` survive normalization and JSON checkpoints. It stores none
+of the text, tool arguments or signatures a second time. Capture and restoration
+share the same narrow metadata reader, and the existing full-content digest
+checks the result. Populated citations, server-tool callers, named toolsets and
+unknown fields are still unsupported: they remain witnessed content loss, not
+a reason to bypass active-turn safety. See the official
+[Messages block types](https://github.com/anthropics/anthropic-sdk-typescript/blob/main/src/resources/messages/messages.ts)
+and [tool caller distinction](https://platform.claude.com/docs/en/agents-and-tools/tool-use/programmatic-tool-calling).
+
 A witnessed unfinished tool turn keeps its signed content intact. A locally
 proven mismatch raises `UnsafeThinkingReplayError` before sending. A witnessed
 completed turn can lose invalid thinking: `onReplayPrepared` tells the run before

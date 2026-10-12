@@ -5,11 +5,16 @@
  */
 import type { LLMRequest } from '../adapters/types.js';
 
-/** The order of already-stored assistant content, without duplicating it. */
+/** The order of already-stored content and its supported inert wire metadata. */
 export type ReplayPart =
-  | { readonly type: 'text'; readonly length: number }
+  | { readonly type: 'text'; readonly length: number; readonly citations?: null | readonly [] }
   | { readonly type: 'thinking'; readonly index: number }
-  | { readonly type: 'tool'; readonly index: number };
+  | {
+      readonly type: 'tool';
+      readonly index: number;
+      readonly caller?: { readonly type: 'direct' };
+      readonly toolset_name?: null;
+    };
 
 /** Versioned, serializable evidence for an assistant message's wire replay. */
 export interface MessageReplay {
