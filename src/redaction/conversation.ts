@@ -131,6 +131,9 @@ const NAMES = {
     'policyHaltArgs',
     'claimFacts',
     'findingsLedger',
+    // The opt-in verifier's private evidence/selected executed scope. Resume
+    // checkpoints remain private; exported records must not disclose this bag.
+    'claimVerification',
     // The inputs layer's raw answers, held in working state until the calls run
     // (`core/agent/arguments/README.md`).
     'argumentAsk',

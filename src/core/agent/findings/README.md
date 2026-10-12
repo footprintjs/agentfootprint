@@ -28,7 +28,8 @@ word is `standing`. They are not the Context Integrity rail's findings —
 `core/agent/integrityFindings.ts` files `ContextError`s the **library**
 detected — and not `integrity/disposition`'s verdicts, which own the word
 'disposition'. Nothing in this folder is detected; everything is declared,
-and every row names the call or answer that declared it.
+and every model row names the call or answer that declared it. The unreleased
+deterministic claim-check protocol below keeps library observations separate.
 
 ## Why
 
@@ -1045,6 +1046,29 @@ reserved argument carries one more part, on the calls of a RULED tool:
 - **Checked and filed** by the inputs layer (`arguments/checks.ts` · `checkSource`, its rows
   `kind: 'argument'` on this ledger) — never by this folder: a declaration is a claim, and the
   record keeps the library's verdict beside it.
+
+## Unreleased exact-claim protocol — not mounted
+
+The pure verification modules prepare an explicit opt-in; no public option or
+model request uses them yet. `verificationCheck.ts` binds one literal claim to
+one authorized result occurrence and asks the shared comparison owner. A match
+means agreement with identified tool evidence under an authored rule, not proof
+of truth, arbitrary prose or an entire answer. The model's standing is unchanged.
+
+`verificationRow.ts` admits a detached, bounded observation without rerunning
+the comparison. `verificationState.ts` retains exact receipts and namespace-global
+reservation counters without eviction. `verificationConfig.ts` holds authored
+callbacks only in configuration and requires a separate grant for all original
+semantic metadata and selected executed scope; payload equality grants nothing.
+`verificationCheckpoint.ts` joins stored row identities to that carrier at both
+native checkpoint boundaries. Carrier-free observations are readable history,
+not resumable evidence. An unarmed continuation refuses instead of dropping the
+carrier; ordinary old checkpoints retain their existing shape and behavior.
+
+No extra ledger or event stream is introduced. `recordFindings` remains the one
+writer; its fold ignores these independent observations. Runtime dispatch/parser
+wiring, per-declaration bounds, delivered-answer binding and offline efficacy
+measurement remain pending before any opt-in use or release.
 
 ## Files
 

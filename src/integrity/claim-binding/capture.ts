@@ -3,7 +3,7 @@
  * The eventual runtime adapter reserves a namespace/run/ordinal before await,
  * captures at actual execute, then finalizes against the authorized served value.
  */
-import { encodeIdentityField } from '../../memory/identity/encode.js';
+import { decodePresentIdentityField, encodeIdentityField } from '../../memory/identity/encode.js';
 import { copyJson } from '../../lib/boundedJson.js';
 import { canonicalJson } from '../../lib/canonicalJson.js';
 import {
@@ -34,6 +34,23 @@ export function resultIdentityOf(identity: ResultIdentity): string {
   return `claim-result/${encodeIdentityField(identity.namespace)}/${encodeIdentityField(
     identity.runId,
   )}/${identity.ordinal}`;
+}
+
+/** Decode only canonical runtime result occurrences; no lookup or authority is inferred. */
+export function readResultIdentity(raw: unknown): ResultIdentity {
+  if (typeof raw !== 'string' || raw.length > BINDING_LIMITS.resultIdText)
+    throw new TypeError('Invalid saved result identity.');
+  const parts = raw.split('/');
+  if (parts.length !== 4 || parts[0] !== 'claim-result')
+    throw new TypeError('Invalid saved result identity.');
+  const identity = Object.freeze({
+    namespace: decodePresentIdentityField(parts[1]),
+    runId: decodePresentIdentityField(parts[2]),
+    ordinal: Number(parts[3]),
+  });
+  if (resultIdentityOf(identity) !== raw)
+    throw new TypeError('Noncanonical saved result identity.');
+  return identity;
 }
 
 /** Capture selected scope now; a later mutation of args cannot change it. */

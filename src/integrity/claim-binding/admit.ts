@@ -8,6 +8,26 @@ import { resultIdentityOf } from './capture.js';
 import { BINDING_REASONS } from './types.js';
 import type { ClaimBindingRule, EvidenceSnapshot, ResultEvidence } from './types.js';
 
+// Only this owner's detached, deeply frozen outputs carry this ephemeral proof.
+// A frozen input, JSON restore or proxy of an output is NOT an admitted identity.
+const admittedSnapshots = new WeakMap<
+  EvidenceSnapshot,
+  Readonly<{ bytes: number; emptyBytes: number }>
+>();
+const encoder = new TextEncoder();
+const jsonBytes = (value: unknown): number => encoder.encode(JSON.stringify(value)).byteLength;
+
+function rememberSnapshot(
+  snapshot: EvidenceSnapshot,
+  bytes = jsonBytes(snapshot),
+): EvidenceSnapshot {
+  admittedSnapshots.set(
+    snapshot,
+    Object.freeze({ bytes, emptyBytes: jsonBytes({ ...snapshot, results: [] }) }),
+  );
+  return snapshot;
+}
+
 export function bindingRuleOf(raw: unknown): ClaimBindingRule {
   const rule = ownData(raw, ['id', 'version', 'toolName', 'scopeDeclaration', 'fact', 'coverage']);
   const fact = ownData(rule.fact, ['entity', 'field']);
@@ -45,7 +65,8 @@ export function bindingRuleOf(raw: unknown): ClaimBindingRule {
   });
 }
 
-function validateCoverage(raw: unknown): void {
+/** Closed coverage admission shared by receipts and saved verification rows. */
+export function validateCoverage(raw: unknown): void {
   const coverage = ownData(raw, ['checked', 'notChecked', 'cannotCover']);
   for (const section of ['checked', 'notChecked', 'cannotCover'] as const) {
     const list = coverage[section];
@@ -158,6 +179,8 @@ function resultOf(raw: unknown): ResultEvidence {
 
 /** Validate a detached saved snapshot without evaluating or reconstructing evidence. */
 export function readEvidenceSnapshot(raw: unknown): EvidenceSnapshot {
+  if (raw !== null && typeof raw === 'object' && admittedSnapshots.has(raw as EvidenceSnapshot))
+    return raw as EvidenceSnapshot;
   const source = ownData(copyJson(raw, BINDING_LIMITS.snapshotBytes, true), [
     'version',
     'namespace',
@@ -176,5 +199,46 @@ export function readEvidenceSnapshot(raw: unknown): EvidenceSnapshot {
   )
     throw new Error('Invalid evidence snapshot.');
   for (const result of source.results) resultOf(result);
-  return source as unknown as EvidenceSnapshot;
+  return rememberSnapshot(Object.freeze(source) as unknown as EvidenceSnapshot);
+}
+
+/**
+ * Append a singleton admitted at the SAME snapshot root depth. Reuse only
+ * owner-proven immutable history; unknown inputs still pass the strict reader.
+ * The carrier owner separately checks reservation/lineage/ordinal coherence.
+ */
+export function appendEvidenceSnapshot(
+  snapshot: EvidenceSnapshot,
+  singleton: EvidenceSnapshot,
+): EvidenceSnapshot {
+  const previous = readEvidenceSnapshot(snapshot);
+  const addition = readEvidenceSnapshot(singleton);
+  if (
+    addition.results.length !== 1 ||
+    previous.namespace !== addition.namespace ||
+    previous.runIds.length !== addition.runIds.length ||
+    previous.runIds.some((runId, index) => runId !== addition.runIds[index])
+  )
+    throw new Error('Evidence append requires the same snapshot header and one receipt.');
+  if (previous.results.length >= BINDING_LIMITS.results)
+    throw new Error('Invalid evidence snapshot.');
+  const priorSize = admittedSnapshots.get(previous);
+  const additionSize = admittedSnapshots.get(addition);
+  if (priorSize === undefined || additionSize === undefined)
+    throw new Error('Missing internal evidence admission proof.');
+  // Exact UTF-8 JSON bytes, including escaping and the new separating comma.
+  // No old receipt is re-serialized, re-validated or deep-copied here.
+  const bytes =
+    priorSize.bytes +
+    additionSize.bytes -
+    additionSize.emptyBytes +
+    (previous.results.length ? 1 : 0);
+  if (bytes > BINDING_LIMITS.snapshotBytes) throw new Error('JSON byte limit.');
+  return rememberSnapshot(
+    Object.freeze({
+      ...previous,
+      results: Object.freeze([...previous.results, addition.results[0]]),
+    }),
+    bytes,
+  );
 }
