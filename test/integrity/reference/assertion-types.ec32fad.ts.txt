@@ -1,0 +1,18 @@
+/**
+ * Agent's assertion types and value conventions are shared with ContextFootprint.
+ * Collection, current/quoted stamping and diagnostic disposition remain here.
+ */
+import type { Assertion } from 'contextfootprint';
+
+export type { Assertion, AssertionStratum, SubjectRef } from 'contextfootprint';
+export { sameSubject, participates, comparableValueOf } from 'contextfootprint';
+
+/**
+ * Preserve Agent's recorded identity encoding across the extraction.
+ * This legacy delimiter format retains its existing collision behavior; new
+ * consumers use ContextFootprint's tuple key. Recording migration is separate.
+ */
+export function assertionKey(a: Assertion): string {
+  const epoch = a.epoch === undefined ? '' : String(a.epoch);
+  return `${a.subject.kind}\u0000${a.subject.id}\u0000${a.predicate}\u0000${epoch}`;
+}

@@ -40,6 +40,19 @@ others can. Unlike the other three it **never re-routes**: a disagreement betwee
 ledger is a fact about a finished run, and re-asking the model would invite it to change the claim
 rather than the run to change the facts. It files one finding and returns the answer untouched.
 
+**Comparison ownership.** `check.ts` selects the latest `(entity, field)` row, constructs the
+asserted pair and preserves the answer-specific messages, witness order and dispositions.
+`evaluate.ts` owns the pair's doubt and numeric-leniency decisions and delegates structural
+comparison to the existing ContextFootprint algebra. It does not select evidence, infer scope,
+judge coverage or write records. There is no second equality implementation.
+
+The internal evaluator reports a reason, not a support badge: evidence unavailable, claim
+nonparticipating, doubt against a value, both doubt, numeric leniency, conflict or no conflict.
+`no-conflict` alone proves no positive agreement. The existing answer adapter still maps both
+doubt and a nonparticipating claimed value to `checked-pass`; that diagnostic contract is
+preserved, not relabeled as verification. A future scoped check must establish its own eligibility
+before interpreting the pair result. This refactor adds no public opt-in or recorded row.
+
 **The fences.**
 
 | Situation                                                       | Verdict                                                                       |
@@ -79,5 +92,6 @@ agent.on('agentfootprint.integrity.context_error', (e) => {
 // (whats_here, call c1, iteration 1). The record supports the fact, not the claim.
 ```
 
-Healthy runs file `checked-pass` rows on the disposition ledger next door — the difference between
-"the checker ran and agreed" and "no checker was watching" is exactly what that ledger exists for.
+The disposition ledger next door distinguishes a configured check from an unwatched seam.
+Its legacy `checked-pass` includes the doubt and nonparticipation cases above, so it is not
+by itself a certificate that an answer field agrees with evidence in the intended scope.
