@@ -25,6 +25,12 @@ export interface LLMMessage {
   /** For `role: 'tool'` — the tool name this result corresponds to. */
   readonly toolName?: string;
   /**
+   * For a refused `role: 'tool'` result only: the same finite argument failure
+   * carried by its attempted call. Anthropic projects this pair as recovery
+   * text, never as a successful parse of substituted empty input.
+   */
+  readonly toolArgumentsFailure?: LLMResponse['toolCalls'][number]['argumentsFailure'];
+  /**
    * For `role: 'assistant'` only — the tool calls the LLM requested in this
    * turn. Required for providers (Anthropic, OpenAI) that need to round-trip
    * tool_use blocks across iterations: when the next `complete()` includes
@@ -42,6 +48,8 @@ export interface LLMMessage {
     readonly id: string;
     readonly name: string;
     readonly args: Readonly<Record<string, unknown>>;
+    /** Stream integrity evidence retained with the attempted call; never tool input. */
+    readonly argumentsFailure?: LLMResponse['toolCalls'][number]['argumentsFailure'];
     readonly providerMeta?: Readonly<Record<string, unknown>>;
   }[];
   /**
@@ -330,6 +338,15 @@ export interface LLMResponse {
     readonly id: string;
     readonly name: string;
     readonly args: Readonly<Record<string, unknown>>;
+    /**
+     * The provider observed malformed or unfinished streamed tool arguments.
+     * The call must not execute, even with schema validation disabled. `args`
+     * is only a placeholder on this branch, not evidence of valid empty input.
+     * Raw argument fragments are deliberately not retained here.
+     */
+    readonly argumentsFailure?: {
+      readonly reason: 'invalid-json' | 'invalid-argument-shape' | 'incomplete-stream';
+    };
     /**
      * 9.29.0 — what the PROVIDER needs back with this call, opaque to
      * everything in between.

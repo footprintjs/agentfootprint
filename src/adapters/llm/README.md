@@ -44,8 +44,13 @@ The Anthropic Messages body (`system` top-level, content blocks, `tool_use` /
 `tool_result`, thinking, cache markers) and its SSE event assembly have ONE owner:
 `anthropicMessagesWire.ts`. An adapter that puts that body on another transport
 adds only its framing (URL, headers, `model` field or path, SSE line format) and
-decides what a malformed streamed tool argument becomes — `browserAnthropic` keeps
-`{}`, `invokeModelGateway` refuses. Pinned byte for byte by
+decides whether a malformed streamed tool argument refuses the whole response:
+`invokeModelGateway` does. `anthropic` and `browserAnthropic` instead retain a
+finite `argumentsFailure` with a non-executable placeholder. The shared
+`anthropicToolArguments` owner checks completed raw argument fragments at their
+original block index, before SDK partial-JSON repairs can authorize execution.
+Failure history is an explicitly lossy text recovery projection, not an exact
+replay of empty input; active signed-thinking safety remains unchanged. Pinned by
 `test/adapters/unit/BrowserAnthropic.sharedWire.byte-identity.test.ts`.
 `anthropic()` (the SDK adapter) builds its whole body through the same
 `buildMessagesBody` — it once kept a private copy of the messages mapping, and a

@@ -79,8 +79,8 @@ const continuation = (message: LLMMessage): LLMRequest => ({
 });
 
 /** Real start/delta/stop assembly; metadata arrives on starts, not invented at finalization. */
-function streamBody(message: AnthropicMessage): string {
-  const events: Record<string, unknown>[] = [
+function streamEvents(message: AnthropicMessage): (Record<string, unknown> & { type: string })[] {
+  const events: (Record<string, unknown> & { type: string })[] = [
     { type: 'message_start', message: { ...message, content: [], stop_reason: null } },
   ];
   for (const [index, block] of message.content.entries()) {
@@ -111,7 +111,13 @@ function streamBody(message: AnthropicMessage): string {
     { type: 'message_delta', delta: { stop_reason: message.stop_reason }, usage: message.usage },
     { type: 'message_stop' },
   );
-  return events.map((event) => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`).join('');
+  return events;
+}
+
+function streamBody(message: AnthropicMessage): string {
+  return streamEvents(message)
+    .map((event) => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`)
+    .join('');
 }
 
 function harness(kind: string, mode: string, first = reply()) {
@@ -134,7 +140,7 @@ function harness(kind: string, mode: string, first = reply()) {
         const result = respond(body);
         return {
           async *[Symbol.asyncIterator]() {
-            yield { type: 'message_stop' };
+            yield* streamEvents(result);
           },
           async finalMessage() {
             return result;

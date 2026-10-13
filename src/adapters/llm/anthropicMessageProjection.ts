@@ -65,6 +65,13 @@ export function toAnthropicMessages(
       if (m.content) blocks.push({ type: 'text', text: m.content });
       if (m.toolCalls) {
         for (const tc of m.toolCalls) {
+          if (tc.argumentsFailure !== undefined) {
+            blocks.push({
+              type: 'text',
+              text: `Tool request '${tc.name}' (${tc.id}) had ${tc.argumentsFailure.reason} streamed arguments and was not executed. Its invalid input is not replayed; issue a new call with complete JSON arguments.`,
+            });
+            continue;
+          }
           blocks.push({ type: 'tool_use', id: tc.id, name: tc.name, input: { ...tc.args } });
         }
       }
@@ -86,6 +93,17 @@ export function toAnthropicMessages(
       continue;
     }
     if (m.role === 'tool') {
+      if (m.toolArgumentsFailure !== undefined) {
+        const last = result[result.length - 1];
+        if (last?.role === 'user' && Array.isArray(last.content)) {
+          indexMap?.push(result.length - 1);
+          last.content.push({ type: 'text', text: m.content });
+        } else {
+          indexMap?.push(result.length);
+          result.push({ role: 'user', content: [{ type: 'text', text: m.content }] });
+        }
+        continue;
+      }
       const block: AnthropicContentBlock = {
         type: 'tool_result',
         tool_use_id: m.toolCallId ?? '',
@@ -96,7 +114,11 @@ export function toAnthropicMessages(
         // Coalesced into the user turn already open — several request messages
         // share one body index.
         indexMap?.push(result.length - 1);
-        last.content.push(block);
+        // Anthropic requires real tool results before text in the coalesced
+        // user turn, including recovery text from an earlier refused sibling.
+        const firstText = last.content.findIndex((part) => part.type !== 'tool_result');
+        if (firstText < 0) last.content.push(block);
+        else last.content.splice(firstText, 0, block);
       } else {
         indexMap?.push(result.length);
         result.push({ role: 'user', content: [block] });

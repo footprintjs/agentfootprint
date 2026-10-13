@@ -11,6 +11,10 @@
  * `agentfootprint.validation.args_invalid`.
  *
  * Modes: 'enforce' (default) | 'warn' (event only, executes anyway) | 'off'.
+ * These modes govern schema checks, not transport integrity. Anthropic
+ * streamed calls carrying argumentsFailure use this same recorded retry
+ * result even in 'off': a repaired {} never authorizes execution. Ordinary
+ * valid {} and extra keys remain governed by the declared schema.
  *
  * Run:  npx tsx examples/features/06-tool-args-validation.ts
  */

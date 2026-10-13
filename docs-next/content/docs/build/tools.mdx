@@ -212,6 +212,25 @@ inputSchema: {
 and emit `agentfootprint.validation.args_invalid` with `enforced: false`), or
 `'off'` (skip validation).
 
+**Stream integrity is separate from schema validation.** With `anthropic()` or
+`browserAnthropic()`, malformed completed argument JSON, a non-object JSON value,
+or an unfinished tool block cannot execute—even in `'warn'` or `'off'` mode.
+The adapter retains a finite `argumentsFailure` on the attempted call; Agent
+emits the ordinary enforced argument-validation event and error result before
+middleware, argument fills, human questions, credentials, or tool execution.
+Raw invalid fragments are not included in this refusal. A complete `{}` remains
+valid; extra object keys remain governed by the tool schema.
+
+On the next Anthropic request, that failed call and its marked error result are
+recovery text, not a fabricated empty `tool_use`. This is explicitly lossy
+projection, not exact replay; existing active signed-thinking safeguards still
+apply. The model may retry within the normal iteration budget. A witnessed
+`max_tokens` completion can carry this recoverable refusal, but a tool stream
+ending without `message_stop` is a provider failure, not a completed call.
+Forced structured output follows the existing output-contract retry/exhaustion
+path rather than accepting repaired `{}`. Non-streaming behavior is unchanged,
+and `invokeModelGateway()` keeps its stronger whole-response refusal.
+
 Invalid regexes are ignored with a one-time warning. A pattern failure takes
 precedence over length failures. String-shape corrections include the
 description and at most 80 characters of the supplied value; structural

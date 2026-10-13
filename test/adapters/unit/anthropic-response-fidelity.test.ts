@@ -310,7 +310,7 @@ describe('Anthropic response fidelity', () => {
     ]);
   });
 
-  it.each(['message_start', 'message_delta', 'message_stop', 'content_block_stop'])(
+  it.each(['message_start', 'message_delta', 'content_block_stop'])(
     'does not certify an incomplete stream missing %s',
     async (missing) => {
       async function* incomplete(): AsyncIterable<AnthropicStreamEvent> {
@@ -325,10 +325,25 @@ describe('Anthropic response fidelity', () => {
       expect(response).toBeDefined();
       expect(response?.replay).toMatchObject({ lossy: true, contentDigest: '' });
       expect(restoreAnthropicReplay(stored(response!))).toBeUndefined();
-      if (missing === 'message_delta' || missing === 'message_stop')
-        expect(response?.replay?.stopReason).toBe('');
+      if (missing === 'message_delta') expect(response?.replay?.stopReason).toBe('');
     },
   );
+
+  it('rejects an incomplete tool stream missing message_stop without yielding a done response', async () => {
+    async function* incomplete(): AsyncIterable<AnthropicStreamEvent> {
+      for await (const event of events()) if (event.event !== 'message_stop') yield event;
+    }
+    let hasTerminalResponse = false;
+    const collect = async () => {
+      for await (const chunk of assembleAnthropicStream(incomplete(), {
+        wireManifest: { toolNames: [] },
+        onMalformedToolArgs: () => ({}),
+      }))
+        hasTerminalResponse ||= chunk.done || chunk.response !== undefined;
+    };
+    await expect(collect()).rejects.toThrow(/without message_stop/);
+    expect(hasTerminalResponse).toBe(false);
+  });
 
   it('keeps unindexed legacy stream text without inventing a replay proof', async () => {
     async function* unindexed(): AsyncIterable<AnthropicStreamEvent> {
@@ -493,7 +508,9 @@ describe('Anthropic response fidelity', () => {
           create: vi.fn(async () => reply()),
           stream: vi.fn(() => ({
             async *[Symbol.asyncIterator]() {
-              yield { type: 'message_stop' };
+              for await (const event of events()) {
+                yield { ...(event.data as Record<string, unknown>), type: event.event };
+              }
             },
             async finalMessage() {
               return reply();

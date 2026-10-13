@@ -119,6 +119,7 @@ function reconstructCurrentLayout(message: LLMMessage): AnthropicContentBlock[] 
     replay?.version !== 1 ||
     replay.protocol !== 'anthropic-messages' ||
     replay.lossy === true ||
+    message.toolCalls?.some((call) => call.argumentsFailure !== undefined) ||
     typeof replay.id !== 'string' ||
     replay.id.length === 0 ||
     !Array.isArray(replay.layout) ||

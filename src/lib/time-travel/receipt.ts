@@ -620,6 +620,7 @@ export function messageDigestInput(message: LLMMessage): string {
       call.name,
       digestJson(call.args),
       call.providerMeta === undefined ? '' : digestJson(call.providerMeta),
+      ...(call.argumentsFailure === undefined ? [] : [digestJson(call.argumentsFailure)]),
     ].join(CALL_FIELD_SEP),
   );
   return [
@@ -631,6 +632,9 @@ export function messageDigestInput(message: LLMMessage): string {
     message.thinkingBlocks === undefined || message.thinkingBlocks.length === 0
       ? ''
       : digestJson(message.thinkingBlocks),
+    ...(message.toolArgumentsFailure === undefined
+      ? []
+      : [digestJson(message.toolArgumentsFailure)]),
   ].join(FIELD_SEP);
 }
 

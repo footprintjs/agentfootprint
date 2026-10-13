@@ -68,6 +68,21 @@
  *  emits the event but executes anyway, 'off' skips validation entirely. */
 export type ToolArgValidationMode = 'enforce' | 'warn' | 'off';
 
+/** Finite, value-free transport failure through the existing argument refusal owner. */
+export function streamedToolArgIssues(
+  failure: NonNullable<
+    import('../../adapters/types.js').LLMResponse['toolCalls'][number]['argumentsFailure']
+  >,
+): readonly ToolArgIssue[] {
+  return [
+    {
+      path: '',
+      expected: 'a complete JSON object from the tool argument stream',
+      got: failure.reason,
+    },
+  ];
+}
+
 /** One schema violation. `got` is a TYPE NAME (optionally with a measured
  *  length), never a value. */
 export interface ToolArgIssue {

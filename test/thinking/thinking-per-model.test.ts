@@ -73,7 +73,32 @@ function sdk(replies: readonly unknown[] = [TEXT_REPLY], fail = false) {
       stream: (params: unknown) => {
         const reply = next(params);
         return {
-          async *[Symbol.asyncIterator]() {},
+          async *[Symbol.asyncIterator]() {
+            const message = reply as {
+              content: readonly {
+                type: string;
+                input?: Record<string, unknown>;
+              }[];
+            };
+            // Retain the streamless text-only mock; tool replies need witnesses.
+            if (!message.content.some((block) => block.type === 'tool_use')) return;
+            yield { type: 'message_start', message: { ...message, content: [] } };
+            for (const [index, block] of message.content.entries()) {
+              yield {
+                type: 'content_block_start',
+                index,
+                content_block: block.type === 'tool_use' ? { ...block, input: {} } : block,
+              };
+              if (block.type === 'tool_use')
+                yield {
+                  type: 'content_block_delta',
+                  index,
+                  delta: { type: 'input_json_delta', partial_json: JSON.stringify(block.input) },
+                };
+              yield { type: 'content_block_stop', index };
+            }
+            yield { type: 'message_stop' };
+          },
           finalMessage: async () => reply,
         };
       },
