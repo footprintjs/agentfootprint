@@ -23,6 +23,7 @@ export function withAnswerValidation(
   parser: OutputSchemaParser<unknown> | undefined,
   store: ArtifactStore | undefined,
   hasOutstandingConsent: () => boolean,
+  nativeOutput = false,
 ): (scope: TypedScope<AgentState>) => Promise<RouteBranch> {
   if (parser === undefined) {
     throw new Error('Agent.answerValidation requires .outputSchema(parser).');
@@ -30,10 +31,15 @@ export function withAnswerValidation(
   return async (scope) => {
     const branch = await decide(scope);
     if (branch !== 'final') return branch;
+    // `strategy: 'native'` only (read only then, so other agents keep their
+    // bytes): an answer whose attempt the Route decider failed on a provider
+    // stop ('refusal', 'max_tokens') may still parse — it is not schema-accepted.
+    const nativeStop = nativeOutput ? scope.outputContractUnmet?.stopReason : undefined;
     const priorRefusal =
       scope.messageDeniedReason !== undefined ||
       scope.unsupportedValues?.refused === true ||
-      hasOutstandingConsent();
+      hasOutstandingConsent() ||
+      nativeStop !== undefined;
     if (priorRefusal) {
       const report: AnswerValidationReport = {
         validatorId: config.id,
@@ -47,7 +53,7 @@ export function withAnswerValidation(
         checks: [],
         resolvedRefs: [],
         schemaAccepted: false,
-        reason: 'prior-refusal',
+        reason: nativeStop !== undefined ? `provider-stop:${nativeStop}` : 'prior-refusal',
       };
       scope.answerValidation = report;
       scope.answerValidationBlocked = true;

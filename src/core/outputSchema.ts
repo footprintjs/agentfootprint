@@ -97,8 +97,9 @@ export interface OutputSchemaParser<T> {
  *     object closed with `additionalProperties: false`, the constraints the
  *     API does not take moved into the description); a schema the API cannot
  *     express is refused at build. The parser still judges every answer
- *     against the full contract, and a `stop_reason` of `'refusal'` or
- *     `'max_tokens'` fails the attempt by name even when the text parses.
+ *     against the full contract, and a `stop_reason` of `'refusal'`,
+ *     `'max_tokens'` or `'model_context_window_exceeded'` fails the attempt by
+ *     name even when the text parses (a refusal is not re-asked).
  */
 export type OutputSchemaStrategy = 'instruct' | 'tool-forced' | 'native';
 

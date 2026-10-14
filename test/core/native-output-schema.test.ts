@@ -18,7 +18,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { Agent, defineTool, OutputSchemaError } from '../../src/index.js';
+import { Agent, defineTool, OutputSchemaError, receiptAt } from '../../src/index.js';
 import { mock } from '../../src/adapters/llm/MockProvider.js';
 import { anthropic } from '../../src/adapters/llm/AnthropicProvider.js';
 import { UnsupportedNativeOutputError } from '../../src/providers.js';
@@ -310,5 +310,108 @@ describe("a 'refusal' or 'max_tokens' stop", () => {
       .build();
     await expect(agent.runTyped({ message: 'q' })).resolves.toEqual({ status: 'ok' });
     expect('llmLatestStopReason' in state(agent)).toBe(false);
+  });
+});
+
+describe('review round 1', () => {
+  type Node = { stageReads?: Record<string, unknown>; next?: Node; children?: Node[] };
+  /** Every key any stage tracked a read of — an absent key read still lands here. */
+  const readKeysOf = (agent: Agent): Set<string> => {
+    const keys = new Set<string>();
+    const walk = (node: Node | undefined): void => {
+      if (!node) return;
+      for (const key of Object.keys(node.stageReads ?? {})) keys.add(key);
+      for (const child of node.children ?? []) walk(child);
+      walk(node.next);
+    };
+    walk(agent.getSnapshot()?.executionTree as Node);
+    return keys;
+  };
+
+  it('no agent without the native strategy reads the stop key (byte law); a native one does', async () => {
+    const instruct = Agent.create({ provider: mock({ reply: '{"status":"ok"}' }), model: 'mock' })
+      .outputSchema(Verdict)
+      .build();
+    const validated = Agent.create({ provider: mock({ reply: '{"status":"ok"}' }), model: 'mock' })
+      .outputSchema(Verdict)
+      .answerValidation({
+        id: 'v',
+        version: '1',
+        mode: 'enforce',
+        validate: () => ({ checks: [{ id: 'v', disposition: 'checked-pass' }] }),
+      })
+      .build();
+    const native = Agent.create({ provider: mock({ reply: '{"status":"ok"}' }), model: 'mock' })
+      .outputSchema(Verdict, { strategy: 'native', jsonSchema: SCHEMA })
+      .build();
+    for (const agent of [instruct, validated, native]) await agent.run({ message: 'q' });
+    expect(readKeysOf(instruct).has('llmLatestStopReason')).toBe(false);
+    expect(readKeysOf(validated).has('llmLatestStopReason')).toBe(false);
+    expect(readKeysOf(native).has('llmLatestStopReason')).toBe(true);
+  });
+
+  it('the receipt names the format the port carried — type and a run-salted schema hash', async () => {
+    const native = Agent.create({ provider: mock({ reply: '{"status":"ok"}' }), model: 'mock' })
+      .outputSchema(Verdict, { strategy: 'native', jsonSchema: SCHEMA })
+      .build();
+    const instruct = Agent.create({ provider: mock({ reply: '{"status":"ok"}' }), model: 'mock' })
+      .outputSchema(Verdict)
+      .build();
+    await native.run({ message: 'q' });
+    await instruct.run({ message: 'q' });
+    const params = receiptAt(native.getSnapshot()!, 1)?.params;
+    expect(params?.outputFormat?.type).toBe('json_schema');
+    expect(params?.outputFormat?.schemaHash).toMatch(/^[0-9a-f]+$/);
+    expect(receiptAt(instruct.getSnapshot()!, 1)?.params.outputFormat).toBeUndefined();
+  });
+
+  it('a refusal is not re-asked: it stands exhausted, the provider called once', async () => {
+    const { provider, requests } = recordingMock([
+      { content: 'I cannot help with that.', stopReason: 'refusal' },
+      { content: '{"status":"ok"}' },
+    ]);
+    const agent = Agent.create({ provider, model: 'mock' })
+      .outputSchema(Verdict, { strategy: 'native', jsonSchema: SCHEMA, retries: 2 })
+      .build();
+    await expect(agent.runTyped({ message: 'q' })).rejects.toBeInstanceOf(OutputSchemaError);
+    expect(requests).toHaveLength(1);
+    expect(attempts(agent)).toMatchObject([{ outcome: 'exhausted', stopReason: 'refusal' }]);
+  });
+
+  it('answer validation does not accept a refusal-stopped answer that parses', async () => {
+    let checked = 0;
+    const { provider } = recordingMock([{ content: '{"status":"ok"}', stopReason: 'refusal' }]);
+    const agent = Agent.create({ provider, model: 'mock' })
+      .outputSchema(Verdict, { strategy: 'native', jsonSchema: SCHEMA })
+      .answerValidation({
+        id: 'v',
+        version: '1',
+        mode: 'enforce',
+        validate() {
+          checked++;
+          return { checks: [{ id: 'v', disposition: 'checked-pass' }] };
+        },
+      })
+      .build();
+    await expect(agent.runTyped({ message: 'q' })).rejects.toBeDefined();
+    expect(checked).toBe(0);
+    expect(agent.answerValidation()).toMatchObject({
+      status: 'unverified',
+      schemaAccepted: false,
+      reason: 'provider-stop:refusal',
+    });
+  });
+
+  it('a context-window stop is a truncation too, and the grouped chart carries the stop to Route', async () => {
+    const { provider } = recordingMock([
+      { content: '{"status":"ok"}', stopReason: 'model_context_window_exceeded' },
+    ]);
+    const agent = Agent.create({ provider, model: 'mock', reactMode: 'dynamic-grouped' })
+      .outputSchema(Verdict, { strategy: 'native', jsonSchema: SCHEMA })
+      .build();
+    await expect(agent.runTyped({ message: 'q' })).rejects.toBeInstanceOf(OutputSchemaError);
+    expect(attempts(agent)).toMatchObject([
+      { outcome: 'exhausted', stopReason: 'model_context_window_exceeded' },
+    ]);
   });
 });

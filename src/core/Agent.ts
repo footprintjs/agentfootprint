@@ -1907,6 +1907,19 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           'Use agent.run() + agent.parseOutput(...) after resume.',
       );
     }
+    // `strategy: 'native'`: an answer whose last attempt failed on a refusal
+    // or truncation stop is refused here even when its text parses — the
+    // format did not hold for it (outputEnforcement.ts · nativeStopFailure).
+    // FIRST, before any delivery path. It takes the same path a parse failure
+    // takes, `.outputFallback()` included.
+    const stopped =
+      this.outputEnforcement?.outputFormat !== undefined ? this.outputContractUnmet() : undefined;
+    if (stopped?.stopReason !== undefined) {
+      return this.settleTypedFailure<T>(
+        out,
+        new OutputSchemaError(stopped.error, { rawOutput: out, stage: stopped.stage }),
+      );
+    }
     if (this.answerValidationConfig !== undefined) {
       // The validator judged the schema's JSON output. Do not run a transforming
       // or stateful parser again and hand back a value the validator never saw.
@@ -1917,17 +1930,6 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         });
       }
       return JSON.parse(out) as T;
-    }
-    // `strategy: 'native'`: an answer whose last attempt failed on a refusal
-    // or max_tokens stop is refused here even when its text parses — the
-    // format did not hold for it (outputEnforcement.ts · nativeStopFailure).
-    // It takes the same path a parse failure takes, `.outputFallback()` included.
-    const stopped = this.outputContractUnmet();
-    if (stopped?.stopReason !== undefined) {
-      return this.settleTypedFailure<T>(
-        out,
-        new OutputSchemaError(stopped.error, { rawOutput: out, stage: stopped.stage }),
-      );
     }
     return this.parseOutputAsync<T>(out);
   }
@@ -5418,6 +5420,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
             this.outputSchemaParser,
             artifactStore,
             () => this.consentOutstanding.size > 0,
+            this.outputEnforcement?.outputFormat !== undefined,
           );
     // `.limitsTravelWithTheAnswer()` on a TYPED answer — decided once, here.
     // An output schema makes the answer JSON, and the appended block would

@@ -85,15 +85,20 @@ export interface OutputAttempt {
   readonly brokenBy?: string;
   /**
    * Set when the attempt failed because the provider STOPPED, not because the
-   * text failed the parser: a `strategy: 'native'` answer that ended with
-   * `stop_reason` `'refusal'` or `'max_tokens'`, where the structured-output
-   * format does not hold. Such an answer fails even when it parses.
+   * text failed the parser: a `strategy: 'native'` answer that ended with a
+   * {@link NativeStopReason}, where the structured-output format does not
+   * hold. Such an answer fails even when it parses; a `'refusal'` is never
+   * re-asked (the row is `'exhausted'` at once).
    */
   readonly stopReason?: NativeStopReason;
 }
 
-/** The two stops under which a structured-output format does not hold. */
-export type NativeStopReason = 'refusal' | 'max_tokens';
+/**
+ * The stops under which a structured-output format does not hold: a refusal,
+ * and the two truncations — the answer's own cap (`'max_tokens'`) and the
+ * context window (`'model_context_window_exceeded'`).
+ */
+export type NativeStopReason = 'refusal' | 'max_tokens' | 'model_context_window_exceeded';
 
 /** The scope surface this file needs. Structurally a `TypedScope<AgentState>`. */
 export interface OutputLedgerScope {
@@ -145,7 +150,14 @@ export function nativeStopFailure(
   stopReason: string | undefined,
 ): OutputFailure | undefined {
   if (enforcement.outputFormat === undefined) return undefined;
-  if (stopReason !== 'refusal' && stopReason !== 'max_tokens') return undefined;
+  if (
+    stopReason !== 'refusal' &&
+    stopReason !== 'max_tokens' &&
+    stopReason !== 'model_context_window_exceeded'
+  )
+    return undefined;
+  // Quoted to the model on a re-ask (`buildCorrectiveTurn`), so it states the
+  // past fact only — no advice to the developer, no destination.
   return {
     stage: 'schema-validate',
     error:
@@ -153,9 +165,9 @@ export function nativeStopFailure(
         ? "The provider stopped with stop_reason 'refusal': the model declined, and the " +
           'structured-output format does not hold for a refusal, so this text is not accepted ' +
           'as the answer even where it parses.'
-        : "The provider stopped with stop_reason 'max_tokens': the answer was cut off before " +
-          'it was complete, so the structured-output format does not hold for it and it is not ' +
-          'accepted even where it parses. A larger maxTokens leaves room for the whole answer.',
+        : `The provider stopped with stop_reason '${stopReason}': the answer was cut off ` +
+          'before it was complete, so the structured-output format does not hold for it and it ' +
+          'is not accepted even where it parses.',
     stopReason,
   };
 }

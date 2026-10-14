@@ -53,7 +53,7 @@ describe('outputSchema options — the generic still flows (7.26)', () => {
       .outputSchema(parser, {
         strategy: 'native',
         retries: 1,
-        jsonSchema: { type: 'object' },
+        jsonSchema: { type: 'object', properties: { amount: { type: 'number' } } },
       })
       .build();
 

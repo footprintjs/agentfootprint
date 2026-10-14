@@ -1544,11 +1544,14 @@ function buildEnforcingDecider(
     }
 
     const attempt = ((scope.outputAttempts?.length as number | undefined) ?? 0) + 1;
-    // `'native'`: a refusal or max_tokens stop fails the attempt by name
-    // before the parser runs — the format did not hold for that text.
+    // `'native'`: a refusal or truncation stop fails the attempt by name
+    // before the parser runs — the format did not hold for that text. The
+    // stop key is READ only under `'native'`: a tracked get of an absent key
+    // is still a read on the record, and every other agent keeps its bytes.
     const failure =
-      nativeStopFailure(enforcement, scope.llmLatestStopReason) ??
-      judgeAnswer(scope.llmLatestContent as string, enforcement.parser);
+      (enforcement.outputFormat !== undefined
+        ? nativeStopFailure(enforcement, scope.llmLatestStopReason)
+        : undefined) ?? judgeAnswer(scope.llmLatestContent as string, enforcement.parser);
 
     if (failure === undefined) {
       recordOutputAttempt(scope, {
@@ -1622,7 +1625,14 @@ function buildEnforcingDecider(
         ? rewrittenBy
         : undefined;
 
-    if (attempt <= enforcement.retries && brokenByChain === undefined) {
+    // A REFUSAL is not re-asked: the model declined, and a correction that
+    // says the shape was wrong would be false and would bill a turn no shape
+    // can fix — the `brokenByChain` reasoning. It stands, exhausted, named.
+    if (
+      attempt <= enforcement.retries &&
+      brokenByChain === undefined &&
+      failure.stopReason !== 'refusal'
+    ) {
       // The retry stage writes the correction and files the row, because it
       // is the one that knows what it wrote. This is the hand-off.
       scope.outputSchemaFailure = { attempt, ...failure };
@@ -1711,7 +1721,7 @@ function recordContractUnmet(
       stage: 'json-parse' | 'schema-validate';
       error: string;
       path?: string;
-      stopReason?: 'refusal' | 'max_tokens';
+      stopReason?: import('../outputEnforcement.js').NativeStopReason;
     };
     readonly attempts: number;
     readonly retriesSpent: number;

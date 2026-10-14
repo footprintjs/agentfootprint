@@ -299,6 +299,14 @@ export interface ReceiptParams {
   readonly stop?: readonly string[];
   /** The forced tool choice, as the port carried it. */
   readonly toolChoice?: { readonly type: string; readonly name?: string };
+  /**
+   * The structured-output format the port carried (`LLMRequest.outputFormat`,
+   * `.outputSchema(s, { strategy: 'native' })`): its `type`, and the
+   * run-salted hash of its schema as sorted-key JSON — so a reader can tell
+   * the answer was decoded under a schema, and which one, without the bytes.
+   * Absent when the request carried none.
+   */
+  readonly outputFormat?: { readonly type: string; readonly schemaHash: string };
 }
 
 /** What a budget dropped before the request was composed — the window's
@@ -728,7 +736,7 @@ export function receiptPieces(
  * so `params` is `{}` rather than a row of `undefined`s claiming defaults the
  * library never sent.
  */
-function paramsOf(request: unknown): ReceiptParams {
+function paramsOf(request: unknown, runId: string): ReceiptParams {
   if (request === null || typeof request !== 'object') return {};
   const req = request as {
     temperature?: unknown;
@@ -736,6 +744,7 @@ function paramsOf(request: unknown): ReceiptParams {
     thinking?: { budget?: unknown };
     stop?: unknown;
     toolChoice?: { type?: unknown; name?: unknown };
+    outputFormat?: { type?: unknown; schema?: unknown };
   };
   const stop = Array.isArray(req.stop) ? req.stop.filter((s) => typeof s === 'string') : undefined;
   return {
@@ -747,6 +756,12 @@ function paramsOf(request: unknown): ReceiptParams {
       toolChoice: {
         type: req.toolChoice.type,
         ...(typeof req.toolChoice.name === 'string' && { name: req.toolChoice.name }),
+      },
+    }),
+    ...(typeof req.outputFormat?.type === 'string' && {
+      outputFormat: {
+        type: req.outputFormat.type,
+        schemaHash: receiptHash(runId, digestJson(req.outputFormat.schema)),
       },
     }),
   };
@@ -1024,7 +1039,7 @@ export function buildReceipt(input: BuildReceiptInput, digests?: ReceiptDigests)
     // strategy returned, and a strategy that rewrote maxTokens must not leave
     // five receipt fields describing a request nobody sent. See
     // {@link RECEIPT_BOUNDARY} — this is the boundary those fields are true at.
-    params: paramsOf(input.preparedRequest),
+    params: paramsOf(input.preparedRequest, input.runId),
     // Value-conditional, like a dial nobody set: a call nothing was dropped
     // before writes no key. Each hash is the turn's own digest, so it pairs
     // with `messages.entries[].hash` on the receipt that last served it.

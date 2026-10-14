@@ -31,11 +31,14 @@
  *     unsupported `format` or `pattern`, …). The model still reads them; the
  *     parser still enforces them.
  *   - REFUSED BY NAME (`NativeOutputSchemaError`): what the API cannot express
- *     — a recursive schema, an external `$ref`, an `enum` holding an object
- *     or array, `allOf` beside a `$ref`, a node with no type (an open
- *     `unknown` value), and an object with open keys (`additionalProperties`
- *     given a schema, or `patternProperties`: closing it would make every map
- *     empty while the parser accepted it).
+ *     — a recursive schema, an external or dangling `$ref` (checked on the
+ *     source AND on the wire copy, whose renamed paths a reference could
+ *     miss), an `enum` or `const` holding an object or array, `allOf` beside
+ *     a `$ref`, a node with no type (an open `unknown` value), and an object
+ *     with open keys (`additionalProperties` given a schema, `true` or `{}`
+ *     on an object naming no properties, a bare `{ type: 'object' }`, or
+ *     `patternProperties`: closing it would make every map empty while the
+ *     parser accepted it).
  *   - DROPPED: the meta keys `$schema`, `$id`, `$comment`, `$anchor`.
  *
  * THE RESERVED `_findings` KEY. With `.findings()` armed, the instruction tells
@@ -149,7 +152,12 @@ function resolvePointer(root: Json, ref: string): unknown {
   if (!ref.startsWith('#/')) return undefined;
   let node: unknown = root;
   for (const raw of ref.slice(2).split('/')) {
-    const key = decodeURIComponent(raw).replace(/~1/g, '/').replace(/~0/g, '~');
+    let key: string;
+    try {
+      key = decodeURIComponent(raw).replace(/~1/g, '/').replace(/~0/g, '~');
+    } catch {
+      return undefined; // a malformed escape points at nothing — refused by name below
+    }
     if (typeof node !== 'object' || node === null) return undefined;
     node = (node as Record<string, unknown>)[key];
   }
@@ -162,7 +170,7 @@ function resolvePointer(root: Json, ref: string): unknown {
  * (`open`); meeting one of them again is recursion. A reference fully
  * expanded once without meeting itself is `settled` and not walked again.
  */
-function assertReferencesExpressible(root: Json): void {
+function assertReferencesExpressible(root: Json, copy: 'source' | 'wire'): void {
   const settled = new Set<string>();
   const open = new Set<string>();
   const walk = (node: unknown, path: string): void => {
@@ -192,7 +200,11 @@ function assertReferencesExpressible(root: Json): void {
         if (!isObject(target)) {
           throw new NativeOutputSchemaError(
             path,
-            `'$ref': '${ref}' points at nothing in this schema.`,
+            copy === 'source'
+              ? `'$ref': '${ref}' points at nothing in this schema.`
+              : `'$ref': '${ref}' points into a part of the schema the wire copy does not ` +
+                `keep at that path (oneOf is sent as anyOf; keywords the API does not take ` +
+                `move into the description). Point it at a $defs entry.`,
           );
         }
         open.add(ref);
@@ -249,6 +261,12 @@ function transformNode(node: unknown, path: string): Json {
         'booleans or null.',
     );
   }
+  if (typeof node.const === 'object' && node.const !== null) {
+    throw new NativeOutputSchemaError(
+      path,
+      'its const is an object or an array; a const must be a string, number, boolean or null.',
+    );
+  }
   if (
     has('allOf') &&
     Array.isArray(node.allOf) &&
@@ -256,21 +274,36 @@ function transformNode(node: unknown, path: string): Json {
   ) {
     throw new NativeOutputSchemaError(path, 'allOf with a $ref inside it is not supported.');
   }
+  // Open keys: a map whose entries the API could never produce once closed.
+  // A value schema for the extra keys, a pattern for them, or an object that
+  // names no properties and does not say it is closed (`{ type: 'object' }`,
+  // `additionalProperties: true` or `{}` — zod's `z.record(…)` emits these).
+  const namesNoProperties = !isObject(node.properties) || Object.keys(node.properties).length === 0;
   if (
     has('patternProperties') ||
-    (isObject(node.additionalProperties) && Object.keys(node.additionalProperties).length > 0)
+    (isObject(node.additionalProperties) && Object.keys(node.additionalProperties).length > 0) ||
+    (isObjectNode(node) && namesNoProperties && node.additionalProperties !== false)
   ) {
     throw new NativeOutputSchemaError(
       path,
-      'it is an object with open keys (a record or map: additionalProperties given a schema, ' +
-        'or patternProperties). The API takes only additionalProperties: false, which would ' +
-        'make every such map empty while the parser accepted it. Name the keys as properties.',
+      'it is an object with open keys (a record or map: additionalProperties given a schema ' +
+        'or left open, or patternProperties). The API takes only additionalProperties: false, ' +
+        'which would make every such map empty while the parser accepted it. Name the keys as ' +
+        'properties.',
     );
   }
 
   // A reference stands alone, as the SDK's transform sends it: its target
-  // carries the shape, and siblings beside a `$ref` are not part of the subset.
-  if (has('$ref')) return { $ref: node.$ref };
+  // carries the shape, and siblings beside a `$ref` are not part of the subset
+  // — except the definitions it may point into (a root `$ref` beside its
+  // `definitions`, as zod-to-json-schema writes with a name).
+  if (has('$ref')) {
+    const ref: Record<string, unknown> = { $ref: node.$ref };
+    for (const key of ['$defs', 'definitions'] as const) {
+      if (isObject(node[key])) ref[key] = transformDefinitions(node[key] as Json, `${path}/${key}`);
+    }
+    return ref;
+  }
 
   const out: Record<string, unknown> = {};
   const moved: Record<string, unknown> = {};
@@ -306,14 +339,8 @@ function transformNode(node: unknown, path: string): Json {
         break;
       case '$defs':
       case 'definitions':
-        if (isObject(value)) {
-          out[key] = Object.fromEntries(
-            Object.entries(value).map(([name, child]) => [
-              name,
-              transformNode(child, `${path}/${key}/${name}`),
-            ]),
-          );
-        } else moved[key] = value;
+        if (isObject(value)) out[key] = transformDefinitions(value, `${path}/${key}`);
+        else moved[key] = value;
         break;
       case 'format':
         if (SUPPORTED_FORMATS.has(value)) out.format = value;
@@ -344,6 +371,12 @@ function transformNode(node: unknown, path: string): Json {
   }
   describe(out, moved);
   return out;
+}
+
+function transformDefinitions(defs: Json, path: string): Json {
+  return Object.fromEntries(
+    Object.entries(defs).map(([name, child]) => [name, transformNode(child, `${path}/${name}`)]),
+  );
 }
 
 function has$ref(node: Json): boolean {
@@ -382,6 +415,10 @@ export function nativeOutputFormat(
       };
     }
   }
-  assertReferencesExpressible(source);
-  return deepFreeze({ type: 'json_schema' as const, schema: transformNode(source, '#') });
+  assertReferencesExpressible(source, 'source');
+  const schema = transformNode(source, '#');
+  // And again on what is SENT: a reference into a path the copy renamed or
+  // moved would dangle on the wire, a 400 on every call.
+  assertReferencesExpressible(schema, 'wire');
+  return deepFreeze({ type: 'json_schema' as const, schema });
 }

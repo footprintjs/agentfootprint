@@ -4,7 +4,7 @@ title: LLMProvider
 
 # Interface: LLMProvider
 
-Defined in: [src/adapters/types.ts:613](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L613)
+Defined in: [src/adapters/types.ts:637](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L637)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/adapters/types.ts:613](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **carriesForcedToolChoice?**: `boolean`
 
-Defined in: [src/adapters/types.ts:692](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L692)
+Defined in: [src/adapters/types.ts:716](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L716)
 
 v7.26 — whether this adapter puts [LLMRequest.toolChoice](/docs/api/interfaces/LLMRequest#toolchoice) on its
 wire as a forced choice of one named tool.
@@ -42,7 +42,7 @@ by `supportsForcedToolChoice`; this existing wire flag remains boolean.
 
 > `readonly` `optional` **carriesInMessages?**: readonly [`WireRole`](/docs/api/type-aliases/WireRole)[]
 
-Defined in: [src/adapters/types.ts:668](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L668)
+Defined in: [src/adapters/types.ts:692](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L692)
 
 v7.21 — which roles this provider carries INSIDE the `messages` array.
 
@@ -70,11 +70,27 @@ because a role only one of them carries is a role the call might drop.
 
 ***
 
+### carriesNativeOutputSchema?
+
+> `readonly` `optional` **carriesNativeOutputSchema?**: `boolean`
+
+Defined in: [src/adapters/types.ts:736](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L736)
+
+Whether this adapter puts [LLMRequest.outputFormat](/docs/api/interfaces/LLMRequest#outputformat) on its wire —
+the provider's own structured output, `strategy: 'native'`. **Absence
+means NO**, for the reason `carriesForcedToolChoice` gives: a format that
+quietly vanishes costs the guarantee the strategy was chosen for. Declared
+by `anthropic()`, `browserAnthropic()` and the mock; read with
+`nativeOutputSchemaFor(provider, model)`. A WRAPPER must forward it;
+`withFallback` publishes the AND of its pair.
+
+***
+
 ### name
 
 > `readonly` **name**: `string`
 
-Defined in: [src/adapters/types.ts:614](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L614)
+Defined in: [src/adapters/types.ts:638](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L638)
 
 ***
 
@@ -82,7 +98,7 @@ Defined in: [src/adapters/types.ts:614](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **promptCaching?**: `PromptCaching`
 
-Defined in: [src/adapters/types.ts:621](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L621)
+Defined in: [src/adapters/types.ts:645](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L645)
 
 How this provider's wire caches a repeated prompt prefix (`PromptCaching`,
 from `agentfootprint/cache`). The agent picks its cache strategy from
@@ -95,7 +111,7 @@ A wrapper must forward it, like `carriesInMessages`.
 
 > `readonly` `optional` **supportsForcedToolChoice?**: (`model`) => `boolean`
 
-Defined in: [src/adapters/types.ts:702](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L702)
+Defined in: [src/adapters/types.ts:726](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L726)
 
 Optional model-specific restriction on the forced-choice wire capability.
 Read with `forcedToolChoiceFor(provider, model)`: the wire flag must be
@@ -117,11 +133,33 @@ forward it as a value. `withFallback` intersects both sides per model.
 
 ***
 
+### supportsNativeOutputSchema?
+
+> `readonly` `optional` **supportsNativeOutputSchema?**: (`model`) => `boolean`
+
+Defined in: [src/adapters/types.ts:742](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L742)
+
+Optional per-model restriction on [carriesNativeOutputSchema](/docs/api/interfaces/LLMProvider#carriesnativeoutputschema), the
+`supportsForcedToolChoice` twin: both must answer true. A plain function
+of the model id (no `this`); the adapter resolves its own shorthand.
+
+#### Parameters
+
+##### model
+
+`string`
+
+#### Returns
+
+`boolean`
+
+***
+
 ### thinkingHandler?
 
 > `readonly` `optional` **thinkingHandler?**: `ThinkingHandler`
 
-Defined in: [src/adapters/types.ts:627](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L627)
+Defined in: [src/adapters/types.ts:651](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L651)
 
 The handler that normalizes this wire's thinking (`rawThinking`). The
 agent uses it unless `.thinkingHandler()` overrides it; absent = no
@@ -133,7 +171,7 @@ thinking stage. Never chosen by `name` — a wrapper must forward it.
 
 > `readonly` `optional` **thinkingMode?**: (`model`) => `ThinkingMode`
 
-Defined in: [src/adapters/types.ts:642](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L642)
+Defined in: [src/adapters/types.ts:666](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L666)
 
 Which thinking request each model takes on this wire — `'budget'`,
 `'adaptive'` or `'none'` (`ThinkingMode`, from `agentfootprint/providers`),
@@ -164,7 +202,7 @@ adapter decides. A plain function of the model id — it must not use
 
 > **complete**(`req`, `hooks?`): `Promise`\<[`LLMResponse`](/docs/api/interfaces/LLMResponse)\>
 
-Defined in: [src/adapters/types.ts:710](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L710)
+Defined in: [src/adapters/types.ts:750](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L750)
 
 `hooks` (v7.8) is optional and additive — implementations may declare
 `complete(req)` with no second parameter and stay assignable. A LEAF
@@ -192,7 +230,7 @@ forward it, or everything it wraps goes silently dark — see the
 
 > `optional` **stream**(`req`, `hooks?`): `AsyncIterable`\<[`LLMChunk`](/docs/api/interfaces/LLMChunk)\>
 
-Defined in: [src/adapters/types.ts:711](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L711)
+Defined in: [src/adapters/types.ts:751](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L751)
 
 #### Parameters
 

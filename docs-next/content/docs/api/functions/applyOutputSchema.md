@@ -6,7 +6,7 @@ title: applyOutputSchema
 
 > **applyOutputSchema**\<`T`\>(`raw`, `parser`): `T`
 
-Defined in: [src/core/outputSchema.ts:198](https://github.com/footprintjs/agentfootprint/blob/main/src/core/outputSchema.ts#L198)
+Defined in: [src/core/outputSchema.ts:225](https://github.com/footprintjs/agentfootprint/blob/main/src/core/outputSchema.ts#L225)
 
 Parse + validate a raw string answer against a parser. Used by
 `agent.parseOutput()` / `agent.runTyped()`. Centralized here so

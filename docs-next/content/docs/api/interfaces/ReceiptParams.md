@@ -50,6 +50,28 @@ Defined in: [src/lib/time-travel/receipt.ts:296](https://github.com/footprintjs/
 
 ***
 
+### outputFormat?
+
+> `readonly` `optional` **outputFormat?**: `object`
+
+Defined in: [src/lib/time-travel/receipt.ts:309](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L309)
+
+The structured-output format the port carried (`LLMRequest.outputFormat`,
+`.outputSchema(s, { strategy: 'native' })`): its `type`, and the
+run-salted hash of its schema as sorted-key JSON — so a reader can tell
+the answer was decoded under a schema, and which one, without the bytes.
+Absent when the request carried none.
+
+#### schemaHash
+
+> `readonly` **schemaHash**: `string`
+
+#### type
+
+> `readonly` **type**: `string`
+
+***
+
 ### stop?
 
 > `readonly` `optional` **stop?**: readonly `string`[]

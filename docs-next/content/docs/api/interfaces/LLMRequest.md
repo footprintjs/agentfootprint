@@ -49,6 +49,33 @@ Defined in: [src/adapters/types.ts:259](https://github.com/footprintjs/agentfoot
 
 ***
 
+### outputFormat?
+
+> `readonly` `optional` **outputFormat?**: `object`
+
+Defined in: [src/adapters/types.ts:341](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L341)
+
+Constrain the model's TEXT answer to a JSON Schema with the provider's
+own structured output — `.outputSchema(parser, { strategy: 'native' })`.
+The Anthropic adapters write it as `output_config: { format }`
+(https://platform.claude.com/docs/en/build-with-claude/structured-outputs).
+
+Same rule as [toolChoice](/docs/api/interfaces/LLMRequest#toolchoice): when `nativeOutputSchemaFor(provider,
+model)` answers false the agent refuses at run start, naming both, and an
+adapter that cannot put it on its wire refuses with an
+`UnsupportedNativeOutputError` before anything is sent — never drops it.
+The schema is the wire copy `nativeOutputFormat` built; send it as-is.
+
+#### schema
+
+> `readonly` **schema**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
+
+#### type
+
+> `readonly` **type**: `"json_schema"`
+
+***
+
 ### signal?
 
 > `readonly` `optional` **signal?**: `AbortSignal`

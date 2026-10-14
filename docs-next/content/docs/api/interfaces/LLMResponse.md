@@ -4,7 +4,7 @@ title: LLMResponse
 
 # Interface: LLMResponse
 
-Defined in: [src/adapters/types.ts:331](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L331)
+Defined in: [src/adapters/types.ts:347](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L347)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/adapters/types.ts:331](https://github.com/footprintjs/agentfoot
 
 > `readonly` **content**: `string`
 
-Defined in: [src/adapters/types.ts:336](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L336)
+Defined in: [src/adapters/types.ts:352](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L352)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/adapters/types.ts:336](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **providerRef?**: `string`
 
-Defined in: [src/adapters/types.ts:397](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L397)
+Defined in: [src/adapters/types.ts:413](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L413)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [src/adapters/types.ts:397](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **rawThinking?**: `unknown`
 
-Defined in: [src/adapters/types.ts:412](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L412)
+Defined in: [src/adapters/types.ts:428](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L428)
 
 v2.14 — Provider-specific raw thinking data, opaque to the
 framework. Providers that support extended thinking populate this
@@ -49,7 +49,7 @@ etc.). The thinking subflow's stage early-returns in this case.
 
 > `readonly` `optional` **replay?**: `MessageReplay`
 
-Defined in: [src/adapters/types.ts:333](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L333)
+Defined in: [src/adapters/types.ts:349](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L349)
 
 Ordered replay evidence, retained with the assistant message.
 
@@ -59,7 +59,7 @@ Ordered replay evidence, retained with the assistant message.
 
 > `readonly` `optional` **replayOmissions?**: readonly `ThinkingReplayOmission`[]
 
-Defined in: [src/adapters/types.ts:335](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L335)
+Defined in: [src/adapters/types.ts:351](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L351)
 
 Leaf-side omissions, also available to standalone callers without hooks.
 
@@ -69,7 +69,7 @@ Leaf-side omissions, also available to standalone callers without hooks.
 
 > `readonly` **stopReason**: `string`
 
-Defined in: [src/adapters/types.ts:396](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L396)
+Defined in: [src/adapters/types.ts:412](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L412)
 
 ***
 
@@ -77,7 +77,7 @@ Defined in: [src/adapters/types.ts:396](https://github.com/footprintjs/agentfoot
 
 > `readonly` **toolCalls**: readonly `object`[]
 
-Defined in: [src/adapters/types.ts:337](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L337)
+Defined in: [src/adapters/types.ts:353](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L353)
 
 ***
 
@@ -85,7 +85,7 @@ Defined in: [src/adapters/types.ts:337](https://github.com/footprintjs/agentfoot
 
 > `readonly` **usage**: `object`
 
-Defined in: [src/adapters/types.ts:371](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L371)
+Defined in: [src/adapters/types.ts:387](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L387)
 
 #### cacheRead?
 
@@ -130,7 +130,7 @@ are billed as a separate line item).
 
 > `readonly` `optional` **wireManifest?**: [`WireToolManifest`](/docs/api/interfaces/WireToolManifest)
 
-Defined in: [src/adapters/types.ts:427](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L427)
+Defined in: [src/adapters/types.ts:443](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L443)
 
 9.60.0 — what this request ACTUALLY carried, read back from the
 serialized body after every transform (see adapters/llm/wireManifest.ts,

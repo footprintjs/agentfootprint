@@ -1653,7 +1653,7 @@ export interface AgentState {
     readonly error: string;
     readonly path?: string;
     /** `'native'` only: the stop that failed the attempt. */
-    readonly stopReason?: 'refusal' | 'max_tokens';
+    readonly stopReason?: import('./outputEnforcement.js').NativeStopReason;
   };
   /**
    * The answer this run hands back does NOT satisfy the output contract (8.18.0).
@@ -1687,9 +1687,9 @@ export interface AgentState {
      *  that HAD satisfied the schema — the name of that middleware. */
     readonly brokenBy?: string;
     /** `strategy: 'native'` only: the provider's stop that failed the last
-     *  attempt (`'refusal'` / `'max_tokens'`). `runTyped()` throws on such an
-     *  answer even where its text parses. */
-    readonly stopReason?: 'refusal' | 'max_tokens';
+     *  attempt (`'refusal'`, `'max_tokens'`, `'model_context_window_exceeded'`).
+     *  `runTyped()` throws on such an answer even where its text parses. */
+    readonly stopReason?: import('./outputEnforcement.js').NativeStopReason;
   };
 
   // ── The evidence gate (`.namesAndNumbersFromEvidence()`, 9.35.0) ────────
@@ -2366,7 +2366,7 @@ export interface AgentState {
   /**
    * The latest response's stop reason — written ONLY by an agent with
    * `.outputSchema(s, { strategy: 'native' })`, on every call, and read by
-   * the Route decider: a `'refusal'` or `'max_tokens'` stop does not hold the
+   * the Route decider: a refusal or truncation stop does not hold the
    * structured-output format, so that answer fails its attempt by name
    * (`outputEnforcement.ts · nativeStopFailure`). Absent on every other agent.
    */

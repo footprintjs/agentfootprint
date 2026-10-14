@@ -216,3 +216,89 @@ describe('nativeOutputFormat — the reserved _findings key', () => {
     ).toThrow(/_findings/);
   });
 });
+
+describe('nativeOutputFormat — review round 1', () => {
+  const refused = (input: Record<string, unknown>, findings = false): string => {
+    try {
+      nativeOutputFormat(input, { findings });
+    } catch (err) {
+      expect(err).toBeInstanceOf(NativeOutputSchemaError);
+      return (err as Error).message;
+    }
+    throw new Error('expected a refusal');
+  };
+
+  it('an open map is refused however it is spelled: {}, true, or a bare object', () => {
+    for (const map of [
+      { type: 'object', additionalProperties: {} },
+      { type: 'object', additionalProperties: true },
+      { type: 'object' },
+    ]) {
+      expect(refused({ type: 'object', properties: { m: map } })).toMatch(/open keys/);
+    }
+    // An explicitly closed empty object is fine, and a loose object with named keys is closed.
+    const out = nativeOutputFormat(
+      {
+        type: 'object',
+        properties: {
+          empty: { type: 'object', properties: {}, additionalProperties: false },
+          loose: {
+            type: 'object',
+            properties: { a: { type: 'string' } },
+            additionalProperties: {},
+          },
+        },
+      },
+      { findings: false },
+    ).schema as { properties: Record<string, { additionalProperties?: unknown }> };
+    expect(out.properties.loose.additionalProperties).toBe(false);
+  });
+
+  it('a root $ref keeps the definitions it points into', () => {
+    const out = nativeOutputFormat(
+      {
+        $ref: '#/definitions/Verdict',
+        definitions: {
+          Verdict: { type: 'object', properties: { s: { type: 'string', maxLength: 3 } } },
+        },
+      },
+      { findings: false },
+    ).schema as Record<string, unknown>;
+    expect(out.$ref).toBe('#/definitions/Verdict');
+    expect(out.definitions).toEqual({
+      Verdict: {
+        type: 'object',
+        properties: { s: { type: 'string', description: '{maxLength: 3}' } },
+        additionalProperties: false,
+      },
+    });
+  });
+
+  it('a reference the wire copy would leave dangling is refused', () => {
+    expect(
+      refused({
+        type: 'object',
+        properties: {
+          v: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+          w: { $ref: '#/properties/v/oneOf/0' },
+        },
+      }),
+    ).toMatch(/wire copy does not keep/);
+  });
+
+  it('a const object, a malformed reference, and findings over a $ref root are refused', () => {
+    expect(refused({ type: 'object', properties: { c: { const: { a: 1 } } } })).toMatch(/const/);
+    expect(refused({ type: 'object', properties: { r: { $ref: '#/%E0%A4%A' } } })).toMatch(
+      /points at nothing/,
+    );
+    expect(
+      refused(
+        {
+          $ref: '#/$defs/V',
+          $defs: { V: { type: 'object', properties: { a: { type: 'string' } } } },
+        },
+        true,
+      ),
+    ).toMatch(/_findings/);
+  });
+});
