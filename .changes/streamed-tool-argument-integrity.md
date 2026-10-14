@@ -1,6 +1,0 @@
----
-type: fixed
----
-**Malformed streamed Anthropic tool arguments no longer execute as repaired empty input.** The SDK and browser adapters check the original completed argument fragments through one reader. Invalid JSON, non-object JSON, or an unfinished tool block carries a finite refusal into Agent dispatch, before middleware, argument fills, human questions, credentials, or execution—even with schema validation disabled. The model receives the normal recorded argument error and can make a new call within the existing iteration limits. Valid empty arguments and schema-owned extra keys are unchanged; non-streaming calls and the gateway's stronger refusal remain unchanged.
-
-Additive public types: optional `LLMResponse.toolCalls[].argumentsFailure`, the matching `LLMMessage.toolCalls[]` field, and `LLMMessage.toolArgumentsFailure` retain this finite evidence; no new entry point. Recovery history is explicitly lossy: failed calls and their errors become protocol recovery text, not fabricated `tool_use` input. Known-invalid active signed-thinking replay still refuses. A tool stream without its terminal event remains a provider failure; a witnessed `max_tokens` completion may instead carry a recoverable argument refusal. Forced structured output cannot accept a repaired empty object and uses the existing bounded output-contract retry/refusal path.
