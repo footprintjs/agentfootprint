@@ -26,6 +26,7 @@ import {
   SCHEMA_TOOL_NAME,
   type ResolvedOutputEnforcement,
 } from './outputEnforcement.js';
+import { nativeOutputFormat } from './nativeOutputFormat.js';
 import { resolveEvidenceGate } from './evidence/gate.js';
 import { scopeToolsToActiveSkill } from './toolsFromActiveSkill.js';
 import type { NamesAndNumbersOptions, ResolvedEvidenceGate } from './evidence/types.js';
@@ -3297,6 +3298,31 @@ export class AgentBuilder {
       schemaTool = buildSchemaTool(jsonSchema, parser.description);
     }
 
+    // `'native'` — the provider's structured output. No tools refusal: the
+    // format constrains the TEXT answer only, so the model may still call a
+    // tool first and the agent stays an agent. The shape comes from the same
+    // place, and is refused the same way when there is none; what the API
+    // cannot express is refused by `nativeOutputFormat`, naming the node.
+    let outputFormat;
+    if (this.outputSchemaStrategy === 'native') {
+      const jsonSchema = resolveJsonSchema(parser, this.outputSchemaJson);
+      if (jsonSchema === undefined) {
+        throw new Error(
+          `AgentBuilder.outputSchema: strategy 'native' sends the schema to the provider as ` +
+            `JSON Schema (Anthropic's output_config.format). This parser does not offer one (no ` +
+            `\`toJsonSchema()\` method), and a \`parse()\` function is not something the library ` +
+            `gets to guess a shape from. Pass it: .outputSchema(parser, { strategy: 'native', ` +
+            `jsonSchema: { type: 'object', properties: { … } } }).`,
+        );
+      }
+      // The answer may carry `_findings` when the ledger is armed — from
+      // either door, the same test `Agent` arms it by.
+      const findingsArmed =
+        this.findingsValue !== undefined ||
+        (this.opts as { readonly findings?: unknown }).findings !== undefined;
+      outputFormat = nativeOutputFormat(jsonSchema, { findings: findingsArmed });
+    }
+
     // Mounted whenever a parser exists (8.18.0). Until then, `retries: 0` —
     // the DEFAULT, and what `.outputSchema(parser)` means on its own — returned
     // `undefined` here: no judging in the loop, no `outputAttempts` row, no
@@ -3311,6 +3337,7 @@ export class AgentBuilder {
       parser,
       retries: this.outputSchemaRetries,
       ...(schemaTool !== undefined && { schemaTool }),
+      ...(outputFormat !== undefined && { outputFormat }),
       hasFallback: this.outputFallbackCfg !== undefined,
       ...(this.answerValidationConfig?.mode === 'enforce' && { answerValidationEnforced: true }),
     };

@@ -1623,6 +1623,9 @@ export interface AgentState {
   /**
    * How the delivered answer's SHAPE was secured (9.100.0) — written by the
    * Route decider on the turn it picks `final`, absent before:
+   *   - `'native'` — the provider decoded the answer under the output
+   *     schema's structured-output format (`output_config.format`), and the
+   *     parser then judged it (`.outputSchema(s, { strategy: 'native' })`);
    *   - `'tool-forced'` — the provider was forced BY NAME to answer through
    *     the output schema's synthetic tool, so the shape held on the wire
    *     (`.outputSchema(s, { strategy: 'tool-forced' })`);
@@ -1630,10 +1633,9 @@ export interface AgentState {
    *     parsed it afterwards (`'instruct'`, the default);
    *   - `'none'` — no output schema: free text, no shape claimed.
    * A guarantee is a fact about how the answer was obtained, distinct from
-   * `answerValidation` (host checks over its content). A provider that
-   * constrains its own decoding would add a stronger word when one ships.
+   * `answerValidation` (host checks over its content).
    */
-  answerGuarantee?: 'tool-forced' | 'checked' | 'none';
+  answerGuarantee?: 'native' | 'tool-forced' | 'checked' | 'none';
   /** Host-authored checks over the exact terminal answer; absent when disabled. */
   answerValidation?: import('../../answer-validation/index.js').AnswerValidationReport;
   /** Refusal carrier: prevents final capture, history, memory and token delivery. */
@@ -1650,6 +1652,8 @@ export interface AgentState {
     readonly stage: 'json-parse' | 'schema-validate';
     readonly error: string;
     readonly path?: string;
+    /** `'native'` only: the stop that failed the attempt. */
+    readonly stopReason?: 'refusal' | 'max_tokens';
   };
   /**
    * The answer this run hands back does NOT satisfy the output contract (8.18.0).
@@ -1682,6 +1686,10 @@ export interface AgentState {
     /** Set when an `act({ output })` middleware's own rewrite broke an answer
      *  that HAD satisfied the schema — the name of that middleware. */
     readonly brokenBy?: string;
+    /** `strategy: 'native'` only: the provider's stop that failed the last
+     *  attempt (`'refusal'` / `'max_tokens'`). `runTyped()` throws on such an
+     *  answer even where its text parses. */
+    readonly stopReason?: 'refusal' | 'max_tokens';
   };
 
   // ── The evidence gate (`.namesAndNumbersFromEvidence()`, 9.35.0) ────────
@@ -2355,6 +2363,14 @@ export interface AgentState {
   // One-element array: grouped output mappers replace top-level arrays but
   // merge object members. Replay evidence must cross as one atomic value.
   llmLatestReplay?: readonly [NonNullable<LLMMessage['replay']>];
+  /**
+   * The latest response's stop reason — written ONLY by an agent with
+   * `.outputSchema(s, { strategy: 'native' })`, on every call, and read by
+   * the Route decider: a `'refusal'` or `'max_tokens'` stop does not hold the
+   * structured-output format, so that answer fails its attempt by name
+   * (`outputEnforcement.ts · nativeStopFailure`). Absent on every other agent.
+   */
+  llmLatestStopReason?: string;
 
   // ── Reliability fail-fast state (v2.11.5) ──────────────────
   /** Set when the rules-based reliability loop takes the fail-fast path.

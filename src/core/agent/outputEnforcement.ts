@@ -34,7 +34,7 @@
  * Identical reasoning, identical shape, to the compaction frame.
  */
 
-import type { LLMMessage, LLMResponse, LLMToolSchema } from '../../adapters/types.js';
+import type { LLMMessage, LLMRequest, LLMResponse, LLMToolSchema } from '../../adapters/types.js';
 import { fnv1a } from '../slots/helpers.js';
 import { applyOutputSchema, type OutputSchemaParser } from '../outputSchema.js';
 import { SCHEMA_CHECK_FRAME_PREFIX } from '../../lib/saidByPerson.js';
@@ -83,7 +83,17 @@ export interface OutputAttempt {
    * converge.
    */
   readonly brokenBy?: string;
+  /**
+   * Set when the attempt failed because the provider STOPPED, not because the
+   * text failed the parser: a `strategy: 'native'` answer that ended with
+   * `stop_reason` `'refusal'` or `'max_tokens'`, where the structured-output
+   * format does not hold. Such an answer fails even when it parses.
+   */
+  readonly stopReason?: NativeStopReason;
 }
+
+/** The two stops under which a structured-output format does not hold. */
+export type NativeStopReason = 'refusal' | 'max_tokens';
 
 /** The scope surface this file needs. Structurally a `TypedScope<AgentState>`. */
 export interface OutputLedgerScope {
@@ -114,6 +124,40 @@ export interface OutputFailure {
    *  friends attach the real error there); fall back to the wrapper's. */
   readonly error: string;
   readonly path?: string;
+  /** The provider's stop that failed the attempt — see `OutputAttempt.stopReason`. */
+  readonly stopReason?: NativeStopReason;
+}
+
+/**
+ * Fail a `strategy: 'native'` answer by its stop reason, before the parser.
+ *
+ * Anthropic's structured-outputs page: on `stop_reason: "refusal"` "the output
+ * may not match your schema because the refusal message takes precedence",
+ * and on `"max_tokens"` "the output may be incomplete and not match your
+ * schema". So the format was not in force for this text, and an answer that
+ * happens to parse is still not one the format produced — delivering it as
+ * constrained would be a silent pass. Returns `undefined` under any other
+ * strategy or stop. The words are the library's own, naming the stop; the
+ * failure then takes the ordinary path (retry, or exhausted and unmet).
+ */
+export function nativeStopFailure(
+  enforcement: Pick<ResolvedOutputEnforcement, 'outputFormat'>,
+  stopReason: string | undefined,
+): OutputFailure | undefined {
+  if (enforcement.outputFormat === undefined) return undefined;
+  if (stopReason !== 'refusal' && stopReason !== 'max_tokens') return undefined;
+  return {
+    stage: 'schema-validate',
+    error:
+      stopReason === 'refusal'
+        ? "The provider stopped with stop_reason 'refusal': the model declined, and the " +
+          'structured-output format does not hold for a refusal, so this text is not accepted ' +
+          'as the answer even where it parses.'
+        : "The provider stopped with stop_reason 'max_tokens': the answer was cut off before " +
+          'it was complete, so the structured-output format does not hold for it and it is not ' +
+          'accepted even where it parses. A larger maxTokens leaves room for the whole answer.',
+    stopReason,
+  };
 }
 
 /**
@@ -289,6 +333,9 @@ export interface ResolvedOutputEnforcement {
   readonly retries: number;
   /** The synthetic tool, pre-built. Present only under `'tool-forced'`. */
   readonly schemaTool?: LLMToolSchema;
+  /** The structured-output format, pre-built by `nativeOutputFormat`.
+   *  Present only under `'native'`. */
+  readonly outputFormat?: NonNullable<LLMRequest['outputFormat']>;
   /** True when `.outputFallback()` is configured. The decider carries it so
    *  the unmet-contract signal can say that a tier exists which `run()` does
    *  not reach — the fallback itself lives at the caller's boundary. */

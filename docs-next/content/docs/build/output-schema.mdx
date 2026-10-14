@@ -253,6 +253,31 @@ const agent = Agent.create({ provider: anthropic(), model: 'claude-sonnet-4-5' }
 
 `jsonSchema` and the parser **can disagree**, and the system stays honest when they do: the forced shape satisfies the wire, the validator rejects the result, and the retry loop corrects it with the validator's own words. The schema constrains generation; the parser remains the judge.
 
+## The provider's own structured output: `strategy: 'native'`
+
+`'native'` sends the schema as the provider's structured-output format — on Anthropic, `output_config.format` ([structured outputs](https://platform.claude.com/docs/en/build-with-claude/structured-outputs)) — so the model's **text** answer is decoded under it. Unlike `'tool-forced'`, the agent keeps its tools: the model may call a tool first, and answers in JSON when it answers.
+
+```ts
+const agent = Agent.create({ provider: anthropic(), model: 'claude-haiku-4-5' })
+  .tool(lookupOrder)
+  .outputSchema(Refund, {
+    strategy: 'native',
+    jsonSchema: {
+      type: 'object',
+      properties: { amount: { type: 'number', minimum: 0 }, reason: { type: 'string' } },
+      required: ['amount', 'reason'],
+    },
+    retries: 1,
+  })
+  .build();
+```
+
+- **Which providers and models.** `anthropic()` and `browserAnthropic()` declare `LLMProvider.carriesNativeOutputSchema`, per model: Claude Haiku 4.5, Sonnet 4.5, Opus 4.5 and every later model take it; Opus 4.1 and earlier do not. An id the model table does not know is read as the newest generation and allowed (the thinking table's rule); the API's own error names `output_config` if it is wrong. The Bedrock and gateway adapters do not declare it yet. Anything that does not is **refused by name at run start** — never a quiet `'instruct'`: a provider without the declaration with an error naming it, a model that does not take the format with `UnsupportedNativeOutputError` (from `agentfootprint/providers`, carrying `provider` and `model`). Ask ahead of time with `nativeOutputSchemaFor(provider, model)`.
+- **The schema sent is a wire copy.** The API takes a subset of JSON Schema, so the copy closes every object (`additionalProperties: false`) and moves what it cannot take — `minimum`, `maxLength`, `minItems` above 1, a lookaround `pattern`, … — into the description. Your parser still judges the full contract, so nothing is weakened. A schema the API cannot express at all (a recursive one, an external `$ref`, an object inside an `enum`, an untyped value, a record with open keys) is refused at build, naming the node.
+- **A stop is not an answer.** On a `stop_reason` of `'refusal'` or `'max_tokens'` the format does not hold, so the attempt fails by name even when the text parses: the `outputAttempts` row and `agent.outputContractUnmet()` carry `stopReason`, `retries` re-asks, and `runTyped()` throws.
+- **`.findings()` still works.** With the ledger armed, the format gains the optional top-level `_findings` the instruction offers, so answer standings are not silently refused by `additionalProperties: false`.
+- **Costs, from Anthropic's page.** A short system prompt is added for you, a changed schema invalidates the prompt cache, and the first use of a schema compiles a grammar (cached for 24 hours). `answerGuarantee` reads `'native'`.
+
 ### What you can import
 
 Five names come off the main barrel so you never have to match on prose to find what this feature put into a conversation:
@@ -260,7 +285,7 @@ Five names come off the main barrel so you never have to match on prose to find 
 | name | what it is |
 | --- | --- |
 | `OutputAttempt` | the row type of `snapshot.sharedState.outputAttempts` |
-| `OutputSchemaStrategy` | the strategy union — `'instruct'` or `'tool-forced'` |
+| `OutputSchemaStrategy` | the strategy union — `'instruct'`, `'tool-forced'` or `'native'` |
 | `SCHEMA_CHECK_FRAME_PREFIX` | the opening of the authored correction frame |
 | `isSchemaCheckMessage` | true when a message is a correction a retry wrote |
 | `SCHEMA_TOOL_NAME` | the synthetic tool's name, `'respond_with_schema'` |

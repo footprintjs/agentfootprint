@@ -30,7 +30,10 @@ import type {
 import { asContextWindowExceeded } from './contextWindow.js';
 import { ANTHROPIC_PROMPT_CACHING } from './anthropicCacheWire.js';
 import { thinkingModeWith } from './anthropicThinkingWire.js';
-import { anthropicTakesForcedToolChoice } from './anthropicModels.js';
+import {
+  anthropicTakesForcedToolChoice,
+  anthropicTakesNativeOutputSchema,
+} from './anthropicModels.js';
 import { prepareAnthropicReplay, thinkingReplayBinding } from './anthropicThinkingReplay.js';
 import { anthropicThinkingHandler } from '../../thinking/AnthropicThinkingHandler.js';
 import type { ThinkingMode } from '../../thinking/types.js';
@@ -132,6 +135,11 @@ export function browserAnthropic(options: BrowserAnthropicProviderOptions): LLMP
     carriesForcedToolChoice: true,
     supportsForcedToolChoice: (model) =>
       anthropicTakesForcedToolChoice(modelOf(model, defaultModel)),
+    // `output_config.format` — the `'native'` output strategy — per model, from
+    // the same table (anthropicModels.ts) the body is built with.
+    carriesNativeOutputSchema: true,
+    supportsNativeOutputSchema: (model) =>
+      anthropicTakesNativeOutputSchema(modelOf(model, defaultModel)),
     // The same body `anthropic()` builds — `buildMessagesBody` applies the
     // markers — so the same declaration (see anthropicCacheWire.ts).
     promptCaching: ANTHROPIC_PROMPT_CACHING,
@@ -173,7 +181,7 @@ export function browserAnthropic(options: BrowserAnthropicProviderOptions): LLMP
       // sent — after every transform (wireManifest.ts).
       return {
         ...fromAnthropicResponse(json, json.id ? bindingFactory(json.id) : undefined),
-        wireManifest: toolManifestOf(body.tools),
+        wireManifest: toolManifestOf(body.tools, body.output_config),
         ...(preparation.omissions.length > 0 && { replayOmissions: preparation.omissions }),
       };
     },
@@ -215,7 +223,7 @@ export function browserAnthropic(options: BrowserAnthropicProviderOptions): LLMP
       yield* assembleAnthropicStream(parseSSE(response.body), {
         bindingFactory,
         replayOmissions: preparation.omissions,
-        wireManifest: toolManifestOf(body.tools),
+        wireManifest: toolManifestOf(body.tools, body.output_config),
         onMalformedToolArgs: () => ({}),
       });
     },
@@ -229,6 +237,9 @@ export class BrowserAnthropicProvider implements LLMProvider {
   readonly carriesForcedToolChoice = true;
   /** The inner declaration resolves this adapter's shorthand before looking up the model. */
   readonly supportsForcedToolChoice: (model: string) => boolean;
+  readonly carriesNativeOutputSchema = true;
+  /** The inner declaration resolves this adapter's shorthand before looking up the model. */
+  readonly supportsNativeOutputSchema: (model: string) => boolean;
   readonly promptCaching = ANTHROPIC_PROMPT_CACHING;
   readonly thinkingHandler = anthropicThinkingHandler;
   /** The inner provider's own function — a closure, safe to forward unbound. */
@@ -239,6 +250,7 @@ export class BrowserAnthropicProvider implements LLMProvider {
     this.inner = browserAnthropic(options);
     this.thinkingMode = this.inner.thinkingMode!;
     this.supportsForcedToolChoice = this.inner.supportsForcedToolChoice!;
+    this.supportsNativeOutputSchema = this.inner.supportsNativeOutputSchema!;
   }
 
   // `hooks` is FORWARDED, not dropped — see LLMCallHooks in adapters/types.ts.
@@ -276,6 +288,7 @@ function buildBody(
       provider: 'browser-anthropic',
       maxTokensDefault: defaultMaxTokens,
       ...(parallelToolCalls !== undefined && { parallelToolCalls }),
+      nativeOutputSchema: anthropicTakesNativeOutputSchema,
     }),
   };
 }

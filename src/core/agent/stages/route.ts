@@ -35,6 +35,7 @@ import type { FindingsLedger } from '../findings/types.js';
 import { HIDDEN_VALUE, TIME_WINDOW_SOURCE } from '../arguments/rows.js';
 import {
   judgeAnswer,
+  nativeStopFailure,
   recordOutputAttempt,
   type ResolvedOutputEnforcement,
 } from '../outputEnforcement.js';
@@ -511,6 +512,8 @@ function recordAnswerGuarantee(
   scope.answerGuarantee =
     enforcement === undefined
       ? 'none'
+      : enforcement.outputFormat !== undefined
+      ? 'native'
       : enforcement.schemaTool !== undefined
       ? 'tool-forced'
       : 'checked';
@@ -1541,7 +1544,11 @@ function buildEnforcingDecider(
     }
 
     const attempt = ((scope.outputAttempts?.length as number | undefined) ?? 0) + 1;
-    const failure = judgeAnswer(scope.llmLatestContent as string, enforcement.parser);
+    // `'native'`: a refusal or max_tokens stop fails the attempt by name
+    // before the parser runs — the format did not hold for that text.
+    const failure =
+      nativeStopFailure(enforcement, scope.llmLatestStopReason) ??
+      judgeAnswer(scope.llmLatestContent as string, enforcement.parser);
 
     if (failure === undefined) {
       recordOutputAttempt(scope, {
@@ -1609,7 +1616,9 @@ function buildEnforcingDecider(
         ? (await import('../findings/peel.js')).peelAnswerFindings(preChainAnswer).content
         : preChainAnswer;
     const brokenByChain =
-      rewrittenBy !== undefined && judgeAnswer(judgedPreChain, enforcement.parser) === undefined
+      rewrittenBy !== undefined &&
+      failure.stopReason === undefined &&
+      judgeAnswer(judgedPreChain, enforcement.parser) === undefined
         ? rewrittenBy
         : undefined;
 
@@ -1636,6 +1645,7 @@ function buildEnforcingDecider(
       error: failure.error,
       ...(failure.path !== undefined && { path: failure.path }),
       ...(brokenByChain !== undefined && { brokenBy: brokenByChain }),
+      ...(failure.stopReason !== undefined && { stopReason: failure.stopReason }),
     });
     recordContractUnmet(scope, {
       failure,
@@ -1697,7 +1707,12 @@ function buildEnforcingDecider(
 function recordContractUnmet(
   scope: TypedScope<AgentState>,
   facts: {
-    readonly failure: { stage: 'json-parse' | 'schema-validate'; error: string; path?: string };
+    readonly failure: {
+      stage: 'json-parse' | 'schema-validate';
+      error: string;
+      path?: string;
+      stopReason?: 'refusal' | 'max_tokens';
+    };
     readonly attempts: number;
     readonly retriesSpent: number;
     readonly fallbackConfigured: boolean;
@@ -1714,6 +1729,7 @@ function recordContractUnmet(
     retriesSpent,
     fallbackConfigured,
     ...(brokenBy !== undefined && { brokenBy }),
+    ...(failure.stopReason !== undefined && { stopReason: failure.stopReason }),
   };
 
   typedEmit(scope, 'agentfootprint.agent.output_contract_unmet', {

@@ -7,7 +7,9 @@
  *   - `thinking` — which thinking request the model takes (`'adaptive'`,
  *     `'budget'` or `'none'`; translated by `anthropicThinkingWire.ts`);
  *   - `forcedToolChoice` — whether it takes `tool_choice: { type: 'tool' }`
- *     (the `'tool-forced'` output strategy and the constrained pick send one).
+ *     (the `'tool-forced'` output strategy and the constrained pick send one);
+ *   - `nativeOutputSchema` — whether it takes `output_config.format` (the
+ *     `'native'` output strategy sends one).
  *
  * A model is added here, and nowhere else.
  *
@@ -21,12 +23,18 @@
  * - Prefix binding is documented for Fable 5.1, Opus 5.5, Sonnet 5.5 and
  *   Haiku 5.5, not inferred for other families:
  *   https://platform.claude.com/docs/en/build-with-claude/preserved-thinking.
+ * - Structured outputs (`output_config.format`) — fetched 2026-10-14 — list
+ *   Fable 5.1, Mythos 5.1, Fable 5, Mythos 5, Mythos Preview, Opus 5.5, Opus 5,
+ *   Opus 4.8, 4.7, 4.6, Sonnet 5.5, Sonnet 5, Sonnet 4.6, Sonnet 4.5, Opus 4.5,
+ *   Haiku 5.5 and Haiku 4.5; the families before them are not listed:
+ *   https://platform.claude.com/docs/en/build-with-claude/structured-outputs.
  *
  * @example
  *   anthropicModelFacts('claude-opus-5-5');
- *   // { thinking: 'adaptive', forcedToolChoice: false, thinkingPrefixBinding: true }
+ *   // { thinking: 'adaptive', forcedToolChoice: false, thinkingPrefixBinding: true,
+ *   //   nativeOutputSchema: true }
  *   anthropicModelFacts('us.anthropic.claude-haiku-4-5-20251001-v1:0');
- *   // { thinking: 'budget', forcedToolChoice: true }
+ *   // { thinking: 'budget', forcedToolChoice: true, nativeOutputSchema: true }
  *   anthropicModelFacts('claude-opus-6'); // undefined — not in the table
  */
 
@@ -40,18 +48,28 @@ export interface AnthropicModelFacts {
   readonly forcedToolChoice: boolean;
   /** This family documents preserved-thinking prefix checking. */
   readonly thinkingPrefixBinding?: true;
+  /**
+   * Whether it takes a structured-output format (`output_config.format`, the
+   * `'native'` output strategy) — the models the structured-outputs page lists.
+   */
+  readonly nativeOutputSchema: boolean;
 }
 
 const row = (
   thinking: ThinkingMode,
   forcedToolChoice = true,
   thinkingPrefixBinding = false,
+  nativeOutputSchema = true,
 ): AnthropicModelFacts =>
   Object.freeze({
     thinking,
     forcedToolChoice,
     ...(thinkingPrefixBinding && { thinkingPrefixBinding: true as const }),
+    nativeOutputSchema,
   });
+
+/** A family the structured-outputs page does not list: no native format. */
+const legacy = (thinking: ThinkingMode): AnthropicModelFacts => row(thinking, true, false, false);
 
 /**
  * The facts per Claude model family, keyed by the family id (the model id
@@ -85,18 +103,18 @@ export const ANTHROPIC_MODELS: Readonly<Record<string, AnthropicModelFacts>> = O
   'claude-opus-4-5': row('budget'),
   'claude-sonnet-4-5': row('budget'),
   'claude-haiku-4-5': row('budget'),
-  'claude-opus-4-1': row('budget'),
-  'claude-opus-4': row('budget'),
-  'claude-sonnet-4': row('budget'),
-  'claude-3-7-sonnet': row('budget'),
+  'claude-opus-4-1': legacy('budget'),
+  'claude-opus-4': legacy('budget'),
+  'claude-sonnet-4': legacy('budget'),
+  'claude-3-7-sonnet': legacy('budget'),
   // No thinking. Retired on the Claude API; still served by some platforms
   // (Vertex lists claude-3-5-haiku@20241022). Claude 1, 2 and Instant are
   // served nowhere and are not listed.
-  'claude-3-5-sonnet': row('none'),
-  'claude-3-5-haiku': row('none'),
-  'claude-3-opus': row('none'),
-  'claude-3-sonnet': row('none'),
-  'claude-3-haiku': row('none'),
+  'claude-3-5-sonnet': legacy('none'),
+  'claude-3-5-haiku': legacy('none'),
+  'claude-3-opus': legacy('none'),
+  'claude-3-sonnet': legacy('none'),
+  'claude-3-haiku': legacy('none'),
 });
 
 /** The thinking column of {@link ANTHROPIC_MODELS}, family → mode. */
@@ -203,4 +221,27 @@ export function anthropicThinkingMode(model: string): ThinkingMode {
  */
 export function anthropicTakesForcedToolChoice(model: string): boolean {
   return anthropicModelFacts(model)?.forcedToolChoice ?? true;
+}
+
+/**
+ * Whether a Claude model id takes a structured-output format
+ * (`output_config.format`, the `'native'` output strategy).
+ *
+ * THE UNKNOWN-ID POLICY, named: an id the table does not know answers `true`,
+ * by the thinking table's precedent (`anthropicThinkingMode` reads an unknown
+ * id as the newest generation's `'adaptive'`). Every Claude model since 4.5
+ * takes the format, so a model released after this table is a model that
+ * takes it, and refusing it would block the newest model by default. The
+ * cost: an id that hides an older model (a router alias) is not refused here,
+ * and the API's own 400 names `output_config` until the model has a row. A
+ * family the table DOES know and the page does not list is refused before
+ * anything is sent.
+ *
+ * @example
+ *   anthropicTakesNativeOutputSchema('claude-haiku-4-5-20251001'); // true
+ *   anthropicTakesNativeOutputSchema('claude-opus-4-1');           // false
+ *   anthropicTakesNativeOutputSchema('claude-opus-6');             // true — unknown, newest
+ */
+export function anthropicTakesNativeOutputSchema(model: string): boolean {
+  return anthropicModelFacts(model)?.nativeOutputSchema ?? true;
 }

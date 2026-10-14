@@ -36,6 +36,10 @@ import { PolicyHaltError } from '../security/PolicyHaltError.js';
 import { updateSkillHistory as updateSkillHistoryStage } from '../cache/CacheGateDecider.js';
 import { cacheStrategyFor } from '../cache/cacheStrategyFor.js';
 import { forcedToolChoiceFor, UnsupportedToolChoiceError } from '../adapters/forcedToolChoice.js';
+import {
+  nativeOutputSchemaFor,
+  UnsupportedNativeOutputError,
+} from '../adapters/nativeOutputSchema.js';
 import { isRequestRefusal } from '../adapters/requestRefusal.js';
 import { assistantReplayFields } from './agent/assistantReplay.js';
 import { buildBrainFor, describeServingBrain } from './agent/skillBrains.js';
@@ -1820,33 +1824,43 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     try {
       return applyOutputSchema(raw, parser);
     } catch (err) {
-      if (!this.outputFallbackCfg || !(err instanceof OutputSchemaError)) throw err;
-      // Engage the 3-tier fallback. The dispatcher gives us the
-      // typed-event entry; we synthesize a minimal event shape since
-      // these events have no per-stage anchor.
-      // Typed via `OutputFallbackEmit`, so the registry — not a grep — is what
-      // decides these two names are real. The cast is now only the envelope
-      // assembly (type + payload are already checked against the event map).
-      const emit: OutputFallbackEmit = (eventType, payload): void => {
-        try {
-          this.dispatcher.dispatch({
-            type: eventType,
-            timestamp: Date.now(),
-            payload,
-          } as unknown as AgentfootprintEventMap[typeof eventType]);
-        } catch {
-          /* observability errors must not poison the fallback path */
-        }
-      };
-      return applyOutputFallback(
-        raw,
-        parser,
-        this.outputFallbackCfg as ResolvedOutputFallback<T>,
-        emit,
-        err,
-        this.lastRunRetriesSpent(),
-      );
+      return this.settleTypedFailure<T>(raw, err);
     }
+  }
+
+  /**
+   * A typed answer that failed: rethrow, or — with `.outputFallback()` and an
+   * `OutputSchemaError` — hand it to the 3-tier fallback. The one settle for
+   * `parseOutputAsync`'s parse failure and `runTyped`'s native stop failure.
+   */
+  private async settleTypedFailure<T>(raw: string, err: unknown): Promise<T> {
+    const parser = this.outputSchemaParser as OutputSchemaParser<T>;
+    if (!this.outputFallbackCfg || !(err instanceof OutputSchemaError)) throw err;
+    // Engage the 3-tier fallback. The dispatcher gives us the
+    // typed-event entry; we synthesize a minimal event shape since
+    // these events have no per-stage anchor.
+    // Typed via `OutputFallbackEmit`, so the registry — not a grep — is what
+    // decides these two names are real. The cast is now only the envelope
+    // assembly (type + payload are already checked against the event map).
+    const emit: OutputFallbackEmit = (eventType, payload): void => {
+      try {
+        this.dispatcher.dispatch({
+          type: eventType,
+          timestamp: Date.now(),
+          payload,
+        } as unknown as AgentfootprintEventMap[typeof eventType]);
+      } catch {
+        /* observability errors must not poison the fallback path */
+      }
+    };
+    return applyOutputFallback(
+      raw,
+      parser,
+      this.outputFallbackCfg as ResolvedOutputFallback<T>,
+      emit,
+      err,
+      this.lastRunRetriesSpent(),
+    );
   }
 
   /**
@@ -1903,6 +1917,17 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         });
       }
       return JSON.parse(out) as T;
+    }
+    // `strategy: 'native'`: an answer whose last attempt failed on a refusal
+    // or max_tokens stop is refused here even when its text parses — the
+    // format did not hold for it (outputEnforcement.ts · nativeStopFailure).
+    // It takes the same path a parse failure takes, `.outputFallback()` included.
+    const stopped = this.outputContractUnmet();
+    if (stopped?.stopReason !== undefined) {
+      return this.settleTypedFailure<T>(
+        out,
+        new OutputSchemaError(stopped.error, { rawOutput: out, stage: stopped.stage }),
+      );
     }
     return this.parseOutputAsync<T>(out);
   }
@@ -3492,9 +3517,42 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     );
   }
 
+  /**
+   * Refuse, at run start, a `'native'` output strategy on a provider that
+   * does not put a structured-output format on its wire, or on a model that
+   * does not take one — the `assertForcedToolChoiceSupported` twin, for the
+   * same reasons: run start because a decorated provider is only what it is
+   * once composed; a refusal because `'instruct'` asks in prose for what this
+   * strategy constrains at decoding, and a quiet swap would be config that
+   * lies.
+   */
+  private assertNativeOutputSchemaSupported(): void {
+    if (this.outputEnforcement?.outputFormat === undefined) return;
+    const first = this.reliabilityConfig?.providers?.[0];
+    const provider = first?.provider ?? this.provider;
+    const model = first?.model ?? this.model;
+    if (provider.carriesNativeOutputSchema === true) {
+      // A configured agent resolves its model at seed; callLLM judges it there.
+      if (
+        (first === undefined && this.runConfigFn !== undefined) ||
+        nativeOutputSchemaFor(provider, model)
+      )
+        return;
+      throw new UnsupportedNativeOutputError({ provider: provider.name, model });
+    }
+    throw new Error(
+      `Agent: .outputSchema(parser, { strategy: 'native' }) needs a provider that puts a ` +
+        `structured-output format on its wire, and '${provider.name}' does not declare one. ` +
+        `anthropic(), browserAnthropic() and the mock do; the Bedrock and gateway adapters do ` +
+        `not in this release. Use { strategy: 'instruct', retries: N } on this provider — it ` +
+        `works on every wire — or run the native strategy on a provider that declares it.`,
+    );
+  }
+
   private createExecutor(runOptions?: AgentRunOptions): FlowChartExecutor {
     this.assertDeliverableRoles();
     this.assertForcedToolChoiceSupported();
+    this.assertNativeOutputSchemaSupported();
     const correlationId = runOptions?.correlationId;
     const traceId = runOptions?.traceId ?? runOptions?.env?.traceId;
     const sessionId = runOptions?.sessionId;
@@ -5205,6 +5263,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // 7.26 — the synthetic tool, under `strategy: 'tool-forced'` only.
       ...(this.outputEnforcement?.schemaTool !== undefined && {
         schemaTool: this.outputEnforcement.schemaTool,
+      }),
+      // The structured-output format, under `strategy: 'native'` only.
+      ...(this.outputEnforcement?.outputFormat !== undefined && {
+        outputFormat: this.outputEnforcement.outputFormat,
       }),
       ...(this.thinkingBudget !== undefined && { thinkingBudget: this.thinkingBudget }),
       // Only a configured agent reads `scope.resolvedModel` — see the dep's

@@ -35,6 +35,10 @@
  */
 
 export { forcedToolChoiceFor, UnsupportedToolChoiceError } from './adapters/forcedToolChoice.js';
+export {
+  nativeOutputSchemaFor,
+  UnsupportedNativeOutputError,
+} from './adapters/nativeOutputSchema.js';
 export { UnsafeThinkingReplayError } from './thinking/replay.js';
 export type {
   MessageReplay,

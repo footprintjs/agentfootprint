@@ -277,6 +277,55 @@ export const FINDINGS_SOURCES_SCHEMA: PlainObject = deepFreeze({
 });
 
 /**
+ * The answer-turn `_findings` property, for a provider's structured output
+ * (`.outputSchema(…, { strategy: 'native' })`, `nativeOutputFormat.ts`).
+ *
+ * What the served contract allows on an ANSWER is exactly what
+ * `FINDINGS_INSTRUCTION` says: a top-level `_findings.previous`. So this is
+ * that one property, taken from `FINDINGS_ARGUMENT_SCHEMA` itself (one source:
+ * a later edit to the standings shape reaches the answer too) — with ONE wire
+ * narrowing: an assertion's `value` is untyped there (any JSON), which a
+ * structured output cannot decode without recursion, so here it is a string,
+ * number, boolean or null. `readDeclaration` still reads whatever arrives.
+ * No offer `enum`: the ids are listed on the served tools, and a format that
+ * changed with every offer would re-compile the grammar and invalidate the
+ * prompt cache on every call. Built per call, never edited.
+ */
+export function findingsAnswerSchema(): PlainObject {
+  const previous = (FINDINGS_ARGUMENT_SCHEMA.properties as PlainObject).previous as PlainObject;
+  const item = previous.items as PlainObject;
+  const itemProps = item.properties as PlainObject;
+  const assertions = itemProps.assertions as PlainObject;
+  const assertion = assertions.items as PlainObject;
+  const scalar = {
+    anyOf: [{ type: 'string' }, { type: 'number' }, { type: 'boolean' }, { type: 'null' }],
+  };
+  return {
+    type: 'object',
+    description: FINDINGS_MARKER,
+    properties: {
+      previous: {
+        ...previous,
+        items: {
+          ...item,
+          properties: {
+            ...itemProps,
+            assertions: {
+              ...assertions,
+              items: {
+                ...assertion,
+                properties: { ...(assertion.properties as PlainObject), value: scalar },
+              },
+            },
+          },
+        },
+      },
+    },
+    required: ['previous'],
+  };
+}
+
+/**
  * The id of the always-on instruction `.findings()` registers (9.101.0) — the
  * name a receipt's `system.pieces` carries and a test can look for; the
  * declared-sources corpus leaves the library's own instruction out of the

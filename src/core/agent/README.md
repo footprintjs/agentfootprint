@@ -22,7 +22,9 @@ Lens: `selfCallNotice.ts`, `stagedRefs.ts` · `stagedRefsNudgeLine`,
   (owner: `../slots/buildToolsSlot.ts` · `discoverStage`) where they name skill ids.
 
 The Route decider also writes `answerGuarantee` on the turn it picks `final`
-(9.100.0): `'tool-forced'` when the provider was forced by name through the
+(9.100.0): `'native'` when the provider decoded the answer under the schema's
+structured-output format (`strategy: 'native'`, `nativeOutputFormat.ts`),
+`'tool-forced'` when the provider was forced by name through the
 output schema's synthetic tool, `'checked'` when the schema parsed a
 generated answer, `'none'` when there is no schema — how the answer's shape
 was secured, beside `answerValidation`, which is about its content.
