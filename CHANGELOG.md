@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.2.0] - 2026-10-14
+
+### Added
+
+- **Additive public types for scoped claim-verification records and saved checkpoints.** FindingsRow includes independent verification observations, and AgentRunCheckpoint can carry their optional receipt state. Paired readers and writers validate exact occurrence identities, scope, lineage and counters; historical observations are read without judging them again. Current runtimes refuse an unarmed continuation rather than silently discard retained verification state. Old checkpoints remain readable. Receipt retention shares admitted immutable history instead of repeatedly copying it, while preserving all size, depth and restored-data checks. Runtime opt-in, compact model declarations and delivered-answer binding are not mounted in this phase; no new model request emits these rows yet.
+
+  **Experimental, not yet validated in real use.** Synthetic controls exercise the new checker, but benefit on real model errors, whole-request overhead and final-answer binding remain unestablished. This foundation enables no new checking behavior by default and provides no public activation option yet.
+
+### Fixed
+
+- **Malformed streamed Anthropic tool arguments no longer execute as repaired empty input.** The SDK and browser adapters check the original completed argument fragments through one reader. Invalid JSON, non-object JSON, or an unfinished tool block carries a finite refusal into Agent dispatch, before middleware, argument fills, human questions, credentials, or execution—even with schema validation disabled. The model receives the normal recorded argument error and can make a new call within the existing iteration limits. Valid empty arguments and schema-owned extra keys are unchanged; non-streaming calls and the gateway's stronger refusal remain unchanged.
+
+  Additive public types: optional `LLMResponse.toolCalls[].argumentsFailure`, the matching `LLMMessage.toolCalls[]` field, and `LLMMessage.toolArgumentsFailure` retain this finite evidence; no new entry point. Recovery history is explicitly lossy: failed calls and their errors become protocol recovery text, not fabricated `tool_use` input. Known-invalid active signed-thinking replay still refuses. A tool stream without its terminal event remains a provider failure; a witnessed `max_tokens` completion may instead carry a recoverable argument refusal. Forced structured output cannot accept a repaired empty object and uses the existing bounded output-contract retry/refusal path.
+
 ## [10.1.1] - 2026-10-12
 
 ### Fixed
