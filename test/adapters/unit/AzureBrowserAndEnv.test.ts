@@ -5,8 +5,8 @@
  *   assert the deployment-scoped Azure URL, the `api-key` header, and that the
  *   model routes to the deployment — no SDK, no network.
  * - providerFromEnv: branches whose SDK is installed (`openai`) are asserted
- *   directly — kind, provider name, model. Branches whose SDK is NOT installed
- *   (`@anthropic-ai/sdk`; `@azure/identity` for the foundry arm's keyless
+ *   directly — kind, provider name, model. Branches whose SDK is absent
+ *   (`@anthropic-ai/sdk`, explicitly isolated below; `@azure/identity` for the foundry arm's keyless
  *   zero-config door) still announce themselves by the distinctive
  *   peer-missing error, which proves WHICH branch was chosen; mock and the
  *   no-creds error are exact either way.
@@ -25,11 +25,29 @@
  *   itself is pinned by test/adapters/integration/foundry-wire.test.ts.
  */
 
-import { describe, expect, it, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import { browserAzureOpenai } from '../../../src/adapters/llm/BrowserOpenAIProvider.js';
 import { providerFromEnv, type ProviderFromEnv } from '../../../src/adapters/llm/createProvider.js';
 import { FoundryLocalUnavailableError } from '../../../src/adapters/llm/FoundryLocalProvider.js';
 import type { LLMRequest } from '../../../src/adapters/types.js';
+
+// Keep the missing-optional-peer branch explicit even though the real SDK is
+// now a dev dependency for offline streamed-argument integration regressions.
+// Only this module's Anthropic resolution is absent; other peers use the real
+// loader. The assertions below still exercise providerFromEnv's real routing.
+vi.mock('../../../src/lib/lazyRequire.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../src/lib/lazyRequire.js')>();
+  return {
+    lazyRequire: (specifier: string) => {
+      if (specifier === '@anthropic-ai/sdk') {
+        throw Object.assign(new Error("Cannot find module '@anthropic-ai/sdk'"), {
+          code: 'MODULE_NOT_FOUND',
+        });
+      }
+      return actual.lazyRequire(specifier);
+    },
+  };
+});
 
 function recordingFetch(recorder: { url?: string; init?: RequestInit }): typeof fetch {
   return ((url: RequestInfo | URL, init?: RequestInit) => {
@@ -361,7 +379,7 @@ describe('providerFromEnv()', () => {
     } catch (err) {
       thrown = err;
     }
-    // `@anthropic-ai/sdk` is deliberately uninstalled here, so the anthropic
+    // `@anthropic-ai/sdk` is deliberately unavailable in this test's loader, so the anthropic
     // arm announces itself by its own peer refusal — which is the proof this
     // case needs: the arm was ENTERED. What must never appear is the foundry
     // refusal, which would mean the endpoint pre-empted it.

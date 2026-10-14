@@ -359,6 +359,7 @@ describe('stream() — SSE from /model/{id}/invoke-with-response-stream', () => 
       },
       { type: 'content_block_stop', index: 0 },
       { type: 'message_delta', delta: { stop_reason: 'tool_use' } },
+      { type: 'message_stop' },
     ];
     const chunks = await drain(gateway([], [sse([dataLines(events)])]).stream!(ask()));
     expect(chunks[chunks.length - 1]!.response!.toolCalls).toStrictEqual([
@@ -599,6 +600,7 @@ describe('errors are typed and name the model', () => {
         delta: { type: 'input_json_delta', partial_json: '{"id":' },
       },
       { type: 'content_block_stop', index: 0 },
+      { type: 'message_stop' },
     ];
     const err = (await caught(
       drain(gateway([], [sse([dataLines(events)])]).stream!(ask())),
@@ -826,6 +828,7 @@ describe('scenario: an Agent runs a tool loop over the gateway', () => {
       },
       { type: 'content_block_stop', index: 0 },
       { type: 'message_delta', delta: { stop_reason: 'tool_use' }, usage: { output_tokens: 9 } },
+      { type: 'message_stop' },
     ];
     const answerTurn = [
       {

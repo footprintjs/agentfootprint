@@ -243,6 +243,7 @@ function callsOf(scope: TypedScope<InputsLayerState>): readonly BatchCall[] {
     id: c.id,
     name: c.name,
     args: { ...(c.args ?? {}) },
+    ...(c.argumentsFailure !== undefined && { argumentsFailure: { ...c.argumentsFailure } }),
   }));
 }
 

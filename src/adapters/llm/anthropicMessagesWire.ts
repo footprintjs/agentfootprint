@@ -32,6 +32,7 @@ import type { ThinkingMode } from '../../thinking/types.js';
 import type { MessageReplay, ThinkingReplayOmission } from '../../thinking/replay.js';
 import { captureAnthropicResponseReplay, lossyAnthropicReplay } from './anthropicReplayLayout.js';
 import { toAnthropicMessages, toAnthropicTool } from './anthropicMessageProjection.js';
+import { AnthropicToolArguments } from './anthropicToolArguments.js';
 export { toAnthropicMessages, toAnthropicTool } from './anthropicMessageProjection.js';
 
 // ─── Types (Anthropic API shapes) ──────────────────────────────────
@@ -188,17 +189,27 @@ export function buildMessagesBody(
 export function fromAnthropicResponse(
   message: AnthropicMessage,
   binding?: MessageReplay['binding'],
+  argumentFailures?: ReadonlyMap<
+    number,
+    NonNullable<LLMResponse['toolCalls'][number]['argumentsFailure']>
+  >,
 ): LLMResponse {
   const textParts: string[] = [];
-  const toolCalls: { id: string; name: string; args: Record<string, unknown> }[] = [];
+  const toolCalls: LLMResponse['toolCalls'][number][] = [];
   // v2.14 — detect thinking presence so we can pass the full content
   // array through as `rawThinking` for the framework's thinking subflow
   // (handler filters thinking + redacted_thinking blocks; ignores rest).
   let hasThinking = false;
-  for (const block of message.content) {
+  for (const [index, block] of message.content.entries()) {
     if (block.type === 'text') textParts.push(block.text);
     else if (block.type === 'tool_use') {
-      toolCalls.push({ id: block.id, name: block.name, args: block.input });
+      const argumentsFailure = argumentFailures?.get(index);
+      toolCalls.push({
+        id: block.id,
+        name: block.name,
+        args: block.input,
+        ...(argumentsFailure !== undefined && { argumentsFailure }),
+      });
     } else if (block.type === 'thinking' || block.type === 'redacted_thinking') {
       hasThinking = true;
     }
@@ -210,12 +221,14 @@ export function fromAnthropicResponse(
     binding === undefined || binding.model === actualModel
       ? binding
       : { ...binding, model: actualModel };
-  const replay = captureAnthropicResponseReplay(
-    message.content,
-    message.id,
-    message.stop_reason,
-    originBinding,
-  );
+  const replay = argumentFailures?.size
+    ? lossyAnthropicReplay(message.content, message.id, message.stop_reason, originBinding)
+    : captureAnthropicResponseReplay(
+        message.content,
+        message.id,
+        message.stop_reason,
+        originBinding,
+      );
   return {
     content: textParts.join(''),
     toolCalls,
@@ -268,8 +281,9 @@ export interface StreamAssemblyOptions {
   readonly wireManifest: WireToolManifest;
   /**
    * What to do with tool arguments that do not parse: return the args to use,
-   * or throw. Each adapter decides — the browser adapter has always used `{}`;
-   * the gateway adapter refuses rather than run a tool with its arguments lost.
+   * or throw. A returned placeholder is always accompanied by finite failure
+   * evidence, so it cannot authorize execution. The gateway keeps its stronger
+   * whole-response refusal.
    */
   readonly onMalformedToolArgs: (call: MalformedToolArgs) => Record<string, unknown>;
 }
@@ -299,7 +313,7 @@ export async function* assembleAnthropicStream(
   // A block completing early never moves it before an earlier response index.
   const contentByIndex = new Map<number, AnthropicContentBlock>();
   const openBlocks = new Set<number>();
-  const toolJson = new Map<number, string[]>();
+  const toolArguments = new AnthropicToolArguments();
   const textParts = new Map<number, string[]>();
   const thinkingParts = new Map<number, string[]>();
   const signatureParts = new Map<number, string[]>();
@@ -314,6 +328,11 @@ export async function* assembleAnthropicStream(
   let observedThinking = false;
 
   for await (const event of events) {
+    // The fetch framing owner already selected the canonical event name.
+    toolArguments.observe({
+      ...(typeof event.data === 'object' && event.data !== null ? event.data : {}),
+      type: event.event,
+    });
     if (event.event === 'message_start') {
       const msg = (event.data as { message?: AnthropicMessage }).message;
       if (msg) {
@@ -341,7 +360,6 @@ export async function* assembleAnthropicStream(
       if (contentByIndex.has(index)) completeLayout = false;
       contentByIndex.set(index, { ...block });
       openBlocks.add(index);
-      if (block.type === 'tool_use') toolJson.set(index, []);
       if (block.type === 'text') textParts.set(index, [block.text]);
       if (block.type === 'thinking') {
         thinkingParts.set(index, [block.thinking]);
@@ -384,9 +402,8 @@ export async function* assembleAnthropicStream(
           tokenIndex++;
         }
       } else if (delta?.type === 'input_json_delta' && typeof delta.partial_json === 'string') {
-        const parts = validIndex ? toolJson.get(index) : undefined;
-        if (parts) parts.push(delta.partial_json);
-        else completeLayout = false;
+        // The shared argument owner retains and parses this text at completion.
+        if (block?.type !== 'tool_use') completeLayout = false;
       } else if (delta?.type === 'thinking_delta' && typeof delta.thinking === 'string') {
         if (validIndex && block?.type === 'thinking') {
           thinkingParts.get(index)?.push(delta.thinking);
@@ -404,35 +421,16 @@ export async function* assembleAnthropicStream(
         continue;
       }
       if (!openBlocks.delete(index)) completeLayout = false;
-      const block = contentByIndex.get(index);
-      const parts = toolJson.get(index);
-      if (block?.type === 'tool_use' && parts) {
-        const joined = parts.join('');
-        let input = block.input;
-        if (joined.length > 0) {
-          try {
-            input = JSON.parse(joined) as Record<string, unknown>;
-          } catch {
-            // The fallback may be a supported transport compatibility policy,
-            // but its substituted arguments are NOT an exact original response.
-            completeLayout = false;
-            input = options.onMalformedToolArgs({
-              id: block.id,
-              name: block.name,
-              index,
-              raw: joined,
-            });
-          }
-        }
-        contentByIndex.set(index, { ...block, input });
-        toolJson.delete(index);
-      }
     } else if (event.event === 'message_stop') {
       sawMessageStop = true;
     }
   }
-
+  toolArguments.assertTerminal();
   const entries = [...contentByIndex.entries()].sort(([a], [b]) => a - b);
+  const argumentFailures = new Map<
+    number,
+    NonNullable<LLMResponse['toolCalls'][number]['argumentsFailure']>
+  >();
   if (
     openBlocks.size > 0 ||
     stopReason === undefined ||
@@ -446,7 +444,24 @@ export async function* assembleAnthropicStream(
       id: messageId,
       model,
       role: 'assistant',
-      content: entries.map(([index, block]) => {
+      content: entries.map(([index, block], position) => {
+        if (block.type === 'tool_use') {
+          const checked = toolArguments.finish(index, block);
+          if (checked.failure) {
+            completeLayout = false;
+            argumentFailures.set(position, checked.failure);
+            return {
+              ...block,
+              input: options.onMalformedToolArgs({
+                id: block.id,
+                name: block.name,
+                index,
+                raw: checked.raw,
+              }),
+            };
+          }
+          return { ...block, input: checked.input };
+        }
         if (block.type === 'text')
           return { ...block, text: textParts.get(index)?.join('') ?? block.text };
         if (block.type === 'thinking') {
@@ -463,6 +478,7 @@ export async function* assembleAnthropicStream(
       usage,
     },
     binding,
+    argumentFailures,
   );
   // Interrupted/malformed content is durable negative evidence, not unknown
   // caller history. Only a witnessed terminal event may certify completion.

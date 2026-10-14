@@ -33,6 +33,7 @@ import { thinkingModeWith } from './anthropicThinkingWire.js';
 import { anthropicTakesForcedToolChoice } from './anthropicModels.js';
 import { prepareAnthropicReplay, thinkingReplayBinding } from './anthropicThinkingReplay.js';
 import { toolManifestOf } from './wireManifest.js';
+import { AnthropicToolArguments } from './anthropicToolArguments.js';
 import { anthropicThinkingHandler } from '../../thinking/AnthropicThinkingHandler.js';
 import type { ThinkingMode } from '../../thinking/types.js';
 // The request body has ONE owner, shared with browserAnthropic() and
@@ -235,8 +236,10 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
         throw wrapError(err);
       }
       let tokenIndex = 0;
+      const toolArguments = new AnthropicToolArguments();
       try {
         for await (const event of stream) {
+          toolArguments.observe(event);
           if (
             event.type === 'content_block_delta' &&
             event.delta?.type === 'text_delta' &&
@@ -247,8 +250,26 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
           }
         }
         const final = await stream.finalMessage();
+        toolArguments.assertTerminal(final.content.some((block) => block.type === 'tool_use'));
+        const argumentFailures = new Map<
+          number,
+          NonNullable<LLMResponse['toolCalls'][number]['argumentsFailure']>
+        >();
+        const checkedMessage = {
+          ...final,
+          content: final.content.map((block, index) => {
+            if (block.type !== 'tool_use') return block;
+            const checked = toolArguments.finish(index, block);
+            if (checked.failure) argumentFailures.set(index, checked.failure);
+            return { ...block, input: checked.input };
+          }),
+        };
         const response: LLMResponse = {
-          ...fromAnthropicResponse(final, final.id ? bindingFactory(final.id) : undefined),
+          ...fromAnthropicResponse(
+            checkedMessage,
+            final.id ? bindingFactory(final.id) : undefined,
+            argumentFailures,
+          ),
           wireManifest: toolManifestOf(params.tools),
           ...(preparation.omissions.length > 0 && { replayOmissions: preparation.omissions }),
         };

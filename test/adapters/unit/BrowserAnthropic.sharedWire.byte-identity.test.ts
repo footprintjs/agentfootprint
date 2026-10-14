@@ -41,16 +41,22 @@
  * response.replay and terminal response.rawThinking changed; all six request
  * body strings, text chunks, tool results and usage remain byte-identical.
  *
+ * A FIFTH: the malformed t2 now carries a finite non-executable refusal. The
+ * original reference stays immutable; only that named call in the detached
+ * expected terminal gains argumentsFailure. Every other byte/field remains
+ * covered by the same whole-value assertions.
+ *
  * Test type (Convention 3): byte identity.
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { browserAnthropic } from '../../../src/adapters/llm/BrowserAnthropicProvider.js';
 import { REQ, rec } from './anthropicWireFixtures.js';
+import type { LLMChunk } from '../../../src/adapters/types.js';
 
 const REFERENCE = JSON.parse(
   readFileSync(new URL('../reference/browser-anthropic-wire.json', import.meta.url), 'utf8'),
-) as Record<string, { bodies: string[]; complete: unknown; chunks: unknown[] }>;
+) as Record<string, { bodies: string[]; complete: unknown; chunks: LLMChunk[] }>;
 
 async function drain(stream: AsyncIterable<unknown>): Promise<unknown[]> {
   const out: unknown[] = [];
@@ -76,9 +82,25 @@ describe('browserAnthropic is byte-identical after the shared-wire move', () => 
         _fetch: rec(bodies, true),
       });
       const chunks = await drain(provider.stream!(REQ));
+      const expectedChunks = structuredClone(expected.chunks);
+      const terminal = expectedChunks.find((chunk) => chunk.done)?.response;
+      expect(terminal?.toolCalls).toStrictEqual([
+        { id: 't1', name: 't', args: { a: 'x' } },
+        { id: 't2', name: 't', args: {} },
+      ]);
+      if (!terminal) throw new Error('Frozen reference has no terminal response');
+      expectedChunks[expectedChunks.length - 1] = {
+        ...expectedChunks[expectedChunks.length - 1]!,
+        response: {
+          ...terminal,
+          toolCalls: terminal.toolCalls.map((call) =>
+            call.id === 't2' ? { ...call, argumentsFailure: { reason: 'invalid-json' } } : call,
+          ),
+        },
+      };
       expect(bodies).toStrictEqual(expected.bodies);
       expect(JSON.parse(JSON.stringify(complete))).toStrictEqual(expected.complete);
-      expect(JSON.parse(JSON.stringify(chunks))).toStrictEqual(expected.chunks);
+      expect(JSON.parse(JSON.stringify(chunks))).toStrictEqual(expectedChunks);
     });
   }
 });

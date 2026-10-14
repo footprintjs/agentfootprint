@@ -112,6 +112,7 @@ export interface BatchCall {
   readonly id: string;
   readonly name: string;
   readonly args: Readonly<Record<string, unknown>>;
+  readonly argumentsFailure?: import('../../../adapters/types.js').LLMResponse['toolCalls'][number]['argumentsFailure'];
 }
 
 /** The implementation that will answer a name — the shared dispatch resolver's. */
@@ -325,6 +326,9 @@ export function declareBatch(
 ): PlannedCall[] {
   const plan: PlannedCall[] = [];
   for (const call of calls) {
+    // Missing values in a damaged stream are not a request to fill or ask.
+    // ToolCalls files the ordinary enforced refusal for this exact attempt.
+    if (call.argumentsFailure !== undefined) continue;
     const rules = rulesOf(toolOf(call.name));
     if (rules === undefined) {
       const free = freeNamed(sources, call.id, []);

@@ -38,6 +38,7 @@ import type { LLMMessage, LLMResponse, LLMToolSchema } from '../../adapters/type
 import { fnv1a } from '../slots/helpers.js';
 import { applyOutputSchema, type OutputSchemaParser } from '../outputSchema.js';
 import { SCHEMA_CHECK_FRAME_PREFIX } from '../../lib/saidByPerson.js';
+import { formatToolArgIssues, streamedToolArgIssues } from './toolArgsValidation.js';
 
 // ─── The ledger ──────────────────────────────────────────────────────
 
@@ -226,6 +227,10 @@ export function buildSchemaTool(
 export function readSchemaToolAnswer(response: LLMResponse): string | undefined {
   const call = response.toolCalls.find((tc) => tc.name === SCHEMA_TOOL_NAME);
   if (!call) return undefined;
+  // A fixed non-JSON refusal follows the existing output-attempt/retry path.
+  // Even a parser accepting {} must never validate an SDK repair as an answer.
+  if (call.argumentsFailure !== undefined)
+    return formatToolArgIssues(call.name, streamedToolArgIssues(call.argumentsFailure));
   return JSON.stringify(call.args);
 }
 

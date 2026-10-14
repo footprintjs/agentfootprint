@@ -43,7 +43,32 @@ function sdk(bodies: string[]) {
       create: async (params: unknown) => record(params),
       stream: (params: unknown) => {
         const reply = record(params);
-        return { async *[Symbol.asyncIterator]() {}, finalMessage: async () => reply };
+        return {
+          async *[Symbol.asyncIterator]() {
+            yield { type: 'message_start', message: { ...reply, content: [] } };
+            for (const [index, block] of reply.content.entries()) {
+              yield {
+                type: 'content_block_start',
+                index,
+                content_block: block.type === 'tool_use' ? { ...block, input: {} } : block,
+              };
+              if (block.type === 'tool_use')
+                yield {
+                  type: 'content_block_delta',
+                  index,
+                  delta: { type: 'input_json_delta', partial_json: JSON.stringify(block.input) },
+                };
+              yield { type: 'content_block_stop', index };
+            }
+            yield {
+              type: 'message_delta',
+              delta: { stop_reason: reply.stop_reason },
+              usage: reply.usage,
+            };
+            yield { type: 'message_stop' };
+          },
+          finalMessage: async () => reply,
+        };
       },
     },
   } as never;

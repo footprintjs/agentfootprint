@@ -77,7 +77,35 @@ function makeClient(turns: readonly FakeMessage[], recorder: { params: unknown[]
         );
         return {
           async *[Symbol.asyncIterator]() {
-            for (const e of events) yield e;
+            if (!final.content.some((block) => block.type === 'tool_use')) {
+              for (const e of events) yield e;
+              return;
+            }
+            yield { type: 'message_start', message: { ...final, content: [] } };
+            for (const [index, block] of final.content.entries()) {
+              yield {
+                type: 'content_block_start',
+                index,
+                content_block:
+                  block.type === 'tool_use'
+                    ? { ...block, input: {} }
+                    : block.type === 'text'
+                    ? { ...block, text: '' }
+                    : block,
+              };
+              if (block.type === 'tool_use')
+                yield {
+                  type: 'content_block_delta',
+                  index,
+                  delta: { type: 'input_json_delta', partial_json: JSON.stringify(block.input) },
+                };
+              if (block.type === 'text')
+                for (const text of block.text!.split('')) {
+                  yield { type: 'content_block_delta', index, delta: { type: 'text_delta', text } };
+                }
+              yield { type: 'content_block_stop', index };
+            }
+            yield { type: 'message_stop' };
           },
           async finalMessage() {
             return final;

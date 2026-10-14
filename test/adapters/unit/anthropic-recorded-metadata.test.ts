@@ -45,6 +45,24 @@ describe.each(['captured-direct-caller-with-text', 'captured-direct-caller'])(
                 const response = respond(body);
                 return {
                   async *[Symbol.asyncIterator]() {
+                    yield { type: 'message_start', message: { ...response, content: [] } };
+                    for (const [index, block] of response.content.entries()) {
+                      yield {
+                        type: 'content_block_start',
+                        index,
+                        content_block: block.type === 'tool_use' ? { ...block, input: {} } : block,
+                      };
+                      if (block.type === 'tool_use')
+                        yield {
+                          type: 'content_block_delta',
+                          index,
+                          delta: {
+                            type: 'input_json_delta',
+                            partial_json: JSON.stringify(block.input),
+                          },
+                        };
+                      yield { type: 'content_block_stop', index };
+                    }
                     yield { type: 'message_stop' };
                   },
                   finalMessage: async () => response,

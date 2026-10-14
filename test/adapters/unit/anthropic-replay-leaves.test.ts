@@ -98,7 +98,7 @@ function harness(kind: string, mode: string, fail = false, reply = response, str
         sdkCall(body);
         return {
           async *[Symbol.asyncIterator]() {
-            yield { type: 'message_stop' };
+            yield* fullEvents(reply);
           },
           async finalMessage() {
             return reply;
@@ -245,16 +245,33 @@ function stored(answer: LLMResponse): LLMMessage {
   ) as LLMMessage;
 }
 
-function fullStream(message: AnthropicMessage): string {
+function fullEvents(message: AnthropicMessage): (Record<string, unknown> & { type: string })[] {
   return [
     { type: 'message_start', message: { ...message, content: [] } },
-    ...message.content.flatMap((content_block, index) => [
-      { type: 'content_block_start', index, content_block },
+    ...message.content.flatMap((block, index) => [
+      {
+        type: 'content_block_start',
+        index,
+        content_block: block.type === 'tool_use' ? { ...block, input: {} } : block,
+      },
+      ...(block.type === 'tool_use'
+        ? [
+            {
+              type: 'content_block_delta',
+              index,
+              delta: { type: 'input_json_delta', partial_json: JSON.stringify(block.input) },
+            },
+          ]
+        : []),
       { type: 'content_block_stop', index },
     ]),
     { type: 'message_delta', delta: { stop_reason: message.stop_reason } },
     { type: 'message_stop' },
-  ]
+  ];
+}
+
+function fullStream(message: AnthropicMessage): string {
+  return fullEvents(message)
     .map((event) => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`)
     .join('');
 }

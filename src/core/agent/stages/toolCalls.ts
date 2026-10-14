@@ -167,6 +167,7 @@ import type { ResolvedEvidenceGate } from '../evidence/types.js';
 import { noteRepeatedCall, repeatedCallLedgers } from '../repeatedCall.js';
 import {
   formatToolArgIssues,
+  streamedToolArgIssues,
   validateToolArgs,
   type ToolArgValidationMode,
 } from '../toolArgsValidation.js';
@@ -3937,6 +3938,7 @@ export function buildToolCallsHandler(
           readonly id: string;
           readonly name: string;
           readonly args: Readonly<Record<string, unknown>>;
+          readonly argumentsFailure?: LLMMessage['toolArgumentsFailure'];
         }[]),
       ];
       const iteration = scope.iteration as number;
@@ -4403,7 +4405,19 @@ export function buildToolCallsHandler(
         }
         // Tool-args validation (#9) and the inputs layer's refusals share one
         // flag: the call is refused for its ARGUMENTS and lands in one shape.
-        let argsRejected = false;
+        let argsRejected = tc.argumentsFailure !== undefined;
+        if (!denied && tc.argumentsFailure !== undefined) {
+          const issues = streamedToolArgIssues(tc.argumentsFailure);
+          typedEmit(scope, 'agentfootprint.validation.args_invalid', {
+            toolName: tc.name,
+            toolCallId: tc.id,
+            iteration,
+            issues,
+            enforced: true,
+          });
+          error = true;
+          result = formatToolArgIssues(tc.name, issues);
+        }
         // A check-in that tripped in a batch whose one human question was the
         // inputs layer's ask (`oneQuestionAsked`) — refused, never asked.
         let checkInRefused = false;
@@ -4418,10 +4432,11 @@ export function buildToolCallsHandler(
         // the layer NOT mounted — any call whose tool declares rules (fail
         // closed). Neither applies to a tool that declares nothing — and
         // neither awaits for one (`unmountedRules` answers it synchronously).
-        const unmounted = unmountedRules(tool, tc.name);
+        const unmounted = argsRejected ? undefined : unmountedRules(tool, tc.name);
         warnUnmountedToolPeriod(tool, tc.name);
-        const rulesRefusal =
-          resolution?.refused ?? (unmounted === undefined ? undefined : await unmounted);
+        const rulesRefusal = argsRejected
+          ? undefined
+          : resolution?.refused ?? (unmounted === undefined ? undefined : await unmounted);
         if (!denied && rulesRefusal !== undefined) {
           argsRejected = true;
           error = true;
@@ -5612,6 +5627,9 @@ export function buildToolCallsHandler(
           toolCallId: tc.id,
           toolName: tc.name,
           ...(layerNote !== '' && { toolChars: deliveredResult.length }),
+          ...(tc.argumentsFailure !== undefined && {
+            toolArgumentsFailure: { ...tc.argumentsFailure },
+          }),
         });
 
         // ── Dynamic ReAct wiring ───────────────────────────────

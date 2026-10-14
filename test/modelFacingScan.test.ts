@@ -809,6 +809,13 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: 'the context-window overflow explanation thrown to the host with its three fixes — the provider refused the request before any model read it',
     },
   ],
+  'src/adapters/llm/anthropicToolArguments.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: 'the missing message_stop refusal is thrown to the host as a provider error; it never becomes a completed response or model-facing recovery message',
+    },
+  ],
   'src/adapters/llm/anthropicThinkingWire.ts': [
     {
       kind: 'not-model-facing',
@@ -1153,12 +1160,15 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // describes the provider/model pair, not "this model cannot think".
         // It no longer matches a persistent rule: remove its stale host-only
         // allowance. No model-facing or unrepaired classification changes.
-        files: 98,
-        total: 192,
+        // Streamed tool integrity: one host-only provider error refuses EOF
+        // without message_stop. It is never delivered as a model message.
+        // files 98 → 99, total 192 → 193, notModelFacing 129 → 130.
+        files: 99,
+        total: 193,
         registry: 8,
         ephemeral: 22,
         unrepaired: 33,
-        notModelFacing: 129,
+        notModelFacing: 130,
         unrepairedEntries: 13,
       });
       // And the ledger's own total is the number of literals the scan flagged —
