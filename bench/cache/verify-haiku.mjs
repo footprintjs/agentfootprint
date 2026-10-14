@@ -85,7 +85,34 @@ function rehearsalClient() {
       stream: (params) => {
         const message = reply(params);
         return {
-          async *[Symbol.asyncIterator]() {},
+          async *[Symbol.asyncIterator]() {
+            // Preserve the streamless text-only rehearsal response.
+            if (!message.content.some((block) => block.type === 'tool_use')) return;
+            yield {
+              type: 'message_start',
+              message: { ...message, content: [], stop_reason: null },
+            };
+            for (const [index, block] of message.content.entries()) {
+              yield {
+                type: 'content_block_start',
+                index,
+                content_block: block.type === 'tool_use' ? { ...block, input: {} } : block,
+              };
+              if (block.type === 'tool_use')
+                yield {
+                  type: 'content_block_delta',
+                  index,
+                  delta: { type: 'input_json_delta', partial_json: JSON.stringify(block.input) },
+                };
+              yield { type: 'content_block_stop', index };
+            }
+            yield {
+              type: 'message_delta',
+              delta: { stop_reason: message.stop_reason },
+              usage: message.usage,
+            };
+            yield { type: 'message_stop' };
+          },
           finalMessage: async () => message,
         };
       },

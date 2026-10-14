@@ -67,6 +67,34 @@ function scriptedClient(bodies: Body[], script: readonly ('tool' | 'text')[]) {
         const message = reply(params);
         return {
           async *[Symbol.asyncIterator]() {
+            // A final tool reply has the same complete raw argument evidence as the SDK stream.
+            if (message.content.some((block) => block.type === 'tool_use')) {
+              yield {
+                type: 'message_start',
+                message: { ...message, content: [], stop_reason: null },
+              };
+              for (const [index, block] of message.content.entries()) {
+                yield {
+                  type: 'content_block_start',
+                  index,
+                  content_block: block.type === 'tool_use' ? { ...block, input: {} } : block,
+                };
+                if (block.type === 'tool_use')
+                  yield {
+                    type: 'content_block_delta',
+                    index,
+                    delta: { type: 'input_json_delta', partial_json: JSON.stringify(block.input) },
+                  };
+                yield { type: 'content_block_stop', index };
+              }
+              yield {
+                type: 'message_delta',
+                delta: { stop_reason: message.stop_reason },
+                usage: message.usage,
+              };
+              yield { type: 'message_stop' };
+              return;
+            }
             for (const b of message.content)
               if (b.type === 'text')
                 yield { type: 'content_block_delta', delta: { type: 'text_delta', text: b.text } };

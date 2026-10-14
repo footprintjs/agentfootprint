@@ -70,6 +70,7 @@ import { isLibraryAuthoredFrame, isSaidByPerson } from '../../../src/index.js';
 import { saidByPerson } from '../../../src/injection-engine.js';
 import type { Injection, InjectionContext } from '../../../src/injection-engine.js';
 import type { LLMMessage } from '../../../src/adapters/types.js';
+import { toAnthropicMessages } from '../../../src/adapters/llm/anthropicMessageProjection.js';
 import { buildDropNotice } from '../../../src/core/agent/window/notice.js';
 import { buildSummaryMessage } from '../../../src/core/agent/window/summarize.js';
 import { buildCorrectiveTurn } from '../../../src/core/agent/outputEnforcement.js';
@@ -305,10 +306,14 @@ const SITES: Readonly<Record<string, readonly Site[]>> = {
   // Provider adapters: they translate an LLMMessage the agent already owns
   // into the vendor's own request shape. Nothing they build is ever read back
   // into `history` — the direction is one-way, onto the wire.
-  // The same two Anthropic wire-only producers moved out of the body/stream
-  // assembler into the shared projection; no new history producer was added.
+  // The two ordinary Anthropic translations and refused-tool recovery text
+  // share the projection; recovery remains a tool message in agent history.
   'src/adapters/llm/anthropicMessageProjection.ts': [
     { cls: 'never-in-history', why: 'wire translation: a text turn in the vendor shape' },
+    {
+      cls: 'never-in-history',
+      why: 'wire translation: a refused tool-result recovery text turn; its original history entry remains a marked tool message',
+    },
     { cls: 'never-in-history', why: 'wire translation: a tool-result turn in the vendor shape' },
   ],
   'src/adapters/llm/BedrockProvider.ts': [
@@ -458,6 +463,47 @@ describe("every `role: 'user'` producer in src/ is classified", () => {
     expect(Object.isFrozen(LIBRARY_AUTHORED_PREFIXES)).toBe(true);
     expect(() => (LIBRARY_AUTHORED_PREFIXES as string[]).push('[mine')).toThrow();
     expect(LIBRARY_AUTHORED_PREFIXES).toHaveLength(8);
+  });
+});
+
+// ─── Unit: vendor-only recovery does not change history ownership ────────
+
+describe('the Anthropic refused-tool wire translation', () => {
+  it('does not turn the recorded tool refusal into a person’s history entry', () => {
+    const history: LLMMessage[] = [
+      { role: 'user', content: 'read the report' },
+      {
+        role: 'assistant',
+        content: '',
+        toolCalls: [
+          {
+            id: 'broken-call',
+            name: 'read_report',
+            args: {},
+            argumentsFailure: { reason: 'invalid-json' },
+          },
+        ],
+      },
+      {
+        role: 'tool',
+        content: 'Tool arguments were incomplete; submit a complete JSON object.',
+        toolCallId: 'broken-call',
+        toolArgumentsFailure: { reason: 'invalid-json' },
+      },
+    ];
+    const before = structuredClone(history);
+    const wire = toAnthropicMessages(history);
+
+    expect(wire[2]).toEqual({
+      role: 'user',
+      content: [{ type: 'text', text: history[2]!.content }],
+    });
+    expect(wire[1]!.content).toEqual([
+      { type: 'text', text: expect.stringContaining('was not executed') },
+    ]);
+    expect(history).toEqual(before);
+    expect(history[2]!.role).toBe('tool');
+    expect(history.filter(isSaidByPerson)).toEqual([history[0]]);
   });
 });
 
