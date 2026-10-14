@@ -326,6 +326,22 @@ export interface LLMRequest {
     readonly type: 'tool';
     readonly name: string;
   };
+  /**
+   * Constrain the model's TEXT answer to a JSON Schema with the provider's
+   * own structured output — `.outputSchema(parser, { strategy: 'native' })`.
+   * The Anthropic adapters write it as `output_config: { format }`
+   * (https://platform.claude.com/docs/en/build-with-claude/structured-outputs).
+   *
+   * Same rule as {@link toolChoice}: when `nativeOutputSchemaFor(provider,
+   * model)` answers false the agent refuses at run start, naming both, and an
+   * adapter that cannot put it on its wire refuses with an
+   * `UnsupportedNativeOutputError` before anything is sent — never drops it.
+   * The schema is the wire copy `nativeOutputFormat` built; send it as-is.
+   */
+  readonly outputFormat?: {
+    readonly type: 'json_schema';
+    readonly schema: Readonly<Record<string, unknown>>;
+  };
 }
 
 export interface LLMResponse {
@@ -431,6 +447,14 @@ export interface LLMResponse {
 export interface WireToolManifest {
   /** Tool names as they appear in the serialized body, in wire order. */
   readonly toolNames: readonly string[];
+  /**
+   * Present only when the serialized body carried a structured-output format
+   * (Anthropic's `output_config.format`) — its `type`, read back from the
+   * body. Absent means none crossed. A `strategy: 'native'` agent refuses a
+   * stated manifest without it: the provider declared the capability and the
+   * request went out unconstrained.
+   */
+  readonly outputFormat?: 'json_schema';
 }
 
 export interface LLMChunk {
@@ -700,6 +724,22 @@ export interface LLMProvider {
    * forward it as a value. `withFallback` intersects both sides per model.
    */
   readonly supportsForcedToolChoice?: (model: string) => boolean;
+  /**
+   * Whether this adapter puts {@link LLMRequest.outputFormat} on its wire —
+   * the provider's own structured output, `strategy: 'native'`. **Absence
+   * means NO**, for the reason `carriesForcedToolChoice` gives: a format that
+   * quietly vanishes costs the guarantee the strategy was chosen for. Declared
+   * by `anthropic()`, `browserAnthropic()` and the mock; read with
+   * `nativeOutputSchemaFor(provider, model)`. A WRAPPER must forward it;
+   * `withFallback` publishes the AND of its pair.
+   */
+  readonly carriesNativeOutputSchema?: boolean;
+  /**
+   * Optional per-model restriction on {@link carriesNativeOutputSchema}, the
+   * `supportsForcedToolChoice` twin: both must answer true. A plain function
+   * of the model id (no `this`); the adapter resolves its own shorthand.
+   */
+  readonly supportsNativeOutputSchema?: (model: string) => boolean;
   /**
    * `hooks` (v7.8) is optional and additive — implementations may declare
    * `complete(req)` with no second parameter and stay assignable. A LEAF

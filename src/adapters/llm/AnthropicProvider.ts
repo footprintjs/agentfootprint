@@ -30,7 +30,10 @@ import { asContextWindowExceeded } from './contextWindow.js';
 import { retryAfterMsFromError } from './retryAfter.js';
 import { ANTHROPIC_PROMPT_CACHING } from './anthropicCacheWire.js';
 import { thinkingModeWith } from './anthropicThinkingWire.js';
-import { anthropicTakesForcedToolChoice } from './anthropicModels.js';
+import {
+  anthropicTakesForcedToolChoice,
+  anthropicTakesNativeOutputSchema,
+} from './anthropicModels.js';
 import { prepareAnthropicReplay, thinkingReplayBinding } from './anthropicThinkingReplay.js';
 import { toolManifestOf } from './wireManifest.js';
 import { AnthropicToolArguments } from './anthropicToolArguments.js';
@@ -187,6 +190,7 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
         provider: 'anthropic',
         maxTokensDefault: defaultMaxTokens,
         ...(parallelToolCalls !== undefined && { parallelToolCalls }),
+        nativeOutputSchema: anthropicTakesNativeOutputSchema,
       }),
     };
   };
@@ -196,6 +200,10 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
     carriesInMessages: CARRIES_IN_MESSAGES,
     carriesForcedToolChoice: true,
     supportsForcedToolChoice: (model) => anthropicTakesForcedToolChoice(modelOf(model)),
+    // `output_config.format` — the `'native'` output strategy — on the models
+    // the structured-outputs page lists (anthropicModels.ts).
+    carriesNativeOutputSchema: true,
+    supportsNativeOutputSchema: (model) => anthropicTakesNativeOutputSchema(modelOf(model)),
     // Explicit `cache_control` breakpoints, four per request, usage reported —
     // the agent's cache strategy is chosen from this, never from `name`.
     promptCaching: ANTHROPIC_PROMPT_CACHING,
@@ -217,7 +225,7 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
         // not what the request intended (wireManifest.ts).
         return {
           ...fromAnthropicResponse(message, message.id ? bindingFactory(message.id) : undefined),
-          wireManifest: toolManifestOf(params.tools),
+          wireManifest: toolManifestOf(params.tools, params.output_config),
           ...(preparation.omissions.length > 0 && { replayOmissions: preparation.omissions }),
         };
       } catch (err) {
@@ -270,7 +278,7 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
             final.id ? bindingFactory(final.id) : undefined,
             argumentFailures,
           ),
-          wireManifest: toolManifestOf(params.tools),
+          wireManifest: toolManifestOf(params.tools, params.output_config),
           ...(preparation.omissions.length > 0 && { replayOmissions: preparation.omissions }),
         };
         yield { tokenIndex, content: '', done: true, response };
@@ -293,6 +301,9 @@ export class AnthropicProvider implements LLMProvider {
   readonly carriesForcedToolChoice = true;
   /** The inner declaration resolves this adapter's shorthand before looking up the model. */
   readonly supportsForcedToolChoice: (model: string) => boolean;
+  readonly carriesNativeOutputSchema = true;
+  /** The inner declaration resolves this adapter's shorthand before looking up the model. */
+  readonly supportsNativeOutputSchema: (model: string) => boolean;
   readonly promptCaching = ANTHROPIC_PROMPT_CACHING;
   readonly thinkingHandler = anthropicThinkingHandler;
   /** The inner provider's own function — a closure, safe to forward unbound. */
@@ -303,6 +314,7 @@ export class AnthropicProvider implements LLMProvider {
     this.inner = anthropic(options);
     this.thinkingMode = this.inner.thinkingMode!;
     this.supportsForcedToolChoice = this.inner.supportsForcedToolChoice!;
+    this.supportsNativeOutputSchema = this.inner.supportsNativeOutputSchema!;
   }
 
   // `hooks` is FORWARDED, not dropped — see LLMCallHooks in adapters/types.ts.

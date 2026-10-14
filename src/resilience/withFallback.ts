@@ -42,6 +42,7 @@ import type { ThinkingHandler, ThinkingMode } from '../thinking/types.js';
 import { dispatchThinkingHandler, tagThinkingResponse } from '../thinking/dispatch.js';
 import { DEFAULT_CARRIES_IN_MESSAGES } from '../adapters/types.js';
 import { forcedToolChoiceFor } from '../adapters/forcedToolChoice.js';
+import { nativeOutputSchemaFor } from '../adapters/nativeOutputSchema.js';
 import { isRequestRefusal } from '../adapters/requestRefusal.js';
 import { replayAttempts } from './replayAttempt.js';
 
@@ -251,6 +252,17 @@ export function withFallback(
       ? {
           supportsForcedToolChoice: (model: string) =>
             forcedToolChoiceFor(primary, model) && forcedToolChoiceFor(fallback, model),
+        }
+      : {}),
+    // The structured-output format (`strategy: 'native'`): AND, for the same
+    // reason — a pair whose answer is constrained only when one side serves it.
+    carriesNativeOutputSchema:
+      (primary.carriesNativeOutputSchema ?? false) && (fallback.carriesNativeOutputSchema ?? false),
+    ...(primary.supportsNativeOutputSchema !== undefined ||
+    fallback.supportsNativeOutputSchema !== undefined
+      ? {
+          supportsNativeOutputSchema: (model: string) =>
+            nativeOutputSchemaFor(primary, model) && nativeOutputSchemaFor(fallback, model),
         }
       : {}),
     // The combination, not the intersection — see `cachingOfPair`.

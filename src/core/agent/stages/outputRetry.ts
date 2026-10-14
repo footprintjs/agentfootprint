@@ -86,6 +86,7 @@ export function buildOutputRetryStage(
       stage: failure.stage,
       error: failure.error,
       ...(failure.path !== undefined && { path: failure.path }),
+      ...(failure.stopReason !== undefined && { stopReason: failure.stopReason }),
       correctiveMessageHash: hash,
     });
 

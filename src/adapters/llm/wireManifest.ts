@@ -26,12 +26,20 @@ export type { WireToolManifest };
  * Read the manifest off the final request body's tools array. `undefined`
  * tools (the field never written — Anthropic rejects an empty array, so
  * adapters omit it) is a stated zero: no tools crossed.
+ *
+ * `outputConfig` is the body's `output_config` (Anthropic), passed by the
+ * adapters that can send one: its `format.type` is read back into
+ * `outputFormat`. A body without it gives the manifest it always gave.
  */
 export function toolManifestOf(
   tools: ReadonlyArray<{ readonly name?: unknown }> | undefined,
+  outputConfig?: { readonly format?: { readonly type?: unknown } },
 ): WireToolManifest {
-  if (tools === undefined) return { toolNames: [] };
+  const format =
+    outputConfig?.format?.type === 'json_schema' ? { outputFormat: 'json_schema' as const } : {};
+  if (tools === undefined) return { toolNames: [], ...format };
   return {
     toolNames: tools.map((t) => t.name).filter((name): name is string => typeof name === 'string'),
+    ...format,
   };
 }

@@ -26,6 +26,7 @@ import type { LLMChunk, LLMRequest, LLMResponse } from '../types.js';
 import { applyCacheMarkers, readCacheUsage } from './anthropicCacheWire.js';
 import { anthropicTakesForcedToolChoice } from './anthropicModels.js';
 import { UnsupportedToolChoiceError } from '../forcedToolChoice.js';
+import { UnsupportedNativeOutputError } from '../nativeOutputSchema.js';
 import { anthropicThinkingPlan, type AnthropicThinkingParam } from './anthropicThinkingWire.js';
 import type { WireToolManifest } from './wireManifest.js';
 import type { ThinkingMode } from '../../thinking/types.js';
@@ -50,6 +51,9 @@ export interface AnthropicMessagesBody {
   thinking?: AnthropicThinkingParam;
   // Emitted only when `parallelToolCalls: false`, or for a forced choice.
   tool_choice?: { type: 'auto'; disable_parallel_tool_use: true } | { type: 'tool'; name: string };
+  // Emitted only for `LLMRequest.outputFormat` (`.outputSchema(s, { strategy:
+  // 'native' })`) — Anthropic's structured outputs. Absent on every other body.
+  output_config?: { format: { type: 'json_schema'; schema: Record<string, unknown> } };
 }
 
 export interface AnthropicMessageParam {
@@ -120,6 +124,13 @@ export interface MessagesBodyOptions {
   readonly maxTokensDefault: number;
   /** `false` caps a reply at one tool call. */
   readonly parallelToolCalls?: boolean;
+  /**
+   * The adapter's declared `supportsNativeOutputSchema` — whether `model`
+   * takes `output_config.format`. ABSENT means the adapter does not carry the
+   * format at all (`invokeModelGateway()` in this release), so a request that
+   * asks for one is refused by name rather than sent without it.
+   */
+  readonly nativeOutputSchema?: (model: string) => boolean;
 }
 
 /**
@@ -148,6 +159,12 @@ export function buildMessagesBody(
   ) {
     throw new UnsupportedToolChoiceError({ provider: options.provider, model: options.model });
   }
+  // Same rule for the structured-output format: refused before transport,
+  // never dropped — a format that quietly vanishes is an unconstrained answer
+  // the config says was constrained.
+  if (req.outputFormat !== undefined && options.nativeOutputSchema?.(options.model) !== true) {
+    throw new UnsupportedNativeOutputError({ provider: options.provider, model: options.model });
+  }
   // The map is only needed when a messages marker has to be placed; building
   // it always keeps the transform single-pass and costs one number per message.
   const messageIndexMap: number[] = [];
@@ -174,6 +191,18 @@ export function buildMessagesBody(
   // WHICH tool answers is the contract the run is built on. Same guard.
   if (req.toolChoice && body.tools !== undefined && body.tools.length > 0) {
     body.tool_choice = { type: 'tool', name: req.toolChoice.name };
+  }
+  // The structured-output format (`strategy: 'native'`), as the agent built
+  // it (`core/agent/nativeOutputFormat.ts`): sent as-is, never re-shaped here.
+  // `output_config.format` — the GA field; the deprecated `output_format`
+  // needs a beta header and is never sent.
+  if (req.outputFormat !== undefined) {
+    body.output_config = {
+      format: {
+        type: 'json_schema',
+        schema: req.outputFormat.schema as Record<string, unknown>,
+      },
+    };
   }
   // Cache markers — applied AFTER body construction so the materialized
   // fields (system / tools / messages) exist to mark. Clamped to the declared

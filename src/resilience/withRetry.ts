@@ -130,6 +130,14 @@ export function withRetry(provider: LLMProvider, options: WithRetryOptions = {})
     ...(provider.supportsForcedToolChoice !== undefined && {
       supportsForcedToolChoice: provider.supportsForcedToolChoice,
     }),
+    // Same wire, same structured-output format (`strategy: 'native'`) — the
+    // same refusal-if-dropped reasoning as the forced choice above.
+    ...(provider.carriesNativeOutputSchema !== undefined && {
+      carriesNativeOutputSchema: provider.carriesNativeOutputSchema,
+    }),
+    ...(provider.supportsNativeOutputSchema !== undefined && {
+      supportsNativeOutputSchema: provider.supportsNativeOutputSchema,
+    }),
     // Same wire, same cache. The agent chooses its cache strategy from this
     // declaration — it used to look the strategy up by `name`, and the
     // `+retry` suffix above sent every retried Anthropic call out with no

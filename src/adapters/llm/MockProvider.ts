@@ -128,6 +128,13 @@ export class MockProvider implements LLMProvider {
    * cheap rehearsal the one path you could only rehearse in production.
    */
   readonly carriesForcedToolChoice = true;
+  /**
+   * The mock "carries" a structured-output format for the same reason it
+   * carries a forced choice: the scripted reply IS the constrained answer, so
+   * `strategy: 'native'` can be rehearsed offline. Its manifest states the
+   * format whenever the request carried one.
+   */
+  readonly carriesNativeOutputSchema = true;
   /** Normalizes the scripted `rawThinking` a reply carries. */
   readonly thinkingHandler = mockThinkingHandler;
   private readonly reply?: string;
@@ -239,7 +246,10 @@ export class MockProvider implements LLMProvider {
       // Mock has no wire, so its honest manifest is an ECHO of the request's
       // tools — the healthy adapter's shape (body mirrors IR), unless a test
       // scripted a divergent manifest to stand in for a drifting adapter.
-      wireManifest: partial.wireManifest ?? { toolNames: (req.tools ?? []).map((t) => t.name) },
+      wireManifest: partial.wireManifest ?? {
+        toolNames: (req.tools ?? []).map((t) => t.name),
+        ...(req.outputFormat !== undefined && { outputFormat: req.outputFormat.type }),
+      },
     };
   }
 

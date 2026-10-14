@@ -4,7 +4,7 @@ title: CodeResult
 
 # Interface: CodeResult
 
-Defined in: [src/adapters/types.ts:1170](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1170)
+Defined in: [src/adapters/types.ts:1210](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1210)
 
 What one execution produced.
 
@@ -14,7 +14,7 @@ What one execution produced.
 
 > `readonly` `optional` **artifacts?**: readonly `object`[]
 
-Defined in: [src/adapters/types.ts:1205](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1205)
+Defined in: [src/adapters/types.ts:1245](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1245)
 
 Files the run produced, described rather than inlined — the whole point is
  that big data does not enter the window. All fields beyond the original
@@ -52,7 +52,7 @@ Files the run produced, described rather than inlined — the whole point is
 
 > `readonly` `optional` **exitCode?**: `number`
 
-Defined in: [src/adapters/types.ts:1175](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1175)
+Defined in: [src/adapters/types.ts:1215](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1215)
 
 ***
 
@@ -60,7 +60,7 @@ Defined in: [src/adapters/types.ts:1175](https://github.com/footprintjs/agentfoo
 
 > `readonly` **ok**: `boolean`
 
-Defined in: [src/adapters/types.ts:1172](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1172)
+Defined in: [src/adapters/types.ts:1212](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1212)
 
 Did the code run to completion without an error exit?
 
@@ -70,7 +70,7 @@ Did the code run to completion without an error exit?
 
 > `readonly` **stderr**: `string`
 
-Defined in: [src/adapters/types.ts:1174](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1174)
+Defined in: [src/adapters/types.ts:1214](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1214)
 
 ***
 
@@ -78,7 +78,7 @@ Defined in: [src/adapters/types.ts:1174](https://github.com/footprintjs/agentfoo
 
 > `readonly` **stdout**: `string`
 
-Defined in: [src/adapters/types.ts:1173](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1173)
+Defined in: [src/adapters/types.ts:1213](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1213)
 
 ***
 
@@ -86,7 +86,7 @@ Defined in: [src/adapters/types.ts:1173](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **truncated?**: `object`
 
-Defined in: [src/adapters/types.ts:1222](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1222)
+Defined in: [src/adapters/types.ts:1262](https://github.com/footprintjs/agentfootprint/blob/main/src/adapters/types.ts#L1262)
 
 Present IFF output was cut, and then it says by how much.
 

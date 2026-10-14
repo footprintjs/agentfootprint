@@ -35,6 +35,7 @@ import type { FindingsLedger } from '../findings/types.js';
 import { HIDDEN_VALUE, TIME_WINDOW_SOURCE } from '../arguments/rows.js';
 import {
   judgeAnswer,
+  nativeStopFailure,
   recordOutputAttempt,
   type ResolvedOutputEnforcement,
 } from '../outputEnforcement.js';
@@ -511,6 +512,8 @@ function recordAnswerGuarantee(
   scope.answerGuarantee =
     enforcement === undefined
       ? 'none'
+      : enforcement.outputFormat !== undefined
+      ? 'native'
       : enforcement.schemaTool !== undefined
       ? 'tool-forced'
       : 'checked';
@@ -1541,7 +1544,14 @@ function buildEnforcingDecider(
     }
 
     const attempt = ((scope.outputAttempts?.length as number | undefined) ?? 0) + 1;
-    const failure = judgeAnswer(scope.llmLatestContent as string, enforcement.parser);
+    // `'native'`: a refusal or truncation stop fails the attempt by name
+    // before the parser runs — the format did not hold for that text. The
+    // stop key is READ only under `'native'`: a tracked get of an absent key
+    // is still a read on the record, and every other agent keeps its bytes.
+    const failure =
+      (enforcement.outputFormat !== undefined
+        ? nativeStopFailure(enforcement, scope.llmLatestStopReason)
+        : undefined) ?? judgeAnswer(scope.llmLatestContent as string, enforcement.parser);
 
     if (failure === undefined) {
       recordOutputAttempt(scope, {
@@ -1609,11 +1619,20 @@ function buildEnforcingDecider(
         ? (await import('../findings/peel.js')).peelAnswerFindings(preChainAnswer).content
         : preChainAnswer;
     const brokenByChain =
-      rewrittenBy !== undefined && judgeAnswer(judgedPreChain, enforcement.parser) === undefined
+      rewrittenBy !== undefined &&
+      failure.stopReason === undefined &&
+      judgeAnswer(judgedPreChain, enforcement.parser) === undefined
         ? rewrittenBy
         : undefined;
 
-    if (attempt <= enforcement.retries && brokenByChain === undefined) {
+    // A REFUSAL is not re-asked: the model declined, and a correction that
+    // says the shape was wrong would be false and would bill a turn no shape
+    // can fix — the `brokenByChain` reasoning. It stands, exhausted, named.
+    if (
+      attempt <= enforcement.retries &&
+      brokenByChain === undefined &&
+      failure.stopReason !== 'refusal'
+    ) {
       // The retry stage writes the correction and files the row, because it
       // is the one that knows what it wrote. This is the hand-off.
       scope.outputSchemaFailure = { attempt, ...failure };
@@ -1636,6 +1655,7 @@ function buildEnforcingDecider(
       error: failure.error,
       ...(failure.path !== undefined && { path: failure.path }),
       ...(brokenByChain !== undefined && { brokenBy: brokenByChain }),
+      ...(failure.stopReason !== undefined && { stopReason: failure.stopReason }),
     });
     recordContractUnmet(scope, {
       failure,
@@ -1651,8 +1671,12 @@ function buildEnforcingDecider(
     noteClaims(claims, integrityLedger, 'unreachable');
     // A schema-exhausted answer is still a would-be-final one, and the step
     // table is unconditional on schema state: steps remaining + nudge
-    // unspent → one teaching re-ask (its turn may well fix both).
-    const steps = judgeUnfinishedSteps(scope, stepPlanFor, base.earlyStop, answer);
+    // unspent → one teaching re-ask (its turn may well fix both). Not after
+    // a REFUSAL (`'native'`): the model declined, and no nudge re-asks it.
+    const steps =
+      failure.stopReason === 'refusal'
+        ? undefined
+        : judgeUnfinishedSteps(scope, stepPlanFor, base.earlyStop, answer);
     if (steps === 'step-nudge') {
       return reAsk('step-nudge', stepNudgeRationale(scope));
     }
@@ -1672,8 +1696,11 @@ function buildEnforcingDecider(
       brokenByChain !== undefined
         ? `final answer satisfied the output schema until the output rule '${brokenByChain}' ` +
             `rewrote it (${failure.stage}) — not re-asked, because the model's answer was fine`
+        : failure.stopReason === 'refusal'
+        ? `the provider stopped with stop_reason 'refusal' — the answer does not hold the ` +
+          `output format, and a refusal is not re-asked`
         : `final answer failed the output schema (${failure.stage}) and ` +
-            `${enforcement.retries} retry/retries were spent`,
+          `${enforcement.retries} retry/retries were spent`,
     );
     settleWrapUp(scope, base.earlyStop, false);
     return 'final';
@@ -1697,7 +1724,12 @@ function buildEnforcingDecider(
 function recordContractUnmet(
   scope: TypedScope<AgentState>,
   facts: {
-    readonly failure: { stage: 'json-parse' | 'schema-validate'; error: string; path?: string };
+    readonly failure: {
+      stage: 'json-parse' | 'schema-validate';
+      error: string;
+      path?: string;
+      stopReason?: import('../outputEnforcement.js').NativeStopReason;
+    };
     readonly attempts: number;
     readonly retriesSpent: number;
     readonly fallbackConfigured: boolean;
@@ -1714,6 +1746,7 @@ function recordContractUnmet(
     retriesSpent,
     fallbackConfigured,
     ...(brokenBy !== undefined && { brokenBy }),
+    ...(failure.stopReason !== undefined && { stopReason: failure.stopReason }),
   };
 
   typedEmit(scope, 'agentfootprint.agent.output_contract_unmet', {

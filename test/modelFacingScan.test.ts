@@ -468,8 +468,8 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
   'src/core/Agent.ts': [
     {
       kind: 'not-model-facing',
-      count: 9,
-      why: "typed-output, option-validation and forced-tool errors thrown to the caller, the build-time refusals of `.findings()` and `.toolChoice()` under reactMode 'classic', plus one console warning about a cached menu",
+      count: 10,
+      why: "typed-output, option-validation, forced-tool and native-output (`strategy: 'native'` run-start) errors thrown to the caller, the build-time refusals of `.findings()` and `.toolChoice()` under reactMode 'classic', plus one console warning about a cached menu",
     },
   ],
   'src/core/agent/toolChoice/pick.ts': [
@@ -1163,12 +1163,14 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // Streamed tool integrity: one host-only provider error refuses EOF
         // without message_stop. It is never delivered as a model message.
         // files 98 → 99, total 192 → 193, notModelFacing 129 → 130.
+        // The native output strategy: one host-only run-start refusal in
+        // Agent.ts. total 193 → 194, notModelFacing 130 → 131.
         files: 99,
-        total: 193,
+        total: 194,
         registry: 8,
         ephemeral: 22,
         unrepaired: 33,
-        notModelFacing: 130,
+        notModelFacing: 131,
         unrepairedEntries: 13,
       });
       // And the ledger's own total is the number of literals the scan flagged —

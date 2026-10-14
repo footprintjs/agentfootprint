@@ -85,8 +85,23 @@ export interface OutputSchemaParser<T> {
  *     refused BY NAME at run start rather than quietly downgraded, because
  *     a strategy that silently falls back to the other one is config that
  *     lies.
+ *   • `'native'` — the provider's own structured output: the schema rides the
+ *     request as Anthropic's `output_config.format` (`{ type: 'json_schema',
+ *     schema }`) and the model's text answer is decoded under it. Unlike
+ *     `'tool-forced'` it keeps the agent's tools: the model may still call a
+ *     tool first, and answers in JSON when it answers. Requires a provider
+ *     that declares `carriesNativeOutputSchema` and permits the selected model
+ *     through its optional `supportsNativeOutputSchema`; the same refusal BY
+ *     NAME applies at run start. The schema sent is a wire copy made
+ *     API-compatible by `nativeOutputFormat.ts · nativeOutputFormat` (every
+ *     object closed with `additionalProperties: false`, the constraints the
+ *     API does not take moved into the description); a schema the API cannot
+ *     express is refused at build. The parser still judges every answer
+ *     against the full contract, and a `stop_reason` of `'refusal'`,
+ *     `'max_tokens'` or `'model_context_window_exceeded'` fails the attempt by
+ *     name even when the text parses (a refusal is not re-asked).
  */
-export type OutputSchemaStrategy = 'instruct' | 'tool-forced';
+export type OutputSchemaStrategy = 'instruct' | 'tool-forced' | 'native';
 
 /**
  * Optional configuration for `outputSchema`.
@@ -129,11 +144,23 @@ export interface OutputSchemaOptions {
    */
   readonly strategy?: OutputSchemaStrategy;
   /**
-   * The JSON Schema for the synthetic tool, required by
-   * `strategy: 'tool-forced'` unless the parser can produce one itself
+   * The JSON Schema for the synthetic tool (`strategy: 'tool-forced'`) or
+   * for the provider's structured output (`strategy: 'native'`), required by
+   * both unless the parser can produce one itself
    * (a `toJsonSchema()` method, which ArkType has). The library will not
    * infer a shape from a `parse()` function — guessing what your schema
    * means is not a thing it gets to do.
+   *
+   * @example  `'native'` on Anthropic
+   *   .outputSchema(Verdict, {
+   *     strategy: 'native',
+   *     retries: 1,
+   *     jsonSchema: {
+   *       type: 'object',
+   *       properties: { status: { type: 'string', enum: ['ok', 'err'] } },
+   *       required: ['status'],
+   *     },
+   *   })
    *
    * This value and the parser CAN disagree. Nothing here prevents that,
    * and nothing needs to: the forced shape satisfies the wire, the parser

@@ -168,9 +168,22 @@ invokeModelGateway({ baseUrl, apiKeyHeader: 'api-key', apiKey, model, timeoutMs:
 - `anthropicMessagesWire.ts` — the Anthropic Messages body, response mapping and
   stream assembly, shared by the two fetch adapters above (and the body by
   `anthropic()`).
-- `anthropicModels.ts` — the one table of thinking and forced-tool facts.
-  New forced-tool refusals require complete recognized model IDs; the thinking
-  column preserves its established permissive alias lookup for compatibility.
+- `anthropicModels.ts` — the one table of thinking, forced-tool and
+  structured-output facts. New forced-tool refusals require complete recognized
+  model IDs; the thinking column preserves its established permissive alias
+  lookup for compatibility. The `nativeOutputSchema` column says which models
+  take `output_config.format` (`.outputSchema(s, { strategy: 'native' })`):
+  the families the structured-outputs page lists; an id the table does not know
+  is read as the newest generation and takes it (the thinking precedent), and a
+  listed-as-older family is refused before sending. `anthropic()` and
+  `browserAnthropic()` declare it; the gateway and Bedrock do not, and
+  `buildMessagesBody` refuses a format for an adapter that did not declare it.
+
+  ```ts
+  import { anthropic, nativeOutputSchemaFor } from 'agentfootprint/providers';
+  nativeOutputSchemaFor(anthropic(), 'claude-haiku-4-5'); // true
+  nativeOutputSchemaFor(anthropic(), 'claude-opus-4-1'); // false — refused by name
+  ```
 - `anthropicThinkingWire.ts` — the translation of `LLMRequest.thinking` onto the body.
 - `retryAfter.ts` — the one reader of `retry-after-ms` / `Retry-After`, for the
   `retryAfterMs` an adapter declares.

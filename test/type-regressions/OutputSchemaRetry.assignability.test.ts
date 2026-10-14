@@ -49,12 +49,20 @@ describe('outputSchema options — the generic still flows (7.26)', () => {
         jsonSchema: { type: 'object' },
       })
       .build();
+    const native = Agent.create({ provider: mock({ reply: '{}' }), model: 'mock' })
+      .outputSchema(parser, {
+        strategy: 'native',
+        retries: 1,
+        jsonSchema: { type: 'object', properties: { amount: { type: 'number' } } },
+      })
+      .build();
 
     // The assertion IS the assignment: `Promise<Refund>` on every path.
     const a: Promise<Refund> = plain.runTyped<Refund>({ message: 'x' });
     const b: Promise<Refund> = withRetries.runTyped<Refund>({ message: 'x' });
     const c: Promise<Refund> = forced.runTyped<Refund>({ message: 'x' });
-    await Promise.allSettled([a, b, c]);
+    const d: Promise<Refund> = native.runTyped<Refund>({ message: 'x' });
+    await Promise.allSettled([a, b, c, d]);
     expect(typeof plain.runTyped).toBe('function');
   });
 

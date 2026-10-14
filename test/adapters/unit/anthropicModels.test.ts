@@ -27,8 +27,8 @@ describe('Anthropic model facts: complete identifiers only', () => {
     expect(facts.thinkingPrefixBinding).toBe(bound ? true : undefined);
     expect(Object.keys(facts).sort()).toEqual(
       bound
-        ? ['forcedToolChoice', 'thinking', 'thinkingPrefixBinding']
-        : ['forcedToolChoice', 'thinking'],
+        ? ['forcedToolChoice', 'nativeOutputSchema', 'thinking', 'thinkingPrefixBinding']
+        : ['forcedToolChoice', 'nativeOutputSchema', 'thinking'],
     );
   });
 

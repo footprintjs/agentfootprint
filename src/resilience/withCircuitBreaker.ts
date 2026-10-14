@@ -311,6 +311,13 @@ export function withCircuitBreaker(
     ...(inner.supportsForcedToolChoice !== undefined && {
       supportsForcedToolChoice: inner.supportsForcedToolChoice,
     }),
+    // And for the structured-output format (`strategy: 'native'`).
+    ...(inner.carriesNativeOutputSchema !== undefined && {
+      carriesNativeOutputSchema: inner.carriesNativeOutputSchema,
+    }),
+    ...(inner.supportsNativeOutputSchema !== undefined && {
+      supportsNativeOutputSchema: inner.supportsNativeOutputSchema,
+    }),
     // And for prompt caching: a breaker never changes what reaches the wire.
     ...(inner.promptCaching !== undefined && { promptCaching: inner.promptCaching }),
     ...(inner.thinkingHandler !== undefined && { thinkingHandler: inner.thinkingHandler }),

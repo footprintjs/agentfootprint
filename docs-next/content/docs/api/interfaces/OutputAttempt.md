@@ -104,3 +104,17 @@ Failing field path when the parser exposes one (Zod-style issues).
 Defined in: [src/core/agent/outputEnforcement.ts:66](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/outputEnforcement.ts#L66)
 
 Which half of validation failed. Absent on a passing row.
+
+***
+
+### stopReason?
+
+> `readonly` `optional` **stopReason?**: `NativeStopReason`
+
+Defined in: [src/core/agent/outputEnforcement.ts:93](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/outputEnforcement.ts#L93)
+
+Set when the attempt failed because the provider STOPPED, not because the
+text failed the parser: a `strategy: 'native'` answer that ended with a
+NativeStopReason, where the structured-output format does not
+hold. Such an answer fails even when it parses; a `'refusal'` is never
+re-asked (the row is `'exhausted'` at once).

@@ -34,6 +34,10 @@ import {
   forcedToolChoiceFor,
   UnsupportedToolChoiceError,
 } from '../../../adapters/forcedToolChoice.js';
+import {
+  nativeOutputSchemaFor,
+  UnsupportedNativeOutputError,
+} from '../../../adapters/nativeOutputSchema.js';
 import type { CacheMarker, CacheStrategy } from '../../../cache/types.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import { wireViolationsOf } from '../../../integrity/invariant-violation/wire.js';
@@ -92,6 +96,11 @@ const EMPTY_TOOL_SCHEMAS: readonly LLMToolSchema[] = Object.freeze([]);
 function assertForcedRequestSupported(provider: LLMProvider, request: LLMRequest): void {
   if (request.toolChoice !== undefined && !forcedToolChoiceFor(provider, request.model)) {
     throw new UnsupportedToolChoiceError({ provider: provider.name, model: request.model });
+  }
+  // The structured-output twin (`strategy: 'native'`), judged on the same
+  // effective model — a configured or per-skill model included.
+  if (request.outputFormat !== undefined && !nativeOutputSchemaFor(provider, request.model)) {
+    throw new UnsupportedNativeOutputError({ provider: provider.name, model: request.model });
   }
 }
 
@@ -330,6 +339,14 @@ export interface CallLLMStageDeps {
    * agent's surface.
    */
   readonly schemaTool?: LLMToolSchema;
+  /**
+   * The structured-output format the `'native'` output strategy sends
+   * (`nativeOutputFormat.ts`). Present ONLY under that strategy: the request
+   * carries it as `outputFormat`, this stage refuses a provider manifest that
+   * says it did not cross, and it records `llmLatestStopReason` for the Route
+   * decider. Absent, not one line of that runs.
+   */
+  readonly outputFormat?: NonNullable<LLMRequest['outputFormat']>;
   /** v2.14+ — request-side thinking budget. When set, every LLMRequest
    *  carries `thinking: { budget }` so the provider activates extended
    *  thinking. Undefined = no activation (default). */
@@ -772,6 +789,7 @@ export function buildCallLLMStage(
       ...(deps.schemaTool !== undefined && {
         toolChoice: { type: 'tool' as const, name: deps.schemaTool.name },
       }),
+      ...(deps.outputFormat !== undefined && { outputFormat: deps.outputFormat }),
     };
     // v2.6+ — call cache strategy to attach provider-specific cache
     // hints. CacheGate has already routed (apply-markers / no-markers)
@@ -1147,8 +1165,28 @@ export function buildCallLLMStage(
     if (typeof response.usage.cacheRead === 'number') {
       scope.totalCacheReadTokens = (scope.totalCacheReadTokens ?? 0) + response.usage.cacheRead;
     }
+    // `'native'` only. A provider that states its manifest (wireManifest.ts)
+    // and says no format crossed sent the request unconstrained while it
+    // declared the capability — refused, never delivered as constrained.
+    if (
+      deps.outputFormat !== undefined &&
+      response.wireManifest !== undefined &&
+      response.wireManifest.outputFormat === undefined
+    ) {
+      throw new Error(
+        `Agent: .outputSchema(parser, { strategy: 'native' }) — '${answeredBy.provider}' ` +
+          `declares a native structured-output format, but its wire manifest says the request ` +
+          `it sent carried none. The answer was not constrained, so it is not delivered as if ` +
+          `it were.`,
+      );
+    }
     scope.llmLatestContent = response.content;
     scope.llmLatestToolCalls = response.toolCalls;
+    // `'native'` only, every call (so it is never stale): the stop reason the
+    // Route decider judges a constrained answer by — a 'refusal' or
+    // 'max_tokens' stop does not hold the format (outputEnforcement.ts ·
+    // nativeStopFailure). Absent on every other agent, so their bytes are unchanged.
+    if (deps.outputFormat !== undefined) scope.llmLatestStopReason = response.stopReason;
     // A response owns its replay evidence, never the previous response's.
     // The presence trap does not record a read on never-replay providers.
     if (response.replay !== undefined || 'llmLatestReplay' in scope) {
