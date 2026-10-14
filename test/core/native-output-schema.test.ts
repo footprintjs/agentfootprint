@@ -402,6 +402,30 @@ describe('review round 1', () => {
     });
   });
 
+  it('observe-mode validation reports a provider stop but does not withhold the answer', async () => {
+    let checked = 0;
+    const { provider } = recordingMock([{ content: '{"status":"ok"}', stopReason: 'refusal' }]);
+    const agent = Agent.create({ provider, model: 'mock' })
+      .outputSchema(Verdict, { strategy: 'native', jsonSchema: SCHEMA })
+      .answerValidation({
+        id: 'v',
+        version: '1',
+        mode: 'observe',
+        validate() {
+          checked++;
+          return { checks: [{ id: 'v', disposition: 'checked-pass' }] };
+        },
+      })
+      .build();
+    await expect(agent.run({ message: 'q' })).resolves.toBe('{"status":"ok"}');
+    expect(checked).toBe(0);
+    expect(agent.answerValidation()).toMatchObject({
+      schemaAccepted: false,
+      reason: 'provider-stop:refusal',
+    });
+    expect(agent.outputContractUnmet()?.stopReason).toBe('refusal');
+  });
+
   it('a context-window stop is a truncation too, and the grouped chart carries the stop to Route', async () => {
     const { provider } = recordingMock([
       { content: '{"status":"ok"}', stopReason: 'model_context_window_exceeded' },

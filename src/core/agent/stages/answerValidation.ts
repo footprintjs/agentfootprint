@@ -56,7 +56,12 @@ export function withAnswerValidation(
         reason: nativeStop !== undefined ? `provider-stop:${nativeStop}` : 'prior-refusal',
       };
       scope.answerValidation = report;
-      scope.answerValidationBlocked = true;
+      // A provider stop is the schema's verdict, not a refusal by a rule: it
+      // withholds only in `enforce` — `observe` hands the answer back with
+      // the report, as the same agent without validation would.
+      if (nativeStop === undefined || config.mode === 'enforce') {
+        scope.answerValidationBlocked = true;
+      }
       return 'final';
     }
     const identity = scope.runIdentity;

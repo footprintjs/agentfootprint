@@ -1671,8 +1671,12 @@ function buildEnforcingDecider(
     noteClaims(claims, integrityLedger, 'unreachable');
     // A schema-exhausted answer is still a would-be-final one, and the step
     // table is unconditional on schema state: steps remaining + nudge
-    // unspent → one teaching re-ask (its turn may well fix both).
-    const steps = judgeUnfinishedSteps(scope, stepPlanFor, base.earlyStop, answer);
+    // unspent → one teaching re-ask (its turn may well fix both). Not after
+    // a REFUSAL (`'native'`): the model declined, and no nudge re-asks it.
+    const steps =
+      failure.stopReason === 'refusal'
+        ? undefined
+        : judgeUnfinishedSteps(scope, stepPlanFor, base.earlyStop, answer);
     if (steps === 'step-nudge') {
       return reAsk('step-nudge', stepNudgeRationale(scope));
     }
@@ -1692,8 +1696,11 @@ function buildEnforcingDecider(
       brokenByChain !== undefined
         ? `final answer satisfied the output schema until the output rule '${brokenByChain}' ` +
             `rewrote it (${failure.stage}) — not re-asked, because the model's answer was fine`
+        : failure.stopReason === 'refusal'
+        ? `the provider stopped with stop_reason 'refusal' — the answer does not hold the ` +
+          `output format, and a refusal is not re-asked`
         : `final answer failed the output schema (${failure.stage}) and ` +
-            `${enforcement.retries} retry/retries were spent`,
+          `${enforcement.retries} retry/retries were spent`,
     );
     settleWrapUp(scope, base.earlyStop, false);
     return 'final';
