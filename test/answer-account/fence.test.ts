@@ -87,7 +87,7 @@ describe('IMPORT-GRAPH FENCE', () => {
   it('reaches no provider, adapter, loop stage or MCP module at run time', () => {
     const reached = [...closure(join(FOLDER, 'index.ts'))].map((f) => relative(SRC, f));
     const forbidden = reached.filter((f) =>
-      /^(adapters\/|llm-providers|core\/agent\/stages\/|lib\/mcp\/|providers|core\/Agent\.ts|core\/runner)/.test(
+      /^(adapters\/|llm-providers|core\/agent\/stages\/|mcp\/|providers|core\/Agent\.ts|core\/runner)/.test(
         f,
       ),
     );
