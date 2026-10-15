@@ -461,8 +461,8 @@ export function streamHandler<TRequest, TEvent>(
         if (inFlight.has(thread.sessionId)) {
           return refusal(
             409,
-            `[hosting] '${name}': this conversation already has a turn in flight. Send the next ` +
-              `turn when it ends.`,
+            `[hosting] '${name}': a turn of that conversation is already in flight. Send the ` +
+              `next turn when it ends.`,
             'ERR_CONCURRENT_RUN',
           );
         }
