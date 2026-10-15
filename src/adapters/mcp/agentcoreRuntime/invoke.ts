@@ -44,7 +44,9 @@
  * returning — `RetryableConflictException` (409), `ThrottlingException` (429),
  * or a hosted server's own 404 as `Unknown`. Each is handed on as the `Response`
  * an HTTPS caller would have read: its status, its error type in
- * `x-amzn-errortype`, and `retry-after` when the service sent one. So the
+ * `x-amzn-errortype`, `retry-after` when the service sent one, and as the body
+ * the server's own JSON-RPC error when it sent one (the SDK spreads a body it
+ * cannot model onto the exception), else the service's message. So the
  * transport's retry decision sees the 409, `mcpClient`'s 429 retry sees the
  * 429, and the MCP client reports the status. A failure with no status — the
  * network, an abort — never reached the service as an answer, and is thrown as
@@ -225,6 +227,11 @@ function serviceAnswerOf(err: unknown): Response | undefined {
     readonly message?: unknown;
     readonly $metadata?: { readonly httpStatusCode?: unknown };
     readonly $response?: { readonly headers?: Readonly<Record<string, unknown>> };
+    // The SDK spreads a JSON body it could not model onto the exception as own
+    // keys — so a hosted MCP server's JSON-RPC error arrives here whole.
+    readonly jsonrpc?: unknown;
+    readonly id?: unknown;
+    readonly error?: unknown;
   };
   const status = failure.$metadata?.httpStatusCode;
   if (typeof status !== 'number' || !Number.isInteger(status) || status < 400 || status > 599) {
@@ -236,8 +243,14 @@ function serviceAnswerOf(err: unknown): Response | undefined {
   }
   const retryAfter = failure.$response?.headers?.['retry-after'];
   if (typeof retryAfter === 'string') headers.set('retry-after', retryAfter);
-  const message = typeof failure.message === 'string' ? failure.message : '';
-  return new Response(JSON.stringify({ message }), { status, headers });
+  // The server's own JSON-RPC error when it sent one (a stateful server's 404
+  // "Session not found"), so the MCP client reads what the server said;
+  // otherwise the service's message.
+  const body =
+    failure.error !== null && typeof failure.error === 'object'
+      ? { jsonrpc: failure.jsonrpc ?? '2.0', id: failure.id ?? null, error: failure.error }
+      : { message: typeof failure.message === 'string' ? failure.message : '' };
+  return new Response(JSON.stringify(body), { status, headers });
 }
 
 /** An optional request field: present only when the header was. */

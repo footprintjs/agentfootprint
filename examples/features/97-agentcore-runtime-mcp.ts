@@ -11,8 +11,10 @@
  *
  * Nothing leaves the process: the runtime's HTTPS endpoint is a stand-in
  * `fetch` that speaks MCP's JSON-RPC and refuses the first tool call as "busy".
- * Drop that one line and the same code reaches a real runtime with OAuth inbound
- * auth; omit `auth` altogether for IAM (SigV4 through the AWS SDK).
+ * Pass your own credential provider (e.g. `agentCoreIdentity()`, with its
+ * `service`) and drop the stand-in, and the same code reaches a real runtime
+ * with OAuth inbound auth; omit `auth` altogether for IAM (SigV4 through the
+ * AWS SDK).
  *
  * Run:  npm run example examples/features/97-agentcore-runtime-mcp.ts
  */
@@ -48,9 +50,10 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
       // agentCoreIdentity(), the name of your OAuth2 credential provider.
       // Omit `auth` entirely for IAM: SigV4 through the AWS SDK.
       auth: {
+        // For a real runtime: your own provider (e.g. agentCoreIdentity()) here,
         bearer: staticTokens({ 'orders-oauth': 'demo-token' }),
         service: 'orders-oauth',
-        fetch: runtime.fetch, // ← drop this line to call the real runtime
+        fetch: runtime.fetch, // ← and drop this stand-in endpoint
       },
       // session: 'reuse' (default) — ONE runtime session for this client.
       retry: { onRetry: ({ attempt }) => retries.push(attempt) },

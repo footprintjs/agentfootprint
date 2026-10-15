@@ -248,15 +248,23 @@ export function fakeAgentCoreRuntime(options: FakeRuntimeOptions): FakeRuntime {
             ? options.sdkFailures?.[String(called.params?.['name'])]
             : undefined;
         if (failing !== undefined) {
-          attempts.push({
-            via: 'sdk',
-            method: 'POST',
-            rpcMethod: 'tools/call',
-            toolName: String(called?.params?.['name']),
-            ...optionalString(input, 'mcpSessionId'),
-            ...optionalString(input, 'runtimeSessionId'),
-            refusedBusy: false,
-          });
+          // The SDK's STANDARD retry policy, as the real client applies it: a
+          // server fault is sent again, up to `maxAttempts` (default 3) — the
+          // replay a client built with `maxAttempts: 1` must not make.
+          const maxAttempts =
+            typeof this.config['maxAttempts'] === 'number' ? this.config['maxAttempts'] : 3;
+          const sends = failing.status >= 500 ? maxAttempts : 1;
+          for (let i = 0; i < sends; i++) {
+            attempts.push({
+              via: 'sdk',
+              method: 'POST',
+              rpcMethod: 'tools/call',
+              toolName: String(called?.params?.['name']),
+              ...optionalString(input, 'mcpSessionId'),
+              ...optionalString(input, 'runtimeSessionId'),
+              refusedBusy: false,
+            });
+          }
           throw Object.assign(new Error(`${failing.name} from the service`), {
             name: failing.name,
             $fault: failing.status >= 500 ? 'server' : 'client',

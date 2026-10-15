@@ -104,10 +104,15 @@ function orderAgent(orderId: string, tools: readonly Tool[]): Agent {
     .build();
 }
 
-/** A branch's client, its watch, and the transport it rides. */
+/**
+ * A branch's client, its watch, and the transport it rides:
+ *   'sigv4'          — the SDK client the TRANSPORT builds (its own retry off);
+ *   'sigv4-callers'  — a client the CALLER built, holding its own keys;
+ *   { token }        — a bearer token over the HTTPS endpoint.
+ */
 async function branchClient(
   runtime: FakeRuntime,
-  auth: 'sigv4' | { token: string },
+  auth: 'sigv4' | 'sigv4-callers' | { token: string },
   maxAttempts?: number,
 ): Promise<{ tools: Tool[]; watch: Watch; close: () => Promise<void> }> {
   const watch: Watch = { retries: [] };
@@ -125,6 +130,8 @@ async function branchClient(
           }),
       },
       ...(auth === 'sigv4'
+        ? { _sdk: runtime.sdk }
+        : auth === 'sigv4-callers'
         ? {
             // A client the caller built, holding its own keys — they must never
             // reach anything this library writes.
@@ -166,7 +173,7 @@ function narrativeOf(recording: unknown): string {
 describe('runtime-hosted MCP — as a SUBFLOW (a Sequence step)', () => {
   it('the call and both retries belong to the step’s tool-calls stage; the SDK keys stay out', async () => {
     const runtime = ordersRuntime();
-    const branch = await branchClient(runtime, 'sigv4');
+    const branch = await branchClient(runtime, 'sigv4-callers');
     const flow = Sequence.create().step('lookup', orderAgent('S-7', branch.tools)).build();
     flow.attach(narrative());
     const recorder = recordRun(flow);
@@ -362,11 +369,14 @@ describe('runtime-hosted MCP — SECRECY when it goes wrong', () => {
     }
   });
 
-  it('a 5xx from the service, as a subflow: sent once (never replayed), no SDK key written', async () => {
+  it('a 5xx from the service, as a subflow: sent ONCE by the transport’s own client, nothing secret written', async () => {
     const runtime = fakeAgentCoreRuntime({
       tools: [{ name: 'lookup_order', answer: () => 'never served' }],
       sdkFailures: { lookup_order: { name: 'InternalServerException', status: 500 } },
     });
+    // The transport's OWN SDK client — the fake re-sends a server fault the way
+    // the SDK's standard policy does (up to `maxAttempts`, default 3), so this
+    // fails if the transport ever stops building its client with retry off.
     const branch = await branchClient(runtime, 'sigv4');
     const flow = Sequence.create().step('lookup', orderAgent('S-7', branch.tools)).build();
     const { written } = await recorded(flow, 'where is order S-7?');
@@ -374,7 +384,27 @@ describe('runtime-hosted MCP — SECRECY when it goes wrong', () => {
 
     // ONE attempt at the call: a 5xx may be the record of work that ran.
     expect(runtime.calls()).toHaveLength(1);
+    expect(runtime.clientConfigs[0]).toMatchObject({ maxAttempts: 1 });
     expect(branch.watch.retries).toEqual([]);
+    for (const attempt of runtime.attempts) {
+      if (attempt.runtimeSessionId) expect(written).not.toContain(attempt.runtimeSessionId);
+      if (attempt.mcpSessionId) expect(written).not.toContain(attempt.mcpSessionId);
+    }
+  });
+
+  it('a caller-built client keeps its OWN retry policy — the documented reason to set maxAttempts: 1', async () => {
+    const runtime = fakeAgentCoreRuntime({
+      tools: [{ name: 'lookup_order', answer: () => 'never served' }],
+      sdkFailures: { lookup_order: { name: 'InternalServerException', status: 500 } },
+    });
+    // No maxAttempts on the caller's client: the SDK's default policy applies,
+    // and the fake re-sends the server fault three times. This is the case the
+    // `client` option's docs warn about.
+    const branch = await branchClient(runtime, 'sigv4-callers');
+    const flow = Sequence.create().step('lookup', orderAgent('S-7', branch.tools)).build();
+    const { written } = await recorded(flow, 'where is order S-7?');
+    await branch.close();
+    expect(runtime.calls()).toHaveLength(3);
     expect(written).not.toContain(SDK_KEYS.accessKeyId);
     expect(written).not.toContain(SDK_KEYS.secretAccessKey);
   });

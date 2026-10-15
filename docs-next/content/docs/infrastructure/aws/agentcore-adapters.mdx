@@ -456,7 +456,7 @@ token", for three reasons:
 
 `agentCoreRuntimeMcpTransport` handles all three, and `mcpClient` sees an
 ordinary Streamable HTTP server. The example runs offline against a stand-in
-endpoint; drop the `fetch` line to reach a real runtime:
+endpoint; pass your own credential provider and drop the stand-in `fetch` to reach a real runtime:
 
 <CodeFile path="examples/features/97-agentcore-runtime-mcp.ts" region="transport" title="examples/features/97-agentcore-runtime-mcp.ts (region: transport)" />
 

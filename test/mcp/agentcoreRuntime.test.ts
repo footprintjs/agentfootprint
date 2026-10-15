@@ -729,8 +729,16 @@ describe('agentCoreRuntimeMcpTransport — P4 property (only the contract’s re
     expect(res.headers.get('retry-after')).toBe('2');
   });
 
-  it('P4 a hosted server’s 404 reaches the MCP client as a 404, not as "UnknownError"', async () => {
-    const sdk = throwingSdk([serviceException('Unknown', 404)]);
+  it('P4 a hosted server’s 404 reaches the MCP client as a 404 with ITS JSON-RPC error', async () => {
+    // The real SDK spreads a body it cannot model onto the exception as own
+    // keys — `jsonrpc`, `id`, `error` — and names it `Unknown` / "UnknownError".
+    const notFound = Object.assign(serviceException('Unknown', 404), {
+      message: 'UnknownError',
+      jsonrpc: '2.0',
+      id: 7,
+      error: { code: -32001, message: 'Session not found' },
+    });
+    const sdk = throwingSdk([notFound]);
     const transport = agentCoreRuntimeMcpTransport({
       agentRuntimeArn: ARN,
       region: REGION,
@@ -742,6 +750,26 @@ describe('agentCoreRuntimeMcpTransport — P4 property (only the contract’s re
     })) as Response;
     expect(res.status).toBe(404);
     expect(sdk.sends()).toBe(1);
+    expect(await res.json()).toEqual({
+      jsonrpc: '2.0',
+      id: 7,
+      error: { code: -32001, message: 'Session not found' },
+    });
+  });
+
+  it('P4 an AWS error with no JSON-RPC body is handed on as its message', async () => {
+    const sdk = throwingSdk([serviceException('AccessDeniedException', 403)]);
+    const transport = agentCoreRuntimeMcpTransport({
+      agentRuntimeArn: ARN,
+      region: REGION,
+      _sdk: sdk.module,
+    });
+    const res = (await transport.fetch?.(transport.url, {
+      method: 'POST',
+      body: '{}',
+    })) as Response;
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ message: 'AccessDeniedException from the service' });
   });
 });
 
