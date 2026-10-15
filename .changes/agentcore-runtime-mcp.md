@@ -1,0 +1,8 @@
+---
+type: added
+---
+**Call MCP servers hosted on AWS Bedrock AgentCore Runtime.** `agentCoreRuntimeMcpTransport({ agentRuntimeArn, region })` (from `agentfootprint/providers`) is an ordinary MCP transport for a server deployed to AgentCore Runtime with `--protocol MCP`, so `mcpClient` lists and calls its tools like any other server. It handles the three things that make such a server different from a plain URL, each as a strategy you pick by name:
+
+- **auth** — `'sigv4'` (default) sends every request through the AWS SDK's `InvokeAgentRuntime`, with the MCP headers on the SDK's own fields (`mcpSessionId`, `mcpProtocolVersion`, `runtimeSessionId`, `contentType`, `accept`, `payload`). `{ bearer }` is for a runtime behind an OAuth authorizer: the SDK has no bearer scheme, so the request goes to the documented HTTPS endpoint with the token vended per request and dropped, by the same code as `gatewayTransport`.
+- **session** — `'reuse'` (default) keeps one runtime session for the transport: it pins the runtime session id (the SDK would otherwise send a fresh random one on every call) and carries the `Mcp-Session-Id` the runtime returns. Build one client per conversation. `'per-call'` sends neither, so nothing carries over between requests.
+- **retry** — the runtime's "Session operation in progress, please retry" refusal arrives as an HTTP 200 with a JSON-RPC `-32005` error, which MCP clients do not retry. It is now retried with bounded, jittered backoff (5 attempts, at most 10 s of waiting by default; `retry: false` turns it off). Only that refusal is retried — not `ConflictException`, which shares the code — and the loop is the same one `mcpClient` uses for HTTP 429, so the ceilings and the `onRetry` report work the same way.

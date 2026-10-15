@@ -17,6 +17,7 @@ first cloud adapter was written against them.
 | `agentCoreRuntimeHost()` | `AgentHost` **and** `ConversationHost` — the container contract's two doors, `/invocations` and `/ws`, on one socket | `agentfootprint/hosting` |
 | `agentCoreSessions({ store })` | `SessionLifecycle` — where a conversation lives between requests | `agentfootprint/hosting` |
 | `gatewayTransport({ url, credentials })` | `McpTransport` — MCP auth headers vended **per request** | `agentfootprint/providers` |
+| `agentCoreRuntimeMcpTransport({ agentRuntimeArn, region })` | `McpTransport` — an MCP server **hosted on** Runtime: its session carried, its "session busy" refusal retried | `agentfootprint/providers` |
 | `AgentCoreStore.search()` | `MemoryStore.search` — server-side semantic retrieval | `agentfootprint/memory` |
 
 <Callout type="warn" title="How much of this is verified — the honest version">
@@ -438,6 +439,59 @@ Since mid-2026 a Gateway can front model providers as well as tools, serving
 so `openai({ baseURL, apiKey: async () => … })` reaches it, and the callback form
 of `apiKey` matters for the usual reason: a gateway token expires.
 
+## MCP servers hosted on Runtime
+
+A Gateway fronts tools; Runtime can also **host** an MCP server — one deployed
+with `agentcore deploy` and `--protocol MCP`. Reaching it is not "a URL with a
+token", for three reasons:
+
+- every request goes through **`InvokeAgentRuntime`**;
+- every request lands in a **runtime session**, and the client has to carry it
+  (the runtime routes by `Mcp-Session-Id` — without it, the next request can
+  land on a fresh microVM);
+- while that session is being set up, the runtime answers with an **HTTP 200**
+  whose JSON-RPC body is `-32005 "Session operation in progress, please retry"`.
+  AgentCore's docs say the caller must read the body and retry with short
+  backoff — MCP clients do not, so the model would see a failed tool call.
+
+`agentCoreRuntimeMcpTransport` handles all three, and `mcpClient` sees an
+ordinary Streamable HTTP server:
+
+```ts
+import { agentCoreIdentity } from 'agentfootprint/security';
+import { agentCoreRuntimeMcpTransport, mcpClient } from 'agentfootprint/providers';
+
+// One client per conversation — 'reuse' keeps ONE runtime session per transport.
+const orders = await mcpClient({
+  name: 'orders',
+  transport: agentCoreRuntimeMcpTransport({
+    agentRuntimeArn: 'arn:aws:bedrock-agentcore:us-west-2:123456789012:runtime/orders_mcp-a1b2c3',
+    region: 'us-west-2',
+    auth: { bearer: agentCoreIdentity({ region: 'us-west-2' }) }, // or 'sigv4' (default)
+  }),
+});
+const agent = Agent.create({ provider, model }).tools(await orders.tools()).build();
+```
+
+Three choices, each a strategy you pick by name:
+
+| Option | Values | What it decides |
+|---|---|---|
+| `auth` | `'sigv4'` (default) · `{ bearer }` | IAM goes through the AWS SDK's `InvokeAgentRuntime`. An OAuth (JWT) authorizer gets a bearer token over the documented HTTPS endpoint — the SDK has no bearer scheme. The token is vended per request and dropped, by the same code as `gatewayTransport`. |
+| `session` | `'reuse'` (default) · `'per-call'` | `'reuse'` pins one runtime session id for the transport (the SDK would otherwise send a fresh random one on every call) and carries the `Mcp-Session-Id` the runtime returns. `'per-call'` sends neither, so nothing carries over — use it for a stateless server shared across conversations. |
+| `retry` | on (5 attempts, ≤ 10 s) · options · `false` | Retries exactly the contract's refusal: code `-32005` with the "session operation in progress" message. Not `ConflictException` (same code, different message), not a batch, not another status. Same loop, ceilings and `onRetry` report as `mcpClient`'s 429 retry. |
+
+<Callout type="warn" title="A 'reuse' client is ONE session">
+Build one client per conversation. A `'reuse'` client shared by two
+conversations puts both in one microVM, with one server state. For a client
+you want to share, use `session: 'per-call'`.
+</Callout>
+
+With SigV4, the MCP headers travel on the SDK's own fields — `mcpSessionId`,
+`mcpProtocolVersion`, `runtimeSessionId`, `contentType`, `accept`, and the
+request body as `payload`. A GET or DELETE has no `InvokeAgentRuntime` form, so
+the transport answers it with 405, which MCP defines as "not offered".
+
 ## Other agents calling yours: A2A (9.67.0)
 
 AgentCore Runtime speaks four protocols, and **A2A** is the one for agent-to-agent
@@ -589,6 +643,17 @@ longer exported.
 **Gateway** (`agentfootprint/providers`) — `GatewayTransportOptions` is
 what `gatewayTransport()` takes, and `McpGatewayTransport` is the descriptor it
 returns: the third member of the `McpTransport` union.
+
+**Runtime-hosted MCP** (`agentfootprint/providers`) —
+`AgentCoreRuntimeMcpTransportOptions` is what `agentCoreRuntimeMcpTransport()`
+takes; its strategies are typed `AgentCoreRuntimeAuth` (`'sigv4'` or an
+`AgentCoreRuntimeBearerAuth`), `AgentCoreRuntimeSession` and
+`AgentCoreRuntimeRetryOptions`. `agentCoreRuntimeUrl()` (taking
+`AgentCoreRuntimeUrlOptions`) builds the HTTPS endpoint, and
+`AGENTCORE_RUNTIME_SESSION_HEADER` names the runtime session header.
+`AgentCoreRuntimeSdkClient` is the command-based client you may pass as
+`client`, and `BedrockAgentCoreRuntimeSdkModule` the SDK slice the SigV4
+strategy touches.
 
 **Memory** (`agentfootprint/memory`) — `AgentCoreMemoryRecord` is one
 retrieved record as `search()` sees it, and `AgentCoreEvent` is one stored event

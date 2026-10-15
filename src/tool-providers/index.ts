@@ -99,6 +99,27 @@ export type {
   AgentCoreGatewayTransportOptions,
   AgentCoreGatewayUrlOptions,
 } from '../adapters/mcp/agentcore.js';
+// An MCP server HOSTED ON AgentCore Runtime — an `http` transport whose fetch
+// carries the runtime's session, its session-busy retry and its auth (SigV4
+// through InvokeAgentRuntime, or a bearer token over HTTPS). `mcpClient` sees an
+// ordinary Streamable HTTP server.
+export {
+  agentCoreRuntimeMcpTransport,
+  agentCoreRuntimeUrl,
+} from '../adapters/mcp/agentcoreRuntime/transport.js';
+export { AGENTCORE_RUNTIME_SESSION_HEADER } from '../adapters/mcp/agentcoreRuntime/session.js';
+export type {
+  AgentCoreRuntimeAuth,
+  AgentCoreRuntimeBearerAuth,
+  AgentCoreRuntimeMcpTransportOptions,
+  AgentCoreRuntimeRetryOptions,
+  AgentCoreRuntimeUrlOptions,
+} from '../adapters/mcp/agentcoreRuntime/transport.js';
+export type { AgentCoreRuntimeSession } from '../adapters/mcp/agentcoreRuntime/session.js';
+export type {
+  AgentCoreRuntimeSdkClient,
+  BedrockAgentCoreRuntimeSdkModule,
+} from '../adapters/mcp/agentcoreRuntime/invoke.js';
 export type {
   GatewayTransportOptions,
   McpCallToolResult,

@@ -1,0 +1,291 @@
+/**
+ * agentCoreRuntimeMcpTransport — an MCP server hosted on AWS Bedrock
+ * **AgentCore Runtime**, reached as an ordinary MCP transport.
+ *
+ *   const orders = await mcpClient({
+ *     name: 'orders',
+ *     transport: agentCoreRuntimeMcpTransport({
+ *       agentRuntimeArn: 'arn:aws:bedrock-agentcore:us-west-2:123456789012:runtime/orders_mcp-a1b2c3',
+ *       region: 'us-west-2',
+ *     }),
+ *   });
+ *
+ * ── Why this exists ──────────────────────────────────────────────────────────
+ * `agentCoreGatewayTransport` reaches a Gateway; `agentCoreRuntimeHost` hosts
+ * OUR agent on Runtime. Neither calls an MCP server somebody deployed TO
+ * Runtime, and that server is not reachable as a plain URL: every request goes
+ * through `InvokeAgentRuntime`, it lands in a runtime SESSION that has to be
+ * carried from call to call, and the platform answers a request that arrives
+ * while that session is still coming up with an HTTP 200 whose body says
+ * "Session operation in progress, please retry" — which no MCP client retries.
+ *
+ * ── What it is: one port, three strategies ───────────────────────────────────
+ * The port is the existing one: this returns an `http` member of
+ * `McpTransport`, so `mcpClient` builds it like any other Streamable HTTP
+ * server and knows nothing about AgentCore. Everything AgentCore-specific sits
+ * in the `fetch` it carries, composed from three choices, one file each:
+ *
+ *   retry   (`sessionBusy.ts`)  the session-busy refusal, retried with bounded
+ *                               backoff by the SAME loop `mcpClient` uses for a
+ *                               429 (`mcp/throttleRetry.ts` · `retryingFetchWhen`)
+ *   session (`session.ts`)      'reuse' one runtime session, or 'per-call'
+ *   auth    (`invoke.ts`)       'sigv4' through the AWS SDK's InvokeAgentRuntime,
+ *                               or a bearer token over the documented HTTPS
+ *                               endpoint — the SDK has no bearer scheme, and the
+ *                               API reference says an OAuth caller must use HTTPS
+ *
+ * in that order, outermost first: every retry re-applies the session and is
+ * signed (or vended) afresh, the ordering `mcp/throttleRetry.ts` requires. And
+ * `mcpClient`'s own 429 retry still wraps the whole thing, untouched.
+ *
+ * ── What it does NOT do ──────────────────────────────────────────────────────
+ * Deploy or manage a runtime (a control-plane job), or host one (that is
+ * `agentCoreRuntimeHost`). This is the CLIENT side of a server somebody already
+ * deployed with `--protocol MCP`.
+ *
+ * Pattern: Facade over three Strategies. Role: outer ring, vendor adapter.
+ */
+
+import {
+  createVendingFetch,
+  gatewayTransport,
+  type FetchLike,
+} from '../../../mcp/gatewayTransport.js';
+import {
+  retryingFetchWhen,
+  type RetryOnThrottle,
+  type ThrottleFetch,
+  type ThrottleRetryOptions,
+} from '../../../mcp/throttleRetry.js';
+import type { McpHttpTransport } from '../../../mcp/types.js';
+import type { CredentialProvider } from '../../../identity/types.js';
+import {
+  invokeFetch,
+  invokeSdk,
+  type AgentCoreRuntimeSdkClient,
+  type BedrockAgentCoreRuntimeSdkModule,
+} from './invoke.js';
+import { sessionStrategy, type AgentCoreRuntimeSession } from './session.js';
+import { sessionBusy } from './sessionBusy.js';
+
+/**
+ * A bearer token, for a runtime whose inbound auth is OAuth (a JWT authorizer).
+ *
+ * Vended PER REQUEST by the provider — the same once-and-dropped rule as
+ * `gatewayTransport`, through the same code.
+ */
+export interface AgentCoreRuntimeBearerAuth {
+  /** Who vends the token. `agentCoreIdentity()` or any `CredentialProvider`. */
+  readonly bearer: CredentialProvider;
+  /** The downstream service id your provider keys on. Default `'runtime'`. */
+  readonly service?: string;
+  /** OAuth scopes, when the provider uses them. */
+  readonly scopes?: readonly string[];
+  /** `machine` (default) or `user`. */
+  readonly mode?: 'machine' | 'user';
+  /**
+   * Your own `fetch`, called UNDERNEATH the per-request vending — an HTTP
+   * agent, a proxy. It sees the final headers, the vended one included.
+   */
+  readonly fetch?: FetchLike;
+}
+
+/**
+ * How requests are authenticated — the runtime's inbound auth decides which.
+ *
+ *   - `'sigv4'` — IAM. The AWS SDK signs `InvokeAgentRuntime` with your AWS
+ *     credentials (the default chain, or the `client` you pass).
+ *   - `{ bearer }` — OAuth. A plain HTTPS request with `Authorization: Bearer`,
+ *     because the SDK cannot send a bearer token.
+ */
+export type AgentCoreRuntimeAuth = 'sigv4' | AgentCoreRuntimeBearerAuth;
+
+/**
+ * The session-busy retry: the same ceilings and the same `onRetry` report as
+ * `mcpClient`'s `retryOnThrottle`, applied to AgentCore's own refusal.
+ */
+export type AgentCoreRuntimeRetryOptions = ThrottleRetryOptions;
+
+/** Options for {@link agentCoreRuntimeMcpTransport}. */
+export interface AgentCoreRuntimeMcpTransportOptions {
+  /**
+   * The runtime hosting the MCP server — its ARN, as `agentcore deploy` prints
+   * it, or its id together with {@link accountId}.
+   */
+  readonly agentRuntimeArn: string;
+  /** The region it runs in, e.g. `'us-west-2'`. */
+  readonly region: string;
+  /** The endpoint (version) to invoke. The runtime's default endpoint when omitted. */
+  readonly qualifier?: string;
+  /** The owning account — required by AgentCore when `agentRuntimeArn` is an id, not an ARN. */
+  readonly accountId?: string;
+  /** How requests are authenticated. Default `'sigv4'`. */
+  readonly auth?: AgentCoreRuntimeAuth;
+  /**
+   * Which runtime session each request lands in. Default `'reuse'`.
+   *
+   *   - `'reuse'` — one session for the life of this transport. **Build one
+   *     client per conversation**: a client shared by two conversations is one
+   *     session — one microVM, one server state — for both.
+   *   - `'per-call'` — every request in a session of its own; nothing carries
+   *     over. Needs a stateless server (the runtime's recommended default).
+   */
+  readonly session?: AgentCoreRuntimeSession;
+  /**
+   * Retry AgentCore's "session operation in progress" refusal. On by default:
+   * up to 5 attempts, never more than 10 s of waiting in total, jittered
+   * exponential backoff. `false` lets the refusal through on the first attempt.
+   */
+  readonly retry?: boolean | AgentCoreRuntimeRetryOptions;
+  /**
+   * SigV4 only: a `BedrockAgentCoreClient` you built, so its credentials,
+   * region and retry settings are the ones used. Refused with `{ bearer }`.
+   */
+  readonly client?: AgentCoreRuntimeSdkClient;
+  /** @internal Test injection — the AWS SDK module. */
+  readonly _sdk?: BedrockAgentCoreRuntimeSdkModule;
+  /** @internal Test injection — the runtime session id source for `'reuse'`. */
+  readonly _newSessionId?: () => string;
+}
+
+/** The session-busy retry's own ceilings, when the caller set none. */
+const DEFAULT_RETRY: AgentCoreRuntimeRetryOptions = { maxAttempts: 5, maxWaitMs: 10_000 };
+
+/** What a bearer token is vended for, unless the caller names another service. */
+const DEFAULT_BEARER_SERVICE = 'runtime';
+
+/** A region is a DNS label run, nothing more — it is spliced into a hostname. */
+const REGION_SHAPE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/**
+ * An MCP transport for a server hosted on AgentCore Runtime.
+ *
+ * @throws when the runtime or region is missing, when a strategy is unknown,
+ *   when `client` is given beside `{ bearer }`, or — for `'sigv4'` — when the
+ *   AWS SDK peer dependency cannot be loaded.
+ */
+export function agentCoreRuntimeMcpTransport(
+  options: AgentCoreRuntimeMcpTransportOptions,
+): McpHttpTransport {
+  const url = agentCoreRuntimeUrl(options);
+  const send = authStrategy(options, url);
+  const session = sessionStrategy(options.session ?? 'reuse', options._newSessionId);
+
+  const sessioned: ThrottleFetch = async (input, init) => {
+    const headers = new Headers(init?.headers);
+    session.request(headers);
+    return session.response(await send(input, { ...init, headers }));
+  };
+
+  return {
+    transport: 'http',
+    url,
+    fetch: retryingFetchWhen(sessioned, retryConfig(options.retry), sessionBusy) ?? sessioned,
+  };
+}
+
+/** Where a runtime's MCP endpoint is, as {@link agentCoreRuntimeUrl} needs it. */
+export interface AgentCoreRuntimeUrlOptions {
+  readonly agentRuntimeArn: string;
+  readonly region: string;
+  readonly qualifier?: string;
+  readonly accountId?: string;
+}
+
+/**
+ * The HTTPS endpoint of a runtime's MCP server:
+ * `https://bedrock-agentcore.{region}.amazonaws.com/runtimes/{url-encoded ARN}/invocations`,
+ * with `qualifier` / `accountId` as query parameters when given — the request
+ * line of `InvokeAgentRuntime`, and the URL AgentCore's own MCP examples dial.
+ *
+ * @throws when `agentRuntimeArn` or `region` is missing, or the region is not
+ *   shaped like one (it becomes part of a hostname).
+ */
+export function agentCoreRuntimeUrl(options: AgentCoreRuntimeUrlOptions): string {
+  const { agentRuntimeArn, region, qualifier, accountId } = options;
+  if (!agentRuntimeArn || !region) {
+    throw new TypeError(
+      'agentCoreRuntimeUrl: both `agentRuntimeArn` and `region` are required — the runtime ' +
+        'is named by the first and reached through the second.',
+    );
+  }
+  if (!REGION_SHAPE.test(region)) {
+    throw new TypeError(
+      `agentCoreRuntimeUrl: \`region\` ${JSON.stringify(region)} is not a region name ` +
+        "(lowercase letters, digits and '-', e.g. 'us-west-2'). It becomes part of the " +
+        'hostname, so it is refused rather than spliced in.',
+    );
+  }
+  const query = new URLSearchParams();
+  if (qualifier) query.set('qualifier', qualifier);
+  if (accountId) query.set('accountId', accountId);
+  const base =
+    `https://bedrock-agentcore.${region}.amazonaws.com/runtimes/` +
+    `${encodeURIComponent(agentRuntimeArn)}/invocations`;
+  const search = query.toString();
+  return search === '' ? base : `${base}?${search}`;
+}
+
+// ── The auth strategy ─────────────────────────────────────────────────
+
+/** The innermost `fetch`: the one that authenticates and sends. */
+function authStrategy(options: AgentCoreRuntimeMcpTransportOptions, url: string): ThrottleFetch {
+  const auth = options.auth ?? 'sigv4';
+  if (auth === 'sigv4') {
+    const { client, InvokeAgentRuntimeCommand } = invokeSdk({
+      region: options.region,
+      ...(options.client !== undefined && { client: options.client }),
+      ...(options._sdk !== undefined && { sdk: options._sdk }),
+    });
+    return invokeFetch(
+      {
+        agentRuntimeArn: options.agentRuntimeArn,
+        ...(options.qualifier !== undefined && { qualifier: options.qualifier }),
+        ...(options.accountId !== undefined && { accountId: options.accountId }),
+      },
+      client,
+      InvokeAgentRuntimeCommand,
+    );
+  }
+  if (auth !== null && typeof auth === 'object' && auth.bearer !== undefined) {
+    if (options.client !== undefined) {
+      throw new TypeError(
+        'agentCoreRuntimeMcpTransport: `client` is the SigV4 strategy’s AWS SDK client, and ' +
+          '`auth: { bearer }` sends no AWS SDK request — the SDK cannot carry a bearer token, ' +
+          'so this path is plain HTTPS. Remove `client`, or use `auth: "sigv4"`.',
+      );
+    }
+    // The Gateway's vending fetch, reused as is: the token is vended per
+    // request, applied to that one request, and dropped.
+    return createVendingFetch(
+      gatewayTransport({
+        url,
+        credentials: auth.bearer,
+        service: auth.service ?? DEFAULT_BEARER_SERVICE,
+        ...(auth.scopes !== undefined && { scopes: auth.scopes }),
+        ...(auth.mode !== undefined && { mode: auth.mode }),
+      }),
+      auth.fetch,
+    );
+  }
+  throw new TypeError(
+    `agentCoreRuntimeMcpTransport: \`auth\` must be 'sigv4' or { bearer: <CredentialProvider> } ` +
+      `— got ${describe(auth)}. Which one is decided by the runtime's inbound auth: IAM is ` +
+      "'sigv4', an OAuth (JWT) authorizer is a bearer token.",
+  );
+}
+
+// ── The retry strategy's configuration ────────────────────────────────
+
+function retryConfig(retry: AgentCoreRuntimeMcpTransportOptions['retry']): RetryOnThrottle {
+  if (retry === false) return false;
+  return { ...DEFAULT_RETRY, ...(typeof retry === 'object' && retry !== null ? retry : {}) };
+}
+
+/** A refused value, described without echoing a secret it might hold. */
+function describe(value: unknown): string {
+  if (value === null) return 'null';
+  if (typeof value === 'string') return JSON.stringify(value);
+  if (typeof value === 'object') return `an object with keys [${Object.keys(value).join(', ')}]`;
+  return typeof value;
+}

@@ -21,6 +21,12 @@
  * — those belong to a caller who knows whether the specific tool is idempotent,
  * and this seam does not. A property test pins the boundary.
  *
+ * The loop takes its question as a {@link RetryDecision}, so the one other
+ * refusal a service DOCUMENTS as pre-execution — AgentCore Runtime's "session
+ * operation in progress" — reuses this loop rather than growing a second one.
+ * That decision is applied only by that vendor's own transport; what
+ * `mcpClient` and `retryingFetch` retry is still a 429 and nothing else.
+ *
  * ── Why it lives at the fetch seam and not around `Tool.execute` ─────────────
  * Because `Retry-After` is only reachable here. The MCP SDK reads the response,
  * throws `StreamableHTTPError(status, text)` and drops the `Response` — so by
@@ -128,6 +134,45 @@ function resolveConfig(config: RetryOnThrottle | undefined): ResolvedThrottleCon
   };
 }
 
+// ─── The decision ────────────────────────────────────────────────────
+
+/**
+ * What one response says about asking again. `undefined` delivers the response
+ * as it is; a verdict waits, then sends the SAME request once more.
+ */
+export interface RetryVerdict {
+  /**
+   * How long the server asked for, in milliseconds, when it said. Absent, the
+   * loop waits its own jittered backoff.
+   */
+  readonly retryAfterMs?: number;
+}
+
+/**
+ * The one question the loop asks of each response.
+ *
+ * ── The license every decision must hold ─────────────────────────────────────
+ * A decision may answer "again" ONLY for a refusal the server made BEFORE it
+ * ran anything — the property that makes a 429 safe to repeat (see the module
+ * note). A response that could be the record of half-done work is never one.
+ * The library holds exactly two such decisions: {@link throttled} below, and
+ * AgentCore Runtime's documented "session operation in progress" refusal,
+ * which lives with that vendor's adapter (`adapters/mcp/agentcoreRuntime/`).
+ * Each stays ONE small function, so a retry has exactly one place it is
+ * decided — and one place to route it when retries are written down as
+ * attempts.
+ */
+export type RetryDecision = (
+  response: Response,
+) => RetryVerdict | undefined | Promise<RetryVerdict | undefined>;
+
+/** HTTP 429, with the server's own `Retry-After` when it sent one. */
+export function throttled(response: Response): RetryVerdict | undefined {
+  if (response.status !== 429) return undefined;
+  const retryAfterMs = parseRetryAfter(response.headers.get('retry-after'));
+  return retryAfterMs === undefined ? {} : { retryAfterMs };
+}
+
 // ─── The decorator ───────────────────────────────────────────────────
 
 /**
@@ -164,6 +209,30 @@ export function retryingFetch(
   inner: ThrottleFetch | undefined,
   config: RetryOnThrottle | undefined,
 ): ThrottleFetch | undefined {
+  return retryingFetchWhen(inner, config, throttled);
+}
+
+/**
+ * The bounded loop itself, asking `decide` of every response.
+ *
+ * {@link retryingFetch} is this loop asking {@link throttled}. A vendor adapter
+ * whose service documents a refusal of its own — one made before anything ran —
+ * passes its decision here instead of writing a second loop, so the ceilings,
+ * the `Retry-After` rail, the replay check, the abort and the `onRetry` report
+ * stay one implementation.
+ *
+ * `decide` is asked only when a retry could actually follow — attempts left, a
+ * body that can be sent again, no abort — so a decision that has to read the
+ * response pays for that only when its answer can matter.
+ *
+ * @internal Public to adapters, not to the door: the decision is the vendor's
+ *   fact, and each one is reviewed against the license on {@link RetryDecision}.
+ */
+export function retryingFetchWhen(
+  inner: ThrottleFetch | undefined,
+  config: RetryOnThrottle | undefined,
+  decide: RetryDecision,
+): ThrottleFetch | undefined {
   const resolved = resolveConfig(config);
   if (!resolved) return inner;
 
@@ -174,15 +243,17 @@ export function retryingFetch(
 
     for (let attempt = 1; ; attempt++) {
       const response = await base(input, init);
-      if (response.status !== 429) return response;
       if (attempt >= resolved.maxAttempts) return response;
       // A body we cannot send twice makes a retry a different request. Rare
       // for MCP (JSON strings), but silently replaying half a stream would be
-      // worse than surfacing the throttle.
+      // worse than surfacing the refusal.
       if (!isReplayable(input, init)) return response;
       if (init?.signal?.aborted) return response;
 
-      const retryAfterMs = parseRetryAfter(response.headers.get('retry-after'));
+      const verdict = await decide(response);
+      if (verdict === undefined) return response;
+
+      const { retryAfterMs } = verdict;
       const waitMs = retryAfterMs ?? backoffMs(attempt);
       // The rail on Retry-After: never let a server talk us into a wait that
       // breaks the caller's budget.
