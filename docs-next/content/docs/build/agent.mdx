@@ -449,7 +449,7 @@ await research.run({
 });
 ```
 
-Without one, every member runs under that composition run's own conversation — never a namespace another run shares. Two users running the same composition at the same time never see each other's memory. An agent mounted in a chart you built yourself must be handed `identity` by your input mapper; one that no run reaches is refused with `MemberIdentityError` rather than run under its instance's last run.
+Without one, every member runs under that composition run's own conversation — never a namespace another run shares. Two users running the same composition at the same time never see each other's memory. An agent mounted in a chart you built yourself must be handed `identity` by your input mapper; one that no run reaches is refused with `MemberIdentityError` rather than run under its instance's last run. A member reads its run only through the link its own composition opened: a `parentRun` the engine did not issue (a hand-built one naming another user, or one whose run has ended) is refused with `ParentRunRefusedError`, so no input can pass a member someone else's identity.
 
 There is no separate "multi-agent" class — agents *are* the building blocks. See [Patterns](doc:key-concepts#patterns--named-compositions) for Reflexion / ToT / Debate / Map-Reduce / Swarm recipes.
 
