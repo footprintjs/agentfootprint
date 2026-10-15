@@ -1,6 +1,6 @@
 /**
  * stableJson — the one sorted-key JSON spelling every fingerprint in this
- * library hashes: the receipt's digests (`time-travel/receipt.ts`), the
+ * library hashes: the receipt's digests (`core/agent/receipt/receipt.ts`), the
  * ontology's hash (`ontology/define.ts` · `ontologyHash`). A leaf so that the
  * layers that hash a value and cannot import each other spell it the same way.
  */
@@ -19,7 +19,7 @@
  * every other one. Two requests that both failed to serialize compared EQUAL,
  * and the receipt wrote `transformHash: null` — "the cache strategy changed
  * nothing" — about a pair it had not read. Callers substitute
- * `time-travel/receipt.ts` · `UNSERIALIZABLE` where a digest needs bytes, and
+ * `core/agent/receipt/receipt.ts` · `UNSERIALIZABLE` where a digest needs bytes, and
  * branch where a comparison needs truth.
  */
 export function stableJson(value: unknown): string | undefined {

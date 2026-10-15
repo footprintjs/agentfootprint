@@ -66,7 +66,7 @@ import { resilienceHooks } from '../recorders/core/resilienceHooks.js';
 import { resilienceRecorder } from '../recorders/core/ResilienceRecorder.js';
 import type { InjectionRecord } from '../recorders/core/types.js';
 import type { LLMProvider, LLMRequest, PricingTable } from '../adapters/types.js';
-import { buildReceipt, receiptPieces, type Receipt } from '../lib/time-travel/receipt.js';
+import { buildReceipt, receiptPieces, type Receipt } from './agent/receipt/receipt.js';
 import {
   assertCostBudgetHasPricing,
   emitCostTick,

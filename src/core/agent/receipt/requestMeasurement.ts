@@ -83,7 +83,7 @@ export interface MessageMeasureCache {
  * grew with the square of the iteration count. Every limit is checked against
  * the same running counts as a whole walk, so the result — `measured` or the
  * reason it is `unavailable` — is the one the whole walk gives; pinned by
- * test/lib/time-travel/receipt-incremental.test.ts. A cache hit assumes what
+ * test/core/agent/receipt/receipt-incremental.test.ts. A cache hit assumes what
  * the receipt memo assumes: the message's nested values were not edited in
  * place (`receiptDigests.ts`). */
 export function measureRequest(request: unknown, cache?: MessageMeasureCache): RequestMeasurement {

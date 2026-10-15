@@ -1,10 +1,10 @@
 /**
  * The request measurement as it stood before it became incremental — the
- * CONTROL that test/lib/time-travel/receipt-incremental.test.ts compares the
+ * CONTROL that test/core/agent/receipt/receipt-incremental.test.ts compares the
  * shipped `measureRequest` against. Its logic is verbatim — only this header,
  * the export name and formatting differ; never edit it to make a test pass.
  */
-import type { RequestJsonSize } from '../../../../src/lib/time-travel/requestMeasurement.js';
+import type { RequestJsonSize } from '../../../../../src/core/agent/receipt/requestMeasurement.js';
 
 type MeasurementBoundary = {
   readonly boundary: 'initial-prepared-request';

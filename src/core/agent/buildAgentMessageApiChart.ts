@@ -29,9 +29,9 @@ import { flowChartSelector, select } from 'footprintjs';
 import type { FlowChart, TypedScope } from 'footprintjs';
 import { ArrayMergeMode } from 'footprintjs/advanced';
 import type { LLMMessage, LLMProvider, LLMRequest, LLMToolSchema } from '../../adapters/types.js';
-import type { Receipt } from '../../lib/time-travel/receipt.js';
+import type { Receipt } from './receipt/receipt.js';
 import { messageApiReceipt } from './messageApiReceipt.js';
-import { createReceiptDigests } from '../../lib/time-travel/receiptDigests.js';
+import { createReceiptDigests } from './receipt/receiptDigests.js';
 import { SUBFLOW_IDS, STAGE_IDS, milestoneTagsFor, RECEIPT_KEY } from '../../lib/conventions.js';
 import type { InjectionRecord } from '../../recorders/core/types.js';
 import { typedEmit } from '../../recorders/core/typedEmit.js';
@@ -104,7 +104,7 @@ export function buildAgentMessageApiChart(deps: AgentMessageApiChartDeps): FlowC
   const { provider, model, systemPrompt, tools } = deps;
   const maxIterations = deps.maxIterations ?? 5;
   // The receipt memo every call of a run mints through, so a loop hashes each
-  // message once per run (`lib/time-travel/receiptDigests.ts`). One per chart:
+  // message once per run (`receipt/receiptDigests.ts`). One per chart:
   // it rebinds itself to each run id, so a chart reused across runs is safe.
   const receiptDigests = createReceiptDigests();
 

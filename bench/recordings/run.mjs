@@ -12,7 +12,7 @@
  *
  * Linear means 4× the iterations cost ~4× — the plain recording costs ~16×.
  * The SHA-256 and UTF-8 work of the receipt mint is counted per call in
- * test/lib/time-travel/receipt-incremental.test.ts (it needs a hook into the
+ * test/core/agent/receipt/receipt-incremental.test.ts (it needs a hook into the
  * hash, which the built package does not expose).
  *
  * Run it standalone, nothing else on the machine (no paid calls — mock only):

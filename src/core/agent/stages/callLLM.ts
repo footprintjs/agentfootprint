@@ -51,9 +51,9 @@ import { toolNameOfMessage } from '../window/toolNames.js';
 import { evidenceConclusionLine, evidenceRecoveryPiece } from '../evidence/recovery.js';
 import { joinSystemPrompt, stripFrameworkFields } from '../composeRequest.js';
 import { toolBytesOf } from '../../../lib/toolBytes.js';
-import { buildReceipt, receiptPieces } from '../../../lib/time-travel/receipt.js';
+import { buildReceipt, receiptPieces } from '../receipt/receipt.js';
 import { RECEIPT_KEY } from '../../../lib/conventions.js';
-import type { ReceiptDigests } from '../../../lib/time-travel/receiptDigests.js';
+import type { ReceiptDigests } from '../receipt/receiptDigests.js';
 import type { EvictedTurnsHandle } from '../window/evictedTurns.js';
 import { findStagedRefs, stagedRefsNudgeLine } from '../stagedRefs.js';
 import { fileIntegrityFindings } from '../integrityFindings.js';
@@ -433,7 +433,7 @@ export interface CallLLMStageDeps {
    */
   readonly evictedTurns?: EvictedTurnsHandle;
   /**
-   * The run's receipt memo (`lib/time-travel/receiptDigests.ts`): every call of
+   * The run's receipt memo (`core/agent/receipt/receiptDigests.ts`): every call of
    * a run mints through the same one, so each message is hashed once per run
    * instead of once per call. Created once per agent — it rebinds itself to
    * each new run id. Absent ⇒ every call hashes everything, as before; the

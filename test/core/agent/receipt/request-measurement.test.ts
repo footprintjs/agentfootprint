@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { measureRequest } from '../../../src/lib/time-travel/requestMeasurement.js';
+import { measureRequest } from '../../../../src/core/agent/receipt/requestMeasurement.js';
 
 const size = (value: unknown) => {
   const json = JSON.stringify(value);

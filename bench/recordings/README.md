@@ -37,7 +37,7 @@ the default 10,000-event cap dropped 1,516 events and the recording opened at it
 
 The receipt mint's work (SHA-256 input and UTF-8 encoding per call) needs a hook into the hash that
 the built package does not expose, so it is counted in
-`test/lib/time-travel/receipt-incremental.test.ts`. Measured on the same runs through that hook:
+`test/core/agent/receipt/receipt-incremental.test.ts`. Measured on the same runs through that hook:
 
 | K | SHA-256 input — before | after | per call, last — before | after | receipt share of run — before | after |
 |---:|---:|---:|---:|---:|---:|---:|

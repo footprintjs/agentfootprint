@@ -41,7 +41,7 @@ export {
   type RequestMeasurement,
   type RequestJsonSize,
   type StoredReceipt,
-} from './receipt.js';
+} from '../../core/agent/receipt/receipt.js';
 export { sha256Hex } from '../sha256.js';
 export { stableJson } from '../stableJson.js';
 export { RECEIPT_KEY } from '../conventions.js';

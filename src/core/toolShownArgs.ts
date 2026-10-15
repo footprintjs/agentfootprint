@@ -16,7 +16,7 @@
  * policy lives in the tool's closure, so the tool itself carries the function
  * that applies it, under a registry symbol — invisible to the model, to
  * `Tool`'s shape and to `toJSON`, found here. The `INNER_RUN_RECORDS` symbol
- * (`lib/trace-toolpack/innerRunRecords.ts` · `INNER_RUN_RECORDS`) is the
+ * (`core/innerRunRecords.ts` · `INNER_RUN_RECORDS`) is the
  * precedent.
  *
  * WHAT IT IS NOT. Not the arguments the tool RECEIVED — the tool ran with the

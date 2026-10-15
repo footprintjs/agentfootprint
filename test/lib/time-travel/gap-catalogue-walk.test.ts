@@ -234,7 +234,7 @@ import {
 } from '../../helpers/gapProseClaims';
 
 const SRC = resolve(__dirname, '../../../src/lib/time-travel');
-const RECEIPT_FILE = resolve(SRC, 'receipt.ts');
+const RECEIPT_FILE = resolve(__dirname, '../../../src/core/agent/receipt/receipt.ts');
 const SERVED_FILE = resolve(SRC, 'servedView.ts');
 
 // ─── (1) the STATIC enumeration — the declarations, expanded ─────────────

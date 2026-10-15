@@ -35,7 +35,7 @@
  *    run that session completed, never whichever run the instance finished
  *    last. A run with no session reads the last run that had none. A tool's
  *    retained inner runs are served through the same key
- *    (`innerRunRecords.ts · innerRunsOfConversation`).
+ *    (`core/innerRunRecords.ts · innerRunsOfConversation`).
  *
  * 2. `buildSelfExplainSkill` — the skill in two modes:
  *
@@ -65,7 +65,7 @@ import type { AgentfootprintEvent } from '../../events/registry.js';
 import { skillScopedTools } from '../../tool-providers/skillScopedTools.js';
 import type { ToolProvider } from '../../tool-providers/types.js';
 import { SELF_EXPLAIN_BODY, SELF_EXPLAIN_WHEN } from './debugPrompt.js';
-import { innerRunsOfConversation, type InnerRunLookup } from './innerRunRecords.js';
+import { innerRunsOfConversation, type InnerRunLookup } from '../../core/innerRunRecords.js';
 import { NO_COMPLETED_RUN_MESSAGE } from '../traceToolNames.js';
 import type { TraceToolpackArtifacts, TraceToolpackOptions } from './types.js';
 

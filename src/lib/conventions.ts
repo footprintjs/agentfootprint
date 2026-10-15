@@ -668,6 +668,6 @@ export function isInjectionKey(key: string): key is InjectionKey {
  * The scope key the receipt is committed under. Written by `callLLM` and the
  * message-API charts, read back by `time-travel/servedView.ts` and the replay
  * hooks — a state-key name both sides agree on, so it lives here rather than
- * beside the receipt's builder (`time-travel/receipt.ts`).
+ * beside the receipt's builder (`core/agent/receipt/receipt.ts`).
  */
 export const RECEIPT_KEY = 'receipt';

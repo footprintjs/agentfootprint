@@ -39,7 +39,7 @@ import type { FoldedSpan, WindowRecord } from './window/types.js';
 import type { ExternalGround } from '../../integrity/unsupported-argument/check.js';
 import type { MessagesDelivery } from './delivery/types.js';
 import type { MiddlewareDecision } from './middleware/types.js';
-import type { Receipt } from '../../lib/time-travel/receipt.js';
+import type { Receipt } from './receipt/receipt.js';
 import type { OutputAttempt } from './outputEnforcement.js';
 import type { PendingEvidenceRecovery, UnsupportedValue } from './evidence/types.js';
 import type { AgentRunCheckpoint } from '../runCheckpoint.js';

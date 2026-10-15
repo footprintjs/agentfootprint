@@ -79,7 +79,7 @@
  * executor's run id — so their deps take one (`getRunId`), and they mint when
  * they are given one. Given none they mint NOTHING rather than salting every
  * hash with an empty string, because the salt is what makes shipping
- * fingerprints in a recording safe (`receipt.ts`, the third law).
+ * fingerprints in a recording safe (`core/agent/receipt/receipt.ts`, the third law).
  *
  * So a receipt-less view is still a shape this library produces — a chart
  * builder run without a run id, a run that declined with `recordReceipt:
@@ -216,7 +216,11 @@ function readRunConstant(location: EpochLocation, key: string, served: boolean):
   const value = foldRunConstant(location, key);
   return served && value === LOG_PLACEHOLDER ? undefined : value;
 }
-import { FORCED_OUTPUT_TOOL_KEY, RECEIPT_BOUNDARY, type StoredReceipt } from './receipt.js';
+import {
+  FORCED_OUTPUT_TOOL_KEY,
+  RECEIPT_BOUNDARY,
+  type StoredReceipt,
+} from '../../core/agent/receipt/receipt.js';
 import { RECEIPT_KEY } from '../conventions.js';
 
 /** One piece of the composed system string, in wire order. */

@@ -91,7 +91,9 @@ among them — seven of those check folders are Mixed, see the Lens list) ·
 `src/observability/**` (the context-error finders) ·
 `src/lib/context-bisect/**` (the driver and its arms) · `src/lib/influence-core/` ·
 `src/memory/retrieval/` · `src/lib/time-travel/` (where a reader of a finished run
-may stop — derived from the recorded commit log, never a re-walk).
+may stop — derived from the recorded commit log, never a re-walk) ·
+`src/core/agent/receipt/` (the receipt each call mints, the writer half of
+time-travel's conformance law — `core/agent/receipt/receipt.ts` · `buildReceipt`).
 
 Mixed folders carrying Fold: `src/lib/injection-engine/`
 (`skillGraph.ts` · `makeReachableSkills`, `skillGraph.ts` ·
