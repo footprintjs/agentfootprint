@@ -7,7 +7,13 @@
  * grammar stay internal — tests import them by module path.
  */
 
-export { agUiSerializer, type AgUiSerializerOptions } from './serializer.js';
+export {
+  agUiSerializer,
+  AG_UI_CUSTOM_EVENTS,
+  type AgUiCustomContext,
+  type AgUiCustomProjection,
+  type AgUiSerializerOptions,
+} from './serializer.js';
 export { agUiSse, type AgUiEncoderModule, type AgUiSseOptions } from './framing.js';
 export {
   AG_UI_PROTOCOL_VERSION,

@@ -40,23 +40,49 @@ event union by this repository's tests. It speaks protocol
 | `stream.token` | `TEXT_MESSAGE_START` · `TEXT_MESSAGE_CONTENT` · `TEXT_MESSAGE_END` — one message per LLM call |
 | `stream.tool_start` | `TOOL_CALL_START` · `TOOL_CALL_ARGS` · `TOOL_CALL_END` — the call, parented to its LLM call's message |
 | `stream.tool_end` | `TOOL_CALL_RESULT` |
-| `stream.thinking_delta` / `stream.thinking_end` | `REASONING_START` … `REASONING_END` |
+| `stream.thinking_delta` / `stream.thinking_end` | `REASONING_START` … `REASONING_END` — only with `reasoning: true` |
 | `agent.iteration_start` / `_end` | `STEP_STARTED` / `STEP_FINISHED`, named `iteration <n>` |
 | `composition.enter` / `exit` | `STEP_STARTED` / `STEP_FINISHED`, named `Sequence`, `Parallel:<mount>` … |
 | `agent.turn_start` / `turn_end` of a nested agent | `SUBAGENT_STARTED` / `SUBAGENT_FINISHED` |
 | `pause.request`, then the run pauses | `RUN_FINISHED` with an `interrupt` outcome (`AgUiRunOutcome`, `AgUiInterrupt`) |
-| `error.fatal`, then the run fails | `RUN_ERROR`, in the record's own words |
-| everything else | `CUSTOM`, named by the event type |
+| `error.fatal`, then the run fails | `RUN_ERROR`, in the words of the served `error.fatal` — never the thrown value |
+| an event on the CUSTOM allow-list | `CUSTOM`, named by the event type, carrying only its listed fields |
+| anything else | nothing |
 
-`AgUiSerializerOptions` takes the request's `threadId` and `runId` and an
-optional `custom` filter: which of the "everything else" events go out as
-`CUSTOM`. The default is all of them — the whole record, including
-`context.injected`, which carries what the model was shown. A frontend that
-does not explain the run can take far fewer:
+## What reaches the browser
 
-```ts
-agUiSerializer({ threadId, runId, custom: (e) => e.type.startsWith('agentfootprint.cost.') });
-```
+An AG-UI stream leaves the process, so nothing goes out by default that a person
+using the frontend is not meant to read. `AgUiSerializerOptions` takes the
+request's `threadId` and `runId`, and two decisions that are yours:
+
+- **`custom`** — the events that go out as `CUSTOM`, each with the fields it
+  carries. The default, `AG_UI_CUSTOM_EVENTS`, is tool progress, spend
+  (`cost.tick`), the loop's route, the answer's standing and a provider's
+  retries — counts and the library's own words. The rest of the record stays off
+  the wire: `context.injected` (what the model was shown, your system prompt
+  included), a retry's raw error, memory, permission and credential facts. To
+  send one, list it with a projection — an `AgUiCustomProjection` gets the
+  event's SERVED payload and an `AgUiCustomContext` (the AG-UI id of the tool
+  call open where it happened) and returns what goes out:
+
+  ```ts
+  agUiSerializer({
+    threadId,
+    runId,
+    custom: { ...AG_UI_CUSTOM_EVENTS, 'agentfootprint.context.injected': (p) => ({ slot: p.slot }) },
+  });
+  ```
+
+  `custom: {}` sends no `CUSTOM` events at all.
+- **`reasoning`** — the model's chain of thought (`REASONING_*`), from the served
+  thinking events. Off unless you set `reasoning: true`; whether a person may read
+  it is a product decision.
+
+A failure is described by the record: `RUN_ERROR` carries the served
+`error.fatal` description, or the fixed words "The run failed." — never the
+thrown value, its stack or a provider's response body. A pause's interrupt
+carries the question's text and nothing else of the pause's payload. The run's
+identity (`principal`, `tenant`, `sessionId`) is never written.
 
 Text is what the run STREAMED. A provider that does not stream still shows its
 answer: the turn's answer is written whole when no token of it streamed. An
@@ -93,10 +119,11 @@ whole conversation, so the adapter never uses it as the id. It rides beside:
 The adapter reads only the served stream — what every listener receives. Under a
 redaction policy (`Agent.create({ redact })`) that is the placeholder wherever the
 policy selected a value, so nothing the policy hides can reach an AG-UI event,
-at any depth of a composition. The structure is unchanged: ids, steps and
-sub-agents are built from the record's address, which a policy never selects.
-The cost is stated, not hidden: under a policy, the text a frontend shows is the
-placeholder too.
+at any depth of a composition — whatever you put on the `CUSTOM` list, because
+the guarantee is the record's, not the list's. The structure is unchanged: ids,
+steps and sub-agents are built from the record's address, which a policy never
+selects. The cost is stated, not hidden: under a policy, the text a frontend
+shows is the placeholder too.
 
 ## The seams
 

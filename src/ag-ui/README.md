@@ -30,9 +30,17 @@ across a thread, and the same with or without a policy.
 - Text is the streamed reply (`stream.token`); an agent's answer that streamed
   nothing is written whole from `turn_end`; an agent's `llm_end.content` is a
   draft and is never written.
-- A paused run ends with `RUN_FINISHED { outcome: interrupt }`; a failed one with
-  `RUN_ERROR`, in the words of the record's `error.fatal` when it filed one.
-- Every other event goes out as `CUSTOM { name: <event type> }`.
+- A paused run ends with `RUN_FINISHED { outcome: interrupt }` (the question's
+  text, nothing else of the pause's payload); a failed one with `RUN_ERROR`, in
+  the words of the record's served `error.fatal` — the settlement never hands an
+  adapter the thrown value.
+- `CUSTOM` is an ALLOW-LIST (`AG_UI_CUSTOM_EVENTS`): progress, spend, the route,
+  the answer's standing, retries — each with only the fields its projection
+  picks. The rest of the record (the assembled prompt, a raw retry error, memory,
+  permission and credential facts) stays off the wire unless an app lists it.
+- Reasoning goes out only with `reasoning: true`.
+- Pinned by `test/ag-ui/redaction.property.test.ts`: a policy's marked values never
+  reach the framed wire, at any depth, even with every event allow-listed.
 
 ## Files
 - `types.ts` — the AG-UI events written here, structural (no `@ag-ui/*` import).

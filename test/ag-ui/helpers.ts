@@ -10,7 +10,7 @@ import type { BaseEvent, Message, RunAgentInput } from '@ag-ui/core';
 import { from, type Observable } from 'rxjs';
 
 import type { AgentfootprintEvent } from '../../src/index.js';
-import { agUiSerializer } from '../../src/ag-ui/serializer.js';
+import { agUiSerializer, type AgUiSerializerOptions } from '../../src/ag-ui/serializer.js';
 import type { AgUiEvent } from '../../src/ag-ui/types.js';
 
 /** What a runner must offer to be run here — every agentfootprint runner does. */
@@ -31,11 +31,17 @@ export interface AgUiRun {
 export async function runAsAgUi(
   runner: Runnable,
   input: unknown,
-  options: { threadId?: string; runId?: string; runOptions?: unknown } = {},
+  options: {
+    threadId?: string;
+    runId?: string;
+    runOptions?: unknown;
+    serializer?: Omit<AgUiSerializerOptions, 'threadId' | 'runId'>;
+  } = {},
 ): Promise<AgUiRun> {
   const serializer = agUiSerializer({
     threadId: options.threadId ?? 'thread-1',
     runId: options.runId ?? 'run-1',
+    ...options.serializer,
   });
   const events: AgUiEvent[] = [];
   const served: AgentfootprintEvent[] = [];
@@ -50,7 +56,7 @@ export async function runAsAgUi(
     events.push(...serializer.settle({ kind: paused ? 'paused' : 'finished' }));
     return { events, served, out };
   } catch (error) {
-    events.push(...serializer.settle({ kind: 'failed', error }));
+    events.push(...serializer.settle({ kind: 'failed' }));
     return { events, served, error };
   } finally {
     off();

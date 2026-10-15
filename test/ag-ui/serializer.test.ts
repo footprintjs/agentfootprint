@@ -3,7 +3,8 @@
  *
  * Each block pins one rule of the mapping (`src/ag-ui/serializer.ts` header):
  * the run lifecycle, text, tool calls, reasoning, sub-agents and steps, the
- * three terminals, and the guards (one settle, one run, the CUSTOM filter).
+ * three terminals, and the guards (one settle, one run, the CUSTOM allow-list,
+ * reasoning only on request).
  * Real runs through the official client live in `contract.test.ts` and
  * `scenario.test.ts`.
  */
@@ -12,10 +13,12 @@ import { describe, expect, it } from 'vitest';
 
 import type { AgentfootprintEvent } from '../../src/index.js';
 import {
+  AG_UI_CUSTOM_EVENTS,
   AG_UI_RUN_FAILED,
   AG_UI_SUBAGENT_CANCELLED,
   AG_UI_SUBAGENT_UNFINISHED,
   agUiSerializer,
+  type AgUiSerializerOptions,
 } from '../../src/ag-ui/serializer.js';
 import type { AgUiEvent } from '../../src/ag-ui/types.js';
 
@@ -45,7 +48,7 @@ const t = (type: string) => `agentfootprint.${type}`;
 
 function feed(
   events: readonly AgentfootprintEvent[],
-  options: { custom?: (e: AgentfootprintEvent) => boolean } = {},
+  options: Omit<AgUiSerializerOptions, 'threadId' | 'runId'> = {},
 ) {
   const s = agUiSerializer({ threadId: 'thread-1', runId: 'ag-run', ...options });
   const out: AgUiEvent[] = [];
@@ -99,16 +102,19 @@ describe('agUiSerializer — the run lifecycle', () => {
     ).toEqual([]);
   });
 
-  it("never translates another run's event; an event of no run (a consumer emit) goes out as CUSTOM", () => {
-    const { out } = feed([
-      ev(t('agent.turn_start'), { turnIndex: 0 }, { rsid: 'seed#0' }),
-      ev(
-        t('stream.token'),
-        { iteration: 1, tokenIndex: 0, content: 'other' },
-        { runId: 'run-999-9' },
-      ),
-      ev('app.note', { note: 'mine' }, { runId: 'consumer-scope' }),
-    ]);
+  it("never translates another run's event; an event of no run (a consumer emit) can go out as CUSTOM", () => {
+    const { out } = feed(
+      [
+        ev(t('agent.turn_start'), { turnIndex: 0 }, { rsid: 'seed#0' }),
+        ev(
+          t('stream.token'),
+          { iteration: 1, tokenIndex: 0, content: 'other' },
+          { runId: 'run-999-9' },
+        ),
+        ev('app.note', { note: 'mine' }, { runId: 'consumer-scope' }),
+      ],
+      { custom: { 'app.note': (p) => ({ note: p.note }) } },
+    );
     expect(only(out, 'TEXT_MESSAGE_CONTENT')).toEqual([]);
     expect(only(out, 'CUSTOM').map((e) => e.name)).toEqual(['app.note']);
   });
@@ -350,42 +356,45 @@ describe('agUiSerializer — tool calls', () => {
     expect(new Set(ids).size).toBe(2);
   });
 
-  it('a result the record cannot tie to a call this run opened goes out as the event it is', () => {
+  it('a result the record cannot tie to a call this run opened is never attached to one', () => {
     const { out } = feed([
       ...opening,
       ev(t('stream.tool_end'), { toolCallId: 'ghost', result: 'x' }, { rsid: 'tool-calls#8' }),
     ]);
     expect(only(out, 'TOOL_CALL_RESULT')).toEqual([]);
-    expect(only(out, 'CUSTOM').map((e) => e.name)).toEqual(['agentfootprint.stream.tool_end']);
+    expect(only(out, 'CUSTOM')).toEqual([]);
   });
 });
 
 describe('agUiSerializer — reasoning', () => {
   it('streamed thinking is one reasoning span and message, closed at thinking_end', () => {
-    const { out } = feed([
-      ev(t('agent.turn_start'), { turnIndex: 0 }, { rsid: 'seed#0' }),
-      ev(t('stream.llm_start'), { iteration: 1 }, { rsid: 'call-llm#5' }),
-      ev(
-        t('stream.thinking_delta'),
-        { iteration: 1, tokenIndex: 0, content: 'Hmm, ' },
-        { rsid: 'call-llm#5' },
-      ),
-      ev(
-        t('stream.thinking_delta'),
-        { iteration: 1, tokenIndex: 1, content: 'Paris.' },
-        { rsid: 'call-llm#5' },
-      ),
-      ev(
-        t('stream.llm_end'),
-        { iteration: 1, content: '', toolCallCount: 0 },
-        { rsid: 'call-llm#5' },
-      ),
-      ev(
-        t('stream.thinking_end'),
-        { iteration: 1, blockCount: 1, totalChars: 11 },
-        { rsid: 'sf-thinking/normalize#6', path: ['sf-thinking'] },
-      ),
-    ]);
+    const { out } = feed(
+      [
+        ev(t('agent.turn_start'), { turnIndex: 0 }, { rsid: 'seed#0' }),
+        ev(t('stream.llm_start'), { iteration: 1 }, { rsid: 'call-llm#5' }),
+        ev(
+          t('stream.thinking_delta'),
+          { iteration: 1, tokenIndex: 0, content: 'Hmm, ' },
+          { rsid: 'call-llm#5' },
+        ),
+        ev(
+          t('stream.thinking_delta'),
+          { iteration: 1, tokenIndex: 1, content: 'Paris.' },
+          { rsid: 'call-llm#5' },
+        ),
+        ev(
+          t('stream.llm_end'),
+          { iteration: 1, content: '', toolCallCount: 0 },
+          { rsid: 'call-llm#5' },
+        ),
+        ev(
+          t('stream.thinking_end'),
+          { iteration: 1, blockCount: 1, totalChars: 11 },
+          { rsid: 'sf-thinking/normalize#6', path: ['sf-thinking'] },
+        ),
+      ],
+      { reasoning: true },
+    );
     expect(out.map((e) => e.type).filter((x) => x.startsWith('REASONING'))).toEqual([
       'REASONING_START',
       'REASONING_MESSAGE_START',
@@ -402,27 +411,54 @@ describe('agUiSerializer — reasoning', () => {
   });
 
   it('thinking that arrived whole is one message per block; a provider-redacted block has no text to show', () => {
+    const { out } = feed(
+      [
+        ev(t('agent.turn_start'), { turnIndex: 0 }, { rsid: 'seed#0' }),
+        ev(t('stream.llm_start'), { iteration: 1 }, { rsid: 'call-llm#5' }),
+        ev(
+          t('stream.thinking_end'),
+          {
+            iteration: 1,
+            blockCount: 3,
+            totalChars: 9,
+            blocks: [
+              { type: 'thinking', content: 'first' },
+              { type: 'redacted_thinking', content: '' },
+              { type: 'thinking', content: 'next' },
+            ],
+          },
+          { rsid: 'sf-thinking/normalize#6', path: ['sf-thinking'] },
+        ),
+      ],
+      { reasoning: true },
+    );
+    expect(only(out, 'REASONING_MESSAGE_CONTENT').map((e) => e.delta)).toEqual(['first', 'next']);
+    expect(only(out, 'REASONING_START')).toHaveLength(1);
+    expect(only(out, 'REASONING_END')).toHaveLength(1);
+  });
+
+  it('writes no reasoning unless the app asks — a chain of thought is not shown by default', () => {
     const { out } = feed([
       ev(t('agent.turn_start'), { turnIndex: 0 }, { rsid: 'seed#0' }),
       ev(t('stream.llm_start'), { iteration: 1 }, { rsid: 'call-llm#5' }),
       ev(
+        t('stream.thinking_delta'),
+        { iteration: 1, tokenIndex: 0, content: 'private' },
+        { rsid: 'call-llm#5' },
+      ),
+      ev(
         t('stream.thinking_end'),
         {
           iteration: 1,
-          blockCount: 3,
-          totalChars: 9,
-          blocks: [
-            { type: 'thinking', content: 'first' },
-            { type: 'redacted_thinking', content: '' },
-            { type: 'thinking', content: 'next' },
-          ],
+          blockCount: 1,
+          totalChars: 7,
+          blocks: [{ type: 'thinking', content: 'private' }],
         },
         { rsid: 'sf-thinking/normalize#6', path: ['sf-thinking'] },
       ),
     ]);
-    expect(only(out, 'REASONING_MESSAGE_CONTENT').map((e) => e.delta)).toEqual(['first', 'next']);
-    expect(only(out, 'REASONING_START')).toHaveLength(1);
-    expect(only(out, 'REASONING_END')).toHaveLength(1);
+    expect(out.some((e) => e.type.startsWith('REASONING'))).toBe(false);
+    expect(JSON.stringify(out)).not.toContain('private');
   });
 });
 
@@ -503,7 +539,7 @@ describe('agUiSerializer — sub-agents and steps', () => {
     expect(only(out, 'STEP_FINISHED').map((e) => e.stepName)).toEqual(['Parallel:step-p']);
   });
 
-  it('a turn_end it never saw open is shown as the event it is — never taken for the root’s answer', () => {
+  it('a turn_end it never saw open is never taken for the root’s answer', () => {
     const { s, out } = feed([
       ev(t('composition.enter'), { kind: 'Sequence' }, { rsid: 'seed#0' }),
       ev(
@@ -512,7 +548,8 @@ describe('agUiSerializer — sub-agents and steps', () => {
         { rsid: 'step-a/final/prepare-final#9', path: ['step-a', 'final'] },
       ),
     ]);
-    expect(only(out, 'CUSTOM').map((e) => e.name)).toEqual(['agentfootprint.agent.turn_end']);
+    expect(only(out, 'CUSTOM')).toEqual([]);
+    expect(only(out, 'TEXT_MESSAGE_CONTENT')).toEqual([]);
     expect(only(out, 'STEP_FINISHED')).toEqual([]);
     expect(s.settle({ kind: 'finished' }).at(-1)).not.toHaveProperty('result');
   });
@@ -610,7 +647,11 @@ describe('agUiSerializer — terminals', () => {
       message: 'Approve?',
       toolCallId: 'ag-run/tool/0/step-a/tool-calls#8',
       subagentRunId: 'ag-run/agent/0/step-a/seed#2',
-      metadata: { agentfootprint: { question: { question: 'Approve?', toolCallId: 'p1' } } },
+    });
+    // The question's text only — nothing else of the pause's payload reaches the wire.
+    expect(interrupt!.metadata?.agentfootprint).toEqual({
+      runtimeStageId: 'step-a/tool-calls#paused',
+      subflowPath: ['step-a'],
     });
     const suspended = only(closing, 'SUBAGENT_FINISHED');
     expect(suspended.map((e) => [e.subagentRunId, e.outcome])).toEqual([
@@ -634,25 +675,19 @@ describe('agUiSerializer — terminals', () => {
         { rsid: '__root__#0' },
       ),
     ]);
-    expect(
-      s.settle({
-        kind: 'failed',
-        error: Object.assign(new Error('raw secret'), { code: 'ECONNRESET' }),
-      }),
-    ).toEqual([
+    expect(s.settle({ kind: 'failed' })).toEqual([
       {
         type: 'RUN_ERROR',
         message: 'The AI call failed: provider down',
-        code: 'ECONNRESET',
         metadata: { agentfootprint: { runId: 'run-100-1' } },
       },
     ]);
   });
 
-  it('a failure the record never described says only that, never the thrown message', () => {
+  it('a failure the record never described says only that', () => {
     const { s } = feed([]);
-    const [, error] = s.settle({ kind: 'failed', error: new TypeError('input was "my password"') });
-    expect(error).toEqual({ type: 'RUN_ERROR', message: AG_UI_RUN_FAILED, code: 'TypeError' });
+    const [, error] = s.settle({ kind: 'failed' });
+    expect(error).toEqual({ type: 'RUN_ERROR', message: AG_UI_RUN_FAILED });
   });
 
   it('a cancelled run closes its open sub-agents and ends with the cancelled outcome', () => {
@@ -668,33 +703,89 @@ describe('agUiSerializer — terminals', () => {
   });
 });
 
-describe('agUiSerializer — CUSTOM', () => {
-  it('an event with no AG-UI equivalent goes out as CUSTOM, attributed and addressed', () => {
+describe('agUiSerializer — CUSTOM is an allow-list', () => {
+  it('an allow-listed event goes out with ONLY its listed fields, attributed and addressed', () => {
     const { out } = feed([
       ev(t('agent.turn_start'), { turnIndex: 0 }, { rsid: 'a/seed#2', path: ['a'] }),
       ev(
         t('cost.tick'),
-        { scope: 'iteration', model: 'm', usd: 0.01 },
+        { scope: 'iteration', model: 'm', tokensInput: 3, estimatedUsd: 0.01, extra: 'not listed' },
         { rsid: 'a/call-llm#4', path: ['a'] },
       ),
     ]);
-    expect(only(out, 'CUSTOM')[0]).toMatchObject({
-      name: 'agentfootprint.cost.tick',
-      value: { scope: 'iteration', model: 'm', usd: 0.01 },
-      subagentRunId: 'ag-run/agent/0/a/seed#2',
-      metadata: { agentfootprint: { runtimeStageId: 'a/call-llm#4', subflowPath: ['a'] } },
+    expect(only(out, 'CUSTOM')).toEqual([
+      {
+        type: 'CUSTOM',
+        name: 'agentfootprint.cost.tick',
+        value: { scope: 'iteration', model: 'm', tokensInput: 3, estimatedUsd: 0.01 },
+        timestamp: expect.any(Number),
+        subagentRunId: 'ag-run/agent/0/a/seed#2',
+        metadata: { agentfootprint: { runtimeStageId: 'a/call-llm#4', subflowPath: ['a'] } },
+      },
+    ]);
+  });
+
+  it('by default, the record’s content stays off the wire: the prompt, a raw retry error, credentials', () => {
+    const { out } = feed([
+      ev(t('context.injected'), { rawContent: 'SYSTEM-PROMPT-SECRET', slot: 'system-prompt' }),
+      ev(t('error.retried'), {
+        attempt: 1,
+        maxAttempts: 3,
+        lastError: 'token sk-LEAK',
+        backoffMs: 10,
+        reason: 'x',
+      }),
+      ev(t('credential.acquired'), { service: 'crm', kind: 'bearer' }),
+      ev(t('memory.attached'), { memoryId: 'm1', contentSummary: 'MEMORY-SECRET' }),
+    ]);
+    expect(only(out, 'CUSTOM')).toEqual([
+      expect.objectContaining({
+        name: 'agentfootprint.error.retried',
+        value: { attempt: 1, maxAttempts: 3, backoffMs: 10 },
+      }),
+    ]);
+    for (const secret of ['SYSTEM-PROMPT-SECRET', 'sk-LEAK', 'crm', 'MEMORY-SECRET'])
+      expect(JSON.stringify(out)).not.toContain(secret);
+  });
+
+  it('a progress report names the AG-UI tool call it belongs to', () => {
+    const { out } = feed([
+      ev(t('agent.turn_start'), { turnIndex: 0 }, { rsid: 'seed#0' }),
+      ev(
+        t('stream.tool_start'),
+        { toolName: 'crawl', toolCallId: 'c9', args: {} },
+        { rsid: 'tool-calls#8' },
+      ),
+      ev(
+        t('stream.tool_progress'),
+        { toolCallId: 'c9', toolName: 'crawl', iteration: 1, payload: { done: 3, total: 12 } },
+        { rsid: 'tool-calls#8' },
+      ),
+    ]);
+    expect(only(out, 'CUSTOM')[0]!.value).toEqual({
+      toolCallId: 'ag-run/tool/0/tool-calls#8',
+      iteration: 1,
+      payload: { done: 3, total: 12 },
     });
   });
 
-  it('`custom` chooses which of them go out; the mapped events never do', () => {
-    const { out } = feed(
-      [
-        ev(t('context.injected'), { rawContent: 'system prompt' }),
-        ev(t('cost.tick'), { scope: 'turn' }),
-        ev(t('stream.llm_start'), { iteration: 1 }),
-      ],
-      { custom: (e) => e.type === 'agentfootprint.cost.tick' },
-    );
-    expect(only(out, 'CUSTOM').map((e) => e.name)).toEqual(['agentfootprint.cost.tick']);
+  it('`custom` replaces the list: `{}` sends none; spreading the default adds one; mapped events never go', () => {
+    const events = [
+      ev(t('context.injected'), { rawContent: 'prompt', slot: 'system-prompt' }),
+      ev(t('cost.tick'), { scope: 'turn' }),
+      ev(t('stream.llm_start'), { iteration: 1 }),
+    ];
+    expect(only(feed(events, { custom: {} }).out, 'CUSTOM')).toEqual([]);
+    const widened = feed(events, {
+      custom: {
+        ...AG_UI_CUSTOM_EVENTS,
+        'agentfootprint.context.injected': (p) => ({ slot: p.slot }),
+        'agentfootprint.stream.llm_start': () => ({ never: true }),
+      },
+    }).out;
+    expect(only(widened, 'CUSTOM').map((e) => [e.name, e.value])).toEqual([
+      ['agentfootprint.context.injected', { slot: 'system-prompt' }],
+      ['agentfootprint.cost.tick', { scope: 'turn' }],
+    ]);
   });
 });

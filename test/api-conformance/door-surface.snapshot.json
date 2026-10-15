@@ -758,12 +758,15 @@
   },
   "./ag-ui": {
     "values": [
+      "AG_UI_CUSTOM_EVENTS",
       "AG_UI_PROTOCOL_VERSION",
       "agUiSerializer",
       "agUiSse"
     ],
     "types": [
       "AgUiAddress",
+      "AgUiCustomContext",
+      "AgUiCustomProjection",
       "AgUiEncoderModule",
       "AgUiEvent",
       "AgUiEventType",

@@ -79,8 +79,9 @@ async function agUiFrames(agent: Agent, message: string): Promise<string[]> {
   try {
     const out = await agent.run({ message });
     write(serializer.settle({ kind: isPaused(out) ? 'paused' : 'finished' }));
-  } catch (error) {
-    write(serializer.settle({ kind: 'failed', error }));
+  } catch {
+    // Described by the record's served error — never by the thrown value.
+    write(serializer.settle({ kind: 'failed' }));
   } finally {
     off();
   }

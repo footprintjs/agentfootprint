@@ -99,9 +99,8 @@ describe('AG-UI contract — real runs, the protocol’s schema and its client',
       Agent.create({ provider: thinker as never, model: 'm' })
         .system('s')
         .build(),
-      {
-        message: 'Capital of France?',
-      },
+      { message: 'Capital of France?' },
+      { serializer: { reasoning: true } }, // reasoning goes out only when asked for
     );
     expect(typesOf(run.events)).toContain('REASONING_MESSAGE_CONTENT');
     const client = await expectClientAccepts(run);

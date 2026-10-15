@@ -43,8 +43,6 @@ export interface AgUiAddress {
   readonly subflowPath?: readonly string[];
   /** The tool call's id as the record serves it — the placeholder under a policy. */
   readonly toolCallId?: string;
-  /** A pause's question as the record serves it (`pause.request.questionPayload`). */
-  readonly question?: Readonly<Record<string, unknown>>;
 }
 
 interface AgUiEventBase<T extends string> {

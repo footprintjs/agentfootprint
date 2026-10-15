@@ -19,12 +19,23 @@
  *   composition.enter/exit             → STEP_STARTED/_FINISHED  `<Kind>[:<mount>]`
  *   stream.token                       → TEXT_MESSAGE_START/CONTENT/END
  *   stream.llm_end (no agent around)   → one whole TEXT message (an LLM call that streams nothing)
- *   stream.thinking_delta/_end         → REASONING_START … REASONING_END
+ *   stream.thinking_delta/_end         → REASONING_START … REASONING_END   (only with `reasoning: true`)
  *   stream.tool_start                  → TOOL_CALL_START + TOOL_CALL_ARGS + TOOL_CALL_END
  *   stream.tool_end                    → TOOL_CALL_RESULT
  *   pause.request + settle('paused')   → RUN_FINISHED { outcome: interrupt }
- *   error.fatal + settle('failed')     → RUN_ERROR
- *   everything else                    → CUSTOM { name: <event type>, value: <served payload> }
+ *   error.fatal + settle('failed')     → RUN_ERROR, in the served error.fatal's words
+ *   an allow-listed event              → CUSTOM { name: <event type>, value: <its listed fields> }
+ *   anything else                      → nothing
+ *
+ * WHAT LEAVES THE PROCESS. An AG-UI stream goes to a browser, so nothing goes
+ * out by default that a person is not meant to read. Every value comes from a
+ * served payload; `CUSTOM` carries only the event types on an allow-list, each
+ * with the fields its projection picks ({@link AG_UI_CUSTOM_EVENTS} — the whole
+ * record, such as `context.injected`'s assembled prompt or `error.retried`'s
+ * raw error, stays off the wire unless the app lists it); the model's
+ * reasoning goes out only when the app says so; and a failure is described by
+ * the record, never by the thrown value. Identity on the meta (`principal`,
+ * `tenant`, `sessionId`) is never written.
  *
  * WHO OWNS AN EVENT. Each agent's turn opens a SCOPE at its mount — the
  * subflow path its `turn_start` fired at (`[]` for the root agent, `step-p/x`
@@ -54,6 +65,64 @@ import {
   type AgUiMetadata,
 } from './types.js';
 
+/** What a CUSTOM projection is told beside the payload: where the event landed. */
+export interface AgUiCustomContext {
+  /** The AG-UI id of the tool call open where the event happened, when one is. */
+  readonly toolCallId?: string;
+}
+
+/**
+ * One allow-listed event's `CUSTOM` value: the fields of its SERVED payload
+ * that go out (the payload is the one every listener receives — the
+ * placeholder wherever a redaction policy selected a value). Return only what
+ * a person using the frontend is meant to read.
+ */
+export type AgUiCustomProjection = (
+  payload: Readonly<Record<string, unknown>>,
+  at: AgUiCustomContext,
+) => unknown;
+
+/** The listed fields of `payload`, where present. */
+const pick = (
+  payload: Readonly<Record<string, unknown>>,
+  fields: readonly string[],
+): Record<string, unknown> => {
+  const out: Record<string, unknown> = {};
+  for (const field of fields) if (payload[field] !== undefined) out[field] = payload[field];
+  return out;
+};
+
+/**
+ * The agentfootprint events that go out as AG-UI `CUSTOM` by default, each with
+ * the fields it carries: progress, spend, the loop's route, the answer's
+ * standing and a provider's retries — counts and the library's own words.
+ * Content (`context.injected`'s assembled prompt, `error.retried`'s raw error,
+ * memory, permission and credential facts) stays off the wire unless an app
+ * lists it: `agUiSerializer({ ..., custom: { ...AG_UI_CUSTOM_EVENTS, [type]: projection } })`.
+ */
+export const AG_UI_CUSTOM_EVENTS: Readonly<Record<string, AgUiCustomProjection>> = Object.freeze({
+  'agentfootprint.stream.tool_progress': (payload, at) => ({
+    ...(at.toolCallId !== undefined && { toolCallId: at.toolCallId }),
+    ...pick(payload, ['iteration', 'payload']),
+  }),
+  'agentfootprint.cost.tick': (payload) =>
+    pick(payload, [
+      'scope',
+      'model',
+      'provider',
+      'tokensInput',
+      'tokensOutput',
+      'estimatedUsd',
+      'cumulative',
+    ]),
+  'agentfootprint.agent.route_decided': (payload) => pick(payload, ['iterIndex', 'chosen']),
+  'agentfootprint.answer.assessed': (payload) =>
+    pick(payload, ['standing', 'assessment', 'reasons', 'checked', 'turn', 'iteration']),
+  'agentfootprint.error.retried': (payload) =>
+    pick(payload, ['attempt', 'maxAttempts', 'backoffMs', 'statedWaitMs']),
+  'agentfootprint.error.recovered': (payload) => pick(payload, ['attempt', 'totalDurationMs']),
+});
+
 /** Options for {@link agUiSerializer}. */
 export interface AgUiSerializerOptions {
   /** The conversation this run belongs to — `RunAgentInput.threadId`. */
@@ -61,11 +130,19 @@ export interface AgUiSerializerOptions {
   /** This run's AG-UI id — `RunAgentInput.runId`. Every id the run mints is under it. */
   readonly runId: string;
   /**
-   * Which agentfootprint events with no AG-UI equivalent go out as `CUSTOM`.
-   * Default: every one. Events the mapping consumes (tokens, tool calls, turns,
-   * iterations, compositions, the pause and the fatal error) never do.
+   * The events with no AG-UI equivalent that go out as `CUSTOM`, keyed by event
+   * type, each with the projection that picks its fields. Default
+   * {@link AG_UI_CUSTOM_EVENTS}; `{}` sends none. An event not listed sends
+   * nothing. Events the mapping consumes (tokens, tool calls, turns,
+   * iterations, compositions, the pause and the fatal error) are never CUSTOM.
    */
-  readonly custom?: (event: AgentfootprintEvent) => boolean;
+  readonly custom?: Readonly<Record<string, AgUiCustomProjection>>;
+  /**
+   * Write the model's reasoning — `REASONING_*` events from the served
+   * `stream.thinking_*` events. Default `false`: a model's chain of thought is
+   * shown to a person only when the app decides it is.
+   */
+  readonly reasoning?: boolean;
 }
 
 /** Said by `RUN_ERROR` when the run failed without filing an `error.fatal` event to quote. */
@@ -146,16 +223,6 @@ const text = (value: unknown): string | undefined =>
 const resultText = (value: unknown): string =>
   typeof value === 'string' ? value : value === undefined ? '' : toWireJson(value);
 
-/** A machine-readable code a thrown value names — a library's or a provider's word, never data. */
-function codeOf(error: unknown): string | undefined {
-  const err = record(error);
-  for (const candidate of [err.code, err.name]) {
-    if (typeof candidate === 'string' && candidate !== 'Error' && /^[\w.:-]{1,64}$/.test(candidate))
-      return candidate;
-  }
-  return undefined;
-}
-
 /**
  * The AG-UI serializer for ONE run: feed it every served agentfootprint event
  * of the run, in order, then settle it once. `RUN_STARTED` comes before the
@@ -169,8 +236,8 @@ function codeOf(error: unknown): string | undefined {
  * try {
  *   const out = await agent.run({ message });
  *   send(ag.settle({ kind: isPaused(out) ? 'paused' : 'finished' }));
- * } catch (error) {
- *   send(ag.settle({ kind: 'failed', error }));
+ * } catch {
+ *   send(ag.settle({ kind: 'failed' })); // described by the record, never by the thrown value
  * } finally {
  *   off();
  * }
@@ -182,7 +249,8 @@ export function agUiSerializer(options: AgUiSerializerOptions): RunTranslation<A
     throw new TypeError('AG-UI: `threadId` must be a non-empty string.');
   }
   const ids = agUiIdMinter(runId);
-  const custom = options.custom ?? (() => true);
+  const custom = options.custom ?? AG_UI_CUSTOM_EVENTS;
+  const reasoning = options.reasoning === true;
 
   const root = newScope([], undefined);
   /** Open scopes — the root always, then each nested agent turn in open order. */
@@ -381,7 +449,7 @@ export function agUiSerializer(options: AgUiSerializerOptions): RunTranslation<A
         if (!scope.isAgent) {
           // A turn this translation never saw open (it subscribed late): its
           // answer has no scope to end, and the root's must not be guessed.
-          if (custom(event)) out.push(customOf(event, scope));
+          pushCustom(event, scope, out);
           return;
         }
         closeText(scope, out);
@@ -472,7 +540,7 @@ export function agUiSerializer(options: AgUiSerializerOptions): RunTranslation<A
       }
       case 'agentfootprint.stream.thinking_delta': {
         const content = text(payload.content);
-        if (content === undefined) return;
+        if (!reasoning || content === undefined) return;
         const scope = scopeOf(path);
         if (scope.reasoning === undefined || scope.reasoning.iteration !== payload.iteration) {
           closeReasoning(scope, out);
@@ -500,6 +568,7 @@ export function agUiSerializer(options: AgUiSerializerOptions): RunTranslation<A
         return;
       }
       case 'agentfootprint.stream.thinking_end': {
+        if (!reasoning) return;
         const scope = scopeOf(path);
         if (scope.reasoning !== undefined && scope.reasoning.iteration === payload.iteration) {
           closeReasoning(scope, out);
@@ -572,9 +641,9 @@ export function agUiSerializer(options: AgUiSerializerOptions): RunTranslation<A
         const scope = scopeOf(path);
         const call = takeCall(scope, address, payload.toolCallId);
         if (call === undefined) {
-          // A result the record cannot tie to a call this run opened — shown as
-          // the event it is, never attached to a call it may not belong to.
-          if (custom(event)) out.push(customOf(event, scope));
+          // A result the record cannot tie to a call this run opened — never
+          // attached to a call it may not belong to (CUSTOM only if listed).
+          pushCustom(event, scope, out);
           return;
         }
         out.push({
@@ -594,7 +663,7 @@ export function agUiSerializer(options: AgUiSerializerOptions): RunTranslation<A
         fatal = text(payload.error) ?? fatal;
         return;
       default:
-        if (custom(event)) out.push(customOf(event, scopeOf(path)));
+        pushCustom(event, scopeOf(path), out);
     }
   };
 
@@ -618,14 +687,25 @@ export function agUiSerializer(options: AgUiSerializerOptions): RunTranslation<A
     return at < 0 ? undefined : scope.calls.splice(at, 1)[0];
   }
 
-  function customOf(event: AgentfootprintEvent, scope: Scope): AgUiEvent {
-    return {
+  /**
+   * `event` as CUSTOM — only when its type is on the allow-list, carrying only
+   * the fields its projection picks from the served payload, through the wire
+   * rule. An unlisted event writes nothing.
+   */
+  function pushCustom(event: AgentfootprintEvent, scope: Scope, out: AgUiEvent[]): void {
+    const project = Object.prototype.hasOwnProperty.call(custom, event.type)
+      ? custom[event.type]
+      : undefined;
+    if (typeof project !== 'function') return;
+    const call = scope.calls[scope.calls.length - 1];
+    const value = project(record(event.payload), call === undefined ? {} : { toolCallId: call.id });
+    out.push({
       type: 'CUSTOM',
       name: event.type,
-      value: withWireErrors(event.payload ?? null),
+      value: withWireErrors(value ?? null),
       ...owned(scope, event),
       metadata: addressOf(event),
-    };
+    });
   }
 
   const start = (out: AgUiEvent[]): void => {
@@ -644,16 +724,18 @@ export function agUiSerializer(options: AgUiSerializerOptions): RunTranslation<A
     if (pause === undefined) return { id: ids.next('interrupt', 'run').id, reason: 'paused' };
     const { event, scope } = pause;
     const payload = record(event.payload);
-    const question = record(payload.questionPayload);
+    // The question a person is asked, as the record serves it — and nothing
+    // else of the pause's payload (a check-in's evidence pack, a typed ask's
+    // context), which a browser has no reason to receive.
+    const message = text(record(payload.questionPayload).question);
     const call = scope.calls[scope.calls.length - 1];
-    const message = text(question.question);
     return {
       id: ids.next('interrupt', event.meta.runtimeStageId).id,
       reason: text(payload.reason) ?? 'paused',
       ...(message !== undefined && { message }),
       ...(call !== undefined && { toolCallId: call.id }),
       ...(scope.subagentRunId !== undefined && { subagentRunId: scope.subagentRunId }),
-      metadata: addressOf(event, { question }),
+      metadata: addressOf(event),
     };
   };
 
@@ -686,16 +768,14 @@ export function agUiSerializer(options: AgUiSerializerOptions): RunTranslation<A
       const out: AgUiEvent[] = [];
       start(out);
       switch (settlement.kind) {
-        case 'failed': {
-          const code = codeOf(settlement.error);
+        case 'failed':
+          // The record's own words for the failure, never the thrown value.
           out.push({
             type: 'RUN_ERROR',
             message: fatal ?? AG_UI_RUN_FAILED,
-            ...(code !== undefined && { code }),
             ...(runMetadata() !== undefined && { metadata: runMetadata() }),
           });
           return out;
-        }
         case 'paused': {
           const interrupt = interruptOf();
           endAllNested(out, (scope) => (subagentRunId) => ({

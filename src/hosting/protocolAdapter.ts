@@ -25,12 +25,13 @@ export type RunSettlement =
   /** The run was stopped by whoever was running it, and did not fail. */
   | { readonly kind: 'cancelled' }
   /**
-   * `run()` rejected. `error` is the rejection AS THROWN — the caller's own
-   * value, never served — so an adapter takes only its `code` from it (a name
-   * the library or a provider chose, not data) and states the failure in the
-   * words of the record's `error.fatal` event when the run filed one.
+   * `run()` rejected. Deliberately carries NOTHING of the rejection: the
+   * thrown value is the caller's own, never served — its message, stack or a
+   * provider's response body may hold anything — so an adapter is never
+   * handed it. It states the failure in the words of the record's served
+   * `error.fatal` event when the run filed one, else in fixed words of its own.
    */
-  | { readonly kind: 'failed'; readonly error?: unknown };
+  | { readonly kind: 'failed' };
 
 /**
  * One run's translation into a protocol's events. Opened per run, fed every
