@@ -234,8 +234,11 @@ export function memberIdentityIn(scope: object): MemoryIdentity | undefined {
         readonly identity?: MemoryIdentity;
       }
     | undefined;
-  const run = runOfLink(args?.parentRun);
-  if (run !== undefined) return run.identity;
+  if (args?.parentRun !== undefined) {
+    // A link decides alone: a dead one names nobody — never the input's own
+    // `identity`, which on a workflow or graph step can be an earlier step's data.
+    return runOfLink(args.parentRun)?.identity;
+  }
   return args?.memberIdentity ?? args?.identity;
 }
 
