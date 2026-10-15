@@ -13,11 +13,11 @@
  * symbols, one door. Import from the door.
  */
 
-import type { AgentfootprintEvent } from './events/registry.js';
-import type { RunnerBase } from './core/RunnerBase.js';
-import type { EventDispatcher, Unsubscribe } from './events/dispatcher.js';
-import { runnerLive } from './core/runnerLive.js';
-import { toWireJson } from './lib/wireJson.js';
+import type { AgentfootprintEvent } from '../events/registry.js';
+import type { RunnerBase } from '../core/RunnerBase.js';
+import type { EventDispatcher, Unsubscribe } from '../events/dispatcher.js';
+import { runnerLive } from '../core/runnerLive.js';
+import { toWireJson } from '../lib/wireJson.js';
 
 /**
  * Hand the runner this iterable's caller before calling `runner.run()`.

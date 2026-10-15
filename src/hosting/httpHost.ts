@@ -85,7 +85,7 @@
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import type { Duplex } from 'node:stream';
 
-import { encodeSSE } from '../stream.js';
+import { encodeSSE } from './stream.js';
 import type { ArtifactWireRequest, ArtifactWireResult } from './artifactWire.js';
 import {
   checkSessionId,

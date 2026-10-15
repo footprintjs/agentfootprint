@@ -201,7 +201,6 @@ const UPWARD_ALLOWANCES = [
   ['src/core/slots/buildMessagesSlot.ts', 'src/conventions.ts'],
   ['src/core/slots/buildSystemPromptSlot.ts', 'src/conventions.ts'],
   ['src/core/slots/buildToolsSlot.ts', 'src/conventions.ts'],
-  ['src/hosting/httpHost.ts', 'src/stream.ts'],
   ['src/integrity/claim-binding/admit.ts', 'src/core/agent/coverage/items.ts'],
   ['src/integrity/claim-binding/admit.ts', 'src/core/agent/coverage/period.ts'],
   ['src/integrity/claim-binding/bindEvidence.ts', 'src/core/agent/coverage/period.ts'],

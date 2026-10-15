@@ -32,7 +32,7 @@ import { MockProvider } from '../../src/adapters/llm/MockProvider.js';
 import { fileObservability } from '../../src/adapters/observability/file.js';
 import { fileRecordingSink } from '../../src/recorders/observability/fileRecordingSink.js';
 import { recordRun } from '../../src/recorders/observability/recordRun.js';
-import { toSSE } from '../../src/stream.js';
+import { toSSE } from '../../src/hosting/stream.js';
 import { toWireJson, withWireErrors, wireError } from '../../src/lib/wireJson.js';
 import { AxiosLikeError } from './axiosLikeError.js';
 

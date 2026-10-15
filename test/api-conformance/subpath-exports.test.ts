@@ -64,7 +64,7 @@ import * as thinking from '../../src/thinking/index.js';
 import * as memoryProviders from '../../src/memory-providers.js';
 import * as observabilityProviders from '../../src/observability-providers.js';
 import * as strategies from '../../src/strategies/index.js';
-import * as stream from '../../src/stream.js';
+import * as stream from '../../src/hosting/stream.js';
 import * as status from '../../src/status.js';
 import * as locales from '../../src/locales/index.js';
 import * as debug from '../../src/debug.js';

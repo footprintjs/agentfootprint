@@ -4,10 +4,10 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { Agent } from '../../../src/core/Agent.js';
-import { mock } from '../../../src/adapters/llm/MockProvider.js';
-import { toSSE, SSEFormatter, encodeSSE } from '../../../src/stream.js';
-import { expectScalesLinearly } from '../../helpers/perf.js';
+import { Agent } from '../../src/core/Agent.js';
+import { mock } from '../../src/adapters/llm/MockProvider.js';
+import { toSSE, SSEFormatter, encodeSSE } from '../../src/hosting/stream.js';
+import { expectScalesLinearly } from '../helpers/perf.js';
 
 function buildAgent() {
   return Agent.create({

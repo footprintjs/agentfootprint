@@ -31,7 +31,7 @@ import { join } from 'node:path';
 import { Agent, defineTool } from '../../../src/index.js';
 import type { ToolExecutionContext } from '../../../src/core/tools.js';
 import { mock } from '../../../src/adapters/llm/MockProvider.js';
-import { toSSE } from '../../../src/stream.js';
+import { toSSE } from '../../../src/hosting/stream.js';
 import { recordRun } from '../../../src/recorders/observability/recordRun.js';
 import { persistRecording } from '../../../src/recorders/observability/recordingEnvelope.js';
 import { fileRecordingSink } from '../../../src/recorders/observability/fileRecordingSink.js';

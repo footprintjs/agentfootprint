@@ -14,7 +14,7 @@
  *   - `onRealEvent` — every event as its producer made it
  *     (`EventDispatcher · onRealEvent`): a hosted agent's streamed reply and
  *     spend ledger (`hosting/standingAgent.ts`), `toSSE({ format: 'text' })`
- *     (`stream.ts`);
+ *     (`hosting/stream.ts`);
  *   - `liveState` — the run's committed root state, live: the conversation a
  *     host's session store resumes from (`hosting/durability.ts`);
  *   - `liveSnapshot` — the run's whole snapshot, live: what the context ledger
