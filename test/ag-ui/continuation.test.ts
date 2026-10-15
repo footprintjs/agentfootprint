@@ -117,11 +117,10 @@ describe('continuation — the run that continues a pause is the same invocation
 
     const opened = only(first.events, 'SUBAGENT_STARTED').find((e) => e.name.endsWith('/x'))!;
     const call = only(first.events, 'TOOL_CALL_START')[0]!;
-    // RUN_STARTED names agentfootprint's run, and the same invocation re-opens.
+    // The same invocation re-opens; the record's process-wide run id never goes out.
     expect(second.events[0]).toMatchObject({ type: 'RUN_STARTED', runId: 'ag-2' });
-    expect(second.events[0]!.metadata?.agentfootprint?.runId).toBe(
-      second.served.find((e) => e.meta.runId !== 'consumer-scope')!.meta.runId,
-    );
+    const recordRun = second.served.find((e) => e.meta.runId !== 'consumer-scope')!.meta.runId;
+    expect(JSON.stringify(second.events)).not.toContain(recordRun);
     expect(only(second.events, 'SUBAGENT_STARTED')).toEqual([
       expect.objectContaining({ subagentRunId: opened.subagentRunId, name: opened.name }),
     ]);

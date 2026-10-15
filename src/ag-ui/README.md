@@ -14,8 +14,11 @@ into the AG-UI protocol's events and framed for the wire.
 
 ## The one law here
 Every value in an AG-UI event comes from a served event, from the record's
-address (`runtimeStageId`, `subflowPath`, agentfootprint's `runId` — never
-selected by a policy), or from the AG-UI request's own ids. Every id is minted
+address (`runtimeStageId`, `subflowPath` — never selected by a policy), or from
+the AG-UI request's own ids. The record's own `runId` is never written (it
+counts every run the process made); a failed tool call's result is the fixed
+words unless the app chose `toolErrors: 'served'`; a tool's progress `payload`
+goes out only when the app lists it. Every id is minted
 by `ids.ts` from that address under the request's `runId`: injective, unique
 across a thread, and the same with or without a policy.
 

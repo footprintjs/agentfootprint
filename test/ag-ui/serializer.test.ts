@@ -17,6 +17,7 @@ import {
   AG_UI_RUN_FAILED,
   AG_UI_SUBAGENT_CANCELLED,
   AG_UI_SUBAGENT_UNFINISHED,
+  AG_UI_TOOL_FAILED,
   agUiSerializer,
   type AgUiSerializerOptions,
 } from '../../src/ag-ui/serializer.js';
@@ -61,7 +62,7 @@ const only = <T extends AgUiEvent['type']>(events: readonly AgUiEvent[], type: T
   events.filter((e): e is Extract<AgUiEvent, { type: T }> => e.type === type);
 
 describe('agUiSerializer — the run lifecycle', () => {
-  it('opens with RUN_STARTED, once, carrying the protocol version and the record’s own run id', () => {
+  it('opens with RUN_STARTED, once, with the protocol version — and never the record’s run id', () => {
     const { s, out } = feed([
       ev(t('agent.turn_start'), { turnIndex: 0, userPrompt: 'hi' }, { rsid: 'seed#0' }),
       ev(t('context.evaluated'), { iteration: 1 }),
@@ -72,8 +73,9 @@ describe('agUiSerializer — the run lifecycle', () => {
       threadId: 'thread-1',
       runId: 'ag-run',
       protocolVersion: '1.0',
-      metadata: { agentfootprint: { runId: 'run-100-1' } },
     });
+    // The record's run ids count every run the process made — never on the wire.
+    expect(JSON.stringify([...out, ...closing])).not.toContain('run-100-1');
     expect(only([...out, ...closing], 'RUN_STARTED')).toHaveLength(1);
     expect(closing.at(-1)).toMatchObject({
       type: 'RUN_FINISHED',
@@ -680,7 +682,6 @@ describe('agUiSerializer — terminals', () => {
       {
         type: 'RUN_ERROR',
         message: LLM_ERROR_SENTENCES.rateLimited,
-        metadata: { agentfootprint: { runId: 'run-100-1' } },
       },
     ]);
   });
@@ -700,7 +701,6 @@ describe('agUiSerializer — terminals', () => {
     expect(s.settle({ kind: 'failed' }).at(-1)).toEqual({
       type: 'RUN_ERROR',
       message: AG_UI_RUN_FAILED,
-      metadata: { agentfootprint: { runId: 'run-100-1' } },
     });
   });
 
@@ -768,7 +768,7 @@ describe('agUiSerializer — CUSTOM is an allow-list', () => {
       expect(JSON.stringify(out)).not.toContain(secret);
   });
 
-  it('a progress report names the AG-UI tool call it belongs to', () => {
+  it('a progress report names the AG-UI tool call it belongs to — and never the tool’s own payload', () => {
     const { out } = feed([
       ev(t('agent.turn_start'), { turnIndex: 0 }, { rsid: 'seed#0' }),
       ev(
@@ -785,8 +785,18 @@ describe('agUiSerializer — CUSTOM is an allow-list', () => {
     expect(only(out, 'CUSTOM')[0]!.value).toEqual({
       toolCallId: 'ag-run/tool/0/tool-calls#8',
       iteration: 1,
-      payload: { done: 3, total: 12 },
     });
+    // The payload is the tool author's own words: sent only when the app lists it.
+    const listed = feed(
+      [ev(t('stream.tool_progress'), { iteration: 1, payload: { done: 3 } }, { rsid: 'x#1' })],
+      {
+        custom: {
+          ...AG_UI_CUSTOM_EVENTS,
+          'agentfootprint.stream.tool_progress': (p, at) => ({ ...at, payload: p.payload }),
+        },
+      },
+    ).out;
+    expect(only(listed, 'CUSTOM')[0]!.value).toEqual({ payload: { done: 3 } });
   });
 
   it('`custom` replaces the list: `{}` sends none; spreading the default adds one; mapped events never go', () => {
@@ -830,7 +840,6 @@ describe('agUiSerializer — which run, and a run that continues another', () =>
       { owns: mine },
     );
     expect(out[0]).toMatchObject({ type: 'RUN_STARTED' });
-    expect(out[0]!.metadata?.agentfootprint?.runId).toBe('run-mine');
     expect(only(out, 'TEXT_MESSAGE_CONTENT').map((e) => e.delta)).toEqual(['mine']);
   });
 
@@ -843,7 +852,7 @@ describe('agUiSerializer — which run, and a run that continues another', () =>
     ).toEqual([]);
     const first = s.event(ev(t('agent.iteration_start'), { iterIndex: 2 }, { rsid: 'call-llm#9' }));
     expect(first[0]).toMatchObject({ type: 'RUN_STARTED' });
-    expect(first[0]!.metadata?.agentfootprint?.runId).toBe('run-100-1');
+    expect(first.map((e) => e.type)).toEqual(['RUN_STARTED', 'STEP_STARTED']);
   });
 
   it('a pause records what its continuation needs; any other ending records nothing', () => {
@@ -1006,5 +1015,40 @@ describe('agUiSerializer — a call the continuation dispatches belongs to the r
       ),
     ];
     expect(only(out, 'TOOL_CALL_START')[0]!.parentMessageId).toBe('ag-1/text/0/call-llm#4');
+  });
+});
+
+describe('agUiSerializer — a failed tool call says only that it failed', () => {
+  const failing = [
+    ev(t('agent.turn_start'), { turnIndex: 0 }, { rsid: 'seed#0' }),
+    ev(
+      t('stream.tool_start'),
+      { toolName: 'db', toolCallId: 'c1', args: {} },
+      { rsid: 'tool-calls#2' },
+    ),
+    ev(
+      t('stream.tool_end'),
+      { toolCallId: 'c1', result: 'ECONNREFUSED postgres://admin:hunter2@db:5432', error: true },
+      { rsid: 'tool-calls#2' },
+    ),
+  ];
+
+  it('by default the result is the fixed words — never the thrown text', () => {
+    const { out } = feed(failing);
+    expect(only(out, 'TOOL_CALL_RESULT')[0]).toMatchObject({ content: AG_UI_TOOL_FAILED });
+    expect(JSON.stringify(out)).not.toContain('hunter2');
+  });
+
+  it("`toolErrors: 'served'` sends the record’s own result", () => {
+    const { out } = feed(failing, { toolErrors: 'served' });
+    expect(only(out, 'TOOL_CALL_RESULT')[0]!.content).toContain('ECONNREFUSED');
+  });
+
+  it('a call that succeeded is unaffected', () => {
+    const { out } = feed([
+      ...failing.slice(0, 2),
+      ev(t('stream.tool_end'), { toolCallId: 'c1', result: 'rows: 3' }, { rsid: 'tool-calls#2' }),
+    ]);
+    expect(only(out, 'TOOL_CALL_RESULT')[0]!.content).toBe('rows: 3');
   });
 });

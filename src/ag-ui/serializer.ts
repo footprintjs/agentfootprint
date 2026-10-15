@@ -8,9 +8,10 @@
  *          is served, from the RECORD only: every value it writes comes from a
  *          served event (the placeholder wherever a redaction policy selected a
  *          value), from the record's address (`meta.runtimeStageId`,
- *          `meta.subflowPath`, `meta.runId` — never selected by a policy), or
- *          from the AG-UI request's own ids. It never reads the run's live
- *          values, so nothing a policy hides can reach an AG-UI event.
+ *          `meta.subflowPath` — never selected by a policy), or from the
+ *          AG-UI request's own ids. It never reads the run's live values, so
+ *          nothing a policy hides can reach an AG-UI event. The record's own
+ *          run id is never written: it counts every run the process made.
  *
  * THE MAPPING
  *   agent.turn_start (nested)          → SUBAGENT_STARTED      (a sub-agent's turn)
@@ -108,16 +109,19 @@ const pick = (
 
 /**
  * The agentfootprint events that go out as AG-UI `CUSTOM` by default, each with
- * the fields it carries: progress, spend, the loop's route, the answer's
- * standing and a provider's retries — counts and the library's own words.
- * Content (`context.injected`'s assembled prompt, `error.retried`'s raw error,
- * memory, permission and credential facts) stays off the wire unless an app
- * lists it: `agUiSerializer({ ..., custom: { ...AG_UI_CUSTOM_EVENTS, [type]: projection } })`.
+ * the fields it carries: progress (which call, which iteration), spend, the
+ * loop's route, the answer's standing and a provider's retries — counts and the
+ * library's own words. Content (a tool's own progress `payload`,
+ * `context.injected`'s assembled prompt, `error.retried`'s raw error, memory,
+ * permission and credential facts) stays off the wire unless an app lists it:
+ * `agUiSerializer({ ..., custom: { ...AG_UI_CUSTOM_EVENTS, [type]: projection } })`.
  */
 export const AG_UI_CUSTOM_EVENTS: Readonly<Record<string, AgUiCustomProjection>> = Object.freeze({
+  // Which call and which iteration — never the tool author's `payload`, which
+  // is whatever the tool chose to report (list it to send it).
   'agentfootprint.stream.tool_progress': (payload, at) => ({
     ...(at.toolCallId !== undefined && { toolCallId: at.toolCallId }),
-    ...pick(payload, ['iteration', 'payload']),
+    ...pick(payload, ['iteration']),
   }),
   'agentfootprint.cost.tick': (payload) =>
     pick(payload, [
@@ -158,6 +162,14 @@ export interface AgUiSerializerOptions {
    */
   readonly reasoning?: boolean;
   /**
+   * What a FAILED tool call's result says. Default `'withheld'`: the fixed words
+   * "The tool failed." — the record's result for a failed call is the thrown
+   * text, which may hold a connection string, a path or a provider's response.
+   * `'served'` sends the record's own result (still the served value: the
+   * placeholder wherever a redaction policy selected one).
+   */
+  readonly toolErrors?: 'withheld' | 'served';
+  /**
    * Which served events are this run's. Default: the events of the first run
    * an event names (plus events that name no run). Pass it when the listener
    * can hear more than one run — an instance several callers share — so the
@@ -184,6 +196,9 @@ export interface AgUiTranslation extends RunTranslation<AgUiEvent> {
    */
   suspension(awaiting?: 'person' | 'caller'): AgUiSuspension | undefined;
 }
+
+/** Said by `TOOL_CALL_RESULT` for a failed call, unless `toolErrors: 'served'`. */
+export const AG_UI_TOOL_FAILED = 'The tool failed.';
 
 /** Said by `RUN_ERROR` when the run's `error.fatal` is not one of the record's fixed sentences. */
 export const AG_UI_RUN_FAILED = 'The run failed.';
@@ -314,13 +329,18 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
   const custom = options.custom ?? AG_UI_CUSTOM_EVENTS;
   const reasoning = options.reasoning === true;
   const owns = options.owns;
+  const toolErrors = options.toolErrors ?? 'withheld';
 
   const root = newScope([], undefined);
   /** Open scopes — the root always, then each nested agent turn in open order. */
   const scopes: Scope[] = [root];
   let started = false;
   let settled = false;
-  /** agentfootprint's own run id, once an event named it. */
+  /**
+   * The run the events name, once one did — how a translation without `owns`
+   * keeps to one run. Never written: the library's run ids count every run the
+   * PROCESS made, and a browser must not learn how many other callers ran.
+   */
   let recordRunId: string | undefined;
   /** The record's own words for a failure — the last served `error.fatal`. */
   let fatal: string | undefined;
@@ -337,9 +357,6 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
     }
     return best;
   };
-
-  const runMetadata = (): AgUiMetadata | undefined =>
-    recordRunId === undefined ? undefined : { agentfootprint: { runId: recordRunId } };
 
   /** The record's address of `event`, as AG-UI metadata. */
   const addressOf = (event: AgentfootprintEvent, extra?: Partial<AgUiAddress>): AgUiMetadata => ({
@@ -724,12 +741,16 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
         }
         // A frontend tool's result is the one the client sent: it holds it already.
         if (call.client === true) return;
+        // A FAILED call's result is the thrown text — a connection string, a
+        // stack line, a provider's body. A person reads the fixed words unless
+        // the app chose to serve the record's own.
+        const failed = payload.error === true && toolErrors !== 'served';
         out.push({
           type: 'TOOL_CALL_RESULT',
           messageId:
             call.n < 0 ? ids.next('result', address).id : ids.at('result', call.n, call.address),
           toolCallId: call.id,
-          content: resultText(payload.result),
+          content: failed ? AG_UI_TOOL_FAILED : resultText(payload.result),
           role: 'tool',
           ...owned(scope, event),
         });
@@ -908,7 +929,6 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
       threadId,
       runId,
       protocolVersion: AG_UI_PROTOCOL_VERSION,
-      ...(runMetadata() !== undefined && { metadata: runMetadata() }),
     });
     out.push(...reopened);
   };
@@ -977,7 +997,6 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
           out.push({
             type: 'RUN_ERROR',
             message: fatal ?? AG_UI_RUN_FAILED,
-            ...(runMetadata() !== undefined && { metadata: runMetadata() }),
           });
           return out;
         case 'paused': {
@@ -997,7 +1016,6 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
               threadId,
               runId,
               outcome: { type: 'success', pendingToolCallIds: [clientCall] },
-              ...(runMetadata() !== undefined && { metadata: runMetadata() }),
             });
             return out;
           }
@@ -1016,7 +1034,6 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
             threadId,
             runId,
             outcome: { type: 'interrupt', interrupts: [interrupt] },
-            ...(runMetadata() !== undefined && { metadata: runMetadata() }),
           });
           return out;
         }
@@ -1033,7 +1050,6 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
             threadId,
             runId,
             outcome: { type: 'cancelled' },
-            ...(runMetadata() !== undefined && { metadata: runMetadata() }),
           });
           return out;
         case 'finished':
@@ -1044,7 +1060,6 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
             threadId,
             runId,
             ...(rootResult !== undefined && { result: rootResult }),
-            ...(runMetadata() !== undefined && { metadata: runMetadata() }),
           });
           return out;
       }

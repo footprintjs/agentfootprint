@@ -54,14 +54,15 @@ event union by this repository's tests. It speaks protocol
 
 An AG-UI stream leaves the process, so nothing goes out by default that a person
 using the frontend is not meant to read. `AgUiSerializerOptions` takes the
-request's `threadId` and `runId`, and two decisions that are yours:
+request's `threadId` and `runId`, and three decisions that are yours:
 
 - **`custom`** — the events that go out as `CUSTOM`, each with the fields it
-  carries. The default, `AG_UI_CUSTOM_EVENTS`, is tool progress, spend
-  (`cost.tick`), the loop's route, the answer's standing and a provider's
-  retries — counts and the library's own words. The rest of the record stays off
-  the wire: `context.injected` (what the model was shown, your system prompt
-  included), a retry's raw error, memory, permission and credential facts. To
+  carries. The default, `AG_UI_CUSTOM_EVENTS`, is tool progress (which call,
+  which iteration), spend (`cost.tick`), the loop's route, the answer's standing
+  and a provider's retries — counts and the library's own words. The rest of the
+  record stays off the wire: a tool's own progress `payload` (whatever the tool
+  chose to report), `context.injected` (what the model was shown, your system
+  prompt included), a retry's raw error, memory, permission and credential facts. To
   send one, list it with a projection — an `AgUiCustomProjection` gets the
   event's SERVED payload and an `AgUiCustomContext` (the AG-UI id of the tool
   call open where it happened) and returns what goes out:
@@ -75,6 +76,10 @@ request's `threadId` and `runId`, and two decisions that are yours:
   ```
 
   `custom: {}` sends no `CUSTOM` events at all.
+- **`toolErrors`** — what a FAILED tool call's result says. By default the fixed
+  words "The tool failed." (`'withheld'`): the record's result for a failed call is
+  the thrown text, which may hold a connection string, a path or a provider's
+  response. `'served'` sends the record's own result.
 - **`reasoning`** — the model's chain of thought (`REASONING_*`), from the served
   thinking events. Off unless you set `reasoning: true`; whether a person may read
   it is a product decision.
@@ -118,8 +123,7 @@ const out = await agent.resume(kept.checkpoint, answer);
 The suspended sub-agents re-open under their own `subagentRunId`, their steps
 re-open, and the first result in the paused call's scope answers that call under
 its own id — the client sees one tool call, one result. `RUN_STARTED` waits for
-the continuation to name its run, so it carries agentfootprint's run id like any
-other.
+the continuation's own first event: the resume's bookkeeping is not the run.
 
 A tool whose work the CLIENT does (an AG-UI frontend tool) pauses the same way.
 Settle it with `{ kind: 'paused', awaiting: 'caller' }`: the segment completes,
@@ -153,8 +157,9 @@ request's `runId`, then the stage execution that produced the entity. A model's
 tool-call id is not unique (providers reuse them; two parallel branches often
 both say `call_1`), and an AG-UI client finds a tool call by its id across the
 whole conversation, so the adapter never uses it as the id. It rides beside:
-`metadata.agentfootprint.toolCallId`. agentfootprint's own run id is on
-`RUN_STARTED` and on the terminal event, under the same key.
+`metadata.agentfootprint.toolCallId`. agentfootprint's own run id is never
+written: it counts every run the process made, and a browser has no business
+learning how many other callers ran.
 
 ## Redaction
 

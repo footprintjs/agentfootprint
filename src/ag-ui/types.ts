@@ -29,14 +29,14 @@ export interface AgUiMetadata {
 }
 
 /**
- * Where an AG-UI event came from in agentfootprint's record: the run, the
- * stage execution and the subflow path — the coordinates a recording, a trace
- * or a commit log is keyed by. Address only: a redaction policy never selects
- * any of it, so it reads the same with or without one.
+ * Where an AG-UI event came from in agentfootprint's record: the stage
+ * execution and the subflow path — the coordinates a recording, a trace or a
+ * commit log is keyed by within its run. Address only: a redaction policy never
+ * selects any of it, so it reads the same with or without one. The record's
+ * own run id is never written: it counts every run the PROCESS made, and a
+ * browser must not learn how many other callers ran.
  */
 export interface AgUiAddress {
-  /** agentfootprint's own run id (`meta.runId`), not the AG-UI `runId`. */
-  readonly runId?: string;
   /** The stage execution that emitted the source event (`meta.runtimeStageId`). */
   readonly runtimeStageId?: string;
   /** The subflow path of that stage, outermost first (`meta.subflowPath`). */

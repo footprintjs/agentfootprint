@@ -23,7 +23,7 @@ import { describe, expect, it } from 'vitest';
 import { Agent, defineTool, flowchartAsTool, Parallel, Sequence } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
 import { agUiSse } from '../../src/ag-ui/framing.js';
-import { AG_UI_RUN_FAILED } from '../../src/ag-ui/serializer.js';
+import { AG_UI_RUN_FAILED, AG_UI_TOOL_FAILED } from '../../src/ag-ui/serializer.js';
 import type { AgUiEvent } from '../../src/ag-ui/types.js';
 import { replayThroughClient, runAsAgUi } from './helpers.js';
 
@@ -74,11 +74,11 @@ describe('scenario — a full run with a tool call', () => {
     ]);
     expect(client.result.result).toBe('Lyon has 520k people.');
 
-    // The run: AG-UI's ids from the request; agentfootprint's own id beside them.
+    // The run: AG-UI's ids from the request. agentfootprint's own run id counts
+    // every run the process made, so it never goes out.
     const recordRunId = run.served[0]!.meta.runId;
     expect(run.events[0]).toMatchObject({ type: 'RUN_STARTED', threadId: 'chat-7', runId: 'ag-1' });
-    expect(run.events[0]!.metadata?.agentfootprint?.runId).toBe(recordRunId);
-    expect(run.events.at(-1)!.metadata?.agentfootprint?.runId).toBe(recordRunId);
+    expect(JSON.stringify(run.events)).not.toContain(recordRunId);
 
     // The tool call: the provider's id rides metadata; the AG-UI id is the call's
     // address in the record, the stage execution that ran it.
@@ -306,5 +306,36 @@ describe('scenario — subflows, sub-agents and a parallel fan-out', () => {
     for (const secret of SECRETS) expect(wire, secret).not.toContain(secret);
     // What the policy hid is SAID to be hidden, not silently dropped.
     expect(wire).toContain('[REDACTED]');
+  });
+});
+
+describe('scenario — a tool that throws', () => {
+  it('reaches the client as a failed call, without the thrown text', async () => {
+    const db = defineTool({
+      name: 'db',
+      description: 'Query the database.',
+      inputSchema: { type: 'object', properties: {} },
+      execute: async () => {
+        throw new Error('ECONNREFUSED postgres://admin:hunter2@db:5432');
+      },
+    });
+    const agent = () =>
+      Agent.create({
+        provider: mock({
+          chunkDelayMs: 0,
+          replies: [{ content: '', toolCalls: [{ id: 'q1', name: 'db', args: {} }] }, 'Sorry.'],
+        }),
+        model: 'm',
+      })
+        .system('s')
+        .tool(db)
+        .build();
+    const run = await runAsAgUi(agent(), { message: 'count rows' });
+    expect(run.served.some((e) => JSON.stringify(e).includes('hunter2'))).toBe(true); // the record has it
+    expect(JSON.stringify(run.events)).not.toContain('hunter2');
+    const client = await replayThroughClient(run.events);
+    expect(client.messages.find((m) => m.role === 'tool')).toMatchObject({
+      content: AG_UI_TOOL_FAILED,
+    });
   });
 });
