@@ -2,7 +2,6 @@
 paths:
   - "src/memory/**"
   - "src/rag/**"
-  - "src/lib/rag/**"
   - "src/adapters/memory/**"
 ---
 # Memory and RAG — seams and blast radius

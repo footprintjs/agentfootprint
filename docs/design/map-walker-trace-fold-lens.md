@@ -44,7 +44,7 @@ any agent runs it) · `src/answer-validation/` (`types.ts`,
 (`buildAgentChart.ts`, `buildDynamicAgentChart.ts`, `buildToolRegistry.ts`,
 `AgentBuilder.ts`, `skillGraphDeclared.ts`) · `src/injection-engine/`
 (`skillGraph.ts` the compiler, plus the build-time checkers) ·
-`src/semantics/` (`types.ts`, `envelope.ts`) · `src/lib/rag/` (`defineRAG`
+`src/semantics/` (`types.ts`, `envelope.ts`) · `src/rag/retriever/` (`defineRAG`
 declares a read-only corpus).
 
 ### Walker — what is happening
@@ -162,7 +162,7 @@ verbatim to a debugging model by
 `src/trace-toolpack/traceToolpack.ts` · `buildFindContextErrors`; only the
 first three carry a `test/modelFacingScan.test.ts` LEDGER row, because that scan
 keys on a time anchor the other four do not use) ·
-`src/core/runbook/verdicts.ts` · `src/lib/rag/defineRAG.ts` ·
+`src/core/runbook/verdicts.ts` · `src/rag/retriever/defineRAG.ts` ·
 `src/semantics/envelope.ts` (`semanticsForModel`).
 
 Second name collision: "Lens" in `src/README.md` and in `src/core/runner.ts`,
@@ -184,7 +184,8 @@ no README, whatever this page happens to list.
 Ports, adapters, transports and leaf utilities: `src/adapters/**`,
 `src/hosting/**`, `src/identity/`, `src/security/`, `src/reliability/`,
 `src/resilience/`, `src/strategies/**`, `src/thinking/`, `src/embedders/`,
-`src/locales/`, `src/rag/**`, `src/mcp/`, `src/lib/claim/`, `src/bridge/`,
+`src/locales/`, `src/rag/`, `src/rag/loaders/`, `src/rag/splitters/` (`src/rag/retriever/`
+is Mixed, above), `src/mcp/`, `src/lib/claim/`, `src/bridge/`,
 `src/debug/` (a re-export-only barrel over the context-error finders),
 `src/artifacts/conformance/`, `src/cache/strategies/`,
 `src/core/agent/delivery/`, `src/time/` (the one owner of every time grammar),

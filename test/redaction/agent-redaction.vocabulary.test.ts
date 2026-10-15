@@ -56,7 +56,7 @@ import { mockThinkingHandler } from '../../src/thinking/MockThinkingHandler.js';
 import { defineMemory, MEMORY_STRATEGIES, MEMORY_TYPES } from '../../src/memory/index.js';
 import { InMemoryStore } from '../../src/memory/store/index.js';
 import { mockEmbedder } from '../../src/memory/embedding/index.js';
-import { indexDocuments } from '../../src/lib/rag/index.js';
+import { indexDocuments } from '../../src/rag/retriever/index.js';
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
 import { locationsOf, withoutAnswerBoundary } from './fixture.js';
 
