@@ -32,8 +32,8 @@
  *   at the default recencyDecay; the gate FAILS promotion otherwise.
  * - **Thin, single-setup.** The recall win is 10/10 vs 9/10 (n=10, one fixture, one embedder/model).
  */
-import type { Embedder, EvidenceInput, InfluenceWeights } from '../lib/influence-core/index.js';
-import { scoreInfluence } from '../lib/influence-core/index.js';
+import type { Embedder, EvidenceInput, InfluenceWeights } from '../influence-core/index.js';
+import { scoreInfluence } from '../influence-core/index.js';
 import {
   defaultSuspectClassifier,
   type ClassifyContext,

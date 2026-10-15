@@ -22,7 +22,7 @@ import {
   scoreLexicalInfluence,
   semanticAlignmentStrategy,
   type InfluenceScorer,
-} from '../../src/lib/influence-core';
+} from '../../src/influence-core';
 import type { LocalizeContextBugOptions } from '../../src/context-bisect';
 
 describe('InfluenceStrategy — assignability (7.5.0 widening stays non-breaking)', () => {

@@ -18,7 +18,7 @@ import { Agent, defineTool } from '../../src/index';
 import { type Injection } from '../../src/injection-engine.js';
 import { mock } from '../../src/llm-providers.js';
 import { defineFact } from '../../src/injection-engine.js';
-import { embeddingCache, scoreInfluence, type Embedder } from '../../src/lib/influence-core';
+import { embeddingCache, scoreInfluence, type Embedder } from '../../src/influence-core';
 import { mockEmbedder } from '../../src/memory/embedding/mockEmbedder';
 import {
   assembleTrajectory,

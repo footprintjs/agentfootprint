@@ -65,7 +65,7 @@
  */
 
 import type { RunManifestLike } from '../../recorders/observability/recordedManifest.js';
-import type { Embedder } from '../../lib/influence-core/index.js';
+import type { Embedder } from '../../influence-core/index.js';
 import type {
   AblationRunStats,
   AblationSpec,

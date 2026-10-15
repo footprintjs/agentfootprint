@@ -6,7 +6,7 @@
  * Method: four-signal embedding-influence composite + ranking-confidence escalation.
  * Thin adapter over `scoreInfluence` / `rankingConfidence` (influence-core).
  */
-import { rankingConfidence, scoreInfluence } from '../../../lib/influence-core/index.js';
+import { rankingConfidence, scoreInfluence } from '../../../influence-core/index.js';
 import type { Finder, FindInput, FindResult } from './types.js';
 
 export const rankSuspects: Finder = {

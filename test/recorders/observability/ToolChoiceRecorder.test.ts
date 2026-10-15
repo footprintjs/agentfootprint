@@ -11,7 +11,7 @@ import type { EmitEvent, LLMProvider } from 'footprintjs';
 import { Agent, askHuman, defineTool, isPaused } from '../../../src/index';
 import { mock } from '../../../src/llm-providers.js';
 import { mockEmbedder } from '../../../src/memory/embedding/mockEmbedder';
-import type { Embedder } from '../../../src/lib/influence-core';
+import type { Embedder } from '../../../src/influence-core';
 import {
   buildChoiceContext,
   toolChoiceRecorder,

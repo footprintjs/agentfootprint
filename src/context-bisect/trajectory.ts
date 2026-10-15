@@ -28,7 +28,7 @@ import type { CommitBundle, UntrackedSource, ValueBasis } from 'foottrace';
 import { STAGE_IDS, SUBFLOW_IDS } from '../lib/conventions.js';
 // The flat/grouped fork, from its ONE owner (9.88.0) — see time-travel/epochs.ts.
 import { llmCallMountKeys } from '../lib/time-travel/epochs.js';
-import type { EvidenceInput } from '../lib/influence-core/index.js';
+import type { EvidenceInput } from '../influence-core/index.js';
 import { stepOutputText } from './llmEdgeWeigher.js';
 import { CONTEXT_BISECT_DEFAULTS, type ContextBugArtifacts, type HonestyFlag } from './types.js';
 

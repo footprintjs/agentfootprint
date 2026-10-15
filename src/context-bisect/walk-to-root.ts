@@ -39,7 +39,7 @@
  * instruction` — where flat single-trigger localize does not. FLAT only — grouped's run-level
  * `lastToolResult` lives outside the per-scope inner logs (deferred, degrade-flagged below).
  */
-import type { Embedder } from '../lib/influence-core/index.js';
+import type { Embedder } from '../influence-core/index.js';
 import { ablationForSuspect, runAblationProbe, probeFlipped, verdictFor } from './ablation.js';
 import { defaultSuspectClassifier, type SuspectClassifier } from './localize.js';
 import { shortlistEarlyCulprits } from './loop-recall.js';

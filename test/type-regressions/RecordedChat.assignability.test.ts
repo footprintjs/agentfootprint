@@ -21,7 +21,7 @@ import type {
   LocalizeContextBugOptions,
   RerunWithoutSourcesResult,
 } from '../../src/context-bisect';
-import type { Embedder } from '../../src/lib/influence-core';
+import type { Embedder } from '../../src/influence-core';
 
 type RerunTurnReturn = Awaited<ReturnType<RecordedChat['rerunTurn']>>;
 

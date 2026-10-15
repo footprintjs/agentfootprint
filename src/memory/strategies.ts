@@ -32,7 +32,7 @@
  * Emits:   N/A — build-time only.
  *
  * @see ./define.types.ts  for `MEMORY_STRATEGIES` and the strategy union
- * @see ../lib/influence-core/strategies.ts  for the exemplar this follows
+ * @see ../influence-core/strategies.ts  for the exemplar this follows
  */
 
 import {

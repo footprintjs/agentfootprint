@@ -20,7 +20,7 @@
  * Run: npx tsx examples/observability/14-loop-recall-shortlist.ts
  */
 import { shortlistEarlyCulprits } from '../../src/observe';
-import { scoreInfluence, type Embedder } from '../../src/lib/influence-core';
+import { scoreInfluence, type Embedder } from '../../src/influence-core';
 
 export const meta = {
   id: '14',

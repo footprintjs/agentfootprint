@@ -20,7 +20,7 @@ paths:
   - src/lib/trace-toolpack/**
   - src/lib/traceToolNames.ts
   - src/observability/contextError/finders/**
-  - src/lib/influence-core/**
+  - src/influence-core/**
 ---
 <!-- analyzed-at: d9afbaa @ 2026-07-02 | model: fable-5 -->
 # Backtracking in agentfootprint — 6 mechanisms

@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 import { flowChart, FlowChartExecutor } from 'footprintjs';
 
 import { mockEmbedder } from '../../src/memory/embedding/mockEmbedder';
-import { embeddingCache, type Embedder } from '../../src/lib/influence-core';
+import { embeddingCache, type Embedder } from '../../src/influence-core';
 import { localizeContextBug } from '../../src/context-bisect';
 import { expectWithinReferenceUnits } from '../helpers/perf.js';
 

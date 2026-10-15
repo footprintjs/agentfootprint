@@ -39,7 +39,7 @@ import {
   type EvidenceInput,
   type InfluenceScorer,
   type InfluenceStrategy,
-} from '../lib/influence-core/index.js';
+} from '../influence-core/index.js';
 import { ablationForSuspect, runAblationProbe, verdictFor } from './ablation.js';
 import { assignCostVerdicts, classifySuspect } from './cost.js';
 import { llmEdgeWeigher, stepOutputText } from './llmEdgeWeigher.js';
