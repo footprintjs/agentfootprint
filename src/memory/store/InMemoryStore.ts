@@ -25,6 +25,11 @@ import type {
   ScoredEntry,
   SearchOptions,
 } from './types.js';
+import {
+  NO_SERVER_EXTRACTION,
+  refuseUnhonouredWriteOptions,
+  type MemoryWriteOptions,
+} from './writeOptions.js';
 
 interface NamespaceSlot {
   readonly entries: Map<string, MemoryEntry>;
@@ -90,7 +95,16 @@ export class InMemoryStore implements MemoryStore {
     return bumped as MemoryEntry<T>;
   }
 
-  async put<T = unknown>(identity: MemoryIdentity, entry: MemoryEntry<T>): Promise<void> {
+  /**
+   * Write options: none honoured — a `Map` derives nothing from what it holds,
+   * so `extraction` and `namespaceScope` are refused by name, never ignored.
+   */
+  async put<T = unknown>(
+    identity: MemoryIdentity,
+    entry: MemoryEntry<T>,
+    options?: MemoryWriteOptions,
+  ): Promise<void> {
+    refuseUnhonouredWriteOptions('InMemoryStore', undefined, options, NO_SERVER_EXTRACTION);
     const slot = this.slot(identity);
     slot.entries.set(entry.id, entry as MemoryEntry);
   }
@@ -103,8 +117,11 @@ export class InMemoryStore implements MemoryStore {
   async putMany<T = unknown>(
     identity: MemoryIdentity,
     entries: readonly MemoryEntry<T>[],
+    options?: MemoryWriteOptions,
   ): Promise<void> {
+    // The port's empty-batch law first: an empty batch is a no-op, never a rejection.
     if (entries.length === 0) return;
+    refuseUnhonouredWriteOptions('InMemoryStore', undefined, options, NO_SERVER_EXTRACTION);
     const slot = this.slot(identity);
     for (const entry of entries) {
       slot.entries.set(entry.id, entry as MemoryEntry);
@@ -115,7 +132,9 @@ export class InMemoryStore implements MemoryStore {
     identity: MemoryIdentity,
     entry: MemoryEntry<T>,
     expectedVersion: number,
+    options?: MemoryWriteOptions,
   ): Promise<PutIfVersionResult> {
+    refuseUnhonouredWriteOptions('InMemoryStore', undefined, options, NO_SERVER_EXTRACTION);
     const slot = this.slot(identity);
     const existing = slot.entries.get(entry.id);
 

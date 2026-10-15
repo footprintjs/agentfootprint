@@ -122,6 +122,15 @@ export const AWS_COMMAND_PINS: readonly AwsAdapterPin[] = [
       'DeleteEventCommand',
       'RetrieveMemoryRecordsCommand',
     ],
+    note:
+      'The write options map onto `CreateEventInput` fields read out of a real install of ' +
+      '3.1152.0 and checked through its real serializer (no network): `extractionMode` ' +
+      '(enum `ExtractionMode`, whose only member is `SKIP` — "stored in short-term memory but ' +
+      'excluded from long-term memory extraction") and `extractionConfig` (`ExtractionConfig` = ' +
+      '`{ namespaceVariables?: Record<string, string> }`, "substituted into namespaceTemplates ' +
+      'during long-term memory extraction"); on the wire, `"extractionMode":"SKIP","extractionConfig":' +
+      '{"namespaceVariables":{…}}` in the CreateEvent body. The keys they fill are declared on ' +
+      'the memory resource (control plane: `CreateMemoryInput.namespaceKeys`).',
   },
   {
     adapter: 'agentCoreSessions',

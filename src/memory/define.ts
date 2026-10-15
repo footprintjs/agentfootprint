@@ -35,6 +35,7 @@ import { refuseAsRole } from './asRoleRefusal.js';
 import { refuseMemoryRedact } from './redactRefusal.js';
 import { assertStrategyRequirements, assertStrategyShape } from './strategies.js';
 import { resolveRankingMode } from './store/capability.js';
+import { assertStoreHonours, bindWriteOptions } from './store/writeOptions.js';
 
 import { defaultPipeline, type DefaultPipelineConfig } from './pipeline/default.js';
 import { ephemeralPipeline } from './pipeline/ephemeral.js';
@@ -97,7 +98,11 @@ import type { MemoryDefinition, ReadonlyMemoryFlowChart } from './define.types.j
 export function defineMemory(options: DefineMemoryOptions): MemoryDefinition {
   validate(options);
 
-  const pipeline = buildPipeline(options);
+  // The write options ride every write the PIPELINE makes, so the pipeline is
+  // built over the store with them bound. The definition still carries the
+  // caller's own store (below): reads are identical, and the turn anchor keeps
+  // deduplicating by reference.
+  const pipeline = buildPipeline(withBoundWrites(options));
 
   // The declared-requirements backstop (9.5.0), deliberately AFTER the
   // dispatch: the arms above know things this check does not (the
@@ -179,6 +184,19 @@ function validate(options: DefineMemoryOptions): void {
         'Pass `new InMemoryStore()` for dev/tests, or a backed store for production.',
     );
   }
+  if (options.writeOptions !== undefined) {
+    if (options.readOnly === true) {
+      throw new Error(
+        `defineMemory[id=${options.id}]: \`writeOptions\` cannot be combined with ` +
+          '`readOnly: true` — a read-only memory compiles no write half, so there is no ' +
+          'write to apply them to. Drop one of the two.',
+      );
+    }
+    // Before the first turn: a store that does not DECLARE an option would
+    // refuse it on every write, so a definition that asks for one is refused
+    // now, by name, instead.
+    assertStoreHonours(options.store, options.writeOptions, `defineMemory[${options.id}]`);
+  }
   // SHAPE before anything reads a field (9.5.1). Both the dispatch below and
   // the requirements walk read fields off the strategy — `h.strategies[0]`,
   // `for (const sub of strategy.strategies)` — and a field read off a shape
@@ -214,6 +232,12 @@ function validate(options: DefineMemoryOptions): void {
 }
 
 // ─── Pipeline dispatch ─────────────────────────────────────────────
+
+/** The options with the store's writes carrying `writeOptions`, when any were given. */
+function withBoundWrites(options: DefineMemoryOptions): DefineMemoryOptions {
+  if (options.writeOptions === undefined) return options;
+  return { ...options, store: bindWriteOptions(options.store, options.writeOptions) };
+}
 
 function buildPipeline(options: DefineMemoryOptions): MemoryPipeline {
   switch (options.type) {

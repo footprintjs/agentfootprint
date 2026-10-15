@@ -42,6 +42,7 @@
 import type { LLMProvider } from '../provider-contract/types.js';
 import type { Embedder } from './embedding/index.js';
 import type { MemoryStore } from './store/index.js';
+import type { MemoryWriteOptionsConfig } from './store/writeOptions.js';
 import type { MemoryIdentity } from './identity/index.js';
 import type { RetrievalStrategy } from './retrieval/types.js';
 
@@ -549,6 +550,20 @@ export interface DefineMemoryOptionsBase {
 
   /** Which claim the injected block makes. See {@link MemoryDefinition.flavor}. */
   readonly flavor?: MemoryFlavor;
+
+  /**
+   * What every write of this memory asks the store to do with it — the
+   * vendor-neutral write options (`MemoryWriteOptions`):
+   *
+   *   - `extraction: 'skip'` — keep the writes out of long-term extraction;
+   *   - `namespaceScope` — the namespace the store files records DERIVED from
+   *     them under: fixed, or `(identity) => ({ ... })` for one per tenant.
+   *
+   * Checked here, before any turn runs: an option the store does not declare in
+   * `MemoryStore.writeOptions` is refused by name. Refused with `readOnly` too —
+   * a memory that never writes has nothing to apply them to.
+   */
+  readonly writeOptions?: MemoryWriteOptionsConfig;
 }
 
 export interface DefineEpisodicOptions extends DefineMemoryOptionsBase {

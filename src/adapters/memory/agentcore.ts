@@ -22,6 +22,8 @@
  * "delete the whole session" call. This shapes the adapter:
  *
  *   • `put`  → `CreateEvent` (append; `actorId` + `eventTimestamp` are required).  O(1)
+ *     Its write options become CreateEvent's own fields: `extraction: 'skip'` →
+ *     `extractionMode: 'SKIP'`, `namespaceScope` → `extractionConfig.namespaceVariables`.
  *   • `list` → `ListEvents` (paginated, `includePayloads`).  ← window / episodic memory.  O(page)
  *   • `get(id)` / `delete(id)` → list-then-find by the entry id stored in the blob, since
  *     AgentCore's ids are server-assigned.  **O(events in session)** — fine for typical
@@ -54,6 +56,18 @@ import type { MemoryIdentity } from '../../memory/identity/index.js';
 import { IDENTITY_ABSENT, identityNamespace } from '../../memory/identity/index.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
 import { describeStoredShape } from '../../lib/storedPreview.js';
+import {
+  refuseUnhonouredWriteOptions,
+  requestedWriteOptions,
+  type MemoryWriteOptionName,
+  type MemoryWriteOptions,
+} from '../../memory/store/writeOptions.js';
+
+/** What this store honours when its client forwards CreateEvent's extraction fields. */
+const AGENTCORE_WRITE_OPTIONS: readonly MemoryWriteOptionName[] = Object.freeze([
+  'extraction',
+  'namespaceScope',
+] as const);
 
 /** One event as the adapter cares about it: AgentCore's id + the decoded entry. */
 export interface AgentCoreEvent {
@@ -142,12 +156,33 @@ export class UnreadableMemoryEntryError extends TypeError {
  * `DeleteEvent`; tests inject a mock via `_client`.
  */
 export interface AgentCoreLikeClient {
+  /**
+   * `true` when {@link createEvent} forwards `extractionMode` and
+   * `extractionConfig` to `CreateEvent` unchanged. The built-in client does.
+   *
+   * Declared, not assumed: a client written before these fields existed
+   * compiles against the wider input and drops them, and a dropped
+   * `extractionMode: 'SKIP'` sends a turn the caller kept out of long-term
+   * memory INTO extraction. Without this, `AgentCoreStore` honours no write
+   * options and refuses them by name.
+   */
+  readonly forwardsWriteOptions?: true;
   /** Append one entry as an event (server assigns the eventId). */
   createEvent(input: {
     memoryId: string;
     actorId: string;
     sessionId: string;
     entry: MemoryEntry;
+    /**
+     * `CreateEvent`'s own field (`ExtractionMode.SKIP`): store the event in
+     * short-term memory, exclude it from long-term extraction.
+     */
+    extractionMode?: 'SKIP';
+    /**
+     * `CreateEvent`'s own field: `namespaceVariables` are substituted into the
+     * memory's `namespaceTemplates` during long-term extraction.
+     */
+    extractionConfig?: { readonly namespaceVariables: Readonly<Record<string, string>> };
   }): Promise<void>;
   /** One page of the session's events (newest-first is AgentCore's default). */
   listEvents(input: {
@@ -393,6 +428,26 @@ export class AgentCoreStore implements MemoryStore {
    */
   readonly ranksBy = 'server-text' as const;
 
+  /**
+   * **Both write options, translated to `CreateEvent`'s own fields:**
+   *
+   *   `extraction: 'skip'`   → `extractionMode: 'SKIP'` — the event stays in
+   *                            short-term memory and is excluded from
+   *                            long-term extraction.
+   *   `namespaceScope`       → `extractionConfig: { namespaceVariables }` —
+   *                            substituted into the memory's
+   *                            `namespaceTemplates` during extraction, which
+   *                            is how one tenant's derived records stay in
+   *                            that tenant's namespace.
+   *
+   * Absent when an injected client does not declare `forwardsWriteOptions`:
+   * then both are refused by name rather than handed to a client that may drop
+   * them. AgentCore validates the variables itself (≤5 entries, keys
+   * `[a-z][a-z0-9]*`, values `[a-z0-9][a-z0-9-_]*`, ≤64 characters); a value it
+   * refuses fails the write loudly, with its `ValidationException`.
+   */
+  readonly writeOptions?: readonly MemoryWriteOptionName[];
+
   private readonly client: AgentCoreLikeClient;
   private readonly memoryId: string;
   private readonly pageSize: number;
@@ -416,6 +471,7 @@ export class AgentCoreStore implements MemoryStore {
     if (options._client) this.client = options._client;
     else if (options.client) this.client = options.client;
     else this.client = createAgentCoreClient(options.region, options._sdk);
+    if (this.client.forwardsWriteOptions === true) this.writeOptions = AGENTCORE_WRITE_OPTIONS;
   }
 
   // MemoryIdentity → AgentCore (actorId, sessionId). The actor is the user/tenant; the
@@ -489,20 +545,31 @@ export class AgentCoreStore implements MemoryStore {
     return found;
   }
 
-  async put<T = unknown>(identity: MemoryIdentity, entry: MemoryEntry<T>): Promise<void> {
+  async put<T = unknown>(
+    identity: MemoryIdentity,
+    entry: MemoryEntry<T>,
+    options?: MemoryWriteOptions,
+  ): Promise<void> {
     this.ensureOpen('put');
+    const extraction = this.extractionFields(options);
     if (entry.ttl !== undefined && entry.ttl <= Date.now()) return;
-    await this.client.createEvent({ ...this.scope(identity), entry: entry as MemoryEntry });
+    await this.client.createEvent({
+      ...this.scope(identity),
+      entry: entry as MemoryEntry,
+      ...extraction,
+    });
   }
 
   async putMany<T = unknown>(
     identity: MemoryIdentity,
     entries: readonly MemoryEntry<T>[],
+    options?: MemoryWriteOptions,
   ): Promise<void> {
     this.ensureOpen('putMany');
     // AgentCore has no batch-write API; per-session events are conceptually ordered, so
-    // sequentialize and let the SDK retry policy handle backoff.
-    for (const entry of entries) await this.put(identity, entry);
+    // sequentialize and let the SDK retry policy handle backoff. The options ride
+    // every event of the batch — a batch is N writes, each asked the same thing.
+    for (const entry of entries) await this.put(identity, entry, options);
   }
 
   /**
@@ -513,16 +580,45 @@ export class AgentCoreStore implements MemoryStore {
     identity: MemoryIdentity,
     entry: MemoryEntry<T>,
     expectedVersion: number,
+    options?: MemoryWriteOptions,
   ): Promise<PutIfVersionResult> {
     this.ensureOpen('putIfVersion');
+    // Refused BEFORE the read, so an unhonoured option never costs a list.
+    this.extractionFields(options);
     const current = await this.get<T>(identity, entry.id);
     if (current === null) {
       if (expectedVersion !== 0) return { applied: false };
     } else if (current.version !== expectedVersion) {
       return { applied: false, currentVersion: current.version };
     }
-    await this.put(identity, entry);
+    await this.put(identity, entry, options);
     return { applied: true };
+  }
+
+  /**
+   * The write options as `CreateEvent`'s own fields — or a refusal by name for
+   * any this store's client cannot carry. The ONE place the vendor-neutral
+   * names become AWS's.
+   */
+  private extractionFields(options: MemoryWriteOptions | undefined): {
+    extractionMode?: 'SKIP';
+    extractionConfig?: { readonly namespaceVariables: Readonly<Record<string, string>> };
+  } {
+    refuseUnhonouredWriteOptions(
+      'AgentCoreStore',
+      this.writeOptions,
+      options,
+      'its injected client does not declare `forwardsWriteOptions: true`, so it may drop ' +
+        "CreateEvent's `extractionMode` / `extractionConfig`",
+    );
+    const asked = requestedWriteOptions(options);
+    return {
+      ...(asked.includes('extraction') && { extractionMode: 'SKIP' as const }),
+      ...(asked.includes('namespaceScope') &&
+        options?.namespaceScope !== undefined && {
+          extractionConfig: { namespaceVariables: { ...options.namespaceScope } },
+        }),
+    };
   }
 
   async list<T = unknown>(
@@ -809,7 +905,10 @@ function createAgentCoreClient(
   };
 
   return {
-    async createEvent({ memoryId, actorId, sessionId, entry }) {
+    // The two extraction fields below are forwarded as they are, so the
+    // store may honour the write options (see `AgentCoreLikeClient`).
+    forwardsWriteOptions: true,
+    async createEvent({ memoryId, actorId, sessionId, entry, extractionMode, extractionConfig }) {
       // The entry is stored as a single `blob` document (PayloadType.blob =
       // __DocumentType), and it goes in as JSON TEXT, not as the object.
       // Field-learned on the session store and true of every blob this service
@@ -825,6 +924,13 @@ function createAgentCoreClient(
         sessionId,
         eventTimestamp: new Date(),
         payload: [{ blob: JSON.stringify(entry) }],
+        // `CreateEventInput`'s own names (`ExtractionMode.SKIP`,
+        // `ExtractionConfig.namespaceVariables`), present only when asked —
+        // an event without them is extracted exactly as before.
+        ...(extractionMode !== undefined && { extractionMode }),
+        ...(extractionConfig !== undefined && {
+          extractionConfig: { namespaceVariables: { ...extractionConfig.namespaceVariables } },
+        }),
       });
     },
     async listEvents({ memoryId, actorId, sessionId, maxResults, nextToken }) {

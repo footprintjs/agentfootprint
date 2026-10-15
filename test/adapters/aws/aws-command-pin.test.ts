@@ -187,6 +187,24 @@ describe('AWS adapters dispatch exactly the commands they are pinned to', () => 
     );
   });
 
+  it('AgentCoreStore — write options ride CreateEvent’s own fields, absent when not asked', async () => {
+    const row = pin('AgentCoreStore');
+    const sdk = fakeSdk(row);
+    const store = new AgentCoreStore({ memoryId: 'mem-1', _sdk: sdk.module });
+    await store.put(IDENTITY, entry('a'), {
+      extraction: 'skip',
+      namespaceScope: { tenantid: 'acme' },
+    });
+    await store.put(IDENTITY, entry('b'));
+    expect(sdk.names()).toEqual(['CreateEventCommand', 'CreateEventCommand']);
+    expect(sdk.sent[0]?.input).toMatchObject({
+      extractionMode: 'SKIP',
+      extractionConfig: { namespaceVariables: { tenantid: 'acme' } },
+    });
+    expect(Object.keys(sdk.sent[1]?.input ?? {})).not.toContain('extractionMode');
+    expect(Object.keys(sdk.sent[1]?.input ?? {})).not.toContain('extractionConfig');
+  });
+
   it('agentCoreSessions — CreateEvent to persist, ListEvents to hydrate', async () => {
     const row = pin('agentCoreSessions');
     const sdk = fakeSdk(row, { ListEventsCommand: { events: [] } });
