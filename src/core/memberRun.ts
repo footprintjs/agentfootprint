@@ -206,6 +206,39 @@ export function parentRunIn(state: unknown): ParentRunRecord | undefined {
   return (state as Record<string, ParentRunRecord | undefined>)[MEMBER_RUN_KEY];
 }
 
+/**
+ * What an inner mount of a member agent is handed of its run: the link, or —
+ * for a chart a caller built — the identity it was given. Nothing on the
+ * agent's own runs.
+ */
+export function memberRunArg(record: unknown): {
+  readonly parentRun?: string;
+  readonly memberIdentity?: MemoryIdentity;
+} {
+  if (record === null || typeof record !== 'object') return {};
+  const { link, identity } = record as { readonly link?: unknown; readonly identity?: unknown };
+  if (typeof link === 'string' && link !== '') return { parentRun: link };
+  return identity !== undefined ? { memberIdentity: identity as MemoryIdentity } : {};
+}
+
+/**
+ * The identity a member's stage runs for, read from the stage's own input:
+ * the run its link names, else the identity a caller-built chart handed it.
+ */
+export function memberIdentityIn(scope: object): MemoryIdentity | undefined {
+  const getArgs = (scope as { readonly $getArgs?: () => unknown }).$getArgs;
+  const args = (typeof getArgs === 'function' ? getArgs.call(scope) : undefined) as
+    | {
+        readonly parentRun?: unknown;
+        readonly memberIdentity?: MemoryIdentity;
+        readonly identity?: MemoryIdentity;
+      }
+    | undefined;
+  const run = runOfLink(args?.parentRun);
+  if (run !== undefined) return run.identity;
+  return args?.memberIdentity ?? args?.identity;
+}
+
 /** The memory namespace a member runs under: the named identity, else the run's own conversation. */
 export function memberIdentityOf(parentRun: ParentRun): MemoryIdentity {
   return parentRun.identity ?? { conversationId: parentRun.runId };

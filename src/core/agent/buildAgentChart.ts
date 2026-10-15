@@ -81,6 +81,7 @@ import {
 } from './honesty/mounts.js';
 import type { RouteBranch } from './stages/route.js';
 import type { AgentState } from './types.js';
+import { memberRunArg } from '../memberRun.js';
 
 /**
  * Stage handlers + slot subflows the chart composer needs. Mostly
@@ -889,6 +890,9 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
         // key. See `AgentChartDeps.timeWindows`.
         ...(deps.timeWindows === true && timeWindowsArg(parent.findingsLedger)),
         ...(deps.timeWindows === true && timeClockArg(parent.findingsLedger)),
+        // A composition member's run, for the slot's skill-visibility check
+        // (`memberRun.ts`) — value-conditional: the agent's own runs cross no key.
+        ...memberRunArg(parent.memberRun),
         // The turn's result-check lines (step T8), under `.time()` only and
         // value-conditional. See `AgentChartDeps.timeLimits`.
         ...(deps.timeLimits === true && timeLimitsArg(parent.findingsLedger)),

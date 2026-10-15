@@ -83,7 +83,7 @@ export interface RouteTurnDeps {
   readonly isNode: (id: string) => boolean;
   /** Which skills the caller's role may not see (9.11.0) — excluded from
    *  candidates, scores, menus and the envelope. Fail-closed inside. */
-  readonly hiddenSkillIds?: () => Promise<readonly string[]> | readonly string[];
+  readonly hiddenSkillIds?: (scope: object) => Promise<readonly string[]> | readonly string[];
   /**
    * The tier-3 DECIDER (9.19.0) — an out-of-band constrained pick over an
    * outstanding menu ∪ {stay}, resolved HERE, before the loop, with the
@@ -185,7 +185,7 @@ export function makeRouteTurnStage(deps: RouteTurnDeps) {
       ...(inherited !== undefined && { currentSkillId: inherited }),
     };
 
-    const resolved = await resolveHidden(deps.hiddenSkillIds);
+    const resolved = await resolveHidden(deps.hiddenSkillIds, scope);
     // Fail CLOSED: a throwing resolver hides EVERY graph candidate this turn
     // (the cascade degrades to continuity-stay / base prompt, all recorded)
     // rather than advertising skills a policy may have meant to hide.
@@ -340,10 +340,11 @@ export function makeRouteTurnStage(deps: RouteTurnDeps) {
  *  nobody answered would advertise what policy hides. */
 async function resolveHidden(
   hiddenSkillIds: RouteTurnDeps['hiddenSkillIds'],
+  scope: object,
 ): Promise<readonly string[] | 'resolver-failed'> {
   if (!hiddenSkillIds) return [];
   try {
-    const asked = hiddenSkillIds();
+    const asked = hiddenSkillIds(scope);
     return asked instanceof Promise ? await asked : asked;
   } catch {
     return 'resolver-failed';

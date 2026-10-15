@@ -331,7 +331,7 @@ import {
 } from './agent/honesty/armed.js';
 import { answerFoldReads } from './agent/honesty/mounts.js';
 import { readsMessageFrom } from './messageFrom.js';
-import { readsParentRun } from './memberRun.js';
+import { memberIdentityIn, readsParentRun } from './memberRun.js';
 import { carriesArgumentView } from './toolShownArgs.js';
 import { assertMaxToolResultChars } from './agent/toolResultCap.js';
 import type { ToolArgValidationMode } from '../tools/toolArgsValidation.js';
@@ -3426,13 +3426,15 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * a policy that did not answer did not say yes, and the same sentence governs
    * the tool gate.
    */
-  private hiddenSkillIdsNow(): (() => Promise<readonly string[]>) | undefined {
+  private hiddenSkillIdsNow(): ((scope: object) => Promise<readonly string[]>) | undefined {
     if (!this.governsSkillVisibility()) return undefined;
     const checker = this.permissionChecker;
     const skillIds = this.injections.filter((i) => i.flavor === 'skill').map((i) => i.id);
     if (!checker || skillIds.length === 0) return undefined;
-    return async (): Promise<readonly string[]> => {
-      const identity = this.lastRunIdentity;
+    return async (scope: object): Promise<readonly string[]> => {
+      // The caller of THIS run: the instance's caller on its own run, the
+      // member's run (never the instance's last caller) on a mount.
+      const identity = this.ownScopes.has(scope) ? this.lastRunIdentity : memberIdentityIn(scope);
       const hidden: string[] = [];
       for (const id of skillIds) {
         let allowed = false;
