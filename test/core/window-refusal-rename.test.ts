@@ -35,7 +35,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { Agent, slidingWindow, tokenBudget } from '../../src/index.js';
-import { defineTool } from '../../src/core/tools.js';
+import { defineTool } from '../../src/tools/tools.js';
 import type { LLMMessage, LLMProvider, LLMResponse } from '../../src/provider-contract/types.js';
 import type { WindowRecord } from '../../src/core/agent/window/types.js';
 import { answeredCallIds, planRemoval, segmentTurns } from '../../src/core/agent/window/turns.js';

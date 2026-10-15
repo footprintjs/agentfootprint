@@ -2,7 +2,7 @@
  * checkin — the evidence-carrying human-consent primitive.
  *
  * "OpenWorker-class agents check in; agentfootprint checks in WITH THE
- * RECEIPTS." A tool declares `checkIn` (see `Tool.checkIn` in `core/tools.ts`); when
+ * RECEIPTS." A tool declares `checkIn` (see `Tool.checkIn` in `tools/tools.ts`); when
  * it trips, the tool-dispatch loop pauses BEFORE executing and surfaces a
  * {@link CheckInRequest} — a typed ask that carries an EVIDENCE PACK
  * ({@link CheckInEvidence}): what the tool will do, what context the run
@@ -28,7 +28,7 @@
 
 import type { ArtifactRef } from '../artifacts/types.js';
 import type { LLMMessage } from '../provider-contract/types.js';
-import type { AskComponent } from './askComponent.js';
+import type { AskComponent } from '../tools/askComponent.js';
 import type { AttributionUnit } from '../lib/influence-core/types.js';
 
 // ─── The ask ───────────────────────────────────────────────────────────

@@ -17,7 +17,7 @@
  * is DECLARED, so a reader knows which of the two they are holding.
  */
 
-import type { ToolExecutionContext } from '../tools.js';
+import type { ToolExecutionContext } from '../../tools/tools.js';
 import { CHART_WALK_ARTIFACT_KIND, chartWalkPutInput } from '../../artifacts/recordingArtifact.js';
 import type { WalkDescriptor } from './types.js';
 

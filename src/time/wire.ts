@@ -9,7 +9,7 @@
  *          to the served tool); a transport with no metadata slot sends
  *          nothing, and the tool declares its period from its own arguments.
  *          A tool's `period` declaration itself travels in the listing's
- *          `_meta.agentfootprint.period`, judged by `arguments/declare.ts`.
+ *          `_meta.agentfootprint.period`, judged by `tools/declare.ts`.
  * Role:    L0 leaf (the time layer). Imports `instant.ts`, `range.ts` and
  *          `zone.ts` only.
  * Emits:   N/A.

@@ -1027,7 +1027,7 @@ reserved argument carries one more part, on the calls of a RULED tool:
 
 - **Served** only there: `withFindingsArgument(schema, offer, { from: true })` plants
   `FINDINGS_FROM_PROPERTY` FIRST and adds it to the property's `required` (`['basis',
-  'from']`), on a tool that carries argument rules (`arguments/declare.ts` · `carriesRules`);
+  'from']`), on a tool that carries argument rules (`tools/declare.ts` · `carriesRules`);
   every other tool keeps the base by reference. `from` is explained ONCE, in its own property
   (its sources, a quote copied exactly, and what the record keeps) — the instruction gains no
   line: the first cut served a second explanation in the system prompt and paid for it twice.

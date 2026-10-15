@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { unconfiguredArtifacts } from '../../../src/artifacts/capability.js';
 import { agentToolDispatch } from '../../../src/core/agent/toolDispatch.js';
-import { defineTool, type Tool, type ToolExecutionContext } from '../../../src/core/tools.js';
+import { defineTool, type Tool, type ToolExecutionContext } from '../../../src/tools/tools.js';
 
 const closedSchema = {
   type: 'object',

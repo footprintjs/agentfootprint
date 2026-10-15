@@ -34,7 +34,7 @@ import type { CombinedRecorder, FlowSubflowEvent, StructureRecorder } from 'foot
 import { splitStageId } from 'foottrace';
 import { Agent } from '../../../src/core/Agent.js';
 import { MockProvider } from '../../../src/adapters/llm/MockProvider.js';
-import { defineTool } from '../../../src/core/tools.js';
+import { defineTool } from '../../../src/tools/tools.js';
 import { defineSkill } from '../../../src/lib/injection-engine/factories/defineSkill.js';
 import { askHuman, isPaused } from '../../../src/core/pause.js';
 import type { PricingTable } from '../../../src/provider-contract/types.js';

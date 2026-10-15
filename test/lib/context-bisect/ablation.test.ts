@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { defineTool } from '../../../src/core/tools';
+import { defineTool } from '../../../src/tools/tools';
 import { defineFact } from '../../../src/lib/injection-engine/factories/defineFact';
 import {
   ablationForSuspect,

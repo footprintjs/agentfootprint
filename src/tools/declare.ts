@@ -1,15 +1,15 @@
 /**
- * arguments/declare — what a tool author declares about its arguments, and the
+ * tools/declare — what a tool author declares about its arguments, and the
  * ONE rule set that judges the declaration.
  *
  * Pattern: Map. A declaration is plain data on the `Tool` (`askOrAssume`,
  *          `period`), judged by one assert at three doors: definition
- *          (`core/tools.ts` · `defineTool`), dispatch (`rulesOf`, because a
+ *          (`tools/tools.ts` · `defineTool`), dispatch (`rulesOf`, because a
  *          Tool built by hand or served by a ToolProvider never passes through
  *          `defineTool`) and MCP ingest (`lib/mcp/toolExtras.ts` ·
  *          `readToolExtras`). A malformed declaration is refused and never
  *          repaired.
- * Role:    core/ layer leaf of the inputs layer (honesty layer 2). Imports
+ * Role:    tools/ layer leaf of the inputs layer (honesty layer 2). Imports
  *          nothing from `findings/` — the folder's one-way law.
  * Emits:   N/A.
  *
@@ -20,12 +20,12 @@
  *     standing then says the value was assumed.
  *   - `{ ask: question, choices? }` — a value the call leaves out is asked of
  *     the person, ONCE per batch, before anything in the batch runs, through
- *     the typed ask (`core/inputRequest.ts`); the answer is filled and
+ *     the typed ask (`tools/inputRequest.ts`); the answer is filled and
  *     recorded as `answered` (`arguments/ask.ts`). A PRESENT value runs,
  *     recorded as the model's own — unless declared sources are armed
  *     (`.inputsLayer({ argumentSources: true })`, or `.findings({ argumentSources:
  *     true })` beside the ledger): then the model says where it
- *     came from, the library checks it (`checks.ts` · `checkSource`), and a
+ *     came from, the library checks it (`arguments/checks.ts` · `checkSource`), and a
  *     value the check does not trace is asked about too. A choice may carry
  *     phrases the author vouches for (`{ value, said }`), matched only inside
  *     a quote the model declared.
@@ -52,7 +52,7 @@
 
 import { isDevMode } from 'footprintjs';
 
-import { isInputFieldValue, type InputValue } from '../../inputRequest.js';
+import { isInputFieldValue, type InputValue } from './inputRequest.js';
 import {
   FACT_UNITS,
   formArguments,
@@ -66,11 +66,11 @@ import {
   type PeriodFacts,
   type PeriodForm,
   type PeriodSpelling,
-} from '../../../time/periodForm.js';
-import { isDuration, LOOKBACK_UNITS, type DurationText } from '../../../time/duration.js';
-import { splitRange } from '../../../time/range.js';
-import { canonicalForm, tokenize } from '../evidence/normalize.js';
-import { validatePropertyValue } from '../toolArgsValidation.js';
+} from '../time/periodForm.js';
+import { isDuration, LOOKBACK_UNITS, type DurationText } from '../time/duration.js';
+import { splitRange } from '../time/range.js';
+import { canonicalForm, tokenize } from './normalize.js';
+import { validatePropertyValue } from './toolArgsValidation.js';
 
 // ─── The declaration ────────────────────────────────────────────────────
 
@@ -98,7 +98,7 @@ export type ArgumentRule =
 /** Per argument name, its rule. Arguments with no rule run free. */
 export type AskOrAssume = Readonly<Record<string, ArgumentRule>>;
 
-export type { PeriodSpelling, PeriodForm, PeriodFacts } from '../../../time/periodForm.js';
+export type { PeriodSpelling, PeriodForm, PeriodFacts } from '../time/periodForm.js';
 export { PERIOD_SPELLINGS };
 
 /**
@@ -157,7 +157,7 @@ export const RULED_TYPES: readonly string[] = Object.freeze([
   'integer',
   'boolean',
 ]);
-/** An `ask` question's bound — the typed ask's own (`core/inputRequest.ts`). */
+/** An `ask` question's bound — the typed ask's own (`tools/inputRequest.ts`). */
 export const ASK_QUESTION_CHARS = 4096;
 /** Choices per `ask` rule. */
 export const MAX_CHOICES = 100;
@@ -207,7 +207,7 @@ function canonicalTokens(value: InputValue): readonly string[] {
 /**
  * Whether two argument values are the same value: same JavaScript type, and
  * the same token sequence under the evidence module's normaliser
- * (`evidence/normalize.ts` · `tokenize`, `canonicalForm` — one owner of "the
+ * (`tools/normalize.ts` · `tokenize`, `canonicalForm` — one owner of "the
  * same value", so `41,200` ≡ `41200` here exactly as at the evidence gate). A
  * value with no token after normalisation equals nothing, not even itself: it
  * cannot be checked, and "cannot be checked" is never "equal".
@@ -260,8 +260,8 @@ export function parsesUnderSpelling(value: unknown, spelling: PeriodSpelling): b
  * `lookback` ↔ `signed-lookback`, by adding or removing the leading minus.
  * Nothing is ever turned into a duration; an `iso-range` is never converted.
  * `undefined` when the value does not parse under `from`. The one owner: the
- * batch ask's shared period field (`ask.ts` · `periodsShareField`) and the
- * declared-sources check's earlier answer in another spelling (`checks.ts` ·
+ * batch ask's shared period field (`arguments/ask.ts` · `periodsShareField`) and the
+ * declared-sources check's earlier answer in another spelling (`arguments/checks.ts` ·
  * `checkSource`, `matched: 'spelling'`) both convert through it.
  */
 export function convertSpelling(
@@ -464,7 +464,7 @@ function assertAskRule(
     const at = `${where}.choices[${i}]`;
     const value = choiceValue(toolName, at, entry);
     assertFitsProperty(toolName, at, value, property);
-    // The typed ask's own field rule (`core/inputRequest.ts` · `isInputFieldValue`):
+    // The typed ask's own field rule (`tools/inputRequest.ts` · `isInputFieldValue`):
     // a choice it cannot offer is refused HERE, by name, never at the ask.
     if (!isInputFieldValue(value)) {
       refuse(
@@ -927,7 +927,7 @@ export interface RuledAsk {
   readonly choices?: readonly InputValue[];
   /**
    * The choices that declare `said` phrases, in declared order — matched as
-   * whole tokens only inside a quote the model declared (`checks.ts` ·
+   * whole tokens only inside a quote the model declared (`arguments/checks.ts` ·
    * `checkSource`, `matched: 'phrase'`), never scanned for in the person's
    * words. Absent when no choice declares any.
    */
@@ -971,7 +971,7 @@ const windowArgumentsOf = (form: PeriodForm) =>
  * The form a call's window is in, read off what the call GIVES — the first form given whole
  * (every argument but the zone), else the first form given in part; `undefined` when every
  * form is left out. A period's forms are alternatives, so this is the one reading of "which
- * form did the call take", asked by the inputs layer (`resolve.ts` · `windowUntakenOf`) and
+ * form did the call take", asked by the inputs layer (`arguments/resolve.ts` · `windowUntakenOf`) and
  * inner dispatch (`toolDispatch.ts` · `refuseUnaccountedRuledArguments`).
  */
 export function sentFormOf(

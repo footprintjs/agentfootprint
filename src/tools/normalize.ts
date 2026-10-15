@@ -4,7 +4,8 @@
  * Pattern: a pure leaf module (its one import, `lib/linearText.ts`, is a leaf
  *          too), shared by the extractor and the evidence index so the two can
  *          never disagree about what "the same value" means.
- * Role:    core/ layer, `namesAndNumbersFromEvidence` only.
+ * Role:    tools/ layer: the evidence gate (`namesAndNumbersFromEvidence`) and the
+ *          inputs layer (`tools/declare.ts`) read it.
  * Emits:   N/A.
  *
  * ## Why this file exists at all
@@ -20,7 +21,7 @@
  * on the answer side AND on the evidence side. The rules are deliberately few
  * and each is here because a real spelling difference needed it.
  */
-import { anyOf, trimTrailing } from '../../../lib/linearText.js';
+import { anyOf, trimTrailing } from '../lib/linearText.js';
 
 /**
  * Characters that may live INSIDE one token.
@@ -138,7 +139,7 @@ export function tokenize(text: string): string[] {
  * on the INDEX side it would let a result's `latency 2024ms` ground an
  * answer's prose year `2024`, which weakens the gate; the glued spelling is
  * met on the LOOKUP side only, by the candidate that came from one
- * (`extract.ts · candidateForms`).
+ * (`evidence/extract.ts · candidateForms`).
  */
 export function lookupForms(normalized: string): readonly string[] {
   if (normalized.startsWith('0x') && normalized.length > 2) {

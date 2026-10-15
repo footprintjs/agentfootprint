@@ -106,8 +106,8 @@ import {
 } from '../artifacts/capability.js';
 import type { ArtifactScope, ArtifactStore } from '../artifacts/types.js';
 import type { ArtifactHandOverFailedPayload } from '../events/payloads.js';
-import { readAskComponent } from '../core/askComponent.js';
-import { applyInputResponse, readAwaitingInput } from '../core/inputRequest.js';
+import { readAskComponent } from '../tools/askComponent.js';
+import { applyInputResponse, readAwaitingInput } from '../tools/inputRequest.js';
 import { isPaused, pauseDemandsDecision, type RunnerPauseOutcome } from '../core/pause.js';
 import type { AgentRunCheckpoint } from '../core/runCheckpoint.js';
 import {

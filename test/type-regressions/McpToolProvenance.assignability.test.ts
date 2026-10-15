@@ -24,7 +24,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { McpCallToolResult, McpHttpTransport } from '../../src/tool-providers/index';
-import type { Tool } from '../../src/core/tools';
+import type { Tool } from '../../src/tools/tools';
 import type { ToolMiddleware, ToolMiddlewareContext } from '../../src/index';
 import { allow, deny } from '../../src/index';
 

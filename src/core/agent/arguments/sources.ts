@@ -40,7 +40,7 @@
  * entry already named the same argument (the first wins).
  */
 
-import { isMissing } from './declare.js';
+import { isMissing } from '../../../tools/declare.js';
 
 /** Where the model says a value came from. */
 export type DeclaredSourceKind = 'user' | 'result' | 'turn' | 'app' | 'assumed';

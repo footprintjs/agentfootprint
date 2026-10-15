@@ -29,7 +29,7 @@ import {
   summarizeOldest,
   tokenBudget,
 } from '../../src/index.js';
-import { defineTool } from '../../src/core/tools.js';
+import { defineTool } from '../../src/tools/tools.js';
 import type {
   LLMMessage,
   LLMProvider,

@@ -5,10 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import {
-  validatePropertyValue,
-  validateToolArgs,
-} from '../../../src/core/agent/toolArgsValidation.js';
+import { validatePropertyValue, validateToolArgs } from '../../../src/tools/toolArgsValidation.js';
 
 const prototypeNames = ['constructor', 'toString', '__proto__', 'hasOwnProperty'];
 

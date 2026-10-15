@@ -106,7 +106,7 @@ import { unionRedactionPolicies } from '../../redaction/policy.js';
 import { redactionMarker } from '../../redaction/marker.js';
 import { modelFacingState, servableSnapshot, watchRunRule } from '../servableSnapshot.js';
 import { argsRedactedBy, SHOWN_ARGS } from '../toolShownArgs.js';
-import { defineTool, type Tool, type ToolExecutionContext } from '../tools.js';
+import { defineTool, type Tool, type ToolExecutionContext } from '../../tools/tools.js';
 import {
   carriedProvenanceOf,
   chartCoverageOf,

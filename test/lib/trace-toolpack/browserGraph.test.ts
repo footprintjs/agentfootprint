@@ -191,7 +191,7 @@ describe.skipIf(!built)('the default browser graph of the root entry', () => {
     // (`arguments/README.md`, "What a plain agent carries"). The declaration's
     // assert stays: `defineTool` refuses a malformed rule synchronously.
     const graph = await splitGraph(resolve(DIST, 'index.js'));
-    expect(graph.syncInputs.has('dist/esm/core/agent/arguments/declare.js')).toBe(true);
+    expect(graph.syncInputs.has('dist/esm/tools/declare.js')).toBe(true);
     for (const lazy of [
       'dist/esm/core/agent/arguments/dispatch.js',
       'dist/esm/core/agent/arguments/serve.js',

@@ -23,11 +23,11 @@
 import type { FlowchartCheckpoint } from 'footprintjs';
 
 import type { Agent } from '../core/Agent.js';
-import type { AskComponent } from '../core/askComponent.js';
+import type { AskComponent } from '../tools/askComponent.js';
 import type { CheckInRequest } from '../core/checkin.js';
 import type { MiddlewareAsk } from '../core/pause.js';
 import type { AgentRunCheckpoint } from '../core/runCheckpoint.js';
-import type { AwaitingInput } from '../core/inputRequest.js';
+import type { AwaitingInput } from '../tools/inputRequest.js';
 import type { Unsubscribe } from '../events/dispatcher.js';
 import type { ToolArtifacts } from '../artifacts/capability.js';
 import type { ArtifactWireRequest, ArtifactWireResult } from './artifactWire.js';

@@ -28,7 +28,7 @@
 import type { RedactionPolicy } from 'footprintjs';
 import { RedactionRule } from 'footprintjs/advanced';
 
-import type { ToolArgs } from './agent/middleware/runChain.js';
+import type { ToolArgs } from '../tools/runChain.js';
 
 /** The registry symbol a tool carries its arguments view under. */
 export const SHOWN_ARGS: unique symbol = Symbol.for('agentfootprint.tool.shownArgs');

@@ -239,8 +239,8 @@ export type {
   InputResponseResult,
   InputRefusal,
   InputRepeat,
-} from './core/inputRequest.js';
-export { InputRequestError } from './core/inputRequest.js';
+} from './tools/inputRequest.js';
+export { InputRequestError } from './tools/inputRequest.js';
 
 // Typed HITL (9.24.0) — the OPTIONAL component half of a human ask: WHICH
 // registered screen component collects the answer, with small `props` inline
@@ -259,7 +259,7 @@ export {
   InvalidAskComponentError,
   type AskComponent,
   type AskComponentRefusalReason,
-} from './core/askComponent.js';
+} from './tools/askComponent.js';
 
 // The middleware family — a typed chain around every tool dispatch
 // (`.toolMiddleware()`) and around the message boundary
@@ -519,7 +519,7 @@ export type { ObserverDrainResult, ObserverStats } from 'footprintjs';
 // #9 — tool-args validation: the mode for AgentOptions.toolArgValidation.
 // (The validator itself is internal; the payload ships as
 // Payloads.ValidationArgsInvalidPayload.)
-export type { ToolArgValidationMode } from './core/agent/toolArgsValidation.js';
+export type { ToolArgValidationMode } from './tools/toolArgsValidation.js';
 // 9.11.0 — the opt-in tool-result ceiling (`AgentOptions.maxToolResultChars`).
 // The marker is what a consumer reads off `stream.tool_end.result` and off the
 // `role: 'tool'` message, so the shape AND the guard are public; the measuring
@@ -778,11 +778,11 @@ export type {
   // result and breeds fabrication; a refusal naming how to narrow produces a
   // clean retry). The record keeps the true size (tools.result_refused).
   ToolResultCeiling,
-} from './core/tools.js';
+} from './tools/tools.js';
 // The inputs layer's declarations (honesty layer 2): per-argument rules —
 // `Tool.askOrAssume` (the library fills an `assume` default and files it) —
 // and which argument sets the period the answer covers (`Tool.period`).
-export type { AskOrAssume, ToolPeriod } from './core/agent/arguments/declare.js';
+export type { AskOrAssume, ToolPeriod } from './tools/declare.js';
 export {
   defineTool,
   assertResultCeiling,
@@ -798,7 +798,7 @@ export {
   // consumers assembling `Tool` objects by hand.
   assertComposedOf,
   assertGates,
-} from './core/tools.js';
+} from './tools/tools.js';
 // The tool-name law (`lib/toolName.ts`): the strict check and the dev-mode
 // warning `defineTool` runs, for consumers assembling `Tool` objects by hand.
 export { assertValidToolName, warnIfInvalidToolName } from './lib/toolName.js';
@@ -933,7 +933,7 @@ export {
   type TeardownScope,
   type TeardownReason,
   type TeardownOptions,
-} from './core/toolSessions.js';
+} from './tools/toolSessions.js';
 export {
   codeRunnerTool,
   codeShape,
@@ -952,7 +952,7 @@ export {
   type ToolContractProblem,
   type ToolContractCode,
   type ServerToolEntry,
-} from './core/toolContract.js';
+} from './tools/toolContract.js';
 // Artifacts (9.21.0) — the claim-check store: a tool checks a payload in and
 // hands the model a ~26-char claim ticket; the model routes tickets instead
 // of hauling data; a later tool redeems them under the run's own scope

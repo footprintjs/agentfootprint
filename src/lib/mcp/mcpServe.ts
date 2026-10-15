@@ -64,8 +64,8 @@
 // a bundle. The listener itself is still built from a dynamic import.
 import type { ServerResponse } from 'node:http';
 
-import type { Tool, ToolExecutionContext } from '../../core/tools.js';
-import { ToolSessionTier, type TeardownScope } from '../../core/toolSessions.js';
+import type { Tool, ToolExecutionContext } from '../../tools/tools.js';
+import { ToolSessionTier, type TeardownScope } from '../../tools/toolSessions.js';
 import type { Credential, CredentialProvider } from '../../identity/types.js';
 import { unconfiguredCredentialProvider } from '../../identity/types.js';
 import { unconfiguredArtifacts } from '../../artifacts/capability.js';
@@ -82,8 +82,8 @@ import { doorGuard, warnAllowedHostsUnset } from '../../hosting/doorGuard.js';
 import { lazyRequire } from '../lazyRequire.js';
 import { sdkLoadFailure } from './sdkLoadFailure.js';
 import { callTimeOf, MCP_TOOL_EXTRAS_KEY, toolExtrasOf } from './toolExtras.js';
-import { runToolChain, runToolAfterChain } from '../../core/agent/middleware/runChain.js';
-import { formatToolArgIssues, validateToolArgs } from '../../core/agent/toolArgsValidation.js';
+import { runToolChain, runToolAfterChain } from '../../tools/runChain.js';
+import { formatToolArgIssues, validateToolArgs } from '../../tools/toolArgsValidation.js';
 
 const DEFAULT_SERVER_NAME = 'agentfootprint';
 const DEFAULT_SERVER_VERSION = '0.0.0';

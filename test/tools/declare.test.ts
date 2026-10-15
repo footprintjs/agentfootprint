@@ -14,7 +14,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { disableDevMode, enableDevMode } from 'footprintjs';
 
-import { defineTool, type Tool } from '../../../../src/index.js';
+import { defineTool, type Tool } from '../../src/index.js';
 import {
   assertAskOrAssume,
   isMissing,
@@ -23,7 +23,7 @@ import {
   rulesOf,
   sameArgumentValue,
   _resetDeclareWarnings,
-} from '../../../../src/core/agent/arguments/declare.js';
+} from '../../src/tools/declare.js';
 
 const SCHEMA = {
   type: 'object',
@@ -90,7 +90,7 @@ describe('assertAskOrAssume — every refusal names the tool and the argument', 
     ['an empty choice list', { window: { ask: 'Which?', choices: [] } }],
     ['a repeated choice', { window: { ask: 'Which?', choices: ['1h', '1h'] } }],
     ['a choice outside the enum', { window: { ask: 'Which?', choices: ['9h'] } }],
-    // The typed ask's own field rule (`core/inputRequest.ts` · `isInputFieldValue`), judged at
+    // The typed ask's own field rule (`tools/inputRequest.ts` · `isInputFieldValue`), judged at
     // definition — before the step-4 review these passed here and failed the RUN at the ask.
     [
       'a blank choice the typed ask cannot offer',

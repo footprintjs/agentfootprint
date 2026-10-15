@@ -42,7 +42,7 @@ It is a leaf: it imports nothing outside itself, and `readers/` imports only the
 | `ask.ts` | the one time ask (§ 6): `TimeFormat` (`instant` · `time-range` · `zone`), `checkTimeAnswer` — the ONE judge of a time field's answer (strict instants with an offset, `from` before `to`, an IANA zone, under a known zone no wall time the clocks skip, and — handed a tool's facts and the clock — inside its `direction`, `retention` and `maxRange`) — refusals as codes with facts; the catalog's keys (`TIME_ASK_MESSAGE_KEYS`), `readTimeAskMessages` (the app's overrides), `refusalReason` (the re-ask's reason) |
 | `readingAsk.ts` | `timeAskOf` — the field an `open` reading needs (the candidates as labelled choices, a zone asked as `format: 'zone'`, every reading offered to confirm with its zone named); split from `ask.ts` because its labels render through `present.ts` |
 
-`core/inputRequest.ts` asks `ask.ts`: a field's `format` is judged at definition (each choice, each
+`tools/inputRequest.ts` asks `ask.ts`: a field's `format` is judged at definition (each choice, each
 supplied value) and at the resume door (`applyInputResponse`, the person's answer — a refused one
 comes back as the same ask with `refused` and `repeat`); `Agent.resume` hands it the paused turn's
 clock zone and the app's `.time({ messages })`. The sentences live in `src/locales/timeAsk.ts`
@@ -72,7 +72,7 @@ shape: the `resume` door, or `execute` re-run after the argument ask's `interrup
 `clock-on-resume`;
 `stages/seed.ts` · `readTimeWords` reads the person's message through the armed reader, right
 after the clock, and files the `time-reading` rows;
-`core/runCheckpoint.ts` · `ledgerRowIsWellFormed` routes the four kinds to `rows.ts`; `arguments/declare.ts` · `parsesUnderSpelling` reads a look-back through `duration.ts` and
+`core/runCheckpoint.ts` · `ledgerRowIsWellFormed` routes the four kinds to `rows.ts`; `tools/declare.ts` · `parsesUnderSpelling` reads a look-back through `duration.ts` and
 an `iso-range` through `range.ts` · `splitRange` in the strict profile; `artifacts/minting.ts` ·
 `prepareArtifact` and `artifacts/datasetResult.ts` · `stageDatasetArtifacts` judge a dataset's
 axis through `axis.ts` · `timeAxisIssues`. From the package: `axis.ts` (through
@@ -589,8 +589,8 @@ periodTimeCheck({
 The optional-family law of docs-next's site budget (`docs-next/scripts/check-site-budget.mjs`): an
 agent that never arms `.time()` loads only what a SYNCHRONOUS door needs before any run starts —
 `.time()`'s options (`clock.ts`), `defineTool({ period })` (`periodForm.ts`, through
-`arguments/declare.ts`), a time answer's check at the resume door (`ask.ts`, through
-`core/inputRequest.ts`) and the checkpoint door's row checks (`rows.ts`, `resolveRecord.ts`, with
+`tools/declare.ts`), a time answer's check at the resume door (`ask.ts`, through
+`tools/inputRequest.ts`) and the checkpoint door's row checks (`rows.ts`, `resolveRecord.ts`, with
 the leaves `instant.ts`, `zone.ts`, `range.ts`, `duration.ts`, `reader.ts`). Everything the RUN does
 under `.time()` loads through `import()` where the path is already async: seed and ToolCalls load
 `agent/stages/timeLayer.ts` (the clock stamp, the reading of the person's words, the dispatch

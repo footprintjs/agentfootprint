@@ -38,7 +38,7 @@
 import type { LLMMessage } from '../../provider-contract/types.js';
 import { STAGED_DATA_FRAME_PREFIX } from '../../lib/saidByPerson.js';
 import { isPlacedToolResult } from '../../artifacts/placement.js';
-import type { Tool } from '../tools.js';
+import type { Tool } from '../../tools/tools.js';
 
 /** One staged parcel a spender tool could be handed. */
 export interface StagedRef {

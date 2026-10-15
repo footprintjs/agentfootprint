@@ -138,7 +138,7 @@
 
 import { assertKnownOptions } from './optionKeys.js';
 import type { Injection } from './types.js';
-import type { Tool } from '../../core/tools.js';
+import type { Tool } from '../../tools/tools.js';
 import type { OnSkipPolicy, SkillStep } from './skillSteps.js';
 import { defineSkill, type SurfaceMode } from './factories/defineSkill.js';
 import type { SkillGraphStep } from './skillGraph.js';

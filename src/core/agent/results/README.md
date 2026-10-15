@@ -46,7 +46,7 @@ period argument but whose result says nothing reads `period-undeclared`.
 
 | # | Clause | The results layer |
 |---|---|---|
-| 1 | DECLARE | the tool author, in the result: `period` on all three doors — `{ queried, held \| 'unknown', readAt? }`, ISO 8601 instants WITH a zone (`coverage/period.ts` · `DeclaredPeriod`) — and `provenance` on `absent()`, the shape `describedResult()` already carries (`semantics/described.ts` · `mintProvenance`). On the tool: a `ToolPeriod` (the inputs layer's declaration — `arguments/declare.ts` · `ToolPeriod`), which names the argument that sets the period. A malformed period is REFUSED at the mint (`coverage/period.ts` · `mintPeriod`); an envelope minted elsewhere is READ, never repaired (`coverage/period.ts` · `readPeriod` drops it from the record with one dev warning per tool; on `af_semantics` it is one more fault of `semantics/envelope.ts` · `semanticIssues`, so the envelope stays data) |
+| 1 | DECLARE | the tool author, in the result: `period` on all three doors — `{ queried, held \| 'unknown', readAt? }`, ISO 8601 instants WITH a zone (`coverage/period.ts` · `DeclaredPeriod`) — and `provenance` on `absent()`, the shape `describedResult()` already carries (`semantics/described.ts` · `mintProvenance`). On the tool: a `ToolPeriod` (the inputs layer's declaration — `tools/declare.ts` · `ToolPeriod`), which names the argument that sets the period. A malformed period is REFUSED at the mint (`coverage/period.ts` · `mintPeriod`); an envelope minted elsewhere is READ, never repaired (`coverage/period.ts` · `readPeriod` drops it from the record with one dev warning per tool; on `af_semantics` it is one more fault of `semantics/envelope.ts` · `semanticIssues`, so the envelope stays data) |
 | 2 | VERIFY | `coverage/period.ts` · `periodVerdict` — one pure rule over the instants the tool declared, bounds inclusive: `covered`, `partly-held`, `not-held`, `unknown` (`held: 'unknown'`); the least held when one call declared two (`coverage/period.ts` · `leastHeld`); `undeclared` when the tool declares a `ToolPeriod` and the result declared no period. No clock is read and no duration is parsed |
 | 3 | RECORD | one `period` row per judged call (`coverage/period.ts` · `PeriodRow`: `turn`, `toolCallId`, `toolName`, `iteration`, `verdict`, the `ToolPeriod`'s `argument`), merged into `findingsLedger` by the mount's output mapping in ONE write; one `agentfootprint.findings.period` per row, fired inside the subflow — the tool, the call, the stamps and the verdict word, never an instant. The declared period itself rides the coverage channel (`coverageDeclared` rows, `tools.absent` / `tools.coverage_declared`), whatever the agent armed; the row never copies it |
 | 4 | RESOLVE | flag — the only verb a result that already ran admits (`subflow.ts` · `resolveResultsStage`): the rows are the flags |
@@ -136,7 +136,7 @@ agent.findings(); // [{ kind: 'period', toolCallId: 'gemini-call-1', verdict: 'c
 
 A `ToolPeriod` is read off the implementation that ANSWERED the call — the shared dispatch
 resolver, which at the loop head still answers for the epoch that dispatched the batch — by the
-inputs layer's own reader (`arguments/declare.ts` · `rulesOf`).
+inputs layer's own reader (`tools/declare.ts` · `rulesOf`).
 
 ## Not covered
 

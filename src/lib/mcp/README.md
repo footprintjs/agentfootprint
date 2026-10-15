@@ -12,7 +12,7 @@ A tool is two things at once — execution and declaration — and both must sur
 the wire (`toolExtras.ts`). A refusal here names WHY, because "install it" is
 only one of the reasons a connection fails.
 
-`mcpServe.ts` uses `core/agent/toolArgsValidation.ts` after the before-tool
+`mcpServe.ts` uses `tools/toolArgsValidation.ts` after the before-tool
 middleware chain and before credentials or execution. A rejected call returns
 an MCP tool error with the shared correction; after-tool middleware does not
 run. This boundary always enforces the validator's supported subset and has

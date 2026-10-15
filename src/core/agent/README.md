@@ -4,7 +4,7 @@ Map: `buildAgentChart.ts`, `buildDynamicAgentChart.ts`,
 `buildAgentMessageApiChart.ts`, `buildMessageApiChart.ts`, `buildCacheSubflow.ts`,
 `buildToolRegistry.ts`, `AgentBuilder.ts`, `skillGraphDeclared.ts`,
 `skillBrains.ts`, `types.ts`.
-Walker: `assistantReplay.ts`, `toolDispatch.ts`, `toolArgsValidation.ts`,
+Walker: `assistantReplay.ts`, `toolDispatch.ts`,
 `validators.ts`, `act.ts` (the five moments it is keyed on are `lib/moments.ts`).
 Trace: `runManifest.ts`, `integrityFindings.ts`, `watch.ts`, `toolSecurityEvents.ts`.
 Fold: `memoryRecallInjections.ts`, `toolsFromActiveSkill.ts`, `emptiness.ts` (which
@@ -77,7 +77,7 @@ word for word). Older sentences are not all registered; the ones the scan
 catches that break the law are named in `test/modelFacingScan.test.ts` ·
 `LEDGER` as `unrepaired` — a work list, not a pardon. Two more are known and
 sit in neither list: the `askPolicy: 'refuse'` denial in
-`middleware/runChain.ts` · `runToolChain` ("there is no pause here to carry
+`tools/runChain.ts` · `runToolChain` ("there is no pause here to carry
 that ask" — present tense), and the author's note closing the 9.86.1
 resumed-call refusal in `stages/toolCalls.ts` ("Keep one gate for this tool:
 …" — a destination). Neither is reworded yet: that changes the bytes of every
@@ -128,7 +128,7 @@ the helper at message writing. The grouped chart's `ArrayMergeMode.Replace`
 replaces top-level arrays but deep-merges objects; the tuple makes each proof
 atomic, so a previous layout or binding cannot survive inside a later proof.
 
-`toolArgsValidation.ts` owns the supported schema rules and correction text.
+`../../tools/toolArgsValidation.ts` owns the supported schema rules and correction text.
 `stages/toolCalls.ts` · `argumentRefusal` applies the Agent's mode and emits
 the existing invalid-arguments event at initial and resumed admission, before
 artifact resolution and credentials. A middleware approval is not schema

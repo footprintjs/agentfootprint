@@ -44,7 +44,7 @@ import type {
   McpListedTool,
   McpSdkServer,
 } from '../../../src/lib/mcp/types.js';
-import type { Tool } from '../../../src/core/tools.js';
+import type { Tool } from '../../../src/tools/tools.js';
 import type { CheckReport } from '../../../src/integrity/disposition/types.js';
 
 // ─── Harness ──────────────────────────────────────────────────────

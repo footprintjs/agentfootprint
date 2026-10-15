@@ -25,7 +25,7 @@ import {
   InputRequestError,
   stampInputRequest,
   validateInputDeclaration,
-} from '../../../../src/core/inputRequest.js';
+} from '../../../../src/tools/inputRequest.js';
 import {
   ARGUMENT_ASK_QUESTION,
   ARGUMENT_REASK_QUESTION,

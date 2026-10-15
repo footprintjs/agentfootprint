@@ -56,8 +56,12 @@ export {
   // by the agent builder, which uses it to name a redundant pairing at build time).
   skillScopedToolsTarget,
   SKILL_SCOPED_TOOLS_ID_PREFIX,
-} from './skillScopedTools.js';
-export type { ToolProvider, ToolDispatchContext, ToolGatePredicate } from './types.js';
+} from '../tools/skillScopedTools.js';
+export type {
+  ToolProvider,
+  ToolDispatchContext,
+  ToolGatePredicate,
+} from '../tools/toolProvider.js';
 
 // Re-export tool sources from the MCP module so consumers find them in
 // one place. This subpath is the ONLY place `mcpClient` is public — the

@@ -297,8 +297,8 @@ interface Edge {
  * Walk the transitive closure of `roots`, STOPPING at the fence.
  *
  * Descending into a refused file would be honest but useless: one import of
- * `core/tools.js` would report eleven more violations from inside
- * `core/tools.js` itself, burying the one edge the author has to delete. So
+ * `tools/tools.js` would report eleven more violations from inside
+ * `tools/tools.js` itself, burying the one edge the author has to delete. So
  * the walk stays inside `allowed` and every reported edge is a BOUNDARY
  * crossing made by a file that is supposed to be inside.
  */
@@ -337,9 +337,9 @@ function teach(spec: string): string {
       'which the host binds (see `devWarnHost.ts`).'
     );
   }
-  if (spec.includes('core/tools')) {
+  if (spec.includes('tools/tools')) {
     return (
-      '`core/tools.ts` drags artifacts, credentials, check-in and tool sessions behind it. If ' +
+      '`tools/tools.ts` drags artifacts, credentials, check-in and tool sessions behind it. If ' +
       'you need a tool SHAPE, use `SkillTool` from `./hostContract.js` (a schema and something ' +
       'to run — the framework `Tool` satisfies it). If you need to DESCRIBE a tool, return a ' +
       '`SkillToolDescriptor` and let the host call `defineTool` on it — see ' +

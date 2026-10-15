@@ -29,7 +29,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { Agent, defineTool, isPaused } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
 import { pauseHere } from '../../src/core/pause.js';
-import type { ToolExecutionContext } from '../../src/core/tools.js';
+import type { ToolExecutionContext } from '../../src/tools/tools.js';
 
 /** Capture the ctx a tool was handed, and answer trivially. */
 function spyTool(name = 'probe') {

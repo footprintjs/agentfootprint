@@ -67,7 +67,7 @@ import type { EvidenceCorpus } from './evidenceIndex.js';
 import { EVIDENCE_CHECK_FRAME_PREFIX } from './frames.js';
 import { candidateForms, extractCandidates } from './extract.js';
 import type { FigureCheck } from './figures.js';
-import { lookupForms, normalizeToken } from './normalize.js';
+import { lookupForms, normalizeToken } from '../../../tools/normalize.js';
 import type {
   ComputedFigure,
   EvidencePosture,

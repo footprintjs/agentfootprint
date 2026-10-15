@@ -51,7 +51,7 @@ import type {
   LLMResponse,
   LLMToolSchema,
 } from '../../../src/provider-contract/types.js';
-import type { Tool } from '../../../src/core/tools.js';
+import type { Tool } from '../../../src/tools/tools.js';
 import {
   answeredBy,
   collisionCases,

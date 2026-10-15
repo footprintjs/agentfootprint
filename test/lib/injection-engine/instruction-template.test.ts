@@ -33,7 +33,7 @@ import {
 } from '../../../src/lib/injection-engine/types.js';
 import { scopeToolsToActiveSkill } from '../../../src/core/agent/toolsFromActiveSkill.js';
 import type { LLMProvider, LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
-import { defineTool } from '../../../src/core/tools.js';
+import { defineTool } from '../../../src/tools/tools.js';
 
 const BUDGET_LINE =
   'You are on action {{action}} of {{actionBudget}}; {{actionsRemaining}} remain. ' +

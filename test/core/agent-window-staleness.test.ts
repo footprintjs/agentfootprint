@@ -14,7 +14,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { Agent, tokenBudget } from '../../src/index.js';
-import { defineTool } from '../../src/core/tools.js';
+import { defineTool } from '../../src/tools/tools.js';
 import type { LLMProvider, LLMResponse } from '../../src/provider-contract/types.js';
 import type { WindowRecord } from '../../src/core/agent/window/types.js';
 

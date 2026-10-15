@@ -33,8 +33,12 @@
  *   );
  */
 
-import type { Tool } from '../core/tools.js';
-import type { ToolProvider, ToolDispatchContext, ToolGatePredicate } from './types.js';
+import type { Tool } from '../tools/tools.js';
+import type {
+  ToolProvider,
+  ToolDispatchContext,
+  ToolGatePredicate,
+} from '../tools/toolProvider.js';
 
 // LENS · tool-list · request-ephemeral
 // reads: nothing of its own — a caller-supplied predicate over the inner provider, recomputed per iteration

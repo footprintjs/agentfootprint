@@ -12,7 +12,7 @@
  * test harness. The claim is CHECKED, not asserted —
  * `test/lib/injection-engine/skill-graph-fence.test.ts` walks the transitive
  * import graph of everything reachable from this file and fails if any of it
- * reaches `footprintjs`, `core/agent/*`, `core/tools.ts`, an adapter or a
+ * reaches `footprintjs`, `core/agent/*`, `tools/tools.ts`, an adapter or a
  * recorder.
  *
  * WHAT A HOST OWES THE GRAPH is written down as a type:

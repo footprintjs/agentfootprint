@@ -1,5 +1,5 @@
 /** Declared datasets -> scope-bound artifacts. No transport, row discovery or domain vocabulary. */
-import type { Tool, ToolExecutionContext } from '../core/tools.js';
+import type { Tool, ToolExecutionContext } from '../tools/tools.js';
 import type { ToolArtifactPutInput, ToolArtifacts } from './capability.js';
 import { InvalidArtifactError, type ArtifactMeta } from './types.js';
 import { timeAxisIssues } from '../time/axis.js';

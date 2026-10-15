@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { requestInput } from '../../../src/index.js';
+import { requestInput } from '../../src/index.js';
 import {
   applyInputResponse,
   stampInputRequest,
   validateInputDeclaration,
-} from '../../../src/core/inputRequest.js';
+} from '../../src/tools/inputRequest.js';
 
 const declaration = {
   id: 'window',

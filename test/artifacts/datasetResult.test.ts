@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { bindArtifacts, inMemoryArtifacts, withDatasetArtifacts } from '../../src/artifacts';
 import type { DatasetResultPlan, ToolArtifactPutInput } from '../../src/artifacts';
-import type { Tool, ToolExecutionContext } from '../../src/core/tools';
+import type { Tool, ToolExecutionContext } from '../../src/tools/tools';
 
 const input = (data: unknown) => ({ kind: 'dataset/rows', mediaType: 'application/json', data });
 function setup(maxArtifacts = 100) {

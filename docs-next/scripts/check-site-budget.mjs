@@ -449,8 +449,8 @@ const OUTPUT_LIMITS = { bytes: 223_400_000, files: 8_270, duplicateRscBytes: 0 }
 // `arguments/resolve.ts`, `middleware/rewrites.ts` — none of them in the
 // demo's assets). That split took the branch from 441.8 to 441.1 KB while main
 // grew 0.5 KB under it (449193f0 measured 434.2 KB). What cannot move is the
-// half a SYNCHRONOUS door needs: `core/tools.ts` · `defineTool` validates
-// `askOrAssume` rules at definition (`arguments/declare.ts` ·
+// half a SYNCHRONOUS door needs: `tools/tools.ts` · `defineTool` validates
+// `askOrAssume` rules at definition (`tools/declare.ts` ·
 // `assertAskOrAssume`), so declare.ts, rows.ts (the checkpoint check
 // `validateCheckpoint` runs), the mount, the arm and the turn stamp stay on the
 // default graph: +6.4 KB over the merge base. The full list is in
@@ -490,8 +490,8 @@ const OUTPUT_LIMITS = { bytes: 223_400_000, files: 8_270, duplicateRscBytes: 0 }
 //   after the shrink                                      470.3 KB  (CI ~471.9)
 // What cannot move is what a SYNCHRONOUS door needs before any run starts:
 // `defineTool({ period })` judges period forms at definition
-// (`arguments/declare.ts` -> `time/periodForm.ts`), `requestInput` and
-// the resume door judge a time `format` (`core/inputRequest.ts` ->
+// (`tools/declare.ts` -> `time/periodForm.ts`), `requestInput` and
+// the resume door judge a time `format` (`tools/inputRequest.ts` ->
 // `time/ask.ts`, with the catalog `locales/timeAsk.ts`), the checkpoint
 // door checks time rows (`runCheckpoint.ts` · `validateCheckpoint`, also the
 // hosting envelopes' sync validators -> `time/rows.ts`,

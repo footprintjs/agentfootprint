@@ -21,10 +21,7 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  formatToolArgIssues,
-  validateToolArgs,
-} from '../../../src/core/agent/toolArgsValidation.js';
+import { formatToolArgIssues, validateToolArgs } from '../../../src/tools/toolArgsValidation.js';
 import { Agent, defineTool } from '../../../src/index.js';
 import { mock } from '../../../src/llm-providers.js';
 

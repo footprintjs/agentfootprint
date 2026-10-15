@@ -15,7 +15,7 @@
  * disagree, so it is the only thing required to say why.
  */
 
-import { assertAskComponent } from '../../askComponent.js';
+import { assertAskComponent } from '../../../tools/askComponent.js';
 import type {
   AllowOutcome,
   ArgumentOrigins,

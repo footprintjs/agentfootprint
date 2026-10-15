@@ -63,13 +63,9 @@ import {
   type ToolOwner,
   type ToolResultCeiling,
   type ToolResultColumns,
-} from '../../core/tools.js';
+} from '../../tools/tools.js';
 import type { ToolResultClass } from '../../semantics/types.js';
-import {
-  assertAskOrAssume,
-  type AskOrAssume,
-  type ToolPeriod,
-} from '../../core/agent/arguments/declare.js';
+import { assertAskOrAssume, type AskOrAssume, type ToolPeriod } from '../../tools/declare.js';
 import { readTimeContext, TIME_CONTEXT_META_KEY, type TimeContext } from '../../time/wire.js';
 
 /**
@@ -303,7 +299,7 @@ function bagOf(meta: unknown): Record<string, unknown> | undefined {
  * Judge ONE field and answer with the value to keep, or `undefined` to drop.
  *
  * The rule is passed IN rather than looked up here, so this function owns the
- * never-throw discipline and nothing else: every rule lives in `core/tools.ts`
+ * never-throw discipline and nothing else: every rule lives in `tools/tools.ts`
  * where `defineTool` reads it, and there is no second copy of any of them in
  * this file.
  */

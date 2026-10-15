@@ -2,7 +2,7 @@
  * toolName — the LLM tool-name law: the charset every major provider enforces,
  * the strict check (`assertValidToolName`) and the dev-mode warning
  * (`warnIfInvalidToolName`) that `defineTool` runs. A leaf so that every
- * layer that mints a tool name — `core/tools.ts` · `defineTool`, the tool
+ * layer that mints a tool name — `tools/tools.ts` · `defineTool`, the tool
  * registry, the coverage result's `tryInstead` — asks the same rule.
  */
 

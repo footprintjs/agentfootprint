@@ -29,12 +29,18 @@
 
 import type { LLMToolSchema } from '../../../provider-contract/types.js';
 import { shownArgsOf } from '../../toolShownArgs.js';
-import type { InputValue } from '../../inputRequest.js';
+import type { InputValue } from '../../../tools/inputRequest.js';
 import { ASSUMED_BLOCK_HEADING, type TimeLimitLines } from '../../../semantics/coverage/answer.js';
 import type { TimeLimitFacts } from '../../../semantics/coverage/timeLimitFacts.js';
 import { renderTimeLimits } from '../../../semantics/coverage/timeLimits.js';
 import { argumentRewritesOf, type ArgumentRewrite } from '../middleware/rewrites.js';
-import { isRefused, periodFactsOf, periodFormsOf, rulesOf, type RuledToolLike } from './declare.js';
+import {
+  isRefused,
+  periodFactsOf,
+  periodFormsOf,
+  rulesOf,
+  type RuledToolLike,
+} from '../../../tools/declare.js';
 import { HIDDEN_VALUE, type ArgumentRow } from './rows.js';
 import { LIBRARY_NOTE_OPENING } from '../../../lib/saidByPerson.js';
 import {
@@ -956,7 +962,7 @@ function answeredClause(toolName: string, f: FilledArgument, sources: boolean): 
 // ─── The refusals ───────────────────────────────────────────────────────
 
 // LENS · tool-result · persistent-history
-// reads: the dispatch re-read of the tool's rules (`declare.ts` · `rulesOf`) — the assert's own sentence
+// reads: the dispatch re-read of the tool's rules (`tools/declare.ts` · `rulesOf`) — the assert's own sentence
 // law: may omit, never deny; every clause anchored to the call it was composed on.
 /** The result a call reads when its tool's rules could not be read at dispatch. */
 export function unreadableRulesRefusal(toolName: string, reason: string): string {

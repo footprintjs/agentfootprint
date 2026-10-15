@@ -475,7 +475,7 @@ agent framework, a router, a test harness) can import it and route with it.
 import graph of everything reachable from `src/doors/skill-graph.ts` — using
 the TypeScript parser, so `import type`, `export … from`, `await import()`
 and inline `` import('…').T `` are all seen — and fails on any edge that
-reaches `footprintjs`, `core/agent/*`, `core/tools.ts`, an adapter or a
+reaches `footprintjs`, `core/agent/*`, `tools/tools.ts`, an adapter or a
 recorder. It names the offending file, the offending import, and what to do
 instead.
 

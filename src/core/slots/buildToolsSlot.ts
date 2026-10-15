@@ -34,17 +34,17 @@ import {
   type StepPointerCarrier,
 } from '../../lib/injection-engine/skillSteps.js';
 import { typedEmit } from '../../recorders/core/typedEmit.js';
-import type { Tool } from '../tools.js';
+import type { Tool } from '../../tools/tools.js';
 import type { ToolClaim } from '../agent/buildToolRegistry.js';
 import type { ToolNameChannel } from '../../events/payloads.js';
-import type { ToolProvider, ToolDispatchContext } from '../../tool-providers/types.js';
+import type { ToolProvider, ToolDispatchContext } from '../../tools/toolProvider.js';
 import { composeSlot, fnv1a, formatOverflowWarning, slotOverflow, truncate } from './helpers.js';
 import {
   ownsReservedArgument,
   withFindingsArgument,
   withSourcesArgument,
 } from '../agent/findings/reserved.js';
-import { carriesRules } from '../agent/arguments/declare.js';
+import { carriesRules } from '../../tools/declare.js';
 import type { Classifier } from '../../classify/types.js';
 import type { ToolChoiceEntry } from '../agent/toolChoice/types.js';
 import type { ReaderWindows } from '../../time/bind.js';
@@ -248,7 +248,7 @@ export interface ToolsSlotConfig {
    * tool to its OWNING subsystem instead of deriving `source:'registry'`.
    * Absent or unmatched → exactly today's bytes.
    */
-  readonly toolOwners?: ReadonlyMap<string, import('../tools.js').ToolOwner>;
+  readonly toolOwners?: ReadonlyMap<string, import('../../tools/tools.js').ToolOwner>;
   /**
    * The mount kernel's map cards (9.60.0) — id + owned tool names, for the
    * compose-seam integrity backstop below. Present only when `.maps()` is
@@ -405,7 +405,7 @@ export interface ToolsSlotConfig {
    * true })` or `.inputsLayer({ argumentSources: true })`) — present ONLY
    * then, only ever `true`, and only beside `inputsLayer`. At the same
    * decoration site, a schema whose WINNING implementation carries argument
-   * rules (`arguments/declare.ts` · `carriesRules`) gets `from`: beside
+   * rules (`tools/declare.ts` · `carriesRules`) gets `from`: beside
    * `findings`, the ledger's `_findings` variant with `from`
    * (`findings/reserved.ts` · `withFindingsArgument`'s `from`); without it,
    * the reserved argument with `from` alone (`withSourcesArgument`). An `ask`
@@ -792,7 +792,8 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
         ? steppedTools.filter((t) => !parkHoldOut.has(t.name))
         : steppedTools;
 
-    const ownerOf = config.toolOwners ?? new Map<string, import('../tools.js').ToolOwner>();
+    const ownerOf =
+      config.toolOwners ?? new Map<string, import('../../tools/tools.js').ToolOwner>();
     // The tool NAME behind each injection record, by index (9.105.0): a
     // record's `sourceId` is the owner or the skill, so the narrowing below
     // needs its own list to know which record is which tool.

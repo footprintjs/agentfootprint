@@ -37,9 +37,9 @@ import { servableSnapshot } from './servableSnapshot.js';
 import { registerRunnerLive } from './runnerLive.js';
 import { redactConsentUrlForEvent } from '../identity/consent.js';
 import { argumentAskReplyForEvent, isArgumentAskPause } from './agent/arguments/askMarker.js';
-import { readAskComponent } from './askComponent.js';
+import { readAskComponent } from '../tools/askComponent.js';
 import { pauseDemandsDecision } from './pause.js';
-import { readAwaitingInput } from './inputRequest.js';
+import { readAwaitingInput } from '../tools/inputRequest.js';
 import type { MiddlewareAsk, RunnerPauseOutcome } from './pause.js';
 import type { CheckInRequest } from './checkin.js';
 import type {
@@ -74,7 +74,7 @@ import {
   type LocalObservabilityOptions,
 } from '../recorders/observability/localObservability.js';
 import type { EnableNamespace, Runner } from './runner.js';
-import type { TeardownReason, ToolSessionTier } from './toolSessions.js';
+import type { TeardownReason, ToolSessionTier } from '../tools/toolSessions.js';
 import type { FixedPauseReason } from '../events/payloads.js';
 
 /** The reason a pause request names when its pause carries none — typed, so a

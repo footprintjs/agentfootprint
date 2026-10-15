@@ -38,7 +38,7 @@ const ISO_DATE = /(?<![\d-])(\d{4})-(\d{2})-(\d{2})(?![\d])/g;
 const TWELVE_HOUR = /(?<![\d:.])(\d{1,2})(?::(\d{2}))?\s*([ap])\.?m(?![a-z])/gi;
 
 /**
- * The evidence tokenizer's boundary (`evidence/normalize.ts` · `tokenize`),
+ * The evidence tokenizer's boundary (`tools/normalize.ts` · `tokenize`),
  * restated for this leaf so a 24-hour reading is recognised as the same
  * whole token the gate compares — pinned equal by `test/time/forms.test.ts`.
  */

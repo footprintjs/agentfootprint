@@ -6,7 +6,7 @@
  *          `resultClass` law: a declaration this library cannot honour fails
  *          at `defineTool`, never at the first row of the first run).
  * Role:    leaf. `src/integrity/` imports nothing outside itself, so the
- *          vocabulary lives HERE and `core/tools.ts` reaches in for it —
+ *          vocabulary lives HERE and `tools/tools.ts` reaches in for it —
  *          never the other way round.
  *
  * ── Why the words are these words ───────────────────────────────────────

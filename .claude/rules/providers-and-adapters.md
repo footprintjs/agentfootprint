@@ -7,6 +7,7 @@ paths:
   - "src/resilience/**"
   - "src/reliability/**"
   - "src/tool-providers/**"
+  - "src/tools/**"
   - "src/providers.ts"
   - "src/embedders/**"
 ---

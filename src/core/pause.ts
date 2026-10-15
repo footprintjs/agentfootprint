@@ -16,12 +16,12 @@
  * the tool API clean (tools are pure-ish) while still supporting pause.
  */
 
-import { readAskComponent } from './askComponent.js';
+import { readAskComponent } from '../tools/askComponent.js';
 import type { FlowchartCheckpoint } from 'footprintjs';
-import type { AskComponent } from './askComponent.js';
+import type { AskComponent } from '../tools/askComponent.js';
 import type { CheckInRequest } from './checkin.js';
-import { InputRequestError, validateInputDeclaration } from './inputRequest.js';
-import type { AwaitingInput, InputRequestDeclaration } from './inputRequest.js';
+import { InputRequestError, validateInputDeclaration } from '../tools/inputRequest.js';
+import type { AwaitingInput, InputRequestDeclaration } from '../tools/inputRequest.js';
 
 /**
  * Outcome returned by `runner.run()` / `runner.resume()` when execution

@@ -9,7 +9,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { Agent } from '../../../src/core/Agent.js';
-import { defineTool } from '../../../src/core/tools.js';
+import { defineTool } from '../../../src/tools/tools.js';
 import { mock } from '../../../src/adapters/llm/MockProvider.js';
 import {
   defineInstruction,

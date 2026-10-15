@@ -31,7 +31,7 @@
  * declared ceiling means one `undefined` check and byte-identical behavior.
  */
 
-import type { ToolResultCeiling } from '../tools.js';
+import type { ToolResultCeiling } from '../../tools/tools.js';
 import { safeStringify } from './validators.js';
 
 /** What an over-ceiling measurement hands the dispatch loop: the sentence the

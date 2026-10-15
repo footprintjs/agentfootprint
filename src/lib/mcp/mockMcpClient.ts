@@ -29,7 +29,7 @@
  * mock-first development.
  */
 
-import type { Tool } from '../../core/tools.js';
+import type { Tool } from '../../tools/tools.js';
 import { callMetaOf, readToolExtras } from './toolExtras.js';
 import type { McpClient, McpClientOptions, McpCallToolResult } from './types.js';
 import { readToolResult, resultModeOf } from './toolResult.js';

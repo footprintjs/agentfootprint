@@ -4,7 +4,7 @@
  * Test types:
  *   unit        — the grammar and the unit sets, row by row (§ 12.1 rows d and e pinned here);
  *   functional  — `durationMs` / `spellDuration` name the same length;
- *   integration — `arguments/declare.ts` · `parsesUnderSpelling` reads a look-back through this grammar
+ *   integration — `tools/declare.ts` · `parsesUnderSpelling` reads a look-back through this grammar
  *                 (`byte-identity-rows.test.ts`);
  *   property    — over 20 000 generated strings the look-back set equals the pre-T1 `LOOKBACK` regex;
  *                 `durationMs(spellDuration(x)) === x` and `spellDuration(durationMs(t))` names t's length;

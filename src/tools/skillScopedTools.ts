@@ -50,8 +50,8 @@
 
 import { isDevMode } from 'footprintjs';
 
-import type { Tool } from '../core/tools.js';
-import type { ToolProvider, ToolDispatchContext } from './types.js';
+import type { Tool } from './tools.js';
+import type { ToolProvider, ToolDispatchContext } from './toolProvider.js';
 
 /** The `ToolProvider.id` prefix every `skillScopedTools(...)` carries. */
 export const SKILL_SCOPED_TOOLS_ID_PREFIX = 'skill-scoped:';

@@ -10,7 +10,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { Agent } from '../../../src/core/Agent.js';
-import { defineTool } from '../../../src/core/tools.js';
+import { defineTool } from '../../../src/tools/tools.js';
 import { mock } from '../../../src/adapters/llm/MockProvider.js';
 import { withRetry, withFallback, fallbackProvider } from '../../../src/resilience/index.js';
 import type { LLMProvider, LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';

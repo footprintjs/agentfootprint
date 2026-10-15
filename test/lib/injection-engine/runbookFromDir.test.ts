@@ -26,7 +26,7 @@ import { join } from 'node:path';
 
 import { defineTool } from '../../../src/index.js';
 import { runbookFromDir, skillsFromDir, skillGraph } from '../../../src/injection-engine.js';
-import type { Tool } from '../../../src/core/tools.js';
+import type { Tool } from '../../../src/tools/tools.js';
 
 // ─── fixtures ────────────────────────────────────────────────────────────────
 

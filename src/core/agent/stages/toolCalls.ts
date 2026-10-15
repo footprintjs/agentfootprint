@@ -78,7 +78,7 @@ import { selfCallNotice, selfSkillTools } from '../selfCallNotice.js';
 import { parkedMemberIds } from '../../../maps/engagement/types.js';
 import { spoken, type SpokenIds } from '../../../lib/spokenIds.js';
 import type { MapEngagement } from '../../../maps/engagement/types.js';
-import type { ToolProvider } from '../../../tool-providers/types.js';
+import type { ToolProvider } from '../../../tools/toolProvider.js';
 import type { Credential, CredentialProvider } from '../../../identity/types.js';
 import { unconfiguredCredentialProvider } from '../../../identity/types.js';
 import {
@@ -103,12 +103,12 @@ import {
   stampInputRequest,
   validateInputDeclaration,
   type AnsweredAsk,
-} from '../../inputRequest.js';
+} from '../../../tools/inputRequest.js';
 import {
   assertAskComponent,
   InvalidAskComponentError,
   type AskComponent,
-} from '../../askComponent.js';
+} from '../../../tools/askComponent.js';
 import {
   shouldCheckIn,
   isCheckInDecision,
@@ -126,16 +126,20 @@ import type { ToolClaim } from '../buildToolRegistry.js';
 import { changedArgKeys, shownArgsOf } from '../../toolShownArgs.js';
 import { toolBytesOf } from '../../../lib/toolBytes.js';
 import { buildToolResolver, type ToolResolution } from './toolResolver.js';
-import type { Tool, ToolExecutionContext } from '../../tools.js';
+import type { Tool, ToolExecutionContext } from '../../../tools/tools.js';
 import { agentToolDispatch } from '../toolDispatch.js';
 import type { MemoryIdentity } from '../../../memory/identity/types.js';
-import type { TeardownOptions, TeardownScope, ToolSessionTier } from '../../toolSessions.js';
+import type {
+  TeardownOptions,
+  TeardownScope,
+  ToolSessionTier,
+} from '../../../tools/toolSessions.js';
 import type { InjectionRecord } from '../../../recorders/core/types.js';
 import type { ToolMiddleware } from '../middleware/types.js';
-import { runToolChain, runToolAfterChain, type ToolArgs } from '../middleware/runChain.js';
+import { runToolChain, runToolAfterChain, type ToolArgs } from '../../../tools/runChain.js';
 import { recordDecisions } from '../middleware/ledger.js';
 import { ownsReservedArgument, splitFindings, type SplitFindings } from '../findings/reserved.js';
-import { carriesRules } from '../arguments/declare.js';
+import { carriesRules } from '../../../tools/declare.js';
 import { isResultMessage, knownResults } from '../findings/offer.js';
 import type { Classifier } from '../../../classify/types.js';
 import {
@@ -170,7 +174,7 @@ import {
   streamedToolArgIssues,
   validateToolArgs,
   type ToolArgValidationMode,
-} from '../toolArgsValidation.js';
+} from '../../../tools/toolArgsValidation.js';
 import { safeStringify } from '../validators.js';
 import { capToolResult } from '../toolResultCap.js';
 import { applyResultCeiling } from '../resultCeiling.js';
@@ -3303,7 +3307,7 @@ export function buildToolCallsHandler(
    * says. DECLARED SOURCES WITHOUT THE LEDGER (`.inputsLayer({
    * argumentSources: true })`, no `.findings()`) plant the argument on RULED
    * tools only (`withSourcesArgument`), so only those calls are peeled — by
-   * the same rule the tools slot decorated with (`arguments/declare.ts` ·
+   * the same rule the tools slot decorated with (`tools/declare.ts` ·
    * `carriesRules`). Unarmed: `tc.args` itself, by reference — not one byte
    * moves.
    */

@@ -16,7 +16,7 @@ import { mcpServe } from '../../../src/tool-providers/index.js';
 import { PermissionPolicy } from '../../../src/security/index.js';
 import { bearer, staticTokens } from '../../../src/identity.js';
 import type { McpCallToolRequest, McpSdkServer } from '../../../src/lib/mcp/types.js';
-import type { Tool, ToolExecutionContext } from '../../../src/core/tools.js';
+import type { Tool, ToolExecutionContext } from '../../../src/tools/tools.js';
 import { expectScalesLinearly } from '../../helpers/perf.js';
 
 // ─── Mock SDK server ──────────────────────────────────────────────

@@ -21,7 +21,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { Agent } from '../../../src/core/Agent.js';
-import { defineTool } from '../../../src/core/tools.js';
+import { defineTool } from '../../../src/tools/tools.js';
 import {
   ask,
   askHuman,

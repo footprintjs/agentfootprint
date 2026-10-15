@@ -59,8 +59,8 @@ import { canStageCodeInputs, STAGED_INPUTS_ENV } from '../provider-contract/type
 import type { ToolWants } from '../artifacts/wants.js';
 import type { CredentialNeed } from '../identity/types.js';
 import type { CheckInDemand } from './checkin.js';
-import { defineTool, type Tool, type ToolExecutionContext } from './tools.js';
-import { toolSessionKey, type TeardownScope } from './toolSessions.js';
+import { defineTool, type Tool, type ToolExecutionContext } from '../tools/tools.js';
+import { toolSessionKey, type TeardownScope } from '../tools/toolSessions.js';
 
 /** The scopes a code session can be held under. `'shutdown'` is not one: it is
  *  when everything goes, not a thing to key a session on. */

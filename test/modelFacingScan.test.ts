@@ -792,7 +792,7 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: 'the answer account\'s template table — sentences rendered for a PERSON reading "Explain this answer" (the lens pane, the print report); `accountForAnswer` is a read-time fold over a finished recording and no model ever reads its output',
     },
   ],
-  'src/tool-providers/skillScopedTools.ts': [
+  'src/tools/skillScopedTools.ts': [
     {
       kind: 'not-model-facing',
       count: 1,

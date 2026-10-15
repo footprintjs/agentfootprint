@@ -143,8 +143,8 @@ import { unionRedactionPolicies } from '../redaction/policy.js';
 import { redactionMarker } from '../redaction/marker.js';
 import { modelFacingState, servableSnapshot, watchRunRule } from './servableSnapshot.js';
 import { argsRedactedBy, SHOWN_ARGS } from './toolShownArgs.js';
-import { defineTool } from './tools.js';
-import type { Tool, ToolExecutionContext } from './tools.js';
+import { defineTool } from '../tools/tools.js';
+import type { Tool, ToolExecutionContext } from '../tools/tools.js';
 
 /**
  * Pruned snapshot view passed to `resultMapper`. We keep this minimal

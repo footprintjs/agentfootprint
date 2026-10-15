@@ -9,7 +9,7 @@
  *          `checkTimeAnswer`.
  * Role:    L0 leaf (the time layer). Split from `ask.ts` because its
  *          labels render through `present.ts` (`presentRange`), and `ask.ts`
- *          is on the resume door's SYNCHRONOUS path (`core/inputRequest.ts`)
+ *          is on the resume door's SYNCHRONOUS path (`tools/inputRequest.ts`)
  *          while the renderer loads only under `.time()` — the
  *          optional-family law of docs-next's site budget.
  * Emits:   N/A.
@@ -30,7 +30,7 @@ import { shownGrain } from './resolveRecord.js';
 
 // ─── The choices a reading offers ─────────────────────────────────────────
 
-/** A time field built from a reading — the fields of `core/inputRequest.ts` · `InputField` it sets. */
+/** A time field built from a reading — the fields of `tools/inputRequest.ts` · `InputField` it sets. */
 export interface TimeAskField {
   readonly id: string;
   readonly type: 'string';

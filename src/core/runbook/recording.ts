@@ -50,7 +50,7 @@
 import type { Recording } from '../../recorders/observability/recordRun.js';
 import { RECORDING_ARTIFACT_KIND, recordingPutInput } from '../../artifacts/recordingArtifact.js';
 import { measureArtifactBytes } from '../../artifacts/payload.js';
-import type { ToolExecutionContext } from '../tools.js';
+import type { ToolExecutionContext } from '../../tools/tools.js';
 
 /**
  * The default size ceiling for a filed chart recording — 5,000,000 bytes.

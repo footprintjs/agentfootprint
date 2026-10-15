@@ -27,7 +27,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { agentCoreCodeRunner } from '../../../src/adapters/code/agentcore.js';
-import { hashSessionKey, toolSessionKey } from '../../../src/core/toolSessions.js';
+import { hashSessionKey, toolSessionKey } from '../../../src/tools/toolSessions.js';
 import type { AgentCoreCodeClientLike } from '../../../src/adapters/code/agentcore.js';
 
 /** Captures every field the adapter hands the SDK. */

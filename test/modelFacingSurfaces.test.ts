@@ -98,7 +98,7 @@ import {
   unreadableRulesRefusal,
   withArgumentRules,
 } from '../src/core/agent/arguments/serve.js';
-import { rulesOf } from '../src/core/agent/arguments/declare.js';
+import { rulesOf } from '../src/tools/declare.js';
 import { periodCheckLine } from '../src/semantics/coverage/period.js';
 import { bindPresentation } from '../src/time/present.js';
 import {

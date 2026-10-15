@@ -20,7 +20,7 @@ import {
   AGENTCORE_SIGV4_SERVICE,
 } from '../../src/adapters/mcp/agentcore.js';
 import { staticTokens } from '../../src/identity/staticTokens.js';
-import type { Tool } from '../../src/core/tools.js';
+import type { Tool } from '../../src/tools/tools.js';
 
 const credentials = staticTokens({ gateway: 'tok-1' });
 

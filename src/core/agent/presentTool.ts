@@ -19,7 +19,7 @@
  */
 
 import { PRESENT_TOOL_NAME } from '../../artifacts/present.js';
-import { defineTool, type Tool } from '../tools.js';
+import { defineTool, type Tool } from '../../tools/tools.js';
 
 // LENS · tool-description · request-ephemeral
 // reads: the declared shell only; the artifact facts are read at dispatch by src/artifacts/present.ts

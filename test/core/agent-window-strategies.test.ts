@@ -28,7 +28,7 @@ import {
   summarizeOldest,
   tokenBudget,
 } from '../../src/index.js';
-import { defineTool } from '../../src/core/tools.js';
+import { defineTool } from '../../src/tools/tools.js';
 import { askHuman, isPaused } from '../../src/core/pause.js';
 import { mock } from '../../src/llm-providers.js';
 import type {

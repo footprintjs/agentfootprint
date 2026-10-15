@@ -22,13 +22,13 @@
  */
 
 import type { TypedScope } from 'footprintjs';
-import type { InputValue } from '../../inputRequest.js';
+import type { InputValue } from '../../../tools/inputRequest.js';
 import { changedArgKeys } from '../../toolShownArgs.js';
-import type { Tool } from '../../tools.js';
-import type { ToolArgs } from '../middleware/runChain.js';
+import type { Tool } from '../../../tools/tools.js';
+import type { ToolArgs } from '../../../tools/runChain.js';
 import type { MiddlewareDecision } from '../middleware/types.js';
 import type { AgentState } from '../types.js';
-import { isMissing, rulesOf } from './declare.js';
+import { isMissing, rulesOf } from '../../../tools/declare.js';
 import { keptThisTurn, withKept, withoutUsed } from './kept.js';
 import type { ArgumentFill, ArgumentResolution } from './resolve.js';
 import {

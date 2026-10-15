@@ -28,7 +28,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { Agent, slidingWindow, summarizeOldest, tokenBudget } from '../../src/index.js';
-import { defineTool } from '../../src/core/tools.js';
+import { defineTool } from '../../src/tools/tools.js';
 import type { LLMMessage, LLMProvider, LLMResponse } from '../../src/provider-contract/types.js';
 import {
   answeredCallIds,

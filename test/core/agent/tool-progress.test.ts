@@ -29,7 +29,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { Agent, defineTool } from '../../../src/index.js';
-import type { ToolExecutionContext } from '../../../src/core/tools.js';
+import type { ToolExecutionContext } from '../../../src/tools/tools.js';
 import { mock } from '../../../src/adapters/llm/MockProvider.js';
 import { toSSE } from '../../../src/hosting/stream.js';
 import { recordRun } from '../../../src/recorders/observability/recordRun.js';

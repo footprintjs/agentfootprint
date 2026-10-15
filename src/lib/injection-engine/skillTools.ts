@@ -24,11 +24,11 @@
  * `scope.activatedInjectionIds` so the next iteration's InjectionEngine sees
  * the new activation.
  *
- * Zone: HOST. Importing `core/tools.js` here is the point of the file.
+ * Zone: HOST. Importing `tools/tools.js` here is the point of the file.
  */
 
-import { defineTool } from '../../core/tools.js';
-import type { Tool } from '../../core/tools.js';
+import { defineTool } from '../../tools/tools.js';
+import type { Tool } from '../../tools/tools.js';
 import { skipStepDescriptor } from './skillSteps.js';
 import {
   listSkillsDescriptor,

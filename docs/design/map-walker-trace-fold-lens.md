@@ -37,7 +37,9 @@ message it injects) · `src/patterns/` (seven caller-prompted research
 patterns; `LlmRouter.ts` composes one) · `src/lib/injection-engine/factories/`
 (seven declaration-only `define*` verbs; `defineRelevanceHint.ts` composes its
 own sentence) · `src/core/` (`LLMCall.ts`, `Agent.ts`'s
-`buildChart`, `toolContract.ts`) · `src/answer-validation/` (`types.ts`,
+`buildChart`) · `src/tools/` (`tools.ts`, `declare.ts`, `inputRequest.ts`,
+`askComponent.ts`, `toolContract.ts`, `toolProvider.ts` — what a tool is, before
+any agent runs it) · `src/answer-validation/` (`types.ts`,
 `outputSchema.ts`) · `src/core/agent/`
 (`buildAgentChart.ts`, `buildDynamicAgentChart.ts`, `buildToolRegistry.ts`,
 `AgentBuilder.ts`, `skillGraphDeclared.ts`) · `src/lib/injection-engine/`
@@ -48,16 +50,17 @@ declares a read-only corpus).
 ### Walker — what is happening
 
 The walk wiring in `src/core/` (`RunnerBase.ts`, `runner.ts`, `runCheckpoint.ts`,
-`pause.ts`, `toolSessions.ts`, `durabilityBarrier.ts`).
+`pause.ts`, `durabilityBarrier.ts`).
 
 Mixed folders carrying Walker: `src/core/agent/stages/` (the ReAct loop's stage
 functions — `seed.ts`, `pickEntry.ts`, `routeTurn.ts`, `window.ts`,
 `deliver.ts`, `route.ts`, `outputRetry.ts`, `reliabilityExecution.ts`,
 `prepareFinal.ts`, `breakFinal.ts`; the same folder's Lens tenants are listed
 under Lens, and it appears in exactly these two places) · `src/core/agent/`
-(`toolDispatch.ts`, `toolArgsValidation.ts`, `validators.ts`) · `src/semantics/`
+(`toolDispatch.ts`, `validators.ts`) · `src/semantics/`
 (`toolEffects.ts`, the tool-result envelope grammar) ·
-`src/core/agent/middleware/` (`runChain.ts` — allow / deny / ask) ·
+`src/core/agent/middleware/` (`outcomes.ts`, `types.ts`) · `src/tools/`
+(`runChain.ts` — allow / deny / ask; `toolArgsValidation.ts`; `toolSessions.ts`) ·
 `src/lib/injection-engine/` (`buildInjectionEngineSubflow.ts`, one Gather →
 Evaluate → Route → Delta pass per iteration) · `src/core/runbook/`
 (`runbookAsTool.ts`, `dispatch.ts`) · `src/memory/stages/` (load, filter, pick)
@@ -101,7 +104,8 @@ Mixed folders carrying Fold: `src/lib/injection-engine/`
 `classifySkillTarget`, `skillGraph.ts` · `makeResolveCursor`, `evaluator.ts`,
 `routingPolicy.ts`) · `src/lib/context-ledger/` (`contextLedger.ts`) ·
 `src/maps/engagement/` (`lease.ts` — the sole owner of the parked set) ·
-`src/core/agent/evidence/` (`evidenceIndex.ts`) · `src/lib/` (`spokenIds.ts`,
+`src/core/agent/evidence/` (`evidenceIndex.ts`) · `src/tools/` (`normalize.ts`,
+the one spelling the evidence gate and the inputs layer share) · `src/lib/` (`spokenIds.ts`,
 `saidByPerson.ts`, `iterationBudget.ts`) · `src/events/` (`eventTail.ts` — how
 much of the stream was retained, how much was dropped, where the window starts) ·
 `src/recorders/` and `src/recorders/observability/` (`FlowchartRecorder.ts`'s `buildStepGraph`,
@@ -110,7 +114,8 @@ stated at its header and again below).
 
 ### Lens — what this reader is served
 
-`src/tool-providers/` (the tool list itself) · `src/lib/trace-toolpack/` (a
+`src/tool-providers/` (the tool list itself) · `src/tools/`
+(`skillScopedTools.ts`, a tool subset while one skill is loaded) · `src/lib/trace-toolpack/` (a
 completed run served to a model) · `src/lib/bug-report/` (a run served to a
 human) · `src/recorders/observability/commentary/` and
 `src/recorders/observability/status/` (prose for a human viewer).
