@@ -646,7 +646,7 @@ vi.mock('foottrace', async (importOriginal) => {
   return { ...real, stateAt: counting('stateAt', real.stateAt), splitStageId: counting('splitStageId', real.splitStageId) };
 });
 vi.mock('../../src/time-travel/epochs.js', async (importOriginal) => {
-  const real = await importOriginal<typeof import('../../../src/time-travel/epochs.js')>();
+  const real = await importOriginal<typeof import('../../src/time-travel/epochs.js')>();
   return { ...real, readAtCall: counting('readAtCall', real.readAtCall) /* …and the other two readers */ };
 });
 

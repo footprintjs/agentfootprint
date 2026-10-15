@@ -6,7 +6,7 @@
  * re-partition loop and `milestoneOf`'s re-derivation. That is only allowed if
  * the axis a 9.88.0 consumer scrubbed is the axis it still scrubs. So the
  * 9.88.0 implementation is here VERBATIM (`git show
- * 739b8c2f:src/time-travel/milestoneStops.ts`, renamed `legacy*`, not
+ * 739b8c2f:src/lib/time-travel/milestoneStops.ts`, renamed `legacy*`, not
  * otherwise touched) and driven over every recorded fixture the milestone
  * tests use, plus a dynamic-grouped run, its drilled inner histories, and a
  * paused-then-resumed run. New and legacy must agree stop for stop — step,
