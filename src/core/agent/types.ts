@@ -1460,17 +1460,27 @@ export interface AgentState {
    * Where `runIdentity` came from, when it came from somewhere other than the
    * caller (9.10.0).
    *
-   * Present ONLY as `'session'`, and only when the run carried a
-   * `sessionId` and no identity at all — the one derivation this library
-   * makes. Absent means the identity is either the caller's own or the
-   * per-run default, which is what every release before 9.10.0 committed, so
-   * a run that is not session-bound writes exactly the keys it always did.
+   * `'session'` when the run carried a `sessionId` and no identity at all;
+   * `'composition'` when the agent ran as a composition member whose run named
+   * none, so its namespace is that run's own `{ conversationId: runId }`
+   * (`core/memberRun.ts`). Absent means the identity is either the caller's
+   * own or the per-run default, which is what every release before 9.10.0
+   * committed, so a run that is neither writes exactly the keys it always did.
    *
    * It is a fact about the RECORD, not a dial: nothing reads it to decide
    * anything. It exists so a trace can be asked "did anyone actually name this
    * namespace?" and answer honestly.
    */
-  runIdentitySource?: 'session';
+  runIdentitySource?: 'session' | 'composition';
+  /**
+   * The run this agent serves as a composition MEMBER (`core/memberRun.ts`) —
+   * the composition's run id and the identity its caller named, if any.
+   * Written by seed ONLY on a member's run, where it is the source of the
+   * facts the member's tools are handed (`ctx.runId`, `ctx.identity`): the
+   * instance's own fields describe some other run. Absent on the agent's own
+   * runs, which commit exactly the keys they always did.
+   */
+  memberRun?: import('../memberRun.js').ParentRunRecord;
   /**
    * The session this run served — written by seed on a session-bound run;
    * `null` on a run a caller named an identity for that has no session (the

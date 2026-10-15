@@ -85,6 +85,16 @@ import { ContextRecorder } from '../recorders/core/ContextRecorder.js';
 import { streamRecorder } from '../recorders/core/StreamRecorder.js';
 import { typedEmit } from '../recorders/core/typedEmit.js';
 import { carryVerdict, childOutcome, raiseChildVerdict } from './childOutcome.js';
+import {
+  adoptParentRun,
+  parentRunIn,
+  readsParentRun,
+  closeParentRun,
+  openParentRun,
+  reopenParentRun,
+  withParentRun,
+} from '../core/memberRun.js';
+import type { MemoryIdentity } from '../memory/identity/types.js';
 
 /**
  * What the NEXT step must accept, given what the previous one returns.
@@ -170,6 +180,8 @@ export class Workflow<TIn extends object = object, TOut = unknown> extends Runne
     // A step's redaction policy covers this composition's run — every step
     // runs on its executor (`src/redaction/declared.ts`).
     adoptMemberRedaction(this, steps);
+    // It hands the run it serves to its members (`core/memberRun.ts`).
+    readsParentRun(this);
     // Eager chart construction — see `RunnerBase.initChart` JSDoc.
     this.initChart(() => this.buildChart());
   }
@@ -177,11 +189,24 @@ export class Workflow<TIn extends object = object, TOut = unknown> extends Runne
   async run(input: TIn, options?: RunOptions): Promise<TOut | RunnerPauseOutcome> {
     const executor = this.createExecutor();
     this.lastExecutor = executor;
-    const result = await executor.run({
-      input: { ...input },
-      ...(withRunSignalInEnv(options) ?? {}),
-    });
-    return this.finalizeResult(executor, result);
+    // The run every step serves — the caller's identity when the input names
+    // one (`input.identity`, as `AgentInput` does), else this run's own
+    // conversation (`core/memberRun.ts`).
+    const parentRun = openParentRun(
+      this.currentRunContext.runId,
+      (input as { readonly identity?: MemoryIdentity } | undefined)?.identity,
+      'Workflow.run',
+    );
+    try {
+      const result = await executor.run({
+        input: { ...input, parentRun: parentRun.link },
+        ...(withRunSignalInEnv(options) ?? {}),
+      });
+      return this.finalizeResult(executor, result);
+    } finally {
+      // Released when the run returns — finished, failed or paused (a resume re-opens it).
+      closeParentRun(parentRun);
+    }
   }
 
   async resume(
@@ -193,8 +218,14 @@ export class Workflow<TIn extends object = object, TOut = unknown> extends Runne
     const resumeLeg = this.emitPauseResume(checkpoint, input);
     const executor = this.createExecutor(resumeLeg);
     this.lastExecutor = executor;
-    const result = await executor.resume(checkpoint, input, withRunSignalInEnv(options));
-    return this.finalizeResult(executor, result);
+    // The paused run its members serve, re-opened from the checkpoint's own record.
+    const parentRun = reopenParentRun(checkpoint.sharedState, 'Workflow.resume');
+    try {
+      const result = await executor.resume(checkpoint, input, withRunSignalInEnv(options));
+      return this.finalizeResult(executor, result);
+    } finally {
+      closeParentRun(parentRun);
+    }
   }
 
   private createExecutor(resumeLeg?: RedactionPolicy): FlowChartExecutor {
@@ -239,8 +270,11 @@ export class Workflow<TIn extends object = object, TOut = unknown> extends Runne
 
     const seed = (scope: TypedScope<WorkflowState>) => {
       // The workflow's own input IS step 1's input — no unwrapping, no
-      // re-wrapping; that is the whole point of the typed chain.
-      scope.current = scope.$getArgs<Record<string, unknown>>();
+      // re-wrapping; that is the whole point of the typed chain. The run it
+      // serves is kept apart and handed to EVERY step (`core/memberRun.ts`).
+      const { parentRun: _run, ...args } = scope.$getArgs<Record<string, unknown>>();
+      adoptParentRun(scope, { parentRun: _run }, 'Workflow');
+      scope.current = args;
       typedEmit(scope, 'agentfootprint.composition.enter', {
         kind: 'Sequence',
         id: compositionId,
@@ -274,7 +308,8 @@ export class Workflow<TIn extends object = object, TOut = unknown> extends Runne
             // A step that ended on a verdict hands nothing on (`childOutcome.ts`).
             raiseChildVerdict((key) => (parent as Record<string, unknown>)[key]);
             const args = toStepArgs(parent.current, stepNumber);
-            return stepNumber === 1 ? args : composedInput(step, args);
+            const mapped = stepNumber === 1 ? args : composedInput(step, args);
+            return withParentRun(mapped, parentRunIn(parent), step);
           },
           // Untouched: whatever the step's chart returned is what the next
           // step (or the caller) receives. No string coercion.

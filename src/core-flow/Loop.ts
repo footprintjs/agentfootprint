@@ -31,6 +31,16 @@ import type { RunnerPauseOutcome } from '../core/pause.js';
 import type { Runner } from '../core/runner.js';
 import { RunnerBase, makeRunId, withRunSignalInEnv } from '../core/RunnerBase.js';
 import { normalizeRunInput } from '../core/runInput.js';
+import {
+  adoptParentRun,
+  parentRunIn,
+  readsParentRun,
+  closeParentRun,
+  openParentRun,
+  reopenParentRun,
+  withParentRun,
+} from '../core/memberRun.js';
+import type { MemoryIdentity } from '../memory/identity/types.js';
 import type { RunContext } from '../bridge/eventMeta.js';
 import { ContextRecorder } from '../recorders/core/ContextRecorder.js';
 import { streamRecorder } from '../recorders/core/StreamRecorder.js';
@@ -64,6 +74,13 @@ export interface LoopOptions {
 
 export interface LoopInput {
   readonly message: string;
+  /**
+   * WHO this run is for — the same tuple as `AgentInput.identity`. Every
+   * member runs for it: its memory, its tools' `ctx.identity`. Omitted, every
+   * member runs under this run's own conversation (`{ conversationId: runId }`),
+   * never a namespace another run shares (`core/memberRun.ts`).
+   */
+  readonly identity?: MemoryIdentity;
 }
 
 export type LoopOutput = string;
@@ -144,6 +161,8 @@ export class Loop extends RunnerBase<LoopInput, LoopOutput> {
     // The body's redaction policy covers this composition's run — the body runs
     // on its executor (`src/redaction/declared.ts`).
     adoptMemberRedaction(this, [body]);
+    // It hands the run it serves to its members (`core/memberRun.ts`).
+    readsParentRun(this);
     // Eager chart construction — see `RunnerBase.initChart` JSDoc.
     this.initChart(() => this.buildChart());
   }
@@ -195,11 +214,18 @@ export class Loop extends RunnerBase<LoopInput, LoopOutput> {
     const runInput = normalizeRunInput<LoopInput>(input, 'Loop.run');
     const executor = this.createExecutor();
     this.lastExecutor = executor;
-    const result = await executor.run({
-      input: { message: runInput.message },
-      ...(withRunSignalInEnv(options) ?? {}),
-    });
-    return this.finalizeResult(executor, result);
+    // The run every member serves — built once, here, from THIS run's id.
+    const parentRun = openParentRun(this.currentRunContext.runId, runInput.identity, 'Loop.run');
+    try {
+      const result = await executor.run({
+        input: { message: runInput.message, parentRun: parentRun.link },
+        ...(withRunSignalInEnv(options) ?? {}),
+      });
+      return this.finalizeResult(executor, result);
+    } finally {
+      // Released when the run returns — finished, failed or paused (a resume re-opens it).
+      closeParentRun(parentRun);
+    }
   }
 
   async resume(
@@ -211,8 +237,14 @@ export class Loop extends RunnerBase<LoopInput, LoopOutput> {
     const resumeLeg = this.emitPauseResume(checkpoint, input);
     const executor = this.createExecutor(resumeLeg);
     this.lastExecutor = executor;
-    const result = await executor.resume(checkpoint, input, withRunSignalInEnv(options));
-    return this.finalizeResult(executor, result);
+    // The paused run its members serve, re-opened from the checkpoint's own record.
+    const parentRun = reopenParentRun(checkpoint.sharedState, 'Loop.resume');
+    try {
+      const result = await executor.resume(checkpoint, input, withRunSignalInEnv(options));
+      return this.finalizeResult(executor, result);
+    } finally {
+      closeParentRun(parentRun);
+    }
   }
 
   private createExecutor(resumeLeg?: RedactionPolicy): FlowChartExecutor {
@@ -267,6 +299,7 @@ export class Loop extends RunnerBase<LoopInput, LoopOutput> {
 
     const seed = (scope: TypedScope<LoopState>) => {
       const args = scope.$getArgs<LoopInput>();
+      adoptParentRun(scope, args, 'Loop');
       scope.current = args.message;
       scope.iteration = 0;
       scope.startMs = Date.now();
@@ -357,10 +390,12 @@ export class Loop extends RunnerBase<LoopInput, LoopOutput> {
         // input it always did.
         inputMapper: (parent) => {
           const input = { message: (parent.current as string) ?? '' };
-          return ((parent.iteration as number | undefined) ?? 1) > 1 ||
-            parent.messageFrom === 'composed'
-            ? composedInput(body, input)
-            : input;
+          const mapped =
+            ((parent.iteration as number | undefined) ?? 1) > 1 || parent.messageFrom === 'composed'
+              ? composedInput(body, input)
+              : input;
+          // Every iteration runs for this run (`core/memberRun.ts`).
+          return withParentRun(mapped, parentRunIn(parent), body);
         },
         // Body's string return becomes next iteration's input via `current`;
         // a body that ended on a verdict carries it onto the loop's state.

@@ -141,6 +141,16 @@ import { ContextRecorder } from '../recorders/core/ContextRecorder.js';
 import { streamRecorder } from '../recorders/core/StreamRecorder.js';
 import { typedEmit } from '../recorders/core/typedEmit.js';
 import { childError, childOutcome } from './childOutcome.js';
+import {
+  adoptParentRun,
+  parentRunIn,
+  readsParentRun,
+  closeParentRun,
+  openParentRun,
+  reopenParentRun,
+  withParentRun,
+} from '../core/memberRun.js';
+import type { MemoryIdentity } from '../memory/identity/types.js';
 
 // ─── Public shapes ───────────────────────────────────────────────────
 
@@ -459,6 +469,8 @@ export class Graph extends RunnerBase<GraphInput, GraphOutput> {
       opts.nodes.map((n) => n.runner),
     );
 
+    // It hands the run it serves to its members (`core/memberRun.ts`).
+    readsParentRun(this);
     // Eager chart construction — see `RunnerBase.initChart` JSDoc.
     this.initChart(() => this.buildChart());
   }
@@ -471,13 +483,28 @@ export class Graph extends RunnerBase<GraphInput, GraphOutput> {
   async run(input: GraphInput, options?: RunOptions): Promise<GraphOutput | RunnerPauseOutcome> {
     const executor = this.createExecutor();
     this.lastExecutor = executor;
-    let result: unknown;
+    // The run every node serves — the caller's identity when the input names
+    // one (`input.identity`), else this run's own conversation (`core/memberRun.ts`).
+    const parentRun = openParentRun(
+      this.currentRunContext.runId,
+      (input as { readonly identity?: MemoryIdentity } | undefined)?.identity,
+      'graph.run',
+    );
     try {
-      result = await executor.run({ input: { ...input }, ...(withRunSignalInEnv(options) ?? {}) });
-    } catch (err) {
-      this.rethrowWithNodeAttribution(err);
+      let result: unknown;
+      try {
+        result = await executor.run({
+          input: { ...input, parentRun: parentRun.link },
+          ...(withRunSignalInEnv(options) ?? {}),
+        });
+      } catch (err) {
+        this.rethrowWithNodeAttribution(err);
+      }
+      return this.finalizeResult(executor, result);
+    } finally {
+      // Released when the run returns — finished, failed or paused (a resume re-opens it).
+      closeParentRun(parentRun);
     }
-    return this.finalizeResult(executor, result);
   }
 
   async resume(
@@ -489,13 +516,19 @@ export class Graph extends RunnerBase<GraphInput, GraphOutput> {
     const resumeLeg = this.emitPauseResume(checkpoint, input);
     const executor = this.createExecutor(resumeLeg);
     this.lastExecutor = executor;
-    let result: unknown;
+    // The paused run its members serve, re-opened from the checkpoint's own record.
+    const parentRun = reopenParentRun(checkpoint.sharedState, 'graph.resume');
     try {
-      result = await executor.resume(checkpoint, input, withRunSignalInEnv(options));
-    } catch (err) {
-      this.rethrowWithNodeAttribution(err);
+      let result: unknown;
+      try {
+        result = await executor.resume(checkpoint, input, withRunSignalInEnv(options));
+      } catch (err) {
+        this.rethrowWithNodeAttribution(err);
+      }
+      return this.finalizeResult(executor, result);
+    } finally {
+      closeParentRun(parentRun);
     }
-    return this.finalizeResult(executor, result);
   }
 
   /**
@@ -597,8 +630,11 @@ export class Graph extends RunnerBase<GraphInput, GraphOutput> {
     const nodeErrors = this.nodeErrors;
 
     const seed = (scope: TypedScope<GraphState>) => {
-      // The graph's own input is what every ROOT node receives.
-      scope.graphInput = scope.$getArgs<GraphInput>();
+      // The graph's own input is what every ROOT node receives; the run it
+      // serves is kept apart and handed to EVERY node (`core/memberRun.ts`).
+      const { parentRun: _run, ...graphInput } = scope.$getArgs<GraphInput>();
+      adoptParentRun(scope, { parentRun: _run }, 'graph');
+      scope.graphInput = graphInput;
       scope.results = {};
       typedEmit(scope, 'agentfootprint.composition.enter', {
         kind: 'Sequence',
@@ -643,7 +679,11 @@ export class Graph extends RunnerBase<GraphInput, GraphOutput> {
           // can name what actually happened instead of 'unknown error'.
           inputMapper: (parent) => {
             try {
-              return this.inputForNode(node, parent as Record<string, unknown>);
+              return withParentRun(
+                this.inputForNode(node, parent as Record<string, unknown>),
+                parentRunIn(parent),
+                node.runner,
+              );
             } catch (err) {
               if (!nodeErrors.has(node.id)) {
                 nodeErrors.set(node.id, {

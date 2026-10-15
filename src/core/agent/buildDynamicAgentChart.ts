@@ -87,6 +87,7 @@ import {
 } from './honesty/mounts.js';
 import type { AgentState } from './types.js';
 import type { ToolChoiceEntry } from './toolChoice/types.js';
+import { memberRunArg } from '../memberRun.js';
 
 /**
  * Inner seed for the `sf-llm-call` subflow. Initialises the per-turn
@@ -471,6 +472,9 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
         // sf-llm-call off the boundary's `findingsLedger`. See `AgentChartDeps.timeWindows`.
         ...(deps.timeWindows === true && timeWindowsArg(parent.findingsLedger)),
         ...(deps.timeWindows === true && timeClockArg(parent.findingsLedger)),
+        // A composition member's run, for the slot's skill-visibility check
+        // (`memberRun.ts`) — value-conditional: the agent's own runs cross no key.
+        ...memberRunArg(parent.memberRun),
         // The turn's result-check lines (step T8). See `AgentChartDeps.timeLimits`.
         ...(deps.timeLimits === true && timeLimitsArg(parent.findingsLedger)),
         // Tool choice by classifier (9.105.0) — the flat chart's three args,

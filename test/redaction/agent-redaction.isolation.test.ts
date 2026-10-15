@@ -285,8 +285,13 @@ describe('(c) a lookup that misses fails closed; a mounted chart is bound to its
       },
       'ask',
     )
-      .addSubFlowChartNext('sf-a', a.getSpec(), 'A', { inputMapper: () => ({ message: 'a' }) })
-      .addSubFlowChartNext('sf-b', b.getSpec(), 'B', { inputMapper: () => ({ message: 'b' }) })
+      // A hand-built chart hands each mounted agent the identity it runs for.
+      .addSubFlowChartNext('sf-a', a.getSpec(), 'A', {
+        inputMapper: () => ({ message: 'a', identity: { conversationId: 'app-a' } }),
+      })
+      .addSubFlowChartNext('sf-b', b.getSpec(), 'B', {
+        inputMapper: () => ({ message: 'b', identity: { conversationId: 'app-b' } }),
+      })
       .build();
     const executor = new FlowChartExecutor(app);
     const starts: { subflow: string; args: Record<string, unknown> }[] = [];

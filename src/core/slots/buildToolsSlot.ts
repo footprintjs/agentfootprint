@@ -345,7 +345,7 @@ export interface ToolsSlotConfig {
    * because composing a menu from a policy that did not answer is exactly the
    * fail-open this feature exists to prevent.
    */
-  readonly hiddenSkillIds?: () => Promise<readonly string[]> | readonly string[];
+  readonly hiddenSkillIds?: (scope: object) => Promise<readonly string[]> | readonly string[];
   /** Budget cap (chars). Default: 2000. Set from the public door as
    *  `contextBudget.tools` on `AgentOptions`. */
   readonly budgetCap?: number;
@@ -557,7 +557,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
     // slot that is allowed to await. Before the provider block so an agent
     // with skills but no `toolProvider` still gets its filter.
     if (hiddenSkillIdsFor) {
-      const asked = hiddenSkillIdsFor();
+      const asked = hiddenSkillIdsFor(scope);
       hiddenSkillIds = asked instanceof Promise ? await asked : asked;
       // FOLD · the one owner of scope.hiddenSkillIds — which skill ids this caller's role may be TOLD about, this iteration
       // consumers read this and never re-derive it: the read_skill offer this slot hands to the description (`offered`),

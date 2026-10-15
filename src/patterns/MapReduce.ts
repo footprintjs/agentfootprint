@@ -27,6 +27,7 @@ import type { MergeFn, MergeWithLLMOptions } from '../core-flow/Parallel.js';
 import { Parallel } from '../core-flow/Parallel.js';
 import { Sequence } from '../core-flow/Sequence.js';
 import { adoptMemberRedaction, redactionDeclaredBy } from '../redaction/declared.js';
+import { adoptParentRun, parentRunIn, readsParentRun, withParentRun } from '../core/memberRun.js';
 
 const SHARD_DELIMITER = '\u001F'; // ASCII Unit Separator — unlikely in real text.
 
@@ -184,6 +185,8 @@ class ShardBranchRunner extends RunnerBase<{ message: string }, string> {
     // The wrapped runner's redaction policy travels with the shard, so the
     // `Parallel` that fans the shards out covers it (`src/redaction/declared.ts`).
     adoptMemberRedaction(this, [inner]);
+    // It hands the run it serves on to the wrapped runner (`core/memberRun.ts`).
+    readsParentRun(this);
   }
 
   getSpec(): FlowChart {
@@ -191,7 +194,8 @@ class ShardBranchRunner extends RunnerBase<{ message: string }, string> {
     // inner chart. The inner LLMCall's chart runs as a subflow whose
     // input is the extracted shard.
     const shardIndex = this.shardIndex;
-    const innerChart = this.inner.getSpec();
+    const inner = this.inner;
+    const innerChart = inner.getSpec();
 
     interface WrapperState {
       shard: string;
@@ -205,11 +209,14 @@ class ShardBranchRunner extends RunnerBase<{ message: string }, string> {
         const parts = (args.message ?? '').split(SHARD_DELIMITER);
         scope.shard = parts[shardIndex] ?? '';
         scope.result = '';
+        // The run the shard serves, handed on to the wrapped runner (`core/memberRun.ts`).
+        adoptParentRun(scope, args, 'mapReduce shard');
       },
       'unpack',
     )
       .addSubFlowChartNext('inner', innerChart, 'InnerCall', {
-        inputMapper: (parent) => ({ message: parent.shard ?? '' }),
+        inputMapper: (parent) =>
+          withParentRun({ message: parent.shard ?? '' }, parentRunIn(parent), inner),
         outputMapper: (sfOutput) => ({
           result: typeof sfOutput === 'string' ? sfOutput : '',
         }),

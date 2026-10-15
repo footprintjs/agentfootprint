@@ -4,7 +4,7 @@ title: Loop
 
 # Class: Loop
 
-Defined in: [src/core-flow/Loop.ts:105](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L105)
+Defined in: [src/core-flow/Loop.ts:122](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L122)
 
 Every primitive (LLMCall, Agent), every composition (Sequence, Parallel,
 Conditional, Loop), and every pattern factory result implements Runner.
@@ -21,7 +21,7 @@ composition.
 
 > **new Loop**(`opts`, `body`, `config`): `Loop`
 
-Defined in: [src/core-flow/Loop.ts:123](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L123)
+Defined in: [src/core-flow/Loop.ts:140](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L140)
 
 #### Parameters
 
@@ -82,7 +82,7 @@ instead of N `.on()` subscriptions.
 
 > `readonly` **id**: `string`
 
-Defined in: [src/core-flow/Loop.ts:107](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L107)
+Defined in: [src/core-flow/Loop.ts:124](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L124)
 
 ***
 
@@ -90,7 +90,7 @@ Defined in: [src/core-flow/Loop.ts:107](https://github.com/footprintjs/agentfoot
 
 > `readonly` **name**: `string`
 
-Defined in: [src/core-flow/Loop.ts:106](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L106)
+Defined in: [src/core-flow/Loop.ts:123](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L123)
 
 ## Methods
 
@@ -211,7 +211,7 @@ host.onSessionEnd(async (sessionId) => {
 
 > `static` **create**(`opts?`): [`LoopBuilder`](/docs/api/classes/LoopBuilder)
 
-Defined in: [src/core-flow/Loop.ts:151](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L151)
+Defined in: [src/core-flow/Loop.ts:170](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L170)
 
 #### Parameters
 
@@ -728,7 +728,7 @@ calling if you still want them. Does NOT touch attached recorders
 
 > **resume**(`checkpoint`, `input?`, `options?`): `Promise`\<`string` \| [`RunnerPauseOutcome`](/docs/api/interfaces/RunnerPauseOutcome)\>
 
-Defined in: [src/core-flow/Loop.ts:205](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L205)
+Defined in: [src/core-flow/Loop.ts:231](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L231)
 
 Resume a paused run from its checkpoint. Default behavior: rebuild the
 chart, wire the same core recorders + consumer recorders, call
@@ -763,7 +763,7 @@ returning. Subclass overrides only if it needs specialized behavior.
 
 > **run**(`input`, `options?`): `Promise`\<`string` \| [`RunnerPauseOutcome`](/docs/api/interfaces/RunnerPauseOutcome)\>
 
-Defined in: [src/core-flow/Loop.ts:191](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L191)
+Defined in: [src/core-flow/Loop.ts:210](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L210)
 
 Execute the runner. Subclass may override for specialized input
 mapping, but default invokes getSpec() + FlowChartExecutor.

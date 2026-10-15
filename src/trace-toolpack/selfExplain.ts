@@ -311,6 +311,18 @@ export class SelfExplainBinding {
     };
   }
 
+  /**
+   * Does the binding serve the run a tool call is in? Only the agent's OWN run
+   * — the one its instance is serving — reads its evidence. A call from the
+   * agent mounted as a composition member carries that composition's run id
+   * (`ctx.runId`), which is never the instance's: the instance's evidence is
+   * another caller's, so it is not served there.
+   */
+  servesRun(runId: string | undefined): boolean {
+    const serving = this.serving();
+    return serving === undefined || (runId !== undefined && serving.runId === runId);
+  }
+
   /** The conversation (and run) in flight, or served last. */
   private serving(): SelfExplainServing | undefined {
     return this.source?.getServing?.();
@@ -430,7 +442,7 @@ function buildExplainRunTool(
       additionalProperties: false,
     },
     execute: async ({ question }, ctx) => {
-      const artifacts = binding.artifacts;
+      const artifacts = binding.servesRun(ctx.runId) ? binding.artifacts : undefined;
       if (!artifacts) return NO_COMPLETED_RUN_MESSAGE;
       // Dynamic import: keeps Agent out of this module's static graph
       // (AgentBuilder imports this file; Agent imports AgentBuilder).
@@ -514,6 +526,20 @@ export function buildSelfExplainToolProvider(
 }
 
 /**
+ * The trace tools, answering only inside the run the binding serves: a call
+ * from the agent mounted as a composition member (`ctx.runId` is the
+ * composition's run) is told there is no completed run, never handed the
+ * instance's evidence — another caller's conversation.
+ */
+function ownRunOnly(tools: readonly Tool[], binding: SelfExplainBinding): readonly Tool[] {
+  return tools.map((tool) => ({
+    ...tool,
+    execute: (args: never, ctx: Parameters<Tool['execute']>[1]) =>
+      binding.servesRun(ctx?.runId) ? tool.execute(args, ctx) : NO_COMPLETED_RUN_MESSAGE,
+  })) as readonly Tool[];
+}
+
+/**
  * The inline-mode provider: `skillScopedTools` semantics, with the tool list
  * behind an `import()` that runs once, on the first ACTIVE iteration.
  *
@@ -537,7 +563,10 @@ function lazilyMountedTraceTools(
       ({ lazyTraceToolpack }) =>
         skillScopedTools(
           skillId,
-          lazyTraceToolpack(() => binding.artifacts, toolpack),
+          ownRunOnly(
+            lazyTraceToolpack(() => binding.artifacts, toolpack),
+            binding,
+          ),
         ),
       (err: unknown) => {
         mounted = undefined;

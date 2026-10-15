@@ -32,6 +32,16 @@ import { agentRecorder } from '../recorders/core/AgentRecorder.js';
 import { compositionRecorder } from '../recorders/core/CompositionRecorder.js';
 import { typedEmit } from '../recorders/core/typedEmit.js';
 import { composedInput, readsMessageFromIfAny } from '../core/messageFrom.js';
+import {
+  adoptParentRun,
+  parentRunIn,
+  readsParentRun,
+  closeParentRun,
+  openParentRun,
+  reopenParentRun,
+  withParentRun,
+} from '../core/memberRun.js';
+import type { MemoryIdentity } from '../memory/identity/types.js';
 import { adoptMemberRedaction } from '../redaction/declared.js';
 import { carryVerdict, childOutcome, raiseChildVerdict } from './childOutcome.js';
 
@@ -67,6 +77,13 @@ export interface SequenceOptions {
 
 export interface SequenceInput {
   readonly message: string;
+  /**
+   * WHO this run is for — the same tuple as `AgentInput.identity`. Every
+   * member runs for it: its memory, its tools' `ctx.identity`. Omitted, every
+   * member runs under this run's own conversation (`{ conversationId: runId }`),
+   * never a namespace another run shares (`core/memberRun.ts`).
+   */
+  readonly identity?: MemoryIdentity;
 }
 
 export type SequenceOutput = string;
@@ -132,6 +149,8 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
       this,
       steps.map((s) => s.runner),
     );
+    // It hands the run it serves to its members (`core/memberRun.ts`).
+    readsParentRun(this);
     // Eager chart construction — see `RunnerBase.initChart` JSDoc.
     this.initChart(() => this.buildChart());
   }
@@ -175,11 +194,22 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
     const runInput = normalizeRunInput<SequenceInput>(input, 'Sequence.run');
     const executor = this.createExecutor();
     this.lastExecutor = executor;
-    const result = await executor.run({
-      input: { message: runInput.message },
-      ...(withRunSignalInEnv(options) ?? {}),
-    });
-    return this.finalizeResult(executor, result);
+    // The run every member serves — built once, here, from THIS run's id.
+    const parentRun = openParentRun(
+      this.currentRunContext.runId,
+      runInput.identity,
+      'Sequence.run',
+    );
+    try {
+      const result = await executor.run({
+        input: { message: runInput.message, parentRun: parentRun.link },
+        ...(withRunSignalInEnv(options) ?? {}),
+      });
+      return this.finalizeResult(executor, result);
+    } finally {
+      // Released when the run returns — finished, failed or paused (a resume re-opens it).
+      closeParentRun(parentRun);
+    }
   }
 
   async resume(
@@ -191,8 +221,14 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
     const resumeLeg = this.emitPauseResume(checkpoint, input);
     const executor = this.createExecutor(resumeLeg);
     this.lastExecutor = executor;
-    const result = await executor.resume(checkpoint, input, withRunSignalInEnv(options));
-    return this.finalizeResult(executor, result);
+    // The paused run its members serve, re-opened from the checkpoint's own record.
+    const parentRun = reopenParentRun(checkpoint.sharedState, 'Sequence.resume');
+    try {
+      const result = await executor.resume(checkpoint, input, withRunSignalInEnv(options));
+      return this.finalizeResult(executor, result);
+    } finally {
+      closeParentRun(parentRun);
+    }
   }
 
   private createExecutor(resumeLeg?: RedactionPolicy): FlowChartExecutor {
@@ -246,6 +282,7 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
     const seed = (scope: TypedScope<SequenceState>) => {
       const args = scope.$getArgs<SequenceInput>();
       scope.current = args.message;
+      adoptParentRun(scope, args, 'Sequence');
       typedEmit(scope, 'agentfootprint.composition.enter', {
         kind: 'Sequence',
         id: compositionId,
@@ -279,9 +316,12 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
           // error here, before the next step runs (`childOutcome.ts`).
           raiseChildVerdict((key) => (parent as Record<string, unknown>)[key]);
           const input = step.mapFromPrev((parent.current as string) ?? '');
-          return index === 0 && parent.messageFrom !== 'composed'
-            ? input
-            : composedInput(step.runner, input);
+          const mapped =
+            index === 0 && parent.messageFrom !== 'composed'
+              ? input
+              : composedInput(step.runner, input);
+          // Every step runs for this run (`core/memberRun.ts`).
+          return withParentRun(mapped, parentRunIn(parent), step.runner);
         },
         // `sfOutput` is the subflow's TraversalResult — for Runner-backed
         // subflows whose last stage returns a string, sfOutput IS that

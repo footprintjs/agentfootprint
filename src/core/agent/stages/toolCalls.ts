@@ -129,6 +129,7 @@ import { buildToolResolver, type ToolResolution } from './toolResolver.js';
 import type { Tool, ToolExecutionContext } from '../../../tools/tools.js';
 import { agentToolDispatch } from '../toolDispatch.js';
 import type { MemoryIdentity } from '../../../memory/identity/types.js';
+import { runOfLink } from '../../memberRun.js';
 import type {
   TeardownOptions,
   TeardownScope,
@@ -650,6 +651,16 @@ export interface ToolCallsHandlerDeps {
    *
    * @internal
    */
+  /**
+   * Is this stage running in the agent's OWN executor? Asked of the scope
+   * (`stages/seed.ts` · `isOwnRun`): a stage in another runner's executor — a
+   * composition member — reads its run facts from `scope.memberRun`, never
+   * from {@link currentRun}, which describes the instance's own last run.
+   * Absent → the agent's own run.
+   *
+   * @internal
+   */
+  readonly isOwnRun?: (scope: object) => boolean;
   readonly currentRun?: () => {
     readonly runContext?: import('../../../bridge/eventMeta.js').RunContext;
     readonly runId: string;
@@ -682,7 +693,7 @@ export interface ToolCallsHandlerDeps {
    * @internal
    */
   readonly time?: {
-    readonly takePassedOnResume: () => ReadRunTime | undefined;
+    readonly takePassedOnResume: (scope: object) => ReadRunTime | undefined;
     readonly appZone?: ZoneName;
     /**
      * Present exactly under `.time({ reader })` (step T6b): the batch ask asks
@@ -2563,6 +2574,28 @@ export function buildToolCallsHandler(
    * which is a composition's run when this agent is mounted in one — never
    * off the agent's last standalone run.
    */
+  /**
+   * The run facts this dispatch serves. A composition MEMBER's come from the
+   * run it is mounted in (`scope.memberRun`, `core/memberRun.ts`): the
+   * instance's own (`deps.currentRun`) describe some other run — its last
+   * standalone caller, or none — and must never reach this run's tools.
+   */
+  const runFactsOf = (
+    scope: TypedScope<AgentState>,
+  ): ReturnType<NonNullable<ToolCallsHandlerDeps['currentRun']>> | undefined => {
+    // Decided WITHOUT reading the state, so the agent's own runs record
+    // exactly what they always did.
+    if (deps.isOwnRun?.(scope) !== false) return deps.currentRun?.();
+    // A composition's run is looked up by its link — never read off the
+    // record in state. Only a chart a caller built (no link) carries its own.
+    const memberRun = scope.memberRun;
+    const run = memberRun?.link === '' ? memberRun : runOfLink(memberRun?.link);
+    return {
+      runId: run?.runId ?? '',
+      ...(run?.identity !== undefined && { identity: run.identity }),
+    };
+  };
+
   const sessionContext = (
     scope: TypedScope<AgentState>,
     toolName: string,
@@ -2571,7 +2604,7 @@ export function buildToolCallsHandler(
     ToolExecutionContext,
     'runId' | 'sessionId' | 'identity' | 'redact' | 'onTeardown' | 'teardownScopes'
   > => {
-    const facts = deps.currentRun?.();
+    const facts = runFactsOf(scope);
     const redact = policyInForce(scope);
     return {
       ...(facts?.runId !== undefined && { runId: facts.runId }),
@@ -2715,7 +2748,7 @@ export function buildToolCallsHandler(
     toolName: string,
     toolCallId: string,
   ): Pick<ToolExecutionContext, 'artifacts' | 'hasArtifacts'> => {
-    const bindRun = deps.currentRun?.();
+    const bindRun = runFactsOf(scope);
     const emitFact = <K extends AgentfootprintEventType>(
       type: K,
       payload: AgentfootprintEventMap[K]['payload'],
@@ -3978,7 +4011,7 @@ export function buildToolCallsHandler(
         const { askBeforeDispatch } = await import('./argumentAsk.js');
         const asked = askBeforeDispatch(scope, resolutions, {
           toolOf: (toolName) => resolveTool(toolName).tool,
-          runId: () => deps.currentRun?.().runId,
+          runId: () => runFactsOf(scope)?.runId,
           ...(deps.argumentAskContext !== undefined && { hostContext: deps.argumentAskContext }),
           ...(deps.time !== undefined && {
             time: {
@@ -5105,7 +5138,7 @@ export function buildToolCallsHandler(
                       ? undefined
                       : stampInputRequest(
                           stamped,
-                          `${deps.currentRun?.().runId ?? scope.turnStartMs}:${tc.id}`,
+                          `${runFactsOf(scope)?.runId ?? scope.turnStartMs}:${tc.id}`,
                           {
                             originalRequest: scope.userMessage,
                             toolCallId: tc.id,
@@ -5575,7 +5608,7 @@ export function buildToolCallsHandler(
           // byte-identical to the release before this one. `currentRun()` is
           // the same accessor `ctx.runId` is composed from — one answer to
           // "which run is this", not a second spelling of it.
-          const runKey = deps.currentRun?.().runId ?? UNSCOPED_RUN;
+          const runKey = runFactsOf(scope)?.runId ?? UNSCOPED_RUN;
           // `repeatedWhen: 'arguments'` (9.62.0) — read off the RESOLVED tool,
           // never off the call: only the tool's own definition knows whether
           // its result is signal or a stamp (a fresh version/timestamp/cursor

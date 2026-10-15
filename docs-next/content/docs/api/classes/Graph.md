@@ -4,7 +4,7 @@ title: Graph
 
 # Class: Graph
 
-Defined in: [src/core-flow/Graph.ts:410](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L410)
+Defined in: [src/core-flow/Graph.ts:420](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L420)
 
 A fixed DAG of runners. Build one with [graph](/docs/api/functions/graph).
 
@@ -18,7 +18,7 @@ A fixed DAG of runners. Build one with [graph](/docs/api/functions/graph).
 
 > **new Graph**(`opts`): `Graph`
 
-Defined in: [src/core-flow/Graph.ts:437](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L437)
+Defined in: [src/core-flow/Graph.ts:447](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L447)
 
 #### Parameters
 
@@ -57,7 +57,7 @@ instead of N `.on()` subscriptions.
 
 > `readonly` **id**: `string`
 
-Defined in: [src/core-flow/Graph.ts:412](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L412)
+Defined in: [src/core-flow/Graph.ts:422](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L422)
 
 ***
 
@@ -65,7 +65,7 @@ Defined in: [src/core-flow/Graph.ts:412](https://github.com/footprintjs/agentfoo
 
 > `readonly` **name**: `string`
 
-Defined in: [src/core-flow/Graph.ts:411](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L411)
+Defined in: [src/core-flow/Graph.ts:421](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L421)
 
 ## Methods
 
@@ -299,7 +299,7 @@ getter — what it computes on is the live run (`liveSnapshot`).
 
 > **getLevels**(): readonly readonly `string`[][]
 
-Defined in: [src/core-flow/Graph.ts:467](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L467)
+Defined in: [src/core-flow/Graph.ts:479](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L479)
 
 How the graph was levelized — level 0 first. Stable post-construction.
 
@@ -699,7 +699,7 @@ calling if you still want them. Does NOT touch attached recorders
 
 > **resume**(`checkpoint`, `input?`, `options?`): `Promise`\<[`RunnerPauseOutcome`](/docs/api/interfaces/RunnerPauseOutcome) \| [`GraphOutput`](/docs/api/type-aliases/GraphOutput)\>
 
-Defined in: [src/core-flow/Graph.ts:483](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L483)
+Defined in: [src/core-flow/Graph.ts:510](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L510)
 
 Resume a paused run from its checkpoint. Default behavior: rebuild the
 chart, wire the same core recorders + consumer recorders, call
@@ -734,7 +734,7 @@ returning. Subclass overrides only if it needs specialized behavior.
 
 > **run**(`input`, `options?`): `Promise`\<[`RunnerPauseOutcome`](/docs/api/interfaces/RunnerPauseOutcome) \| [`GraphOutput`](/docs/api/type-aliases/GraphOutput)\>
 
-Defined in: [src/core-flow/Graph.ts:471](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L471)
+Defined in: [src/core-flow/Graph.ts:483](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L483)
 
 Execute the runner. Subclass may override for specialized input
 mapping, but default invokes getSpec() + FlowChartExecutor.

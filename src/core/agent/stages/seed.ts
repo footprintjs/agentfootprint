@@ -40,6 +40,8 @@ import type { TimeReader } from '../../../time/reader.js';
 import type { TimePolicy } from '../../../time/resolve.js';
 import { carriedRunPolicy } from '../../../redaction/conversation.js';
 import { policyInForce } from '../../../redaction/runRedaction.js';
+import { MemberIdentityError, memberIdentityOf, resolveParentRun } from '../../memberRun.js';
+import { makeRunId } from '../../RunnerBase.js';
 
 /**
  * A stored conversation handed to the next run — what
@@ -149,7 +151,7 @@ export interface SeedStageDeps {
    * (`time/rowsBuild.ts` · `clockRow`). Absent on an agent without the layer,
    * so nothing is read or written.
    */
-  readonly timeClock?: () => ClockDraft | undefined;
+  readonly timeClock?: (scope: object) => ClockDraft | undefined;
   /**
    * THE TIME LAYER'S READER (`.time({ reader, policy })`) — seed reads the
    * turn's message through it ONCE, after the clock is stamped, and files
@@ -190,6 +192,16 @@ export interface SeedStageDeps {
    * `agent.run(message)` in a script.
    */
   readonly getCurrentSessionId?: () => string | undefined;
+  /**
+   * Is this stage running in THIS agent's own executor (its `run()` or
+   * `resume()`)? Asked of the stage's scope: the agent's executor makes every
+   * scope it runs, so a scope it did not make belongs to another runner's
+   * executor — a composition, or a chart a caller built — where every
+   * instance accessor above (`getCurrentRunId`, `getCurrentSessionId`)
+   * describes some other run. Per scope, so two overlapping runs cannot be
+   * confused. Absent → treated as the agent's own run.
+   */
+  readonly isOwnRun?: (scope: object) => boolean;
   /**
    * Per-run config resolver from `.configure()`. Seed is where run-level
    * facts are decided AND committed (identity, iteration budget, turn
@@ -588,12 +600,22 @@ function seedFrom(
   const args = scope.$getArgs<AgentInput>();
   scope.userMessage = message;
 
+  // A MEMBER — this chart run by another runner's executor — is decided FIRST:
+  // every hand-off below that lives on the instance (`continueFrom`,
+  // `resumeOnError`, folded spans, the findings ledger, the skill cursor, the
+  // evidence recovery) belongs to the agent's OWN next run, and a member must
+  // neither read another caller's conversation nor take it from them. The run
+  // is looked up by its link in `memberRun.ts`'s private registry; a
+  // `parentRun` that is not a live link is refused there, by name.
+  const parentRun = resolveParentRun(args, 'Agent (composition member)');
+  const mounted = parentRun !== undefined || deps.isOwnRun?.(scope) === false;
+
   // If `run({ continueFrom })` or `resumeOnError(...)` set the side channel,
   // restore the stored conversation; this turn's user entry is `message` —
   // the input chain's verdict — on every path (`historyForTurn`). The
   // accessor clears the field, so a later run without a continuation starts
   // fresh.
-  const resume = deps.consumePendingResumeHistory();
+  const resume = mounted ? undefined : deps.consumePendingResumeHistory();
   const history = historyForTurn(resume, message);
   scope.history = history;
 
@@ -603,7 +625,7 @@ function seedFrom(
   // `.compaction()` must still hand them on rather than quietly drop somebody
   // else's evidence. Written only when there is something to restore, so a
   // conversation that never folded commits exactly the keys it always did.
-  const resumeFolded = deps.consumePendingResumeFolded?.();
+  const resumeFolded = mounted ? undefined : deps.consumePendingResumeFolded?.();
   if (resumeFolded && resumeFolded.length > 0) {
     scope.foldedSpans = [...resumeFolded];
   }
@@ -612,7 +634,7 @@ function seedFrom(
   // and restored as the stored record — a copy, never a `recordFindings`
   // write, so nothing is re-declared and no event fires. Written only when the
   // checkpoint carries rows; every other run seeds exactly the keys it always did.
-  const resumeLedger = deps.consumePendingResumeFindingsLedger?.();
+  const resumeLedger = mounted ? undefined : deps.consumePendingResumeFindingsLedger?.();
   if (resumeLedger && resumeLedger.length > 0) {
     scope.findingsLedger = [...resumeLedger];
   }
@@ -645,14 +667,41 @@ function seedFrom(
   // keys it always did. And note what does NOT change: `Agent.lastRunIdentity` stays
   // the CALLER's identity, so a derived namespace never reaches `tool.execute`
   // as `ctx.identity` and "absent" keeps meaning "nobody named one".
-  const sessionId = deps.getCurrentSessionId?.();
-  if (args.identity !== undefined) {
+  //
+  // A MEMBER — this chart run by another runner's executor (a composition, or
+  // a chart a caller built) — never reads the instance accessors: they
+  // describe the agent's own last run, which another user may own, or none at
+  // all (`'pending'`). It runs for the run that mounted it (`memberRun.ts`):
+  // the `parentRun` its composition handed down — the caller's identity, else
+  // that run's own `{ conversationId: runId }` — and with neither that nor an
+  // explicit identity it is refused by name, never filed under a shared one.
+  const sessionId = mounted ? undefined : deps.getCurrentSessionId?.();
+  if (parentRun !== undefined) {
+    // The engine's run outranks anything in the input: a step's input can be
+    // an earlier step's output (`workflow`, `graph`), and an `identity` there
+    // is data, never who the run is for.
+    scope.runIdentity = memberIdentityOf(parentRun);
+    if (parentRun.identity === undefined) scope.runIdentitySource = 'composition';
+  } else if (args.identity !== undefined) {
     scope.runIdentity = args.identity;
+  } else if (mounted) {
+    throw new MemberIdentityError();
   } else if (sessionId !== undefined) {
     scope.runIdentity = { conversationId: sessionId };
     scope.runIdentitySource = 'session';
   } else {
     scope.runIdentity = { conversationId: deps.getCurrentRunId() ?? 'default' };
+  }
+  // The run a member serves, for the facts its tools are handed (`ctx.runId`,
+  // `ctx.identity`) — written only on a member's run, so the agent's own runs
+  // commit exactly the keys they always did. A chart a caller built that
+  // handed an explicit identity and no run gets a run of its own.
+  if (mounted) {
+    scope.memberRun = parentRun ?? {
+      link: '',
+      runId: makeRunId(),
+      ...(args.identity !== undefined && { identity: args.identity }),
+    };
   }
   // WHICH SESSION this run served, recorded on every session-bound run (rung 1
   // or 2) — so a resume that names no session reads it from the checkpoint it
@@ -663,7 +712,7 @@ function seedFrom(
   // record that there was none, so a resume can tell this checkpoint from one
   // written before the key existed (`callerIdentity.ts · pausedSessionOf`). A
   // run on the per-run default writes nothing.
-  else if (args.identity !== undefined) scope.runSessionId = null;
+  else if (args.identity !== undefined && parentRun === undefined) scope.runSessionId = null;
   scope.newMessages = [];
   // WHICH TURN THIS IS (9.6.0). Every release up to 9.5.1 wrote `1` here, on
   // every run — and memory writes key their entries on it (`msg-{turn}-{i}`),
@@ -826,7 +875,7 @@ function seedFrom(
   // no second cursor, no new time axis. Consumed unconditionally (the side
   // channel clears whether or not it is honored); written only under the
   // option, so `continuity: 'turn'` commits exactly the keys it always did.
-  const inheritedCursor = deps.consumePendingResumeSkillCursor?.();
+  const inheritedCursor = mounted ? undefined : deps.consumePendingResumeSkillCursor?.();
   if (deps.restoreSkillCursor === true && inheritedCursor !== undefined) {
     scope.currentSkillId = inheritedCursor;
   }
@@ -857,7 +906,7 @@ function seedFrom(
   // an `'assist'` agent (and every agent without the gate) commits exactly
   // the keys it always did.
   if (deps.hasEvidenceRevision === true) {
-    const recovery = deps.consumePendingEvidenceRecovery?.();
+    const recovery = mounted ? undefined : deps.consumePendingEvidenceRecovery?.();
     scope.evidenceRevisionSpent = recovery?.revisionSpent === true;
     if (recovery?.pending !== undefined) {
       scope.evidenceRecovery = {

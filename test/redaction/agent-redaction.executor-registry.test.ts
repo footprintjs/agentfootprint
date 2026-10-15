@@ -128,7 +128,11 @@ describe('an executor no run opened is unknown — and refused, never served raw
     await runner.run({ message: 'go' });
     expect(runner.getLastSnapshot()).toBeDefined();
     const foreign = new FlowChartExecutor(runner.getSpec());
-    await foreign.run({ input: { message: 'ssn SSN-FOREIGN-1' } });
+    // A chart run by an executor its runner did not open is a mount: it must be
+    // handed the identity it runs for (`core/memberRun.ts`).
+    await foreign.run({
+      input: { message: 'ssn SSN-FOREIGN-1', identity: { conversationId: 'foreign-1' } },
+    });
     expect(runner.getLastNarrativeEntries().length).toBeGreaterThan(0);
     (runner as unknown as { lastExecutor: object }).lastExecutor = foreign;
     expect(runner.getLastSnapshot()).toBeUndefined();

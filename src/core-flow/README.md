@@ -192,6 +192,47 @@ const pipeline = Sequence.create().step('draft', drafter).step('review', reviewe
 // relayed under `current` are kept out too.
 ```
 
+### Decision 13: every member runs for the run that mounted it — never for its instance
+
+A composition mounts each member's chart in ITS OWN executor; the member's
+`run()` never runs. So nothing a member instance holds may decide whom a run is
+for: an Agent instance shared by every run of a composition holds `'pending'`
+(never run on its own) or its last direct caller — another person. Before this
+rule, two users of one `Sequence` shared one memory under conversation
+`'pending'`, and a member's tool could be handed an earlier caller's identity.
+
+The rule (`core/memberRun.ts`): the OUTERMOST composition's `run()` OPENS one
+run — the caller's `identity` (`run({ message, identity })`, or `input.identity`
+for `workflow` and `graph`), and THIS run's id — in that module's private
+registry, and passes only an unguessable LINK to it in its input. Each
+composition's seed resolves the link and keeps the run in its state
+(`memberRun`); its input mappers hand the link to every member that reads it
+(`readsParentRun`: an Agent, and every composition, which hands it on —
+nesting included). The run is released when `run()` returns and re-opened from
+the checkpoint by `resume()`. A `parentRun` that is not a live link — a
+run-shaped object, a made-up token, the link of a run that has ended — is
+refused (`ParentRunRefusedError`): nothing outside the engine can name the run
+a member serves, and an `identity` in a member's input never outranks it (a
+`workflow` or `graph` step's input can be an earlier step's output). Nor does a
+member read what its INSTANCE keeps for its own next run: a `continueFrom` /
+`resumeOnError` hand-off is consumed only by the agent's own run, and
+self-explain evidence is served only inside the run the instance is serving. A member
+Agent runs under the caller's identity, or this run's own `{ conversationId:
+runId }` (recorded `runIdentitySource: 'composition'`), and its tools read
+`ctx.identity` / `ctx.runId` from the run, not the instance. Per-run input is
+the carrier because it is the one thing two overlapping runs cannot share.
+
+An Agent tells its own run from a mount by the scope it was given (its own
+executor marks every scope it makes), and a mount that no run reached — no
+`parentRun`, no `identity` in its input — is refused by name
+(`MemberIdentityError`), never filed under a placeholder. Other runners are
+handed the input they always were.
+
+```typescript
+const flow = Sequence.create().step('support', supportAgent).build();
+await flow.run({ message: 'where is my order?', identity: { tenant, principal, conversationId } });
+```
+
 ## Events emitted
 
 | Composition | Events |
