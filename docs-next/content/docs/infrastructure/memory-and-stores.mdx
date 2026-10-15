@@ -694,6 +694,15 @@ written before this release ignores a third argument it never knew about —
 `defineMemory` checks `writeOptions` before passing any; check it yourself
 (`refuseUnhonouredWriteOptions`) when calling `put` directly.
 
+**Writing your own store.** The per-write argument is `MemoryWriteOptions`;
+`defineMemory` takes `MemoryWriteOptionsConfig` (fixed values, or a function of
+the identity for `namespaceScope`). A store declares the options it honours as a
+list of `MemoryWriteOptionName` — `MEMORY_WRITE_OPTION_NAMES` is every one of
+them. `requestedWriteOptions(options)` gives the names a write actually asks for
+(checking their shape without echoing a value), and a store with no server-side
+extraction refuses with the shared reason `NO_SERVER_EXTRACTION`, so every such
+store says the same thing and names the same fix.
+
 ## BedrockAgentMemory (legacy Bedrock Agents — read-only)
 
 AWS has **two** memory systems. `AgentCoreStore` above targets the newer **AgentCore** platform
