@@ -4,7 +4,7 @@ title: LLMCall
 
 # Class: LLMCall
 
-Defined in: [src/core/LLMCall.ts:225](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L225)
+Defined in: [src/core/LLMCall.ts:220](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L220)
 
 Every primitive (LLMCall, Agent), every composition (Sequence, Parallel,
 Conditional, Loop), and every pattern factory result implements Runner.
@@ -21,7 +21,7 @@ composition.
 
 > **new LLMCall**(`opts`, `systemPromptValue`): `LLMCall`
 
-Defined in: [src/core/LLMCall.ts:256](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L256)
+Defined in: [src/core/LLMCall.ts:251](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L251)
 
 #### Parameters
 
@@ -64,7 +64,7 @@ instead of N `.on()` subscriptions.
 
 > `readonly` **id**: `string`
 
-Defined in: [src/core/LLMCall.ts:227](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L227)
+Defined in: [src/core/LLMCall.ts:222](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L222)
 
 ***
 
@@ -72,7 +72,7 @@ Defined in: [src/core/LLMCall.ts:227](https://github.com/footprintjs/agentfootpr
 
 > `readonly` **name**: `string`
 
-Defined in: [src/core/LLMCall.ts:226](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L226)
+Defined in: [src/core/LLMCall.ts:221](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L221)
 
 ## Methods
 
@@ -193,7 +193,7 @@ host.onSessionEnd(async (sessionId) => {
 
 > `static` **create**(`opts`): [`LLMCallBuilder`](/docs/api/classes/LLMCallBuilder)
 
-Defined in: [src/core/LLMCall.ts:293](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L293)
+Defined in: [src/core/LLMCall.ts:288](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L288)
 
 #### Parameters
 
@@ -710,7 +710,7 @@ calling if you still want them. Does NOT touch attached recorders
 
 > **resume**(`checkpoint`, `input?`, `options?`): `Promise`\<`string` \| [`RunnerPauseOutcome`](/docs/api/interfaces/RunnerPauseOutcome)\>
 
-Defined in: [src/core/LLMCall.ts:343](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L343)
+Defined in: [src/core/LLMCall.ts:338](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L338)
 
 Resume a paused run from its checkpoint. Default behavior: rebuild the
 chart, wire the same core recorders + consumer recorders, call
@@ -745,7 +745,7 @@ returning. Subclass overrides only if it needs specialized behavior.
 
 > **run**(`input`, `options?`): `Promise`\<`string` \| [`RunnerPauseOutcome`](/docs/api/interfaces/RunnerPauseOutcome)\>
 
-Defined in: [src/core/LLMCall.ts:325](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L325)
+Defined in: [src/core/LLMCall.ts:320](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L320)
 
 Execute the runner. Subclass may override for specialized input
 mapping, but default invokes getSpec() + FlowChartExecutor.

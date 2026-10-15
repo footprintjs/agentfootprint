@@ -4,7 +4,7 @@ title: ToolExecutionContext
 
 # Interface: ToolExecutionContext
 
-Defined in: [src/core/tools.ts:725](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L725)
+Defined in: [src/core/tools.ts:726](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L726)
 
 Runtime context passed to tool.execute().
 
@@ -14,7 +14,7 @@ Runtime context passed to tool.execute().
 
 > `readonly` **artifacts**: [`ToolArtifacts`](/docs/api/interfaces/ToolArtifacts)
 
-Defined in: [src/core/tools.ts:763](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L763)
+Defined in: [src/core/tools.ts:764](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L764)
 
 The claim-check store, bound to THIS run's scope (9.21.0) — shaped
 exactly like `credentials`. Always present: with no store attached every
@@ -31,7 +31,7 @@ cannot name, widen, or replace it. `put` stamps `origin`
 
 > `readonly` `optional` **credential?**: `Credential`
 
-Defined in: [src/core/tools.ts:777](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L777)
+Defined in: [src/core/tools.ts:778](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L778)
 
 The credential resolved for this tool's declared `needs` (declare-and-push).
  Present only when the tool declared a need and it resolved successfully.
@@ -42,7 +42,7 @@ The credential resolved for this tool's declared `needs` (declare-and-push).
 
 > `readonly` **credentials**: `CredentialProvider`
 
-Defined in: [src/core/tools.ts:749](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L749)
+Defined in: [src/core/tools.ts:750](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L750)
 
 The bound credential provider — the PULL escape hatch for dynamic needs.
 Always present: when none is attached it's a fail-closed provider that
@@ -55,7 +55,7 @@ declarative `needs` + `ctx.credential` for the common case.
 
 > `readonly` **hasArtifacts**: `boolean`
 
-Defined in: [src/core/tools.ts:766](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L766)
+Defined in: [src/core/tools.ts:767](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L767)
 
 True when a real artifact store is attached. Branch on this for an
  intentional no-store (degraded) mode instead of catching the refusal.
@@ -66,7 +66,7 @@ True when a real artifact store is attached. Branch on this for an
 
 > `readonly` **hasCredentials**: `boolean`
 
-Defined in: [src/core/tools.ts:752](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L752)
+Defined in: [src/core/tools.ts:753](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L753)
 
 True when a real provider is attached. Branch on this for intentional
  degraded (no-credential) mode instead of relying on `undefined`.
@@ -77,7 +77,7 @@ True when a real provider is attached. Branch on this for intentional
 
 > `readonly` `optional` **identity?**: `MemoryIdentity`
 
-Defined in: [src/core/tools.ts:900](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L900)
+Defined in: [src/core/tools.ts:901](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L901)
 
 The identity the CALLER supplied — `run({ identity })`, the same tuple
 memory and the permission gate scope on.
@@ -96,7 +96,7 @@ transport actually delivered.
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/core/tools.ts:729](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L729)
+Defined in: [src/core/tools.ts:730](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L730)
 
 Current iteration number of the ReAct loop.
 
@@ -106,7 +106,7 @@ Current iteration number of the ReAct loop.
 
 > `readonly` `optional` **redact?**: [`RedactionPolicy`](/docs/api/interfaces/RedactionPolicy)
 
-Defined in: [src/core/tools.ts:923](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L923)
+Defined in: [src/core/tools.ts:924](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L924)
 
 The redaction policy the calling run is covered by — the agent's
 `redact`, joined with any a composition or an outer caller added.
@@ -134,7 +134,7 @@ tool receives: the tool runs on real values.
 
 > `readonly` `optional` **runId?**: `string`
 
-Defined in: [src/core/tools.ts:874](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L874)
+Defined in: [src/core/tools.ts:875](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L875)
 
 The run this call belongs to.
 
@@ -148,7 +148,7 @@ fabricate a run that never existed. Branch on the absence.
 
 > `readonly` `optional` **sessionId?**: `string`
 
-Defined in: [src/core/tools.ts:886](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L886)
+Defined in: [src/core/tools.ts:887](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L887)
 
 The hosting conversation this run is bound to, when it is bound to one —
 `HostRequest.sessionId`, threaded through `agent.run({ sessionId })`.
@@ -165,7 +165,7 @@ alone — compose it with tenant and principal via [toolSessionKey](/docs/api/fu
 
 > `readonly` `optional` **signal?**: `AbortSignal`
 
-Defined in: [src/core/tools.ts:742](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L742)
+Defined in: [src/core/tools.ts:743](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L743)
 
 Abort signal propagated from run({ env: { signal } }).
 
@@ -175,7 +175,7 @@ Abort signal propagated from run({ env: { signal } }).
 
 > `readonly` `optional` **teardownScopes?**: readonly [`TeardownScope`](/docs/api/type-aliases/TeardownScope)[]
 
-Defined in: [src/core/tools.ts:954](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L954)
+Defined in: [src/core/tools.ts:955](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L955)
 
 Which teardown scopes this door can actually honour — `[]` means none ever
 fires here.
@@ -190,7 +190,7 @@ needs to know it is talking to a door that has no runs BEFORE it opens one.
 
 > `readonly` `optional` **time?**: [`TimeContext`](/docs/api/interfaces/TimeContext)
 
-Defined in: [src/core/tools.ts:740](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L740)
+Defined in: [src/core/tools.ts:741](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L741)
 
 The call's time (the time layer, step T5a — `core/time/wire.ts`): the
 half-open range the call asks for (`asked`, edge `'exclusive'` — the
@@ -207,7 +207,7 @@ MCP it travels in the call's `_meta.agentfootprint.time`.
 
 > `readonly` **toolCallId**: `string`
 
-Defined in: [src/core/tools.ts:727](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L727)
+Defined in: [src/core/tools.ts:728](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L728)
 
 Unique id of THIS tool invocation (matches stream.tool_start.toolCallId).
 
@@ -217,7 +217,7 @@ Unique id of THIS tool invocation (matches stream.tool_start.toolCallId).
 
 > `readonly` `optional` **tools?**: [`ToolDispatch`](/docs/api/interfaces/ToolDispatch)
 
-Defined in: [src/core/tools.ts:786](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L786)
+Defined in: [src/core/tools.ts:787](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L787)
 
 The run's own tool dispatch (9.76.0) — see [ToolDispatch](/docs/api/interfaces/ToolDispatch). Present
 on the agent's dispatch paths; ABSENT at doors with no dispatch map
@@ -232,7 +232,7 @@ optional-chaining past it, and prefer a fail-closed refusal (the
 
 > `readonly` `optional` **wanted?**: `Readonly`\<`Record`\<`string`, [`ArtifactMeta`](/docs/api/interfaces/ArtifactMeta)\>\>
 
-Defined in: [src/core/tools.ts:774](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L774)
+Defined in: [src/core/tools.ts:775](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L775)
 
 The claim tickets behind this call's resolved `wants` arguments (9.22.0)
 — argument name → the `ArtifactMeta` whose data replaced the ref in
@@ -246,7 +246,7 @@ different facts). The data itself is already in `args`.
 
 > `optional` **onTeardown**(`cleanup`, `options?`): `void`
 
-Defined in: [src/core/tools.ts:944](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L944)
+Defined in: [src/core/tools.ts:945](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L945)
 
 Register cleanup for work THIS call started — a code-interpreter session, a
 browser context, a lease.
@@ -290,7 +290,7 @@ a session that lives as long as the run
 
 > **progress**(`payload`): `void`
 
-Defined in: [src/core/tools.ts:859](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L859)
+Defined in: [src/core/tools.ts:860](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L860)
 
 Report progress from INSIDE a long-running tool — "hop 3 of 12 done", said
 mid-`execute`, while the call is still running.

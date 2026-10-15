@@ -6,11 +6,11 @@ title: assertResultCeiling
 
 > **assertResultCeiling**(`toolName`, `ceiling`): `void`
 
-Defined in: [src/core/tools.ts:445](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L445)
+Defined in: [src/core/tools.ts:446](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L446)
 
 Refuse a `resultCeiling` this library cannot honor, at definition time —
 naming the tool and the fix, never failing at the first oversized result of
-the first run. Exported beside [assertValidToolName](/docs/api/functions/assertValidToolName) for consumers
+the first run. Exported beside `lib/toolName.ts` · `assertValidToolName` for consumers
 assembling `Tool` objects by hand.
 
 ## Parameters

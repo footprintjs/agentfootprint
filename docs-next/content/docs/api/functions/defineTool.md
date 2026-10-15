@@ -6,7 +6,11 @@ title: defineTool
 
 > **defineTool**\<`TArgs`, `TResult`\>(`options`): [`Tool`](/docs/api/interfaces/Tool)\<`TArgs`, `TResult`\>
 
-Defined in: [src/core/tools.ts:1106](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L1106)
+Defined in: [src/core/tools.ts:1053](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L1053)
+
+Ergonomic builder for `Tool`. Equivalent to constructing an object
+literal with `schema` + `execute`, but flatter and safer — the name
++ description live alongside the executor so they can't drift.
 
 ## Type Parameters
 
@@ -27,3 +31,20 @@ Defined in: [src/core/tools.ts:1106](https://github.com/footprintjs/agentfootpri
 ## Returns
 
 [`Tool`](/docs/api/interfaces/Tool)\<`TArgs`, `TResult`\>
+
+## Example
+
+```ts
+const weather = defineTool<{ city: string }, string>({
+    name: 'weather',
+    description: 'Get current weather for a city',
+    inputSchema: {
+      type: 'object',
+      properties: { city: { type: 'string' } },
+      required: ['city'],
+    },
+    execute: async ({ city }) => `${city}: 72°F sunny`,
+  });
+
+  const agent = Agent.create({ provider }).tool(weather).build();
+```
