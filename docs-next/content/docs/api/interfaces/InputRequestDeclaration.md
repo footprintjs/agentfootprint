@@ -17,7 +17,7 @@ Defined in: [src/core/inputRequest.ts:71](https://github.com/footprintjs/agentfo
 What the tool LOOKED AT before it asked (9.114.0): the envelope `absent()`
 returns, when a lookup found nothing and raises this request about the
 miss. Recognized at raise time by the one recognizer
-(`agent/coverage/absent.ts` · `readAbsence`) — anything it does not read
+(`../semantics/coverage/absent.ts` · `readAbsence`) — anything it does not read
 is refused, and `null` is the field omitted — and filed by the dispatch
 door at the raise, before the
 checkpoint is returned: the same `tools.absent` event and
