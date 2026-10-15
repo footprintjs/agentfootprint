@@ -501,6 +501,8 @@ export interface AgentCoreStoreOptions {
    * a namespace that stops at the tenant serves one person's extracted facts,
    * preferences and summaries to another. Set it only when the memory's
    * strategies file per tenant ON PURPOSE (knowledge the whole tenant shares).
+   * It applies to SCOPED searches only: a search with no scope has no tenant to
+   * stay inside, so it must always hold the actor.
    */
   readonly searchAcrossPrincipals?: boolean;
   /** @internal Test injection — skips the SDK require entirely. */
@@ -923,11 +925,13 @@ export class AgentCoreStore implements MemoryStore {
     // unscoped search: with no scope to confine it, the actor is the only thing
     // that keeps the read on this identity (a namespace template rendered with
     // no tenant collapses to a prefix every tenant shares).
-    if (
-      (identity.principal !== undefined || namespaceScope === undefined) &&
-      !this.searchAcrossPrincipals &&
-      !holdsActor(namespace, ids.actorId)
-    ) {
+    // `searchAcrossPrincipals` widens a SCOPED search to the tenant's
+    // principals; with no scope there is no tenant to stay inside, so it never
+    // lifts the actor requirement there.
+    const actorRequired =
+      namespaceScope === undefined ||
+      (identity.principal !== undefined && !this.searchAcrossPrincipals);
+    if (actorRequired && !holdsActor(namespace, ids.actorId)) {
       throw new TypeError(
         'AgentCoreStore.search(): the namespace searched does not hold this identity’s ' +
           '`actorId`, so it would read records AgentCore derived from every principal it ' +

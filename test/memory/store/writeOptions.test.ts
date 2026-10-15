@@ -840,11 +840,12 @@ describe('memory write options — search never reads a neighbouring namespace',
     const store = new AgentCoreStore({
       memoryId: 'mem-1',
       client,
-      searchNamespace: ({ identity }) => `/tenants/v${identity.tenant ?? ''}`,
-      // This case is about prefix narrowing on a tenant-wide memory, on purpose.
-      searchAcrossPrincipals: true,
+      searchNamespace: ({ namespaceScope }) => `/tenants/${namespaceScope?.['tenantid'] ?? ''}`,
     });
-    const found = await store.search({ tenant: '1', conversationId: 'c' }, [0], { text: 'facts?' });
+    const found = await store.search({ tenant: '1', conversationId: 'c' }, [0], {
+      text: 'facts?',
+      namespaceScope: { tenantid: 'v1' },
+    });
     expect(asked).toEqual(['/tenants/v1']);
     // Tenant 12's record matched AgentCore's prefix — and is not handed to tenant 1.
     expect(found.map((f) => f.entry.id).sort()).toEqual(['mine', 'mine-root']);
@@ -929,13 +930,13 @@ describe('memory write options — search never reads a neighbouring namespace',
             memoryRecordId: 'r-1',
             content: { text: 'ok' },
             score: 0.5,
-            namespaces: ['/actors/a/sessions/s'],
+            namespaces: ['/actors/afp-acme_ada/sessions/s'],
           },
           {
             memoryRecordId: 'r-2',
             content: { text: 'other' },
             score: 0.6,
-            namespaces: ['/actors/a/sessions/s2'],
+            namespaces: ['/actors/afp-acme_ada/sessions/s2'],
           },
         ],
       },
@@ -943,12 +944,12 @@ describe('memory write options — search never reads a neighbouring namespace',
     const store = new AgentCoreStore({
       memoryId: 'mem-1',
       _sdk: sdk.module,
-      searchNamespace: () => '/actors/a/sessions/s',
-      // This case is about the SDK's `namespaces` field, not about actors.
-      searchAcrossPrincipals: true,
+      searchNamespace: ({ actorId }) => `/actors/${actorId}/sessions/s`,
     });
     const found = await store.search(IDENTITY, [0], { text: 'q' });
     expect(found.map((f) => f.entry.id)).toEqual(['r-1']);
-    expect(found[0]?.entry.metadata).toMatchObject({ namespace: '/actors/a/sessions/s' });
+    expect(found[0]?.entry.metadata).toMatchObject({
+      namespace: '/actors/afp-acme_ada/sessions/s',
+    });
   });
 });
