@@ -517,7 +517,7 @@ compositions call) — the checks and the corpora load with the layer. Two small
 row's event (`findings/ledger.ts` · `emitArgumentRow`, inside the one writer's emit half) and
 the inner-dispatch refusal (`toolDispatch.ts` · `refuseUnaccountedRuledArguments`, which
 refuses before `ctx.tools.call` takes its sequence number — an `await` there would reorder
-concurrent inner calls). `test/lib/trace-toolpack/browserGraph.test.ts` pins the split.
+concurrent inner calls). `test/trace-toolpack/browserGraph.test.ts` pins the split.
 
 ## The period argument, and the results layer (honesty step 7b)
 

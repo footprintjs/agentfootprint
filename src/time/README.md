@@ -606,7 +606,7 @@ the Tools mount's `inputMapper` hands the served line the turn's windows (`windo
 the slot renders under the arm (`agent/arguments/serve.ts` · `timeLimitsLine`); prepareFinal loads
 the limits composer (`agent/coverage/timeLimits.ts`) and Route the lineage reader
 (`agent/stages/timeLineage.ts`, which brings `forms.ts`, `bind.ts` and the resolver) through
-`import()`. Pinned by `test/lib/trace-toolpack/browserGraph.test.ts` (the time layer's law).
+`import()`. Pinned by `test/trace-toolpack/browserGraph.test.ts` (the time layer's law).
 
 ```ts
 // agent/stages/seed.ts · fileTime — a plain seed returns before the import and stays synchronous

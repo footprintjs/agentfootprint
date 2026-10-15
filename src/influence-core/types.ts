@@ -5,7 +5,7 @@
  *          rule engine are the library's; the `Embedder` is consumer-
  *          injected, exactly like NarrativeFormatter / reliability /
  *          permission / commentary strategies.
- * Role:    `src/lib/` leaf module. Shared by the FDL paper pipeline
+ * Role:    `src/influence-core/` leaf module. Shared by the FDL paper pipeline
  *          (Visible Reasoning, Eq. 1–6), RFC-002's tool-catalog lint +
  *          margin recorder (C1/C4/C5), and RFC-003 Part B's LLM-edge
  *          weigher (D7). Extracted as RFC-003 block D6 so all three

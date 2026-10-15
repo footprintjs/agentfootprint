@@ -82,7 +82,7 @@
  * whitelist has no synonyms.
  *
  * WHAT ACTUALLY CLOSES THE CLASS is one file over:
- * `test/lib/time-travel/gap-sentences.test.ts` drives a real run per catalogue
+ * `test/time-travel/gap-sentences.test.ts` drives a real run per catalogue
  * entry and ASSERTS WHAT THE SENTENCE CLAIMS about the view it raises. That is
  * how the seventh round found a BRAND-NEW false sentence inside the round
  * written to end false sentences — `no-run-log` claimed fields "could not be
@@ -127,7 +127,7 @@
  *     FIELDS MEAN. "Absent means unrecovered, not unused" passed every row and
  *     was measured false on the ordinary view that prints it. No shape test
  *     reaches that. What reaches it is a run:
- *     `test/lib/time-travel/gap-sentences.test.ts` asserts each sentence's
+ *     `test/time-travel/gap-sentences.test.ts` asserts each sentence's
  *     claim against a real view, and that file — not this one — is why the
  *     class is closed. A person reading the sentence against the field is still
  *     what writes the assertion; the reduction makes that reading cheap.

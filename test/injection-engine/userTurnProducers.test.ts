@@ -239,7 +239,7 @@ const SITES: Readonly<Record<string, readonly Site[]>> = {
       opening: LIBRARY_NOTE_OPENING,
     },
   ],
-  'src/lib/time-travel/servedView.ts': [
+  'src/time-travel/servedView.ts': [
     {
       cls: 'never-in-history',
       why:

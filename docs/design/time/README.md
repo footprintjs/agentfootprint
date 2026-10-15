@@ -1694,7 +1694,7 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   `periodCheckLine`) — never the two ranges left to compare; the person's limits block keeps its
   bytes. Each sentence is registered in `test/modelFacingSurfaces.test.ts`; `servedView` rebuilds
   the line from the same committed `timeLine` key, so the rebuild carries the opening byte for
-  byte (`test/lib/time-travel/receipt-conformance.test.ts`); without `.time()` nothing here runs.
+  byte (`test/time-travel/receipt-conformance.test.ts`); without `.time()` nothing here runs.
   Not done, named: the durable root of the own-window rate (36/90 readable runs wrote their own
   window on a pending reading) is the § 7.3 dispatch law — "a present value runs as sent" — and
   routing such a call to the confirmation is an owner decision; this packet changes words only, and

@@ -10,7 +10,7 @@
  *          the trace tools. The toolpack reads a FINISHED run, so it sits above
  *          the agent in the layer table and the agent may not import it; the
  *          agent names only this port, and the toolpack registers itself here
- *          (`lib/trace-toolpack/selfExplainHost.ts` · `selfExplainExtension`).
+ *          (`trace-toolpack/selfExplainHost.ts` · `selfExplainExtension`).
  * Emits:   nothing.
  *
  * WHO REGISTERS. `selfExplainHost.ts` registers at load, and every published
@@ -22,10 +22,7 @@
  */
 
 import type { Injection } from '../../injection-engine/types.js';
-import type {
-  SelfExplainBinding,
-  SelfExplainOptions,
-} from '../../lib/trace-toolpack/selfExplain.js';
+import type { SelfExplainBinding, SelfExplainOptions } from '../../trace-toolpack/selfExplain.js';
 import type { ToolProvider } from '../../tools/toolProvider.js';
 
 /** What the trace toolpack hands the agent builder for `.selfExplain()`. */

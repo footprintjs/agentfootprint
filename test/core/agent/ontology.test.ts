@@ -41,7 +41,7 @@ import {
 } from '../../../src/index.js';
 import { defineInstruction, defineSkill } from '../../../src/injection-engine.js';
 import { PermissionPolicy } from '../../../src/security/PermissionPolicy.js';
-import { messageDigestInput } from '../../../src/lib/time-travel/index.js';
+import { messageDigestInput } from '../../../src/time-travel/index.js';
 import type { LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
 import type { AgentState } from '../../../src/core/agent/types.js';
 import {

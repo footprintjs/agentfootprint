@@ -340,7 +340,7 @@ always was. (A bug report's `redactedKeys` is different on purpose: it lists
 the keys whose value IS a placeholder string in the evidence, read off the
 bytes, for any recording — an agent's or a chart's.)
 
-- **The answer account** (`lib/answer-account/view.ts`) reads a kept-out field
+- **The answer account** (`answer-account/view.ts`) reads a kept-out field
   or state key as ABSENT and NAMES it, so a fact says "kept out" where it would
   otherwise say "not recorded": the question, the answer (a run whose answer is
   kept out still finished), a tool result's emptiness (a row set kept out

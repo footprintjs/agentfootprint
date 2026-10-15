@@ -215,14 +215,14 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: "the step-advance suffix appended to a tool result ('Now on step 3 of 5'), the skip-advance sentence beside it, and skip_step's 'no step procedure is active' — persistent surfaces pointing at the moment of reading; correctly flagged, and owned by the steps feature rather than by this packet",
     },
   ],
-  'src/lib/trace-toolpack/debugPrompt.ts': [
+  'src/trace-toolpack/debugPrompt.ts': [
     {
       kind: 'ephemeral',
       count: 2,
       why: 'the self-explain skill body and its trigger line — system text composed for the debugging request that serves the trace tools',
     },
   ],
-  'src/lib/trace-toolpack/traceToolpack.ts': [
+  'src/trace-toolpack/traceToolpack.ts': [
     {
       kind: 'ephemeral',
       count: 4,
@@ -351,7 +351,7 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: "integrity finding prose, same delivery as its sibling check — a per-call report anchored to the frame `this run` holds, and the finding's frame line ('frame this call was assembled from'), which the bare call deictic row catches since 9.86.1",
     },
   ],
-  'src/lib/trace-toolpack/lazyToolpack.ts': [
+  'src/trace-toolpack/lazyToolpack.ts': [
     {
       kind: 'unrepaired',
       count: 1,
@@ -785,7 +785,7 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: 'commentary templates rendered for PEOPLE watching a run — a dashboard line, never a message on any wire',
     },
   ],
-  'src/lib/answer-account/templates.ts': [
+  'src/answer-account/templates.ts': [
     {
       kind: 'not-model-facing',
       count: 3,

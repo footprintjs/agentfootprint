@@ -642,7 +642,7 @@
     {
       "id": "field:fixture-A",
       "tier": "full",
-      "source": "test/lib/answer-account/fixtures/turn2.recorded.json",
+      "source": "test/answer-account/fixtures/turn2.recorded.json",
       "assessment": "unknown",
       "standing": "not-sure",
       "reasons": [
@@ -1630,8 +1630,8 @@
     "test/observability-providers/reference/otel-session.json",
     "test/integrity/reference/dangling-trap-narrative.json",
     "test/core/agent/fixtures/absent-try-instead-not-a-sentence.reference.json",
-    "test/lib/answer-account/golden/turn2.A.account.json",
-    "test/lib/answer-account/golden/turn2.A.shown.json",
-    "test/lib/answer-account/golden/templates.reference.json"
+    "test/answer-account/golden/turn2.A.account.json",
+    "test/answer-account/golden/turn2.A.shown.json",
+    "test/answer-account/golden/templates.reference.json"
   ]
 }

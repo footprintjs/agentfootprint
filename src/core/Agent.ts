@@ -205,7 +205,7 @@ import { assertCostBudgetHasPricing, resolveCostBudget, type ResolvedCostBudget 
 import type { MemoryDefinition } from '../memory/define.types.js';
 import type { MemoryStore } from '../memory/store/index.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
-import type { SelfExplainBinding } from '../lib/trace-toolpack/selfExplain.js';
+import type { SelfExplainBinding } from '../trace-toolpack/selfExplain.js';
 import {
   causalEvidenceRecorder,
   type CausalEvidenceRecorderHandle,

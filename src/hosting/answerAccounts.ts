@@ -34,11 +34,11 @@
 import { createHash } from 'node:crypto';
 
 import type { ArtifactScope } from '../artifacts/types.js';
-import { accountForAnswer } from '../lib/answer-account/account.js';
-import { validateDeclarations } from '../lib/answer-account/declarations.js';
-import { showLeaves } from '../lib/answer-account/shown.js';
-import { ANSWER_ACCOUNT_TEMPLATE_SET_VERSION } from '../lib/answer-account/templates.js';
-import type { AnswerAccountDeclarations } from '../lib/answer-account/types.js';
+import { accountForAnswer } from '../answer-account/account.js';
+import { validateDeclarations } from '../answer-account/declarations.js';
+import { showLeaves } from '../answer-account/shown.js';
+import { ANSWER_ACCOUNT_TEMPLATE_SET_VERSION } from '../answer-account/templates.js';
+import type { AnswerAccountDeclarations } from '../answer-account/types.js';
 import type { Recording } from '../recorders/observability/recordRun.js';
 import {
   PackedRecordingTooLargeError,

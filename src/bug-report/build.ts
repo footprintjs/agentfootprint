@@ -78,7 +78,7 @@
  */
 
 import type { Recording, RunRecorder } from '../recorders/observability/recordRun.js';
-import { narrativeFrom } from '../lib/trace-toolpack/openRecording.js';
+import { narrativeFrom } from '../trace-toolpack/openRecording.js';
 import { engineVersion, libraryVersion } from '../lib/libraryVersion.js';
 import { toWireJson } from '../lib/wireJson.js';
 import { stampConversation, type EnvelopeSource } from './envelope.js';

@@ -133,7 +133,7 @@ export const COVERAGE_BLOCK_HEADING = 'Coverage of this answer';
  * `assumedBlock` composes the block). Owned here, beside the limits block's
  * heading: this module's `composeAnswerWithCoverage` is the one composer of
  * the section the framework appends after an answer, and a reader of the
- * answer's text (`lib/answer-account/account.ts` · `readAnswer`) finds every
+ * answer's text (`answer-account/account.ts` · `readAnswer`) finds every
  * block of it through this one module. Stable — tests and readers match on it.
  */
 export const ASSUMED_BLOCK_HEADING = "Assumed (a tool's rule, not your words):";

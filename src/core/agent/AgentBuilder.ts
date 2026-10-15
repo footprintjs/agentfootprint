@@ -79,7 +79,7 @@ import type { ToolProvider } from '../../tools/toolProvider.js';
 import type { Watcher } from './watch.js';
 import { defaultCommentaryTemplates } from '../../recorders/observability/commentary/commentaryTemplates.js';
 import { defaultStatusTemplates } from '../../recorders/observability/status/statusTemplates.js';
-import type { SelfExplainOptions } from '../../lib/trace-toolpack/selfExplain.js';
+import type { SelfExplainOptions } from '../../trace-toolpack/selfExplain.js';
 import { requireSelfExplain } from './selfExplainPort.js';
 import { servingConversationOf } from './servingConversation.js';
 import { innerRunsOf, mergeInnerRuns, type InnerRunLookup } from '../innerRunRecords.js';

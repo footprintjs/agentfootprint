@@ -16,7 +16,7 @@ knows. But a recording is older than the reader that opens it: what a
 reader is handed is what the MINTING release knew to write, and that has
 grown — `cache` came with the receipt in 9.88.0 and gained `strategy` in
 9.93.0; `omittedForAttention` has always been written only when something
-was dropped. The narrowing that admits a stored value (`lib/time-travel/servedView.ts` ·
+was dropped. The narrowing that admits a stored value (`time-travel/servedView.ts` ·
 `readReceipt`) checks the basis and nothing past it, so this type says what
 that check leaves open, and the compiler — not a throw on an older
 recording — is what meets a reader that forgets.

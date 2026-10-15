@@ -256,7 +256,7 @@ Or jump into the [examples gallery](https://github.com/footprintjs/agentfootprin
 - **Entry points named for what you're doing** — `agentfootprint` plus `/providers`, `/memory`, `/rag`, `/observe`, `/context`, `/resilience`, `/security`, `/hosting`, `/events`, `/cache` and a few more; `package.json` `exports` is the complete list.
 - **Lazy peer-deps** — vendor SDKs (Anthropic, AWS, Redis, MCP…) load only when you instantiate that adapter, and optional families like the self-explain toolpack load only when enabled.
 
-Proven by tests, not promised: [`test/esm-packaging.test.ts`](test/esm-packaging.test.ts) and [`test/lib/trace-toolpack/browserGraph.test.ts`](test/lib/trace-toolpack/browserGraph.test.ts).
+Proven by tests, not promised: [`test/esm-packaging.test.ts`](test/esm-packaging.test.ts) and [`test/trace-toolpack/browserGraph.test.ts`](test/trace-toolpack/browserGraph.test.ts).
 
 ## Built on
 

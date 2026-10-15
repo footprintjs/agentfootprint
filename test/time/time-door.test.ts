@@ -18,7 +18,7 @@
  *                 `maxRange`;
  *   byte identity — the door adds no names beyond its list (pinned in
  *                 test/api-conformance/subpath-exports.test.ts) and nothing to the root graph
- *                 (test/lib/trace-toolpack/browserGraph.test.ts).
+ *                 (test/trace-toolpack/browserGraph.test.ts).
  */
 
 import { describe, expect, it } from 'vitest';

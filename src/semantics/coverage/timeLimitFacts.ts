@@ -12,7 +12,7 @@
  *          served line renders them (`arguments/serve.ts` · `timeLimitsLine`,
  *          loaded under the arm). The renderer (`time/present.ts`) never
  *          reaches the graph `import { Agent }` loads (the optional-family
- *          law, `test/lib/trace-toolpack/browserGraph.test.ts`).
+ *          law, `test/trace-toolpack/browserGraph.test.ts`).
  * Emits:   N/A.
  *
  * `undefined` exactly when `timeLimits.ts` · `renderTimeLimits` would say

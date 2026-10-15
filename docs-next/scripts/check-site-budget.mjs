@@ -338,7 +338,7 @@ const OUTPUT_LIMITS = { bytes: 223_400_000, files: 8_270, duplicateRscBytes: 0 }
 //      of its own. scripts/postbuild-esm.mjs now carries the root list across,
 //      rebased; the list was widened only where it is TRUE (the root entry and
 //      the injection-engine barrel, each of which imports a module-level
-//      registration), and test/lib/trace-toolpack/browserGraph.test.ts proves
+//      registration), and test/trace-toolpack/browserGraph.test.ts proves
 //      at the graph that every registration still survives.
 //
 // THE LAW this number ratchets from here on: AN OPTIONAL FAMILY IS LOADED WHEN
@@ -431,7 +431,7 @@ const OUTPUT_LIMITS = { bytes: 223_400_000, files: 8_270, duplicateRscBytes: 0 }
 // LOWERED to 436 KB (2026-09-25): the owed shrink landed. The scanner now
 // sits behind `findings/peel.ts`, loaded through import() by callLLM and route
 // only under the arm — the judge.ts / toolChoice/compose.ts pattern — and
-// test/lib/trace-toolpack/browserGraph.test.ts pins it off the root sync
+// test/trace-toolpack/browserGraph.test.ts pins it off the root sync
 // closure. Measured 430.4 KB gzip across 17 async assets (from 433.5 KB); the
 // same day's AnswerAccount release (#17, 9.116.0) then grew the default graph
 // by 1.5 KB, re-measured together at 431.9 KB. Ceiling ~1% over that — thinner
@@ -499,7 +499,7 @@ const OUTPUT_LIMITS = { bytes: 223_400_000, files: 8_270, duplicateRscBytes: 0 }
 // with their leaves (`instant.ts`, `zone.ts`, `range.ts`, `duration.ts`,
 // `reader.ts`). Moving any of them makes a public sync door async — a
 // behaviour change, not a packaging one. The law is pinned at the graph by
-// test/lib/trace-toolpack/browserGraph.test.ts (the time layer's case) and
+// test/trace-toolpack/browserGraph.test.ts (the time layer's case) and
 // listed in src/time/README.md, "What a plain agent carries". Ceiling ~2%
 // over CI's expected ~471.9 KB (local builds read ~1.6 KB under CI on this
 // branch: 478.7 vs 480.3), as every raise here.

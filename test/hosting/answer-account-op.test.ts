@@ -34,8 +34,8 @@ import {
   packRecording,
   PACKED_RECORDING_FORMAT,
 } from '../../src/observe.js';
-import { showLeaves } from '../../src/lib/answer-account/shown.js';
-import { ANSWER_ACCOUNT_TEMPLATE_SET_VERSION } from '../../src/lib/answer-account/templates.js';
+import { showLeaves } from '../../src/answer-account/shown.js';
+import { ANSWER_ACCOUNT_TEMPLATE_SET_VERSION } from '../../src/answer-account/templates.js';
 import {
   answerAccounts,
   ANSWER_ACCOUNT_CACHE_MAX_BYTES,
@@ -70,7 +70,7 @@ import {
   fixtureA,
   FLAGSHIP_RUN_ID,
   NEO_DECLARATIONS,
-} from '../lib/answer-account/helpers.js';
+} from '../answer-account/helpers.js';
 
 const { served, closeAll } = harness();
 afterEach(closeAll);
@@ -854,11 +854,11 @@ describe('answer-account — the import fence (no model is called)', () => {
     expect(imports.sort()).toEqual(
       [
         '../artifacts/types.js',
-        '../lib/answer-account/account.js',
-        '../lib/answer-account/declarations.js',
-        '../lib/answer-account/shown.js',
-        '../lib/answer-account/templates.js',
-        '../lib/answer-account/types.js',
+        '../answer-account/account.js',
+        '../answer-account/declarations.js',
+        '../answer-account/shown.js',
+        '../answer-account/templates.js',
+        '../answer-account/types.js',
         '../recorders/observability/recordRun.js',
         // The packed-recording codec — pure data in, data out (it imports the
         // wire rule and a type, nothing that runs a model).

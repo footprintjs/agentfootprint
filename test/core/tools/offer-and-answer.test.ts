@@ -43,7 +43,7 @@ import { FlowChartExecutor } from 'footprintjs';
 import { Agent, defineTool } from '../../../src/index.js';
 import { defineSkill } from '../../../src/injection-engine.js';
 import { SKILL_SCOPED_TOOLS_ID_PREFIX, staticTools } from '../../../src/tool-providers/index.js';
-import { SELF_EXPLAIN_SKILL_ID } from '../../../src/lib/trace-toolpack/selfExplain.js';
+import { SELF_EXPLAIN_SKILL_ID } from '../../../src/trace-toolpack/selfExplain.js';
 import { mock } from '../../../src/llm-providers.js';
 import { buildAgentMessageApiChart } from '../../../src/core/agent/buildAgentMessageApiChart.js';
 import type {

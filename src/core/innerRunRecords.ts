@@ -312,7 +312,7 @@ export function mergeInnerRuns(lookups: readonly InnerRunLookup[]): InnerRunLook
 
 /**
  * The records ONE conversation's runs filed — the view a self-explaining agent
- * serves (`lib/trace-toolpack/selfExplain.ts · SelfExplainBinding`), so a why-question asked in
+ * serves (`trace-toolpack/selfExplain.ts · SelfExplainBinding`), so a why-question asked in
  * one conversation can neither descend into, list, nor count a call another
  * conversation's run made.
  *

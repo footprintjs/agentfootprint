@@ -104,7 +104,7 @@
  * the ANSWER — after the last wire — and `c1` is a fact, served verbatim
  * under the default mode; the collapse is pinned by
  * `test/core/agent/findings-served.test.ts` and the receipt law for a
- * collapsed entry by `test/lib/time-travel/receipt-conformance.test.ts`.
+ * collapsed entry by `test/time-travel/receipt-conformance.test.ts`.
  *
  * `agent-findings` REGENERATED ALONE once more in step 3's second review
  * (the 15 copied aside and `cmp`-equal after): the piece's header lost its

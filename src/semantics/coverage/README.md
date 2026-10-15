@@ -225,7 +225,7 @@ export dated 2026-09-19"). A person reading a report of the answer wants the
 same ground in five words, and wants to know whether an unchecked item is the
 one that matters most — whether the thing asked about exists at all. Two
 optional item fields say so, and the answer account
-(`lib/answer-account` · `accountForAnswer`) is their reader:
+(`answer-account` · `accountForAnswer`) is their reader:
 
 - **`short`** — a short plain form of `what`. At most 80 characters, one line,
   never longer than `what`; allowed in every section.
@@ -549,8 +549,8 @@ typed routes only — never a guess:
 | anything else                                                                | `unknown`                                                                                                        |
 
 Two callers, one rule: the `/observe` answer account
-(`lib/answer-account/facts/calls.ts` for this run's calls,
-`lib/answer-account/facts/inView.ts` for an earlier answer's result) and the
+(`answer-account/facts/calls.ts` for this run's calls,
+`answer-account/facts/inView.ts` for an earlier answer's result) and the
 answer's standing (`../../core/agent/assessment/assess.ts` · `assessAnswer`). They read the
 same bytes the same way and differ only in the door they hold (below).
 

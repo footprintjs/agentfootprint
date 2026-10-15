@@ -16,7 +16,7 @@
  * asynchronous, which request assembly is not.
  *
  * So the algorithm is here, in about seventy lines, and
- * `test/lib/time-travel/receipt-conformance.test.ts` checks it against
+ * `test/time-travel/receipt-conformance.test.ts` checks it against
  * `node:crypto` on every input the suite hashes. A vendored primitive that is
  * never compared against the reference is a second truth waiting to happen.
  */

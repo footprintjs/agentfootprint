@@ -24,7 +24,7 @@
  *   bug-report transcript · domain events + step graph + rollup · route hops
  *
  * The trace toolpack's reader is pinned beside its own suite
- * (`test/lib/trace-toolpack/inspectToolCall.test.ts`).
+ * (`test/trace-toolpack/inspectToolCall.test.ts`).
  */
 
 import { describe, expect, it } from 'vitest';

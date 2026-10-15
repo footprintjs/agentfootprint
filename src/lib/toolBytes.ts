@@ -21,7 +21,7 @@
  *   answer as if the tool had said it;
  * - the answer's standing (`core/agent/assessment/assess.ts` · `assessAnswer`)
  *   and the answer account's in-view results
- *   (`lib/answer-account/facts/inView.ts` · `readInView`) — the one emptiness
+ *   (`answer-account/facts/inView.ts` · `readInView`) — the one emptiness
  *   reader parses the tool's bytes, and a note after a `[]` made the parse
  *   fail, so a filled call's empty result stopped reading `empty-undeclared`
  *   and its absence stopped reading `declared-absent`;
@@ -46,7 +46,7 @@
 
 // FOLD · the one owner of where a tool's own words end in a result message
 // consumers read this and never re-derive it: core/agent/evidence/evidenceIndex.ts · evidenceFromHistory,
-// core/agent/assessment/assess.ts · turnResults, lib/answer-account/facts/inView.ts · readInView,
+// core/agent/assessment/assess.ts · turnResults, answer-account/facts/inView.ts · readInView,
 // core/agent/stages/callLLM.ts · groundedTextOf, core/agent/stages/toolCalls.ts · producerCorpusOf
 // detached: yes — a string cut from the content (or the content as given when it is not a string).
 /**

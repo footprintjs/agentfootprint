@@ -27,7 +27,7 @@ import type { AgentfootprintEvent } from '../../src/events.js';
 import { mock } from '../../src/llm-providers.js';
 import { eventBelongsToRun } from '../../src/bridge/eventMeta.js';
 import type { IngressRecord, TurnArtifacts } from '../../src/hosting/index.js';
-import type { SelfExplainBinding } from '../../src/lib/trace-toolpack/selfExplain.js';
+import type { SelfExplainBinding } from '../../src/trace-toolpack/selfExplain.js';
 import {
   ALICE,
   BOB,

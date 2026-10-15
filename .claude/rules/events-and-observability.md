@@ -10,7 +10,7 @@ paths:
   - "src/observe.ts"
   - "src/debug/**"
   - "src/context-bisect/**"
-  - "src/lib/trace-toolpack/**"
+  - "src/trace-toolpack/**"
   - "src/lib/traceToolNames.ts"
   - "src/context-ledger/**"
 ---

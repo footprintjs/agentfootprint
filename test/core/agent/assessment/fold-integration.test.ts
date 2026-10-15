@@ -50,8 +50,8 @@ import { mock } from '../../../../src/llm-providers.js';
 import { accountForAnswer, assessAnswer, recordRun } from '../../../../src/observe.js';
 import type { AnswerAssessment } from '../../../../src/observe.js';
 import type { Recording } from '../../../../src/recorders/observability/recordRun.js';
-import { isShowable, showLeaves } from '../../../../src/lib/answer-account/shown.js';
-import { assertP1, assertP7 } from '../../../lib/answer-account/helpers.js';
+import { isShowable, showLeaves } from '../../../../src/answer-account/shown.js';
+import { assertP1, assertP7 } from '../../../answer-account/helpers.js';
 
 const lookup = (name: string, execute: () => unknown) =>
   defineTool({

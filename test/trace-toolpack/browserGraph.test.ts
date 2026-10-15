@@ -1,0 +1,348 @@
+/**
+ * The default-graph fence — bundle the SHIPPED root entry the way a browser
+ * build does, and assert that the trace toolpack is NOT on the graph a plain
+ * `import { Agent, defineTool } from 'agentfootprint'` loads.
+ *
+ * ── Why a graph test ─────────────────────────────────────────────────────────
+ * lazyMount.test.ts proves the pack loads lazily in Node. It cannot prove what
+ * a bundler does with the same `import()`, and that is where the bytes are
+ * decided: every browser consumer, and the docs site's own demo chunk (which
+ * this fence exists to keep from growing again — four releases of
+ * docs-next/scripts/check-site-budget.mjs history say why), pays for whatever
+ * a static walk from the root entry can reach. So this file walks `dist/esm/`
+ * with esbuild, code-splitting on, and reads the chunk graph:
+ *
+ *   1. LAW: `trace-toolpack/traceToolpack.js` is absent from the SYNC
+ *      closure of the root entry — the chunks reached by static imports. A
+ *      future static import of the pack from `Agent`'s graph fails here.
+ *   2. The pack is still REACHABLE — it sits in a chunk reached only by a
+ *      `dynamic-import` edge — so the seam is a real split, not a dropped
+ *      feature.
+ *   3. The `/observe` door carries the pack statically. That is the
+ *      contrast, stated: a consumer who imports the debugger wants it eagerly,
+ *      and the fence is about the DEFAULT graph, not the whole surface.
+ *
+ * ── What it cannot catch ─────────────────────────────────────────────────────
+ * It is esbuild, not webpack or a browser: the docs site's webpack build and
+ * its site budget are the measurement that closes the loop, and a page that
+ * drives `.selfExplain()` in Chrome is the only proof the chunk loads there.
+ */
+
+import { describe, expect, it } from 'vitest';
+import { build, type Metafile } from 'esbuild';
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+const REPO_ROOT = resolve(__dirname, '../..');
+const DIST = resolve(REPO_ROOT, 'dist/esm');
+const PACK = 'dist/esm/trace-toolpack/traceToolpack.js';
+
+interface SplitGraph {
+  /** Inputs of every chunk reached from the entry by static imports only. */
+  readonly syncInputs: ReadonlySet<string>;
+  /** Inputs of chunks reached ONLY across a dynamic-import edge. */
+  readonly dynamicInputs: ReadonlySet<string>;
+}
+
+/** A shipped module named the way it ships, whatever the cwd was. */
+function shipped(file: string): string {
+  const at = file.replace(/\\/g, '/').indexOf('dist/esm/');
+  return at === -1 ? file : file.slice(at);
+}
+
+/**
+ * Bundle one shipped entry with code splitting and partition its chunks by
+ * how the entry reaches them. `external: ['node:*']` mirrors what every
+ * browser bundler does with builtins the graph names but never calls.
+ */
+async function splitGraph(entry: string): Promise<SplitGraph> {
+  const result = await build({
+    entryPoints: [entry],
+    bundle: true,
+    splitting: true,
+    format: 'esm',
+    platform: 'browser',
+    outdir: resolve(REPO_ROOT, 'node_modules/.agentfootprint-default-graph'),
+    metafile: true,
+    write: false,
+    logLevel: 'silent',
+    external: ['node:*'],
+  });
+  return partition(result.metafile, entry);
+}
+
+function partition(meta: Metafile, entry: string): SplitGraph {
+  const outputs = meta.outputs;
+  const entryOutput = Object.keys(outputs).find((file) =>
+    outputs[file]!.entryPoint?.endsWith(shipped(entry)),
+  );
+  if (entryOutput === undefined) throw new Error(`no output for entry ${entry}`);
+  const syncChunks = new Set<string>();
+  const dynamicChunks = new Set<string>();
+  const walk = (chunk: string, sync: boolean): void => {
+    const seen = sync ? syncChunks : dynamicChunks;
+    if (seen.has(chunk) || (!sync && syncChunks.has(chunk))) return;
+    seen.add(chunk);
+    for (const edge of outputs[chunk]!.imports) {
+      if (edge.external || !edge.path.endsWith('.js')) continue;
+      walk(edge.path, sync && edge.kind !== 'dynamic-import');
+    }
+  };
+  walk(entryOutput, true);
+  const inputsOf = (chunks: ReadonlySet<string>): Set<string> =>
+    new Set([...chunks].flatMap((chunk) => Object.keys(outputs[chunk]!.inputs).map(shipped)));
+  const syncInputs = inputsOf(syncChunks);
+  const dynamicInputs = new Set([...inputsOf(dynamicChunks)].filter((f) => !syncInputs.has(f)));
+  return { syncInputs, dynamicInputs };
+}
+
+// The graph tests read what SHIPS, so they need a build. Say so rather than
+// failing on a missing file three frames deep inside esbuild.
+const built = existsSync(resolve(DIST, 'index.js')) && existsSync(resolve(DIST, PACK.slice(9)));
+
+describe.skipIf(!built)('the default browser graph of the root entry', () => {
+  it('LAW: the trace toolpack is not on the sync closure of `import from "agentfootprint"`', async () => {
+    const graph = await splitGraph(resolve(DIST, 'index.js'));
+    // The entry really is the whole entry, not a stub that resolved to nothing.
+    expect(graph.syncInputs.size).toBeGreaterThan(200);
+    expect(graph.syncInputs.has('dist/esm/core/Agent.js')).toBe(true);
+    expect(graph.syncInputs.has(PACK)).toBe(false);
+    // The two facts the builder needs before the pack loads ARE on it.
+    expect(graph.syncInputs.has('dist/esm/lib/traceToolNames.js')).toBe(true);
+  });
+
+  it('the pack is still reachable — behind a dynamic-import edge, in its own chunk', async () => {
+    const graph = await splitGraph(resolve(DIST, 'index.js'));
+    expect(graph.dynamicInputs.has(PACK)).toBe(true);
+    expect(graph.dynamicInputs.has('dist/esm/trace-toolpack/lazyToolpack.js')).toBe(true);
+  });
+
+  it('LAW: the findings answer-text scanner is not on the root sync closure either', async () => {
+    // Only `.findings()` agents run it (`findings/peel.ts`), so `callLLM` and
+    // `route` load it through `import()` under the arm — the same fence as the
+    // pack above, for the docs demo chunk it once grew by 1.4 KB gzip.
+    const graph = await splitGraph(resolve(DIST, 'index.js'));
+    expect(graph.syncInputs.has('dist/esm/core/agent/stages/callLLM.js')).toBe(true);
+    expect(graph.syncInputs.has('dist/esm/core/agent/findings/reserved.js')).toBe(true);
+    expect(graph.syncInputs.has('dist/esm/core/agent/findings/answerText.js')).toBe(false);
+    expect(graph.syncInputs.has('dist/esm/core/agent/findings/peel.js')).toBe(false);
+  });
+
+  it('LAW: the evidence gate’s figures dial is off the root sync closure — Route loads it under the dial', async () => {
+    // `namesAndNumbersFromEvidence({ figures: true })` only: Route's deciders
+    // load `evidence/figures.ts` through `import()` (`route.ts` · `loadFigures`)
+    // — it grew the docs demo chunk past its ceiling when it sat on the graph.
+    const graph = await splitGraph(resolve(DIST, 'index.js'));
+    expect(graph.syncInputs.has('dist/esm/core/agent/evidence/extract.js')).toBe(true);
+    expect(graph.syncInputs.has('dist/esm/core/agent/evidence/figures.js')).toBe(false);
+    expect(graph.dynamicInputs.has('dist/esm/core/agent/evidence/figures.js')).toBe(true);
+  });
+
+  it('the scanner is still reachable — behind a dynamic-import edge', async () => {
+    const graph = await splitGraph(resolve(DIST, 'index.js'));
+    expect(graph.dynamicInputs.has('dist/esm/core/agent/findings/answerText.js')).toBe(true);
+    expect(graph.dynamicInputs.has('dist/esm/core/agent/findings/peel.js')).toBe(true);
+  });
+
+  it('LAW: the standing fold is off the root sync closure — `agent.assessment()` loads it on first use', async () => {
+    // A reader nobody calls during a run: `Agent` reaches it only through `import()`.
+    const graph = await splitGraph(resolve(DIST, 'index.js'));
+    expect(graph.syncInputs.has('dist/esm/core/Agent.js')).toBe(true);
+    expect(graph.syncInputs.has('dist/esm/core/agent/assessment/assess.js')).toBe(false);
+    expect(graph.dynamicInputs.has('dist/esm/core/agent/assessment/assess.js')).toBe(true);
+  });
+
+  it('LAW: the inputs layer’s stage bodies are off the root sync closure — the mount loads them on first use', async () => {
+    // Only an agent whose tools declare `askOrAssume` (or `.inputsLayer()`)
+    // mounts `sf-inputs`; its four stage bodies and the pure steps behind them
+    // are reached through `import()` from the mount (`honesty/mounts.ts`).
+    const graph = await splitGraph(resolve(DIST, 'index.js'));
+    expect(graph.syncInputs.has('dist/esm/core/agent/honesty/mounts.js')).toBe(true);
+    expect(graph.syncInputs.has('dist/esm/core/agent/arguments/subflow.js')).toBe(false);
+    expect(graph.syncInputs.has('dist/esm/core/agent/arguments/resolve.js')).toBe(false);
+    expect(graph.dynamicInputs.has('dist/esm/core/agent/arguments/subflow.js')).toBe(true);
+    expect(graph.dynamicInputs.has('dist/esm/core/agent/arguments/resolve.js')).toBe(true);
+  });
+
+  it('LAW: the results layer’s stage bodies are off the root sync closure — the mount loads them on first use', async () => {
+    // Only an agent with a `ToolPeriod` tool (or `.resultsLayer()`) mounts
+    // `sf-results`; its stage bodies load through `import()` from the mount.
+    // What the mount's synchronous input mapping needs (`batchToJudge`) lives
+    // in the mount itself, so it pulls nothing of the layer onto the graph.
+    const graph = await splitGraph(resolve(DIST, 'index.js'));
+    expect(graph.syncInputs.has('dist/esm/core/agent/results/subflow.js')).toBe(false);
+    expect(graph.dynamicInputs.has('dist/esm/core/agent/results/subflow.js')).toBe(true);
+  });
+
+  it('LAW: the batch ask is off the root sync closure — ToolCalls loads it when an ask is raised', async () => {
+    // Only a batch whose layer named an `ask` argument reaches it
+    // (`stages/toolCalls.ts` → `import('./argumentAsk.js')`).
+    const graph = await splitGraph(resolve(DIST, 'index.js'));
+    expect(graph.syncInputs.has('dist/esm/core/agent/stages/argumentAsk.js')).toBe(false);
+    expect(graph.syncInputs.has('dist/esm/core/agent/arguments/ask.js')).toBe(false);
+    expect(graph.dynamicInputs.has('dist/esm/core/agent/stages/argumentAsk.js')).toBe(true);
+    expect(graph.dynamicInputs.has('dist/esm/core/agent/arguments/ask.js')).toBe(true);
+  });
+
+  it('LAW: the inputs layer’s run-time halves are off the root sync closure — only the synchronous doors stay', async () => {
+    // ToolCalls' half (the fills, the note, the rewrites' `changedKeys`, the
+    // fail-closed refusal), the served sentences and the "Assumed" block, and
+    // the one reading of a rewrite load through `import()` under the arm
+    // (`arguments/README.md`, "What a plain agent carries"). The declaration's
+    // assert stays: `defineTool` refuses a malformed rule synchronously.
+    const graph = await splitGraph(resolve(DIST, 'index.js'));
+    expect(graph.syncInputs.has('dist/esm/tools/declare.js')).toBe(true);
+    for (const lazy of [
+      'dist/esm/core/agent/arguments/dispatch.js',
+      'dist/esm/core/agent/arguments/serve.js',
+      'dist/esm/core/agent/middleware/rewrites.js',
+    ]) {
+      expect(graph.syncInputs.has(lazy), lazy).toBe(false);
+      expect(graph.dynamicInputs.has(lazy), lazy).toBe(true);
+    }
+  });
+
+  it('LAW: the declared-sources checks and their corpora are off the root sync closure — only the reader stays', async () => {
+    // Under `.findings({ argumentSources: true })` the layer's VERIFY stage runs
+    // the checks (`arguments/checks.ts`, reached through `resolve.ts`) over the
+    // corpora the mount builds on first use (`honesty/sourceCorpus.ts`). The
+    // reader of `from` stays static: the one reader of `_findings`
+    // (`findings/reserved.ts` · `readDeclaration`) is synchronous and on every
+    // armed agent's graph (`arguments/README.md`, "What a plain agent carries").
+    const graph = await splitGraph(resolve(DIST, 'index.js'));
+    expect(graph.syncInputs.has('dist/esm/core/agent/arguments/sources.js')).toBe(true);
+    for (const lazy of [
+      'dist/esm/core/agent/arguments/checks.js',
+      'dist/esm/core/agent/evidence/resultCarries.js',
+      'dist/esm/core/agent/honesty/sourceCorpus.js',
+    ]) {
+      expect(graph.syncInputs.has(lazy), lazy).toBe(false);
+      expect(graph.dynamicInputs.has(lazy), lazy).toBe(true);
+    }
+  });
+
+  it('LAW: the answer layer’s run-time half is off the root sync closure — the mount loads it on the first armed answer', async () => {
+    // Only an agent with `.answerLayer()` starts its final branch with the
+    // layer's stage; its body, the fold it runs and the line's composer are
+    // reached through `import()` from the mount (`honesty/mounts.ts` ·
+    // `startFinalBranch`). What stays static is what a synchronous door needs
+    // first: the witness rows' shape, which the checkpoint door checks.
+    const graph = await splitGraph(resolve(DIST, 'index.js'));
+    expect(graph.syncInputs.has('dist/esm/core/agent/assessment/witness.js')).toBe(true);
+    for (const lazy of [
+      'dist/esm/core/agent/assessment/stage.js',
+      'dist/esm/core/agent/assessment/compose.js',
+      'dist/esm/core/agent/assessment/assess.js',
+    ]) {
+      expect(graph.syncInputs.has(lazy), lazy).toBe(false);
+      expect(graph.dynamicInputs.has(lazy), lazy).toBe(true);
+    }
+  });
+
+  it('LAW: the time layer’s run-time half is off the root sync closure — only the synchronous doors stay', async () => {
+    // Only an agent with `.time()` runs the clock stamp, the reading of the
+    // person's words and the dispatch moment; seed and ToolCalls load them
+    // through `import()` (`agent/stages/timeLayer.ts`), and with them the
+    // resolver, the conversions, the drift check and the row builders; the
+    // limits line's renderer loads in prepareFinal the same way. What stays
+    // static is what a SYNCHRONOUS door needs first: `.time()`'s options
+    // (`clock.ts`), `defineTool({ period })` (`periodForm.ts`), a time
+    // answer's check at the resume door (`ask.ts`) and the checkpoint door's
+    // row checks (`rows.ts`, `resolveRecord.ts`, `checkRecord.ts`). The later
+    // steps keep the law by FILE too: the Tools mount's `inputMapper` reads
+    // the turn's windows (`windows.ts`, not `bind.ts`) and the limits FACTS
+    // (`coverage/timeLimitFacts.ts` — rendered in the slot, under the arm);
+    // the evidence gate's corpus reads the text rule (`textForms.ts`, not
+    // `forms.ts`); Route loads the lineage reader (`stages/timeLineage.ts`)
+    // and prepareFinal the limits composer (`coverage/timeLimits.ts`) through
+    // `import()`.
+    const graph = await splitGraph(resolve(DIST, 'index.js'));
+    for (const stays of [
+      'time/clock.js',
+      'time/periodForm.js',
+      'time/ask.js',
+      'time/rows.js',
+      'time/resolveRecord.js',
+      'time/checkRecord.js',
+      'time/windows.js',
+      'time/textForms.js',
+      'semantics/coverage/timeLimitFacts.js',
+    ]) {
+      expect(graph.syncInputs.has(`dist/esm/${stays}`), stays).toBe(true);
+    }
+    for (const lazy of [
+      'core/agent/stages/timeLayer.js',
+      'time/resolve.js',
+      'time/convert.js',
+      'time/drift.js',
+      'time/wire.js',
+      'time/rowsBuild.js',
+      'time/present.js',
+      'time/readingAsk.js',
+      'time/bind.js',
+      'time/check.js',
+      'time/forms.js',
+      'semantics/coverage/timeLimits.js',
+      'core/agent/stages/timeLineage.js',
+    ]) {
+      expect(graph.syncInputs.has(`dist/esm/${lazy}`), lazy).toBe(false);
+      expect(graph.dynamicInputs.has(`dist/esm/${lazy}`), lazy).toBe(true);
+    }
+  });
+
+  it('contrast: the /time door carries the conversions statically — the root still does not', async () => {
+    // An app that asks the conversions outside a run (`agentfootprint/time` ·
+    // `convertExact`, `convertWidened`, `periodFactProblem`) imports them
+    // eagerly through their own door; publishing them there must not move
+    // `convert.ts` onto the root graph (the time-layer law above).
+    const door = await splitGraph(resolve(DIST, 'doors/time.js'));
+    expect(door.syncInputs.has('dist/esm/time/convert.js')).toBe(true);
+    const root = await splitGraph(resolve(DIST, 'index.js'));
+    expect(root.syncInputs.has('dist/esm/time/convert.js')).toBe(false);
+  });
+
+  it('contrast: the /observe door carries the pack statically, by design', async () => {
+    const graph = await splitGraph(resolve(DIST, 'observe.js'));
+    expect(graph.syncInputs.has(PACK)).toBe(true);
+  });
+
+  it('LAW: opt-in trust capture is off the root graph — internal run recording does not construct it', async () => {
+    const graph = await splitGraph(resolve(DIST, 'index.js'));
+    expect(graph.syncInputs.has('dist/esm/core/Agent.js')).toBe(true);
+    expect(graph.syncInputs.has('dist/esm/recorders/observability/recordRun.js')).toBe(true);
+    for (const optional of ['capture', 'project']) {
+      const module = `dist/esm/trust-boundaries/${optional}.js`;
+      expect(graph.syncInputs.has(module), module).toBe(false);
+      expect(graph.dynamicInputs.has(module), module).toBe(false);
+    }
+  });
+
+  it('contrast: the /observe door retains the synchronous trust capture factory', async () => {
+    const graph = await splitGraph(resolve(DIST, 'observe.js'));
+    for (const optional of ['capture', 'project']) {
+      const module = `dist/esm/trust-boundaries/${optional}.js`;
+      expect(graph.syncInputs.has(module), module).toBe(true);
+    }
+  });
+
+  it('the sideEffects list the ESM build now carries is TRUE: every module-level registration survives', async () => {
+    // With `sideEffects` finally reaching dist/esm (9.94.0), a bundler may
+    // skip any module not on the list whose exports go unused. The list names
+    // the one registration this package has and the barrel that imports it;
+    // this is the proof at the graph, not the list: a /context consumer still
+    // gets the dev-warn host bound. The cache strategies used to be the other
+    // registrations (keyed by provider NAME, so a root consumer that lost them
+    // cached nothing). They register nothing now — the agent IMPORTS the
+    // selection (`cacheStrategyFor`, from the provider's declared
+    // `promptCaching`), so a bundler keeps it because it is used, not because
+    // a list says so.
+    const root = await splitGraph(resolve(DIST, 'index.js'));
+    expect(root.syncInputs.has('dist/esm/cache/cacheStrategyFor.js')).toBe(true);
+    expect(root.syncInputs.has('dist/esm/cache/strategies/BreakpointCacheStrategy.js')).toBe(true);
+    for (const gone of ['Anthropic', 'OpenAI', 'Bedrock']) {
+      expect(root.syncInputs.has(`dist/esm/cache/strategies/${gone}CacheStrategy.js`)).toBe(false);
+    }
+    const context = await splitGraph(resolve(DIST, 'doors/context.js'));
+    expect(context.syncInputs.has('dist/esm/injection-engine/devWarnHost.js')).toBe(true);
+  });
+});

@@ -7,7 +7,7 @@
  *          and structural rule pack are all consumer-injected, with our
  *          defaults. Exactly like NarrativeFormatter / reliability /
  *          permission / commentary strategies.
- * Role:    `src/lib/` leaf module. ZERO stack buy-in: input is a plain
+ * Role:    `src/tool-lint/` leaf module. ZERO stack buy-in: input is a plain
  *          `{ name, description?, inputSchema? }[]` — any OpenAI /
  *          Anthropic / LangChain / MCP tool list normalizes to it
  *          (see `coerceCatalog`). The library's own `Tool[]` adapts via

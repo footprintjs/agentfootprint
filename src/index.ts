@@ -96,8 +96,8 @@ export {
 // decision instead of stopping on every stage. `milestoneOf(stop)` reads the
 // milestone back off a stop (footprintjs's `Stop` has no slot for a
 // consumer's own vocabulary). Fold: derived from the recorded log, never a
-// re-walk — see src/lib/time-travel/README.md.
-export { milestoneOf, milestoneStops, milestoneStopsStrategy } from './lib/time-travel/index.js';
+// re-walk — see src/time-travel/README.md.
+export { milestoneOf, milestoneStops, milestoneStopsStrategy } from './time-travel/index.js';
 // THE RECEIPT AT THE STOP (9.88.0). The wire a model receives is assembled from
 // committed pieces and is itself never committed — so `servedAt(snapshot, k)`
 // REBUILDS it from those pieces, and `receiptAt(snapshot, k)` reads the
@@ -142,7 +142,7 @@ export {
   type ServedRequestOnly,
   type ServedView,
   type StoredReceipt,
-} from './lib/time-travel/index.js';
+} from './time-travel/index.js';
 // `STAGE_IDS`, `SUBFLOW_IDS`, `isSlotSubflow`, `slotFromSubflowId`,
 // `isKnownStage`, `isKnownSubflow` are intentionally NOT exported — they
 // are the internal builder↔recorder coordination protocol, not consumer
@@ -417,8 +417,8 @@ export {
 // `Agent` and `AgentBuilder` come through the trace toolpack's host, which
 // plugs `.selfExplain()` into the builder's port at load — the registration
 // travels with the class, so a bundler that skips this barrel cannot drop it
-// (`lib/trace-toolpack/selfExplainHost.ts` says why).
-export { Agent, AgentBuilder } from './lib/trace-toolpack/selfExplainHost.js';
+// (`trace-toolpack/selfExplainHost.ts` says why).
+export { Agent, AgentBuilder } from './trace-toolpack/selfExplainHost.js';
 export {
   type AgentArtifactsOptions,
   type AgentRecordingsOptions,
@@ -513,7 +513,7 @@ export {
 // `.selfExplain()` — the in-conversation door over the agent's own trace.
 // The options type lives with the other builder-method option types; the
 // machinery (traceDebugAgent, toolpack) is on `agentfootprint/observe`.
-export type { SelfExplainInclude, SelfExplainOptions } from './lib/trace-toolpack/selfExplain.js';
+export type { SelfExplainInclude, SelfExplainOptions } from './trace-toolpack/selfExplain.js';
 // RFC-001 Block 10 — deferred observer delivery: the result shape of
 // `agent.drainObservers()` + the `snapshot.observerStats` payload
 // (re-exported from footprintjs so Agent consumers don't need a direct

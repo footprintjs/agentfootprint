@@ -535,10 +535,10 @@ checks can. This section says what layer 3 hands it.
 
 ### 5.1 Today: `readEmptiness` reads an envelope as "returned a result"
 
-`lib/answer-account/facts/common.ts` · `readEmptiness` has three typed routes and never guesses: a
+`answer-account/facts/common.ts` · `readEmptiness` has three typed routes and never guesses: a
 declared absence; a top-level array (counted by the library); an object whose key the app declared
 in `rowsAt` (counted by the app). Everything else is `unknown`, and the account says
-"`{{tool}}` returned a result." (`lib/answer-account/templates.ts`, `found.result`). It reads what
+"`{{tool}}` returned a result." (`answer-account/templates.ts`, `found.result`). It reads what
 the MODEL read (`modelResult ?? result`, `facts/calls.ts` · `readOne`). Two consequences:
 
 - a `describedResult()`: the model read the projection, which carries no marker, so it reads
@@ -854,7 +854,7 @@ Committed code (9.118.1) unless marked "draft":
 - `evidence.ts` withholds `looked_for`, `short` and `kind`; everything else a recognized absence
   carries grounds (`coverage/evidence.ts`, header).
 - `readEmptiness` has three typed routes and reads the model's view; the account's fallback sentence
-  is "returned a result" (`lib/answer-account/facts/common.ts`, `facts/calls.ts` · `readOne`,
+  is "returned a result" (`answer-account/facts/common.ts`, `facts/calls.ts` · `readOne`,
   `templates.ts`).
 - `resultClass` is read at definition (`tools/tools.ts`), copied by `runbookAsTool`, and judged only
   by the `check:semantics` gate; no stage reads it at run time.

@@ -360,7 +360,7 @@
   "sideEffects": [
     "**/injection-engine/index.js",
     "**/injection-engine/devWarnHost.js",
-    "**/lib/trace-toolpack/selfExplainHost.js"
+    "**/trace-toolpack/selfExplainHost.js"
   ],
   "peerDependencies": {
     "@anthropic-ai/sdk": "*",

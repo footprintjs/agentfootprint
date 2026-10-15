@@ -5,7 +5,7 @@ turn fetched. It derives from the record, states its own evidence, and files a
 disposition even when it finds nothing.
 Lens: the `message` `check.ts` · `priorTurnEvidenceOf` composes — a per-turn
 report anchored to `this run`, served verbatim (truncated) to a debugging model
-by `src/lib/trace-toolpack/traceToolpack.ts` · `buildFindContextErrors`.
+by `src/trace-toolpack/traceToolpack.ts` · `buildFindContextErrors`.
 `test/modelFacingScan.test.ts` files this check `kind: 'unrepaired'`.
 
 # prior-turn-evidence — grounded, and nothing this turn fetched grounds it

@@ -6,7 +6,7 @@
  *          them, and what the resume event may carry of an answer to it.
  * Role:    core/ layer leaf of the inputs layer (honesty layer 2). Kept apart
  *          from `ask.ts` — which loads through `import()` only when an ask is
- *          raised (`test/lib/trace-toolpack/browserGraph.test.ts`) — so a
+ *          raised (`test/trace-toolpack/browserGraph.test.ts`) — so a
  *          reader on every agent's graph (`RunnerBase` · `emitPauseResume`)
  *          can ask "was this pause the library's argument ask?" without
  *          pulling the ask onto that graph.

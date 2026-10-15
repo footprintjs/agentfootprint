@@ -3974,7 +3974,7 @@ export function buildToolCallsHandler(
         [...resolutions.values()].some((r) => r.ask !== undefined)
       ) {
         // Loaded on first use — the optional-family law: a plain agent's
-        // graph never carries the ask (`test/lib/trace-toolpack/browserGraph`).
+        // graph never carries the ask (`test/trace-toolpack/browserGraph`).
         const { askBeforeDispatch } = await import('./argumentAsk.js');
         const asked = askBeforeDispatch(scope, resolutions, {
           toolOf: (toolName) => resolveTool(toolName).tool,
@@ -5558,7 +5558,7 @@ export function buildToolCallsHandler(
         // owners are `resolveCredentialAndExecute` above (resume),
         // `../toolDispatch.ts` · `agentToolDispatch` (inner calls),
         // `lib/mcp/mcpServe.ts` (external MCP clients), and
-        // `lib/trace-toolpack/traceToolpack.ts` · `callTraceTool` (offline).
+        // `trace-toolpack/traceToolpack.ts` · `callTraceTool` (offline).
         // Inner calls are the outer call's work, not another model turn.
         // The other doors never see a live multi-turn conversation the way
         // this loop does — a resumed check-in is a single call with no
