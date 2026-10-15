@@ -6,11 +6,12 @@ paths:
   - "src/observability/**"
   - "src/strategies/**"
   - "src/bridge/**"
-  - "src/conventions.ts"
+  - "src/lib/conventions.ts"
   - "src/observe.ts"
   - "src/debug/**"
   - "src/lib/context-bisect/**"
   - "src/lib/trace-toolpack/**"
+  - "src/lib/traceToolNames.ts"
   - "src/lib/context-ledger/**"
 ---
 # Events, recorders and observability — seams and blast radius

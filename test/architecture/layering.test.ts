@@ -20,7 +20,8 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { analyse, format } from '../../scripts/check-layering.mjs';
 import layering from '../../scripts/layering.config.cjs';
 
-const { LAYERS, UPWARD_ALLOWANCES, compileLayers, rankOf, listSourceFiles } = layering;
+const { LAYERS, CLOSED_FOLDERS, UPWARD_ALLOWANCES, compileLayers, rankOf, listSourceFiles } =
+  layering;
 const REPO = resolve(__dirname, '../..');
 
 /**
@@ -28,7 +29,7 @@ const REPO = resolve(__dirname, '../..');
  * edge is gone; this refuses one that was ADDED. A change that frees edges deletes their
  * entries and lowers this number in the same commit; nothing raises it.
  */
-const ALLOWANCE_COUNT = 78;
+const ALLOWANCE_COUNT = 48;
 
 // ── fixtures ─────────────────────────────────────────────────────────────────
 
@@ -291,6 +292,11 @@ describe('check-layering — this repository', () => {
     expect(result.duplicateAllowances).toEqual([]);
     expect(result.unresolved).toEqual([]);
     expect(result.ok).toBe(true);
+  });
+
+  it("lib's leaves import nothing in src/ outside themselves — the closed-folder rule is on", () => {
+    expect(CLOSED_FOLDERS.map((c: { name: string }) => c.name)).toContain('lib (the leaves)');
+    expect(result.closedEscapes).toEqual([]);
   });
 
   it('the allowance list has exactly ALLOWANCE_COUNT entries — it only shrinks', () => {

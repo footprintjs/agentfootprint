@@ -17,7 +17,11 @@ import type { CombinedRecorder, FlowSubflowEvent, WriteEvent } from 'footprintjs
 import type { EventDispatcher } from '../../events/dispatcher.js';
 import type { AgentfootprintEventMap, AgentfootprintEventType } from '../../events/registry.js';
 import type { ContextSlot } from '../../events/types.js';
-import { INJECTION_KEYS, slotFromSubflowId, slotFromRuntimeStageId } from '../../conventions.js';
+import {
+  INJECTION_KEYS,
+  slotFromSubflowId,
+  slotFromRuntimeStageId,
+} from '../../lib/conventions.js';
 import { buildEventMeta, type RunContext } from '../../bridge/eventMeta.js';
 import type { RunRedaction } from '../../redaction/runRedaction.js';
 import { SERVED_PLACEHOLDER } from '../../redaction/served.js';

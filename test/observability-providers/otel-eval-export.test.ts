@@ -58,7 +58,7 @@ import { mock } from '../../src/llm-providers.js';
 import { memorySessions, standingAgent } from '../../src/hosting/index.js';
 import type { LLMRequest } from '../../src/adapters/types.js';
 import { bearer } from '../../src/identity/kinds.js';
-import { sha256Hex } from '../../src/lib/time-travel/sha256.js';
+import { sha256Hex } from '../../src/lib/sha256.js';
 import { inProcessHost } from '../hosting/testHost.js';
 import {
   allEmittedText,

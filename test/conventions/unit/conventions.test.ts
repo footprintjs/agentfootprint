@@ -13,7 +13,7 @@ import {
   isKnownStage,
   stageRole,
   milestoneFor,
-} from '../../../src/conventions.js';
+} from '../../../src/lib/conventions.js';
 
 describe('SUBFLOW_IDS — single source of truth', () => {
   it('has exactly the 14 known subflow IDs', () => {

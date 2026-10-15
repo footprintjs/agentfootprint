@@ -187,7 +187,7 @@ registered model-facing producer live in a Support folder.
 
 Two folders are Mixed and belong to no single heading above.
 
-`src/` itself — the root holding `conventions.ts`, `index.ts`, `status.ts`
+`src/` itself — the root holding `index.ts`, `status.ts`
 and the ten sibling barrels. Its role is stated on
 [src/README.md](../../src/README.md): Fold for the `saidByPerson` predicates
 `index.ts` publishes, Support for the barrels. It is named here because the

@@ -23,7 +23,7 @@
 import type { CombinedRecorder, FlowRunFailedEvent } from 'footprintjs';
 import type { EventDispatcher } from '../../events/dispatcher.js';
 import { buildEventMeta, type RunContext } from '../../bridge/eventMeta.js';
-import { humanizeLLMError } from '../../core/humanizeLLMError.js';
+import { humanizeLLMError } from '../../lib/humanizeLLMError.js';
 
 export interface ErrorBridgeOptions {
   readonly dispatcher: EventDispatcher;

@@ -62,7 +62,7 @@ import {
 import type { CommitBundle, ValueBasis } from 'foottrace';
 import type { StageSnapshot } from 'footprintjs/advanced';
 
-import { INJECTION_KEYS } from '../../conventions.js';
+import { INJECTION_KEYS } from '../conventions.js';
 // The flat/grouped fork, from its ONE owner (9.88.0). This file used to carry a
 // private copy and `context-bisect/trajectory.ts` carried its byte-twin; two
 // answers to "which log is iteration k in?" is one answer too many.

@@ -24,7 +24,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { SUBFLOW_IDS, STAGE_IDS } from '../../../src/conventions.js';
+import { SUBFLOW_IDS, STAGE_IDS } from '../../../src/lib/conventions.js';
 
 // ── Categorization (mirror BoundaryRecorder.ts) ──────────────────────
 

@@ -46,7 +46,7 @@ import {
 import { Agent } from '../../src/index.js';
 import { MockProvider } from '../../src/adapters/llm/MockProvider.js';
 import { makeCapture, envelope, type CapturedSpan } from '../helpers/otelCapture.js';
-import { sha256Hex } from '../../src/lib/time-travel/sha256.js';
+import { sha256Hex } from '../../src/lib/sha256.js';
 
 // ─── the stream: every event the adapter mapped before the change ────
 

@@ -3,7 +3,7 @@
  *
  * Pattern: Closed enumeration + a mechanical name mapping, with the mapping
  *          pinned by the compiler rather than by memory.
- * Role:    core/ layer. `LoopMoment` is the vocabulary `.act()` is keyed on
+ * Role:    lib/ leaf (Map). `LoopMoment` is the vocabulary `.act()` is keyed on
  *          and the vocabulary every ledger row now stamps itself with, so a
  *          person asking "where in the loop did this happen?" and a person
  *          asking "where in the loop can I intervene?" are reading the same

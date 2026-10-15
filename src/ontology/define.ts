@@ -23,14 +23,14 @@
  *     deep-frozen, so a later edit of the caller's objects cannot move what
  *     `seed` puts on the record.
  *   - `ontologyHash` fingerprints the FIVE declared fields through the
- *     receipt's own canonical JSON (`receipt.ts · stableJson` — keys sorted,
+ *     receipt's own canonical JSON (`stableJson.ts · stableJson` — keys sorted,
  *     `undefined` dropped — one owner of the rule) and `sha256Hex`: two
  *     declarations that differ only in key order hash the same; edge order
  *     is declaration order and is part of the identity.
  */
 
-import { stableJson } from '../lib/time-travel/receipt.js';
-import { sha256Hex } from '../lib/time-travel/sha256.js';
+import { stableJson } from '../lib/stableJson.js';
+import { sha256Hex } from '../lib/sha256.js';
 import type {
   Ontology,
   OntologyEdge,

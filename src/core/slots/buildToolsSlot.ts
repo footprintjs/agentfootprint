@@ -14,7 +14,7 @@
 import { flowChart, isDevMode } from 'footprintjs';
 import type { FlowChart, TypedScope } from 'footprintjs';
 import type { LLMToolSchema } from '../../adapters/types.js';
-import { INJECTION_KEYS } from '../../conventions.js';
+import { INJECTION_KEYS } from '../../lib/conventions.js';
 import type { InjectionRecord } from '../../recorders/core/types.js';
 import { COMPOSITION_KEYS } from '../../recorders/core/types.js';
 // Writes the context recorder derives its events from — relayed under a policy.

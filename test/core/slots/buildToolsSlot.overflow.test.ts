@@ -21,7 +21,7 @@ import type { TypedScope } from 'footprintjs';
 
 import { buildToolsSlot } from '../../../src/core/slots/buildToolsSlot.js';
 import { slotOverflow } from '../../../src/core/slots/helpers.js';
-import { SUBFLOW_IDS } from '../../../src/conventions.js';
+import { SUBFLOW_IDS } from '../../../src/lib/conventions.js';
 import { ContextRecorder } from '../../../src/recorders/core/ContextRecorder.js';
 import { EventDispatcher } from '../../../src/events/dispatcher.js';
 import type { LLMToolSchema } from '../../../src/adapters/types.js';

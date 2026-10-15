@@ -62,7 +62,7 @@
  */
 
 import { mintProvenance } from '../../../lib/semantics/described.js';
-import { warnIfInvalidToolName } from '../../tools.js';
+import { warnIfInvalidToolName } from '../../../lib/toolName.js';
 import { normalizeCoverageList } from './items.js';
 import { mintPeriod } from './period.js';
 import { refusal, refuseUnknownKeys } from './refusal.js';
@@ -190,7 +190,7 @@ function readSentence(raw: unknown): Reading<string> {
  * given, says something. Both are trimmed; `why: null` reads as omitted. The
  * name is recorded as declared: never looked up (a provider may serve it on a
  * later iteration), and held to no charset here — which names a provider
- * accepts is `core/tools.ts` · `assertValidToolName`'s question, and
+ * accepts is `lib/toolName.ts` · `assertValidToolName`'s question, and
  * `absent` asks the dev-mode warning that owns it.
  *
  * Why ONE tool and not a list: every suggestion on record names at most one

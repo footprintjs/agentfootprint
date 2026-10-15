@@ -52,7 +52,7 @@ import {
   milestoneFor,
   milestoneTagsFor,
   stageRole,
-} from '../../../../src/conventions.js';
+} from '../../../../src/lib/conventions.js';
 import { SHOWN_ARGS } from '../../../../src/core/toolShownArgs.js';
 
 const SCHEMA = {

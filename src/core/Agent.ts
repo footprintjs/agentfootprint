@@ -43,7 +43,7 @@ import {
 import { isRequestRefusal } from '../adapters/requestRefusal.js';
 import { assistantReplayFields } from './agent/assistantReplay.js';
 import { buildBrainFor, describeServingBrain } from './agent/skillBrains.js';
-import { SUBFLOW_IDS } from '../conventions.js';
+import { SUBFLOW_IDS } from '../lib/conventions.js';
 import {
   DecisionRequiredError,
   assertDecisionIsNotStale,

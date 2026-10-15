@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { humanizeLLMError, wrapLLMError } from '../../src/core/humanizeLLMError.js';
+import { humanizeLLMError, wrapLLMError } from '../../src/lib/humanizeLLMError.js';
 
 describe('humanizeLLMError — friendly mapping', () => {
   it('network / Failed to fetch → reachability + key hint', () => {

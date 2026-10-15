@@ -19,7 +19,7 @@ Everything under `src/` composes into one public API: **primitives** (LLMCall, A
 ```
 src/
 ├── events/             The stable contract: 45+ typed events, the dispatcher.
-├── conventions.ts      Builder↔Recorder protocol (subflow IDs, injection keys).
+├── lib/conventions.ts  Builder↔Recorder protocol (subflow IDs, injection keys).
 ├── adapters/           Ports-and-Adapters outer ring (LLM provider interface + Mock).
 ├── bridge/             Bridging helpers (footprintjs → agentfootprint event meta).
 ├── core/               Primitives (LLMCall, Agent) + slot subflow builders + Tool.
@@ -87,7 +87,7 @@ Components:
 | Folder | Guarantee |
 |---|---|
 | `events/` | The stable public event contract. Additive within a major. |
-| `conventions.ts` | The builder↔recorder coordination protocol. One file, one source of truth. |
+| `lib/conventions.ts` | The builder↔recorder coordination protocol. One file, one source of truth. |
 | `adapters/` | Provider-agnostic interfaces. External dependencies hide behind ports. |
 | `bridge/` | Translation helpers between footprintjs and agentfootprint event meta. |
 | `core/` | Consumer-facing primitives. Symmetric builder API across all runners. |

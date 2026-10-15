@@ -66,7 +66,7 @@ import { flowChart } from 'footprintjs';
 import type { FlowChart, FlowChartBuilder, StructureRecorder, TypedScope } from 'footprintjs';
 
 import type { ExternalGround } from '../../../integrity/unsupported-argument/check.js';
-import { STAGE_IDS, SUBFLOW_IDS, milestoneTagsFor } from '../../../conventions.js';
+import { STAGE_IDS, SUBFLOW_IDS, milestoneTagsFor } from '../../../lib/conventions.js';
 import type { SourceCorpus } from '../arguments/checks.js';
 import {
   isRefused,

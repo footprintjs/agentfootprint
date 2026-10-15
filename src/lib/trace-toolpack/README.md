@@ -68,7 +68,8 @@ INSIDE SUBFLOW sf-tools#33 — "Tools": its own log, 3 commit(s), the mount's se
 - `subflowRecords.ts` — where a mount's own log is, and why it is not.
 - `bounded.ts` — the one bound every served value passes through.
 - `selfExplain.ts`, `traceDebugAgent.ts` — the two conversational doors.
-- `traceToolNames.ts` — the two facts `.selfExplain()` needs BEFORE the pack
+- `../traceToolNames.ts` (a `lib/` leaf, so the agent builder reads it without
+  importing this folder) — the two facts `.selfExplain()` needs BEFORE the pack
   loads (the names it reserves, the "no run yet" answer). The pack itself is
   reached through `import()` on the first iteration the skill is active
   (`selfExplain.ts` · `lazilyMountedTraceTools`), so an agent that never

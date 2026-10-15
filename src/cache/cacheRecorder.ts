@@ -54,7 +54,7 @@
 import type { CombinedRecorder } from 'footprintjs';
 import type { FlowDecisionEvent } from 'footprintjs';
 import { splitStageId } from 'foottrace';
-import { STAGE_IDS } from '../conventions.js';
+import { STAGE_IDS } from '../lib/conventions.js';
 import type { AgentfootprintEvent } from '../events/registry.js';
 import type { CacheMetrics, CacheStrategy, CacheUsage } from './types.js';
 import type { PricingTable } from '../adapters/types.js';

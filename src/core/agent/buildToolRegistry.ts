@@ -200,7 +200,8 @@ import type { Injection } from '../../lib/injection-engine/types.js';
 import type { LLMToolSchema } from '../../adapters/types.js';
 import { PRESENT_TOOL_NAME } from '../../artifacts/present.js';
 import { buildPresentTool } from './presentTool.js';
-import { warnIfInvalidToolName, type Tool, type ToolRegistryEntry } from '../tools.js';
+import type { Tool, ToolRegistryEntry } from '../tools.js';
+import { warnIfInvalidToolName } from '../../lib/toolName.js';
 import type { ToolNameChannel } from '../../events/payloads.js';
 
 /**

@@ -11,7 +11,7 @@
  */
 
 import { splitStageId } from 'foottrace';
-import type { ContextSlot } from './events/types.js';
+import type { ContextSlot } from '../events/types.js';
 
 /** Subflow IDs — mounted by builders, observed by recorders. */
 export const SUBFLOW_IDS = {
@@ -663,3 +663,11 @@ export function injectionKeyForSlot(slot: 'system-prompt' | 'messages' | 'tools'
 export function isInjectionKey(key: string): key is InjectionKey {
   return (Object.values(INJECTION_KEYS) as string[]).includes(key);
 }
+
+/**
+ * The scope key the receipt is committed under. Written by `callLLM` and the
+ * message-API charts, read back by `time-travel/servedView.ts` and the replay
+ * hooks — a state-key name both sides agree on, so it lives here rather than
+ * beside the receipt's builder (`time-travel/receipt.ts`).
+ */
+export const RECEIPT_KEY = 'receipt';

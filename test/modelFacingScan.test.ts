@@ -358,7 +358,7 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: "the stand-in tool result the lazy pack serves for a mounted tool with no evidence this run ('nothing to read for this run') — the module's own comments call it model-visible, and it is read again on every later call of the turn; its sibling ('No completed run is available yet') moved to traceToolNames.ts in 9.94.0 so the delegate tool can serve it without loading the pack",
     },
   ],
-  'src/lib/trace-toolpack/traceToolNames.ts': [
+  'src/lib/traceToolNames.ts': [
     {
       kind: 'unrepaired',
       count: 1,

@@ -147,9 +147,18 @@ const LAYERS = [
  * Folders whose files import, at runtime, only files of the same folder set. Off until the
  * change that makes the law true turns it on.
  *
+ * `lib` — the leaves every layer agrees on (its loose files, `claim/`, `context-contract/`)
+ * import nothing in `src/` outside themselves. Its feature subfolders are not part of the set:
+ * each sits at its own layer until it leaves `lib/` for a top-level folder of its own.
+ *
  * @type {ReadonlyArray<{ name: string, files: string[] }>}
  */
-const CLOSED_FOLDERS = [];
+const CLOSED_FOLDERS = [
+  {
+    name: 'lib (the leaves)',
+    files: ['src/lib/*.ts', 'src/lib/claim/**', 'src/lib/context-contract/**'],
+  },
+];
 
 /**
  * Every upward runtime edge that exists today, file → file (`[from, to]`, repo-relative).
@@ -162,31 +171,16 @@ const UPWARD_ALLOWANCES = [
   ['src/artifacts/datasetResult.ts', 'src/core/time/axis.ts'],
   ['src/artifacts/index.ts', 'src/core/time/axis.ts'],
   ['src/artifacts/minting.ts', 'src/core/time/axis.ts'],
-  ['src/cache/cacheRecorder.ts', 'src/conventions.ts'],
-  ['src/core-flow/Conditional.ts', 'src/conventions.ts'],
-  ['src/core-flow/Graph.ts', 'src/conventions.ts'],
-  ['src/core-flow/Parallel.ts', 'src/conventions.ts'],
   ['src/core/Agent.ts', 'src/adapters/forcedToolChoice.ts'],
   ['src/core/Agent.ts', 'src/adapters/nativeOutputSchema.ts'],
   ['src/core/Agent.ts', 'src/adapters/requestRefusal.ts'],
   ['src/core/Agent.ts', 'src/adapters/types.ts'],
-  ['src/core/Agent.ts', 'src/conventions.ts'],
   ['src/core/Agent.ts', 'src/lib/time-travel/receiptDigests.ts'],
-  ['src/core/LLMCall.ts', 'src/conventions.ts'],
   ['src/core/LLMCall.ts', 'src/lib/time-travel/receipt.ts'],
   ['src/core/agent/AgentBuilder.ts', 'src/lib/trace-toolpack/innerRunRecords.ts'],
   ['src/core/agent/AgentBuilder.ts', 'src/lib/trace-toolpack/selfExplain.ts'],
-  ['src/core/agent/AgentBuilder.ts', 'src/lib/trace-toolpack/traceToolNames.ts'],
   ['src/core/agent/AgentBuilder.ts', 'src/tool-providers/skillScopedTools.ts'],
-  ['src/core/agent/buildAgentChart.ts', 'src/conventions.ts'],
-  ['src/core/agent/buildAgentMessageApiChart.ts', 'src/conventions.ts'],
-  ['src/core/agent/buildAgentMessageApiChart.ts', 'src/lib/time-travel/receipt.ts'],
   ['src/core/agent/buildAgentMessageApiChart.ts', 'src/lib/time-travel/receiptDigests.ts'],
-  ['src/core/agent/buildCacheSubflow.ts', 'src/conventions.ts'],
-  ['src/core/agent/buildDynamicAgentChart.ts', 'src/conventions.ts'],
-  ['src/core/agent/buildMessageApiChart.ts', 'src/conventions.ts'],
-  ['src/core/agent/buildMessageApiChart.ts', 'src/lib/time-travel/receipt.ts'],
-  ['src/core/agent/honesty/mounts.ts', 'src/conventions.ts'],
   ['src/core/agent/messageApiReceipt.ts', 'src/lib/time-travel/receipt.ts'],
   ['src/core/agent/stages/callLLM.ts', 'src/adapters/forcedToolChoice.ts'],
   ['src/core/agent/stages/callLLM.ts', 'src/adapters/nativeOutputSchema.ts'],
@@ -198,16 +192,11 @@ const UPWARD_ALLOWANCES = [
   ['src/core/flowchartAsTool.ts', 'src/lib/trace-toolpack/innerRunRecords.ts'],
   ['src/core/runCheckpoint.ts', 'src/adapters/llm/contextWindow.ts'],
   ['src/core/runbook/runbookAsTool.ts', 'src/lib/trace-toolpack/innerRunRecords.ts'],
-  ['src/core/slots/buildMessagesSlot.ts', 'src/conventions.ts'],
-  ['src/core/slots/buildSystemPromptSlot.ts', 'src/conventions.ts'],
-  ['src/core/slots/buildToolsSlot.ts', 'src/conventions.ts'],
   ['src/integrity/claim-binding/admit.ts', 'src/core/agent/coverage/items.ts'],
   ['src/integrity/claim-binding/admit.ts', 'src/core/agent/coverage/period.ts'],
   ['src/integrity/claim-binding/bindEvidence.ts', 'src/core/agent/coverage/period.ts'],
   ['src/integrity/claim-binding/scope.ts', 'src/core/agent/coverage/period.ts'],
   ['src/integrity/claim-binding/scope.ts', 'src/core/time/instant.ts'],
-  ['src/lib/context-bisect/trajectory.ts', 'src/conventions.ts'],
-  ['src/lib/context-ledger/contextLedger.ts', 'src/conventions.ts'],
   ['src/lib/injection-engine/buildInjectionEngineSubflow.ts', 'src/core/agent/toolEffects.ts'],
   ['src/lib/injection-engine/constrainedEnumPick.ts', 'src/adapters/forcedToolChoice.ts'],
   ['src/lib/injection-engine/skillTools.ts', 'src/core/tools.ts'],
@@ -220,23 +209,13 @@ const UPWARD_ALLOWANCES = [
   ['src/lib/semantics/projection.ts', 'src/core/agent/coverage/absent.ts'],
   ['src/lib/semantics/projection.ts', 'src/core/agent/coverage/ledger.ts'],
   ['src/lib/semantics/projection.ts', 'src/core/agent/toolEffects.ts'],
-  ['src/lib/time-travel/epochs.ts', 'src/conventions.ts'],
-  ['src/lib/time-travel/milestoneStops.ts', 'src/conventions.ts'],
   ['src/lib/trace-toolpack/selfExplain.ts', 'src/tool-providers/skillScopedTools.ts'],
-  ['src/lib/trust-boundaries/project.ts', 'src/core/agent/moments.ts'],
-  ['src/ontology/define.ts', 'src/lib/time-travel/receipt.ts'],
-  ['src/ontology/define.ts', 'src/lib/time-travel/sha256.ts'],
-  ['src/recorders/core/ContextRecorder.ts', 'src/conventions.ts'],
-  ['src/recorders/core/ErrorBridge.ts', 'src/core/humanizeLLMError.ts'],
-  ['src/recorders/core/replayHooks.ts', 'src/lib/time-travel/receipt.ts'],
-  ['src/recorders/observability/BoundaryRecorder.ts', 'src/conventions.ts'],
   ['src/resilience/withCircuitBreaker.ts', 'src/adapters/requestRefusal.ts'],
   ['src/resilience/withFallback.ts', 'src/adapters/forcedToolChoice.ts'],
   ['src/resilience/withFallback.ts', 'src/adapters/nativeOutputSchema.ts'],
   ['src/resilience/withFallback.ts', 'src/adapters/requestRefusal.ts'],
   ['src/resilience/withFallback.ts', 'src/adapters/types.ts'],
   ['src/security/index.ts', 'src/adapters/types.ts'],
-  ['src/thinking/replayHistory.ts', 'src/lib/time-travel/sha256.ts'],
 ];
 
 // ── matching ─────────────────────────────────────────────────────────────────

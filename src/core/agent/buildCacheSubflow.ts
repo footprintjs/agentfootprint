@@ -33,7 +33,7 @@ import {
   type CacheDecisionStageOptions,
 } from '../../cache/CacheDecisionSubflow.js';
 import { cacheGateDecide } from '../../cache/CacheGateDecider.js';
-import { STAGE_IDS } from '../../conventions.js';
+import { STAGE_IDS } from '../../lib/conventions.js';
 import type { AgentState } from './types.js';
 
 /**

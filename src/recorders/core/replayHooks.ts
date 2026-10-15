@@ -1,7 +1,8 @@
 /** Runtime replay reporting. State retirement is not fallible telemetry. */
 import type { LLMCallHooks, LLMMessage } from '../../adapters/types.js';
 import { retireReplayHistory } from '../../thinking/replayHistory.js';
-import { RECEIPT_KEY, type Receipt } from '../../lib/time-travel/receipt.js';
+import type { Receipt } from '../../lib/time-travel/receipt.js';
+import { RECEIPT_KEY } from '../../lib/conventions.js';
 import { typedEmit, type EmitableScope } from './typedEmit.js';
 
 /** Only live scopes offer persistence; emit-only standalone callers do not. */

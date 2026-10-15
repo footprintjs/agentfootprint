@@ -61,7 +61,7 @@ import {
 import { safeStringify } from '../trace-toolpack/bounded.js';
 import { CONTEXT_BISECT_DEFAULTS } from './types.js';
 // The one committed key that is a fingerprint, not prose — see NOT_OUTPUT_KEYS.
-import { RECEIPT_KEY } from '../time-travel/receipt.js';
+import { RECEIPT_KEY } from '../conventions.js';
 
 // ─── Options / handle ────────────────────────────────────────────────
 

@@ -25,7 +25,7 @@
 import type { StageSnapshot } from 'footprintjs/advanced';
 import { commitValueAtWithBasis, findLastWriterWithBasis, splitStageId } from 'foottrace';
 import type { CommitBundle, UntrackedSource, ValueBasis } from 'foottrace';
-import { STAGE_IDS, SUBFLOW_IDS } from '../../conventions.js';
+import { STAGE_IDS, SUBFLOW_IDS } from '../conventions.js';
 // The flat/grouped fork, from its ONE owner (9.88.0) — see time-travel/epochs.ts.
 import { llmCallMountKeys } from '../time-travel/epochs.js';
 import type { EvidenceInput } from '../influence-core/index.js';

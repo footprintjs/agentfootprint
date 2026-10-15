@@ -185,7 +185,7 @@ returned it.
   to spare `try_instead`.
 - **`tool` is a non-empty name, recorded as declared.** It is not looked up (a
   provider may serve it on a later iteration), and it is held to no charset
-  here: which names a provider accepts is `core/tools.ts` ·
+  here: which names a provider accepts is `lib/toolName.ts` ·
   `assertValidToolName`'s question, and `absent()` asks the owner's dev-mode
   warning, `warnIfInvalidToolName` — the verdict a `defineTool` of that name
   would get, a warning and never a refusal.

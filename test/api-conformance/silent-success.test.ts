@@ -636,7 +636,7 @@ describe('silent success — reading a run', () => {
     // The sentence lives beside the reserved names since 9.94.0 — the two
     // facts the builder needs before the pack loads — and the lazy pack
     // serves it from there.
-    const names = read('lib/trace-toolpack/traceToolNames.ts');
+    const names = read('lib/traceToolNames.ts');
     expect(names).toContain('No completed run is available yet');
     expect(names).toContain('Tell the user there is nothing to explain yet.');
     expect(read('lib/trace-toolpack/lazyToolpack.ts')).toContain('NO_COMPLETED_RUN_MESSAGE');
