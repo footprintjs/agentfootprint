@@ -614,3 +614,27 @@ describe('memory write options — an empty or deceptive scope is no scope', () 
     expect(service.created).toEqual([]);
   });
 });
+
+describe('memory write options — a write decides on the copy it sends', () => {
+  it('a scope that empties itself after it was asked for is refused on a store that requires one', async () => {
+    const service = extractingAgentCore();
+    const store = new AgentCoreStore({
+      memoryId: 'mem-1',
+      client: service.client,
+      requireNamespaceScope: true,
+      searchNamespace: ({ actorId, namespaceScope }) =>
+        `/tenants/${namespaceScope?.['tenantid'] ?? ''}/actors/${actorId}/facts`,
+    });
+    let looks = 0;
+    const vanishing = new Proxy({ tenantid: 'vacme_z' } as Record<string, string>, {
+      // Reports its key while it is being asked about, then hides it.
+      ownKeys: (target) => (looks++ < 2 ? Reflect.ownKeys(target) : []),
+    });
+    await expect(
+      store.put(ACME, { id: 'e', value: 'x', version: 1 } as MemoryEntry, {
+        namespaceScope: vanishing,
+      }),
+    ).rejects.toThrow(/requireNamespaceScope/);
+    expect(service.created).toEqual([]);
+  });
+});

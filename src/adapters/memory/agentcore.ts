@@ -898,8 +898,11 @@ export class AgentCoreStore implements MemoryStore {
       this.writeOptionsRefusal ?? '',
     );
     const asked = requestedWriteOptions(options);
-    const given = asked.includes('namespaceScope') ? options?.namespaceScope : undefined;
-    const scope = given === undefined ? undefined : frozenScope(given);
+    // Copy FIRST, then decide on the copy — the same rule as a search: an empty
+    // copy is no scope, whatever the caller's object reported a moment earlier.
+    const given = options?.namespaceScope;
+    const copied = given === undefined ? undefined : frozenScope(given);
+    const scope = copied === undefined || Object.keys(copied).length === 0 ? undefined : copied;
     if (scope === undefined && this.requireNamespaceScope) {
       throw new TypeError(MISSING_SCOPE('write'));
     }
