@@ -55,7 +55,8 @@ functions — `seed.ts`, `pickEntry.ts`, `routeTurn.ts`, `window.ts`,
 `deliver.ts`, `route.ts`, `outputRetry.ts`, `reliabilityExecution.ts`,
 `prepareFinal.ts`, `breakFinal.ts`; the same folder's Lens tenants are listed
 under Lens, and it appears in exactly these two places) · `src/core/agent/`
-(`toolDispatch.ts`, `toolEffects.ts`, `toolArgsValidation.ts`, `validators.ts`) ·
+(`toolDispatch.ts`, `toolArgsValidation.ts`, `validators.ts`) · `src/semantics/`
+(`toolEffects.ts`, the tool-result envelope grammar) ·
 `src/core/agent/middleware/` (`runChain.ts` — allow / deny / ask) ·
 `src/lib/injection-engine/` (`buildInjectionEngineSubflow.ts`, one Gather →
 Evaluate → Route → Delta pass per iteration) · `src/core/runbook/`

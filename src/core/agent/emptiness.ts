@@ -4,7 +4,7 @@
  * Pattern: typed routes over two inputs — the value the MODEL read, and the
  *          door the RECORD says the call returned — and never a guess.
  * Role:    core/ layer, pure. It imports the recognizers only
- *          (`coverage/recognize.ts`; the artifact ref grammar and the
+ *          (`semantics/coverage/recognize.ts`; the artifact ref grammar and the
  *          placement ticket's guard, `artifacts/naming.ts`,
  *          `artifacts/placement.ts`), never a mint, so a post-hoc reader
  *          loads it without the tool-name checks and refusal sentences.
@@ -71,7 +71,7 @@
  * an absence or a boundary was declared, and a marker the door does not vouch
  * for is read as plain data. Only when the caller holds NO door for the result
  * is the door read off the value itself, by the rule the run's own recognizer
- * applies (`declaredByValue`, mirroring `coverage/read.ts` ·
+ * applies (`declaredByValue`, mirroring `semantics/coverage/read.ts` ·
  * `readCoverageResult`) — the only evidence left, and the same answer the run
  * would have filed for an object. Which caller holds a door:
  *
@@ -367,7 +367,7 @@ const listed = (value: unknown): boolean => Array.isArray(value) && value.length
 /**
  * What a value's own envelope declares, read by the strict recognizers only and
  * by the rule the RUN's recognizer files rows for a value it is handed
- * (`coverage/read.ts` · `readCoverageResult`): a bare absence, or a boundary
+ * (`semantics/coverage/read.ts` · `readCoverageResult`): a bare absence, or a boundary
  * with an absence directly inside it, and the gaps either lists. `undefined`
  * when the value is neither envelope. JSON text is parsed once, at the top.
  *

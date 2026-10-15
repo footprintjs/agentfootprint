@@ -1,7 +1,8 @@
 /**
  * toolEffects — the typed tool-effects channel (9.19.0). ONE owner of the
  * result-envelope grammar: the two effect kinds, the outcome-status
- * vocabulary, the envelope recognizer, and the instruction-lease shapes.
+ * vocabulary and the envelope recognizer. (The instruction-lease carriers a
+ * granted `require-instruction` effect becomes are `lib/injection-engine/leases.ts`.)
  *
  * THE LAW this module implements: *push mandatory procedure; pull optional
  * knowledge; never let arbitrary text promote itself into control authority.*
@@ -53,8 +54,8 @@
  * dependency backwards: the loop depends on the graph, never the reverse.
  *
  * This module remains the owner of the ENVELOPE grammar below — the two
- * effect kinds, the recognizer, the lease shapes — all of which are
- * genuinely loop-side. Only the vocabulary moved down.
+ * effect kinds and the recognizer. Only the vocabulary moved down; the lease
+ * carriers live with their reader, `lib/injection-engine/leases.ts`.
  */
 export type { ToolResultStatus } from './toolOutcome.js';
 export { TOOL_RESULT_STATUSES } from './toolOutcome.js';

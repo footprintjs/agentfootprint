@@ -451,7 +451,7 @@ defineTool({
     `resolveCredentialAndExecute`, whose pause catch refuses every pause,
     worded for a check-in): that call settles as an ERROR, and an errored
     call files no coverage on any door;
-  - the unsettled-by-absence row (`../findings/README.md`): its rule needs
+  - the unsettled-by-absence row (`../../core/agent/findings/README.md`): its rule needs
     the SERVED result to read as an absence, and a paused lookup is served
     the person's answer — so a ruling-out on it files no row, although the
     door's rows now hold its miss. The rule is unchanged;
@@ -805,7 +805,7 @@ The evidence corpus is every `role: 'tool'` result. An absence's job is to say
 what was looked FOR — which in practice quotes the arguments the model passed.
 Indexed whole, an invented identifier would become **grounded** by the one
 operation that proves nothing about it: a lookup that found nothing. It is
-`evidence/frames.ts`'s argument on the tool side of the conversation.
+`../../core/agent/evidence/frames.ts`'s argument on the tool side of the conversation.
 
 The line is **tool-authored knowledge vs caller echo**, not "coverage vs the
 rest". `looked_for` is withheld and nothing else is (`evidence.ts`): the

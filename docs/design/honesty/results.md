@@ -868,7 +868,7 @@ Committed code (9.118.1) unless marked "draft":
   head still sees the batch just run (`stages/toolCalls.ts`).
 - The host's time-series tools return `data_window: { window, range_end }`, with no held period
   (`host:py-tools/server.py`).
-- Draft (local branch `feat/described-result`, commit `d8258fd3`, not on main): `semantics/described.ts` · `describedResult`; `envelope.ts` ·
+- Draft (local branch `feat/described-result`, commit `d8258fd3`, not on main): `lib/semantics/described.ts` · `describedResult`; `envelope.ts` ·
   `mintSemantics`; `types.ts` · `DescribedResultDeclaration`; the two `.changes` fragments; the
   tests named in § 6.1.
 

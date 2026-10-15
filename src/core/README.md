@@ -35,7 +35,7 @@ full replies use the normal paused-tool result path. It does not share the
 consent decision vocabulary. See the input-requests guide for the wire shape.
 A lookup that pauses still declares what it looked at (9.114.0): the
 declaration's `absence` — the envelope `absent()` returns — is filed at the
-raise and never rides `awaitingInput` (`agent/coverage/README.md` § 4).
+raise and never rides `awaitingInput` (`../semantics/coverage/README.md` § 4).
 
 ## A re-ask is never silent (refused · repeat)
 

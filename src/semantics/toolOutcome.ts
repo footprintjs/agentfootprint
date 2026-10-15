@@ -5,7 +5,8 @@
  * WHY IT LIVES HERE. A skill-graph route edge can key on what a tool
  * DECLARED happened (`onToolStatus`), so this vocabulary is part of the
  * graph's own reading of a turn — `InjectionContext.toolResults[].status`
- * is typed by it. It used to be declared inside `semantics/toolEffects.ts`,
+ * is typed by it. It used to be declared inside `core/agent/toolEffects.ts`
+ * (today `semantics/toolEffects.ts`),
  * which meant the graph's context type reached into the agent loop's
  * tool-effects module for one string union: the loop's vocabulary embedded
  * in the graph's contract, pointing the dependency the wrong way.
@@ -13,11 +14,10 @@
  * So the words moved DOWN here — a module with zero imports that both
  * sides read. `semantics/toolEffects.ts` re-exports them under the same
  * names, so every existing import path is unchanged; that module remains
- * the owner of the ENVELOPE grammar (the two effect kinds, the recognizer,
- * the lease shapes), which is genuinely loop-side.
+ * the owner of the ENVELOPE grammar (the two effect kinds, the recognizer).
  *
- * Zone: PURE CORE. Pinned by
- * `test/lib/injection-engine/skill-graph-fence.test.ts`.
+ * Zone: a zero-import leaf the skill-graph PURE CORE may reach (`PURE_LEAVES`).
+ * Pinned by `test/lib/injection-engine/skill-graph-fence.test.ts`.
  */
 
 /**

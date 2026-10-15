@@ -18,7 +18,7 @@
  *     interactive consent refuses by name (a pause the inner tool itself
  *     RAISES, `requestInput` or `pauseHere`, is not refused: it passes up as
  *     the OUTER call's pause, and an `absence` it declares is filed under the
- *     outer call — `coverage/README.md` § 4);
+ *     outer call — `semantics/coverage/README.md` § 4);
  *   - it cannot redeem artifact refs — a `wants` tool refuses by name
  *     (dispatch-time resolution belongs to the model-facing loop);
  *   - it does not see ToolProvider-delivered tools — there is no build-time
