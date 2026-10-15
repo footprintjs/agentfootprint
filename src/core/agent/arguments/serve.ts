@@ -962,7 +962,7 @@ function answeredClause(toolName: string, f: FilledArgument, sources: boolean): 
 // ─── The refusals ───────────────────────────────────────────────────────
 
 // LENS · tool-result · persistent-history
-// reads: the dispatch re-read of the tool's rules (`declare.ts` · `rulesOf`) — the assert's own sentence
+// reads: the dispatch re-read of the tool's rules (`tools/declare.ts` · `rulesOf`) — the assert's own sentence
 // law: may omit, never deny; every clause anchored to the call it was composed on.
 /** The result a call reads when its tool's rules could not be read at dispatch. */
 export function unreadableRulesRefusal(toolName: string, reason: string): string {

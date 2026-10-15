@@ -2,7 +2,7 @@
  * extract — which tokens in an answer are DATA, and therefore have to be
  * grounded in a tool result.
  *
- * Pattern: a pure classifier over normalized tokens (normalize.ts is the only
+ * Pattern: a pure classifier over normalized tokens (tools/normalize.ts is the only
  *          import), so it can be unit-tested on strings with no agent, no
  *          chart and no model.
  * Role:    core/ layer. The hard half of `namesAndNumbersFromEvidence`.

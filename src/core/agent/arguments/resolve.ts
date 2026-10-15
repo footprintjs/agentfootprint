@@ -41,7 +41,7 @@
  * person's message would carry any value past the rule — and the ask's field
  * shows the person their own words (`quoted`) unless a tool in reach may hide
  * arguments (`quotesMayShow`). The model's value never rides the ask.
- * "Equal" is the evidence module's same-value rule (`declare.ts` ·
+ * "Equal" is the evidence module's same-value rule (`tools/declare.ts` ·
  * `sameArgumentValue`). A present value equal to the default is filed as
  * `default`, never as the model's own choice: a model that copies a default
  * from a description chose nothing (the row's `proposed` tells it from a fill).
@@ -590,7 +590,7 @@ function untakenFormArgumentsOf(
 
 /**
  * A window is owed ONCE, with no window decision to read (`.time()` off, or nothing filled):
- * the form the call SENT its window in (`declare.ts` · `sentFormOf`) — or, the period left out
+ * the form the call SENT its window in (`tools/declare.ts` · `sentFormOf`) — or, the period left out
  * entirely, the form the rules owe (`owedFormOf`: kept answers, else the ASSUMED form, else
  * the first form's own asks) — is the window; every other form's arguments are untaken. Before
  * this, each form's arguments were ruled one by one: an assumed look-back beside asked bounds

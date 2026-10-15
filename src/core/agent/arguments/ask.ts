@@ -383,7 +383,7 @@ function askRuleOf(
 }
 
 // The one conversion between declared period spellings lives beside the
-// spellings themselves (`declare.ts` · `convertSpelling`); re-exported here,
+// spellings themselves (`tools/declare.ts` · `convertSpelling`); re-exported here,
 // where the batch ask's readers have always found it.
 export { convertSpelling };
 

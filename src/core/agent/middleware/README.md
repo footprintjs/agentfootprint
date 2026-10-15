@@ -1,7 +1,7 @@
 **Mixed** — the governance chain: three verbs walked forwards over a call and
 backwards over its result.
 Walker: `outcomes.ts`, `types.ts`. The one place a chain is walked,
-`../../../tools/runChain.ts`, sits one layer down: the MCP server walks it too.
+`../../../tools/runChain.ts`, sits in the tools layer, below the agent: the MCP server walks it too.
 Trace: `ledger.ts` — one writer for one committed key, where a chain's decisions
 become record.
 Fold: `rewrites.ts` — which ruled argument a before-tool rewrite superseded, read

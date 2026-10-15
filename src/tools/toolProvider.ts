@@ -21,7 +21,7 @@
  *          Decorator (GoF) — `gatedTools(inner, predicate)` wraps any
  *          provider with an additional filter, mirroring how `withRetry`
  *          / `withFallback` decorate `LLMProvider`.
- * Role:    Layer-3 tool-dispatch primitive. Agent calls `provider.list(ctx)`
+ * Role:    tools/ layer (L7) dispatch primitive. Agent calls `provider.list(ctx)`
  *          each iteration to compute the visible tool set.
  * Emits:   N/A (pure compute; permission denials emit elsewhere via the
  *          permission subsystem).
