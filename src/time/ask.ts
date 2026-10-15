@@ -11,7 +11,7 @@
  *          the app may override (`.time({ messages })`), filled here
  *          ({@link refusalReason}) — the library writes a reason only for a
  *          check the app armed by declaring the field (TQ7).
- * Role:    core/ leaf (the time layer). Imports `instant.ts`, `zone.ts`,
+ * Role:    L0 leaf (the time layer). Imports `instant.ts`, `zone.ts`,
  *          `range.ts`, `present.ts` and the row / candidate TYPES only.
  * Emits:   N/A.
  *

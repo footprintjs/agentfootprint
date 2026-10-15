@@ -7,7 +7,7 @@
  *          a zone asked as `format: 'zone'`, a `model` reading offered to
  *          confirm. The judge of the answer stays `ask.ts` ·
  *          `checkTimeAnswer`.
- * Role:    core/ leaf (the time layer). Split from `ask.ts` because its
+ * Role:    L0 leaf (the time layer). Split from `ask.ts` because its
  *          labels render through `present.ts` (`presentRange`), and `ask.ts`
  *          is on the resume door's SYNCHRONOUS path (`core/inputRequest.ts`)
  *          while the renderer loads only under `.time()` — the

@@ -8,7 +8,7 @@
  *          (which `artifacts/index.ts` still re-exports), so the axis speaks
  *          the time layer's one grammar: `interval` is a `duration.ts`
  *          duration under {@link AXIS_UNITS}, `zone` is a `zone.ts` zone name.
- * Role:    core/ leaf (the time layer's one owner). Imports `instant.ts`,
+ * Role:    L0 leaf (the time layer's one owner). Imports `instant.ts`,
  *          `duration.ts` and `zone.ts`. Asked by `artifacts/minting.ts` ·
  *          `prepareArtifact` and `artifacts/datasetResult.ts` ·
  *          `stageDatasetArtifacts` (the judge), and by any consumer that

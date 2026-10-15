@@ -7,7 +7,7 @@
  *          never an instant, never a date order, never a zone. Everything
  *          that turns parts into instants is `resolve.ts`'s, the same way for
  *          every strategy (time design § 5.1).
- * Role:    core/ leaf (the time layer). Imports nothing. The builder's
+ * Role:    L0 leaf (the time layer). Imports nothing. The builder's
  *          `.time({ reader })` checks a reader through {@link readerIssue};
  *          seed checks what it returned through {@link checkReading}.
  * Emits:   N/A.

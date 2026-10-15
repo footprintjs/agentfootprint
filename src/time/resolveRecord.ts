@@ -10,7 +10,7 @@
  *          the resolver, which only an armed seed loads (`agent/stages/
  *          timeLayer.ts`, through `import()`: the optional-family law of
  *          docs-next's site budget). `resolve.ts` re-exports everything here.
- * Role:    core/ leaf (the time layer). Imports `range.ts` and `zone.ts`
+ * Role:    L0 leaf (the time layer). Imports `range.ts` and `zone.ts`
  *          (the window check) only.
  * Emits:   N/A.
  *

@@ -12,7 +12,7 @@
  *          (the owner's decision "Always confirm", time design TQ29). One call's decision
  *          ({@link callWindowOf}) is a pure function of its arguments, the
  *          tool's forms and those windows.
- * Role:    core/ leaf (the time layer). Imports `convert.ts`, `range.ts`,
+ * Role:    L0 leaf (the time layer). Imports `convert.ts`, `range.ts`,
  *          `rows.ts`, `resolve.ts`' types and `zone.ts` only. Asked by the
  *          inputs layer (`arguments/resolve.ts`), which files the argument
  *          rows and the `call-window` row the decision implies.

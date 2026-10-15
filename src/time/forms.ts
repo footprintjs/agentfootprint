@@ -7,7 +7,7 @@
  *          asks it (`evidence/evidenceIndex.ts` · `exemptFromRun`,
  *          `stages/timeLineage.ts` · `timeLineageOf`) and never keeps a time table of
  *          its own.
- * Role:    core/ leaf (the time layer). Imports `windows.ts`, `rows.ts`,
+ * Role:    L0 leaf (the time layer). Imports `windows.ts`, `rows.ts`,
  *          `resolve.ts`, `textForms.ts` (the text rule, split out so the
  *          evidence gate's synchronous corpus never loads the resolver),
  *          `instant.ts` and `zone.ts` only. Loaded under `.time()` only,

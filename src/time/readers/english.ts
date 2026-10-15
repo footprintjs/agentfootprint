@@ -9,7 +9,7 @@
  *          never maps a zone token (an abbreviation, a place) to a zone and
  *          never refuses a future date —
  *          all of that is `resolve.ts`'s, the policy's or the ask's.
- * Role:    core/ leaf (the time layer). Imports only the port's types. Armed
+ * Role:    L0 leaf (the time layer). Imports only the port's types. Armed
  *          by the app: `.time({ reader: englishTimeReader() })` — there is no
  *          default reader.
  * Emits:   N/A.

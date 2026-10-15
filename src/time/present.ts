@@ -5,7 +5,7 @@
  *          the limits block's `Period:` line (`coverage/period.ts` ·
  *          `periodLine`) and, later, every time label the layer shows. A
  *          label is never parsed back; the typed record keeps the instants.
- * Role:    core/ leaf (the time layer). Imports `instant.ts`, `zone.ts` and
+ * Role:    L0 leaf (the time layer). Imports `instant.ts`, `zone.ts` and
  *          `range.ts` only.
  * Emits:   N/A.
  *

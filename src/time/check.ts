@@ -7,7 +7,7 @@
  *          dispatch), the periods its result declared, and the tool's facts —
  *          and one pure read over the turn's wall-clock sources. None reads
  *          words; none reads a period's offset as a clock.
- * Role:    core/ leaf (the time layer). Imports `instant.ts`, `range.ts`,
+ * Role:    L0 leaf (the time layer). Imports `instant.ts`, `range.ts`,
  *          `convert.ts` and the row types of `rows.ts`. Asked by the results
  *          layer (`results/subflow.ts` · `checkPeriods`), which files the
  *          answer on the call's `period` row (`coverage/period.ts` ·

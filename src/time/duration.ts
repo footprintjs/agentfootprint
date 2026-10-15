@@ -7,7 +7,7 @@
  *          '5m'` — never a person's words ("the last 40 minutes" is read only
  *          by an armed reader). This is the T-spellings law of the time
  *          design (`docs/design/time/README.md`, § 5.4).
- * Role:    core/ leaf (the time layer's one owner). Imports nothing. Asked by
+ * Role:    L0 leaf (the time layer's one owner). Imports nothing. Asked by
  *          `arguments/declare.ts` · `parsesUnderSpelling` for a look-back.
  * Emits:   N/A.
  *

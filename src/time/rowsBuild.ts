@@ -4,7 +4,7 @@
  *
  * Pattern: one builder per row kind, each returning the plain record the
  *          ledger's one writer files.
- * Role:    core/ leaf (the time layer). Split from `rows.ts` because
+ * Role:    L0 leaf (the time layer). Split from `rows.ts` because
  *          `timeReadingRows` runs the resolver (`resolve.ts`), which only an
  *          armed agent loads — its callers (`agent/stages/timeLayer.ts`, the
  *          inputs layer's `arguments/resolve.ts`) are reached through

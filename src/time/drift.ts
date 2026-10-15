@@ -11,7 +11,7 @@
  *          exactly, and records a look-back it cannot re-send — the model's
  *          own (never written over, § 7.3), or a tool with no absolute form —
  *          as shifted.
- * Role:    core/ leaf (the time layer). Imports `convert.ts` and `range.ts`
+ * Role:    L0 leaf (the time layer). Imports `convert.ts` and `range.ts`
  *          types only. Asked by ToolCalls (`stages/toolCalls.ts` ·
  *          `timeAtDispatch`) at both execute sites, just before the tool
  *          runs; the answer rides the `call` row (`rows.ts` · `CallDrift`).

@@ -10,7 +10,7 @@
  *          argument boundary of § 3.3 through `range.ts` (`boundInto` /
  *          `boundFrom` for a `to` bound; `lookbackRange` for a look-back) —
  *          never inline.
- * Role:    core/ leaf (the time layer). Imports `instant.ts`, `duration.ts`,
+ * Role:    L0 leaf (the time layer). Imports `instant.ts`, `duration.ts`,
  *          `range.ts`, `zone.ts` and `periodForm.ts` — the declaration half
  *          (the shapes, the sugar, each form's own rules, a declared value's
  *          spelling, the tool's facts), split out for the synchronous doors

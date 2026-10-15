@@ -6,7 +6,7 @@
  *          this wall time in this zone?" — with Temporal's four DST words for
  *          the second. No dependency: `Intl.DateTimeFormat` carries the
  *          database the runtime ships.
- * Role:    core/ leaf (the time layer's one owner). Imports `instant.ts` only.
+ * Role:    L0 leaf (the time layer's one owner). Imports `instant.ts` only.
  * Emits:   N/A.
  *
  * ## A zone is an IANA name, never an abbreviation

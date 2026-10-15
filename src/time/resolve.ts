@@ -6,7 +6,7 @@
  *          design § 5.1): a strategy tokenizes (`reader.ts`); this module
  *          resolves, the same way for every strategy. It is the one place
  *          zone arithmetic meets the person's words.
- * Role:    core/ leaf (the time layer). Imports `instant.ts`, `zone.ts`,
+ * Role:    L0 leaf (the time layer). Imports `instant.ts`, `zone.ts`,
  *          `range.ts`, `present.ts` (the `Grain` word), `reader.ts` (the
  *          parts) and `resolveRecord.ts` (the shapes, the policy and the
  *          record's checks — split out for the synchronous doors, and

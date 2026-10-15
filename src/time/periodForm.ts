@@ -11,7 +11,7 @@
  *          engine, which only an armed agent loads (`bind.ts`, `drift.ts`,
  *          reached through `import()`: the optional-family law of docs-next's
  *          site budget). `convert.ts` re-exports everything public here.
- * Role:    core/ leaf (the time layer). Imports `instant.ts`, `duration.ts`
+ * Role:    L0 leaf (the time layer). Imports `instant.ts`, `duration.ts`
  *          and `zone.ts` only.
  * Emits:   N/A.
  *

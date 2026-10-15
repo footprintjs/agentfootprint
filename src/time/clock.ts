@@ -4,7 +4,7 @@
  * Pattern: normalize-or-refuse at a boundary (`core/runInput.ts`'s shape): the
  *          app's `.time({ zone })` and the run's `time: { now, zone, window }`
  *          are read here into one {@link TimeClock}, or refused by name.
- * Role:    core/ leaf (the time layer's one owner). Imports `instant.ts`,
+ * Role:    L0 leaf (the time layer's one owner). Imports `instant.ts`,
  *          `zone.ts`, `range.ts`, `reader.ts` (the reader's check) and
  *          `resolve.ts` (the policy's) only. The Agent reads the two inputs
  *          (`Agent.run`, `Agent.resume`); seed stamps the clock once per turn

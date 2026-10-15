@@ -6,7 +6,7 @@
  *          and `arguments/declare.ts` (where a regex plus `Date.parse` checked
  *          an `iso-range` argument). Exact: no `Date.parse` guessing, no
  *          sub-millisecond loss.
- * Role:    core/ leaf (the time layer's one owner, `src/time/`). Imports
+ * Role:    L0 leaf (the time layer's one owner, `src/time/`). Imports
  *          nothing. Asked by `coverage/period.ts` (lenient) and, through
  *          `range.ts` · `splitRange`, by `arguments/declare.ts` (strict).
  * Emits:   N/A.

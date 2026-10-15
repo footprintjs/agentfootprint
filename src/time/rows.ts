@@ -7,7 +7,7 @@
  *          also answers "is this a row I would have filed?", so the
  *          checkpoint door (`core/runCheckpoint.ts` · `ledgerRowIsWellFormed`)
  *          refuses exactly what the library never files.
- * Role:    core/ leaf (the time layer). Imports `instant.ts`, `zone.ts`,
+ * Role:    L0 leaf (the time layer). Imports `instant.ts`, `zone.ts`,
  *          `range.ts`, `reader.ts` (the parts check), `resolveRecord.ts` (the
  *          candidate and choice checks), `convert.ts` (the refusal codes) and
  *          `clock.ts`' and `bind.ts`' types only — the rows are plain records
