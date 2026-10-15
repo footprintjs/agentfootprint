@@ -4,7 +4,7 @@ title: ToolResultCeiling
 
 # Interface: ToolResultCeiling
 
-Defined in: [src/core/tools.ts:429](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L429)
+Defined in: [src/tools/tools.ts:429](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L429)
 
 A declared cap on ONE tool's result that REFUSES instead of truncating
 (9.20.0).
@@ -28,7 +28,7 @@ event carries the true size, and the delivered result carries status
 
 > `readonly` **maxChars**: `number`
 
-Defined in: [src/core/tools.ts:432](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L432)
+Defined in: [src/tools/tools.ts:432](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L432)
 
 The ceiling, in characters of the stringified result. Positive whole
  number; anything else is refused at `defineTool`.
@@ -39,7 +39,7 @@ The ceiling, in characters of the stringified result. Positive whole
 
 > `readonly` `optional` **narrowBy?**: readonly `string`[]
 
-Defined in: [src/core/tools.ts:437](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L437)
+Defined in: [src/tools/tools.ts:437](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L437)
 
 Parameter names the refusal suggests narrowing by (e.g. `['limit',
  'fields']`). Optional; when present it must name at least one — an empty
