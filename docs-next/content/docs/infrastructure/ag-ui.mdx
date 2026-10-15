@@ -1,0 +1,110 @@
+---
+title: AG-UI frontends
+description: Speak the AG-UI protocol from any agentfootprint run — streamed text, tool calls, reasoning, steps, sub-agents and interrupts as AG-UI 1.0 events, framed by the official encoder, with nothing a redaction policy hides on the wire.
+---
+
+> **An AG-UI frontend already knows how to show an agent.** `@ag-ui/client`,
+> CopilotKit and the AG-UI Dojo read one stream of typed events — a message
+> streaming in, a tool being called, a step starting, a run finishing. Give
+> them that stream and there is no frontend glue to write.
+
+`agentfootprint/ag-ui` is the adapter that turns a run into that stream. It
+reads the same events every listener receives and writes AG-UI 1.0 events;
+nothing about the agent changes.
+
+## Quick look
+
+`agUiSerializer` translates ONE run's events into AG-UI events. `agUiSse` frames
+each one as a Server-Sent Event, exactly as the official `@ag-ui/encoder` writes
+it. Subscribe before the run, translate as events land, settle once when the run
+ends:
+
+<CodeFile path="examples/deploy/ag-ui.ts" region="frames" title="examples/deploy/ag-ui.ts (region: frames)" />
+
+`agUiSse` loads `@ag-ui/encoder`, an optional peer, when the framing is built —
+never when the door is imported. Install it with `npm install @ag-ui/core @ag-ui/encoder`;
+without it, `agUiSse()` throws an error that says so. In a runtime this package
+cannot load it from (a browser or edge bundle), import it yourself and pass it:
+`agUiSse({ encoder })` (`AgUiSseOptions`, the module typed structurally as
+`AgUiEncoderModule`).
+
+The serializer itself imports nothing from AG-UI: its events are plain data
+typed by `AgUiEvent` (and `AgUiEventType`), checked against `@ag-ui/core`'s own
+event union by this repository's tests. It speaks protocol
+`AG_UI_PROTOCOL_VERSION` (`'1.0'`), stated on `RUN_STARTED`.
+
+## What a run becomes
+
+| agentfootprint event | AG-UI events |
+|---|---|
+| `stream.token` | `TEXT_MESSAGE_START` · `TEXT_MESSAGE_CONTENT` · `TEXT_MESSAGE_END` — one message per LLM call |
+| `stream.tool_start` | `TOOL_CALL_START` · `TOOL_CALL_ARGS` · `TOOL_CALL_END` — the call, parented to its LLM call's message |
+| `stream.tool_end` | `TOOL_CALL_RESULT` |
+| `stream.thinking_delta` / `stream.thinking_end` | `REASONING_START` … `REASONING_END` |
+| `agent.iteration_start` / `_end` | `STEP_STARTED` / `STEP_FINISHED`, named `iteration <n>` |
+| `composition.enter` / `exit` | `STEP_STARTED` / `STEP_FINISHED`, named `Sequence`, `Parallel:<mount>` … |
+| `agent.turn_start` / `turn_end` of a nested agent | `SUBAGENT_STARTED` / `SUBAGENT_FINISHED` |
+| `pause.request`, then the run pauses | `RUN_FINISHED` with an `interrupt` outcome (`AgUiRunOutcome`, `AgUiInterrupt`) |
+| `error.fatal`, then the run fails | `RUN_ERROR`, in the record's own words |
+| everything else | `CUSTOM`, named by the event type |
+
+`AgUiSerializerOptions` takes the request's `threadId` and `runId` and an
+optional `custom` filter: which of the "everything else" events go out as
+`CUSTOM`. The default is all of them — the whole record, including
+`context.injected`, which carries what the model was shown. A frontend that
+does not explain the run can take far fewer:
+
+```ts
+agUiSerializer({ threadId, runId, custom: (e) => e.type.startsWith('agentfootprint.cost.') });
+```
+
+Text is what the run STREAMED. A provider that does not stream still shows its
+answer: the turn's answer is written whole when no token of it streamed. An
+agent's intermediate draft (`llm_end.content`) is never written — the library
+may be holding it back (answer validation, an output policy).
+
+## Sub-agents and parallel branches
+
+An agent mounted inside a composition — a `Sequence` step, a `Parallel` branch —
+is an AG-UI **sub-agent**. Its turn opens a scope at its subflow path, and every
+event under that path carries the sub-agent's `subagentRunId`. Two parallel
+branches have different paths, so their interleaved tokens, tool calls and
+steps are never attributed to each other. A branch a tolerant merge let fail
+ends with `SUBAGENT_ERROR`, never left open.
+
+AG-UI 1.0 has no parent field on a step, so every step, sub-agent and opening
+event carries the record's **address** in `metadata.agentfootprint`
+(`AgUiMetadata`, `AgUiAddress`): the `runtimeStageId` and `subflowPath` of the
+event it came from. A step's path prefixes the paths of everything that ran
+inside it.
+
+## Ids that line up with the record
+
+Every id the adapter mints is `<runId>/<kind>/<n>/<runtimeStageId>` — the
+request's `runId`, then the stage execution that produced the entity. A model's
+tool-call id is not unique (providers reuse them; two parallel branches often
+both say `call_1`), and an AG-UI client finds a tool call by its id across the
+whole conversation, so the adapter never uses it as the id. It rides beside:
+`metadata.agentfootprint.toolCallId`. agentfootprint's own run id is on
+`RUN_STARTED` and on the terminal event, under the same key.
+
+## Redaction
+
+The adapter reads only the served stream — what every listener receives. Under a
+redaction policy (`Agent.create({ redact })`) that is the placeholder wherever the
+policy selected a value, so nothing the policy hides can reach an AG-UI event,
+at any depth of a composition. The structure is unchanged: ids, steps and
+sub-agents are built from the record's address, which a policy never selects.
+The cost is stated, not hidden: under a policy, the text a frontend shows is the
+placeholder too.
+
+## The seams
+
+The framing is a **strategy**: `SseFraming` says how one event becomes one
+frame. `agUiSse` is one; `agentfootprintSse` — the frames `toSSE` has always
+written — is the other, and `toSSE({ framing })` takes any.
+
+The adapter implements a **port** on `agentfootprint/hosting`: `RunTranslation`
+(one run's served events in, protocol events out) and `RunSettlement` (how the
+run ended: `finished`, `paused`, `cancelled`, `failed`). A future protocol is one
+more adapter on the same port.

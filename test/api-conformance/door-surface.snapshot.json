@@ -756,6 +756,24 @@
       "ZoneArgument"
     ]
   },
+  "./ag-ui": {
+    "values": [
+      "AG_UI_PROTOCOL_VERSION",
+      "agUiSerializer",
+      "agUiSse"
+    ],
+    "types": [
+      "AgUiAddress",
+      "AgUiEncoderModule",
+      "AgUiEvent",
+      "AgUiEventType",
+      "AgUiInterrupt",
+      "AgUiMetadata",
+      "AgUiRunOutcome",
+      "AgUiSerializerOptions",
+      "AgUiSseOptions"
+    ]
+  },
   "./cache": {
     "values": [
       "AutomaticCacheStrategy",
@@ -1257,6 +1275,8 @@
       "RedirectFailure",
       "RedirectSignIn",
       "ResponsesWireOptions",
+      "RunSettlement",
+      "RunTranslation",
       "SealKey",
       "SessionExpiryPolicy",
       "SessionLifecycle",
@@ -1622,6 +1642,7 @@
       "agentRecorder",
       "agentThinkingTrace",
       "agentcoreObservability",
+      "agentfootprintSse",
       "analyzeToolCatalog",
       "answerAccountPointerKey",
       "applyAblations",
@@ -2103,6 +2124,7 @@
       "SliceToBacktrackTraceOptions",
       "SlotBoundary",
       "SnippetUnitsOptions",
+      "SseFraming",
       "StatusContext",
       "StatusEvent",
       "StatusKind",

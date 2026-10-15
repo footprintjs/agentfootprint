@@ -54,6 +54,7 @@ import * as securityDoor from '../../src/doors/security.js';
 import * as classifyDoor from '../../src/doors/classify.js';
 import * as ontologyDoor from '../../src/doors/ontology.js';
 import * as timeDoor from '../../src/doors/time.js';
+import * as agUiDoor from '../../src/doors/ag-ui.js';
 
 // ─── The implementation barrels behind them (no longer subpaths) ───
 
@@ -79,6 +80,7 @@ import * as timeConvert from '../../src/time/convert.js';
 import * as timePeriodForm from '../../src/time/periodForm.js';
 import * as timePresent from '../../src/time/present.js';
 import * as timeZone from '../../src/time/zone.js';
+import * as agUi from '../../src/ag-ui/index.js';
 
 // ─── The two lists ─────────────────────────────────────────────────
 
@@ -266,6 +268,11 @@ const SURVIVING_SUBPATHS = [
   // needs the same answer outside a run — pure functions, no run entry
   // point; off the main barrel because they are the layer's run-time half.
   './time',
+  // Also added, also never one of the sixteen. `./ag-ui` publishes the AG-UI
+  // protocol adapter over the run's served event stream (`agUiSerializer`,
+  // `agUiSse`); the framing's `@ag-ui/encoder` is an optional peer loaded only
+  // when a framing is built, so importing the door loads nothing of AG-UI's.
+  './ag-ui',
 ] as const;
 
 // ─── Manifest helpers ──────────────────────────────────────────────
@@ -366,6 +373,15 @@ describe('a door added after 9.0.0 is a re-export of its implementation barrel',
     ]) {
       expect(impl[sample], `src/ontology lost ${sample}`).toBeDefined();
       expect(onDoor[sample], `./ontology's ${sample} is a different object`).toBe(impl[sample]);
+    }
+  });
+
+  it('./ag-ui serves the SAME agUiSerializer / agUiSse / AG_UI_PROTOCOL_VERSION as src/ag-ui', () => {
+    const impl = agUi as unknown as Record<string, unknown>;
+    const onDoor = agUiDoor as unknown as Record<string, unknown>;
+    for (const sample of ['agUiSerializer', 'agUiSse', 'AG_UI_PROTOCOL_VERSION']) {
+      expect(impl[sample], `src/ag-ui lost ${sample}`).toBeDefined();
+      expect(onDoor[sample], `./ag-ui's ${sample} is a different object`).toBe(impl[sample]);
     }
   });
 

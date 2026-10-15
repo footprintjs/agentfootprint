@@ -299,6 +299,16 @@
         "default": "./dist/doors/time.js"
       }
     },
+    "./ag-ui": {
+      "import": {
+        "types": "./dist/esm/doors/ag-ui.d.ts",
+        "default": "./dist/esm/doors/ag-ui.js"
+      },
+      "require": {
+        "types": "./dist/types/doors/ag-ui.d.ts",
+        "default": "./dist/doors/ag-ui.js"
+      }
+    },
     "./package.json": "./package.json",
     "./canonical-notes.json": "./canonical-notes.json"
   },
@@ -354,6 +364,9 @@
       ],
       "time": [
         "./dist/types/doors/time.d.ts"
+      ],
+      "ag-ui": [
+        "./dist/types/doors/ag-ui.d.ts"
       ]
     }
   },
@@ -363,6 +376,8 @@
     "**/trace-toolpack/selfExplainHost.js"
   ],
   "peerDependencies": {
+    "@ag-ui/core": "^1.0.0",
+    "@ag-ui/encoder": "^1.0.0",
     "@anthropic-ai/sdk": "*",
     "@aws-sdk/client-bedrock-agent-runtime": "*",
     "@aws-sdk/client-bedrock-agentcore": "*",
@@ -392,6 +407,12 @@
     "zod": "*"
   },
   "peerDependenciesMeta": {
+    "@ag-ui/core": {
+      "optional": true
+    },
+    "@ag-ui/encoder": {
+      "optional": true
+    },
     "@anthropic-ai/sdk": {
       "optional": true
     },
@@ -472,6 +493,9 @@
     }
   },
   "devDependencies": {
+    "@ag-ui/client": "^1.0.2",
+    "@ag-ui/core": "^1.0.2",
+    "@ag-ui/encoder": "^1.0.2",
     "@anthropic-ai/sdk": "0.125.0",
     "@arethetypeswrong/cli": "^0.18.1",
     "@google-cloud/storage": "^8.3.0",

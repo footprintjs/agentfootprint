@@ -44,7 +44,7 @@
  *   L9  the agent       core
  *   L10 lenses          answer-account, time-travel, trace-toolpack, core-flow
  *   L11                 hosting, context-bisect, context-ledger, bug-report, patterns
- *   L12                 mcp, recorded-chat
+ *   L12                 mcp, recorded-chat, ag-ui
  *   L13 implementations adapters
  *   L14                 tool-providers, embedders
  *   L15 entry points    src/*.ts barrels and doors/ — may import anything, hold no logic
@@ -144,7 +144,13 @@ const LAYERS = [
       'src/patterns/**',
     ],
   },
-  { rank: 12, name: 'protocol and replay', files: ['src/mcp/**', 'src/recorded-chat/**'] },
+  {
+    rank: 12,
+    name: 'protocol and replay',
+    // `ag-ui/` speaks a wire protocol for a run, beside `mcp/`: it reads the
+    // hosting port (`hosting/protocolAdapter.ts`) and frames through `hosting/stream.ts`.
+    files: ['src/mcp/**', 'src/recorded-chat/**', 'src/ag-ui/**'],
+  },
   { rank: 13, name: 'provider implementations', files: ['src/adapters/**'] },
   { rank: 14, name: 'tool providers', files: ['src/tool-providers/**', 'src/embedders/**'] },
   { rank: 15, name: 'entry points', files: ['src/*.ts', 'src/doors/**'] },

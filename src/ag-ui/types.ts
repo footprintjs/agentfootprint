@@ -1,0 +1,221 @@
+/**
+ * types — the AG-UI events this adapter writes, as plain structural types.
+ *
+ * AG-UI (the Agent–User Interaction protocol, `@ag-ui/core`) is an OPTIONAL
+ * peer of this package, so no declaration here imports it: a consumer who
+ * only reads these types compiles without it, and nothing in `dist/` names a
+ * module they may not have installed. The shapes mirror protocol 1.0 field
+ * for field — `test/type-regressions/AgUiEvents.assignability.test.ts`
+ * compiles every one of them against `@ag-ui/core`'s own `Event` union, and
+ * `test/ag-ui/contract.test.ts` validates every event a real run produces with
+ * `@ag-ui/core/schemas` and the official client's verifier.
+ *
+ * Only the fields this adapter sets are declared. `type` is a string literal
+ * here where `@ag-ui/core` uses its `EventType` enum; the wire values are the
+ * same strings.
+ */
+
+/** The AG-UI protocol version this adapter speaks — stated on `RUN_STARTED`. */
+export const AG_UI_PROTOCOL_VERSION = '1.0';
+
+/**
+ * Extra information on an event — AG-UI's open `metadata` object. This adapter
+ * writes one key, `agentfootprint`, holding the record's ADDRESS for the event
+ * (see {@link AgUiAddress}); the key `ag-ui` is the protocol's own.
+ */
+export interface AgUiMetadata {
+  readonly agentfootprint?: AgUiAddress;
+  readonly [key: string]: unknown;
+}
+
+/**
+ * Where an AG-UI event came from in agentfootprint's record: the run, the
+ * stage execution and the subflow path — the coordinates a recording, a trace
+ * or a commit log is keyed by. Address only: a redaction policy never selects
+ * any of it, so it reads the same with or without one.
+ */
+export interface AgUiAddress {
+  /** agentfootprint's own run id (`meta.runId`), not the AG-UI `runId`. */
+  readonly runId?: string;
+  /** The stage execution that emitted the source event (`meta.runtimeStageId`). */
+  readonly runtimeStageId?: string;
+  /** The subflow path of that stage, outermost first (`meta.subflowPath`). */
+  readonly subflowPath?: readonly string[];
+  /** The tool call's id as the record serves it — the placeholder under a policy. */
+  readonly toolCallId?: string;
+  /** A pause's question as the record serves it (`pause.request.questionPayload`). */
+  readonly question?: Readonly<Record<string, unknown>>;
+}
+
+interface AgUiEventBase<T extends string> {
+  readonly type: T;
+  /** Milliseconds since the epoch — the source event's wall clock. */
+  readonly timestamp?: number;
+  readonly metadata?: AgUiMetadata;
+}
+
+/** Everything a subagent can own carries its invocation handle; absent = the parent agent. */
+interface Attributable {
+  readonly subagentRunId?: string;
+}
+
+export interface AgUiRunStartedEvent extends AgUiEventBase<'RUN_STARTED'> {
+  readonly threadId: string;
+  readonly runId: string;
+  readonly protocolVersion?: string;
+}
+
+/** Something a paused run is waiting for. */
+export interface AgUiInterrupt extends Attributable {
+  readonly id: string;
+  readonly reason: string;
+  readonly message?: string;
+  readonly toolCallId?: string;
+  readonly metadata?: AgUiMetadata;
+}
+
+/** Why a run ended — absent means success. */
+export type AgUiRunOutcome =
+  | { readonly type: 'success' }
+  | { readonly type: 'interrupt'; readonly interrupts: readonly AgUiInterrupt[] }
+  | { readonly type: 'cancelled' };
+
+export interface AgUiRunFinishedEvent extends AgUiEventBase<'RUN_FINISHED'> {
+  readonly threadId: string;
+  readonly runId: string;
+  readonly result?: unknown;
+  readonly outcome?: AgUiRunOutcome;
+}
+
+export interface AgUiRunErrorEvent extends AgUiEventBase<'RUN_ERROR'> {
+  readonly message: string;
+  readonly code?: string;
+}
+
+export interface AgUiStepStartedEvent extends AgUiEventBase<'STEP_STARTED'>, Attributable {
+  readonly stepName: string;
+}
+
+export interface AgUiStepFinishedEvent extends AgUiEventBase<'STEP_FINISHED'>, Attributable {
+  readonly stepName: string;
+}
+
+export interface AgUiTextMessageStartEvent
+  extends AgUiEventBase<'TEXT_MESSAGE_START'>,
+    Attributable {
+  readonly messageId: string;
+  readonly role: 'assistant';
+}
+
+export interface AgUiTextMessageContentEvent
+  extends AgUiEventBase<'TEXT_MESSAGE_CONTENT'>,
+    Attributable {
+  readonly messageId: string;
+  readonly delta: string;
+}
+
+export interface AgUiTextMessageEndEvent extends AgUiEventBase<'TEXT_MESSAGE_END'>, Attributable {
+  readonly messageId: string;
+}
+
+export interface AgUiToolCallStartEvent extends AgUiEventBase<'TOOL_CALL_START'>, Attributable {
+  readonly toolCallId: string;
+  readonly toolCallName: string;
+  readonly parentMessageId?: string;
+}
+
+export interface AgUiToolCallArgsEvent extends AgUiEventBase<'TOOL_CALL_ARGS'>, Attributable {
+  readonly toolCallId: string;
+  readonly delta: string;
+}
+
+export interface AgUiToolCallEndEvent extends AgUiEventBase<'TOOL_CALL_END'>, Attributable {
+  readonly toolCallId: string;
+}
+
+export interface AgUiToolCallResultEvent extends AgUiEventBase<'TOOL_CALL_RESULT'>, Attributable {
+  readonly messageId: string;
+  readonly toolCallId: string;
+  readonly content: string;
+  readonly role: 'tool';
+}
+
+export interface AgUiReasoningStartEvent extends AgUiEventBase<'REASONING_START'>, Attributable {
+  readonly messageId: string;
+}
+
+export interface AgUiReasoningMessageStartEvent
+  extends AgUiEventBase<'REASONING_MESSAGE_START'>,
+    Attributable {
+  readonly messageId: string;
+  readonly role: 'reasoning';
+}
+
+export interface AgUiReasoningMessageContentEvent
+  extends AgUiEventBase<'REASONING_MESSAGE_CONTENT'>,
+    Attributable {
+  readonly messageId: string;
+  readonly delta: string;
+}
+
+export interface AgUiReasoningMessageEndEvent
+  extends AgUiEventBase<'REASONING_MESSAGE_END'>,
+    Attributable {
+  readonly messageId: string;
+}
+
+export interface AgUiReasoningEndEvent extends AgUiEventBase<'REASONING_END'>, Attributable {
+  readonly messageId: string;
+}
+
+export interface AgUiSubagentStartedEvent extends AgUiEventBase<'SUBAGENT_STARTED'> {
+  readonly subagentRunId: string;
+  readonly name: string;
+  readonly parentSubagentRunId?: string;
+}
+
+export interface AgUiSubagentFinishedEvent extends AgUiEventBase<'SUBAGENT_FINISHED'> {
+  readonly subagentRunId: string;
+  readonly result?: unknown;
+  readonly outcome?:
+    | { readonly type: 'success' }
+    | { readonly type: 'suspended'; readonly interruptIds?: readonly string[] };
+}
+
+export interface AgUiSubagentErrorEvent extends AgUiEventBase<'SUBAGENT_ERROR'> {
+  readonly subagentRunId: string;
+  readonly message: string;
+  readonly code?: string;
+}
+
+export interface AgUiCustomEvent extends AgUiEventBase<'CUSTOM'>, Attributable {
+  readonly name: string;
+  readonly value: unknown;
+}
+
+/** Every AG-UI event this adapter writes. */
+export type AgUiEvent =
+  | AgUiRunStartedEvent
+  | AgUiRunFinishedEvent
+  | AgUiRunErrorEvent
+  | AgUiStepStartedEvent
+  | AgUiStepFinishedEvent
+  | AgUiTextMessageStartEvent
+  | AgUiTextMessageContentEvent
+  | AgUiTextMessageEndEvent
+  | AgUiToolCallStartEvent
+  | AgUiToolCallArgsEvent
+  | AgUiToolCallEndEvent
+  | AgUiToolCallResultEvent
+  | AgUiReasoningStartEvent
+  | AgUiReasoningMessageStartEvent
+  | AgUiReasoningMessageContentEvent
+  | AgUiReasoningMessageEndEvent
+  | AgUiReasoningEndEvent
+  | AgUiSubagentStartedEvent
+  | AgUiSubagentFinishedEvent
+  | AgUiSubagentErrorEvent
+  | AgUiCustomEvent;
+
+/** The `type` of every AG-UI event this adapter writes. */
+export type AgUiEventType = AgUiEvent['type'];

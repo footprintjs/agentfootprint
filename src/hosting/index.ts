@@ -122,6 +122,10 @@ export type {
   StreamFraming,
 } from './httpHost.js';
 
+// The port a wire protocol implements to speak for a run — AG-UI
+// (`agentfootprint/ag-ui`) is one adapter; a future protocol is one more.
+export type { RunSettlement, RunTranslation } from './protocolAdapter.js';
+
 export { memorySessions } from './memorySessions.js';
 export {
   sqliteSessions,
