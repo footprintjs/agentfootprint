@@ -279,6 +279,8 @@ describe('AWS adapters dispatch exactly the commands they are pinned to', () => 
     const transport = agentCoreRuntimeMcpTransport({
       agentRuntimeArn: 'arn:aws:bedrock-agentcore:us-west-2:123456789012:runtime/m-1',
       region: 'us-west-2',
+      // 'reuse' sends both session fields; the default, 'per-call', sends neither.
+      session: 'reuse',
       _sdk: sdk.module,
     });
     const res = await transport.fetch?.(transport.url, {

@@ -15,7 +15,7 @@ refusal reaches the model as a failed tool call.
 ```ts
 import { agentCoreRuntimeMcpTransport, mcpClient } from 'agentfootprint/providers';
 
-// One client per conversation: 'reuse' keeps ONE runtime session per transport.
+// The default session strategy, 'per-call', is safe to share: build it once.
 const orders = await mcpClient({
   name: 'orders',
   transport: agentCoreRuntimeMcpTransport({
@@ -24,7 +24,8 @@ const orders = await mcpClient({
     // auth: 'sigv4'                       (default — IAM, through the AWS SDK)
     // auth: { bearer: agentCoreIdentity({ region: 'us-west-2' }), service: 'my-runtime-oauth' }
     //                                     (OAuth inbound auth; `service` = your OAuth2 provider)
-    // session: 'per-call'                 (no session carried — a stateless server)
+    // session: 'reuse'                    (one runtime session per CLIENT — build a
+    //                                     client per conversation, never share it)
     retry: { onRetry: ({ attempt, waitMs }) => log.info({ attempt, waitMs }, 'runtime session busy') },
   }),
 });
@@ -32,9 +33,10 @@ const agent = Agent.create({ provider, model }).tools(await orders.tools()).buil
 ```
 
 ## What it reads / what it writes
-Reads the MCP client's requests and the runtime's replies. Holds one runtime
-session id per `'reuse'` transport. Writes nothing to a run: no scope, no event,
-no sentence. A vended bearer token is used for one request and dropped.
+Reads the MCP client's requests and the runtime's replies. Under `'reuse'`,
+holds which runtime session each client's MCP session was given (at most 256,
+oldest forgotten first). Writes nothing to a run: no scope, no event, no
+sentence. A vended bearer token is used for one request and dropped.
 
 ## The rules here
 1. **One port, three strategies.** `transport.ts` returns an `http` member of
@@ -53,13 +55,17 @@ no sentence. A vended bearer token is used for one request and dropped.
    runtime behind an OAuth authorizer is reached at
    `https://bedrock-agentcore.{region}.amazonaws.com/runtimes/{ARN}/invocations`
    with the token vended per request by the same code as `gatewayTransport`.
-4. **`'reuse'` pins the runtime session.** The SDK fills a FRESH random
-   `runtimeSessionId` on every call that leaves it unset; `'reuse'` chooses one
-   per transport and sends it on every request, and the MCP client carries the
-   `Mcp-Session-Id` the platform returns. One transport is one session: build a
-   client per conversation. `'per-call'` sends no session id of its own (on
-   SigV4 the SDK then fills a fresh one per call) and hides the returned one, so
-   nothing carries over; it needs a stateless server.
+4. **`'per-call'` is the default — isolation by construction.** It sends no
+   session id of its own (on SigV4 the SDK then fills a fresh random
+   `runtimeSessionId` per call) and hides the `Mcp-Session-Id` the platform
+   returns, so nothing carries over and one client built at startup can serve
+   every user of a process. It needs a stateless server (the runtime's
+   recommended default). **`'reuse'` keeps one session per CLIENT:** a request
+   with no `Mcp-Session-Id` (a client's `initialize`) gets a fresh runtime id,
+   the `Mcp-Session-Id` returned for it is bound to that id, and every later
+   request carrying it is sent in the same runtime session. Two clients on one
+   transport are two sessions; one client is one session for whoever calls
+   through it — build a client per conversation.
 5. **Only the session-busy refusal is retried — and only here.** `sessionBusy`
    matches ONE JSON-RPC reply with code `-32005` AND the "session operation in
    progress" message (`ConflictException` shares the code and is not
@@ -80,10 +86,22 @@ no sentence. A vended bearer token is used for one request and dropped.
 7. **POST only on the SDK path.** A GET (server-message stream) or DELETE (end a
    session) has no `InvokeAgentRuntime` form; it is answered 405 locally, which
    the MCP Streamable HTTP spec defines as "not offered" for both.
+8. **An auth failure says what failed, never how.** A 401, a 403 or an AWS
+   auth error type (`authFailure.ts`) keeps its status and `x-amzn-errortype`,
+   and its body becomes `"<type> (HTTP <status>) …"`: AWS can quote the signed
+   request back — the session token and both session ids among it — and the
+   MCP client's error text reaches the model, the history and `tool_end`. The
+   hosted server's own JSON-RPC error is kept whole. Both auth strategies.
+9. **No user-delegated bearer.** `auth.mode` must be `'machine'`: the vending
+   request names no user, so a `'user'` token would be sent for whoever calls
+   through the client. For a token per user, build a transport per user whose
+   provider vends that user's token.
 
 ## Files
 - `transport.ts` — the facade: options, the endpoint URL, the composition.
 - `sessionBusy.ts` — the retry decision (one function).
-- `session.ts` — `'reuse'` and `'per-call'`.
+- `session.ts` — `'per-call'` (default) and `'reuse'`.
+- `authFailure.ts` — an auth failure answered with its type and status only.
+- `errorType.ts` — the bare `x-amzn-errortype` name.
 - `invoke.ts` — the SigV4 strategy over `InvokeAgentRuntimeCommand` (the only
   file that loads `@aws-sdk/client-bedrock-agentcore`).

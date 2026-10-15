@@ -16,17 +16,18 @@
  *                the one small function `sessionBusy`.
  *   ISOLATION    session ids never cross a branch: each branch's requests carry
  *                its own runtime and MCP session, the two sets are disjoint, and
- *                a shared 'per-call' client sends no session id at all. For
- *                'reuse' this holds BY CONSTRUCTION — one transport per branch,
- *                each with its own pinned id — and this guards it.
+ *                a shared client on the default ('per-call') sends no session id
+ *                at all. For 'reuse' this holds BY CONSTRUCTION — one client per
+ *                branch, each its own runtime session — and this guards it.
  *   SECRECY      no credential — a bearer token, an SDK client's keys — and no
  *                session id reaches the recording (snapshot, events, structure)
  *                or the narrative: on the happy path, when the retries run out,
- *                and when the service answers a call with a 5xx.
+ *                when the service answers a call with a 5xx, and when an auth
+ *                failure's message quotes the signed request back.
  *
- * One client per branch is the documented shape for 'reuse' ("one transport is
- * one session — build one client per conversation"); the test builds exactly
- * that, and one case shows the 'per-call' alternative for a shared client.
+ * One client per branch is the documented shape for 'reuse' ("one client is one
+ * session — build one client per conversation"); the test builds exactly that,
+ * and one case shows the default, 'per-call', for a shared client.
  */
 
 import { narrative } from 'footprintjs/recorders';
@@ -121,6 +122,8 @@ async function branchClient(
     transport: agentCoreRuntimeMcpTransport({
       agentRuntimeArn: ARN,
       region: REGION,
+      // One client per branch is the documented shape for 'reuse'.
+      session: 'reuse',
       retry: {
         ...(maxAttempts !== undefined && { maxAttempts }),
         onRetry: (info) =>
@@ -299,14 +302,14 @@ describe('runtime-hosted MCP — inside a PARALLEL fan-out', () => {
     expect(told).toContain('order B-200 is shipped');
   });
 
-  it("ISOLATION — one SHARED 'per-call' client: no request carries any session id", async () => {
+  it("ISOLATION — one SHARED client on the default ('per-call'): no request carries any session id", async () => {
     const runtime = ordersRuntime();
     const client = await mcpClient({
       name: 'orders',
+      // No `session` option: the default is the one that is safe to share.
       transport: agentCoreRuntimeMcpTransport({
         agentRuntimeArn: ARN,
         region: REGION,
-        session: 'per-call',
         _sdk: runtime.sdk,
       }),
     });
@@ -389,6 +392,46 @@ describe('runtime-hosted MCP — SECRECY when it goes wrong', () => {
     for (const attempt of runtime.attempts) {
       if (attempt.runtimeSessionId) expect(written).not.toContain(attempt.runtimeSessionId);
       if (attempt.mcpSessionId) expect(written).not.toContain(attempt.mcpSessionId);
+    }
+  });
+
+  it('an auth failure that QUOTES the signed request, as a subflow: the model, record and narrative never see it', async () => {
+    const SECURITY_TOKEN = 'SECRET-SESSION-TOKEN-5d2e';
+    const runtime = fakeAgentCoreRuntime({
+      tools: [{ name: 'lookup_order', answer: () => 'never served' }],
+      sdkFailures: {
+        lookup_order: {
+          name: 'InvalidSignatureException',
+          status: 403,
+          // How AWS answers a signature mismatch: the canonical request it
+          // expected — every signed header, with its value.
+          message: (input) =>
+            'The request signature we calculated does not match the signature you provided. ' +
+            "The Canonical String for this request should have been\n'POST\n" +
+            `x-amz-security-token:${SECURITY_TOKEN}\n` +
+            `mcp-session-id:${String(input['mcpSessionId'])}\n` +
+            `x-amzn-bedrock-agentcore-runtime-session-id:${String(input['runtimeSessionId'])}'`,
+        },
+      },
+    });
+    const branch = await branchClient(runtime, 'sigv4');
+    const flow = Sequence.create().step('lookup', orderAgent('S-7', branch.tools)).build();
+    const events: AgentfootprintEvent[] = [];
+    flow.on('*', (e) => events.push(e));
+    const { answer, written } = await recorded(flow, 'where is order S-7?');
+    await branch.close();
+
+    // The control: the call really was refused, once, and the model was told
+    // WHAT failed — the type and the status.
+    expect(runtime.calls()).toHaveLength(1);
+    expect(String(answer)).toContain('InvalidSignatureException (HTTP 403)');
+    const sessionIds = runtime.attempts.flatMap((a) =>
+      [a.runtimeSessionId, a.mcpSessionId].filter((id): id is string => id !== undefined),
+    );
+    expect(sessionIds.length).toBeGreaterThan(0);
+    for (const text of [String(answer), written, JSON.stringify(events)]) {
+      expect(text).not.toContain(SECURITY_TOKEN);
+      for (const id of sessionIds) expect(text).not.toContain(id);
     }
   });
 

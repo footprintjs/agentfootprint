@@ -469,14 +469,14 @@ Three choices, each a strategy you pick by name:
 
 | Option | Values | What it decides |
 |---|---|---|
-| `auth` | `'sigv4'` (default) · `{ bearer, service? }` | IAM goes through the AWS SDK's `InvokeAgentRuntime`, with the SDK's own retry turned **off** (`maxAttempts: 1`) — its standard policy would re-send a call after a 5xx or a dropped connection; a `client` you pass keeps its own policy, so build it with `maxAttempts: 1`. An OAuth (JWT) authorizer gets a bearer token over the documented HTTPS endpoint — the SDK has no bearer scheme. The token is vended per request and dropped, by the same code as `gatewayTransport`. |
-| `session` | `'reuse'` (default) · `'per-call'` | `'reuse'` pins one runtime session id for the transport (the SDK would otherwise send a fresh random one on every call) and carries the `Mcp-Session-Id` the runtime returns. `'per-call'` sends no session id of its own (on SigV4 the SDK then fills a fresh random one per call) and hides the returned `Mcp-Session-Id`, so nothing carries over — use it for a stateless server shared across conversations. |
+| `auth` | `'sigv4'` (default) · `{ bearer, service? }` | IAM goes through the AWS SDK's `InvokeAgentRuntime`, with the SDK's own retry turned **off** (`maxAttempts: 1`) — its standard policy would re-send a call after a 5xx or a dropped connection; a `client` you pass keeps its own policy, so build it with `maxAttempts: 1`. An OAuth (JWT) authorizer gets a bearer token over the documented HTTPS endpoint — the SDK has no bearer scheme. The token is vended per request and dropped, by the same code as `gatewayTransport`; it is a machine token (`mode: 'user'` is refused — the request names no user, so a user's token would be sent for whoever calls through the client). |
+| `session` | `'per-call'` (default) · `'reuse'` | `'per-call'` sends no session id of its own (on SigV4 the SDK then fills a fresh random one per call) and hides the returned `Mcp-Session-Id`, so nothing carries over and one client can serve every user of a process; it needs a stateless server, the runtime's recommended default. `'reuse'` keeps one runtime session per **client**: a client's first request gets a fresh runtime session id, and every request carrying the `Mcp-Session-Id` the runtime returned for it is sent in that session. |
 | `retry` | on (5 attempts, ≤ 10 s) · options · `false` | Retries exactly the session-busy refusal, in both its forms: the MCP contract's HTTP 200 with code `-32005` and the "session operation in progress" message, and the API's 409 `RetryableConflictException`. Not `ConflictException` (same code, different message), not a batch, not `-32003` (throttling also arrives as a JSON-RPC error inside a 200 — delivered as it is), not a 5xx or a dropped connection, which may be the record of work that ran. Same loop, ceilings and `onRetry` report as `mcpClient`'s 429 retry. |
 
 <Callout type="warn" title="A 'reuse' client is ONE session">
-Build one client per conversation. A `'reuse'` client shared by two
-conversations puts both in one microVM, with one server state. For a client
-you want to share, use `session: 'per-call'`.
+Build one client per conversation. Two clients built on one transport are two
+sessions, but a `'reuse'` client shared by two users puts both in one microVM,
+with one server state. The default, `'per-call'`, is the one to share.
 </Callout>
 
 With SigV4, the MCP headers travel on the SDK's own fields — `mcpSessionId`,
@@ -484,7 +484,11 @@ With SigV4, the MCP headers travel on the SDK's own fields — `mcpSessionId`,
 request body as `payload`. When the service answers with a non-2xx status the
 SDK throws; the transport hands that on as the HTTP answer it was (status,
 `x-amzn-errortype`, `retry-after`), so a 429 reaches `mcpClient`'s throttle
-retry and a hosted server's 404 reaches the MCP client as a 404. A GET or DELETE
+retry and a hosted server's 404 reaches the MCP client as a 404. An auth failure
+(401, 403, or an AWS auth error type) keeps its status and type, but its message
+is replaced by `"<type> (HTTP <status>)"` on both auth paths: AWS can quote the
+signed request back, session token and session ids included, and the MCP
+client's error text reaches the model and the run's record. A GET or DELETE
 has no `InvokeAgentRuntime` form, so the transport answers it with 405, which MCP
 defines as "not offered".
 

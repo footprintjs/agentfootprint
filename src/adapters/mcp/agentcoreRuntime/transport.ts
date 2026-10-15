@@ -28,7 +28,8 @@
  *   retry   (`sessionBusy.ts`)  the session-busy refusal, retried with bounded
  *                               backoff by the SAME loop `mcpClient` uses for a
  *                               429 (`mcp/throttleRetry.ts` · `retryingFetchWhen`)
- *   session (`session.ts`)      'reuse' one runtime session, or 'per-call'
+ *   session (`session.ts`)      'per-call' (the default: a session per request),
+ *                               or 'reuse' (one session per MCP client)
  *   auth    (`invoke.ts`)       'sigv4' through the AWS SDK's InvokeAgentRuntime,
  *                               or a bearer token over the documented HTTPS
  *                               endpoint — the SDK has no bearer scheme, and the
@@ -65,6 +66,7 @@ import {
   type AgentCoreRuntimeSdkClient,
   type BedrockAgentCoreRuntimeSdkModule,
 } from './invoke.js';
+import { quietAuthFailure } from './authFailure.js';
 import { sessionStrategy, type AgentCoreRuntimeSession } from './session.js';
 import { sessionBusy } from './sessionBusy.js';
 
@@ -81,8 +83,13 @@ export interface AgentCoreRuntimeBearerAuth {
   readonly service?: string;
   /** OAuth scopes, when the provider uses them. */
   readonly scopes?: readonly string[];
-  /** `machine` (default) or `user`. */
-  readonly mode?: 'machine' | 'user';
+  /**
+   * `'machine'` (2-legged), the only mode. `'user'` is refused: the transport
+   * asks for its token without naming any user, so a user-delegated token
+   * would be sent for whoever calls through the client. For a token per user,
+   * build a transport per user whose provider vends that user's token.
+   */
+  readonly mode?: 'machine';
   /**
    * Your own `fetch`, called UNDERNEATH the per-request vending — an HTTP
    * agent, a proxy. It sees the final headers, the vended one included.
@@ -122,13 +129,15 @@ export interface AgentCoreRuntimeMcpTransportOptions {
   /** How requests are authenticated. Default `'sigv4'`. */
   readonly auth?: AgentCoreRuntimeAuth;
   /**
-   * Which runtime session each request lands in. Default `'reuse'`.
+   * Which runtime session each request lands in. Default `'per-call'`.
    *
-   *   - `'reuse'` — one session for the life of this transport. **Build one
-   *     client per conversation**: a client shared by two conversations is one
-   *     session — one microVM, one server state — for both.
    *   - `'per-call'` — every request in a session of its own; nothing carries
-   *     over. Needs a stateless server (the runtime's recommended default).
+   *     over, so one client can serve every user of a process. Needs a
+   *     stateless server (the runtime's recommended default).
+   *   - `'reuse'` — one session per CLIENT: each `mcpClient` built on this
+   *     transport keeps its own runtime session for its life. **Build one
+   *     client per conversation**: a client shared by two users is one
+   *     session — one microVM, one server state — for both.
    */
   readonly session?: AgentCoreRuntimeSession;
   /**
@@ -181,12 +190,12 @@ export function agentCoreRuntimeMcpTransport(
 ): McpHttpTransport {
   const url = agentCoreRuntimeUrl(options);
   const send = authStrategy(options, url);
-  const session = sessionStrategy(options.session ?? 'reuse', options._newSessionId);
+  const session = sessionStrategy(options.session ?? 'per-call', options._newSessionId);
 
   const sessioned: ThrottleFetch = async (input, init) => {
     const headers = new Headers(init?.headers);
-    session.request(headers);
-    return session.response(await send(input, { ...init, headers }));
+    const settle = session.request(headers);
+    return settle(await send(input, { ...init, headers }));
   };
 
   return {
@@ -274,9 +283,24 @@ function authStrategy(options: AgentCoreRuntimeMcpTransportOptions, url: string)
           'so this path is plain HTTPS. Remove `client`, or use `auth: "sigv4"`.',
       );
     }
+    if (auth.mode !== undefined && auth.mode !== 'machine') {
+      // The vending request names no user: it carries `service`, `scopes` and
+      // `mode`, never an identity or the user's own token. A user-delegated
+      // token asked for that way belongs to nobody in particular — and would be
+      // sent for whoever calls through the client.
+      throw new TypeError(
+        `agentCoreRuntimeMcpTransport: \`auth.mode\` must be 'machine' — got ${describe(
+          auth.mode,
+        )}. ` +
+          'This transport asks its provider for a token without naming any user, so a ' +
+          'user-delegated token would be sent for whoever calls through the client. Leave ' +
+          '`mode` unset for the client credential; for a token per user, build a transport per ' +
+          'user whose `bearer` provider vends that user’s token.',
+      );
+    }
     // The Gateway's vending fetch, reused as is: the token is vended per
     // request, applied to that one request, and dropped.
-    return createVendingFetch(
+    const vending = createVendingFetch(
       gatewayTransport({
         url,
         credentials: auth.bearer,
@@ -286,6 +310,8 @@ function authStrategy(options: AgentCoreRuntimeMcpTransportOptions, url: string)
       }),
       auth.fetch,
     );
+    // Same rule as the SigV4 strategy: an auth failure's message is withheld.
+    return async (input, init) => quietAuthFailure(await vending(input, init));
   }
   throw new TypeError(
     `agentCoreRuntimeMcpTransport: \`auth\` must be 'sigv4' or { bearer: <CredentialProvider> } ` +

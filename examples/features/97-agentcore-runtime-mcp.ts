@@ -55,7 +55,10 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
         service: 'orders-oauth',
         fetch: runtime.fetch, // ← and drop this stand-in endpoint
       },
-      // session: 'reuse' (default) — ONE runtime session for this client.
+      // ONE runtime session for this client — so build a client per
+      // conversation. The default, 'per-call', gives every request a session of
+      // its own: nothing carries over, and one client can serve every user.
+      session: 'reuse',
       retry: { onRetry: ({ attempt }) => retries.push(attempt) },
     }),
   });
@@ -87,6 +90,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
   // minted at `initialize` carried by every request after it.
   const posts = runtime.seen.filter((s) => s.method === 'POST');
   assert.equal(new Set(posts.map((s) => s.runtimeSessionId)).size, 1);
+  assert.ok(posts[0]?.runtimeSessionId);
   assert.equal(new Set(posts.slice(1).map((s) => s.mcpSessionId)).size, 1);
   // The token went on the wire — and only there.
   assert.ok(posts.every((s) => s.authorization === 'Bearer demo-token'));

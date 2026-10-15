@@ -15,24 +15,25 @@
  *     the AWS SDK models it as an idempotency token — it fills a FRESH random id
  *     on every call that leaves it unset.
  *
- * ── 'reuse' (the default) ────────────────────────────────────────────────────
- * One session for the life of the transport. A runtime session id is chosen
- * ONCE and sent on every request, and the `Mcp-Session-Id` the service hands
- * back is carried by the MCP client exactly as for any Streamable HTTP server.
- * Pinning the runtime id is what stops the SDK's per-call default from putting
- * each request in a session of its own. One transport is one session, so a
- * client built per conversation is a session per conversation — and a client
- * SHARED by two conversations is one session for both. Build per conversation.
- *
- * ── 'per-call' ───────────────────────────────────────────────────────────────
+ * ── 'per-call' (the default) ─────────────────────────────────────────────────
  * Every request in a session of its own: this strategy sends no session id of
  * its own — on SigV4 the SDK then fills a fresh random `runtimeSessionId` per
- * call, which is exactly what this wants — and the `Mcp-Session-Id` a response
- * carries is not handed to the MCP client, so nothing can carry one call's
- * session into the next. Isolation by
- * construction, a cold start per call, and it needs a STATELESS server
- * (`stateless_http=True`, the runtime's recommended default) — a stateful one
- * would see every request as a stranger.
+ * call — and the `Mcp-Session-Id` a response carries is not handed to the MCP
+ * client, so nothing can carry one call's session into the next. Isolation by
+ * construction: a client shared by every user of a process (tools built once at
+ * startup — the common shape) never puts two users in one microVM. The price is
+ * a cold start per call, and it needs a STATELESS server (`stateless_http=True`,
+ * the runtime's recommended default) — a stateful one sees every request as a
+ * stranger.
+ *
+ * ── 'reuse' ──────────────────────────────────────────────────────────────────
+ * One session per CONNECTION (per `mcpClient` built on the transport): the
+ * first request of a connection carries no `Mcp-Session-Id`, so it gets a fresh
+ * runtime session id; the `Mcp-Session-Id` the runtime returns for it is then
+ * bound to that runtime id, and every later request carrying it is sent in the
+ * same runtime session. So two clients built from one transport object are two
+ * sessions — but ONE client is one session for whoever calls through it. Build
+ * a client per conversation; never share a 'reuse' client between users.
  *
  * Pattern: Strategy. Role: outer ring, vendor fact. Holds no credential.
  */
@@ -46,13 +47,16 @@ export const MCP_SESSION_HEADER = 'Mcp-Session-Id';
 /** Which session a request lands in. See the module note for each. */
 export type AgentCoreRuntimeSession = 'reuse' | 'per-call';
 
-/** One strategy: what a request carries out, and what a response hands back. */
+/**
+ * One strategy: fix a request's session headers in place, and say what the
+ * MCP client may see of that request's response.
+ */
 export interface SessionStrategy {
-  /** Set or strip this request's session headers, in place. */
-  request(headers: Headers): void;
-  /** The response as the MCP client may see it. */
-  response(response: Response): Response;
+  request(headers: Headers): (response: Response) => Response;
 }
+
+/** How many connections a 'reuse' transport remembers before it forgets the oldest. */
+const MAX_CONNECTIONS = 256;
 
 /**
  * Build the strategy for one transport.
@@ -65,20 +69,42 @@ export function sessionStrategy(
   kind: AgentCoreRuntimeSession,
   newId: () => string = () => globalThis.crypto.randomUUID(),
 ): SessionStrategy {
-  if (kind === 'reuse') return reuse(newId());
+  if (kind === 'reuse') return reuse(newId);
   if (kind === 'per-call') return PER_CALL;
   throw new TypeError(
     `agentCoreRuntimeMcpTransport: \`session\` must be 'reuse' or 'per-call' — got ` +
-      `${JSON.stringify(kind)}. 'reuse' keeps one runtime session for this transport ` +
-      `(build one client per conversation); 'per-call' gives every request its own.`,
+      `${JSON.stringify(kind)}. 'per-call' gives every request its own session (safe to share); ` +
+      `'reuse' keeps one runtime session per client (build one client per conversation).`,
   );
 }
 
-function reuse(runtimeSessionId: string): SessionStrategy {
+function reuse(newId: () => string): SessionStrategy {
+  // The runtime session each CONNECTION was given, keyed by the Mcp-Session-Id
+  // the runtime returned to it — so two clients on one transport stay apart.
+  const runtimeIdOf = new Map<string, string>();
+  const remember = (mcpSessionId: string, runtimeId: string): void => {
+    if (runtimeIdOf.has(mcpSessionId)) return;
+    if (runtimeIdOf.size >= MAX_CONNECTIONS) {
+      const oldest = runtimeIdOf.keys().next().value;
+      if (oldest !== undefined) runtimeIdOf.delete(oldest);
+    }
+    runtimeIdOf.set(mcpSessionId, runtimeId);
+  };
   return {
-    // Set, not merged: the pinned id is the only one this transport sends.
-    request: (headers) => headers.set(AGENTCORE_RUNTIME_SESSION_HEADER, runtimeSessionId),
-    response: (response) => response,
+    request(headers) {
+      const carried = headers.get(MCP_SESSION_HEADER);
+      // A request with no Mcp-Session-Id opens a connection: it gets a session
+      // of its own, never the one another connection is using.
+      const runtimeId = (carried !== null ? runtimeIdOf.get(carried) : undefined) ?? newId();
+      if (carried !== null) remember(carried, runtimeId);
+      // Set, not merged: this is the only runtime session id this request sends.
+      headers.set(AGENTCORE_RUNTIME_SESSION_HEADER, runtimeId);
+      return (response) => {
+        const returned = response.headers.get(MCP_SESSION_HEADER);
+        if (returned !== null) remember(returned, runtimeId);
+        return response;
+      };
+    },
   };
 }
 
@@ -86,17 +112,20 @@ const PER_CALL: SessionStrategy = {
   request(headers) {
     headers.delete(MCP_SESSION_HEADER);
     headers.delete(AGENTCORE_RUNTIME_SESSION_HEADER);
-  },
-  response(response) {
-    if (!response.headers.has(MCP_SESSION_HEADER)) return response;
-    // A fetched Response's headers are immutable, so the copy is rebuilt
-    // around the same body rather than edited.
-    const headers = new Headers(response.headers);
-    headers.delete(MCP_SESSION_HEADER);
-    return new Response(response.body, {
-      status: response.status,
-      statusText: response.statusText,
-      headers,
-    });
+    return hideSession;
   },
 };
+
+/** The response with its Mcp-Session-Id removed, so the MCP client never carries one. */
+function hideSession(response: Response): Response {
+  if (!response.headers.has(MCP_SESSION_HEADER)) return response;
+  // A fetched Response's headers are immutable, so the copy is rebuilt
+  // around the same body rather than edited.
+  const headers = new Headers(response.headers);
+  headers.delete(MCP_SESSION_HEADER);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}

@@ -224,6 +224,7 @@ describe('agentCoreRuntimeMcpTransport — P2 boundary', () => {
       qualifier: 'DEFAULT',
       accountId: '123456789012',
       retry: false,
+      session: 'reuse',
       _sdk: sdk.module,
       _newSessionId: () => 'runtime-session-pinned-0000000000000000',
     });
@@ -269,6 +270,7 @@ describe('agentCoreRuntimeMcpTransport — P2 boundary', () => {
       agentRuntimeArn: ARN,
       region: REGION,
       retry: false,
+      session: 'reuse',
       _sdk: sdk.module,
     });
     const res = (await transport.fetch?.(transport.url, {
@@ -437,6 +439,7 @@ describe('agentCoreRuntimeMcpTransport — P3 scenario (real MCP client + real M
         agentRuntimeArn: ARN,
         region: REGION,
         retry: { onRetry: (info) => retries.push(info) },
+        session: 'reuse',
         _sdk: runtime.sdk,
       }),
     });
@@ -487,6 +490,7 @@ describe('agentCoreRuntimeMcpTransport — P3 scenario (real MCP client + real M
         agentRuntimeArn: ARN,
         region: REGION,
         qualifier: 'DEFAULT',
+        session: 'reuse',
         auth: { bearer: staticTokens({ runtime: 'tok-runtime' }), fetch: runtime.https },
       }),
     });
@@ -499,17 +503,18 @@ describe('agentCoreRuntimeMcpTransport — P3 scenario (real MCP client + real M
     expect(posts.every((a) => a.authorization === 'Bearer tok-runtime')).toBe(true);
     expect(posts.every((a) => a.agentRuntimeArn === ARN && a.qualifier === 'DEFAULT')).toBe(true);
     expect(new Set(posts.map((a) => a.runtimeSessionId)).size).toBe(1);
+    expect(posts[0]?.runtimeSessionId).toBeDefined();
     expect(runtime.calls().map((c) => c.refusedBusy)).toEqual([true, false]);
   });
 
-  it("P3 'per-call': no request carries a session id, so nothing carries over", async () => {
+  it("P3 the default, 'per-call': no request carries a session id, so nothing carries over", async () => {
     const runtime = lookupRuntime();
     const client = await mcpClient({
       name: 'orders',
+      // No `session` option: the default must be the strategy that is safe to share.
       transport: agentCoreRuntimeMcpTransport({
         agentRuntimeArn: ARN,
         region: REGION,
-        session: 'per-call',
         _sdk: runtime.sdk,
       }),
     });
@@ -758,7 +763,60 @@ describe('agentCoreRuntimeMcpTransport — P4 property (only the contract’s re
   });
 
   it('P4 an AWS error with no JSON-RPC body is handed on as its message', async () => {
-    const sdk = throwingSdk([serviceException('AccessDeniedException', 403)]);
+    const sdk = throwingSdk([serviceException('ValidationException', 400)]);
+    const transport = agentCoreRuntimeMcpTransport({
+      agentRuntimeArn: ARN,
+      region: REGION,
+      _sdk: sdk.module,
+    });
+    const res = (await transport.fetch?.(transport.url, {
+      method: 'POST',
+      body: '{}',
+    })) as Response;
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ message: 'ValidationException from the service' });
+  });
+
+  it.each([
+    ['AccessDeniedException', 403],
+    ['InvalidSignatureException', 403],
+    ['UnrecognizedClientException', 401],
+    // Typed as an auth failure though its status is not one.
+    ['IncompleteSignatureException', 400],
+    // Untyped: the status alone says it.
+    ['Unknown', 403],
+  ] as const)(
+    'P4 an auth failure (%s, %i) is handed on as its type and status — its message withheld',
+    async (name, status) => {
+      const quoted = Object.assign(serviceException(name, status), {
+        message: 'x-amz-security-token:SECRET-SESSION-TOKEN-9a1f',
+      });
+      const sdk = throwingSdk([quoted]);
+      const transport = agentCoreRuntimeMcpTransport({
+        agentRuntimeArn: ARN,
+        region: REGION,
+        _sdk: sdk.module,
+      });
+      const res = (await transport.fetch?.(transport.url, {
+        method: 'POST',
+        body: '{}',
+      })) as Response;
+      expect(res.status).toBe(status);
+      expect(res.headers.get('x-amzn-errortype')).toBe(name);
+      const text = await res.text();
+      expect(text).not.toContain('SECRET-SESSION-TOKEN');
+      expect(JSON.parse(text).message).toMatch(new RegExp(`^${name} \\(HTTP ${status}\\)`));
+      expect(sdk.sends()).toBe(1);
+    },
+  );
+
+  it('P4 a hosted server’s own JSON-RPC error on a 403 is still delivered whole', async () => {
+    const denied = Object.assign(serviceException('Unknown', 403), {
+      jsonrpc: '2.0',
+      id: 3,
+      error: { code: -32001, message: 'Tool not permitted for this caller' },
+    });
+    const sdk = throwingSdk([denied]);
     const transport = agentCoreRuntimeMcpTransport({
       agentRuntimeArn: ARN,
       region: REGION,
@@ -769,7 +827,11 @@ describe('agentCoreRuntimeMcpTransport — P4 property (only the contract’s re
       body: '{}',
     })) as Response;
     expect(res.status).toBe(403);
-    expect(await res.json()).toEqual({ message: 'AccessDeniedException from the service' });
+    expect(await res.json()).toEqual({
+      jsonrpc: '2.0',
+      id: 3,
+      error: { code: -32001, message: 'Tool not permitted for this caller' },
+    });
   });
 });
 
@@ -859,6 +921,124 @@ describe('agentCoreRuntimeMcpTransport — P5 security', () => {
     }
     expect(message).toMatch(/must be a CredentialProvider/);
     expect(message).not.toContain(SECRET);
+  });
+
+  it("P5 `mode: 'user'` is refused at build — the transport names no user to vend for", () => {
+    let message = '';
+    try {
+      agentCoreRuntimeMcpTransport({
+        agentRuntimeArn: ARN,
+        region: REGION,
+        auth: { bearer: staticTokens({ runtime: SECRET }), mode: 'user' as never },
+      });
+    } catch (err) {
+      message = (err as Error).message;
+    }
+    expect(message).toMatch(/`auth.mode` must be 'machine'/);
+    expect(message).toMatch(/for whoever calls through the client/);
+    expect(message).not.toContain(SECRET);
+    // 'machine', said out loud, is the same as leaving it unset.
+    expect(() =>
+      agentCoreRuntimeMcpTransport({
+        agentRuntimeArn: ARN,
+        region: REGION,
+        auth: { bearer: staticTokens({ runtime: SECRET }), mode: 'machine' },
+      }),
+    ).not.toThrow();
+  });
+
+  it('P5 bearer: a 401/403 from the endpoint reaches the MCP client without its message', async () => {
+    const replies: Response[] = [
+      new Response(JSON.stringify({ message: `token ${SECRET} rejected` }), {
+        status: 401,
+        headers: {
+          'content-type': 'application/json',
+          'x-amzn-errortype': 'UnauthorizedException',
+        },
+      }),
+      new Response(`denied for ${SECRET}`, { status: 403 }),
+      // The hosted server's own JSON-RPC error is its words, kept whole.
+      jsonReply({ jsonrpc: '2.0', id: 1, error: { code: -32001, message: 'not yours' } }, 403),
+    ];
+    const ok = jsonReply({ result: {} });
+    replies.push(ok);
+    const transport = agentCoreRuntimeMcpTransport({
+      agentRuntimeArn: ARN,
+      region: REGION,
+      auth: {
+        bearer: staticTokens({ runtime: 't' }),
+        fetch: async () => replies.shift() as Response,
+      },
+    });
+    const send = async () =>
+      (await transport.fetch?.(transport.url, { method: 'POST', body: '{}' })) as Response;
+
+    const unauthorized = await send();
+    expect(unauthorized.status).toBe(401);
+    expect(unauthorized.headers.get('x-amzn-errortype')).toBe('UnauthorizedException');
+    expect(await unauthorized.text()).not.toContain(SECRET);
+
+    const forbidden = await send();
+    expect(forbidden.status).toBe(403);
+    const forbiddenText = await forbidden.text();
+    expect(forbiddenText).not.toContain(SECRET);
+    expect(JSON.parse(forbiddenText).message).toMatch(/^Request refused \(HTTP 403\)/);
+
+    expect(await (await send()).json()).toEqual({
+      jsonrpc: '2.0',
+      id: 1,
+      error: { code: -32001, message: 'not yours' },
+    });
+    // Anything else is handed on as it is — the very object, unread.
+    expect(await send()).toBe(ok);
+  });
+
+  it("P5 'reuse': two clients on ONE transport are two runtime sessions, never one", async () => {
+    const runtime = lookupRuntime();
+    const transport = agentCoreRuntimeMcpTransport({
+      agentRuntimeArn: ARN,
+      region: REGION,
+      session: 'reuse',
+      _sdk: runtime.sdk,
+    });
+    // Interleaved, as two conversations sharing a process would be.
+    const alice = await mcpClient({ name: 'orders', transport });
+    const bob = await mcpClient({ name: 'orders', transport });
+    const aliceTools = await alice.tools();
+    const bobTools = await bob.tools();
+    await callTool(aliceTools, 'lookup', { id: 'A' });
+    await callTool(bobTools, 'lookup', { id: 'B' });
+    await callTool(aliceTools, 'lookup', { id: 'A2' });
+    await alice.close();
+    await bob.close();
+
+    // Each MCP session the platform minted maps to exactly ONE runtime session...
+    const runtimeIdsOf = new Map<string, Set<string | undefined>>();
+    for (const attempt of runtime.attempts) {
+      if (attempt.mcpSessionId === undefined) continue;
+      const ids = runtimeIdsOf.get(attempt.mcpSessionId) ?? new Set();
+      ids.add(attempt.runtimeSessionId);
+      runtimeIdsOf.set(attempt.mcpSessionId, ids);
+    }
+    expect(runtimeIdsOf.size).toBe(2);
+    const [first, second] = [...runtimeIdsOf.values()].map((ids) => [...ids]);
+    expect(first).toHaveLength(1);
+    expect(second).toHaveLength(1);
+    // ...and the two clients' runtime sessions are not the same one.
+    expect(first?.[0]).toBeDefined();
+    expect(first?.[0]).not.toBe(second?.[0]);
+    // Each initialize opened its own: no runtime id is shared by the two.
+    const initializes = runtime.attempts.filter((a) => a.rpcMethod === 'initialize');
+    expect(new Set(initializes.map((a) => a.runtimeSessionId)).size).toBe(2);
+    // And each call ran under the session of the client that made it.
+    const callsBy = (id: string) =>
+      runtime.calls().filter((c) => String(c.args?.['id']).startsWith(id));
+    expect(new Set(callsBy('A').map((c) => c.runtimeSessionId))).toEqual(
+      new Set([initializes[0]?.runtimeSessionId]),
+    );
+    expect(new Set(callsBy('B').map((c) => c.runtimeSessionId))).toEqual(
+      new Set([initializes[1]?.runtimeSessionId]),
+    );
   });
 });
 
