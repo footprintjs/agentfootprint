@@ -36,8 +36,8 @@ import {
 import type { TimeLimitLines } from '../coverage/timeLimits.js';
 import type { AgentState } from '../types.js';
 import type { FindingsLedger } from '../findings/types.js';
-import { presentationZoneOf } from '../../time/rows.js';
-import type { BoundPresentation } from '../../time/present.js';
+import { presentationZoneOf } from '../../../time/rows.js';
+import type { BoundPresentation } from '../../../time/present.js';
 import { withheldByOutputPolicy } from './outputAdmission.js';
 import { assistantReplayFields } from '../assistantReplay.js';
 
@@ -268,7 +268,7 @@ export const prepareFinalWithLimitsStage = (scope: TypedScope<AgentState>): void
 
 /**
  * The run's presentation zone (the time layer) — the zone of the turn's
- * `clock` row (`core/time/rows.ts` · `presentationZoneOf`). Read ONLY by the
+ * `clock` row (`time/rows.ts` · `presentationZoneOf`). Read ONLY by the
  * variants mounted under `.time()`, so an agent without the layer never reads
  * the ledger here. `undefined` when no clock was filed (a paused turn from a
  * runtime without the layer): the lines are then the declared instants.
@@ -279,7 +279,7 @@ async function presentationOf(
   const zone = presentationZoneOf(scope.findingsLedger as FindingsLedger | undefined);
   if (zone === undefined) return undefined;
   // The renderer loads only here, under `.time()` — the optional-family law.
-  const { bindPresentation } = await import('../../time/present.js');
+  const { bindPresentation } = await import('../../../time/present.js');
   return bindPresentation({ zone });
 }
 
@@ -287,7 +287,7 @@ async function presentationOf(
  * The time layer's limits lines for THIS turn (step T8), composed from the
  * record: one line per `period` row whose result checks hold
  * (`coverage/period.ts` · `periodCheckLine`) and the wall-clock sources'
- * `Clocks` lines (`source-clock` rows; `core/time/check.ts` · `clocksDiffer`).
+ * `Clocks` lines (`source-clock` rows; `time/check.ts` · `clocksDiffer`).
  * `undefined` when there is no clock (nothing to render in) or nothing to say.
  */
 async function timeLinesOf(scope: TypedScope<AgentState>): Promise<TimeLimitLines | undefined> {

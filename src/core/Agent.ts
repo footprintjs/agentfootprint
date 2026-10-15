@@ -274,7 +274,7 @@ import {
   type OutputSchemaParser,
 } from '../answer-validation/outputSchema.js';
 import { InvalidRunInputError, normalizeRunInput } from './runInput.js';
-import { clockOf } from './time/rows.js';
+import { clockOf } from '../time/rows.js';
 import {
   draftClock,
   readRunTime,
@@ -283,7 +283,7 @@ import {
   type ReadRunTime,
   type ReadTimeOptions,
   type RunTime,
-} from './time/clock.js';
+} from '../time/clock.js';
 import type { ResolvedOutputEnforcement } from './agent/outputEnforcement.js';
 import { buildOutputRetryStage } from './agent/stages/outputRetry.js';
 import { RunnerBase, makeRunId, withRunSignalInEnv } from './RunnerBase.js';
@@ -653,7 +653,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  ask, and that undefined is the whole zero-cost guarantee: no stage, no
    *  witness row, no stamp, no event, no bridge. */
   private readonly answerLayerOption?: { readonly standingLine?: true };
-  /** `.time()` (the time layer, `core/time/`): the fallback zone, as read.
+  /** `.time()` (the time layer, `time/`): the fallback zone, as read.
    *  Undefined on every agent that did not ask — then no clock is read, no
    *  time row is filed and `time` on a run is refused. */
   private readonly timeOptions?: ReadTimeOptions;

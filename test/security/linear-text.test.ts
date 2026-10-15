@@ -40,8 +40,8 @@ import {
   trimTrailing,
 } from '../../src/lib/linearText.js';
 import { composeAnswerWithCoverage } from '../../src/core/agent/coverage/answer.js';
-import { timeFormsOfText } from '../../src/core/time/textForms.js';
-import { placeBeforeTime } from '../../src/core/time/resolve.js';
+import { timeFormsOfText } from '../../src/time/textForms.js';
+import { placeBeforeTime } from '../../src/time/resolve.js';
 import { idFromIri } from '../../src/ontology/skosJsonLd.js';
 import { azureBaseUrl } from '../../src/adapters/llm/azureUrl.js';
 import { ollama } from '../../src/adapters/llm/OllamaProvider.js';

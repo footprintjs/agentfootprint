@@ -1048,8 +1048,8 @@ export {
 // The time layer's run clock (time design § 4, step T3) — `.time()` and the
 // run's `time` input, and the rows the clock files on the ledger. Types only:
 // the doors are `AgentBuilder.time` and `run({ time })`.
-export type { RunTime, TimeClock, TimeOptions } from './core/time/clock.js';
-export type { TimeRange } from './core/time/range.js';
+export type { RunTime, TimeClock, TimeOptions } from './time/clock.js';
+export type { TimeRange } from './time/range.js';
 export type {
   CallRow,
   CallWindowRow,
@@ -1062,7 +1062,7 @@ export type {
   TimeDerivedRow,
   TimeReaderStamp,
   TimeReadingRow,
-} from './core/time/rows.js';
+} from './time/rows.js';
 // A tool's period forms and facts (step T5a) — `Tool.period`'s general form:
 // every shape the tool's period takes and the facts about its source; and the
 // call's time a tool is handed (`ctx.time`, over MCP `_meta.agentfootprint.time`).
@@ -1075,8 +1075,8 @@ export type {
   PeriodForm,
   PeriodSpelling,
   ZoneArgument,
-} from './core/time/convert.js';
-export type { TimeContext } from './core/time/wire.js';
+} from './time/convert.js';
+export type { TimeContext } from './time/wire.js';
 // The time layer's reader port (step T6a) — `.time({ reader, policy })`: a
 // strategy returns zone-less PARTS, the library resolves them. Types only.
 export type {
@@ -1088,11 +1088,11 @@ export type {
   TimeReading,
   TimeRelative,
   TimeWall,
-} from './core/time/reader.js';
+} from './time/reader.js';
 // The library's careful English reader (step T6b) — a tokenizer over the v1
 // phrases, "unreadable" for the rest: `.time({ reader: englishTimeReader() })`.
-export { englishTimeReader } from './core/time/readers/english.js';
-export type { EnglishTimeReaderOptions } from './core/time/readers/english.js';
+export { englishTimeReader } from './time/readers/english.js';
+export type { EnglishTimeReaderOptions } from './time/readers/english.js';
 export type {
   OpenQuestion,
   ReadingChoice,
@@ -1104,7 +1104,7 @@ export type {
   TimePolicy,
   TimeWindow,
   ZoneAbbreviation,
-} from './core/time/resolve.js';
+} from './time/resolve.js';
 // The time ask (step T4) — a `requestInput` field with a `format`
 // (`'instant' | 'time-range' | 'zone'`) is checked at the resume door; a
 // refused answer is asked again with a catalog reason. The catalog is data an
@@ -1115,7 +1115,7 @@ export type {
   TimeAskMessageKey,
   TimeAskMessages,
   TimeFormat,
-} from './core/time/ask.js';
+} from './time/ask.js';
 export { defaultTimeAskMessages } from './locales/timeAsk.js';
 export {
   answerFromElicitation,

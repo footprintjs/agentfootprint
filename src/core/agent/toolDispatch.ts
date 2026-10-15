@@ -43,7 +43,7 @@ import {
   sentFormOf,
   untakenBesides,
 } from './arguments/declare.js';
-import { formArguments, type PeriodForm } from '../time/periodForm.js';
+import { formArguments, type PeriodForm } from '../../time/periodForm.js';
 import type {
   Tool,
   ToolDispatch,

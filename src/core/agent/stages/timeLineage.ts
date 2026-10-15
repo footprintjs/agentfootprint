@@ -4,7 +4,7 @@
  * never loads.
  *
  * Pattern: Walker over the committed ledger — the turn's recorded windows
- *          (`core/time/forms.ts` · `turnFormsWindowsOf`), the values the
+ *          (`time/forms.ts` · `turnFormsWindowsOf`), the values the
  *          library filled from a window (`./route.ts` · `isWindowFillRow`) and
  *          the served time line.
  * Role:    the Route decider loads it through `import()` under `.time()` only
@@ -20,8 +20,8 @@
  * ```
  */
 
-import { timeFormsOf, turnFormsWindowsOf } from '../../time/forms.js';
-import { clockOf, presentationZoneOf } from '../../time/rows.js';
+import { timeFormsOf, turnFormsWindowsOf } from '../../../time/forms.js';
+import { clockOf, presentationZoneOf } from '../../../time/rows.js';
 import type { PeriodRow } from '../coverage/period.js';
 import { HIDDEN_VALUE } from '../arguments/rows.js';
 import type { FindingsLedger } from '../findings/types.js';
@@ -32,7 +32,7 @@ import { isWindowFillRow, type TimeLineage } from './route.js';
 // detached: yes — fresh arrays per call, read from the committed ledger and the served time line.
 /**
  * This turn's time spellings, split by lineage (time design § 9.5, step T7):
- * per recorded window and offered proposal (`core/time/forms.ts` ·
+ * per recorded window and offered proposal (`time/forms.ts` ·
  * `turnFormsWindowsOf`), the spellings `timeFormsOf` files as the person's and
  * as the library's; the turn's clock at the grain it is served (G16); plus,
  * as the library's, every value it filled from a window into a call

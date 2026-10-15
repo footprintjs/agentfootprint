@@ -35,9 +35,9 @@ import type { HonestyLayers } from '../honesty/armed.js';
 import type { FindingsLedger } from '../findings/types.js';
 import type { Ontology } from '../../../ontology/types.js';
 import type { Tool } from '../../tools.js';
-import type { ClockDraft } from '../../time/clock.js';
-import type { TimeReader } from '../../time/reader.js';
-import type { TimePolicy } from '../../time/resolve.js';
+import type { ClockDraft } from '../../../time/clock.js';
+import type { TimeReader } from '../../../time/reader.js';
+import type { TimePolicy } from '../../../time/resolve.js';
 import { carriedRunPolicy } from '../../../redaction/conversation.js';
 import { policyInForce } from '../../../redaction/runRedaction.js';
 
@@ -146,14 +146,14 @@ export interface SeedStageDeps {
    * THE TIME LAYER'S CLOCK (`.time()`) — the current run's clock draft, read
    * once, after the turn is known: seed completes it with the turn's start
    * (`turnStartMs`, when the app passed no `now`) and files ONE `clock` row
-   * (`core/time/rowsBuild.ts` · `clockRow`). Absent on an agent without the layer,
+   * (`time/rowsBuild.ts` · `clockRow`). Absent on an agent without the layer,
    * so nothing is read or written.
    */
   readonly timeClock?: () => ClockDraft | undefined;
   /**
    * THE TIME LAYER'S READER (`.time({ reader, policy })`) — seed reads the
    * turn's message through it ONCE, after the clock is stamped, and files
-   * one `time-reading` row per mention (`core/time/rowsBuild.ts` ·
+   * one `time-reading` row per mention (`time/rowsBuild.ts` ·
    * `timeReadingRows`). Only a message a person wrote (`lib/saidByPerson.ts`
    * · `isSaidByPerson`, and never a composed run's message); never again for
    * a turn that already has its rows (a retry). Absent → nothing is read.

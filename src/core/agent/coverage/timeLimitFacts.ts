@@ -10,7 +10,7 @@
  *          (`agent/buildAgentChart.ts` · `timeLimitsArg`), which runs before
  *          any `import()` can: it hands these facts across, and the slot's
  *          served line renders them (`arguments/serve.ts` · `timeLimitsLine`,
- *          loaded under the arm). The renderer (`core/time/present.ts`) never
+ *          loaded under the arm). The renderer (`time/present.ts`) never
  *          reaches the graph `import { Agent }` loads (the optional-family
  *          law, `test/lib/trace-toolpack/browserGraph.test.ts`).
  * Emits:   N/A.
@@ -27,14 +27,14 @@
  */
 
 import type { PeriodRow } from './period.js';
-import { clockOf, presentationZoneOf, sourceClocksOf } from '../../time/rows.js';
+import { clockOf, presentationZoneOf, sourceClocksOf } from '../../../time/rows.js';
 import {
   clocksDiffer,
   distinctSources,
   type ClocksDiffer,
   type SourceClock,
-} from '../../time/checkRecord.js';
-import type { ZoneName } from '../../time/zone.js';
+} from '../../../time/checkRecord.js';
+import type { ZoneName } from '../../../time/zone.js';
 
 /** Who reads the lines: the person (the limits block) or the model (the served time line). */
 export type TimeLimitsAudience = 'person' | 'model';

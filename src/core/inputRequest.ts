@@ -7,8 +7,8 @@ import {
   type TimeAnswerRefusal,
   type TimeAskMessages,
   type TimeFormat,
-} from './time/ask.js';
-import type { ZoneName } from './time/zone.js';
+} from '../time/ask.js';
+import type { ZoneName } from '../time/zone.js';
 import { defaultTimeAskMessages } from '../locales/timeAsk.js';
 
 /** Typed missing-input values. Collection is distinct from permission or consent. */

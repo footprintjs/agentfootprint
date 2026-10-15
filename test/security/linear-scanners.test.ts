@@ -44,7 +44,7 @@ import {
   pemCertificateBlocks,
 } from '../../src/adapters/identity/directory/ldapDirectory.js';
 import { firstEmail, patternFactExtractor } from '../../src/memory/facts/patternFactExtractor.js';
-import { placeBeforeTime } from '../../src/core/time/resolve.js';
+import { placeBeforeTime } from '../../src/time/resolve.js';
 import { withoutQuery } from '../../src/ontology/skosJsonLd.js';
 import { countTextWork } from '../helpers/workCount.js';
 import { seeded, seededTexts } from '../helpers/seededText.js';
@@ -56,7 +56,7 @@ import {
   MODIFIER_BEFORE,
   saysBetweenBefore,
   windowBefore,
-} from '../../src/core/time/readers/english.js';
+} from '../../src/time/readers/english.js';
 
 const N = 100_000;
 

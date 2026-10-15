@@ -44,7 +44,7 @@ import type { OutputAttempt } from './outputEnforcement.js';
 import type { PendingEvidenceRecovery, UnsupportedValue } from './evidence/types.js';
 import type { AgentRunCheckpoint } from '../runCheckpoint.js';
 import type { FindingsLedger } from './findings/types.js';
-import type { RunTime, TimeOptions } from '../time/clock.js';
+import type { RunTime, TimeOptions } from '../../time/clock.js';
 import type { ToolChoiceLedger } from './toolChoice/types.js';
 import type { Classifier } from '../../classify/types.js';
 import type { Ontology, OntologyAsk, OntologyRecord } from '../../ontology/types.js';
@@ -311,7 +311,7 @@ export interface AgentOptions {
    */
   readonly answerLayer?: boolean | { readonly standingLine?: boolean };
   /**
-   * THE TIME LAYER'S CLOCK (`core/time/`) — every run declares its clock: a
+   * THE TIME LAYER'S CLOCK (`time/`) — every run declares its clock: a
    * zone (the run's `time.zone`, else this fallback; with neither the zone is
    * unknown — never the server's, never guessed: the person is asked it first)
    * and a `now` (the run's, else the turn's

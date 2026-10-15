@@ -258,7 +258,7 @@ export interface EvidenceVerdict {
    * Under `.time()` (step T7): the values no tool result carried that the
    * library itself spelled from a time reading of this turn — an implied
    * year, an offset, the end-of-grain minute, the served time line
-   * (`core/time/forms.ts` · `timeFormsOf`'s `derived` list). Never
+   * (`time/forms.ts` · `timeFormsOf`'s `derived` list). Never
    * `unsupported` (the library produced them) and never the person's: the
    * answer's standing reads them as `derived-from-reading`, "not sure" at
    * most. Absent when the gate was not handed the list.

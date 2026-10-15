@@ -304,7 +304,7 @@ export function argumentRowOf(
 
 /**
  * The row for a value the library filled from the turn's ONE window of the
- * person's (the time layer, `core/time/bind.ts`): from the window the person
+ * person's (the time layer, `time/bind.ts`): from the window the person
  * settled in the time ask (`answered`, `matched: 'mention'`), from a `model`
  * reader's unconfirmed reading of their words (`said`, `matched: 'mention'`
  * and `reading` — it can support "not sure", never "known"), or from a window

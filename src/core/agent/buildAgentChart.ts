@@ -59,8 +59,8 @@ import { unwrapMemoryFlowChart } from '../../memory/define.js';
 import { mountMemoryRead, mountMemoryWrite } from '../../memory/wire/mountMemoryPipeline.js';
 import { withMemoryRecall } from './memoryRecallInjections.js';
 import { offeredResultIds } from './findings/offer.js';
-import { readerWindowsOf } from '../time/windows.js';
-import { clockOf } from '../time/rows.js';
+import { readerWindowsOf } from '../../time/windows.js';
+import { clockOf } from '../../time/rows.js';
 import { timeLimitFactsOf, type TimeLimitFacts } from './coverage/timeLimitFacts.js';
 import type { FindingsLedger } from './findings/types.js';
 import {
@@ -310,7 +310,7 @@ export interface AgentChartDeps {
   /**
    * The time layer is armed (`.time()`). Gates ONE mount arg on the Tools
    * branch's `inputMapper`: `timeWindows`, the turn's windows with the turn's
-   * clock (`core/time/windows.ts` · `readerWindowsOf`, off
+   * clock (`time/windows.ts` · `readerWindowsOf`, off
    * `parent.findingsLedger`) — the reader's (step T6b) and the app's control
    * window (`time.window`) — value-conditional, so a turn with none crosses no
    * key. The slot serves the reader's on each tool that declares a period and

@@ -200,11 +200,11 @@ memory; only what the record SHOWS changes.
 ## Under `.time()` — the person's window, into a period's own arguments (time layer, step T5a)
 
 A `ToolPeriod` names every shape the period takes (`forms`; `{ argument, spelling }` is
-shorthand — `core/time/convert.ts` · `sugarForms`) and facts about the source; each argument a
+shorthand — `time/convert.ts` · `sugarForms`) and facts about the source; each argument a
 form names carries a rule, as the single argument always did (an `object` form's argument
 excepted: a ruled argument is flat). With `.time()` armed, the mount hands the layer this turn's
 `clock` and `time-reading` rows (`honesty/mounts.ts` · `timeInputsOf`), and each stage asks ONE
-pure decision per call (`resolve.ts` · `timeDecisionsOf` over `core/time/bind.ts` ·
+pure decision per call (`resolve.ts` · `timeDecisionsOf` over `time/bind.ts` ·
 `callWindowOf`) — the table's rows for the period's arguments become:
 
 | The call's period arguments | Row | Runs with |
@@ -214,7 +214,7 @@ pure decision per call (`resolve.ts` · `timeDecisionsOf` over `core/time/bind.t
 | sent, and the declared `user` quote names a mention whose window it IS | `said` + `matched: 'mention'` (a reading stays a reading) | as sent — never asked |
 | sent, equal to a window by value, or different from the person's | the check's own verdict (`model`, a reading, …) | as sent — a differing window is NOT asked about (the v1 law: record and run) |
 
-One `call-window` row per such call says which (`core/time/rows.ts` · `CallWindowRow`),
+One `call-window` row per such call says which (`time/rows.ts` · `CallWindowRow`),
 merged in the same ONE write as the argument rows; the tool is handed `ctx.time`, read off that
 row at dispatch (`stages/timeLayer.ts` · `callTimeContext`). The batch ask's answer for a period
 argument is also judged against the tool's `direction`, `retention` and `maxRange` at the turn's
@@ -236,7 +236,7 @@ defineTool({
 ```
 
 **Wider, refused, drifted (step T5b).** When no form holds the window exactly, the fill takes
-the first form that holds MORE (`core/time/convert.ts` · `convertWidened`: a range inside one
+the first form that holds MORE (`time/convert.ts` · `convertWidened`: a range inside one
 day → that `day`; a range ending before now → the covering look-back from now, never wider
 than the tool's `maxRange`) — the argument rows are the same, the `call-window` row adds `sent`
 and `differs.extra` (or `trimmedByTool` under `filtersToAsked`), and the note's window clause
@@ -249,12 +249,12 @@ is the record); a window only partly beyond `retention` runs, marked `partlyBeyo
 A window of the person's that NO form can read, not even wider — a window still running to a
 look-back-only tool, a covering look-back longer than `maxRange` — is refused the same way
 (`no-form-holds`), never left to the tool's rule: an assumed `1h` would read a time nobody asked
-about. The fill, the time ask and the served line all ask ONE owner, `core/time/convert.ts` ·
+about. The fill, the time ask and the served line all ask ONE owner, `time/convert.ts` ·
 `convertForTool`. A window the model sent in one form leaves another form's missing arguments
 alone — never filled or asked (`resolve.ts` · `untakenFormArgumentsOf`) — with or without `.time()`
 (`resolve.ts` · `windowUntakenOf`: a call that sends its bounds is not also handed the assumed look-back). At dispatch, a look-back the clock
 drifted past (§ 7.4) is redrawn only when the library wrote it (`stages/toolCalls.ts` ·
-`timeAtDispatch` over `core/time/drift.ts`); the `call` row records `drift`.
+`timeAtDispatch` over `time/drift.ts`); the `call` row records `drift`.
 
 ```ts
 // period: { argument: 'window', spelling: 'lookback', direction: 'past' }, "yesterday", {} sent →
@@ -277,7 +277,7 @@ its period out while the turn's one mention is open (`not-filled` / `open-readin
 period is asked too (`resolve.ts` · `verifyPlan`: its default never stands in for words the person
 wrote); the batch ask then asks ONE window field for every such call instead of one field per
 argument (`ask.ts` · `planAskFields` with the plan `stages/argumentAsk.ts` · `windowPlanOf` builds
-from `core/time/readingAsk.ts` · `timeAskOf`): the zone first for an abbreviation, then the readings
+from `time/readingAsk.ts` · `timeAskOf`): the zone first for an abbreviation, then the readings
 every member tool's facts allow as labelled, pre-filled `time-range` choices naming each window's
 zone, free entry open. The answer is converted into each call's forms (`bindAnswer` → exactly, else
 wider), filed `answered` per argument, filled with `ArgumentFill.window` (the note's window clause:
@@ -290,7 +290,7 @@ the turn are filled from it (`answered` + `matched: 'mention'`) and it is not as
 tool description: ONE request-only `user` line appended last to each request (`serve.ts` ·
 `timeWindowsLine`, composed at the slot's one decoration site from the tools really served, carried
 on `timeLine` = `{ iteration, text }`, appended by `callLLM`, rebuilt by `servedView`; the mount
-reads the windows with `core/time/windows.ts` · `readerWindowsOf`). Under `.time()` it opens, after
+reads the windows with `time/windows.ts` · `readerWindowsOf`). Under `.time()` it opens, after
 who says it, with the turn's clock on EVERY request (`serve.ts` · `clockSentence`, G16: "This turn's
 time: Friday 2026-10-09 08:40 America/Los_Angeles (UTC-07:00)." — under an unknown zone, G15, the UTC
 spelling "(the person's time zone is not known)"). It is the library's CONCLUSION,
@@ -318,7 +318,7 @@ zone, never that it "shows its reading".
 
 **Open means "the person wrote a time and the library holds no window for it" (packet "gaps").**
 A reading waiting on its zone (no candidates yet) and words the reader could not read
-(`by: 'none'`) are open too (`core/time/windows.ts` · `isOpenForPerson`, the one owner) — so the
+(`by: 'none'`) are open too (`time/windows.ts` · `isOpenForPerson`, the one owner) — so the
 `proposed` check above fires for them as well, and a tool whose rule assumes its period is asked,
 never defaulted. The unread words are asked as ONE window field with nothing pre-filled
 (`format: 'time-range'`, "Which time did you mean by “yesterday morning”?"), judged and converted
@@ -533,7 +533,7 @@ and neither parses the other's words. The answer's standing names both rows as
 the witnesses of a `period-*` reason. This layer's rows, served bytes and refusals
 are unchanged.
 
-**The spellings are the time layer's grammar** (`src/core/time/README.md`). A look-back is
+**The spellings are the time layer's grammar** (`src/time/README.md`). A look-back is
 `duration.ts` under today's units (`mhdw`, any number of digits; `30s` is not a look-back), and an
 `iso-range` is `range.ts` · `splitRange` under `..` in the STRICT instant profile: upper-case
 `T`/`Z`, no leap second, and a day that exists — `2026-02-30T08:00Z..…` and hour `24` are refused
@@ -587,7 +587,7 @@ the PERFORMANCE block), and the resume adds no model call.
   supports "known" — it only keeps a reason from firing — and why the bench counts one-token
   quotes. This check never parses a time phrase: only phrases an author declared (`said` on a
   choice) are matched, as whole tokens, inside a quote the model declared (the person's words are
-  read as time only through a reader the app arms — `src/core/time/`).
+  read as time only through a reader the app arms — `src/time/`).
 - **Unicode folding.** A character outside the token alphabet (full-width `２４ｈ`) vanishes on
   both sides; a value or quote left with no token is `uncheckable`. Folding, if wanted, belongs
   in `evidence/normalize.ts` for the evidence gate and this layer together.

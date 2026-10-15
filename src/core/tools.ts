@@ -26,7 +26,7 @@ import {
 import { assertAskComponent, type AskComponent } from './askComponent.js';
 import { warnIfInvalidToolName } from '../lib/toolName.js';
 import { assertAskOrAssume, type AskOrAssume, type ToolPeriod } from './agent/arguments/declare.js';
-import type { TimeContext } from './time/wire.js';
+import type { TimeContext } from '../time/wire.js';
 import type { CheckInDemand } from './checkin.js';
 import type { TeardownOptions, TeardownScope } from './toolSessions.js';
 
@@ -729,7 +729,7 @@ export interface ToolExecutionContext {
   /** Current iteration number of the ReAct loop. */
   readonly iteration: number;
   /**
-   * The call's time (the time layer, step T5a — `core/time/wire.ts`): the
+   * The call's time (the time layer, step T5a — `time/wire.ts`): the
    * half-open range the call asks for (`asked`, edge `'exclusive'` — the
    * person's window when the library filled or bound it, the sent value read
    * back otherwise), the person's zone, the turn's frozen `now` and the

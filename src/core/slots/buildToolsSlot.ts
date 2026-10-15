@@ -47,9 +47,9 @@ import {
 import { carriesRules } from '../agent/arguments/declare.js';
 import type { Classifier } from '../../classify/types.js';
 import type { ToolChoiceEntry } from '../agent/toolChoice/types.js';
-import type { ReaderWindows } from '../time/bind.js';
+import type { ReaderWindows } from '../../time/bind.js';
 import type { ServedClock } from '../agent/arguments/serve.js';
-import type { ZoneName } from '../time/zone.js';
+import type { ZoneName } from '../../time/zone.js';
 import type { TimeLimitFacts } from '../agent/coverage/timeLimitFacts.js';
 
 /**
@@ -428,7 +428,7 @@ export interface ToolsSlotConfig {
    * which appends it LAST to the request, never to history. The tool schemas
    * are not touched. Reads two mount args under this gate only, `timeClock`
    * (`agent/buildAgentChart.ts` · `timeClockArg`) and `timeWindows`
-   * (`core/time/windows.ts` · `readerWindowsOf` — absent on a turn with none).
+   * (`time/windows.ts` · `readerWindowsOf` — absent on a turn with none).
    * `appZone` is the app's `.time({ zone })`. `reader` — the reader is armed
    * (`.time({ reader })`, step T6b) beside `inputsLayer`: the line is written EVERY composition
    * (`''` when there is nothing to say), so a slot that does not re-run never

@@ -101,7 +101,7 @@ import {
   findingsInstructionFor,
 } from './findings/reserved.js';
 import { readInputsLayerOption } from './honesty/armed.js';
-import { readTimeOptions, type TimeOptions } from '../time/clock.js';
+import { readTimeOptions, type TimeOptions } from '../../time/clock.js';
 import { ONTOLOGY_INSTRUCTION, ONTOLOGY_INSTRUCTION_ID } from '../../ontology/instruction.js';
 import type { CompactionOptions } from './window/types.js';
 import type { WindowStrategy } from './window/strategy.js';

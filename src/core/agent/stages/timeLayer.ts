@@ -25,14 +25,14 @@
 import type { TypedScope } from 'footprintjs';
 import type { LLMMessage } from '../../../adapters/types.js';
 import { isSaidByPerson } from '../../../lib/saidByPerson.js';
-import { completeClock } from '../../time/clock.js';
-import { granularityMsOf } from '../../time/convert.js';
-import { driftAtDispatch } from '../../time/drift.js';
-import { checkReading, type TimeReading } from '../../time/reader.js';
-import { answeredZoneOf, callWindowOfCall, clockOf, readingsOf } from '../../time/rows.js';
-import { callRow, clockOnResumeRow, clockRow, timeReadingRows } from '../../time/rowsBuild.js';
-import { timeContextOf, type TimeContext } from '../../time/wire.js';
-import { tzdataVersion, type ZoneName } from '../../time/zone.js';
+import { completeClock } from '../../../time/clock.js';
+import { granularityMsOf } from '../../../time/convert.js';
+import { driftAtDispatch } from '../../../time/drift.js';
+import { checkReading, type TimeReading } from '../../../time/reader.js';
+import { answeredZoneOf, callWindowOfCall, clockOf, readingsOf } from '../../../time/rows.js';
+import { callRow, clockOnResumeRow, clockRow, timeReadingRows } from '../../../time/rowsBuild.js';
+import { timeContextOf, type TimeContext } from '../../../time/wire.js';
+import { tzdataVersion, type ZoneName } from '../../../time/zone.js';
 import {
   isRefused,
   periodFactsOf,
@@ -56,7 +56,7 @@ import type { ToolCallsHandlerDeps } from './toolCalls.js';
  * resume keeps it — `stages/toolCalls.ts` records a differing `time` as
  * `clock-on-resume`). No accessor, or no draft → nothing is written. A draft
  * whose zone is unknown (G15) takes the zone the person answered in an earlier
- * turn (`core/time/rows.ts` · `answeredZoneOf`, `zoneSource: 'answered'`), else stays
+ * turn (`time/rows.ts` · `answeredZoneOf`, `zoneSource: 'answered'`), else stays
  * unknown — never the server's.
  */
 export function stampClock(scope: TypedScope<AgentState>, deps: SeedStageDeps): void {
@@ -127,10 +127,10 @@ export function readTimeWords(
 // ─── ToolCalls ───────────────────────────────────────────────────────────
 
 /**
- * The time layer at one dispatch: the `call` row (`core/time/rowsBuild.ts` ·
+ * The time layer at one dispatch: the `call` row (`time/rowsBuild.ts` ·
  * `callRow`) — the wall clock read at the moment the library hands the call
  * to the tool — and, for a call that sent a look-back, the clock at dispatch
- * (§ 7.4, `core/time/drift.ts` · `driftAtDispatch`): past the tool's step the
+ * (§ 7.4, `time/drift.ts` · `driftAtDispatch`): past the tool's step the
  * library's OWN look-back fill is re-sent as the asked range in the tool's
  * absolute form (`args` comes back redrawn), and any other look-back runs as
  * sent and is recorded shifted. Filed through the one writer; no event (the
@@ -193,7 +193,7 @@ function redrawnArgs(
 }
 
 /**
- * `ctx.time` for one call (`core/time/wire.ts` · `TimeContext`, time design
+ * `ctx.time` for one call (`time/wire.ts` · `TimeContext`, time design
  * § 7.5) — present only when the inputs layer filed a `call-window` row for
  * it this turn (its tool's period declares forms) and the turn has a clock:
  * the range the call asks for, the person's zone, the frozen `now` and the
@@ -215,7 +215,7 @@ export function callTimeContext(
 
 /**
  * A resume's passed `time` against the paused turn's kept clock — one
- * `clock-on-resume` row when they differ (`core/time/rowsBuild.ts` ·
+ * `clock-on-resume` row when they differ (`time/rowsBuild.ts` ·
  * `clockOnResumeRow`), nothing when nothing was passed, nothing differs, or
  * the paused turn has no clock (a checkpoint written by an agent without the
  * layer: there is no frozen clock to keep, and a resume never starts one

@@ -554,14 +554,14 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: 'the stored-conversation ledger refusal thrown to the host; it names the time rows’ `now` field',
     },
   ],
-  'src/core/time/clock.ts': [
+  'src/time/clock.ts': [
     {
       kind: 'not-model-facing',
       count: 3,
       why: 'the run clock input’s refusals (`now`, `time` shape), thrown to the caller of run() / resume() before the turn starts',
     },
   ],
-  'src/core/time/readers/english.ts': [
+  'src/time/readers/english.ts': [
     {
       kind: 'not-model-facing',
       count: 1,
@@ -1122,12 +1122,12 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // `handle.artifactsForRequest` binding after its instance was retired;
         // no model reads it. hosting/errors.ts not-model-facing 7 → 8.
         // Unreleased (time layer, step T3): four host-facing refusals naming the
-        // run clock's `now` — the run input's three in core/time/clock.ts (one
+        // run clock's `now` — the run input's three in time/clock.ts (one
         // new file) and the checkpoint door's ledger refusal, which now names
         // the time rows (runCheckpoint.ts 1 → 2). Thrown to the caller before
         // the turn starts, or at the door; no model reads them.
         // Unreleased (time layer, step T6b): one regular-expression SOURCE in
-        // the English time reader (core/time/readers/english.ts, one new file)
+        // the English time reader (time/readers/english.ts, one new file)
         // holds the word `now` — words it recognises in a person's message, never
         // text anyone reads. not-model-facing (1) — the leftover rule's word
         // list went with the owner's decision "Always confirm".

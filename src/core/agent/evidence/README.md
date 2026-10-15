@@ -45,7 +45,7 @@ looks the way it does, and it is stated again at the top of `gate.ts`.
 | file | one job |
 |---|---|
 | `types.ts` | the public vocabulary: posture, shape, options, verdict |
-| `normalize.ts` | one spelling per value, on BOTH sides (`41,200` ≡ `41200`). The other spellings of a date or clock time are NOT here: since time step T7 they are asked of `core/time/forms.ts` · `timeFormsOf` (its `said` list, by the exempt corpus only) |
+| `normalize.ts` | one spelling per value, on BOTH sides (`41,200` ≡ `41200`). The other spellings of a date or clock time are NOT here: since time step T7 they are asked of `time/forms.ts` · `timeFormsOf` (its `said` list, by the exempt corpus only) |
 | `extract.ts` | which tokens in an answer are DATA — the conservative rule |
 | `evidenceIndex.ts` | the structural walk of tool results, and the exempt corpus; `readResult` is the ONE reading of a result |
 | `servedJson.ts` | a served result that is NOT one JSON value, read by the JSON grammar: its leading value(s) — the tool's JSON before a framework note (a step banner, an effect note, the repeated-call note), an MCP text result's several blocks — and the text after them, and the complete leaves of JSON cut short (a capped result's `head`, a tool that truncated its own output) — never the token the cut falls inside — plus, when the cut falls inside a string, that string's whole words up to its last space, read as text (the word the cut may have split is left out: `mo` may be `more`). Read whole as text, `{"id":4417}` tokenises to `:4417`: every number and boolean the tool returned read as absent, a false flag at the gate and a false `not-in-result` in the inputs layer. Text that opens with a bracket and is not JSON stays text |
@@ -360,7 +360,7 @@ person (or the app) wrote is exempt in its other spellings. Nothing else is
 widened: a value is exempt only when it IS, or respells, something the person
 or the app said.** One owner each: `evidenceIndex.ts` · `typedAskAnswerOf`
 (read by `addHistoryExempt`, so the corpus and a fold's lineage take it the
-same way) and `core/time/forms.ts` · `timeFormsOf`'s `said` list for a text
+same way) and `time/forms.ts` · `timeFormsOf`'s `said` list for a text
 (read through `evidenceIndex.ts` · `addExempt`, the exempt corpus's one text
 door — until time step T7 this was a table private to this folder,
 its `dateAndClockForms` in `normalize.ts`; the job moved, the cases did not).
@@ -419,7 +419,7 @@ the fold's lineage, byte identity).
 **Under `.time()` beside the inputs layer, the gate tells THREE lineages of a
 time value apart: the person's (exempt), the library's (`derived-from-reading`
 — never invented, never known), and nobody's (flagged). It keeps no time table
-of its own: it asks `core/time/forms.ts` · `timeFormsOf`, the one owner of
+of its own: it asks `time/forms.ts` · `timeFormsOf`, the one owner of
 which spelling of a time is whose (time design § 9.5).**
 
 Why: every reading of chat time words is confirmed by the person (TQ29), so an
@@ -432,7 +432,7 @@ person's words. Neither is true, so the record says which.
 | the value in the answer | lineage | the gate | the standing |
 |---|---|---|---|
 | a part the person WROTE, at the grain they wrote it (`8:00` for "8 AM", `08:40`, `2026-10-09` for a confirmed `10/09/26`), or any part of a window they typed in the ask or set in a UI | said | exempt (`exemptFromRun`'s `timeSaid`) | nothing fires |
-| an implied year, the abbreviation in effect, an offset, the end-of-grain minute, a UTC or epoch spelling, a look-back's duration, the window's length ("6:25 to 6:45" → `20-minute`, and `21-minute` read to the end of its grain), a value the library filled from the window, a value of the served time line, the turn's clock at its served minute (`7:08`, the date, the year — never `7:09` or its seconds), any part of a `model` reading or of a reading the time ask offers that the person has not answered yet (`06:25:00` for "6:25") | `derived-from-reading` | not flagged: `EvidenceVerdict.derived`, filed as ONE `time-derived` row per judged answer that stands (`core/time/rows.ts`) | `derived-from-reading` — "not sure", never "known" |
+| an implied year, the abbreviation in effect, an offset, the end-of-grain minute, a UTC or epoch spelling, a look-back's duration, the window's length ("6:25 to 6:45" → `20-minute`, and `21-minute` read to the end of its grain), a value the library filled from the window, a value of the served time line, the turn's clock at its served minute (`7:08`, the date, the year — never `7:09` or its seconds), any part of a `model` reading or of a reading the time ask offers that the person has not answered yet (`06:25:00` for "6:25") | `derived-from-reading` | not flagged: `EvidenceVerdict.derived`, filed as ONE `time-derived` row per judged answer that stands (`time/rows.ts`) | `derived-from-reading` — "not sure", never "known" |
 | anything else (`09:15` nobody read, `2031`) | none | flagged, as always | `value-unsupported` |
 
 The order is exempt → the tools' results → derived: a value a tool returned is
@@ -460,9 +460,9 @@ derived.includes('08:41'); // true  — the end of that minute is the library's
 derived.includes('PDT');   // true  — they said PST
 ```
 
-Pinned by `test/core/time/forms.test.ts` (the lists, the text rule equal to
+Pinned by `test/time/forms.test.ts` (the lists, the text rule equal to
 the retired table over seeded texts, the reader over a ledger, the row, the
-fold) and `test/core/time/lineage-run.test.ts` (the field run end to end; an
+fold) and `test/time/lineage-run.test.ts` (the field run end to end; an
 invented time and year still flagged; byte identity without `.time()`).
 
 ## A glued-unit number is met on the lookup side only (9.110.0)

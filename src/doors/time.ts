@@ -34,7 +34,7 @@
  *
  * Pure functions over a clock the caller passes: no run, no record, no
  * `.time()`. A door of its own because the conversions are the time layer's
- * RUN-TIME half, which a plain agent never loads (`src/core/time/README.md` ·
+ * RUN-TIME half, which a plain agent never loads (`src/time/README.md` ·
  * "What a plain agent carries"; pinned by
  * `test/lib/trace-toolpack/browserGraph.test.ts`): on the main barrel they
  * would put that half on every consumer's default graph. The shapes they take
@@ -66,13 +66,13 @@ export {
   type ToolConversion,
   type WidenedConversion,
   type WindowToConvert,
-} from '../core/time/convert.js';
+} from '../time/convert.js';
 export {
   periodFactProblem,
   sugarForms,
   type PeriodFactProblem,
   type PeriodShapes,
   type TimeRefusal,
-} from '../core/time/periodForm.js';
-export { presentRange, type Grain, type Presentation } from '../core/time/present.js';
-export { isZoneName, type ZoneName } from '../core/time/zone.js';
+} from '../time/periodForm.js';
+export { presentRange, type Grain, type Presentation } from '../time/present.js';
+export { isZoneName, type ZoneName } from '../time/zone.js';

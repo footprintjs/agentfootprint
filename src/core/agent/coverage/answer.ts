@@ -47,7 +47,7 @@
 import { copyInProgressItem, IN_PROGRESS_SECTION_LABEL, inProgressLine } from './inProgress.js';
 import { mergeItems } from './items.js';
 import { copyPeriod, periodLine, type DeclaredPeriod } from './period.js';
-import type { BoundPresentation } from '../../time/present.js';
+import type { BoundPresentation } from '../../../time/present.js';
 import type { Coverage, CoverageItem, DeclaredCoverage, InProgressItem } from './types.js';
 import { isRegExpWhitespace, trimTrailing } from '../../../lib/linearText.js';
 

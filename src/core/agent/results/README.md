@@ -62,7 +62,7 @@ not read is `missing`, read but not asked is `extra`, and either makes the answe
 
 With `.time()` armed, the mount also hands the layer each call's time rows (`honesty/mounts.ts` ·
 `timeOfBatch`: its `call-window` row and its `call` row's `drift`) and the clock's `now`; Verify
-asks `core/time/check.ts` · `periodTimeCheck` and Record files what holds on the call's `period`
+asks `time/check.ts` · `periodTimeCheck` and Record files what holds on the call's `period`
 row — `differs { against, asked, read, source, stepMs?, missing, extra }`, `shifted { byMs }`,
 `beyondRetention`, `partlyBeyondRetention` — and names them (never a range) on the
 `findings.period` event's `timeChecks`. What was read: the result's declared `queried` (inclusive,
@@ -92,7 +92,7 @@ came from (`results/subflow.ts` · `heldSpanOf`). The served time line hands the
 conclusion in the person's zone (`coverage/timeLimits.ts` · `heldLine`: "pscale_client_health asked
 about 2026-09-30 06:00:00–11:59:50 America/Los_Angeles (UTC-07:00); its source holds 2026-10-01
 09:22:44.300–10:02:44.300 America/Los_Angeles (UTC-07:00), which covers none of that time"), and the evidence
-gate spells it as the library's (`core/time/forms.ts` · `timeFormsOf`, its `held` source). Take 3 of the
+gate spells it as the library's (`time/forms.ts` · `timeFormsOf`, its `held` source). Take 3 of the
 demo video is why: served only the UTC instants, the model converted the start and not the end
 ("9:22 AM–5:02 PM Pacific" for 16:22–17:02 UTC). The person's limits block gets no second line —
 its `Period:` line already prints both spans in their zone. The `findings.period` event is

@@ -4,7 +4,7 @@
  * simulated person, the scripted mock's variants, and the sheet's own checks.
  *
  * THE QUESTION. Under `.time()`, step T8 compares what each call READ with what it ASKED
- * (`core/time/check.ts` · `periodTimeCheck`), folds "not sure" when they differ or the time asked
+ * (`time/check.ts` · `periodTimeCheck`), folds "not sure" when they differ or the time asked
  * about is older than the source keeps, labels sources on different clocks, prints the limits for
  * the person and serves them to the model late (`arguments/serve.ts` · `timeLimitsSentence`).
  * Does the answer's standing then match the planted truth — "not sure" where part of the asked

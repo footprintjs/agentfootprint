@@ -35,9 +35,9 @@
 
 import type { TypedScope } from 'footprintjs';
 
-import { turnWindowsOf } from '../../time/bind.js';
-import type { CallWindowRow, ClockRow, TimeAnswerRow, TimeReadingRow } from '../../time/rows.js';
-import type { ZoneName } from '../../time/zone.js';
+import { turnWindowsOf } from '../../../time/bind.js';
+import type { CallWindowRow, ClockRow, TimeAnswerRow, TimeReadingRow } from '../../../time/rows.js';
+import type { ZoneName } from '../../../time/zone.js';
 import type { SourceCorpus } from './checks.js';
 import type { KeptAnswer } from './kept.js';
 import type { ArgumentRow } from './rows.js';
@@ -83,7 +83,7 @@ export interface SourceInputs {
 /**
  * Under `.time()`: the rows of THIS turn the time layer reads — the turn's
  * `clock` row, its `time-reading` rows and its `time-answer` rows (the
- * windows the person settled in the time ask — `core/time/bind.ts` ·
+ * windows the person settled in the time ask — `time/bind.ts` ·
  * `turnWindowsOf`). Handed by the mount only under the arm, for a batch with
  * calls, and only once the turn has a clock.
  */
