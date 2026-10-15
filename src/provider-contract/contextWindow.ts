@@ -24,7 +24,7 @@
  * reached … tokens per min") is a different failure with a different fix and
  * must never land here — which is why no pattern matches on "too many tokens".
  *
- * @see ../../core/runCheckpoint.ts  where this class makes `resumeOnError`
+ * @see ../core/runCheckpoint.ts  where this class makes `resumeOnError`
  *                                   stop advertising a resume that cannot work
  */
 
@@ -268,7 +268,7 @@ export interface ContextWindowTranslation {
  * passing through `wrapError`, and a caller reading that error deserves the
  * same answer an adapter would have given.
  *
- * @see ../../core/runCheckpoint.ts — the caller this exists for
+ * @see ../core/runCheckpoint.ts — the caller this exists for
  */
 export function looksLikeContextWindowExceeded(err: unknown, bodyText?: string): boolean {
   if (isContextWindowExceeded(err)) return true;

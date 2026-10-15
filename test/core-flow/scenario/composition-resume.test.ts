@@ -21,7 +21,7 @@ import { Conditional } from '../../../src/core-flow/Conditional.js';
 import { Parallel } from '../../../src/core-flow/Parallel.js';
 import { Sequence } from '../../../src/core-flow/Sequence.js';
 import { isPaused, pauseHere } from '../../../src/core/pause.js';
-import type { LLMProvider, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMProvider, LLMResponse } from '../../../src/provider-contract/types.js';
 
 const resp = (
   content: string,

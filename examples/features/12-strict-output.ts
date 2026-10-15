@@ -33,7 +33,7 @@ import {
   type ReliabilityRule,
   type ReliabilityScope,
 } from '../../src/doors/resilience.js';
-import type { LLMProvider, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMProvider, LLMResponse } from '../../src/provider-contract/types.js';
 import { isCliEntry, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

@@ -9,7 +9,7 @@ import {
   receiptHash,
 } from '../../../src/index.js';
 import type { EvidenceRecoveryContext, NamesAndNumbersOptions } from '../../../src/index.js';
-import type { LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
 
 const question = 'Show SMB on SHISOLPLPAP006 between 14:15 and 14:40 on 11 September';
 const draft = 'Which year: 2024 or 2023?';

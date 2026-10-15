@@ -16,7 +16,7 @@ import type {
   LLMProvider,
   LLMRequest,
   LLMResponse,
-} from '../../../src/adapters/types.js';
+} from '../../../src/provider-contract/types.js';
 
 const MODEL = 'claude-sonnet-4-6';
 const response: AnthropicMessage = {

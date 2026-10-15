@@ -14,7 +14,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { CacheMarker } from '../../src/cache/types.js';
-import type { LLMChunk, LLMProvider, LLMRequest } from '../../src/adapters/types.js';
+import type { LLMChunk, LLMProvider, LLMRequest } from '../../src/provider-contract/types.js';
 import { anthropic } from '../../src/adapters/llm/AnthropicProvider.js';
 import { invokeModelGateway } from '../../src/adapters/llm/InvokeModelGatewayProvider.js';
 import { withFallback } from '../../src/resilience/withFallback.js';

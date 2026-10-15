@@ -20,7 +20,7 @@
  *   );
  */
 
-import type { LLMProvider } from '../adapters/types.js';
+import type { LLMProvider } from '../provider-contract/types.js';
 import { withFallback, type WithFallbackOptions } from './withFallback.js';
 
 export interface FallbackProviderOptions extends WithFallbackOptions {

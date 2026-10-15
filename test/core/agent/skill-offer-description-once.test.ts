@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { Agent, defineTool } from '../../../src/index.js';
 import { defineSkill, keywordScorer, skillGraph } from '../../../src/injection-engine.js';
 import { mock } from '../../../src/llm-providers.js';
-import type { LLMRequest, PermissionChecker } from '../../../src/adapters/types.js';
+import type { LLMRequest, PermissionChecker } from '../../../src/provider-contract/types.js';
 import type { MockReply } from '../../../src/adapters/llm/MockProvider.js';
 
 const descriptions = {

@@ -17,7 +17,7 @@ import {
   deny,
   type MessageMiddleware,
 } from '../../src/index.js';
-import type { LLMProvider } from '../../src/adapters/types.js';
+import type { LLMProvider } from '../../src/provider-contract/types.js';
 import type { LLMEndPayload } from '../../src/events/payloads.js';
 import { memorySessions, standingAgent } from '../../src/hosting/index.js';
 import type {

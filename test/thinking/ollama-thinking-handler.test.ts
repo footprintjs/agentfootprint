@@ -16,7 +16,7 @@ import {
 } from '../../src/thinking/OllamaThinkingHandler.js';
 import { SHIPPED_THINKING_HANDLERS } from '../../src/thinking/registry.js';
 import { ollama } from '../../src/adapters/llm/OllamaProvider.js';
-import type { LLMRequest } from '../../src/adapters/types.js';
+import type { LLMRequest } from '../../src/provider-contract/types.js';
 
 const baseRequest: LLMRequest = {
   messages: [{ role: 'user', content: 'hi' }],

@@ -1,7 +1,7 @@
 /**
  * Compile-level regression test — the v7.8 addition of an OPTIONAL second
  * `hooks?: LLMCallHooks` parameter to `LLMProvider.complete()` /
- * `stream()` (src/adapters/types.ts) must stay NON-BREAKING.
+ * `stream()` (src/provider-contract/types.ts) must stay NON-BREAKING.
  *
  * TypeScript permits a function with FEWER parameters to satisfy a
  * signature that declares more, so every provider written before v7.8 —
@@ -27,7 +27,7 @@ import type {
   LLMRequest,
   LLMResponse,
   ResilienceReport,
-} from '../../src/adapters/types.js';
+} from '../../src/provider-contract/types.js';
 import { withRetry } from '../../src/resilience/withRetry.js';
 
 const response: LLMResponse = {

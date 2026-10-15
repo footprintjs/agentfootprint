@@ -30,7 +30,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { Agent, defineTool } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
 import { memorySessions, standingAgent } from '../../src/hosting/index.js';
-import type { LLMProvider, LLMRequest, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMProvider, LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
 import { inProcessHost } from './testHost.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────

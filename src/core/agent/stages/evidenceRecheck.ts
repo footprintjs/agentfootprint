@@ -20,7 +20,7 @@
  */
 
 import type { TypedScope } from 'footprintjs';
-import type { LLMMessage, LLMToolSchema } from '../../../adapters/types.js';
+import type { LLMMessage, LLMToolSchema } from '../../../provider-contract/types.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import { MAX_REPORTED_VALUES } from '../evidence/gate.js';
 import { buildEvidenceRecovery } from '../evidence/recovery.js';

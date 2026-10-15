@@ -152,7 +152,7 @@
  * blind spot is honest and small: a claim nobody wrote an assertion for.
  */
 
-import type { LLMMessage, LLMToolSchema } from '../../adapters/types.js';
+import type { LLMMessage, LLMToolSchema } from '../../provider-contract/types.js';
 import type { ContextRole, ContextSlot, ContextSource } from '../../events/types.js';
 import type { InjectionRecord } from '../../recorders/core/types.js';
 import {

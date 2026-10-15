@@ -39,7 +39,7 @@
  * - **Assistant text** only to say a value was found nowhere else.
  */
 
-import type { LLMMessage, LLMToolSchema } from '../../../adapters/types.js';
+import type { LLMMessage, LLMToolSchema } from '../../../provider-contract/types.js';
 import type { ExternalGround } from '../../../integrity/unsupported-argument/check.js';
 import { isSaidByPerson } from '../../../lib/saidByPerson.js';
 import { toolBytesOf } from '../../../lib/toolBytes.js';

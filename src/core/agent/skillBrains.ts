@@ -40,7 +40,7 @@
  * port implementation), never a vendor name this library resolves.
  */
 
-import type { LLMProvider } from '../../adapters/types.js';
+import type { LLMProvider } from '../../provider-contract/types.js';
 import type { CacheStrategy } from '../../cache/types.js';
 import { cacheStrategyFor } from '../../cache/cacheStrategyFor.js';
 import type { Injection } from '../../lib/injection-engine/types.js';

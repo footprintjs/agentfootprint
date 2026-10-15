@@ -16,7 +16,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { llmRouter, RoutingDecisionError } from '../../../src/patterns/LlmRouter.js';
-import type { LLMProvider, LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMProvider, LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
 
 /** A provider that answers from a script and remembers every request. */
 function scripted(replies: readonly string[]): LLMProvider & { readonly seen: LLMRequest[] } {

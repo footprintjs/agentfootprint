@@ -34,7 +34,12 @@
  * Identical reasoning, identical shape, to the compaction frame.
  */
 
-import type { LLMMessage, LLMRequest, LLMResponse, LLMToolSchema } from '../../adapters/types.js';
+import type {
+  LLMMessage,
+  LLMRequest,
+  LLMResponse,
+  LLMToolSchema,
+} from '../../provider-contract/types.js';
 import { fnv1a } from '../slots/helpers.js';
 import {
   applyOutputSchema,

@@ -58,7 +58,7 @@
  * `start()` first runs (or never, if you inject `_client` / `_sdk`).
  */
 
-import type { CodeResult, CodeRunner, CodeSession } from '../types.js';
+import type { CodeResult, CodeRunner, CodeSession } from '../../provider-contract/types.js';
 import { hashSessionKey } from '../../core/toolSessions.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
 

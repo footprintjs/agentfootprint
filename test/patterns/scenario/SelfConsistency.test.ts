@@ -6,7 +6,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { selfConsistency } from '../../../src/patterns/SelfConsistency.js';
-import type { LLMProvider, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMProvider, LLMResponse } from '../../../src/provider-contract/types.js';
 
 function roundRobin(...responses: string[]): LLMProvider {
   let i = 0;

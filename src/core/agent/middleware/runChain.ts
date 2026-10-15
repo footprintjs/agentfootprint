@@ -44,7 +44,7 @@
  * value is that a row means somebody looked.
  */
 
-import type { LLMMessage } from '../../../adapters/types.js';
+import type { LLMMessage } from '../../../provider-contract/types.js';
 import type { MemoryIdentity } from '../../../memory/identity/types.js';
 import type {
   AskPayload,

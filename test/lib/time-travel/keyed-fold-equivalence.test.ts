@@ -26,7 +26,7 @@ import { FlowChartExecutor, flowChart } from 'footprintjs';
 import { Agent } from '../../../src/index.js';
 import { isPaused, pauseHere } from '../../../src/core/pause.js';
 import { keyedFold } from '../../../src/lib/time-travel/index.js';
-import type { LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
 
 // ─── the harness ─────────────────────────────────────────────────────
 

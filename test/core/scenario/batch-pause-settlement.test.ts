@@ -62,7 +62,7 @@ import type {
   LLMRequest,
   LLMResponse,
   PermissionChecker,
-} from '../../../src/adapters/types.js';
+} from '../../../src/provider-contract/types.js';
 import { notDispatchedResult, pausedBatchOf } from '../../../src/core/agent/stages/toolCalls.js';
 import { stripFrameworkFields } from '../../../src/core/agent/composeRequest.js';
 import { extractSequence, SYNTHETIC_DENY_PREFIX } from '../../../src/security/extractSequence.js';

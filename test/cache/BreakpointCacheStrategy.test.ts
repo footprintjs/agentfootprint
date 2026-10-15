@@ -19,7 +19,7 @@ import { cacheStrategyFor } from '../../src/cache/cacheStrategyFor';
 import { anthropic } from '../../src/adapters/llm/AnthropicProvider';
 import { browserAnthropic } from '../../src/adapters/llm/BrowserAnthropicProvider';
 import type { CacheMarker, CacheStrategyContext } from '../../src/cache/types';
-import type { LLMRequest } from '../../src/adapters/types';
+import type { LLMRequest } from '../../src/provider-contract/types';
 import { expectScalesLinearly } from '../helpers/perf.js';
 
 /** What the Anthropic adapters declare. */

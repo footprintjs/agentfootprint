@@ -78,7 +78,7 @@ import {
   projectionSemanticsIssues,
   snapshotProjectionSemantics,
 } from '../../../src/lib/semantics/projection.js';
-import type { LLMMessage, LLMProvider, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMMessage, LLMProvider, LLMResponse } from '../../../src/provider-contract/types.js';
 
 // ── Toolkit ──────────────────────────────────────────────────────────────
 

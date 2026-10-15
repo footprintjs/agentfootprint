@@ -19,7 +19,7 @@ import { describe, expect, it } from 'vitest';
 import { Agent, LLMCall } from '../../../src/index.js';
 import { mock } from '../../../src/llm-providers.js';
 import { defineSkill, skillGraph } from '../../../src/injection-engine.js';
-import type { LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
 
 type LLMStart = { iteration: number; systemPromptChars: number; systemPromptText?: string };
 

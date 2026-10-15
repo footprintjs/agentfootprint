@@ -22,7 +22,7 @@
  * literal `'provider'`; its `'tool'`/`'skill'` arms stay unused.
  */
 
-import type { LLMCallHooks } from '../../adapters/types.js';
+import type { LLMCallHooks } from '../../provider-contract/types.js';
 import { typedEmit, type EmitableScope } from './typedEmit.js';
 import { replayPreparedHook, type ReplayReportScope } from './replayHooks.js';
 

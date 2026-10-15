@@ -48,7 +48,7 @@ import type {
   LLMResponse,
   LLMToolSchema,
   PermissionChecker,
-} from '../../../src/adapters/types.js';
+} from '../../../src/provider-contract/types.js';
 import type { AgentState } from '../../../src/core/agent/types.js';
 import { isPaused, pauseHere } from '../../../src/core/pause.js';
 import { allow } from '../../../src/core/agent/middleware/outcomes.js';

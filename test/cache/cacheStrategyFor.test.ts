@@ -17,7 +17,7 @@ import { AutomaticCacheStrategy } from '../../src/cache/strategies/AutomaticCach
 import { BreakpointCacheStrategy } from '../../src/cache/strategies/BreakpointCacheStrategy';
 import { NoOpCacheStrategy } from '../../src/cache/strategies/NoOpCacheStrategy';
 import type { CacheMarker, PromptCaching } from '../../src/cache/types';
-import type { LLMProvider } from '../../src/adapters/types';
+import type { LLMProvider } from '../../src/provider-contract/types';
 import { anthropic } from '../../src/adapters/llm/AnthropicProvider';
 import { browserAnthropic } from '../../src/adapters/llm/BrowserAnthropicProvider';
 import { openai } from '../../src/adapters/llm/OpenAIProvider';

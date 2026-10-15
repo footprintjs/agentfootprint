@@ -29,7 +29,7 @@ import { Agent, defineTool } from '../../src/index.js';
 import { defineSteering } from '../../src/injection-engine.js';
 import { anthropic } from '../../src/adapters/llm/AnthropicProvider.js';
 import { withRetry } from '../../src/resilience/withRetry.js';
-import type { LLMProvider } from '../../src/adapters/types.js';
+import type { LLMProvider } from '../../src/provider-contract/types.js';
 
 type Body = {
   system?: unknown;

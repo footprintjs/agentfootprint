@@ -43,7 +43,7 @@ import {
   type TimeReadingRow,
   type Tool,
 } from '../../src/index.js';
-import type { LLMRequest, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
 import { validateCheckpoint } from '../../src/core/runCheckpoint.js';
 import { EVIDENCE_CHECK_FRAME_PREFIX } from '../../src/lib/saidByPerson.js';
 

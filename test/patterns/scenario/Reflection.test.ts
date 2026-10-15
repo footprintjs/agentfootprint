@@ -6,7 +6,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { reflection } from '../../../src/patterns/Reflection.js';
-import type { LLMProvider, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMProvider, LLMResponse } from '../../../src/provider-contract/types.js';
 
 /** Provider that returns responses in order, with the given sequence. */
 function seq(...responses: string[]): LLMProvider {

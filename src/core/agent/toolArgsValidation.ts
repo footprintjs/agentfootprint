@@ -71,7 +71,7 @@ export type ToolArgValidationMode = 'enforce' | 'warn' | 'off';
 /** Finite, value-free transport failure through the existing argument refusal owner. */
 export function streamedToolArgIssues(
   failure: NonNullable<
-    import('../../adapters/types.js').LLMResponse['toolCalls'][number]['argumentsFailure']
+    import('../../provider-contract/types.js').LLMResponse['toolCalls'][number]['argumentsFailure']
   >,
 ): readonly ToolArgIssue[] {
   return [

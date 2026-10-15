@@ -47,7 +47,7 @@
 import type { CombinedRecorder, CommitEvent } from 'footprintjs';
 
 import { installDurabilityBarrier } from '../core/durabilityBarrier.js';
-import type { LLMMessage } from '../adapters/types.js';
+import type { LLMMessage } from '../provider-contract/types.js';
 import type { AgentRunCheckpoint } from '../core/runCheckpoint.js';
 import type { DurabilityMode } from './types.js';
 

@@ -24,7 +24,7 @@
  *   });
  */
 
-import type { WireRole } from '../../../adapters/types.js';
+import type { WireRole } from '../../../provider-contract/types.js';
 import type { Injection, InjectionContext, InjectionTrigger } from '../types.js';
 import { messagesToolRoleRefusal } from '../messagesSlotRefusal.js';
 import { resolveCachePolicy } from '../../../cache/applyCachePolicy.js';

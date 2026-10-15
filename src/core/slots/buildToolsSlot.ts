@@ -13,7 +13,7 @@
 
 import { flowChart, isDevMode } from 'footprintjs';
 import type { FlowChart, TypedScope } from 'footprintjs';
-import type { LLMToolSchema } from '../../adapters/types.js';
+import type { LLMToolSchema } from '../../provider-contract/types.js';
 import { INJECTION_KEYS } from '../../lib/conventions.js';
 import type { InjectionRecord } from '../../recorders/core/types.js';
 import { COMPOSITION_KEYS } from '../../recorders/core/types.js';

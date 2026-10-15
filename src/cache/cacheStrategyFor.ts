@@ -29,7 +29,7 @@
  * ```
  */
 
-import type { LLMProvider } from '../adapters/types.js';
+import type { LLMProvider } from '../provider-contract/types.js';
 import type { CacheStrategy, PromptCaching } from './types.js';
 import { AutomaticCacheStrategy } from './strategies/AutomaticCacheStrategy.js';
 import { BreakpointCacheStrategy } from './strategies/BreakpointCacheStrategy.js';

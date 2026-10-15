@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { flowChart } from 'footprintjs';
 import { Agent } from '../../src/core/Agent.js';
 import { defineFact, defineSkill, skillGraph } from '../../src/injection-engine.js';
-import type { LLMProvider, LLMRequest, WireRole } from '../../src/adapters/types.js';
+import type { LLMProvider, LLMRequest, WireRole } from '../../src/provider-contract/types.js';
 import type { MemoryDefinition, ReadonlyMemoryFlowChart } from '../../src/memory/define.types.js';
 import { UnsupportedThinkingError } from '../../src/thinking/errors.js';
 

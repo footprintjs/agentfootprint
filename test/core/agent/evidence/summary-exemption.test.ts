@@ -25,7 +25,11 @@ import { describe, expect, it } from 'vitest';
 
 import { Agent } from '../../../../src/index.js';
 import { defineTool } from '../../../../src/core/tools.js';
-import type { LLMMessage, LLMProvider, LLMRequest } from '../../../../src/adapters/types.js';
+import type {
+  LLMMessage,
+  LLMProvider,
+  LLMRequest,
+} from '../../../../src/provider-contract/types.js';
 import {
   evidenceFromHistory,
   exemptFromRun,

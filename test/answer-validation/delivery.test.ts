@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { Agent, AnswerValidationError, allow, type OutputSchemaParser } from '../../src/index.js';
-import type { LLMProvider, LLMRequest } from '../../src/adapters/types.js';
+import type { LLMProvider, LLMRequest } from '../../src/provider-contract/types.js';
 import { mock } from '../../src/llm-providers.js';
 import {
   defineMemory,

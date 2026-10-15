@@ -24,7 +24,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import type { LLMMessage } from '../../src/adapters/types.js';
+import type { LLMMessage } from '../../src/provider-contract/types.js';
 import type { Standing } from '../../src/core/agent/findings/types.js';
 import { currentRequestIndexOf } from '../../src/core/agent/window/currentRequest.js';
 import {

@@ -28,7 +28,7 @@ import type { RedactionPolicy } from 'footprintjs';
 import { describe, expect, it } from 'vitest';
 
 import { Agent, flowchartAsTool } from '../../src/index.js';
-import type { LLMProvider, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMProvider, LLMResponse } from '../../src/provider-contract/types.js';
 import { mock } from '../../src/doors/providers.js';
 import { innerRunsOf } from '../../src/doors/observe.js';
 import { conversationRedaction } from '../../src/doors/security.js';

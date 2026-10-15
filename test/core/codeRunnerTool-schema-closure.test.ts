@@ -7,7 +7,7 @@ import type {
   CodeRunner,
   CodeSession,
   LLMToolSchema,
-} from '../../src/adapters/types.js';
+} from '../../src/provider-contract/types.js';
 import type { ToolArgValidationMode } from '../../src/core/agent/toolArgsValidation.js';
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
 import { staticTokens } from '../../src/identity.js';

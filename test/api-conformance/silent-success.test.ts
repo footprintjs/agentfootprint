@@ -58,7 +58,7 @@ import { mock } from '../../src/llm-providers.js';
 import { defineOntology } from '../../src/ontology/index.js';
 import { pauseHere } from '../../src/core/pause.js';
 import { unconfiguredCredentialProvider } from '../../src/identity/types.js';
-import type { CodeResult, CodeRunner, LLMRequest } from '../../src/adapters/types.js';
+import type { CodeResult, CodeRunner, LLMRequest } from '../../src/provider-contract/types.js';
 
 const SRC = join(__dirname, '..', '..', 'src');
 const read = (relative: string): string => readFileSync(join(SRC, relative), 'utf8');
@@ -414,7 +414,7 @@ describe('silent success — a tool result that was quietly cut (9.7.0)', () => 
   it('STATED: the port says why truncation must be reported, and the source still says it', () => {
     // A stated behaviour whose statement was deleted is back to being a silent
     // success, and only this second assertion catches that.
-    expect(read('adapters/types.ts')).toContain('An unstated slice is a silent success.');
+    expect(read('provider-contract/types.ts')).toContain('An unstated slice is a silent success.');
     expect(read('core/codeRunnerTool.ts')).toContain('TRUNCATION IS ALWAYS STATED');
   });
 

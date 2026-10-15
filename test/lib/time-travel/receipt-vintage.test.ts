@@ -46,7 +46,7 @@ import {
   type Receipt,
   type StoredReceipt,
 } from '../../../src/index.js';
-import type { LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
 
 // ─── the harness ─────────────────────────────────────────────────────
 

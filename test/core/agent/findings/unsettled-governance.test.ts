@@ -44,7 +44,7 @@ import {
   type FindingsRow,
   type ToolMiddleware,
 } from '../../../../src/index.js';
-import type { LLMRequest, LLMResponse } from '../../../../src/adapters/types.js';
+import type { LLMRequest, LLMResponse } from '../../../../src/provider-contract/types.js';
 
 /** The word an after-tool rule keeps from the model — unique, so a leak anywhere on the wire shows. */
 const WITHHELD = 'SECRET-internal-collector-host-db7.corp';

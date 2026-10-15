@@ -16,7 +16,7 @@
  * See `buildReliabilityGate.ts` for the gate stage that consumes these
  * types and `Agent.create().reliability()` for the consumer-facing API.
  */
-import type { LLMProvider, LLMRequest, LLMResponse } from '../adapters/types.js';
+import type { LLMProvider, LLMRequest, LLMResponse } from '../provider-contract/types.js';
 
 // ─── Decision verbs ──────────────────────────────────────────────────
 

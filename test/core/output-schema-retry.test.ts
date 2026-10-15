@@ -45,7 +45,7 @@ import {
   resolveJsonSchema,
 } from '../../src/core/agent/outputEnforcement.js';
 import { buildOutputRetryStage } from '../../src/core/agent/stages/outputRetry.js';
-import type { LLMProvider, LLMRequest, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMProvider, LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
 import type { AgentState } from '../../src/core/agent/types.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────

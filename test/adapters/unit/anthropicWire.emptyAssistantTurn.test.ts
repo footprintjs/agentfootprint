@@ -20,7 +20,7 @@ import { toAnthropicMessages } from '../../../src/adapters/llm/anthropicMessages
 import { anthropic } from '../../../src/adapters/llm/AnthropicProvider.js';
 import { browserAnthropic } from '../../../src/adapters/llm/BrowserAnthropicProvider.js';
 import { invokeModelGateway } from '../../../src/adapters/llm/InvokeModelGatewayProvider.js';
-import type { LLMMessage, LLMRequest } from '../../../src/adapters/types.js';
+import type { LLMMessage, LLMRequest } from '../../../src/provider-contract/types.js';
 
 const HISTORY: LLMMessage[] = [
   { role: 'user', content: 'hi' },

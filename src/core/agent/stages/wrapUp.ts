@@ -47,7 +47,7 @@
  */
 
 import type { TypedScope } from 'footprintjs';
-import type { LLMMessage } from '../../../adapters/types.js';
+import type { LLMMessage } from '../../../provider-contract/types.js';
 import { WRAP_UP_FRAME_PREFIX } from '../../../lib/saidByPerson.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import type { AgentState } from '../types.js';

@@ -20,7 +20,7 @@
  * helper deliberately exposes only the common subset.
  */
 
-import type { LLMProvider } from '../types.js';
+import type { LLMProvider } from '../../provider-contract/types.js';
 import { mock, type MockProviderOptions } from './MockProvider.js';
 import { anthropic, type AnthropicProviderOptions } from './AnthropicProvider.js';
 import { openai, azureOpenai, type OpenAIProviderOptions } from './OpenAIProvider.js';

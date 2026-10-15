@@ -15,7 +15,11 @@ import { describe, it, expect, vi } from 'vitest';
 import { LLMCall } from '../../../src/core/LLMCall.js';
 import { Agent } from '../../../src/core/Agent.js';
 import { MockProvider } from '../../../src/adapters/llm/MockProvider.js';
-import type { LLMProvider, LLMResponse, PricingTable } from '../../../src/adapters/types.js';
+import type {
+  LLMProvider,
+  LLMResponse,
+  PricingTable,
+} from '../../../src/provider-contract/types.js';
 import { expectWithinTimes, measureAsync } from '../../helpers/perf.js';
 
 function scripted(...r: LLMResponse[]): LLMProvider {

@@ -30,7 +30,7 @@
 
 import { Agent } from '../../src/index.js';
 import { ReliabilityFailFastError } from '../../src/reliability/types.js';
-import type { LLMProvider, LLMRequest, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMProvider, LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
 import { isCliEntry, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

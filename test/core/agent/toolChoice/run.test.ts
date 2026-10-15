@@ -50,7 +50,7 @@ import {
   type ClassifyRequest,
   type ClassifyResult,
 } from '../../../../src/classify/index.js';
-import type { LLMRequest, LLMResponse } from '../../../../src/adapters/types.js';
+import type { LLMRequest, LLMResponse } from '../../../../src/provider-contract/types.js';
 
 type Row = { type: string; payload: Record<string, unknown> };
 

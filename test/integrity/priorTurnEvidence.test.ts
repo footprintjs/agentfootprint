@@ -67,7 +67,7 @@ import {
 } from '../../src/core/agent/evidence/gate.js';
 import { Agent, allow, defineTool, deny } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
-import type { LLMMessage } from '../../src/adapters/types.js';
+import type { LLMMessage } from '../../src/provider-contract/types.js';
 import type { CheckReport } from '../../src/integrity/disposition/types.js';
 import type { ContextError } from '../../src/integrity/finding/types.js';
 

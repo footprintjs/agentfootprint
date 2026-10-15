@@ -15,7 +15,7 @@ import { Agent, defineTool } from '../../src/index.js';
 import { defineSkill, skillGraph } from '../../src/injection-engine.js';
 import { mock } from '../../src/llm-providers.js';
 import { PermissionPolicy } from '../../src/security/PermissionPolicy.js';
-import type { PermissionChecker, PermissionRequest } from '../../src/adapters/types.js';
+import type { PermissionChecker, PermissionRequest } from '../../src/provider-contract/types.js';
 
 // ── Toolkit ──────────────────────────────────────────────────────────────
 

@@ -24,7 +24,7 @@ import { decideSkill, defineSkill, skillGraph } from '../../../src/injection-eng
 import { mock } from '../../../src/llm-providers.js';
 import { scopeToolsToActiveSkill } from '../../../src/core/agent/toolsFromActiveSkill.js';
 import type { Injection } from '../../../src/lib/injection-engine/types.js';
-import type { LLMProvider, LLMRequest } from '../../../src/adapters/types.js';
+import type { LLMProvider, LLMRequest } from '../../../src/provider-contract/types.js';
 
 // ─── Fixtures ──────────────────────────────────────────────────────
 

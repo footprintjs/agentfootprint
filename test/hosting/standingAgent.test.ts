@@ -38,7 +38,7 @@ import {
   UnreadableEnvelopeError,
 } from '../../src/hosting/index.js';
 import type { CheckpointEnvelope, SessionLifecycle } from '../../src/hosting/index.js';
-import type { LLMProvider, LLMRequest, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMProvider, LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
 import { inProcessHost } from './testHost.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────

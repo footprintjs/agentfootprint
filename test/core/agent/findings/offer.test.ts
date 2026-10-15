@@ -25,7 +25,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import type { LLMMessage } from '../../../../src/adapters/types.js';
+import type { LLMMessage } from '../../../../src/provider-contract/types.js';
 import { placedToolResult } from '../../../../src/artifacts/placement.js';
 import type { ArtifactMeta } from '../../../../src/artifacts/types.js';
 import {

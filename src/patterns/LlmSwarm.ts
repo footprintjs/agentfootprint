@@ -47,7 +47,7 @@
  * ```
  */
 
-import type { LLMProvider } from '../adapters/types.js';
+import type { LLMProvider } from '../provider-contract/types.js';
 import type { Runner } from '../core/runner.js';
 import { Sequence } from '../core-flow/Sequence.js';
 import { llmRouter, type LlmRouter } from './LlmRouter.js';

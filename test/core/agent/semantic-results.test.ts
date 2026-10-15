@@ -27,7 +27,7 @@ import {
   SEMANTICS_NOTE,
   type ToolSemantics,
 } from '../../../src/index.js';
-import type { LLMMessage } from '../../../src/adapters/types.js';
+import type { LLMMessage } from '../../../src/provider-contract/types.js';
 import { mock } from '../../../src/llm-providers.js';
 import { recordRun } from '../../../src/recorders/observability/recordRun.js';
 import { persistRecording } from '../../../src/recorders/observability/recordingEnvelope.js';

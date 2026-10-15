@@ -16,7 +16,7 @@
  */
 
 import { isDevMode } from 'footprintjs';
-import type { LLMProvider } from '../../adapters/types.js';
+import type { LLMProvider } from '../../provider-contract/types.js';
 import { UnsupportedThinkingError } from '../../thinking/errors.js';
 import { thinkingModeFor } from '../../thinking/thinkingModeFor.js';
 import type { FoldedSkillBrains } from './skillBrains.js';

@@ -45,8 +45,8 @@
  */
 
 import type { TypedScope } from 'footprintjs';
-import type { LLMMessage, LLMProvider, WireRole } from '../../../adapters/types.js';
-import { DEFAULT_CARRIES_IN_MESSAGES } from '../../../adapters/types.js';
+import type { LLMMessage, LLMProvider, WireRole } from '../../../provider-contract/types.js';
+import { DEFAULT_CARRIES_IN_MESSAGES } from '../../../provider-contract/types.js';
 import type { ActiveInjection } from '../../../lib/injection-engine/types.js';
 import {
   messagesDeferralNote,

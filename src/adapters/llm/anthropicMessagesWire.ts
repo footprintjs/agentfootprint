@@ -22,11 +22,11 @@
  * {@link assembleAnthropicStream}.
  */
 
-import type { LLMChunk, LLMRequest, LLMResponse } from '../types.js';
+import type { LLMChunk, LLMRequest, LLMResponse } from '../../provider-contract/types.js';
 import { applyCacheMarkers, readCacheUsage } from './anthropicCacheWire.js';
 import { anthropicTakesForcedToolChoice } from './anthropicModels.js';
-import { UnsupportedToolChoiceError } from '../forcedToolChoice.js';
-import { UnsupportedNativeOutputError } from '../nativeOutputSchema.js';
+import { UnsupportedToolChoiceError } from '../../provider-contract/forcedToolChoice.js';
+import { UnsupportedNativeOutputError } from '../../provider-contract/nativeOutputSchema.js';
 import { anthropicThinkingPlan, type AnthropicThinkingParam } from './anthropicThinkingWire.js';
 import type { WireToolManifest } from './wireManifest.js';
 import type { ThinkingMode } from '../../thinking/types.js';

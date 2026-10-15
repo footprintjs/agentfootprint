@@ -3,7 +3,7 @@
  * The carrier stores indices/lengths, inert metadata and digests, never a second content copy.
  * Replay policy lives elsewhere: undefined here means no fidelity proof.
  */
-import type { LLMMessage } from '../types.js';
+import type { LLMMessage } from '../../provider-contract/types.js';
 import type { MessageReplay, ReplayPart } from '../../thinking/replay.js';
 import { canonicalJson } from '../../lib/canonicalJson.js';
 import { sha256Hex } from '../../lib/sha256.js';

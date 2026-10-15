@@ -29,7 +29,7 @@ import type { AddressInfo } from 'node:net';
 import { foundry } from '../../../src/adapters/llm/FoundryProvider.js';
 import { AZURE_AI_SCOPE } from '../../../src/adapters/identity/azure.js';
 import type { AccessTokenLike, TokenCredentialLike } from '../../../src/adapters/identity/azure.js';
-import type { LLMRequest } from '../../../src/adapters/types.js';
+import type { LLMRequest } from '../../../src/provider-contract/types.js';
 
 // ─── The fake Foundry wire ──────────────────────────────────────────
 

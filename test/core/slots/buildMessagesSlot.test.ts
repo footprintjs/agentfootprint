@@ -25,7 +25,7 @@ import type { TypedScope } from 'footprintjs';
 
 import { buildMessagesSlot } from '../../../src/core/slots/buildMessagesSlot.js';
 import { SUBFLOW_IDS } from '../../../src/lib/conventions.js';
-import type { LLMMessage } from '../../../src/adapters/types.js';
+import type { LLMMessage } from '../../../src/provider-contract/types.js';
 import type { InjectionRecord } from '../../../src/recorders/core/types.js';
 
 interface HarnessState {

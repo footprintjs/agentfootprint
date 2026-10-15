@@ -50,7 +50,7 @@ import {
 import { beginIntegrityRun } from '../../src/integrity/disposition/lifecycle.js';
 import { Agent, absent, defineTool, isInputPause, requestInput } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
-import type { LLMMessage } from '../../src/adapters/types.js';
+import type { LLMMessage } from '../../src/provider-contract/types.js';
 import { notDispatchedResult, producerCorpusOf } from '../../src/core/agent/stages/toolCalls.js';
 import type { CheckReport } from '../../src/integrity/disposition/types.js';
 import type { ContextError } from '../../src/integrity/finding/types.js';

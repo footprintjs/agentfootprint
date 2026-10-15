@@ -11,7 +11,7 @@
  *          agentfootprint.cost.limit_hit
  */
 
-import type { PricingTable } from '../adapters/types.js';
+import type { PricingTable } from '../provider-contract/types.js';
 import { typedEmit } from '../recorders/core/typedEmit.js';
 
 export interface CostAccountingScope {

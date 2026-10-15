@@ -44,7 +44,7 @@
  * sentence as a re-fetched ground.
  */
 
-import type { LLMMessage } from '../../../adapters/types.js';
+import type { LLMMessage } from '../../../provider-contract/types.js';
 
 /**
  * The tool a `role: 'tool'` message came from, or `undefined`. A settled

@@ -63,7 +63,7 @@
  * what it kept.
  */
 
-import type { LLMMessage } from '../../../adapters/types.js';
+import type { LLMMessage } from '../../../provider-contract/types.js';
 import { toolNameOfMessage } from './toolNames.js';
 import type { Turn } from './turns.js';
 

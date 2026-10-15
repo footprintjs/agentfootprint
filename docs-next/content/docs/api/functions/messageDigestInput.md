@@ -30,7 +30,7 @@ SWAPPED names fingerprinted identically. It rides as its own field behind
 the separator, beside the id, so a name moving between two results changes
 both hashes and neither can absorb the other's bytes.
 
-WHY `thinkingBlocks` and `providerMeta` (9.88.0). `adapters/types.ts` is
+WHY `thinkingBlocks` and `providerMeta` (9.88.0). `provider-contract/types.ts` is
 explicit that a signed thinking block MUST be echoed byte-exact or the API
 rejects the turn, and `providerMeta` round-trips vendor state (Gemini's
 `thoughtSignature`, without which the turn after a tool call is refused).

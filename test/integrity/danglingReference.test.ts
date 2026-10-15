@@ -28,7 +28,7 @@ import { describe, expect, it } from 'vitest';
 import { danglingReferencesOf } from '../../src/integrity/dangling-reference/check.js';
 import { Agent, slidingWindow, defineTool } from '../../src/index.js';
 import { mockThinkingHandler } from '../../src/thinking/MockThinkingHandler.js';
-import type { LLMMessage, LLMProvider, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMMessage, LLMProvider, LLMResponse } from '../../src/provider-contract/types.js';
 import type { AgentRunCheckpoint } from '../../src/index.js';
 import type { WindowRecord } from '../../src/core/agent/window/types.js';
 

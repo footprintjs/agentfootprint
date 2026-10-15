@@ -72,7 +72,7 @@
  * record names what it kept.
  */
 
-import type { LLMMessage } from '../../../adapters/types.js';
+import type { LLMMessage } from '../../../provider-contract/types.js';
 import { isResultMessage } from '../findings/offer.js';
 import type { Standing } from '../findings/types.js';
 import { toolNameOfMessage } from './toolNames.js';

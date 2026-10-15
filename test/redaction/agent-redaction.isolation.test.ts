@@ -21,7 +21,7 @@ import type { CombinedRecorder, RedactionPolicy } from 'footprintjs';
 import { describe, expect, it } from 'vitest';
 
 import { Agent, defineTool, Sequence } from '../../src/index.js';
-import type { LLMProvider, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMProvider, LLMResponse } from '../../src/provider-contract/types.js';
 import { mock } from '../../src/doors/providers.js';
 import { recordRun } from '../../src/doors/observe.js';
 import type { AgentfootprintEvent } from '../../src/events/registry.js';

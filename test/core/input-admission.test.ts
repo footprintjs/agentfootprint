@@ -16,7 +16,7 @@ import {
   type MessageOutcome,
 } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
-import type { LLMRequest } from '../../src/adapters/types.js';
+import type { LLMRequest } from '../../src/provider-contract/types.js';
 
 const secret = 'refused-input-918273';
 const refusals: readonly (readonly [string, () => MessageOutcome])[] = [

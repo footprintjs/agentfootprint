@@ -407,7 +407,6 @@
     "src/adapters/llm/MockProvider",
     "src/adapters/memory/agentcore",
     "src/adapters/memory/redis",
-    "src/adapters/types",
     "src/core/checkin",
     "src/core/pause",
     "src/events/registry",
@@ -421,6 +420,7 @@
     "src/memory/embedding/mockEmbedder",
     "src/memory/entry/index",
     "src/observe",
+    "src/provider-contract/types",
     "src/reliability/types",
     "src/security/index"
   ],

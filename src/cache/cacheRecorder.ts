@@ -57,7 +57,7 @@ import { splitStageId } from 'foottrace';
 import { STAGE_IDS } from '../lib/conventions.js';
 import type { AgentfootprintEvent } from '../events/registry.js';
 import type { CacheMetrics, CacheStrategy, CacheUsage } from './types.js';
-import type { PricingTable } from '../adapters/types.js';
+import type { PricingTable } from '../provider-contract/types.js';
 import { known, unknown, isKnown, type Claim } from '../lib/claim/claim.js';
 
 /** One LLM call's row on the record. */

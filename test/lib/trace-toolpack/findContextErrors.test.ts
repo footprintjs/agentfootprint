@@ -20,7 +20,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { Agent, defineTool, slidingWindow } from '../../../src/index.js';
-import type { LLMProvider, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMProvider, LLMResponse } from '../../../src/provider-contract/types.js';
 import type { AgentfootprintEvent } from '../../../src/events.js';
 import type { EventMeta } from '../../../src/events/types.js';
 import type { CheckReport } from '../../../src/integrity/disposition/types.js';

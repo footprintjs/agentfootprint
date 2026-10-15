@@ -19,7 +19,7 @@
  */
 
 import type { TypedScope } from 'footprintjs';
-import type { LLMMessage, LLMToolSchema } from '../../../adapters/types.js';
+import type { LLMMessage, LLMToolSchema } from '../../../provider-contract/types.js';
 import type { MemoryStore } from '../../../memory/store/index.js';
 import { resolveTurnNumber } from '../../../memory/turn/index.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';

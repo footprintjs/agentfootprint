@@ -23,7 +23,7 @@ import { slidingWindow } from '../../../src/index.js';
 import { buildRunManifest } from '../../../src/core/agent/runManifest.js';
 import type { AgentfootprintEventMap } from '../../../src/events/registry.js';
 import type { MemoryDefinition } from '../../../src/memory/define.types.js';
-import type { LLMProvider } from '../../../src/adapters/types.js';
+import type { LLMProvider } from '../../../src/provider-contract/types.js';
 import type { ArtifactStore } from '../../../src/artifacts/types.js';
 import type { EventDispatcher } from '../../../src/events/dispatcher.js';
 

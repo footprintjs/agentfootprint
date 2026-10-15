@@ -16,7 +16,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { Agent, defineTool, type Tool } from '../../../../src/index.js';
-import type { LLMRequest, LLMResponse } from '../../../../src/adapters/types.js';
+import type { LLMRequest, LLMResponse } from '../../../../src/provider-contract/types.js';
 import { appendRows } from '../../../../src/core/agent/findings/ledger.js';
 import { argumentRowOf } from '../../../../src/core/agent/arguments/rows.js';
 import type { FindingsRow } from '../../../../src/core/agent/findings/types.js';

@@ -18,7 +18,7 @@ import { Agent, defineTool } from '../../src/index.js';
 import { mock } from '../../src/doors/providers.js';
 import { accountForAnswer, recordRun } from '../../src/doors/observe.js';
 import { conversationRedaction } from '../../src/doors/security.js';
-import type { LLMProvider, LLMRequest } from '../../src/adapters/types.js';
+import type { LLMProvider, LLMRequest } from '../../src/provider-contract/types.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

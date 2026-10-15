@@ -19,7 +19,7 @@ import type {
   ToolProtocol,
   ToolCallEventIdentity,
 } from './types.js';
-import type { LLMMessage, PermissionCapability } from '../adapters/types.js';
+import type { LLMMessage, PermissionCapability } from '../provider-contract/types.js';
 import type { MemoryFlavor, MemoryStrategyKind, MemoryType } from '../memory/define.types.js';
 import type { ArtifactOp, ArtifactRefusalReason } from '../artifacts/capability.js';
 import type { ArtifactOrigin, ArtifactSweepReason } from '../artifacts/types.js';

@@ -45,7 +45,7 @@
 import { ArrayMergeMode } from 'footprintjs/advanced';
 import { flowChart, select } from 'footprintjs';
 import type { FlowChart, StructureRecorder, TypedScope } from 'footprintjs';
-import type { LLMMessage } from '../../adapters/types.js';
+import type { LLMMessage } from '../../provider-contract/types.js';
 import type { CachePolicy } from '../../cache/types.js';
 import { STAGE_IDS, SUBFLOW_IDS, milestoneTagsFor } from '../../lib/conventions.js';
 import {

@@ -10,7 +10,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import type { LLMMessage } from '../../src/adapters/types.js';
+import type { LLMMessage } from '../../src/provider-contract/types.js';
 import {
   answeredCallIds,
   planRemoval,
@@ -23,7 +23,7 @@ import {
 import { buildSummaryMessage } from '../../src/core/agent/window/summarize.js';
 import { summarizeOldest } from '../../src/core/agent/window/strategies/summarizeOldest.js';
 import { removalFacts } from '../../src/core/agent/window/removal.js';
-import type { LLMProvider } from '../../src/adapters/types.js';
+import type { LLMProvider } from '../../src/provider-contract/types.js';
 import type { CompactionRecord } from '../../src/core/agent/window/types.js';
 import * as publicApi from '../../src/index.js';
 

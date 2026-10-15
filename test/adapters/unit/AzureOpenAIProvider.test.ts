@@ -9,7 +9,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import { azureOpenai } from '../../../src/adapters/llm/OpenAIProvider.js';
-import type { LLMRequest } from '../../../src/adapters/types.js';
+import type { LLMRequest } from '../../../src/provider-contract/types.js';
 
 function fakeClient(recorder: { params: Array<{ model: string; stream?: boolean }> }) {
   return {

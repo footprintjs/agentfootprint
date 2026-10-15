@@ -23,7 +23,7 @@
  */
 
 import type { TypedScope } from 'footprintjs';
-import type { LLMMessage } from '../../../adapters/types.js';
+import type { LLMMessage } from '../../../provider-contract/types.js';
 import { isSaidByPerson } from '../../../lib/saidByPerson.js';
 import { completeClock } from '../../../time/clock.js';
 import { granularityMsOf } from '../../../time/convert.js';

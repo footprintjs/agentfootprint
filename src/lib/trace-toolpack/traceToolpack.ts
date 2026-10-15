@@ -47,7 +47,7 @@ import {
 import type { CommitBundle, ControlDepLookup, HonestyCode } from 'foottrace';
 import { arrayProvenance, elementProvenance, formatSlice, sliceForKey } from 'foottrace';
 
-import type { LLMMessage } from '../../adapters/types.js';
+import type { LLMMessage } from '../../provider-contract/types.js';
 import { formatToolArgIssues, validateToolArgs } from '../../core/agent/toolArgsValidation.js';
 import type { CheckReport } from '../../integrity/disposition/types.js';
 import type { ContextError, ContextErrorKind } from '../../integrity/finding/types.js';

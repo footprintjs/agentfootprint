@@ -48,7 +48,7 @@
  */
 
 import type { TypedScope } from 'footprintjs';
-import type { LLMMessage, PricingTable } from '../../../adapters/types.js';
+import type { LLMMessage, PricingTable } from '../../../provider-contract/types.js';
 import type { CompactionMeterHandle } from '../../../recorders/core/CompactionMeter.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import { fnv1a } from '../../slots/helpers.js';

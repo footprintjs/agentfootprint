@@ -38,7 +38,7 @@ import {
   evidenceRefusalSentence,
   resolveEvidenceGate,
 } from '../../../src/core/agent/evidence/gate.js';
-import type { LLMMessage } from '../../../src/adapters/types.js';
+import type { LLMMessage } from '../../../src/provider-contract/types.js';
 import { CORRECT_ANSWERS, FABRICATED_ANSWERS, toolMessages } from './fixtures/sanEvidence.js';
 
 const GATE = resolveEvidenceGate();

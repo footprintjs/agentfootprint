@@ -29,15 +29,15 @@ import type {
   LLMResponse,
   LLMToolSchema,
   PricingTable,
-} from '../../../adapters/types.js';
+} from '../../../provider-contract/types.js';
 import {
   forcedToolChoiceFor,
   UnsupportedToolChoiceError,
-} from '../../../adapters/forcedToolChoice.js';
+} from '../../../provider-contract/forcedToolChoice.js';
 import {
   nativeOutputSchemaFor,
   UnsupportedNativeOutputError,
-} from '../../../adapters/nativeOutputSchema.js';
+} from '../../../provider-contract/nativeOutputSchema.js';
 import type { CacheMarker, CacheStrategy } from '../../../cache/types.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import { wireViolationsOf } from '../../../integrity/invariant-violation/wire.js';

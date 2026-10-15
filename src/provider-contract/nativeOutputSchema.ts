@@ -16,7 +16,7 @@
  * model — and not on Opus 4.1 and earlier
  * (https://platform.claude.com/docs/en/build-with-claude/structured-outputs).
  * The per-model facts are the `nativeOutputSchema` column of
- * `llm/anthropicModels.ts · ANTHROPIC_MODELS`.
+ * `../adapters/llm/anthropicModels.ts · ANTHROPIC_MODELS`.
  *
  * @example
  * ```ts

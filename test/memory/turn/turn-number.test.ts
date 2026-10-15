@@ -36,7 +36,7 @@ import {
 import type { MemoryEntry } from '../../../src/memory/entry/index.js';
 import type { MemoryIdentity } from '../../../src/memory/identity/index.js';
 import type { MemoryStore } from '../../../src/memory/store/index.js';
-import type { LLMProvider, LLMRequest } from '../../../src/adapters/types.js';
+import type { LLMProvider, LLMRequest } from '../../../src/provider-contract/types.js';
 
 const ID: MemoryIdentity = { tenant: 'acme', conversationId: 'conv-turns' };
 

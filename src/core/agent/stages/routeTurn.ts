@@ -49,7 +49,7 @@
 
 import { isDevMode } from 'footprintjs';
 import type { TypedScope } from 'footprintjs';
-import type { LLMProvider } from '../../../adapters/types.js';
+import type { LLMProvider } from '../../../provider-contract/types.js';
 import type { AgentState } from '../types.js';
 import type { InjectionContext } from '../../../lib/injection-engine/types.js';
 import type { EntryScoring } from '../../../lib/injection-engine/skillGraph.js';

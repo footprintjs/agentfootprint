@@ -9,7 +9,7 @@ import { Agent, checkInApproved, defineTool, isPaused } from '../../src/index.js
 import { mock } from '../../src/providers.js';
 import { bearer, CredentialConsentRequiredError } from '../../src/identity.js';
 import type { CredentialProvider, CredentialResult } from '../../src/identity.js';
-import type { PermissionChecker } from '../../src/adapters/types.js';
+import type { PermissionChecker } from '../../src/provider-contract/types.js';
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
 import { PolicyHaltError } from '../../src/security/index.js';
 

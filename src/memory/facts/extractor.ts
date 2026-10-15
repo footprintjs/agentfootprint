@@ -12,7 +12,7 @@
  *   - `llmFactExtractor({ provider })` — one LLM call per turn for
  *     open-ended extraction. Opt-in.
  */
-import type { LLMMessage as Message } from '../../adapters/types.js';
+import type { LLMMessage as Message } from '../../provider-contract/types.js';
 import type { Fact } from './types.js';
 
 export interface FactExtractArgs {

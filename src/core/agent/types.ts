@@ -23,7 +23,7 @@ import type {
   LLMToolSchema,
   PermissionChecker,
   PricingTable,
-} from '../../adapters/types.js';
+} from '../../provider-contract/types.js';
 import type { CacheMarker, CacheStrategy } from '../../cache/types.js';
 import type { ActiveInjection } from '../../lib/injection-engine/types.js';
 import type { InjectionRecord } from '../../recorders/core/types.js';
@@ -1517,7 +1517,7 @@ export interface AgentState {
     readonly id: string;
     readonly name: string;
     readonly args: Readonly<Record<string, unknown>>;
-    readonly argumentsFailure?: import('../../adapters/types.js').LLMResponse['toolCalls'][number]['argumentsFailure'];
+    readonly argumentsFailure?: import('../../provider-contract/types.js').LLMResponse['toolCalls'][number]['argumentsFailure'];
     // Carried, never read here (9.29.0). The adapter that produced the call is
     // the only thing that understands this bag; the loop's job is to keep it
     // attached to its call all the way into the assistant turn, because for

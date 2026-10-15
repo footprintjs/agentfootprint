@@ -4,7 +4,7 @@
  *
  * `test/lib/injection-engine/skill-graph-fence.test.ts` proves the pure core
  * imports no engine and no agent loop. It does that by refusing imports —
- * including the two the boundary used to make: `adapters/types.ts#LLMToolSchema`
+ * including the two the boundary used to make: `provider-contract/types.ts#LLMToolSchema`
  * and `cache/types.ts#CachePolicy`, which `ActiveInjection` named inline. Those
  * are now `SkillToolSchema` and `SkillCachePolicy`, declared in
  * `hostContract.ts` with zero imports.
@@ -30,7 +30,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { defineTool, type Tool } from '../../src/index';
-import type { LLMToolSchema } from '../../src/adapters/types';
+import type { LLMToolSchema } from '../../src/provider-contract/types';
 import type { CachePolicy, CachePolicyContext } from '../../src/cache/types';
 import type {
   SkillCachePolicy,

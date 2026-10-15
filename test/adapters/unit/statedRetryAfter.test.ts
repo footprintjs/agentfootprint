@@ -18,7 +18,7 @@ import {
 import { anthropic } from '../../../src/adapters/llm/AnthropicProvider.js';
 import { openai } from '../../../src/adapters/llm/OpenAIProvider.js';
 import { bedrock } from '../../../src/adapters/llm/BedrockProvider.js';
-import type { LLMProvider, LLMRequest } from '../../../src/adapters/types.js';
+import type { LLMProvider, LLMRequest } from '../../../src/provider-contract/types.js';
 
 describe('retryAfterMsFromHeaders', () => {
   it('reads retry-after-ms first, then retry-after (seconds)', () => {

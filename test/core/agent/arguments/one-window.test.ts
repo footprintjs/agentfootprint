@@ -21,7 +21,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { Agent, defineTool, isInputPause, type Tool } from '../../../../src/index.js';
-import type { LLMRequest, LLMResponse } from '../../../../src/adapters/types.js';
+import type { LLMRequest, LLMResponse } from '../../../../src/provider-contract/types.js';
 import type { ArgumentRow } from '../../../../src/core/agent/arguments/rows.js';
 
 // ─── the harness ─────────────────────────────────────────────────────

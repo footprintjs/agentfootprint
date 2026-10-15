@@ -79,7 +79,7 @@ import type {
   PermissionRequest,
   PermissionDecision,
   ToolCapability,
-} from '../adapters/types.js';
+} from '../provider-contract/types.js';
 import { skillIdFromTarget } from './skillTarget.js';
 
 /** The four capabilities a tool can declare — the set a capability rule may

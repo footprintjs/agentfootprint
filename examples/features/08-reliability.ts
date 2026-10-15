@@ -35,7 +35,7 @@ import {
   CircuitOpenError,
 } from '../../src/doors/resilience.js';
 import type { AgentRunCheckpoint } from '../../src/index.js';
-import type { LLMProvider, LLMRequest, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMProvider, LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
 import { mock } from '../../src/adapters/llm/MockProvider.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 

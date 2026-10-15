@@ -27,7 +27,7 @@ import { mock } from '../../src/llm-providers.js';
 import { pendingDurableWrite } from '../../src/core/durabilityBarrier.js';
 import { memorySessions, readEnvelope, standingAgent } from '../../src/hosting/index.js';
 import type { CheckpointEnvelope, SessionLifecycle } from '../../src/hosting/index.js';
-import type { LLMProvider, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMProvider, LLMResponse } from '../../src/provider-contract/types.js';
 import { inProcessHost } from './testHost.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────

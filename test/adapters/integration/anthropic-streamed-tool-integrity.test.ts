@@ -10,7 +10,7 @@ import {
   anthropic,
   type AnthropicProviderOptions,
 } from '../../../src/adapters/llm/AnthropicProvider.js';
-import type { LLMChunk, LLMProvider, LLMRequest } from '../../../src/adapters/types.js';
+import type { LLMChunk, LLMProvider, LLMRequest } from '../../../src/provider-contract/types.js';
 import type { Payloads } from '../../../src/events.js';
 
 const MODEL = 'claude-haiku-4-5-20251001';

@@ -15,7 +15,7 @@
 import { describe, it, expect } from 'vitest';
 import { Agent, defineTool, UnsupportedValuesError } from '../../../src/index.js';
 import { mock } from '../../../src/llm-providers.js';
-import type { LLMMessage } from '../../../src/adapters/types.js';
+import type { LLMMessage } from '../../../src/provider-contract/types.js';
 import { TOOL_RESULTS } from './fixtures/sanEvidence.js';
 
 // ── Toolkit ──────────────────────────────────────────────────────────────

@@ -19,7 +19,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { MockProvider } from '../../../src/adapters/llm/MockProvider.js';
-import type { LLMRequest, LLMChunk } from '../../../src/adapters/types.js';
+import type { LLMRequest, LLMChunk } from '../../../src/provider-contract/types.js';
 
 function req(message = 'hello'): LLMRequest {
   return {

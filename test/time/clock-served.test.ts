@@ -28,7 +28,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { Agent, defineTool } from '../../src/index.js';
-import type { LLMRequest, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
 import { clockSentence, timeLine, TIME_LINE_SOURCE } from '../../src/core/agent/arguments/serve.js';
 import { servedAt } from '../../src/lib/time-travel/servedView.js';
 

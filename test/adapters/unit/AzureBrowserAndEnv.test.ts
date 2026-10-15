@@ -29,7 +29,7 @@ import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import { browserAzureOpenai } from '../../../src/adapters/llm/BrowserOpenAIProvider.js';
 import { providerFromEnv, type ProviderFromEnv } from '../../../src/adapters/llm/createProvider.js';
 import { FoundryLocalUnavailableError } from '../../../src/adapters/llm/FoundryLocalProvider.js';
-import type { LLMRequest } from '../../../src/adapters/types.js';
+import type { LLMRequest } from '../../../src/provider-contract/types.js';
 
 // Keep the missing-optional-peer branch explicit even though the real SDK is
 // now a dev dependency for offline streamed-argument integration regressions.

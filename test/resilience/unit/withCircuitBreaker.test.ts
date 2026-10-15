@@ -18,7 +18,7 @@ import {
 } from '../../../src/resilience/withCircuitBreaker.js';
 import { withFallback } from '../../../src/resilience/withFallback.js';
 import { withRetry } from '../../../src/resilience/withRetry.js';
-import type { LLMProvider, LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMProvider, LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
 import { expectScalesLinearly } from '../../helpers/perf.js';
 
 // ── Test provider helpers ────────────────────────────────────────────

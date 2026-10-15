@@ -21,7 +21,7 @@ import {
   FoundryLocalProvider,
   FoundryLocalUnavailableError,
 } from '../../../src/adapters/llm/FoundryLocalProvider.js';
-import type { LLMRequest } from '../../../src/adapters/types.js';
+import type { LLMRequest } from '../../../src/provider-contract/types.js';
 import { expectScalesLinearly } from '../../helpers/perf.js';
 
 // ─── Env hygiene ───────────────────────────────────────────────────

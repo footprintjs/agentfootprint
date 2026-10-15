@@ -28,7 +28,7 @@ import { Agent, codeRunnerTool, defineTool, toolSessionsOf } from '../../src/ind
 import { INNER_RUN_RECORDS } from '../../src/core/innerRunRecords.js';
 import { localCodeRunner } from '../../src/adapters/code/local.js';
 import { mock } from '../../src/llm-providers.js';
-import type { CodeResult, CodeRunner, CodeSession } from '../../src/adapters/types.js';
+import type { CodeResult, CodeRunner, CodeSession } from '../../src/provider-contract/types.js';
 import type { ToolExecutionContext } from '../../src/core/tools.js';
 import { unconfiguredCredentialProvider } from '../../src/identity/types.js';
 

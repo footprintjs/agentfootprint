@@ -34,7 +34,7 @@
  * refusal that does not teach just moves the puzzle.
  */
 
-import type { WireRole } from '../../adapters/types.js';
+import type { WireRole } from '../../provider-contract/types.js';
 
 /** Render a role list the way the refusals quote it. */
 function listRoles(roles: readonly WireRole[]): string {

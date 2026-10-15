@@ -27,9 +27,9 @@ import { anthropicTakesNativeOutputSchema } from '../../../src/adapters/llm/anth
 import { withRetry } from '../../../src/resilience/withRetry.js';
 import { withFallback } from '../../../src/resilience/withFallback.js';
 import { withCircuitBreaker } from '../../../src/resilience/withCircuitBreaker.js';
-import { isRequestRefusal } from '../../../src/adapters/requestRefusal.js';
+import { isRequestRefusal } from '../../../src/provider-contract/requestRefusal.js';
 import { nativeOutputSchemaFor, UnsupportedNativeOutputError } from '../../../src/providers.js';
-import type { LLMChunk, LLMRequest } from '../../../src/adapters/types.js';
+import type { LLMChunk, LLMRequest } from '../../../src/provider-contract/types.js';
 
 const SCHEMA = {
   type: 'object',

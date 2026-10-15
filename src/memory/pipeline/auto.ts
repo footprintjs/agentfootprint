@@ -51,10 +51,10 @@
  */
 import { flowChart, type TypedScope } from 'footprintjs';
 
-import type { LLMProvider } from '../../adapters/types.js';
+import type { LLMProvider } from '../../provider-contract/types.js';
 import type { MemoryStore } from '../store/index.js';
 import type { MemoryEntry } from '../entry/index.js';
-import type { LLMMessage as Message } from '../../adapters/types.js';
+import type { LLMMessage as Message } from '../../provider-contract/types.js';
 import type { MemoryPipeline } from './types.js';
 
 import {

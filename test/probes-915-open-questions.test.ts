@@ -37,7 +37,7 @@ import { describe, it, expect } from 'vitest';
 import { defineTool, Agent } from '../src/index.js';
 import { skillGraph, defineSkill } from '../src/injection-engine.js';
 import { mock } from '../src/llm-providers.js';
-import type { LLMRequest } from '../src/adapters/types.js';
+import type { LLMRequest } from '../src/provider-contract/types.js';
 
 const skill = (id: string, body = `${id} body`) =>
   defineSkill({ id, description: `use ${id}`, body });

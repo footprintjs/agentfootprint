@@ -22,7 +22,7 @@ import {
   inMemoryArtifacts,
   UnsupportedValuesError,
 } from '../../../src/index.js';
-import type { LLMMessage, LLMRequest } from '../../../src/adapters/types.js';
+import type { LLMMessage, LLMRequest } from '../../../src/provider-contract/types.js';
 
 // ── Toolkit ──────────────────────────────────────────────────────────────
 

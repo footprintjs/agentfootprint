@@ -40,7 +40,7 @@
  * ```
  */
 
-import type { LLMMessage } from '../../../adapters/types.js';
+import type { LLMMessage } from '../../../provider-contract/types.js';
 
 export interface EvictedTurnsHandle {
   /** The window stage files what left at iteration `k`'s head — possibly

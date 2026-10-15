@@ -31,7 +31,12 @@ import {
 import { defineTool } from '../../src/core/tools.js';
 import { askHuman, isPaused } from '../../src/core/pause.js';
 import { mock } from '../../src/llm-providers.js';
-import type { LLMMessage, LLMProvider, LLMRequest, LLMResponse } from '../../src/adapters/types.js';
+import type {
+  LLMMessage,
+  LLMProvider,
+  LLMRequest,
+  LLMResponse,
+} from '../../src/provider-contract/types.js';
 import {
   answeredCallIds,
   planRemoval,

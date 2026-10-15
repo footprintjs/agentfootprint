@@ -55,7 +55,7 @@
 
 import { decide, flowChart } from 'footprintjs';
 import type { FlowChart, TypedScope } from 'footprintjs';
-import type { LLMRequest, LLMResponse } from '../adapters/types.js';
+import type { LLMRequest, LLMResponse } from '../provider-contract/types.js';
 import {
   CircuitOpenError,
   admitCall,

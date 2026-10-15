@@ -802,7 +802,7 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
 
   // ── caught by the rows widened in 9.86.1 (future-tense effect verbs, the
   // bare call deictic, the next-call forecast, more copula nouns) ──
-  'src/adapters/llm/contextWindow.ts': [
+  'src/provider-contract/contextWindow.ts': [
     {
       kind: 'not-model-facing',
       count: 1,

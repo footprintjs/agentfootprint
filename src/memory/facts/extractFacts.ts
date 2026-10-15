@@ -20,7 +20,7 @@
  * short-circuits on empty — no store round-trip.
  */
 import type { TypedScope } from 'footprintjs';
-import type { LLMMessage as Message } from '../../adapters/types.js';
+import type { LLMMessage as Message } from '../../provider-contract/types.js';
 import type { MemoryEntry } from '../entry/index.js';
 import type { MemoryState } from '../stages/index.js';
 import type { FactExtractor } from './extractor.js';

@@ -18,7 +18,7 @@
  * opposite: a stated fact that zero tools rode the request.
  */
 
-import type { WireToolManifest } from '../types.js';
+import type { WireToolManifest } from '../../provider-contract/types.js';
 
 export type { WireToolManifest };
 

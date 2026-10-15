@@ -93,7 +93,7 @@ import type {
   LLMResponse,
   LLMToolSchema,
   WireRole,
-} from '../types.js';
+} from '../../provider-contract/types.js';
 import { isSlash, trimTrailing } from '../../lib/linearText.js';
 
 // ─── Wire shapes (Foundry Local /v1 — the OpenAI dialect) ───────────
@@ -627,7 +627,7 @@ export class FoundryLocalProvider implements LLMProvider {
         : foundryLocal(model as FoundryLocalProviderOptions);
   }
 
-  // `hooks` is FORWARDED, not dropped — see LLMCallHooks in adapters/types.ts.
+  // `hooks` is FORWARDED, not dropped — see LLMCallHooks in provider-contract/types.ts.
   complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
     return this.inner.complete(req, hooks);
   }

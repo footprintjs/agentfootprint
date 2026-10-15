@@ -27,7 +27,7 @@ import { describe, expect, it } from 'vitest';
 
 import { Agent, InvalidRunInputError, LLMCall, Sequence } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
-import type { LLMProvider, LLMRequest, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMProvider, LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
 
 /** A provider that records exactly what reached the wire. */
 function spyProvider(reply = 'ok'): { provider: LLMProvider; requests: LLMRequest[] } {

@@ -61,7 +61,7 @@
  * test this file applies, and two copies of it would drift.
  */
 
-import type { LLMMessage } from '../../../adapters/types.js';
+import type { LLMMessage } from '../../../provider-contract/types.js';
 import { isSaidByPerson } from '../../../lib/saidByPerson.js';
 
 /**

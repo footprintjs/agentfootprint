@@ -32,7 +32,7 @@ import { describe, expect, it } from 'vitest';
 import { Agent } from '../../src/core/Agent.js';
 import { defineTool } from '../../src/core/tools.js';
 import { RunCheckpointError } from '../../src/core/runCheckpoint.js';
-import type { LLMProvider, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMProvider, LLMResponse } from '../../src/provider-contract/types.js';
 
 const SECRET_URL = 'https://api.example.com/v1/messages?api_key=sk-super-secret-value';
 

@@ -34,7 +34,7 @@ import type {
   LLMRequest,
   LLMResponse,
   WireRole,
-} from '../../../src/adapters/types.js';
+} from '../../../src/provider-contract/types.js';
 
 /**
  * A provider that answers once and keeps every request it was handed.

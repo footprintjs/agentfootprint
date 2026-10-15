@@ -22,7 +22,7 @@ import { gemini, type GeminiGenerateParams } from '../../../src/adapters/llm/Gem
 import { mock } from '../../../src/adapters/llm/MockProvider.js';
 import { withRetry } from '../../../src/resilience/withRetry.js';
 import { withFallback } from '../../../src/resilience/withFallback.js';
-import type { LLMProvider, LLMRequest } from '../../../src/adapters/types.js';
+import type { LLMProvider, LLMRequest } from '../../../src/provider-contract/types.js';
 
 const FORCED: LLMRequest = {
   messages: [{ role: 'user', content: 'hi' }],

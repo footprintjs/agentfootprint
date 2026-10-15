@@ -26,7 +26,7 @@ import {
   toolDigestInput,
   UNSERIALIZABLE,
 } from '../../../src/core/agent/receipt/receipt.js';
-import type { LLMToolSchema } from '../../../src/adapters/types.js';
+import type { LLMToolSchema } from '../../../src/provider-contract/types.js';
 
 const RUN = 'run-1';
 

@@ -25,7 +25,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { Agent, defineTool, isInputPause, requestInput } from '../../../../src/index.js';
-import type { LLMMessage } from '../../../../src/adapters/types.js';
+import type { LLMMessage } from '../../../../src/provider-contract/types.js';
 import { mock } from '../../../../src/llm-providers.js';
 import {
   evidenceFromHistory,

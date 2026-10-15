@@ -30,7 +30,7 @@
  * Testable on its own — see `test/core/delivery/delivery-rules.test.ts`.
  */
 
-import type { LLMMessage, WireRole } from '../../../adapters/types.js';
+import type { LLMMessage, WireRole } from '../../../provider-contract/types.js';
 import { fnv1a } from '../../slots/helpers.js';
 import type { DeferralReason } from '../../../lib/injection-engine/messagesSlotRefusal.js';
 

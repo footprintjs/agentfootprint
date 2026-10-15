@@ -9,7 +9,11 @@
 import { describe, it, expect } from 'vitest';
 import { Agent } from '../../../src/core/Agent.js';
 import { isPaused, pauseHere } from '../../../src/core/pause.js';
-import type { FlowchartCheckpoint, LLMProvider, LLMResponse } from '../../../src/adapters/types.js';
+import type {
+  FlowchartCheckpoint,
+  LLMProvider,
+  LLMResponse,
+} from '../../../src/provider-contract/types.js';
 
 function scripted(...responses: readonly LLMResponse[]): LLMProvider {
   let i = 0;

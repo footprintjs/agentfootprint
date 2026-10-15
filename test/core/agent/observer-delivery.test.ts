@@ -28,7 +28,7 @@ import {
 import { mock } from '../../../src/llm-providers.js';
 import { isPaused, pauseHere } from '../../../src/core/pause.js';
 import { RunCheckpointError } from '../../../src/core/runCheckpoint.js';
-import type { LLMProvider, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMProvider, LLMResponse } from '../../../src/provider-contract/types.js';
 import type { CombinedRecorder, EmitEvent } from 'footprintjs';
 
 // ─── helpers ──────────────────────────────────────────────────────

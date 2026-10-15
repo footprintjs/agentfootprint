@@ -27,7 +27,7 @@
  * hidden by the tool's view instead.
  */
 
-import type { LLMToolSchema } from '../../../adapters/types.js';
+import type { LLMToolSchema } from '../../../provider-contract/types.js';
 import { shownArgsOf } from '../../toolShownArgs.js';
 import type { InputValue } from '../../inputRequest.js';
 import { ASSUMED_BLOCK_HEADING, type TimeLimitLines } from '../coverage/answer.js';

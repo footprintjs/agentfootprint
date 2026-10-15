@@ -29,7 +29,7 @@
  * @see ./pipeline/*.ts          for the existing pipeline factories this dispatches to
  */
 
-import type { LLMProvider } from '../adapters/types.js';
+import type { LLMProvider } from '../provider-contract/types.js';
 
 import { refuseAsRole } from './asRoleRefusal.js';
 import { refuseMemoryRedact } from './redactRefusal.js';

@@ -68,7 +68,7 @@ import {
 } from '../../../../src/index.js';
 import { assessAnswer, recordRun } from '../../../../src/observe.js';
 import { allow } from '../../../../src/core/agent/middleware/outcomes.js';
-import type { LLMRequest, LLMResponse } from '../../../../src/adapters/types.js';
+import type { LLMRequest, LLMResponse } from '../../../../src/provider-contract/types.js';
 import type { ArgumentRow } from '../../../../src/core/agent/arguments/rows.js';
 import { checkSource } from '../../../../src/core/agent/arguments/checks.js';
 import {

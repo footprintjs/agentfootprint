@@ -36,7 +36,7 @@ import {
   servedViews,
 } from '../../../src/index.js';
 import { messageDigestInput } from '../../../src/lib/time-travel/index.js';
-import type { LLMMessage, LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMMessage, LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
 import type { AgentState } from '../../../src/core/agent/types.js';
 import { isCollapsedToolResult } from '../../../src/core/agent/findings/serve.js';
 import {

@@ -34,7 +34,7 @@ import {
   runbookAsTool,
 } from '../../src/index.js';
 import type { AgentfootprintEvent } from '../../src/events.js';
-import type { LLMRequest } from '../../src/adapters/types.js';
+import type { LLMRequest } from '../../src/provider-contract/types.js';
 import { mock } from '../../src/llm-providers.js';
 import { askHuman } from '../../src/core/pause.js';
 import type { MemoryIdentity } from '../../src/memory/identity/types.js';

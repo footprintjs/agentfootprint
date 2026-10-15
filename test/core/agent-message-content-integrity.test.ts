@@ -31,7 +31,7 @@ import { safeStringify, NO_TOOL_VALUE } from '../../src/core/agent/validators.js
 import { validateCheckpoint } from '../../src/core/runCheckpoint.js';
 import { buildMessagesSlot } from '../../src/core/slots/buildMessagesSlot.js';
 import { FlowChartExecutor } from 'footprintjs';
-import type { LLMMessage } from '../../src/adapters/types.js';
+import type { LLMMessage } from '../../src/provider-contract/types.js';
 
 const CALL = (name: string): { toolCalls: { id: string; name: string; args: object }[] } => ({
   toolCalls: [{ id: 'c0', name, args: {} }],

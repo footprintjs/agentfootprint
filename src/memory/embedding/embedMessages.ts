@@ -20,7 +20,7 @@
  */
 import type { TypedScope } from 'footprintjs';
 import type { Embedder } from './types.js';
-import type { LLMMessage as Message } from '../../adapters/types.js';
+import type { LLMMessage as Message } from '../../provider-contract/types.js';
 import type { MemoryState } from '../stages/index.js';
 import { emitEmbedding } from './emitEmbedding.js';
 

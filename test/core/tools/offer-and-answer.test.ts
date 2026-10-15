@@ -46,7 +46,11 @@ import { SKILL_SCOPED_TOOLS_ID_PREFIX, staticTools } from '../../../src/tool-pro
 import { SELF_EXPLAIN_SKILL_ID } from '../../../src/lib/trace-toolpack/selfExplain.js';
 import { mock } from '../../../src/llm-providers.js';
 import { buildAgentMessageApiChart } from '../../../src/core/agent/buildAgentMessageApiChart.js';
-import type { LLMRequest, LLMResponse, LLMToolSchema } from '../../../src/adapters/types.js';
+import type {
+  LLMRequest,
+  LLMResponse,
+  LLMToolSchema,
+} from '../../../src/provider-contract/types.js';
 import type { Tool } from '../../../src/core/tools.js';
 import {
   answeredBy,

@@ -31,7 +31,7 @@ import { describe, expect, it } from 'vitest';
 
 import { Agent, LLMCall, summarizeOldest, slidingWindow } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
-import type { LLMProvider } from '../../src/adapters/types.js';
+import type { LLMProvider } from '../../src/provider-contract/types.js';
 
 const cheap = (): LLMProvider => mock({ reply: 'summary' });
 

@@ -39,7 +39,7 @@
  * @see MEMORY.md            for the load-bearing design memory
  */
 
-import type { LLMProvider } from '../adapters/types.js';
+import type { LLMProvider } from '../provider-contract/types.js';
 import type { Embedder } from './embedding/index.js';
 import type { MemoryStore } from './store/index.js';
 import type { MemoryIdentity } from './identity/index.js';

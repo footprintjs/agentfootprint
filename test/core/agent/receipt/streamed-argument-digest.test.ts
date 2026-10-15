@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { messageDigestInput } from '../../../../src/core/agent/receipt/receipt.js';
-import type { LLMMessage } from '../../../../src/adapters/types.js';
+import type { LLMMessage } from '../../../../src/provider-contract/types.js';
 
 describe('stream argument recovery participates in request identity', () => {
   const ordinary: LLMMessage = {

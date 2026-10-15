@@ -21,7 +21,7 @@ import {
   type AgentRunCheckpoint,
   type RunCheckpointTracker,
 } from '../../src/core/runCheckpoint.js';
-import type { LLMMessage } from '../../src/adapters/types.js';
+import type { LLMMessage } from '../../src/provider-contract/types.js';
 import { expectWithinReferenceUnits, measureAsync } from '../helpers/perf.js';
 
 // ── Test helpers ─────────────────────────────────────────────────────

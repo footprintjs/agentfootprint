@@ -722,7 +722,7 @@ Five places where reality bends the rule (each is a backlog task):
        `BrowserAzureOpenAIProvider`, and the two `azure`/`browser-azure` factories. **All eight now
        forward** (2026-07-28), so every wrapper the library ships is transparent and the trap can only
        be sprung by a consumer-authored wrapper (`myWrapper(withRetry(p))`). Documented at the seam
-       (`LLMCallHooks` JSDoc in `adapters/types.ts`) and in the resilience guide's honest limits.
+       (`LLMCallHooks` JSDoc in `provider-contract/types.ts`) and in the resilience guide's honest limits.
      · The arity change is runtime-observable in **untyped JS only**: a consumer whose
        `complete(req, options)` genuinely takes a second parameter of its own now receives our hooks
        object there. Impossible in TS (excess arguments were never assignable).

@@ -6,8 +6,8 @@ import { bedrock, BedrockProvider } from '../../../src/adapters/llm/BedrockProvi
 import {
   forcedToolChoiceFor,
   UnsupportedToolChoiceError,
-} from '../../../src/adapters/forcedToolChoice.js';
-import type { LLMProvider, LLMRequest } from '../../../src/adapters/types.js';
+} from '../../../src/provider-contract/forcedToolChoice.js';
+import type { LLMProvider, LLMRequest } from '../../../src/provider-contract/types.js';
 import { UnsupportedThinkingError } from '../../../src/thinking/errors.js';
 
 const tools = [{ name: 'answer', description: 'Answer.', inputSchema: { type: 'object' } }];

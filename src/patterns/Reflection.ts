@@ -11,7 +11,7 @@
  *          every inner LLMCall's stream.llm_start/end.
  */
 
-import type { LLMProvider } from '../adapters/types.js';
+import type { LLMProvider } from '../provider-contract/types.js';
 import { LLMCall } from '../core/LLMCall.js';
 import type { Runner } from '../core/runner.js';
 import { Loop } from '../core-flow/Loop.js';

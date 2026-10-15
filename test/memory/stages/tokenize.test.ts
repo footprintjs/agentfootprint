@@ -3,7 +3,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { approximateTokenCounter, countMessageTokens } from '../../../src/memory/stages/tokenize';
-import type { LLMMessage } from '../../../src/adapters/types';
+import type { LLMMessage } from '../../../src/provider-contract/types';
 
 describe('approximateTokenCounter', () => {
   it('counts an empty string as 0 tokens', () => {

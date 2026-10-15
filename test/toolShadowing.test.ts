@@ -27,7 +27,7 @@ import { enableDevMode, disableDevMode } from 'footprintjs';
 import { defineTool, Agent } from '../src/index.js';
 import { skillGraph, defineSkill } from '../src/doors/context.js';
 import { mock, staticTools } from '../src/doors/providers.js';
-import type { LLMResponse } from '../src/adapters/types.js';
+import type { LLMResponse } from '../src/provider-contract/types.js';
 import type { ToolsClaimSwallowedPayload, ToolsShadowedPayload } from '../src/events/payloads.js';
 
 // ── helpers ──────────────────────────────────────────────────────────────────

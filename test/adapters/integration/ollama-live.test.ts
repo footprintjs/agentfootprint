@@ -19,7 +19,7 @@ import { describe, expect, it, beforeAll } from 'vitest';
 
 import { ollama, OllamaUnavailableError } from '../../../src/adapters/llm/OllamaProvider.js';
 import { Agent, defineTool } from '../../../src/index.js';
-import type { LLMRequest } from '../../../src/adapters/types.js';
+import type { LLMRequest } from '../../../src/provider-contract/types.js';
 
 const LIVE = !!process.env.AGENTFOOTPRINT_OLLAMA_LIVE;
 const MODEL = process.env.AGENTFOOTPRINT_OLLAMA_MODEL ?? 'llama3.2';

@@ -18,7 +18,7 @@
  * inside a wrapping Runner that rebuilds the Parallel per call.
  */
 
-import type { LLMProvider } from '../adapters/types.js';
+import type { LLMProvider } from '../provider-contract/types.js';
 import { flowChart, FlowChartExecutor, type FlowChart, type TypedScope } from 'footprintjs';
 import { LLMCall } from '../core/LLMCall.js';
 import { RunnerBase } from '../core/RunnerBase.js';

@@ -6,7 +6,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { mapReduce } from '../../../src/patterns/MapReduce.js';
-import type { LLMProvider, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMProvider, LLMResponse } from '../../../src/provider-contract/types.js';
 
 /** Echo provider — returns the user input so we can verify shard routing. */
 function echoProvider(): LLMProvider {

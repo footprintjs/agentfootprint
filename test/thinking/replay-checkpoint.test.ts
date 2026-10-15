@@ -3,7 +3,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { Agent, defineTool, isPaused, RunCheckpointError } from '../../src/index.js';
 import { defineSkill } from '../../src/injection-engine.js';
 import { askHuman } from '../../src/core/pause.js';
-import type { LLMMessage, LLMProvider, LLMRequest, LLMResponse } from '../../src/adapters/types.js';
+import type {
+  LLMMessage,
+  LLMProvider,
+  LLMRequest,
+  LLMResponse,
+} from '../../src/provider-contract/types.js';
 import { allow, deny } from '../../src/core/agent/middleware/outcomes.js';
 import { conversationRedaction } from '../../src/doors/security.js';
 import { mockAnthropicRaw, mockThinkingHandler } from '../../src/thinking/MockThinkingHandler.js';

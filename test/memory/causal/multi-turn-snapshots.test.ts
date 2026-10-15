@@ -30,7 +30,7 @@ import { writeSnapshot } from '../../../src/memory/causal/writeSnapshot.js';
 import type { SnapshotEntry } from '../../../src/memory/causal/types.js';
 import type { MemoryState } from '../../../src/memory/stages/types.js';
 import type { MemoryEntry } from '../../../src/memory/entry/types.js';
-import type { LLMMessage } from '../../../src/adapters/types.js';
+import type { LLMMessage } from '../../../src/provider-contract/types.js';
 
 const ID = { tenant: 'acme', conversationId: 'conv-multi' };
 

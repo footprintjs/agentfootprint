@@ -42,7 +42,11 @@ import {
   type ToolMiddleware,
 } from '../../../../src/index.js';
 import { staticTools } from '../../../../src/tool-providers/index.js';
-import type { LLMMessage, LLMRequest, LLMResponse } from '../../../../src/adapters/types.js';
+import type {
+  LLMMessage,
+  LLMRequest,
+  LLMResponse,
+} from '../../../../src/provider-contract/types.js';
 import { producerCorpusOf } from '../../../../src/core/agent/stages/toolCalls.js';
 import { _resetUnmountedRulesWarnings } from '../../../../src/core/agent/arguments/dispatch.js';
 import type { ArgumentRow } from '../../../../src/core/agent/arguments/rows.js';

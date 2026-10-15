@@ -21,7 +21,7 @@ import type {
   LLMProvider,
   LLMRequest,
   LLMResponse,
-} from '../../../src/adapters/types.js';
+} from '../../../src/provider-contract/types.js';
 
 const MODEL = 'claude-haiku-4-5-20251001';
 const variants = [

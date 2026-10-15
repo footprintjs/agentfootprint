@@ -1,6 +1,6 @@
 /** A real Agent receipt and retirement hook, with a scripted leaf transport. */
 import { Agent } from '../../src/index.js';
-import type { LLMMessage, LLMProvider, LLMRequest } from '../../src/adapters/types.js';
+import type { LLMMessage, LLMProvider, LLMRequest } from '../../src/provider-contract/types.js';
 import { mockAnthropicRaw, mockThinkingHandler } from '../../src/thinking/MockThinkingHandler.js';
 import type { MessageReplay } from '../../src/thinking/replay.js';
 import { replayMessageFingerprint } from '../../src/thinking/replayHistory.js';

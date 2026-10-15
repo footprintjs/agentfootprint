@@ -13,7 +13,7 @@ import { Conditional } from '../../../src/core-flow/Conditional.js';
 import { Loop } from '../../../src/core-flow/Loop.js';
 import { LLMCall } from '../../../src/core/LLMCall.js';
 import { MockProvider } from '../../../src/adapters/llm/MockProvider.js';
-import type { LLMProvider } from '../../../src/adapters/types.js';
+import type { LLMProvider } from '../../../src/provider-contract/types.js';
 
 function llm(reply: string) {
   return LLMCall.create({ provider: new MockProvider({ reply }), model: 'mock' })

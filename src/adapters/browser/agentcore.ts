@@ -45,7 +45,12 @@
  * `start()` first runs, or never, if you inject `_client` / `_sdk`.
  */
 
-import type { BrowserDriver, BrowserRunner, BrowserSession, BrowserShot } from '../types.js';
+import type {
+  BrowserDriver,
+  BrowserRunner,
+  BrowserSession,
+  BrowserShot,
+} from '../../provider-contract/types.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
 
 /** AWS's managed browser. A custom `CreateBrowser` resource id goes here instead. */

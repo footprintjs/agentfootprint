@@ -34,7 +34,7 @@ import { describe, expect, it } from 'vitest';
 import { Agent, defineTool } from '../../src/index.js';
 import { defineSkill, skillGraph } from '../../src/injection-engine.js';
 import { mock } from '../../src/llm-providers.js';
-import type { LLMRequest } from '../../src/adapters/types.js';
+import type { LLMRequest } from '../../src/provider-contract/types.js';
 
 const zoneTool = defineTool<Record<string, never>, string>({
   name: 'get_zone_info',

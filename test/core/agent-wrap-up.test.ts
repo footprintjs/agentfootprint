@@ -33,7 +33,7 @@ import { join } from 'node:path';
 import { Agent } from '../../src/index.js';
 import { defineTool } from '../../src/core/tools.js';
 import { mock } from '../../src/llm-providers.js';
-import type { LLMRequest, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
 import type { AgentState } from '../../src/core/agent/types.js';
 import { WRAP_UP_INSTRUCTION } from '../../src/core/agent/stages/wrapUp.js';
 import { isLibraryAuthoredFrame, isSaidByPerson } from '../../src/index.js';

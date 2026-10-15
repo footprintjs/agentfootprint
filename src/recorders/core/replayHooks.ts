@@ -1,5 +1,5 @@
 /** Runtime replay reporting. State retirement is not fallible telemetry. */
-import type { LLMCallHooks, LLMMessage } from '../../adapters/types.js';
+import type { LLMCallHooks, LLMMessage } from '../../provider-contract/types.js';
 import { retireReplayHistory } from '../../thinking/replayHistory.js';
 import type { Receipt } from '../../core/agent/receipt/receipt.js';
 import { RECEIPT_KEY } from '../../lib/conventions.js';

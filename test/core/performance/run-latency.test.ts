@@ -13,7 +13,7 @@ import { describe, it, expect } from 'vitest';
 import { Agent } from '../../../src/core/Agent.js';
 import { LLMCall } from '../../../src/core/LLMCall.js';
 import { MockProvider } from '../../../src/adapters/llm/MockProvider.js';
-import type { LLMProvider, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMProvider, LLMResponse } from '../../../src/provider-contract/types.js';
 import { expectWithinReferenceUnits, expectWithinTimes, measureAsync } from '../../helpers/perf.js';
 
 function scripted(...responses: readonly LLMResponse[]): LLMProvider {

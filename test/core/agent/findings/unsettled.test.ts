@@ -69,7 +69,7 @@ import {
   servedViews,
   type FindingsRow,
 } from '../../../../src/index.js';
-import type { LLMRequest, LLMResponse } from '../../../../src/adapters/types.js';
+import type { LLMRequest, LLMResponse } from '../../../../src/provider-contract/types.js';
 import { defineSkill } from '../../../../src/injection-engine.js';
 import { foldLedger } from '../../../../src/core/agent/findings/ledger.js';
 import { findingsLedgerPiece } from '../../../../src/core/agent/findings/serve.js';

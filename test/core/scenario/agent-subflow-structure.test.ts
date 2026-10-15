@@ -37,7 +37,7 @@ import { MockProvider } from '../../../src/adapters/llm/MockProvider.js';
 import { defineTool } from '../../../src/core/tools.js';
 import { defineSkill } from '../../../src/lib/injection-engine/factories/defineSkill.js';
 import { askHuman, isPaused } from '../../../src/core/pause.js';
-import type { PricingTable } from '../../../src/adapters/types.js';
+import type { PricingTable } from '../../../src/provider-contract/types.js';
 
 /** Captures subflow-entry ids (+ their subflowPath) during a run — the same
  *  FlowRecorder signal explainable-ui's structure recorder consumes. */

@@ -25,7 +25,7 @@ import { defineSkill, skillGraph, decideSkill } from '../../../src/injection-eng
 import { skillScopedTools, staticTools } from '../../../src/tool-providers/index.js';
 import { mockMcpClient } from '../../../src/lib/mcp/index.js';
 import { mock } from '../../../src/llm-providers.js';
-import type { LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
 import type {
   ToolsAnsweredOffWirePayload,
   ToolsClaimSwallowedPayload,

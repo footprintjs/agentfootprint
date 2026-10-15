@@ -47,7 +47,7 @@ export type {
 } from 'footprintjs';
 
 // Adapter interfaces (ports)
-export * from './adapters/types.js';
+export * from './provider-contract/types.js';
 
 // Injection keys + recorder authoring helpers — needed by anyone writing
 // a custom recorder that switches on injection events.
@@ -703,7 +703,7 @@ export {
   ContextWindowExceededError,
   ERR_CONTEXT_WINDOW_EXCEEDED,
   isContextWindowExceeded,
-} from './adapters/llm/contextWindow.js';
+} from './provider-contract/contextWindow.js';
 // The conversation refusals (9.2.0) — `instanceof`-able so a caller can tell
 // "you are already running" from "somebody is still waiting on an answer" from
 // "there is nothing to follow up on".

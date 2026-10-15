@@ -24,7 +24,7 @@ import type { RedactionPolicy } from 'footprintjs';
 import { describe, expect, it } from 'vitest';
 
 import { Agent, defineTool, inMemoryArtifacts } from '../../src/index.js';
-import type { LLMProvider, LLMRequest } from '../../src/adapters/types.js';
+import type { LLMProvider, LLMRequest } from '../../src/provider-contract/types.js';
 import { ALL_EVENT_TYPES, type AgentfootprintEvent } from '../../src/events/registry.js';
 import { mock } from '../../src/doors/providers.js';
 import { conversationRedaction } from '../../src/doors/security.js';

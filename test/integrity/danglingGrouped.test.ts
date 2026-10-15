@@ -21,7 +21,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { Agent, slidingWindow, defineTool } from '../../src/index.js';
-import type { LLMProvider, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMProvider, LLMResponse } from '../../src/provider-contract/types.js';
 import type { CheckReport } from '../../src/integrity/disposition/types.js';
 
 const TASK = 'Walk the whole floor and tell me which rack is hottest.';

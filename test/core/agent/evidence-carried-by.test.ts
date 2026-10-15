@@ -28,7 +28,7 @@ import {
   evidenceFromHistory,
   MAX_CARRIERS,
 } from '../../../src/core/agent/evidence/evidenceIndex.js';
-import type { LLMMessage, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMMessage, LLMResponse } from '../../../src/provider-contract/types.js';
 
 const QUESTION = 'which hosts had slow creates in that window';
 

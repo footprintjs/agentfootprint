@@ -47,7 +47,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { Agent } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
-import type { LLMProvider } from '../../src/adapters/types.js';
+import type { LLMProvider } from '../../src/provider-contract/types.js';
 import { agentCoreRuntimeHost, foundryResponsesHost } from '../../src/hosting-providers.js';
 import {
   checkSessionId,

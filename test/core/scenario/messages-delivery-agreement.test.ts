@@ -25,8 +25,8 @@
 import { describe, it, expect } from 'vitest';
 import { Agent } from '../../../src/index.js';
 import { defineFact } from '../../../src/injection-engine.js';
-import type { LLMProvider, LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
-import type { LLMMessage } from '../../../src/adapters/types.js';
+import type { LLMProvider, LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
+import type { LLMMessage } from '../../../src/provider-contract/types.js';
 import type { MessagesDelivery } from '../../../src/core/agent/delivery/types.js';
 
 function capturingProvider(): { provider: LLMProvider; requests: LLMRequest[] } {

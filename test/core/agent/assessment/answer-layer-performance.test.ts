@@ -17,7 +17,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { Agent, defineTool } from '../../../../src/index.js';
-import type { LLMRequest, LLMResponse } from '../../../../src/adapters/types.js';
+import type { LLMRequest, LLMResponse } from '../../../../src/provider-contract/types.js';
 import { assessAnswer } from '../../../../src/observe.js';
 import { groundedRowFrom } from '../../../../src/core/agent/assessment/witness.js';
 import { expectScalesLinearly, expectWithinTimes } from '../../../helpers/perf.js';

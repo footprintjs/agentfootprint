@@ -30,7 +30,7 @@ import { mock } from '../../src/llm-providers.js';
 import { defineMemory, MEMORY_STRATEGIES, MEMORY_TYPES } from '../../src/memory/index.js';
 import { InMemoryStore } from '../../src/memory/store/index.js';
 import { memorySessions, standingAgent } from '../../src/hosting/index.js';
-import type { LLMProvider, LLMRequest, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMProvider, LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
 import { inProcessHost } from '../hosting/testHost.js';
 
 /** A provider that answers once per call and keeps every request it was handed. */

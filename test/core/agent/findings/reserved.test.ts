@@ -17,7 +17,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import type { LLMToolSchema } from '../../../../src/adapters/types.js';
+import type { LLMToolSchema } from '../../../../src/provider-contract/types.js';
 import {
   FINDINGS_ARGUMENT_SCHEMA,
   FINDINGS_INSTRUCTION,

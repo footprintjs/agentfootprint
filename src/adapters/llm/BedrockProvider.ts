@@ -39,12 +39,15 @@ import type {
   LLMResponse,
   LLMToolSchema,
   WireRole,
-} from '../types.js';
+} from '../../provider-contract/types.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
-import { asContextWindowExceeded } from './contextWindow.js';
+import { asContextWindowExceeded } from '../../provider-contract/contextWindow.js';
 import { retryAfterMsFromError } from './retryAfter.js';
 import { anthropicTakesForcedToolChoice } from './anthropicModels.js';
-import { forcedToolChoiceFor, UnsupportedToolChoiceError } from '../forcedToolChoice.js';
+import {
+  forcedToolChoiceFor,
+  UnsupportedToolChoiceError,
+} from '../../provider-contract/forcedToolChoice.js';
 import { UnsupportedThinkingError } from '../../thinking/errors.js';
 
 // ─── Bedrock Converse SDK shape (duck-typed) ───────────────────────
@@ -346,7 +349,7 @@ export class BedrockProvider implements LLMProvider {
     this.supportsForcedToolChoice = (model) => forcedToolChoiceFor(this.inner, model);
   }
 
-  // `hooks` is FORWARDED, not dropped — see LLMCallHooks in adapters/types.ts.
+  // `hooks` is FORWARDED, not dropped — see LLMCallHooks in provider-contract/types.ts.
   complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
     return this.inner.complete(req, hooks);
   }

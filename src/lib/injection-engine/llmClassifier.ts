@@ -19,12 +19,12 @@
  * never diluted by the near-tie margin; see `routingPolicy.ts`).
  *
  * One of the two injection-engine scorer modules that import
- * `adapters/types` (the other is `constrainedEnumPick`, its machinery) —
+ * `provider-contract/types` (the other is `constrainedEnumPick`, its machinery) —
  * kept out of `entryScorer.ts` so the keyword/embedding paths stay
  * adapter-free.
  */
 
-import type { LLMProvider } from '../../adapters/types.js';
+import type { LLMProvider } from '../../provider-contract/types.js';
 import { constrainedEnumPick } from './constrainedEnumPick.js';
 import type {
   IntentCandidate,

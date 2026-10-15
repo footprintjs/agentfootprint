@@ -7,7 +7,7 @@ import * as security from '../../src/doors/security.js';
 import { PermissionPolicy } from '../../src/security/index.js';
 import { gatedTools, staticTools } from '../../src/tool-providers/index.js';
 import { Agent } from '../../src/core/Agent.js';
-import type { LLMProvider, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMProvider, LLMResponse } from '../../src/provider-contract/types.js';
 import type { Tool } from '../../src/core/tools.js';
 
 function scripted(...responses: LLMResponse[]): LLMProvider {

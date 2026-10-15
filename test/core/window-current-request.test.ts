@@ -30,7 +30,12 @@ import {
   tokenBudget,
 } from '../../src/index.js';
 import { defineTool } from '../../src/core/tools.js';
-import type { LLMMessage, LLMProvider, LLMRequest, LLMResponse } from '../../src/adapters/types.js';
+import type {
+  LLMMessage,
+  LLMProvider,
+  LLMRequest,
+  LLMResponse,
+} from '../../src/provider-contract/types.js';
 import {
   answeredCallIds,
   planRemoval,

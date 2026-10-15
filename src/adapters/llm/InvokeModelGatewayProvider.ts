@@ -59,8 +59,14 @@
  *   caller's `req.signal` still wins.
  */
 
-import type { LLMCallHooks, LLMChunk, LLMProvider, LLMRequest, LLMResponse } from '../types.js';
-import { asContextWindowExceeded } from './contextWindow.js';
+import type {
+  LLMCallHooks,
+  LLMChunk,
+  LLMProvider,
+  LLMRequest,
+  LLMResponse,
+} from '../../provider-contract/types.js';
+import { asContextWindowExceeded } from '../../provider-contract/contextWindow.js';
 import {
   assembleAnthropicStream,
   buildMessagesBody,
@@ -457,7 +463,7 @@ export class InvokeModelGatewayProvider implements LLMProvider {
     this.supportsForcedToolChoice = this.inner.supportsForcedToolChoice!;
   }
 
-  // `hooks` is FORWARDED, not dropped — see LLMCallHooks in adapters/types.ts.
+  // `hooks` is FORWARDED, not dropped — see LLMCallHooks in provider-contract/types.ts.
   complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
     return this.inner.complete(req, hooks);
   }

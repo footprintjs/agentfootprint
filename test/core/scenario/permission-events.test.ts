@@ -19,7 +19,7 @@ import type {
   PermissionChecker,
   PermissionDecision,
   PermissionRequest,
-} from '../../../src/adapters/types.js';
+} from '../../../src/provider-contract/types.js';
 import { expectWithinTimes, measureAsync } from '../../helpers/perf.js';
 
 function scripted(...r: LLMResponse[]): LLMProvider {

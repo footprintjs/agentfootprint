@@ -41,7 +41,12 @@ import {
 import { defineTool } from '../../src/core/tools.js';
 import { mock } from '../../src/llm-providers.js';
 import { readEnvelope, sqliteSessions, toEnvelope } from '../../src/hosting/index.js';
-import type { LLMMessage, LLMProvider, LLMRequest, LLMResponse } from '../../src/adapters/types.js';
+import type {
+  LLMMessage,
+  LLMProvider,
+  LLMRequest,
+  LLMResponse,
+} from '../../src/provider-contract/types.js';
 import type { AgentRunCheckpoint } from '../../src/core/runCheckpoint.js';
 import type { FoldedSpan } from '../../src/core/agent/window/types.js';
 import { buildSummaryMessage } from '../../src/core/agent/window/summarize.js';

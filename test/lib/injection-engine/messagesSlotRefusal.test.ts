@@ -40,7 +40,7 @@ import {
   messagesToolRoleRefusal,
 } from '../../../src/lib/injection-engine/messagesSlotRefusal.js';
 import { MockProvider } from '../../../src/adapters/llm/MockProvider.js';
-import type { LLMProvider, LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMProvider, LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
 
 /** A minimal provider with no declared capability → the user/assistant floor. */
 function floorProvider(name = 'third-party'): LLMProvider {

@@ -27,7 +27,7 @@
  * Lens may omit, never deny.
  */
 
-import type { LLMMessage, LLMRequest, LLMToolSchema } from '../../adapters/types.js';
+import type { LLMMessage, LLMRequest, LLMToolSchema } from '../../provider-contract/types.js';
 import {
   buildReceipt,
   receiptPieces,

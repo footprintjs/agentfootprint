@@ -35,12 +35,15 @@ import { extractSequence } from '../security/extractSequence.js';
 import { PolicyHaltError } from '../security/PolicyHaltError.js';
 import { updateSkillHistory as updateSkillHistoryStage } from '../cache/CacheGateDecider.js';
 import { cacheStrategyFor } from '../cache/cacheStrategyFor.js';
-import { forcedToolChoiceFor, UnsupportedToolChoiceError } from '../adapters/forcedToolChoice.js';
+import {
+  forcedToolChoiceFor,
+  UnsupportedToolChoiceError,
+} from '../provider-contract/forcedToolChoice.js';
 import {
   nativeOutputSchemaFor,
   UnsupportedNativeOutputError,
-} from '../adapters/nativeOutputSchema.js';
-import { isRequestRefusal } from '../adapters/requestRefusal.js';
+} from '../provider-contract/nativeOutputSchema.js';
+import { isRequestRefusal } from '../provider-contract/requestRefusal.js';
 import { assistantReplayFields } from './agent/assistantReplay.js';
 import { buildBrainFor, describeServingBrain } from './agent/skillBrains.js';
 import { SUBFLOW_IDS } from '../lib/conventions.js';
@@ -57,7 +60,7 @@ import type {
   LLMToolSchema,
   PermissionChecker,
   PricingTable,
-} from '../adapters/types.js';
+} from '../provider-contract/types.js';
 import type { CredentialProvider } from '../identity/types.js';
 import type { ArtifactScope, ArtifactStore } from '../artifacts/types.js';
 import { assertArtifactPlacement, type ArtifactPlacement } from '../artifacts/placement.js';
@@ -227,7 +230,7 @@ import { isValidatedDelivery } from './agent/stages/breakFinal.js';
 import { evidenceRefusalSentence } from './agent/evidence/gate.js';
 import { UnsupportedValuesError } from './agent/evidence/errors.js';
 import type { ResolvedEvidenceGate } from './agent/evidence/types.js';
-import { checkerGoverns } from '../adapters/types.js';
+import { checkerGoverns } from '../provider-contract/types.js';
 import { skillTarget } from '../security/skillTarget.js';
 import { buildInjectionEngineSubflow } from '../lib/injection-engine/buildInjectionEngineSubflow.js';
 import type { Injection, InjectionContext } from '../lib/injection-engine/types.js';
@@ -4365,7 +4368,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       policyHaltArgs?: Readonly<Record<string, unknown>>;
       policyHaltIteration?: number;
       policyHaltCheckerId?: string;
-      history?: import('../adapters/types.js').LLMMessage[];
+      history?: import('../provider-contract/types.js').LLMMessage[];
     };
     if (halt.policyHaltReason !== undefined && halt.policyHaltTarget !== undefined) {
       const history = halt.history ?? [];

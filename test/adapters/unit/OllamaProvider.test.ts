@@ -15,7 +15,7 @@ import {
   OllamaProvider,
   OllamaUnavailableError,
 } from '../../../src/adapters/llm/OllamaProvider.js';
-import type { LLMRequest } from '../../../src/adapters/types.js';
+import type { LLMRequest } from '../../../src/provider-contract/types.js';
 import { expectScalesLinearly } from '../../helpers/perf.js';
 
 // ─── Fake wire helpers ─────────────────────────────────────────────

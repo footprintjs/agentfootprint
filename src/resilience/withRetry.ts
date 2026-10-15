@@ -49,7 +49,7 @@ import type {
   LLMProvider,
   LLMRequest,
   LLMResponse,
-} from '../adapters/types.js';
+} from '../provider-contract/types.js';
 import { sleep } from '../lib/sleep.js';
 import { statedRetryAfterMs } from './statedWait.js';
 import { replayAttempts } from './replayAttempt.js';

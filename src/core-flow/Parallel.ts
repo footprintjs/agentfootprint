@@ -26,7 +26,7 @@ import {
 import type { RedactionPolicy } from 'footprintjs';
 import type { GroupMember, GroupMetadata, GroupTranslator } from '../core/translator.js';
 import type { RunnerPauseOutcome } from '../core/pause.js';
-import type { LLMMessage, LLMProvider } from '../adapters/types.js';
+import type { LLMMessage, LLMProvider } from '../provider-contract/types.js';
 import type { Runner } from '../core/runner.js';
 import { RunnerBase, makeRunId, withRunSignalInEnv } from '../core/RunnerBase.js';
 import { normalizeRunInput } from '../core/runInput.js';
