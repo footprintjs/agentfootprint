@@ -283,14 +283,20 @@ describe('AWS adapters dispatch exactly the commands they are pinned to', () => 
       session: 'reuse',
       _sdk: sdk.module,
     });
+    // The first request opens the connection; the second carries its handle,
+    // which the transport sends as the platform's own session id.
+    const opened = await transport.fetch?.(transport.url, { method: 'POST', body: '{}' });
     const res = await transport.fetch?.(transport.url, {
       method: 'POST',
-      headers: { 'mcp-session-id': 'mcp-1', 'mcp-protocol-version': '2025-06-18' },
+      headers: {
+        'mcp-session-id': opened?.headers.get('mcp-session-id') ?? '',
+        'mcp-protocol-version': '2025-06-18',
+      },
       body: '{"jsonrpc":"2.0","id":1,"method":"tools/list"}',
     });
 
-    expect(sdk.names()).toEqual(['InvokeAgentRuntimeCommand']);
-    const input = sdk.sent[0]?.input ?? {};
+    expect(sdk.names()).toEqual(['InvokeAgentRuntimeCommand', 'InvokeAgentRuntimeCommand']);
+    const input = sdk.sent[1]?.input ?? {};
     expect(input['agentRuntimeArn']).toBe(
       'arn:aws:bedrock-agentcore:us-west-2:123456789012:runtime/m-1',
     );
@@ -298,7 +304,7 @@ describe('AWS adapters dispatch exactly the commands they are pinned to', () => 
     expect(input['mcpProtocolVersion']).toBe('2025-06-18');
     expect(typeof input['runtimeSessionId']).toBe('string');
     expect(input['payload']).toBeInstanceOf(Uint8Array);
-    expect(res?.headers.get('mcp-session-id')).toBe('mcp-1');
+    expect(res?.headers.get('mcp-session-id')).toBe(opened?.headers.get('mcp-session-id'));
   });
 
   it('BedrockAgentMemory — GetAgentMemory to read, DeleteAgentMemory to forget', async () => {

@@ -25,19 +25,23 @@
  * server and knows nothing about AgentCore. Everything AgentCore-specific sits
  * in the `fetch` it carries, composed from three choices, one file each:
  *
+ *   session (`session.ts`)      'per-call' (the default: a session per request),
+ *                               or 'reuse' (one session per MCP client, keyed by
+ *                               a handle the transport issues)
  *   retry   (`sessionBusy.ts`)  the session-busy refusal, retried with bounded
  *                               backoff by the SAME loop `mcpClient` uses for a
  *                               429 (`mcp/throttleRetry.ts` · `retryingFetchWhen`)
- *   session (`session.ts`)      'per-call' (the default: a session per request),
- *                               or 'reuse' (one session per MCP client)
  *   auth    (`invoke.ts`)       'sigv4' through the AWS SDK's InvokeAgentRuntime,
  *                               or a bearer token over the documented HTTPS
  *                               endpoint — the SDK has no bearer scheme, and the
  *                               API reference says an OAuth caller must use HTTPS
  *
- * in that order, outermost first: every retry re-applies the session and is
- * signed (or vended) afresh, the ordering `mcp/throttleRetry.ts` requires. And
- * `mcpClient`'s own 429 retry still wraps the whole thing, untouched.
+ * in that order, outermost first: the session is applied once per request, so
+ * every attempt of it lands in the same runtime session, and every attempt is
+ * signed (or vended) afresh, the ordering `mcp/throttleRetry.ts` requires. A
+ * failure's text never repeats a session id or token the request carried
+ * (`echo.ts`), and an auth failure's never repeats the service's message
+ * (`authFailure.ts`). `mcpClient`'s own 429 retry still wraps the whole thing.
  *
  * ── What it does NOT do ──────────────────────────────────────────────────────
  * Deploy or manage a runtime (a control-plane job), or host one (that is
@@ -67,7 +71,13 @@ import {
   type BedrockAgentCoreRuntimeSdkModule,
 } from './invoke.js';
 import { quietAuthFailure } from './authFailure.js';
-import { sessionStrategy, type AgentCoreRuntimeSession } from './session.js';
+import { withoutEcho } from './echo.js';
+import {
+  AGENTCORE_RUNTIME_SESSION_HEADER,
+  MCP_SESSION_HEADER,
+  sessionStrategy,
+  type AgentCoreRuntimeSession,
+} from './session.js';
 import { sessionBusy } from './sessionBusy.js';
 
 /**
@@ -190,19 +200,27 @@ export function agentCoreRuntimeMcpTransport(
 ): McpHttpTransport {
   const url = agentCoreRuntimeUrl(options);
   const send = authStrategy(options, url);
+  const retried = retryingFetchWhen(send, retryConfig(options.retry), sessionBusy) ?? send;
   const session = sessionStrategy(options.session ?? 'per-call', options._newSessionId);
 
+  // The session is applied ONCE per request the MCP client makes, outside the
+  // retry: every attempt of one request goes to the same runtime session (a
+  // busy refusal is about THAT session coming up), and only the final answer
+  // binds anything.
   const sessioned: ThrottleFetch = async (input, init) => {
     const headers = new Headers(init?.headers);
-    const settle = session.request(headers);
-    return settle(await send(input, { ...init, headers }));
+    const step = session.request(headers, (init?.method ?? 'GET').toUpperCase());
+    if ('answer' in step) return step.answer;
+    const response = await retried(input, { ...init, headers });
+    // The session ids this request carried never come back in a failure's text.
+    const scrubbed = await withoutEcho(response, [
+      headers.get(MCP_SESSION_HEADER),
+      headers.get(AGENTCORE_RUNTIME_SESSION_HEADER),
+    ]);
+    return step.settle(scrubbed);
   };
 
-  return {
-    transport: 'http',
-    url,
-    fetch: retryingFetchWhen(sessioned, retryConfig(options.retry), sessionBusy) ?? sessioned,
-  };
+  return { transport: 'http', url, fetch: sessioned };
 }
 
 /** Where a runtime's MCP endpoint is, as {@link agentCoreRuntimeUrl} needs it. */
@@ -298,6 +316,11 @@ function authStrategy(options: AgentCoreRuntimeMcpTransportOptions, url: string)
           'user whose `bearer` provider vends that user’s token.',
       );
     }
+    // Beneath the vending, where the final headers are visible: a failure body
+    // never repeats the token this request carried.
+    const base = auth.fetch ?? globalThis.fetch.bind(globalThis);
+    const scrubbingBase: FetchLike = async (input, init) =>
+      withoutEcho(await base(input, init), [new Headers(init?.headers).get('authorization')]);
     // The Gateway's vending fetch, reused as is: the token is vended per
     // request, applied to that one request, and dropped.
     const vending = createVendingFetch(
@@ -308,7 +331,7 @@ function authStrategy(options: AgentCoreRuntimeMcpTransportOptions, url: string)
         ...(auth.scopes !== undefined && { scopes: auth.scopes }),
         ...(auth.mode !== undefined && { mode: auth.mode }),
       }),
-      auth.fetch,
+      scrubbingBase,
     );
     // Same rule as the SigV4 strategy: an auth failure's message is withheld.
     return async (input, init) => quietAuthFailure(await vending(input, init));

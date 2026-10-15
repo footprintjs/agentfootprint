@@ -34,17 +34,19 @@ const agent = Agent.create({ provider, model }).tools(await orders.tools()).buil
 
 ## What it reads / what it writes
 Reads the MCP client's requests and the runtime's replies. Under `'reuse'`,
-holds which runtime session each client's MCP session was given (at most 256,
-oldest forgotten first). Writes nothing to a run: no scope, no event, no
+holds each client's connection — its runtime session id and the server's own
+session id — under a handle the transport issued (at most 256, least recently
+used forgotten first; a client's `DELETE` forgets its own). Writes nothing to a run: no scope, no event, no
 sentence. A vended bearer token is used for one request and dropped.
 
 ## The rules here
 1. **One port, three strategies.** `transport.ts` returns an `http` member of
    `McpTransport`; `mcpClient` never learns this is AgentCore. The choices are
-   strategies, one file each, composed outermost first: retry
-   (`sessionBusy.ts`) → session (`session.ts`) → auth (`invoke.ts` for SigV4,
-   the shared vending fetch for a bearer). Every retry re-applies the session
-   and is signed or vended afresh.
+   strategies, one file each, composed outermost first: session
+   (`session.ts`) → retry (`sessionBusy.ts`) → auth (`invoke.ts` for SigV4,
+   the shared vending fetch for a bearer). The session is applied once per
+   request, so every attempt of it lands in the same runtime session; every
+   attempt is signed or vended afresh.
 2. **Every AWS name is the SDK's.** The SigV4 strategy maps HTTP onto
    `InvokeAgentRuntimeRequest` / `InvokeAgentRuntimeResponse` field for field:
    `payload`, `contentType`, `accept`, `mcpSessionId`, `mcpProtocolVersion`,
@@ -60,12 +62,15 @@ sentence. A vended bearer token is used for one request and dropped.
    `runtimeSessionId` per call) and hides the `Mcp-Session-Id` the platform
    returns, so nothing carries over and one client built at startup can serve
    every user of a process. It needs a stateless server (the runtime's
-   recommended default). **`'reuse'` keeps one session per CLIENT:** a request
-   with no `Mcp-Session-Id` (a client's `initialize`) gets a fresh runtime id,
-   the `Mcp-Session-Id` returned for it is bound to that id, and every later
-   request carrying it is sent in the same runtime session. Two clients on one
-   transport are two sessions; one client is one session for whoever calls
-   through it — build a client per conversation.
+   recommended default). **`'reuse'` keeps one session per CLIENT, keyed by
+   the transport:** a request with no `Mcp-Session-Id` (a client's
+   `initialize`) opens a connection with a fresh runtime id; the server's
+   `Mcp-Session-Id` is stored with it and the client is handed a random handle
+   in its place, which every later request is translated back from. A server
+   that numbers sessions per process (every fresh microVM says `s-1`) cannot
+   put two clients in one session, and a handle the transport does not know is
+   answered 404 "Session not found" here, unsent. One client is one session
+   for whoever calls through it — build a client per conversation.
 5. **Only the session-busy refusal is retried — and only here.** `sessionBusy`
    matches ONE JSON-RPC reply with code `-32005` AND the "session operation in
    progress" message (`ConflictException` shares the code and is not
@@ -96,12 +101,17 @@ sentence. A vended bearer token is used for one request and dropped.
    request names no user, so a `'user'` token would be sent for whoever calls
    through the client. For a token per user, build a transport per user whose
    provider vends that user's token.
+10. **A failure never repeats what the request carried.** Any non-2xx body has
+   the session ids and the bearer token this request sent replaced
+   (`echo.ts`): AWS validation errors quote the value they refused, and the
+   body becomes the model's tool error. A 2xx answer is handed on unread.
 
 ## Files
 - `transport.ts` — the facade: options, the endpoint URL, the composition.
 - `sessionBusy.ts` — the retry decision (one function).
 - `session.ts` — `'per-call'` (default) and `'reuse'`.
 - `authFailure.ts` — an auth failure answered with its type and status only.
+- `echo.ts` — a failure body never repeats a session id or token the request sent.
 - `errorType.ts` — the bare `x-amzn-errortype` name.
 - `invoke.ts` — the SigV4 strategy over `InvokeAgentRuntimeCommand` (the only
   file that loads `@aws-sdk/client-bedrock-agentcore`).

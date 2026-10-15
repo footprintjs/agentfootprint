@@ -30,7 +30,10 @@ import {
   isSessionBusyReply,
   sessionBusy,
 } from '../../src/adapters/mcp/agentcoreRuntime/sessionBusy.js';
-import { AGENTCORE_RUNTIME_SESSION_HEADER } from '../../src/adapters/mcp/agentcoreRuntime/session.js';
+import {
+  AGENTCORE_RUNTIME_SESSION_HEADER,
+  MAX_CONNECTIONS,
+} from '../../src/adapters/mcp/agentcoreRuntime/session.js';
 import { staticTokens } from '../../src/identity/staticTokens.js';
 import type { ThrottleRetryInfo } from '../../src/mcp/throttleRetry.js';
 import type { Tool } from '../../src/tools/tools.js';
@@ -217,7 +220,12 @@ describe('agentCoreRuntimeMcpTransport — P2 boundary', () => {
   }
 
   it('P2 every request header lands on the SDK field of the same meaning', async () => {
-    const sdk = recordingSdk({ statusCode: 200, contentType: 'application/json' });
+    const sdk = recordingSdk({
+      statusCode: 200,
+      contentType: 'application/json',
+      mcpSessionId: 'mcp-7',
+      response: { transformToByteArray: async () => new TextEncoder().encode('{}') },
+    });
     const transport = agentCoreRuntimeMcpTransport({
       agentRuntimeArn: ARN,
       region: REGION,
@@ -228,26 +236,35 @@ describe('agentCoreRuntimeMcpTransport — P2 boundary', () => {
       _sdk: sdk.module,
       _newSessionId: () => 'runtime-session-pinned-0000000000000000',
     });
+    // The connection's first request carries no session; the client is handed
+    // the transport's handle for it, and carries that from then on.
+    const opened = (await transport.fetch?.(transport.url, {
+      method: 'POST',
+      body: '{}',
+    })) as Response;
+    const handle = opened.headers.get('mcp-session-id') ?? '';
     await transport.fetch?.(transport.url, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
         accept: 'application/json, text/event-stream',
-        'mcp-session-id': 'mcp-7',
+        'mcp-session-id': handle,
         'mcp-protocol-version': '2025-06-18',
       },
       body: '{"jsonrpc":"2.0","id":1,"method":"tools/list"}',
     });
-    const input = sdk.inputs[0] ?? {};
+    const input = sdk.inputs[1] ?? {};
     expect(input['agentRuntimeArn']).toBe(ARN);
     expect(input['qualifier']).toBe('DEFAULT');
     expect(input['accountId']).toBe('123456789012');
     expect(input['contentType']).toBe('application/json');
     expect(input['accept']).toBe('application/json, text/event-stream');
+    // The handle is translated back to the server's own session id.
+    expect(handle).not.toBe('mcp-7');
     expect(input['mcpSessionId']).toBe('mcp-7');
     expect(input['mcpProtocolVersion']).toBe('2025-06-18');
-    // The 'reuse' strategy's pinned runtime session — set, never left to the
-    // SDK's per-call random default.
+    // The 'reuse' strategy's runtime session for this connection — set, never
+    // left to the SDK's per-call random default.
     expect(input['runtimeSessionId']).toBe('runtime-session-pinned-0000000000000000');
     expect(new TextDecoder().decode(input['payload'] as Uint8Array)).toBe(
       '{"jsonrpc":"2.0","id":1,"method":"tools/list"}',
@@ -279,7 +296,10 @@ describe('agentCoreRuntimeMcpTransport — P2 boundary', () => {
     })) as Response;
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('application/json');
-    expect(res.headers.get('mcp-session-id')).toBe('mcp-from-platform');
+    // The platform's session id is KEPT by the transport; the client carries
+    // a handle of the transport's own in its place.
+    expect(res.headers.get('mcp-session-id')).toMatch(/^[0-9a-f-]{36}$/);
+    expect(res.headers.get('mcp-session-id')).not.toBe('mcp-from-platform');
     expect(res.headers.get('mcp-protocol-version')).toBe('2025-06-18');
     expect(res.headers.get(AGENTCORE_RUNTIME_SESSION_HEADER)).toBe('rt-1');
     expect(await res.text()).toBe('{"ok":1}');
@@ -1043,6 +1063,225 @@ describe('agentCoreRuntimeMcpTransport — P5 security', () => {
 });
 
 // ─── P6 Performance ──────────────────────────────────────────────────
+
+/**
+ * A platform whose hosted server numbers its sessions PER PROCESS — every
+ * fresh microVM (one per runtime session id) hands out `s-1` first. Each
+ * microVM keeps its own notes, so a request that lands in the wrong one reads
+ * somebody else's.
+ */
+function perProcessPlatform() {
+  const vms = new Map<string, { readonly notes: string[]; minted: number }>();
+  const sent: { runtimeId: string | null; mcp: string | null; body: string }[] = [];
+  const fetch = async (_input: string | URL | Request, init?: RequestInit): Promise<Response> => {
+    const headers = new Headers(init?.headers);
+    const runtimeId = headers.get(AGENTCORE_RUNTIME_SESSION_HEADER);
+    const mcp = headers.get('mcp-session-id');
+    const body = typeof init?.body === 'string' ? init.body : '';
+    sent.push({ runtimeId, mcp, body });
+    const vm = vms.get(runtimeId ?? '') ?? { notes: [], minted: 0 };
+    vms.set(runtimeId ?? '', vm);
+    if (body.startsWith('note:')) vm.notes.push(body.slice(5));
+    const session = mcp ?? `s-${++vm.minted}`;
+    return new Response(JSON.stringify({ notes: vm.notes }), {
+      status: 200,
+      headers: { 'content-type': 'application/json', 'mcp-session-id': session },
+    });
+  };
+  return { fetch, sent };
+}
+
+describe("agentCoreRuntimeMcpTransport — P5 'reuse' owns its session key", () => {
+  function reuseOver(platform: ReturnType<typeof perProcessPlatform>) {
+    return agentCoreRuntimeMcpTransport({
+      agentRuntimeArn: ARN,
+      region: REGION,
+      session: 'reuse',
+      retry: false,
+      auth: { bearer: staticTokens({ runtime: 't' }), fetch: platform.fetch },
+    });
+  }
+  const post = async (
+    transport: ReturnType<typeof reuseOver>,
+    body: string,
+    handle?: string,
+    method = 'POST',
+  ) =>
+    (await transport.fetch?.(transport.url, {
+      method,
+      ...(handle !== undefined && { headers: { 'mcp-session-id': handle } }),
+      body,
+    })) as Response;
+
+  it('two clients handed the SAME server session id stay in their own runtime sessions', async () => {
+    const platform = perProcessPlatform();
+    const transport = reuseOver(platform);
+    const alice = (await post(transport, 'open')).headers.get('mcp-session-id') ?? '';
+    const bob = (await post(transport, 'open')).headers.get('mcp-session-id') ?? '';
+    await post(transport, 'note:alice card 4242', alice);
+    const bobReads = await (await post(transport, 'read', bob)).json();
+
+    // Both microVMs numbered their first session `s-1` — and that never mattered.
+    expect(platform.sent.filter((x) => x.mcp === 's-1')).toHaveLength(2);
+    expect(alice).not.toBe(bob);
+    expect(alice).not.toBe('s-1');
+    expect(bobReads).toEqual({ notes: [] });
+    const runtimeOf = (body: string) => platform.sent.find((x) => x.body === body)?.runtimeId;
+    expect(runtimeOf('note:alice card 4242')).not.toBe(runtimeOf('read'));
+  });
+
+  it('a handle the transport never issued is answered 404 here — never sent', async () => {
+    const platform = perProcessPlatform();
+    const transport = reuseOver(platform);
+    const res = await post(transport, 'read', 's-1');
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ error: { message: 'Session not found' } });
+    expect(platform.sent).toEqual([]);
+  });
+
+  it('the least recently USED connection is forgotten first; a forgotten one fails closed', async () => {
+    const platform = perProcessPlatform();
+    const transport = reuseOver(platform);
+    const active = (await post(transport, 'open')).headers.get('mcp-session-id') ?? '';
+    const idle = (await post(transport, 'open')).headers.get('mcp-session-id') ?? '';
+    for (let i = 0; i < MAX_CONNECTIONS - 2; i++) await post(transport, 'open');
+    await post(transport, 'read', active); // used: now the most recent
+    await post(transport, 'open'); // one past the ceiling
+    expect((await post(transport, 'read', active)).status).toBe(200);
+    expect((await post(transport, 'read', idle)).status).toBe(404);
+  });
+
+  it("a client's DELETE (its close()) forgets its connection", async () => {
+    const platform = perProcessPlatform();
+    const transport = reuseOver(platform);
+    const handle = (await post(transport, 'open')).headers.get('mcp-session-id') ?? '';
+    await post(transport, '', handle, 'DELETE');
+    expect((await post(transport, 'read', handle)).status).toBe(404);
+  });
+
+  it('every attempt of one refused request goes to the SAME runtime session', async () => {
+    const seen: (string | null)[] = [];
+    let calls = 0;
+    const transport = agentCoreRuntimeMcpTransport({
+      agentRuntimeArn: ARN,
+      region: REGION,
+      session: 'reuse',
+      retry: { maxAttempts: 5, maxWaitMs: 60_000 },
+      auth: {
+        bearer: staticTokens({ runtime: 't' }),
+        fetch: async (_input, init) => {
+          seen.push(new Headers(init?.headers).get(AGENTCORE_RUNTIME_SESSION_HEADER));
+          return calls++ < 2
+            ? jsonReply({ jsonrpc: '2.0', id: 1, error: BUSY })
+            : new Response('{}', {
+                headers: { 'content-type': 'application/json', 'mcp-session-id': 'srv-1' },
+              });
+        },
+      },
+    });
+    const res = (await transport.fetch?.(transport.url, {
+      method: 'POST',
+      body: '{}',
+    })) as Response;
+    expect(res.status).toBe(200);
+    expect(seen).toHaveLength(3);
+    expect(new Set(seen).size).toBe(1);
+  });
+});
+
+describe('agentCoreRuntimeMcpTransport — P5 a failure never repeats what the request carried', () => {
+  it('SigV4: a validation error quoting the session ids reaches the client without them', async () => {
+    let sends = 0;
+    const module = {
+      InvokeAgentRuntimeCommand: class {
+        constructor(readonly input: Record<string, unknown>) {}
+      },
+      BedrockAgentCoreClient: class {
+        async send(command: { input: Record<string, unknown> }) {
+          if (sends++ === 0) {
+            return {
+              statusCode: 200,
+              contentType: 'application/json',
+              mcpSessionId: 'server-session-0123456789',
+              response: { transformToByteArray: async () => new TextEncoder().encode('{}') },
+            };
+          }
+          const { runtimeSessionId, mcpSessionId } = command.input;
+          throw Object.assign(
+            new Error(
+              `1 validation error: Value '${String(runtimeSessionId)}' at 'runtimeSessionId' ` +
+                `and Value '${String(
+                  mcpSessionId,
+                )}' at 'mcpSessionId' failed to satisfy constraint`,
+            ),
+            {
+              name: 'ValidationException',
+              $fault: 'client',
+              $metadata: { httpStatusCode: 400 },
+              $response: { statusCode: 400, headers: {} },
+            },
+          );
+        }
+      },
+    };
+    const transport = agentCoreRuntimeMcpTransport({
+      agentRuntimeArn: ARN,
+      region: REGION,
+      session: 'reuse',
+      _sdk: module,
+      _newSessionId: () => 'runtime-session-fixed-000000000000001',
+    });
+    const opened = (await transport.fetch?.(transport.url, {
+      method: 'POST',
+      body: '{}',
+    })) as Response;
+    const failed = (await transport.fetch?.(transport.url, {
+      method: 'POST',
+      headers: { 'mcp-session-id': opened.headers.get('mcp-session-id') ?? '' },
+      body: '{}',
+    })) as Response;
+    const text = await failed.text();
+    expect(failed.status).toBe(400);
+    expect(text).toContain('failed to satisfy constraint');
+    expect(text).not.toContain('runtime-session-fixed-000000000000001');
+    expect(text).not.toContain('server-session-0123456789');
+  });
+
+  it('bearer: a 4xx body echoing the Authorization header reaches the client without the token', async () => {
+    const transport = agentCoreRuntimeMcpTransport({
+      agentRuntimeArn: ARN,
+      region: REGION,
+      auth: {
+        bearer: staticTokens({ runtime: 'SECRET-BEARER-TOKEN-77' }),
+        fetch: async (_input, init) =>
+          new Response(
+            `bad request; header authorization='${
+              new Headers(init?.headers).get('authorization') ?? ''
+            }'`,
+            { status: 400 },
+          ),
+      },
+    });
+    const res = (await transport.fetch?.(transport.url, {
+      method: 'POST',
+      body: '{}',
+    })) as Response;
+    const text = await res.text();
+    expect(res.status).toBe(400);
+    expect(text).toContain('bad request');
+    expect(text).not.toContain('SECRET-BEARER-TOKEN-77');
+  });
+
+  it('a successful answer is handed on as the very object, unread', async () => {
+    const ok = jsonReply({ result: {} });
+    const transport = agentCoreRuntimeMcpTransport({
+      agentRuntimeArn: ARN,
+      region: REGION,
+      auth: { bearer: staticTokens({ runtime: 't' }), fetch: async () => ok },
+    });
+    expect(await transport.fetch?.(transport.url, { method: 'POST', body: '{}' })).toBe(ok);
+  });
+});
 
 describe('agentCoreRuntimeMcpTransport — P6 performance', () => {
   it('P6 a served reply costs exactly one attempt and no wait', async () => {
