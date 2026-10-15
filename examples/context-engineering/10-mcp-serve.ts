@@ -26,7 +26,7 @@
 import { defineTool, type LLMProvider, type Tool } from '../../src/index.js';
 import { mcpServe } from '../../src/doors/providers.js';
 import { PermissionPolicy } from '../../src/doors/security.js';
-import type { McpCallToolRequest, McpSdkServer } from '../../src/lib/mcp/types.js';
+import type { McpCallToolRequest, McpSdkServer } from '../../src/mcp/types.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

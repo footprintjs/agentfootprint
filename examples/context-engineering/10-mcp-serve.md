@@ -1,7 +1,7 @@
 ---
 name: MCP — serve your tools to other clients
 group: context-engineering
-guide: ../../src/lib/mcp/
+guide: ../../src/mcp/
 defaultInput: lookup order 5512
 ---
 

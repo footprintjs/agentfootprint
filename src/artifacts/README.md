@@ -67,7 +67,7 @@ materialized payloads, not remote handles or streaming datasets.
 
 For MCP, opt into `resultMode: 'structured'` or the explicitly declared JSON-text
 fallback before wrapping the tools. The default MCP text result cannot recover
-discarded structured data. See `src/lib/mcp/README.md`.
+discarded structured data. See `src/mcp/README.md`.
 
 **The ticket the library's readers count.** A projection that moves a declared
 rowset out of the result and leaves a ticket in its place spells it

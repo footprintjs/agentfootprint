@@ -5557,7 +5557,7 @@ export function buildToolCallsHandler(
         // Only this batch-loop dispatch gets the nudge. The other dispatch
         // owners are `resolveCredentialAndExecute` above (resume),
         // `../toolDispatch.ts` · `agentToolDispatch` (inner calls),
-        // `lib/mcp/mcpServe.ts` (external MCP clients), and
+        // `mcp/mcpServe.ts` (external MCP clients), and
         // `trace-toolpack/traceToolpack.ts` · `callTraceTool` (offline).
         // Inner calls are the outer call's work, not another model turn.
         // The other doors never see a live multi-turn conversation the way

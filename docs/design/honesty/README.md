@@ -293,7 +293,7 @@ through `defineTool`) and at MCP ingest.
 turns the MCP path on, its catalog replaces each local binding with the served tool
 (`host:src/mcpCatalog.ts`), and declarations come from `host:py-tools/tool_metadata.py` ·
 `TOOL_EXTRAS` through `host:py-tools/mcp_server.py`. A layer that left MCP tools free would do
-nothing there. So step 3 adds `askOrAssume` and `period` to `lib/mcp/toolExtras.ts` ·
+nothing there. So step 3 adds `askOrAssume` and `period` to `mcp/toolExtras.ts` ·
 `McpToolExtras`, validated on ingest by the same exported assert and dropped with a warning when
 malformed, like every other extra. They pass that file's bar — "a declaration a consumer-side check
 or rail reads; nothing that governs execution" — because the ask and the fill happen in the

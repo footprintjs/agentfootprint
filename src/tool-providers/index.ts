@@ -81,7 +81,7 @@ export {
   // builds no transport — can wrap its own `fetch` with the same code rather
   // than quietly doing without it.
   retryingFetch,
-} from '../lib/mcp/index.js';
+} from '../mcp/index.js';
 // Reaching an AWS Bedrock AgentCore Gateway (9.66.0). A configuration of
 // `gatewayTransport` plus the four facts that are AgentCore's alone — kept in
 // the vendor's own file so the transport above stays able to say, truthfully,
@@ -125,4 +125,4 @@ export type {
   McpHttpServeTransport,
   McpSdkServer,
   McpToolExtras,
-} from '../lib/mcp/index.js';
+} from '../mcp/index.js';

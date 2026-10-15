@@ -18,7 +18,7 @@
  * The dispatch loop serves a tool's value as JSON and joins framework notes
  * AFTER it — a stepped skill's step banner, an effect note, the repeated-call
  * note (`stages/toolCalls.ts`); an MCP text result joins its content blocks
- * with a newline (`lib/mcp/toolResult.ts` · `readTextResult`); and a capped
+ * with a newline (`mcp/toolResult.ts` · `readTextResult`); and a capped
  * result's `head` is the first characters of the tool's JSON, cut mid-value
  * (`toolResultCap.ts`). `JSON.parse` refuses all of these, and the text
  * fallback tokenises `{"id":4417,"up":true}` into `id`, `:4417`, `up`,

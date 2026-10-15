@@ -1,0 +1,200 @@
+/**
+ * mockMcpClient — in-memory MCP client for development and tests.
+ *
+ *   const slack = mockMcpClient({
+ *     tools: [
+ *       {
+ *         name: 'send_message',
+ *         description: 'Post a message to a channel',
+ *         inputSchema: { type: 'object' },
+ *         handler: async ({ text }) => `Posted: ${text}`,
+ *       },
+ *     ],
+ *   });
+ *
+ *   const agent = Agent.create({ provider: mock({ reply: 'ok' }) })
+ *     .tools(await slack.tools())
+ *     .build();
+ *
+ * Pattern: Adapter (GoF) — produces an `McpClient` with the same shape
+ *          as `mcpClient(opts)` but driven by an in-memory tool table
+ *          instead of the MCP SDK + transport. Drop-in for development:
+ *          start with `mockMcpClient`, swap to `mcpClient` once the
+ *          real server is ready.
+ *
+ * Why public: `mcpClient`'s `_client` injection is `@internal` because
+ * the SDK shape isn't a stable public surface. `mockMcpClient` exposes
+ * a curated tool-handler shape that's tied to OUR Tool contract instead
+ * — stable, documented, and the right level of abstraction for
+ * mock-first development.
+ */
+
+import type { Tool } from '../tools/tools.js';
+import { callMetaOf, readToolExtras } from './toolExtras.js';
+import type { McpClient, McpClientOptions, McpCallToolResult } from './types.js';
+import { readToolResult, resultModeOf } from './toolResult.js';
+
+/** A scripted tool exposed by the mock MCP server. */
+export interface MockMcpTool {
+  /** Tool name as the LLM sees it. */
+  readonly name: string;
+  /** Description surfaced to the LLM via the tool schema. */
+  readonly description?: string;
+  /**
+   * JSON-schema-like input schema. Passed through to the agent's tool
+   * registry verbatim — same as a real MCP server's `listTools()`.
+   */
+  readonly inputSchema: Readonly<Record<string, unknown>>;
+  /**
+   * MCP's extensibility bag, exactly as a real server would send it (9.71.0).
+   *
+   * agentfootprint's tool DECLARATIONS — `argumentsFrom`, `resultKind`,
+   * `owner`, `resultClass`, `resultCeiling` — ride under the `agentfootprint`
+   * key here, and this mock reads them through the SAME defensive reader
+   * `mcpClient` uses. So a rail armed by a remotely-declared tool can be
+   * developed and tested before the real server exists, and so can the
+   * unhappy path: put a malformed declaration in and watch the field get
+   * dropped, the warning name the rule, and the tool register anyway.
+   *
+   * ```ts
+   * mockMcpClient({
+   *   name: 'fleet-mcp',
+   *   tools: [{
+   *     name: 'backup_status',
+   *     inputSchema: { type: 'object', properties: { machine: { type: 'string' } } },
+   *     _meta: { agentfootprint: { argumentsFrom: ['fleet_report'] } },
+   *   }],
+   * });
+   * ```
+   *
+   * Omitted → the registered `Tool` carries no declarations, exactly as
+   * before this existed.
+   */
+  readonly _meta?: Readonly<Record<string, unknown>>;
+  /**
+   * Async handler that runs when the agent calls this tool. Receives
+   * the args the LLM produced; returns a string or an MCP result envelope.
+   * Strings retain the existing behavior in text mode; envelopes use the
+   * same result decoder as the real client.
+   *
+   * Defaults to `async () => '[mock result]'` when omitted — useful
+   * when the consumer cares about wiring not behavior.
+   */
+  readonly handler?: (
+    args: Record<string, unknown>,
+    /**
+     * The request's `_meta` bag, exactly as the real client would send it —
+     * `{ agentfootprint: { time } }` on a call handed `ctx.time` (the time
+     * layer), absent otherwise. A handler that ignores it behaves as before.
+     */
+    request: { readonly _meta?: Readonly<Record<string, unknown>> },
+  ) => Promise<string | McpCallToolResult>;
+}
+
+export interface MockMcpClientOptions {
+  /** Logical server name. Surfaces in observability + error messages. */
+  readonly name?: string;
+  /** Tools exposed by the mock server. */
+  readonly tools: readonly MockMcpTool[];
+  /** Same result decoding as mcpClient. A string handler becomes one text
+   * block; return McpCallToolResult to exercise structuredContent or isError. */
+  readonly resultMode?: McpClientOptions['resultMode'];
+}
+
+/**
+ * Build an in-memory `McpClient`. Useful when you want to develop
+ * against MCP semantics without spawning subprocesses, hitting the
+ * network, or installing `@modelcontextprotocol/sdk`. Same `McpClient`
+ * shape as `mcpClient(opts)` — code that consumes one accepts the other.
+ */
+export function mockMcpClient(options: MockMcpClientOptions): McpClient {
+  const name = options.name ?? 'mock-mcp';
+  const resultMode = resultModeOf(options.resultMode, name);
+  const toolMap = new Map<string, MockMcpTool>(options.tools.map((t) => [t.name, t]));
+
+  let cache: readonly Tool[] | null = null;
+  let closed = false;
+
+  const ensureOpen = (op: string): void => {
+    if (closed) {
+      throw new Error(
+        `mockMcpClient[${name}].${op}() called after close(). Construct a new client to reuse.`,
+      );
+    }
+  };
+
+  const buildTools = (): readonly Tool[] =>
+    options.tools.map((mcp) => wrapMockTool(name, toolMap, mcp, resultMode));
+
+  return {
+    name,
+    async tools(): Promise<readonly Tool[]> {
+      ensureOpen('tools');
+      if (!cache) cache = buildTools();
+      return cache;
+    },
+    async refresh(): Promise<readonly Tool[]> {
+      ensureOpen('refresh');
+      cache = buildTools();
+      return cache;
+    },
+    async close(): Promise<void> {
+      if (closed) return;
+      closed = true;
+      cache = null;
+    },
+  };
+}
+
+function wrapMockTool(
+  serverName: string,
+  toolMap: ReadonlyMap<string, MockMcpTool>,
+  mcp: MockMcpTool,
+  resultMode: NonNullable<McpClientOptions['resultMode']>,
+): Tool {
+  const tool: Tool = {
+    schema: {
+      name: mcp.name,
+      description: mcp.description ?? `Mock MCP tool: ${mcp.name}`,
+      inputSchema: mcp.inputSchema,
+    },
+    // Same provenance a real `mcpClient` stamps, for the same reason: code that
+    // governs by server name has to be testable against the mock, or the swap
+    // from mock to real server changes what the policy sees.
+    source: serverName,
+    // …and the same declarations, through the same reader (9.71.0). A rail
+    // that arms on a remotely-declared `argumentsFrom` must arm here too, or
+    // the mock proves nothing about the server it stands in for.
+    ...readToolExtras(mcp._meta, {
+      server: serverName,
+      tool: mcp.name,
+      inputSchema: mcp.inputSchema,
+    }),
+    execute: async (args, ctx) => {
+      const argsObj =
+        args !== null && typeof args === 'object' && !Array.isArray(args)
+          ? (args as Record<string, unknown>)
+          : {};
+      // The same request `_meta` the real client sends (the time layer's `ctx.time`), as data.
+      const request =
+        ctx?.time !== undefined ? { _meta: structuredClone(callMetaOf(ctx.time)) } : {};
+      // Look up by name at call time so mid-test handler swaps via a
+      // mutable Map could be supported later. For now `toolMap` is
+      // built once at factory time.
+      const handler = toolMap.get(mcp.name)?.handler;
+      try {
+        const result = handler ? await handler(argsObj, request) : '[mock result]';
+        return readToolResult(
+          typeof result === 'string' ? { content: [{ type: 'text', text: result }] } : result,
+          mcp.name,
+          serverName,
+          resultMode,
+        );
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new Error(`Mock MCP tool '${mcp.name}' (server '${serverName}') threw: ${msg}`);
+      }
+    },
+  };
+  return tool;
+}

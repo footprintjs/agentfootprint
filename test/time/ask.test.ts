@@ -2,7 +2,7 @@
  * time/ask — the one judge of a time field's answer, the catalog's
  * reasons, and the choices a reading offers (the time design § 6, step T4).
  * End to end through real agents: ask-run.test.ts; over MCP:
- * test/lib/mcp/elicitation.test.ts.
+ * test/mcp/elicitation.test.ts.
  *
  * Test types:
  *   unit        — each refusal code on its own example (shape, no offset, not a range, out of

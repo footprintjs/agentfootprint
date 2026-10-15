@@ -6,7 +6,7 @@
  *          `period`), judged by one assert at three doors: definition
  *          (`tools/tools.ts` · `defineTool`), dispatch (`rulesOf`, because a
  *          Tool built by hand or served by a ToolProvider never passes through
- *          `defineTool`) and MCP ingest (`lib/mcp/toolExtras.ts` ·
+ *          `defineTool`) and MCP ingest (`mcp/toolExtras.ts` ·
  *          `readToolExtras`). A malformed declaration is refused and never
  *          repaired.
  * Role:    tools/ layer leaf of the inputs layer (honesty layer 2). Imports

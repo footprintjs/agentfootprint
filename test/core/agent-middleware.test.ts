@@ -13,7 +13,7 @@
  *   6. absent middleware = byte-identical;
  *   7. order is declaration order, and a throwing link is a denial;
  *   8. the `'input'` transform is what everything downstream sees;
- *   9. mcpServe (pinned in test/lib/mcp/mcpServe.test.ts);
+ *   9. mcpServe (pinned in test/mcp/mcpServe.test.ts);
  *  10. adapter-swap deterministic on mocks.
  */
 

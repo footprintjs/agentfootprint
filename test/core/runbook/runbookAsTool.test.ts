@@ -73,7 +73,7 @@ import { admitReport } from '../../../src/core/runbook/report.js';
 import { composeMeanings, meaningsRecorder } from '../../../src/core/runbook/verdicts.js';
 import { mock } from '../../../src/llm-providers.js';
 import { unconfiguredCredentialProvider } from '../../../src/identity.js';
-import { readToolExtras, toolExtrasOf } from '../../../src/lib/mcp/toolExtras.js';
+import { readToolExtras, toolExtrasOf } from '../../../src/mcp/toolExtras.js';
 import { expectScalesLinearly } from '../../helpers/perf.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────

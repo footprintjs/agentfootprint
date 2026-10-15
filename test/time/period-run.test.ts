@@ -47,10 +47,10 @@ import {
 } from '../../src/index.js';
 import type { LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
 import { validateCheckpoint } from '../../src/core/runCheckpoint.js';
-import { mockMcpClient } from '../../src/lib/mcp/mockMcpClient.js';
-import { readToolExtras, _resetToolExtrasWarnings } from '../../src/lib/mcp/toolExtras.js';
+import { mockMcpClient } from '../../src/mcp/mockMcpClient.js';
+import { readToolExtras, _resetToolExtrasWarnings } from '../../src/mcp/toolExtras.js';
 import { mcpServe } from '../../src/tool-providers/index.js';
-import type { McpCallToolRequest, McpSdkServer } from '../../src/lib/mcp/types.js';
+import type { McpCallToolRequest, McpSdkServer } from '../../src/mcp/types.js';
 
 // ─── the harness ─────────────────────────────────────────────────────
 

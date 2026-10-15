@@ -285,13 +285,13 @@ The host's production tools arrive over MCP: its service unit turns the MCP path
 catalog replaces each local binding with the served tool (`host:src/mcpCatalog.ts`). A layer that
 left MCP tools free would do nothing there. So step 3 carries both declarations:
 
-- **Serve.** `lib/mcp/toolExtras.ts` · `toolExtrasOf` copies `askOrAssume` and `period` verbatim into
+- **Serve.** `mcp/toolExtras.ts` · `toolExtrasOf` copies `askOrAssume` and `period` verbatim into
   `_meta.agentfootprint`, under the same camelCase keys as the tool fields (`argumentsFrom`,
   `resultCeiling` already travel this way). `mcpServe` still serves the author's registry schema,
   `required` intact.
-- **Ingest.** `lib/mcp/toolExtras.ts` · `readToolExtras` judges each field with the same exported
+- **Ingest.** `mcp/toolExtras.ts` · `readToolExtras` judges each field with the same exported
   assert `defineTool` calls. These are the first extras judged against the tool's schema, so
-  `McpToolExtrasOrigin` gains the listed tool's `inputSchema` (`lib/mcp/mcpClient.ts` and
+  `McpToolExtrasOrigin` gains the listed tool's `inputSchema` (`mcp/mcpClient.ts` and
   `mockMcpClient.ts` pass it). A field that fails is warned once — naming the server, the tool, the
   field and the rule — and dropped. The tool still registers, and its argument then runs free.
 - **The file's bar holds.** "A declaration a consumer-side check or rail reads; nothing that
