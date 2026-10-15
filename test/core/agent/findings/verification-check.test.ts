@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { describedResult } from '../../../../src/index.js';
 import { known, unknown as unknownValue } from '../../../../src/doors/maps.js';
-import { readSemantics, semanticsForModel } from '../../../../src/lib/semantics/envelope.js';
+import { readSemantics, semanticsForModel } from '../../../../src/semantics/envelope.js';
 import {
   captureDispatch,
   captureReturnedEvidence,

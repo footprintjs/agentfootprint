@@ -14,7 +14,7 @@ import { BINDING_LIMITS, boundedText } from '../../../integrity/claim-binding/sc
 import type { ResultIdentity } from '../../../integrity/claim-binding/types.js';
 import { validateCoverage } from '../../../integrity/claim-binding/admit.js';
 import { readResultIdentity } from '../../../integrity/claim-binding/capture.js';
-import { periodProblem } from '../coverage/period.js';
+import { periodProblem } from '../../../semantics/coverage/period.js';
 import { STANDING_VALUES } from './types.js';
 import { VERIFICATION_UNVERIFIED_REASONS, type ClaimVerificationRow } from './verificationTypes.js';
 

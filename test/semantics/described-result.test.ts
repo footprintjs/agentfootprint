@@ -21,11 +21,11 @@ import {
   SEMANTICS_NOTE,
   semanticsForModel,
   type DescribedResultDeclaration,
-} from '../../../src/index.js';
-import { checkSemantics } from '../../../src/lib/semantics/index.js';
-import { REFUSED_PREFIX } from '../../../src/core/agent/coverage/refusal.js';
-import type { LLMMessage, LLMRequest } from '../../../src/provider-contract/types.js';
-import { mock } from '../../../src/llm-providers.js';
+} from '../../src/index.js';
+import { checkSemantics } from '../../src/semantics/index.js';
+import { REFUSED_PREFIX } from '../../src/semantics/coverage/refusal.js';
+import type { LLMMessage, LLMRequest } from '../../src/provider-contract/types.js';
+import { mock } from '../../src/llm-providers.js';
 
 const legacy = JSON.parse(
   readFileSync(new URL('./fixtures/legacy-wire.json', import.meta.url), 'utf8'),

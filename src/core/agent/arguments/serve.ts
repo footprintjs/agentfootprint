@@ -30,9 +30,9 @@
 import type { LLMToolSchema } from '../../../provider-contract/types.js';
 import { shownArgsOf } from '../../toolShownArgs.js';
 import type { InputValue } from '../../inputRequest.js';
-import { ASSUMED_BLOCK_HEADING, type TimeLimitLines } from '../coverage/answer.js';
-import type { TimeLimitFacts } from '../coverage/timeLimitFacts.js';
-import { renderTimeLimits } from '../coverage/timeLimits.js';
+import { ASSUMED_BLOCK_HEADING, type TimeLimitLines } from '../../../semantics/coverage/answer.js';
+import type { TimeLimitFacts } from '../../../semantics/coverage/timeLimitFacts.js';
+import { renderTimeLimits } from '../../../semantics/coverage/timeLimits.js';
 import { argumentRewritesOf, type ArgumentRewrite } from '../middleware/rewrites.js';
 import { isRefused, periodFactsOf, periodFormsOf, rulesOf, type RuledToolLike } from './declare.js';
 import { HIDDEN_VALUE, type ArgumentRow } from './rows.js';
@@ -627,8 +627,8 @@ export function timeWindowsLine(
 
 /**
  * The served time limits from the Tools mount's `timeLimits` FACTS
- * (`coverage/timeLimitFacts.ts` · `TimeLimitFacts`): rendered for the MODEL
- * (`coverage/timeLimits.ts` · `renderTimeLimits` — the one composer the
+ * (`semantics/coverage/timeLimitFacts.ts` · `TimeLimitFacts`): rendered for the MODEL
+ * (`semantics/coverage/timeLimits.ts` · `renderTimeLimits` — the one composer the
  * limits block asks too), then {@link timeLimitsSentence}. The facts cross
  * the mount unrendered so the renderer loads here, under the arm, and never
  * on the graph a plain agent loads.
@@ -644,7 +644,7 @@ export function timeLimitsLine(facts: TimeLimitFacts | undefined): string | unde
 
 // LENS · late-line · request-ephemeral
 // reads: the turn's `period` rows whose result checks hold and its `source-clock` rows, composed by
-//        the ONE owner of the limits lines (`coverage/timeLimits.ts` · `timeLimitLinesOf`,
+//        the ONE owner of the limits lines (`semantics/coverage/timeLimits.ts` · `timeLimitLinesOf`,
 //        audience `model`) — the same lines the limits block prints for the person after the answer
 // law: the library's CONCLUSION about what each call READ against what it ASKED (step T8), both
 //      ranges in the person's zone, and what an answer built on it states; it names what the record
@@ -1144,7 +1144,7 @@ export function keptAnswersNote(toolName: string, argumentNames: readonly string
 
 /**
  * The block's opening line. Stable — tests and readers match on it. Owned by
- * the appended section's one composer (`coverage/answer.ts`), beside the
+ * the appended section's one composer (`semantics/coverage/answer.ts`), beside the
  * limits block's heading, so a reader of an answer's text finds every block
  * the framework appends through one module; re-exported here, where the block
  * is composed.

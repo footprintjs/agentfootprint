@@ -65,7 +65,7 @@ import {
 import { resultCarries } from '../../../../src/core/agent/evidence/resultCarries.js';
 import { lookupForms, normalizeToken } from '../../../../src/core/agent/evidence/normalize.js';
 import { readDeclaration, splitFindings } from '../../../../src/core/agent/findings/reserved.js';
-import { absent } from '../../../../src/core/agent/coverage/index.js';
+import { absent } from '../../../../src/semantics/coverage/index.js';
 import { defineTool, type Tool } from '../../../../src/index.js';
 
 // ─── fixtures ────────────────────────────────────────────────────────

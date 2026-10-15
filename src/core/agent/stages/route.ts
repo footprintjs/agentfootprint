@@ -30,7 +30,7 @@ import {
 import { knownResults } from '../findings/offer.js';
 import { contingentRowsOf, hasSetAsideStanding } from '../findings/contingent.js';
 import { withUnsettledRows } from '../findings/unsettled.js';
-import type { DeclaredCoverage } from '../coverage/types.js';
+import type { DeclaredCoverage } from '../../../semantics/coverage/types.js';
 import type { FindingsLedger } from '../findings/types.js';
 import { HIDDEN_VALUE, TIME_WINDOW_SOURCE } from '../arguments/rows.js';
 import {

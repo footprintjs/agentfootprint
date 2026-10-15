@@ -10,7 +10,7 @@ Nothing here is built unless a line says "shipped" or "drafted".**
 > #22 (`0600ab53`) late on 2026-09-26, after this page was written.
 >
 > **Step 7a′ built, 2026-09-27** (branch `feat/results-period`, its first commit; not yet merged or
-> released): the empty-data refusal names `absent()` (§ 1.3) — `lib/semantics/envelope.ts` ·
+> released): the empty-data refusal names `absent()` (§ 1.3) — `semantics/envelope.ts` ·
 > `emptyDataList`, one core for both doors and the `check:semantics` gate; the refusal is a
 > registered model-facing sentence. Beyond the page, in the same mint: a data list that is not a
 > list at all is refused as one (it used to crash with a `TypeError` on an object) —
@@ -21,7 +21,7 @@ Nothing here is built unless a line says "shipped" or "drafted".**
 > `coverage/period.ts` (the one shape `DeclaredPeriod`, the one rule set `periodProblem` behind
 > `mintPeriod` / `readPeriod`, `periodVerdict`, `periodLine`, `PERIOD_WIRE`, the `PeriodRow` and its
 > checkpoint door); `period` on the three doors and `provenance` on `absent()` only
-> (`lib/semantics/described.ts` · `mintProvenance` over `lib/semantics/envelope.ts` ·
+> (`semantics/described.ts` · `mintProvenance` over `semantics/envelope.ts` ·
 > `provenanceIssues`, one rule set with `describedResult()`); the coverage channel carrying both;
 > `canonical-notes.json` · `wire.PERIOD_WIRE`; the results subflow (`core/agent/results/`, mounted by
 > `honesty/mounts.ts` · `mountResultsLayer` at the loop head as the loop target); the period
@@ -74,9 +74,9 @@ Nothing here is built unless a line says "shipped" or "drafted".**
 - **A draft of step 7a is now COMMITTED on a local branch** — `feat/described-result`, one commit
   `d8258fd3` (54 files, 2026-09-26 23:07), not pushed, no PR, not released; `main` is still at
   9.118.1 (`8360b3b8`). It was uncommitted when this page was first written. It holds:
-  `lib/semantics/described.ts` · `describedResult`, the one core `lib/semantics/envelope.ts` ·
-  `mintSemantics` with its `DeclarationDoor`, `lib/semantics/types.ts` ·
-  `DescribedResultDeclaration`, the gate advice in `lib/semantics/check.ts`, a decision table in
+  `semantics/described.ts` · `describedResult`, the one core `semantics/envelope.ts` ·
+  `mintSemantics` with its `DeclarationDoor`, `semantics/types.ts` ·
+  `DescribedResultDeclaration`, the gate advice in `semantics/check.ts`, a decision table in
   `docs-next/content/docs/build/tools.mdx`, example 66, and two tests. It is not on main, not
   released, and not made by this design pass. § 6 reviews it against the request. Everything else
   on this page cites code on main (9.118.1).
@@ -106,7 +106,7 @@ Nothing here is built unless a line says "shipped" or "drafted".**
 | ------------------------------ | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
 | `absent({ what, checked, … })` | the search ran and nothing matched                                                              | the whole envelope minus the record-only item keys `short` and `kind`: `af_absent`, `outcome: "nothing_found"`, `looked_for`, `checked`, `not_checked`, `cannot_cover`, `retry_returns_the_same`, `try_instead`, `try_instead_tool`, and `ABSENCE_NOTE` (385 characters)       | the `agentfootprint.tools.absent` event (with `lookedFor`, the lists with `short`/`kind`, `tryInstead`, `tryInsteadTool`); one tracked `coverageDeclared` row of kind `'absence'`, which does not carry the suggestions                                                       | `'absent'`                            |
 | `coverage(value, { … })`       | any other value that has limits: a verdict, a sentence, an object you will not reshape          | `af_coverage` (the lists minus `short`/`kind`, and `COVERAGE_NOTE`, 318 characters), serialized BEFORE `result`, so the agent's truncation keeps the limits; then `result`, untouched                                                                                          | `agentfootprint.tools.coverage_declared`; one `coverageDeclared` row of kind `'ledger'` (plus the absence's own row when it wraps one)                                                                                                                                        | none, or `'absent'` around an absence |
-| `describedResult({ … })`       | rows, a series or relationships from a system of record — or a question handed back (`clarify`) | the projection `lib/semantics/envelope.ts` · `semanticsForModel`: the data, `grain`, `provenance`, the composed `not_covered` lines, a non-null `clarify`, and `SEMANTICS_NOTE` (329 characters) — never the marker, `render`, or the three coverage lists, so never `checked` | the FULL envelope on `agentfootprint.tools.semantics_declared`, filed before the result ceiling is measured, so it survives a refused oversized result; its `coverage` as a `coverageDeclared` row of kind `'ledger'`; flattened claim rows on `claimFacts` under `.claims()` | none                                  |
+| `describedResult({ … })`       | rows, a series or relationships from a system of record — or a question handed back (`clarify`) | the projection `semantics/envelope.ts` · `semanticsForModel`: the data, `grain`, `provenance`, the composed `not_covered` lines, a non-null `clarify`, and `SEMANTICS_NOTE` (329 characters) — never the marker, `render`, or the three coverage lists, so never `checked` | the FULL envelope on `agentfootprint.tools.semantics_declared`, filed before the result ceiling is measured, so it survives a refused oversized result; its `coverage` as a `coverageDeclared` row of kind `'ledger'`; flattened claim rows on `claimFacts` under `.claims()` | none                                  |
 | no door                        | a value with no limits worth stating                                                            | the value as returned                                                                                                                                                                                                                                                          | `stream.tool_end` only; no coverage row                                                                                                                                                                                                                                       | none                                  |
 
 **The rule** (the request's, kept): rows from a system of record → `describedResult()`; any other
@@ -135,7 +135,7 @@ the status stays `'absent'` (`coverage/read.ts` · `readCoverageResult`).
     `checked`; any other key rides through as tool knowledge.
   - `coverage/ledger.ts` · `readCoverageLedger` asks only for an `af_coverage` object and a
     `result` key.
-  - `lib/semantics/envelope.ts` · `readSemantics` refuses ANY key its vocabulary lacks
+  - `semantics/envelope.ts` · `readSemantics` refuses ANY key its vocabulary lacks
     (`semanticIssues`: "which is not a field this vocabulary has"). A marker-bearing value with a
     fault stays plain data, dev-warned — "this library does not half-apply a shape it cannot fully
     honor".
@@ -464,14 +464,14 @@ say so in these words:**
   covered, so `checked` is served.
 - `describedResult()` carries typed rows, and each row names its entity. The part that stops an
   overclaim — the ground NOT covered — is served as `not_covered`. The positive population
-  statement stays in the record and in the limits block (`lib/semantics/envelope.ts` header: "the
+  statement stays in the record and in the limits block (`semantics/envelope.ts` header: "the
   model reads the composed `not_covered` lines instead").
 
 **The named risk: the completeness of a listing.** "Every VM in the export" is what tells a reader
 that a listing is complete. Without it, the model cannot tell "these are all" from "these are some"
 unless the author declared the gap — the `resultClass: 'inventory'` concern in the gate's own advice
 ("An inventory that cannot say which population it covered reads as the whole fleet",
-`lib/semantics/check.ts` · `classCoverageFinding`). Bench cell R4 (§ 7) measures it. On a gain, the
+`semantics/check.ts` · `classCoverageFinding`). Bench cell R4 (§ 7) measures it. On a gain, the
 choice is:
 
 - serve `checked` in the projection for every envelope that declares it — a served-bytes change for
@@ -547,7 +547,7 @@ the MODEL read (`modelResult ?? result`, `facts/calls.ts` · `readOne`). Two con
 
 ### 5.2 One emptiness reader, two callers
 
-Move the rule to ONE owner beside the recognizers — `coverage/emptiness.ts` · `readEmptiness`,
+Move the rule to ONE owner beside the recognizers — `agent/emptiness.ts` · `readEmptiness`,
 importing only the recognizers, so a post-hoc reader can load it without the mints (the reason
 `coverage/recognize.ts` was split out for the account) — and add typed routes,
 still never a guess. It takes the value the model read and the door the record says the call
@@ -586,7 +586,7 @@ The period reasons are `period-partly-held`, `period-not-held`, `period-unknown`
 
 **Proposed addition (Q5): `coverage-undeclared`.** A tool that declares `resultClass: 'triage'` or
 `'inventory'` is held to declaring coverage only in the `check:semantics` samples today; nothing
-reads `resultClass` at run time (it is read in `core/tools.ts` and `lib/semantics/` only). The
+reads `resultClass` at run time (it is read in `core/tools.ts` and `semantics/` only). The
 results layer can hold every run to the tool's own declaration: a result from such a tool that
 files no coverage row fires `coverage-undeclared`. It is declared silence — rule 4 of the fold — on
 a declaration that already exists and already travels over MCP.
@@ -634,14 +634,14 @@ against the request. "Present" means found in the draft by this pass; nothing he
 
 | The request asks                                                                            | The house law                                                                                                                          | In the draft (`d8258fd3`)                                                                                                                                    |
 | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| one core, two doors                                                                         | `describedResult(decl)` respells and calls the core; `semantic(decl)` passes through; each door's refusals quote its author's spelling | present: `lib/semantics/envelope.ts` · `mintSemantics` with a `DeclarationDoor` per door; `lib/semantics/described.ts` · `DESCRIBED_DOOR`                    |
+| one core, two doors                                                                         | `describedResult(decl)` respells and calls the core; `semantic(decl)` passes through; each door's refusals quote its author's spelling | present: `semantics/envelope.ts` · `mintSemantics` with a `DeclarationDoor` per door; `semantics/described.ts` · `DESCRIBED_DOOR`                    |
 | camelCase in, unchanged wire out                                                            | per-object rename tables tied to BOTH types, so a field with no wire name fails to compile                                             | present: `GRAIN_NAMES`, `PROVENANCE_NAMES`, `RENDER_NAMES` with `satisfies`                                                                                  |
 | one spelling per door, never both                                                           | the other spelling is refused, naming the one meant                                                                                    | present, with tests ("neither door takes both spellings at once")                                                                                            |
 | no `measuredAt` alias in `semantic()`                                                       | —                                                                                                                                      | none added                                                                                                                                                   |
 | input type split from the wire type                                                         | internal camelCase shapes, not exported by name                                                                                        | present: `DescribedGrain`, `DescribedProvenance`, `DescribedRender` (`@inline`)                                                                              |
 | a missing source is a compile error                                                         | a conditional type, `@ts-expect-error` pins                                                                                            | present: `DescribedResultDeclaration`'s intersection; 8 pins in `test/type-regressions/DescribedResult.assignability.test.ts`                                |
 | keep the wire, the note, the notes file, the recognizers, the gate's name, the 17 types     | —                                                                                                                                      | kept                                                                                                                                                         |
-| the gate's advice names the new door                                                        | `lib/semantics/check.ts` · `classCoverageFinding`                                                                                      | present, with a regression test                                                                                                                              |
+| the gate's advice names the new door                                                        | `semantics/check.ts` · `classCoverageFinding`                                                                                      | present, with a regression test                                                                                                                              |
 | a 9.x minor; `@deprecated` in TSDoc only; no warning                                        | fragments `added` + `deprecated`                                                                                                       | present: `.changes/described-result.md`, `.changes/semantic-deprecated.md`                                                                                   |
 | the decision table; "where it lives"; values from the data; retitle "Semantic tool results" | Tools page, README, SKILL.md                                                                                                           | present: `docs-next/content/docs/build/tools.mdx` (with captured model views), the retitled `semantic-results.mdx`, README, both SKILL.md copies, example 66 |
 | golden test: facts, series with grain, edges, clarify-only, render                          | camelCase ⇒ the same bytes as snake_case                                                                                               | present: unit pins plus a property test over 3,000 declarations                                                                                              |
@@ -681,7 +681,7 @@ a CAPABILITIES row, a `.changes` fragment, the docs-next page, an example, `npm 
 
 | Step | Ships (result layer)                                                                                                                                                                                                                                                                                                                                                               | Arm (off ⇒ byte-identical)                             | Needs                                                                                                                                               |
 | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1    | `coverage/emptiness.ts` · `readEmptiness` (one owner); the answer account and `assessAnswer` both call it; the account's described template                                                                                                                                                                                                                                        | none — readers only                                    | —                                                                                                                                                   |
+| 1    | `agent/emptiness.ts` · `readEmptiness` (one owner); the answer account and `assessAnswer` both call it; the account's described template                                                                                                                                                                                                                                        | none — readers only                                    | —                                                                                                                                                   |
 | 7a   | `describedResult()` (drafted, § 6)                                                                                                                                                                                                                                                                                                                                                 | a new door                                             | —                                                                                                                                                   |
 | 7a′  | the empty-data refusal names `absent()` (§ 1.3) — **built 2026-09-27**                                                                                                                                                                                                                                                                                                             | refusal text only                                      | 7a                                                                                                                                                  |
 | 7b   | `coverage/period.ts` (the rule and `periodVerdict`); `period` on the three doors and `provenance` on `absent()`; the coverage channel carries `period`; `canonical-notes.json`; the results subflow at the loop head, its period rows and reasons; the `Period:` line under the existing limits arm; the lens reads `period` — **built 2026-09-27 except the lens (its own repo)** | a result declares `period`, or its tool a `ToolPeriod` | 1, 3 — the `ToolPeriod` ships with step 3, owned by `arguments/`, and is refused without an argument rule ([inputs.md](inputs.md) § 1.3; Q12 below) |
@@ -691,7 +691,7 @@ a CAPABILITIES row, a `.changes` fragment, the docs-next page, an example, `npm 
 **The folders.** `coverage/` keeps the doors and gains `period.ts` and `emptiness.ts` (their rules
 stay with their data). `results/` (new) holds only the subflow — Declare → Verify → Record →
 Resolve — and its README: _A result says what it covered, its period included; silence about a
-declared period is recorded as silence._ `lib/semantics/` keeps `describedResult()`. The layer's
+declared period is recorded as silence._ `semantics/` keeps `describedResult()`. The layer's
 design page is this one, placed by step 0 at `docs/design/honesty/results.md`.
 
 ---
@@ -821,7 +821,7 @@ questions stay here as they were put.
     `clarify` as data only?
 11. **Names, all open:** `period`, `queried`, `held`, `readAt`, the literal `'unknown'`; the verdict
     words (`covered`, `partly-held`, `not-held`, `unknown`, `undeclared`); `coverage/period.ts`,
-    `coverage/emptiness.ts`; the `period` row kind and its event; the account's described
+    `agent/emptiness.ts`; the `period` row kind and its event; the account's described
     template.
 12. **A `ToolPeriod` on an argument with no rule** (the architecture note's Q19): refused today, so
     `period-undeclared` reaches only tools that rule their period argument. Keep the refusal in v1,
@@ -840,9 +840,9 @@ Committed code (9.118.1) unless marked "draft":
 - `readAbsence` asks only for the marker and a non-empty `checked` (`coverage/recognize.ts`);
   `readCoverageLedger` only for an `af_coverage` object and a `result` key (`coverage/ledger.ts`);
   `semanticIssues` refuses any key outside its vocabulary and any empty `series`, `facts` or
-  `edges`, and accepts any string `note` (`lib/semantics/envelope.ts`).
+  `edges`, and accepts any string `note` (`semantics/envelope.ts`).
 - The projection drops the marker, `render`, the three coverage lists and a null `clarify`, and
-  keeps the composed `not_covered` (`lib/semantics/envelope.ts` · `semanticsForModel`);
+  keeps the composed `not_covered` (`semantics/envelope.ts` · `semanticsForModel`);
   `declareSemantics` replaces the envelope with it before the ceiling, and files the full envelope
   on `tools.semantics_declared` first (`stages/toolCalls.ts`).
 - `servedToModel` strips `short`/`kind` and does not read JSON text (`coverage/read.ts`);
@@ -863,7 +863,7 @@ Committed code (9.118.1) unless marked "draft":
   `scripts/gen-canonical-notes.mjs`.
 - The two facts the request's house law fixes, as committed: `SemanticDeclaration.provenance` is
   optional, and `SemanticProvenance` is both the declaration's type and `ToolSemantics.provenance`
-  (`lib/semantics/types.ts`).
+  (`semantics/types.ts`).
 - `toolResults` is reset at the start of every ToolCalls batch and filled during it, so the loop
   head still sees the batch just run (`stages/toolCalls.ts`).
 - The host's time-series tools return `data_window: { window, range_end }`, with no held period

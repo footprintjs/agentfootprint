@@ -1,7 +1,7 @@
 /** Authored configuration and permission, not a production verifier mount. */
 import { describe, expect, it } from 'vitest';
-import { describedResult } from '../../../../src/lib/semantics/described.js';
-import { readSemantics, semanticsForModel } from '../../../../src/lib/semantics/envelope.js';
+import { describedResult } from '../../../../src/semantics/described.js';
+import { readSemantics, semanticsForModel } from '../../../../src/semantics/envelope.js';
 import {
   captureDispatch,
   captureReturnedEvidence,

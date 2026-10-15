@@ -45,7 +45,7 @@
  *     called ungrounded for doing so. `looked_for` alone quotes the arguments
  *     the model passed, so indexing it would ground an invented identifier
  *     through the one operation that proves nothing about it: a lookup that
- *     found nothing. See `../coverage/evidence.ts`.
+ *     found nothing. See `../../../semantics/coverage/evidence.ts`.
  *
  * The EXEMPT index is built from a different corpus with the same machinery:
  * the user's own message, the conversation's user/system turns, the values
@@ -102,7 +102,7 @@
 import type { LLMMessage } from '../../../provider-contract/types.js';
 import type { InjectionRecord } from '../../../recorders/core/types.js';
 import { toolBytesOf } from '../../../lib/toolBytes.js';
-import { absenceEvidenceProjection } from '../coverage/index.js';
+import { absenceEvidenceProjection } from '../../../semantics/coverage/index.js';
 import { isTruncatedToolResult } from '../toolResultCap.js';
 import { isCompactedSummary } from '../../../lib/saidByPerson.js';
 import { isLibraryAuthoredTurn } from './frames.js';
@@ -302,7 +302,7 @@ export type ResultReading =
  * TOOL authored and drops the one field that quotes the REQUEST
  * (`looked_for`) — indexing that would ground every identifier a model
  * invented as long as it handed the invention to one tool that found nothing.
- * See `../coverage/evidence.ts` — it is the frames.ts argument on the tool
+ * See `../../../semantics/coverage/evidence.ts` — it is the frames.ts argument on the tool
  * side of the conversation. A capped result (`../toolResultCap.ts`) is walked
  * as served AND its `head` — the tool's first characters, verbatim, usually
  * JSON cut mid-value — is read as a result of its own, so a number or a

@@ -63,7 +63,7 @@ overturn. Nothing in it is built yet: this folder is step 0 of its plan (§ 7).*
 
 Honesty features were added one at a time, each with its own arm, record and words:
 
-- tools say what they covered (`core/agent/coverage/absent.ts` · `absent`, `coverage/ledger.ts` · `coverage`);
+- tools say what they covered (`semantics/coverage/absent.ts` · `absent`, `coverage/ledger.ts` · `coverage`);
 - the model files a basis for each call and a standing for each result (`findings/`, the reserved `_findings` argument);
 - the evidence gate checks the answer's names and numbers (`core/agent/evidence/gate.ts` · `checkAnswer`);
 - typed claims are checked against settled facts (`.claims()`, `integrity/unsupported-claim/`);
@@ -606,7 +606,7 @@ Two halves: the **tool** declares what its result covered (the result doors), an
 declares how it reads that result (the findings ledger).
 
 **Exists.**
-- *Declare:* `absent()`, `coverage()`, `lib/semantics/envelope.ts` · `semantic`;
+- *Declare:* `absent()`, `coverage()`, `semantics/envelope.ts` · `semantic`;
   `Tool.resultColumns`, `resultCeiling`, `resultClass`; the model's `_findings.previous[]`
   standings.
 - *Verify:* `stages/toolCalls.ts` · `declareCoverage`; `resultCeiling.ts` · `applyResultCeiling`;
@@ -874,7 +874,7 @@ each other; support decides.
 | 2 | `value-contingent` | `argument` · `result` + `setAside`; `ContingentRow` | 5 |
 | 2 | **ask** · `argument-asked` | the library's argument ask pending at the end of the turn; an asked row never answered | 4 |
 | all | **ask** · `asked` | a tool's own `requestInput` pending at the end of the turn — read from the paused run's checkpoint (its pause data carries `awaitingInput`), never from an event | 1 |
-| 3 | `declared-absent` | a `coverageDeclared` absence on a call this turn, or a `coverage()` whose wrapped rowset is empty (the one emptiness reader, `coverage/emptiness.ts` · `readEmptiness`, [results.md](results.md) § 5.2) | 1 |
+| 3 | `declared-absent` | a `coverageDeclared` absence on a call this turn, or a `coverage()` whose wrapped rowset is empty (the one emptiness reader, `agent/emptiness.ts` · `readEmptiness`, [results.md](results.md) § 5.2) | 1 |
 | 3 | `coverage-gap` | a `notChecked` or `cannotCover` item on a call this turn | 1 |
 | 3 | `empty-undeclared` | the one emptiness reader over every result: an empty rowset (a top-level array, a key the app declared in `rowsAt`, or the dataset ticket left where those rows were, counting 0) with no coverage row for that call fires it; a non-empty rowset passes; any other shape is not applicable | 1 |
 | 3 | `coverage-undeclared` (proposed, [results.md](results.md) Q5; adopted 2026-09-27) | a result from a tool that declares `resultClass: 'triage'` or `'inventory'` and filed no coverage row | 8 |
@@ -1154,7 +1154,7 @@ the paper uses it:
 | # | Step | Ships | Arm (off ⇒ byte-identical) | Needs |
 |---|---|---|---|---|
 | 0 | **Docs skeleton** | `docs/design/honesty/` (the index + four layer pages seeded from § 3); a pointer in agentfootprint's CLAUDE.md capability section | — (no code) | — |
-| 1 | **The standing, as a pure reader ($0)** | `assessment/assess.ts` · `assessAnswer` over recordings, from EXISTING rows only (coverage, ledger, `unsupportedValues`, claims, dispositions): the four values, the rendering, the reasons marked "1" in § 4.2; the one emptiness reader `coverage/emptiness.ts` · `readEmptiness`, shared with the `/observe` answer account and its described template ([results.md](results.md) § 5.2); `howSure.ts` reads it; the lens chip. **First**, before anything else in the step: the confusion table of the fold against the oracle over the retained recorded runs ([decisions memo](../2026-09-honest-answer-ledger-decisions.md) § 2.2), and the parity test with the study's frozen RQ3 on its records | none — nothing runs inside a run | — |
+| 1 | **The standing, as a pure reader ($0)** | `assessment/assess.ts` · `assessAnswer` over recordings, from EXISTING rows only (coverage, ledger, `unsupportedValues`, claims, dispositions): the four values, the rendering, the reasons marked "1" in § 4.2; the one emptiness reader `agent/emptiness.ts` · `readEmptiness`, shared with the `/observe` answer account and its described template ([results.md](results.md) § 5.2); `howSure.ts` reads it; the lens chip. **First**, before anything else in the step: the confusion table of the fold against the oracle over the retained recorded runs ([decisions memo](../2026-09-honest-answer-ledger-decisions.md) § 2.2), and the parity test with the study's frozen RQ3 on its records | none — nothing runs inside a run | — |
 | 2 | **Inputs bench and baseline** | provoking cases and controls, the unarmed baseline, the registered rule (§ 6) | bench only; owner budget | — |
 | 3 | **Inputs layer: assume** | `arguments/` (declare, resolve, rows, serve); `askOrAssume` with `assume` only — an `ask` rule is refused at definition until step 4, so no declaration promises what the library cannot yet do; `Tool.period` (`ToolPeriod`, owned by `arguments/`, arguments note R8); MCP carriage of both in `McpToolExtras`; the schema decoration at the one site (`core/slots/buildToolsSlot.ts` · `commitWire`, and `stages/seed.ts`'s `dynamicToolSchemas` twin) — `mergeWire` must also return the winning TOOL per served name (it returns only `winners`, name → party, today), and a name with no known tool is not decorated (the dispatch re-read is the guard); the inputs subflow and its mount; `appendRows`; the fills in ToolCalls; the `argument` row kind, its checkpoint arm, the widened restore and the `turn` stamp; the result note and the tool-bytes boundary the evidence index reads through (§ 3.2 (c)); the declared defaults in the gate's exempt corpus; the argument event (names and enums only); the "Assumed" line under an existing `.limitsTravelWithTheAnswer()`; the two doc-comment updates (`core/checkin.ts` · `CheckInRequest.args` now carries filled values; `agent.findings()` returns rows without `.findings()`) | a tool declares `askOrAssume` (and `.inputsLayer()` for ruled tools only a ToolProvider serves — arguments note R11, adopted 2026-09-27) | 2 |
 | 4 | **Inputs layer: ask for missing values** | the batch ask, the pause and resume inside the layer, `answered` rows, the stamp change for a batch origin, the `argumentAskContext` hook (or the statement), `build/input-requests.mdx`; the needless-ask measurement on the step-2 cases; answered values join the gate's exempt corpus (arguments note R9) | an `ask` rule | 3 |

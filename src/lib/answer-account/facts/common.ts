@@ -12,7 +12,7 @@ import {
   parseMaybeJson,
   readEmptiness,
   type EmptinessReading,
-} from '../../../core/agent/coverage/emptiness.js';
+} from '../../../core/agent/emptiness.js';
 import { isSaidByPerson, type AuthoredMessage } from '../../saidByPerson.js';
 import { sentence, v, type SentenceSpec } from '../render.js';
 import type { TemplateId } from '../templates.js';
@@ -216,7 +216,7 @@ export function skillVars(
 
 // ── the model's view of a result ─────────────────────────────────────────
 
-// ONE owner of "what came back?": `core/agent/coverage/emptiness.ts` · `readEmptiness`,
+// ONE owner of "what came back?": `core/agent/emptiness.ts` · `readEmptiness`,
 // shared with the standing fold (`core/agent/assessment/assess.ts` · `assessAnswer`), so the
 // account and the answer's standing cannot disagree about a result. The account supplies the
 // app's `rowsAt` and — for this run's calls — the door the record holds (`facts/calls.ts`).

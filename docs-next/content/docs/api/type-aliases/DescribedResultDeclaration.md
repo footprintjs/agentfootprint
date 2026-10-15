@@ -6,7 +6,7 @@ title: DescribedResultDeclaration
 
 > **DescribedResultDeclaration** = `object` & \{ `provenance`: \{ `ageSeconds?`: `number`; `measuredAt`: `string`; `source`: `string`; `sourceExportDate?`: `string`; \}; \} \| \{ `facts?`: `undefined`; `series?`: `undefined`; \}
 
-Defined in: [src/lib/semantics/types.ts:256](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/types.ts#L256)
+Defined in: [src/semantics/types.ts:256](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/types.ts#L256)
 
 What a tool author passes to `describedResult()` — the
 result fields in ONE spelling, camelCase, respelled to

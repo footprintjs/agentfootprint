@@ -44,19 +44,19 @@ import {
   readSemantics,
   semanticsForModel,
 } from '../../../src/index.js';
-import { checkSemantics as gate } from '../../../src/lib/semantics/index.js';
-import { absenceEvidenceProjection } from '../../../src/core/agent/coverage/evidence.js';
-import { ABSENCE_NOTE, ABSENCE_NOTE_HELD_ONLY } from '../../../src/core/agent/coverage/absent.js';
-import { COVERAGE_NOTE } from '../../../src/core/agent/coverage/ledger.js';
+import { checkSemantics as gate } from '../../../src/semantics/index.js';
+import { absenceEvidenceProjection } from '../../../src/semantics/coverage/evidence.js';
+import { ABSENCE_NOTE, ABSENCE_NOTE_HELD_ONLY } from '../../../src/semantics/coverage/absent.js';
+import { COVERAGE_NOTE } from '../../../src/semantics/coverage/ledger.js';
 import {
   _resetPeriodWarnings,
   PERIOD_VERDICT_CLAUSES,
   servedPeriod,
   unservedPeriod,
-} from '../../../src/core/agent/coverage/period.js';
-import { servedToModel } from '../../../src/core/agent/coverage/read.js';
-import { SEMANTICS_NOTE } from '../../../src/lib/semantics/types.js';
-import { REFUSED_PREFIX } from '../../../src/core/agent/coverage/refusal.js';
+} from '../../../src/semantics/coverage/period.js';
+import { servedToModel } from '../../../src/semantics/coverage/read.js';
+import { SEMANTICS_NOTE } from '../../../src/semantics/types.js';
+import { REFUSED_PREFIX } from '../../../src/semantics/coverage/refusal.js';
 
 const Q = { from: '2026-09-26T09:00:00Z', to: '2026-09-26T10:00:00Z' };
 const HELD = { from: '2026-08-27T02:00:00Z', to: '2026-09-26T02:00:00Z' };

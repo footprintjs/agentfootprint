@@ -789,7 +789,7 @@ beside, in the same write, at the two moments that file standings (a call's
   absence?" has one owner: the dispatch door
   (`../stages/toolCalls.ts · declareCoverage`), which reads the value the
   tool RETURNED through the one recognizer
-  (`../coverage/read.ts · readCoverageResult`), delivers the status
+  (`../../../semantics/coverage/read.ts · readCoverageResult`), delivers the status
   `'absent'`, emits `tools.absent` and files the call's rows on
   `AgentState.coverageDeclared`. The rule files a row only when the door's
   rows for the standing's `toolCallId` hold one of `kind: 'absence'` (an
@@ -901,13 +901,13 @@ beside, in the same write, at the two moments that file standings (a call's
   - a `fact` standing on an absence (the model standing on "nothing found"
     as a positive) — the design scoped this rule to `ruled-out`;
   - a lookup that PAUSED on its miss — `requestInput({ …, absence })`
-    (9.114.0, `../coverage/README.md` § 4). The door files that call's rows
+    (9.114.0, `../../../semantics/coverage/README.md` § 4). The door files that call's rows
     at the raise, so they hold `kind: 'absence'` for its id; but on resume
     the model is SERVED the person's `InputResponseResult` for it, which is
     no absence, so a ruling-out on that call files nothing. The rule is
     unchanged — both facts stay required, and the second one is not there;
   - the TYPED suggestion, `try_instead_tool` (9.113.0,
-    `../coverage/README.md`). The row carries the served `try_instead`
+    `../../../semantics/coverage/README.md`). The row carries the served `try_instead`
     STRING and no other part of the suggestion, and the section quotes no
     typed tool: nothing in this release reads a typed tool off the row (the
     join that would, `source-not-consulted`, is not built), so the row does

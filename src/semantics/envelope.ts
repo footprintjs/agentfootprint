@@ -52,7 +52,7 @@
  * and record reading keep one owner; old wire records never need an adapter.
  */
 
-import { normalizeCoverageList } from '../../core/agent/coverage/items.js';
+import { normalizeCoverageList } from './coverage/items.js';
 import {
   copyPeriod,
   mintPeriod,
@@ -61,13 +61,9 @@ import {
   readPeriod,
   servedPeriod,
   type DeclaredPeriod,
-} from '../../core/agent/coverage/period.js';
-import { refusal, refuseUnknownKeys } from '../../core/agent/coverage/refusal.js';
-import type {
-  Coverage,
-  CoverageDeclaration,
-  CoverageItem,
-} from '../../core/agent/coverage/types.js';
+} from './coverage/period.js';
+import { refusal, refuseUnknownKeys } from './coverage/refusal.js';
+import type { Coverage, CoverageDeclaration, CoverageItem } from './coverage/types.js';
 import {
   COUNTER_AGGREGATION_WORDS,
   SEMANTICS_MARKER,

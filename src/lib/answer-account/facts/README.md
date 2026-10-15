@@ -4,7 +4,7 @@ per-sentence catch). No reader reads another row's lines.
 
 | file | row(s) |
 |---|---|
-| `common.ts` | the shared context (`say`, the size budgets), pointers, vars; the model's view of a result through the ONE emptiness reader (`core/agent/coverage/emptiness.ts`) |
+| `common.ts` | the shared context (`say`, the size budgets), pointers, vars; the model's view of a result through the ONE emptiness reader (`core/agent/emptiness.ts`) |
 | `asked.ts` | You asked |
 | `understood.ts` | It understood — and check 1, decided-delivered (non-delivery needs a complete record) |
 | `calls.ts` | the calls of THIS run: outcome (before-tool refusals only), coverage, emptiness |

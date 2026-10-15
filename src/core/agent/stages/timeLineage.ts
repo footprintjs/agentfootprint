@@ -22,7 +22,7 @@
 
 import { timeFormsOf, turnFormsWindowsOf } from '../../../time/forms.js';
 import { clockOf, presentationZoneOf } from '../../../time/rows.js';
-import type { PeriodRow } from '../coverage/period.js';
+import type { PeriodRow } from '../../../semantics/coverage/period.js';
 import { HIDDEN_VALUE } from '../arguments/rows.js';
 import type { FindingsLedger } from '../findings/types.js';
 import { isWindowFillRow, type TimeLineage } from './route.js';

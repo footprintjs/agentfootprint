@@ -31,14 +31,14 @@ import { absent, coverage, readCoverageResult } from '../../../src/index.js';
 import {
   absenceEvidenceProjection,
   normalizeCoverageList,
-} from '../../../src/core/agent/coverage/index.js';
+} from '../../../src/semantics/coverage/index.js';
 import {
   listWithoutRecordOnly,
   MAX_SHORT_CHARS,
   readItemExtras,
-} from '../../../src/core/agent/coverage/items.js';
-import { servedToModel, strippedOnly } from '../../../src/core/agent/coverage/read.js';
-import { describedResult } from '../../../src/lib/semantics/index.js';
+} from '../../../src/semantics/coverage/items.js';
+import { servedToModel, strippedOnly } from '../../../src/semantics/coverage/read.js';
+import { describedResult } from '../../../src/semantics/index.js';
 
 const WHAT = 'whether that name is a storage array, and which VM disks are on it';
 const item = (extra: Record<string, unknown>) => ({

@@ -4,7 +4,7 @@
  *
  * Pattern: One predicate, no imports, no state.
  * Role:    Leaf. Asked by the three doors that take a short declared label:
- *          `core/agent/coverage/items.ts` (a coverage item's `short`, at the
+ *          `semantics/coverage/items.ts` (a coverage item's `short`, at the
  *          `absent()` / `coverage()` mint AND at the dispatch reader) and
  *          `lib/injection-engine/factories/defineSkill.ts` (a skill's
  *          `title`). One rule, so the three cannot disagree.

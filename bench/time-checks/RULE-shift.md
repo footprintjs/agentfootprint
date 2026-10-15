@@ -34,7 +34,8 @@ as the host's). They differ only in the BUILD of the library:
 | `after` | this branch at the rule's commit, built (`npm run build`) |
 
 `run-shift.mjs` · `loadDoors` refuses a `before` build that already serves the conclusion (its
-`dist/esm/core/agent/coverage/period.js` holds "so its result does not cover") and an `after`
+`dist/esm/semantics/coverage/period.js` — `dist/esm/core/agent/coverage/period.js` in a build
+from before that folder moved — holds "so its result does not cover") and an `after`
 build that does not.
 
 ## The cases (from `cases.mjs` · `CASES`, unchanged)

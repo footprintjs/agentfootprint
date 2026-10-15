@@ -1,8 +1,8 @@
 /** Closed restored-data schemas; shared JSON/coverage/period owners do validation. */
 import { copyJson, ownData } from '../../lib/boundedJson.js';
-import { normalizeCoverageList, type CoverageSection } from '../../core/agent/coverage/items.js';
-import { periodProblem } from '../../core/agent/coverage/period.js';
-import type { CoverageInput } from '../../core/agent/coverage/types.js';
+import { normalizeCoverageList, type CoverageSection } from '../../semantics/coverage/items.js';
+import { periodProblem } from '../../semantics/coverage/period.js';
+import type { CoverageInput } from '../../semantics/coverage/types.js';
 import { BINDING_LIMITS, boundedText, boundedResultId, scopeDeclarationOf } from './scope.js';
 import { resultIdentityOf } from './capture.js';
 import { BINDING_REASONS } from './types.js';

@@ -48,12 +48,12 @@ import {
   type InProgressInput,
 } from '../../../src/index.js';
 import { mock } from '../../../src/llm-providers.js';
-import { servedToModel, withoutServedPeriod } from '../../../src/core/agent/coverage/read.js';
+import { servedToModel, withoutServedPeriod } from '../../../src/semantics/coverage/read.js';
 import {
   _resetInProgressWarnings,
   withInProgressServed,
   withoutInProgressServed,
-} from '../../../src/core/agent/coverage/inProgress.js';
+} from '../../../src/semantics/coverage/inProgress.js';
 
 const CHECKED = ['every replication session on the array (live query)'];
 const SUMMARY = { failed: 0, settled: 135 };

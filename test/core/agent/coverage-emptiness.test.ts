@@ -1,5 +1,5 @@
 /**
- * The ONE emptiness reader — `core/agent/coverage/emptiness.ts` · `readEmptiness`.
+ * The ONE emptiness reader — `core/agent/emptiness.ts` · `readEmptiness`.
  *
  * Test types:
  *   - UNIT        — every route of the table, in its order; the door decides
@@ -38,7 +38,7 @@ import {
   readEmptiness,
   rowsAtProblem,
   type ReturnedDoor,
-} from '../../../src/core/agent/coverage/emptiness.js';
+} from '../../../src/core/agent/emptiness.js';
 
 const NONE: ReturnedDoor = { absent: false, bounded: false };
 const found = absent({ what: 'VMs on host-9', checked: ['the VM inventory'] });
@@ -462,8 +462,8 @@ describe('FUNCTIONAL — one reader, two callers', () => {
     const src = resolve(__dirname, '../../../src');
     const common = readFileSync(`${src}/lib/answer-account/facts/common.ts`, 'utf8');
     const fold = readFileSync(`${src}/core/agent/assessment/assess.ts`, 'utf8');
-    expect(common).toMatch(/from '\.\.\/\.\.\/\.\.\/core\/agent\/coverage\/emptiness\.js'/);
-    expect(fold).toMatch(/from '\.\.\/coverage\/emptiness\.js'/);
+    expect(common).toMatch(/from '\.\.\/\.\.\/\.\.\/core\/agent\/emptiness\.js'/);
+    expect(fold).toMatch(/from '\.\.\/emptiness\.js'/);
     // No second implementation of the routes anywhere in either caller.
     for (const text of [common, fold]) expect(text).not.toMatch(/undeclared-empty', rows: 0/);
   });

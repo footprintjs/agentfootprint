@@ -1,6 +1,6 @@
 {
   "sourceCommit": "30f7a415d127d95ef188776e6c1bd29fb8526af2",
-  "sourceTest": "test/lib/semantics/described-result.test.ts",
+  "sourceTest": "test/semantics/described-result.test.ts",
   "sourceTestSha256": "19c2a8a9f52d434739a5f0eaa50147d471a7eca809e7f990d48f26b47f46496e",
   "captureNodeVersion": "v22.23.3",
   "method": "Mechanically extract original CASES and seeded generator with the TypeScript AST; execute compiled pristine semantic(), compare all outcomes to pristine describedResult() after original inWireWords normalization. Digest exact UTF-8 JSON.stringify(ordered outcome strings), no newline.",

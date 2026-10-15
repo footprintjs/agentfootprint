@@ -24,7 +24,7 @@ import {
   SEMANTICS_NOTE,
   readCoverageResult,
   type ToolSemantics,
-} from '../../../src/index.js';
+} from '../../src/index.js';
 
 const PROVENANCE = { measuredAt: '2026-08-19T10:20:00Z', source: 'InfluxDB SwitchPortStats' };
 const POINT = { t: '2026-08-19T10:00:00Z', entity: 'fc1/3', metric: 'avg_iops', value: 18450 };

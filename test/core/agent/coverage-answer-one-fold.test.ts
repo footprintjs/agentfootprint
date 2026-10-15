@@ -43,7 +43,7 @@ import {
   answerCoverageOf,
   composeAnswerWithCoverage,
   coverageOfAnswer,
-} from '../../../src/core/agent/coverage/index.js';
+} from '../../../src/semantics/coverage/index.js';
 import { SHOWN_ARGS } from '../../../src/core/toolShownArgs.js';
 
 // ─── PROPERTY — one fold, two forms ──────────────────────────────────

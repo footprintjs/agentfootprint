@@ -61,8 +61,8 @@
  * reads by it, so a mint and a read cannot disagree.
  */
 
-import { mintProvenance } from '../../../lib/semantics/described.js';
-import { warnIfInvalidToolName } from '../../../lib/toolName.js';
+import { mintProvenance } from '../described.js';
+import { warnIfInvalidToolName } from '../../lib/toolName.js';
 import { normalizeCoverageList } from './items.js';
 import { mintPeriod } from './period.js';
 import { refusal, refuseUnknownKeys } from './refusal.js';
@@ -329,7 +329,7 @@ export function absent(decl: AbsenceDeclaration): ToolAbsence {
   // dev mode and never throws — the verdict a `defineTool` of it would get.
   if (tryInsteadTool !== undefined) warnIfInvalidToolName(tryInsteadTool.tool);
   // Honesty step 7b — the source and time of the search, by the ONE provenance
-  // rule `describedResult()` mints with (`lib/semantics/described.ts` ·
+  // rule `describedResult()` mints with (`semantics/described.ts` ·
   // `mintProvenance`), and the period its read covered, by the ONE period rule
   // (`period.ts` · `mintPeriod`). Each refuses at this line, in camelCase.
   // `null` reads as omitted for either — a JSON producer's missing value.

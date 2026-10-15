@@ -56,7 +56,7 @@ import { validateCheckpoint } from '../../../../src/core/runCheckpoint.js';
 import {
   _resetPeriodWarnings,
   PERIOD_VERDICT_CLAUSES,
-} from '../../../../src/core/agent/coverage/period.js';
+} from '../../../../src/semantics/coverage/period.js';
 import { _resetPeriodUnjudgedWarnings } from '../../../../src/core/agent/stages/toolCalls.js';
 
 // ─── the harness ─────────────────────────────────────────────────────

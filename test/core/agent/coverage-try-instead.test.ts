@@ -73,11 +73,11 @@ import {
   type EmitEvent,
   type ToolAbsence,
 } from '../../../src/index.js';
-import { absenceEvidenceProjection } from '../../../src/core/agent/coverage/index.js';
+import { absenceEvidenceProjection } from '../../../src/semantics/coverage/index.js';
 import {
   projectionSemanticsIssues,
   snapshotProjectionSemantics,
-} from '../../../src/lib/semantics/projection.js';
+} from '../../../src/semantics/projection.js';
 import type { LLMMessage, LLMProvider, LLMResponse } from '../../../src/provider-contract/types.js';
 
 // ── Toolkit ──────────────────────────────────────────────────────────────
@@ -726,7 +726,7 @@ describe('edge: the one recognizer is the one reader, whoever minted the envelop
   });
 
   it('the dataset projection guard keeps the typed tool among the declarations, and catches a rewrite or a drop', () => {
-    // `lib/semantics/projection.ts` · `snapshotProjectionSemantics` — the
+    // `semantics/projection.ts` · `snapshotProjectionSemantics` — the
     // guard an adapter's projection must pass — lists the absence keys it
     // will not let an adapter change; `try_instead_tool` is one of them.
     const minted = absent(FLAGSHIP_TYPED);

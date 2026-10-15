@@ -40,7 +40,7 @@ import {
   REFUSED_PREFIX,
   refuseUnknownKeys,
   spellingMeant,
-} from '../../../src/core/agent/coverage/refusal.js';
+} from '../../../src/semantics/coverage/refusal.js';
 import type { LLMMessage, LLMRequest } from '../../../src/provider-contract/types.js';
 import { mock } from '../../../src/llm-providers.js';
 

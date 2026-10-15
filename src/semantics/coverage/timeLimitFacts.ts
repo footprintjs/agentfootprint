@@ -27,14 +27,14 @@
  */
 
 import type { PeriodRow } from './period.js';
-import { clockOf, presentationZoneOf, sourceClocksOf } from '../../../time/rows.js';
+import { clockOf, presentationZoneOf, sourceClocksOf } from '../../time/rows.js';
 import {
   clocksDiffer,
   distinctSources,
   type ClocksDiffer,
   type SourceClock,
-} from '../../../time/checkRecord.js';
-import type { ZoneName } from '../../../time/zone.js';
+} from '../../time/checkRecord.js';
+import type { ZoneName } from '../../time/zone.js';
 
 /** Who reads the lines: the person (the limits block) or the model (the served time line). */
 export type TimeLimitsAudience = 'person' | 'model';

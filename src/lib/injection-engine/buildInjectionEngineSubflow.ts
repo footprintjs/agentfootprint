@@ -87,7 +87,7 @@ import {
   tenantOf,
   type InstructionLease,
   type PendingToolTransition,
-} from '../../core/agent/toolEffects.js';
+} from './leases.js';
 import { advanceEngagement } from '../../maps/engagement/lease.js';
 import { parkCard, PARK_CARD_ID } from '../../maps/engagement/parkCard.js';
 import type { EngagementPlan, MapEngagement } from '../../maps/engagement/types.js';

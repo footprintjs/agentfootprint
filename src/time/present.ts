@@ -322,7 +322,7 @@ export function presentSpan(
 
 /**
  * A presentation bound into the three renderers the coverage limits lines use
- * (`agent/coverage/period.ts` · `periodLine` for a `Period:` line, and
+ * (`semantics/coverage/period.ts` · `periodLine` for a `Period:` line, and
  * `periodCheckLine` for a result check's ranges). The coverage module is on every
  * agent's graph and this one loads only under `.time()`, so it is HANDED the
  * renderers (`agent/stages/prepareFinal.ts` loads this module through

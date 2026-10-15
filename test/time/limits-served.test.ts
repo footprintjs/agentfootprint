@@ -372,11 +372,9 @@ describe('the limits facts cross the Tools mount unrendered — `timeLimitFactsO
   for (const [name, ledger] of Object.entries(ledgers)) {
     for (const audience of ['person', 'model'] as const) {
       it(`${name} (${audience}): facts present ⇔ lines present, and the facts render to the lines`, async () => {
-        const { timeLimitFactsOf } = await import(
-          '../../src/core/agent/coverage/timeLimitFacts.js'
-        );
+        const { timeLimitFactsOf } = await import('../../src/semantics/coverage/timeLimitFacts.js');
         const { renderTimeLimits, timeLimitLinesOf } = await import(
-          '../../src/core/agent/coverage/timeLimits.js'
+          '../../src/semantics/coverage/timeLimits.js'
         );
         const facts = timeLimitFactsOf(ledger, 1, audience);
         const lines = timeLimitLinesOf(ledger, 1, audience);
@@ -387,7 +385,7 @@ describe('the limits facts cross the Tools mount unrendered — `timeLimitFactsO
   }
 
   it('a matching read and one declared clock serve the model nothing — no key crosses', async () => {
-    const { timeLimitFactsOf } = await import('../../src/core/agent/coverage/timeLimitFacts.js');
+    const { timeLimitFactsOf } = await import('../../src/semantics/coverage/timeLimitFacts.js');
     expect(timeLimitFactsOf([clock, period({})], 1, 'model')).toBeUndefined();
     expect(
       timeLimitFactsOf([clock, source('orders', 'America/New_York')], 1, 'model'),

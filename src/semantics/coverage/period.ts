@@ -13,7 +13,7 @@
  *          `refusal.ts`, the dev-mode flag and the time layer's one instant
  *          parser (`time/instant.ts` · `instantOf`, lenient profile) and its
  *          person-facing renderer (`time/present.ts`). The results layer
- *          (`../results/subflow.ts`) files one verdict per call from
+ *          (`../../core/agent/results/subflow.ts`) files one verdict per call from
  *          {@link periodVerdict}; the limits block prints one line per
  *          declaring call from {@link periodLine}.
  * Emits:   N/A.
@@ -46,14 +46,14 @@
 
 import { isDevMode } from 'footprintjs';
 
-import { compareInstants, instantOf, type Instant } from '../../../time/instant.js';
-import type { BoundPresentation } from '../../../time/present.js';
+import { compareInstants, instantOf, type Instant } from '../../time/instant.js';
+import type { BoundPresentation } from '../../time/present.js';
 import {
   isPeriodDiffers,
   isShifted,
   type PeriodDiffers,
   type SourceClock,
-} from '../../../time/checkRecord.js';
+} from '../../time/checkRecord.js';
 
 import { refusal, spellingMeant } from './refusal.js';
 
@@ -631,7 +631,7 @@ function periodLineInZone(
 /**
  * The results layer's verdict on ONE call's period — a row on the one honesty
  * ledger (`AgentState.findingsLedger`, `kind: 'period'`), filed by the results
- * subflow at the loop head (`../results/subflow.ts`), never by the model.
+ * subflow at the loop head (`../../core/agent/results/subflow.ts`), never by the model.
  *
  * - `verdict` — {@link periodVerdict} over the period the call's result
  *   declared (the least held, when it declared more than one), or

@@ -41,7 +41,7 @@ import type {
   SkillToolSchema,
 } from '../../src/doors/skill-graph';
 import { TOOL_RESULT_STATUSES, type ToolResultStatus } from '../../src/doors/skill-graph';
-import type { ToolResultStatus as StatusFromLoop } from '../../src/core/agent/toolEffects';
+import type { ToolResultStatus as StatusFromLoop } from '../../src/semantics/toolEffects';
 import type { InjectionContent } from '../../src/doors/skill-graph';
 
 describe('SkillToolSchema is LLMToolSchema, spelled without the adapter', () => {

@@ -94,12 +94,12 @@ describe('IMPORT-GRAPH FENCE', () => {
     expect(forbidden).toEqual([]);
     // The walk is real: it reaches past the folder (the owners below and what they import).
     expect(reached).toContain('bridge/eventMeta.ts');
-    expect(reached).toContain('core/agent/coverage/items.ts');
+    expect(reached).toContain('semantics/coverage/items.ts');
   });
 
   // Still wider than the design's list, named for later: `coverage/read.ts` · `strip` (the one
   // owner of the record-only strip) imports `coverage/absent.ts` for `coverageOfAbsence` /
-  // `tryInstead*`, and `absent.ts` imports `core/tools.ts` (tool-name checks at the mint). The
+  // `tryInstead*`, and `absent.ts` imports `lib/toolName.ts` (tool-name checks at the mint). The
   // recognizer (`recognize.ts`) and the evidence cap (`evidence/limits.ts`) are leaves now; moving
   // the absence READERS out of the mint is the next cut. No clock, network or provider is reached.
   it('its direct edges out of the folder are exactly the named owners', () => {
@@ -119,14 +119,14 @@ describe('IMPORT-GRAPH FENCE', () => {
       'core/agent/arguments/serve.ts', // assumedLinesFor — the ONE reading of this turn's assumed values
       'core/agent/assessment/assess.ts', // assessAnswer — the ONE fold of the answer's standing
       'core/agent/assessment/compose.ts', // standingLineOf + its inputs — the ONE composer of the standing line
-      'core/agent/coverage/answer.ts', // COVERAGE_BLOCK_HEADING / ASSUMED_BLOCK_HEADING — the appended section's headings
-      'core/agent/coverage/emptiness.ts', // readEmptiness / rowsAtProblem — the ONE emptiness reader
-      'core/agent/coverage/read.ts', // strip — the ONE owner of what the record-only strip serves
+      'core/agent/emptiness.ts', // readEmptiness / rowsAtProblem — the ONE emptiness reader
       'core/agent/evidence/limits.ts', // MAX_REPORTED_VALUES — the event's cap, a leaf
       'lib/plainLine.ts', // plainLineProblem — the one "plain visible line" rule for labels
       'lib/saidByPerson.ts', // isSaidByPerson — the ONE rule for which history entry a person wrote (G17)
       'lib/toolBytes.ts', // toolBytesOf — the ONE owner of where a tool's own words end in a result
       'redaction/marker.ts', // servedUnderPolicy / isPlaceholder — the ONE sign a record was served under a policy, a leaf
+      'semantics/coverage/answer.ts', // COVERAGE_BLOCK_HEADING / ASSUMED_BLOCK_HEADING — the appended section's headings
+      'semantics/coverage/read.ts', // strip — the ONE owner of what the record-only strip serves
     ]);
   });
 });

@@ -211,12 +211,12 @@ export type CallOutcome =
 
 /**
  * Whether the result the MODEL read was empty, and who says so — the one
- * emptiness reader's vocabulary (`core/agent/coverage/emptiness.ts` ·
+ * emptiness reader's vocabulary (`core/agent/emptiness.ts` ·
  * `readEmptiness`), shared with the standing fold. `clarify` (a described
  * result that handed back a question and no data) joined it with that reader;
  * readers of this union skip a value they do not know.
  */
-import type { Emptiness } from '../../core/agent/coverage/emptiness.js';
+import type { Emptiness } from '../../core/agent/emptiness.js';
 export type { Emptiness };
 
 export interface ToolCallFact {

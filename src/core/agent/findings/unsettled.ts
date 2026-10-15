@@ -37,7 +37,7 @@
  *   declareCoverage`), which reads the value the tool RETURNED, or the
  *   `absence` a `requestInput` it raised declared (9.114.0,
  *   `stages/toolCalls.ts · declareRaisedAbsence`), through the one
- *   recognizer (`coverage/read.ts · readCoverageResult`), delivers the
+ *   recognizer (`semantics/coverage/read.ts · readCoverageResult`), delivers the
  *   status `'absent'` (a returned one only — a raised one is not settled),
  *   emits `tools.absent` and files the call's rows on
  *   `AgentState.coverageDeclared`. This rule never re-reads a result to
@@ -100,11 +100,15 @@
  * model rules out no such result records the bytes it always did.
  */
 
-import { readAbsence } from '../coverage/absent.js';
-import { mergeItems } from '../coverage/items.js';
-import { readCoverageLedger } from '../coverage/ledger.js';
-import { readCoverageResult, type CoverageReading } from '../coverage/read.js';
-import type { CoverageItem, DeclaredCoverage, ToolAbsence } from '../coverage/types.js';
+import { readAbsence } from '../../../semantics/coverage/absent.js';
+import { mergeItems } from '../../../semantics/coverage/items.js';
+import { readCoverageLedger } from '../../../semantics/coverage/ledger.js';
+import { readCoverageResult, type CoverageReading } from '../../../semantics/coverage/read.js';
+import type {
+  CoverageItem,
+  DeclaredCoverage,
+  ToolAbsence,
+} from '../../../semantics/coverage/types.js';
 import type { PreviousResult } from './ledger.js';
 import type { FindingsRow, StandingRow, UnsettledByAbsenceRow } from './types.js';
 
@@ -207,7 +211,7 @@ function rowOf(
 /**
  * The result the model was served for one call, read as an absence: the
  * served string's leading JSON object through the one recognizer
- * (`coverage/read.ts · readCoverageResult` — the door's own law, so the two
+ * (`semantics/coverage/read.ts · readCoverageResult` — the door's own law, so the two
  * cannot disagree about what an absence looks like), and the absence it
  * holds, bare or inside the bounding ledger (the recognizer's own order).
  * `undefined` when the model was served no absence.
@@ -242,7 +246,7 @@ function declaredFor(
  * One list, read and never trusted: `[]` for anything that is not an array,
  * each item copied as the vocabulary spells it — `{ what, why? }`, plain —
  * and an item whose `what` is not a non-blank string left out, as is a
- * `why` that says nothing (`coverage/items.ts · normalizeCoverageList`'s
+ * `why` that says nothing (`semantics/coverage/items.ts · normalizeCoverageList`'s
  * own law of a well-formed item).
  */
 function itemsOf(list: unknown): CoverageItem[] {

@@ -1,9 +1,9 @@
 /** Internal evidence-binding ports. No public configuration or recorded row. */
 import type { Assertion } from '../assertion/types.js';
 import type { ClaimLedgerRow } from '../unsupported-claim/check.js';
-import type { Coverage } from '../../core/agent/coverage/types.js';
-import type { DeclaredPeriod } from '../../core/agent/coverage/period.js';
-import type { ToolSemantics } from '../../lib/semantics/types.js';
+import type { Coverage } from '../../semantics/coverage/types.js';
+import type { DeclaredPeriod } from '../../semantics/coverage/period.js';
+import type { ToolSemantics } from '../../semantics/types.js';
 
 export interface ScopeDimension {
   readonly name: string;

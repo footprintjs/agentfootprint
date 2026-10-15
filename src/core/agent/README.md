@@ -4,10 +4,12 @@ Map: `buildAgentChart.ts`, `buildDynamicAgentChart.ts`,
 `buildAgentMessageApiChart.ts`, `buildMessageApiChart.ts`, `buildCacheSubflow.ts`,
 `buildToolRegistry.ts`, `AgentBuilder.ts`, `skillGraphDeclared.ts`,
 `skillBrains.ts`, `types.ts`.
-Walker: `assistantReplay.ts`, `toolDispatch.ts`, `toolEffects.ts`, `toolArgsValidation.ts`,
+Walker: `assistantReplay.ts`, `toolDispatch.ts`, `toolArgsValidation.ts`,
 `validators.ts`, `act.ts` (the five moments it is keyed on are `lib/moments.ts`).
 Trace: `runManifest.ts`, `integrityFindings.ts`, `watch.ts`, `toolSecurityEvents.ts`.
-Fold: `memoryRecallInjections.ts`, `toolsFromActiveSkill.ts`.
+Fold: `memoryRecallInjections.ts`, `toolsFromActiveSkill.ts`, `emptiness.ts` (which
+artifact-placed results hold no rows — the coverage primitives it reads are
+`semantics/coverage/`; the tool-result envelope grammar is `semantics/toolEffects.ts`).
 Lens: `selfCallNotice.ts`, `stagedRefs.ts` · `stagedRefsNudgeLine`,
 `presentTool.ts`, `outputEnforcement.ts` · `buildCorrectiveTurn`,
 `repeatedCall.ts` · `noteFor`, `resultCeiling.ts` · `applyResultCeiling`,

@@ -32,7 +32,7 @@
 import type { Assertion } from '../../../integrity/assertion/types.js';
 import type { ArgumentRow } from '../arguments/rows.js';
 import type { DeclaredSource } from '../arguments/sources.js';
-import type { PeriodRow } from '../coverage/period.js';
+import type { PeriodRow } from '../../../semantics/coverage/period.js';
 import type { GroundedRow, StepsUnfinishedRow } from '../assessment/witness.js';
 import type {
   CallRow,
@@ -44,7 +44,7 @@ import type {
   TimeDerivedRow,
   TimeReadingRow,
 } from '../../../time/rows.js';
-import type { CoverageItem } from '../coverage/types.js';
+import type { CoverageItem } from '../../../semantics/coverage/types.js';
 import type { ClaimVerificationRow } from './verificationTypes.js';
 
 /** The reserved optional property every SERVED tool schema carries when armed. */

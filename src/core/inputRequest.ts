@@ -1,5 +1,5 @@
-import { readAbsence } from './agent/coverage/absent.js';
-import type { ToolAbsence } from './agent/coverage/types.js';
+import { readAbsence } from '../semantics/coverage/absent.js';
+import type { ToolAbsence } from '../semantics/coverage/types.js';
 import {
   checkTimeAnswer,
   isTimeFormat,
@@ -56,7 +56,7 @@ export interface InputRequestDeclaration {
    * What the tool LOOKED AT before it asked (9.114.0): the envelope `absent()`
    * returns, when a lookup found nothing and raises this request about the
    * miss. Recognized at raise time by the one recognizer
-   * (`agent/coverage/absent.ts` · `readAbsence`) — anything it does not read
+   * (`../semantics/coverage/absent.ts` · `readAbsence`) — anything it does not read
    * is refused, and `null` is the field omitted — and filed by the dispatch
    * door at the raise, before the
    * checkpoint is returned: the same `tools.absent` event and
@@ -342,7 +342,7 @@ export function validateInputDeclaration(raw: unknown): InputRequestDeclaration 
     context = JSON.parse(json) as Readonly<Record<string, unknown>>;
   }
   // `null` is the field omitted — the coverage module's rule for a missing
-  // optional value (`agent/coverage/absent.ts` · `notGiven`): refusing it
+  // optional value (`../semantics/coverage/absent.ts` · `notGiven`): refusing it
   // would turn a question into a tool error, and it carries no miss to file.
   const absence = raw.absence == null ? undefined : recognizedAbsence(raw.absence);
   const refused = raw.refused == null ? undefined : validateRefusal(fields, raw.refused);
@@ -451,7 +451,7 @@ function landedAnswer(
 
 /**
  * The declaration's `absence`, as the ONE recognizer reads it
- * (`agent/coverage/absent.ts` · `readAbsence`) — refused, never repaired,
+ * (`../semantics/coverage/absent.ts` · `readAbsence`) — refused, never repaired,
  * when it reads nothing, so a raise cannot carry a miss the dispatch door
  * would then drop without a word. Held as handed over: it is read once, at
  * the raise, and the rows filed from it are copies

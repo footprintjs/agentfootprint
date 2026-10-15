@@ -26,8 +26,8 @@
  * minting without it. The declaration never accepts both spellings in one object.
  */
 
-import { COVERAGE_DECLARATION_KEYS } from '../../core/agent/coverage/items.js';
-import { refusal, refuseUnknownKeys } from '../../core/agent/coverage/refusal.js';
+import { COVERAGE_DECLARATION_KEYS } from './coverage/items.js';
+import { refusal, refuseUnknownKeys } from './coverage/refusal.js';
 import {
   CLARIFY_DECLARATION_KEYS,
   mintSemantics,

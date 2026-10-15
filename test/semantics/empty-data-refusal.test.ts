@@ -14,7 +14,7 @@
  *
  *   refused: `facts` is empty — if nothing matched, return absent({ what, checked }) instead.
  *
- * One core (`lib/semantics/envelope.ts` · `semanticIssues`), so both
+ * One core (`semantics/envelope.ts` · `semanticIssues`), so both
  * declaration and wire-reading paths — `describedResult()` and `readSemantics()` —
  * refuse in the same words, the `check:semantics` gate names the same fault on
  * a sample that exercises an empty branch, and a marker-bearing envelope minted
@@ -27,7 +27,7 @@
  * each path × arbitrary sibling fields: the same refusal, never the old
  * advice) · Security (the refusal quotes nothing the caller declared) ·
  * Byte identity (a well-formed envelope mints what it always minted — the
- * existing goldens, test/lib/semantics/described-result.test.ts and
+ * existing goldens, test/semantics/described-result.test.ts and
  * test/core/agent/coverage-declaration-refusals.test.ts, stay unchanged; one
  * pin here). Performance does not apply: the change is one constant message on
  * a path that already refused.
@@ -43,11 +43,11 @@ import {
   explainSemantics,
   readSemantics,
   SEMANTICS_NOTE,
-} from '../../../src/index.js';
-import { checkSemantics } from '../../../src/lib/semantics/index.js';
-import { REFUSED_PREFIX } from '../../../src/core/agent/coverage/refusal.js';
-import type { LLMMessage, LLMRequest } from '../../../src/provider-contract/types.js';
-import { mock } from '../../../src/llm-providers.js';
+} from '../../src/index.js';
+import { checkSemantics } from '../../src/semantics/index.js';
+import { REFUSED_PREFIX } from '../../src/semantics/coverage/refusal.js';
+import type { LLMMessage, LLMRequest } from '../../src/provider-contract/types.js';
+import { mock } from '../../src/llm-providers.js';
 
 const DATA_FIELDS = ['series', 'facts', 'edges'] as const;
 type DataField = (typeof DATA_FIELDS)[number];

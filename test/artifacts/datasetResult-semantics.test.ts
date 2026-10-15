@@ -9,7 +9,7 @@ import {
   withDatasetArtifacts,
 } from '../../src/index.js';
 import type { Tool, ToolExecutionContext } from '../../src/index.js';
-import { checkSemantics, coerceSemanticsCatalog } from '../../src/lib/semantics/index.js';
+import { checkSemantics, coerceSemanticsCatalog } from '../../src/semantics/index.js';
 
 function boundary(result: unknown, project: () => unknown, describeResult?: (value: any) => void) {
   const artifacts = bindArtifacts(inMemoryArtifacts(), {

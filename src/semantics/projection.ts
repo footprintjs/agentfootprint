@@ -1,7 +1,7 @@
 /** Pure preservation check at the dataset adapter boundary. No fact validation or row scan. */
-import { ABSENCE_MARKER } from '../../core/agent/coverage/absent.js';
-import { COVERAGE_MARKER } from '../../core/agent/coverage/ledger.js';
-import { readToolResultEnvelope } from '../../core/agent/toolEffects.js';
+import { ABSENCE_MARKER } from './coverage/recognize.js';
+import { COVERAGE_MARKER } from './coverage/ledger.js';
+import { readToolResultEnvelope } from './toolEffects.js';
 import { SEMANTICS_MARKER } from './types.js';
 
 export interface ProjectionIssue {

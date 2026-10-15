@@ -19,7 +19,7 @@
 
 import type { ContextRole, ContextSource } from '../../events/types.js';
 import type { SkillCachePolicy, SkillTool, SkillToolSchema } from './hostContract.js';
-import type { ToolResultStatus } from './toolOutcome.js';
+import type { ToolResultStatus } from '../../semantics/toolOutcome.js';
 import { isSaidByPerson } from '../saidByPerson.js';
 import { renderTemplate } from './promptTemplate.js';
 

@@ -8,7 +8,7 @@
  * top-level key with no `/` or `.`; unknown keys refused by name.
  */
 
-import { rowsAtProblem } from '../../core/agent/coverage/emptiness.js';
+import { rowsAtProblem } from '../../core/agent/emptiness.js';
 import { plainLineProblem } from '../plainLine.js';
 import type { AnswerAccountDeclarations } from './types.js';
 

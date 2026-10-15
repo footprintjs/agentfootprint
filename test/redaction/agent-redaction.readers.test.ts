@@ -38,7 +38,7 @@ import { servedViews } from '../../src/index.js';
 import type { AnswerAccount, Sentence } from '../../src/lib/answer-account/types.js';
 import { REDACTION_MARKER_ID, servedUnderPolicy } from '../../src/redaction/marker.js';
 import { assessLive } from '../../src/core/agent/assessment/assess.js';
-import { readEmptiness } from '../../src/core/agent/coverage/emptiness.js';
+import { readEmptiness } from '../../src/core/agent/emptiness.js';
 import { conversationPolicy, fixtureAgent, MESSAGE } from './fixture.js';
 
 /** Every sentence of an account, as template ids. */
@@ -335,7 +335,7 @@ describe('kept out is read from a positive sign, never from a value', () => {
     expect(served.account.summary.sentence.template.id).toBe('scope.keptOut');
     expect(ids.some((id) => /noList|no-list/i.test(id))).toBe(false);
     // …and the rows reader itself reads the folded keys as kept out, never as
-    // "no list" (`coverage/emptiness.ts` · `holdsKeptOutKeys`).
+    // "no list" (`agent/emptiness.ts` · `holdsKeptOutKeys`).
     const reading = readEmptiness(
       { total: 3, '[REDACTED]': '[REDACTED]' },
       { rowsAt: 'customers', keptOut: (v) => v === '[REDACTED]' },

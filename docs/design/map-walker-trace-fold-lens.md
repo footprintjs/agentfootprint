@@ -42,7 +42,7 @@ own sentence) · `src/core/` (`LLMCall.ts`, `Agent.ts`'s
 (`buildAgentChart.ts`, `buildDynamicAgentChart.ts`, `buildToolRegistry.ts`,
 `AgentBuilder.ts`, `skillGraphDeclared.ts`) · `src/lib/injection-engine/`
 (`skillGraph.ts` the compiler, plus the build-time checkers) ·
-`src/lib/semantics/` (`types.ts`, `envelope.ts`) · `src/lib/rag/` (`defineRAG`
+`src/semantics/` (`types.ts`, `envelope.ts`) · `src/lib/rag/` (`defineRAG`
 declares a read-only corpus).
 
 ### Walker — what is happening
@@ -55,7 +55,8 @@ functions — `seed.ts`, `pickEntry.ts`, `routeTurn.ts`, `window.ts`,
 `deliver.ts`, `route.ts`, `outputRetry.ts`, `reliabilityExecution.ts`,
 `prepareFinal.ts`, `breakFinal.ts`; the same folder's Lens tenants are listed
 under Lens, and it appears in exactly these two places) · `src/core/agent/`
-(`toolDispatch.ts`, `toolEffects.ts`, `toolArgsValidation.ts`, `validators.ts`) ·
+(`toolDispatch.ts`, `toolArgsValidation.ts`, `validators.ts`) · `src/semantics/`
+(`toolEffects.ts`, the tool-result envelope grammar) ·
 `src/core/agent/middleware/` (`runChain.ts` — allow / deny / ask) ·
 `src/lib/injection-engine/` (`buildInjectionEngineSubflow.ts`, one Gather →
 Evaluate → Route → Delta pass per iteration) · `src/core/runbook/`
@@ -123,7 +124,7 @@ Mixed folders carrying Lens: `src/core/slots/` (`buildSystemPromptSlot.ts`,
 under Walker: `toolCalls.ts`'s refusals, `stepNudge.ts`, `evidenceRecheck.ts`,
 `wrapUp.ts`, and the wire assembly in `callLLM.ts` · `buildCallLLMStage`) ·
 `src/core/agent/window/` (`notice.ts`, `summarize.ts`) ·
-`src/core/agent/coverage/` (`answer.ts`) · `src/core/agent/`
+`src/semantics/coverage/` (`answer.ts`) · `src/core/agent/`
 (`selfCallNotice.ts`, `stagedRefs.ts`, `presentTool.ts`, `repeatedCall.ts`,
 `resultCeiling.ts`, `outputEnforcement.ts`) · `src/lib/injection-engine/`
 (`skillToolDescriptors.ts`, `skillSteps.ts`'s sentence half,
@@ -153,7 +154,7 @@ verbatim to a debugging model by
 first three carry a `test/modelFacingScan.test.ts` LEDGER row, because that scan
 keys on a time anchor the other four do not use) ·
 `src/core/runbook/verdicts.ts` · `src/lib/rag/defineRAG.ts` ·
-`src/lib/semantics/envelope.ts` (`semanticsForModel`).
+`src/semantics/envelope.ts` (`semanticsForModel`).
 
 Second name collision: "Lens" in `src/README.md` and in `src/core/runner.ts`,
 `RunnerBase.ts`, `Agent.ts`, `translator.ts`, `LLMCall.ts` means the VIEWER

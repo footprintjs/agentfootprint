@@ -4,7 +4,7 @@ Map: `types.ts`, `items.ts`, `refusal.ts`, `absent.ts`, `ledger.ts` (what a tool
 declares), and `period.ts` (the one period shape a result declares, its one
 rule set, and the verdict row the results layer files — honesty step 7b).
 Walker: `read.ts` — the ONE reader both dispatch boundaries and the raise site
-(`../stages/toolCalls.ts` · `declareRaisedAbsence`) call.
+(`../../core/agent/stages/toolCalls.ts` · `declareRaisedAbsence`) call.
 Fold: `evidence.ts` (`absenceEvidenceProjection` — what an absence may ground)
 and `emptiness.ts` (`readEmptiness` — the ONE reader of what came back, shared by
 the answer account and the answer's standing), `period.ts` · `periodVerdict`
@@ -15,7 +15,7 @@ Lens: `answer.ts` · `composeAnswerWithCoverage`, the coverage block appended to
 a prose answer so the model cannot drop it, and `timeLimits.ts` ·
 `timeLimitLinesOf` — the time layer's limits lines of one turn (step T8), the
 ONE composition both the block (for the person) and the served time line (for
-the model, `../arguments/serve.ts` · `timeLimitsLine`) read. It renders through
+the model, `../../core/agent/arguments/serve.ts` · `timeLimitsLine`) read. It renders through
 the time layer's renderer, so it loads through `import()` only; what the lines
 SAY is read by `timeLimitFacts.ts` · `timeLimitFactsOf` (unrendered, safe on the
 synchronous graph — the Tools mount's `inputMapper` hands it across). For the
@@ -151,7 +151,7 @@ What each reader gets:
 | the model (the `af_absent` JSON)                             | `"try_instead":"Widen the window, or …"` — byte-identical to 9.112.2 | `"try_instead_tool":{"tool":"cluster_inventory","why":"it lists the collected cluster names"}`, right after `try_instead` — the author's words; the library composes no sentence for it |
 | `agentfootprint.tools.absent`                                | `tryInstead: '<the sentence>'`                                       | `tryInsteadTool: { tool, why }`, a copy                                                                                                                                                 |
 | the evidence corpus                                          | the sentence grounds                                                 | `tool` and `why` ground; `looked_for` is still the one field withheld                                                                                                                   |
-| a dataset projection's guard (`lib/semantics/projection.ts`) | a declaration no adapter may change                                  | the same                                                                                                                                                                                |
+| a dataset projection's guard (`semantics/projection.ts`) | a declaration no adapter may change                                  | the same                                                                                                                                                                                |
 | `coverageDeclared` and the appended block                    | never carried                                                        | never carried — a suggestion is advice about a call not yet made, not ground the answer stands on                                                                                       |
 
 **What this release does with the name, and what it does not.** The name is
@@ -282,7 +282,7 @@ The laws:
   account — never the model's request. `read.ts` · `servedToModel` removes
   them from every recognized envelope OBJECT: a bare absence, and a ledger —
   its own lists and, recursively, whatever it bounds (an absence, another
-  ledger, a semantic envelope). `../stages/toolCalls.ts` · `afterMoment` asks
+  ledger, a semantic envelope). `../../core/agent/stages/toolCalls.ts` · `afterMoment` asks
   it FIRST, so all five dispatch paths strip and every after-tool link is
   handed the served value. (A top-level semantic envelope is already reduced
   to `semanticsForModel`, which drops the coverage detail, before
@@ -344,10 +344,10 @@ Why: some misses cannot be answered without the person — the lookup searched
 one fabric, found nothing, and needs to be told which fabric the host is
 cabled to. So it raises `requestInput` about its miss. (A dedicated
 collection tool that asks BEFORE the query runs stays the documented shape —
-`../../pause.ts` · `requestInput`; this section is the case where a lookup
+`../../core/pause.ts` · `requestInput`; this section is the case where a lookup
 has already looked when it asks.) Before this release
 that miss left no record: the dispatch door reads coverage off a RETURNED
-value (`../stages/toolCalls.ts` · `declareCoverage`), and a pause returns its
+value (`../../core/agent/stages/toolCalls.ts` · `declareCoverage`), and a pause returns its
 checkpoint before the door is reached. No `tools.absent`, no
 `coverageDeclared` row, nothing for a coverage band — and the app could not
 file it, because the declaration's `context` rides to the model on resume,
@@ -381,7 +381,7 @@ defineTool({
 ```
 
 - **One recognizer, at raise time.** The declaration's one validator
-  (`../../inputRequest.ts` · `validateInputDeclaration`) asks
+  (`../../core/inputRequest.ts` · `validateInputDeclaration`) asks
   `absent.ts` · `readAbsence` and refuses what it does not read — an
   `InputRequestError` naming `absent()`, thrown from `requestInput`, so the
   call errors like any malformed declaration and nothing pauses. `null` is
@@ -397,7 +397,7 @@ defineTool({
   give, nothing pauses, nothing is filed, and the run goes on.
 - **Filed at the raise, by the returned path's readers, before anything is
   written for the pause.** The batch loop's pause branch
-  (`../stages/toolCalls.ts` · `declareRaisedAbsence`) runs `declareCoverage`
+  (`../../core/agent/stages/toolCalls.ts` · `declareRaisedAbsence`) runs `declareCoverage`
   over it — the same `tools.absent` payload and `coverageDeclared` row a
   lookup returning the same `absent(…)` files — and, when the tool is
   grounded (`argumentsFrom` under `noticeEmptyLookups`), the empty-lookup
@@ -417,7 +417,7 @@ defineTool({
 - **Read once, then never.** The rows are tracked state, so they ride the
   checkpoint: under `.limitsTravelWithTheAnswer()` the resumed run's answer
   carries the same block a returned miss gives. The field does not:
-  `../../inputRequest.ts` · `stampInputRequest` leaves it off, so
+  `../../core/inputRequest.ts` · `stampInputRequest` leaves it off, so
   `awaitingInput` — what the person, the model and the durable pause read —
   never carries it, and `readAwaitingInput` re-validates the same five keys.
   Nothing on resume reads it; the paused call's served result is the
@@ -439,7 +439,7 @@ defineTool({
   — a `pauseHere`/`askHuman` whose `inputRequest` never went through
   `requestInput` — leaves the committed record it always left, WHETHER OR NOT
   it carries `absence`: its error leaves the stage only after the pause
-  writes are made (`../stages/toolCalls.ts` · `writePause`), so the failed
+  writes are made (`../../core/agent/stages/toolCalls.ts` · `writePause`), so the failed
   run's record keeps the in-flight batch (the assistant turn, every sibling's
   result, the paused keys). Its error TEXT can differ from 9.113.0's where
   9.113.0 stopped first at the then-unknown `absence` key. All pinned against
@@ -447,11 +447,11 @@ defineTool({
 - **Not covered, named here so nobody reads it as covered:**
   - a raise the library refuses — a tool that pauses on any RESUMED dispatch
     (an approved middleware ask, an approved check-in, granted credential
-    consent — all three run `../stages/toolCalls.ts` ·
+    consent — all three run `../../core/agent/stages/toolCalls.ts` ·
     `resolveCredentialAndExecute`, whose pause catch refuses every pause,
     worded for a check-in): that call settles as an ERROR, and an errored
     call files no coverage on any door;
-  - the unsettled-by-absence row (`../findings/README.md`): its rule needs
+  - the unsettled-by-absence row (`../../core/agent/findings/README.md`): its rule needs
     the SERVED result to read as an absence, and a paused lookup is served
     the person's answer — so a ruling-out on it files no row, although the
     door's rows now hold its miss. The rule is unchanged;
@@ -551,7 +551,7 @@ typed routes only — never a guess:
 Two callers, one rule: the `/observe` answer account
 (`lib/answer-account/facts/calls.ts` for this run's calls,
 `lib/answer-account/facts/inView.ts` for an earlier answer's result) and the
-answer's standing (`../assessment/assess.ts` · `assessAnswer`). They read the
+answer's standing (`../../core/agent/assessment/assess.ts` · `assessAnswer`). They read the
 same bytes the same way and differ only in the door they hold (below).
 
 **The door decides, when the record holds one.** An envelope a tool returned as
@@ -658,8 +658,8 @@ return absent({
   own: `coverage(value, { period })` with no lists is accepted.
 - **`provenance` on `absent()` only** (adopted Q34; `coverage()` takes none — a
   value that comes as rows from a system of record has `describedResult()`).
-  One rule set with `describedResult()`'s: `lib/semantics/described.ts` ·
-  `mintProvenance` mints it, `lib/semantics/envelope.ts` · `provenanceIssues`
+  One rule set with `describedResult()`'s: `semantics/described.ts` ·
+  `mintProvenance` mints it, `semantics/envelope.ts` · `provenanceIssues`
   judges it — `measuredAt` and `source` both required once it is present.
   `measuredAt` is words for the model and is never parsed.
 - **Read, never repaired.** An envelope minted elsewhere (a Python helper) is
@@ -805,7 +805,7 @@ The evidence corpus is every `role: 'tool'` result. An absence's job is to say
 what was looked FOR — which in practice quotes the arguments the model passed.
 Indexed whole, an invented identifier would become **grounded** by the one
 operation that proves nothing about it: a lookup that found nothing. It is
-`evidence/frames.ts`'s argument on the tool side of the conversation.
+`../../core/agent/evidence/frames.ts`'s argument on the tool side of the conversation.
 
 The line is **tool-authored knowledge vs caller echo**, not "coverage vs the
 rest". `looked_for` is withheld and nothing else is (`evidence.ts`): the
@@ -872,10 +872,10 @@ const limits = agent.answerCoverage();
 ```
 
 One value, three readers: `AgentState.answerCoverage` (committed by the Route
-decider on the turn it picks `final` — `../stages/answerCoverage.ts` ·
+decider on the turn it picks `final` — `../../core/agent/stages/answerCoverage.ts` ·
 `withAnswerCoverage`; the Final branch cannot write back), `agent.answerCoverage()`
 (a detached copy), and `turn_end.answerCoverage` (projected by
-`../stages/prepareFinal.ts` · `prepareFinalWithLimitsAsDataStage`). All three are
+`../../core/agent/stages/prepareFinal.ts` · `prepareFinalWithLimitsAsDataStage`). All three are
 absent when no tool declared anything, so such a run commits exactly the keys it
 would have without the option. The raw rows stay in `coverageDeclared` either
 way. A prose answer is untouched, byte for byte — pinned with the typed path by
@@ -890,7 +890,7 @@ generated declarations (`test/core/agent/coverage-answer-one-fold.test.ts`).
 **The assumed values travel too.** On an agent whose inputs layer is armed (a tool
 declares `askOrAssume`), a prose answer's section carries the "Assumed" block; a
 typed answer's limits carry the same values as data — `assumed`, read from the same
-rows by the same function the block prints from (`../arguments/serve.ts` ·
+rows by the same function the block prints from (`../../core/agent/arguments/serve.ts` ·
 `assumedLinesFor`), each value in the tool's own view (`'REDACTED'` with `hidden`
 when that view hides it), and present only when a value was assumed:
 
@@ -916,7 +916,7 @@ armed: the final branch cannot write back, and one key has one writer.
 | `absent.ts`     | `absent()`, the static note, and the ONE rule set for a suggestion (`tryInsteadOfAbsence` and `tryInsteadToolOfAbsence` read by it); re-exports its recognizer                                                                                                                                |
 | `ledger.ts`     | `coverage()` and the static note; re-exports its recognizer                                                                                                                                                                                                                                   |
 | `emptiness.ts`  | the ONE reader of what came back (§ 6) — typed routes, the door the record holds, what a value's own envelope declares (`declaredByValue`), the `rowsAt` rule                                                                                                                                 |
-| `read.ts`       | the ONE reader both dispatch boundaries and the raise site (`../stages/toolCalls.ts` · `declareRaisedAbsence`) call — lifts the suggestion beside the coverage                                                                                                                                |
+| `read.ts`       | the ONE reader both dispatch boundaries and the raise site (`../../core/agent/stages/toolCalls.ts` · `declareRaisedAbsence`) call — lifts the suggestion beside the coverage                                                                                                                                |
 | `evidence.ts`   | what an absence is allowed to ground                                                                                                                                                                                                                                                          |
 | `period.ts`     | the ONE period shape (`DeclaredPeriod`), its ONE rule set (`periodProblem` — asked by every mint and every reader), the verdict (`periodVerdict`), the person's line (`periodLine`), the wire spelling as data (`PERIOD_WIRE`), and the results layer's `period` row with its checkpoint door |
 | `inProgress.ts` | the third outcome (§ 8) — the ONE rule set for `inProgress` (`readInProgressList`: the mint refuses by it, the dispatch door reads by it), the served clause and its inverse, the person's line, and the wire spelling as data (`IN_PROGRESS_WIRE`)                                           |
@@ -932,7 +932,7 @@ sidecar regex-scraped at import time. Right instinct, wrong door, our fault.
 
 They are now also published as data at the package root, in
 `canonical-notes.json` (with `SEMANTICS_NOTE` / `SEMANTICS_MARKER` from
-`lib/semantics/` and `COVERAGE_BLOCK_HEADING` from `answer.ts`).
+`semantics/` and `COVERAGE_BLOCK_HEADING` from `answer.ts`).
 **Do not hand-edit that file** — `scripts/gen-canonical-notes.mjs` regenerates
 it from the BUILT barrel on every `npm run build`, so it cannot disagree with
 the constants here, and `test/docs/canonical-notes.test.ts` fails if it does.

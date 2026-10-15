@@ -4,7 +4,7 @@ title: InProgressItem
 
 # Interface: InProgressItem
 
-Defined in: [src/core/agent/coverage/types.ts:94](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L94)
+Defined in: [src/semantics/coverage/types.ts:91](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L91)
 
 One thing the tool READ and found still RUNNING — a backup in progress, a
 replication session still synchronizing — whose outcome is therefore not
@@ -27,7 +27,7 @@ is ground it reached.
 
 > `readonly` `optional` **count?**: `number`
 
-Defined in: [src/core/agent/coverage/types.ts:102](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L102)
+Defined in: [src/semantics/coverage/types.ts:99](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L99)
 
 How many things this entry stands for — a positive whole number; omitted = one.
 
@@ -37,7 +37,7 @@ How many things this entry stands for — a positive whole number; omitted = one
 
 > `readonly` `optional` **short?**: `string`
 
-Defined in: [src/core/agent/coverage/types.ts:100](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L100)
+Defined in: [src/semantics/coverage/types.ts:97](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L97)
 
 RECORD-ONLY short form, the [CoverageItem.short](/docs/api/interfaces/CoverageItem#short) rules.
 
@@ -47,7 +47,7 @@ RECORD-ONLY short form, the [CoverageItem.short](/docs/api/interfaces/CoverageIt
 
 > `readonly` **what**: `string`
 
-Defined in: [src/core/agent/coverage/types.ts:96](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L96)
+Defined in: [src/semantics/coverage/types.ts:93](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L93)
 
 What is still running. Non-empty.
 
@@ -57,6 +57,6 @@ What is still running. Non-empty.
 
 > `readonly` `optional` **why?**: `string`
 
-Defined in: [src/core/agent/coverage/types.ts:98](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/coverage/types.ts#L98)
+Defined in: [src/semantics/coverage/types.ts:95](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L95)
 
 Since when, or what the vendor reported — optional.

@@ -355,7 +355,7 @@ describe('record-only fields — every serving path goes through the one strip',
       'core/agent/findings/unsettled.ts', // servedAbsenceOf — reads what WAS served
       'core/agent/stages/toolCalls.ts', // declareCoverage — records; afterMoment serves
       'core/runbook/coverage.ts', // foldInnerCoverage — folds declared lists upward
-      'lib/semantics/check.ts', // declaresCoverage — the build-time gate asks yes/no
+      'semantics/check.ts', // declaresCoverage — the build-time gate asks yes/no
     ];
     const found: string[] = [];
     const walk = (dir: string): void => {
@@ -372,7 +372,7 @@ describe('record-only fields — every serving path goes through the one strip',
       }
     };
     walk(SRC);
-    expect(found.filter((f) => f !== 'core/agent/coverage/read.ts').sort()).toEqual(PINNED);
+    expect(found.filter((f) => f !== 'semantics/coverage/read.ts').sort()).toEqual(PINNED);
   });
 });
 

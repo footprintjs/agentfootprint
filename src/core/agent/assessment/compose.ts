@@ -30,7 +30,7 @@
  * ## What it never does
  *
  * It never edits the model's reply. The line is appended after it by the
- * final branch's one composer (`coverage/answer.ts` ·
+ * final branch's one composer (`semantics/coverage/answer.ts` ·
  * `composeAnswerWithCoverage`), under the separator the limits block uses, and
  * only on a PROSE answer: a typed answer (`.outputSchema()`) is JSON, and the
  * builder refuses the line beside it — as it refuses the line beside

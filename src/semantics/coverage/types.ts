@@ -10,15 +10,12 @@
  * Role:    core/ layer, pure data. No behavior; TYPE-only imports (they erase
  *          at runtime): the one period shape (`period.ts`) and the one
  *          provenance shape `describedResult()` already declares
- *          (`lib/semantics/types.ts`), so an absence says its source and time
+ *          (`semantics/types.ts`), so an absence says its source and time
  *          in the same words a described result does.
  * Emits:   N/A.
  */
 
-import type {
-  DescribedResultDeclaration,
-  SemanticProvenance,
-} from '../../../lib/semantics/types.js';
+import type { DescribedResultDeclaration, SemanticProvenance } from '../types.js';
 import type { DeclaredPeriod, PeriodOnWire } from './period.js';
 
 /**

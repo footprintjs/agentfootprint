@@ -40,7 +40,7 @@ import { TIME_LINE_SOURCE } from '../../src/core/agent/arguments/serve.js';
 import { chooseReading, DEFAULT_TIME_POLICY, resolveMention } from '../../src/time/resolve.js';
 import { timeAskOf } from '../../src/time/readingAsk.js';
 import { answeredZoneOf, type TimeReadingRow } from '../../src/time/rows.js';
-import { renderTimeLimits, UNKNOWN_ZONE_LINE } from '../../src/core/agent/coverage/timeLimits.js';
+import { renderTimeLimits, UNKNOWN_ZONE_LINE } from '../../src/semantics/coverage/timeLimits.js';
 import { defaultTimeAskMessages } from '../../src/locales/timeAsk.js';
 import { readTimeContext, timeContextOf } from '../../src/time/wire.js';
 

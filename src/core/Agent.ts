@@ -315,7 +315,7 @@ import { buildRouteDeciderStage } from './agent/stages/route.js';
 import { withAnswerValidation } from './agent/stages/answerValidation.js';
 import { hasOutputMiddleware } from './agent/middleware/messagePhase.js';
 import { withAnswerCoverage } from './agent/stages/answerCoverage.js';
-import type { AnswerCoverage } from './agent/coverage/answer.js';
+import type { AnswerCoverage } from '../semantics/coverage/answer.js';
 import {
   AnswerValidationError,
   type AnswerValidationReport,

@@ -61,7 +61,7 @@ import { withMemoryRecall } from './memoryRecallInjections.js';
 import { offeredResultIds } from './findings/offer.js';
 import { readerWindowsOf } from '../../time/windows.js';
 import { clockOf } from '../../time/rows.js';
-import { timeLimitFactsOf, type TimeLimitFacts } from './coverage/timeLimitFacts.js';
+import { timeLimitFactsOf, type TimeLimitFacts } from '../../semantics/coverage/timeLimitFacts.js';
 import type { FindingsLedger } from './findings/types.js';
 import {
   breakFinalStage,
@@ -322,7 +322,7 @@ export interface AgentChartDeps {
    * The time layer is armed with the inputs layer (`.time()` over a tool that
    * declares a period, step T8). Gates ONE mount arg on the Tools branch's
    * `inputMapper`: `timeLimits`, the turn's result-check facts for the model
-   * (`coverage/timeLimitFacts.ts` · `timeLimitFactsOf`, audience `model`, off
+   * (`semantics/coverage/timeLimitFacts.ts` · `timeLimitFactsOf`, audience `model`, off
    * `parent.findingsLedger`) — value-conditional, so a turn whose reads match
    * what was asked crosses no key. The slot renders and serves them in the
    * one time line (`ToolsSlotConfig.timeLimits`); the renderer loads there,

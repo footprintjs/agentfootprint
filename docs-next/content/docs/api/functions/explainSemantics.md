@@ -6,7 +6,7 @@ title: explainSemantics
 
 > **explainSemantics**(`value`): readonly [`SemanticIssue`](/docs/api/interfaces/SemanticIssue)[] \| `undefined`
 
-Defined in: [src/lib/semantics/envelope.ts:938](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/envelope.ts#L938)
+Defined in: [src/semantics/envelope.ts:934](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/envelope.ts#L934)
 
 Name what is wrong with a value that CARRIES the marker but was not
 recognized. `undefined` for values without the marker (they are data, not

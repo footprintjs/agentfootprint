@@ -6,7 +6,7 @@ title: semanticsForModel
 
 > **semanticsForModel**(`sem`): `Record`\<`string`, `unknown`\>
 
-Defined in: [src/lib/semantics/envelope.ts:963](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/semantics/envelope.ts#L963)
+Defined in: [src/semantics/envelope.ts:959](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/envelope.ts#L959)
 
 The MODEL's view of one recognized envelope — compact and rendering-free.
 

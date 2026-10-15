@@ -104,7 +104,7 @@
 import type { LLMMessage } from '../../../provider-contract/types.js';
 import { CONTEXT_FIELD_MEANINGS } from '../../../lib/context-contract/index.js';
 import { assertionKey, type Assertion } from '../../../integrity/assertion/types.js';
-import type { CoverageItem } from '../coverage/types.js';
+import type { CoverageItem } from '../../../semantics/coverage/types.js';
 import { foldLedger, type LedgerFold } from './ledger.js';
 import { isResultMessage, servedToolCallIds, undeclaredIds } from './offer.js';
 import { FINDINGS_ANSWER_ASK } from './reserved.js';

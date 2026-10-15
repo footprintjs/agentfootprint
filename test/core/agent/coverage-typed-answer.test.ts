@@ -36,7 +36,7 @@ import {
   type DeclaredCoverage,
 } from '../../../src/index.js';
 import { mock } from '../../../src/llm-providers.js';
-import { coverageOfAnswer } from '../../../src/core/agent/coverage/index.js';
+import { coverageOfAnswer } from '../../../src/semantics/coverage/index.js';
 
 // ── Toolkit ──────────────────────────────────────────────────────────────
 

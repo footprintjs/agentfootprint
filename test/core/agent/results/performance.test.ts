@@ -20,7 +20,7 @@ import { vi } from 'vitest';
 
 import { Agent, absent, defineTool, type Tool } from '../../../../src/index.js';
 import type { LLMRequest, LLMResponse } from '../../../../src/provider-contract/types.js';
-import { periodVerdict, type DeclaredPeriod } from '../../../../src/core/agent/coverage/period.js';
+import { periodVerdict, type DeclaredPeriod } from '../../../../src/semantics/coverage/period.js';
 import { expectScalesLinearly, expectWithinTimes } from '../../../helpers/perf.js';
 
 const PERIOD: DeclaredPeriod = {

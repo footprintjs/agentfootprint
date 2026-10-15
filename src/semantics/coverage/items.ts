@@ -13,7 +13,7 @@
 
 import { isDevMode } from 'footprintjs';
 
-import { plainLineProblem } from '../../../lib/plainLine.js';
+import { plainLineProblem } from '../../lib/plainLine.js';
 
 import { refusal } from './refusal.js';
 import type { CoverageDeclaration, CoverageInput, CoverageItem } from './types.js';
@@ -99,7 +99,7 @@ const warnedTools = new Set<string>();
 
 /**
  * The item's `short` / `kind`, when each is valid — the NON-throwing reader
- * every dispatch door uses (`../stages/toolCalls.ts` · `declareCoverage`'s
+ * every dispatch door uses (`../../core/agent/stages/toolCalls.ts` · `declareCoverage`'s
  * copy), so the event and the tracked row carry the same fields.
  *
  * An invalid value is DROPPED, never repaired, and named once per tool in dev

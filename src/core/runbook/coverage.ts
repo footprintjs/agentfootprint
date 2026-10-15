@@ -24,10 +24,10 @@
  *      ground the answer does not cover).
  */
 
-import { readCoverageResult } from '../agent/coverage/read.js';
-import { mergeItems } from '../agent/coverage/items.js';
-import { COVERAGE_NOTE } from '../agent/coverage/ledger.js';
-import type { CoverageItem } from '../agent/coverage/types.js';
+import { readCoverageResult } from '../../semantics/coverage/read.js';
+import { mergeItems } from '../../semantics/coverage/items.js';
+import { COVERAGE_NOTE } from '../../semantics/coverage/ledger.js';
+import type { CoverageItem } from '../../semantics/coverage/types.js';
 import type { InnerCallRecord } from './dispatch.js';
 import type { RunbookRules } from './types.js';
 

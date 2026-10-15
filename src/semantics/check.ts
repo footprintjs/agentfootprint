@@ -28,7 +28,7 @@
  * inventory whose facts carry no render hint (useful, not provably harmful).
  */
 
-import { readCoverageResult } from '../../core/agent/coverage/read.js';
+import { readCoverageResult } from './coverage/read.js';
 import { explainSemantics, readSemantics } from './envelope.js';
 import { RESULT_CLASSES, type ToolResultClass } from './types.js';
 import {

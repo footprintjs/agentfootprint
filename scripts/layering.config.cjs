@@ -76,7 +76,9 @@ const LAYERS = [
     rank: 1,
     name: 'vocabularies',
     files: [
-      'src/lib/semantics/**',
+      // The semantic-result vocabulary and the coverage primitives (absent, coverage, period),
+      // with the tool-result envelope grammar and the outcome words: one law, one folder.
+      'src/semantics/**',
       'src/redaction/**',
       'src/thinking/**',
       'src/classify/**',
@@ -176,21 +178,7 @@ const CLOSED_FOLDERS = [
 const UPWARD_ALLOWANCES = [
   ['src/core/agent/AgentBuilder.ts', 'src/lib/trace-toolpack/selfExplain.ts'],
   ['src/core/agent/AgentBuilder.ts', 'src/tool-providers/skillScopedTools.ts'],
-  ['src/integrity/claim-binding/admit.ts', 'src/core/agent/coverage/items.ts'],
-  ['src/integrity/claim-binding/admit.ts', 'src/core/agent/coverage/period.ts'],
-  ['src/integrity/claim-binding/bindEvidence.ts', 'src/core/agent/coverage/period.ts'],
-  ['src/integrity/claim-binding/scope.ts', 'src/core/agent/coverage/period.ts'],
-  ['src/lib/injection-engine/buildInjectionEngineSubflow.ts', 'src/core/agent/toolEffects.ts'],
   ['src/lib/injection-engine/skillTools.ts', 'src/core/tools.ts'],
-  ['src/lib/semantics/check.ts', 'src/core/agent/coverage/read.ts'],
-  ['src/lib/semantics/described.ts', 'src/core/agent/coverage/items.ts'],
-  ['src/lib/semantics/described.ts', 'src/core/agent/coverage/refusal.ts'],
-  ['src/lib/semantics/envelope.ts', 'src/core/agent/coverage/items.ts'],
-  ['src/lib/semantics/envelope.ts', 'src/core/agent/coverage/period.ts'],
-  ['src/lib/semantics/envelope.ts', 'src/core/agent/coverage/refusal.ts'],
-  ['src/lib/semantics/projection.ts', 'src/core/agent/coverage/absent.ts'],
-  ['src/lib/semantics/projection.ts', 'src/core/agent/coverage/ledger.ts'],
-  ['src/lib/semantics/projection.ts', 'src/core/agent/toolEffects.ts'],
   ['src/lib/trace-toolpack/selfExplain.ts', 'src/tool-providers/skillScopedTools.ts'],
 ];
 

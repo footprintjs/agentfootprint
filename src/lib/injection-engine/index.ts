@@ -142,7 +142,7 @@ export type {
   SkillToolDescriptor,
   SkillToolSchema,
 } from './hostContract.js';
-export { TOOL_RESULT_STATUSES, type ToolResultStatus } from './toolOutcome.js';
+export { TOOL_RESULT_STATUSES, type ToolResultStatus } from '../../semantics/toolOutcome.js';
 export { useSkillGraphDevMode, type DevModeReader } from './devWarn.js';
 
 export { defineSteering, type DefineSteeringOptions } from './factories/defineSteering.js';

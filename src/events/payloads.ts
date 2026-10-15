@@ -26,8 +26,8 @@ import type { ArtifactOrigin, ArtifactSweepReason } from '../artifacts/types.js'
 import type { DatasetTimeAxis } from '../time/axis.js';
 import type { ThinkingBlock } from '../thinking/types.js';
 import type { LoopMoment } from '../lib/moments.js';
-import type { InstructionDeliveryLease, ToolResultStatus } from '../core/agent/toolEffects.js';
-import type { ToolSemantics } from '../lib/semantics/types.js';
+import type { InstructionDeliveryLease, ToolResultStatus } from '../semantics/toolEffects.js';
+import type { ToolSemantics } from '../semantics/types.js';
 import type { Basis, Expect, Standing } from '../core/agent/findings/types.js';
 import type {
   ArgumentAsked,
