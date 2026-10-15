@@ -8,9 +8,12 @@ Bun, Deno or Workers. It treats every request as untrusted browser input and
 shares nothing between requests: it builds a FRESH runner per request from your
 factory (a factory that hands back the same runner twice is refused), binds the
 thread a request names to the caller YOUR code authenticates (`threads`, a
-`ThreadBinder` — the named id is format-checked and never a key), keeps the
+`ThreadBinder` — the named id is format-checked and never a key;
+`verifiedThreads(identity)` is the ready-made one: the caller verified with the
+door's identity options, never a header read as a name), keeps the
 conversation and any paused run on the server under that binding (`sessions`,
-any session store), and allows one turn at a time per thread. It keeps
+any session store; another caller's stored conversation is not found, whether or not
+a turn is running), and allows one turn at a time per thread. It keeps
 `httpHost`'s laws: the door guard first, a body ceiling, refusals as JSON with
 their own status and code, a 500 that quotes nothing, an SSE keep-alive, a caller
 who hangs up cutting the run. A paused run is stored BEFORE the caller is told.

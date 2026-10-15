@@ -5,7 +5,7 @@
  * request's tool waits until the other's has started, so both runs are in
  * flight together. Each stream is read as the bytes its browser receives and
  * must hold only its own run: its own run id on every id it mints, one tool
- * call and one result of its own, agentfootprint's run id of its own — and,
+ * call and one result of its own, no process-wide run id at all — and,
  * under a redaction policy, neither user's marked values. The server-side
  * store keeps each conversation under its own user's key, with its own words.
  *
@@ -137,19 +137,16 @@ function expectOnlyItsOwn(stream: { events: AgUiEvent[] }, runId: string) {
       expect(id.startsWith(`${runId}/`), `${event.type} ${id}`).toBe(true);
   expect(stream.events.filter((e) => e.type === 'TOOL_CALL_START')).toHaveLength(1);
   expect(stream.events.filter((e) => e.type === 'TOOL_CALL_RESULT')).toHaveLength(1);
-  // agentfootprint's own run: one, the same on its start and its end.
-  const recordRun = stream.events[0]!.metadata?.agentfootprint?.runId;
-  expect(recordRun).toBeDefined();
-  expect(stream.events.at(-1)!.metadata?.agentfootprint?.runId).toBe(recordRun);
-  return recordRun;
+  // agentfootprint's own run ids count every run the PROCESS made: none goes
+  // out, so neither caller can count the other's runs.
+  expect(JSON.stringify(stream.events)).not.toMatch(/run-\d+-\d+/);
 }
 
 describe('two tenants at once — each request sees only its own run', () => {
   it('under a redaction policy: own ids, own call and result, no marked value of either', async () => {
     const { alice, bob, sessions } = await runBoth(true);
-    const aliceRun = expectOnlyItsOwn(alice, 'run-a');
-    const bobRun = expectOnlyItsOwn(bob, 'run-b');
-    expect(aliceRun).not.toBe(bobRun);
+    expectOnlyItsOwn(alice, 'run-a');
+    expectOnlyItsOwn(bob, 'run-b');
     for (const secret of [USERS.alice.ssn, USERS.bob.ssn]) {
       expect(alice.wire).not.toContain(secret);
       expect(bob.wire).not.toContain(secret);

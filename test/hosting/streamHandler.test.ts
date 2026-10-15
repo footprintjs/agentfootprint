@@ -391,6 +391,37 @@ describe('streamHandler — the server keeps the conversation', () => {
     expect(JSON.stringify(body)).not.toContain('shared-key');
   });
 
+  it('a caller the conversation is not hears "not found" even mid-turn — never "busy", never holding it', async () => {
+    const sessions = memorySessions();
+    // A binder bug maps bob onto alice's key.
+    const careless = {
+      bind: ({ headers }: { headers: Record<string, string> }) => ({
+        sessionId: 'shared-key',
+        identity: { principal: headers['x-user'] as string, conversationId: 'c' },
+      }),
+    };
+    const handle = streamHandler({
+      agent: () => agent('slow answer', { thinkingMs: 80 }),
+      adapter: stubAdapter(),
+      threads: careless,
+      sessions,
+      heartbeatMs: 0,
+    });
+    const alice = { headers: { 'x-user': 'alice' } };
+    await (await handle(post({ message: 'mine' }, alice))).text(); // alice owns it now
+    const running = await handle(post({ message: 'again' }, alice));
+    const bob = await handle(post({ message: 'theirs' }, { headers: { 'x-user': 'bob' } }));
+    expect(bob.status).toBe(404); // not 409: no activity oracle
+    expect(await bob.json()).toMatchObject({ code: 'ERR_SESSION_NOT_FOUND' });
+    const aliceAgain = await handle(post({ message: 'twice' }, alice));
+    expect(aliceAgain.status).toBe(409); // the owner is told it is busy
+    await running.text();
+    // Bob's refusal held nothing: alice's next turn runs.
+    const next = await handle(post({ message: 'next' }, alice));
+    expect(next.status).toBe(200);
+    await next.text();
+  });
+
   it('keeps a paused run with the protocol’s record BEFORE telling the caller, then continues it', async () => {
     const sessions = memorySessions();
     const ask = defineTool({

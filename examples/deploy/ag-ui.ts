@@ -10,8 +10,8 @@
  *                  `(request) => Promise<Response>`, that mounts in Next.js,
  *                  Hono, Bun, Deno or Workers. It builds a FRESH agent for every
  *                  request, binds the conversation the request names to the
- *                  caller YOUR code authenticates (`threads`), and keeps the
- *                  conversation on the server (`sessions`);
+ *                  caller your verifier PROVES (`verifiedThreads`), and keeps
+ *                  the conversation on the server (`sessions`);
  *   agUi()        (agentfootprint/ag-ui)   — the protocol adapter it takes: an
  *                  untrusted request → the turn, the run's served events →
  *                  AG-UI events, framed by the official `@ag-ui/encoder` (an
@@ -26,7 +26,7 @@
 
 import { Agent, defineTool, isPaused, type LLMProvider, type Tool } from '../../src/index.js';
 import { mock } from '../../src/doors/providers.js';
-import { memorySessions, streamHandler, type ThreadBinder } from '../../src/doors/hosting.js';
+import { memorySessions, streamHandler, verifiedThreads } from '../../src/doors/hosting.js';
 import { agUi, agUiSerializer, agUiSse, type AgUiEvent } from '../../src/doors/ag-ui.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
@@ -40,6 +40,9 @@ export const meta: ExampleMeta = {
   providerSlots: ['default'],
   tags: ['deploy', 'ag-ui', 'streaming', 'sse', 'protocol', 'hosting'],
 };
+
+/** The demo caller's credential — what a signed-in page sends. */
+const DEMO_TOKEN = 'demo-token-for-ada';
 
 const weather = defineTool({
   name: 'weather',
@@ -58,18 +61,13 @@ function buildAgent(provider: LLMProvider, tools: readonly Tool[] = []): Agent {
 
 // #region serve
 /**
- * YOUR authentication: who is calling. A real app verifies a session cookie or a
- * bearer token here (`verifyRequestIdentity`); this one trusts a demo header.
+ * WHO is calling — proven, never read off a header. A real app passes its IdP:
+ * `jwksIdentity({ jwksUrl, issuer, audience })` from `agentfootprint/security`.
+ * This demo verifier knows one token.
  */
-const threads: ThreadBinder = {
-  bind: ({ conversation, headers }) => {
-    const user = headers['x-demo-user'] ?? 'guest';
-    // The key is the caller's own: the same thread id from someone else is another conversation.
-    return {
-      sessionId: `${user}:${conversation}`,
-      identity: { principal: user, conversationId: conversation },
-    };
-  },
+const verify = async (token: string) => {
+  if (token !== DEMO_TOKEN) throw new Error('unknown token');
+  return { userId: 'ada' };
 };
 
 /** The whole server side: one handler, mounted at any route of any framework. */
@@ -77,7 +75,9 @@ function serve(provider: LLMProvider) {
   return streamHandler({
     agent: ({ tools }) => buildAgent(provider, tools), // fresh per request
     adapter: agUi(),
-    threads,
+    // No valid token → 401. The thread is keyed by the VERIFIED caller, so the
+    // same thread id from someone else is someone else's conversation.
+    threads: verifiedThreads({ verify }),
     sessions: memorySessions(), // sqliteSessions({ file }) to survive a restart
   });
   // Next.js:  export const POST = serve(provider);
@@ -99,7 +99,7 @@ async function turn(
       headers: {
         'content-type': 'application/json',
         accept: 'text/event-stream',
-        'x-demo-user': 'ada',
+        authorization: `Bearer ${DEMO_TOKEN}`,
       },
       body: JSON.stringify({ threadId: 'thread-1', runId, messages, tools: [], context: [] }),
     }),

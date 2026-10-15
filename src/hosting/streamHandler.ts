@@ -211,21 +211,31 @@ export function streamHandler<TRequest, TEvent>(
     return thread;
   }
 
-  /** Read what the server holds for the bound conversation — refusing one that is not the caller's. */
-  async function hold(thread: ThreadBinding | undefined): Promise<Held> {
-    if (sessions === undefined || thread === undefined) return { view: { continues: false } };
+  /**
+   * The stored conversation, when it is the caller's — refusing one that is not.
+   * Asked BEFORE anything about the conversation's activity, so a caller it is
+   * not learns "not found" and never "busy" — and never holds its turn.
+   */
+  async function ownersOnly(thread: ThreadBinding | undefined) {
+    if (sessions === undefined || thread === undefined) return undefined;
     await sessions.onWake?.(thread.sessionId, 'invoke');
     const stored = await sessions.hydrate(thread.sessionId);
-    if (stored === undefined) return { view: { continues: false } };
     // Whose conversation this is, before a line of it is read. One answer for
     // "none", "another's" and "nobody's", so a caller learns no ids.
-    if (envelopeOwner(stored) !== thread.identity?.principal) {
+    if (stored !== undefined && envelopeOwner(stored) !== thread.identity?.principal) {
       throw new WireRequestRefusal(
         'ERR_SESSION_NOT_FOUND',
         `[hosting] '${name}': that conversation is not one you can open.`,
         404,
       );
     }
+    return stored;
+  }
+
+  /** Read what the server holds for the bound conversation — under the turn's claim. */
+  async function hold(thread: ThreadBinding | undefined): Promise<Held> {
+    const stored = await ownersOnly(thread);
+    if (stored === undefined) return { view: { continues: false } };
     if (stored.format === 'flowchart-v1') {
       const paused = readPausedRun(stored);
       const record = paused.wire?.protocol === adapter.name ? paused.wire.record : undefined;
@@ -458,6 +468,9 @@ export function streamHandler<TRequest, TEvent>(
       const read = adapter.readRequest({ body, headers });
       const thread = await bind(read, headers);
       if (thread !== undefined) {
+        // Ownership first: a caller the conversation is not answered "not
+        // found" whether or not a turn is running, and never claims it.
+        await ownersOnly(thread);
         if (inFlight.has(thread.sessionId)) {
           return refusal(
             409,

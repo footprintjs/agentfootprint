@@ -145,6 +145,7 @@ export {
   type StreamHandlerOptions,
   type StreamRunner,
 } from './streamHandler.js';
+export { verifiedThreads } from './verifiedThreads.js';
 
 export { memorySessions } from './memorySessions.js';
 export {

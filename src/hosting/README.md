@@ -250,6 +250,9 @@ The rules for the verifiers themselves are in `src/adapters/identity/README.md`.
   `RunSettlement` (the run's served events out), and `ProtocolAdapter` (read an
   untrusted request, plan the turn against `HeldConversation`, open a
   translation, name a framing) with `ThreadBinder` / `StreamRunContext`.
+- `verifiedThreads.ts` — the ready-made `ThreadBinder`: the caller verified
+  with the door's identity options (never a header read as a name), the thread
+  keyed by the verified person, an unverified caller refused.
 - `refusalStatus.ts` — the ONE status table every HTTP door answers refusals
   with; `pendingAsk.ts` — the one projection of what a paused run waits on.
 

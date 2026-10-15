@@ -42,7 +42,14 @@ What the handler does, for every protocol (`StreamHandlerOptions`):
   authenticates the caller your way (a session cookie, a bearer token through
   `verifyRequestIdentity`) and answers a `ThreadBinding` — the server-side key
   (`sessionId`) and the run's `identity` — or throws a refusal the caller gets.
-  The same thread id from two callers is two conversations.
+  The same thread id from two callers is two conversations. `verifiedThreads(identity)`
+  is that binder, ready-made: it verifies the caller with the door's identity
+  options (your `verify` — `jwksIdentity` for an IdP — or a sign-in), keys the
+  thread by the VERIFIED person, names them as the run's `principal`, and refuses
+  a caller with no credential (401) — never a name read off a header.
+- **Ownership before activity.** A stored conversation that is not the caller's
+  is not found (404) — whether or not a turn is running, so a caller learns
+  nothing about another's activity and never holds their turn.
 - **The conversation lives on the server** (`sessions`, any session store —
   `memorySessions()`, `sqliteSessions()`, yours), under the bound key: what was said
   (an Agent's checkpoint) and a run paused on an answer, kept BEFORE the caller is

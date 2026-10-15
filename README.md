@@ -232,14 +232,21 @@ The flowchart, recorders, and tests don't change between dev and prod.
 
 AG-UI frontends (CopilotKit, the AG-UI Dojo, any `@ag-ui/client` app) all speak one protocol: POST a `RunAgentInput`, read a stream of typed events. An agentfootprint run is already a stream of typed events, so the only missing piece is the adapter between them — `agUi()`. Hand it to `streamHandler`, a plain `(request) => Promise<Response>` that mounts in Next.js, Hono, Bun, Deno or Workers, and the frontend shows streamed text, tool calls with their results, steps and sub-agents.
 
-A browser request is untrusted, so the handler decides nothing on its word: it builds a fresh agent for every request, binds the thread to the caller *your* code authenticates (`threads`), keeps the conversation on the server (`sessions`) and takes only the person's newest message from the page. It reads only what the run *serves*, so anything your redaction policy hides never reaches the browser.
+A browser request is untrusted, so the handler decides nothing on its word: it builds a fresh agent for every request, binds the thread to the caller *your* verifier proves (`verifiedThreads` — a checked bearer token or sign-in, never a header read as a name), keeps the conversation on the server (`sessions`) and takes only the person's newest message from the page. It reads only what the run *serves*, so anything your redaction policy hides never reaches the browser.
 
 ```ts
 // npm install agentfootprint @ag-ui/core @ag-ui/encoder
 import { Agent } from 'agentfootprint';
 import { mock } from 'agentfootprint/providers';
-import { memorySessions, streamHandler } from 'agentfootprint/hosting';
+import { memorySessions, streamHandler, verifiedThreads } from 'agentfootprint/hosting';
 import { agUi } from 'agentfootprint/ag-ui';
+
+// Who is calling — PROVEN, not claimed. A real app: jwksIdentity({ jwksUrl, issuer, audience })
+// from 'agentfootprint/security'. This demo verifier knows one token.
+const verify = async (token: string) => {
+  if (token !== 'demo-token-for-ada') throw new Error('unknown token');
+  return { userId: 'ada' };
+};
 
 const handler = streamHandler({
   // A fresh agent per request — nothing one caller's run leaves behind reaches another.
@@ -248,10 +255,7 @@ const handler = streamHandler({
       .system('Be brief.')
       .build(),
   adapter: agUi(),
-  // Who is calling is YOUR answer (verify a cookie or token here); the key is theirs.
-  threads: {
-    bind: ({ conversation, headers }) => ({ sessionId: `${headers['x-user'] ?? 'guest'}:${conversation}` }),
-  },
+  threads: verifiedThreads({ verify }), // no valid token → 401; the thread is the caller's own
   sessions: memorySessions(), // the conversation lives on the server
 }); // Next.js: export const POST = handler;
 
@@ -259,7 +263,7 @@ const handler = streamHandler({
 const response = await handler(
   new Request('http://localhost/agent', {
     method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-user': 'ada' },
+    headers: { 'content-type': 'application/json', authorization: 'Bearer demo-token-for-ada' },
     body: JSON.stringify({ threadId: 't1', runId: 'r1', messages: [{ id: 'u1', role: 'user', content: 'Hi' }] }),
   }),
 );
