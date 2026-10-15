@@ -105,7 +105,7 @@ import {
   withCurrentVocabulary,
 } from '../redaction/conversation.js';
 import { createEvictedTurnsHandle, type EvictedTurnsHandle } from './agent/window/evictedTurns.js';
-import { createReceiptDigests, type ReceiptDigests } from '../lib/time-travel/receiptDigests.js';
+import { createReceiptDigests, type ReceiptDigests } from './agent/receipt/receiptDigests.js';
 import { packRecording } from '../recorders/observability/recordingPack.js';
 import { pendingDurableWrite } from './durabilityBarrier.js';
 import {
@@ -1046,7 +1046,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  the mint at `callLLM`; nothing else about the run changes. */
   private readonly recordReceiptValue: boolean = true;
   /** The receipt memo every call of a run mints through — one per agent,
-   *  rebinding itself to each run id (`lib/time-travel/receiptDigests.ts`). */
+   *  rebinding itself to each run id (`core/agent/receipt/receiptDigests.ts`). */
   private readonly receiptDigests: ReceiptDigests = createReceiptDigests();
   private readonly answerValidationConfig?: ResolvedAnswerValidation;
 
@@ -5227,7 +5227,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // an agent with a window strategy has any, and only it hands the seam.
       ...(this.evictedTurnsHandle !== undefined && { evictedTurns: this.evictedTurnsHandle }),
       // …and the receipt memo, so a run hashes each message once rather than
-      // once per call (`lib/time-travel/receiptDigests.ts`). Only where a
+      // once per call (`core/agent/receipt/receiptDigests.ts`). Only where a
       // receipt is minted at all.
       ...(this.recordReceiptValue !== false && { receiptDigests: this.receiptDigests }),
       provider,

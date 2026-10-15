@@ -40,7 +40,7 @@ export {
   type InnerRunStore,
   type InnerRunSummary,
   type KeepsInnerRuns,
-} from './innerRunRecords.js';
+} from '../../core/innerRunRecords.js';
 export { traceDebugAgent, type TraceDebugAgentOptions } from './traceDebugAgent.js';
 export {
   buildSelfExplainSkill,

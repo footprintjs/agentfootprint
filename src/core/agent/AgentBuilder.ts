@@ -86,11 +86,7 @@ import {
   type SelfExplainOptions,
 } from '../../lib/trace-toolpack/selfExplain.js';
 import { servingConversationOf } from './servingConversation.js';
-import {
-  innerRunsOf,
-  mergeInnerRuns,
-  type InnerRunLookup,
-} from '../../lib/trace-toolpack/innerRunRecords.js';
+import { innerRunsOf, mergeInnerRuns, type InnerRunLookup } from '../innerRunRecords.js';
 import { TRACE_TOOL_NAMES } from '../../lib/traceToolNames.js';
 import { Agent } from '../Agent.js';
 import { buildSkillGraphDeclared, type SkillGraphDeclaredMap } from './skillGraphDeclared.js';

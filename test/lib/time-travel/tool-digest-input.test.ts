@@ -25,7 +25,7 @@ import {
   receiptHash,
   toolDigestInput,
   UNSERIALIZABLE,
-} from '../../../src/lib/time-travel/receipt.js';
+} from '../../../src/core/agent/receipt/receipt.js';
 import type { LLMToolSchema } from '../../../src/adapters/types.js';
 
 const RUN = 'run-1';

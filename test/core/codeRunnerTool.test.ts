@@ -25,7 +25,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { Agent, codeRunnerTool, defineTool, toolSessionsOf } from '../../src/index.js';
-import { INNER_RUN_RECORDS } from '../../src/lib/trace-toolpack/innerRunRecords.js';
+import { INNER_RUN_RECORDS } from '../../src/core/innerRunRecords.js';
 import { localCodeRunner } from '../../src/adapters/code/local.js';
 import { mock } from '../../src/llm-providers.js';
 import type { CodeResult, CodeRunner, CodeSession } from '../../src/adapters/types.js';

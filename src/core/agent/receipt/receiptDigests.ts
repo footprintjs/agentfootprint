@@ -41,7 +41,7 @@
  * Every hash a receipt carries is the hash it carried before this memo existed:
  * same preimage, same salt, same digest. A receipt minted with the memo and one
  * minted without it are byte-identical, and so is the request measurement —
- * pinned by test/lib/time-travel/receipt-incremental.test.ts.
+ * pinned by test/core/agent/receipt/receipt-incremental.test.ts.
  *
  * The one assumption a hit makes: a message's NESTED values (`toolCalls`,
  * `args`, `thinkingBlocks`) are not edited in place while the message object
@@ -104,7 +104,7 @@ export interface RunDigests extends MessageMeasureCache {
    *  `transformHashOf`. Computed by `compute` the first time only. */
   link(previous: string, digest: string, compute: () => string): string;
   /** @internal Strings the two string memos hold right now — pinned by
-   *  test/lib/time-travel/receipt-incremental.test.ts (bounded by two calls). */
+   *  test/core/agent/receipt/receipt-incremental.test.ts (bounded by two calls). */
   retained(): number;
 }
 

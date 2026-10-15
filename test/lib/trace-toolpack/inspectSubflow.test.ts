@@ -16,7 +16,7 @@ import { callTraceTool, traceToolpack } from '../../../src/lib/trace-toolpack/tr
 import { TRACE_TOOL_NAMES } from '../../../src/lib/traceToolNames';
 import type { Tool } from '../../../src/core/tools';
 import { plantedScenario, runPlantedScenario } from '../context-bisect/plantedFactFixture';
-import { innerRunStore } from '../../../src/lib/trace-toolpack/innerRunRecords';
+import { innerRunStore } from '../../../src/core/innerRunRecords';
 import { Agent } from '../../../src/core/Agent';
 import { mock } from '../../../src/adapters/llm/MockProvider';
 import { FACTS, SYSTEM, scriptedRespond } from '../recorded-chat/chatDeskFixture';

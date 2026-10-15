@@ -38,7 +38,7 @@
 import { flowChartSelector, select } from 'footprintjs';
 import type { FlowChart, TypedScope } from 'footprintjs';
 import type { LLMMessage, LLMProvider, LLMRequest } from '../../adapters/types.js';
-import type { Receipt } from '../../lib/time-travel/receipt.js';
+import type { Receipt } from './receipt/receipt.js';
 import { messageApiReceipt } from './messageApiReceipt.js';
 import { SUBFLOW_IDS, STAGE_IDS, milestoneTagsFor, RECEIPT_KEY } from '../../lib/conventions.js';
 import type { InjectionRecord } from '../../recorders/core/types.js';

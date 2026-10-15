@@ -33,8 +33,8 @@ import {
   receiptPieces,
   type Receipt,
   type SystemPieceRecord,
-} from '../../lib/time-travel/receipt.js';
-import type { ReceiptDigests } from '../../lib/time-travel/receiptDigests.js';
+} from './receipt/receipt.js';
+import type { ReceiptDigests } from './receipt/receiptDigests.js';
 
 /** What a message-API chart's `call-llm` stage hands the mint. */
 export interface MessageApiReceiptInput {
@@ -68,7 +68,7 @@ export interface MessageApiReceiptInput {
    * leave `cache-transform` off these charts.
    */
   readonly request: LLMRequest;
-  /** The chart's receipt memo (`lib/time-travel/receiptDigests.ts`), when the
+  /** The chart's receipt memo (`receipt/receiptDigests.ts`), when the
    *  chart loops: each message is then hashed once per run, not once per call.
    *  It changes no byte of the receipt. */
   readonly digests?: ReceiptDigests;

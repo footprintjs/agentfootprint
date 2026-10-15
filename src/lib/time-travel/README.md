@@ -165,6 +165,12 @@ When they agree, the record is complete: everything the model read is derivable
 from the trace. When they disagree, something reached the model that the run
 never wrote down — a defect in the record, not in the check.
 
+The two sides live apart. The receipt's WRITER — `buildReceipt`, the run's
+digest memo and the request measurement — lives with the call that mints it,
+in `core/agent/receipt/`. This folder holds the readers: `servedView.ts` ·
+`servedAt` rebuilds the request and `servedView.ts` · `receiptAt` reads the
+receipt back, and `index.ts` re-exports the writer's public names beside them.
+
 ```ts
 import { receiptAt, receiptHash, servedAt } from 'agentfootprint';
 
@@ -337,7 +343,7 @@ An agent's request at call k is call k−1's plus what the loop appended, and
 until the receipt memo the mint hashed and measured all of it again on every
 call: SHA-256 input and the request measurement grew with the square of the
 iteration count (measured with 1,000-row tool results: 30 MB hashed at 40
-iterations, the mint 48% of the run's CPU). `receiptDigests.ts` keeps, per
+iterations, the mint 48% of the run's CPU). `core/agent/receipt/receiptDigests.ts` keeps, per
 message OBJECT, what the run already derived from it — its entry hash, its
 chain digest, whether it serializes, and its measurement (counts and JSON size,
 never its text) — so each call does work in proportion to what it added.
@@ -345,7 +351,7 @@ never its text) — so each call does work in proportion to what it added.
 (JSON is compositional), checking every limit against the same running counts
 a whole walk keeps. Nothing a receipt carries changes: memo on and memo off
 mint byte-identical receipts, and the measurement equals the whole walk —
-pinned by `test/lib/time-travel/receipt-incremental.test.ts`, which also
+pinned by `test/core/agent/receipt/receipt-incremental.test.ts`, which also
 counts the SHA-256 input and UTF-8 encoding per call on a real agent run (flat
 per call; 4× the iterations, ~4× the work). The one assumption a memo hit
 makes: a message's nested values are not edited in place while the object is

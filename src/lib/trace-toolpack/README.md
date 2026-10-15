@@ -36,8 +36,9 @@ c1 answered 'first answer' in 1ms, then — reused — threw 'second call failed
 A record BELOW the run is opened by reference, through ONE implementation
 (`innerDescent.ts`: a one-slot memo, the param-shaped ask, the three-line
 frame). Two doors use it: `inspect_tool_run` (the record a chart-as-tool kept,
-`innerRunRecords.ts`) and `inspect_subflow` (a subflow mount's OWN log, read
-through footprintjs's `getSubtreeSnapshot` — `subflowRecords.ts`). The inner
+in the store the runner writes, `core/innerRunRecords.ts`) and
+`inspect_subflow` (a subflow mount's OWN log, read through footprintjs's
+`getSubtreeSnapshot` — `subflowRecords.ts`). The inner
 views are this pack's own tools over the inner record, so inner answers carry
 the same reason codes, folded from the inner record's own `initialState`.
 Inner ids are said to be inner on every answer; an outer tool handed one
@@ -77,5 +78,6 @@ INSIDE SUBFLOW sf-tools#33 — "Tools": its own log, 3 commit(s), the mount's se
   purpose. Fenced at the bundle graph by
   `test/lib/trace-toolpack/browserGraph.test.ts`.
 - `debugPrompt.ts` — the methodology text both doors share, so they cannot drift.
-- `openRecording.ts`, `lazyToolpack.ts`, `innerRunRecords.ts`, `types.ts`,
-  `index.ts`.
+- `openRecording.ts`, `lazyToolpack.ts`, `types.ts`, `index.ts`. The inner-run
+  store this pack reads is written by the runner and lives with it, in
+  `core/innerRunRecords.ts`; `index.ts` re-exports its names unchanged.

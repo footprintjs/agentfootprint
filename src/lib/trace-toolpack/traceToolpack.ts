@@ -64,7 +64,7 @@ import {
   safeStringify,
 } from './bounded.js';
 import { askInner, framed, innerPackSlot } from './innerDescent.js';
-import type { InnerRunRecord } from './innerRunRecords.js';
+import type { InnerRunRecord } from '../../core/innerRunRecords.js';
 import { openRecording } from './openRecording.js';
 import {
   homeMountOf,

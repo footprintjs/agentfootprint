@@ -11,7 +11,7 @@ import type { RuntimeSnapshot } from 'footprintjs';
 import type { ControlDepLookup } from 'foottrace';
 
 import type { AgentfootprintEvent } from '../../events/registry.js';
-import type { InnerRunLookup } from './innerRunRecords.js';
+import type { InnerRunLookup } from '../../core/innerRunRecords.js';
 
 /**
  * The frozen evidence of one completed run.

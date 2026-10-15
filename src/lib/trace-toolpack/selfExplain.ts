@@ -65,7 +65,7 @@ import type { AgentfootprintEvent } from '../../events/registry.js';
 import { skillScopedTools } from '../../tool-providers/skillScopedTools.js';
 import type { ToolProvider } from '../../tool-providers/types.js';
 import { SELF_EXPLAIN_BODY, SELF_EXPLAIN_WHEN } from './debugPrompt.js';
-import { innerRunsOfConversation, type InnerRunLookup } from './innerRunRecords.js';
+import { innerRunsOfConversation, type InnerRunLookup } from '../../core/innerRunRecords.js';
 import { NO_COMPLETED_RUN_MESSAGE } from '../traceToolNames.js';
 import type { TraceToolpackArtifacts, TraceToolpackOptions } from './types.js';
 

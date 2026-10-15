@@ -100,11 +100,11 @@
  * places a reader is most likely to mistake it for wire-level proof.
  */
 
-import type { LLMMessage, LLMToolSchema } from '../../adapters/types.js';
-import type { ContextRole, ContextSlot, ContextSource } from '../../events/types.js';
-import { contributingPieces } from '../../core/agent/composeRequest.js';
-import { sha256Hex } from '../sha256.js';
-import { stableJson } from '../stableJson.js';
+import type { LLMMessage, LLMToolSchema } from '../../../adapters/types.js';
+import type { ContextRole, ContextSlot, ContextSource } from '../../../events/types.js';
+import { contributingPieces } from '../composeRequest.js';
+import { sha256Hex } from '../../../lib/sha256.js';
+import { stableJson } from '../../../lib/stableJson.js';
 import { measureRequest, type RequestMeasurement } from './requestMeasurement.js';
 import type { ReceiptDigests, RunDigests } from './receiptDigests.js';
 

@@ -101,7 +101,7 @@ import {
   type InnerRunOutcome,
   type InnerRunStore,
   type KeepsInnerRuns,
-} from '../../lib/trace-toolpack/innerRunRecords.js';
+} from '../innerRunRecords.js';
 import { unionRedactionPolicies } from '../../redaction/policy.js';
 import { redactionMarker } from '../../redaction/marker.js';
 import { modelFacingState, servableSnapshot, watchRunRule } from '../servableSnapshot.js';
