@@ -1,7 +1,8 @@
 **Support** — a build-time pipeline (load, split, index) governed by one law: a
 chunk must be able to say which document and which characters it came from,
 verified rather than assumed. Nothing here runs during a walk or composes a
-sentence.
+sentence. (This folder only: `retriever/` below has its own README and its own
+role.)
 
 # rag/ — a folder of documents becomes an answering agent
 

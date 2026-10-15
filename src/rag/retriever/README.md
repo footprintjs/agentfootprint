@@ -19,5 +19,5 @@ and ate a real passage's slot.
 ## Files
 - `defineRAG.ts` — the declaration and the served block.
 - `indexDocuments.ts` — seed a vector-capable store.
-- `index.ts` — the barrel the main barrel (`src/index.ts`) re-exports; the
-  `/rag` door (`../index.ts`) does not.
+- `index.ts` — the barrel the main barrel (`src/index.ts`) re-exports; the barrel
+  behind the `/rag` door (`../index.ts`, re-exported by `src/doors/rag.ts`) does not.

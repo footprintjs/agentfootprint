@@ -18,11 +18,11 @@
  *
  * WHERE THIS TABLE COMES FROM. The design pass that measured the folder-level import
  * cycle (a value-level SCC of 23 of the 33 folder nodes, the root `src/*.ts` modules
- * counted as one — `--json` reports it as `folderCycles`) and the order that removes it. The
- * table below is that order: each top-level folder sits at the layer it keeps. `src/lib/`
- * holds the leaves only — every feature package that once lived under it is now a
- * top-level folder of its own (the last one, the retriever declaration, is
- * `src/rag/retriever/`, inside the folder at its own layer).
+ * counted as one — `--json` reports it as `folderCycles`) and the order that removed it:
+ * the report now finds no folder in a value-level cycle. The table below is that order:
+ * each top-level folder sits at the layer it keeps. `src/lib/` holds the leaves only —
+ * each feature package left it for the top-level folder at its own layer (the last, the
+ * retriever declaration, into `rag/` as `src/rag/retriever/`).
  *
  *   L0  leaves          imports nothing above itself: `lib/` (its loose files, `claim/`,
  *                       `context-contract/`), events, bridge, maps, recipes, time
@@ -152,12 +152,11 @@ const LAYERS = [
 ];
 
 /**
- * Folders whose files import, at runtime, only files of the same folder set. Off until the
- * change that makes the law true turns it on.
+ * Folders whose files import, at runtime, only files of the same folder set.
  *
  * `lib` — the leaves every layer agrees on (its loose files, `claim/`, `context-contract/`)
  * import nothing in `src/` outside themselves. `lib/` has no feature subfolders any more:
- * each one left for a top-level folder of its own, at its own layer.
+ * each one left for the top-level folder at its own layer.
  *
  * `time` — the time layer (instants, ranges, zones, the run clock, the readers) is
  * self-contained: every layer that speaks about time imports it, and it imports none of them.
