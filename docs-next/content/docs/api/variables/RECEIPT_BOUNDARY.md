@@ -25,7 +25,7 @@ stages call it since 9.91.0: the agent charts' (`stages/callLLM.ts`),
 `messageApiReceipt.ts`. Three things sit downstream of that call and none of them is on the
 record: a provider decorated by the consumer (`complete()` wrapping
 `complete()`), a vendor adapter's own serializer, and the vendor's
-server-side defaults. `test/lib/time-travel/receipt-conformance.test.ts`
+server-side defaults. `test/time-travel/receipt-conformance.test.ts`
 reproduces the first of those — a decorator that appends a system suffix and
 a ghost tool after the mint, with `cache.transform` still reading
 `'unchanged'`, correctly.

@@ -6,7 +6,7 @@ title: UNGAPPED_FIELDS
 
 > `const` **UNGAPPED\_FIELDS**: `Readonly`\<`Record`\<`string`, `string`\>\>
 
-Defined in: [src/lib/time-travel/servedView.ts:788](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/servedView.ts#L788)
+Defined in: [src/time-travel/servedView.ts:785](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedView.ts#L785)
 
 The fields no gap names, and the reason each one needs none — the OTHER half
 of the account.
@@ -14,7 +14,7 @@ of the account.
 WHY IT EXISTS. `SERVED_GAPS` was hand-checked against the two shapes three
 times in one release and came up short every time, because "is every field
 named by a gap?" was a question a person answered by reading. It is now a
-question a walk answers: `test/lib/time-travel/gap-catalogue-walk.test.ts`
+question a walk answers: `test/time-travel/gap-catalogue-walk.test.ts`
 enumerates every field a real `Receipt` and a real `ServedView` carry and
 requires each one to be named by a gap OR to be a key here. A field in
 neither fails, by name.

@@ -19,7 +19,7 @@ cache strategy has had it. This is the one part of a receipt that describes
 the post-strategy request rather than the pre-strategy one, and deliberately
 so: a strategy holds the whole composed request and can move a dial, and
 `params` claims in this very docstring to be what the PORT got.
-`lib/time-travel/servedView.ts` · `SERVED_GAPS` says the same from the other side —
+`time-travel/servedView.ts` · `SERVED_GAPS` says the same from the other side —
 `cache-transform` names every field the log rebuilds pre-strategy, and
 `params` is not among them.
 

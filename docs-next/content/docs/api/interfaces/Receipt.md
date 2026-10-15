@@ -146,7 +146,7 @@ Absent when nothing was dropped before this call. Since 9.93.0 that is a
 claim and not a shrug: the agent chart's window stage is the one shipped
 mechanism that drops for attention and it files every eviction here; the
 built-in slots drop nothing; `LLMCall` and the message-API charts have no
-window. It is named by the `no-receipt-on-chart` entry of `lib/time-travel/servedView.ts` ·
+window. It is named by the `no-receipt-on-chart` entry of `time-travel/servedView.ts` ·
 `SERVED_GAPS` — the one gap that can lose it, by losing the receipt — and it sat in
 `UNGAPPED_FIELDS` until this release, when its absence was universal and
 meant only that nobody had recorded a drop.
