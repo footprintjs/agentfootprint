@@ -33,6 +33,7 @@ import {
 } from '../../../src/memory-providers.js';
 import { agentCoreSessions } from '../../../src/adapters/hosting/agentcore.js';
 import { agentCoreCodeRunner } from '../../../src/adapters/code/agentcore.js';
+import { agentCoreRuntimeMcpTransport } from '../../../src/adapters/mcp/agentcoreRuntime/transport.js';
 import { cloudwatchObservability } from '../../../src/adapters/observability/cloudwatch.js';
 import { xrayObservability } from '../../../src/adapters/observability/xray.js';
 import { bedrockEmbedder } from '../../../src/embedders/index.js';
@@ -263,6 +264,39 @@ describe('AWS adapters dispatch exactly the commands they are pinned to', () => 
     // output would report a clean run that "printed nothing" — the silent
     // success this whole class of bug wears.
     await expect(session.execute({ code: 'x' })).rejects.toThrow(/accessDeniedException/);
+  });
+
+  it('agentCoreRuntimeMcpTransport — InvokeAgentRuntime, the MCP headers on its own fields', async () => {
+    const row = pin('agentCoreRuntimeMcpTransport');
+    const sdk = fakeSdk(row, {
+      InvokeAgentRuntimeCommand: {
+        statusCode: 200,
+        contentType: 'application/json',
+        mcpSessionId: 'mcp-1',
+        response: { transformToByteArray: async () => new TextEncoder().encode('{}') },
+      },
+    });
+    const transport = agentCoreRuntimeMcpTransport({
+      agentRuntimeArn: 'arn:aws:bedrock-agentcore:us-west-2:123456789012:runtime/m-1',
+      region: 'us-west-2',
+      _sdk: sdk.module,
+    });
+    const res = await transport.fetch?.(transport.url, {
+      method: 'POST',
+      headers: { 'mcp-session-id': 'mcp-1', 'mcp-protocol-version': '2025-06-18' },
+      body: '{"jsonrpc":"2.0","id":1,"method":"tools/list"}',
+    });
+
+    expect(sdk.names()).toEqual(['InvokeAgentRuntimeCommand']);
+    const input = sdk.sent[0]?.input ?? {};
+    expect(input['agentRuntimeArn']).toBe(
+      'arn:aws:bedrock-agentcore:us-west-2:123456789012:runtime/m-1',
+    );
+    expect(input['mcpSessionId']).toBe('mcp-1');
+    expect(input['mcpProtocolVersion']).toBe('2025-06-18');
+    expect(typeof input['runtimeSessionId']).toBe('string');
+    expect(input['payload']).toBeInstanceOf(Uint8Array);
+    expect(res?.headers.get('mcp-session-id')).toBe('mcp-1');
   });
 
   it('BedrockAgentMemory — GetAgentMemory to read, DeleteAgentMemory to forget', async () => {

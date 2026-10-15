@@ -174,6 +174,27 @@ export const AWS_COMMAND_PINS: readonly AwsAdapterPin[] = [
       'names wherever the peer dep is installed.',
   },
   {
+    adapter: 'agentCoreRuntimeMcpTransport',
+    sources: ['src/adapters/mcp/agentcoreRuntime/invoke.ts'],
+    sdkPackage: '@aws-sdk/client-bedrock-agentcore',
+    client: 'BedrockAgentCoreClient',
+    commands: ['InvokeAgentRuntimeCommand'],
+    note:
+      'Read out of a real install of 3.1152.0 before this adapter was written. ' +
+      '`InvokeAgentRuntimeRequest` carries the MCP Streamable HTTP headers as modelled fields: ' +
+      '`mcpSessionId` (Mcp-Session-Id), `mcpProtocolVersion` (Mcp-Protocol-Version), ' +
+      '`runtimeSessionId` (X-Amzn-Bedrock-AgentCore-Runtime-Session-Id — an idempotency token, ' +
+      'so the SDK fills a FRESH random one on every call that leaves it unset, which is why the ' +
+      "'reuse' session strategy pins it), `contentType`, `accept`, plus `agentRuntimeArn`, " +
+      '`qualifier`, `accountId` and the `payload` bytes; `InvokeAgentRuntimeResponse` answers ' +
+      '`statusCode`, `contentType`, `mcpSessionId`, `mcpProtocolVersion`, `runtimeSessionId` and ' +
+      'a streaming `response`. The client has ONE auth scheme, `aws.auth#sigv4` — no bearer — ' +
+      'which is why the bearer strategy goes over HTTPS instead. No exception name is branched ' +
+      'on: the session-busy refusal an MCP runtime sends is a JSON-RPC -32005 inside an HTTP ' +
+      '200, and the 409 `RetryableConflictException` form carries `$retryable`, so the SDK ' +
+      'retries it before this adapter sees anything.',
+  },
+  {
     adapter: 'BedrockAgentMemory',
     sources: ['src/adapters/memory/bedrockAgentMemory.ts'],
     sdkPackage: '@aws-sdk/client-bedrock-agent-runtime',

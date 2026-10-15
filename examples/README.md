@@ -316,6 +316,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 94 | [`94-packed-recording.ts`](features/94-packed-recording.ts) | Packed recordings | A mock agent calls a 500-row tool twelve times. The plain recording repeats every result once per place that saw it; the packed one writes each once and reads back to the same JSON. |
 | 95 | [`95-agent-redaction.ts`](features/95-agent-redaction.ts) | Agent redaction | A mock agent looks a citizen up by SSN. Under conversationRedaction() no message, argument, result or answer text reaches the snapshot, the narrative, the events or the recording — while the model, the tool and the caller get the real values. |
 | 96 | [`96-thinking-per-model.ts`](features/96-thinking-per-model.ts) | Thinking per model | One .thinking({ budget }) on three Claude models: adaptive thinking on Opus 5.5 (no budget on the wire), budget_tokens on Haiku 4.5, and a build-time refusal for Claude 3 Haiku, which cannot think. |
+| 97 | [`97-agentcore-runtime-mcp.ts`](features/97-agentcore-runtime-mcp.ts) | MCP server hosted on AgentCore Runtime | mcpClient over agentCoreRuntimeMcpTransport: one runtime session carried across calls, and the runtime’s "session operation in progress" refusal retried instead of reaching the model as a failed tool. |
 
 ### [`canonical/`](canonical/) — end-to-end patterns
 
