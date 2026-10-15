@@ -15,7 +15,7 @@ refusal reaches the model as a failed tool call.
 ```ts
 import { agentCoreRuntimeMcpTransport, mcpClient } from 'agentfootprint/providers';
 
-// One client per conversation: 'reuse' keeps ONE runtime session per transport.
+// The default session strategy, 'per-call', is safe to share: build it once.
 const orders = await mcpClient({
   name: 'orders',
   transport: agentCoreRuntimeMcpTransport({
@@ -24,7 +24,8 @@ const orders = await mcpClient({
     // auth: 'sigv4'                       (default — IAM, through the AWS SDK)
     // auth: { bearer: agentCoreIdentity({ region: 'us-west-2' }), service: 'my-runtime-oauth' }
     //                                     (OAuth inbound auth; `service` = your OAuth2 provider)
-    // session: 'per-call'                 (no session carried — a stateless server)
+    // session: 'reuse'                    (one runtime session per CLIENT — build a
+    //                                     client per conversation, never share it)
     retry: { onRetry: ({ attempt, waitMs }) => log.info({ attempt, waitMs }, 'runtime session busy') },
   }),
 });
@@ -32,17 +33,20 @@ const agent = Agent.create({ provider, model }).tools(await orders.tools()).buil
 ```
 
 ## What it reads / what it writes
-Reads the MCP client's requests and the runtime's replies. Holds one runtime
-session id per `'reuse'` transport. Writes nothing to a run: no scope, no event,
-no sentence. A vended bearer token is used for one request and dropped.
+Reads the MCP client's requests and the runtime's replies. Under `'reuse'`,
+holds each client's connection — its runtime session id and the server's own
+session id — under a handle the transport issued (at most 256, least recently
+used forgotten first; a client's `DELETE` forgets its own). Writes nothing to a run: no scope, no event, no
+sentence. A vended bearer token is used for one request and dropped.
 
 ## The rules here
 1. **One port, three strategies.** `transport.ts` returns an `http` member of
    `McpTransport`; `mcpClient` never learns this is AgentCore. The choices are
-   strategies, one file each, composed outermost first: retry
-   (`sessionBusy.ts`) → session (`session.ts`) → auth (`invoke.ts` for SigV4,
-   the shared vending fetch for a bearer). Every retry re-applies the session
-   and is signed or vended afresh.
+   strategies, one file each, composed outermost first: session
+   (`session.ts`) → retry (`sessionBusy.ts`) → auth (`invoke.ts` for SigV4,
+   the shared vending fetch for a bearer). The session is applied once per
+   request, so every attempt of it lands in the same runtime session; every
+   attempt is signed or vended afresh.
 2. **Every AWS name is the SDK's.** The SigV4 strategy maps HTTP onto
    `InvokeAgentRuntimeRequest` / `InvokeAgentRuntimeResponse` field for field:
    `payload`, `contentType`, `accept`, `mcpSessionId`, `mcpProtocolVersion`,
@@ -53,13 +57,19 @@ no sentence. A vended bearer token is used for one request and dropped.
    runtime behind an OAuth authorizer is reached at
    `https://bedrock-agentcore.{region}.amazonaws.com/runtimes/{ARN}/invocations`
    with the token vended per request by the same code as `gatewayTransport`.
-4. **`'reuse'` pins the runtime session.** The SDK fills a FRESH random
-   `runtimeSessionId` on every call that leaves it unset; `'reuse'` chooses one
-   per transport and sends it on every request, and the MCP client carries the
-   `Mcp-Session-Id` the platform returns. One transport is one session: build a
-   client per conversation. `'per-call'` sends no session id of its own (on
-   SigV4 the SDK then fills a fresh one per call) and hides the returned one, so
-   nothing carries over; it needs a stateless server.
+4. **`'per-call'` is the default — isolation by construction.** It sends a
+   fresh runtime session id of its own with every request (`crypto.randomUUID()`,
+   never injectable — freshness is the isolation) and no `Mcp-Session-Id`, and hides the `Mcp-Session-Id` the platform returns, so nothing carries over and one client built at startup can serve
+   every user of a process. It needs a stateless server (the runtime's
+   recommended default). **`'reuse'` keeps one session per CLIENT, keyed by
+   the transport:** a request with no `Mcp-Session-Id` (a client's
+   `initialize`) opens a connection with a fresh runtime id; the server's
+   `Mcp-Session-Id` is stored with it and the client is handed a random handle
+   in its place, which every later request is translated back from. A server
+   that numbers sessions per process (every fresh microVM says `s-1`) cannot
+   put two clients in one session, and a handle the transport does not know is
+   answered 404 "Session not found" here, unsent. One client is one session
+   for whoever calls through it — build a client per conversation.
 5. **Only the session-busy refusal is retried — and only here.** `sessionBusy`
    matches ONE JSON-RPC reply with code `-32005` AND the "session operation in
    progress" message (`ConflictException` shares the code and is not
@@ -80,10 +90,43 @@ no sentence. A vended bearer token is used for one request and dropped.
 7. **POST only on the SDK path.** A GET (server-message stream) or DELETE (end a
    session) has no `InvokeAgentRuntime` form; it is answered 405 locally, which
    the MCP Streamable HTTP spec defines as "not offered" for both.
+8. **What the MCP client reads of a failure is the library's, never the
+   service's.** Every non-2xx answer, a 2xx JSON-RPC error reply and an error
+   event in a 2xx stream are rewritten from parts that cannot carry a secret
+   (`safeAnswer.ts`): the status; the AWS error type when it is a plain name;
+   `Retry-After` when it is seconds or a date; and for a JSON-RPC error its
+   integer `code`, the client's own `id`, and its `message` only when it is one
+   of the fixed sentences the MCP SDK and the AgentCore contract use — any
+   other message, and every `data`, becomes a fixed sentence. A failure with no
+   JSON-RPC reply reads `"<type> (HTTP <status>). The service's message for
+   this request was not passed on …"`. Why an allow-list: AWS quotes the whole
+   signed request on a signature mismatch (the session token among it), its
+   validation errors quote the value they refused, a proxy may echo a header —
+   and the MCP client's error text reaches the model, the history and
+   `tool_end`. Scrubbing known values out of that text misses whatever it was
+   not told about. Both auth strategies, one function, applied outside the
+   retry (which still reads the original).
+9. **One reading of an answer.** A 2xx is never handed on as its raw bytes: it
+   is classified by one rule (exactly `application/json` or
+   `text/event-stream`, UTF-8), parsed ONCE (`strictJson.ts`), checked, and
+   re-serialized — the MCP client reads the value that was checked, so no
+   crafted body can pass the check and be read as something else. Refused by
+   name, as a 502 in this library's words: a duplicated key, more than one
+   message in a body or an event, trailing data, a byte-order mark, a body
+   that is not UTF-8, a content type that is not one of the two. An event
+   stream is read event by event as it passes, by the SSE rules, and an event
+   that cannot be read cuts the stream with the same kind of refusal.
+10. **No user-delegated bearer.** `auth.mode` must be `'machine'`: the vending
+   request names no user, so a `'user'` token would be sent for whoever calls
+   through the client. For a token per user, build a transport per user whose
+   provider vends that user's token.
 
 ## Files
 - `transport.ts` — the facade: options, the endpoint URL, the composition.
 - `sessionBusy.ts` — the retry decision (one function).
-- `session.ts` — `'reuse'` and `'per-call'`.
+- `session.ts` — `'per-call'` (default) and `'reuse'`.
+- `safeAnswer.ts` — what the MCP client may read: failures rewritten, a 2xx read once and re-serialized.
+- `strictJson.ts` — the one JSON reader: duplicated keys, trailing data and a BOM refused.
+- `errorType.ts` — the bare `x-amzn-errortype` name.
 - `invoke.ts` — the SigV4 strategy over `InvokeAgentRuntimeCommand` (the only
   file that loads `@aws-sdk/client-bedrock-agentcore`).

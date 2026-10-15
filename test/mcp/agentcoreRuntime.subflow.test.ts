@@ -16,17 +16,18 @@
  *                the one small function `sessionBusy`.
  *   ISOLATION    session ids never cross a branch: each branch's requests carry
  *                its own runtime and MCP session, the two sets are disjoint, and
- *                a shared 'per-call' client sends no session id at all. For
- *                'reuse' this holds BY CONSTRUCTION — one transport per branch,
- *                each with its own pinned id — and this guards it.
+ *                a shared client on the default ('per-call') sends no session id
+ *                at all. For 'reuse' this holds BY CONSTRUCTION — one client per
+ *                branch, each its own runtime session — and this guards it.
  *   SECRECY      no credential — a bearer token, an SDK client's keys — and no
  *                session id reaches the recording (snapshot, events, structure)
  *                or the narrative: on the happy path, when the retries run out,
- *                and when the service answers a call with a 5xx.
+ *                when the service answers a call with a 5xx, and when an auth
+ *                failure's message quotes the signed request back.
  *
- * One client per branch is the documented shape for 'reuse' ("one transport is
- * one session — build one client per conversation"); the test builds exactly
- * that, and one case shows the 'per-call' alternative for a shared client.
+ * One client per branch is the documented shape for 'reuse' ("one client is one
+ * session — build one client per conversation"); the test builds exactly that,
+ * and one case shows the default, 'per-call', for a shared client.
  */
 
 import { narrative } from 'footprintjs/recorders';
@@ -121,6 +122,8 @@ async function branchClient(
     transport: agentCoreRuntimeMcpTransport({
       agentRuntimeArn: ARN,
       region: REGION,
+      // One client per branch is the documented shape for 'reuse'.
+      session: 'reuse',
       retry: {
         ...(maxAttempts !== undefined && { maxAttempts }),
         onRetry: (info) =>
@@ -299,14 +302,14 @@ describe('runtime-hosted MCP — inside a PARALLEL fan-out', () => {
     expect(told).toContain('order B-200 is shipped');
   });
 
-  it("ISOLATION — one SHARED 'per-call' client: no request carries any session id", async () => {
+  it("ISOLATION — one SHARED client on the default ('per-call'): no session carries over", async () => {
     const runtime = ordersRuntime();
     const client = await mcpClient({
       name: 'orders',
+      // No `session` option: the default is the one that is safe to share.
       transport: agentCoreRuntimeMcpTransport({
         agentRuntimeArn: ARN,
         region: REGION,
-        session: 'per-call',
         _sdk: runtime.sdk,
       }),
     });
@@ -325,7 +328,19 @@ describe('runtime-hosted MCP — inside a PARALLEL fan-out', () => {
     expect(answer['a']).toContain('order A-100 is shipped');
     expect(answer['b']).toContain('order B-200 is shipped');
     expect(runtime.attempts.every((x) => x.mcpSessionId === undefined)).toBe(true);
-    expect(runtime.attempts.every((x) => x.runtimeSessionId === undefined)).toBe(true);
+    // A fresh runtime session per request (a refused request's retries keep
+    // its one) — so the branches' calls never share one.
+    expect(runtime.attempts.every((x) => typeof x.runtimeSessionId === 'string')).toBe(true);
+    const runtimeIdsOf = (orderId: string) =>
+      new Set(
+        runtime
+          .calls()
+          .filter((c) => c.args?.['id'] === orderId)
+          .map((c) => c.runtimeSessionId),
+      );
+    const [a, b] = [runtimeIdsOf('A-100'), runtimeIdsOf('B-200')];
+    expect(a.size).toBeGreaterThan(0);
+    expect([...a].some((id) => b.has(id))).toBe(false);
   });
 });
 
@@ -389,6 +404,119 @@ describe('runtime-hosted MCP — SECRECY when it goes wrong', () => {
     for (const attempt of runtime.attempts) {
       if (attempt.runtimeSessionId) expect(written).not.toContain(attempt.runtimeSessionId);
       if (attempt.mcpSessionId) expect(written).not.toContain(attempt.mcpSessionId);
+    }
+  });
+
+  it('an auth failure that QUOTES the signed request, as a subflow: the model, record and narrative never see it', async () => {
+    const SECURITY_TOKEN = 'SECRET-SESSION-TOKEN-5d2e';
+    const runtime = fakeAgentCoreRuntime({
+      tools: [{ name: 'lookup_order', answer: () => 'never served' }],
+      sdkFailures: {
+        lookup_order: {
+          name: 'InvalidSignatureException',
+          status: 403,
+          // How AWS answers a signature mismatch: the canonical request it
+          // expected — every signed header, with its value.
+          message: (input) =>
+            'The request signature we calculated does not match the signature you provided. ' +
+            "The Canonical String for this request should have been\n'POST\n" +
+            `x-amz-security-token:${SECURITY_TOKEN}\n` +
+            `mcp-session-id:${String(input['mcpSessionId'])}\n` +
+            `x-amzn-bedrock-agentcore-runtime-session-id:${String(input['runtimeSessionId'])}'`,
+        },
+      },
+    });
+    const branch = await branchClient(runtime, 'sigv4');
+    const flow = Sequence.create().step('lookup', orderAgent('S-7', branch.tools)).build();
+    const events: AgentfootprintEvent[] = [];
+    flow.on('*', (e) => events.push(e));
+    const { answer, written } = await recorded(flow, 'where is order S-7?');
+    await branch.close();
+
+    // The control: the call really was refused, once, and the model was told
+    // WHAT failed — the type and the status.
+    expect(runtime.calls()).toHaveLength(1);
+    expect(String(answer)).toContain('InvalidSignatureException (HTTP 403)');
+    const sessionIds = runtime.attempts.flatMap((a) =>
+      [a.runtimeSessionId, a.mcpSessionId].filter((id): id is string => id !== undefined),
+    );
+    expect(sessionIds.length).toBeGreaterThan(0);
+    for (const text of [String(answer), written, JSON.stringify(events)]) {
+      expect(text).not.toContain(SECURITY_TOKEN);
+      for (const id of sessionIds) expect(text).not.toContain(id);
+    }
+  });
+
+  it('any other failure that quotes what the request carried, in a fan-out: the model and the record read only the library’s sentence', async () => {
+    const SECRET = 'SECRET-SESSION-TOKEN-7c41';
+    const runtime = fakeAgentCoreRuntime({
+      tools: [{ name: 'lookup_order', answer: () => 'never served' }],
+      sdkFailures: {
+        lookup_order: {
+          name: 'ValidationException',
+          status: 400,
+          message: (input) =>
+            `1 validation error: Value '${String(input['runtimeSessionId'])}' at ` +
+            `'runtimeSessionId' (token ${SECRET}) failed to satisfy constraint`,
+        },
+      },
+    });
+    const a = await branchClient(runtime, 'sigv4');
+    const b = await branchClient(runtime, 'sigv4');
+    const flow = Parallel.create()
+      .branch('a', orderAgent('A-100', a.tools))
+      .branch('b', orderAgent('B-200', b.tools))
+      .mergeWithFn((results) => JSON.stringify(results))
+      .build();
+    const events: AgentfootprintEvent[] = [];
+    flow.on('*', (e) => events.push(e));
+    const { answer, written } = await recorded(flow, 'look both orders up');
+    await a.close();
+    await b.close();
+
+    // The control: both calls failed, and each model was told WHAT failed.
+    expect(runtime.calls()).toHaveLength(2);
+    expect(String(answer)).toContain('ValidationException (HTTP 400)');
+    const sessionIds = runtime.attempts.flatMap((x) =>
+      [x.runtimeSessionId, x.mcpSessionId].filter((id): id is string => id !== undefined),
+    );
+    for (const text of [String(answer), written, JSON.stringify(events)]) {
+      expect(text).not.toContain(SECRET);
+      expect(text).not.toContain('failed to satisfy constraint');
+      for (const id of sessionIds) expect(text).not.toContain(id);
+    }
+  });
+
+  it('an AMBIGUOUS answer (a duplicated key) to a tool call, as a subflow: refused, the hidden value nowhere', async () => {
+    const SECRET = 'SECRET-HIDDEN-IN-A-DUPLICATE-4f1a';
+    const runtime = ordersRuntime();
+    // The platform answers the tool call with ONE body two readers could read
+    // two ways: JSON.parse keeps the last `error`, another reader the first.
+    const crafted: FakeRuntime = {
+      ...runtime,
+      https: async (input, init) => {
+        const body = typeof init?.body === 'string' ? init.body : '';
+        if (!body.includes('"tools/call"')) return runtime.https(input, init);
+        return new Response(
+          `{"jsonrpc":"2.0","id":${String((JSON.parse(body) as { id: number }).id)},` +
+            `"result":{"content":[{"type":"text","text":"fine"}]},` +
+            `"error":{"code":-32603,"message":"${SECRET}"},"error":{"code":-32603,"message":"Internal error"}}`,
+          { headers: { 'content-type': 'application/json' } },
+        );
+      },
+    };
+    const branch = await branchClient(crafted, { token: TOKEN.a });
+    const flow = Sequence.create().step('lookup', orderAgent('S-7', branch.tools)).build();
+    const events: AgentfootprintEvent[] = [];
+    flow.on('*', (e) => events.push(e));
+    const { answer, written } = await recorded(flow, 'where is order S-7?');
+    await branch.close();
+
+    // The control: the model was told the answer was refused — in the library's words.
+    expect(String(answer)).toContain('Unreadable answer');
+    for (const text of [String(answer), written, JSON.stringify(events)]) {
+      expect(text).not.toContain(SECRET);
+      expect(text).not.toContain(TOKEN.a);
     }
   });
 

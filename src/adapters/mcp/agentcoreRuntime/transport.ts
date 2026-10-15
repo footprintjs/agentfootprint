@@ -25,18 +25,23 @@
  * server and knows nothing about AgentCore. Everything AgentCore-specific sits
  * in the `fetch` it carries, composed from three choices, one file each:
  *
+ *   session (`session.ts`)      'per-call' (the default: a session per request),
+ *                               or 'reuse' (one session per MCP client, keyed by
+ *                               a handle the transport issues)
  *   retry   (`sessionBusy.ts`)  the session-busy refusal, retried with bounded
  *                               backoff by the SAME loop `mcpClient` uses for a
  *                               429 (`mcp/throttleRetry.ts` · `retryingFetchWhen`)
- *   session (`session.ts`)      'reuse' one runtime session, or 'per-call'
  *   auth    (`invoke.ts`)       'sigv4' through the AWS SDK's InvokeAgentRuntime,
  *                               or a bearer token over the documented HTTPS
  *                               endpoint — the SDK has no bearer scheme, and the
  *                               API reference says an OAuth caller must use HTTPS
  *
- * in that order, outermost first: every retry re-applies the session and is
- * signed (or vended) afresh, the ordering `mcp/throttleRetry.ts` requires. And
- * `mcpClient`'s own 429 retry still wraps the whole thing, untouched.
+ * in that order, outermost first: the session is applied once per request, so
+ * every attempt of it lands in the same runtime session, and every attempt is
+ * signed (or vended) afresh, the ordering `mcp/throttleRetry.ts` requires.
+ * What the MCP client reads of a failure is rewritten from the library's own
+ * fixed sentences and safe ids (`safeAnswer.ts`), never the service's text.
+ * `mcpClient`'s own 429 retry still wraps the whole thing.
  *
  * ── What it does NOT do ──────────────────────────────────────────────────────
  * Deploy or manage a runtime (a control-plane job), or host one (that is
@@ -65,6 +70,7 @@ import {
   type AgentCoreRuntimeSdkClient,
   type BedrockAgentCoreRuntimeSdkModule,
 } from './invoke.js';
+import { safeAnswer } from './safeAnswer.js';
 import { sessionStrategy, type AgentCoreRuntimeSession } from './session.js';
 import { sessionBusy } from './sessionBusy.js';
 
@@ -81,8 +87,13 @@ export interface AgentCoreRuntimeBearerAuth {
   readonly service?: string;
   /** OAuth scopes, when the provider uses them. */
   readonly scopes?: readonly string[];
-  /** `machine` (default) or `user`. */
-  readonly mode?: 'machine' | 'user';
+  /**
+   * `'machine'` (2-legged), the only mode. `'user'` is refused: the transport
+   * asks for its token without naming any user, so a user-delegated token
+   * would be sent for whoever calls through the client. For a token per user,
+   * build a transport per user whose provider vends that user's token.
+   */
+  readonly mode?: 'machine';
   /**
    * Your own `fetch`, called UNDERNEATH the per-request vending — an HTTP
    * agent, a proxy. It sees the final headers, the vended one included.
@@ -122,13 +133,15 @@ export interface AgentCoreRuntimeMcpTransportOptions {
   /** How requests are authenticated. Default `'sigv4'`. */
   readonly auth?: AgentCoreRuntimeAuth;
   /**
-   * Which runtime session each request lands in. Default `'reuse'`.
+   * Which runtime session each request lands in. Default `'per-call'`.
    *
-   *   - `'reuse'` — one session for the life of this transport. **Build one
-   *     client per conversation**: a client shared by two conversations is one
-   *     session — one microVM, one server state — for both.
    *   - `'per-call'` — every request in a session of its own; nothing carries
-   *     over. Needs a stateless server (the runtime's recommended default).
+   *     over, so one client can serve every user of a process. Needs a
+   *     stateless server (the runtime's recommended default).
+   *   - `'reuse'` — one session per CLIENT: each `mcpClient` built on this
+   *     transport keeps its own runtime session for its life. **Build one
+   *     client per conversation**: a client shared by two users is one
+   *     session — one microVM, one server state — for both.
    */
   readonly session?: AgentCoreRuntimeSession;
   /**
@@ -156,8 +169,6 @@ export interface AgentCoreRuntimeMcpTransportOptions {
   readonly client?: AgentCoreRuntimeSdkClient;
   /** @internal Test injection — the AWS SDK module. */
   readonly _sdk?: BedrockAgentCoreRuntimeSdkModule;
-  /** @internal Test injection — the runtime session id source for `'reuse'`. */
-  readonly _newSessionId?: () => string;
 }
 
 /** The session-busy retry's own ceilings, when the caller set none. */
@@ -181,19 +192,24 @@ export function agentCoreRuntimeMcpTransport(
 ): McpHttpTransport {
   const url = agentCoreRuntimeUrl(options);
   const send = authStrategy(options, url);
-  const session = sessionStrategy(options.session ?? 'reuse', options._newSessionId);
+  const retried = retryingFetchWhen(send, retryConfig(options.retry), sessionBusy) ?? send;
+  const session = sessionStrategy(options.session ?? 'per-call');
 
+  // The session is applied ONCE per request the MCP client makes, outside the
+  // retry: every attempt of one request goes to the same runtime session (a
+  // busy refusal is about THAT session coming up), and only the final answer
+  // binds anything.
   const sessioned: ThrottleFetch = async (input, init) => {
     const headers = new Headers(init?.headers);
-    session.request(headers);
-    return session.response(await send(input, { ...init, headers }));
+    const step = session.request(headers, (init?.method ?? 'GET').toUpperCase());
+    if ('answer' in step) return step.answer;
+    const response = await retried(input, { ...init, headers });
+    // What the MCP client may read of a failure is rewritten from safe parts —
+    // ONE rule for both auth paths, after the retry has read the original.
+    return step.settle(await safeAnswer(response));
   };
 
-  return {
-    transport: 'http',
-    url,
-    fetch: retryingFetchWhen(sessioned, retryConfig(options.retry), sessionBusy) ?? sessioned,
-  };
+  return { transport: 'http', url, fetch: sessioned };
 }
 
 /** Where a runtime's MCP endpoint is, as {@link agentCoreRuntimeUrl} needs it. */
@@ -272,6 +288,21 @@ function authStrategy(options: AgentCoreRuntimeMcpTransportOptions, url: string)
         'agentCoreRuntimeMcpTransport: `client` is the SigV4 strategy’s AWS SDK client, and ' +
           '`auth: { bearer }` sends no AWS SDK request — the SDK cannot carry a bearer token, ' +
           'so this path is plain HTTPS. Remove `client`, or use `auth: "sigv4"`.',
+      );
+    }
+    if (auth.mode !== undefined && auth.mode !== 'machine') {
+      // The vending request names no user: it carries `service`, `scopes` and
+      // `mode`, never an identity or the user's own token. A user-delegated
+      // token asked for that way belongs to nobody in particular — and would be
+      // sent for whoever calls through the client.
+      throw new TypeError(
+        `agentCoreRuntimeMcpTransport: \`auth.mode\` must be 'machine' — got ${describe(
+          auth.mode,
+        )}. ` +
+          'This transport asks its provider for a token without naming any user, so a ' +
+          'user-delegated token would be sent for whoever calls through the client. Leave ' +
+          '`mode` unset for the client credential; for a token per user, build a transport per ' +
+          'user whose `bearer` provider vends that user’s token.',
       );
     }
     // The Gateway's vending fetch, reused as is: the token is vended per

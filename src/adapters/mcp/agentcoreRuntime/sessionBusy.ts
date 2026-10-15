@@ -42,6 +42,7 @@
  */
 
 import type { RetryVerdict } from '../../../mcp/throttleRetry.js';
+import { awsErrorType } from './errorType.js';
 
 /** The JSON-RPC error code the contract gives `RetryableConflictException`. */
 export const SESSION_BUSY_CODE = -32005;
@@ -67,7 +68,7 @@ const SESSION_BUSY_MESSAGE = /session operation in progress/i;
  */
 export async function sessionBusy(response: Response): Promise<RetryVerdict | undefined> {
   if (response.status === 409) {
-    return errorTypeOf(response) === SESSION_BUSY_TYPE ? {} : undefined;
+    return awsErrorType(response.headers) === SESSION_BUSY_TYPE ? {} : undefined;
   }
   if (response.status !== 200) return undefined;
   if (!isJson(response.headers.get('content-type'))) return undefined;
@@ -102,17 +103,6 @@ export function isSessionBusyReply(body: unknown): boolean {
   return (
     code === SESSION_BUSY_CODE && typeof message === 'string' && SESSION_BUSY_MESSAGE.test(message)
   );
-}
-
-/**
- * The error type an AWS REST answer names in `x-amzn-errortype` — which may
- * carry a `:` suffix (a URL) or a `namespace#` prefix; both are trimmed.
- */
-function errorTypeOf(response: Response): string | undefined {
-  const raw = response.headers.get('x-amzn-errortype');
-  if (raw === null) return undefined;
-  const withoutSuffix = raw.split(':')[0] ?? '';
-  return withoutSuffix.slice(withoutSuffix.lastIndexOf('#') + 1).trim();
 }
 
 /** `application/json`, with or without parameters, in any case. */

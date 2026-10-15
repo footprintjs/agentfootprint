@@ -185,14 +185,16 @@ export const AWS_COMMAND_PINS: readonly AwsAdapterPin[] = [
       '`mcpSessionId` (Mcp-Session-Id), `mcpProtocolVersion` (Mcp-Protocol-Version), ' +
       '`runtimeSessionId` (X-Amzn-Bedrock-AgentCore-Runtime-Session-Id — an idempotency token, ' +
       'so the SDK fills a FRESH random one on every call that leaves it unset, which is why the ' +
-      "'reuse' session strategy pins it), `contentType`, `accept`, plus `agentRuntimeArn`, " +
+      "'reuse' session strategy sets it), `contentType`, `accept`, plus `agentRuntimeArn`, " +
       '`qualifier`, `accountId` and the `payload` bytes; `InvokeAgentRuntimeResponse` answers ' +
       '`statusCode`, `contentType`, `mcpSessionId`, `mcpProtocolVersion`, `runtimeSessionId` and ' +
       'a streaming `response`. The client has ONE auth scheme, `aws.auth#sigv4` — no bearer — ' +
-      'which is why the bearer strategy goes over HTTPS instead. No exception name is branched ' +
-      'on: the session-busy refusal an MCP runtime sends is a JSON-RPC -32005 inside an HTTP ' +
-      '200, and the 409 `RetryableConflictException` form carries `$retryable`, so the SDK ' +
-      'retries it before this adapter sees anything.',
+      'which is why the bearer strategy goes over HTTPS instead. The client is built with ' +
+      '`maxAttempts: 1`, so a thrown service exception reaches this file, which hands it on as ' +
+      'the HTTP answer (status, `x-amzn-errortype` = the exception name); the decisions on it ' +
+      'are made by the transport — the 409 `RetryableConflictException` by `sessionBusy.ts`, ' +
+      'an auth failure by its 401/403 status first (`authFailure.ts`, whose few name matches ' +
+      'are generic AWS auth errors this SDK does not model).',
   },
   {
     adapter: 'BedrockAgentMemory',

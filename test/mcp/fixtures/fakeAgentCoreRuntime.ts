@@ -76,7 +76,19 @@ export interface FakeRuntimeOptions {
    * service exception, THROWN as the real SDK throws a non-2xx answer.
    */
   readonly sdkFailures?: Readonly<
-    Record<string, { readonly name: string; readonly status: number }>
+    Record<
+      string,
+      {
+        readonly name: string;
+        readonly status: number;
+        /**
+         * The exception's message, from the command input — so a test can
+         * have the service quote the request back, as AWS does for a
+         * signature mismatch. Default `"<name> from the service"`.
+         */
+        readonly message?: (input: Record<string, unknown>) => string;
+      }
+    >
   >;
 }
 
@@ -265,7 +277,8 @@ export function fakeAgentCoreRuntime(options: FakeRuntimeOptions): FakeRuntime {
               refusedBusy: false,
             });
           }
-          throw Object.assign(new Error(`${failing.name} from the service`), {
+          const message = failing.message?.(input) ?? `${failing.name} from the service`;
+          throw Object.assign(new Error(message), {
             name: failing.name,
             $fault: failing.status >= 500 ? 'server' : 'client',
             $metadata: { httpStatusCode: failing.status },

@@ -46,9 +46,11 @@
  * an HTTPS caller would have read: its status, its error type in
  * `x-amzn-errortype`, `retry-after` when the service sent one, and as the body
  * the server's own JSON-RPC error when it sent one (the SDK spreads a body it
- * cannot model onto the exception), else the service's message. So the
- * transport's retry decision sees the 409, `mcpClient`'s 429 retry sees the
- * 429, and the MCP client reports the status. A failure with no status — the
+ * cannot model onto the exception) — never the exception's message, which can
+ * quote the signed request. What the MCP client may read of it is decided
+ * once, by `safeAnswer.ts`. So the transport's retry decision sees the 409,
+ * `mcpClient`'s 429 retry sees the 429, and the MCP client reports the
+ * status. A failure with no status — the
  * network, an abort — never reached the service as an answer, and is thrown as
  * it is.
  *
@@ -244,12 +246,14 @@ function serviceAnswerOf(err: unknown): Response | undefined {
   const retryAfter = failure.$response?.headers?.['retry-after'];
   if (typeof retryAfter === 'string') headers.set('retry-after', retryAfter);
   // The server's own JSON-RPC error when it sent one (a stateful server's 404
-  // "Session not found"), so the MCP client reads what the server said;
-  // otherwise the service's message.
+  // "Session not found"), for its code. The exception's message is never put
+  // in the answer: it can quote the signed request. What the client reads of
+  // either is decided by `safeAnswer.ts`, outside the retry.
+  const error = failure.error;
   const body =
-    failure.error !== null && typeof failure.error === 'object'
-      ? { jsonrpc: failure.jsonrpc ?? '2.0', id: failure.id ?? null, error: failure.error }
-      : { message: typeof failure.message === 'string' ? failure.message : '' };
+    error !== null && typeof error === 'object' && !Array.isArray(error)
+      ? { jsonrpc: failure.jsonrpc ?? '2.0', id: failure.id ?? null, error }
+      : {};
   return new Response(JSON.stringify(body), { status, headers });
 }
 
