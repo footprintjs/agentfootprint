@@ -109,7 +109,8 @@ function checkNamespaceVariables(scope: Readonly<Record<string, string>>): void 
           'digits (and not memoryStrategyId / actorId / sessionId).',
       );
     }
-    if (!NAMESPACE_VALUE.test(scope[key] as string)) {
+    const value = scope[key];
+    if (typeof value !== 'string' || !NAMESPACE_VALUE.test(value)) {
       throw new TypeError(
         `AgentCoreStore: the value of namespace variable ${JSON.stringify(key)} is not one ` +
           'AgentCore admits — 1–64 characters of [a-z0-9-_], starting with a letter or digit. ' +
@@ -156,7 +157,7 @@ function assertSearchWithinScope(
         `${JSON.stringify(variable)} as a path segment of its own, so it could read records ` +
         'filed under another tenant’s scope. Build `searchNamespace` from the ' +
         '`namespaceScope` it is handed, one variable per segment (e.g. ' +
-        '`({ namespaceScope }) => "/tenants/" + namespaceScope?.tenantid + "/facts"`).',
+        '"/tenants/{tenantid}/actors/{actorId}/facts").',
     );
   };
   const seen = new Set<string>();
@@ -839,7 +840,11 @@ export class AgentCoreStore implements MemoryStore {
     ids: { readonly actorId: string; readonly sessionId: string },
     given: Readonly<Record<string, string>> | undefined,
   ): string {
-    const namespaceScope = given === undefined ? undefined : frozenScope(given);
+    // An empty scope asks for nothing — the same rule writes follow
+    // (`requestedWriteOptions`) — so it is treated as no scope at all.
+    const copied = given === undefined ? undefined : frozenScope(given);
+    const namespaceScope =
+      copied === undefined || Object.keys(copied).length === 0 ? undefined : copied;
     if (namespaceScope === undefined && this.requireNamespaceScope) {
       throw new TypeError(MISSING_SCOPE('search'));
     }

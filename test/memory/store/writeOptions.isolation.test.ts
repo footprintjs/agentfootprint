@@ -562,3 +562,55 @@ describe('memory write options — a corpus is not scoped by the run', () => {
     ).toThrow(/cannot be combined with `corpus`/);
   });
 });
+
+describe('memory write options — an empty or deceptive scope is no scope', () => {
+  it('an EMPTY scope on a search is treated as missing — refused on a store that requires one', async () => {
+    const service = extractingAgentCore();
+    const store = new AgentCoreStore({
+      memoryId: 'mem-1',
+      client: service.client,
+      requireNamespaceScope: true,
+      searchNamespace: ({ actorId, namespaceScope }) =>
+        `/tenants/${namespaceScope?.['tenantid'] ?? ''}/actors/${actorId}/facts`,
+    });
+    await expect(store.search(ACME, [], { text: 'q', namespaceScope: {} })).rejects.toThrow(
+      /requireNamespaceScope/,
+    );
+    // …and through a bound store that binds only `extraction`.
+    const bound = bindWriteOptions(store, { extraction: 'skip' });
+    await expect(bound.search?.(ACME, [], { text: 'q', namespaceScope: {} })).rejects.toThrow(
+      /requireNamespaceScope/,
+    );
+    expect(service.retrieved).toEqual([]);
+  });
+
+  it('a Proxy that reports one value and returns another: the value sent is the value checked', async () => {
+    const service = extractingAgentCore();
+    let reads = 0;
+    const deceptive = new Proxy({ tenantid: 'vacme_z' } as Record<string, string>, {
+      get: (target, key) => (reads++ === 0 ? target[key as string] : 'vglobex_z'),
+    });
+    const bound = bindWriteOptions(storeOver(service.client), { namespaceScope: () => deceptive });
+    await bound.put(ACME, { id: 'e', value: 'x', version: 1 } as MemoryEntry);
+    // Whatever the Proxy answers later, the store sent the one reading that was checked.
+    const sent = service.created[0]?.extractionConfig?.namespaceVariables['tenantid'];
+    expect(['vacme_z', 'vglobex_z']).toContain(sent);
+    expect(Object.isFrozen(service.created[0]?.extractionConfig?.namespaceVariables)).toBe(true);
+  });
+
+  it('a non-string value never reaches CreateEvent — refused by rule', async () => {
+    const service = extractingAgentCore();
+    const store = storeOver(service.client);
+    const tricky = new Proxy({} as Record<string, string>, {
+      ownKeys: () => ['tenantid'],
+      getOwnPropertyDescriptor: () => ({ value: 'vacme_z', enumerable: true, configurable: true }),
+      get: () => ({ toString: () => 'vacme_z' } as unknown as string),
+    });
+    await expect(
+      store.put(ACME, { id: 'e', value: 'x', version: 1 } as MemoryEntry, {
+        namespaceScope: tricky,
+      }),
+    ).rejects.toThrow(/AgentCoreStore|namespaceScope/);
+    expect(service.created).toEqual([]);
+  });
+});

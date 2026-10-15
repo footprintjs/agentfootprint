@@ -338,10 +338,13 @@ function boundScope(
       ? config.namespaceScope(identity)
       : config.namespaceScope;
   assertScopeShape(scope);
-  assertNonEmptyScope(scope, what);
-  // A frozen copy: the scope that was checked is the scope every store sees,
-  // even if the resolver hands back an object it goes on to reuse.
-  return Object.freeze({ ...scope });
+  // Copy FIRST, then check the copy: the values checked are the values every
+  // store sees — whatever the resolver's object does afterwards, or does on a
+  // second read (a getter, a Proxy that reports one value and returns another).
+  const copy = Object.freeze({ ...scope });
+  assertScopeShape(copy);
+  assertNonEmptyScope(copy, what);
+  return copy;
 }
 
 function assertExtraction(value: unknown): void {
