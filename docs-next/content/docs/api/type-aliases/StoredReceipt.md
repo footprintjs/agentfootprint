@@ -6,7 +6,7 @@ title: StoredReceipt
 
 > **StoredReceipt** = `Omit`\<[`Receipt`](/docs/api/interfaces/Receipt), `"cache"`\> & `object`
 
-Defined in: [src/lib/time-travel/receipt.ts:469](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L469)
+Defined in: [src/core/agent/receipt/receipt.ts:469](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L469)
 
 A receipt as a READER meets it — what `receiptAt` hands back, and the shape
 every rebuild reads through (9.94.1).
@@ -16,7 +16,7 @@ knows. But a recording is older than the reader that opens it: what a
 reader is handed is what the MINTING release knew to write, and that has
 grown — `cache` came with the receipt in 9.88.0 and gained `strategy` in
 9.93.0; `omittedForAttention` has always been written only when something
-was dropped. The narrowing that admits a stored value (`servedView.ts` ·
+was dropped. The narrowing that admits a stored value (`lib/time-travel/servedView.ts` ·
 `readReceipt`) checks the basis and nothing past it, so this type says what
 that check leaves open, and the compiler — not a throw on an older
 recording — is what meets a reader that forgets.

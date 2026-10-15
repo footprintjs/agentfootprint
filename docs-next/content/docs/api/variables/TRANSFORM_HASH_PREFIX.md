@@ -6,7 +6,7 @@ title: TRANSFORM_HASH_PREFIX
 
 > `const` **TRANSFORM\_HASH\_PREFIX**: `"chain-v1:"` = `'chain-v1:'`
 
-Defined in: [src/lib/time-travel/receipt.ts:748](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/time-travel/receipt.ts#L748)
+Defined in: [src/core/agent/receipt/receipt.ts:748](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L748)
 
 The prefix a chained [Receipt.cache.transformHash](/docs/api/interfaces/Receipt#cache) carries — the NAME of
 the scheme that produced it, inside the value, so a verifier can tell the two
