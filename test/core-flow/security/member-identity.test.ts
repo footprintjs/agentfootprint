@@ -291,3 +291,59 @@ describe('composition members — every composition, deeper nesting, refusals by
     );
   });
 });
+
+describe('composition members — across a pause and resume', () => {
+  it('a resumed composition still hands every member the run’s identity — never the instance’s', async () => {
+    const store = new InMemoryStore();
+    const toolSaw: { member: string; identity?: MemoryIdentity }[] = [];
+    const { pauseHere, isPaused } = await import('../../../src/core/pause.js');
+    let asked = 0;
+    const asker = Agent.create({
+      id: 'asker',
+      provider: mock({
+        chunkDelayMs: 0,
+        respond: (req) =>
+          req.messages.some((m) => m.role === 'tool')
+            ? { content: 'approved' }
+            : { toolCalls: [{ id: `a-${++asked}`, name: 'approve', args: {} }] },
+      }),
+      model: 'mock',
+      maxIterations: 3,
+    })
+      .system('s')
+      .tool(
+        defineTool({
+          name: 'approve',
+          description: 'Asks a person.',
+          inputSchema: { type: 'object', properties: {} },
+          execute: async (_args, ctx) => {
+            toolSaw.push({ member: 'asker', identity: ctx.identity });
+            pauseHere({ question: 'Approve?' });
+            return '';
+          },
+        }),
+      )
+      .build();
+    const after = member('after', store, [], toolSaw);
+    const flow = Sequence.create({ id: 'outer' }).step('ask', asker).step('after', after).build();
+
+    // Another user runs the `after` agent on its own first — its instance now
+    // remembers that caller.
+    await after.run({
+      message: 'CAROL-OWN',
+      identity: { conversationId: 'c-carol', principal: 'carol' },
+    });
+    toolSaw.length = 0;
+
+    const paused = await flow.run({ message: 'please approve', identity: ALICE });
+    expect(isPaused(paused)).toBe(true);
+    if (!isPaused(paused)) return;
+    await flow.resume(paused.checkpoint, { approved: true });
+
+    expect(toolSaw.some((c) => c.member === 'after')).toBe(true);
+    for (const call of toolSaw) expect(call.identity).toEqual(ALICE);
+    // The resumed member wrote under Alice's conversation, not Carol's.
+    const alice = await store.list(ALICE);
+    expect(alice.entries.length).toBeGreaterThan(0);
+  });
+});
