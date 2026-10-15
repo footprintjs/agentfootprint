@@ -23,7 +23,7 @@ import { LLMCall } from '../../../src/core/LLMCall.js';
 import { Agent } from '../../../src/core/Agent.js';
 import { MockProvider } from '../../../src/adapters/llm/MockProvider.js';
 import { isPaused, pauseHere } from '../../../src/core/pause.js';
-import type { LLMProvider, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMProvider, LLMResponse } from '../../../src/provider-contract/types.js';
 
 const ok = (reply: string) =>
   LLMCall.create({ provider: new MockProvider({ reply }), model: 'm' })

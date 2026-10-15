@@ -29,7 +29,7 @@ const REPO = resolve(__dirname, '../..');
  * edge is gone; this refuses one that was ADDED. A change that frees edges deletes their
  * entries and lowers this number in the same commit; nothing raises it.
  */
-const ALLOWANCE_COUNT = 36;
+const ALLOWANCE_COUNT = 18;
 
 // ── fixtures ─────────────────────────────────────────────────────────────────
 
@@ -299,6 +299,16 @@ describe('check-layering — this repository', () => {
     expect(closed).toContain('lib (the leaves)');
     expect(closed).toContain('time');
     expect(result.closedEscapes).toEqual([]);
+  });
+
+  it('nothing below adapters/ imports it, by value or by type — the ports live in provider-contract/', () => {
+    const compiled = compileLayers(LAYERS);
+    const adaptersRank = rankOf('src/adapters/types.ts', compiled);
+    const into = [...result.upward, ...result.typeUpward]
+      .filter((e: { to: string }) => e.to.startsWith('src/adapters/'))
+      .map((e: { from: string; to: string }) => `${e.from} -> ${e.to}`);
+    expect(adaptersRank).toBe(13);
+    expect(into).toEqual([]);
   });
 
   it('the allowance list has exactly ALLOWANCE_COUNT entries — it only shrinks', () => {

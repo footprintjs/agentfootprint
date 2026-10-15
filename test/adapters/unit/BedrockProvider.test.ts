@@ -6,7 +6,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { bedrock, BedrockProvider } from '../../../src/adapters/llm/BedrockProvider.js';
-import type { LLMRequest, LLMMessage } from '../../../src/adapters/types.js';
+import type { LLMRequest, LLMMessage } from '../../../src/provider-contract/types.js';
 import { expectScalesLinearly } from '../../helpers/perf.js';
 
 interface FakeResponse {

@@ -23,7 +23,7 @@ import type {
   LLMRequest,
   LLMResponse,
   ResilienceReport,
-} from '../../../src/adapters/types.js';
+} from '../../../src/provider-contract/types.js';
 import { Agent } from '../../../src/index.js';
 import type { ErrorRetriedPayload } from '../../../src/events/payloads.js';
 

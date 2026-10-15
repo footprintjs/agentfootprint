@@ -50,7 +50,7 @@
  *   }); // { thinking: { type: 'adaptive', display: 'summarized' }, maxTokens: 4096 }
  */
 
-import type { LLMRequest } from '../types.js';
+import type { LLMRequest } from '../../provider-contract/types.js';
 import type { ThinkingMode } from '../../thinking/types.js';
 import { UnsupportedThinkingError } from '../../thinking/errors.js';
 import { anthropicThinkingMode } from './anthropicModels.js';

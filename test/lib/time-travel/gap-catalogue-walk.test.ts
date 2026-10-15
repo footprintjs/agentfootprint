@@ -220,7 +220,7 @@ import {
   type ServedGapKind,
   type ServedView,
 } from '../../../src/index.js';
-import type { LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
 import { isPaused, pauseHere } from '../../../src/core/pause.js';
 import { replayReceiptFixture } from '../../helpers/replayReceiptFixture.js';
 // The receipt-LESS shape a shipped chart still produces (9.91.0) — the public

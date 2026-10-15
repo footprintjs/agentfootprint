@@ -15,7 +15,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { foundry, foundryInferenceUrl } from '../../../src/adapters/llm/FoundryProvider.js';
 import { AZURE_AI_SCOPE } from '../../../src/adapters/identity/azure.js';
 import type { AccessTokenLike } from '../../../src/adapters/identity/azure.js';
-import type { LLMRequest } from '../../../src/adapters/types.js';
+import type { LLMRequest } from '../../../src/provider-contract/types.js';
 
 function fakeClient(recorder: { params: Array<{ model: string; stream?: boolean }> }) {
   return {

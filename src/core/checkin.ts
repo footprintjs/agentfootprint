@@ -17,7 +17,7 @@
  * `core/agent/stages/toolCalls.ts`; the events in `events/`; the store in
  * `recorders/core/CheckInRecorder.ts`.
  *
- * NOT a policy engine (the `PermissionChecker` in `adapters/types.ts` is
+ * NOT a policy engine (the `PermissionChecker` in `provider-contract/types.ts` is
  * untouched, and runs BEFORE this gate) and NOT UI. This asks a person to
  * CONSENT, with the receipts attached.
  *
@@ -27,7 +27,7 @@
  */
 
 import type { ArtifactRef } from '../artifacts/types.js';
-import type { LLMMessage } from '../adapters/types.js';
+import type { LLMMessage } from '../provider-contract/types.js';
 import type { AskComponent } from './askComponent.js';
 import type { AttributionUnit } from '../lib/influence-core/types.js';
 

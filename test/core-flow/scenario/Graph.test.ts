@@ -24,7 +24,7 @@ import { Agent } from '../../../src/core/Agent.js';
 import { LLMCall } from '../../../src/core/LLMCall.js';
 import { RunnerBase } from '../../../src/core/RunnerBase.js';
 import { isPaused, pauseHere, type RunnerPauseOutcome } from '../../../src/core/pause.js';
-import type { LLMProvider, LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMProvider, LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
 
 /** A minimal typed node runner: one stage, returns whatever `fn` returns. */
 class Step<TIn extends object, TOut> extends RunnerBase<TIn, TOut> {

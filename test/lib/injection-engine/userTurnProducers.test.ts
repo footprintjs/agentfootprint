@@ -69,7 +69,7 @@ import { describe, expect, it } from 'vitest';
 import { isLibraryAuthoredFrame, isSaidByPerson } from '../../../src/index.js';
 import { saidByPerson } from '../../../src/injection-engine.js';
 import type { Injection, InjectionContext } from '../../../src/injection-engine.js';
-import type { LLMMessage } from '../../../src/adapters/types.js';
+import type { LLMMessage } from '../../../src/provider-contract/types.js';
 import { toAnthropicMessages } from '../../../src/adapters/llm/anthropicMessageProjection.js';
 import { buildDropNotice } from '../../../src/core/agent/window/notice.js';
 import { buildSummaryMessage } from '../../../src/core/agent/window/summarize.js';

@@ -12,7 +12,7 @@ import { AnthropicProvider } from '../../../src/adapters/llm/AnthropicProvider.j
 import { browserAnthropic } from '../../../src/adapters/llm/BrowserAnthropicProvider.js';
 import { prepareAnthropicReplay } from '../../../src/adapters/llm/anthropicThinkingReplay.js';
 import { anthropicThinkingHandler } from '../../../src/thinking/AnthropicThinkingHandler.js';
-import type { LLMMessage, LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMMessage, LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
 import {
   captureAnthropicReplay,
   omitAnthropicThinking,

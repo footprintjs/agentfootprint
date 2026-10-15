@@ -19,7 +19,7 @@ import type { RedactionPolicy } from 'footprintjs';
 import { Agent, defineTool, type Tool } from '../../src/index.js';
 import { mock } from '../../src/doors/providers.js';
 import { conversationRedaction } from '../../src/doors/security.js';
-import type { LLMProvider, LLMRequest } from '../../src/adapters/types.js';
+import type { LLMProvider, LLMRequest } from '../../src/provider-contract/types.js';
 import { FIELD_NAMES, servedString } from '../../src/redaction/knownStrings.js';
 
 export const SECRET = {

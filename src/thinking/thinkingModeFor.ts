@@ -10,7 +10,7 @@
  *          is refused at build, by provider name, instead of meaning "no claim".
  */
 
-import type { LLMProvider } from '../adapters/types.js';
+import type { LLMProvider } from '../provider-contract/types.js';
 import type { ThinkingMode } from './types.js';
 
 const MODES: ReadonlySet<unknown> = new Set<ThinkingMode>(['adaptive', 'budget', 'none']);

@@ -24,7 +24,7 @@ import {
   llmRouter,
   workflow,
 } from '../../src/index.js';
-import type { LLMProvider, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMProvider, LLMResponse } from '../../src/provider-contract/types.js';
 import type { Runner } from '../../src/core/runner.js';
 import { mock } from '../../src/doors/providers.js';
 import { coverageOfExecutor } from '../../src/redaction/runRedaction.js';

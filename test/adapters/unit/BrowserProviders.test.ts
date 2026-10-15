@@ -13,7 +13,7 @@ import {
   browserOpenai,
   BrowserOpenAIProvider,
 } from '../../../src/adapters/llm/BrowserOpenAIProvider.js';
-import type { LLMRequest } from '../../../src/adapters/types.js';
+import type { LLMRequest } from '../../../src/provider-contract/types.js';
 import { expectScalesLinearly } from '../../helpers/perf.js';
 
 // ─── Fake fetch helpers ────────────────────────────────────────────

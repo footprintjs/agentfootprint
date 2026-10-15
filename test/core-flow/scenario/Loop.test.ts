@@ -6,7 +6,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { Loop } from '../../../src/core-flow/Loop.js';
 import { LLMCall } from '../../../src/core/LLMCall.js';
 import { MockProvider } from '../../../src/adapters/llm/MockProvider.js';
-import type { LLMProvider, LLMRequest } from '../../../src/adapters/types.js';
+import type { LLMProvider, LLMRequest } from '../../../src/provider-contract/types.js';
 
 /** LLM that appends a counter suffix each call — lets us see iteration progress. */
 function counterProvider(): LLMProvider {

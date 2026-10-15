@@ -41,7 +41,7 @@ import {
   refuseUnknownKeys,
   spellingMeant,
 } from '../../../src/core/agent/coverage/refusal.js';
-import type { LLMMessage, LLMRequest } from '../../../src/adapters/types.js';
+import type { LLMMessage, LLMRequest } from '../../../src/provider-contract/types.js';
 import { mock } from '../../../src/llm-providers.js';
 
 // ── Toolkit ──────────────────────────────────────────────────────────────

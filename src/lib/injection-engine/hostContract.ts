@@ -22,7 +22,7 @@
  *     to route correctly. Documentation as a type.
  *
  * WHY STRUCTURAL COPIES. `SkillToolSchema` and `SkillCachePolicy` are
- * field-for-field mirrors of `adapters/types.ts#LLMToolSchema` and
+ * field-for-field mirrors of `provider-contract/types.ts#LLMToolSchema` and
  * `cache/types.ts#CachePolicy`. Mirroring them is what lets a foreign host
  * satisfy the boundary without importing an adapter layer it does not use;
  * TypeScript's structural typing then makes the two spellings mutually
@@ -39,7 +39,7 @@
 /**
  * A tool's LLM-facing declaration — name, description, input schema.
  *
- * Structural mirror of `LLMToolSchema` (`src/adapters/types.ts`). Anything
+ * Structural mirror of `LLMToolSchema` (`src/provider-contract/types.ts`). Anything
  * that satisfies one satisfies the other.
  */
 export interface SkillToolSchema {

@@ -27,7 +27,7 @@ import type {
   ReliabilityProvider,
   ReliabilityScope,
 } from '../../src/reliability/types.js';
-import type { LLMProvider, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMProvider, LLMResponse } from '../../src/provider-contract/types.js';
 import { expectWithinReferenceUnits, measureAsync } from '../helpers/perf.js';
 import { noPolicyExecutor } from '../helpers/noPolicy.js';
 

@@ -52,7 +52,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { browserAnthropic } from '../../../src/adapters/llm/BrowserAnthropicProvider.js';
 import { REQ, rec } from './anthropicWireFixtures.js';
-import type { LLMChunk } from '../../../src/adapters/types.js';
+import type { LLMChunk } from '../../../src/provider-contract/types.js';
 
 const REFERENCE = JSON.parse(
   readFileSync(new URL('../reference/browser-anthropic-wire.json', import.meta.url), 'utf8'),

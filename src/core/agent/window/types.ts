@@ -25,7 +25,7 @@
  * {@link CompactionRetention} and {@link FoldedSpan}.
  */
 
-import type { LLMMessage, LLMProvider } from '../../../adapters/types.js';
+import type { LLMMessage, LLMProvider } from '../../../provider-contract/types.js';
 import type { Standing } from '../findings/types.js';
 
 // ─────────────────────────────────────────────────────────────────

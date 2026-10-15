@@ -101,7 +101,7 @@ import { readTimeOptions, type TimeOptions } from '../../time/clock.js';
 import { ONTOLOGY_INSTRUCTION, ONTOLOGY_INSTRUCTION_ID } from '../../ontology/instruction.js';
 import type { CompactionOptions } from './window/types.js';
 import type { WindowStrategy } from './window/strategy.js';
-import type { LLMProvider } from '../../adapters/types.js';
+import type { LLMProvider } from '../../provider-contract/types.js';
 import type { MessageMiddleware, ToolMiddleware } from './middleware/types.js';
 import { resolveAct, type ActOptions } from './act.js';
 import { resolveCompactionOptions } from './window/options.js';

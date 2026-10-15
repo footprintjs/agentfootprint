@@ -38,7 +38,7 @@
  * });
  * ```
  */
-import type { LLMProvider, LLMMessage as Message } from '../../adapters/types.js';
+import type { LLMProvider, LLMMessage as Message } from '../../provider-contract/types.js';
 import type { FactExtractArgs, FactExtractor } from './extractor.js';
 import type { Fact } from './types.js';
 import { asConfidence } from './types.js';

@@ -22,7 +22,7 @@ import { Agent } from '../../../src/index.js';
 import { mock } from '../../../src/llm-providers.js';
 import { defineSkill, skillGraph } from '../../../src/injection-engine.js';
 import { buildSkillGraphDeclared } from '../../../src/core/agent/skillGraphDeclared.js';
-import type { LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
 
 const inventory = (title?: string) =>
   defineSkill({

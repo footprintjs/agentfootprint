@@ -24,7 +24,7 @@
 import { describe, expect, it } from 'vitest';
 import { Agent } from '../../src/core/Agent.js';
 import { ReliabilityFailFastError } from '../../src/reliability/types.js';
-import type { LLMProvider, LLMResponse, LLMRequest } from '../../src/adapters/types.js';
+import type { LLMProvider, LLMResponse, LLMRequest } from '../../src/provider-contract/types.js';
 
 // ─── Test helpers ─────────────────────────────────────────────────
 

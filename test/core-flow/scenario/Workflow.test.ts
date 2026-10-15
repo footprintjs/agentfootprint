@@ -25,7 +25,7 @@ import { LLMCall } from '../../../src/core/LLMCall.js';
 import { Agent } from '../../../src/core/Agent.js';
 import { RunnerBase } from '../../../src/core/RunnerBase.js';
 import { isPaused, pauseHere, type RunnerPauseOutcome } from '../../../src/core/pause.js';
-import type { LLMProvider, LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMProvider, LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
 
 /**
  * A minimal typed step: one stage, returns whatever `fn` returns. The

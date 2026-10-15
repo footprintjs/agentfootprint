@@ -71,7 +71,7 @@
  */
 
 import type { ActiveInjection } from '../../lib/injection-engine/types.js';
-import type { LLMToolSchema } from '../../adapters/types.js';
+import type { LLMToolSchema } from '../../provider-contract/types.js';
 
 /** What the current skill's tools did on the call the model made `read_skill` on. */
 export interface SelfSkillTools {

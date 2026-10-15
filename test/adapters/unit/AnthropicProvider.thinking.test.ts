@@ -27,7 +27,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { AnthropicProvider } from '../../../src/adapters/llm/AnthropicProvider.js';
-import type { LLMMessage, LLMRequest } from '../../../src/adapters/types.js';
+import type { LLMMessage, LLMRequest } from '../../../src/provider-contract/types.js';
 import type { ThinkingBlock } from '../../../src/thinking/types.js';
 import { expectScalesLinearly } from '../../helpers/perf.js';
 

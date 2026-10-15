@@ -41,7 +41,7 @@ import {
   type ClockRow,
   type Tool,
 } from '../../src/index.js';
-import type { LLMResponse } from '../../src/adapters/types.js';
+import type { LLMResponse } from '../../src/provider-contract/types.js';
 import { defineMemory, MEMORY_STRATEGIES, MEMORY_TYPES } from '../../src/memory/index.js';
 import { InMemoryStore } from '../../src/memory/store/index.js';
 

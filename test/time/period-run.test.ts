@@ -45,7 +45,7 @@ import {
   type Tool,
   type ToolExecutionContext,
 } from '../../src/index.js';
-import type { LLMRequest, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
 import { validateCheckpoint } from '../../src/core/runCheckpoint.js';
 import { mockMcpClient } from '../../src/lib/mcp/mockMcpClient.js';
 import { readToolExtras, _resetToolExtrasWarnings } from '../../src/lib/mcp/toolExtras.js';

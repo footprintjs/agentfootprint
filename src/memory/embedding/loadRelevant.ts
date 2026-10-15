@@ -57,7 +57,7 @@
  * as it did before.
  */
 import type { TypedScope } from 'footprintjs';
-import type { LLMMessage as Message } from '../../adapters/types.js';
+import type { LLMMessage as Message } from '../../provider-contract/types.js';
 import type { MemoryStore, ScoredEntry } from '../store/index.js';
 import type { MemoryState } from '../stages/index.js';
 import { identityNamespace } from '../identity/index.js';

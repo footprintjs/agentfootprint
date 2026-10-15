@@ -80,8 +80,8 @@ export type {
   ToolCallEntry,
   ToolCapability,
   ToolResultContent,
-} from '../adapters/types.js';
+} from '../provider-contract/types.js';
 // The one question the dispatch loop asks a checker before sending it anything
 // beyond `'tool_call'`. Exported so a custom checker's own tests can assert the
 // same answer the framework will get.
-export { checkerGoverns } from '../adapters/types.js';
+export { checkerGoverns } from '../provider-contract/types.js';

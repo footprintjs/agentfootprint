@@ -45,7 +45,7 @@
  * round, so the next drop absorbs it and files a fresh one.
  */
 
-import type { LLMMessage } from '../../../adapters/types.js';
+import type { LLMMessage } from '../../../provider-contract/types.js';
 import { DROP_NOTICE_PREFIX } from '../../../lib/saidByPerson.js';
 
 // The marker and its recognizer live in the leaf both this file and the

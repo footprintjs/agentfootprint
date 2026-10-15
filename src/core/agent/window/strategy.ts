@@ -41,7 +41,7 @@
  * usage at all while `summarizeOldest` and `tokenBudget` refuse by name.
  */
 
-import type { LLMMessage, LLMProvider } from '../../../adapters/types.js';
+import type { LLMMessage, LLMProvider } from '../../../provider-contract/types.js';
 import type { Standing } from '../findings/types.js';
 import type { Turn, RemovalPlan } from './turns.js';
 import type { FoldedSpan, WindowRecord } from './types.js';

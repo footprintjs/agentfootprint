@@ -6,7 +6,7 @@ import type {
   LLMProvider,
   LLMRequest,
   LLMResponse,
-} from '../../../src/adapters/types.js';
+} from '../../../src/provider-contract/types.js';
 import type { ReplayPreparation } from '../../../src/thinking/replay.js';
 import { replayMessageFingerprint } from '../../../src/thinking/replayHistory.js';
 import { withFallback } from '../../../src/resilience/withFallback.js';

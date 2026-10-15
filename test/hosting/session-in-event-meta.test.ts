@@ -22,7 +22,7 @@ import type {
   CloudWatchLikeClient,
   CloudwatchObservabilityOptions,
 } from '../../src/adapters/observability/cloudwatch.js';
-import type { LLMProvider, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMProvider, LLMResponse } from '../../src/provider-contract/types.js';
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
 import { inProcessHost } from './testHost.js';
 

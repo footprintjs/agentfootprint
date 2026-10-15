@@ -48,7 +48,7 @@
  */
 import type { TypedScope } from 'footprintjs';
 import type { MemoryEntry } from '../entry/index.js';
-import type { LLMMessage as Message } from '../../adapters/types.js';
+import type { LLMMessage as Message } from '../../provider-contract/types.js';
 import type { MemoryState } from './types.js';
 import { chunkProvenance, chunkText } from '../retrieval/provenance.js';
 import type { RetrievedCandidate } from '../retrieval/types.js';

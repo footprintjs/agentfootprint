@@ -37,7 +37,7 @@
 import type { TypedScope } from 'footprintjs';
 import type { MemoryEntry } from '../entry/index.js';
 import type { MemoryStore } from '../store/index.js';
-import type { LLMMessage as Message } from '../../adapters/types.js';
+import type { LLMMessage as Message } from '../../provider-contract/types.js';
 import type { MemoryState } from './types.js';
 
 export interface WriteMessagesConfig {

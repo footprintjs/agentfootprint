@@ -27,7 +27,7 @@ import type {
 } from '../types.js';
 import { notApplicable, type Claim } from '../../lib/claim/claim.js';
 import { readPortCacheUsage } from '../portUsage.js';
-import type { LLMRequest } from '../../adapters/types.js';
+import type { LLMRequest } from '../../provider-contract/types.js';
 
 export class BreakpointCacheStrategy implements CacheStrategy {
   readonly name = 'breakpoints';

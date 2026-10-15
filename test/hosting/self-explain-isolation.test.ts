@@ -30,7 +30,7 @@ import { flowChart } from 'footprintjs';
 
 import { Agent, flowchartAsTool, inMemoryArtifacts } from '../../src/index.js';
 import type { AgentfootprintEvent } from '../../src/events.js';
-import type { LLMRequest } from '../../src/adapters/types.js';
+import type { LLMRequest } from '../../src/provider-contract/types.js';
 import { mock } from '../../src/llm-providers.js';
 import { IdentityNotVerifiedError } from '../../src/hosting/index.js';
 import type { IdentityVerifier, VerifiedIdentity } from '../../src/hosting/index.js';

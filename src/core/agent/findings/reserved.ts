@@ -42,7 +42,7 @@
  * `unprovable` so a later call cannot falsify a sentence.
  */
 
-import type { LLMToolSchema } from '../../../adapters/types.js';
+import type { LLMToolSchema } from '../../../provider-contract/types.js';
 import { DECLARED_SOURCE_KINDS, readSources } from '../arguments/sources.js';
 import {
   BASIS_VALUES,

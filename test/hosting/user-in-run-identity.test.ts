@@ -29,7 +29,7 @@ import { describe, expect, it } from 'vitest';
 import { Agent, defineTool } from '../../src/index.js';
 import { memorySessions, standingAgent } from '../../src/hosting/index.js';
 import type { SessionLifecycle } from '../../src/hosting/index.js';
-import type { LLMProvider, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMProvider, LLMResponse } from '../../src/provider-contract/types.js';
 import { inProcessHost, type InProcessHost } from './testHost.js';
 
 function provider(): LLMProvider {

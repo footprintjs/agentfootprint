@@ -12,7 +12,7 @@
  *          view see the narrowed list at the one site they always read.
  */
 
-import type { LLMToolSchema } from '../../../adapters/types.js';
+import type { LLMToolSchema } from '../../../provider-contract/types.js';
 import type { InjectionRecord } from '../../../recorders/core/types.js';
 import type { Classifier } from '../../../classify/types.js';
 import { alwaysServedNames, narrowServed, pickTools } from './pick.js';

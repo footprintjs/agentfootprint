@@ -34,8 +34,13 @@ import { MockProvider } from '../../src/adapters/llm/MockProvider.js';
 import { withRetry } from '../../src/resilience/withRetry.js';
 import { withFallback } from '../../src/resilience/withFallback.js';
 import { withCircuitBreaker } from '../../src/resilience/withCircuitBreaker.js';
-import { DEFAULT_CARRIES_IN_MESSAGES } from '../../src/adapters/types.js';
-import type { LLMProvider, LLMRequest, LLMResponse, WireRole } from '../../src/adapters/types.js';
+import { DEFAULT_CARRIES_IN_MESSAGES } from '../../src/provider-contract/types.js';
+import type {
+  LLMProvider,
+  LLMRequest,
+  LLMResponse,
+  WireRole,
+} from '../../src/provider-contract/types.js';
 
 const FLOOR: readonly WireRole[] = ['user', 'assistant'];
 const ALL: readonly WireRole[] = ['system', 'user', 'assistant'];

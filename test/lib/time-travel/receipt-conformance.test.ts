@@ -103,7 +103,7 @@ import type {
   LLMRequest,
   LLMResponse,
   LLMToolSchema,
-} from '../../../src/adapters/types.js';
+} from '../../../src/provider-contract/types.js';
 
 // ─── the harness ─────────────────────────────────────────────────────
 

@@ -21,7 +21,7 @@
  * Testable on its own — see `test/core/window-turns.test.ts`.
  */
 
-import type { LLMMessage } from '../../../adapters/types.js';
+import type { LLMMessage } from '../../../provider-contract/types.js';
 import type { ToolResultPin } from './lastToolResult.js';
 import type { LedgerFactPin } from './ledgerFactPins.js';
 import type { WindowObservations, WindowRefusal, WindowRefusalReason } from './types.js';

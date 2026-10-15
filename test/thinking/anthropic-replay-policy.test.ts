@@ -1,6 +1,6 @@
 /** Offline Messages bodies: exact active replay vs observable completed-turn omission. */
 import { describe, expect, it, vi } from 'vitest';
-import type { LLMMessage, LLMRequest } from '../../src/adapters/types.js';
+import type { LLMMessage, LLMRequest } from '../../src/provider-contract/types.js';
 import {
   buildMessagesBody,
   fromAnthropicResponse,

@@ -47,7 +47,7 @@ import {
   type ContingentRow,
   type FindingsRow,
 } from '../../../../src/index.js';
-import type { LLMRequest, LLMResponse } from '../../../../src/adapters/types.js';
+import type { LLMRequest, LLMResponse } from '../../../../src/provider-contract/types.js';
 import type { AgentState } from '../../../../src/core/agent/types.js';
 import {
   contingentRowsOf,

@@ -9,7 +9,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { withRetry } from '../../../src/resilience/withRetry.js';
-import type { LLMProvider, LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMProvider, LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
 
 const noopRequest: LLMRequest = {
   messages: [{ role: 'user', content: 'hi' }],

@@ -7,7 +7,7 @@ import {
   defineSteering,
 } from '../../src/doors/context.js';
 import { MockProvider } from '../../src/adapters/llm/MockProvider.js';
-import type { LLMRequest } from '../../src/adapters/types.js';
+import type { LLMRequest } from '../../src/provider-contract/types.js';
 
 const context = {
   objective: 'Describe the recorded queue state.',

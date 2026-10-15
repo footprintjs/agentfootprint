@@ -22,7 +22,7 @@ import {
 } from '../../../src/index.js';
 import { mock } from '../../../src/llm-providers.js';
 import { allow } from '../../../src/core/agent/middleware/outcomes.js';
-import type { LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMResponse } from '../../../src/provider-contract/types.js';
 
 const collectCall = (id: string) => ({ toolCalls: [{ id, name: 'collect_window', args: {} }] });
 

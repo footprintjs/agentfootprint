@@ -69,7 +69,7 @@ vi.mock('../../../../src/core/agent/receipt/receipt.js', async (importOriginal) 
 
 import { Agent, defineTool } from '../../../../src/index.js';
 import { mock } from '../../../../src/providers.js';
-import type { LLMMessage } from '../../../../src/adapters/types.js';
+import type { LLMMessage } from '../../../../src/provider-contract/types.js';
 import {
   buildReceipt,
   receiptHash,

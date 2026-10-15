@@ -23,7 +23,7 @@ import { mock } from '../../src/adapters/llm/MockProvider.js';
 import { anthropic } from '../../src/adapters/llm/AnthropicProvider.js';
 import { UnsupportedNativeOutputError } from '../../src/providers.js';
 import { NativeOutputSchemaError } from '../../src/core/agent/nativeOutputFormat.js';
-import type { LLMProvider, LLMRequest, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMProvider, LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
 import type { OutputAttempt } from '../../src/core/agent/outputEnforcement.js';
 
 const SCHEMA = {

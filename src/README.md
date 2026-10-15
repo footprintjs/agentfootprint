@@ -76,7 +76,7 @@ These invariants are preserved across every file in `src/`:
 
 Components:
 
-- *Hexagonal / Ports-and-Adapters* — `adapters/types.ts` defines the ports; `adapters/<domain>/*` implements them.
+- *Hexagonal / Ports-and-Adapters* — `provider-contract/types.ts` defines the ports; `adapters/<domain>/*` implements them.
 - *Event-Driven* — everything observable is a typed event on one central dispatcher.
 - *Pipes and Filters* — core recorders transform raw footprintjs events into domain events.
 - *Facade* — the `Runner` interface is the single consumer-facing surface.

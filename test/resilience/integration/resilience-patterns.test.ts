@@ -13,7 +13,7 @@ import { Agent } from '../../../src/core/Agent.js';
 import { defineTool } from '../../../src/core/tools.js';
 import { mock } from '../../../src/adapters/llm/MockProvider.js';
 import { withRetry, withFallback, fallbackProvider } from '../../../src/resilience/index.js';
-import type { LLMProvider, LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMProvider, LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
 import { expectScalesLinearly, expectWithinTimes, measureAsync } from '../../helpers/perf.js';
 
 const ok = (tag: string): LLMResponse => ({

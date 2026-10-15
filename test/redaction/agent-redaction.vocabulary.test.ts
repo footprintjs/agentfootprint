@@ -39,7 +39,7 @@ import {
   isPaused,
 } from '../../src/index.js';
 import { defineSkill, skillGraph } from '../../src/injection-engine.js';
-import type { LLMProvider, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMProvider, LLMResponse } from '../../src/provider-contract/types.js';
 import { mock } from '../../src/doors/providers.js';
 import {
   accountForAnswer,

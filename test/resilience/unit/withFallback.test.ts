@@ -5,7 +5,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { withFallback } from '../../../src/resilience/withFallback.js';
-import type { LLMProvider, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMProvider, LLMResponse } from '../../../src/provider-contract/types.js';
 
 const req = {
   messages: [{ role: 'user' as const, content: 'hi' }],

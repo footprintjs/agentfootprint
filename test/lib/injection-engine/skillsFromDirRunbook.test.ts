@@ -26,7 +26,7 @@ import { Agent, defineTool } from '../../../src/index.js';
 import { defineSkill, skillsFromDir } from '../../../src/injection-engine.js';
 import { mock } from '../../../src/llm-providers.js';
 import type { Tool } from '../../../src/core/tools.js';
-import type { LLMProvider, LLMRequest } from '../../../src/adapters/types.js';
+import type { LLMProvider, LLMRequest } from '../../../src/provider-contract/types.js';
 
 // ─── Fixture helpers ──────────────────────────────────────────────
 

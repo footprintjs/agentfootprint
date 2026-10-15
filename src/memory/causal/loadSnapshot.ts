@@ -19,7 +19,7 @@
  */
 
 import type { TypedScope } from 'footprintjs';
-import type { LLMMessage } from '../../adapters/types.js';
+import type { LLMMessage } from '../../provider-contract/types.js';
 import type { MemoryEntry } from '../entry/index.js';
 import type { MemoryStore } from '../store/index.js';
 import type { Embedder } from '../embedding/index.js';

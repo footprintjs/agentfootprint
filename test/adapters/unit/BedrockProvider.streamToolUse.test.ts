@@ -18,7 +18,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { bedrock, type BedrockStreamEvent } from '../../../src/adapters/llm/BedrockProvider.js';
-import type { LLMChunk, LLMProvider, LLMRequest } from '../../../src/adapters/types.js';
+import type { LLMChunk, LLMProvider, LLMRequest } from '../../../src/provider-contract/types.js';
 import { expectScalesLinearly } from '../../helpers/perf.js';
 
 // ─── Fixtures ──────────────────────────────────────────────────────

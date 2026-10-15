@@ -49,7 +49,7 @@ import {
 } from '../../../../src/index.js';
 import { accountForAnswer, assessAnswer, recordRun } from '../../../../src/observe.js';
 import { ask as askOutcome } from '../../../../src/core/agent/middleware/outcomes.js';
-import type { LLMRequest, LLMResponse } from '../../../../src/adapters/types.js';
+import type { LLMRequest, LLMResponse } from '../../../../src/provider-contract/types.js';
 import type { ArgumentRow } from '../../../../src/core/agent/arguments/rows.js';
 import {
   ARGUMENT_ASK_QUESTION,

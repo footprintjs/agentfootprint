@@ -29,7 +29,7 @@
  *                       `context-contract/`), events, bridge, maps, recipes, time
  *   L1  vocabularies    the one law each spells: semantics, redaction, thinking, classify,
  *                       ontology, cache, trust-boundaries
- *   L2  ports           memory
+ *   L2  ports           provider-contract (what a provider implements), memory
  *   L3  stores, folds   artifacts, integrity, influence-core, rag (+ lib/rag), resilience, security
  *   L4                  identity, answer-validation, observability, tool-lint
  *   L5  the trace       recorders, debug
@@ -85,7 +85,7 @@ const LAYERS = [
       'src/lib/trust-boundaries/**',
     ],
   },
-  { rank: 2, name: 'ports', files: ['src/memory/**'] },
+  { rank: 2, name: 'ports', files: ['src/provider-contract/**', 'src/memory/**'] },
   {
     rank: 3,
     name: 'stores and folds',
@@ -174,25 +174,13 @@ const CLOSED_FOLDERS = [
  * @type {ReadonlyArray<readonly [string, string]>}
  */
 const UPWARD_ALLOWANCES = [
-  ['src/core/Agent.ts', 'src/adapters/forcedToolChoice.ts'],
-  ['src/core/Agent.ts', 'src/adapters/nativeOutputSchema.ts'],
-  ['src/core/Agent.ts', 'src/adapters/requestRefusal.ts'],
-  ['src/core/Agent.ts', 'src/adapters/types.ts'],
   ['src/core/agent/AgentBuilder.ts', 'src/lib/trace-toolpack/selfExplain.ts'],
   ['src/core/agent/AgentBuilder.ts', 'src/tool-providers/skillScopedTools.ts'],
-  ['src/core/agent/stages/callLLM.ts', 'src/adapters/forcedToolChoice.ts'],
-  ['src/core/agent/stages/callLLM.ts', 'src/adapters/nativeOutputSchema.ts'],
-  ['src/core/agent/stages/deliver.ts', 'src/adapters/types.ts'],
-  ['src/core/agent/stages/reliabilityExecution.ts', 'src/adapters/requestRefusal.ts'],
-  ['src/core/agent/stages/toolCalls.ts', 'src/adapters/types.ts'],
-  ['src/core/codeRunnerTool.ts', 'src/adapters/types.ts'],
-  ['src/core/runCheckpoint.ts', 'src/adapters/llm/contextWindow.ts'],
   ['src/integrity/claim-binding/admit.ts', 'src/core/agent/coverage/items.ts'],
   ['src/integrity/claim-binding/admit.ts', 'src/core/agent/coverage/period.ts'],
   ['src/integrity/claim-binding/bindEvidence.ts', 'src/core/agent/coverage/period.ts'],
   ['src/integrity/claim-binding/scope.ts', 'src/core/agent/coverage/period.ts'],
   ['src/lib/injection-engine/buildInjectionEngineSubflow.ts', 'src/core/agent/toolEffects.ts'],
-  ['src/lib/injection-engine/constrainedEnumPick.ts', 'src/adapters/forcedToolChoice.ts'],
   ['src/lib/injection-engine/skillTools.ts', 'src/core/tools.ts'],
   ['src/lib/semantics/check.ts', 'src/core/agent/coverage/read.ts'],
   ['src/lib/semantics/described.ts', 'src/core/agent/coverage/items.ts'],
@@ -204,12 +192,6 @@ const UPWARD_ALLOWANCES = [
   ['src/lib/semantics/projection.ts', 'src/core/agent/coverage/ledger.ts'],
   ['src/lib/semantics/projection.ts', 'src/core/agent/toolEffects.ts'],
   ['src/lib/trace-toolpack/selfExplain.ts', 'src/tool-providers/skillScopedTools.ts'],
-  ['src/resilience/withCircuitBreaker.ts', 'src/adapters/requestRefusal.ts'],
-  ['src/resilience/withFallback.ts', 'src/adapters/forcedToolChoice.ts'],
-  ['src/resilience/withFallback.ts', 'src/adapters/nativeOutputSchema.ts'],
-  ['src/resilience/withFallback.ts', 'src/adapters/requestRefusal.ts'],
-  ['src/resilience/withFallback.ts', 'src/adapters/types.ts'],
-  ['src/security/index.ts', 'src/adapters/types.ts'],
 ];
 
 // ── matching ─────────────────────────────────────────────────────────────────

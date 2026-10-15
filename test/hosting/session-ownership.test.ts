@@ -45,7 +45,7 @@ import {
   toEnvelope,
 } from '../../src/hosting/index.js';
 import type { IdentityVerifier, SessionLifecycle } from '../../src/hosting/index.js';
-import type { LLMRequest } from '../../src/adapters/types.js';
+import type { LLMRequest } from '../../src/provider-contract/types.js';
 import { inProcessHost } from './testHost.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';

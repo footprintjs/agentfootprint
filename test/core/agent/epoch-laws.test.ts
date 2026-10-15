@@ -46,7 +46,7 @@ import { Agent, defineTool } from '../../../src/index.js';
 import { defineSkill, skillGraph, decideSkill } from '../../../src/injection-engine.js';
 import { skillScopedTools, staticTools } from '../../../src/tool-providers/index.js';
 import { mock } from '../../../src/llm-providers.js';
-import type { LLMRequest } from '../../../src/adapters/types.js';
+import type { LLMRequest } from '../../../src/provider-contract/types.js';
 import {
   readSkillDescriptor,
   type ReadSkillOffer,

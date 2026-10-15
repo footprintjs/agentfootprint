@@ -10,7 +10,7 @@
  *          builder did not set one.
  */
 
-import type { LLMProvider } from '../adapters/types.js';
+import type { LLMProvider } from '../provider-contract/types.js';
 import type { ThinkingHandler } from './types.js';
 
 /**

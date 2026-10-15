@@ -23,13 +23,13 @@ import {
   ERR_CONTEXT_WINDOW_EXCEEDED,
   isContextWindowExceeded,
 } from '../../../src/index.js';
-import { asContextWindowExceeded } from '../../../src/adapters/llm/contextWindow.js';
+import { asContextWindowExceeded } from '../../../src/provider-contract/contextWindow.js';
 import { anthropic } from '../../../src/adapters/llm/AnthropicProvider.js';
 import { bedrock } from '../../../src/adapters/llm/BedrockProvider.js';
 import { browserAnthropic } from '../../../src/adapters/llm/BrowserAnthropicProvider.js';
 import { browserOpenai } from '../../../src/adapters/llm/BrowserOpenAIProvider.js';
 import { openai } from '../../../src/adapters/llm/OpenAIProvider.js';
-import type { LLMRequest } from '../../../src/adapters/types.js';
+import type { LLMRequest } from '../../../src/provider-contract/types.js';
 
 const REQUEST: LLMRequest = { messages: [{ role: 'user', content: 'hi' }], model: 'm' };
 

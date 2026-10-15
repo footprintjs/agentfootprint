@@ -67,7 +67,7 @@
  * pause machinery that already exists.
  */
 
-import type { LLMMessage } from '../../../adapters/types.js';
+import type { LLMMessage } from '../../../provider-contract/types.js';
 import type { AskComponent } from '../../askComponent.js';
 import type { MemoryIdentity } from '../../../memory/identity/types.js';
 import type { LoopMoment } from '../../../lib/moments.js';

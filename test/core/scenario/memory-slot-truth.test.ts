@@ -31,7 +31,7 @@ import type { CombinedRecorder, EmitEvent } from 'footprintjs';
 import { Agent } from '../../../src/index.js';
 import { defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES } from '../../../src/memory/index.js';
 import { InMemoryStore } from '../../../src/memory/store/index.js';
-import type { LLMProvider, LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMProvider, LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
 
 /** A provider that answers once per call and keeps every request it was handed. */
 function capturingProvider(reply: string): { provider: LLMProvider; requests: LLMRequest[] } {

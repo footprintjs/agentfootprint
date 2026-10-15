@@ -35,7 +35,7 @@
  * Pure functions, no scope, no events — the callers own delivery and record.
  */
 
-import type { LLMMessage } from '../../adapters/types.js';
+import type { LLMMessage } from '../../provider-contract/types.js';
 import { STAGED_DATA_FRAME_PREFIX } from '../../lib/saidByPerson.js';
 import { isPlacedToolResult } from '../../artifacts/placement.js';
 import type { Tool } from '../tools.js';

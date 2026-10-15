@@ -40,7 +40,7 @@ import {
   isInputPause,
   type Tool,
 } from '../../src/index.js';
-import type { LLMMessage, LLMRequest, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMMessage, LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
 
 const LA = 'America/Los_Angeles';
 const NOW = '2026-10-01T17:17:10Z';

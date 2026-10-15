@@ -3,7 +3,7 @@
  *
  * Pattern: One pure function. No imports, no state, no clock.
  * Role:    Leaf. The one owner of the tool-bytes boundary — the `toolChars`
- *          field of `adapters/types.ts` · `LLMMessage` (honesty layer 2).
+ *          field of `provider-contract/types.ts` · `LLMMessage` (honesty layer 2).
  * Emits:   N/A.
  *
  * ## Why this is a leaf and not a helper beside its first reader

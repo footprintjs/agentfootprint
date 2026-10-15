@@ -20,7 +20,7 @@ import {
   MENU_HINT_METADATA_KEY,
 } from '../../../src/injection-engine.js';
 import { mock } from '../../../src/llm-providers.js';
-import type { PermissionChecker } from '../../../src/adapters/types.js';
+import type { PermissionChecker } from '../../../src/provider-contract/types.js';
 
 const skill = (id: string, description = `use ${id}`) =>
   defineSkill({ id, description, body: `${id} body` });

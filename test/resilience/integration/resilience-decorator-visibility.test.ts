@@ -72,7 +72,7 @@ import type {
   LLMProvider,
   LLMResponse,
   ResilienceReport,
-} from '../../../src/adapters/types.js';
+} from '../../../src/provider-contract/types.js';
 
 // ── Providers ────────────────────────────────────────────────────────
 

@@ -1,5 +1,5 @@
 /** Pure message matching for durable omissions; no second conversation store. */
-import type { LLMMessage } from '../adapters/types.js';
+import type { LLMMessage } from '../provider-contract/types.js';
 import type { ReplayPreparation } from './replay.js';
 import { canonicalJson } from '../lib/canonicalJson.js';
 import { sha256Hex } from '../lib/sha256.js';

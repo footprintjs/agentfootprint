@@ -20,7 +20,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { Agent } from '../../src/index.js';
-import type { LLMChunk, LLMProvider, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMChunk, LLMProvider, LLMResponse } from '../../src/provider-contract/types.js';
 
 const RESPONSE: LLMResponse = {
   content: 'hello there',

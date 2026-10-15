@@ -13,7 +13,7 @@
  *          observe via the standard typed listeners.
  */
 
-import type { LLMProvider } from '../adapters/types.js';
+import type { LLMProvider } from '../provider-contract/types.js';
 import { LLMCall } from '../core/LLMCall.js';
 import type { Runner } from '../core/runner.js';
 import { Parallel } from '../core-flow/Parallel.js';

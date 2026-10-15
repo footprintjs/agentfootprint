@@ -60,7 +60,7 @@ import {
   type CredentialResult,
 } from '../../../../src/identity.js';
 import { ask as askOutcome } from '../../../../src/core/agent/middleware/outcomes.js';
-import type { LLMRequest, LLMResponse } from '../../../../src/adapters/types.js';
+import type { LLMRequest, LLMResponse } from '../../../../src/provider-contract/types.js';
 import type { ArgumentRow } from '../../../../src/core/agent/arguments/rows.js';
 import { SHOWN_ARGS } from '../../../../src/core/toolShownArgs.js';
 import { inProcessHost } from '../../../hosting/testHost.js';

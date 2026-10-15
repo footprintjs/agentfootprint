@@ -33,12 +33,12 @@ import { describe, expect, it } from 'vitest';
 import { Agent, defineTool } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
 import { PermissionPolicy } from '../../src/security/PermissionPolicy.js';
-import { checkerGoverns } from '../../src/adapters/types.js';
+import { checkerGoverns } from '../../src/provider-contract/types.js';
 import type {
   PermissionChecker,
   PermissionDecision,
   PermissionRequest,
-} from '../../src/adapters/types.js';
+} from '../../src/provider-contract/types.js';
 
 // ─── Fixtures ────────────────────────────────────────────────────────
 

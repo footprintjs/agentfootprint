@@ -9,7 +9,7 @@
 
 import type { RedactionPolicy } from 'footprintjs';
 
-import type { LLMToolSchema, ToolCapability } from '../adapters/types.js';
+import type { LLMToolSchema, ToolCapability } from '../provider-contract/types.js';
 import type { ToolArtifacts } from '../artifacts/capability.js';
 import type { ArtifactMeta } from '../artifacts/types.js';
 import { assertToolWants, type ToolWants } from '../artifacts/wants.js';

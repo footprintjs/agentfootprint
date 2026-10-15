@@ -29,7 +29,7 @@ import { describe, expect, it } from 'vitest';
 import type { Part } from '@google/genai';
 
 import type { GeminiPart } from '../../src/adapters/llm/GeminiProvider';
-import type { LLMMessage, LLMResponse } from '../../src/adapters/types';
+import type { LLMMessage, LLMResponse } from '../../src/provider-contract/types';
 import type { LLMEndPayload } from '../../src/events/payloads';
 
 describe("the SDK really has the field this adapter's fix depends on", () => {

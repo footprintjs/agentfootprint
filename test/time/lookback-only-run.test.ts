@@ -43,7 +43,7 @@ import {
   type Tool,
   type ToolExecutionContext,
 } from '../../src/index.js';
-import type { LLMRequest, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
 import { validateCheckpoint } from '../../src/core/runCheckpoint.js';
 import { timeRowIsWellFormed } from '../../src/time/rows.js';
 import { TIME_LINE_SOURCE } from '../../src/core/agent/arguments/serve.js';

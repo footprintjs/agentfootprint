@@ -29,7 +29,7 @@ import type {
   LLMProvider,
   LLMRequest,
   LLMResponse,
-} from '../../../src/adapters/types.js';
+} from '../../../src/provider-contract/types.js';
 
 function scriptedProvider(replies: readonly Partial<LLMResponse>[]): {
   provider: LLMProvider;

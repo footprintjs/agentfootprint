@@ -23,7 +23,7 @@ import { describe, it, expect } from 'vitest';
 import { defineTool, Agent } from '../src/index.js';
 import { skillGraph, defineSkill } from '../src/injection-engine.js';
 import { mock } from '../src/llm-providers.js';
-import type { LLMResponse } from '../src/adapters/types.js';
+import type { LLMResponse } from '../src/provider-contract/types.js';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 

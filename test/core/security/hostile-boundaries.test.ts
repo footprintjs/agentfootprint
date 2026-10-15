@@ -8,7 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import { Agent } from '../../../src/core/Agent.js';
 import { LLMCall } from '../../../src/core/LLMCall.js';
-import type { LLMProvider, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMProvider, LLMResponse } from '../../../src/provider-contract/types.js';
 
 function scripted(...responses: readonly LLMResponse[]): LLMProvider {
   let i = 0;

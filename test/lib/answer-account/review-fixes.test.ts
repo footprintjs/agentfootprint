@@ -26,7 +26,7 @@ import { describe, expect, it } from 'vitest';
 import { Agent, defineTool, inMemoryArtifacts } from '../../../src/index.js';
 import { mock } from '../../../src/llm-providers.js';
 import { recordRun } from '../../../src/observe.js';
-import type { PermissionChecker } from '../../../src/adapters/types.js';
+import type { PermissionChecker } from '../../../src/provider-contract/types.js';
 import { servedToModel, strip } from '../../../src/core/agent/coverage/read.js';
 import { accountForAnswer } from '../../../src/lib/answer-account/account.js';
 import { validateDeclarations } from '../../../src/lib/answer-account/declarations.js';

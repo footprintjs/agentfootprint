@@ -22,7 +22,7 @@ import type {
   LLMResponse,
   PermissionChecker,
   PermissionDecision,
-} from '../../src/adapters/types.js';
+} from '../../src/provider-contract/types.js';
 
 /** The exact shape of message that taught a model to wait. */
 const TRANSIENT = "Tool 'refund' is not available right now.";

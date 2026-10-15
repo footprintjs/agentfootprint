@@ -51,7 +51,7 @@
  * A history without a settled message pairs exactly as before 9.113.0.
  */
 
-import type { LLMMessage, ToolCallEntry } from '../adapters/types.js';
+import type { LLMMessage, ToolCallEntry } from '../provider-contract/types.js';
 
 /** Prefix the framework writes on synthetic deny tool_results. Used to
  *  distinguish "denied but in history" from "actually dispatched". */

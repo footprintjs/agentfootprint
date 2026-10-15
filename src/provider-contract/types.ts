@@ -1,5 +1,5 @@
 /**
- * adapters/types — the Ports of the hexagonal architecture.
+ * provider-contract/types — the Ports of the hexagonal architecture.
  *
  * Pattern: Adapter (GoF, Design Patterns ch. 4) + Ports-and-Adapters
  *          (Cockburn, 2005).

@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { Agent } from '../../src/index.js';
 import { defineSkill, skillGraph } from '../../src/injection-engine.js';
 import { UnsupportedToolChoiceError } from '../../src/providers.js';
-import type { LLMProvider, LLMRequest, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMProvider, LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
 import { NoOpCacheStrategy } from '../../src/cache/index.js';
 
 const ALLOWED = 'allowed-model';

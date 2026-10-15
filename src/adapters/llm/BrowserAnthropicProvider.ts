@@ -26,8 +26,8 @@ import type {
   LLMRequest,
   LLMResponse,
   WireRole,
-} from '../types.js';
-import { asContextWindowExceeded } from './contextWindow.js';
+} from '../../provider-contract/types.js';
+import { asContextWindowExceeded } from '../../provider-contract/contextWindow.js';
 import { ANTHROPIC_PROMPT_CACHING } from './anthropicCacheWire.js';
 import { thinkingModeWith } from './anthropicThinkingWire.js';
 import {
@@ -253,7 +253,7 @@ export class BrowserAnthropicProvider implements LLMProvider {
     this.supportsNativeOutputSchema = this.inner.supportsNativeOutputSchema!;
   }
 
-  // `hooks` is FORWARDED, not dropped — see LLMCallHooks in adapters/types.ts.
+  // `hooks` is FORWARDED, not dropped — see LLMCallHooks in provider-contract/types.ts.
   complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
     return this.inner.complete(req, hooks);
   }

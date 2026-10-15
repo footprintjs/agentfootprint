@@ -19,7 +19,7 @@
  * pieces are), so the rebuild rests entirely on this join being one function.
  */
 
-import type { LLMMessage } from '../../adapters/types.js';
+import type { LLMMessage } from '../../provider-contract/types.js';
 import type { ContextRole } from '../../events/types.js';
 
 /** What the system-prompt join needs from an injection record. */

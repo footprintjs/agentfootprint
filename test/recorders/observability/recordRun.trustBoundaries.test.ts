@@ -18,7 +18,7 @@ import {
 import { mock } from '../../../src/providers.js';
 import { bearer, type CredentialProvider } from '../../../src/identity.js';
 import type { AgentfootprintEvent } from '../../../src/events/registry.js';
-import type { PermissionChecker } from '../../../src/adapters/types.js';
+import type { PermissionChecker } from '../../../src/provider-contract/types.js';
 import { PolicyHaltError } from '../../../src/security/index.js';
 import {
   trustBoundaryRecorder,

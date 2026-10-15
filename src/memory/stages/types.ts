@@ -16,7 +16,7 @@
  */
 import type { MemoryIdentity } from '../identity/index.js';
 import type { MemoryEntry } from '../entry/index.js';
-import type { LLMMessage as Message } from '../../adapters/types.js';
+import type { LLMMessage as Message } from '../../provider-contract/types.js';
 
 export interface MemoryState {
   /**

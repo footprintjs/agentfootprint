@@ -29,7 +29,7 @@ import { Agent } from '../../../src/index.js';
 import { mock } from '../../../src/llm-providers.js';
 import { skillGraph, defineSkill } from '../../../src/injection-engine.js';
 import { defineTool } from '../../../src/index.js';
-import type { LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMResponse } from '../../../src/provider-contract/types.js';
 
 const skill = (id: string, description = `use ${id}`) =>
   defineSkill({ id, description, body: `${id} body` });

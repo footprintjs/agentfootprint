@@ -32,7 +32,7 @@ import {
 } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
 import { memorySessions, standingAgent } from '../../src/hosting/index.js';
-import type { LLMMessage, LLMRequest } from '../../src/adapters/types.js';
+import type { LLMMessage, LLMRequest } from '../../src/provider-contract/types.js';
 import { inProcessHost } from '../hosting/testHost.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────

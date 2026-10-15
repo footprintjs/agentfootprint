@@ -25,7 +25,7 @@ import {
   type GeminiGenerateResponse,
 } from '../../../src/adapters/llm/GeminiProvider.js';
 import { Agent, defineTool } from '../../../src/index.js';
-import type { LLMRequest } from '../../../src/adapters/types.js';
+import type { LLMRequest } from '../../../src/provider-contract/types.js';
 
 // ── The double ───────────────────────────────────────────────────────
 

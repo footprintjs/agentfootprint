@@ -68,9 +68,9 @@ import type {
   LLMResponse,
   LLMToolSchema,
   WireRole,
-} from '../types.js';
+} from '../../provider-contract/types.js';
 // Type-only: erased at build, so this adds no runtime edge from adapters/
-// into thinking/ (the same relationship `adapters/types.ts` already has
+// into thinking/ (the same relationship `provider-contract/types.ts` already has
 // with `ThinkingBlock`). ALL tag parsing lives in the handler; this file
 // only notices the shape and labels it.
 import {
@@ -479,7 +479,7 @@ export class OllamaProvider implements LLMProvider {
       typeof model === 'string' ? ollama(model, options) : ollama(model as OllamaProviderOptions);
   }
 
-  // `hooks` is FORWARDED, not dropped — see LLMCallHooks in adapters/types.ts.
+  // `hooks` is FORWARDED, not dropped — see LLMCallHooks in provider-contract/types.ts.
   complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
     return this.inner.complete(req, hooks);
   }

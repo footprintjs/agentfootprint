@@ -3,7 +3,7 @@
  * Consumes already-decoded events; it neither frames SSE nor assembles a
  * message. Original block positions, not provider IDs, associate evidence.
  */
-import type { LLMResponse } from '../types.js';
+import type { LLMResponse } from '../../provider-contract/types.js';
 
 type Failure = NonNullable<LLMResponse['toolCalls'][number]['argumentsFailure']>;
 type ToolBlock = { readonly id: string; readonly name: string; readonly input: unknown };

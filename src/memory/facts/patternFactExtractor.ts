@@ -18,7 +18,7 @@
  *   The facts the pattern extractor misses are still better-captured
  *   by beats (which run in a separate pipeline).
  */
-import type { LLMMessage as Message } from '../../adapters/types.js';
+import type { LLMMessage as Message } from '../../provider-contract/types.js';
 import type { FactExtractArgs, FactExtractor } from './extractor.js';
 import type { Fact } from './types.js';
 import { asConfidence } from './types.js';

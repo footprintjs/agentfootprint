@@ -43,7 +43,7 @@
  * needs a message in that position and none of them is smaller than the span.
  */
 
-import type { LLMMessage } from '../../../../adapters/types.js';
+import type { LLMMessage } from '../../../../provider-contract/types.js';
 import { buildDropNotice } from '../notice.js';
 import { droppedToolNames } from '../toolNames.js';
 import { indexRange } from '../removal.js';

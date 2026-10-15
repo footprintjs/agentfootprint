@@ -4,7 +4,7 @@
  * failure the hand-rolled glue invites; recordedChat makes it structural.
  */
 import { describe, expect, it, vi } from 'vitest';
-import type { LLMRequest } from '../../../src/adapters/types';
+import type { LLMRequest } from '../../../src/provider-contract/types';
 import { recordedChat } from '../../../src/lib/recorded-chat';
 import type { AblationSpec } from '../../../src/lib/context-bisect';
 import { chatDeskFixture, scriptedRespond, REPLY } from './chatDeskFixture';

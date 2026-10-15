@@ -15,7 +15,7 @@ import {
   type IntentCandidate,
 } from '../../../src/injection-engine.js';
 import { mock } from '../../../src/llm-providers.js';
-import type { LLMProvider, LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMProvider, LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
 
 const candidates: IntentCandidate[] = [
   { id: 'billing', intent: 'customer wants a refund', examples: ['refund my order'] },

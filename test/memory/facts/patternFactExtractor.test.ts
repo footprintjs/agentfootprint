@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { patternFactExtractor } from '../../../src/memory/facts/patternFactExtractor';
-import type { LLMMessage } from '../../../src/adapters/types';
+import type { LLMMessage } from '../../../src/provider-contract/types';
 
 function user(content: string): LLMMessage {
   return { role: 'user', content };

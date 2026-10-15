@@ -213,7 +213,7 @@ export interface DefineSkillOptions {
    * different choices are refused naming both homes. Absent → this skill is
    * byte-identical to today.
    */
-  readonly provider?: import('../../../adapters/types.js').LLMProvider;
+  readonly provider?: import('../../../provider-contract/types.js').LLMProvider;
   /**
    * The model this skill's calls run on (9.19.0). Legal ALONE — the agent's
    * own provider, another model ("triage runs on the small one") — or

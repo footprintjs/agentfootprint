@@ -6,8 +6,8 @@ import type {
   LLMProvider,
   LLMRequest,
   LLMResponse,
-} from '../../src/adapters/types.js';
-import { UnsupportedToolChoiceError } from '../../src/adapters/forcedToolChoice.js';
+} from '../../src/provider-contract/types.js';
+import { UnsupportedToolChoiceError } from '../../src/provider-contract/forcedToolChoice.js';
 import { UnsupportedThinkingError } from '../../src/thinking/errors.js';
 import { UnsafeThinkingReplayError, type MessageReplay } from '../../src/thinking/replay.js';
 import { mockAnthropicRaw, mockThinkingHandler } from '../../src/thinking/MockThinkingHandler.js';

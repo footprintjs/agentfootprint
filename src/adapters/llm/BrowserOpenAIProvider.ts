@@ -26,10 +26,10 @@ import type {
   LLMResponse,
   LLMToolSchema,
   WireRole,
-} from '../types.js';
+} from '../../provider-contract/types.js';
 import type { PromptCaching } from '../../cache/types.js';
 import type { ThinkingHandler } from '../../thinking/types.js';
-import { asContextWindowExceeded } from './contextWindow.js';
+import { asContextWindowExceeded } from '../../provider-contract/contextWindow.js';
 import { azureChatCompletionsUrl } from './azureUrl.js';
 
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
@@ -293,7 +293,7 @@ export class BrowserOpenAIProvider implements LLMProvider {
     if (this.inner.thinkingHandler !== undefined) this.thinkingHandler = this.inner.thinkingHandler;
   }
 
-  // `hooks` is FORWARDED, not dropped — see LLMCallHooks in adapters/types.ts.
+  // `hooks` is FORWARDED, not dropped — see LLMCallHooks in provider-contract/types.ts.
   complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
     return this.inner.complete(req, hooks);
   }
@@ -394,7 +394,7 @@ export function browserAzureOpenai(options: BrowserAzureOpenAIProviderOptions): 
     }),
     ...(inner.promptCaching !== undefined && { promptCaching: inner.promptCaching }),
     ...(inner.thinkingHandler !== undefined && { thinkingHandler: inner.thinkingHandler }),
-    // `hooks` is FORWARDED, not dropped — see LLMCallHooks in adapters/types.ts.
+    // `hooks` is FORWARDED, not dropped — see LLMCallHooks in provider-contract/types.ts.
     complete: (req, hooks) => inner.complete(withDeployment(req), hooks),
     ...(inner.stream && {
       stream: (req: LLMRequest, hooks?: LLMCallHooks) => inner.stream!(withDeployment(req), hooks),
@@ -419,7 +419,7 @@ export class BrowserAzureOpenAIProvider implements LLMProvider {
     if (this.inner.thinkingHandler !== undefined) this.thinkingHandler = this.inner.thinkingHandler;
   }
 
-  // `hooks` is FORWARDED, not dropped — see LLMCallHooks in adapters/types.ts.
+  // `hooks` is FORWARDED, not dropped — see LLMCallHooks in provider-contract/types.ts.
   complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
     return this.inner.complete(req, hooks);
   }

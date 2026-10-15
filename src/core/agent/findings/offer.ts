@@ -56,7 +56,7 @@
  * page.
  */
 
-import type { LLMMessage } from '../../../adapters/types.js';
+import type { LLMMessage } from '../../../provider-contract/types.js';
 import { foldLedger, type PreviousResult } from './ledger.js';
 import type { FindingsLedger, Standing, StandingRow } from './types.js';
 

@@ -57,7 +57,7 @@ import type {
   ReliabilityRetriedPayload,
   ReliabilityRecoveredPayload,
 } from '../../src/events/payloads.js';
-import type { LLMRequest, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
 
 /** Provider that throws the first `failTimes` calls, then returns `content`. */
 function flakyProvider(opts: {

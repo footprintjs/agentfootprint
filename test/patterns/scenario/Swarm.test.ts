@@ -8,7 +8,7 @@ import { describe, it, expect } from 'vitest';
 import { swarm } from '../../../src/patterns/Swarm.js';
 import { LLMCall } from '../../../src/core/LLMCall.js';
 import { MockProvider } from '../../../src/adapters/llm/MockProvider.js';
-import type { LLMProvider, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMProvider, LLMResponse } from '../../../src/provider-contract/types.js';
 
 function tagged(tag: string): LLMProvider {
   return {

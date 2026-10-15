@@ -4,7 +4,7 @@
  * every branch of the body builder, one SSE script that drives every branch of
  * the stream assembly, and one complete() reply.
  */
-import type { LLMRequest } from '../../../src/adapters/types.js';
+import type { LLMRequest } from '../../../src/provider-contract/types.js';
 
 export const REQ: LLMRequest = {
   model: 'anthropic',

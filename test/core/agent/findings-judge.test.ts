@@ -39,7 +39,11 @@ import {
 } from '../../../src/classify/index.js';
 import { foldLedger } from '../../../src/core/agent/findings/ledger.js';
 import { isPaused, pauseHere } from '../../../src/core/pause.js';
-import type { LLMRequest, LLMResponse, PermissionChecker } from '../../../src/adapters/types.js';
+import type {
+  LLMRequest,
+  LLMResponse,
+  PermissionChecker,
+} from '../../../src/provider-contract/types.js';
 
 type Row = { type: string; payload: Record<string, unknown> };
 

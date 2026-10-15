@@ -49,8 +49,8 @@ import type {
   LLMProvider,
   LLMRequest,
   LLMResponse,
-} from '../../../adapters/types.js';
-import { isRequestRefusal } from '../../../adapters/requestRefusal.js';
+} from '../../../provider-contract/types.js';
+import { isRequestRefusal } from '../../../provider-contract/requestRefusal.js';
 import { replayAttempts } from '../../../resilience/replayAttempt.js';
 import {
   CircuitOpenError,

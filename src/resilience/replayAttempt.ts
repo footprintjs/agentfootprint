@@ -1,5 +1,10 @@
 /** Carry only a leaf-approved replay retirement across one call's attempts. */
-import type { LLMCallHooks, LLMChunk, LLMRequest, LLMResponse } from '../adapters/types.js';
+import type {
+  LLMCallHooks,
+  LLMChunk,
+  LLMRequest,
+  LLMResponse,
+} from '../provider-contract/types.js';
 import type { ThinkingReplayOmission } from '../thinking/replay.js';
 import { retireReplayHistory } from '../thinking/replayHistory.js';
 

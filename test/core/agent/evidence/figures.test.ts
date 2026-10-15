@@ -17,7 +17,7 @@
 import { describe, expect, it } from 'vitest';
 import { Agent, defineTool, receiptAt, servedAt } from '../../../../src/index.js';
 import type { NamesAndNumbersOptions } from '../../../../src/index.js';
-import type { LLMRequest, LLMResponse } from '../../../../src/adapters/types.js';
+import type { LLMRequest, LLMResponse } from '../../../../src/provider-contract/types.js';
 import { extractCandidates } from '../../../../src/core/agent/evidence/extract.js';
 import {
   LIBRARY_NOTE_OPENING,

@@ -55,7 +55,7 @@ import { describe, expect, it } from 'vitest';
 import { isSaidByPerson } from '../../../src/index.js';
 import { evaluateInjections, saidByPerson } from '../../../src/injection-engine.js';
 import type { Injection, InjectionContext } from '../../../src/injection-engine.js';
-import type { LLMMessage, LLMProvider } from '../../../src/adapters/types.js';
+import type { LLMMessage, LLMProvider } from '../../../src/provider-contract/types.js';
 import { buildDropNotice } from '../../../src/core/agent/window/notice.js';
 import { buildCorrectiveTurn } from '../../../src/core/agent/outputEnforcement.js';
 import { buildEvidenceCorrection } from '../../../src/core/agent/evidence/gate.js';

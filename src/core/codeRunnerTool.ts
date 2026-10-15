@@ -54,8 +54,8 @@
 
 import { fnv1a } from '../lib/fnv1a.js';
 import { isLineBreak } from '../lib/linearText.js';
-import type { CodeInput, CodeResult, CodeRunner, CodeSession } from '../adapters/types.js';
-import { canStageCodeInputs, STAGED_INPUTS_ENV } from '../adapters/types.js';
+import type { CodeInput, CodeResult, CodeRunner, CodeSession } from '../provider-contract/types.js';
+import { canStageCodeInputs, STAGED_INPUTS_ENV } from '../provider-contract/types.js';
 import type { ToolWants } from '../artifacts/wants.js';
 import type { CredentialNeed } from '../identity/types.js';
 import type { CheckInDemand } from './checkin.js';

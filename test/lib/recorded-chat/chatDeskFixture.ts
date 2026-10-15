@@ -14,7 +14,7 @@ import { Agent } from '../../../src/core/Agent';
 import { defineFact } from '../../../src/lib/injection-engine/factories/defineFact';
 import type { Injection } from '../../../src/lib/injection-engine/types';
 import { mock } from '../../../src/adapters/llm/MockProvider';
-import type { LLMRequest } from '../../../src/adapters/types';
+import type { LLMRequest } from '../../../src/provider-contract/types';
 import { mockEmbedder } from '../../../src/memory/embedding/mockEmbedder';
 import { embeddingCache, type Embedder } from '../../../src/lib/influence-core';
 import { applyAblations, type AblationSpec } from '../../../src/lib/context-bisect';

@@ -51,7 +51,7 @@ import {
 } from '../../../../src/index.js';
 import { accountForAnswer, recordRun } from '../../../../src/observe.js';
 import { staticTools } from '../../../../src/tool-providers/index.js';
-import type { LLMRequest, LLMResponse } from '../../../../src/adapters/types.js';
+import type { LLMRequest, LLMResponse } from '../../../../src/provider-contract/types.js';
 import { validateCheckpoint } from '../../../../src/core/runCheckpoint.js';
 import {
   _resetPeriodWarnings,

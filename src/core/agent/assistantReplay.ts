@@ -1,5 +1,5 @@
 /** Durable metadata for a provider-authored assistant turn, copied at its writer. */
-import type { LLMMessage } from '../../adapters/types.js';
+import type { LLMMessage } from '../../provider-contract/types.js';
 import type { AgentState } from './types.js';
 
 /**

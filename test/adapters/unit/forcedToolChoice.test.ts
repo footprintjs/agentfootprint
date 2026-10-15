@@ -6,7 +6,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { Agent } from '../../../src/index.js';
-import type { LLMProvider, LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMProvider, LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
 import {
   anthropic,
   type AnthropicProviderOptions,

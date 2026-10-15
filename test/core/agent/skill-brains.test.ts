@@ -17,7 +17,7 @@ import { defineSkill, skillGraph } from '../../../src/injection-engine.js';
 import { mock } from '../../../src/llm-providers.js';
 import type { Injection } from '../../../src/lib/injection-engine/types.js';
 import type { IntentScorer } from '../../../src/lib/injection-engine/intentScorer.js';
-import type { LLMProvider } from '../../../src/adapters/types.js';
+import type { LLMProvider } from '../../../src/provider-contract/types.js';
 
 // ── Toolkit ──────────────────────────────────────────────────────────────
 

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { LLMProvider, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMProvider, LLMResponse } from '../../src/provider-contract/types.js';
 import { withFallback } from '../../src/resilience/withFallback.js';
 import { dispatchThinkingHandler, tagThinkingResponse } from '../../src/thinking/dispatch.js';
 import type { ThinkingHandler } from '../../src/thinking/types.js';

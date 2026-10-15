@@ -111,7 +111,7 @@ import {
   type ServedGapKind,
   type ServedView,
 } from '../../../src/index.js';
-import type { LLMMessage, LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMMessage, LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
 // The receipt-LESS shape a shipped chart still produces (9.91.0): a chart
 // builder run on the caller's own executor with no run id to salt hashes
 // with. The public barrel carries the deps type and not this builder.

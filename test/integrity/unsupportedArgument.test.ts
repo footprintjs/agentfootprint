@@ -37,7 +37,7 @@ import {
 import { Agent, defineTool } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
 import type { CheckReport } from '../../src/integrity/disposition/types.js';
-import type { LLMToolSchema } from '../../src/adapters/types.js';
+import type { LLMToolSchema } from '../../src/provider-contract/types.js';
 import {
   withFindingsArgument,
   withoutFindingsArgument,

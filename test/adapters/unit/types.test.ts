@@ -14,7 +14,7 @@ import type {
   MemoryStore,
   PermissionChecker,
   PricingTable,
-} from '../../../src/adapters/types.js';
+} from '../../../src/provider-contract/types.js';
 
 describe('adapter interface conformance', () => {
   it('LLMProvider has name + complete + optional stream', () => {
@@ -60,7 +60,7 @@ describe('adapter interface conformance', () => {
 
 /** Type regression tests separately prove absence through the public root door. */
 describe('removed unused adapter ports', () => {
-  const source = readFileSync(join(__dirname, '../../../src/adapters/types.ts'), 'utf8');
+  const source = readFileSync(join(__dirname, '../../../src/provider-contract/types.ts'), 'utf8');
   for (const name of [
     'ResolveCtx',
     'ContextContribution',

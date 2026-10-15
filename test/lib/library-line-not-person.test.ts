@@ -47,7 +47,7 @@ import {
   LIBRARY_NOTE_OPENING,
 } from '../../src/index.js';
 import { mock } from '../../src/providers.js';
-import type { LLMMessage, LLMRequest, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMMessage, LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
 import { TIME_LINE_SOURCE } from '../../src/core/agent/arguments/serve.js';
 import {
   figuresConclusionLine,

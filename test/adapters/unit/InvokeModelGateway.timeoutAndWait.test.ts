@@ -25,7 +25,7 @@ import {
   type InvokeModelGatewayOptions,
 } from '../../../src/adapters/llm/InvokeModelGatewayProvider.js';
 import { withRetry } from '../../../src/resilience/withRetry.js';
-import type { LLMChunk, LLMRequest } from '../../../src/adapters/types.js';
+import type { LLMChunk, LLMRequest } from '../../../src/provider-contract/types.js';
 
 const REQ: LLMRequest = {
   model: 'invoke-model-gateway',

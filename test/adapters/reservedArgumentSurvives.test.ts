@@ -65,7 +65,7 @@ import { foundry } from '../../src/adapters/llm/FoundryProvider.js';
 import { gemini } from '../../src/adapters/llm/GeminiProvider.js';
 import { ollama } from '../../src/adapters/llm/OllamaProvider.js';
 import { openai } from '../../src/adapters/llm/OpenAIProvider.js';
-import type { LLMRequest, LLMToolSchema } from '../../src/adapters/types.js';
+import type { LLMRequest, LLMToolSchema } from '../../src/provider-contract/types.js';
 
 // ─── The reserved property, as the model will be shown it ──────────
 // Owner: `src/core/agent/findings/reserved.ts · FINDINGS_ARGUMENT_SCHEMA`

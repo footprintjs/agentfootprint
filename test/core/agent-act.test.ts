@@ -39,7 +39,7 @@ import {
   type WindowRecord,
 } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
-import type { LLMRequest, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────
 

@@ -24,7 +24,7 @@ import {
 } from '../../../src/index.js';
 import { checkSemantics } from '../../../src/lib/semantics/index.js';
 import { REFUSED_PREFIX } from '../../../src/core/agent/coverage/refusal.js';
-import type { LLMMessage, LLMRequest } from '../../../src/adapters/types.js';
+import type { LLMMessage, LLMRequest } from '../../../src/provider-contract/types.js';
 import { mock } from '../../../src/llm-providers.js';
 
 const legacy = JSON.parse(

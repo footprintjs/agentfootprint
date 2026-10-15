@@ -15,7 +15,7 @@ import {
   servedAt,
   type Receipt,
 } from '../../../src/index.js';
-import type { LLMProvider, LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMProvider, LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
 import { buildMessageApiChart } from '../../../src/core/agent/buildMessageApiChart.js';
 import { gatedTools, staticTools } from '../../../src/tool-providers/index.js';
 

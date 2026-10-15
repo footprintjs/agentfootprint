@@ -23,7 +23,7 @@ import { AutomaticCacheStrategy } from '../../src/cache/strategies/AutomaticCach
 import { NoOpCacheStrategy } from '../../src/cache/strategies/NoOpCacheStrategy';
 import { cacheStrategyFor } from '../../src/cache/cacheStrategyFor';
 import type { CacheMarker, CacheStrategyContext } from '../../src/cache/types';
-import type { LLMRequest } from '../../src/adapters/types';
+import type { LLMRequest } from '../../src/provider-contract/types';
 import { openai } from '../../src/adapters/llm/OpenAIProvider';
 import { bedrock } from '../../src/adapters/llm/BedrockProvider';
 import { ollama } from '../../src/adapters/llm/OllamaProvider';

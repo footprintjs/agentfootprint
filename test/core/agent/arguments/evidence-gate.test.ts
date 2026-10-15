@@ -17,7 +17,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { Agent, defineTool, type Tool } from '../../../../src/index.js';
-import type { LLMRequest, LLMResponse } from '../../../../src/adapters/types.js';
+import type { LLMRequest, LLMResponse } from '../../../../src/provider-contract/types.js';
 import { answeredValuesOf } from '../../../../src/core/agent/stages/route.js';
 
 function scripted(script: readonly { content: string; toolCalls?: unknown[] }[]) {

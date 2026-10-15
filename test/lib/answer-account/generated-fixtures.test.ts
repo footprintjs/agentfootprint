@@ -32,7 +32,7 @@ import {
 import type { AgentfootprintEvent } from '../../../src/index.js';
 import { mock } from '../../../src/llm-providers.js';
 import { recordRun } from '../../../src/observe.js';
-import type { PermissionChecker } from '../../../src/adapters/types.js';
+import type { PermissionChecker } from '../../../src/provider-contract/types.js';
 import { defineSkill, keywordScorer, skillGraph } from '../../../src/injection-engine.js';
 import { accountForAnswer } from '../../../src/lib/answer-account/account.js';
 import type {

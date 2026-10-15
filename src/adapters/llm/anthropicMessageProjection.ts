@@ -1,5 +1,5 @@
 /** Pure Messages projection shared by body construction and replay checks. */
-import type { LLMMessage, LLMToolSchema } from '../types.js';
+import type { LLMMessage, LLMToolSchema } from '../../provider-contract/types.js';
 import type {
   AnthropicMessageParam,
   AnthropicContentBlock,

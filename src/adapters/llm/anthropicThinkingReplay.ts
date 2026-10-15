@@ -10,7 +10,7 @@
  * https://platform.claude.com/docs/en/build-with-claude/thinking#preserving-thinking-blocks
  * https://platform.claude.com/docs/en/build-with-claude/preserved-thinking
  */
-import type { LLMMessage, LLMRequest } from '../types.js';
+import type { LLMMessage, LLMRequest } from '../../provider-contract/types.js';
 import type {
   MessageReplay,
   ReplayPreparation,

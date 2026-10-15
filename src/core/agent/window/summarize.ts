@@ -25,7 +25,7 @@
  * Emits:   N/A (the stage emits; this file only builds and calls).
  */
 
-import type { LLMMessage, LLMProvider, LLMResponse } from '../../../adapters/types.js';
+import type { LLMMessage, LLMProvider, LLMResponse } from '../../../provider-contract/types.js';
 import type { CompactionRetention } from './types.js';
 import { COMPACTED_FRAME_PREFIX } from '../../../lib/saidByPerson.js';
 

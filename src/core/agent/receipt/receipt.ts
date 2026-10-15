@@ -100,7 +100,7 @@
  * places a reader is most likely to mistake it for wire-level proof.
  */
 
-import type { LLMMessage, LLMToolSchema } from '../../../adapters/types.js';
+import type { LLMMessage, LLMToolSchema } from '../../../provider-contract/types.js';
 import type { ContextRole, ContextSlot, ContextSource } from '../../../events/types.js';
 import { contributingPieces } from '../composeRequest.js';
 import { sha256Hex } from '../../../lib/sha256.js';
@@ -566,7 +566,7 @@ export function toolDigestInput(tool: LLMToolSchema): string {
  * the separator, beside the id, so a name moving between two results changes
  * both hashes and neither can absorb the other's bytes.
  *
- * WHY `thinkingBlocks` and `providerMeta` (9.88.0). `adapters/types.ts` is
+ * WHY `thinkingBlocks` and `providerMeta` (9.88.0). `provider-contract/types.ts` is
  * explicit that a signed thinking block MUST be echoed byte-exact or the API
  * rejects the turn, and `providerMeta` round-trips vendor state (Gemini's
  * `thoughtSignature`, without which the turn after a tool call is refused).

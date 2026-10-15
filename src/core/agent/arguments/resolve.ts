@@ -112,7 +112,7 @@ export interface BatchCall {
   readonly id: string;
   readonly name: string;
   readonly args: Readonly<Record<string, unknown>>;
-  readonly argumentsFailure?: import('../../../adapters/types.js').LLMResponse['toolCalls'][number]['argumentsFailure'];
+  readonly argumentsFailure?: import('../../../provider-contract/types.js').LLMResponse['toolCalls'][number]['argumentsFailure'];
 }
 
 /** The implementation that will answer a name — the shared dispatch resolver's. */

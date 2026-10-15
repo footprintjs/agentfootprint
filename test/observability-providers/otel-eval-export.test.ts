@@ -56,7 +56,7 @@ import {
 import { MockProvider } from '../../src/adapters/llm/MockProvider.js';
 import { mock } from '../../src/llm-providers.js';
 import { memorySessions, standingAgent } from '../../src/hosting/index.js';
-import type { LLMRequest } from '../../src/adapters/types.js';
+import type { LLMRequest } from '../../src/provider-contract/types.js';
 import { bearer } from '../../src/identity/kinds.js';
 import { sha256Hex } from '../../src/lib/sha256.js';
 import { inProcessHost } from '../hosting/testHost.js';

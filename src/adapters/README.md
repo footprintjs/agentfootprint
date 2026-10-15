@@ -19,8 +19,9 @@ injections, embedders and authorization use their dedicated, live contracts.
 
 ## Files
 
-- `types.ts` — the ports of the hexagonal architecture, in one place.
-- `requestRefusal.ts` — the narrow shared classifier for terminal request-contract
-  refusals, not transport failures or arbitrary application errors.
+- The ports themselves live one layer down, in `../provider-contract/`
+  (`types.ts`, the capability readers, `requestRefusal.ts`, `contextWindow.ts`),
+  so the agent, the decorators and the memory port read them without importing
+  any implementation. Nothing below this folder imports it.
 - `llm/`, `memory/`, `identity/`, `hosting/`, `mcp/`, `observability/`,
   `browser/`, `code/`, `google/` — one folder per port.

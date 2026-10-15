@@ -26,7 +26,7 @@
  *     `agentfootprint/skill-graph` exports.
  *   • PROVIDER LAYER — `constrainedEnumPick` + `llmClassifier`. These make a
  *     MODEL CALL, so they need an `LLMProvider`; a port that pretends
- *     otherwise is a fake abstraction. They may import `adapters/types.js`
+ *     otherwise is a fake abstraction. They may import `provider-contract/types.js`
  *     (and its closed type cluster), plus the pure capability reader below.
  *     They are deliberately NOT on the door.
  *
@@ -149,18 +149,21 @@ const PROVIDER_LAYER = [`${IE}/constrainedEnumPick.ts`, `${IE}/llmClassifier.ts`
 /** What the provider layer may reach on top of the pure set. */
 const PROVIDER_LEAVES: ReadonlyArray<readonly [file: string, why: string]> = [
   [
-    'src/adapters/forcedToolChoice.ts',
+    'src/provider-contract/forcedToolChoice.ts',
     'The shared forced-choice capability reader and typed refusal: reads only the ' +
       'already-allowed provider port, with a type-only import. No vendor, model table ' +
       'or engine. Its import boundary is pinned separately below.',
   ],
   [
-    'src/adapters/types.ts',
+    'src/provider-contract/types.ts',
     '`LLMProvider` / `LLMRequest` / `LLMResponse` / `LLMToolSchema` — the provider PORT. ' +
       'A constrained-enum pick is one model call; there is no honest way to describe it ' +
       'without naming a provider.',
   ],
-  ['src/thinking/types.ts', 'reached by `adapters/types.ts` for `ThinkingBlock`. No imports.'],
+  [
+    'src/thinking/types.ts',
+    'reached by `provider-contract/types.ts` for `ThinkingBlock`. No imports.',
+  ],
   [
     'src/thinking/replay.ts',
     'Replay metadata/report types reached by the provider PORT, plus a data-only refusal ' +
@@ -169,7 +172,7 @@ const PROVIDER_LEAVES: ReadonlyArray<readonly [file: string, why: string]> = [
   ],
   [
     'src/cache/types.ts',
-    'reached by `adapters/types.ts` for `CacheMarker` (`LLMRequest.cacheMarkers`), and it ' +
+    'reached by `provider-contract/types.ts` for `CacheMarker` (`LLMRequest.cacheMarkers`), and it ' +
       'points straight back — the files here are one closed cluster of pure TYPE ' +
       'declarations with no runtime between them. Note the pure core does NOT get this one: ' +
       'it uses the `SkillCachePolicy` mirror instead.',
@@ -470,7 +473,7 @@ describe('skill-graph fence — the provider layer', () => {
       true,
       ts.ScriptKind.TS,
     );
-    expect(specifiersOf(resolve(REPO, file))).toEqual(['../adapters/types.js']);
+    expect(specifiersOf(resolve(REPO, file))).toEqual(['../provider-contract/types.js']);
     const imports = source.statements.filter(ts.isImportDeclaration);
     expect(imports).toHaveLength(1);
     expect(imports[0]!.importClause?.isTypeOnly).toBe(true);
@@ -478,7 +481,7 @@ describe('skill-graph fence — the provider layer', () => {
   });
 
   it('the capability reader reaches only the provider type, never an adapter implementation', () => {
-    const file = 'src/adapters/forcedToolChoice.ts';
+    const file = 'src/provider-contract/forcedToolChoice.ts';
     const source = ts.createSourceFile(
       file,
       readFileSync(resolve(REPO, file), 'utf8'),
@@ -506,7 +509,7 @@ describe('skill-graph fence — the provider layer', () => {
 
   it('the provider layer really does use the port (the exception is not stale)', () => {
     const used = PROVIDER_LAYER.flatMap((f) =>
-      specifiersOf(resolve(REPO, f)).filter((s) => s.includes('adapters/types')),
+      specifiersOf(resolve(REPO, f)).filter((s) => s.includes('provider-contract/types')),
     );
     expect(
       used.length > 0,
@@ -601,8 +604,8 @@ describe('skill-graph fence — the structural mirrors', () => {
       'The mirror drifted. `ActiveInjection.inject.tools[].schema` is typed by ' +
         '`SkillToolSchema` and assigned from a real `LLMToolSchema`; if the two stop matching ' +
         'field for field, either the assignment breaks or (worse) a field silently stops ' +
-        'crossing the boundary. Update `hostContract.ts` to match `src/adapters/types.ts`.',
-    ).toEqual(membersOf('src/adapters/types.ts', 'LLMToolSchema'));
+        'crossing the boundary. Update `hostContract.ts` to match `src/provider-contract/types.ts`.',
+    ).toEqual(membersOf('src/provider-contract/types.ts', 'LLMToolSchema'));
   });
 
   it('SkillCachePolicyContext mirrors CachePolicyContext', () => {

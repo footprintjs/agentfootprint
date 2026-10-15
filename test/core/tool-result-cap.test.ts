@@ -31,7 +31,7 @@ import {
   capToolResult,
   type TruncatedToolResult,
 } from '../../src/core/agent/toolResultCap.js';
-import type { LLMMessage } from '../../src/adapters/types.js';
+import type { LLMMessage } from '../../src/provider-contract/types.js';
 
 // ─── Fixtures ────────────────────────────────────────────────────────
 

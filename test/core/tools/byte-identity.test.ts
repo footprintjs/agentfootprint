@@ -530,7 +530,11 @@ import { defineSkill, skillGraph } from '../../../src/injection-engine.js';
 import { skillScopedTools, staticTools } from '../../../src/tool-providers/index.js';
 import { mockClassifier, type ClassifyResult } from '../../../src/classify/index.js';
 import { defineOntology } from '../../../src/ontology/index.js';
-import type { LLMRequest, LLMResponse, LLMToolSchema } from '../../../src/adapters/types.js';
+import type {
+  LLMRequest,
+  LLMResponse,
+  LLMToolSchema,
+} from '../../../src/provider-contract/types.js';
 
 // ─── the harness ─────────────────────────────────────────────────────
 

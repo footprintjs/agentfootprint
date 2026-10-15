@@ -22,7 +22,7 @@
  * `CacheStrategyContext` passed into `prepareRequest`.
  */
 
-import type { LLMRequest, LLMResponse } from '../adapters/types.js';
+import type { LLMRequest, LLMResponse } from '../provider-contract/types.js';
 import type { Claim } from '../lib/claim/claim.js';
 
 /**

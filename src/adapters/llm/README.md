@@ -11,7 +11,7 @@ is explicit, observed and persisted, never a silent context rewrite.
 
 ## The one law here
 No adapter silently narrows what the model is shown. Budget failures refuse;
-`contextWindow.ts` owns those words. Thinking replay has its own documented
+`provider-contract/contextWindow.ts` owns those words. Thinking replay has its own documented
 protocol rule below; it is not a budget workaround.
 
 ## Adapters make one attempt
@@ -187,7 +187,8 @@ invokeModelGateway({ baseUrl, apiKeyHeader: 'api-key', apiKey, model, timeoutMs:
 - `anthropicThinkingWire.ts` — the translation of `LLMRequest.thinking` onto the body.
 - `retryAfter.ts` — the one reader of `retry-after-ms` / `Retry-After`, for the
   `retryAfterMs` an adapter declares.
-- `contextWindow.ts` — `ContextWindowExceededError`: the budget refusal, named.
+- `../../provider-contract/contextWindow.ts` — `ContextWindowExceededError`: the
+  budget refusal, named (the port's, so the run checkpoint reads it too).
 - `anthropicCacheWire.ts`, `azureUrl.ts`, `googleGenAI.ts`, `createProvider.ts`,
   `wireManifest.ts` — shared client/URL/cache helpers and the read-back of what
   actually crossed the wire.

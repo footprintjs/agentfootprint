@@ -17,7 +17,7 @@ import { describe, expect, it } from 'vitest';
 import { Agent, defineTool } from '../../src/index.js';
 import { mock } from '../../src/adapters/llm/MockProvider.js';
 import { ollama } from '../../src/adapters/llm/OllamaProvider.js';
-import type { LLMProvider } from '../../src/adapters/types.js';
+import type { LLMProvider } from '../../src/provider-contract/types.js';
 
 const ANSWER = 'Refunds take 3 business days.';
 

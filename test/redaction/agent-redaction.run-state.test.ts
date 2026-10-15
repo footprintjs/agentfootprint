@@ -30,7 +30,7 @@ import {
   ResumeRedactionError,
   RunInFlightError,
 } from '../../src/index.js';
-import type { LLMProvider, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMProvider, LLMResponse } from '../../src/provider-contract/types.js';
 import { recordRun } from '../../src/doors/observe.js';
 import { mock } from '../../src/doors/providers.js';
 import { conversationRedaction } from '../../src/doors/security.js';

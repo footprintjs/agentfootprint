@@ -37,7 +37,11 @@ import {
 } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
 import { mockMcpClient } from '../../src/tool-providers/index.js';
-import type { LLMRequest, LLMResponse, PermissionChecker } from '../../src/adapters/types.js';
+import type {
+  LLMRequest,
+  LLMResponse,
+  PermissionChecker,
+} from '../../src/provider-contract/types.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────
 

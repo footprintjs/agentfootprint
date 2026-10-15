@@ -40,7 +40,7 @@
 
 import { Agent, OutputSchemaError, SCHEMA_TOOL_NAME, allow } from '../../src/index.js';
 import { mock } from '../../src/doors/providers.js';
-import type { LLMProvider } from '../../src/adapters/types.js';
+import type { LLMProvider } from '../../src/provider-contract/types.js';
 import { isCliEntry, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

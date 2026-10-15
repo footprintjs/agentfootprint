@@ -11,7 +11,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { Agent, allow, deny } from '../../src/index.js';
-import type { LLMProvider, LLMRequest, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMProvider, LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
 import { memorySessions, standingAgent } from '../../src/hosting/index.js';
 import type {
   CheckpointEnvelope,

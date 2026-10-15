@@ -1,5 +1,5 @@
 /** One raw-thinking envelope for a provider choice, shared by both routing paths. */
-import type { LLMProvider, LLMResponse } from '../adapters/types.js';
+import type { LLMProvider, LLMResponse } from '../provider-contract/types.js';
 import type { ThinkingHandler } from './types.js';
 import { thinkingHandlerFor } from './thinkingHandlerFor.js';
 

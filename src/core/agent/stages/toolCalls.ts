@@ -57,8 +57,8 @@ import type {
   LLMMessage,
   PermissionCapability,
   PermissionChecker,
-} from '../../../adapters/types.js';
-import { checkerGoverns } from '../../../adapters/types.js';
+} from '../../../provider-contract/types.js';
+import { checkerGoverns } from '../../../provider-contract/types.js';
 import type { ContextRole } from '../../../events/types.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import { policyInForce } from '../../../redaction/runRedaction.js';
@@ -73,7 +73,7 @@ import {
 } from '../../../lib/injection-engine/skillGraph.js';
 import { skillActivationConfirmation } from '../../../lib/injection-engine/skillToolDescriptors.js';
 import type { ActiveInjection } from '../../../lib/injection-engine/types.js';
-import type { LLMToolSchema } from '../../../adapters/types.js';
+import type { LLMToolSchema } from '../../../provider-contract/types.js';
 import { selfCallNotice, selfSkillTools } from '../selfCallNotice.js';
 import { parkedMemberIds } from '../../../maps/engagement/types.js';
 import { spoken, type SpokenIds } from '../../../lib/spokenIds.js';

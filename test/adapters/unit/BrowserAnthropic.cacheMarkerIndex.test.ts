@@ -22,7 +22,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { browserAnthropic } from '../../../src/adapters/llm/BrowserAnthropicProvider.js';
-import type { LLMRequest } from '../../../src/adapters/types.js';
+import type { LLMRequest } from '../../../src/provider-contract/types.js';
 
 interface AnthropicBody {
   readonly messages: ReadonlyArray<{

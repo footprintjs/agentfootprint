@@ -22,10 +22,10 @@ import {
   type InvokeModelGatewayFetch,
 } from '../../../src/adapters/llm/InvokeModelGatewayProvider.js';
 import { createProvider } from '../../../src/adapters/llm/createProvider.js';
-import { ContextWindowExceededError } from '../../../src/adapters/llm/contextWindow.js';
+import { ContextWindowExceededError } from '../../../src/provider-contract/contextWindow.js';
 import { withRetry } from '../../../src/resilience/withRetry.js';
 import { Agent, defineTool } from '../../../src/index.js';
-import type { LLMChunk, LLMRequest } from '../../../src/adapters/types.js';
+import type { LLMChunk, LLMRequest } from '../../../src/provider-contract/types.js';
 
 // ─── The scripted gateway ───────────────────────────────────────────
 

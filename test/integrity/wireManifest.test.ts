@@ -21,7 +21,7 @@ import { wireViolationsOf } from '../../src/integrity/invariant-violation/wire.j
 import { anthropic } from '../../src/adapters/llm/AnthropicProvider.js';
 import { Agent, defineTool } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
-import type { LLMResponse } from '../../src/adapters/types.js';
+import type { LLMResponse } from '../../src/provider-contract/types.js';
 
 // ---------------------------------------------------------------------------
 // The extractor

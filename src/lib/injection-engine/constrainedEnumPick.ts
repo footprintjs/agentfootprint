@@ -19,8 +19,13 @@
  * member on the wire, exactly as `llmClassifier` has always sent it.
  */
 
-import type { LLMProvider, LLMRequest, LLMResponse, LLMToolSchema } from '../../adapters/types.js';
-import { forcedToolChoiceFor } from '../../adapters/forcedToolChoice.js';
+import type {
+  LLMProvider,
+  LLMRequest,
+  LLMResponse,
+  LLMToolSchema,
+} from '../../provider-contract/types.js';
+import { forcedToolChoiceFor } from '../../provider-contract/forcedToolChoice.js';
 import { anyOf, trimLeading, trimTrailing } from '../linearText.js';
 
 /** The synthetic pick tool, named by the caller (the wire shows this name). */

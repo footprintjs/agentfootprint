@@ -102,7 +102,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import { Agent, defineTool, epochLocations, servedAt, servedViews } from '../../../src/index.js';
-import type { LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
 
 /** The operations a scrub's work is made of — see the header — and the
  *  wrapper that counts one. Hoisted, so the (hoisted) mock factories below can

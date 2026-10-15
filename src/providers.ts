@@ -34,11 +34,14 @@
  *   `MockProvider` source is the canonical reference.
  */
 
-export { forcedToolChoiceFor, UnsupportedToolChoiceError } from './adapters/forcedToolChoice.js';
+export {
+  forcedToolChoiceFor,
+  UnsupportedToolChoiceError,
+} from './provider-contract/forcedToolChoice.js';
 export {
   nativeOutputSchemaFor,
   UnsupportedNativeOutputError,
-} from './adapters/nativeOutputSchema.js';
+} from './provider-contract/nativeOutputSchema.js';
 export { UnsafeThinkingReplayError } from './thinking/replay.js';
 export type {
   MessageReplay,
@@ -179,4 +182,4 @@ export type {
   // this subpath can name the type in their own signature.
   LLMCallHooks,
   ResilienceReport,
-} from './adapters/types.js';
+} from './provider-contract/types.js';

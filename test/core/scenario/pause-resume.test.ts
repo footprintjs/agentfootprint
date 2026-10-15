@@ -14,7 +14,7 @@ import { Agent } from '../../../src/core/Agent.js';
 import { isPaused, pauseHere } from '../../../src/core/pause.js';
 import { allow, deny } from '../../../src/core/agent/middleware/outcomes.js';
 import type { MiddlewareDecision } from '../../../src/core/agent/middleware/types.js';
-import type { LLMProvider, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMProvider, LLMResponse } from '../../../src/provider-contract/types.js';
 
 function scripted(...responses: readonly LLMResponse[]): LLMProvider {
   let i = 0;

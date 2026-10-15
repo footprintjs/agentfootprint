@@ -38,7 +38,7 @@ import type { AddressInfo } from 'node:net';
 import { providerFromEnv } from '../../../src/adapters/llm/createProvider.js';
 import { azureOpenai } from '../../../src/adapters/llm/OpenAIProvider.js';
 import { Agent } from '../../../src/index.js';
-import type { LLMRequest } from '../../../src/adapters/types.js';
+import type { LLMRequest } from '../../../src/provider-contract/types.js';
 
 // ─── The fake Azure wire ────────────────────────────────────────────
 

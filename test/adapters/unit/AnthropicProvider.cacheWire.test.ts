@@ -19,7 +19,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { anthropic } from '../../../src/adapters/llm/AnthropicProvider.js';
-import type { LLMRequest } from '../../../src/adapters/types.js';
+import type { LLMRequest } from '../../../src/provider-contract/types.js';
 
 interface CapturedParams {
   readonly system?: unknown;

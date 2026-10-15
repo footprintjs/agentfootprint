@@ -54,7 +54,7 @@
  *          DFS stage).
  */
 
-import type { LLMMessage } from '../adapters/types.js';
+import type { LLMMessage } from '../provider-contract/types.js';
 import type { ReplayPreparation } from '../thinking/replay.js';
 import {
   applyReplayRetirements,
@@ -64,7 +64,7 @@ import {
 import {
   isContextWindowExceeded,
   looksLikeContextWindowExceeded,
-} from '../adapters/llm/contextWindow.js';
+} from '../provider-contract/contextWindow.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
 import type { FoldedSpan } from './agent/window/types.js';
 import { argumentRowIsWellFormed } from './agent/arguments/rows.js';

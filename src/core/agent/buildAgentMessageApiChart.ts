@@ -28,7 +28,12 @@
 import { flowChartSelector, select } from 'footprintjs';
 import type { FlowChart, TypedScope } from 'footprintjs';
 import { ArrayMergeMode } from 'footprintjs/advanced';
-import type { LLMMessage, LLMProvider, LLMRequest, LLMToolSchema } from '../../adapters/types.js';
+import type {
+  LLMMessage,
+  LLMProvider,
+  LLMRequest,
+  LLMToolSchema,
+} from '../../provider-contract/types.js';
 import type { Receipt } from './receipt/receipt.js';
 import { messageApiReceipt } from './messageApiReceipt.js';
 import { createReceiptDigests } from './receipt/receiptDigests.js';

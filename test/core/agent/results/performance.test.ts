@@ -19,7 +19,7 @@ import { describe, expect, it } from 'vitest';
 import { vi } from 'vitest';
 
 import { Agent, absent, defineTool, type Tool } from '../../../../src/index.js';
-import type { LLMRequest, LLMResponse } from '../../../../src/adapters/types.js';
+import type { LLMRequest, LLMResponse } from '../../../../src/provider-contract/types.js';
 import { periodVerdict, type DeclaredPeriod } from '../../../../src/core/agent/coverage/period.js';
 import { expectScalesLinearly, expectWithinTimes } from '../../../helpers/perf.js';
 

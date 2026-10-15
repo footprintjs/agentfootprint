@@ -27,7 +27,7 @@ import {
   type StepGraph,
   type StepNode,
 } from '../../../src/recorders/observability/FlowchartRecorder.js';
-import type { LLMProvider, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMProvider, LLMResponse } from '../../../src/provider-contract/types.js';
 import type { CombinedRecorder } from 'footprintjs';
 
 // ─── Test helpers ────────────────────────────────────────────────────

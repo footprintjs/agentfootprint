@@ -197,7 +197,7 @@ import { RESERVED_ARGUMENT } from './findings/types.js';
 import { ownsReservedArgument } from './findings/reserved.js';
 import { carriesRules } from './arguments/declare.js';
 import type { Injection } from '../../lib/injection-engine/types.js';
-import type { LLMToolSchema } from '../../adapters/types.js';
+import type { LLMToolSchema } from '../../provider-contract/types.js';
 import { PRESENT_TOOL_NAME } from '../../artifacts/present.js';
 import { buildPresentTool } from './presentTool.js';
 import type { Tool, ToolRegistryEntry } from '../tools.js';

@@ -25,7 +25,7 @@ import { mock } from '../../src/adapters/llm/MockProvider.js';
 import { defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES } from '../../src/memory/index.js';
 import { InMemoryStore } from '../../src/memory/store/index.js';
 import { SUMMARY_ID_PREFIX, summaryCoverage } from '../../src/memory/stages/summarize.js';
-import type { LLMMessage, LLMProvider, LLMRequest } from '../../src/adapters/types.js';
+import type { LLMMessage, LLMProvider, LLMRequest } from '../../src/provider-contract/types.js';
 
 const IDENTITY = { conversationId: 'summarize-e2e' };
 

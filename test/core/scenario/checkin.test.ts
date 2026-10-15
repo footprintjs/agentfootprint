@@ -34,7 +34,7 @@ import type {
   PermissionChecker,
   PermissionDecision,
   PermissionRequest,
-} from '../../../src/adapters/types.js';
+} from '../../../src/provider-contract/types.js';
 import type {
   CredentialProvider,
   CredentialRequest,

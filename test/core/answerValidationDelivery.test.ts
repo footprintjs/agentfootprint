@@ -18,7 +18,7 @@ import {
   MEMORY_TYPES,
   MEMORY_STRATEGIES,
 } from '../../src/memory/index.js';
-import type { LLMRequest } from '../../src/adapters/types.js';
+import type { LLMRequest } from '../../src/provider-contract/types.js';
 import {
   prepareFinalStage,
   prepareFinalWithValidationStage,

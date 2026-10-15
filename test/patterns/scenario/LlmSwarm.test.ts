@@ -17,7 +17,7 @@
 import { describe, it, expect } from 'vitest';
 import { llmSwarm } from '../../../src/patterns/LlmSwarm.js';
 import { LLMCall } from '../../../src/core/LLMCall.js';
-import type { LLMProvider, LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMProvider, LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
 
 /** Router provider: answers from a script, remembers every request. */
 function scriptedRouter(replies: readonly string[]): LLMProvider & { readonly seen: LLMRequest[] } {

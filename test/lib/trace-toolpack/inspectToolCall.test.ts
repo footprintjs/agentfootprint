@@ -27,7 +27,7 @@ import {
   slidingWindow,
   type ToolMiddleware,
 } from '../../../src/index.js';
-import type { LLMMessage } from '../../../src/adapters/types.js';
+import type { LLMMessage } from '../../../src/provider-contract/types.js';
 import { mock } from '../../../src/llm-providers.js';
 import { recordRun } from '../../../src/observe.js';
 import { callTraceTool, traceToolpack, type TraceToolpackArtifacts } from '../../../src/observe.js';

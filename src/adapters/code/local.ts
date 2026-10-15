@@ -61,8 +61,14 @@
  *     .build();
  */
 
-import type { CodeInput, CodeResult, CodeRunner, CodeSession, StagedCodeInput } from '../types.js';
-import { STAGED_INPUTS_ENV } from '../types.js';
+import type {
+  CodeInput,
+  CodeResult,
+  CodeRunner,
+  CodeSession,
+  StagedCodeInput,
+} from '../../provider-contract/types.js';
+import { STAGED_INPUTS_ENV } from '../../provider-contract/types.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
 
 export interface LocalCodeRunnerOptions {

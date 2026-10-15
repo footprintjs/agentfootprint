@@ -3,7 +3,7 @@
  * text, tool arguments, signatures or credentials. The concrete wire owns
  * capture and comparison; the run owns persistence and observation.
  */
-import type { LLMRequest } from '../adapters/types.js';
+import type { LLMRequest } from '../provider-contract/types.js';
 
 /** The order of already-stored content and its supported inert wire metadata. */
 export type ReplayPart =

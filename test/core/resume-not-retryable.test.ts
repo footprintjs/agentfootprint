@@ -30,7 +30,7 @@ import {
 } from '../../src/index.js';
 import { mock } from '../../src/adapters/llm/MockProvider.js';
 import { openai } from '../../src/adapters/llm/OpenAIProvider.js';
-import type { LLMProvider, LLMRequest, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMProvider, LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
 
 const FIELD_MESSAGE =
   '400 Input tokens exceed the configured limit of 272000 tokens. ' +

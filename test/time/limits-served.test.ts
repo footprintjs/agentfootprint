@@ -29,7 +29,7 @@ import {
   isPaused,
   type Tool,
 } from '../../src/index.js';
-import type { LLMMessage, LLMRequest, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMMessage, LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
 import {
   TIME_LINE_SOURCE,
   timeLimitsSentence,

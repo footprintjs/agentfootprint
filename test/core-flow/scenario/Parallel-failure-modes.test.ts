@@ -17,7 +17,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { Parallel } from '../../../src/core-flow/Parallel.js';
 import { LLMCall } from '../../../src/core/LLMCall.js';
 import { MockProvider } from '../../../src/adapters/llm/MockProvider.js';
-import type { LLMProvider } from '../../../src/adapters/types.js';
+import type { LLMProvider } from '../../../src/provider-contract/types.js';
 import { expectWithinReferenceUnits, measureAsync } from '../../helpers/perf.js';
 
 function ok(reply: string) {

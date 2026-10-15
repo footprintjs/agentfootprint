@@ -128,8 +128,8 @@ import type {
   LLMResponse,
   LLMToolSchema,
   WireRole,
-} from '../types.js';
-import { asContextWindowExceeded } from './contextWindow.js';
+} from '../../provider-contract/types.js';
+import { asContextWindowExceeded } from '../../provider-contract/contextWindow.js';
 import {
   createGoogleGenAIClientResolver,
   resolveGoogleDoor,
@@ -530,7 +530,7 @@ export class GeminiProvider implements LLMProvider {
     this.inner = gemini(options);
   }
 
-  // `hooks` is FORWARDED, not dropped — see LLMCallHooks in adapters/types.ts.
+  // `hooks` is FORWARDED, not dropped — see LLMCallHooks in provider-contract/types.ts.
   complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
     return this.inner.complete(req, hooks);
   }

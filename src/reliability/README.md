@@ -13,7 +13,7 @@ adds no sentence to the wire.
 ## Request refusals and actual selected providers
 
 The live loop is `core/agent/stages/reliabilityExecution.ts`. The narrow
-`adapters/requestRefusal.ts` predicate identifies unsupported thinking,
+`provider-contract/requestRefusal.ts` predicate identifies unsupported thinking,
 unsupported forced-tool choice and unsafe thinking replay. Those refusals
 escape unchanged before error classification, post-rules or breaker failure
 accounting; a response-repair fallback cannot turn them into an outage either.

@@ -23,7 +23,13 @@
 
 import { isSaidByPerson } from '../../lib/saidByPerson.js';
 import { sleep } from '../../lib/sleep.js';
-import type { LLMChunk, LLMProvider, LLMRequest, LLMResponse, WireRole } from '../types.js';
+import type {
+  LLMChunk,
+  LLMProvider,
+  LLMRequest,
+  LLMResponse,
+  WireRole,
+} from '../../provider-contract/types.js';
 import { mockThinkingHandler } from '../../thinking/MockThinkingHandler.js';
 
 /** Either a fixed value (in ms) or a random `[min, max]` range (inclusive). */

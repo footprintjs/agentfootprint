@@ -32,7 +32,11 @@ import {
   type ToolMiddleware,
 } from '../../../../src/index.js';
 import { staticTools } from '../../../../src/tool-providers/index.js';
-import type { LLMRequest, LLMResponse, PermissionChecker } from '../../../../src/adapters/types.js';
+import type {
+  LLMRequest,
+  LLMResponse,
+  PermissionChecker,
+} from '../../../../src/provider-contract/types.js';
 import { SHOWN_ARGS } from '../../../../src/core/toolShownArgs.js';
 import { _resetUnmountedRulesWarnings } from '../../../../src/core/agent/arguments/dispatch.js';
 import type { ArgumentRow } from '../../../../src/core/agent/arguments/rows.js';

@@ -7,7 +7,12 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import { llmExtractor } from '../../../src/memory/beats/llmExtractor';
-import type { LLMProvider, LLMRequest, LLMResponse, LLMMessage } from '../../../src/adapters/types';
+import type {
+  LLMProvider,
+  LLMRequest,
+  LLMResponse,
+  LLMMessage,
+} from '../../../src/provider-contract/types';
 
 // ─── Test helpers ────────────────────────────────────────────────────
 

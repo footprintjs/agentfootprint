@@ -13,7 +13,7 @@ import { Sequence } from '../../../src/core-flow/Sequence.js';
 import { Loop } from '../../../src/core-flow/Loop.js';
 import { Conditional } from '../../../src/core-flow/Conditional.js';
 import { isPaused, pauseHere } from '../../../src/core/pause.js';
-import type { LLMProvider, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMProvider, LLMResponse } from '../../../src/provider-contract/types.js';
 
 function scripted(...responses: readonly LLMResponse[]): LLMProvider {
   let i = 0;

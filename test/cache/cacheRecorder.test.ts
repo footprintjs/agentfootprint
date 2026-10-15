@@ -35,7 +35,7 @@ const breakpoints = (): BreakpointCacheStrategy =>
     { mode: 'breakpoints', maxBreakpoints: 4, reportsUsage: true },
     'the Anthropic adapter',
   );
-import type { PricingTable, TokenKind } from '../../src/adapters/types';
+import type { PricingTable, TokenKind } from '../../src/provider-contract/types';
 import type { FlowDecisionEvent } from 'footprintjs';
 import type { AgentfootprintEvent } from '../../src/events/registry';
 import { expectScalesLinearly } from '../helpers/perf.js';

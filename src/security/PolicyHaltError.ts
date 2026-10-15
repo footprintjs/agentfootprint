@@ -36,7 +36,7 @@
  *   }
  */
 
-import type { LLMMessage, ToolCallEntry, ToolResultContent } from '../adapters/types.js';
+import type { LLMMessage, ToolCallEntry, ToolResultContent } from '../provider-contract/types.js';
 
 export interface PolicyHaltContext {
   /** Telemetry tag from the matched rule. Stable across versions. */

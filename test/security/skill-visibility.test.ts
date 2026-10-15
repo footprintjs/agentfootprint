@@ -40,7 +40,7 @@ import {
   unprovable,
   GRAPH_TOOL_DESCRIPTION,
 } from '../helpers/modelFacingClaims.js';
-import type { PermissionChecker, PermissionRequest } from '../../src/adapters/types.js';
+import type { PermissionChecker, PermissionRequest } from '../../src/provider-contract/types.js';
 
 // ─── Fixtures ────────────────────────────────────────────────────────
 

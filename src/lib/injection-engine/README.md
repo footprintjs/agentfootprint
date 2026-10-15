@@ -491,7 +491,7 @@ not survive three minor releases. A fence does.
 | zone | files | may import |
 |---|---|---|
 | PURE CORE | the 24 files the fence test lists — every row of the module map above except the two provider-layer ones and `factories/defineMenuHint.ts`, plus `types.ts` / `evaluator.ts` / `promptTemplate.ts` / `skillEntryEvidence.ts` / `skillGuard.ts` / `skillSteps.ts` / `skillVocabulary.ts` / `softmax.ts` | each other, and five verified zero-import leaves: `events/types.ts` (`ContextRole`/`ContextSource`), `memory/embedding/types.ts` (`Embedder`), `memory/embedding/cosine.ts`, `lib/iterationBudget.ts` (`iterationsRemainingOf` — the one arithmetic the engine, the cache decision and the request assembly must not drift by one about), `lib/saidByPerson.ts` (`isSaidByPerson` — which `role: 'user'` message a PERSON wrote, the same rule the window's refusal engine applies, so routing and the window cannot answer it differently) |
-| PROVIDER LAYER | `constrainedEnumPick.ts`, `llmClassifier.ts` | the above **plus** `adapters/types.ts` and the closed type-only cluster it points at (`thinking/types.ts`, `cache/types.ts`, `lib/claim/claim.ts`) |
+| PROVIDER LAYER | `constrainedEnumPick.ts`, `llmClassifier.ts` | the above **plus** `provider-contract/types.ts` and the closed type-only cluster it points at (`thinking/types.ts`, `cache/types.ts`, `lib/claim/claim.ts`) |
 
 The provider layer is deliberately outside the pure boundary, and
 deliberately **not** on the door. Both files make a MODEL CALL — a

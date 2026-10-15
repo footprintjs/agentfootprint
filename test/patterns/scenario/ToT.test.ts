@@ -5,7 +5,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { tot } from '../../../src/patterns/ToT.js';
-import type { LLMProvider, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMProvider, LLMResponse } from '../../../src/provider-contract/types.js';
 
 /**
  * Provider that returns distinct content per call — lets us verify

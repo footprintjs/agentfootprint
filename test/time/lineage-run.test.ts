@@ -25,7 +25,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Agent, defineTool, englishTimeReader, isInputPause, type Tool } from '../../src/index.js';
-import type { LLMRequest, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
 import { assessAnswer } from '../../src/core/agent/assessment/assess.js';
 
 type Reply = { content: string; toolCalls?: { id: string; name: string; args: object }[] };

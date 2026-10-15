@@ -25,7 +25,7 @@ import { readFileSync } from 'node:fs';
 
 import { anthropic } from '../../../src/adapters/llm/AnthropicProvider.js';
 import { browserAnthropic } from '../../../src/adapters/llm/BrowserAnthropicProvider.js';
-import type { LLMRequest } from '../../../src/adapters/types.js';
+import type { LLMRequest } from '../../../src/provider-contract/types.js';
 import { MSG, REQ_BUDGET, REQ_PLAIN, rec } from './anthropicWireFixtures.js';
 
 const REFERENCE = JSON.parse(

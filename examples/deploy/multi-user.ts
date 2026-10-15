@@ -39,7 +39,7 @@
  */
 
 import { Agent, type LLMProvider } from '../../src/index.js';
-import type { LLMRequest, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
 import { memorySessions, nodeHost, standingAgent } from '../../src/doors/hosting.js';
 import {
   defineMemory,

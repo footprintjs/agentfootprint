@@ -30,7 +30,7 @@ import {
   toEnvelope,
 } from '../../src/hosting/index.js';
 import type { CheckpointEnvelope, SessionLifecycle, WakeReason } from '../../src/hosting/index.js';
-import type { LLMProvider } from '../../src/adapters/types.js';
+import type { LLMProvider } from '../../src/provider-contract/types.js';
 import { inProcessHost } from './testHost.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────

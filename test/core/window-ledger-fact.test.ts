@@ -34,7 +34,7 @@ import { describe, expect, it } from 'vitest';
 import { Agent, slidingWindow, tokenBudget } from '../../src/index.js';
 import { MockProvider } from '../../src/adapters/llm/MockProvider.js';
 import { defineTool } from '../../src/core/tools.js';
-import type { LLMMessage, LLMRequest, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMMessage, LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
 import { foldLedger } from '../../src/core/agent/findings/ledger.js';
 import type { FindingsRow, Standing } from '../../src/core/agent/findings/types.js';
 import {

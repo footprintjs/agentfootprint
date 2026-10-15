@@ -36,14 +36,14 @@ import type {
   LLMRequest,
   LLMResponse,
   WireRole,
-} from '../adapters/types.js';
+} from '../provider-contract/types.js';
 import type { PromptCaching } from '../cache/types.js';
 import type { ThinkingHandler, ThinkingMode } from '../thinking/types.js';
 import { dispatchThinkingHandler, tagThinkingResponse } from '../thinking/dispatch.js';
-import { DEFAULT_CARRIES_IN_MESSAGES } from '../adapters/types.js';
-import { forcedToolChoiceFor } from '../adapters/forcedToolChoice.js';
-import { nativeOutputSchemaFor } from '../adapters/nativeOutputSchema.js';
-import { isRequestRefusal } from '../adapters/requestRefusal.js';
+import { DEFAULT_CARRIES_IN_MESSAGES } from '../provider-contract/types.js';
+import { forcedToolChoiceFor } from '../provider-contract/forcedToolChoice.js';
+import { nativeOutputSchemaFor } from '../provider-contract/nativeOutputSchema.js';
+import { isRequestRefusal } from '../provider-contract/requestRefusal.js';
 import { replayAttempts } from './replayAttempt.js';
 
 /**

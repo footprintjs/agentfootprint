@@ -24,7 +24,7 @@ import { slotOverflow } from '../../../src/core/slots/helpers.js';
 import { SUBFLOW_IDS } from '../../../src/lib/conventions.js';
 import { ContextRecorder } from '../../../src/recorders/core/ContextRecorder.js';
 import { EventDispatcher } from '../../../src/events/dispatcher.js';
-import type { LLMToolSchema } from '../../../src/adapters/types.js';
+import type { LLMToolSchema } from '../../../src/provider-contract/types.js';
 import type { BudgetPressureRecord, SlotComposition } from '../../../src/recorders/core/types.js';
 
 // ─── Fixtures ──────────────────────────────────────────────────────

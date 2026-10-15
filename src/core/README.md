@@ -247,7 +247,7 @@ named follow-up; a halt needs its own anchor, since "halted" is not "paused".
 ### One owner of 'never dispatched' — in history and on the stream
 
 **The fact has ONE definition — `LLMMessage.notDispatched`
-(`adapters/types.ts`) — ONE writer, and two carriers: the settled message in
+(`provider-contract/types.ts`) — ONE writer, and two carriers: the settled message in
 `history` (`agent/stages/toolCalls.ts` · `settleBatch`) and both halves of its
 bracket (`toolCalls.ts` · `bracketSettled`, the one stamping site;
 `ToolStartPayload.notDispatched` and `ToolEndPayload.notDispatched` in

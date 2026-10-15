@@ -59,7 +59,12 @@
  *   not do either — it is the same machinery.
  */
 
-import type { LLMCallHooks, LLMProvider, LLMRequest, WireRole } from '../types.js';
+import type {
+  LLMCallHooks,
+  LLMProvider,
+  LLMRequest,
+  WireRole,
+} from '../../provider-contract/types.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
 import { entraBearerToken, openai } from './OpenAIProvider.js';
 import type { OpenAIProviderOptions } from './OpenAIProvider.js';
@@ -285,7 +290,7 @@ export function foundry(options: FoundryProviderOptions = {}): LLMProvider {
     }),
     ...(inner.promptCaching !== undefined && { promptCaching: inner.promptCaching }),
     ...(inner.thinkingHandler !== undefined && { thinkingHandler: inner.thinkingHandler }),
-    // `hooks` is FORWARDED, not dropped — see LLMCallHooks in adapters/types.ts.
+    // `hooks` is FORWARDED, not dropped — see LLMCallHooks in provider-contract/types.ts.
     complete: (req, hooks) => inner.complete(withDeployment(req), hooks),
     ...(inner.stream && {
       stream: (req: LLMRequest, hooks?: LLMCallHooks) => inner.stream!(withDeployment(req), hooks),

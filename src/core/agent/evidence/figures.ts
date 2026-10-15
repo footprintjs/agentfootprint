@@ -66,7 +66,7 @@
  * are not asked about, which can only flag MORE, never fewer.
  */
 
-import type { LLMMessage } from '../../../adapters/types.js';
+import type { LLMMessage } from '../../../provider-contract/types.js';
 import { LIBRARY_NOTE_OPENING } from '../../../lib/saidByPerson.js';
 import { toolBytesOf } from '../../../lib/toolBytes.js';
 import { readResult } from './evidenceIndex.js';

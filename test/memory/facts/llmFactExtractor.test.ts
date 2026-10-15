@@ -8,7 +8,12 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import { llmFactExtractor } from '../../../src/memory/facts/llmFactExtractor';
-import type { LLMProvider, LLMRequest, LLMResponse, LLMMessage } from '../../../src/adapters/types';
+import type {
+  LLMProvider,
+  LLMRequest,
+  LLMResponse,
+  LLMMessage,
+} from '../../../src/provider-contract/types';
 
 interface ScriptedProviderOptions {
   readonly content: string;

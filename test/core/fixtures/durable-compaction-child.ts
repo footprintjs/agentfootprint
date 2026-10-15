@@ -21,7 +21,7 @@
 
 import { Agent, foldedSpanFor, isCompactedSummary } from '../../../src/index.js';
 import { readEnvelope, sqliteSessions } from '../../../src/hosting/index.js';
-import type { LLMProvider, LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMProvider, LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
 
 async function main(): Promise<void> {
   const file = process.env.SESSION_DB;

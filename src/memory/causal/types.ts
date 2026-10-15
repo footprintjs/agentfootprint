@@ -17,7 +17,7 @@
  * search out of the box.
  */
 
-import type { LLMMessage } from '../../adapters/types.js';
+import type { LLMMessage } from '../../provider-contract/types.js';
 
 /**
  * One stored agent run — the unit of causal memory.

@@ -21,7 +21,7 @@ import {
   type CheckInAssembler,
   type CheckInScorer,
 } from '../../../src/core/checkin.js';
-import type { LLMMessage } from '../../../src/adapters/types.js';
+import type { LLMMessage } from '../../../src/provider-contract/types.js';
 
 const HISTORY: readonly LLMMessage[] = [
   { role: 'system', content: 'Refund only verified orders. Confirm the amount.' },

@@ -43,7 +43,7 @@ import {
   type InputRequestDeclaration,
   type RunnerPauseOutcome,
 } from '../../src/index.js';
-import type { LLMRequest, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
 
 type Reply = { content: string; toolCalls?: { id: string; name: string; args: object }[] };
 

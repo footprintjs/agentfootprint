@@ -27,7 +27,7 @@ import {
   exemptFromRun,
 } from '../../../src/core/agent/evidence/evidenceIndex.js';
 import { checkAnswer, resolveEvidenceGate } from '../../../src/core/agent/evidence/gate.js';
-import type { LLMMessage, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMMessage, LLMResponse } from '../../../src/provider-contract/types.js';
 
 const QUESTION = 'what applications are running on powerstore SHPSTRPLPCL003';
 const TOOL_RESULT = JSON.stringify({ volumes: [{ name: 'VOL-ORA-7731', app: 'oracle-erp' }] });

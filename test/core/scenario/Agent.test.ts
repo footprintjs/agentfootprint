@@ -13,7 +13,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Agent } from '../../../src/core/Agent.js';
 import { MockProvider } from '../../../src/adapters/llm/MockProvider.js';
-import type { LLMProvider, LLMRequest, LLMResponse } from '../../../src/adapters/types.js';
+import type { LLMProvider, LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
 
 /** Deterministic scripted provider — returns one response per call. */
 function scriptedProvider(...responses: readonly LLMResponse[]): LLMProvider {

@@ -22,7 +22,7 @@ import {
   RunCheckpointError,
   tokenBudget,
 } from '../../src/index.js';
-import type { LLMProvider, LLMRequest, LLMResponse } from '../../src/adapters/types.js';
+import type { LLMProvider, LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
 import type { WindowRecord } from '../../src/core/agent/window/types.js';
 import { recordRun, toSSE } from '../../src/doors/observe.js';

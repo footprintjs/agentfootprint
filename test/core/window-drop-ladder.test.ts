@@ -34,7 +34,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { slidingWindow, tokenBudget, summarizeOldest } from '../../src/index.js';
-import type { LLMMessage, LLMProvider, LLMRequest, LLMResponse } from '../../src/adapters/types.js';
+import type {
+  LLMMessage,
+  LLMProvider,
+  LLMRequest,
+  LLMResponse,
+} from '../../src/provider-contract/types.js';
 import {
   answeredCallIds,
   planRemoval,

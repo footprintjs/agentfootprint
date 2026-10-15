@@ -17,7 +17,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import type { LLMMessage } from '../../../src/adapters/types.js';
+import type { LLMMessage } from '../../../src/provider-contract/types.js';
 import {
   deliveryKey,
   effectiveWireRole,

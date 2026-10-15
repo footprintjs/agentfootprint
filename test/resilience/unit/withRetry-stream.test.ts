@@ -28,7 +28,7 @@ import type {
   LLMRequest,
   LLMResponse,
   ResilienceReport,
-} from '../../../src/adapters/types.js';
+} from '../../../src/provider-contract/types.js';
 
 const request: LLMRequest = { messages: [{ role: 'user', content: 'hi' }], model: 'mock' };
 
