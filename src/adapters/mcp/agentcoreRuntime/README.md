@@ -104,9 +104,19 @@ sentence. A vended bearer token is used for one request and dropped.
    validation errors quote the value they refused, a proxy may echo a header —
    and the MCP client's error text reaches the model, the history and
    `tool_end`. Scrubbing known values out of that text misses whatever it was
-   not told about. A `result` is never touched. Both auth strategies, one
-   function, applied outside the retry (which still reads the original).
-9. **No user-delegated bearer.** `auth.mode` must be `'machine'`: the vending
+   not told about. Both auth strategies, one function, applied outside the
+   retry (which still reads the original).
+9. **One reading of an answer.** A 2xx is never handed on as its raw bytes: it
+   is classified by one rule (exactly `application/json` or
+   `text/event-stream`, UTF-8), parsed ONCE (`strictJson.ts`), checked, and
+   re-serialized — the MCP client reads the value that was checked, so no
+   crafted body can pass the check and be read as something else. Refused by
+   name, as a 502 in this library's words: a duplicated key, more than one
+   message in a body or an event, trailing data, a byte-order mark, a body
+   that is not UTF-8, a content type that is not one of the two. An event
+   stream is read event by event as it passes, by the SSE rules, and an event
+   that cannot be read cuts the stream with the same kind of refusal.
+10. **No user-delegated bearer.** `auth.mode` must be `'machine'`: the vending
    request names no user, so a `'user'` token would be sent for whoever calls
    through the client. For a token per user, build a transport per user whose
    provider vends that user's token.
@@ -115,7 +125,8 @@ sentence. A vended bearer token is used for one request and dropped.
 - `transport.ts` — the facade: options, the endpoint URL, the composition.
 - `sessionBusy.ts` — the retry decision (one function).
 - `session.ts` — `'per-call'` (default) and `'reuse'`.
-- `safeAnswer.ts` — what the MCP client may read of a failure: fixed sentences and safe ids.
+- `safeAnswer.ts` — what the MCP client may read: failures rewritten, a 2xx read once and re-serialized.
+- `strictJson.ts` — the one JSON reader: duplicated keys, trailing data and a BOM refused.
 - `errorType.ts` — the bare `x-amzn-errortype` name.
 - `invoke.ts` — the SigV4 strategy over `InvokeAgentRuntimeCommand` (the only
   file that loads `@aws-sdk/client-bedrock-agentcore`).

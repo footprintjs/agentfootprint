@@ -495,7 +495,11 @@ request was not passed on …"`. AWS quotes the whole signed request on a
 signature mismatch, its validation errors quote the value they refused, and the
 MCP client's error text reaches the model and the run's record — so the text is
 rewritten, not scrubbed. The same holds for a 200 JSON-RPC error and an error
-event in a stream; a tool `result` is never touched. A GET or DELETE
+event in a stream. And a successful answer is read ONCE — parsed strictly,
+checked, and re-serialized, so the client reads exactly the value that was
+checked; an answer two readers could read two ways (a duplicated key, two
+messages in one body, trailing data, a content type that does not match) is
+refused as a 502 in this library's words. A GET or DELETE
 has no `InvokeAgentRuntime` form, so the transport answers it with 405, which MCP
 defines as "not offered".
 

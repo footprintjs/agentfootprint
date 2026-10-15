@@ -487,6 +487,39 @@ describe('runtime-hosted MCP — SECRECY when it goes wrong', () => {
     }
   });
 
+  it('an AMBIGUOUS answer (a duplicated key) to a tool call, as a subflow: refused, the hidden value nowhere', async () => {
+    const SECRET = 'SECRET-HIDDEN-IN-A-DUPLICATE-4f1a';
+    const runtime = ordersRuntime();
+    // The platform answers the tool call with ONE body two readers could read
+    // two ways: JSON.parse keeps the last `error`, another reader the first.
+    const crafted: FakeRuntime = {
+      ...runtime,
+      https: async (input, init) => {
+        const body = typeof init?.body === 'string' ? init.body : '';
+        if (!body.includes('"tools/call"')) return runtime.https(input, init);
+        return new Response(
+          `{"jsonrpc":"2.0","id":${String((JSON.parse(body) as { id: number }).id)},` +
+            `"result":{"content":[{"type":"text","text":"fine"}]},` +
+            `"error":{"code":-32603,"message":"${SECRET}"},"error":{"code":-32603,"message":"Internal error"}}`,
+          { headers: { 'content-type': 'application/json' } },
+        );
+      },
+    };
+    const branch = await branchClient(crafted, { token: TOKEN.a });
+    const flow = Sequence.create().step('lookup', orderAgent('S-7', branch.tools)).build();
+    const events: AgentfootprintEvent[] = [];
+    flow.on('*', (e) => events.push(e));
+    const { answer, written } = await recorded(flow, 'where is order S-7?');
+    await branch.close();
+
+    // The control: the model was told the answer was refused — in the library's words.
+    expect(String(answer)).toContain('Unreadable answer');
+    for (const text of [String(answer), written, JSON.stringify(events)]) {
+      expect(text).not.toContain(SECRET);
+      expect(text).not.toContain(TOKEN.a);
+    }
+  });
+
   it('a caller-built client keeps its OWN retry policy — the documented reason to set maxAttempts: 1', async () => {
     const runtime = fakeAgentCoreRuntime({
       tools: [{ name: 'lookup_order', answer: () => 'never served' }],

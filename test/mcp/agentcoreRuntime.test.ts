@@ -301,7 +301,8 @@ describe('agentCoreRuntimeMcpTransport — P2 boundary', () => {
     expect(res.headers.get('mcp-session-id')).toMatch(/^[0-9a-f-]{36}$/);
     expect(res.headers.get('mcp-session-id')).not.toBe('mcp-from-platform');
     expect(res.headers.get('mcp-protocol-version')).toBe('2025-06-18');
-    expect(res.headers.get(AGENTCORE_RUNTIME_SESSION_HEADER)).toBe('rt-1');
+    // The runtime's own session header is not the MCP client's to read.
+    expect(res.headers.get(AGENTCORE_RUNTIME_SESSION_HEADER)).toBeNull();
     expect(await res.text()).toBe('{"ok":1}');
   });
 
@@ -391,7 +392,11 @@ describe('agentCoreRuntimeMcpTransport — P2 boundary', () => {
     const stream = new ReadableStream<Uint8Array>({
       pull(controller) {
         pulled++;
-        controller.enqueue(new TextEncoder().encode(`data: ${pulled}\n\n`));
+        controller.enqueue(
+          new TextEncoder().encode(
+            `data: {"jsonrpc":"2.0","method":"n","params":{"i":${pulled}}}\n\n`,
+          ),
+        );
         if (pulled === 3) controller.close();
       },
     });
@@ -411,14 +416,15 @@ describe('agentCoreRuntimeMcpTransport — P2 boundary', () => {
     })) as Response;
     // Still a stream: an event is passed on as it arrives, not after the end.
     const reader = (res.body as ReadableStream<Uint8Array>).getReader();
+    const event = (i: number) => `data: {"jsonrpc":"2.0","method":"n","params":{"i":${i}}}\n\n`;
     const first = await reader.read();
-    expect(new TextDecoder().decode(first.value)).toBe('data: 1\n\n');
+    expect(new TextDecoder().decode(first.value)).toBe(event(1));
     expect(pulled).toBeLessThan(3);
     let rest = '';
     for (let next = await reader.read(); !next.done; next = await reader.read()) {
       rest += new TextDecoder().decode(next.value);
     }
-    expect(rest).toBe('data: 2\n\ndata: 3\n\n');
+    expect(rest).toBe(event(2) + event(3));
   });
 
   it('P2 an SSE error event is rewritten as it passes; the other events byte for byte', async () => {
@@ -1051,8 +1057,8 @@ describe('agentCoreRuntimeMcpTransport — P5 security', () => {
     const rpc = await (await send()).text();
     expect(rpc).not.toContain(SECRET);
     expect(JSON.parse(rpc)).toMatchObject({ jsonrpc: '2.0', id: 1, error: { code: -32001 } });
-    // A result is handed on as it is — the very object, unread.
-    expect(await send()).toBe(ok);
+    // A result is handed on as the value it held.
+    expect(await (await send()).json()).toEqual({ result: {} });
   });
 
   it("P5 'reuse': two clients on ONE transport are two runtime sessions, never one", async () => {
@@ -1409,7 +1415,7 @@ describe('agentCoreRuntimeMcpTransport — P5 a failure is the library’s sente
   });
 
   it('a 2xx RESULT is never rewritten, even when it holds a value the request sent', async () => {
-    let result: Response | undefined;
+    let sent: unknown;
     const transport = agentCoreRuntimeMcpTransport({
       agentRuntimeArn: ARN,
       region: REGION,
@@ -1417,12 +1423,12 @@ describe('agentCoreRuntimeMcpTransport — P5 a failure is the library’s sente
         bearer: staticTokens({ runtime: 't' }),
         fetch: async (_input, init) => {
           const id = new Headers(init?.headers).get(AGENTCORE_RUNTIME_SESSION_HEADER) ?? '';
-          result = jsonReply({
+          sent = {
             jsonrpc: '2.0',
             id: 1,
             result: { orders: 20261015, note: `session ${id}`, error: 'a field named error' },
-          });
-          return result;
+          };
+          return jsonReply(sent);
         },
       },
     });
@@ -1430,18 +1436,193 @@ describe('agentCoreRuntimeMcpTransport — P5 a failure is the library’s sente
       method: 'POST',
       body: '{}',
     })) as Response;
-    expect(res).toBe(result);
-    expect(await res.json()).toMatchObject({ result: { orders: 20261015 } });
+    // Re-serialized from the one reading — the same value, untouched.
+    expect(await res.json()).toEqual(sent);
   });
 
-  it('a successful answer is handed on as the very object, unread', async () => {
-    const ok = jsonReply({ result: {} });
+  it('a successful answer is handed on as the value it held, re-serialized', async () => {
     const transport = agentCoreRuntimeMcpTransport({
       agentRuntimeArn: ARN,
       region: REGION,
-      auth: { bearer: staticTokens({ runtime: 't' }), fetch: async () => ok },
+      auth: {
+        bearer: staticTokens({ runtime: 't' }),
+        fetch: async () =>
+          new Response('  {"jsonrpc":"2.0", "id":1, "result":{"a":1.0}}  ', {
+            headers: { 'content-type': 'application/json; charset=utf-8' },
+          }),
+      },
     });
-    expect(await transport.fetch?.(transport.url, { method: 'POST', body: '{}' })).toBe(ok);
+    const res = (await transport.fetch?.(transport.url, {
+      method: 'POST',
+      body: '{}',
+    })) as Response;
+    expect(res.headers.get('content-type')).toBe('application/json');
+    expect(await res.text()).toBe('{"jsonrpc":"2.0","id":1,"result":{"a":1}}');
+  });
+});
+
+describe('agentCoreRuntimeMcpTransport — P5 one reading of an answer; ambiguity refused by name', () => {
+  const SECRET = 'SECRET-AMBIGUOUS-0001';
+  /** A transport whose platform answers `reply` (a body and its headers) to every request. */
+  function answering(body: BodyInit, headers: Record<string, string>, status = 200) {
+    return agentCoreRuntimeMcpTransport({
+      agentRuntimeArn: ARN,
+      region: REGION,
+      retry: false,
+      auth: {
+        bearer: staticTokens({ runtime: 't' }),
+        fetch: async () => new Response(body, { status, headers }),
+      },
+    });
+  }
+  const send = async (transport: ReturnType<typeof answering>) =>
+    (await transport.fetch?.(transport.url, { method: 'POST', body: '{}' })) as Response;
+  const JSON_TYPE = { 'content-type': 'application/json' };
+
+  it.each([
+    [
+      'a duplicated key',
+      `{"jsonrpc":"2.0","id":1,"error":{"code":-32603,"message":"Internal error"},"error":{"code":1,"message":"${SECRET}"}}`,
+      JSON_TYPE,
+      /a duplicated object key/,
+    ],
+    [
+      'a duplicated key inside the error',
+      `{"jsonrpc":"2.0","id":1,"error":{"code":-32603,"message":"Internal error","message":"${SECRET}"}}`,
+      JSON_TYPE,
+      /a duplicated object key/,
+    ],
+    [
+      'more than one message in one body',
+      `[{"jsonrpc":"2.0","id":1,"result":{}},{"jsonrpc":"2.0","id":2,"error":{"code":1,"message":"${SECRET}"}}]`,
+      JSON_TYPE,
+      /more than one message/,
+    ],
+    [
+      'trailing data after the value',
+      `{"jsonrpc":"2.0","id":1,"result":{}} {"jsonrpc":"2.0","id":1,"error":{"code":1,"message":"${SECRET}"}}`,
+      JSON_TYPE,
+      /trailing data/,
+    ],
+    [
+      'a content type that does not match the body',
+      `{"jsonrpc":"2.0","id":1,"error":{"code":1,"message":"${SECRET}"}}`,
+      { 'content-type': 'text/plain; profile=application/json' },
+      /content type/,
+    ],
+    [
+      'two content types at once',
+      `{"jsonrpc":"2.0","id":1,"error":{"code":1,"message":"${SECRET}"}}`,
+      { 'content-type': 'application/json, text/event-stream' },
+      /content type/,
+    ],
+    [
+      'a charset other than UTF-8',
+      `{"jsonrpc":"2.0","id":1,"error":{"code":1,"message":"${SECRET}"}}`,
+      { 'content-type': 'application/json; charset=utf-16' },
+      /content type/,
+    ],
+    [
+      'no content type at all',
+      new TextEncoder().encode(`{"jsonrpc":"2.0","id":1,"error":{"code":1,"message":"${SECRET}"}}`),
+      {},
+      /no content type/,
+    ],
+  ] as const)(
+    '%s: refused (502) in the library’s words, the body unread by the client',
+    async (_, body, headers, reason) => {
+      const res = await send(answering(body, headers));
+      const text = await res.text();
+      expect(res.status).toBe(502);
+      expect(JSON.parse(text).message).toMatch(reason);
+      expect(text).not.toContain(SECRET);
+    },
+  );
+
+  it('a leading byte-order mark is refused', async () => {
+    const bom = new Uint8Array([
+      0xef,
+      0xbb,
+      0xbf,
+      ...new TextEncoder().encode('{"jsonrpc":"2.0","id":1,"result":{}}'),
+    ]);
+    const res = await send(answering(bom, JSON_TYPE));
+    expect(res.status).toBe(502);
+    expect(JSON.parse(await res.text()).message).toMatch(/byte-order mark/);
+  });
+
+  it('a body that is not UTF-8 is refused', async () => {
+    const res = await send(answering(new Uint8Array([0x7b, 0xff, 0x7d]), JSON_TYPE));
+    expect(res.status).toBe(502);
+    expect(JSON.parse(await res.text()).message).toMatch(/not UTF-8/);
+  });
+
+  it('header case never changes the reading: Content-Type: Application/JSON is JSON', async () => {
+    const res = await send(
+      answering('{"jsonrpc":"2.0","id":1,"result":{}}', { 'Content-Type': 'Application/JSON' }),
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ jsonrpc: '2.0', id: 1, result: {} });
+  });
+
+  it('a `__proto__` key is data in the reading, never a prototype', async () => {
+    const res = await send(
+      answering('{"jsonrpc":"2.0","id":1,"result":{"__proto__":{"polluted":true}}}', JSON_TYPE),
+    );
+    const text = await res.text();
+    expect(text).toContain('"__proto__"');
+    expect(({} as { polluted?: boolean }).polluted).toBeUndefined();
+  });
+
+  describe('event streams', () => {
+    const SSE = { 'content-type': 'text/event-stream' };
+    const read = async (res: Response): Promise<{ text: string; error?: string }> => {
+      try {
+        return { text: await res.text() };
+      } catch (err) {
+        return { text: '', error: (err as Error).message };
+      }
+    };
+
+    it('an event with a duplicated key cuts the stream, in the library’s words', async () => {
+      const res = await send(
+        answering(
+          `data: {"jsonrpc":"2.0","id":1,"error":{"code":1,"message":"Internal error"},"error":{"code":1,"message":"${SECRET}"}}\n\n`,
+          SSE,
+        ),
+      );
+      const { text, error } = await read(res);
+      expect(error).toMatch(/the event stream was cut: a duplicated object key/);
+      expect(text + (error ?? '')).not.toContain(SECRET);
+    });
+
+    it('an event holding more than one message cuts the stream', async () => {
+      const res = await send(
+        answering(`data: [{"jsonrpc":"2.0","method":"a"},{"jsonrpc":"2.0","method":"b"}]\n\n`, SSE),
+      );
+      expect((await read(res)).error).toMatch(/more than one message/);
+    });
+
+    it('an event whose data is not JSON cuts the stream', async () => {
+      const res = await send(answering(`data: ${SECRET}\n\n`, SSE));
+      const { error } = await read(res);
+      expect(error).toMatch(/the event stream was cut/);
+      expect(error).not.toContain(SECRET);
+    });
+
+    it('data split over lines and CR line endings read as ONE message, re-emitted canonically', async () => {
+      const res = await send(
+        answering('id: 7\revent: message\rdata: {"jsonrpc":"2.0",\rdata: "method":"n"}\r\r', SSE),
+      );
+      expect(await res.text()).toBe(
+        'event: message\nid: 7\ndata: {"jsonrpc":"2.0","method":"n"}\n\n',
+      );
+    });
+
+    it('a last event with no blank line after it is not dispatched — as the SSE rules say', async () => {
+      const res = await send(answering(`data: {"jsonrpc":"2.0","method":"n"}`, SSE));
+      expect(await res.text()).toBe('');
+    });
   });
 });
 
