@@ -69,6 +69,7 @@
       "PRIOR_TURN_EVIDENCE_CEILING",
       "Parallel",
       "ParallelBuilder",
+      "ParentRunRefusedError",
       "PauseAnswerRequiredError",
       "PendingQuestionError",
       "RECEIPT_BOUNDARY",

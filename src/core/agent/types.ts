@@ -1480,7 +1480,7 @@ export interface AgentState {
    * instance's own fields describe some other run. Absent on the agent's own
    * runs, which commit exactly the keys they always did.
    */
-  memberRun?: import('../memberRun.js').ParentRun;
+  memberRun?: import('../memberRun.js').ParentRunRecord;
   /**
    * The session this run served — written by seed on a session-bound run;
    * `null` on a run a caller named an identity for that has no session (the

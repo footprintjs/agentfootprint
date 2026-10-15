@@ -129,6 +129,7 @@ import { buildToolResolver, type ToolResolution } from './toolResolver.js';
 import type { Tool, ToolExecutionContext } from '../../../tools/tools.js';
 import { agentToolDispatch } from '../toolDispatch.js';
 import type { MemoryIdentity } from '../../../memory/identity/types.js';
+import { runOfLink } from '../../memberRun.js';
 import type {
   TeardownOptions,
   TeardownScope,
@@ -2585,10 +2586,13 @@ export function buildToolCallsHandler(
     // Decided WITHOUT reading the state, so the agent's own runs record
     // exactly what they always did.
     if (deps.isOwnRun?.(scope) !== false) return deps.currentRun?.();
+    // A composition's run is looked up by its link — never read off the
+    // record in state. Only a chart a caller built (no link) carries its own.
     const memberRun = scope.memberRun;
+    const run = memberRun?.link === '' ? memberRun : runOfLink(memberRun?.link);
     return {
-      runId: memberRun?.runId ?? '',
-      ...(memberRun?.identity !== undefined && { identity: memberRun.identity }),
+      runId: run?.runId ?? '',
+      ...(run?.identity !== undefined && { identity: run.identity }),
     };
   };
 

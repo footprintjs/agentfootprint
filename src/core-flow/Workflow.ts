@@ -89,7 +89,9 @@ import {
   adoptParentRun,
   parentRunIn,
   readsParentRun,
-  topLevelParentRun,
+  closeParentRun,
+  openParentRun,
+  reopenParentRun,
   withParentRun,
 } from '../core/memberRun.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
@@ -190,16 +192,21 @@ export class Workflow<TIn extends object = object, TOut = unknown> extends Runne
     // The run every step serves — the caller's identity when the input names
     // one (`input.identity`, as `AgentInput` does), else this run's own
     // conversation (`core/memberRun.ts`).
-    const parentRun = topLevelParentRun(
+    const parentRun = openParentRun(
       this.currentRunContext.runId,
       (input as { readonly identity?: MemoryIdentity } | undefined)?.identity,
       'Workflow.run',
     );
-    const result = await executor.run({
-      input: { ...input, parentRun },
-      ...(withRunSignalInEnv(options) ?? {}),
-    });
-    return this.finalizeResult(executor, result);
+    try {
+      const result = await executor.run({
+        input: { ...input, parentRun: parentRun.link },
+        ...(withRunSignalInEnv(options) ?? {}),
+      });
+      return this.finalizeResult(executor, result);
+    } finally {
+      // Released when the run returns — finished, failed or paused (a resume re-opens it).
+      closeParentRun(parentRun);
+    }
   }
 
   async resume(
@@ -211,8 +218,14 @@ export class Workflow<TIn extends object = object, TOut = unknown> extends Runne
     const resumeLeg = this.emitPauseResume(checkpoint, input);
     const executor = this.createExecutor(resumeLeg);
     this.lastExecutor = executor;
-    const result = await executor.resume(checkpoint, input, withRunSignalInEnv(options));
-    return this.finalizeResult(executor, result);
+    // The paused run its members serve, re-opened from the checkpoint's own record.
+    const parentRun = reopenParentRun(checkpoint.sharedState, 'Workflow.resume');
+    try {
+      const result = await executor.resume(checkpoint, input, withRunSignalInEnv(options));
+      return this.finalizeResult(executor, result);
+    } finally {
+      closeParentRun(parentRun);
+    }
   }
 
   private createExecutor(resumeLeg?: RedactionPolicy): FlowChartExecutor {

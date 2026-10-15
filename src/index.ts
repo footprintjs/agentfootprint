@@ -721,7 +721,7 @@ export {
 } from './core/conversation.js';
 // A composition member runs for the run that mounted it; one no run reached is
 // refused by name (`core/memberRun.ts`).
-export { MemberIdentityError } from './core/memberRun.js';
+export { MemberIdentityError, ParentRunRefusedError } from './core/memberRun.js';
 export {
   flowchartAsTool,
   type FlowchartAsToolOptions,

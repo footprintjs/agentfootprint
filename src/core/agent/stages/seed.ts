@@ -40,7 +40,7 @@ import type { TimeReader } from '../../../time/reader.js';
 import type { TimePolicy } from '../../../time/resolve.js';
 import { carriedRunPolicy } from '../../../redaction/conversation.js';
 import { policyInForce } from '../../../redaction/runRedaction.js';
-import { MemberIdentityError, memberIdentityOf, parentRunOf } from '../../memberRun.js';
+import { MemberIdentityError, memberIdentityOf, resolveParentRun } from '../../memberRun.js';
 import { makeRunId } from '../../RunnerBase.js';
 
 /**
@@ -665,14 +665,19 @@ function seedFrom(
   // the `parentRun` its composition handed down — the caller's identity, else
   // that run's own `{ conversationId: runId }` — and with neither that nor an
   // explicit identity it is refused by name, never filed under a shared one.
-  const parentRun = parentRunOf(args, 'Agent (composition member)');
+  // The run is looked up by its link in `memberRun.ts`'s private registry; a
+  // `parentRun` that is not a live link is refused there, by name.
+  const parentRun = resolveParentRun(args, 'Agent (composition member)');
   const mounted = parentRun !== undefined || deps.isOwnRun?.(scope) === false;
   const sessionId = mounted ? undefined : deps.getCurrentSessionId?.();
-  if (args.identity !== undefined) {
-    scope.runIdentity = args.identity;
-  } else if (parentRun !== undefined) {
+  if (parentRun !== undefined) {
+    // The engine's run outranks anything in the input: a step's input can be
+    // an earlier step's output (`workflow`, `graph`), and an `identity` there
+    // is data, never who the run is for.
     scope.runIdentity = memberIdentityOf(parentRun);
     if (parentRun.identity === undefined) scope.runIdentitySource = 'composition';
+  } else if (args.identity !== undefined) {
+    scope.runIdentity = args.identity;
   } else if (mounted) {
     throw new MemberIdentityError();
   } else if (sessionId !== undefined) {
@@ -687,6 +692,7 @@ function seedFrom(
   // handed an explicit identity and no run gets a run of its own.
   if (mounted) {
     scope.memberRun = parentRun ?? {
+      link: '',
       runId: makeRunId(),
       ...(args.identity !== undefined && { identity: args.identity }),
     };
@@ -700,7 +706,7 @@ function seedFrom(
   // record that there was none, so a resume can tell this checkpoint from one
   // written before the key existed (`callerIdentity.ts · pausedSessionOf`). A
   // run on the per-run default writes nothing.
-  else if (args.identity !== undefined) scope.runSessionId = null;
+  else if (args.identity !== undefined && parentRun === undefined) scope.runSessionId = null;
   scope.newMessages = [];
   // WHICH TURN THIS IS (9.6.0). Every release up to 9.5.1 wrote `1` here, on
   // every run — and memory writes key their entries on it (`msg-{turn}-{i}`),

@@ -272,23 +272,70 @@ describe('composition members — every composition, deeper nesting, refusals by
     ).rejects.toThrow(/Sequence\.run: identity\.conversationId must be a string/);
   });
 
-  it('a malformed `parentRun` handed by a hand-built chart is refused, never half-used', async () => {
-    const agent = member('m', new InMemoryStore(), [], []);
-    const chart = flowChart<{ msg: string }>(
-      'Start',
-      (scope) => {
-        scope.msg = 'hello';
-      },
-      'start',
-    )
-      .addSubFlowChartNext('sf-m', agent.getSpec(), 'M', {
-        inputMapper: () => ({ message: 'hi', parentRun: { identity: ALICE } }),
-      })
-      .build();
-    const { FlowChartExecutor } = await import('footprintjs');
-    await expect(new FlowChartExecutor(chart).run({ input: {} })).rejects.toThrow(
-      /`parentRun\.runId` must be a non-empty string/,
+  it.each([
+    ['a run-shaped object naming the victim', { runId: 'run-1', identity: ALICE }],
+    ['a made-up link', '6d1f0b4e-0000-4000-8000-000000000000'],
+    ['an empty link', ''],
+  ])(
+    'a forged `parentRun` (%s) is refused by name — the victim’s memory untouched',
+    async (_, forged) => {
+      const store = new InMemoryStore();
+      await store.put(ALICE, { id: 'alice-1', value: 'ALICE-PRIVATE', version: 1 } as never);
+      const seen: Seen = [];
+      const agent = member('m', store, seen, []);
+      const chart = flowChart<{ msg: string }>(
+        'Start',
+        (scope) => {
+          scope.msg = 'hello';
+        },
+        'start',
+      )
+        .addSubFlowChartNext('sf-m', agent.getSpec(), 'M', {
+          inputMapper: () => ({ message: 'what do you know about me?', parentRun: forged }),
+        })
+        .build();
+      const { FlowChartExecutor } = await import('footprintjs');
+      await expect(new FlowChartExecutor(chart).run({ input: {} })).rejects.toThrow(
+        /`parentRun` is not a run this process opened/,
+      );
+      expect(seen.join('\n')).not.toContain('ALICE-PRIVATE');
+    },
+  );
+
+  it('a REAL link is dead once its run returns — copying it out buys nothing', async () => {
+    const { openParentRun, closeParentRun, resolveParentRun } = await import(
+      '../../../src/core/memberRun.js'
     );
+    const run = openParentRun('run-x', ALICE, 'test');
+    expect(resolveParentRun({ parentRun: run.link }, 'test')?.identity).toEqual(ALICE);
+    closeParentRun(run);
+    expect(() => resolveParentRun({ parentRun: run.link }, 'test')).toThrow(
+      /`parentRun` is not a run this process opened/,
+    );
+  });
+
+  it('an `identity` in a node’s input never outranks the run — data cannot re-point a member', async () => {
+    const store = new InMemoryStore();
+    const toolSaw: { member: string; identity?: MemoryIdentity }[] = [];
+    const g = graph({
+      nodes: [
+        { id: 'a', runner: member('a', store, [], toolSaw) },
+        { id: 'b', runner: member('b', store, [], toolSaw) },
+        {
+          id: 'c',
+          runner: member('c', store, [], toolSaw),
+          // The hand-off is DATA — as a model's output would be — naming the victim.
+          join: () => ({ message: 'merged', identity: ALICE }),
+        },
+      ],
+      edges: [
+        { from: 'a', to: 'c' },
+        { from: 'b', to: 'c' },
+      ],
+    });
+    await g.run({ message: 'go', identity: BOB });
+    expect(toolSaw.some((c) => c.member === 'c')).toBe(true);
+    for (const call of toolSaw) expect(call.identity).toEqual(BOB);
   });
 });
 

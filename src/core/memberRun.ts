@@ -11,14 +11,16 @@
  * composition), or the last direct run's caller (another person's identity).
  *
  * ── The rule ─────────────────────────────────────────────────────────────────
- * The run decides, and it travels with the run. The OUTERMOST runner's
- * `run()` builds one `ParentRun` — the identity its caller named, or none, and
- * that run's own id — and every composition hands it to each member through
- * the member's input (`withParentRun`), nesting included. A member agent reads
- * it there (`stages/seed.ts`): the caller's identity when one was named, else
- * the run's own per-run conversation `{ conversationId: runId }` — never a
- * value its instance holds. A member mounted where no run reaches it is
- * refused by name.
+ * The run decides, and only the engine can name it. The OUTERMOST
+ * composition's `run()` OPENS one run — the identity its caller named, or
+ * none, and that run's own id — in this module's private registry, and hands
+ * its members only an unguessable LINK to it (`withParentRun`), nesting
+ * included. A member agent looks the run up by that link (`stages/seed.ts`):
+ * the caller's identity when one was named, else the run's own per-run
+ * conversation `{ conversationId: runId }` — never a value its instance
+ * holds, and never a run-shaped value it was handed: a `parentRun` that is not
+ * a live link is refused by name (`ParentRunRefusedError`). A member mounted
+ * where no run reaches it is refused too (`MemberIdentityError`).
  *
  * Per-run args are the carrier because they are the one thing two overlapping
  * runs of one composition cannot share.
@@ -32,7 +34,7 @@ import { assertIdentityShape } from './agent/callerIdentity.js';
 /** The state key a runner keeps the run it serves under. */
 export const MEMBER_RUN_KEY = 'memberRun';
 
-/** The run a member is mounted in, as its composition hands it down. */
+/** The run a member is mounted in. */
 export interface ParentRun {
   /** The outermost run's id — the member's `ctx.runId`, and its conversation when no identity was named. */
   readonly runId: string;
@@ -41,42 +43,120 @@ export interface ParentRun {
 }
 
 /**
- * The `ParentRun` a top-level composition run hands its members.
- *
- * @throws TypeError (from `assertIdentityShape`) when `identity` is not one.
+ * A run as a runner's state records it: the run, and the LINK that names it in
+ * this module's registry. Only the link travels to members; what a member runs
+ * for is looked up here, never read off what it was handed.
  */
-export function topLevelParentRun(
-  runId: string,
-  identity: MemoryIdentity | undefined,
-  door: string,
-): ParentRun {
-  assertIdentityShape(identity, door);
-  return { runId, ...(identity !== undefined && { identity: copyIdentity(identity) }) };
+export interface ParentRunRecord extends ParentRun {
+  readonly link: string;
+}
+
+// ── The brand: a module-private registry of the runs a composition opened ──
+//
+// A member is handed a LINK, an unguessable token, never a run. The run it
+// names lives here, where only `openParentRun` / `reopenParentRun` can put it
+// — so nothing outside this module (an option, an input, a mapper, a state
+// key, a model's or a tool's output) can make a member run for someone: a
+// `parentRun` that is not a live link is refused by name. A token rather than
+// an object brand, because a member's input is copied on its way in, and a
+// copy keeps a string but not an object's identity.
+
+const live = new Map<string, { readonly run: ParentRun; holders: number }>();
+
+/**
+ * A `parentRun` that is not a live link this module issued — forged, copied
+ * from another run, or a run already over. Refused, never used.
+ */
+export class ParentRunRefusedError extends Error {
+  readonly code = 'ERR_PARENT_RUN_REFUSED' as const;
+
+  constructor(door: string) {
+    super(
+      `${door}: \`parentRun\` is not a run this process opened — it is refused. Only a ` +
+        'composition’s own run() hands its members their run; one built anywhere else (an ' +
+        'option, an input mapper, a model’s or a tool’s output) could name another person.',
+    );
+    this.name = 'ParentRunRefusedError';
+  }
 }
 
 /**
- * The `ParentRun` a runner was handed in its input, as a validated copy;
- * `undefined` when the input carries none.
+ * Open the run a top-level composition run hands its members, and register it.
+ * Close it with {@link closeParentRun} when the run returns (finished or paused).
  *
- * @throws TypeError when a `parentRun` is present but malformed — a member
- *   must never run under a half-named run.
+ * @throws TypeError (from `assertIdentityShape`) when `identity` is not one.
  */
-export function parentRunOf(args: unknown, door: string): ParentRun | undefined {
-  if (args === null || typeof args !== 'object') return undefined;
-  const raw = (args as { readonly parentRun?: unknown }).parentRun;
+export function openParentRun(
+  runId: string,
+  identity: MemoryIdentity | undefined,
+  door: string,
+): ParentRunRecord {
+  assertIdentityShape(identity, door);
+  const run: ParentRun = {
+    runId,
+    ...(identity !== undefined && { identity: copyIdentity(identity) }),
+  };
+  const link = globalThis.crypto.randomUUID();
+  live.set(link, { run, holders: 1 });
+  return { link, ...run };
+}
+
+/**
+ * Re-open, for a resumed leg, the run a paused composition was running — read
+ * off the checkpoint's own state (the checkpoint is the record of that run; a
+ * host keeps it server-side or signs it, as for every resume). `undefined`
+ * when the paused run recorded none.
+ */
+export function reopenParentRun(sharedState: unknown, door: string): ParentRunRecord | undefined {
+  if (sharedState === null || typeof sharedState !== 'object') return undefined;
+  const raw = (sharedState as Record<string, unknown>)[MEMBER_RUN_KEY];
   if (raw === undefined) return undefined;
-  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
-    throw new TypeError(`${door}: \`parentRun\` must be an object like { runId, identity? }.`);
-  }
-  const { runId, identity } = raw as { readonly runId?: unknown; readonly identity?: unknown };
-  if (typeof runId !== 'string' || runId === '') {
-    throw new TypeError(`${door}: \`parentRun.runId\` must be a non-empty string.`);
+  const { link, runId, identity } = (raw ?? {}) as {
+    readonly link?: unknown;
+    readonly runId?: unknown;
+    readonly identity?: unknown;
+  };
+  if (typeof link !== 'string' || link === '' || typeof runId !== 'string' || runId === '') {
+    throw new ParentRunRefusedError(door);
   }
   assertIdentityShape(identity, door);
-  return {
+  const run: ParentRun = {
     runId,
     ...(identity !== undefined && { identity: copyIdentity(identity as MemoryIdentity) }),
   };
+  const held = live.get(link);
+  if (held !== undefined) held.holders++;
+  else live.set(link, { run, holders: 1 });
+  return { link, ...(held?.run ?? run) };
+}
+
+/** Release a run this module opened (`openParentRun` / `reopenParentRun`). */
+export function closeParentRun(record: ParentRunRecord | undefined): void {
+  if (record === undefined) return;
+  const held = live.get(record.link);
+  if (held === undefined) return;
+  if (--held.holders <= 0) live.delete(record.link);
+}
+
+/** The run a live link names, or `undefined`. */
+export function runOfLink(link: unknown): ParentRun | undefined {
+  return typeof link === 'string' ? live.get(link)?.run : undefined;
+}
+
+/**
+ * The run a runner was handed in its input, looked up by its link; `undefined`
+ * when the input carries none.
+ *
+ * @throws ParentRunRefusedError when a `parentRun` is present but is not a live
+ *   link — a member never runs under a run it cannot prove.
+ */
+export function resolveParentRun(args: unknown, door: string): ParentRunRecord | undefined {
+  if (args === null || typeof args !== 'object') return undefined;
+  const link = (args as { readonly parentRun?: unknown }).parentRun;
+  if (link === undefined) return undefined;
+  const run = runOfLink(link);
+  if (run === undefined) throw new ParentRunRefusedError(door);
+  return { link: link as string, ...run };
 }
 
 /** The runners that read `parentRun` — an Agent, and every composition (which hands it on). */
@@ -92,35 +172,38 @@ export function readsParentRun(runner: object): void {
 }
 
 /**
- * A member's input with the run it is mounted in — what every composition's
- * input mapper returns — for a runner that reads it; the input unchanged for
- * any other runner, or when there is no run to hand down.
+ * A member's input with the LINK of the run it is mounted in — what every
+ * composition's input mapper returns — for a runner that reads it; the input
+ * unchanged for any other runner, or when there is no run to hand down.
  */
 export function withParentRun<I extends object>(
   input: I,
-  parentRun: ParentRun | undefined,
+  record: ParentRunRecord | undefined,
   runner: object,
-): I | (I & { readonly parentRun: ParentRun }) {
-  return parentRun === undefined || !readers.has(runner) ? input : { ...input, parentRun };
+): I | (I & { readonly parentRun: string }) {
+  return record === undefined || !readers.has(runner)
+    ? input
+    : { ...input, parentRun: record.link };
 }
 
 /**
- * A composition's seed: keep the run it was handed — its own `run()` builds
- * one; a parent composition's mapper hands one down — in its state, under
- * {@link MEMBER_RUN_KEY}, for its input mappers to hand on. (A run's input is
- * not part of the state an input mapper reads, and the input key itself is
- * read-only, so it is kept under a key of its own.) Written only when there is
- * one.
+ * A composition's seed: resolve the link it was handed — its own `run()`
+ * opened one; a parent composition's mapper hands one down — and keep the run
+ * in its state, under {@link MEMBER_RUN_KEY}, for its input mappers to hand on
+ * (a run's input is not part of the state an input mapper reads). Written only
+ * when there is one.
+ *
+ * @throws ParentRunRefusedError for a link that is not live.
  */
 export function adoptParentRun(scope: object, args: unknown, door: string): void {
-  const parentRun = parentRunOf(args, door);
-  if (parentRun !== undefined) (scope as Record<string, unknown>)[MEMBER_RUN_KEY] = parentRun;
+  const record = resolveParentRun(args, door);
+  if (record !== undefined) (scope as Record<string, unknown>)[MEMBER_RUN_KEY] = record;
 }
 
 /** The run a runner's state carries (`adoptParentRun`, or an agent's seed), for its input mappers. */
-export function parentRunIn(state: unknown): ParentRun | undefined {
+export function parentRunIn(state: unknown): ParentRunRecord | undefined {
   if (state === null || typeof state !== 'object') return undefined;
-  return (state as Record<string, ParentRun | undefined>)[MEMBER_RUN_KEY];
+  return (state as Record<string, ParentRunRecord | undefined>)[MEMBER_RUN_KEY];
 }
 
 /** The memory namespace a member runs under: the named identity, else the run's own conversation. */

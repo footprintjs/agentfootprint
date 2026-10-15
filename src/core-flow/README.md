@@ -201,12 +201,19 @@ for: an Agent instance shared by every run of a composition holds `'pending'`
 rule, two users of one `Sequence` shared one memory under conversation
 `'pending'`, and a member's tool could be handed an earlier caller's identity.
 
-The rule (`core/memberRun.ts`): the OUTERMOST composition's `run()` builds one
-`ParentRun` — the caller's `identity` (`run({ message, identity })`, or
-`input.identity` for `workflow` and `graph`), and THIS run's id — and passes it
-in its input. Each composition's seed keeps it in its state (`memberRun`), and
-its input mappers hand it to every member that reads it (`readsParentRun`: an
-Agent, and every composition, which hands it on — nesting included). A member
+The rule (`core/memberRun.ts`): the OUTERMOST composition's `run()` OPENS one
+run — the caller's `identity` (`run({ message, identity })`, or `input.identity`
+for `workflow` and `graph`), and THIS run's id — in that module's private
+registry, and passes only an unguessable LINK to it in its input. Each
+composition's seed resolves the link and keeps the run in its state
+(`memberRun`); its input mappers hand the link to every member that reads it
+(`readsParentRun`: an Agent, and every composition, which hands it on —
+nesting included). The run is released when `run()` returns and re-opened from
+the checkpoint by `resume()`. A `parentRun` that is not a live link — a
+run-shaped object, a made-up token, the link of a run that has ended — is
+refused (`ParentRunRefusedError`): nothing outside the engine can name the run
+a member serves, and an `identity` in a member's input never outranks it (a
+`workflow` or `graph` step's input can be an earlier step's output). A member
 Agent runs under the caller's identity, or this run's own `{ conversationId:
 runId }` (recorded `runIdentitySource: 'composition'`), and its tools read
 `ctx.identity` / `ctx.runId` from the run, not the instance. Per-run input is
