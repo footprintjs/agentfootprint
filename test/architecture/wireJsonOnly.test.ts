@@ -12,7 +12,7 @@
  *
  * The scanned modules: sinks and adapters that ship events
  * (`adapters/observability/`, `strategies/`), the browser stream
- * (`stream.ts`), everything that builds or files a recording
+ * (`hosting/stream.ts`), everything that builds or files a recording
  * (`recorders/`, `artifacts/recordingArtifact.ts`, `lib/bug-report/`), and
  * the causal-memory evidence recorder (it persists live recorder values).
  *
@@ -34,7 +34,7 @@ const SCANNED_DIRS = [
   'src/lib/bug-report',
 ];
 const SCANNED_FILES = [
-  'src/stream.ts',
+  'src/hosting/stream.ts',
   'src/artifacts/recordingArtifact.ts',
   'src/memory/causal/evidenceRecorder.ts',
 ];

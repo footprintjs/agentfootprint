@@ -32,7 +32,7 @@ import {
   MEMORY_STRATEGIES,
   MEMORY_TYPES,
 } from '../../src/memory/index.js';
-import { toSSE } from '../../src/stream.js';
+import { toSSE } from '../../src/hosting/stream.js';
 import { inProcessHost } from './testHost.js';
 
 const RAW = 'Draft canary: account 4729';

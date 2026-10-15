@@ -23,7 +23,7 @@ runtime, and a spoofed `Symbol.toStringTag` is not an Error. Every serializer
 of the record goes through it: here (`file`, `cloudwatch` / `agentcore`,
 `xray`, the `otel` attribute text, the console default; `audit`'s sanitizer
 renders Errors with the same `wireError`), the browser stream
-(`stream.ts · encodeSSE`), the recording artifact, the recording file sink,
+(`hosting/stream.ts · encodeSSE`), the recording artifact, the recording file sink,
 the bug-report bundle, and the tool-result text the model reads and `history`
 keeps (`core/agent/validators.ts · safeStringify`). Detached delivery renders
 Errors before it clones (`strategies/attach.ts · snapshotEvent`, Maps and Sets

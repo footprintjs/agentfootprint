@@ -787,7 +787,7 @@ src/
     observability/         BoundaryRecorder, FlowchartRecorder(buildStepGraph), RunStepRecorder, LiveStateRecorder
   events/                  registry (EVENT_NAMES, ALL_EVENT_TYPES), payloads (59 shapes), dispatcher, types(EventMeta)
   bridge/                  eventMeta (RunContext, buildEventMeta)
-  observe.ts stream.ts status.ts   public observability surfaces
+  observe.ts status.ts   public observability surfaces (the SSE stream: hosting/stream.ts)
   llm-providers.ts memory-providers.ts observability-providers.ts   subpath barrels
 ```
 

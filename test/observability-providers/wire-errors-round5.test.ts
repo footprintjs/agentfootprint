@@ -25,7 +25,7 @@ import { runInNewContext } from 'node:vm';
 
 import { toWireJson, withWireErrors } from '../../src/lib/wireJson.js';
 import { safeStringify } from '../../src/core/agent/validators.js';
-import { encodeSSE } from '../../src/stream.js';
+import { encodeSSE } from '../../src/hosting/stream.js';
 
 const TOKEN = 'Bearer tok-R4';
 
