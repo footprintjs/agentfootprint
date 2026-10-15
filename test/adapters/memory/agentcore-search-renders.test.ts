@@ -98,7 +98,9 @@ describe('AgentCoreStore.search — the model sees what AgentCore extracted', ()
 
   it('rag flavour: every extracted record reaches the request as a cited passage', async () => {
     const prompt = await promptSeen(FACTS, 'rag');
-    expect(prompt).toContain('<source id="rec-1" score="0.92">\nAda prefers window seats.\n</source>');
+    expect(prompt).toContain(
+      '<source id="rec-1" score="0.92">\nAda prefers window seats.\n</source>',
+    );
     expect(prompt).toContain('<source id="rec-2" score="0.81">\nAda is vegetarian.\n</source>');
     expect(prompt).not.toMatch(/<source[^>]*>\n\n<\/source>/);
   });
