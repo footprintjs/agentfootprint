@@ -84,9 +84,55 @@ const AGENTCORE_WRITE_OPTIONS: readonly MemoryWriteOptionName[] = Object.freeze(
 const MAX_NAMESPACE_VARIABLES = 5;
 /** The refusal of a scope-less write or search on a store that requires one. */
 const MISSING_SCOPE = (what: 'write' | 'search'): string =>
-  `AgentCoreStore: this ${what} carries no \`namespaceScope\`, and the store was built with ` +
-  '`requireNamespaceScope: true`. It is refused rather than run under a namespace no tenant ' +
-  'owns. Scope the memory that made it (`defineMemory({ namespaceScope })`).';
+  `AgentCoreStore: this ${what} carries no \`namespaceScope\`, and the store requires one — it ` +
+  'was built with `requireNamespaceScope: true`, or it has already served scoped calls. It is ' +
+  'refused rather than run under a namespace no tenant owns. Scope the memory that made it ' +
+  '(`defineMemory({ namespaceScope })`).';
+
+/**
+ * Refuse, before any call, an identity this store cannot address: not an
+ * object, or no `conversationId` — an absent one would encode to ONE session
+ * every such identity shares.
+ */
+function assertAddressable(identity: MemoryIdentity): void {
+  if (identity === null || typeof identity !== 'object') {
+    throw new TypeError('AgentCoreStore: an identity is required — got none.');
+  }
+  const { conversationId, tenant, principal } = identity as {
+    readonly conversationId?: unknown;
+    readonly tenant?: unknown;
+    readonly principal?: unknown;
+  };
+  if (typeof conversationId !== 'string' || conversationId === '') {
+    throw new TypeError(
+      'AgentCoreStore: the identity has no `conversationId`. It is refused rather than filed ' +
+        'under one session every such identity would share.',
+    );
+  }
+  for (const [name, value] of [
+    ['tenant', tenant],
+    ['principal', principal],
+  ] as const) {
+    if (value !== undefined && value !== null && typeof value !== 'string') {
+      throw new TypeError(`AgentCoreStore: the identity's \`${name}\` must be a string.`);
+    }
+  }
+}
+
+/**
+ * Refuse a search namespace that names no place: not a string, empty, or no
+ * path segment at all (`''`, `'/'`) — AgentCore matches a prefix, and an empty
+ * prefix is every record of the memory.
+ */
+function assertNamespace(namespace: unknown): asserts namespace is string {
+  if (typeof namespace !== 'string' || pathOf(namespace).replace(/^\//, '') === '') {
+    throw new TypeError(
+      'AgentCoreStore.search(): `searchNamespace` returned no namespace — an empty prefix ' +
+        'matches every record of the memory, so it is refused. Return a namespace with at ' +
+        'least one path segment.',
+    );
+  }
+}
 
 const NAMESPACE_KEY = /^(?!memoryStrategyId$|actorId$|sessionId$)[a-z][a-z0-9]{0,31}$/;
 const NAMESPACE_VALUE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
@@ -663,6 +709,13 @@ export class AgentCoreStore implements MemoryStore {
   }) => string;
   private readonly searchStrategyId: string | undefined;
   private readonly requireNamespaceScope: boolean;
+  /**
+   * Set by the first write or search that carries a scope: from then on this
+   * store is a SCOPED store, and a call without one is refused — a second
+   * memory, a `defineRAG` or a direct call that forgot its scope never reads
+   * or files across the tenants the first one kept apart.
+   */
+  private servedScoped = false;
   private readonly searchAcrossPrincipals: boolean;
   /** Why the write options cannot be honoured — `undefined` when they can. */
   private readonly writeOptionsRefusal: string | undefined;
@@ -713,13 +766,10 @@ export class AgentCoreStore implements MemoryStore {
   private sessionId(identity: MemoryIdentity): string {
     // One field, so no joiner — but `sessionId` admits no `/`, so it escapes with
     // `_` instead. `-` stays verbatim in both, which is what keeps a UUID a UUID.
-    return boundedId(
-      escapeIdSegment(identity.conversationId ?? '', '_'),
-      SESSION_ID_MAX,
-      'session',
-    );
+    return boundedId(escapeIdSegment(identity.conversationId, '_'), SESSION_ID_MAX, 'session');
   }
   private scope(identity: MemoryIdentity) {
+    assertAddressable(identity);
     return {
       memoryId: this.memoryId,
       actorId: this.actorId(identity),
@@ -732,6 +782,7 @@ export class AgentCoreStore implements MemoryStore {
   // a copy of the version where a `/` inside a tenant donated a field boundary
   // — two different identities sharing one dedup set and one feedback bag.
   private shadowKey(identity: MemoryIdentity): string {
+    assertAddressable(identity);
     return identityNamespace(identity);
   }
   private feedbackKey(identity: MemoryIdentity, id: string): string {
@@ -845,9 +896,10 @@ export class AgentCoreStore implements MemoryStore {
     const copied = given === undefined ? undefined : frozenScope(given);
     const namespaceScope =
       copied === undefined || Object.keys(copied).length === 0 ? undefined : copied;
-    if (namespaceScope === undefined && this.requireNamespaceScope) {
+    if (namespaceScope === undefined && (this.requireNamespaceScope || this.servedScoped)) {
       throw new TypeError(MISSING_SCOPE('search'));
     }
+    if (namespaceScope !== undefined) this.servedScoped = true;
     if (namespaceScope !== undefined) checkNamespaceVariables(namespaceScope);
     const render = (scope: Readonly<Record<string, string>> | undefined): string =>
       this.searchNamespace({
@@ -857,6 +909,7 @@ export class AgentCoreStore implements MemoryStore {
         ...(scope !== undefined && { namespaceScope: scope }),
       });
     const namespace = render(namespaceScope);
+    assertNamespace(namespace);
     if (namespace.includes('*')) {
       throw new TypeError(
         'AgentCoreStore.search(): `searchNamespace` returned a namespace containing `*`. ' +
@@ -903,9 +956,10 @@ export class AgentCoreStore implements MemoryStore {
     const given = options?.namespaceScope;
     const copied = given === undefined ? undefined : frozenScope(given);
     const scope = copied === undefined || Object.keys(copied).length === 0 ? undefined : copied;
-    if (scope === undefined && this.requireNamespaceScope) {
+    if (scope === undefined && (this.requireNamespaceScope || this.servedScoped)) {
       throw new TypeError(MISSING_SCOPE('write'));
     }
+    if (scope !== undefined) this.servedScoped = true;
     if (scope !== undefined) checkNamespaceVariables(scope);
     return {
       ...(asked.includes('extraction') && { extractionMode: 'SKIP' as const }),

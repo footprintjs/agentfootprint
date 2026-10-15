@@ -638,3 +638,106 @@ describe('memory write options — a write decides on the copy it sends', () => 
     expect(service.created).toEqual([]);
   });
 });
+
+describe('AgentCoreStore — every missing or malformed address fails CLOSED, with no SDK call', () => {
+  /** A client that counts every call; any call is a failure of these tests. */
+  function countingClient() {
+    const calls: string[] = [];
+    const client: AgentCoreLikeClient = {
+      forwardsWriteOptions: true,
+      createEvent: async () => {
+        calls.push('createEvent');
+      },
+      listEvents: async () => {
+        calls.push('listEvents');
+        return { events: [] };
+      },
+      deleteEvent: async () => {
+        calls.push('deleteEvent');
+      },
+      retrieveRecords: async () => {
+        calls.push('retrieveRecords');
+        return { records: [] };
+      },
+    };
+    return { client, calls };
+  }
+  const e = { id: 'e', value: 'x', version: 1 } as MemoryEntry;
+
+  it.each([
+    ['no identity at all', undefined],
+    ['an identity with no conversationId', { tenant: 'acme', principal: 'ada' }],
+    ['an empty conversationId', { tenant: 'acme', conversationId: '' }],
+    ['a non-string tenant', { tenant: 7, conversationId: 'c-1' }],
+  ])('%s: every method refuses by name', async (_, identity) => {
+    const { client, calls } = countingClient();
+    const store = new AgentCoreStore({ memoryId: 'mem-1', client });
+    const id = identity as unknown as MemoryIdentity;
+    await expect(store.put(id, e)).rejects.toThrow(/AgentCoreStore: (an identity|the identity)/);
+    await expect(store.putMany(id, [e])).rejects.toThrow(/AgentCoreStore/);
+    await expect(store.putIfVersion(id, e, 0)).rejects.toThrow(/AgentCoreStore/);
+    await expect(store.get(id, 'e')).rejects.toThrow(/AgentCoreStore/);
+    await expect(store.list(id)).rejects.toThrow(/AgentCoreStore/);
+    await expect(store.delete(id, 'e')).rejects.toThrow(/AgentCoreStore/);
+    await expect(store.search(id, [], { text: 'q' })).rejects.toThrow(/AgentCoreStore/);
+    expect(calls).toEqual([]);
+  });
+
+  it.each([
+    ['an empty namespace', () => ''],
+    ['a bare slash', () => '/'],
+    ['slashes only', () => '///'],
+    ['not a string', () => undefined as unknown as string],
+  ])(
+    '`searchNamespace` returning %s is refused — an empty prefix matches every record',
+    async (_, ns) => {
+      const { client, calls } = countingClient();
+      const store = new AgentCoreStore({ memoryId: 'mem-1', client, searchNamespace: ns });
+      await expect(store.search(ACME, [], { text: 'q' })).rejects.toThrow(
+        /`searchNamespace` returned no namespace/,
+      );
+      expect(calls).toEqual([]);
+    },
+  );
+
+  it('a `searchNamespace` that throws refuses the search', async () => {
+    const { client, calls } = countingClient();
+    const store = new AgentCoreStore({
+      memoryId: 'mem-1',
+      client,
+      searchNamespace: () => {
+        throw new Error('resolver down');
+      },
+    });
+    await expect(store.search(ACME, [], { text: 'q' })).rejects.toThrow(/resolver down/);
+    expect(calls).toEqual([]);
+  });
+
+  it('a scope resolver that throws refuses the write and the search', async () => {
+    const { client, calls } = countingClient();
+    const bound = bindWriteOptions(storeOver(client), {
+      namespaceScope: () => {
+        throw new Error('tenant lookup failed');
+      },
+    });
+    await expect(bound.put(ACME, e)).rejects.toThrow(/tenant lookup failed/);
+    await expect(bound.search?.(ACME, [], { text: 'q' })).rejects.toThrow(/tenant lookup failed/);
+    expect(calls).toEqual([]);
+  });
+
+  it('once a store has served a scoped call, an UNSCOPED write or search is refused', async () => {
+    const { client, calls } = countingClient();
+    const store = storeOver(client);
+    await store.put(ACME, e, { namespaceScope: { tenantid: 'vacme_z' } });
+    expect(calls).toEqual(['createEvent']);
+    calls.length = 0;
+    await expect(store.put(ACME, e)).rejects.toThrow(/already served scoped calls/);
+    await expect(store.search(ACME, [], { text: 'q' })).rejects.toThrow(
+      /already served scoped calls/,
+    );
+    await expect(store.search(ACME, [], { text: 'q', namespaceScope: {} })).rejects.toThrow(
+      /already served scoped calls/,
+    );
+    expect(calls).toEqual([]);
+  });
+});

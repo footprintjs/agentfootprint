@@ -676,6 +676,11 @@ true` on the store only for a memory the whole tenant shares on purpose.
 For a multi-tenant deployment, build the store with `requireNamespaceScope:
 true`: a memory, a `defineRAG` or a direct call that forgot its scope is then
 refused by name instead of reading or filing under a namespace no tenant owns.
+A store that has served one scoped call refuses unscoped ones from then on even
+without the flag, and every refusal comes before any call to AgentCore: an
+identity with no `conversationId` (it would share one session), a
+`searchNamespace` that returns no path segment (an empty prefix matches every
+record), and a scope resolver that throws all stop the call, never widen it.
 `namespaceScope` is allowed on a `readOnly: true` memory, which is how the
 records AgentCore extracted are read back, and refused beside `corpus`, whose
 memory runs under the corpus identity rather than the person's.

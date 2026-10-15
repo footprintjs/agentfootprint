@@ -74,7 +74,10 @@ with `{actorId}`, a continuation starting with four uppercase hex digits is
 dropped — another actor's id can extend this one by whole segments
 (`bob@x.com.au` after `bob@x.com`) — and a namespace containing `*` is refused
 by name. `requireNamespaceScope: true` refuses any write or search with no scope
-— the setting for a multi-tenant store. The scope is read once into a frozen
+— the setting for a multi-tenant store; a store that has served one scoped call
+refuses unscoped ones from then on. Every failure to address a call fails
+CLOSED, before any SDK call: no `conversationId`, a namespace with no path
+segment, a throwing resolver. The scope is read once into a frozen
 copy, so the value checked is the value sent. An empty batch stays
 a no-op, options or not (the port's law).
 

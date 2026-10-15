@@ -192,31 +192,24 @@ describe('AWS adapters dispatch exactly the commands they are pinned to', () => 
     const sdk = fakeSdk(row);
     // The store honours the options only when the SDK MODELS the fields — read
     // off the SDK's own `CreateEventInput$` schema, as 3.1152.0 ships it.
-    const store = new AgentCoreStore({
-      memoryId: 'mem-1',
-      _sdk: {
-        ...sdk.module,
-        CreateEventInput$: [
-          3,
-          'com.amazonaws.bedrockagentcore',
-          'CreateEventInput',
-          0,
-          [
-            'memoryId',
-            'actorId',
-            'eventTimestamp',
-            'payload',
-            'extractionMode',
-            'extractionConfig',
-          ],
-        ],
-      },
-    });
+    const modelled = {
+      ...sdk.module,
+      CreateEventInput$: [
+        3,
+        'com.amazonaws.bedrockagentcore',
+        'CreateEventInput',
+        0,
+        ['memoryId', 'actorId', 'eventTimestamp', 'payload', 'extractionMode', 'extractionConfig'],
+      ],
+    };
+    const store = new AgentCoreStore({ memoryId: 'mem-1', _sdk: modelled });
     await store.put(IDENTITY, entry('a'), {
       extraction: 'skip',
       namespaceScope: { tenantid: 'acme' },
     });
-    await store.put(IDENTITY, entry('b'));
+    // A store that served a scoped write refuses an unscoped one, so the
+    // unscoped write goes through a store of its own.
+    await new AgentCoreStore({ memoryId: 'mem-1', _sdk: modelled }).put(IDENTITY, entry('b'));
     expect(sdk.names()).toEqual(['CreateEventCommand', 'CreateEventCommand']);
     expect(sdk.sent[0]?.input).toMatchObject({
       extractionMode: 'SKIP',

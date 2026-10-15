@@ -331,8 +331,11 @@ describe('memory write options — P3 AgentCoreStore through the SDK', () => {
       extraction: 'skip',
       namespaceScope: { tenantid: TENANT_VALUE },
     });
-    await store.putMany(IDENTITY, [entry('b'), entry('c')], { extraction: 'skip' });
-    await store.put(IDENTITY, entry('d'));
+    // A store that served a scoped write refuses an unscoped one — these go
+    // through a store of their own.
+    const unscoped = new AgentCoreStore({ memoryId: 'mem-1', _sdk: sdk.module });
+    await unscoped.putMany(IDENTITY, [entry('b'), entry('c')], { extraction: 'skip' });
+    await unscoped.put(IDENTITY, entry('d'));
 
     const creates = sdk.sent.filter((s) => s.command === 'CreateEventCommand');
     expect(creates).toHaveLength(4);
