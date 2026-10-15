@@ -80,12 +80,12 @@
  * With one, footprintjs scrubs at COMMIT time, so a selected key never enters
  * the commit log, and `getLastSnapshot()` serves the redacted mirror
  * (`servableSnapshot`) — the rebuilt view reads a redacted piece as ABSENT
- * (`servedView.ts` never prints a placeholder as if the request had carried
+ * (`lib/time-travel/servedView.ts` never prints a placeholder as if the request had carried
  * it), so the view's hash no longer matches this receipt's (the receipt hashed
  * what the model was served). The same holds for `flowchartAsTool({ redact })` /
  * `runbookAsTool({ redact })` on an inner run. A snapshot taken with
  * `redact: true` also omits `initialState`, so folding it reports
- * `basis: 'log-only'` and `servedView.ts` raises `no-fold-base` rather than
+ * `basis: 'log-only'` and `lib/time-travel/servedView.ts` raises `no-fold-base` rather than
  * rebuilding a short view in silence. Treat an unredacted recording as the
  * plaintext it is; the salt protects the fingerprints, and only the
  * fingerprints.
@@ -96,7 +96,7 @@
  * boundary is outside what this record can witness: a decorated provider, a
  * vendor adapter's own serializer, a consumer's hand-written `complete`, or the
  * vendor's server-side defaults. `RECEIPT_BOUNDARY` states it in one sentence
- * for a renderer to print, and `servedView.ts` · `SERVED_GAPS` names the two
+ * for a renderer to print, and `lib/time-travel/servedView.ts` · `SERVED_GAPS` names the two
  * places a reader is most likely to mistake it for wire-level proof.
  */
 
@@ -193,7 +193,7 @@ export const RECEIPT_BOUNDARY =
   'do not prove what was sent or accepted.';
 
 /** The scope key holding the name of the tool a `'tool-forced'` output
- *  strategy put on the wire. `seed` commits it; `servedView.ts` · `servedAt`
+ *  strategy put on the wire. `seed` commits it; `lib/time-travel/servedView.ts` · `servedAt`
  *  reads it — so a rebuild can NAME the forced tool without reading the
  *  receipt it is being checked against. */
 export const FORCED_OUTPUT_TOOL_KEY = 'forcedOutputToolName';
@@ -271,7 +271,7 @@ export interface ReceiptCacheMarker {
  * the post-strategy request rather than the pre-strategy one, and deliberately
  * so: a strategy holds the whole composed request and can move a dial, and
  * `params` claims in this very docstring to be what the PORT got.
- * `servedView.ts` · `SERVED_GAPS` says the same from the other side —
+ * `lib/time-travel/servedView.ts` · `SERVED_GAPS` says the same from the other side —
  * `cache-transform` names every field the log rebuilds pre-strategy, and
  * `params` is not among them.
  *
@@ -424,7 +424,7 @@ export interface Receipt {
    * claim and not a shrug: the agent chart's window stage is the one shipped
    * mechanism that drops for attention and it files every eviction here; the
    * built-in slots drop nothing; `LLMCall` and the message-API charts have no
-   * window. It is named by the `no-receipt-on-chart` entry of `servedView.ts` ·
+   * window. It is named by the `no-receipt-on-chart` entry of `lib/time-travel/servedView.ts` ·
    * `SERVED_GAPS` — the one gap that can lose it, by losing the receipt — and it sat in
    * `UNGAPPED_FIELDS` until this release, when its absence was universal and
    * meant only that nobody had recorded a drop.
@@ -447,7 +447,7 @@ export interface Receipt {
  * reader is handed is what the MINTING release knew to write, and that has
  * grown — `cache` came with the receipt in 9.88.0 and gained `strategy` in
  * 9.93.0; `omittedForAttention` has always been written only when something
- * was dropped. The narrowing that admits a stored value (`servedView.ts` ·
+ * was dropped. The narrowing that admits a stored value (`lib/time-travel/servedView.ts` ·
  * `readReceipt`) checks the basis and nothing past it, so this type says what
  * that check leaves open, and the compiler — not a throw on an older
  * recording — is what meets a reader that forgets.

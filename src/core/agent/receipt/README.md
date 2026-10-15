@@ -9,10 +9,12 @@ and references, folded once from the request the call composed.
   the mint is `receipt.ts` · `buildReceipt`.
 
 ## Why it lives in core
-The receipt is minted by the call (`stages/callLLM.ts`, `LLMCall.ts`,
-`../messageApiReceipt.ts`), so its writer sits with its writer. The readers
-stay in `lib/time-travel/`: `servedView.ts` · `servedAt` rebuilds the request
-from the record and `servedView.ts` · `receiptAt` reads the receipt back. They
+The receipt is minted by the call (`core/agent/stages/callLLM.ts`,
+`core/LLMCall.ts`, `core/agent/messageApiReceipt.ts`), so the mint sits with
+the code that calls it. The readers stay in `lib/time-travel/`:
+`lib/time-travel/servedView.ts` · `servedAt` rebuilds the request from the
+record and `lib/time-travel/servedView.ts` · `receiptAt` reads the receipt
+back. They
 import this folder downward, and `lib/time-travel/index.ts` re-exports its
 public names, so every door keeps the same exports. The law that binds the two
 sides — `hash(servedAt(k)) === receiptAt(k).hash` — is documented in
@@ -20,8 +22,9 @@ sides — `hash(servedAt(k)) === receiptAt(k).hash` — is documented in
 `test/lib/time-travel/receipt-conformance.test.ts`.
 
 ## Files
-- `receipt.ts` — the receipt's shape, its three digest inputs
-  (`receiptHash`, `messageDigestInput`, `toolDigestInput`) and the mint.
+- `receipt.ts` — the receipt's shape, the salted hash (`receiptHash`), the
+  digest inputs (`messageDigestInput`, `toolDigestInput`), the chained
+  fingerprint (`transformHashOf`) and the mint (`buildReceipt`).
 - `receiptDigests.ts` — the run's memo, so each call hashes and measures only
   what it added (`test/core/agent/receipt/receipt-incremental.test.ts`).
 - `requestMeasurement.ts` — the size of the prepared request, never its text.

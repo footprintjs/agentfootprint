@@ -35,7 +35,7 @@
  *    run that session completed, never whichever run the instance finished
  *    last. A run with no session reads the last run that had none. A tool's
  *    retained inner runs are served through the same key
- *    (`innerRunRecords.ts · innerRunsOfConversation`).
+ *    (`core/innerRunRecords.ts · innerRunsOfConversation`).
  *
  * 2. `buildSelfExplainSkill` — the skill in two modes:
  *
