@@ -29,37 +29,12 @@
  * this file exists to catch.
  */
 
-import type { CapturedEventLike } from '../types.js';
-import { declaredFacetCount } from './validate.js';
 import type {
-  ArmFacetMismatch,
-  ArmFacets,
   ManifestMemoryLike,
   RunManifestLike,
-  StrategyArm,
-} from './types.js';
-
-/** The event type the run manifest rides on (9.41.0). */
-export const RUN_CONFIGURED_EVENT = 'agentfootprint.agent.run_configured';
-
-/**
- * Pull the run manifest out of a run's captured typed events — the same
- * `CapturedEventLike[]` bag `localizeContextBug` already accepts, so a consumer
- * who collected events with `agent.on('*', …)` needs no second capture.
- *
- * One manifest per run by design; the FIRST is returned. A bag holding events
- * from several runs is the caller's own mixing — filter by `meta.runId` first.
- */
-export function manifestFromEvents(
-  events: readonly CapturedEventLike[] | undefined,
-): RunManifestLike | undefined {
-  const event = events?.find((e) => e.type === RUN_CONFIGURED_EVENT);
-  if (event === undefined) return undefined;
-  const payload = event.payload;
-  // Structural, not a cast-and-pray: a payload that is not an object at all is
-  // no manifest, and reporting `undefined` keeps `checked: false` honest.
-  return payload !== null && typeof payload === 'object' ? (payload as RunManifestLike) : undefined;
-}
+} from '../../../recorders/observability/recordedManifest.js';
+import { declaredFacetCount } from './validate.js';
+import type { ArmFacetMismatch, ArmFacets, StrategyArm } from './types.js';
 
 /**
  * Project a manifest onto the arm-facet vocabulary — the inverse of what an arm

@@ -70,11 +70,13 @@
  */
 
 import type { AgentfootprintEvent } from '../../events/registry.js';
-import { manifestFromEvents } from '../../lib/context-bisect/arms/manifest.js';
-import type { RunManifestLike } from '../../lib/context-bisect/arms/types.js';
-import type { CapturedEventLike } from '../../lib/context-bisect/types.js';
 import { engineVersion, libraryVersion } from '../../lib/libraryVersion.js';
 import type { Recording, RunRecorder } from './recordRun.js';
+import {
+  manifestFromEvents,
+  type CapturedEventLike,
+  type RunManifestLike,
+} from './recordedManifest.js';
 
 /**
  * The format marker. Bumped only for a change an older reader could not

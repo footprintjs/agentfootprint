@@ -66,7 +66,7 @@ instruments and an embedding statistic must not veto a real decision flip.
 |---|---|
 | `types.ts` | the types + the full design argument |
 | `validate.ts` | six teaching refusals, all before the first model call |
-| `manifest.ts` | project / label / verify / match against the run manifest |
+| `manifest.ts` | project / label / verify / match against the run manifest (read out of a run by `recorders/observability/recordedManifest.ts` · `manifestFromEvents`) |
 | `probe.ts` | collect runs, score them, build the null band |
 | `verdict.ts` | the three tiers, phrased for a substitution |
 | `apply.ts` | an arm's removals → the unchanged `applyAblations` |

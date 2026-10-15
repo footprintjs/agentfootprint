@@ -10,14 +10,13 @@
 
 export { applyArm } from './apply.js';
 export { compareStrategyArms } from './compare.js';
+export { armFacetsFromManifest, armLabel, checkArmApplied, matchArm } from './manifest.js';
 export {
-  armFacetsFromManifest,
-  armLabel,
-  checkArmApplied,
   manifestFromEvents,
-  matchArm,
   RUN_CONFIGURED_EVENT,
-} from './manifest.js';
+  type ManifestMemoryLike,
+  type RunManifestLike,
+} from '../../../recorders/observability/recordedManifest.js';
 export {
   checkArmApplication,
   collectArmRuns,
@@ -36,9 +35,7 @@ export type {
   ArmRunResult,
   ArmRunner,
   CompareStrategyArmsOptions,
-  ManifestMemoryLike,
   NullBand,
-  RunManifestLike,
   StrategyArm,
   StrategyComparison,
 } from './types.js';

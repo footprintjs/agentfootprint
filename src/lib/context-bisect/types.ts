@@ -37,20 +37,13 @@
 
 import type { RuntimeSnapshot, StageSnapshot } from 'footprintjs/advanced';
 import type { CommitBundle, ControlDepLookup, ValueBasis } from 'foottrace';
+import type { CapturedEventLike } from '../../recorders/observability/recordedManifest.js';
 import type { Embedder, InfluenceWeights } from '../influence-core/index.js';
 
 // ─── Artifacts (input contract) ──────────────────────────────────────
 
-/**
- * Minimal structural envelope for captured typed events — satisfied by
- * `AgentfootprintEvent` (collect with `agent.on('*', e => events.push(e))`).
- * Structural so a consumer can hand in any array shaped like this.
- */
-export interface CapturedEventLike {
-  readonly type: string;
-  readonly payload: unknown;
-  readonly meta: { readonly runtimeStageId: string };
-}
+// The captured-event envelope `events` holds (`CapturedEventLike`) is the
+// recording's own vocabulary: `recorders/observability/recordedManifest.ts`.
 
 /**
  * Minimal per-step quality lookup for trigger derivation — satisfied by

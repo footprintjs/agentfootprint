@@ -230,7 +230,6 @@ const UPWARD_ALLOWANCES = [
   ['src/recorders/core/ErrorBridge.ts', 'src/core/humanizeLLMError.ts'],
   ['src/recorders/core/replayHooks.ts', 'src/lib/time-travel/receipt.ts'],
   ['src/recorders/observability/BoundaryRecorder.ts', 'src/conventions.ts'],
-  ['src/recorders/observability/recordingEnvelope.ts', 'src/lib/context-bisect/arms/manifest.ts'],
   ['src/resilience/withCircuitBreaker.ts', 'src/adapters/requestRefusal.ts'],
   ['src/resilience/withFallback.ts', 'src/adapters/forcedToolChoice.ts'],
   ['src/resilience/withFallback.ts', 'src/adapters/nativeOutputSchema.ts'],
