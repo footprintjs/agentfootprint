@@ -15,11 +15,13 @@ Map: `conventions.ts` (the builder↔recorder protocol — subflow and stage ids
 injection keys, the receipt's scope key `RECEIPT_KEY`), `moments.ts` (the five
 places in the loop where a rule may speak), `traceToolNames.ts` (the trace tool
 names `.selfExplain()` reserves before the pack loads, and its "no run yet"
-answer). Support: `toolName.ts` (the LLM tool-name law `defineTool` checks),
-`humanizeLLMError.ts`, `sha256.ts`, `stableJson.ts` (the sorted-key JSON every
-fingerprint hashes).
+answer). Fold: `stableJson.ts` and `sha256.ts`, the two halves of every
+fingerprint the library mints (sorted-key JSON, then the hash). Support:
+`toolName.ts` (the LLM tool-name law `defineTool` checks), `humanizeLLMError.ts`.
 These loose files, `claim/` and `context-contract/` import nothing in `src/`
-outside themselves; `npm run check:layering` refuses an import that would.
+outside themselves at run time — a type-only import, such as `conventions.ts`
+naming `events/types.ts` · `ContextSlot`, is erased and is not an edge;
+`npm run check:layering` refuses a run-time import that would leave the set.
 Every subfolder here has its own role and its own README.
 
 Trace owner: `trust-boundaries/` projects selected typed events into a bounded,

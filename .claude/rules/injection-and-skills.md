@@ -5,6 +5,7 @@ paths:
   - "src/injection-engine.ts"
   - "src/core/agent/**"
   - "src/security/skillTarget.ts"
+  - "src/lib/moments.ts"
 ---
 # The injection engine and skills — seams and blast radius
 

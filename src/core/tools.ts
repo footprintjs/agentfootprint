@@ -440,7 +440,7 @@ export interface ToolResultCeiling {
 /**
  * Refuse a `resultCeiling` this library cannot honor, at definition time —
  * naming the tool and the fix, never failing at the first oversized result of
- * the first run. Exported beside {@link assertValidToolName} for consumers
+ * the first run. Exported beside `lib/toolName.ts` · `assertValidToolName` for consumers
  * assembling `Tool` objects by hand.
  */
 export function assertResultCeiling(

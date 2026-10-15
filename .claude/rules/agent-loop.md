@@ -8,6 +8,9 @@ paths:
   - "src/classify/**"
   - "src/ontology/**"
   - "src/recipes/**"
+  - "src/lib/moments.ts"
+  - "src/lib/toolName.ts"
+  - "src/lib/humanizeLLMError.ts"
 ---
 # The agent loop — tools, stages, output contract, gates — seams and blast radius
 

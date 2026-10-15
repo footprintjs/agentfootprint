@@ -11,6 +11,7 @@ paths:
   - "src/debug/**"
   - "src/lib/context-bisect/**"
   - "src/lib/trace-toolpack/**"
+  - "src/lib/traceToolNames.ts"
   - "src/lib/context-ledger/**"
 ---
 # Events, recorders and observability — seams and blast radius

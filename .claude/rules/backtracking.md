@@ -18,6 +18,7 @@ paths:
   - src/identity/withCredentialRetry.ts
   - src/lib/context-bisect/**
   - src/lib/trace-toolpack/**
+  - src/lib/traceToolNames.ts
   - src/observability/contextError/finders/**
   - src/lib/influence-core/**
 ---

@@ -399,7 +399,7 @@ describe('unit: a malformed suggestion is refused where it is typed', () => {
 });
 
 describe("unit: the tool's name is the tool registry's question, answered by its owner", () => {
-  // `core/tools.ts` · `warnIfInvalidToolName` — dev mode warns, nothing
+  // `lib/toolName.ts` · `warnIfInvalidToolName` — dev mode warns, nothing
   // refuses — is what a `defineTool` of the same name gets. A suggestion is
   // held to exactly that, never to a second rule of its own.
   it('a name a provider would refuse is recorded as declared, and warned about in dev mode', () => {
