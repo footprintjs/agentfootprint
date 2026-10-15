@@ -103,7 +103,7 @@ class RecallingStore extends AgentCoreStore {
     const found = await super.search<T>(identity, query, options);
     this.recalled.push({
       tenant: identity.tenant,
-      contents: found.map((f) => String(f.entry.value)),
+      contents: found.map((f) => (f.entry.value as { content: string }).content),
     });
     return found;
   }
@@ -436,8 +436,8 @@ describe('memory write options — one principal never reads another’s, inside
     await bound.put(ADA, { id: 'e1', value: 'ADA-PRIVATE card 4242', version: 1 } as MemoryEntry);
     const bobFound = (await bound.search?.(BOB, [], { text: 'card?' })) ?? [];
     const adaFound = (await bound.search?.(ADA, [], { text: 'card?' })) ?? [];
-    expect(bobFound.map((f) => String(f.entry.value))).toEqual([]);
-    expect(adaFound.map((f) => String(f.entry.value)).join()).toContain('ADA-PRIVATE');
+    expect(bobFound.map((f) => JSON.stringify(f.entry.value))).toEqual([]);
+    expect(adaFound.map((f) => JSON.stringify(f.entry.value)).join()).toContain('ADA-PRIVATE');
   });
 
   it('`searchAcrossPrincipals: true` is the explicit opt-in for a tenant-wide memory', async () => {

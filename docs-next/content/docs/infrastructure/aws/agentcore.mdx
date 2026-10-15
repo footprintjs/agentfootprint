@@ -77,7 +77,22 @@ These are documented in the JSDoc; promoted here for visibility:
 
    Omit `options.text` and the call **throws**, naming what is missing, rather than ranking nothing and handing back `[]` — an empty array reads as "no matches" when it really means "wrong query form". Backends that rank locally ignore `text`, so passing both is always safe.
 
-   **What comes back is not what you `put()`.** `list()` returns the events this store wrote; `search()` returns the records AgentCore's own extraction strategies derived *from* those events — summaries, semantic facts, preferences. Their ids belong to AgentCore, so `store.get(result.id)` will not find them. They arrive as entries so ranking code needs no special case, and each carries `metadata.source: 'agentcore-memory-record'` saying plainly where it came from. `searchStrategyId` and the namespace reach AgentCore's side; `k` and `minScore` are applied to what comes back. A `tiers` filter excludes everything, because AgentCore records carry no tier and silently ignoring a filter somebody asked for is worse than returning nothing.
+   **What comes back is not what you `put()`.** `list()` returns the events this store wrote; `search()` returns the records AgentCore's own extraction strategies derived *from* those events — summaries, semantic facts, preferences. Their ids belong to AgentCore, so `store.get(result.id)` will not find them. They arrive as entries so ranking code needs no special case, and each carries `metadata.source: 'agentcore-memory-record'` saying plainly where it came from. Each value is `{ content }`, the record's text where both memory formatters read it, so a read-only memory over this store puts the extracted facts in the prompt:
+
+   ```ts
+   defineMemory({
+     id: 'facts',
+     type: MEMORY_TYPES.SEMANTIC,
+     strategy: { kind: MEMORY_STRATEGIES.TOP_K, topK: 5 }, // no embedder: AgentCore ranks the words
+     store, // an AgentCoreStore
+     readOnly: true,
+   });
+   // the model sees: <memory role="unknown" …>Ada prefers window seats.</memory>
+   ```
+
+   The role is `unknown` on purpose: nobody said the fact, AgentCore derived it.
+
+   `searchStrategyId` and the namespace reach AgentCore's side; `k` and `minScore` are applied to what comes back. A `tiers` filter excludes everything, because AgentCore records carry no tier and silently ignoring a filter somebody asked for is worse than returning nothing.
 
 5. **AWS rate limits apply** — production deployments should wrap with `withRetry` and budget calls per session. AWS SDK has built-in retry; tune via the SDK's `maxAttempts` config.
 
