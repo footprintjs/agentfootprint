@@ -52,7 +52,7 @@
  * the person typed into a typed ask (`requestInput` — its `input_received`
  * result is a `role: 'tool'` message carrying THEIR words), and the
  * system-prompt content this turn was built from — each text with the other
- * spellings of the dates and clock times in it (`core/time/forms.ts` ·
+ * spellings of the dates and clock times in it (`time/forms.ts` ·
  * `timeFormsOf`'s `said` list: `8 Am` is also `8:00`, `2026-10-09` also
  * `2026`) — and, under `.time()`, the said spellings of the turn's recorded
  * windows (`timeSaid`). A compaction summary is a
@@ -106,7 +106,7 @@ import { absenceEvidenceProjection } from '../coverage/index.js';
 import { isTruncatedToolResult } from '../toolResultCap.js';
 import { isCompactedSummary } from '../../../lib/saidByPerson.js';
 import { isLibraryAuthoredTurn } from './frames.js';
-import { timeFormsOfText } from '../../time/textForms.js';
+import { timeFormsOfText } from '../../../time/textForms.js';
 import { lookupForms, normalizeToken, tokenize } from './normalize.js';
 import { jsonPrefixOf, leadingJsonValues } from './servedJson.js';
 
@@ -428,8 +428,8 @@ export function evidenceFromHistory(history: readonly LLMMessage[]): EvidenceCor
 /**
  * Index one piece of EXEMPT text — something the person or the app said —
  * with the other spellings of every date and clock time in it — the SAID
- * list of `core/time/textForms.ts` · `timeFormsOfText` (the text rule of
- * `core/time/forms.ts` · `timeFormsOf`), the one owner of which
+ * list of `time/textForms.ts` · `timeFormsOfText` (the text rule of
+ * `time/forms.ts` · `timeFormsOf`), the one owner of which
  * spellings of a time are the person's (time design § 9.5). The exempt
  * corpus's one text door: the tool-evidence index reads `addText` and never
  * gains these forms.
@@ -599,7 +599,7 @@ export function exemptFromRun(args: {
   readonly answeredValues?: readonly string[];
   /**
    * Under `.time()` (step T7): the SAID spellings of this turn's recorded
-   * windows (`core/time/forms.ts` · `timeFormsOf`) — the parts the person
+   * windows (`time/forms.ts` · `timeFormsOf`) — the parts the person
    * wrote, confirmed, typed or set, at the grain they gave them. Absent →
    * the corpus it always was.
    */
@@ -650,7 +650,7 @@ export function exemptFromRun(args: {
 // detached: yes — a fresh Set per call.
 /**
  * The lookup forms of the spellings the library DERIVED from this turn's
- * time readings (`core/time/forms.ts` · `timeFormsOf`'s `derived` list, the
+ * time readings (`time/forms.ts` · `timeFormsOf`'s `derived` list, the
  * values the library filled from a window, the served time line) — each
  * value indexed whole and by its tokens, exactly as the exempt corpus
  * indexes a text. A value the answer took only from here is filed

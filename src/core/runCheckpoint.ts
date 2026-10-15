@@ -70,7 +70,7 @@ import type { FoldedSpan } from './agent/window/types.js';
 import { argumentRowIsWellFormed } from './agent/arguments/rows.js';
 import { periodRowIsWellFormed } from './agent/coverage/period.js';
 import { witnessRowIsWellFormed } from './agent/assessment/witness.js';
-import { isTimeRowKind, timeRowIsWellFormed } from './time/rows.js';
+import { isTimeRowKind, timeRowIsWellFormed } from '../time/rows.js';
 import {
   BASIS_VALUES,
   EXPECT_VALUES,
@@ -688,7 +688,7 @@ function ledgerRowIsWellFormed(row: unknown): boolean {
   // differing `time`, each call's dispatch moment, and each time mention the
   // armed reader found (`time-reading`). The arm ships in the
   // SAME change as the kinds; one owner of their kinds and shape
-  // (`core/time/rows.ts`). An older runtime refuses a checkpoint carrying one.
+  // (`time/rows.ts`). An older runtime refuses a checkpoint carrying one.
   if (isTimeRowKind(r.kind)) return timeRowIsWellFormed(r);
   switch (r.kind) {
     case 'basis':

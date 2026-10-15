@@ -44,12 +44,12 @@ import {
   toolFacts,
   type PeriodFacts,
   type TimeRefusal,
-} from '../../time/convert.js';
-import type { ReaderWindows } from '../../time/bind.js';
-import { windowToConvert } from '../../time/windows.js';
-import type { ZoneName } from '../../time/zone.js';
-import { presentInstant, presentRange } from '../../time/present.js';
-import type { InstantText } from '../../time/instant.js';
+} from '../../../time/convert.js';
+import type { ReaderWindows } from '../../../time/bind.js';
+import { windowToConvert } from '../../../time/windows.js';
+import type { ZoneName } from '../../../time/zone.js';
+import { presentInstant, presentRange } from '../../../time/present.js';
+import type { InstantText } from '../../../time/instant.js';
 
 type PlainObject = Record<string, unknown>;
 
@@ -238,7 +238,7 @@ export function rulesOnWire(
 
 /**
  * What the served line reads: the turn's SETTLED windows of the person's
- * words (`core/time/windows.ts` · `readerWindowsOf` — each mention's quote and
+ * words (`time/windows.ts` · `readerWindowsOf` — each mention's quote and
  * its one window: the one the person confirmed or gave in the time ask, or a
  * `model` reader's reading), the quotes still PENDING (a proposal the person
  * has not answered, a zone to name, or words the library could not read —
@@ -558,7 +558,7 @@ const refusedFor = (windows: ServedWindows, quote: string, tool: string): boolea
 //        WHOSE it is — the person's answer in the time ask, or a model reader's reading), the
 //        quotes still pending (a rule reading the person has not answered — `bind.ts` ·
 //        `pendingQuotesOf`), the turn's clock, and the SERVED tools' declared period forms and
-//        facts — converted by the one owner (`core/time/convert.ts`)
+//        facts — converted by the one owner (`time/convert.ts`)
 // law: the library's CONCLUSION, never raw facts: a settled window is named with its source (a
 //      reading is never called the person's words) and the values each tool takes, as a
 //      permission ("may pass"); a pending quote names no window and no reading (a proposal is not
@@ -878,7 +878,7 @@ function printedFill(value: FilledArgument['value']): string {
 
 // LENS · tool-result · persistent-history
 // reads: the call's window fill (`argumentResolutions`: the turn's ONE window of the person's, converted
-//        into the tool's form — `core/time/bind.ts`), kept only where the call RAN with it, and whose window
+//        into the tool's form — `time/bind.ts`), kept only where the call RAN with it, and whose window
 //        it was (the person's words, a model reader's unconfirmed reading of them, a UI control)
 // law: may omit, never deny; past tense, naming the call this result answers; a reading of the person's
 //      words is never called their words.
@@ -1023,7 +1023,7 @@ export function secondPauseRefusal(toolName: string, why: 'check-in' | 'tool-pau
 }
 
 // LENS · tool-result · persistent-history
-// reads: the call's `call-window` decision (`core/time/bind.ts` · `callWindowOf`: the window it asked
+// reads: the call's `call-window` decision (`time/bind.ts` · `callWindowOf`: the window it asked
 //        for against the tool's DECLARED facts — `direction`, `retention`, `maxRange`, a `day`-only form,
 //        a sent wall time the zone skips, a person's window no declared form can read) and those facts'
 //        own spellings

@@ -70,7 +70,7 @@ import {
   type AskOrAssume,
   type ToolPeriod,
 } from '../../core/agent/arguments/declare.js';
-import { readTimeContext, TIME_CONTEXT_META_KEY, type TimeContext } from '../../core/time/wire.js';
+import { readTimeContext, TIME_CONTEXT_META_KEY, type TimeContext } from '../../time/wire.js';
 
 /**
  * The single `_meta` key every agentfootprint declaration travels under.
@@ -155,7 +155,7 @@ export interface McpToolExtras {
 
 /**
  * The `_meta` bag a `tools/call` request carries for a call handed
- * `ctx.time` (the time layer, `core/time/wire.ts` · `TimeContext`): the
+ * `ctx.time` (the time layer, `time/wire.ts` · `TimeContext`): the
  * same object, under the one namespaced key — so a host tool in another
  * process can declare the `period.queried` its read covered without parsing
  * its own argument.

@@ -100,7 +100,7 @@ import {
 } from '../src/core/agent/arguments/serve.js';
 import { rulesOf } from '../src/core/agent/arguments/declare.js';
 import { periodCheckLine } from '../src/core/agent/coverage/period.js';
-import { bindPresentation } from '../src/core/time/present.js';
+import { bindPresentation } from '../src/time/present.js';
 import {
   factExpectation,
   WINDOW_FORM_EXPECTATION,
@@ -1778,7 +1778,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       'and appended by `callLLM` as the LAST `role: "user"` line of that one request — never ' +
       'written to history, so every later call re-reads a fresh composition (a pending quote the ' +
       'person then confirms is never re-read as pending)',
-    drivenBy: ['test/core/time/english-run.test.ts', 'test/core/time/gaps-run.test.ts'],
+    drivenBy: ['test/time/english-run.test.ts', 'test/time/gaps-run.test.ts'],
     reaches: [
       /^\[A note from the library that runs the tools — not from the person, and not a correction from them: when you answer, answer the person directly, as you would from the tool results alone\.\] The person's time words, as the library holds them: “yesterday” is 2026-10-08 00:00–23:59 America\/Los_Angeles \(UTC-07:00\), the window the person confirmed when asked what their words meant — search_logs window "1960m" \(a wider read than the words named\); client_activity start_time 1791442800000, end_time 1791529200000\. A call may pass these values as written; an answer built on them states that window\.$/m,
       /client_activity start_time \(hidden by the tool's view\), end_time 1791529200000/,
@@ -1812,7 +1812,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       'checks hold and its `source-clock` rows (`coverage/timeLimits.ts` · `timeLimitLinesOf`, the ' +
       'owner the limits block also asks), appended to the ONE served time line, which `callLLM` ' +
       'serves as the LAST `role: "user"` line of that one request — never written to history',
-    drivenBy: ['test/core/time/limits-served.test.ts'],
+    drivenBy: ['test/time/limits-served.test.ts'],
     reaches: [
       /^\[A note from the library that runs the tools — not from the person, and not a correction from them: when you answer, answer the person directly, as you would from the tool results alone\.\] The time the tools read is not the time asked about — client_activity read less than was asked — asked: .+; read: .+\. So the answer to the person states the time each result read and claims nothing about time no result read\.$/m,
       /search_logs read more than the person's window — the person's window: /,
@@ -1836,7 +1836,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       '`timeClock`), the first part of the ONE served time line, which `callLLM` serves as the ' +
       'LAST `role: "user"` line of that one request — never written to history, so every request ' +
       'reads the turn’s frozen clock again',
-    drivenBy: ['test/core/time/clock-served.test.ts', 'test/core/time/zone-unknown-run.test.ts'],
+    drivenBy: ['test/time/clock-served.test.ts', 'test/time/zone-unknown-run.test.ts'],
     reaches: [
       /^\[A note from the library that runs the tools — not from the person, and not a correction from them: when you answer, answer the person directly, as you would from the tool results alone\.\] This turn's time: Friday 2026-10-09 08:40 America\/Los_Angeles \(UTC-07:00\)\.$/m,
       // The unknown zone (G15): UTC, named as not known — never a guessed zone.
@@ -2054,7 +2054,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       'each lands as the `role: "tool"` result of the call it refused, in the argument-refusal ' +
       'shape, so it is written into `history` — past tense, anchored to "that call", naming only ' +
       "the tool's declared facts and an argument name, never the window's value",
-    drivenBy: ['test/core/time/widen-run.test.ts'],
+    drivenBy: ['test/time/widen-run.test.ts'],
     reaches: [
       /search_logs was not run on that call: the window it asked for had not happened yet, and the tool declares that its source holds only the past\./,
       /the window it asked for had already ended, and the tool declares that its source holds only the future\./,

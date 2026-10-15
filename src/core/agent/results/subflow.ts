@@ -65,8 +65,12 @@ import {
   type HeldSpan,
   type PeriodRow,
 } from '../coverage/period.js';
-import { periodTimeCheck, type PeriodCheckInput, type PeriodTimeCheck } from '../../time/check.js';
-import type { PeriodFacts, PeriodForm } from '../../time/convert.js';
+import {
+  periodTimeCheck,
+  type PeriodCheckInput,
+  type PeriodTimeCheck,
+} from '../../../time/check.js';
+import type { PeriodFacts, PeriodForm } from '../../../time/convert.js';
 
 /** One call of the batch ToolCalls just ran — identities only. */
 export interface RanCall {

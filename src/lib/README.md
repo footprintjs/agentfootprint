@@ -111,10 +111,10 @@ The same rule holds for the scanners that live beside their one caller
 `stripTags`, `core/codeRunnerTool.ts` · `codeShape`,
 `memory/facts/patternFactExtractor.ts` · `firstEmail`,
 `adapters/identity/directory/ldapDirectory.ts` · `pemCertificateBlocks`,
-`core/time/resolve.ts` · `placeBeforeTime`, `ontology/skosJsonLd.ts` ·
-`withoutQuery`, `core/time/readers/english.ts` · `saysBetweenBefore`): linear
+`time/resolve.ts` · `placeBeforeTime`, `ontology/skosJsonLd.ts` ·
+`withoutQuery`, `time/readers/english.ts` · `saysBetweenBefore`): linear
 in the text, equal to the regex they replaced — `stripTags` to that regex with
-its end tag corrected to the one a browser ends a script at. `core/time/`
+its end tag corrected to the one a browser ends a script at. `time/`
 imports nothing outside itself, so it restates the walk and the character
 tests it needs instead of importing them.
 `test/security/linear-text.test.ts` and `test/security/linear-scanners.test.ts`

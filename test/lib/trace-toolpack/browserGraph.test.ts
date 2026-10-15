@@ -258,30 +258,30 @@ describe.skipIf(!built)('the default browser graph of the root entry', () => {
     // `import()`.
     const graph = await splitGraph(resolve(DIST, 'index.js'));
     for (const stays of [
-      'core/time/clock.js',
-      'core/time/periodForm.js',
-      'core/time/ask.js',
-      'core/time/rows.js',
-      'core/time/resolveRecord.js',
-      'core/time/checkRecord.js',
-      'core/time/windows.js',
-      'core/time/textForms.js',
+      'time/clock.js',
+      'time/periodForm.js',
+      'time/ask.js',
+      'time/rows.js',
+      'time/resolveRecord.js',
+      'time/checkRecord.js',
+      'time/windows.js',
+      'time/textForms.js',
       'core/agent/coverage/timeLimitFacts.js',
     ]) {
       expect(graph.syncInputs.has(`dist/esm/${stays}`), stays).toBe(true);
     }
     for (const lazy of [
       'core/agent/stages/timeLayer.js',
-      'core/time/resolve.js',
-      'core/time/convert.js',
-      'core/time/drift.js',
-      'core/time/wire.js',
-      'core/time/rowsBuild.js',
-      'core/time/present.js',
-      'core/time/readingAsk.js',
-      'core/time/bind.js',
-      'core/time/check.js',
-      'core/time/forms.js',
+      'time/resolve.js',
+      'time/convert.js',
+      'time/drift.js',
+      'time/wire.js',
+      'time/rowsBuild.js',
+      'time/present.js',
+      'time/readingAsk.js',
+      'time/bind.js',
+      'time/check.js',
+      'time/forms.js',
       'core/agent/coverage/timeLimits.js',
       'core/agent/stages/timeLineage.js',
     ]) {
@@ -296,9 +296,9 @@ describe.skipIf(!built)('the default browser graph of the root entry', () => {
     // eagerly through their own door; publishing them there must not move
     // `convert.ts` onto the root graph (the time-layer law above).
     const door = await splitGraph(resolve(DIST, 'doors/time.js'));
-    expect(door.syncInputs.has('dist/esm/core/time/convert.js')).toBe(true);
+    expect(door.syncInputs.has('dist/esm/time/convert.js')).toBe(true);
     const root = await splitGraph(resolve(DIST, 'index.js'));
-    expect(root.syncInputs.has('dist/esm/core/time/convert.js')).toBe(false);
+    expect(root.syncInputs.has('dist/esm/time/convert.js')).toBe(false);
   });
 
   it('contrast: the /observe door carries the pack statically, by design', async () => {

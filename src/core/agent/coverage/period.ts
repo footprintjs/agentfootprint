@@ -11,8 +11,8 @@
  *          cannot disagree about what a well-formed period is.
  * Role:    core/ layer leaf of the result doors (honesty layer 3). Imports only
  *          `refusal.ts`, the dev-mode flag and the time layer's one instant
- *          parser (`core/time/instant.ts` · `instantOf`, lenient profile) and its
- *          person-facing renderer (`core/time/present.ts`). The results layer
+ *          parser (`time/instant.ts` · `instantOf`, lenient profile) and its
+ *          person-facing renderer (`time/present.ts`). The results layer
  *          (`../results/subflow.ts`) files one verdict per call from
  *          {@link periodVerdict}; the limits block prints one line per
  *          declaring call from {@link periodLine}.
@@ -46,14 +46,14 @@
 
 import { isDevMode } from 'footprintjs';
 
-import { compareInstants, instantOf, type Instant } from '../../time/instant.js';
-import type { BoundPresentation } from '../../time/present.js';
+import { compareInstants, instantOf, type Instant } from '../../../time/instant.js';
+import type { BoundPresentation } from '../../../time/present.js';
 import {
   isPeriodDiffers,
   isShifted,
   type PeriodDiffers,
   type SourceClock,
-} from '../../time/checkRecord.js';
+} from '../../../time/checkRecord.js';
 
 import { refusal, spellingMeant } from './refusal.js';
 
@@ -142,7 +142,7 @@ export type PeriodVerdict = 'covered' | 'partly-held' | 'not-held' | 'unknown';
 
 // ─── Instants ────────────────────────────────────────────────────────────
 
-// The one instant parser lives in `core/time/instant.ts` (`instantOf`). A
+// The one instant parser lives in `time/instant.ts` (`instantOf`). A
 // period a result DECLARES is read in its LENIENT profile — RFC 3339 as a
 // foreign minter may write it (`t`/`z`, the leap second `:60`) — exactly the
 // rule this file owned before the time layer took it; the verdict below is
@@ -594,7 +594,7 @@ export function periodLine(
 /**
  * The same line under `.time()` (time design § 10.2): every instant rendered
  * in the presentation zone by the time layer's one renderer
- * (`core/time/present.ts`), the zone named, each end AS DECLARED (a declared
+ * (`time/present.ts`), the zone named, each end AS DECLARED (a declared
  * period is inclusive, so no end moves). The raw instants stay in the typed
  * record (`coverageDeclared`, `answerCoverage`); a label is never parsed back.
  *
@@ -603,7 +603,7 @@ export function periodLine(
  * periodLine('backup_runs', {
  *   queried: { from: '2026-09-26T09:00:00Z', to: '2026-09-26T10:00:00Z' },
  *   held: 'unknown',
- * }, bindPresentation({ zone: 'America/Los_Angeles' })); // core/time/present.ts
+ * }, bindPresentation({ zone: 'America/Los_Angeles' })); // time/present.ts
  * // 'backup_runs queried 2026-09-26 02:00–03:00 America/Los_Angeles (UTC-07:00);
  * //  what the store holds is unknown'
  * ```
@@ -657,7 +657,7 @@ export interface PeriodRow {
   readonly verdict: PeriodVerdict | 'undeclared';
   /** The argument the tool's `ToolPeriod` names — present only when it declares one. */
   readonly argument?: string;
-  // ── The time layer's result checks (step T8 — `core/time/check.ts` ·
+  // ── The time layer's result checks (step T8 — `time/check.ts` ·
   //    `periodTimeCheck`), filed only under `.time()` and only when they hold;
   //    an unarmed run's rows never carry them (byte-identical). ──
   /** `period-differs-from-asked { missing, extra }` — the read differs from the asked range (or, for a window the model chose, from the person's). */
@@ -674,7 +674,7 @@ export interface PeriodRow {
    * `held` spans of the declared period that verdict came from, as the tool
    * declared them. Filed only under `.time()`, where the served time line
    * hands the model this conclusion in the person's zone (`timeLimits.ts` ·
-   * `heldLine`) and the evidence gate spells it (`core/time/forms.ts` ·
+   * `heldLine`) and the evidence gate spells it (`time/forms.ts` ·
    * `timeFormsOf`, its `held` source): the model never converts a source's
    * UTC instants itself.
    */
@@ -735,13 +735,13 @@ export function periodRowIsWellFormed(row: Readonly<Record<string, unknown>>): b
  * The one limits line for a call whose `period` row carries a time check
  * (time design § 10.2, step T8) — `undefined` when it carries none. Static
  * words around the two ranges, rendered in the presentation zone by the time
- * layer's one renderer, HANDED in bound (`core/time/present.ts` ·
+ * layer's one renderer, HANDED in bound (`time/present.ts` ·
  * `bindPresentation` → `range`, to the second, the zone named — coverage never
  * imports the renderer); the raw instants stay on the row.
  *
  * @example
  * ```ts
- * periodCheckLine(row, bindPresentation({ zone: 'America/Los_Angeles' })); // core/time/present.ts
+ * periodCheckLine(row, bindPresentation({ zone: 'America/Los_Angeles' })); // time/present.ts
  * // 'search_logs read more than was asked — asked: 2026-10-08 00:00:00–23:59:59 America/Los_Angeles
  * //  (UTC-07:00); read: 2026-10-08 00:00:00–2026-10-09 08:40:00 America/Los_Angeles (UTC-07:00)'
  * ```

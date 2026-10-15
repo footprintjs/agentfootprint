@@ -75,10 +75,10 @@ import * as injectionEngine from '../../src/injection-engine.js';
 import * as identity from '../../src/identity.js';
 import * as classify from '../../src/classify/index.js';
 import * as ontology from '../../src/ontology/index.js';
-import * as timeConvert from '../../src/core/time/convert.js';
-import * as timePeriodForm from '../../src/core/time/periodForm.js';
-import * as timePresent from '../../src/core/time/present.js';
-import * as timeZone from '../../src/core/time/zone.js';
+import * as timeConvert from '../../src/time/convert.js';
+import * as timePeriodForm from '../../src/time/periodForm.js';
+import * as timePresent from '../../src/time/present.js';
+import * as timeZone from '../../src/time/zone.js';
 
 // ─── The two lists ─────────────────────────────────────────────────
 
@@ -369,7 +369,7 @@ describe('a door added after 9.0.0 is a re-export of its implementation barrel',
     }
   });
 
-  it('./time serves the SAME conversion functions the run asks, from src/core/time', () => {
+  it('./time serves the SAME conversion functions the run asks, from src/time', () => {
     const onDoor = timeDoor as unknown as Record<string, unknown>;
     const convert = timeConvert as unknown as Record<string, unknown>;
     const periodForm = timePeriodForm as unknown as Record<string, unknown>;
@@ -388,7 +388,7 @@ describe('a door added after 9.0.0 is a re-export of its implementation barrel',
       isZoneName: timeZone as unknown as Record<string, unknown>,
     };
     for (const [sample, impl] of Object.entries(owners)) {
-      expect(impl[sample], `src/core/time lost ${sample}`).toBeDefined();
+      expect(impl[sample], `src/time lost ${sample}`).toBeDefined();
       expect(onDoor[sample], `./time's ${sample} is a different object`).toBe(impl[sample]);
     }
     // The door is exactly these: the rest of the layer stays internal.

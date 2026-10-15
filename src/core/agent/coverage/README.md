@@ -653,7 +653,7 @@ return absent({
   `mintPeriod`. Every value is an ISO 8601 instant
   WITH a zone — the library compares instants, and one with no zone is refused
   rather than guessed (read by the time layer's one parser,
-  `core/time/instant.ts` · `instantOf`, in its lenient RFC 3339 profile); `from` is never after `to`; `held` is a span or the
+  `time/instant.ts` · `instantOf`, in its lenient RFC 3339 profile); `from` is never after `to`; `held` is a span or the
   literal `'unknown'`, said out loud. A `period` is a declared boundary on its
   own: `coverage(value, { period })` with no lists is accepted.
 - **`provenance` on `absent()` only** (adopted Q34; `coverage()` takes none — a
@@ -689,7 +689,7 @@ return absent({
   as `periods` in its limits data (`answer.ts` · `coverageOfAnswer`). With no
   period declared the block is the bytes it always was. Under `.time()` (the
   time layer's run clock) the line's instants are rendered in the run's zone by
-  `core/time/present.ts`, the zone named, each end as declared
+  `time/present.ts`, the zone named, each end as declared
   (`backup_runs queried 2026-10-09 08:00–08:40 America/Los_Angeles (UTC-07:00); …`);
   the typed data keeps the declared instants.
 - **Across processes.** `canonical-notes.json` publishes the period's wire

@@ -26,7 +26,7 @@
  * that move removes are named below, and the change that frees them deletes them.
  *
  *   L0  leaves          imports nothing above itself: `lib/` (its loose files, `claim/`,
- *                       `context-contract/`), events, bridge, maps, recipes
+ *                       `context-contract/`), events, bridge, maps, recipes, time
  *   L1  vocabularies    the one law each spells: semantics, redaction, thinking, classify,
  *                       ontology, cache, trust-boundaries
  *   L2  ports           memory
@@ -68,6 +68,8 @@ const LAYERS = [
       'src/bridge/**',
       'src/maps/**',
       'src/recipes/**',
+      // The time layer: one owner of every time grammar, imports nothing outside itself.
+      'src/time/**',
     ],
   },
   {
@@ -151,6 +153,9 @@ const LAYERS = [
  * import nothing in `src/` outside themselves. Its feature subfolders are not part of the set:
  * each sits at its own layer until it leaves `lib/` for a top-level folder of its own.
  *
+ * `time` — the time layer (instants, ranges, zones, the run clock, the readers) is
+ * self-contained: every layer that speaks about time imports it, and it imports none of them.
+ *
  * @type {ReadonlyArray<{ name: string, files: string[] }>}
  */
 const CLOSED_FOLDERS = [
@@ -158,6 +163,7 @@ const CLOSED_FOLDERS = [
     name: 'lib (the leaves)',
     files: ['src/lib/*.ts', 'src/lib/claim/**', 'src/lib/context-contract/**'],
   },
+  { name: 'time', files: ['src/time/**'] },
 ];
 
 /**
@@ -168,9 +174,6 @@ const CLOSED_FOLDERS = [
  * @type {ReadonlyArray<readonly [string, string]>}
  */
 const UPWARD_ALLOWANCES = [
-  ['src/artifacts/datasetResult.ts', 'src/core/time/axis.ts'],
-  ['src/artifacts/index.ts', 'src/core/time/axis.ts'],
-  ['src/artifacts/minting.ts', 'src/core/time/axis.ts'],
   ['src/core/Agent.ts', 'src/adapters/forcedToolChoice.ts'],
   ['src/core/Agent.ts', 'src/adapters/nativeOutputSchema.ts'],
   ['src/core/Agent.ts', 'src/adapters/requestRefusal.ts'],
@@ -196,7 +199,6 @@ const UPWARD_ALLOWANCES = [
   ['src/integrity/claim-binding/admit.ts', 'src/core/agent/coverage/period.ts'],
   ['src/integrity/claim-binding/bindEvidence.ts', 'src/core/agent/coverage/period.ts'],
   ['src/integrity/claim-binding/scope.ts', 'src/core/agent/coverage/period.ts'],
-  ['src/integrity/claim-binding/scope.ts', 'src/core/time/instant.ts'],
   ['src/lib/injection-engine/buildInjectionEngineSubflow.ts', 'src/core/agent/toolEffects.ts'],
   ['src/lib/injection-engine/constrainedEnumPick.ts', 'src/adapters/forcedToolChoice.ts'],
   ['src/lib/injection-engine/skillTools.ts', 'src/core/tools.ts'],

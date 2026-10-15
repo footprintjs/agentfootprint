@@ -91,7 +91,7 @@ whole-number `rows` is never guessed ("it reached the model as a ticket … does
 not say how many rows it holds"). Without the count, whether the result was empty
 cannot be told.
 
-### A declared time axis (owned by `core/time/axis.ts`, re-exported here)
+### A declared time axis (owned by `time/axis.ts`, re-exported here)
 
 **Law: declared, never guessed; judged at mint, never repaired.** A producer puts
 `timeAxis` beside its rows and the ticket carries it (`ArtifactMeta.timeAxis`): the
@@ -108,7 +108,7 @@ The store never scans rows. A declared column the rows lack is the consumer's to
 report, visibly. `sqliteArtifacts` adds the `time_axis` column in place on an older
 file, and the JSON-envelope stores carry it unchanged.
 
-The declaration and its judge live in the time layer (`src/core/time/axis.ts`), so
+The declaration and its judge live in the time layer (`src/time/axis.ts`), so
 `interval` and `zone` use the one duration and zone grammar. A consumer that COMPARES
 times asks for the read-side view, `normaliseInstants(rows, axis)`: UTC instants at
 one precision, sorted, with every value it could not place counted. An offset-less

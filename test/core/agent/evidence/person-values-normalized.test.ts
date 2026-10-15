@@ -19,7 +19,7 @@
  * Test types (Convention 3): unit / integration (the pausing agent) /
  * regression (the field case) / negative (invented values) / documentation
  * (the README example, verbatim). Since time step T7 the spellings are
- * `core/time/forms.ts` · `timeFormsOf`'s `said` list; the cases are the same.
+ * `time/forms.ts` · `timeFormsOf`'s `said` list; the cases are the same.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -34,11 +34,11 @@ import {
 } from '../../../../src/core/agent/evidence/evidenceIndex.js';
 import { checkAnswer, resolveEvidenceGate } from '../../../../src/core/agent/evidence/gate.js';
 import { tokenize } from '../../../../src/core/agent/evidence/normalize.js';
-import { timeFormsOf } from '../../../../src/core/time/forms.js';
+import { timeFormsOf } from '../../../../src/time/forms.js';
 
 /**
  * The gate's private table (`normalize.ts` · `dateAndClockForms`) retired in
- * time step T7: its job is the `said` list of `core/time/forms.ts` ·
+ * time step T7: its job is the `said` list of `time/forms.ts` ·
  * `timeFormsOf({ text })`. Every case below is asked of it unchanged.
  */
 const dateAndClockForms = (text: string): readonly string[] => timeFormsOf({ text }).said;

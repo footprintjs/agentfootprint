@@ -2,7 +2,7 @@
  * locales/timeAsk — the time ask's sentences, for the PERSON answering it
  * (time design § 6.2, TQ7).
  *
- * The library validates a time field's answer (`core/time/ask.ts` ·
+ * The library validates a time field's answer (`time/ask.ts` ·
  * `checkTimeAnswer`), so a refused answer needs a reason — and the reason is a
  * sentence a person reads on the re-ask (`InputRefusal.reason`), never text
  * for the model. It lives here, as data, so an app can translate or reword
@@ -26,7 +26,7 @@
  * `format`, or the choices of a reading under `.time()`.
  */
 
-import type { TimeAskMessages } from '../core/time/ask.js';
+import type { TimeAskMessages } from '../time/ask.js';
 
 /** The time ask's English sentences — one per `TIME_ASK_MESSAGE_KEYS` key. */
 export const defaultTimeAskMessages: TimeAskMessages = Object.freeze({

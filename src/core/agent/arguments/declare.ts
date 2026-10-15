@@ -40,13 +40,13 @@
  * Q13): a period argument is exactly what a rule is for.
  *
  * Since the time layer's step T5a the single-argument form is SUGAR over
- * `forms` (`core/time/convert.ts` · `sugarForms`): a tool declares every shape
+ * `forms` (`time/convert.ts` · `sugarForms`): a tool declares every shape
  * its period takes — two arguments (`bounds`), one joined string, an object, a
  * `day`, a look-back with its `units` — and the facts about its source
  * (`direction`, `retention`, `maxRange`, `granularity`, `filtersToAsked`).
  * Under `.time()` the library fills a period the model left out from the
  * turn's one window, binds a sent one to the person's window, and hands the
- * tool `ctx.time` (`core/time/bind.ts`). Without `.time()` a period is judged
+ * tool `ctx.time` (`time/bind.ts`). Without `.time()` a period is judged
  * and read exactly as before.
  */
 
@@ -66,9 +66,9 @@ import {
   type PeriodFacts,
   type PeriodForm,
   type PeriodSpelling,
-} from '../../time/periodForm.js';
-import { isDuration, LOOKBACK_UNITS, type DurationText } from '../../time/duration.js';
-import { splitRange } from '../../time/range.js';
+} from '../../../time/periodForm.js';
+import { isDuration, LOOKBACK_UNITS, type DurationText } from '../../../time/duration.js';
+import { splitRange } from '../../../time/range.js';
 import { canonicalForm, tokenize } from '../evidence/normalize.js';
 import { validatePropertyValue } from '../toolArgsValidation.js';
 
@@ -98,7 +98,7 @@ export type ArgumentRule =
 /** Per argument name, its rule. Arguments with no rule run free. */
 export type AskOrAssume = Readonly<Record<string, ArgumentRule>>;
 
-export type { PeriodSpelling, PeriodForm, PeriodFacts } from '../../time/periodForm.js';
+export type { PeriodSpelling, PeriodForm, PeriodFacts } from '../../../time/periodForm.js';
 export { PERIOD_SPELLINGS };
 
 /**
@@ -222,7 +222,7 @@ export function sameArgumentValue(a: unknown, b: unknown): boolean {
 
 // ─── Spellings ──────────────────────────────────────────────────────────
 
-// The grammars live in the time layer (`src/core/time/`): a look-back is
+// The grammars live in the time layer (`src/time/`): a look-back is
 // `duration.ts` under today's units (`LOOKBACK_UNITS`, `mhdw` — no `s`, no
 // digit cap), and an `iso-range` is `range.ts` · `splitRange` under `..` in
 // the STRICT instant profile (upper-case `T`/`Z`, no leap second, the day
@@ -955,7 +955,7 @@ export interface ToolRules {
 }
 
 /**
- * Every form a tool's period takes, the sugar read (`core/time/convert.ts` ·
+ * Every form a tool's period takes, the sugar read (`time/convert.ts` ·
  * `sugarForms`) — empty when it declares none, or names an argument and no
  * spelling.
  */

@@ -15,7 +15,7 @@ paid run reads it. `test/bench/time-checks/rule.test.ts` fails if the margins be
 ## The question
 
 Under `.time()`, step T8 compares what each call READ with what it ASKED
-(`core/time/check.ts` · `periodTimeCheck`). A read narrower, wider or shifted from the asked
+(`time/check.ts` · `periodTimeCheck`). A read narrower, wider or shifted from the asked
 window, or a window older than the source keeps, makes the answer's standing "not sure"; two
 sources on different declared clocks get a label. The limits block says it to the person, and
 since commit `4a5b6015` the same lines reach the MODEL as the library's conclusion, late, at the

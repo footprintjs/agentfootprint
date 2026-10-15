@@ -8,6 +8,7 @@ paths:
   - "src/classify/**"
   - "src/ontology/**"
   - "src/recipes/**"
+  - "src/time/**"
   - "src/lib/moments.ts"
   - "src/lib/toolName.ts"
   - "src/lib/humanizeLLMError.ts"

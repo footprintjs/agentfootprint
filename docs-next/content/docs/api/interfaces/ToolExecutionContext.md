@@ -192,7 +192,7 @@ needs to know it is talking to a door that has no runs BEFORE it opens one.
 
 Defined in: [src/core/tools.ts:741](https://github.com/footprintjs/agentfootprint/blob/main/src/core/tools.ts#L741)
 
-The call's time (the time layer, step T5a — `core/time/wire.ts`): the
+The call's time (the time layer, step T5a — `time/wire.ts`): the
 half-open range the call asks for (`asked`, edge `'exclusive'` — the
 person's window when the library filled or bound it, the sent value read
 back otherwise), the person's zone, the turn's frozen `now` and the

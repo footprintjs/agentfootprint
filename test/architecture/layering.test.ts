@@ -29,7 +29,7 @@ const REPO = resolve(__dirname, '../..');
  * edge is gone; this refuses one that was ADDED. A change that frees edges deletes their
  * entries and lowers this number in the same commit; nothing raises it.
  */
-const ALLOWANCE_COUNT = 48;
+const ALLOWANCE_COUNT = 44;
 
 // ── fixtures ─────────────────────────────────────────────────────────────────
 
@@ -294,8 +294,10 @@ describe('check-layering — this repository', () => {
     expect(result.ok).toBe(true);
   });
 
-  it("lib's leaves import nothing in src/ outside themselves — the closed-folder rule is on", () => {
-    expect(CLOSED_FOLDERS.map((c: { name: string }) => c.name)).toContain('lib (the leaves)');
+  it("lib's leaves and the time layer import nothing in src/ outside themselves — the closed-folder rule is on", () => {
+    const closed = CLOSED_FOLDERS.map((c: { name: string }) => c.name);
+    expect(closed).toContain('lib (the leaves)');
+    expect(closed).toContain('time');
     expect(result.closedEscapes).toEqual([]);
   });
 

@@ -12,7 +12,7 @@
  *   - a window older than the tool declares its source keeps: refused before
  *     it ran, and the answer reads "not sure" (`period-beyond-retention`).
  *
- * One owner compares: `core/time/check.ts` · `periodTimeCheck`.
+ * One owner compares: `time/check.ts` · `periodTimeCheck`.
  *
  * Run:  npm run example examples/features/88-time-result-checks.ts
  */

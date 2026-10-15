@@ -26,7 +26,7 @@ import {
   type DatasetTimeAxis,
 } from '../../src/index.js';
 import type { ArtifactEventFact } from '../../src/artifacts/capability.js';
-import * as owner from '../../src/core/time/axis.js';
+import * as owner from '../../src/time/axis.js';
 
 const SCOPE = { conversationId: 'conv-time' };
 const HOURLY: DatasetTimeAxis = {

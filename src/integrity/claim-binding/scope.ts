@@ -1,7 +1,7 @@
 /** Authored scope projection over the arguments actually delivered to execute. */
 import { copyJson, ownData } from '../../lib/boundedJson.js';
 import { canonicalJson } from '../../lib/canonicalJson.js';
-import { compareInstants, instantOf } from '../../core/time/instant.js';
+import { compareInstants, instantOf } from '../../time/instant.js';
 import { periodProblem } from '../../core/agent/coverage/period.js';
 import type { DeclaredPeriod } from '../../core/agent/coverage/period.js';
 import type { ScopeDeclaration, ScopeDimension } from './types.js';

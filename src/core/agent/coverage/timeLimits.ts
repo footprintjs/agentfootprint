@@ -12,18 +12,18 @@
  *
  * What it reads: the facts `timeLimitFacts.ts` · `timeLimitFactsOf` reads —
  * the turn's `period` rows whose result checks hold, the turn's
- * `source-clock` rows (`core/time/checkRecord.ts` · `clocksDiffer`) and the
+ * `source-clock` rows (`time/checkRecord.ts` · `clocksDiffer`) and the
  * clock row's zone — rendered here (`period.ts` · `periodCheckLine`,
  * `clockLines`). `undefined` when there is no clock (nothing to render in) or
  * nothing to say.
  *
  * Loaded through `import()` only, under `.time()` (`stages/prepareFinal.ts`;
  * `arguments/serve.ts`, itself loaded under the arm): it renders through
- * `core/time/present.ts`, which a plain agent never loads.
+ * `time/present.ts`, which a plain agent never loads.
  */
 
 import { clockLines, periodCheckLine, type PeriodRow } from './period.js';
-import { bindPresentation, type BoundPresentation } from '../../time/present.js';
+import { bindPresentation, type BoundPresentation } from '../../../time/present.js';
 import type { TimeLimitLines } from './answer.js';
 import {
   timeLimitFactsOf,
@@ -97,7 +97,7 @@ export function timeLimitLinesOf(
 
 /**
  * The limits lines for `audience`, rendered in the facts' zone by the time
- * layer's one renderer (`core/time/present.ts` · `bindPresentation`) —
+ * layer's one renderer (`time/present.ts` · `bindPresentation`) —
  * `undefined` when there are no facts or nothing to say.
  */
 export function renderTimeLimits(

@@ -478,7 +478,7 @@ const OUTPUT_LIMITS = { bytes: 223_400_000, files: 8_270, duplicateRscBytes: 0 }
 // imported the renderer. The clean shrink moved all of it behind `import()`
 // under the arm — `core/agent/stages/timeLayer.ts` (seed's clock stamp and
 // reading, ToolCalls' dispatch moment, `clock-on-resume`), prepareFinal's
-// in-zone line loading `core/time/present.ts` and handing coverage a bound
+// in-zone line loading `time/present.ts` and handing coverage a bound
 // renderer — and split each time module a synchronous door shares with the
 // run into its record half and its engine (`resolveRecord.ts` / `resolve.ts`,
 // `periodForm.ts` / `convert.ts`, `rows.ts` / `rowsBuild.ts`, `ask.ts` /
@@ -490,17 +490,17 @@ const OUTPUT_LIMITS = { bytes: 223_400_000, files: 8_270, duplicateRscBytes: 0 }
 //   after the shrink                                      470.3 KB  (CI ~471.9)
 // What cannot move is what a SYNCHRONOUS door needs before any run starts:
 // `defineTool({ period })` judges period forms at definition
-// (`arguments/declare.ts` -> `core/time/periodForm.ts`), `requestInput` and
+// (`arguments/declare.ts` -> `time/periodForm.ts`), `requestInput` and
 // the resume door judge a time `format` (`core/inputRequest.ts` ->
-// `core/time/ask.ts`, with the catalog `locales/timeAsk.ts`), the checkpoint
+// `time/ask.ts`, with the catalog `locales/timeAsk.ts`), the checkpoint
 // door checks time rows (`runCheckpoint.ts` · `validateCheckpoint`, also the
-// hosting envelopes' sync validators -> `core/time/rows.ts`,
+// hosting envelopes' sync validators -> `time/rows.ts`,
 // `resolveRecord.ts`), and `.time()` reads its options at build (`clock.ts`),
 // with their leaves (`instant.ts`, `zone.ts`, `range.ts`, `duration.ts`,
 // `reader.ts`). Moving any of them makes a public sync door async — a
 // behaviour change, not a packaging one. The law is pinned at the graph by
 // test/lib/trace-toolpack/browserGraph.test.ts (the time layer's case) and
-// listed in src/core/time/README.md, "What a plain agent carries". Ceiling ~2%
+// listed in src/time/README.md, "What a plain agent carries". Ceiling ~2%
 // over CI's expected ~471.9 KB (local builds read ~1.6 KB under CI on this
 // branch: 478.7 vs 480.3), as every raise here.
 // 2026-10-02: footprintjs 9.29.0 (copy-on-write commit) adds its own engine

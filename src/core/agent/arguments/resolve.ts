@@ -64,18 +64,18 @@ import {
   type CallWindow,
   type TurnWindows,
   type WindowSource,
-} from '../../time/bind.js';
+} from '../../../time/bind.js';
 import {
   formArguments,
   formFacts,
   granularityMsOf,
   toolFacts,
   type PeriodFacts,
-} from '../../time/convert.js';
-import type { InstantText } from '../../time/instant.js';
-import type { CallWindowRow } from '../../time/rows.js';
-import { callWindowRow } from '../../time/rowsBuild.js';
-import type { ZoneName } from '../../time/zone.js';
+} from '../../../time/convert.js';
+import type { InstantText } from '../../../time/instant.js';
+import type { CallWindowRow } from '../../../time/rows.js';
+import { callWindowRow } from '../../../time/rowsBuild.js';
+import type { ZoneName } from '../../../time/zone.js';
 import { shownArgsOf } from '../../toolShownArgs.js';
 import { validatePropertyValue } from '../toolArgsValidation.js';
 import { checkSource, isTraced, type SourceCheck, type SourceCorpus } from './checks.js';
@@ -179,7 +179,7 @@ export interface CheckedArgument {
   readonly quoteShown?: true;
   /**
    * Under `.time()`: the library fills the value from the turn's ONE window of
-   * the person's (`core/time/bind.ts`) — who that window is. Set with `filled`.
+   * the person's (`time/bind.ts`) — who that window is. Set with `filled`.
    */
   readonly window?: WindowSource;
 }
@@ -187,7 +187,7 @@ export interface CheckedArgument {
 /**
  * Under `.time()` (the time layer, step T5a): the turn's windows and clock, as
  * the record holds them — the `time-reading` rows and the `clock` row of this
- * turn, read by `core/time/bind.ts` · `turnWindowsOf`. A tool whose period
+ * turn, read by `time/bind.ts` · `turnWindowsOf`. A tool whose period
  * declares forms is then filled from the turn's one window, bound to the
  * person's window, or recorded as the model's (`callWindowOf`). Absent → the
  * arm is off and every call is resolved exactly as before.
@@ -290,7 +290,7 @@ export interface ArgumentResolution {
   readonly quoted?: readonly { readonly argument: string; readonly quote: string }[];
   /**
    * Under `.time({ reader })`: the call left its period out while the turn's
-   * one mention was still OPEN (`core/time/bind.ts` · `not-filled` /
+   * one mention was still OPEN (`time/bind.ts` · `not-filled` /
    * `open-reading`) — its period arguments in `ask` are asked as that
    * mention's window, in one field for the batch (`ask.ts` · `planAskFields`,
    * the lazy word-driven ask of time design § 5.2), not one by one.
@@ -496,7 +496,7 @@ function periodQuotesOf(
 
 /**
  * Under `.time()`: per planned call whose tool's period declares forms, which
- * window the call carries (`core/time/bind.ts` · `callWindowOf`) — a pure
+ * window the call carries (`time/bind.ts` · `callWindowOf`) — a pure
  * function of the call, the tool's forms and facts, the turn's windows and the
  * model's declared quotes. Empty when the arm is off. Every stage asks it
  * afresh (the same inputs, the same answer), so no decision is staged twice.
@@ -541,7 +541,7 @@ export function timeDecisionsOf(
   return decisions;
 }
 
-/** The `call-window` rows for this batch's decisions, in batch order (`core/time/rows.ts`). */
+/** The `call-window` rows for this batch's decisions, in batch order (`time/rows.ts`). */
 export function callWindowRowsOf(
   decisions: ReadonlyMap<string, CallWindow>,
   calls: readonly BatchCall[],

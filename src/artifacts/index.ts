@@ -133,7 +133,7 @@ export {
   type DatasetResultPlan,
 } from './datasetResult.js';
 // A dataset's declared TIME AXIS — judged at mint, read by consumers. Owned by
-// the time layer (`core/time/axis.ts`); re-exported here, where datasets live.
+// the time layer (`time/axis.ts`); re-exported here, where datasets live.
 export {
   describeTimeAxis,
   normaliseInstants,
@@ -152,4 +152,4 @@ export {
   type TimeAxisAggregate,
   type TimeAxisReading,
   type TimeAxisUnit,
-} from '../core/time/axis.js';
+} from '../time/axis.js';

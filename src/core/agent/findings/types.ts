@@ -43,7 +43,7 @@ import type {
   SourceClockRow,
   TimeDerivedRow,
   TimeReadingRow,
-} from '../../time/rows.js';
+} from '../../../time/rows.js';
 import type { CoverageItem } from '../coverage/types.js';
 import type { ClaimVerificationRow } from './verificationTypes.js';
 
@@ -471,7 +471,7 @@ export type FindingsRow =
   // Filed only while the answer layer is armed (`assessment/witness.ts`).
   | GroundedRow
   | StepsUnfinishedRow
-  // The time layer's rows (`core/time/rows.ts`), filed only under `.time()`:
+  // The time layer's rows (`time/rows.ts`), filed only under `.time()`:
   // the turn's clock stamp, a resume's differing `time` (recorded, not
   // applied), each dispatched call's wall-clock moment, and — under a
   // reader (`.time({ reader })`) — each time mention in the person's message;

@@ -14,7 +14,7 @@
  *     answer's standing folds `derived-from-reading` — "not sure";
  *   - a time no reading produced is still flagged.
  *
- * One owner decides which spelling is whose: `core/time/forms.ts` · `timeFormsOf`.
+ * One owner decides which spelling is whose: `time/forms.ts` · `timeFormsOf`.
  *
  * Run:  npm run example examples/features/87-time-evidence-lineage.ts
  */

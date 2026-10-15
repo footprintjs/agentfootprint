@@ -66,7 +66,7 @@ call asked about (`verdict` `not-held` / `partly-held`) — the `queried` and
 `held` spans of the declared period that verdict came from, as the tool
 declared them. Filed only under `.time()`, where the served time line
 hands the model this conclusion in the person's zone (`timeLimits.ts` ·
-`heldLine`) and the evidence gate spells it (`core/time/forms.ts` ·
+`heldLine`) and the evidence gate spells it (`time/forms.ts` ·
 `timeFormsOf`, its `held` source): the model never converts a source's
 UTC instants itself.
 

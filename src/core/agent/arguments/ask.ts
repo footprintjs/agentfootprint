@@ -73,27 +73,27 @@ import {
   type PeriodFacts,
   type PeriodForm,
   type TimeRefusal,
-} from '../../time/convert.js';
-import type { CallWindow } from '../../time/bind.js';
-import { offeredLookback, windowToConvert, type TurnWindow } from '../../time/windows.js';
-import { callWindowRow } from '../../time/rowsBuild.js';
-import { instantOf, type InstantText } from '../../time/instant.js';
-import { parseRange, spellRange, type TimeRange } from '../../time/range.js';
+} from '../../../time/convert.js';
+import type { CallWindow } from '../../../time/bind.js';
+import { offeredLookback, windowToConvert, type TurnWindow } from '../../../time/windows.js';
+import { callWindowRow } from '../../../time/rowsBuild.js';
+import { instantOf, type InstantText } from '../../../time/instant.js';
+import { parseRange, spellRange, type TimeRange } from '../../../time/range.js';
 import {
   chooseReading,
   resolveMention,
   withZoneAnswered,
   type TimePolicy,
-} from '../../time/resolve.js';
-import type { TimeAskMessages } from '../../time/ask.js';
-import { timeAskOf } from '../../time/readingAsk.js';
+} from '../../../time/resolve.js';
+import type { TimeAskMessages } from '../../../time/ask.js';
+import { timeAskOf } from '../../../time/readingAsk.js';
 import {
   timeAnswerRow,
   type CallWindowRow,
   type TimeAnswerRow,
   type TimeReadingRow,
-} from '../../time/rows.js';
-import { fixedOffsetZone, isZoneName, offsetAt, type ZoneName } from '../../time/zone.js';
+} from '../../../time/rows.js';
+import { fixedOffsetZone, isZoneName, offsetAt, type ZoneName } from '../../../time/zone.js';
 import { shownArgsOf } from '../../toolShownArgs.js';
 import { validatePropertyValue } from '../toolArgsValidation.js';
 import {
@@ -255,7 +255,7 @@ export interface CallAsk {
 
 /**
  * The lazy word-driven ask's plan (time design § 5.2): the question the open
- * mention needs (`core/time/readingAsk.ts` · `timeAskOf`) and its mention index.
+ * mention needs (`time/readingAsk.ts` · `timeAskOf`) and its mention index.
  * Handed by the stage glue only when the turn's one mention is open.
  */
 export interface WindowAskPlan {
@@ -275,7 +275,7 @@ export interface WindowAskPlan {
 
 /**
  * Why one member tool cannot read a window the ask would put into it — the
- * one owner's answer (`core/time/convert.ts` · `convertForTool`: a fact it
+ * one owner's answer (`time/convert.ts` · `convertForTool`: a fact it
  * breaks, `multi-day`, or `no-form-holds`) — or `undefined` when it can. A
  * tool whose rules cannot be read has nothing to say here.
  */
@@ -735,7 +735,7 @@ export function argumentAskDeclaration(
       required: true,
       description: field.question,
       ...(field.choices !== undefined && { enum: [...field.choices] }),
-      // A window field is a TIME field: the door judges its answer (`core/time/ask.ts`).
+      // A window field is a TIME field: the door judges its answer (`time/ask.ts`).
       ...(field.window !== undefined && { format: field.window.format }),
       ...(field.window?.labels !== undefined && { labels: [...field.window.labels] }),
     };
@@ -890,7 +890,7 @@ export interface AskTime {
 
 /**
  * The tool's declared fact an answer for its period argument breaks (the time
- * layer, step T5a — `core/time/convert.ts` · `periodFactProblem`): the answer,
+ * layer, step T5a — `time/convert.ts` · `periodFactProblem`): the answer,
  * read back through the single-argument form that names the argument, against
  * `direction`, `retention` and `maxRange` at the turn's clock. `undefined` for
  * a tool that declares none of the three, an argument no single-argument form
@@ -1049,7 +1049,7 @@ export interface BoundAnswer {
   /**
    * `answered` rows for bound fields; `asked: 'invalid-answer'` rows for fields
    * asked again or exhausted; and, for a bound WINDOW field, the `time-answer`
-   * row that settles its mention for the rest of the turn (`core/time/rows.ts`)
+   * row that settles its mention for the rest of the turn (`time/rows.ts`)
    * and one `call-window` row per call it filled — `filled` from the person's
    * answered window, exactly or wider (`sent`, `differs.extra`).
    */
@@ -1314,7 +1314,7 @@ interface WindowFilled {
 
 /**
  * The window written into every member call's forms — the one owner's answer
- * per tool (`core/time/convert.ts` · `convertForTool`: exactly, else wider,
+ * per tool (`time/convert.ts` · `convertForTool`: exactly, else wider,
  * after the tool's facts) — or what it failed. Each fill also carries the
  * decision its `call-window` row records (`filled`, the person's ANSWERED
  * window, with the wider read's `sent` and `extra`).

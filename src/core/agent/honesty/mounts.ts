@@ -91,9 +91,9 @@ import {
   clockOf,
   readingsOf,
   type CallWindowRow,
-} from '../../time/rows.js';
-import type { PeriodFacts, PeriodForm } from '../../time/convert.js';
-import type { ZoneName } from '../../time/zone.js';
+} from '../../../time/rows.js';
+import type { PeriodFacts, PeriodForm } from '../../../time/convert.js';
+import type { ZoneName } from '../../../time/zone.js';
 import { copyPeriod, type DeclaredPeriod, type PeriodRow } from '../coverage/period.js';
 import { appendRows, emitRow, type FindingsScope } from '../findings/ledger.js';
 import type { FindingsRow } from '../findings/types.js';
@@ -152,7 +152,7 @@ export interface InputsMountDeps {
    * THE TIME LAYER IS ARMED (`.time()`) — present only then. The mount hands
    * the layer this turn's `clock` row and `time-reading` rows (`timeInputs`),
    * and the layer files one `call-window` row per call to a tool whose period
-   * declares forms (`core/time/bind.ts`), merged into the ledger beside the
+   * declares forms (`time/bind.ts`), merged into the ledger beside the
    * argument rows in the same ONE write.
    */
   readonly time?: {
@@ -544,7 +544,7 @@ function resultsLayerInput(parent: Record<string, unknown>): ResultsLayerState {
 /**
  * Under `.time()` (step T8): each call's time rows — its `call-window` row
  * and its `call` row's `drift` — and the turn's clock `now`, for the result
- * checks (`core/time/check.ts` · `periodTimeCheck`). Nothing when the turn has
+ * checks (`time/check.ts` · `periodTimeCheck`). Nothing when the turn has
  * no clock (an agent without `.time()`), so an unarmed run hands the layer the
  * input it always did. "This turn" is checked, not assumed: a ledger carried
  * forward (a checkpoint's `findingsLedger` from an agent that had `.time()`,
