@@ -36,6 +36,12 @@ const ROUTES = [
   },
 ];
 
+// RAISED 2026-10-15 (search gzip), for the AG-UI adapter: its docs page
+// (infrastructure/ag-ui — the mapping, what reaches a browser, continuation,
+// sub-agents, ids, redaction), under the 2026-09-27 ruling. CI measured the
+// branch with EXPORT=true at 2,277,700 B gzip (9.14 MB raw, 1,121 records)
+// against the 2.255 MB ceiling; main measured 2.24 MB. ~2% over the
+// measurement, the rule every raise here follows.
 // RAISED 2026-10-07 (search gzip), for the recordings performance packet:
 // owner-approved raise under the 2026-09-27 ruling; docs-site cleanup planned.
 // CI measured the branch with EXPORT=true at 2.21 MB gzip (8.98 MB raw, 1,125
@@ -48,7 +54,7 @@ const ROUTES = [
 // 2.155 MB ceiling, so the package was tagged but not published. ~2% over the
 // measurement, the rule every raise here follows. Owner-approved raise;
 // docs-site cleanup planned.
-const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_255_000, records: 2_000 };
+const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_325_000, records: 2_000 };
 // Search gzip raised 2.11 -> 2.155 MB (2026-09-27) — growth this release can
 // name: the answer's standing (`assessAnswer()` / `agent.assessment()`), its
 // section on the recordings page and its Agent API entry. Measured with

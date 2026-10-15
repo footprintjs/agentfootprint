@@ -11,8 +11,8 @@
  * `JSON.stringify` there unless it is on the allow-list below, with a reason.
  *
  * The scanned modules: sinks and adapters that ship events
- * (`adapters/observability/`, `strategies/`), the browser stream
- * (`hosting/stream.ts`), everything that builds or files a recording
+ * (`adapters/observability/`, `strategies/`), the browser streams
+ * (`hosting/stream.ts`, the AG-UI adapter in `ag-ui/`), everything that builds or files a recording
  * (`recorders/`, `artifacts/recordingArtifact.ts`, `bug-report/`), and
  * the causal-memory evidence recorder (it persists live recorder values).
  *
@@ -32,6 +32,8 @@ const SCANNED_DIRS = [
   'src/strategies',
   'src/recorders',
   'src/bug-report',
+  // The AG-UI adapter writes the record onto a wire (tool arguments, results, CUSTOM values).
+  'src/ag-ui',
 ];
 const SCANNED_FILES = [
   'src/hosting/stream.ts',

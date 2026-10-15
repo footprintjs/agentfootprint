@@ -71,7 +71,51 @@ export interface ToSSEOptions {
    * at this interval. Default 0 (disabled).
    */
   readonly heartbeatMs?: number;
+  /**
+   * How each event is written as a frame in the 'full' format — the framing
+   * STRATEGY ({@link SseFraming}). Default: {@link agentfootprintSse}, the
+   * frames `toSSE` has always written (`event: <type>` + `data: <json>`).
+   *
+   * Refused together with `eventName` (which names the event line of the
+   * default framing only) and with `format: 'text'` (which writes no frames).
+   */
+  readonly framing?: SseFraming<AgentfootprintEvent>;
 }
+
+/**
+ * How ONE event becomes ONE Server-Sent Events frame — the framing strategy.
+ *
+ * A framing decides the bytes of a frame and nothing else: which events go out,
+ * in what order, and when the stream ends belong to whoever drives it. Two
+ * strategies ship: {@link agentfootprintSse} frames agentfootprint's own events
+ * (what `toSSE` writes), and `agUiSse()` from `agentfootprint/ag-ui` frames AG-UI
+ * events the way the official `@ag-ui/encoder` does (a `data:` line only).
+ *
+ * @example Frame each event under its short name (`stream.token`, not `agentfootprint.stream.token`)
+ * ```ts
+ * const shortNames: SseFraming<AgentfootprintEvent> = {
+ *   contentType: 'text/event-stream',
+ *   frame: (event) => encodeSSE(event.type.replace(/^agentfootprint\./, ''), event),
+ * };
+ * for await (const frame of toSSE(agent, { framing: shortNames })) res.write(frame);
+ * ```
+ */
+export interface SseFraming<E> {
+  /** The media type a response framed this way declares. */
+  readonly contentType: string;
+  /** The whole frame for one event, its terminating blank line included. */
+  frame(event: E): string;
+}
+
+/**
+ * agentfootprint's own framing — `event: <type>` then `data: <json>` — the
+ * frames `toSSE` writes by default, byte for byte as before the framing seam
+ * existed. Every payload goes through the wire rule (`lib/wireJson.ts`).
+ */
+export const agentfootprintSse: SseFraming<AgentfootprintEvent> = {
+  contentType: 'text/event-stream',
+  frame: (event) => encodeSSE(event.type, event),
+};
 
 /**
  * Subscribe to a runner's `EventDispatcher` and yield SSE-formatted
@@ -83,8 +127,8 @@ export async function* toSSE<TIn, TOut>(
 ): AsyncIterable<string> {
   const filter = options.filter;
   const format = options.format ?? 'full';
-  const eventName = options.eventName ?? ((e: AgentfootprintEvent) => e.type);
   const heartbeatMs = options.heartbeatMs ?? 0;
+  const framing = framingOf(options);
 
   // Pull the dispatcher off the runner. RunnerBase exposes it as
   // protected — we cast to access. No public dispatcher() method
@@ -186,7 +230,7 @@ export async function* toSSE<TIn, TOut>(
             if (payload?.content) yield payload.content;
           }
         } else {
-          yield encodeSSE(eventName(event), event);
+          yield framing.frame(event);
         }
       }
       if (done) break;
@@ -230,6 +274,33 @@ export function encodeSSE(eventName: string, payload: unknown): string {
   // stays single-line. SSE's data: lines can be repeated, but the
   // canonical encoder keeps it simple.
   return `event: ${eventName}\ndata: ${json}\n\n`;
+}
+
+/**
+ * The framing `toSSE` writes with: the one the caller passed, else the default
+ * — {@link agentfootprintSse}, or, when only `eventName` was given, the same
+ * frames under the caller's names. A `framing` beside `eventName` or beside
+ * `format: 'text'` is refused by name: each would silently ignore the other.
+ */
+function framingOf(options: ToSSEOptions): SseFraming<AgentfootprintEvent> {
+  const { framing, eventName } = options;
+  if (framing === undefined) {
+    if (eventName === undefined) return agentfootprintSse;
+    return { contentType: agentfootprintSse.contentType, frame: (e) => encodeSSE(eventName(e), e) };
+  }
+  if (eventName !== undefined) {
+    throw new TypeError(
+      'toSSE: `framing` and `eventName` were both given. `eventName` names the event line of ' +
+        'the default framing; a framing of your own writes its own names — pass one or the other.',
+    );
+  }
+  if (options.format === 'text') {
+    throw new TypeError(
+      "toSSE: `framing` was given with `format: 'text'`, which writes the reply's text and no " +
+        'frames. Drop `framing`, or use the default `format`.',
+    );
+  }
+  return framing;
 }
 
 /**

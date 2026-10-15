@@ -117,6 +117,12 @@ const DOORS = [
   // over a clock the caller passes, kept off the main barrel because they
   // are the layer's run-time half (the default-graph law).
   './time',
+  // The SEVENTEENTH: `./ag-ui` carries no run entry point of its own either.
+  // It publishes the AG-UI protocol adapter over a run the caller drives —
+  // `agUiSerializer` (one run's served events → AG-UI events) and `agUiSse`
+  // (their frames, through the optional peer `@ag-ui/encoder`, loaded only
+  // when a framing is built) — so the main barrel never names the protocol.
+  './ag-ui',
 ] as const;
 
 /** Names an alias exports that its door deliberately does NOT. See header. */

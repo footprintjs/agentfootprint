@@ -21,6 +21,25 @@ interface ErrorLike {
   readonly name?: string;
 }
 
+/**
+ * The FIXED sentences {@link humanizeLLMError} answers with — every answer
+ * except the fallback, which quotes the raw message. A reader that sends a
+ * failure somewhere a person reads it (an AG-UI `RUN_ERROR`) passes on only
+ * these: the fallback's raw text may hold anything a provider put in it.
+ */
+export const LLM_ERROR_SENTENCES = Object.freeze({
+  unreachable:
+    "Couldn't reach the AI model. Check your internet connection, and that the provider/API key is set up correctly.",
+  auth: 'The AI provider rejected the request — the API key looks missing or invalid. Add or fix it in Settings.',
+  rateLimited: 'The AI provider is busy (rate limit / quota). Wait a moment, then try again.',
+  timeout:
+    'The AI model took too long to respond. Try again — if it keeps happening, simplify the request.',
+  providerDown: 'The AI provider had a temporary problem on their end. Try again in a moment.',
+  rejected:
+    'The AI request was rejected — the model name or request may be wrong. Check the model in the code.',
+  unknown: 'The AI call failed for an unknown reason.',
+} as const);
+
 /** Map a thrown provider/SDK error to a friendly, actionable sentence. */
 export function humanizeLLMError(err: unknown): string {
   const e = (err ?? {}) as ErrorLike;
@@ -36,7 +55,7 @@ export function humanizeLLMError(err: unknown): string {
       raw,
     )
   ) {
-    return "Couldn't reach the AI model. Check your internet connection, and that the provider/API key is set up correctly.";
+    return LLM_ERROR_SENTENCES.unreachable;
   }
 
   // Auth — missing/invalid API key (or, for Bedrock, IAM/model access:
@@ -49,31 +68,31 @@ export function humanizeLLMError(err: unknown): string {
       lc,
     )
   ) {
-    return 'The AI provider rejected the request — the API key looks missing or invalid. Add or fix it in Settings.';
+    return LLM_ERROR_SENTENCES.auth;
   }
 
   // Rate limit.
   if (status === 429 || /rate.?limit|too many requests|quota/i.test(lc)) {
-    return 'The AI provider is busy (rate limit / quota). Wait a moment, then try again.';
+    return LLM_ERROR_SENTENCES.rateLimited;
   }
 
   // Timeout.
   if (/timeout|timed out|etimedout|deadline/i.test(lc)) {
-    return 'The AI model took too long to respond. Try again — if it keeps happening, simplify the request.';
+    return LLM_ERROR_SENTENCES.timeout;
   }
 
   // Transient server-side (5xx).
   if (typeof status === 'number' && status >= 500 && status < 600) {
-    return 'The AI provider had a temporary problem on their end. Try again in a moment.';
+    return LLM_ERROR_SENTENCES.providerDown;
   }
 
   // Bad request — usually a model name or payload issue.
   if (status === 400 || /not found|no such model|invalid model|model.*not/i.test(lc)) {
-    return 'The AI request was rejected — the model name or request may be wrong. Check the model in the code.';
+    return LLM_ERROR_SENTENCES.rejected;
   }
 
   // Fallback: keep the raw text but frame it so it doesn't read as a crash.
-  return raw ? `The AI call failed: ${raw}` : 'The AI call failed for an unknown reason.';
+  return raw ? `The AI call failed: ${raw}` : LLM_ERROR_SENTENCES.unknown;
 }
 
 /**

@@ -55,7 +55,7 @@ import type {
   AgentfootprintEventType,
 } from '../events/registry.js';
 import type { EventMeta } from '../events/types.js';
-import { CONSUMER_SCOPE_RUN_ID } from '../bridge/eventMeta.js';
+import { CONSUMER_SCOPE_RUN_ID, parseSubflowPath } from '../bridge/eventMeta.js';
 import {
   attachObservabilityStrategy,
   attachCostStrategy,
@@ -80,6 +80,21 @@ import type { FixedPauseReason } from '../events/payloads.js';
 /** The reason a pause request names when its pause carries none — typed, so a
  *  redacted record keeps it as the library's own words (`FixedPauseReason`). */
 const DEFAULT_PAUSE_REASON: FixedPauseReason = 'stage requested pause';
+
+/**
+ * Where a pause happened, as the SEGMENT list every other event carries
+ * (`buildEventMeta`) — so a reader finds the owner of `pause.request` and
+ * `pause.resume` the way it finds every event's. The checkpoint's own list is
+ * footprintjs's resume cursor, one cumulative mount id per level
+ * (`['step-p', 'step-p/x']`); its last entry names the whole path.
+ */
+function pauseSegments(checkpoint: FlowchartCheckpoint): readonly string[] {
+  // Read defensively: `resume()` builds `pause.resume` BEFORE the engine
+  // validates the checkpoint, and a hostile one must still fail there, by name.
+  const cursor: unknown = checkpoint.subflowPath;
+  const last: unknown = Array.isArray(cursor) ? cursor[cursor.length - 1] : undefined;
+  return typeof last === 'string' ? parseSubflowPath(last) : [];
+}
 
 let _runIdSeq = 0;
 
@@ -564,7 +579,7 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
       meta: {
         ...meta,
         runtimeStageId: `${checkpoint.pausedStageId}#paused`,
-        subflowPath: checkpoint.subflowPath,
+        subflowPath: pauseSegments(checkpoint),
       },
     } as const;
     this.dispatcher.dispatchForRun(event as unknown as AgentfootprintEvent, runServing);
@@ -622,7 +637,7 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
       meta: {
         ...meta,
         runtimeStageId: `${checkpoint.pausedStageId}#resumed`,
-        subflowPath: checkpoint.subflowPath,
+        subflowPath: pauseSegments(checkpoint),
       },
     });
     return resumeLeg;

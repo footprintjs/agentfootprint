@@ -15,6 +15,8 @@ are the layer's run-time half, which the main barrel keeps off the default
 graph).
 Map + Lens: `ontology.ts` (the declared map — `defineOntology` and the shapes
 are Map; `ontologyPiece` and the always-on ask are Lens).
+Lens: `ag-ui.ts` (one run served to an AG-UI reader — `agUiSerializer` builds
+the protocol's events from the record's served stream, `agUiSse` frames them).
 Support: `memory.ts`, `providers.ts`, `hosting.ts`, `rag.ts`, `security.ts`,
 `resilience.ts`, `classify.ts`.
 
@@ -30,4 +32,5 @@ through a door tells you nothing about whether a symbol may compose a sentence.
 ## Files
 One file per door: `skill-graph.ts`, `context.ts`, `observe.ts`, `maps.ts`,
 `recipes.ts`, `memory.ts`, `providers.ts`, `hosting.ts`, `rag.ts`,
-`security.ts`, `resilience.ts`, `classify.ts`, `ontology.ts`, `time.ts`.
+`security.ts`, `resilience.ts`, `classify.ts`, `ontology.ts`, `time.ts`,
+`ag-ui.ts`.

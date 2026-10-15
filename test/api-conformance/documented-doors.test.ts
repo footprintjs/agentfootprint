@@ -129,13 +129,13 @@ describe('CLAUDE.md documents exactly the doors package.json publishes', () => {
   });
 
   it('the count it claims out loud matches the count it lists', () => {
-    // The line says "EIGHTEEN doors" in words. A reader skimming trusts the
+    // The line says "NINETEEN doors" in words. A reader skimming trusts the
     // word over the list, so the word is pinned too. (`/maps`, 9.58.0, was
     // the fifteenth; `/classify`, 9.104.0, the sixteenth; `/ontology`,
     // 9.106.0, the seventeenth; `/time`, with the time layer's follow-ups,
-    // is the eighteenth.)
-    expect(entryPointsLine().current).toContain('EIGHTEEN');
-    expect(documentedPaths(entryPointsLine().current)).toHaveLength(18);
+    // the eighteenth; `/ag-ui`, the AG-UI protocol adapter, is the nineteenth.)
+    expect(entryPointsLine().current).toContain('NINETEEN');
+    expect(documentedPaths(entryPointsLine().current)).toHaveLength(19);
   });
 });
 
