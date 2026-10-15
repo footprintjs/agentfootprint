@@ -66,13 +66,13 @@ import { bindToolSecurityEvents, type ToolSecurityEmitter } from '../toolSecurit
 import type { AgentfootprintEventMap, AgentfootprintEventType } from '../../../events/registry.js';
 import { extractSequence } from '../../../security/extractSequence.js';
 import { skillTarget } from '../../../security/skillTarget.js';
-import { menuOutstanding, type TurnRoute } from '../../../lib/injection-engine/routingPolicy.js';
+import { menuOutstanding, type TurnRoute } from '../../../injection-engine/routingPolicy.js';
 import {
   classifySkillTarget,
   type SkillTargetClass,
-} from '../../../lib/injection-engine/skillGraph.js';
-import { skillActivationConfirmation } from '../../../lib/injection-engine/skillToolDescriptors.js';
-import type { ActiveInjection } from '../../../lib/injection-engine/types.js';
+} from '../../../injection-engine/skillGraph.js';
+import { skillActivationConfirmation } from '../../../injection-engine/skillToolDescriptors.js';
+import type { ActiveInjection } from '../../../injection-engine/types.js';
 import type { LLMToolSchema } from '../../../provider-contract/types.js';
 import { selfCallNotice, selfSkillTools } from '../selfCallNotice.js';
 import { parkedMemberIds } from '../../../maps/engagement/types.js';
@@ -192,7 +192,7 @@ import {
   type StepPlan,
   type StepPlanFor,
   type StepPointer,
-} from '../../../lib/injection-engine/skillSteps.js';
+} from '../../../injection-engine/skillSteps.js';
 import { explainSemantics, readSemantics, semanticsForModel } from '../../../semantics/envelope.js';
 import type { ToolSemantics } from '../../../semantics/types.js';
 import { claimRowsOf } from '../../../integrity/unsupported-claim/ledger.js';
@@ -219,7 +219,7 @@ import {
   tenantOf,
   type InstructionLease,
   type PendingToolTransition,
-} from '../../../lib/injection-engine/leases.js';
+} from '../../../injection-engine/leases.js';
 import {
   explainStatusOnlyNearMiss,
   readToolResultEnvelope,
@@ -2105,7 +2105,7 @@ export function buildToolCallsHandler(
   };
 
   // LENS · tool-result · persistent-history
-  // reads: the advanced pointer ← pointerOf(scope.stepPointer), under `toolCalls.ts` · "── Step-procedure boundary (9.18.0)"; the sentence ← ../../lib/injection-engine/skillSteps.ts
+  // reads: the advanced pointer ← pointerOf(scope.stepPointer), under `toolCalls.ts` · "── Step-procedure boundary (9.18.0)"; the sentence ← ../../injection-engine/skillSteps.ts
   // note: it overwrites the placeholder BEFORE the after-tool moment, so the record carries the authoritative words.
   // law: may omit, never deny; every clause anchored to the call it was composed on.
   /**

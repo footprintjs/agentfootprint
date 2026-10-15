@@ -192,7 +192,7 @@ Each layer below closes with **what it lets you measure** (owner item 4).
 
 **Exists.**
 - *Declare:* tool descriptions, `Tool.owner`, `Tool.argumentsFrom`; skill rules and scorers
-  (`lib/injection-engine/routingPolicy.ts` · `decideTier2`); ontology `via` tools; the model's
+  (`injection-engine/routingPolicy.ts` · `decideTier2`); ontology `via` tools; the model's
   `_findings.basis` and `expect`, filed before the call (`findings/ledger.ts` · `recordFindings`).
 - *Verify:* `core/slots/buildToolsSlot.ts` · `mergeWire`; `stages/toolCalls.ts` · `resolveTool`;
   the read_skill gate; `core/agent/validators.ts` · `validateToolNameUniqueness`;

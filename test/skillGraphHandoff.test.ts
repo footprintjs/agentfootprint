@@ -31,9 +31,9 @@
 import { describe, expect, it } from 'vitest';
 import { Agent, checkInApproved, defineTool, isPaused } from '../src/index.js';
 import { defineSkill, skillGraph } from '../src/injection-engine.js';
-import { evaluateInjections } from '../src/lib/injection-engine/index.js';
+import { evaluateInjections } from '../src/injection-engine/index.js';
 import { mock } from '../src/llm-providers.js';
-import type { InjectionContext } from '../src/lib/injection-engine/types.js';
+import type { InjectionContext } from '../src/injection-engine/types.js';
 
 // ── helpers ──────────────────────────────────────────────────────────────
 

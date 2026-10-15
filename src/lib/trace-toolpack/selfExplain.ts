@@ -55,8 +55,8 @@
 import { isFlowEvent, type CombinedRecorder, type RuntimeSnapshot } from 'footprintjs';
 import { controlDepRecorder } from 'footprintjs/trace';
 
-import { defineSkill } from '../injection-engine/factories/defineSkill.js';
-import type { Injection } from '../injection-engine/types.js';
+import { defineSkill } from '../../injection-engine/factories/defineSkill.js';
+import type { Injection } from '../../injection-engine/types.js';
 import { defineTool, type Tool } from '../../tools/tools.js';
 import type { AgentOptions } from '../../core/agent/types.js';
 import type { Unsubscribe } from '../../events/dispatcher.js';

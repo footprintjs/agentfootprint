@@ -31,7 +31,7 @@ import type {
   LLMRequest,
   LLMResponse,
 } from '../../../src/provider-contract/types.js';
-import type { ActiveInjection } from '../../../src/lib/injection-engine/types.js';
+import type { ActiveInjection } from '../../../src/injection-engine/types.js';
 
 function scriptedProvider(replies: readonly Partial<LLMResponse>[]): {
   provider: LLMProvider;

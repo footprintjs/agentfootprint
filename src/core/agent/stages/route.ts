@@ -44,7 +44,7 @@ import {
   remainingStepsOf,
   stepInProgress,
   type StepPlanFor,
-} from '../../../lib/injection-engine/skillSteps.js';
+} from '../../../injection-engine/skillSteps.js';
 import { checkAnswer, evidenceRefusalSentence, MAX_REPORTED_VALUES } from '../evidence/gate.js';
 import { answerCarriersOf } from '../evidence/answerCarriers.js';
 import { derivedFormsOf, evidenceFromHistory, exemptFromRun } from '../evidence/evidenceIndex.js';

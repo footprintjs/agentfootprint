@@ -10,7 +10,7 @@
 
 import type { ContextSource } from '../../../events/types.js';
 import type { WireRole } from '../../../provider-contract/types.js';
-import type { DeferralReason } from '../../../lib/injection-engine/messagesSlotRefusal.js';
+import type { DeferralReason } from '../../../injection-engine/messagesSlotRefusal.js';
 
 /** One injection message that entered the window this iteration. */
 export interface DeliveredMessage {

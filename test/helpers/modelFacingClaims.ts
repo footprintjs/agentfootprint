@@ -40,7 +40,7 @@
  * turns into a denial later without anybody rewriting a word. Two walks now
  * enforce that law instead of remembering it — `test/modelFacingScan.test.ts`
  * over every sentence-shaped literal in `src/`, and
- * `test/lib/injection-engine/userTurnProducers.test.ts` over every
+ * `test/injection-engine/userTurnProducers.test.ts` over every
  * `role: 'user'` turn this library writes.
  *
  * ── WHY A SURFACE IS TWO DIMENSIONS AND NOT ONE ───────────────────────────

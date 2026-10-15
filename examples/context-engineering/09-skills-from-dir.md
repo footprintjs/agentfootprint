@@ -1,7 +1,7 @@
 ---
 name: Skills from a directory of SKILL.md files
 group: context-engineering
-guide: ../../src/lib/injection-engine/
+guide: ../../src/injection-engine/
 defaultInput: I want a refund for order 5512.
 ---
 

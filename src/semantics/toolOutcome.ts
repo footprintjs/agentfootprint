@@ -17,7 +17,7 @@
  * the owner of the ENVELOPE grammar (the two effect kinds, the recognizer).
  *
  * Zone: a zero-import leaf the skill-graph PURE CORE may reach (`PURE_LEAVES`).
- * Pinned by `test/lib/injection-engine/skill-graph-fence.test.ts`.
+ * Pinned by `test/injection-engine/skill-graph-fence.test.ts`.
  */
 
 /**

@@ -17,7 +17,7 @@
  * recorded-and-dropped one. Since 7.21.0 it DOES reach the model: a
  * `slot: 'messages'` injection is delivered into `scope.history`, subject to
  * what the provider carries and to the sequence rule
- * (`lib/injection-engine/messagesSlotRefusal.ts`). The mechanism a
+ * (`injection-engine/messagesSlotRefusal.ts`). The mechanism a
  * role-differentiated recall would ride now exists.
  *
  * The refusal still stands, and the reason it stands is now the only reason

@@ -124,7 +124,7 @@ const LAYERS = [
     // `ToolProvider` seam: the agent, the injection engine, MCP and the toolpack all read it.
     files: ['src/tools/**'],
   },
-  { rank: 8, name: 'context assembly', files: ['src/lib/injection-engine/**'] },
+  { rank: 8, name: 'context assembly', files: ['src/injection-engine/**'] },
   { rank: 9, name: 'the agent', files: ['src/core/**'] },
   {
     rank: 10,

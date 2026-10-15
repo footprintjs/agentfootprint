@@ -10,7 +10,7 @@
  * This door exposes exactly that layer, so a host that is NOT agentfootprint's
  * agent can run it: another agent framework, a server that routes prompts, a
  * test harness. The claim is CHECKED, not asserted —
- * `test/lib/injection-engine/skill-graph-fence.test.ts` walks the transitive
+ * `test/injection-engine/skill-graph-fence.test.ts` walks the transitive
  * import graph of everything reachable from this file and fails if any of it
  * reaches `footprintjs`, `core/agent/*`, `tools/tools.ts`, an adapter or a
  * recorder.
@@ -48,7 +48,7 @@
  * `examples/context-engineering/19-skill-graph-host.ts` — typechecked by
  * `npm run test:examples:typecheck`, RUN by `scripts/run-all-examples.sh`, and
  * pinned byte-for-byte to these lines by
- * `test/lib/injection-engine/skill-graph-doc-example.test.ts`. Edit it there;
+ * `test/injection-engine/skill-graph-doc-example.test.ts`. Edit it there;
  * the test will tell you to bring this copy along.
  *
  * @example routing a turn from a host that is not our agent
@@ -111,13 +111,9 @@ export type {
   InjectionContext,
   InjectionEvaluation,
   InjectionTrigger,
-} from '../lib/injection-engine/types.js';
-export {
-  projectActiveInjection,
-  saidByPerson,
-  toolResultsOf,
-} from '../lib/injection-engine/types.js';
-export { evaluateInjections } from '../lib/injection-engine/evaluator.js';
+} from '../injection-engine/types.js';
+export { projectActiveInjection, saidByPerson, toolResultsOf } from '../injection-engine/types.js';
+export { evaluateInjections } from '../injection-engine/evaluator.js';
 
 // ─── The boundary contract ─────────────────────────────────────────────
 export type {
@@ -128,7 +124,7 @@ export type {
   SkillTool,
   SkillToolDescriptor,
   SkillToolSchema,
-} from '../lib/injection-engine/hostContract.js';
+} from '../injection-engine/hostContract.js';
 export { TOOL_RESULT_STATUSES, type ToolResultStatus } from '../semantics/toolOutcome.js';
 
 // ─── The graph (the SkillMap — the agent that mounts it is the SkillWalker) ─
@@ -191,8 +187,8 @@ export {
   // agent's gate uses — obligation 2, without re-deriving the stay rule.
   classifySkillTarget,
   type SkillTargetClass,
-} from '../lib/injection-engine/skillGraph.js';
-export type { TurnRoutingPlan } from '../lib/injection-engine/skillIntent.js';
+} from '../injection-engine/skillGraph.js';
+export type { TurnRoutingPlan } from '../injection-engine/skillIntent.js';
 
 // ─── Scoring + the tie policy ──────────────────────────────────────────
 export {
@@ -202,7 +198,7 @@ export {
   type EntryCandidate,
   type EntryScorer,
   type EntryScorerInput,
-} from '../lib/injection-engine/entryScorer.js';
+} from '../injection-engine/entryScorer.js';
 // 9.104.0 — the scored choice: an EntryScorer whose ranking IS a calibrated
 // classifier's distribution. The `Classifier` port it takes lives on
 // `agentfootprint/classify`; re-exported here as a type so a graph author
@@ -212,7 +208,7 @@ export {
   CLASSIFIER_SCORER_QUESTION,
   CLASSIFIER_SCORER_UNAVAILABLE,
   type ClassifierScorerOptions,
-} from '../lib/injection-engine/classifierScorer.js';
+} from '../injection-engine/classifierScorer.js';
 export type { Classifier } from '../classify/types.js';
 export {
   validateIntentScores,
@@ -220,7 +216,7 @@ export {
   type IntentScore,
   type IntentScorer,
   type IntentScorerInput,
-} from '../lib/injection-engine/intentScorer.js';
+} from '../injection-engine/intentScorer.js';
 export {
   decideTier2,
   menuOutstanding,
@@ -231,14 +227,14 @@ export {
   type RoutingPolicy,
   type Tier2Verdict,
   type TurnRoute,
-} from '../lib/injection-engine/routingPolicy.js';
+} from '../injection-engine/routingPolicy.js';
 
 // ─── The tools the graph DESCRIBES (the host constructs them) ──────────
 export {
   listSkillsDescriptor,
   readSkillDescriptor,
   type ReadSkillOffer,
-} from '../lib/injection-engine/skillToolDescriptors.js';
+} from '../injection-engine/skillToolDescriptors.js';
 
 // ─── Declared procedures (steps-as-data) ───────────────────────────────
 export {
@@ -250,7 +246,7 @@ export {
   type StepPlan,
   type StepPointer,
   type StepPointerCarrier,
-} from '../lib/injection-engine/skillSteps.js';
+} from '../injection-engine/skillSteps.js';
 
 // ─── Authoring checks ──────────────────────────────────────────────────
 export {
@@ -258,15 +254,15 @@ export {
   checkSkillContracts,
   skillToolNames,
   type SkillContractOptions,
-} from '../lib/injection-engine/skillContract.js';
+} from '../injection-engine/skillContract.js';
 export {
   checkArtifactVocabularies,
   vocabularyOf,
   type ArtifactVocabulary,
-} from '../lib/injection-engine/skillVocabulary.js';
+} from '../injection-engine/skillVocabulary.js';
 
 // ─── Dev warnings, opt-in ──────────────────────────────────────────────
 // The core prints nothing unless a host hands it a dev-mode reader — it has
 // no engine to ask. Inside agentfootprint the binding is automatic; here it
 // is one line. See `devWarn.ts`.
-export { useSkillGraphDevMode, type DevModeReader } from '../lib/injection-engine/devWarn.js';
+export { useSkillGraphDevMode, type DevModeReader } from '../injection-engine/devWarn.js';

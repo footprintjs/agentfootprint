@@ -1,7 +1,7 @@
 ---
 name: Fact — developer-supplied data injection
 group: context-engineering
-guide: ../../src/lib/injection-engine/README.md
+guide: ../../src/injection-engine/README.md
 defaultInput: When did I sign up?
 ---
 

@@ -20,7 +20,7 @@
 import { Agent, defineTool, type CombinedRecorder, type LLMProvider } from '../../src/index.js'
 import { defineSkill, decideSkill, skillGraph } from '../../src/doors/context.js'
 import { mock } from '../../src/doors/providers.js';
-import { evaluateInjections } from '../../src/lib/injection-engine/index.js';
+import { evaluateInjections } from '../../src/injection-engine/index.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

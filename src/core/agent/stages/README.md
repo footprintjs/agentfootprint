@@ -174,7 +174,7 @@ const hops = spoken(deps.allowedSkillIds(cursor), (id) => !hidden.has(id));
 
 **It is a leaf, and that is the point.** It began life in `toolCalls.ts`, which
 put it on the wrong side of the skill-graph fence: the `read_skill` DESCRIPTION
-is composed in `src/lib/injection-engine/`, which may not import this stage, so
+is composed in `src/injection-engine/`, which may not import this stage, so
 the one surface the model reads to CHOOSE went on printing "Nothing is reachable
 from here" over a graph whose only hop the role filter had removed — the repaired
 law, and the surface it mattered most on left out of it. `src/lib/spokenIds.ts`
@@ -351,7 +351,7 @@ export const WRAP_UP_INSTRUCTION =
 The tools are still withheld by `scope.wrapUpAsked` at request assembly in
 `callLLM` — a mechanism, never a sentence asking the model to abstain.
 
-`test/lib/injection-engine/userTurnProducers.test.ts` walks `src/` for every
+`test/injection-engine/userTurnProducers.test.ts` walks `src/` for every
 `role: 'user'` construction site and fails on one that is neither a registered
 frame, nor a person's own words, nor request-only (`callLLM`'s staged-refs
 nudge and `reliabilityExecution`'s ephemeral feedback line are the two

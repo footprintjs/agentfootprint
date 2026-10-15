@@ -27,7 +27,7 @@ import {
   defineInstruction,
 } from '../src/injection-engine.js';
 import { mock } from '../src/llm-providers.js';
-import type { Injection, InjectionContext } from '../src/lib/injection-engine/types.js';
+import type { Injection, InjectionContext } from '../src/injection-engine/types.js';
 
 const skill = (id: string, description = `use ${id}`) =>
   defineSkill({ id, description, body: `${id} body` });

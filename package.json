@@ -358,8 +358,8 @@
     }
   },
   "sideEffects": [
-    "**/lib/injection-engine/index.js",
-    "**/lib/injection-engine/devWarnHost.js",
+    "**/injection-engine/index.js",
+    "**/injection-engine/devWarnHost.js",
     "**/lib/trace-toolpack/selfExplainHost.js"
   ],
   "peerDependencies": {

@@ -51,18 +51,18 @@ import { isDevMode } from 'footprintjs';
 import type { TypedScope } from 'footprintjs';
 import type { LLMProvider } from '../../../provider-contract/types.js';
 import type { AgentState } from '../types.js';
-import type { InjectionContext } from '../../../lib/injection-engine/types.js';
-import type { EntryScoring } from '../../../lib/injection-engine/skillGraph.js';
-import type { IntentCandidate, IntentScore } from '../../../lib/injection-engine/intentScorer.js';
-import { validateIntentScores } from '../../../lib/injection-engine/intentScorer.js';
-import type { TurnRoutingPlan } from '../../../lib/injection-engine/skillIntent.js';
+import type { InjectionContext } from '../../../injection-engine/types.js';
+import type { EntryScoring } from '../../../injection-engine/skillGraph.js';
+import type { IntentCandidate, IntentScore } from '../../../injection-engine/intentScorer.js';
+import { validateIntentScores } from '../../../injection-engine/intentScorer.js';
+import type { TurnRoutingPlan } from '../../../injection-engine/skillIntent.js';
 import {
   decideTier2,
   type Tier2Verdict,
   type TurnRoute,
-} from '../../../lib/injection-engine/routingPolicy.js';
-import { constrainedEnumPick } from '../../../lib/injection-engine/constrainedEnumPick.js';
-import type { RouteWitness } from '../../../lib/injection-engine/skillMatch.js';
+} from '../../../injection-engine/routingPolicy.js';
+import { constrainedEnumPick } from '../../../injection-engine/constrainedEnumPick.js';
+import type { RouteWitness } from '../../../injection-engine/skillMatch.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import type { SkillTurnRoutedPayload } from '../../../events/payloads.js';
 

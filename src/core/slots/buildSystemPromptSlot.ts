@@ -20,7 +20,7 @@ import type { InjectionRecord } from '../../recorders/core/types.js';
 import { COMPOSITION_KEYS } from '../../recorders/core/types.js';
 // Writes the context recorder derives its events from — relayed under a policy.
 import { setEventSource } from '../../redaction/runRedaction.js';
-import type { ActiveInjection } from '../../lib/injection-engine/types.js';
+import type { ActiveInjection } from '../../injection-engine/types.js';
 import { composeSlot, fnv1a, formatOverflowWarning, slotOverflow, truncate } from './helpers.js';
 
 /**

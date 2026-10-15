@@ -90,7 +90,7 @@ const c      = scoreContrastiveInfluence({ evidence, answerText, referenceText, 
 
 ## Part 3 — `skillGraph()`: declarative skill routing — ✅ **v1 EXISTS** · 🔶 v2 hardening proposed
 
-> **`skillGraph()` is real and usable today** (`src/lib/injection-engine/skillGraph.ts`, proposal 002 v1) — a **fluent builder**: `.entry(skill, {when?})` · `.route(from, to, {when | onToolReturn})` · `.tree(decideSkill(...))` · `.build()`, plus `toMermaid()`. `defineSkill` exists. Your friend can use it now. ✅
+> **`skillGraph()` is real and usable today** (`src/injection-engine/skillGraph.ts`, proposal 002 v1) — a **fluent builder**: `.entry(skill, {when?})` · `.route(from, to, {when | onToolReturn})` · `.tree(decideSkill(...))` · `.build()`, plus `toMermaid()`. `defineSkill` exists. Your friend can use it now. ✅
 >
 > ✅ **The keystone SHIPPED (2026-06-17, panel-reviewed *SHIP WITH NITS*):**
 > 1. the **keystone** `currentSkillId` on `InjectionContext` + **`from`-gating** — an edge `A→B on get_wwn` now fires **only while the cursor is on A**, so the cross-skill edge bleed is gone. The cursor is a sticky state machine: you stay in a skill until a `from`-gated edge moves you out, with a clean handoff (the leaving skill deactivates the same step the next one activates). Driven by one pure resolver `graph.nextSkill(ctx)`.
@@ -151,7 +151,7 @@ const graph = skillGraph({
 | Live `onExplain` | ✅ 0.17.0 | `agentthinkingui` + consumer LLM |
 | LLM-free influence scoring (proxy + contrastive + confidence + ablation) | ✅ 6.31.0 | `agentfootprint/observe` |
 | Why-panel **% confidence** via softmax | 🔶 proposed | `agentthinkingui` (relevance scorer) |
-| `skillGraph()` v1 — fluent `.entry/.route/.tree/.build`, predicate-on-tool-result routes, decision trees, `toMermaid` | ✅ **exists** | `agentfootprint` `lib/injection-engine/skillGraph.ts` |
+| `skillGraph()` v1 — fluent `.entry/.route/.tree/.build`, predicate-on-tool-result routes, decision trees, `toMermaid` | ✅ **exists** | `agentfootprint` `injection-engine/skillGraph.ts` |
 | v2 **keystone** — `currentSkillId` + `from`-gating (sticky cursor, clean handoff, no edge bleed), per-matcher try/catch, `graph.nextSkill(ctx)` | ✅ **shipped** (6.34.0) | `agentfootprint` `skillGraph.ts` + Injection Engine + chart mappers |
 | **scoped `read_skill` gate** — `graph.reachableSkills(cur)` + the runtime reject at `toolCalls.ts` + `skill.rejected` event | ✅ **shipped** (6.35.0) | `agentfootprint` `skillGraph.ts` + `toolCalls.ts` |
 | **`entryByRelevance(embedder)`** — embedding-softmax entry routing + `scope.entryScores` (relevance %) + off-loop `PickEntry` stage | ✅ **shipped** (6.35.0) | `agentfootprint` `skillGraph.ts` + `softmax.ts` + `pickEntry.ts` |

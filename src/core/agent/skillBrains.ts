@@ -43,7 +43,7 @@
 import type { LLMProvider } from '../../provider-contract/types.js';
 import type { CacheStrategy } from '../../cache/types.js';
 import { cacheStrategyFor } from '../../cache/cacheStrategyFor.js';
-import type { Injection } from '../../lib/injection-engine/types.js';
+import type { Injection } from '../../injection-engine/types.js';
 
 /** One brain: a provider port, optionally pinned to a model. `model` absent
  *  → resolved down the precedence chain (legal only while the provider is

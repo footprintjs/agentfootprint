@@ -25,8 +25,8 @@ import { describe, it, expect } from 'vitest';
 import { defineTool, Agent } from '../src/index.js';
 import { skillGraph, defineSkill } from '../src/injection-engine.js';
 import { mock } from '../src/llm-providers.js';
-import { evaluateInjections } from '../src/lib/injection-engine/index.js';
-import type { InjectionContext } from '../src/lib/injection-engine/types.js';
+import { evaluateInjections } from '../src/injection-engine/index.js';
+import type { InjectionContext } from '../src/injection-engine/types.js';
 
 // ── helpers ──────────────────────────────────────────────────────────────
 

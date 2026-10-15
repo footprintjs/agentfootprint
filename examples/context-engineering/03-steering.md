@@ -1,7 +1,7 @@
 ---
 name: Steering — always-on system-prompt rule
 group: context-engineering
-guide: ../../src/lib/injection-engine/README.md
+guide: ../../src/injection-engine/README.md
 defaultInput: What is the weather in Tokyo?
 ---
 

@@ -414,7 +414,7 @@
     "src/influence-core",
     "src/influence-core/index",
     "src/injection-engine",
-    "src/lib/injection-engine/index",
+    "src/injection-engine/index",
     "src/lib/mcp/types",
     "src/llm-providers",
     "src/memory/embedding/mockEmbedder",

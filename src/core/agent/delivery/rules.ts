@@ -32,7 +32,7 @@
 
 import type { LLMMessage, WireRole } from '../../../provider-contract/types.js';
 import { fnv1a } from '../../slots/helpers.js';
-import type { DeferralReason } from '../../../lib/injection-engine/messagesSlotRefusal.js';
+import type { DeferralReason } from '../../../injection-engine/messagesSlotRefusal.js';
 
 /**
  * The role a message OCCUPIES on the wire, for sequencing purposes.

@@ -1,6 +1,6 @@
 ---
 paths:
-  - "src/lib/injection-engine/**"
+  - "src/injection-engine/**"
   - "src/maps/**"
   - "src/injection-engine.ts"
   - "src/core/agent/**"
@@ -13,7 +13,7 @@ paths:
 Loaded only when you work on the paths above — moved verbatim out of the root CLAUDE.md so it costs context only where it applies. **Trust the code** where this disagrees.
 
 ## Extension points
-- **Injection/skill**: `Injection = {id, flavor, trigger, inject}` (lib/injection-engine/types.ts:161); trigger is a closed 4-variant union (:30 — new kind edits evaluator.ts:40-74 switch). Factories defineSkill etc.; skill graph via `skillGraph()` (skillGraph.ts:392) with pluggable `EntryScorer` (entryScorer.ts:64). `SkillGraphConfig` is a UNION (flat arm `start`/`steps` vs tree arm) — the contradictions it encodes are ALSO refused at build (`.tree()` + `.entry()`/`.route()`, a non-leaf in `skills[]` under a tree, two skills claiming one id, a second `.skillGraph()` on one agent).
+- **Injection/skill**: `Injection = {id, flavor, trigger, inject}` (injection-engine/types.ts:161); trigger is a closed 4-variant union (:30 — new kind edits evaluator.ts:40-74 switch). Factories defineSkill etc.; skill graph via `skillGraph()` (skillGraph.ts:392) with pluggable `EntryScorer` (entryScorer.ts:64). `SkillGraphConfig` is a UNION (flat arm `start`/`steps` vs tree arm) — the contradictions it encodes are ALSO refused at build (`.tree()` + `.entry()`/`.route()`, a non-leaf in `skills[]` under a tree, two skills claiming one id, a second `.skillGraph()` on one agent).
 
 ## Change-impact map
 - **Injection engine eval semantics** → Evaluate stage cursor keystone (buildInjectionEngineSubflow.ts:214-222), Route stage MIRRORS slot filters (keep in sync with buildSystemPromptSlot), read_skill gate (toolCalls.ts:747). The gate's allowed set is TWO kinds of id (8.4.0): a HOP (`deps.allowedSkillIds` = `graph.reachableSkills(cursor)` — activates AND moves the cursor) ∪ an OPEN skill (`deps.openSkillIds` = `Agent.openSkillIds()`, Agent.ts:1052 — a registered skill whose trigger is `llm-activated` AND that the graph declares no incoming edge to; activates, never moves the cursor). Both clauses are load-bearing: the trigger test is "read_skill can really activate this", the edge test keeps a bare model edge `.route(a,m)` from-gated. **8.5.0** extends the SAME trigger test three ways: a decision `tree()` returns `[]` from `reachableSkills` (leaves compile to `rule` triggers, so a pick could only be accepted then dropped — the gate refuses with a tree-specific message, `deps.skillGraphIsTree`, derived in AgentBuilder from `graph.nodes.some(kind==='predicate')`); `surfaceMode:'tool-only'` is refused at agent build for any skill whose trigger is not `llm-activated` (skillBodyDelivery.ts — the read_skill tool result is the only channel that mode has, and the graph never calls read_skill); and `read_skill`'s DESCRIPTION is rebuilt per iteration from `reachableSkills(cursor) ∪ open` (Agent.readSkillOfferFor → buildToolsSlot's `readSkillFor`). **The read_skill ENUM must stay the full catalog** — `toolArgValidation` defaults to `'enforce'` and runs at toolCalls.ts:570, BEFORE the gate at :765, and sets `error = true` which the gate skips; narrowing the enum silently retires the teaching refusal, `skill.rejected`, routeRecorder's rejection hops and the rejected-cap governor.

@@ -10,8 +10,8 @@
  */
 import { Agent } from '../../src/core/Agent';
 import { defineTool, type Tool } from '../../src/tools/tools';
-import { defineFact } from '../../src/lib/injection-engine/factories/defineFact';
-import type { Injection } from '../../src/lib/injection-engine/types';
+import { defineFact } from '../../src/injection-engine/factories/defineFact';
+import type { Injection } from '../../src/injection-engine/types';
 import { mock } from '../../src/adapters/llm/MockProvider';
 import { controlDepRecorder } from 'footprintjs/trace';
 import { type ControlDepLookup } from 'foottrace';

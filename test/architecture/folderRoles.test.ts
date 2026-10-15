@@ -31,7 +31,7 @@
  * exactly the state this pass exists to make impossible.
  *
  * Two neighbouring tests carry the rest of the truth: the fence test
- * (`test/lib/injection-engine/skill-graph-fence.test.ts`) proves an import
+ * (`test/injection-engine/skill-graph-fence.test.ts`) proves an import
  * boundary, `test/architecture/citations.test.ts` proves the role headers'
  * pointers still point at something, and `test/modelFacingSurfaces.test.ts`
  * pins the registered model-facing producers themselves.
@@ -136,8 +136,8 @@ describe('every src/ folder claims a role', () => {
  * `this run` / `right now` time anchor, which is what its scan keys on. It was
  * never a census of model-facing files, and a guard keyed to it inherits that
  * blind spot: it would not have caught `src/patterns/LlmRouter.ts`,
- * `src/lib/injection-engine/constrainedEnumPick.ts`,
- * `src/lib/injection-engine/llmClassifier.ts`, `src/memory/beats/llmExtractor.ts`,
+ * `src/injection-engine/constrainedEnumPick.ts`,
+ * `src/injection-engine/llmClassifier.ts`, `src/memory/beats/llmExtractor.ts`,
  * `src/memory/pipeline/auto.ts`, `src/core-flow/Parallel.ts`, or any of the four
  * integrity checks retracted to Mixed in this pass — none of them carries a
  * LEDGER row. So do NOT extend this by keying a new guard to either register.

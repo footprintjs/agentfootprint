@@ -23,7 +23,7 @@ import { Agent, defineTool } from '../../../src/index.js';
 import { decideSkill, defineSkill, skillGraph } from '../../../src/injection-engine.js';
 import { mock } from '../../../src/llm-providers.js';
 import { scopeToolsToActiveSkill } from '../../../src/core/agent/toolsFromActiveSkill.js';
-import type { Injection } from '../../../src/lib/injection-engine/types.js';
+import type { Injection } from '../../../src/injection-engine/types.js';
 import type { LLMProvider, LLMRequest } from '../../../src/provider-contract/types.js';
 
 // ─── Fixtures ──────────────────────────────────────────────────────

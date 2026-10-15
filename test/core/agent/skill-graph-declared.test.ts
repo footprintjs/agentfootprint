@@ -26,7 +26,7 @@ import { skillGraph, defineSkill } from '../../../src/injection-engine.js';
 import { recordRun } from '../../../src/recorders/observability/recordRun.js';
 import { buildSkillGraphDeclared } from '../../../src/core/agent/skillGraphDeclared.js';
 import type { AgentfootprintEventMap } from '../../../src/events/registry.js';
-import type { Injection } from '../../../src/lib/injection-engine/types.js';
+import type { Injection } from '../../../src/injection-engine/types.js';
 
 type DeclaredEvent = AgentfootprintEventMap['agentfootprint.skill.graph_declared'];
 

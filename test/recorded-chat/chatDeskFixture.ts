@@ -11,8 +11,8 @@
  * Everything is $0: mock provider + mock embedder + a domain comparator.
  */
 import { Agent } from '../../src/core/Agent';
-import { defineFact } from '../../src/lib/injection-engine/factories/defineFact';
-import type { Injection } from '../../src/lib/injection-engine/types';
+import { defineFact } from '../../src/injection-engine/factories/defineFact';
+import type { Injection } from '../../src/injection-engine/types';
 import { mock } from '../../src/adapters/llm/MockProvider';
 import type { LLMRequest } from '../../src/provider-contract/types';
 import { mockEmbedder } from '../../src/memory/embedding/mockEmbedder';

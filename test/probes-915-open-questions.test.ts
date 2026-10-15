@@ -13,7 +13,7 @@
  *     whatever their batch order — both orderings of the old smoking-gun
  *     probe fire the route. Conflicting matches inside one batch emit
  *     `agentfootprint.skill.route_conflict` (covered in
- *     test/lib/injection-engine/toolBatchRouting.test.ts).
+ *     test/injection-engine/toolBatchRouting.test.ts).
  *
  *  L2 (SETTLED — this is the designed behavior, pinned here; unchanged):
  *     an open (non-graph-wired) skill picked via read_skill NEVER ends within

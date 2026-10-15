@@ -6,7 +6,7 @@ a zero-import leaf so the skill-graph fence can reach it). Walker:
 environment, backoff on 429/529) · `mock.ts` (a scripted classifier for the
 suite and the bench). Trace: nothing here records; the two consumers do —
 `core/agent/findings/judge.ts` (the judge on the ledger) and
-`lib/injection-engine/classifierScorer.ts` (the scored entry choice).
+`injection-engine/classifierScorer.ts` (the scored entry choice).
 
 # `classify/` — the scored choice
 

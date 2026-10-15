@@ -70,7 +70,7 @@
  * rule fires on it. Adding one means adding it to
  * {@link LIBRARY_AUTHORED_PREFIXES}, and every reader is fixed at once —
  * which is why the count is no longer asserted in prose alone:
- * `test/lib/injection-engine/userTurnProducers.test.ts` WALKS the tree for
+ * `test/injection-engine/userTurnProducers.test.ts` WALKS the tree for
  * every `role: 'user'` construction site and fails, with the file and line, on
  * one that is neither registered here, nor a person's own turn, nor
  * wire-only.
@@ -187,7 +187,7 @@ export function isCompactedSummary(msg: AuthoredMessage | undefined): boolean {
 
 // FOLD · the one owner of which role:'user' message a PERSON wrote, as opposed to the ones this library writes in a person's voice
 // consumers read this and never re-derive it: core/agent/window/currentRequest.ts, injection-engine/types.ts's
-// saidByPerson(ctx) (lib/injection-engine/types.ts · saidByPerson), and src/index.ts (published)
+// saidByPerson(ctx) (injection-engine/types.ts · saidByPerson), and src/index.ts (published)
 // detached: yes — a boolean over one message; the writers import the prefixes the recogniser matches on.
 /**
  * THE rule: true when this message is something a PERSON said.

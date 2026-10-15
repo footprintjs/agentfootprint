@@ -10,7 +10,7 @@ result primitives, `absent()` and `coverage()`, and the period a result
 declares — its own README), `toolEffects.ts` (the tool-result envelope grammar:
 the two effect kinds, the recognizer) and `toolOutcome.ts` (the outcome words a
 route edge keys on). The instruction leases an effect grants live with their
-reader, `lib/injection-engine/leases.ts`.
+reader, `injection-engine/leases.ts`.
 
 # semantics — the semantic tool-result envelope + `check:semantics`
 

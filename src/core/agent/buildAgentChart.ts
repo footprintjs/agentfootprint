@@ -51,8 +51,8 @@ import { STAGE_IDS, SUBFLOW_IDS, milestoneTagsFor } from '../../lib/conventions.
 import {
   EMPTY_ACTIVE_BY_SLOT,
   type ActiveBySlot,
-} from '../../lib/injection-engine/buildInjectionEngineSubflow.js';
-import type { ActiveInjection, Injection } from '../../lib/injection-engine/types.js';
+} from '../../injection-engine/buildInjectionEngineSubflow.js';
+import type { ActiveInjection, Injection } from '../../injection-engine/types.js';
 import type { MemoryDefinition } from '../../memory/define.types.js';
 import { memoryInjectionKey, retrievalEvidenceKey } from '../../memory/define.types.js';
 import { unwrapMemoryFlowChart } from '../../memory/define.js';
@@ -664,7 +664,7 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
           // The turn-start verdict (SG-C) — written once by RouteTurn; the
           // resolver consumes it on iteration 1, the menu hint reads `offered`.
           turnRoute: parent.turnRoute as
-            | import('../../lib/injection-engine/routingPolicy.js').TurnRoute
+            | import('../../injection-engine/routingPolicy.js').TurnRoute
             | undefined,
           // The step pointer as of the previous iteration (9.18.0) — a
           // readonly input for the Evaluate re-key. Threaded only for agents
@@ -918,7 +918,7 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
         // The turn-start verdict (SG-C) — the Compose stage leads read_skill's
         // description with the menu while it is outstanding.
         turnRoute: parent.turnRoute as
-          | import('../../lib/injection-engine/routingPolicy.js').TurnRoute
+          | import('../../injection-engine/routingPolicy.js').TurnRoute
           | undefined,
         // The step pointer (9.18.0), ALREADY RE-KEYED — the same freshness
         // rule the cursor line above documents. In this flat chart the

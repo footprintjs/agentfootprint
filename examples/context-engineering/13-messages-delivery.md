@@ -1,7 +1,7 @@
 ---
 name: Messages delivery — declared content, delivered into the window
 group: context-engineering
-guide: ../../src/lib/injection-engine/README.md
+guide: ../../src/injection-engine/README.md
 defaultInput: where is my refund?
 ---
 

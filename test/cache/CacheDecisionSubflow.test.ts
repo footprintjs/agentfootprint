@@ -27,7 +27,7 @@ import {
   type CacheDecisionState,
 } from '../../src/cache/CacheDecisionSubflow';
 import type { CacheMarker, CachePolicy, CachePolicyContext } from '../../src/cache/types';
-import type { Injection } from '../../src/lib/injection-engine/types';
+import type { Injection } from '../../src/injection-engine/types';
 import { expectScalesLinearly } from '../helpers/perf.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────

@@ -15,7 +15,7 @@ in CI.
 | the 5-minute version — three skills, one graph, the picture | `docs-next/content/docs/build/skill-graph-quickstart.mdx` |
 | the full API — `defineSkill`, `skillGraph`, `checkup()`, `scopeTools`, `surfaceMode`, `steps`, `SkillRegistry`, `skillsFromDir`, `autoActivate` | `docs-next/content/docs/build/skills.mdx` |
 | why skills exist at all (the concept essay) | `docs-next/content/docs/build/skills-explained.mdx` |
-| the maintainer's map — module boundaries, import zones, seams | `src/lib/injection-engine/README.md` |
+| the maintainer's map — module boundaries, import zones, seams | `src/injection-engine/README.md` |
 | the design spec | [`design/skill-graph-spec.md`](./design/skill-graph-spec.md) |
 
 **Runnable, tested counterparts** for every snippet live under `examples/features/`

@@ -113,14 +113,14 @@ import {
   nudgeTeachingMessage,
   type StepPlan,
   type StepPointer,
-} from '../src/lib/injection-engine/skillSteps.js';
+} from '../src/injection-engine/skillSteps.js';
 import { mock } from '../src/llm-providers.js';
 import { defineSkill } from '../src/injection-engine.js';
 import { selfCallNotice } from '../src/core/agent/selfCallNotice.js';
 import {
   readSkillDescriptor,
   type ReadSkillOffer,
-} from '../src/lib/injection-engine/skillToolDescriptors.js';
+} from '../src/injection-engine/skillToolDescriptors.js';
 import { presentArtifact } from '../src/artifacts/present.js';
 import { standingLineOf } from '../src/core/agent/assessment/compose.js';
 import { resolveToolWants } from '../src/artifacts/wants.js';
@@ -1323,7 +1323,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
   },
   {
     id: 'skill-graph — the read_skill DESCRIPTION (the offer)',
-    module: 'src/lib/injection-engine/skillToolDescriptors.ts',
+    module: 'src/injection-engine/skillToolDescriptors.ts',
     surface: GRAPH_TOOL_DESCRIPTION,
     lifetimeBecause:
       "`AgentBuilder.skillGraph` throws under `reactMode: 'classic'`, the one mode that " +
@@ -1529,7 +1529,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       'the stage appends it to `scope.history` as a `role: "user"` turn, so every later call ' +
       'of the turn re-reads it — a schema retry and an evidence recheck included',
     drivenBy: [
-      'test/lib/injection-engine/userTurnProducers.test.ts',
+      'test/injection-engine/userTurnProducers.test.ts',
       'test/core/agent-wrap-up.test.ts',
     ],
     reaches: [/action budget was exhausted before the wrap-up call this message opened/],
@@ -1537,13 +1537,13 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
   },
   {
     id: 'skills — the stepped-skill NUDGE frame',
-    module: 'src/lib/injection-engine/skillSteps.ts',
+    module: 'src/injection-engine/skillSteps.ts',
     surface: INJECTED_TURN,
     lifetimeBecause:
       'the nudge stage appends it to `scope.history` as a `role: "user"` turn — the same ' +
       'lifetime as the wrap-up, and the reason both had to stop speaking in the present',
     drivenBy: [
-      'test/lib/injection-engine/userTurnProducers.test.ts',
+      'test/injection-engine/userTurnProducers.test.ts',
       'test/core/agent/skill-steps.test.ts',
     ],
     // Both span arms: the range and the single step. They are one ternary
@@ -2672,7 +2672,7 @@ describe('the checker catches the shapes, not only the wordings it has seen', ()
   });
 
   it('the LIFETIME decides: one sentence, clean as a description and false as a result', () => {
-    // The worked example in `src/lib/injection-engine/README.md`, executed
+    // The worked example in `src/injection-engine/README.md`, executed
     // here so the documented law cannot drift from the rules. The description
     // is recomposed for the request being answered and may report the
     // present; the same words on a tool result are re-read after the cursor

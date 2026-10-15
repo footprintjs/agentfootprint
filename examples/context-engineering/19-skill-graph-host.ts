@@ -9,7 +9,7 @@
  * anywhere in it, which is the claim the door makes.
  *
  * THE `doc-example` REGION BELOW IS THE DOOR'S OWN `@example`. It is not a
- * copy: `test/lib/injection-engine/skill-graph-doc-example.test.ts` reads the
+ * copy: `test/injection-engine/skill-graph-doc-example.test.ts` reads the
  * `@example` block out of `src/doors/skill-graph.ts` and fails unless it is
  * byte-identical to those lines (the one allowed difference is the import
  * specifier — an example imports `../../src/…` so it typechecks against the

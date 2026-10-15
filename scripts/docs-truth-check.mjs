@@ -736,7 +736,7 @@ const DOC_TEXT_RULES = [
       'for the gated behaviour. Note the rule does NOT exempt a negated sentence: write "activation ' +
       'adds the body, not the tools" rather than "tools are not added once activated".',
     find() {
-      const file = 'src/lib/injection-engine/factories/defineSkill.ts';
+      const file = 'src/injection-engine/factories/defineSkill.ts';
       const lines = readLines(file);
       if (!lines) {
         return [
@@ -819,7 +819,7 @@ const DOC_TEXT_RULES = [
       //     defect lived. General rather than a literal "v2.5" match: a
       //     PROMISE CUE near a version reference that is already at or below
       //     the shipped version. History cues ("since v2.5") never fire.
-      for (const abs of scanFiles('src/lib/injection-engine', ['.ts'])) {
+      for (const abs of scanFiles('src/injection-engine', ['.ts'])) {
         const file = relative(ROOT, abs);
         const text = readFileSync(abs, 'utf8');
         const comments = commentLineNumbers(text);

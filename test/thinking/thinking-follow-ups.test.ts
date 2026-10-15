@@ -17,7 +17,7 @@ import { describe, expect, it } from 'vitest';
 import { Agent, type LLMRequest } from '../../src/index.js';
 import { anthropic } from '../../src/adapters/llm/AnthropicProvider.js';
 import { bedrock } from '../../src/adapters/llm/BedrockProvider.js';
-import { constrainedEnumPick } from '../../src/lib/injection-engine/constrainedEnumPick.js';
+import { constrainedEnumPick } from '../../src/injection-engine/constrainedEnumPick.js';
 import { UnsupportedThinkingError } from '../../src/thinking/index.js';
 
 // ── Fakes ──────────────────────────────────────────────────────────────

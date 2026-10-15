@@ -21,7 +21,7 @@
  *
  * It lived in `core/agent/stages/toolCalls.ts`, which put it on the wrong side
  * of the skill-graph fence: `read_skill`'s DESCRIPTION is composed inside
- * `src/lib/injection-engine/`, which may not import the agent loop, so the one
+ * `src/injection-engine/`, which may not import the agent loop, so the one
  * surface the model reads to CHOOSE a skill could not use the fact its own
  * refusals were being repaired with — and it went on printing "Nothing is
  * reachable from here" over a graph whose only hop the role filter had removed.
