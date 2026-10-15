@@ -106,6 +106,10 @@
 import type { MemoryEntry } from '../../memory/entry/index.js';
 import type { MemoryIdentity } from '../../memory/identity/index.js';
 import { encodeIdentityField } from '../../memory/identity/index.js';
+import {
+  refuseUnhonouredWriteOptions,
+  type MemoryWriteOptions,
+} from '../../memory/store/writeOptions.js';
 import type {
   ListOptions,
   ListResult,
@@ -134,6 +138,19 @@ import {
 } from '../google/aiPlatform.js';
 
 const ADAPTER = 'memoryBankStore';
+
+/**
+ * Why this store refuses both write options. A `put` here is `memories.create`
+ * — the entry IS a long-term memory the moment it lands, with no short-term
+ * tier for `extraction: 'skip'` to leave it in; and its namespace is the
+ * immutable `scope` from `scopeFor(identity)`, which a per-write
+ * `namespaceScope` would silently fork away from every later retrieval.
+ */
+const MEMORY_BANK_WRITES =
+  'every write here is itself a long-term memory (there is no extraction step to skip), ' +
+  'and its scope comes from `scopeFor(identity)` — a per-write namespace would file it ' +
+  'where no retrieval for that identity looks. Leave the option off for this store; ' +
+  'scope it through `scopeFor`';
 
 /**
  * The metadata keys this adapter owns on a `Memory`.
@@ -541,8 +558,13 @@ export class MemoryBankStore implements MemoryStore {
    * name. The `create` race — two writers, neither of whom saw a row — is
    * caught as `ALREADY EXISTS` and folded back into the same checked patch.
    */
-  async put<T = unknown>(identity: MemoryIdentity, entry: MemoryEntry<T>): Promise<void> {
+  async put<T = unknown>(
+    identity: MemoryIdentity,
+    entry: MemoryEntry<T>,
+    options?: MemoryWriteOptions,
+  ): Promise<void> {
     this.ensureOpen('put');
+    refuseUnhonouredWriteOptions('MemoryBankStore', undefined, options, MEMORY_BANK_WRITES);
     if (entry.ttl !== undefined && entry.ttl <= Date.now()) return;
     const scope = this.resolveScope(identity);
     const body = toMemory(entry, scope, this.defaultTtl);
@@ -580,9 +602,10 @@ export class MemoryBankStore implements MemoryStore {
   async putMany<T = unknown>(
     identity: MemoryIdentity,
     entries: readonly MemoryEntry<T>[],
+    options?: MemoryWriteOptions,
   ): Promise<void> {
     this.ensureOpen('putMany');
-    for (const entry of entries) await this.put(identity, entry);
+    for (const entry of entries) await this.put(identity, entry, options);
   }
 
   /**

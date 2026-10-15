@@ -187,6 +187,38 @@ describe('AWS adapters dispatch exactly the commands they are pinned to', () => 
     );
   });
 
+  it('AgentCoreStore — write options ride CreateEvent’s own fields, absent when not asked', async () => {
+    const row = pin('AgentCoreStore');
+    const sdk = fakeSdk(row);
+    // The store honours the options only when the SDK MODELS the fields — read
+    // off the SDK's own `CreateEventInput$` schema, as 3.1152.0 ships it.
+    const modelled = {
+      ...sdk.module,
+      CreateEventInput$: [
+        3,
+        'com.amazonaws.bedrockagentcore',
+        'CreateEventInput',
+        0,
+        ['memoryId', 'actorId', 'eventTimestamp', 'payload', 'extractionMode', 'extractionConfig'],
+      ],
+    };
+    const store = new AgentCoreStore({ memoryId: 'mem-1', _sdk: modelled });
+    await store.put(IDENTITY, entry('a'), {
+      extraction: 'skip',
+      namespaceScope: { tenantid: 'acme' },
+    });
+    // A store that served a scoped write refuses an unscoped one, so the
+    // unscoped write goes through a store of its own.
+    await new AgentCoreStore({ memoryId: 'mem-1', _sdk: modelled }).put(IDENTITY, entry('b'));
+    expect(sdk.names()).toEqual(['CreateEventCommand', 'CreateEventCommand']);
+    expect(sdk.sent[0]?.input).toMatchObject({
+      extractionMode: 'SKIP',
+      extractionConfig: { namespaceVariables: { tenantid: 'acme' } },
+    });
+    expect(Object.keys(sdk.sent[1]?.input ?? {})).not.toContain('extractionMode');
+    expect(Object.keys(sdk.sent[1]?.input ?? {})).not.toContain('extractionConfig');
+  });
+
   it('agentCoreSessions — CreateEvent to persist, ListEvents to hydrate', async () => {
     const row = pin('agentCoreSessions');
     const sdk = fakeSdk(row, { ListEventsCommand: { events: [] } });
@@ -533,6 +565,18 @@ describe('the pinned names against the real SDK, where it is installed', () => {
       });
     }
   }
+
+  it.skipIf(realSdk('@aws-sdk/client-bedrock-agentcore') === undefined)(
+    'AgentCoreStore → the real SDK models CreateEvent’s extraction fields the write options use',
+    () => {
+      const sdk = realSdk('@aws-sdk/client-bedrock-agentcore') as Record<string, unknown>;
+      expect((sdk['ExtractionMode'] as { SKIP?: string } | undefined)?.SKIP).toBe('SKIP');
+      // The schema the store reads to decide whether to honour them at all.
+      const schema = sdk['CreateEventInput$'] as unknown[];
+      const members = schema.find((part) => Array.isArray(part) && part.includes('memoryId'));
+      expect(members).toEqual(expect.arrayContaining(['extractionMode', 'extractionConfig']));
+    },
+  );
 
   it('EvaluatePolicyCommand is not a command anybody may pin again', () => {
     const sdk = realSdk('@aws-sdk/client-bedrock-agentcore');

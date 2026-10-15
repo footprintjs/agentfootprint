@@ -137,6 +137,11 @@
 import { identityNamespace } from '../../memory/identity/index.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
 import {
+  NO_SERVER_EXTRACTION,
+  refuseUnhonouredWriteOptions,
+  type MemoryWriteOptions,
+} from '../../memory/store/writeOptions.js';
+import {
   EmbedderMismatchError,
   fingerprintConflict,
   fingerprintText,
@@ -635,18 +640,27 @@ export function s3VectorsStore(options: S3VectorsStoreOptions): S3VectorsStore {
       return entry;
     },
 
-    async put<T = unknown>(identity: MemoryIdentity, entry: MemoryEntry<T>): Promise<void> {
-      await this.putMany(identity, [entry]);
+    // Write options: none honoured (refused by name in putMany, below).
+    async put<T = unknown>(
+      identity: MemoryIdentity,
+      entry: MemoryEntry<T>,
+      options?: MemoryWriteOptions,
+    ): Promise<void> {
+      await this.putMany(identity, [entry], options);
     },
 
     async putMany<T = unknown>(
       identity: MemoryIdentity,
       entries: readonly MemoryEntry<T>[],
+      options?: MemoryWriteOptions,
     ): Promise<void> {
       open('write entries');
       // The port requires an empty batch to be a no-op — callers rely on it to
       // skip a round-trip on a turn that produced nothing.
       if (entries.length === 0) return;
+      // Nothing here is ever extracted, so a write option is refused by name —
+      // never dropped, which would read exactly like honouring it.
+      refuseUnhonouredWriteOptions('s3VectorsStore', undefined, options, NO_SERVER_EXTRACTION);
       const ns = identityNamespace(identity);
       // Before a byte: the index really is cosine, and it really has room for a
       // passage. Memoized, so this is one GetIndex for the life of the store —

@@ -35,6 +35,11 @@ import { refuseAsRole } from './asRoleRefusal.js';
 import { refuseMemoryRedact } from './redactRefusal.js';
 import { assertStrategyRequirements, assertStrategyShape } from './strategies.js';
 import { resolveRankingMode } from './store/capability.js';
+import {
+  assertStoreHonours,
+  bindWriteOptions,
+  type BoundMemoryOptions,
+} from './store/writeOptions.js';
 
 import { defaultPipeline, type DefaultPipelineConfig } from './pipeline/default.js';
 import { ephemeralPipeline } from './pipeline/ephemeral.js';
@@ -97,7 +102,13 @@ import type { MemoryDefinition, ReadonlyMemoryFlowChart } from './define.types.j
 export function defineMemory(options: DefineMemoryOptions): MemoryDefinition {
   validate(options);
 
-  const pipeline = buildPipeline(options);
+  // The write options and the scope ride every write AND search the PIPELINE
+  // makes, so the pipeline is built over the store with them bound. The
+  // definition still carries the caller's own store (below), unbound, so the
+  // turn anchor keeps deduplicating by reference — a direct call on
+  // `definition.store` carries no scope (a store built with
+  // `requireNamespaceScope` refuses it).
+  const pipeline = buildPipeline(withBoundWrites(options));
 
   // The declared-requirements backstop (9.5.0), deliberately AFTER the
   // dispatch: the arms above know things this check does not (the
@@ -179,6 +190,28 @@ function validate(options: DefineMemoryOptions): void {
         'Pass `new InMemoryStore()` for dev/tests, or a backed store for production.',
     );
   }
+  if (options.writeOptions !== undefined && options.readOnly === true) {
+    throw new Error(
+      `defineMemory[id=${options.id}]: \`writeOptions\` cannot be combined with ` +
+        '`readOnly: true` — a read-only memory compiles no write half, so there is no ' +
+        'write to apply them to. Drop one of the two (`namespaceScope` scopes reads too).',
+    );
+  }
+  if (options.namespaceScope !== undefined && options.corpus !== undefined) {
+    throw new Error(
+      `defineMemory[id=${options.id}]: \`namespaceScope\` cannot be combined with ` +
+        '`corpus` — a corpus memory runs under the corpus identity, not the run’s, so a ' +
+        'per-identity scope would be resolved for the corpus and never for the person. Scope ' +
+        'a corpus by its own identity, or drop one of the two.',
+    );
+  }
+  const bound = boundOptionsOf(options);
+  if (bound !== undefined) {
+    // Before the first turn: a store that does not DECLARE an option would
+    // refuse it on every write, so a definition that asks for one is refused
+    // now, by name, instead.
+    assertStoreHonours(options.store, bound, `defineMemory[${options.id}]`);
+  }
   // SHAPE before anything reads a field (9.5.1). Both the dispatch below and
   // the requirements walk read fields off the strategy — `h.strategies[0]`,
   // `for (const sub of strategy.strategies)` — and a field read off a shape
@@ -214,6 +247,25 @@ function validate(options: DefineMemoryOptions): void {
 }
 
 // ─── Pipeline dispatch ─────────────────────────────────────────────
+
+/** The write options and scope to bind to the store, when either was given. */
+function boundOptionsOf(options: DefineMemoryOptions): BoundMemoryOptions | undefined {
+  if (options.writeOptions === undefined && options.namespaceScope === undefined) return undefined;
+  return {
+    ...options.writeOptions,
+    ...(options.namespaceScope !== undefined && { namespaceScope: options.namespaceScope }),
+  };
+}
+
+/**
+ * The options with the store bound: writes carrying `writeOptions` and the
+ * scope, searches confined to the scope — when either was given.
+ */
+function withBoundWrites(options: DefineMemoryOptions): DefineMemoryOptions {
+  const bound = boundOptionsOf(options);
+  if (bound === undefined) return options;
+  return { ...options, store: bindWriteOptions(options.store, bound) };
+}
 
 function buildPipeline(options: DefineMemoryOptions): MemoryPipeline {
   switch (options.type) {

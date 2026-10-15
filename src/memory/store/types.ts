@@ -35,6 +35,7 @@
  */
 import type { MemoryIdentity } from '../identity/index.js';
 import type { MemoryEntry } from '../entry/index.js';
+import type { MemoryWriteOptionName, MemoryWriteOptions } from './writeOptions.js';
 
 /** Pagination cursor — opaque string, adapter-specific encoding. */
 export type MemoryCursor = string;
@@ -109,6 +110,20 @@ export interface SearchOptions {
    * whenever you have both, and any store can serve the query.
    */
   readonly text?: string;
+
+  /**
+   * The namespace scope this memory's WRITES are filed under
+   * (`MemoryWriteOptions.namespaceScope`), so the read stays inside it.
+   *
+   * A write option must never let a later read see another tenant's records,
+   * so reads follow the same rule as writes: `defineMemory({ writeOptions })`
+   * resolves this from the run's identity with the SAME resolver as its
+   * writes, and passes it only to a store that declares `'namespaceScope'` in
+   * `writeOptions`. A store that receives it reads only within it, or refuses
+   * by name. Stores that file nothing by a namespace never receive it — the
+   * identity is their boundary.
+   */
+  readonly namespaceScope?: Readonly<Record<string, string>>;
 }
 
 /**
@@ -198,6 +213,20 @@ export interface MemoryStore {
   readonly ranksBy?: 'vector' | 'server-text';
 
   /**
+   * Which {@link MemoryWriteOptions} this store HONOURS — vendor-neutral
+   * requests about what a managed service does with a write after storing it
+   * (`'extraction'`: keep it out of long-term extraction; `'namespaceScope'`:
+   * the namespace its derived records are filed under).
+   *
+   * **Absent means none**, and every write option a store does not list is
+   * refused BY NAME at the call (`refuseUnhonouredWriteOptions`), never
+   * ignored: a dropped `namespaceScope` files one tenant's derived records
+   * where another's are read, and it looks exactly like working. `defineMemory`
+   * reads this before any turn runs.
+   */
+  readonly writeOptions?: readonly MemoryWriteOptionName[];
+
+  /**
    * Fetch one entry by id within the given identity's namespace.
    * Returns `null` when the entry doesn't exist OR has expired (TTL).
    * Callers should not distinguish — both mean "no data."
@@ -210,8 +239,16 @@ export interface MemoryStore {
   /**
    * Unconditional write — overwrites any existing entry with the same id.
    * Prefer `putIfVersion` in multi-writer scenarios.
+   *
+   * `options` asks a managed service what to do with the entry after storing
+   * it; an option the store does not declare in {@link writeOptions} is
+   * refused by name, before anything is written.
    */
-  put<T = unknown>(identity: MemoryIdentity, entry: MemoryEntry<T>): Promise<void>;
+  put<T = unknown>(
+    identity: MemoryIdentity,
+    entry: MemoryEntry<T>,
+    options?: MemoryWriteOptions,
+  ): Promise<void>;
 
   /**
    * Batched unconditional write. Semantically equivalent to N sequential
@@ -238,8 +275,15 @@ export interface MemoryStore {
    * Default implementation for adapters that don't override: sequentially
    * calls `put()` for each entry. Adapters SHOULD override for
    * performance-critical paths.
+   *
+   * `options` applies to every entry of the batch, under the same rule as
+   * `put` — refused by name, before anything is written, when not declared.
    */
-  putMany<T = unknown>(identity: MemoryIdentity, entries: readonly MemoryEntry<T>[]): Promise<void>;
+  putMany<T = unknown>(
+    identity: MemoryIdentity,
+    entries: readonly MemoryEntry<T>[],
+    options?: MemoryWriteOptions,
+  ): Promise<void>;
 
   /**
    * Optimistic-concurrency write. Writes only if the stored version equals
@@ -247,12 +291,13 @@ export interface MemoryStore {
    * is `0` (first-write sentinel).
    *
    * Returns `{ applied: true }` on success, `{ applied: false, currentVersion }`
-   * when the caller's assumed version is stale.
+   * when the caller's assumed version is stale. `options` as for `put`.
    */
   putIfVersion<T = unknown>(
     identity: MemoryIdentity,
     entry: MemoryEntry<T>,
     expectedVersion: number,
+    options?: MemoryWriteOptions,
   ): Promise<PutIfVersionResult>;
 
   /**

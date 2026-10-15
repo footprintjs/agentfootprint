@@ -35,13 +35,14 @@ reading before you write an adapter:
 
 ### The optional, feature-detected members
 
-Three, and each answers a different question:
+Four, and each answers a different question:
 
 | Member | Question | Absence means |
 |---|---|---|
 | `search?(identity, query, options?)` | Does this store rank at all? | No vector search. Callers feature-detect with `if (store.search)` |
 | `supportsVectorSearch?: boolean` | Can you serve back the embeddings **I wrote**? | Undeclared — behaves exactly as before this bit existed |
 | `ranksBy?: 'vector' \| 'server-text'` | What **query form** does your `search()` take? | Undeclared — nothing refuses, nothing changes |
+| `writeOptions?: ('extraction' \| 'namespaceScope')[]` | Which **write options** do you honour? | **None** — any write option is refused by name (see *Write options* below) |
 
 The next two sections are why the second and third exist.
 
@@ -254,7 +255,7 @@ namespaces on the Memory resource, and two options steer `search()` at them:
 
 | Option | What it is | Default |
 |---|---|---|
-| `searchNamespace({ actorId, sessionId })` | Where `search()` looks — a **function**, because the namespace usually contains the actor. Commonly shaped like `/strategies/{strategyId}/actors/{actorId}` | `/actors/{actorId}/sessions/{sessionId}` — the session's own records |
+| `searchNamespace({ actorId, sessionId, identity })` | Where `search()` looks — a **function**, because the namespace usually contains the actor. Commonly shaped like `/strategies/{strategyId}/actors/{actorId}` | `/actors/{actorId}/sessions/{sessionId}` — the session's own records |
 | `searchStrategyId` | Restrict `search()` to **one** extraction strategy. Omit to search across all of them | omitted |
 
 Both are **opaque**: they reach AgentCore's own side as a filter, and this
@@ -621,6 +622,137 @@ Maps `MemoryStore` onto AgentCore's **append-only event log** (`CreateEvent` / `
 - `put` appends; `list` is `ListEvents` (**window / episodic memory is the natural fit**); `get`/`delete` by id are list-then-find (server-assigned event ids); `forget` lists + deletes each event (no `DeleteSession`).
 - `putIfVersion` is emulated client-side; `seen` / `feedback` are in-process shadow state — don't survive process restart. Use Redis for durable recognition.
 - `search()` **is** wired (since 7.15) onto `RetrieveMemoryRecords` — but it takes the query as **text** in `options.text`, not the vector, because AgentCore embeds and ranks server-side. Omit the text and it throws rather than returning an empty list that reads like "no matches". What comes back is AgentCore's own extracted records, not the entries you `put()`. Full story: [AgentCore Memory](doc:agentcore).
+
+## Write options: extraction and a namespace per tenant
+
+A managed memory service does more than keep what it is handed: it **extracts**
+long-term records from it — facts, summaries, preferences — and files them under
+namespaces. Two things about that are yours to decide, per write, in names that
+belong to no vendor:
+
+| Option | What it asks |
+|---|---|
+| `extraction: 'skip'` | Store this entry, but derive nothing long-term from it — a turn that must not become a remembered fact, a scratch note |
+| `namespaceScope: { … }` | The values the service puts into the namespaces its **derived** records are filed under — usually one tenant's |
+
+On `defineMemory`, `writeOptions: { extraction: 'skip' }` applies to every write
+the memory makes, and `namespaceScope` scopes the memory as a whole — its writes
+are filed under it and its searches are confined to it. The example runs offline
+against a stand-in AgentCore client; drop that line and pass `region` for the
+real service:
+
+<CodeFile path="examples/memory/12-write-options.ts" region="write-options" title="examples/memory/12-write-options.ts (region: write-options)" />
+
+A function of the run's identity is the multi-tenant shape: each write is filed
+under the tenant it is for, and each search reads only that tenant's. The scope
+comes from the identity you pass to `run({ identity })` and from nothing else —
+not the message, not the model's reply, not a tool's arguments — and a call
+cannot replace it: a memory that binds one refuses a write or search that brings
+its own. A fixed object (`namespaceScope: { tenantid: 'acme' }`) is right only
+for a deployment that serves one tenant. A scope that comes back empty or
+malformed for some identity refuses that write or search — never a shared
+namespace.
+
+**Reads follow the same rule as writes.** A scope that filed one tenant's
+records must never let a later read see another's, so the search gets the same
+scope (`SearchOptions.namespaceScope`) and `searchNamespace` is handed it. Build
+the namespace from it, one variable per path segment, and keep the person in it:
+
+```ts
+// The strategy's namespace template on the memory resource:
+//   /tenants/{tenantid}/actors/{actorId}/facts
+searchNamespace: ({ actorId, namespaceScope }) =>
+  `/tenants/${namespaceScope?.tenantid}/actors/${actorId}/facts`,
+```
+
+The store checks this by rendering, not by looking: it asks `searchNamespace`
+again with canary values, and refuses — naming the variable — a namespace that
+ignores the scope, puts a variable inside a segment, or only happens to contain
+a value. A namespace that stops at the tenant is refused for an identity that
+names a principal: AgentCore's extracted facts and preferences are personal, and
+a tenant-wide namespace would serve Ada's to Bob. Set `searchAcrossPrincipals:
+true` on the store only for a memory the whole tenant shares on purpose.
+
+For a multi-tenant deployment, build the store with `requireNamespaceScope:
+true`: a memory, a `defineRAG` or a direct call that forgot its scope is then
+refused by name instead of reading or filing under a namespace no tenant owns.
+A store that has served one scoped call refuses unscoped ones from then on even
+without the flag, and every refusal comes before any call to AgentCore: an
+identity with no `conversationId` (it would share one session), a
+`searchNamespace` that returns no path segment (an empty prefix matches every
+record), and a scope resolver that throws all stop the call, never widen it.
+`namespaceScope` is allowed on a `readOnly: true` memory, which is how the
+records AgentCore extracted are read back, and refused beside `corpus`, whose
+memory runs under the corpus identity rather than the person's.
+
+…or per write, on the port: `store.put(identity, entry, { extraction: 'skip' })`
+(also `putMany` and `putIfVersion`).
+
+<Callout type="warn" title="Honoured, or refused by name — never ignored">
+A store that dropped `namespaceScope` would file one tenant's derived records
+where another tenant's are read; a dropped `'skip'` would turn a turn you kept out
+of long-term memory into a remembered fact. Both look exactly like working. So a
+store **declares** what it honours (`writeOptions`) and refuses everything else
+with `UnsupportedMemoryWriteOptionError`, before writing anything — and
+`defineMemory` checks the declaration before the first turn.
+</Callout>
+
+| Store | `extraction: 'skip'` | `namespaceScope` |
+|---|---|---|
+| `AgentCoreStore` | ✅ `CreateEvent` `extractionMode: 'SKIP'` — the event stays in short-term memory | ✅ `CreateEvent` `extractionConfig.namespaceVariables`, substituted into the memory's namespace templates |
+| `memoryBankStore` | refused — every write is itself a long-term memory | refused — its scope is `scopeFor(identity)` |
+| `InMemoryStore`, `sqliteVectorStore`, `pgVectorStore`, `s3VectorsStore`, `RedisStore` | refused — nothing is ever extracted | refused — no derived records; the identity is the boundary |
+| `staticVectorStore` | refused (every write is) | refused (every write is) |
+| `BedrockAgentMemory` | no write port | no write port |
+
+Keep the tenant → value mapping **one-to-one**. AgentCore accepts at most 5
+variables, keys of 1–32 characters matching `[a-z][a-z0-9]*` and values of 1–64
+characters matching `[a-z0-9][a-z0-9-_]*`; `AgentCoreStore` checks that before
+sending and refuses by variable name — never quoting the value, which names a
+tenant. A mapping that lowercases or truncates tenant ids to fit would merge two
+tenants' namespaces, so use `agentCoreNamespaceValue(tenant)`: it is one-to-one
+into that alphabet (`'acme'` → `'vacme_z'`, `'Acme'` → `'v_0041cme_z'`), never makes
+one tenant's value the beginning of another's, refuses an empty value, and refuses
+rather than truncates one that will not fit. The keys
+themselves are declared on the memory resource (`namespaceKeys`, used in each
+strategy's `namespaceTemplates`).
+
+**What a search keeps.** `searchNamespace` is handed the ids, the identity and
+the scope (`({ actorId, sessionId, identity, namespaceScope }) => …`). AgentCore matches
+`namespace` as a string PREFIX, so `search()` keeps only records filed at that
+namespace or under it, on whole path segments (`/tenants/v1` never returns
+`/tenants/v12`), and drops a record that reports no namespace.
+
+Two more cases are refused rather than guessed. An actor id can contain `/` (its
+escape is `/` plus four hex digits), so `bob@x.com.au`'s id extends
+`bob@x.com`'s by whole segments; when the namespace you search ends with
+`{actorId}`, a record filed under a continuation that starts with four
+uppercase hex digits is dropped, because it may be that other actor's. Keep your
+own sub-namespaces under a literal segment (`/actors/{actorId}/sessions/…`) that
+does not itself start with four uppercase hex digits, and they are unaffected.
+And a namespace containing `*` is refused by name: a
+wildcard cannot be checked for ownership, and matching nothing would look like
+an empty memory.
+
+`AgentCoreStore` declares the options only when they can reach AgentCore intact:
+an injected `AgentCoreLikeClient` must say `forwardsWriteOptions: true`, and the
+installed `@aws-sdk/client-bedrock-agentcore` must model `extractionMode` and
+`extractionConfig` (an older one's serializer would drop them without a word).
+Otherwise both are refused by name, with the fix. One limit, stated: a store
+written before this release ignores a third argument it never knew about —
+`defineMemory` checks `writeOptions` before passing any; check it yourself
+(`refuseUnhonouredWriteOptions`) when calling `put` directly.
+
+**Writing your own store.** The per-write argument is `MemoryWriteOptions`;
+`defineMemory` takes `MemoryWriteOptionsConfig` for `writeOptions` and a
+`MemoryNamespaceScope` (fixed values, or a function of the identity) for
+`namespaceScope`. A store that declares `'namespaceScope'` must also confine a
+search to `SearchOptions.namespaceScope` when it is given. A store declares the options it honours as a
+list of `MemoryWriteOptionName` — `MEMORY_WRITE_OPTION_NAMES` is every one of
+them. `requestedWriteOptions(options)` gives the names a write actually asks for
+(checking their shape without echoing a value), and a store with no server-side
+extraction refuses with the shared reason `NO_SERVER_EXTRACTION`, so every such
+store says the same thing and names the same fix.
 
 ## BedrockAgentMemory (legacy Bedrock Agents — read-only)
 

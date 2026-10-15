@@ -42,6 +42,7 @@
 import type { LLMProvider } from '../provider-contract/types.js';
 import type { Embedder } from './embedding/index.js';
 import type { MemoryStore } from './store/index.js';
+import type { MemoryNamespaceScope, MemoryWriteOptionsConfig } from './store/writeOptions.js';
 import type { MemoryIdentity } from './identity/index.js';
 import type { RetrievalStrategy } from './retrieval/types.js';
 
@@ -549,6 +550,31 @@ export interface DefineMemoryOptionsBase {
 
   /** Which claim the injected block makes. See {@link MemoryDefinition.flavor}. */
   readonly flavor?: MemoryFlavor;
+
+  /**
+   * What every write of this memory asks the store to do with it — today
+   * `extraction: 'skip'`, which keeps the writes out of long-term extraction.
+   *
+   * Checked here, before any turn runs: an option the store does not declare in
+   * `MemoryStore.writeOptions` is refused by name. Refused with `readOnly` too —
+   * a memory that never writes has nothing to apply them to.
+   */
+  readonly writeOptions?: MemoryWriteOptionsConfig;
+
+  /**
+   * The namespace scope of this memory — usually one tenant's — for its writes
+   * AND its reads: `(identity) => ({ tenantid: … })`, resolved from the run's
+   * identity and from nothing else (never the message, the model or a tool).
+   *
+   * Writes are filed under it (`MemoryWriteOptions.namespaceScope`) and every
+   * search is confined to it (`SearchOptions.namespaceScope`), so a scope can
+   * never make a later read see another tenant's records. Allowed on a
+   * `readOnly` memory — the one that reads what the service extracted. Checked
+   * here, before any turn runs: a store that does not declare `'namespaceScope'`
+   * in `MemoryStore.writeOptions` is refused by name. A scope that comes back
+   * empty or malformed refuses that write or search.
+   */
+  readonly namespaceScope?: MemoryNamespaceScope;
 }
 
 export interface DefineEpisodicOptions extends DefineMemoryOptionsBase {

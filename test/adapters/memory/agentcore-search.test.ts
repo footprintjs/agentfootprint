@@ -47,7 +47,15 @@ function retrievingClient(
     deleteEvent: async () => undefined,
     retrieveRecords: async (input) => {
       asked.push({ ...input });
-      return { records };
+      // As AgentCore answers: each record filed under the namespace asked for,
+      // unless the test says where it is filed.
+      return {
+        records: records.map((r) =>
+          r.namespaces !== undefined || r.namespace !== undefined
+            ? r
+            : { ...r, namespaces: [input.namespace] },
+        ),
+      };
     },
   };
 }
@@ -273,7 +281,17 @@ describe('AgentCoreStore.search — the SDK mapping', () => {
         async send(cmd: unknown): Promise<unknown> {
           const typed = cmd as { __name: string; input: Record<string, unknown> };
           sent.push({ command: typed.__name, input: typed.input });
-          return result;
+          // Records come back filed under the namespace the request asked for.
+          const summaries = (result as { memoryRecordSummaries?: Record<string, unknown>[] })
+            ?.memoryRecordSummaries;
+          return summaries === undefined
+            ? result
+            : {
+                memoryRecordSummaries: summaries.map((x) => ({
+                  namespaces: [typed.input['namespace']],
+                  ...x,
+                })),
+              };
         }
       } as unknown as BedrockAgentCoreSdkModule['BedrockAgentCoreClient'],
       CreateEventCommand: command('CreateEvent') as never,

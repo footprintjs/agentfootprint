@@ -308,7 +308,12 @@ describe('AgentCoreStore — an unreadable entry', () => {
           if (name === 'RetrieveMemoryRecords') {
             return {
               memoryRecordSummaries: [
-                { memoryRecordId: 'rec-1', content: 'Ada prefers window seats.', score: 0.9 },
+                {
+                  memoryRecordId: 'rec-1',
+                  content: 'Ada prefers window seats.',
+                  score: 0.9,
+                  namespaces: [c.input['namespace']],
+                },
               ],
             };
           }
@@ -466,7 +471,12 @@ describe('AgentCoreStore — string blobs on every read path', () => {
           if (name === 'RetrieveMemoryRecords') {
             return {
               memoryRecordSummaries: [
-                { memoryRecordId: 'rec-1', content: 'Ada prefers window seats.', score: 0.9 },
+                {
+                  memoryRecordId: 'rec-1',
+                  content: 'Ada prefers window seats.',
+                  score: 0.9,
+                  namespaces: [c.input['namespace']],
+                },
               ],
             };
           }

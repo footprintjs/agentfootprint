@@ -37,6 +37,11 @@ import type { MemoryEntry } from '../../memory/entry/index.js';
 import type { MemoryIdentity } from '../../memory/identity/index.js';
 import { identityNamespace } from '../../memory/identity/index.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
+import {
+  NO_SERVER_EXTRACTION,
+  refuseUnhonouredWriteOptions,
+  type MemoryWriteOptions,
+} from '../../memory/store/writeOptions.js';
 
 /**
  * Minimal `ioredis` client surface this adapter needs. Defined locally so
@@ -201,8 +206,17 @@ export class RedisStore implements MemoryStore {
     return entry;
   }
 
-  async put<T = unknown>(identity: MemoryIdentity, entry: MemoryEntry<T>): Promise<void> {
+  /**
+   * Write options: none honoured — Redis keeps the entry and derives nothing
+   * from it, so `extraction` and `namespaceScope` are refused by name.
+   */
+  async put<T = unknown>(
+    identity: MemoryIdentity,
+    entry: MemoryEntry<T>,
+    options?: MemoryWriteOptions,
+  ): Promise<void> {
     this.ensureOpen('put');
+    refuseUnhonouredWriteOptions('RedisStore', undefined, options, NO_SERVER_EXTRACTION);
     const payload = JSON.stringify(entry);
     const eKey = this.entryKey(identity, entry.id);
     if (entry.ttl !== undefined) {
@@ -218,9 +232,11 @@ export class RedisStore implements MemoryStore {
   async putMany<T = unknown>(
     identity: MemoryIdentity,
     entries: readonly MemoryEntry<T>[],
+    options?: MemoryWriteOptions,
   ): Promise<void> {
     this.ensureOpen('putMany');
     if (entries.length === 0) return;
+    refuseUnhonouredWriteOptions('RedisStore', undefined, options, NO_SERVER_EXTRACTION);
     const pipeline = this.client.pipeline();
     const ids: string[] = [];
     const now = Date.now();
@@ -248,8 +264,10 @@ export class RedisStore implements MemoryStore {
     identity: MemoryIdentity,
     entry: MemoryEntry<T>,
     expectedVersion: number,
+    options?: MemoryWriteOptions,
   ): Promise<PutIfVersionResult> {
     this.ensureOpen('putIfVersion');
+    refuseUnhonouredWriteOptions('RedisStore', undefined, options, NO_SERVER_EXTRACTION);
     const eKey = this.entryKey(identity, entry.id);
     const idxKey = this.indexKey(identity);
     const payload = JSON.stringify(entry);

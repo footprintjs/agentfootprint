@@ -34,6 +34,9 @@ export {
 export {
   AgentCoreStore,
   UnreadableMemoryEntryError,
+  // A tenant id in the alphabet AgentCore admits for a namespace variable,
+  // one-to-one — what `defineMemory({ namespaceScope })` and `searchNamespace` map with.
+  agentCoreNamespaceValue,
   type AgentCoreStoreOptions,
   type AgentCoreLikeClient,
   type AgentCoreEvent,

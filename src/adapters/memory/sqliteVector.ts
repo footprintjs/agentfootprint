@@ -84,6 +84,11 @@
 
 import { identityNamespace } from '../../memory/identity/index.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
+import {
+  NO_SERVER_EXTRACTION,
+  refuseUnhonouredWriteOptions,
+  type MemoryWriteOptions,
+} from '../../memory/store/writeOptions.js';
 import { SqliteUnavailableError } from '../../lib/sqliteUnavailable.js';
 import {
   EmbedderMismatchError as SharedEmbedderMismatchError,
@@ -569,19 +574,28 @@ export function sqliteVectorStore(options: SqliteVectorStoreOptions): SqliteVect
       return rowToEntry<T>(row);
     },
 
-    async put<T = unknown>(identity: MemoryIdentity, entry: MemoryEntry<T>): Promise<void> {
-      await this.putMany(identity, [entry]);
+    // Write options: none honoured (refused by name in putMany, below).
+    async put<T = unknown>(
+      identity: MemoryIdentity,
+      entry: MemoryEntry<T>,
+      options?: MemoryWriteOptions,
+    ): Promise<void> {
+      await this.putMany(identity, [entry], options);
     },
 
     // eslint-disable-next-line @typescript-eslint/require-await
     async putMany<T = unknown>(
       identity: MemoryIdentity,
       entries: readonly MemoryEntry<T>[],
+      options?: MemoryWriteOptions,
     ): Promise<void> {
       open('write entries');
       // The port requires an empty batch to be a no-op — callers rely on it to
       // skip a round-trip on a turn that produced nothing.
       if (entries.length === 0) return;
+      // Nothing here is ever extracted, so a write option is refused by name —
+      // never dropped, which would read exactly like honouring it.
+      refuseUnhonouredWriteOptions('sqliteVectorStore', undefined, options, NO_SERVER_EXTRACTION);
       const ns = identityNamespace(identity);
 
       // ONE transaction for the batch. The port says atomicity is not
@@ -610,8 +624,10 @@ export function sqliteVectorStore(options: SqliteVectorStoreOptions): SqliteVect
       identity: MemoryIdentity,
       entry: MemoryEntry<T>,
       expectedVersion: number,
+      options?: MemoryWriteOptions,
     ): Promise<PutIfVersionResult> {
       open('write an entry');
+      refuseUnhonouredWriteOptions('sqliteVectorStore', undefined, options, NO_SERVER_EXTRACTION);
       const ns = identityNamespace(identity);
       // Read and write inside one transaction, so the check and the write
       // cannot be separated by another writer — which is the entire point of a
