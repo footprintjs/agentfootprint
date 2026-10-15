@@ -744,7 +744,10 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
         // A FAILED call's result is the thrown text — a connection string, a
         // stack line, a provider's body. A person reads the fixed words unless
         // the app chose to serve the record's own.
-        const failed = payload.error === true && toolErrors !== 'served';
+        // Any `error` but an explicit `false` counts — under a policy that
+        // selects the key, the flag itself is served as the placeholder.
+        const failed =
+          payload.error !== undefined && payload.error !== false && toolErrors !== 'served';
         out.push({
           type: 'TOOL_CALL_RESULT',
           messageId:

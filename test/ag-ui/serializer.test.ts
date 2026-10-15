@@ -1044,6 +1044,18 @@ describe('agUiSerializer — a failed tool call says only that it failed', () =>
     expect(only(out, 'TOOL_CALL_RESULT')[0]!.content).toContain('ECONNREFUSED');
   });
 
+  it('a failure flag a policy served as the placeholder still withholds the text', () => {
+    const { out } = feed([
+      ...failing.slice(0, 2),
+      ev(
+        t('stream.tool_end'),
+        { toolCallId: 'c1', result: 'ECONNREFUSED postgres://admin:hunter2@db', error: 'REDACTED' },
+        { rsid: 'tool-calls#2' },
+      ),
+    ]);
+    expect(only(out, 'TOOL_CALL_RESULT')[0]).toMatchObject({ content: AG_UI_TOOL_FAILED });
+  });
+
   it('a call that succeeded is unaffected', () => {
     const { out } = feed([
       ...failing.slice(0, 2),
