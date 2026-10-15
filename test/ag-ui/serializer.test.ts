@@ -842,7 +842,6 @@ describe('agUiSerializer — which run, and a run that continues another', () =>
       ),
     ];
     const paused = feed(events);
-    expect(paused.s.suspension()).toBeUndefined();
     const end = paused.s.settle({ kind: 'paused' });
     const finished = end.at(-1) as Extract<AgUiEvent, { type: 'RUN_FINISHED' }>;
     if (finished.outcome?.type !== 'interrupt') throw new Error('expected an interrupt');
@@ -904,5 +903,50 @@ describe('agUiSerializer — which run, and a run that continues another', () =>
       content: 'yes',
       subagentRunId: 'ag-1/agent/0/x',
     });
+  });
+});
+
+describe('agUiSerializer — a pause is kept before the caller is told', () => {
+  const events = [
+    ev(t('agent.turn_start'), { turnIndex: 0 }, { rsid: 'seed#0' }),
+    ev(
+      t('stream.tool_start'),
+      { toolName: 'ask', toolCallId: 'c1', args: {} },
+      { rsid: 'tool-calls#2' },
+    ),
+    ev(
+      t('pause.request'),
+      { reason: 'r', questionPayload: { question: 'Sure?' } },
+      { rsid: 'tool-calls#paused', runId: 'consumer-scope' },
+    ),
+  ];
+
+  it('the record asked for before settling is the one the settlement hands out', () => {
+    const { s } = feed(events);
+    const kept = s.suspension('person');
+    const end = s.settle({ kind: 'paused', awaiting: 'person' });
+    const finished = end.at(-1) as Extract<AgUiEvent, { type: 'RUN_FINISHED' }>;
+    if (finished.outcome?.type !== 'interrupt') throw new Error('expected an interrupt');
+    expect(kept?.interruptId).toBe(finished.outcome.interrupts[0]!.id);
+    expect(s.suspension()).toEqual(kept);
+  });
+
+  it('…for a tool the client runs too', () => {
+    const { s } = feed(events);
+    const kept = s.suspension('caller');
+    s.settle({ kind: 'paused', awaiting: 'caller' });
+    expect(kept?.call).toEqual({
+      toolCallId: 'ag-run/tool/0/tool-calls#2',
+      mount: [],
+      client: true,
+    });
+    expect(s.suspension()).toEqual(kept);
+  });
+
+  it('a pause that could not be kept settles as a failure, and leaves no record', () => {
+    const { s } = feed(events);
+    s.suspension('person');
+    expect(s.settle({ kind: 'failed' }).at(-1)).toMatchObject({ type: 'RUN_ERROR' });
+    expect(s.suspension()).toBeUndefined();
   });
 });

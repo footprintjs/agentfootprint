@@ -172,10 +172,15 @@ export interface AgUiSerializerOptions {
   readonly resume?: AgUiSuspension;
 }
 
-/** One run's AG-UI translation — and, once it paused, what its continuation needs. */
+/** One run's AG-UI translation — and, once it pauses, what its continuation needs. */
 export interface AgUiTranslation extends RunTranslation<AgUiEvent> {
-  /** After `settle({ kind: 'paused' })`: the record to `resume` from. `undefined` otherwise. */
-  suspension(): AgUiSuspension | undefined;
+  /**
+   * The record to `resume` from. Before settling, what a `'paused'` settlement
+   * with the same `awaiting` will hand out (keep it first, then settle); after
+   * `settle({ kind: 'paused' })`, what it handed out; after any other ending,
+   * `undefined`.
+   */
+  suspension(awaiting?: 'person' | 'caller'): AgUiSuspension | undefined;
 }
 
 /** Said by `RUN_ERROR` when the run failed without filing an `error.fatal` event to quote. */
@@ -846,6 +851,36 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
     });
   }
 
+  /**
+   * What a pause leaves for its continuation, as of now: on whom it waits
+   * decides whether the open call is the client's (a frontend tool) or the
+   * interrupt's. Pure apart from minting the interrupt once.
+   */
+  const pausedRecord = (
+    awaiting: 'person' | 'caller' | undefined,
+  ): { readonly record: AgUiSuspension; readonly clientCall?: string } => {
+    const at = pause?.scope ?? root;
+    const open = at.calls[at.calls.length - 1];
+    if (awaiting === 'caller' && open !== undefined) {
+      return {
+        record: suspensionOf(undefined, {
+          toolCallId: open.id,
+          mount: [...at.mount],
+          client: true,
+        }),
+        clientCall: open.id,
+      };
+    }
+    return {
+      record: suspensionOf(
+        interruptOf().id,
+        open === undefined
+          ? undefined
+          : { toolCallId: open.id, mount: [...at.mount], client: false },
+      ),
+    };
+  };
+
   /** What `RUN_STARTED` is followed by in a continuation: the scopes and steps it re-opens. */
   const reopened: readonly AgUiEvent[] =
     options.resume === undefined ? [] : restore(options.resume);
@@ -863,7 +898,10 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
     out.push(...reopened);
   };
 
-  const interruptOf = (): AgUiInterrupt => {
+  /** The interrupt a person-awaited pause hands out — minted once, so a record kept before settling names it. */
+  let interrupt: AgUiInterrupt | undefined;
+  const interruptOf = (): AgUiInterrupt => (interrupt ??= mintInterrupt());
+  const mintInterrupt = (): AgUiInterrupt => {
     if (pause === undefined) return { id: ids.next('interrupt', 'run').id, reason: 'paused' };
     const { event, scope } = pause;
     const payload = record(event.payload);
@@ -928,16 +966,11 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
           });
           return out;
         case 'paused': {
-          const at = pause?.scope ?? root;
-          const open = at.calls[at.calls.length - 1];
-          if (settlement.awaiting === 'caller' && open !== undefined) {
+          const { record, clientCall } = pausedRecord(settlement.awaiting);
+          suspended = record;
+          if (clientCall !== undefined) {
             // A tool the client runs: the run COMPLETED this segment and left
             // the call for the application to answer in its next input.
-            suspended = suspensionOf(undefined, {
-              toolCallId: open.id,
-              mount: [...at.mount],
-              client: true,
-            });
             endAllNested(out, () => (subagentRunId) => ({
               type: 'SUBAGENT_FINISHED',
               subagentRunId,
@@ -948,18 +981,12 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
               type: 'RUN_FINISHED',
               threadId,
               runId,
-              outcome: { type: 'success', pendingToolCallIds: [open.id] },
+              outcome: { type: 'success', pendingToolCallIds: [clientCall] },
               ...(runMetadata() !== undefined && { metadata: runMetadata() }),
             });
             return out;
           }
           const interrupt = interruptOf();
-          suspended = suspensionOf(
-            interrupt.id,
-            open === undefined
-              ? undefined
-              : { toolCallId: open.id, mount: [...at.mount], client: false },
-          );
           endAllNested(out, (scope) => (subagentRunId) => ({
             type: 'SUBAGENT_FINISHED',
             subagentRunId,
@@ -1007,7 +1034,10 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
           return out;
       }
     },
-    suspension: () => suspended,
+    suspension: (awaiting) => {
+      if (settled) return suspended;
+      return pausedRecord(awaiting).record;
+    },
   };
 }
 

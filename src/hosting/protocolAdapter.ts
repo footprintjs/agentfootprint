@@ -50,10 +50,16 @@ export interface RunTranslation<TEvent> {
   /** The closing events. After this, `event` returns nothing. */
   settle(settlement: RunSettlement): readonly TEvent[];
   /**
-   * After a `'paused'` settlement: what the protocol needs to continue this run
-   * in a later request — the ids it handed the caller for the answer. Plain
-   * JSON, kept with the paused run; `undefined` before or after any other
-   * settlement. Optional: a protocol with nothing to remember omits it.
+   * What the protocol needs to continue this run in a later request once it
+   * pauses — the ids it hands the caller for the answer. Plain JSON, kept with
+   * the paused run.
+   *
+   * Asked BEFORE settling `'paused'` (with the same `awaiting`), it is the
+   * record that settlement will hand out — so a host stores the pause first
+   * and tells the caller only once it is kept (and settles `'failed'` when it
+   * could not be). Asked after, it is what the pause handed out; after any
+   * other settlement, `undefined`. Optional: a protocol with nothing to
+   * remember omits it.
    */
-  suspension?(): unknown;
+  suspension?(awaiting?: 'person' | 'caller'): unknown;
 }
