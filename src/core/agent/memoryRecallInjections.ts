@@ -45,7 +45,7 @@ import { memoryInjectionKey, retrievalEvidenceKey } from '../../memory/define.ty
 import type { MemoryFlavor } from '../../memory/define.types.js';
 import type { RetrievalEvidence } from '../../memory/retrieval/index.js';
 import type { ContextRole, ContextSource } from '../../events/types.js';
-import type { ActiveInjection } from '../../lib/injection-engine/types.js';
+import type { ActiveInjection } from '../../injection-engine/types.js';
 
 interface RecallMessage {
   readonly role: ContextRole;

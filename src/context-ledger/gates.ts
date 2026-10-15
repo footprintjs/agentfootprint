@@ -13,13 +13,13 @@
  * `minOffers` everything passes.
  */
 
-import { rankEntries } from '../lib/injection-engine/entryScorer.js';
+import { rankEntries } from '../injection-engine/entryScorer.js';
 import type {
   EntryScorer,
   EntryScorerInput,
   EntryScoring,
-} from '../lib/injection-engine/entryScorer.js';
-import type { Injection } from '../lib/injection-engine/types.js';
+} from '../injection-engine/entryScorer.js';
+import type { Injection } from '../injection-engine/types.js';
 import type { ToolGatePredicate } from '../tools/toolProvider.js';
 import type { ContextLedger, PieceKind } from './types.js';
 

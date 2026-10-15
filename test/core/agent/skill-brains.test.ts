@@ -15,8 +15,8 @@ import { describe, it, expect } from 'vitest';
 import { Agent, type SkillGraphOptions } from '../../../src/index.js';
 import { defineSkill, skillGraph } from '../../../src/injection-engine.js';
 import { mock } from '../../../src/llm-providers.js';
-import type { Injection } from '../../../src/lib/injection-engine/types.js';
-import type { IntentScorer } from '../../../src/lib/injection-engine/intentScorer.js';
+import type { Injection } from '../../../src/injection-engine/types.js';
+import type { IntentScorer } from '../../../src/injection-engine/intentScorer.js';
 import type { LLMProvider } from '../../../src/provider-contract/types.js';
 
 // ── Toolkit ──────────────────────────────────────────────────────────────

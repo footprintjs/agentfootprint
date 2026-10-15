@@ -1,0 +1,750 @@
+/**
+ * THE WALK — every producer of a `role: 'user'` message in this tree,
+ * classified, with nowhere for a new one to hide (9.86.0).
+ *
+ * ── WHY THIS FILE EXISTS ──────────────────────────────────────────────────
+ *
+ * 9.84.0 built the authorship registry (`lib/saidByPerson.ts`) and wrote its
+ * own count in prose: "FIVE kinds of `role: 'user'` message that nobody said".
+ * The registry held four openings. The tree held SEVEN producers of a
+ * user-role message that reaches `scope.history`, and the two that were
+ * missing are the two that name things a routing rule watches for:
+ *
+ *   • the budget wrap-up (`stages/wrapUp.ts`) — its sentence contained
+ *     "Do not request tools", so a rule written the documented way,
+ *     `saidByPerson(ctx).some((m) => m.content.includes('tools'))`, matched on
+ *     the library's own instruction; and the window's refusal engine, which
+ *     will not let a strategy drop "the current request", could pin that
+ *     request on the framework's own frame and let the real one be dropped
+ *     underneath it;
+ *   • the stepped-skill nudge (`stages/stepNudge.ts`) — its body lists a skill
+ *     id and every unrun step's TOOL NAME, which is exactly the text a rule
+ *     scanning history is looking for.
+ *
+ * A count in a comment is a claim; the tree is the fact. So this file WALKS
+ * the tree — with the TypeScript compiler's own parser, the way
+ * `skill-graph-fence.test.ts` walks the import graph — finds every place a
+ * `role: 'user'` object is constructed, and requires each one to be in exactly
+ * one of three lists, each entry carrying the reason it is there:
+ *
+ *   (a) AUTHORED FRAME — this library wrote it in a person's voice, and it is
+ *       recognised as such by `isLibraryAuthoredFrame` (an opening from
+ *       {@link LIBRARY_AUTHORED_PREFIXES}) or by an `injectedBy` marker. Each
+ *       one is also CONSTRUCTED BELOW WITH ITS REAL WRITER and asserted, so a
+ *       writer that stops emitting its opening fails here rather than in
+ *       production.
+ *   (b) PERSON — the content came from a person: the run's request, a
+ *       continuation, a stored conversation's own turn.
+ *   (c) NEVER IN HISTORY — request-only or transcript-only. It rides one
+ *       provider call, or a record of the chat, and is never appended to
+ *       `scope.history`, so no reader of the CONVERSATION can mistake it.
+ *       A reader of the REQUEST can (G17): the time layer's late
+ *       line is the last user-role message of every request under `.time()`,
+ *       and with no registered opening `isSaidByPerson` called it the
+ *       person's. So a request-only line the LIBRARY wrote also names its
+ *       `opening`, which must be in the registry — and is asserted against
+ *       its real writer below.
+ *
+ * A site in none of the three fails with its file and line. That is what turns
+ * "five classes" from a claim into a walk.
+ *
+ * Two things the walk deliberately cannot see, named here rather than left to
+ * be noticed: the DELIVERED injection message (`stages/deliver.ts` copies the
+ * role off the Injection, so there is no literal to find — it is asserted
+ * behaviourally below), and any producer that builds a message from a computed
+ * role. Both are covered by assertions instead of by the scan.
+ *
+ * Test types (Convention 3): contract (the walk itself — every site
+ * classified) · unit (each writer's real output is recognised) · functional
+ * (the model-facing law over the two new frames) · regression (the rule and
+ * the window that the two unregistered frames used to fool).
+ */
+
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join, relative, resolve } from 'node:path';
+
+import ts from 'typescript';
+import { describe, expect, it } from 'vitest';
+
+import { isLibraryAuthoredFrame, isSaidByPerson } from '../../src/index.js';
+import { saidByPerson } from '../../src/injection-engine.js';
+import type { Injection, InjectionContext } from '../../src/injection-engine.js';
+import type { LLMMessage } from '../../src/provider-contract/types.js';
+import { toAnthropicMessages } from '../../src/adapters/llm/anthropicMessageProjection.js';
+import { buildDropNotice } from '../../src/core/agent/window/notice.js';
+import { buildSummaryMessage } from '../../src/core/agent/window/summarize.js';
+import { buildCorrectiveTurn } from '../../src/core/agent/outputEnforcement.js';
+import { buildEvidenceCorrection } from '../../src/core/agent/evidence/gate.js';
+import { currentRequestIndexOf } from '../../src/core/agent/window/currentRequest.js';
+import { WRAP_UP_INSTRUCTION, wrapUpStage } from '../../src/core/agent/stages/wrapUp.js';
+import { buildStepNudgeStage } from '../../src/core/agent/stages/stepNudge.js';
+import type { StepPlan } from '../../src/injection-engine/skillSteps.js';
+import {
+  LIBRARY_AUTHORED_PREFIXES,
+  LIBRARY_NOTE_OPENING,
+  STAGED_DATA_FRAME_PREFIX,
+} from '../../src/lib/saidByPerson.js';
+import { timeLine } from '../../src/core/agent/arguments/serve.js';
+import { figuresConclusionLine } from '../../src/core/agent/evidence/figures.js';
+import { stagedRefsNudgeLine } from '../../src/core/agent/stagedRefs.js';
+import { unprovable, INJECTED_TURN } from '../helpers/modelFacingClaims.js';
+
+const REPO = resolve(__dirname, '../..');
+
+// ─── The three lists ─────────────────────────────────────────────────────
+
+type SiteClass = 'authored-frame' | 'person' | 'never-in-history';
+
+interface Site {
+  readonly cls: SiteClass;
+  /** Why it is in that list. Prose, because the reason is the product. */
+  readonly why: string;
+  /**
+   * On a `never-in-history` line the LIBRARY wrote and serves on the agent's
+   * own request: the registered opening it carries (G17). Absent on a side
+   * request, a transcript row, or a line whose words are the app's.
+   */
+  readonly opening?: string;
+}
+
+/**
+ * Every file that constructs a `role: 'user'` object, with one entry per
+ * construction site IN SOURCE ORDER.
+ *
+ * The count is load-bearing: a new site in a file that is already listed
+ * fails just as loudly as a site in a file that is not, which is the failure
+ * this file exists to produce. Line numbers are deliberately NOT written down
+ * — they move for reasons that have nothing to do with authorship — but a
+ * failure prints them.
+ */
+const SITES: Readonly<Record<string, readonly Site[]>> = {
+  // ── (a) authored frames — the library writing in a person's voice ──
+  'src/core/agent/window/notice.ts': [
+    { cls: 'authored-frame', why: 'the drop notice — opens with DROP_NOTICE_PREFIX' },
+  ],
+  'src/core/agent/window/summarize.ts': [
+    { cls: 'authored-frame', why: 'the compaction frame — opens with COMPACTED_FRAME_PREFIX' },
+    {
+      cls: 'never-in-history',
+      why:
+        "the summarizer's own request: one provider call rendering the folded span. Its " +
+        'answer becomes the frame above; this message is never appended anywhere.',
+    },
+  ],
+  'src/core/agent/outputEnforcement.ts': [
+    {
+      cls: 'authored-frame',
+      why:
+        'the schema-check correction — opens with SCHEMA_CHECK_FRAME_PREFIX, then quotes ' +
+        "the validator's error as data",
+    },
+  ],
+  'src/core/agent/evidence/gate.ts': [
+    {
+      cls: 'authored-frame',
+      why:
+        'the evidence-check correction — opens with EVIDENCE_CHECK_FRAME_PREFIX, then ' +
+        "quotes the model's own flagged values as data",
+    },
+  ],
+  'src/core/agent/stages/wrapUp.ts': [
+    {
+      cls: 'authored-frame',
+      why:
+        'the out-of-budget wrap-up instruction (WRAP_UP_INSTRUCTION) — opens with ' +
+        'WRAP_UP_FRAME_PREFIX since 9.86.0. Registered because it lands in `scope.history` ' +
+        'and is re-read on every later call of the turn.',
+    },
+  ],
+  'src/core/agent/stages/stepNudge.ts': [
+    {
+      cls: 'authored-frame',
+      why:
+        'the stepped-skill nudge — its content is `nudgeTeachingMessage`, which opens ' +
+        'with STEP_NUDGE_FRAME_PREFIX since 9.86.0. Registered because it names a skill id ' +
+        'and every unrun step`s tool name, in `scope.history`.',
+    },
+  ],
+
+  // ── (b) person — the content came from somebody ──
+  'src/core/agent/stages/seed.ts': [
+    {
+      cls: 'person',
+      why:
+        "the run's request: the message `agent.run({ message })` was given, as the `'input'` " +
+        "middleware chain let it through — the fresh run's only entry AND the turn a " +
+        'continuation (`run({ continueFrom })`) appends to the restored conversation. One ' +
+        'owner since 9.112.2: `seed.ts · historyForTurn`; `Agent.ts · applyContinuation` ' +
+        'used to build the continued entry itself, from the raw message, before the chain ran',
+    },
+  ],
+  'src/core/agent/stages/prepareFinal.ts': [
+    {
+      cls: 'person',
+      why:
+        'the memory turn: the run`s own `userMessage` paired with the answer, written to ' +
+        '`scope.newMessages` for the memory writer — a record of what the person said, not a ' +
+        'new message, and never appended to `history`',
+    },
+  ],
+  'src/core/agent/buildMessageApiChart.ts': [
+    { cls: 'person', why: "the one-shot chart's seed: `args.message`, as given" },
+  ],
+  'src/core/agent/buildAgentMessageApiChart.ts': [
+    { cls: 'person', why: "the message-API agent chart's seed: `args.message`, as given" },
+  ],
+  'src/core/LLMCall.ts': [
+    {
+      cls: 'person',
+      why:
+        "the caller's `userMessage`, wrapped as a one-entry list for the messages slot to " +
+        'engineer. LLMCall keeps no `history`.',
+    },
+  ],
+  'src/hosting/conformance/run.ts': [
+    {
+      cls: 'person',
+      why:
+        'a conformance fixture: the user turn of a STORED conversation, built to exercise ' +
+        'a checkpoint store. Never produced by a run.',
+    },
+  ],
+
+  // ── (c) never in history — request-only or transcript-only ──
+  'src/core/agent/stages/callLLM.ts': [
+    {
+      cls: 'never-in-history',
+      why:
+        'the staged-refs nudge: appended to `wireMessages` for ONE request and recomposed ' +
+        'from scratch each iteration. `scope.history` is deliberately untouched — but a ' +
+        'reader of the request sees it last, so it opens with STAGED_DATA_FRAME_PREFIX (G17).',
+      opening: STAGED_DATA_FRAME_PREFIX,
+    },
+    {
+      cls: 'never-in-history',
+      why:
+        "the time layer's late line (step T6b): the tools slot's composition for THIS " +
+        'iteration, appended LAST to `wireMessages` for one request and never to ' +
+        "`scope.history` — the library's conclusion about the person's time words, re-read " +
+        'fresh by every later call. LAST on every request under `.time()` since G16, so it ' +
+        'opens with LIBRARY_NOTE_OPENING (`TIME_LINE_SOURCE`) — never the person (G17).',
+      opening: LIBRARY_NOTE_OPENING,
+    },
+    {
+      cls: 'never-in-history',
+      why:
+        "the evidence gate's late line (the figures dial): the committed recovery carrier's " +
+        '`conclusion`, appended LAST to `wireMessages` on the one request that serves the ' +
+        'revision instruction, never to `scope.history`. Opens with LIBRARY_NOTE_OPENING (G17).',
+      opening: LIBRARY_NOTE_OPENING,
+    },
+  ],
+  'src/lib/time-travel/servedView.ts': [
+    {
+      cls: 'never-in-history',
+      why:
+        'not a producer at all: the REBUILD of the staged-refs nudge, composed post-hoc from ' +
+        'the committed record so a reader can see the one model-facing line the run never ' +
+        'persisted. It goes onto a `ServedView`, which is a reading of a finished run — no ' +
+        'scope, no history, no request.',
+    },
+    {
+      cls: 'never-in-history',
+      why:
+        "not a producer either: the REBUILD of the time layer's late line (step T6b), read " +
+        'from the committed `timeLine` key onto a `ServedView` — a reading of a finished run.',
+    },
+    {
+      cls: 'never-in-history',
+      why:
+        "not a producer either: the REBUILD of the evidence gate's late line, read from the " +
+        'committed `evidenceRecovery` carrier onto a `ServedView` — a reading of a finished run.',
+    },
+  ],
+  'src/core/agent/stages/reliabilityExecution.ts': [
+    {
+      cls: 'never-in-history',
+      why: "the retry feedback line, carried `ephemeral: true` on one attempt's request",
+    },
+  ],
+  'src/core/agent/stages/routeTurn.ts': [
+    {
+      cls: 'never-in-history',
+      why:
+        "the router's own classification call: the person's message quoted into a side " +
+        'request whose only answer is a menu id',
+    },
+  ],
+  'src/injection-engine/constrainedEnumPick.ts': [
+    { cls: 'never-in-history', why: 'the constrained-pick request — one provider call' },
+  ],
+  'src/injection-engine/llmClassifier.ts': [
+    { cls: 'never-in-history', why: 'the classifier request — one provider call' },
+  ],
+  'src/core-flow/Parallel.ts': [
+    { cls: 'never-in-history', why: "the merge call's request over the branches' outputs" },
+  ],
+  'src/memory/stages/summarize.ts': [
+    { cls: 'never-in-history', why: 'the memory summarizer request — one provider call' },
+  ],
+  'src/memory/facts/llmFactExtractor.ts': [
+    { cls: 'never-in-history', why: 'the fact-extraction request — one provider call' },
+  ],
+  'src/memory/beats/llmExtractor.ts': [
+    { cls: 'never-in-history', why: 'the beat-extraction request — one provider call' },
+  ],
+  'src/recorded-chat/recordedChat.ts': [
+    {
+      cls: 'never-in-history',
+      why:
+        'a transcript row `{ role, text }` — the recorded-chat record of a turn, not a ' +
+        'wire message (no `content` field at all)',
+    },
+    { cls: 'never-in-history', why: 'the same transcript row, rebuilt for a forked session' },
+  ],
+
+  // Provider adapters: they translate an LLMMessage the agent already owns
+  // into the vendor's own request shape. Nothing they build is ever read back
+  // into `history` — the direction is one-way, onto the wire.
+  // The two ordinary Anthropic translations and refused-tool recovery text
+  // share the projection; recovery remains a tool message in agent history.
+  'src/adapters/llm/anthropicMessageProjection.ts': [
+    { cls: 'never-in-history', why: 'wire translation: a text turn in the vendor shape' },
+    {
+      cls: 'never-in-history',
+      why: 'wire translation: a refused tool-result recovery text turn; its original history entry remains a marked tool message',
+    },
+    { cls: 'never-in-history', why: 'wire translation: a tool-result turn in the vendor shape' },
+  ],
+  'src/adapters/llm/BedrockProvider.ts': [
+    { cls: 'never-in-history', why: 'wire translation: a text turn in the vendor shape' },
+    { cls: 'never-in-history', why: 'wire translation: a tool-result turn in the vendor shape' },
+  ],
+  'src/adapters/llm/GeminiProvider.ts': [
+    { cls: 'never-in-history', why: 'wire translation: a text turn in the vendor shape' },
+    { cls: 'never-in-history', why: 'wire translation: a tool-result turn in the vendor shape' },
+  ],
+  'src/adapters/llm/OpenAIProvider.ts': [
+    { cls: 'never-in-history', why: 'wire translation: a text turn in the vendor shape' },
+  ],
+  'src/adapters/llm/BrowserOpenAIProvider.ts': [
+    { cls: 'never-in-history', why: 'wire translation: a text turn in the vendor shape' },
+  ],
+};
+
+// ─── The scan ────────────────────────────────────────────────────────────
+
+/** Every `.ts` file under `src/`, in a stable order. */
+function sourceFiles(dir: string, out: string[] = []): string[] {
+  for (const entry of readdirSync(dir).sort()) {
+    const p = join(dir, entry);
+    if (statSync(p).isDirectory()) sourceFiles(p, out);
+    else if (p.endsWith('.ts') && !p.endsWith('.d.ts')) out.push(p);
+  }
+  return out;
+}
+
+/**
+ * Every CONSTRUCTION of an object with `role: 'user'`, as `file:line`.
+ *
+ * The compiler's parser, not a grep: a `role: 'user' | 'assistant'` TYPE
+ * member is a PropertySignature and is not a producer, and a comment quoting
+ * the string is not a producer either. Both are all over this tree, and a
+ * regex walk would drown the list in them.
+ */
+function userMessageSites(): ReadonlyArray<{ file: string; line: number }> {
+  // Parsed ONCE per suite (9.86.1). Every `it` below called this fresh, so
+  // the tree was parsed three times, and under CI's v8-instrumented coverage
+  // job each parse took over five seconds — past vitest's default budget —
+  // while the plain test job passed and so did the local gate. The walk is
+  // O(src/), and it says so with its own budget on each test below.
+  if (userMessageSitesMemo !== undefined) return userMessageSitesMemo;
+  const found: Array<{ file: string; line: number }> = [];
+  for (const file of sourceFiles(join(REPO, 'src'))) {
+    const text = readFileSync(file, 'utf8');
+    const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
+    const visit = (node: ts.Node): void => {
+      if (ts.isPropertyAssignment(node) && node.name.getText(sf) === 'role') {
+        const init = node.initializer;
+        const literal = ts.isStringLiteral(init)
+          ? init.text
+          : ts.isAsExpression(init) && ts.isStringLiteral(init.expression)
+          ? init.expression.text
+          : undefined;
+        if (literal === 'user') {
+          const { line } = sf.getLineAndCharacterOfPosition(node.getStart(sf));
+          found.push({ file: relative(REPO, file), line: line + 1 });
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sf);
+  }
+  userMessageSitesMemo = found;
+  return found;
+}
+let userMessageSitesMemo: ReadonlyArray<{ file: string; line: number }> | undefined;
+
+/** The walk reads every file under `src/`; its budget is stated, not the default. */
+const WALK_BUDGET = { timeout: 60_000 };
+
+// ─── Contract: the walk ──────────────────────────────────────────────────
+
+describe("every `role: 'user'` producer in src/ is classified", () => {
+  it(
+    'fails on a producer in a file nobody classified, naming its file and line',
+    WALK_BUDGET,
+    () => {
+      // The failure message IS the fix instruction: add the site to one of the
+      // three lists in this file, with the reason it belongs there.
+      const unclassified = userMessageSites()
+        .filter(({ file }) => SITES[file] === undefined)
+        .map((s) => `${s.file}:${s.line}`);
+      expect(unclassified).toEqual([]);
+    },
+  );
+
+  it(
+    'fails on a NEW producer inside a file that is already listed — the count is the guard',
+    WALK_BUDGET,
+    () => {
+      const perFile = new Map<string, number[]>();
+      for (const { file, line } of userMessageSites()) {
+        perFile.set(file, [...(perFile.get(file) ?? []), line]);
+      }
+      const drift: string[] = [];
+      for (const [file, lines] of perFile) {
+        const listed = SITES[file]?.length ?? 0;
+        if (lines.length !== listed) {
+          drift.push(
+            `${file}: ${lines.length} site(s) at line(s) ${lines.join(', ')}, ${listed} listed`,
+          );
+        }
+      }
+      for (const file of Object.keys(SITES)) {
+        if (!perFile.has(file)) {
+          drift.push(`${file}: listed, but constructs no user message any more`);
+        }
+      }
+      expect(drift).toEqual([]);
+    },
+  );
+
+  it('every classification carries a reason', () => {
+    const reasonless = Object.entries(SITES).flatMap(([file, sites]) =>
+      sites.filter((s) => s.why.trim().length < 20).map((_s, i) => `${file}[${i}]`),
+    );
+    expect(reasonless).toEqual([]);
+  });
+
+  it('the authored-frame list and the prefix registry are the same size, less the delivered class', () => {
+    const framed = Object.values(SITES)
+      .flat()
+      .filter((s) => s.cls === 'authored-frame');
+    const requestOnly = new Set(
+      Object.values(SITES)
+        .flat()
+        .flatMap((s) => (s.opening === undefined ? [] : [s.opening])),
+    );
+    // Six history openings, six construction sites that carry one; plus the
+    // two openings the request-only late lines carry (G17 — the time line and
+    // the figures conclusion share one). The library-authored class with no
+    // opening — a DELIVERED injection message — has no literal to find
+    // (deliver.ts copies the role off the Injection) and is asserted by its
+    // marker below instead.
+    expect(framed.length + requestOnly.size).toBe(LIBRARY_AUTHORED_PREFIXES.length);
+    for (const opening of requestOnly) expect(LIBRARY_AUTHORED_PREFIXES).toContain(opening);
+    expect(LIBRARY_AUTHORED_PREFIXES).toHaveLength(8);
+  });
+
+  it('the registry cannot be extended at runtime by a consumer', () => {
+    // Typed `readonly` and, since 9.86.0, frozen: a consumer holds the same
+    // array every reader in this library holds.
+    expect(Object.isFrozen(LIBRARY_AUTHORED_PREFIXES)).toBe(true);
+    expect(() => (LIBRARY_AUTHORED_PREFIXES as string[]).push('[mine')).toThrow();
+    expect(LIBRARY_AUTHORED_PREFIXES).toHaveLength(8);
+  });
+});
+
+// ─── Unit: vendor-only recovery does not change history ownership ────────
+
+describe('the Anthropic refused-tool wire translation', () => {
+  it('does not turn the recorded tool refusal into a person’s history entry', () => {
+    const history: LLMMessage[] = [
+      { role: 'user', content: 'read the report' },
+      {
+        role: 'assistant',
+        content: '',
+        toolCalls: [
+          {
+            id: 'broken-call',
+            name: 'read_report',
+            args: {},
+            argumentsFailure: { reason: 'invalid-json' },
+          },
+        ],
+      },
+      {
+        role: 'tool',
+        content: 'Tool arguments were incomplete; submit a complete JSON object.',
+        toolCallId: 'broken-call',
+        toolArgumentsFailure: { reason: 'invalid-json' },
+      },
+    ];
+    const before = structuredClone(history);
+    const wire = toAnthropicMessages(history);
+
+    expect(wire[2]).toEqual({
+      role: 'user',
+      content: [{ type: 'text', text: history[2]!.content }],
+    });
+    expect(wire[1]!.content).toEqual([
+      { type: 'text', text: expect.stringContaining('was not executed') },
+    ]);
+    expect(history).toEqual(before);
+    expect(history[2]!.role).toBe('tool');
+    expect(history.filter(isSaidByPerson)).toEqual([history[0]]);
+  });
+});
+
+// ─── Unit: each request-only late line's REAL writer opens with its opening (G17) ───
+
+describe('the request-only late lines, built by their real writers', () => {
+  it('the time line, the figures conclusion and the staged-refs nudge are never a person’s', () => {
+    const lines = [
+      timeLine(["This turn's time: Friday 2026-10-09 08:40 America/Los_Angeles (UTC-07:00)."])!,
+      figuresConclusionLine([{ value: '53.2', shape: 'figure' } as never])!,
+      stagedRefsNudgeLine({
+        refs: [{ ref: 'art_x', kind: 'dataset/rows' } as never],
+        refsOmitted: 0,
+        tools: ['compute'],
+      }),
+    ];
+    for (const content of lines) {
+      const msg = { role: 'user', content };
+      expect(isLibraryAuthoredFrame(msg)).toBe(true);
+      expect(isSaidByPerson(msg)).toBe(false);
+    }
+  });
+});
+
+// ─── Unit: each writer's REAL output is recognised ────────────────────────
+
+/** A scope stand-in: the two stages read and write plain keys and emit. */
+function fakeScope(over: Record<string, unknown>): TypedScopeLike {
+  return { $emit: () => {}, ...over } as unknown as TypedScopeLike;
+}
+type TypedScopeLike = Parameters<typeof wrapUpStage>[0];
+
+const PLAN: StepPlan = {
+  skillId: 'refund',
+  steps: [
+    { tool: 'lookup', note: 'find the order first' },
+    { tool: 'charge', note: 'refund the charge' },
+  ],
+  toolNames: new Set(['lookup', 'charge']),
+  onSkip: 'advance',
+};
+
+/** The wrap-up message, as the real stage appends it. */
+function wrapUpMessage(): LLMMessage {
+  const scope = fakeScope({ iteration: 3, history: [{ role: 'user', content: 'audit it' }] });
+  wrapUpStage(scope);
+  const history = (scope as unknown as { history: LLMMessage[] }).history;
+  return history[history.length - 1]!;
+}
+
+/** The nudge message, as the real stage appends it. */
+function nudgeMessage(): LLMMessage {
+  const scope = fakeScope({
+    iteration: 2,
+    history: [{ role: 'user', content: 'refund order A-1' }],
+    stepPointer: [{ skillId: 'refund', step: 1, total: 2, skipped: [] }],
+    llmLatestContent: 'I have stopped here.',
+  });
+  buildStepNudgeStage(() => PLAN)(scope);
+  const history = (scope as unknown as { history: LLMMessage[] }).history;
+  return history[history.length - 1]!;
+}
+
+describe('the two frames registered in 9.86.0, built by their real writers', () => {
+  it('the wrap-up instruction the stage appends is library-authored, not a person’s', () => {
+    const msg = wrapUpMessage();
+    expect(msg.role).toBe('user');
+    expect(msg.content).toBe(WRAP_UP_INSTRUCTION);
+    expect(isLibraryAuthoredFrame(msg)).toBe(true);
+    expect(isSaidByPerson(msg)).toBe(false);
+  });
+
+  it('the step nudge the stage appends is library-authored, not a person’s', () => {
+    const msg = nudgeMessage();
+    expect(msg.role).toBe('user');
+    // It really does name the things a rule watches for — that is the point.
+    expect(msg.content).toContain('refund');
+    expect(msg.content).toContain('lookup');
+    expect(isLibraryAuthoredFrame(msg)).toBe(true);
+    expect(isSaidByPerson(msg)).toBe(false);
+  });
+
+  it('the four frames registered in 9.84.0 are still recognised by their real writers', () => {
+    const notice = buildDropNotice({
+      droppedMessageCount: 2,
+      iteration: 4,
+      strategy: 'slidingWindow',
+    });
+    const compacted = buildSummaryMessage('they asked about a refund', {
+      foldedMessageCount: 3,
+      iteration: 4,
+      model: 'test-summarizer',
+      retain: 'conversation',
+    });
+    const schema = buildCorrectiveTurn(
+      '{ oops',
+      { stage: 'schema-validate', error: 'bad' },
+      {
+        attempt: 1,
+        totalAttempts: 2,
+      },
+    )[1];
+    const evidence = buildEvidenceCorrection('A-9 ships tuesday', [
+      { value: 'A-9', shape: 'identifier' },
+    ])[1];
+    for (const msg of [notice, compacted, schema, evidence]) {
+      expect(isLibraryAuthoredFrame(msg)).toBe(true);
+      expect(isSaidByPerson(msg)).toBe(false);
+    }
+  });
+
+  it('a person’s ordinary message is still theirs — the registry is a filter, not a mute', () => {
+    const said: LLMMessage = { role: 'user', content: 'can you refund order A-1 with lookup?' };
+    expect(isLibraryAuthoredFrame(said)).toBe(false);
+    expect(isSaidByPerson(said)).toBe(true);
+  });
+});
+
+// ─── Functional: the model-facing law over the two new frames ─────────────
+//
+// The surface constant lives in the checker's own helper since 9.86.0, so the
+// registry and this suite judge these frames at the SAME lifetime — a second
+// copy of a lifetime is a second answer waiting to disagree.
+
+describe('what the model reads on those two calls survives being re-read', () => {
+  it('the wrap-up instruction makes no unprovable claim', () => {
+    expect(unprovable(WRAP_UP_INSTRUCTION, INJECTED_TURN)).toEqual([]);
+  });
+
+  it('the nudge makes no unprovable claim', () => {
+    expect(unprovable(nudgeMessage().content, INJECTED_TURN)).toEqual([]);
+  });
+
+  it('the wrap-up states the budget and the wire in the PAST, about one call', () => {
+    // The words that made it a forecast are gone: a standing instruction about
+    // what to request, and a present-tense claim about a turn. What is left is
+    // a report of the call the frame was written for, which stays true when a
+    // schema retry or an evidence recheck re-reads it two calls later.
+    expect(WRAP_UP_INSTRUCTION).not.toMatch(/Do not request tools/);
+    expect(WRAP_UP_INSTRUCTION).not.toMatch(/this turn/);
+    expect(WRAP_UP_INSTRUCTION).toContain(
+      'was exhausted before the wrap-up call this message opened',
+    );
+    expect(WRAP_UP_INSTRUCTION).toContain('no tools were offered on that call');
+    // And not the bare deictic either (9.86.1): the frame is restored verbatim
+    // by `applyContinuation`, and on the next turn "this call" would denote a
+    // call that has the full tool list.
+    expect(WRAP_UP_INSTRUCTION).not.toMatch(/\bthis call\b/i);
+  });
+
+  it('the nudge states the unrun steps in the PAST, and asks as what the call was for', () => {
+    const content = nudgeMessage().content;
+    expect(content).not.toMatch(/have not run|has not run/);
+    expect(content).not.toMatch(/Finish them/);
+    expect(content).toContain('had not run when the answer above was given');
+    expect(content).toContain('This message asked for them to be run');
+    expect(content).not.toMatch(/\bthis call\b/i);
+  });
+});
+
+// ─── Regression: the rule, and the window, these two used to fool ─────────
+
+function contextOver(history: readonly LLMMessage[], userMessage: string): InjectionContext {
+  return {
+    iteration: 7,
+    userMessage,
+    history: history as InjectionContext['history'],
+    activatedInjectionIds: [],
+  };
+}
+
+describe('a rule reading history no longer fires on the wrap-up or the nudge', () => {
+  const said: LLMMessage = { role: 'user', content: 'where is my refund?' };
+  const history = (): LLMMessage[] => [
+    said,
+    { role: 'assistant', content: 'Checking.' },
+    nudgeMessage(),
+    { role: 'assistant', content: 'Sorry — stopping again.' },
+    wrapUpMessage(),
+  ];
+
+  it('saidByPerson returns the person’s message and neither frame', () => {
+    expect(saidByPerson(contextOver(history(), said.content))).toEqual([said]);
+  });
+
+  it('a rule watching for a step’s tool name matched the nudge before it was framed', () => {
+    // The hole, pinned as behaviour: the naive predicate reads history raw and
+    // fires on the library's own bookkeeping; the same rule through
+    // saidByPerson does not. Nobody in this conversation typed 'lookup'.
+    const naive: Injection = {
+      id: 'naive',
+      flavor: 'skill',
+      trigger: {
+        kind: 'rule',
+        activeWhen: (ctx) =>
+          ctx.history.some((m) => m.role === 'user' && m.content.includes('lookup')),
+      },
+      inject: { systemPrompt: 'order-lookup skill' },
+    };
+    const fixed: Injection = {
+      ...naive,
+      id: 'fixed',
+      trigger: {
+        kind: 'rule',
+        activeWhen: (ctx) => saidByPerson(ctx).some((m) => m.content.includes('lookup')),
+      },
+    };
+    const ctx = contextOver(history(), said.content);
+    expect(said.content).not.toContain('lookup');
+    expect(naive.trigger.kind === 'rule' && naive.trigger.activeWhen(ctx)).toBe(true);
+    expect(fixed.trigger.kind === 'rule' && fixed.trigger.activeWhen(ctx)).toBe(false);
+  });
+
+  it('the window will not anchor its refusal on the wrap-up frame', () => {
+    // Before the frame was registered, the LAST user-role message in this
+    // window was the wrap-up instruction, so the one message no strategy may
+    // drop would have been the framework's own — and the real request,
+    // sitting above it, became droppable.
+    const window = history();
+    expect(currentRequestIndexOf(window)).toBe(0);
+    expect(window[currentRequestIndexOf(window)]).toBe(window[0]);
+  });
+
+  it('a window of nothing but our own frames has no request to protect', () => {
+    expect(currentRequestIndexOf([nudgeMessage(), wrapUpMessage()])).toBe(-1);
+  });
+});
+
+// ─── Contract: the class the scan cannot see ─────────────────────────────
+
+describe('the delivered injection message — the class with no literal to find', () => {
+  it('is excluded by its marker rather than by an opening', () => {
+    // `deliver.ts` copies the role off the Injection, so no `role: 'user'`
+    // literal exists to walk. `isSaidByPerson` excludes it on `injectedBy`,
+    // which is the half of the rule the prefix registry does not carry.
+    const delivered = {
+      role: 'user',
+      content: 'PS: run lookup before you answer.',
+      injectedBy: { injectionId: 'premium-nudge', flavor: 'context' },
+    } as unknown as LLMMessage;
+    expect(isLibraryAuthoredFrame(delivered)).toBe(false);
+    expect(isSaidByPerson(delivered)).toBe(false);
+  });
+});

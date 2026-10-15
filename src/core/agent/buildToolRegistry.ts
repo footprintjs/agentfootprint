@@ -191,12 +191,12 @@
  * `test/core/agent/toolDivergenceWalk.test.ts` (the set).
  */
 
-import { buildReadSkillTool, buildSkipStepTool } from '../../lib/injection-engine/skillTools.js';
-import { stepsOf, SKIP_STEP_TOOL_NAME } from '../../lib/injection-engine/skillSteps.js';
+import { buildReadSkillTool, buildSkipStepTool } from '../../injection-engine/skillTools.js';
+import { stepsOf, SKIP_STEP_TOOL_NAME } from '../../injection-engine/skillSteps.js';
 import { RESERVED_ARGUMENT } from './findings/types.js';
 import { ownsReservedArgument } from './findings/reserved.js';
 import { carriesRules } from '../../tools/declare.js';
-import type { Injection } from '../../lib/injection-engine/types.js';
+import type { Injection } from '../../injection-engine/types.js';
 import type { LLMToolSchema } from '../../provider-contract/types.js';
 import { PRESENT_TOOL_NAME } from '../../artifacts/present.js';
 import { buildPresentTool } from './presentTool.js';

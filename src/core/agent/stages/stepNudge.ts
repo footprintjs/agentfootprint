@@ -37,7 +37,7 @@ import {
   remainingStepsOf,
   stepInProgress,
   type StepPlanFor,
-} from '../../../lib/injection-engine/skillSteps.js';
+} from '../../../injection-engine/skillSteps.js';
 import type { AgentState } from '../types.js';
 import { assistantReplayFields } from '../assistantReplay.js';
 

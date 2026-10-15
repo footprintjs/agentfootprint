@@ -7,7 +7,7 @@
  *          reading and answers each question with a distribution, a
  *          confidence, or a probability — the "scored choice" of
  *          docs/design/2026-09-scored-choice.md, opened 2026-09-17.
- * Role:    zero-import leaf. `src/lib/injection-engine/classifierScorer.ts`
+ * Role:    zero-import leaf. `src/injection-engine/classifierScorer.ts`
  *          (a pure-core file behind `agentfootprint/skill-graph`) types its
  *          port against this file, so nothing here may import anything.
  *

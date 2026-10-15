@@ -6,4 +6,4 @@
  * symbols, one door. Import from the door.
  */
 
-export * from './lib/injection-engine/index.js';
+export * from './injection-engine/index.js';

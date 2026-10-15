@@ -1,7 +1,7 @@
 ---
 name: Skill — LLM-activated body + tools
 group: context-engineering
-guide: ../../src/lib/injection-engine/README.md
+guide: ../../src/injection-engine/README.md
 defaultInput: I need a refund for order #42
 ---
 

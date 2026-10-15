@@ -329,7 +329,7 @@ import { skillGraph, readSkillDescriptor } from 'agentfootprint/skill-graph';
 Three things are worth stating plainly.
 
 **The neutrality is proved, not claimed.** A test —
-`test/lib/injection-engine/skill-graph-fence.test.ts` — walks the *transitive*
+`test/injection-engine/skill-graph-fence.test.ts` — walks the *transitive*
 import graph of everything this subpath exports and fails if any of it
 reaches `footprintjs`, the agent loop, the tool factory, an adapter or a
 recorder. It is a fence, and it is the actual feature: the boundary already

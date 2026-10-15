@@ -4,7 +4,7 @@ title: PendingToolTransition
 
 # Interface: PendingToolTransition
 
-Defined in: [src/lib/injection-engine/leases.ts:25](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/leases.ts#L25)
+Defined in: [src/injection-engine/leases.ts:25](https://github.com/footprintjs/agentfootprint/blob/main/src/injection-engine/leases.ts#L25)
 
 The transition proposal the tool-calls stage ACCEPTED this iteration —
 validated (graph mounted, target reachable), first-accepted-wins across
@@ -19,7 +19,7 @@ back to undefined (zero-cost stays zero for agents that never see one).
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/lib/injection-engine/leases.ts:33](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/leases.ts#L33)
+Defined in: [src/injection-engine/leases.ts:33](https://github.com/footprintjs/agentfootprint/blob/main/src/injection-engine/leases.ts#L33)
 
 The ReAct iteration whose batch granted it (valid for iteration + 1).
 
@@ -29,7 +29,7 @@ The ReAct iteration whose batch granted it (valid for iteration + 1).
 
 > `readonly` **reason**: `string`
 
-Defined in: [src/lib/injection-engine/leases.ts:31](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/leases.ts#L31)
+Defined in: [src/injection-engine/leases.ts:31](https://github.com/footprintjs/agentfootprint/blob/main/src/injection-engine/leases.ts#L31)
 
 The effect's own declared reason.
 
@@ -39,7 +39,7 @@ The effect's own declared reason.
 
 > `readonly` **targetSkillId**: `string`
 
-Defined in: [src/lib/injection-engine/leases.ts:26](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/leases.ts#L26)
+Defined in: [src/injection-engine/leases.ts:26](https://github.com/footprintjs/agentfootprint/blob/main/src/injection-engine/leases.ts#L26)
 
 ***
 
@@ -47,7 +47,7 @@ Defined in: [src/lib/injection-engine/leases.ts:26](https://github.com/footprint
 
 > `readonly` `optional` **toolCallId?**: `string`
 
-Defined in: [src/lib/injection-engine/leases.ts:29](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/leases.ts#L29)
+Defined in: [src/injection-engine/leases.ts:29](https://github.com/footprintjs/agentfootprint/blob/main/src/injection-engine/leases.ts#L29)
 
 ***
 
@@ -55,6 +55,6 @@ Defined in: [src/lib/injection-engine/leases.ts:29](https://github.com/footprint
 
 > `readonly` **toolName**: `string`
 
-Defined in: [src/lib/injection-engine/leases.ts:28](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/leases.ts#L28)
+Defined in: [src/injection-engine/leases.ts:28](https://github.com/footprintjs/agentfootprint/blob/main/src/injection-engine/leases.ts#L28)
 
 The proposing tool — provenance for the record.

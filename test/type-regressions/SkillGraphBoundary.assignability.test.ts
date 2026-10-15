@@ -2,7 +2,7 @@
  * Compile-level regression test — the skill-graph boundary contract's
  * structural mirrors really are structural.
  *
- * `test/lib/injection-engine/skill-graph-fence.test.ts` proves the pure core
+ * `test/injection-engine/skill-graph-fence.test.ts` proves the pure core
  * imports no engine and no agent loop. It does that by refusing imports —
  * including the two the boundary used to make: `provider-contract/types.ts#LLMToolSchema`
  * and `cache/types.ts#CachePolicy`, which `ActiveInjection` named inline. Those

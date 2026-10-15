@@ -48,7 +48,7 @@ import {
 } from '../src/doors/context.js';
 import { mock } from '../src/doors/providers.js';
 import { buildToolRegistry } from '../src/core/agent/buildToolRegistry.js';
-import type { InjectionContext } from '../src/lib/injection-engine/types.js';
+import type { InjectionContext } from '../src/injection-engine/types.js';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 

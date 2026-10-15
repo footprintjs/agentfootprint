@@ -33,7 +33,7 @@
  * place of `label`.
  */
 
-import type { Injection } from '../../lib/injection-engine/types.js';
+import type { Injection } from '../../injection-engine/types.js';
 import type { SkillGraphDeclaredPayload } from '../../events/payloads.js';
 
 /** The structural slice of a graph this projection reads. Matches (a widened

@@ -39,7 +39,7 @@
 import type { TypedScope } from 'footprintjs';
 import type { CacheMarker, CachePolicy, CachePolicyContext } from './types.js';
 import type { LLMMessage } from '../provider-contract/types.js';
-import type { ActiveInjection, Injection } from '../lib/injection-engine/types.js';
+import type { ActiveInjection, Injection } from '../injection-engine/types.js';
 import { iterationsRemainingOf } from '../lib/iterationBudget.js';
 
 /**

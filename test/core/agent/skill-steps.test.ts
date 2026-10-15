@@ -21,7 +21,7 @@ import {
   pointerOf,
 } from '../../../src/injection-engine.js';
 import { mock } from '../../../src/llm-providers.js';
-import type { Injection } from '../../../src/lib/injection-engine/types.js';
+import type { Injection } from '../../../src/injection-engine/types.js';
 import type { PermissionChecker } from '../../../src/provider-contract/types.js';
 
 // ── Toolkit ──────────────────────────────────────────────────────────────

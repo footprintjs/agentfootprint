@@ -21,7 +21,7 @@
  * the builder's own module, past every door, reaches `build()` unregistered.
  */
 
-import type { Injection } from '../../lib/injection-engine/types.js';
+import type { Injection } from '../../injection-engine/types.js';
 import type {
   SelfExplainBinding,
   SelfExplainOptions,

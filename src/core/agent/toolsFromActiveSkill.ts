@@ -40,7 +40,7 @@
  * on can only ever REMOVE tools from the static registry, never add one.
  */
 
-import type { Injection } from '../../lib/injection-engine/types.js';
+import type { Injection } from '../../injection-engine/types.js';
 
 /** The one legal `autoActivate` mode — see `AutoActivateMode` in defineSkill. */
 const CURRENT_SKILL = 'currentSkill';

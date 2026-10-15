@@ -17,7 +17,7 @@ import { forcedToolChoiceFor, UnsupportedToolChoiceError } from '../../../src/pr
 import { withRetry } from '../../../src/resilience/withRetry.js';
 import { withCircuitBreaker } from '../../../src/resilience/withCircuitBreaker.js';
 import { withFallback } from '../../../src/resilience/withFallback.js';
-import { constrainedEnumPick } from '../../../src/lib/injection-engine/constrainedEnumPick.js';
+import { constrainedEnumPick } from '../../../src/injection-engine/constrainedEnumPick.js';
 
 const ALLOWED = 'claude-haiku-5-5';
 const BLOCKED = 'claude-opus-5-5';

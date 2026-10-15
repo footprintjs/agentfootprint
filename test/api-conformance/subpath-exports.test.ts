@@ -238,7 +238,7 @@ const SURVIVING_SUBPATHS = [
   './reliability',
   // 9.34.0 — added, not resurrected: `./skill-graph` was never one of the
   // sixteen. It publishes the skill-graph decision layer whose framework
-  // neutrality `test/lib/injection-engine/skill-graph-fence.test.ts` proves.
+  // neutrality `test/injection-engine/skill-graph-fence.test.ts` proves.
   './skill-graph',
   // 9.48.0 — also added, also never one of the sixteen. `./recipes` publishes
   // the declared unit of agent configuration (`defineAgentRecipe`), which is

@@ -343,6 +343,6 @@ describe.skipIf(!built)('the default browser graph of the root entry', () => {
       expect(root.syncInputs.has(`dist/esm/cache/strategies/${gone}CacheStrategy.js`)).toBe(false);
     }
     const context = await splitGraph(resolve(DIST, 'doors/context.js'));
-    expect(context.syncInputs.has('dist/esm/lib/injection-engine/devWarnHost.js')).toBe(true);
+    expect(context.syncInputs.has('dist/esm/injection-engine/devWarnHost.js')).toBe(true);
   });
 });

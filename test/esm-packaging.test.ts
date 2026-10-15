@@ -74,8 +74,8 @@ describe.skipIf(!built)('ESM packaging', () => {
     // themselves by provider name: the agent now chooses one from the
     // provider's declared `promptCaching`, so nothing has to run at load.
     expect(shipped.sideEffects).toEqual([
-      '**/lib/injection-engine/index.js',
-      '**/lib/injection-engine/devWarnHost.js',
+      '**/injection-engine/index.js',
+      '**/injection-engine/devWarnHost.js',
       '**/lib/trace-toolpack/selfExplainHost.js',
     ]);
   });

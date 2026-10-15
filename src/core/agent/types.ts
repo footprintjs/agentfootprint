@@ -25,7 +25,7 @@ import type {
   PricingTable,
 } from '../../provider-contract/types.js';
 import type { CacheMarker, CacheStrategy } from '../../cache/types.js';
-import type { ActiveInjection } from '../../lib/injection-engine/types.js';
+import type { ActiveInjection } from '../../injection-engine/types.js';
 import type { InjectionRecord } from '../../recorders/core/types.js';
 import type { MemoryIdentity } from '../../memory/identity/types.js';
 import type { CredentialProvider } from '../../identity/types.js';
@@ -2026,7 +2026,7 @@ export interface AgentState {
    *  'conversation'`), read by the cursor resolver (iteration 1), the
    *  `read_skill` menu envelope and the `'guard'` gate. Absent on every
    *  other agent — nothing writes it, so nothing changes. */
-  turnRoute?: import('../../lib/injection-engine/routingPolicy.js').TurnRoute;
+  turnRoute?: import('../../injection-engine/routingPolicy.js').TurnRoute;
   /** WHERE the active skill's declared procedure stands (9.18.0) — strictly
    *  subordinate to the ONE cursor: it lives and dies inside one skill's
    *  tenure, is re-keyed on every cursor move (by the Evaluate stage, the
@@ -2041,7 +2041,7 @@ export interface AgentState {
    *  declared somewhere but no procedure is active; ABSENT = no registered
    *  skill declares steps (nothing ever writes it — zero-cost-when-unused).
    *  Read it with `pointerOf()` from `agentfootprint/injection-engine`. */
-  stepPointer?: import('../../lib/injection-engine/skillSteps.js').StepPointerCarrier;
+  stepPointer?: import('../../injection-engine/skillSteps.js').StepPointerCarrier;
   /** The one teaching nudge for a premature stop has been spent this turn
    *  (9.18.0). Written by the StepNudge branch; reset at seed. Absent on
    *  agents with no stepped skill. */
@@ -2062,14 +2062,12 @@ export interface AgentState {
    *  batch, stamped with the granting iteration (one-shot by data: the
    *  Evaluate stage honors it exactly once, on the following iteration).
    *  Absent unless a tool proposed one on a skill-graph agent. */
-  pendingToolTransition?: import('../../lib/injection-engine/leases.js').PendingToolTransition;
+  pendingToolTransition?: import('../../injection-engine/leases.js').PendingToolTransition;
   /** The granted `require-instruction` leases (9.19.0), in grant order.
    *  Appended by the tool-calls stage (which prunes spent ones as it
    *  writes); validity is computed per Evaluate pass, never mutated.
    *  Absent unless a tool granted one. */
-  instructionLeases?: ReadonlyArray<
-    import('../../lib/injection-engine/leases.js').InstructionLease
-  >;
+  instructionLeases?: ReadonlyArray<import('../../injection-engine/leases.js').InstructionLease>;
 
   /**
    * The mount kernel's engagement state (9.58.0) — one record per mounted

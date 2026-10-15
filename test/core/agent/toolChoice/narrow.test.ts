@@ -17,12 +17,12 @@ import {
   type Pick,
 } from '../../../../src/core/agent/toolChoice/pick.js';
 import { ALWAYS_SERVED_TOOLS } from '../../../../src/core/agent/toolChoice/types.js';
-import { SKIP_STEP_TOOL_NAME } from '../../../../src/lib/injection-engine/skillSteps.js';
+import { SKIP_STEP_TOOL_NAME } from '../../../../src/injection-engine/skillSteps.js';
 import { PRESENT_TOOL_NAME } from '../../../../src/artifacts/present.js';
 import {
   buildListSkillsTool,
   buildReadSkillTool,
-} from '../../../../src/lib/injection-engine/skillTools.js';
+} from '../../../../src/injection-engine/skillTools.js';
 import { defineSkill } from '../../../../src/injection-engine.js';
 
 const WIRE = ['read_skill', 'lookup', 'charge', 'ship', 'invoice', 'skip_step'];

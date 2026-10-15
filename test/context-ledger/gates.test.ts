@@ -22,8 +22,8 @@ import {
   ledgerToolGate,
 } from '../../src/context-ledger/index.js';
 import type { ContextLedger, LedgerJSON } from '../../src/context-ledger/index.js';
-import type { EntryScorer } from '../../src/lib/injection-engine/entryScorer.js';
-import type { InjectionContext } from '../../src/lib/injection-engine/types.js';
+import type { EntryScorer } from '../../src/injection-engine/entryScorer.js';
+import type { InjectionContext } from '../../src/injection-engine/types.js';
 
 /** A ledger seeded via importJSON — rows are data, no run needed. */
 function seededLedger(

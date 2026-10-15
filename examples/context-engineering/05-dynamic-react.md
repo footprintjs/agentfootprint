@@ -1,7 +1,7 @@
 ---
 name: Dynamic ReAct — context morphs each iteration
 group: context-engineering
-guide: ../../src/lib/injection-engine/README.md
+guide: ../../src/injection-engine/README.md
 defaultInput: My account is alice@example.com — please refund $42
 ---
 
@@ -113,7 +113,7 @@ chip grid different from the last.
 
 ## Related
 
-- **[Injection Engine README](../../src/lib/injection-engine/README.md)**
+- **[Injection Engine README](../../src/injection-engine/README.md)**
   — full architecture
 - **[Mixed flavors](./06-mixed-flavors.md)** — same idea, simpler scenario
 - **[Instruction](./01-instruction.md)**, **[Skill](./02-skill.md)**,

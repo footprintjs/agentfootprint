@@ -125,7 +125,7 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: 'the `wants` dispatch refusal — the registry composes every arm through resolveToolWants and reads the whole sentence, not this fragment of it',
     },
   ],
-  'src/lib/injection-engine/skillToolDescriptors.ts': [
+  'src/injection-engine/skillToolDescriptors.ts': [
     {
       kind: 'registry',
       count: 5,
@@ -146,7 +146,7 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
   ],
 
   // ── model-facing, but composed for ONE request and never re-read ──
-  'src/lib/injection-engine/factories/defineMenuHint.ts': [
+  'src/injection-engine/factories/defineMenuHint.ts': [
     {
       kind: 'ephemeral',
       count: 1,
@@ -196,14 +196,14 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: 'wiring errors thrown when a session scope or a staging runner is missing',
     },
   ],
-  'src/lib/injection-engine/factories/defineRelevanceHint.ts': [
+  'src/injection-engine/factories/defineRelevanceHint.ts': [
     {
       kind: 'ephemeral',
       count: 1,
       why: 'a systemPrompt injection the engine rebuilds on every pass',
     },
   ],
-  'src/lib/injection-engine/skillSteps.ts': [
+  'src/injection-engine/skillSteps.ts': [
     {
       kind: 'ephemeral',
       count: 1,
@@ -652,56 +652,56 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: 'the honesty banner of a BacktrackTrace — analysis output rendered for a person or a UI',
     },
   ],
-  'src/lib/injection-engine/SkillRegistry.ts': [
+  'src/injection-engine/SkillRegistry.ts': [
     {
       kind: 'not-model-facing',
       count: 3,
       why: 'registry errors thrown as skills are registered',
     },
   ],
-  'src/lib/injection-engine/factories/defineInstruction.ts': [
+  'src/injection-engine/factories/defineInstruction.ts': [
     {
       kind: 'not-model-facing',
       count: 1,
       why: 'a slot-targeting error thrown at definition time',
     },
   ],
-  'src/lib/injection-engine/messagesSlotRefusal.ts': [
+  'src/injection-engine/messagesSlotRefusal.ts': [
     {
       kind: 'not-model-facing',
       count: 1,
       why: 'the messages-slot refusal, raised to the consumer that tried to inject a tool-role message',
     },
   ],
-  'src/lib/injection-engine/skillBodyDelivery.ts': [
+  'src/injection-engine/skillBodyDelivery.ts': [
     {
       kind: 'not-model-facing',
       count: 1,
       why: 'a delivery-mode refusal raised at build time',
     },
   ],
-  'src/lib/injection-engine/skillGraph.ts': [
+  'src/injection-engine/skillGraph.ts': [
     {
       kind: 'not-model-facing',
       count: 1,
       why: 'a graph-declaration error thrown at build time',
     },
   ],
-  'src/lib/injection-engine/skillGraphCheckup.ts': [
+  'src/injection-engine/skillGraphCheckup.ts': [
     {
       kind: 'not-model-facing',
       count: 1,
       why: 'a checkup problem reported to the developer who ran .checkup()',
     },
   ],
-  'src/lib/injection-engine/skillVocabulary.ts': [
+  'src/injection-engine/skillVocabulary.ts': [
     {
       kind: 'not-model-facing',
       count: 1,
       why: 'a vocabulary warning reported to the developer wiring the skills',
     },
   ],
-  'src/lib/injection-engine/skillsFromDir.ts': [
+  'src/injection-engine/skillsFromDir.ts': [
     {
       kind: 'not-model-facing',
       count: 2,
@@ -837,14 +837,14 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: 'a build-time refusal thrown when a skill brain is declared with no graph to pick it',
     },
   ],
-  'src/lib/injection-engine/skillExamples.ts': [
+  'src/injection-engine/skillExamples.ts': [
     {
       kind: 'not-model-facing',
       count: 1,
       why: "a graph check-up WARNING handed to the author ('depends on how this graph is MOUNTED') — never on a request",
     },
   ],
-  'src/lib/injection-engine/skillNeverRoutes.ts': [
+  'src/injection-engine/skillNeverRoutes.ts': [
     {
       kind: 'not-model-facing',
       count: 1,

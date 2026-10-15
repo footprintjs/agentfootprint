@@ -4,7 +4,7 @@ title: InstructionLease
 
 # Interface: InstructionLease
 
-Defined in: [src/lib/injection-engine/leases.ts:51](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/leases.ts#L51)
+Defined in: [src/injection-engine/leases.ts:51](https://github.com/footprintjs/agentfootprint/blob/main/src/injection-engine/leases.ts#L51)
 
 One granted `require-instruction` lease. Validity is COMPUTED, never
 mutated: `'next-call'` serves exactly the Evaluate pass of
@@ -26,7 +26,7 @@ law's owner: it runs whether or not anything new was granted.
 
 > `readonly` **deliveryLease**: [`InstructionDeliveryLease`](/docs/api/type-aliases/InstructionDeliveryLease)
 
-Defined in: [src/lib/injection-engine/leases.ts:53](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/leases.ts#L53)
+Defined in: [src/injection-engine/leases.ts:53](https://github.com/footprintjs/agentfootprint/blob/main/src/injection-engine/leases.ts#L53)
 
 ***
 
@@ -34,7 +34,7 @@ Defined in: [src/lib/injection-engine/leases.ts:53](https://github.com/footprint
 
 > `readonly` **instructionId**: `string`
 
-Defined in: [src/lib/injection-engine/leases.ts:52](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/leases.ts#L52)
+Defined in: [src/injection-engine/leases.ts:52](https://github.com/footprintjs/agentfootprint/blob/main/src/injection-engine/leases.ts#L52)
 
 ***
 
@@ -42,7 +42,7 @@ Defined in: [src/lib/injection-engine/leases.ts:52](https://github.com/footprint
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/lib/injection-engine/leases.ts:62](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/leases.ts#L62)
+Defined in: [src/injection-engine/leases.ts:62](https://github.com/footprintjs/agentfootprint/blob/main/src/injection-engine/leases.ts#L62)
 
 The ReAct iteration whose batch granted it.
 
@@ -52,7 +52,7 @@ The ReAct iteration whose batch granted it.
 
 > `readonly` `optional` **skillId?**: `string`
 
-Defined in: [src/lib/injection-engine/leases.ts:57](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/leases.ts#L57)
+Defined in: [src/injection-engine/leases.ts:57](https://github.com/footprintjs/agentfootprint/blob/main/src/injection-engine/leases.ts#L57)
 
 The tenure that granted it (advanced cursor, else the activation tail);
  absent when no tenant existed at grant. `'until-skill-exit'` compares
@@ -64,7 +64,7 @@ The tenure that granted it (advanced cursor, else the activation tail);
 
 > `readonly` `optional` **toolCallId?**: `string`
 
-Defined in: [src/lib/injection-engine/leases.ts:60](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/leases.ts#L60)
+Defined in: [src/injection-engine/leases.ts:60](https://github.com/footprintjs/agentfootprint/blob/main/src/injection-engine/leases.ts#L60)
 
 ***
 
@@ -72,6 +72,6 @@ Defined in: [src/lib/injection-engine/leases.ts:60](https://github.com/footprint
 
 > `readonly` **toolName**: `string`
 
-Defined in: [src/lib/injection-engine/leases.ts:59](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/injection-engine/leases.ts#L59)
+Defined in: [src/injection-engine/leases.ts:59](https://github.com/footprintjs/agentfootprint/blob/main/src/injection-engine/leases.ts#L59)
 
 The granting tool — provenance for the record.

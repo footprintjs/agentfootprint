@@ -38,14 +38,14 @@ import {
 } from '../outputFallback.js';
 import type { CachePolicy, CacheStrategy } from '../../cache/types.js';
 import type { EngagementPlan, MapsOptions } from '../../maps/engagement/types.js';
-import type { Injection, InjectionContext } from '../../lib/injection-engine/types.js';
+import type { Injection, InjectionContext } from '../../injection-engine/types.js';
 import {
   SKILL_GRAPH_DEFERRED_CONTRACT_KEY,
   type CursorMove,
   type DeferredBodyContract,
   type EntryScoring,
   type TurnRoutingPlan,
-} from '../../lib/injection-engine/skillGraph.js';
+} from '../../injection-engine/skillGraph.js';
 import {
   foldSkillBrains,
   type EscalationPolicy,
@@ -56,19 +56,19 @@ import { checkThinkingSupport } from './thinkingSupport.js';
 import {
   defineMenuHint,
   MENU_HINT_METADATA_KEY,
-} from '../../lib/injection-engine/factories/defineMenuHint.js';
+} from '../../injection-engine/factories/defineMenuHint.js';
 import {
   defineStepsHint,
   STEPS_HINT_METADATA_KEY,
-} from '../../lib/injection-engine/factories/defineStepsHint.js';
-import { foldStepPlans } from '../../lib/injection-engine/skillSteps.js';
-import { checkSkillContracts, skillToolNames } from '../../lib/injection-engine/skillContract.js';
-import { formatCheckup } from '../../lib/injection-engine/skillGraphCheckup.js';
-import { checkArtifactVocabularies } from '../../lib/injection-engine/skillVocabulary.js';
-import { toolOnlyDeliveryRefusal } from '../../lib/injection-engine/skillBodyDelivery.js';
-import { defineInstruction } from '../../lib/injection-engine/factories/defineInstruction.js';
-import { messagesToolRoleRefusal } from '../../lib/injection-engine/messagesSlotRefusal.js';
-import { READS_ENTRY_SCORES_METADATA_KEY } from '../../lib/injection-engine/factories/defineRelevanceHint.js';
+} from '../../injection-engine/factories/defineStepsHint.js';
+import { foldStepPlans } from '../../injection-engine/skillSteps.js';
+import { checkSkillContracts, skillToolNames } from '../../injection-engine/skillContract.js';
+import { formatCheckup } from '../../injection-engine/skillGraphCheckup.js';
+import { checkArtifactVocabularies } from '../../injection-engine/skillVocabulary.js';
+import { toolOnlyDeliveryRefusal } from '../../injection-engine/skillBodyDelivery.js';
+import { defineInstruction } from '../../injection-engine/factories/defineInstruction.js';
+import { messagesToolRoleRefusal } from '../../injection-engine/messagesSlotRefusal.js';
+import { READS_ENTRY_SCORES_METADATA_KEY } from '../../injection-engine/factories/defineRelevanceHint.js';
 import { skillScopedToolsTarget } from '../../tools/skillScopedTools.js';
 import type { MemoryDefinition } from '../../memory/define.types.js';
 import type { ReliabilityConfig } from '../../reliability/types.js';

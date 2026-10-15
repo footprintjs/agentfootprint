@@ -12,7 +12,7 @@
 
 import { isDevMode } from 'footprintjs';
 import type { MemoryDefinition } from '../../memory/define.types.js';
-import type { Injection } from '../../lib/injection-engine/types.js';
+import type { Injection } from '../../injection-engine/types.js';
 import type { Tool, ToolRegistryEntry } from '../../tools/tools.js';
 import { toWireJson } from '../../lib/wireJson.js';
 

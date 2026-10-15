@@ -6,7 +6,7 @@
  * Role:    Leaf. Asked by the three doors that take a short declared label:
  *          `semantics/coverage/items.ts` (a coverage item's `short`, at the
  *          `absent()` / `coverage()` mint AND at the dispatch reader) and
- *          `lib/injection-engine/factories/defineSkill.ts` (a skill's
+ *          `injection-engine/factories/defineSkill.ts` (a skill's
  *          `title`). One rule, so the three cannot disagree.
  * Emits:   N/A.
  *

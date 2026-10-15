@@ -85,7 +85,7 @@ const DOORS = [
   './security',
   // 9.34.0 — the ELEVENTH door, and the first one added since the 8.0.0
   // consolidation. It is not another way to run an agent: it publishes the
-  // skill-graph decision layer, which `test/lib/injection-engine/skill-graph-fence.test.ts`
+  // skill-graph decision layer, which `test/injection-engine/skill-graph-fence.test.ts`
   // PROVES imports no engine and no agent loop, so a host on another framework
   // can route with it. A door that carries no run entry point does not reopen
   // the 26-doors problem the ledger closed.

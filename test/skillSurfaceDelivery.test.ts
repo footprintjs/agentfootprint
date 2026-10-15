@@ -25,7 +25,7 @@ import {
   activatesByRead,
   resolvedSurfaceModeOf,
   toolOnlyDeliveryRefusal,
-} from '../src/lib/injection-engine/skillBodyDelivery.js';
+} from '../src/injection-engine/skillBodyDelivery.js';
 import { mock } from '../src/llm-providers.js';
 
 const t = (name: string) =>

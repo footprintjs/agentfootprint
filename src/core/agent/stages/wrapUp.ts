@@ -106,7 +106,7 @@ export { WRAP_UP_FRAME_PREFIX } from '../../../lib/saidByPerson.js';
  * word in 9.86.0 for the same reason; this frame names the call it is about
  * instead of pointing at it.
  *
- * Checked, not asserted: `test/lib/injection-engine/userTurnProducers.test.ts`
+ * Checked, not asserted: `test/injection-engine/userTurnProducers.test.ts`
  * runs this string through `unprovable(text, { channel: 'injected-turn',
  * lifetime: 'persistent-history' })`.
  */

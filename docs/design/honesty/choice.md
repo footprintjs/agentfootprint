@@ -16,7 +16,7 @@ Code is cited as `file · symbol`, as in the architecture note: paths are under 
 The architecture note § 3.1 lists it by clause:
 
 - **Declare** — tool descriptions, `Tool.owner`, `Tool.argumentsFrom`; skill rules and scorers
-  (`lib/injection-engine/routingPolicy.ts` · `decideTier2`); ontology `via` tools; the model's
+  (`injection-engine/routingPolicy.ts` · `decideTier2`); ontology `via` tools; the model's
   `_findings.basis` and `expect`, filed before the call (`findings/ledger.ts` · `recordFindings`).
 - **Verify** — `core/slots/buildToolsSlot.ts` · `mergeWire`; `stages/toolCalls.ts` · `resolveTool`;
   the read_skill gate; `core/agent/validators.ts` · `validateToolNameUniqueness`;

@@ -57,8 +57,8 @@ import { STAGE_IDS, SUBFLOW_IDS, milestoneTagsFor } from '../../lib/conventions.
 import {
   EMPTY_ACTIVE_BY_SLOT,
   type ActiveBySlot,
-} from '../../lib/injection-engine/buildInjectionEngineSubflow.js';
-import type { ActiveInjection, Injection } from '../../lib/injection-engine/types.js';
+} from '../../injection-engine/buildInjectionEngineSubflow.js';
+import type { ActiveInjection, Injection } from '../../injection-engine/types.js';
 import { memoryInjectionKey, retrievalEvidenceKey } from '../../memory/define.types.js';
 import { unwrapMemoryFlowChart } from '../../memory/define.js';
 import { mountMemoryRead, mountMemoryWrite } from '../../memory/wire/mountMemoryPipeline.js';
@@ -281,7 +281,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           // The turn-start verdict (SG-C) — crossed into sf-llm-call by the outer
           // boundary below; the resolver consumes it on iteration 1.
           turnRoute: parent.turnRoute as
-            | import('../../lib/injection-engine/routingPolicy.js').TurnRoute
+            | import('../../injection-engine/routingPolicy.js').TurnRoute
             | undefined,
           // The step pointer as of the previous iteration (9.18.0) — the
           // sf-llm-call boundary's readonly input, for the Evaluate re-key.
@@ -495,7 +495,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
         // The turn-start verdict (SG-C) — the Compose stage leads read_skill's
         // description with the menu while it is outstanding.
         turnRoute: parent.turnRoute as
-          | import('../../lib/injection-engine/routingPolicy.js').TurnRoute
+          | import('../../injection-engine/routingPolicy.js').TurnRoute
           | undefined,
         // The step pointer (9.18.0) — the exact cursor pattern three lines
         // up: the FRESH value lives under `nextStepPointer` (the engine

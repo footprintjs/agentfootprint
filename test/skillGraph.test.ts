@@ -18,9 +18,9 @@ import {
 import { mock } from '../src/llm-providers.js';
 import { mockEmbedder } from '../src/memory/index.js';
 import type { Injection } from '../src/injection-engine.js';
-import { softmax } from '../src/lib/injection-engine/softmax.js';
-import { evaluateInjections } from '../src/lib/injection-engine/index.js';
-import type { InjectionContext } from '../src/lib/injection-engine/types.js';
+import { softmax } from '../src/injection-engine/softmax.js';
+import { evaluateInjections } from '../src/injection-engine/index.js';
+import type { InjectionContext } from '../src/injection-engine/types.js';
 
 const skill = (id: string, body = `${id} body`) =>
   defineSkill({ id, description: `use ${id}`, body });

@@ -291,7 +291,7 @@ So `buildDynamicAgentChart` runs when `reactStructure === 'subflow'` AND `reactM
 
 ---
 
-## 6. Context Engineering — the conceptual heart (`src/lib/injection-engine/`, `src/core/slots/`)
+## 6. Context Engineering — the conceptual heart (`src/injection-engine/`, `src/core/slots/`)
 
 **One `Injection` primitive; everything else is sugar.** A piece of developer-engineered content
 reaching the LLM — a safety policy, a retrieved doc, a skill body, a fact — is an `Injection`:
@@ -593,7 +593,7 @@ Five places where reality bends the rule (each is a backlog task):
    metadata was a DEAD `injectionEvaluation` scope write that nothing read and that never even left
    the InjectionEngine subflow (the `outputMapper` only bubbled `activeInjections`). It is now a real
    **emit** — `agentfootprint.context.evaluated`, fired once per iteration from the InjectionEngine
-   ([buildInjectionEngineSubflow.ts](../src/lib/injection-engine/buildInjectionEngineSubflow.ts)). It
+   ([buildInjectionEngineSubflow.ts](../src/injection-engine/buildInjectionEngineSubflow.ts)). It
    carries the active/skipped breakdown + skip reasons + trigger-kind counts — the "what was
    considered, what won, what was **skipped and why**" view that the per-injection `context.injected`
    events (survivors only) do NOT carry. It is the upstream counterpart to `context.slot_composed`.
@@ -774,7 +774,7 @@ src/
     slots/                 buildSystemPromptSlot/MessagesSlot/ToolsSlot/ThinkingSubflow, helpers
   core-flow/               Sequence, Parallel, Conditional, Loop (+ README = 9 decisions)
   patterns/                SelfConsistency, Reflection, Debate, MapReduce, ToT, Swarm
-  lib/injection-engine/    Injection types, evaluator, buildInjectionEngineSubflow, factories/, SkillRegistry, skillTools
+  injection-engine/        Injection types, evaluator, buildInjectionEngineSubflow, factories/, SkillRegistry, skillTools
   memory/                  define(.types), pipeline/, causal/, store/, identity/, wire/mountMemoryPipeline
   adapters/                types.ts (LLMProvider port), llm/* providers, memory/* stores, observability/*
   thinking/                ThinkingHandler, registry, per-provider handlers
@@ -817,7 +817,7 @@ The door barrels live in `src/doors/`; the implementation barrels never moved.
 
 1. `src/core/runner.ts` + `RunnerBase.ts` — the contract everything implements.
 2. `src/core/LLMCall.ts` — the simplest real chart.
-3. `src/lib/injection-engine/` — the conceptual heart (Injection + 5 axes).
+3. `src/injection-engine/` — the conceptual heart (Injection + 5 axes).
 4. `src/core/agent/buildAgentChart.ts` — the ReAct chart that ties slots + cache + call + route together.
 5. `src/recorders/observability/BoundaryRecorder.ts` + `FlowchartRecorder.ts` — how a run becomes a StepGraph.
 6. Then breadth: memory → providers → compositions/patterns → cache/reliability.

@@ -1,7 +1,7 @@
 ---
 name: Mixed flavors — all 4 in one agent
 group: context-engineering
-guide: ../../src/lib/injection-engine/README.md
+guide: ../../src/injection-engine/README.md
 defaultInput: help me reset my password
 ---
 
@@ -57,6 +57,6 @@ factory name + the resulting `flavor` tag.
 
 ## Related
 
-- **[Injection Engine README](../../src/lib/injection-engine/README.md)**
+- **[Injection Engine README](../../src/injection-engine/README.md)**
 - **[Dynamic ReAct](./05-dynamic-react.md)** — same idea, multi-iteration
   morph

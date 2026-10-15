@@ -10,7 +10,7 @@ Defined in: [src/core/agent/toolChoice/types.ts:39](https://github.com/footprint
 
 The framework's own doors, never narrowed away: the skill menu
 (`read_skill`, `list_skills` — `core/agent/buildToolRegistry.ts`), the
-procedure escape (`skip_step` — `lib/injection-engine/skillSteps.ts ·
+procedure escape (`skip_step` — `injection-engine/skillSteps.ts ·
 SKIP_STEP_TOOL_NAME`) and the hand-to-the-screen tool (`present` —
 `artifacts/present.ts · PRESENT_TOOL_NAME`). Literals here so this file
 stays a leaf; `test/core/agent/toolChoice/narrow.test.ts` pins them to

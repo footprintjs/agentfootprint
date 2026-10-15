@@ -189,7 +189,7 @@ import { buildWindowStage } from './agent/stages/window.js';
 import { requireKeepLastToolResults } from './agent/window/options.js';
 import { assertDeliverableRole, buildDeliverStage } from './agent/stages/deliver.js';
 import { providerTargets } from './agent/providerTargets.js';
-import { messagesContentRefusal } from '../lib/injection-engine/messagesSlotRefusal.js';
+import { messagesContentRefusal } from '../injection-engine/messagesSlotRefusal.js';
 import { CompactionUnmeasurableError } from './agent/window/errors.js';
 import type { WindowStrategy } from './agent/window/strategy.js';
 import type { FoldedSpan } from './agent/window/types.js';
@@ -218,8 +218,8 @@ import {
   type ServedToolParties,
 } from './slots/buildToolsSlot.js';
 import { isDevMode } from 'footprintjs';
-import { buildReadSkillTool } from '../lib/injection-engine/skillTools.js';
-import { foldStepPlans } from '../lib/injection-engine/skillSteps.js';
+import { buildReadSkillTool } from '../injection-engine/skillTools.js';
+import { foldStepPlans } from '../injection-engine/skillSteps.js';
 import { buildStepNudgeStage } from './agent/stages/stepNudge.js';
 import { buildEvidenceRecheckStage } from './agent/stages/evidenceRecheck.js';
 import { toolWantsOf } from './agent/stagedRefs.js';
@@ -232,13 +232,9 @@ import { UnsupportedValuesError } from './agent/evidence/errors.js';
 import type { ResolvedEvidenceGate } from './agent/evidence/types.js';
 import { checkerGoverns } from '../provider-contract/types.js';
 import { skillTarget } from '../security/skillTarget.js';
-import { buildInjectionEngineSubflow } from '../lib/injection-engine/buildInjectionEngineSubflow.js';
-import type { Injection, InjectionContext } from '../lib/injection-engine/types.js';
-import type {
-  CursorMove,
-  EntryScoring,
-  TurnRoutingPlan,
-} from '../lib/injection-engine/skillGraph.js';
+import { buildInjectionEngineSubflow } from '../injection-engine/buildInjectionEngineSubflow.js';
+import type { Injection, InjectionContext } from '../injection-engine/types.js';
+import type { CursorMove, EntryScoring, TurnRoutingPlan } from '../injection-engine/skillGraph.js';
 import { makePickEntryStage } from './agent/stages/pickEntry.js';
 import { makeRouteTurnStage } from './agent/stages/routeTurn.js';
 import {

@@ -19,11 +19,11 @@ import type { InjectionRecord } from '../../recorders/core/types.js';
 import { COMPOSITION_KEYS } from '../../recorders/core/types.js';
 // Writes the context recorder derives its events from — relayed under a policy.
 import { setEventSource } from '../../redaction/runRedaction.js';
-import type { ActiveInjection } from '../../lib/injection-engine/types.js';
-import { menuOutstanding, type TurnRoute } from '../../lib/injection-engine/routingPolicy.js';
+import type { ActiveInjection } from '../../injection-engine/types.js';
+import { menuOutstanding, type TurnRoute } from '../../injection-engine/routingPolicy.js';
 import { invariantViolationsOf } from '../../integrity/invariant-violation/check.js';
 import { contextErrorIdentity } from '../../integrity/finding/types.js';
-import { buildSkipStepTool } from '../../lib/injection-engine/skillTools.js';
+import { buildSkipStepTool } from '../../injection-engine/skillTools.js';
 import {
   currentStepOf,
   pointerOf,
@@ -32,7 +32,7 @@ import {
   stepInProgress,
   type StepPlanFor,
   type StepPointerCarrier,
-} from '../../lib/injection-engine/skillSteps.js';
+} from '../../injection-engine/skillSteps.js';
 import { typedEmit } from '../../recorders/core/typedEmit.js';
 import type { Tool } from '../../tools/tools.js';
 import type { ToolClaim } from '../agent/buildToolRegistry.js';

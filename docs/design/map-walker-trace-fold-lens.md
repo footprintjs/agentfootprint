@@ -34,7 +34,7 @@ plus Parallel's declared half; `Parallel.ts` · `mergeWithLLM` runs in the walk
 and composes the merging model's turn) · `src/memory/pipeline/` (five
 declaration-only presets; `auto.ts` mounts a stage of its own and composes the
 message it injects) · `src/patterns/` (seven caller-prompted research
-patterns; `LlmRouter.ts` composes one) · `src/lib/injection-engine/factories/`
+patterns; `LlmRouter.ts` composes one) · `src/injection-engine/factories/`
 (seven declaration-only `define*` verbs; `defineRelevanceHint.ts` composes its
 own sentence) · `src/core/` (`LLMCall.ts`, `Agent.ts`'s
 `buildChart`) · `src/tools/` (`tools.ts`, `declare.ts`, `inputRequest.ts`,
@@ -42,7 +42,7 @@ own sentence) · `src/core/` (`LLMCall.ts`, `Agent.ts`'s
 any agent runs it) · `src/answer-validation/` (`types.ts`,
 `outputSchema.ts`) · `src/core/agent/`
 (`buildAgentChart.ts`, `buildDynamicAgentChart.ts`, `buildToolRegistry.ts`,
-`AgentBuilder.ts`, `skillGraphDeclared.ts`) · `src/lib/injection-engine/`
+`AgentBuilder.ts`, `skillGraphDeclared.ts`) · `src/injection-engine/`
 (`skillGraph.ts` the compiler, plus the build-time checkers) ·
 `src/semantics/` (`types.ts`, `envelope.ts`) · `src/lib/rag/` (`defineRAG`
 declares a read-only corpus).
@@ -61,7 +61,7 @@ under Lens, and it appears in exactly these two places) · `src/core/agent/`
 (`toolEffects.ts`, the tool-result envelope grammar) ·
 `src/core/agent/middleware/` (`outcomes.ts`, `types.ts`) · `src/tools/`
 (`runChain.ts` — allow / deny / ask; `toolArgsValidation.ts`; `toolSessions.ts`) ·
-`src/lib/injection-engine/` (`buildInjectionEngineSubflow.ts`, one Gather →
+`src/injection-engine/` (`buildInjectionEngineSubflow.ts`, one Gather →
 Evaluate → Route → Delta pass per iteration) · `src/core/runbook/`
 (`runbookAsTool.ts`, `dispatch.ts`) · `src/memory/stages/` (load, filter, pick)
 · `src/cache/` (`CacheDecisionSubflow.ts`) · `src/recorded-chat/` (`send()`).
@@ -101,7 +101,7 @@ may stop — derived from the recorded commit log, never a re-walk) ·
 `src/core/agent/receipt/` (the receipt each call mints, the writer half of
 time-travel's conformance law — `core/agent/receipt/receipt.ts` · `buildReceipt`).
 
-Mixed folders carrying Fold: `src/lib/injection-engine/`
+Mixed folders carrying Fold: `src/injection-engine/`
 (`skillGraph.ts` · `makeReachableSkills`, `skillGraph.ts` ·
 `classifySkillTarget`, `skillGraph.ts` · `makeResolveCursor`, `evaluator.ts`,
 `routingPolicy.ts`) · `src/context-ledger/` (`contextLedger.ts`) ·
@@ -133,7 +133,7 @@ under Walker: `toolCalls.ts`'s refusals, `stepNudge.ts`, `evidenceRecheck.ts`,
 `src/core/agent/window/` (`notice.ts`, `summarize.ts`) ·
 `src/semantics/coverage/` (`answer.ts`) · `src/core/agent/`
 (`selfCallNotice.ts`, `stagedRefs.ts`, `presentTool.ts`, `repeatedCall.ts`,
-`resultCeiling.ts`, `outputEnforcement.ts`) · `src/lib/injection-engine/`
+`resultCeiling.ts`, `outputEnforcement.ts`) · `src/injection-engine/`
 (`skillToolDescriptors.ts`, `skillSteps.ts`'s sentence half,
 `promptTemplate.ts` · `renderTemplate`, `constrainedEnumPick.ts` ·
 `pickByParse`, `llmClassifier.ts` · `systemPromptFor`) · `src/artifacts/` (`present.ts`, `wants.ts`,
@@ -147,7 +147,7 @@ extractor prompt), `src/memory/causal/` (`loadSnapshot.ts`) ·
 `src/memory/pipeline/` (`auto.ts` · `renderAutoMessage`) ·
 `src/patterns/` (`LlmRouter.ts` · `compileRouterPrompt`) ·
 `src/core-flow/` (`Parallel.ts` · `mergeWithLLM`) ·
-`src/lib/injection-engine/factories/` (`defineRelevanceHint.ts` ·
+`src/injection-engine/factories/` (`defineRelevanceHint.ts` ·
 `defineRelevanceHint`) · the seven integrity check folders that compose their
 own finding prose — `src/integrity/empty-lookup/`,
 `src/integrity/prior-turn-evidence/`, `src/integrity/unsupported-argument/`,
@@ -253,7 +253,7 @@ a Fold.
 sentence. It may not turn that name's absence into a claim that the thing is
 gone.
 
-> `src/lib/injection-engine/skillToolDescriptors.ts` · `describeOffer`
+> `src/injection-engine/skillToolDescriptors.ts` · `describeOffer`
 > filters the catalog through `visibleSkills` FIRST, then gates its negative
 > sentence on `!hopsSpoken.held`: if the run holds hops the role may
 > not be told about, the clause is dropped rather than negated.

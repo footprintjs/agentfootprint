@@ -47,11 +47,11 @@
 import type { TypedScope } from 'footprintjs';
 import type { LLMMessage, LLMProvider, WireRole } from '../../../provider-contract/types.js';
 import { DEFAULT_CARRIES_IN_MESSAGES } from '../../../provider-contract/types.js';
-import type { ActiveInjection } from '../../../lib/injection-engine/types.js';
+import type { ActiveInjection } from '../../../injection-engine/types.js';
 import {
   messagesDeferralNote,
   messagesRoleRefusal,
-} from '../../../lib/injection-engine/messagesSlotRefusal.js';
+} from '../../../injection-engine/messagesSlotRefusal.js';
 import { fnv1a } from '../../slots/helpers.js';
 import { withMemoryRecall, type MemoryRecallSource } from '../memoryRecallInjections.js';
 import { deliveryKey, keysInWindow, refusalForPlacement, tailWireRole } from '../delivery/rules.js';

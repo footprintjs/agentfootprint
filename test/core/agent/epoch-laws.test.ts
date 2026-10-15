@@ -21,7 +21,7 @@
  *     exception — the shadow seam — was pinned as a counterexample by (g)
  *     until 9.92.0 made dispatch follow the offer; (g) now pins the seam
  *     CLOSED and its collision still reported.
- *  2. THE LENS LAW (src/lib/injection-engine/skillToolDescriptors.ts) — a
+ *  2. THE LENS LAW (src/injection-engine/skillToolDescriptors.ts) — a
  *     Lens may omit; it may claim absence or refusal only from authoritative
  *     evidence for the epoch it describes.
  *  3. THE CURSOR LAW (src/core/agent/stages/routeTurn.ts) — position belongs
@@ -50,7 +50,7 @@ import type { LLMRequest } from '../../../src/provider-contract/types.js';
 import {
   readSkillDescriptor,
   type ReadSkillOffer,
-} from '../../../src/lib/injection-engine/skillToolDescriptors.js';
+} from '../../../src/injection-engine/skillToolDescriptors.js';
 
 // ── Toolkit ──────────────────────────────────────────────────────────────
 
@@ -712,7 +712,7 @@ describe('LAW 2 — a Lens may omit; absence and refusal need evidence for the e
   it('STATED: the law is written at the composition site that both omits and refuses', () => {
     // `describeOffer` is the only site doing both halves: `hiddenIds` omits,
     // and the second column predicts a refusal. Everywhere else does one.
-    const src = read('lib/injection-engine/skillToolDescriptors.ts');
+    const src = read('injection-engine/skillToolDescriptors.ts');
     expect(src).toContain(
       'A Lens may omit; it may claim absence or refusal only from authoritative',
     );
