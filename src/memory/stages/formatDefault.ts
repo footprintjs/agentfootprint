@@ -113,7 +113,9 @@ function escapeCloseTag(text: string, tag: string): string {
   // U+200D ZERO WIDTH JOINER — invisible, survives tokenization, and
   // breaks the literal tag match. Same byte the memory formatter has
   // used since 7.x; keeping it identical keeps that output byte-stable.
-  return text.replace(new RegExp(`</${tag}>`, 'gi'), `</${head}‍${rest}>`);
+  // Whitespace inside the tag (`</memory >`, `</ memory\n>`) closes it just as
+  // well for a reader, so it is matched too; the replacement is the same bytes.
+  return text.replace(new RegExp(`<\\/\\s*${tag}\\s*>`, 'gi'), `</${head}‍${rest}>`);
 }
 
 /** Escape a value for an XML-ish attribute. Corpus metadata is not trusted input. */

@@ -1135,7 +1135,8 @@ export class AgentCoreStore implements MemoryStore {
         // flavour as a message, the rag flavour as a passage), so a bare string
         // rendered as an EMPTY block: the record was found and the model never
         // saw it. No `role`: nobody said this; AgentCore derived it.
-        value: { content: record.content } as T,
+        // Text only: a client outside the type hands back no non-string.
+        value: { content: typeof record.content === 'string' ? record.content : '' } as T,
         version: 1,
         createdAt,
         updatedAt: createdAt,
