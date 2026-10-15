@@ -172,7 +172,7 @@ describe('the time limits line — served late, after the read', () => {
     expect(line).toMatch(
       new RegExp(
         `^${`${TIME_LINE_SOURCE} ${CLOCK} ${CONTROL_30D} The time the tools read is not the time asked about`.replace(
-          /[[\]().]/g,
+          /[.*+?^${}()|[\]\\]/g,
           '\\$&',
         )} — client_activity read less than was asked — asked: 2026-09-09 08:40:00`,
       ),
