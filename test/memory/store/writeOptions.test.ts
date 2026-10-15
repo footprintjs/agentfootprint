@@ -841,6 +841,8 @@ describe('memory write options — search never reads a neighbouring namespace',
       memoryId: 'mem-1',
       client,
       searchNamespace: ({ identity }) => `/tenants/v${identity.tenant ?? ''}`,
+      // This case is about prefix narrowing on a tenant-wide memory, on purpose.
+      searchAcrossPrincipals: true,
     });
     const found = await store.search({ tenant: '1', conversationId: 'c' }, [0], { text: 'facts?' });
     expect(asked).toEqual(['/tenants/v1']);

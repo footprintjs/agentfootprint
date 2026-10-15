@@ -740,4 +740,17 @@ describe('AgentCoreStore — every missing or malformed address fails CLOSED, wi
     );
     expect(calls).toEqual([]);
   });
+
+  it('an UNSCOPED search must hold the actor — a template rendered with no tenant never spans tenants', async () => {
+    const { client, calls } = countingClient();
+    const store = new AgentCoreStore({
+      memoryId: 'mem-1',
+      client,
+      searchNamespace: ({ namespaceScope }) => `/tenants/${namespaceScope?.['tenantid'] ?? ''}`,
+    });
+    await expect(
+      store.search({ tenant: 'acme', conversationId: 'c-1' }, [], { text: 'q' }),
+    ).rejects.toThrow(/does not hold this identity’s `actorId`/);
+    expect(calls).toEqual([]);
+  });
 });

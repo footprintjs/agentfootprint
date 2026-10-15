@@ -919,8 +919,12 @@ export class AgentCoreStore implements MemoryStore {
       );
     }
     if (namespaceScope !== undefined) assertSearchWithinScope(render, namespace, namespaceScope);
+    // The actor is required when the identity names a principal — and on EVERY
+    // unscoped search: with no scope to confine it, the actor is the only thing
+    // that keeps the read on this identity (a namespace template rendered with
+    // no tenant collapses to a prefix every tenant shares).
     if (
-      identity.principal !== undefined &&
+      (identity.principal !== undefined || namespaceScope === undefined) &&
       !this.searchAcrossPrincipals &&
       !holdsActor(namespace, ids.actorId)
     ) {
