@@ -19,7 +19,7 @@
  *     host's session store resumes from (`hosting/durability.ts`);
  *   - `liveSnapshot` — the run's whole snapshot, live: what the context ledger
  *     counts usage from, whose gates decide what later runs are offered
- *     (`lib/context-ledger/contextLedger.ts`).
+ *     (`context-ledger/contextLedger.ts`).
  *
  * NO BARREL EXPORTS THIS FILE, and the runner classes carry no method for it:
  * a consumer cannot reach the real values through a runner, so nothing a

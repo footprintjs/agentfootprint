@@ -88,7 +88,7 @@ import {
   sha256Hex,
   stableJson,
 } from '../../../src/lib/time-travel/index.js';
-import { stepOutputText } from '../../../src/lib/context-bisect/index.js';
+import { stepOutputText } from '../../../src/context-bisect/index.js';
 import {
   FINDINGS_ANSWER_ASK,
   FINDINGS_ARGUMENT_SCHEMA,

@@ -53,7 +53,7 @@ import {
 } from '../../../src/recorders/observability/commentary/commentaryTemplates.js';
 import { LiveToolTracker } from '../../../src/recorders/observability/LiveStateRecorder.js';
 import { agentThinkingTrace } from '../../../src/recorders/observability/AgentThinkingTraceRecorder.js';
-import { deriveTranscript } from '../../../src/lib/bug-report/transcript.js';
+import { deriveTranscript } from '../../../src/bug-report/transcript.js';
 import {
   BoundaryRecorder,
   type DomainEvent,
@@ -533,7 +533,7 @@ describe('thinking trace (`recorders/observability/AgentThinkingTraceRecorder.ts
 
 // ─── 9. the bug-report transcript ─────────────────────────────────────
 
-describe('bug-report transcript (`lib/bug-report/transcript.ts`)', () => {
+describe('bug-report transcript (`bug-report/transcript.ts`)', () => {
   it('mirrors the event: the settled step carries the marker and no `error`', async () => {
     const { events } = await settledRun();
     const steps = (deriveTranscript(events)?.turns ?? []).flatMap((t) => t.steps);

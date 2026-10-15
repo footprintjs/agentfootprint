@@ -290,7 +290,7 @@ The readers, and what each does with it (paths from `src/`):
 | `core/Agent.ts` — the in-flight phase a crash is attributed to | stream | never in flight. Nothing observable depends on it today: both halves fire back to back with no await between them, so no crash can land inside a settled bracket |
 | `recorders/observability/BoundaryRecorder.ts` → `FlowchartRecorder.ts` | stream | the domain `tool.start` / `tool.end` carry the marker; no `llm->tool` step, no count in a boundary's `toolCalls`, and the next `tool->llm` step shows the last REAL result |
 | `recorders/observability/AgentThinkingTraceRecorder.ts` | stream | no ask or return beat |
-| `lib/bug-report/transcript.ts` | stream | its tool step carries the marker, and no `error` |
+| `bug-report/transcript.ts` | stream | its tool step carries the marker, and no `error` |
 
 Unchanged on purpose: `recorders/observability/ToolChoiceRecorder.ts` counts
 the settled call among the tools the model CHOSE — it was proposed, which is

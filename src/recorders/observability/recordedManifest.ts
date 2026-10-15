@@ -6,7 +6,7 @@
  * strategies a run is about to use. Two readers consume it: the recording
  * envelope (`recordingEnvelope.ts`) archives it as the run's own
  * `configuration`, and context-bisect's strategy arms
- * (`lib/context-bisect/arms/manifest.ts`) check a declared arm against it. The
+ * (`context-bisect/arms/manifest.ts`) check a declared arm against it. The
  * vocabulary lives here, beside the recording that carries it, so the trace
  * channel never imports the analysis built on top of it.
  *

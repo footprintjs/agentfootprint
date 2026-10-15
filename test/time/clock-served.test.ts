@@ -63,7 +63,7 @@ const call = (id: string): Reply => ({
 const LA = 'America/Los_Angeles';
 const NOW = '2026-10-09T15:40:00Z';
 const CLOCK = "This turn's time: Friday 2026-10-09 08:40 America/Los_Angeles (UTC-07:00).";
-/** The repo's token estimate (`lib/context-ledger/contextLedger.ts` · `approxTokens`): chars ÷ 4. */
+/** The repo's token estimate (`context-ledger/contextLedger.ts` · `approxTokens`): chars ÷ 4. */
 const approxTokens = (value: unknown): number => Math.ceil(JSON.stringify(value).length / 4);
 
 const listJobs = () =>

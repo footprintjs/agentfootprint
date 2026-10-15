@@ -638,14 +638,14 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: 'socket close reasons sent to the connecting client',
     },
   ],
-  'src/lib/bug-report/build.ts': [
+  'src/bug-report/build.ts': [
     {
       kind: 'not-model-facing',
       count: 1,
       why: 'a line of the bug-report bundle, written for the person who opens the issue',
     },
   ],
-  'src/lib/context-bisect/variableToBacktrackTrace.ts': [
+  'src/context-bisect/variableToBacktrackTrace.ts': [
     {
       kind: 'not-model-facing',
       count: 1,
@@ -708,7 +708,7 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: 'markdown-loading errors thrown at load time: routes passed to the skills-only loader, and declared tool names without a supplied tool registry',
     },
   ],
-  'src/lib/recorded-chat/recordedChat.ts': [
+  'src/recorded-chat/recordedChat.ts': [
     {
       kind: 'not-model-facing',
       count: 1,

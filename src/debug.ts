@@ -247,13 +247,13 @@ export {
   type JoinVariableSliceOptions,
   type TraceVariableOptions,
   type VariableAblationHook,
-} from './lib/context-bisect/index.js';
+} from './context-bisect/index.js';
 // Strategy arms — the SUBSTITUTION half of the counterfactual engine
 // ("scorer A vs scorer B", "topK vs a re-ranker"). Deliberately a SIBLING of
 // `AblationSpec` rather than a fifth arm on it: ablation removes, an arm
 // replaces, and the union feeds a subset search substitutions do not compose
 // under. Wired to 9.41.0's run manifest, so a run says which arm it belonged to
-// instead of the experimenter asserting it. See lib/context-bisect/arms/README.md.
+// instead of the experimenter asserting it. See context-bisect/arms/README.md.
 export {
   applyArm,
   armConfigKey,
@@ -286,7 +286,7 @@ export {
   type RunManifestLike,
   type StrategyArm,
   type StrategyComparison,
-} from './lib/context-bisect/index.js';
+} from './context-bisect/index.js';
 // BacktrackTrace serializer — feeds agentThinkingUI's <BacktrackView>
 // (the "why?" board) straight off a localizer report. Pure mapping, no
 // UI dependency; the interfaces mirror agentthinkingui's contract.
@@ -302,7 +302,7 @@ export {
   type SliceToBacktrackTraceOptions,
   type ToBacktrackTraceOptions,
   type VariableToBacktrackTraceOptions,
-} from './lib/context-bisect/index.js';
+} from './context-bisect/index.js';
 // Tool-catalog confusability lint (RFC-002 tier 1, C1–C3) — build-time,
 // CI-gateable, framework-agnostic: plain { name, description?, inputSchema? }
 // tools in (OpenAI/Anthropic/MCP lists coerce via coerceCatalog; the
@@ -380,4 +380,4 @@ export {
   type RecordedChatOptions,
   type RerunTurnOptions,
   type SendOptions,
-} from './lib/recorded-chat/index.js';
+} from './recorded-chat/index.js';

@@ -85,8 +85,8 @@
  * ```
  */
 
-import { formatBytes } from '../../lib/bug-report/build.js';
-import type { BugReport } from '../../lib/bug-report/index.js';
+import { formatBytes } from '../../bug-report/build.js';
+import type { BugReport } from '../../bug-report/index.js';
 import { isSlash, trimBoth, trimTrailing } from '../../lib/linearText.js';
 
 /** GitHub's own ceiling for a file committed through the contents API is 100 MB,

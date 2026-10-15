@@ -1,7 +1,7 @@
 /**
  * Compile-level regression test — the 7.5.0 widening of
  * `LocalizeContextBugOptions['scorer']` from `InfluenceScorer` to
- * `InfluenceScorer | InfluenceStrategy` (src/lib/context-bisect/localize.ts)
+ * `InfluenceScorer | InfluenceStrategy` (src/context-bisect/localize.ts)
  * must stay NON-BREAKING: 7.4.0 code that passed a bare `InfluenceScorer`
  * function still has to compile unchanged, and the new `InfluenceStrategy`
  * descriptor must be assignable too.
@@ -23,7 +23,7 @@ import {
   semanticAlignmentStrategy,
   type InfluenceScorer,
 } from '../../src/lib/influence-core';
-import type { LocalizeContextBugOptions } from '../../src/lib/context-bisect';
+import type { LocalizeContextBugOptions } from '../../src/context-bisect';
 
 describe('InfluenceStrategy — assignability (7.5.0 widening stays non-breaking)', () => {
   it('a bare InfluenceScorer function still fits the widened scorer option', () => {

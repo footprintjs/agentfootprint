@@ -361,7 +361,7 @@ bytes, for any recording — an agent's or a chart's.)
   never is.
 - **The served views** (`servedAt`, `servedViews`) read a redacted piece as
   absent, and name the fold base a served snapshot lacks (`no-fold-base`).
-- **The context ledger** (`lib/context-ledger/contextLedger.ts`) is not a
+- **The context ledger** (`context-ledger/contextLedger.ts`) is not a
   reader of the record but a mechanism: its gates decide what LATER runs are
   offered, so a placeholder must never count as "never used". A runner is read
   live — a final value the log keeps out (the history it counts tool calls

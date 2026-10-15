@@ -45,7 +45,7 @@ an audit found them drifting toward overlap:
 |---|---|---|
 | `RecordingEnvelope` (here) | machines | THE versioned contract — the narrow waist. Identity, completeness and drop-count facts stamped as truths or refused. Archives, ingestion, cross-run analysis. |
 | `Trace` v1 (`trace.ts`) | humans + UIs | a redacted domain-event PROJECTION of the same run — a presentation, not the contract |
-| `exportBugReport` (`src/lib/bug-report/`) | humans filing issues | a zip whose evidence IS an envelope, wrapped in consent machinery (selectable units, redacted-key names, a size ceiling) — a presentation for one workflow |
+| `exportBugReport` (`src/bug-report/`) | humans filing issues | a zip whose evidence IS an envelope, wrapped in consent machinery (selectable units, redacted-key names, a size ceiling) — a presentation for one workflow |
 
 The rule: the envelope is the contract; the other two are presentations OVER it.
 

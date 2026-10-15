@@ -293,7 +293,7 @@ const SITES: Readonly<Record<string, readonly Site[]>> = {
   'src/memory/beats/llmExtractor.ts': [
     { cls: 'never-in-history', why: 'the beat-extraction request — one provider call' },
   ],
-  'src/lib/recorded-chat/recordedChat.ts': [
+  'src/recorded-chat/recordedChat.ts': [
     {
       cls: 'never-in-history',
       why:
