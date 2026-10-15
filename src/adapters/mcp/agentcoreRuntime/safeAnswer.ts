@@ -436,9 +436,13 @@ function sseParser(emit: (event: SseEvent) => Uint8Array): {
 
 /** One event in canonical form — its data the ONE message it held, read strictly. */
 function canonicalEvent(event: SseEvent): string {
+  // An event type that is not a plain token cannot be re-emitted as it was,
+  // and re-emitting it as a default `message` would make the client act on an
+  // event it would have ignored — so it is dropped.
+  if (event.type !== undefined && !PLAIN_TOKEN.test(event.type)) return '';
   const message = oneMessage(parseOnce(event.data));
   const lines: string[] = [];
-  if (event.type !== undefined && PLAIN_TOKEN.test(event.type)) lines.push(`event: ${event.type}`);
+  if (event.type !== undefined) lines.push(`event: ${event.type}`);
   if (event.id !== undefined && PLAIN_TOKEN.test(event.id)) lines.push(`id: ${event.id}`);
   lines.push(`data: ${JSON.stringify(canonicalMessage(message))}`);
   return `${lines.join('\n')}\n\n`;

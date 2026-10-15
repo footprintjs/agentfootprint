@@ -1619,6 +1619,16 @@ describe('agentCoreRuntimeMcpTransport — P5 one reading of an answer; ambiguit
       );
     });
 
+    it('an event whose type is not a plain token is dropped, never turned into a message', async () => {
+      const res = await send(
+        answering(
+          'event: x y\ndata: {"jsonrpc":"2.0","method":"n"}\n\ndata: {"jsonrpc":"2.0","method":"m"}\n\n',
+          SSE,
+        ),
+      );
+      expect(await res.text()).toBe('data: {"jsonrpc":"2.0","method":"m"}\n\n');
+    });
+
     it('a last event with no blank line after it is not dispatched — as the SSE rules say', async () => {
       const res = await send(answering(`data: {"jsonrpc":"2.0","method":"n"}`, SSE));
       expect(await res.text()).toBe('');

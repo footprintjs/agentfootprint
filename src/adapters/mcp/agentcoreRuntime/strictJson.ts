@@ -9,8 +9,9 @@
  * the client the canonical re-serialization of exactly the value it checked.
  *
  * Refused, by name: a duplicated object key, trailing data after the value, a
- * leading byte-order mark, nesting deeper than {@link MAX_DEPTH}, and anything
- * that is not RFC 8259 JSON.
+ * leading byte-order mark, nesting deeper than {@link MAX_DEPTH}, a number
+ * out of range (its re-serialization would be `null`), and anything that is
+ * not RFC 8259 JSON.
  *
  * Objects are built with own properties only (a `__proto__` key is data, never
  * a prototype).
@@ -185,7 +186,10 @@ class Reader {
     const match = NUMBER.exec(this.text);
     if (match === null || match[0] === '') throw new AmbiguousJsonError('a value that is not JSON');
     this.at += match[0].length;
-    return Number(match[0]);
+    const value = Number(match[0]);
+    // Re-serialized, a number out of range would become `null` — another value.
+    if (!Number.isFinite(value)) throw new AmbiguousJsonError('a number out of range');
+    return value;
   }
 
   private word(word: string): boolean {

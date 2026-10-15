@@ -31,6 +31,7 @@ describe('strictJson — P1 every ambiguity refused by name', () => {
     ['NaN', /not JSON/],
     ['', /not JSON/],
     ['[1,]', /not JSON/],
+    ['1e400', /number out of range/],
   ])('%j is refused', (text, reason) => {
     expect(() => parseStrictJson(text)).toThrow(AmbiguousJsonError);
     expect(() => parseStrictJson(text)).toThrow(reason);
