@@ -131,7 +131,7 @@ export {
 // the app declared) in, a typed account out — facts, each with who vouches for
 // it and where it lives in the record, and fixed sentences from a closed,
 // versioned template table. Pure and read-time: no clock, network or model.
-// See src/lib/answer-account/README.md.
+// See src/answer-account/README.md.
 // `answerAccountPointerKey(pointer)` is the key of the `shown` map the hosting
 // op `{ op: 'answer-account', ref }` returns beside the account.
 export {
@@ -140,7 +140,7 @@ export {
   type AnswerAccount,
   type AnswerAccountDeclarations,
   type AnswerAccountShownLeaf,
-} from './lib/answer-account/index.js';
+} from './answer-account/index.js';
 
 // assessAnswer — the answer's STANDING, folded from the run's committed record:
 // known · consistent with the record · not sure (with the reasons) · ask · not

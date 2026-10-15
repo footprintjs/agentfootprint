@@ -11,7 +11,7 @@
  *          `periodRowIsWellFormed`) is on every agent's graph, and a bundler
  *          places a whole file there — so this file imports only
  *          `instant.ts` and the range and zone types (the optional-family
- *          law, `test/lib/trace-toolpack/browserGraph.test.ts`). `check.ts`
+ *          law, `test/trace-toolpack/browserGraph.test.ts`). `check.ts`
  *          re-exports every public name.
  * Emits:   N/A.
  *

@@ -32,7 +32,7 @@
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { Agent, slidingWindow } from '../../../src/index.js';
 import { mock } from '../../../src/llm-providers.js';
-import { epochLocations, readRunConstant } from '../../../src/lib/time-travel/index.js';
+import { epochLocations, readRunConstant } from '../../../src/time-travel/index.js';
 import { buildWindowStage } from '../../../src/core/agent/stages/window.js';
 import type { WindowStageDeps } from '../../../src/core/agent/stages/window.js';
 import type { AgentOptions, AgentState } from '../../../src/core/agent/types.js';

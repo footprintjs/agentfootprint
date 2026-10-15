@@ -55,8 +55,8 @@ import {
 } from '../../src/core/agent/evidence/figures.js';
 import { stagedRefsNudgeLine } from '../../src/core/agent/stagedRefs.js';
 import { currentRequestIndexOf } from '../../src/core/agent/window/currentRequest.js';
-import { readPausedLeg } from '../../src/lib/answer-account/facts/pausedLeg.js';
-import { isPersonEntry, type ReadContext } from '../../src/lib/answer-account/facts/common.js';
+import { readPausedLeg } from '../../src/answer-account/facts/pausedLeg.js';
+import { isPersonEntry, type ReadContext } from '../../src/answer-account/facts/common.js';
 import { STAGED_DATA_FRAME_PREFIX } from '../../src/lib/saidByPerson.js';
 
 const LA = 'America/Los_Angeles';

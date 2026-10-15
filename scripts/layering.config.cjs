@@ -130,9 +130,9 @@ const LAYERS = [
     rank: 10,
     name: 'lenses over a run',
     files: [
-      'src/lib/answer-account/**',
-      'src/lib/time-travel/**',
-      'src/lib/trace-toolpack/**',
+      'src/answer-account/**',
+      'src/time-travel/**',
+      'src/trace-toolpack/**',
       'src/core-flow/**',
     ],
   },

@@ -254,7 +254,7 @@ accountForAnswer(recording).facts.standing.value; // 'ask'
 | RECORD | the existing committed keys, and — under the layer's arm — the two witness rows (`witness.ts`), filed by the Route decider (`core/agent/stages/route.ts` · `judgeEvidence`, `judgeUnfinishedSteps`) |
 | RESOLVE | label only: the fold never asks, refuses or rewrites; the one opt-in line is appended after the answer, never into it |
 | FOLD | `assess.ts` · `assessAnswer` — pure, committed rows only, one function for every reader, in the run and after it |
-| SERVE | after the run: `agent.assessment()` (async: it loads this fold through `import()` on first use, so an agent that never asks does not carry it — pinned by `test/lib/trace-toolpack/browserGraph.test.ts`), `assessAnswer` on `agentfootprint/observe`, the answer account's "How sure" row (`lib/answer-account/facts/howSure.ts` · `readHowSure`); in the run (armed): `turn_end.answerAssessment`, `agentfootprint.answer.assessed`, and the line under `{ standingLine: true }` |
+| SERVE | after the run: `agent.assessment()` (async: it loads this fold through `import()` on first use, so an agent that never asks does not carry it — pinned by `test/trace-toolpack/browserGraph.test.ts`), `assessAnswer` on `agentfootprint/observe`, the answer account's "How sure" row (`answer-account/facts/howSure.ts` · `readHowSure`); in the run (armed): `turn_end.answerAssessment`, `agentfootprint.answer.assessed`, and the line under `{ standingLine: true }` |
 | ARM + MEASURE | `.answerLayer()`; off → byte-identical (every reference under `test/core/tools/reference/` unchanged; `agent-answer-layer` is the armed one); this README's last section |
 
 ## Parity with the study's RQ3 rule

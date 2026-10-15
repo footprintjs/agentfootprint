@@ -217,9 +217,9 @@ tracked read), and so is the empty-lookup corpus
 (`test/integrity/emptyLookup.test.ts`); the toolpack's arm (stream first,
 history fallback, the latest decides — a reused id's outcome and duration off
 its LAST `tool_end`, with and without a settlement) in
-`test/lib/trace-toolpack/inspectToolCall.test.ts`; and the
+`test/trace-toolpack/inspectToolCall.test.ts`; and the
 served-view rebuild under `.findings()` by the conformance law in
-`test/lib/time-travel/receipt-conformance.test.ts`.
+`test/time-travel/receipt-conformance.test.ts`.
 
 **Not covered yet — three doors that leave the later calls unanswered, or
 answer them another way.** A permission `halt` mid-batch ends the run with the
@@ -276,9 +276,9 @@ The readers, and what each does with it (paths from `src/`):
 | `core/agent/stages/toolCalls.ts` · `producerCorpusOf` — the empty-lookup check's producer corpus (`noticeEmptyLookup`) | history | no producer text: a value only the sentence carries is not one "this run produced", and a ground that was only ever settled served nothing (the row reads `unreachable`) |
 | `core/checkin.ts` · `buildTrail` — the check-in trail's `toolCalls` | history | left out: never shown as a receipt |
 | `core/agent/window/toolNames.ts` · `toolNameOfMessage` — the last-tool-result pin, the drop notice, the dangling-reference check (`core/agent/stages/callLLM.ts`, which names the frame from the history the stage already read at its top — never a second read, which would add a narrative step to every run) | history | named as no tool: the pin stays on the tool's real result |
-| `core/agent/findings/offer.ts` · `isResultMessage` — the offer, `knownResults`, the piece's `undeclared:` line, the collapse (`core/agent/findings/serve.ts` · `collapseJudged`), `WindowRecord.droppedStandings` (`core/agent/stages/window.ts`) | history | no result to judge: never offered, never resolved (a model that names it files `unknownId`), never undeclared, never collapsed, never listed as dropped — the request and its rebuild (`lib/time-travel/servedView.ts`) both read the committed conversation |
+| `core/agent/findings/offer.ts` · `isResultMessage` — the offer, `knownResults`, the piece's `undeclared:` line, the collapse (`core/agent/findings/serve.ts` · `collapseJudged`), `WindowRecord.droppedStandings` (`core/agent/stages/window.ts`) | history | no result to judge: never offered, never resolved (a model that names it files `unknownId`), never undeclared, never collapsed, never listed as dropped — the request and its rebuild (`time-travel/servedView.ts`) both read the committed conversation |
 | `core/agent/window/ledgerFactPins.ts` · `turnStandingOf`, `ledgerFactPinsOf` — a turn's standing (`WindowStrategyInput.standingOf`) and the `'ledger-fact'` pin, by the same `isResultMessage` | history | no result to rank: it takes no part in its turn's standing (a batch whose results the model judged all noise stays `noise`), a `fact` filed on its id holds nothing, and a pin never lists its id |
-| `lib/trace-toolpack/traceToolpack.ts` · `notDispatchedOf` — `inspect_tool_call` | stream first, history fallback | "not dispatched", with no arguments, duration or inside. For an id a provider reused, the latest bracket and the latest message decide whether it was dispatched; a call that ran under it after a settlement is read off its own bracket — its outcome and duration off the LAST `tool_end` for the id (`buildInspectToolCall`), its step off the first bracket of a call that ran (`bracketsFor`) — never the settlement's `durationMs: 0` |
+| `trace-toolpack/traceToolpack.ts` · `notDispatchedOf` — `inspect_tool_call` | stream first, history fallback | "not dispatched", with no arguments, duration or inside. For an id a provider reused, the latest bracket and the latest message decide whether it was dispatched; a call that ran under it after a settlement is read off its own bracket — its outcome and duration off the LAST `tool_end` for the id (`buildInspectToolCall`), its step off the first bracket of a call that ran (`bracketsFor`) — never the settlement's `durationMs: 0` |
 | `memory/causal/evidenceRecorder.ts` | stream | no `ToolCallRecord`: no args went to a tool, no result came back |
 | `adapters/observability/audit.ts` | stream | the marker rides verbatim on both chained records (identifiers only, both payload modes), with no `error` |
 | `adapters/observability/otel.ts` | stream | no `execute_tool` span; one span event `agentfootprint.tool.not_dispatched` on the active span — on a leg the adapter traces. **Known limit: no run records it yet.** A trace opens on `agent.turn_start`, a resumed leg emits none under a new `meta.runId`, so none of a resumed leg is traced, and a settled bracket only ever rides one |

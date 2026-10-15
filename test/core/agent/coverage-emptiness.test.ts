@@ -460,9 +460,9 @@ describe('PROPERTY — total, deterministic, pure; the two callers agree on a re
 describe('FUNCTIONAL — one reader, two callers', () => {
   it('the answer account and the standing fold both import it; neither keeps its own', () => {
     const src = resolve(__dirname, '../../../src');
-    const common = readFileSync(`${src}/lib/answer-account/facts/common.ts`, 'utf8');
+    const common = readFileSync(`${src}/answer-account/facts/common.ts`, 'utf8');
     const fold = readFileSync(`${src}/core/agent/assessment/assess.ts`, 'utf8');
-    expect(common).toMatch(/from '\.\.\/\.\.\/\.\.\/core\/agent\/emptiness\.js'/);
+    expect(common).toMatch(/from '\.\.\/\.\.\/core\/agent\/emptiness\.js'/);
     expect(fold).toMatch(/from '\.\.\/emptiness\.js'/);
     // No second implementation of the routes anywhere in either caller.
     for (const text of [common, fold]) expect(text).not.toMatch(/undeclared-empty', rows: 0/);

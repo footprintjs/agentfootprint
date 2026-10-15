@@ -20,7 +20,7 @@
 
 /**
  * A leaf of the committed record a reason or a check rests on — an RFC 6901
- * pointer, the answer account's pointer shape (`lib/answer-account/types.ts` ·
+ * pointer, the answer account's pointer shape (`answer-account/types.ts` ·
  * `RecordPointer`), so a lens resolves both the same way:
  *
  * - `state` — a leaf of a committed key of the run's `sharedState`

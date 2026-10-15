@@ -639,9 +639,9 @@ describe('silent success — reading a run', () => {
     const names = read('lib/traceToolNames.ts');
     expect(names).toContain('No completed run is available yet');
     expect(names).toContain('Tell the user there is nothing to explain yet.');
-    expect(read('lib/trace-toolpack/lazyToolpack.ts')).toContain('NO_COMPLETED_RUN_MESSAGE');
+    expect(read('trace-toolpack/lazyToolpack.ts')).toContain('NO_COMPLETED_RUN_MESSAGE');
     // The model is told the same thing by the methodology it is handed.
-    expect(read('lib/trace-toolpack/debugPrompt.ts')).toContain('say so plainly');
+    expect(read('trace-toolpack/debugPrompt.ts')).toContain('say so plainly');
   });
 
   it('ACCEPTED: a recorder attached between runs observes the next one', async () => {

@@ -246,7 +246,7 @@ export async function run(): Promise<void> {
   // A field with no gap beside it is not an oversight: `UNGAPPED_FIELDS` says
   // which fields need none and why, in one sentence each. Between the two,
   // every field of a receipt and a view is accounted for — and a walk
-  // (test/lib/time-travel/gap-catalogue-walk.test.ts) is what keeps that true
+  // (test/time-travel/gap-catalogue-walk.test.ts) is what keeps that true
   // as fields are added, rather than somebody re-reading the list.
   console.log('Fields no gap explains, and why none is needed:');
   for (const [field, reason] of Object.entries(UNGAPPED_FIELDS)) {

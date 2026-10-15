@@ -8,7 +8,7 @@ the contradiction sentence ("The answer's '…' says … while the run verified 
 and its advisory twin. They are English prose with a model audience, not only a
 dashboard one: `src/core/agent/integrityFindings.ts` · `fileIntegrityFindings` emits every
 ContextError on `agentfootprint.integrity.context_error`, and
-`src/lib/trace-toolpack/traceToolpack.ts` · `buildFindContextErrors` reads them
+`src/trace-toolpack/traceToolpack.ts` · `buildFindContextErrors` reads them
 all and truncates `error.message` into the `find_context_errors` tool result a
 debugging model reads.
 No `test/modelFacingScan.test.ts` LEDGER row files this check: that scan keys

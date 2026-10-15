@@ -6,7 +6,7 @@ for. It derives from the record, states its own evidence, and files a
 disposition even when it finds nothing.
 Lens: the `message` `check.ts` · `emptyLookupOf` composes. It is English prose
 with a model audience, not only a dashboard one:
-`src/lib/trace-toolpack/traceToolpack.ts` · `buildFindContextErrors` reads
+`src/trace-toolpack/traceToolpack.ts` · `buildFindContextErrors` reads
 `error.message` and truncates it into the `find_context_errors` tool result.
 `test/modelFacingScan.test.ts` files this check `kind: 'unrepaired'`.
 

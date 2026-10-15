@@ -17,7 +17,7 @@ paths:
   - src/resilience/withRetry.ts
   - src/identity/withCredentialRetry.ts
   - src/context-bisect/**
-  - src/lib/trace-toolpack/**
+  - src/trace-toolpack/**
   - src/lib/traceToolNames.ts
   - src/observability/contextError/finders/**
   - src/influence-core/**
@@ -137,7 +137,7 @@ walkToRoot: frame = symptom; loop: narrow(frame) → beam-k writers → ablate e
 
 ## M7 — Variable-first triage surface (consumes fp's slice layer)
 
-Files: `src/lib/trace-toolpack/traceToolpack.ts` `buildBacktrack` — the 6th
+Files: `src/trace-toolpack/traceToolpack.ts` `buildBacktrack` — the 6th
 toolpack tool, `backtrack(variable, element?, before?)`: slice mode =
 `sliceForKey` + `formatSlice` (fp 9.10.0); element mode = `elementProvenance`
 (the history mega-key answer: `history[N]` names its birth iteration —

@@ -120,7 +120,7 @@ decider committed, before PrepareFinal, which writes nothing the fold reads.
    section once; the block (capped for the reader) and the data (uncapped) are its two callers, and
    a property test holds the block's items equal to the data's.
 7. **The account reads what travelled with the answer** (follow-up 1).
-   `lib/answer-account/account.ts` · `readAnswer` reads `turn_end.answerCoverage` into a new fact,
+   `answer-account/account.ts` · `readAnswer` reads `turn_end.answerCoverage` into a new fact,
    `limitsData` (recorded; a pointer to every item), and a typed answer's `limitsBlock` now reads
    `not-recorded` with `missing: 'as-data'` — never `not-applicable` when the limits travelled.
    The split of a prose answer finds the framework's whole appended section — the blocks by their

@@ -10,7 +10,7 @@
  *          a whole file on the synchronous graph — so the window half, which
  *          re-resolves a recorded reading (`resolve.ts`), stays behind
  *          `import()` (the optional-family law,
- *          `test/lib/trace-toolpack/browserGraph.test.ts`). Imports nothing.
+ *          `test/trace-toolpack/browserGraph.test.ts`). Imports nothing.
  * Emits:   N/A.
  *
  * @example

@@ -50,7 +50,7 @@ import {
 import { conversationRedaction } from '../../src/doors/security.js';
 import { boundedContentFieldNames } from '../../src/adapters/observability/audit.js';
 import { ALL_EVENT_TYPES } from '../../src/events/registry.js';
-import type { AnswerAccount } from '../../src/lib/answer-account/types.js';
+import type { AnswerAccount } from '../../src/answer-account/types.js';
 import { CONVERSATION_FEATURES } from '../../src/redaction/conversation.js';
 import { mockThinkingHandler } from '../../src/thinking/MockThinkingHandler.js';
 import { defineMemory, MEMORY_STRATEGIES, MEMORY_TYPES } from '../../src/memory/index.js';

@@ -66,7 +66,7 @@ import { INJECTION_KEYS } from '../lib/conventions.js';
 // The flat/grouped fork, from its ONE owner (9.88.0). This file used to carry a
 // private copy and `context-bisect/trajectory.ts` carried its byte-twin; two
 // answers to "which log is iteration k in?" is one answer too many.
-import { llmCallMountKeys } from '../lib/time-travel/epochs.js';
+import { llmCallMountKeys } from '../time-travel/epochs.js';
 import type {
   ContextLedger,
   LedgerRow,

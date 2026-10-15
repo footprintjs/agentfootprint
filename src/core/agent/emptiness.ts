@@ -8,8 +8,8 @@
  *          placement ticket's guard, `artifacts/naming.ts`,
  *          `artifacts/placement.ts`), never a mint, so a post-hoc reader
  *          loads it without the tool-name checks and refusal sentences.
- * Callers: the `/observe` answer account (`lib/answer-account/facts/calls.ts`
- *          for this run's calls, `lib/answer-account/facts/inView.ts` for an
+ * Callers: the `/observe` answer account (`answer-account/facts/calls.ts`
+ *          for this run's calls, `answer-account/facts/inView.ts` for an
  *          earlier answer's result) and the standing fold
  *          (`core/agent/assessment/assess.ts` · `assessAnswer`). One rule, so
  *          the person's account and the answer's standing read the same bytes
@@ -76,7 +76,7 @@
  * would have filed for an object. Which caller holds a door:
  *
  * - the answer account, for this run's calls — its EVENTS are the door
- *   (`lib/answer-account/facts/calls.ts`), and a call's `tool_end` is always
+ *   (`answer-account/facts/calls.ts`), and a call's `tool_end` is always
  *   in the record, so a JSON-text envelope the run never recognized reads as
  *   data in "It found";
  * - the standing fold, only for a call that has a committed coverage row
@@ -191,7 +191,7 @@ export interface EmptinessReading {
    * - `redacted` — the result itself is kept out of the record: a redaction
    *   policy (an agent's `redact`) left its placeholder where the value was,
    *   so nothing about the rows can be read. Set by the answer account's call
-   *   reader (`lib/answer-account/facts/calls.ts`), which never hands a
+   *   reader (`answer-account/facts/calls.ts`), which never hands a
    *   placeholder to this reader as if it were a result.
    */
   readonly rowsUnread?: 'no-list' | 'uncounted-ticket' | 'redacted';
@@ -205,7 +205,7 @@ const MAX_BOUND_DEPTH = 8;
  * object result — no `/` and no `.`, so it can never be read as a path. Returns
  * what is wrong with a value (`'empty'`, `'nested'`), or `undefined` when it
  * keeps the rule. Both readers' declarations are checked by it (the answer
- * account's `lib/answer-account/declarations.ts` · `validateDeclarations`, the
+ * account's `answer-account/declarations.ts` · `validateDeclarations`, the
  * standing fold's `core/agent/assessment/assess.ts` · `assessAnswer`), so the
  * two cannot accept different keys.
  */

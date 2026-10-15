@@ -38,7 +38,7 @@
 
 import { isArtifactRef } from '../artifacts/naming.js';
 import type { ArtifactMeta } from '../artifacts/types.js';
-import type { AnswerAccount, AnswerAccountShownLeaf } from '../lib/answer-account/types.js';
+import type { AnswerAccount, AnswerAccountShownLeaf } from '../answer-account/types.js';
 import { InvalidWireOpError } from './errors.js';
 import { isWireOp, refuseUnknownWireOp, WIRE_OPS } from './wireOps.js';
 

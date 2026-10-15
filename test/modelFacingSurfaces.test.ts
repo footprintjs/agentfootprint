@@ -1493,14 +1493,14 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
   },
   {
     id: 'trace toolpack — the tool-call inspection results',
-    module: 'src/lib/trace-toolpack/traceToolpack.ts',
+    module: 'src/trace-toolpack/traceToolpack.ts',
     surface: TOOL_RESULT,
     lifetimeBecause:
       "these are the return values of the pack's `execute`, dispatched by a debugging agent " +
       'like any other tool — every later call of that session re-reads them',
     drivenBy: [
-      'test/lib/trace-toolpack/inspectToolCall.test.ts',
-      'test/lib/trace-toolpack/innerRunRecords.test.ts',
+      'test/trace-toolpack/inspectToolCall.test.ts',
+      'test/trace-toolpack/innerRunRecords.test.ts',
     ],
     // The arms this row composes, one marker each. NOT every arm of the
     // pack: the unknown-id arms of `inspect_tool_call` / `trace_node` carry
@@ -1586,7 +1586,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       'hashes per request — never a `history` turn',
     drivenBy: [
       'test/core/agent/findings-ledger.test.ts',
-      'test/lib/time-travel/receipt-conformance.test.ts',
+      'test/time-travel/receipt-conformance.test.ts',
     ],
     // The ask's four standings and its one refusal to guess, each a marker so
     // a rewrite that drops a standing goes red here before it ships.
@@ -1614,7 +1614,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
     drivenBy: [
       'test/core/agent/findings-served.test.ts',
       'test/core/agent/findings/serve.test.ts',
-      'test/lib/time-travel/receipt-conformance.test.ts',
+      'test/time-travel/receipt-conformance.test.ts',
     ],
     // The header's two refusals to infer, every bucket heading, the honest
     // absence, and the two stated overflows — each a marker so a rewrite that
@@ -1650,7 +1650,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
     drivenBy: [
       'test/core/agent/findings-served.test.ts',
       'test/core/agent/findings/serve.test.ts',
-      'test/lib/time-travel/receipt-conformance.test.ts',
+      'test/time-travel/receipt-conformance.test.ts',
     ],
     // The ask's five sentences: what the model may DO with a fact line, an
     // open one, a ticket and an undeclared result, and its one refusal to
@@ -2351,10 +2351,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       '`.ontology()` registers it through `defineInstruction` (the twin of `outputSchema()` and ' +
       '`.findings()`), so it is a system piece the injection engine recomposes on every pass and ' +
       'the receipt hashes per request — never a `history` turn',
-    drivenBy: [
-      'test/core/agent/ontology.test.ts',
-      'test/lib/time-travel/receipt-conformance.test.ts',
-    ],
+    drivenBy: ['test/core/agent/ontology.test.ts', 'test/time-travel/receipt-conformance.test.ts'],
     // The ask's four sentences: what the map is, what to say when a need
     // was not met (a proposal, never a claim), the refusal to invent, the
     // node nobody holds — each a marker so a rewrite that drops one goes
@@ -2384,7 +2381,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
     drivenBy: [
       'test/core/agent/ontology.test.ts',
       'test/ontology/serve.test.ts',
-      'test/lib/time-travel/receipt-conformance.test.ts',
+      'test/time-travel/receipt-conformance.test.ts',
     ],
     // The header's two refusals to infer, every section heading, every line
     // shape, the honest "known, not held here" and the stated overflow.

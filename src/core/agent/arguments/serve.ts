@@ -576,7 +576,7 @@ const refusedFor = (windows: ServedWindows, quote: string, tool: string): boolea
  * point — composed at the tools slot's one decoration site
  * (`core/slots/buildToolsSlot.ts` · `commitWire`) from the tools it really
  * serves, carried to `callLLM` on `timeLine`, and rebuilt by
- * `lib/time-travel/servedView.ts` from the same committed key. Four parts:
+ * `time-travel/servedView.ts` from the same committed key. Four parts:
  *
  * - SETTLED — each window the person confirmed or gave in the time ask (or a
  *   `model` reader's reading), in the person's zone, WHOSE it is, and each
@@ -785,7 +785,7 @@ export const TIME_LINE_SOURCE: string = LIBRARY_NOTE_OPENING;
  * then the limits — opened ONCE with {@link TIME_LINE_SOURCE}. The tools
  * slot's one decoration site (`core/slots/buildToolsSlot.ts` · `commitWire`)
  * calls it, `callLLM` appends the result LAST to the request, and
- * `lib/time-travel/servedView.ts` rebuilds it byte for byte from the same
+ * `time-travel/servedView.ts` rebuilds it byte for byte from the same
  * committed `timeLine` key. `undefined` when no part has anything to say — a
  * turn with nothing to say serves no line (and without `.time()` nothing here
  * runs at all).

@@ -1,0 +1,556 @@
+/**
+ * selfExplain — the IN-CONVERSATION door over the agent's own trace.
+ *
+ * `.selfExplain()` on the builder mounts ONE skill plus ONE scoped tool
+ * provider. Day to day the tool catalog carries only the skill's
+ * activation row — the trace tools are NOT in the skill (skill `tools`
+ * land in the static registry, exposed every iteration); they ride a
+ * `skillScopedTools` provider gated on the skill's activation, composed
+ * with whatever provider the consumer already set. When the user asks a
+ * why-question the LLM activates the skill, and the NEXT iteration's
+ * catalog gains the trace tools, bound to the agent's own PREVIOUS
+ * COMPLETED run.
+ *
+ * The two pieces here:
+ *
+ * 1. `SelfExplainBinding` — the late-binding seam, a plain CombinedRecorder
+ *    attached like any consumer recorder (zero engine changes):
+ *
+ *      - capture at `onRunEnd`/`onRunFailed`: the just-finished run's
+ *        snapshot becomes the explainable evidence (a FAILED run is
+ *        still a completed trace — "why did you fail?" works);
+ *      - rotate at `onRunStart`: a FRESH ControlDepRecorder per run. The
+ *        retired instance never sees the new run's events, so its live
+ *        `asLookup()` survives Convention-4's runId reset — the captured
+ *        control edges stay valid for the whole next turn.
+ *
+ *    B13 safety lives here: `Agent.run()` reassigns its executor at run
+ *    START, so resolving artifacts mid-run through `getLastSnapshot()`
+ *    would expose the IN-FLIGHT run. Capturing only at terminal flush
+ *    means the binding can never serve anything but a completed run.
+ *
+ *    Keyed PER CONVERSATION (R2-11): one agent instance can serve
+ *    many people (`standingAgent({ agent })`), so "the previous completed
+ *    run" is asked of the ASKING run's session — the evidence of the last
+ *    run that session completed, never whichever run the instance finished
+ *    last. A run with no session reads the last run that had none. A tool's
+ *    retained inner runs are served through the same key
+ *    (`core/innerRunRecords.ts · innerRunsOfConversation`).
+ *
+ * 2. `buildSelfExplainSkill` — the skill in two modes:
+ *
+ *      - INLINE (default): the skill unlocks the trace tools — every name
+ *        in `TRACE_TOOL_NAMES` (11 today) — in the main agent's own loop
+ *        (same model). The count is deliberately not restated anywhere
+ *        that could fall behind the pack.
+ *      - DELEGATE: the skill unlocks ONE tool — `explain_run(question)` —
+ *        whose execute runs a nested `traceDebugAgent` on the consumer's
+ *        chosen (cheaper) provider/model and returns its evidence-cited
+ *        answer. The main conversation pays for one tool call; the
+ *        trace-walking loop happens at the delegate's price. Loaded via
+ *        dynamic import so the builder never statically pulls Agent
+ *        through this module (no core ↔ lib cycle).
+ */
+
+import { isFlowEvent, type CombinedRecorder, type RuntimeSnapshot } from 'footprintjs';
+import { controlDepRecorder } from 'footprintjs/trace';
+
+import { defineSkill } from '../injection-engine/factories/defineSkill.js';
+import type { Injection } from '../injection-engine/types.js';
+import { defineTool, type Tool } from '../tools/tools.js';
+import type { AgentOptions } from '../core/agent/types.js';
+import type { Unsubscribe } from '../events/dispatcher.js';
+import { eventTail, type EventTail } from '../events/eventTail.js';
+import type { AgentfootprintEvent } from '../events/registry.js';
+import { skillScopedTools } from '../tools/skillScopedTools.js';
+import type { ToolProvider } from '../tools/toolProvider.js';
+import { SELF_EXPLAIN_BODY, SELF_EXPLAIN_WHEN } from './debugPrompt.js';
+import { innerRunsOfConversation, type InnerRunLookup } from '../core/innerRunRecords.js';
+import { NO_COMPLETED_RUN_MESSAGE } from '../lib/traceToolNames.js';
+import type { TraceToolpackArtifacts, TraceToolpackOptions } from './types.js';
+
+/**
+ * How much of a turn's evidence the binding keeps.
+ *
+ * Both default to TRUE, which is the point: the tools that read them
+ * (`read_narrative`, `inspect_tool_call`) are on the catalog either way,
+ * and a tool that answers "⚠ no evidence" by default is a tool that
+ * teaches the model not to call it. Turn one off when the cost matters
+ * more than the answer — a very long-running turn, or a run whose
+ * narrative would repeat what the structured tools already say.
+ */
+export interface SelfExplainInclude {
+  /** The run's plain-English story → the `read_narrative` tool. Default true. */
+  readonly narrative?: boolean;
+  /**
+   * A bounded tail of the run's typed events → tool-call timings and
+   * outcomes in `inspect_tool_call`, and the Context Integrity findings
+   * `find_context_errors` reads. Default true. Off means no wildcard event
+   * subscription is made at all, not a subscription that is ignored — and
+   * `find_context_errors` then reports the evidence channel as ABSENT
+   * rather than reporting a run with no context errors.
+   */
+  readonly events?: boolean;
+}
+
+/** Consumer surface for `.selfExplain()` on the Agent builder. */
+export interface SelfExplainOptions {
+  /** Appended to the recommended skill body (ours stays; yours adds). */
+  readonly instruction?: string;
+  /**
+   * Answer why-questions on a SEPARATE (typically cheaper) model: the
+   * skill unlocks one `explain_run` tool that runs a nested
+   * `traceDebugAgent` and returns its evidence-cited answer.
+   */
+  readonly delegate?: {
+    readonly provider: AgentOptions['provider'];
+    readonly model: string;
+    readonly maxIterations?: number;
+  };
+  /** Skill id (activation key for `read_skill`). Default 'self-explain'. */
+  readonly id?: string;
+  /** Bounding dials forwarded to the toolpack. */
+  readonly toolpack?: TraceToolpackOptions;
+  /** Which optional parts of a turn's evidence to capture. Both default true. */
+  readonly include?: SelfExplainInclude;
+  /**
+   * Cap on retained events per turn (only with `include.events`). Default
+   * 2,000 — enough for a long tool-using turn, small enough that a server
+   * holding one binding per agent does not grow without limit. A tail that
+   * dropped events says so in `inspect_tool_call`.
+   */
+  readonly maxEvents?: number;
+}
+
+type CtrlRecorder = ReturnType<typeof controlDepRecorder>;
+
+/** Default per-turn event cap for the self-explain binding. */
+export const SELF_EXPLAIN_MAX_EVENTS = 2000;
+
+/**
+ * How many conversations one binding keeps evidence for — the least recently
+ * explained or completed is dropped past it. One agent instance serving many
+ * sessions holds one completed turn per session, so the bound is what keeps a
+ * long-lived shared agent from pinning every session's last snapshot. A
+ * session whose evidence was dropped is answered like one with no completed
+ * turn: nothing is served, and nothing of anybody else's is served instead.
+ */
+const MAX_CONVERSATIONS = 64;
+
+/**
+ * The separate bound for ONE-SHOT conversations — a hosted request with no
+ * session, which no later request can name (`SelfExplainServing.oneShot`).
+ * Kept on their own shelf so a flood of sessionless requests can never evict a
+ * session's evidence (recheck NIT 4); small, because nothing ever asks a
+ * follow-up question of one.
+ */
+const MAX_ONE_SHOT_CONVERSATIONS = 8;
+
+/** One bounded shelf of conversations: evidence and run ids, same keys. */
+interface Shelf {
+  readonly captured: Map<string | undefined, CapturedTurn>;
+  readonly runs: Map<string | undefined, string[]>;
+  readonly max: number;
+}
+
+function shelf(max: number): Shelf {
+  return { captured: new Map(), runs: new Map(), max };
+}
+
+/** Drop the oldest entries of an insertion-ordered map past `max`. */
+function bound(held: Map<string | undefined, unknown>, max: number): void {
+  while (held.size > max) {
+    const oldest = held.keys().next();
+    if (oldest.done === true) return;
+    held.delete(oldest.value);
+  }
+}
+
+/** How many of one conversation's runs its inner-run view admits. */
+const MAX_RUNS_PER_CONVERSATION = 32;
+
+/** One conversation's evidence: its last completed turn, and its runs. */
+interface CapturedTurn {
+  readonly snapshot: RuntimeSnapshot;
+  readonly ctrl: CtrlRecorder;
+  readonly narrative?: readonly string[];
+  readonly events?: readonly AgentfootprintEvent[];
+}
+
+/** Which conversation the agent is serving, and which run — see {@link SelfExplainSource.getServing}. */
+export interface SelfExplainServing {
+  /** The evidence key. `undefined` = a direct run with no session. */
+  readonly conversation: string | undefined;
+  /** The run in flight, or the one served last. */
+  readonly runId: string;
+  /** A conversation no later request can name (a hosted request with no
+   *  session) — kept on its own, smaller shelf. */
+  readonly oneShot?: boolean;
+}
+
+/**
+ * What the binding reads a completed turn's evidence FROM.
+ *
+ * One object rather than three wiring calls, on purpose: the
+ * `BoundaryRecorder` lesson in this codebase is that a seam needing three
+ * separate connections gets two of them in some integrations, and the
+ * missing third fails silently. Here the only caller is `AgentBuilder`,
+ * and it hands over all of it at once.
+ */
+export interface SelfExplainSource {
+  /** The just-finished run's snapshot — `agent.getLastSnapshot()`. */
+  getSnapshot(): RuntimeSnapshot | undefined;
+  /** The run's narrative entries — `agent.getLastNarrativeEntries()`. */
+  getNarrative?(): readonly { readonly text: string }[];
+  /** The typed event stream — `agent.on('*', …)`. */
+  on?(type: '*', listener: (event: AgentfootprintEvent) => void): Unsubscribe;
+  /**
+   * The records TOOLS kept of their own runs — present when the agent
+   * mounts a `flowchartAsTool({ keepRecord: true })`. Unlike the other
+   * three, this is NOT captured at the terminal flush: the store is a live,
+   * bounded object owned by the tool, and the binding holds the lookup so
+   * `inspect_tool_run` reads whatever the tool has filed. Rotating it per
+   * turn would throw away the previous turn's inner runs at exactly the
+   * moment the follow-up question arrives.
+   */
+  getInnerRuns?(): InnerRunLookup | undefined;
+  /**
+   * The conversation the agent is serving — or, between runs, served last —
+   * and that run's id. The conversation is the KEY the evidence is kept and
+   * served under: read at the terminal flush it names the conversation the
+   * finished turn belongs to, read inside a turn it names the conversation
+   * asking. It is the run's session; a HOSTED run with no session gets the
+   * host's per-request key, which nobody can present again; only a direct run
+   * with no session shares `undefined`. Absent (a bare `getSnapshot` binding)
+   * every run shares one key — the single-conversation behaviour — and inner
+   * runs are served unfiltered.
+   */
+  getServing?(): SelfExplainServing;
+}
+
+/**
+ * The late-binding seam. Create one per built Agent, attach
+ * `binding.recorder()` via `agent.attach()`, and point `bindTo()` at the
+ * agent's `getLastSnapshot`. `artifacts` then always answers with the
+ * previous COMPLETED run of the asking conversation — never the in-flight
+ * one, and never another conversation's.
+ */
+export class SelfExplainBinding {
+  private source: SelfExplainSource | undefined;
+  private ctrl: CtrlRecorder = controlDepRecorder();
+  private tail: EventTail | undefined;
+  /** Evidence and run ids per conversation (see
+   *  {@link SelfExplainSource.getServing}), on two shelves: one for
+   *  conversations a caller can come back to ({@link MAX_CONVERSATIONS}), one
+   *  for one-shot ones ({@link MAX_ONE_SHOT_CONVERSATIONS}). Insertion order is
+   *  recency order. Run ids are recorded at run START, so a run that PAUSED or
+   *  FAILED (neither reaches the terminal capture) still owns the records its
+   *  tools filed (recheck RS4). */
+  private readonly lasting = shelf(MAX_CONVERSATIONS);
+  private readonly oneShot = shelf(MAX_ONE_SHOT_CONVERSATIONS);
+
+  constructor(
+    private readonly include: SelfExplainInclude = {},
+    private readonly maxEvents: number = SELF_EXPLAIN_MAX_EVENTS,
+  ) {}
+
+  private get wantsNarrative(): boolean {
+    return this.include.narrative !== false;
+  }
+
+  private get wantsEvents(): boolean {
+    return this.include.events !== false;
+  }
+
+  /**
+   * Point the binding at the agent it explains.
+   *
+   * Accepts the bare `getSnapshot` function it has always accepted (the
+   * evidence a completed run leaves behind on its own), or the full
+   * source, which adds the two parts a snapshot does NOT carry: the
+   * narrative, and the typed event stream.
+   */
+  bindTo(source: SelfExplainSource | (() => RuntimeSnapshot | undefined)): void {
+    this.source = typeof source === 'function' ? { getSnapshot: source } : source;
+    if (this.wantsEvents && this.source.on) {
+      this.tail = eventTail(this.maxEvents);
+      this.source.on('*', (event) => this.tail?.push(event));
+    }
+  }
+
+  /**
+   * Evidence of the previous completed run OF THE ASKING CONVERSATION, or
+   * undefined when that conversation has completed none (or its evidence was
+   * dropped past the bound). Never another conversation's.
+   */
+  get artifacts(): TraceToolpackArtifacts | undefined {
+    // No refresh on read: a read happens only inside the asking
+    // conversation's own run, whose terminal capture files it as the most
+    // recent anyway.
+    const serving = this.serving();
+    const conversation = serving?.conversation;
+    const held = this.shelfOf(serving);
+    const turn = held.captured.get(conversation);
+    if (turn === undefined) return undefined;
+    const allInnerRuns = this.source?.getInnerRuns?.();
+    const innerRuns =
+      allInnerRuns === undefined
+        ? undefined
+        : this.source?.getServing === undefined
+        ? allInnerRuns
+        : innerRunsOfConversation(
+            allInnerRuns,
+            ownRuns(held.runs.get(conversation) ?? [], conversation),
+          );
+    return {
+      snapshot: turn.snapshot,
+      controlDeps: turn.ctrl.asLookup(),
+      ...(turn.narrative !== undefined && { narrative: turn.narrative }),
+      ...(turn.events !== undefined && { events: turn.events }),
+      ...(innerRuns !== undefined && { innerRuns }),
+    };
+  }
+
+  /** The conversation (and run) in flight, or served last. */
+  private serving(): SelfExplainServing | undefined {
+    return this.source?.getServing?.();
+  }
+
+  /** Which shelf a conversation lives on. */
+  private shelfOf(serving: SelfExplainServing | undefined): Shelf {
+    return serving?.oneShot === true ? this.oneShot : this.lasting;
+  }
+
+  /** Remember that the serving run belongs to its conversation (bounded both ways). */
+  private recordRun(serving: SelfExplainServing): void {
+    const { runs, max } = this.shelfOf(serving);
+    const held = runs.get(serving.conversation) ?? [];
+    runs.delete(serving.conversation);
+    runs.set(serving.conversation, [...held, serving.runId].slice(-MAX_RUNS_PER_CONVERSATION));
+    bound(runs, max);
+  }
+
+  /** File the serving conversation's evidence as its most recent, within the bound. */
+  private file(serving: SelfExplainServing | undefined, turn: CapturedTurn): void {
+    const { captured, max } = this.shelfOf(serving);
+    captured.delete(serving?.conversation);
+    captured.set(serving?.conversation, turn);
+    bound(captured, max);
+  }
+
+  /** The recorder to attach — forwards flow events to the per-run ctrl. */
+  recorder(): CombinedRecorder {
+    const capture = (): void => {
+      const snapshot = this.source?.getSnapshot();
+      if (!snapshot) return;
+      // The narrative and the event tail are read at the SAME terminal
+      // flush as the snapshot, so the three describe one turn. Reading
+      // either later would mean reading it during the NEXT turn.
+      const narrative =
+        this.wantsNarrative && this.source?.getNarrative
+          ? this.source.getNarrative().map((entry) => entry.text)
+          : undefined;
+      const events = this.tail?.snapshot().events;
+      // Filed under the FINISHED run's conversation — at the terminal flush
+      // the source still names the run that just ended.
+      this.file(this.serving(), {
+        snapshot,
+        ctrl: this.ctrl,
+        ...(narrative !== undefined && { narrative }),
+        ...(events !== undefined && { events }),
+      });
+    };
+    return {
+      id: 'self-explain-binding',
+      // Inline always: capture must complete at the terminal flush, and
+      // the ctrl forwarding is four cheap map writes per event.
+      delivery: 'inline',
+      onRunStart: () => {
+        // Rotate FIRST: the retired ctrl never sees this run's events,
+        // so the captured lookup survives Convention-4's runId reset.
+        // The event tail rotates for the same reason — turn N+1's
+        // evidence must not carry turn N's events. The retired tail is
+        // the one its conversation's `captured` entry already holds, so it
+        // is not lost.
+        this.ctrl = controlDepRecorder();
+        if (this.wantsEvents && this.source?.on) this.tail = eventTail(this.maxEvents);
+        // The run joins its conversation NOW, not at the end: a pause or a
+        // failure never reaches the terminal capture, and the records its
+        // tools filed must still be its conversation's to read.
+        const serving = this.serving();
+        if (serving !== undefined) this.recordRun(serving);
+      },
+      onRunEnd: capture,
+      onRunFailed: capture,
+      onDecision: (e) => this.ctrl.onDecision(e),
+      onSelected: (e) => this.ctrl.onSelected(e),
+      onStageExecuted: (e) => this.ctrl.onStageExecuted(e),
+      onError: (e) => {
+        // ControlDepRecorder consumes FLOW errors only (branch-slot
+        // accounting); scope errors don't carry traversal context.
+        if (isFlowEvent(e)) this.ctrl.onError(e as Parameters<CtrlRecorder['onError']>[0]);
+      },
+    };
+  }
+}
+
+/**
+ * Which inner-run records a conversation may read: those its own completed
+ * runs filed. A record that names no run (a third-party producer, a tool run
+ * outside an agent) cannot be attributed, so it is admitted only on the
+ * direct no-session path (`undefined`) — never to a session or a hosted
+ * request.
+ */
+function ownRuns(
+  runIds: readonly string[],
+  conversation: string | undefined,
+): (runId: string | undefined) => boolean {
+  const runs = new Set(runIds);
+  return (runId) => (runId === undefined ? conversation === undefined : runs.has(runId));
+}
+
+/** The delegate-mode tool: one call → a nested debugger at delegate price. */
+function buildExplainRunTool(
+  binding: SelfExplainBinding,
+  delegate: NonNullable<SelfExplainOptions['delegate']>,
+  toolpack?: TraceToolpackOptions,
+): Tool {
+  return defineTool<{ question: string }, string>({
+    name: 'explain_run',
+    description:
+      "Answer a question about this agent's PREVIOUS completed turn by walking its recorded " +
+      'trace (a dedicated trace debugger runs the investigation and returns an evidence-cited ' +
+      "answer). Pass the user's why-question verbatim.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        question: { type: 'string', description: 'The why-question to investigate.' },
+      },
+      required: ['question'],
+      additionalProperties: false,
+    },
+    execute: async ({ question }, ctx) => {
+      const artifacts = binding.artifacts;
+      if (!artifacts) return NO_COMPLETED_RUN_MESSAGE;
+      // Dynamic import: keeps Agent out of this module's static graph
+      // (AgentBuilder imports this file; Agent imports AgentBuilder).
+      const { traceDebugAgent } = await import('./traceDebugAgent.js');
+      const debuggerAgent = traceDebugAgent({
+        artifacts,
+        provider: delegate.provider,
+        model: delegate.model,
+        maxIterations: delegate.maxIterations,
+        toolpack,
+      });
+      // The debugger's run is NESTED in the calling agent's run, so it is
+      // covered by the same policy — its own record (the question, what the
+      // trace tools served it, its answer) keeps out what the agent's does.
+      const out = await debuggerAgent.run(
+        { message: question },
+        ctx.redact !== undefined ? { redact: ctx.redact } : undefined,
+      );
+      return typeof out === 'object' && out !== null && 'content' in out
+        ? String((out as { content: unknown }).content)
+        : String(out);
+    },
+  });
+}
+
+/** The default skill id — the activation key the LLM passes to read_skill. */
+export const SELF_EXPLAIN_SKILL_ID = 'self-explain';
+
+/**
+ * The skill `.selfExplain()` mounts — methodology body ONLY. The trace
+ * tools deliberately do NOT ride the skill: skill `tools` land in the
+ * static registry (exposed every iteration); catalog gating is the
+ * ToolProvider's job — see {@link buildSelfExplainToolProvider}.
+ */
+export function buildSelfExplainSkill(options: SelfExplainOptions): Injection {
+  return defineSkill({
+    id: options.id ?? SELF_EXPLAIN_SKILL_ID,
+    description: SELF_EXPLAIN_WHEN,
+    body: SELF_EXPLAIN_BODY + (options.instruction ? `\n\n${options.instruction}` : ''),
+  });
+}
+
+/**
+ * The gated tool delivery — `skillScopedTools` (the shipped primitive)
+ * scoped to the skill's id, composed with the consumer's own provider
+ * when they set one. The iteration after activation, `ctx.activeSkillId`
+ * matches and the catalog gains the trace tools (inline) or the single
+ * `explain_run` tool (delegate).
+ *
+ * INLINE MODE LOADS THE PACK LAZILY (9.94.0). The toolpack module is the
+ * largest single module on the library's default graph, and until this
+ * release every consumer who imported `Agent` carried it — `.selfExplain()`
+ * or not — because this function reached it statically. Now the pack is
+ * `import()`ed the first time the self-explain skill is ACTIVE on an
+ * iteration, and never before: not at `build()`, not on a turn where the
+ * model never opened the skill, not at all for an agent that did not enable
+ * `.selfExplain()`. A bundler splits it into its own chunk; Node loads it
+ * through the same `require` it always did, one microtask later.
+ *
+ * What the consumer sees: `list(ctx)` still answers `[]` synchronously when
+ * the skill is not active (the sync fast path the tools slot skips the await
+ * for), and a Promise of the same eleven tools when it is — the shape
+ * `ToolProvider.list` has always allowed, and the one the composed provider
+ * below already used. The provider id is unchanged, so `.watch()` output and
+ * the `skill-scoped:` refusal in the builder read exactly as before.
+ */
+export function buildSelfExplainToolProvider(
+  binding: SelfExplainBinding,
+  options: SelfExplainOptions,
+  existing?: ToolProvider,
+): ToolProvider {
+  const skillId = options.id ?? SELF_EXPLAIN_SKILL_ID;
+  const scoped = options.delegate
+    ? skillScopedTools(skillId, [buildExplainRunTool(binding, options.delegate, options.toolpack)])
+    : lazilyMountedTraceTools(skillId, binding, options.toolpack);
+  if (!existing) return scoped;
+  return {
+    id: `${existing.id}+${scoped.id}`,
+    list: async (ctx) => [...(await existing.list(ctx)), ...(await scoped.list(ctx))],
+  };
+}
+
+/**
+ * The inline-mode provider: `skillScopedTools` semantics, with the tool list
+ * behind an `import()` that runs once, on the first ACTIVE iteration.
+ *
+ * The inactive path delegates to a real `skillScopedTools(skillId, [])` so it
+ * keeps that primitive's exact behaviour — the `[]` answer AND its one-time
+ * dev-mode warning about a skill that is loaded but not by `read_skill` — and
+ * the active path resolves the pack, builds the same scoped provider over it
+ * ONCE, and asks it. A failed load rejects `list()`, which the tools slot
+ * already reports as `tools.discovery_failed` and rethrows; the memo is
+ * cleared so the next iteration retries rather than serving a dead promise.
+ */
+function lazilyMountedTraceTools(
+  skillId: string,
+  binding: SelfExplainBinding,
+  toolpack: TraceToolpackOptions | undefined,
+): ToolProvider {
+  const inactive = skillScopedTools(skillId, []);
+  let mounted: Promise<ToolProvider> | undefined;
+  const mount = (): Promise<ToolProvider> => {
+    mounted ??= import('./lazyToolpack.js').then(
+      ({ lazyTraceToolpack }) =>
+        skillScopedTools(
+          skillId,
+          lazyTraceToolpack(() => binding.artifacts, toolpack),
+        ),
+      (err: unknown) => {
+        mounted = undefined;
+        throw err;
+      },
+    );
+    return mounted;
+  };
+  return {
+    id: inactive.id,
+    list(ctx) {
+      if (ctx.activeSkillId !== skillId) return inactive.list(ctx);
+      return mount().then((provider) => provider.list(ctx));
+    },
+  };
+}

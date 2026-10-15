@@ -478,7 +478,7 @@ offering it would invite a judgment of the library's own words, and counting
 it undeclared would report an absence that is not one. A model that names the
 id anyway is recorded exactly as written (`unknownId: true`, no tool name),
 and its standing never turns the sentence into a ticket. The live request
-(`../stages/callLLM.ts`) and its rebuild (`lib/time-travel/servedView.ts`)
+(`../stages/callLLM.ts`) and its rebuild (`time-travel/servedView.ts`)
 both read the served ids and run the collapse on the committed conversation
 and strip AFTER, so the conformance law holds on a settled run.
 
@@ -491,7 +491,7 @@ servedToolCallIds(history); // ['c1', 'c2'] — the piece's `undeclared:` never 
 ```
 
 Pinned by `test/core/scenario/batch-pause-settlement.test.ts` § 5, the
-conformance case in `test/lib/time-travel/receipt-conformance.test.ts`, and
+conformance case in `test/time-travel/receipt-conformance.test.ts`, and
 the settled cases in `test/core/window-ledger-fact-pins.test.ts`.
 
 **What a settled call's OWN `_findings` leaves on the ledger — in part, and
@@ -1098,7 +1098,7 @@ measurement remain pending before any opt-in use or release.
   `reservedMemberFilter` / `withoutReservedMembers` re-exported: the ONE
   module that statically imports the scanner, loaded through `import()` by
   `callLLM` and `route` only under the arm, so an unarmed agent's bundle
-  carries none of it (pinned by test/lib/trace-toolpack/browserGraph.test.ts).
+  carries none of it (pinned by test/trace-toolpack/browserGraph.test.ts).
 - `offer.ts` — `offeredResultIds`, `nameableIds`, `undeclaredIds`,
   `servedToolCallIds`, `knownResults`, `isResultMessage`,
   `RETIRING_STANDINGS`.

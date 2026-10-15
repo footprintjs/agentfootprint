@@ -376,12 +376,12 @@ renderer prints the sentence and, if it wants, the cause.
 That rule keeps the sentences short; it does not make them true. A sentence that
 tells you something useful *is* a claim about how the rebuild behaves, and the
 rebuild is code — so every claim each sentence makes is asserted against a real
-view in `test/lib/time-travel/gap-sentences.test.ts`, one run per entry, with
+view in `test/time-travel/gap-sentences.test.ts`, one run per entry, with
 the clauses required to partition the sentence so no printed word goes
 unchecked. `UNGAPPED_FIELDS` is the other half of the
 account: the fields no gap names, each with the one sentence saying why none is
 needed. Between them they cover every field of both shapes, and a walk
-(`test/lib/time-travel/gap-catalogue-walk.test.ts`) is what keeps that true —
+(`test/time-travel/gap-catalogue-walk.test.ts`) is what keeps that true —
 it derives the field list rather than reading it, so a field added later cannot
 go unnamed. `epochAt` and `epochLocations` return
 `EpochLocation` records: the epoch number, the `call-llm` stage's
@@ -499,7 +499,7 @@ still claim something the rebuild decides — *may be short*, *empty means
 unknown*, *the list is complete and the schemas are one short* — because a
 sentence that claims nothing cannot inform. So every claim a printed sentence
 makes is asserted against a real run in a test beside it,
-`test/lib/time-travel/gap-sentences.test.ts`: each sentence is cut into quoted
+`test/time-travel/gap-sentences.test.ts`: each sentence is cut into quoted
 clauses, each clause carries its own assertion, and the clauses must cover the
 whole sentence, so no printed word sits outside a checked claim. That is how the
 seventh round caught a sentence the sixth had just written — `no-run-log`

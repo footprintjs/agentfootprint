@@ -31,7 +31,7 @@
  * rather than typed out beside it (a second list is a list that drifts).
  *
  * The pack itself asserts, at test time, that what it mounts is exactly
- * this list (test/lib/trace-toolpack/selfExplainAgent.test.ts).
+ * this list (test/trace-toolpack/selfExplainAgent.test.ts).
  */
 export const TRACE_TOOL_NAMES = [
   'run_overview',

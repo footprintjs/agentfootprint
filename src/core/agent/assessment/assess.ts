@@ -9,7 +9,7 @@
  * Role:    core/ layer, pure. The one owner of the answer's standing: the
  *          `/observe` door publishes it (`assessAnswer`), `Agent.assessment`
  *          reads the last run through it, and the answer account's "How sure"
- *          row renders it (`lib/answer-account/facts/howSure.ts` ·
+ *          row renders it (`answer-account/facts/howSure.ts` ·
  *          `readHowSure`).
  * Emits:   N/A.
  *

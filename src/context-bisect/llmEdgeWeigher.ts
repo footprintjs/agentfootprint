@@ -58,7 +58,7 @@ import {
   type EvidenceInput,
   type InfluenceWeights,
 } from '../influence-core/index.js';
-import { safeStringify } from '../lib/trace-toolpack/bounded.js';
+import { safeStringify } from '../trace-toolpack/bounded.js';
 import { CONTEXT_BISECT_DEFAULTS } from './types.js';
 // The one committed key that is a fingerprint, not prose — see NOT_OUTPUT_KEYS.
 import { RECEIPT_KEY } from '../lib/conventions.js';

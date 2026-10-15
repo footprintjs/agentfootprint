@@ -594,7 +594,7 @@ export function buildCallLLMStage(
     // (9.113.0): a message the batch settlement wrote is no result
     // (`findings/offer.ts` · `isResultMessage`) and only its marker says so —
     // the marker `stripFrameworkFields` takes off. Same ids, same order, same
-    // wire; `lib/time-travel/servedView.ts` rebuilds it the same way.
+    // wire; `time-travel/servedView.ts` rebuilds it the same way.
     const ledger =
       deps.hasFindingsLedger === true
         ? (scope.findingsLedger as FindingsLedger | undefined)

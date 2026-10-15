@@ -7,7 +7,7 @@ even when it finds nothing.
 Lens: the two `message` variants and the frame line ("frame this call was
 assembled from") that `check.ts` · `unsupportedArgumentsOf` composes, served
 verbatim (truncated) to a debugging model by
-`src/lib/trace-toolpack/traceToolpack.ts` · `buildFindContextErrors`.
+`src/trace-toolpack/traceToolpack.ts` · `buildFindContextErrors`.
 `test/modelFacingScan.test.ts` files this check `kind: 'unrepaired'`, count 2.
 
 # unsupported-argument — acted on a value nothing served

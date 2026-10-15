@@ -25,8 +25,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { Agent, inMemoryArtifacts, recordingPutInput } from '../../src/index.js';
 import type { ArtifactStore } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
-import { accountForAnswer } from '../../src/lib/answer-account/index.js';
-import { showLeaves } from '../../src/lib/answer-account/shown.js';
+import { accountForAnswer } from '../../src/answer-account/index.js';
+import { showLeaves } from '../../src/answer-account/shown.js';
 import { agentCoreRuntimeHost } from '../../src/hosting-providers.js';
 import { memorySessions, nodeHost, standingAgent } from '../../src/hosting/index.js';
 import type { CrossSiteOptions, HostHandle } from '../../src/hosting/index.js';
@@ -36,7 +36,7 @@ import {
   fixtureA,
   FLAGSHIP_RUN_ID,
   NEO_DECLARATIONS,
-} from '../lib/answer-account/helpers.js';
+} from '../answer-account/helpers.js';
 
 /** The archived field recording (4–5 MB). Outside the repo, so its cases skip where it is absent. */
 const FIELD_RECORDING =

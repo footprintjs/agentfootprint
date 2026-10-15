@@ -76,7 +76,7 @@ describe.skipIf(!built)('ESM packaging', () => {
     expect(shipped.sideEffects).toEqual([
       '**/injection-engine/index.js',
       '**/injection-engine/devWarnHost.js',
-      '**/lib/trace-toolpack/selfExplainHost.js',
+      '**/trace-toolpack/selfExplainHost.js',
     ]);
   });
 

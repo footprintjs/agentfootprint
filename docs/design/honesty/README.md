@@ -73,7 +73,7 @@ Honesty features were added one at a time, each with its own arm, record and wor
 Nothing joins them into what the owner asked for: **every answer carries a standing — known, not
 sure or ask — with its reason, and both are read from the record.** Two gaps show it:
 
-- `lib/answer-account/facts/howSure.ts` still says "the whole-answer standing: NOT BUILT in v1".
+- `answer-account/facts/howSure.ts` still says "the whole-answer standing: NOT BUILT in v1".
 - The arguments a call runs with are not checked at all. The host's VM performance tool defaults
   its window to `"2h"` and its I/O profile tool to `"24h"` (`host:py-tools/server.py` ·
   `real_vrops_get_vm_perf`, `real_influx_io_profile`). So "no errors" can mean "no errors in a
@@ -723,7 +723,7 @@ fact-not-in-result rate.
   `ContingentRow`s.
 - *Resolve:* revise once (`stages/evidenceRecheck.ts`); refuse (rails, `.answerValidation()`, a
   message `deny`); flag.
-- *After the run:* `lib/answer-account/account.ts` · `accountForAnswer` (reads events).
+- *After the run:* `answer-account/account.ts` · `accountForAnswer` (reads events).
 
 **New.**
 - The standing fold (§ 4.2), first as a pure reader over recordings (step 1), then run by the
@@ -911,7 +911,7 @@ disagreement. The study keeps its hash-frozen copy (`study/rq3-standing/`, "the 
 later"); the port must not change a frozen verdict.
 
 **Where the fold runs.** After the run, as a pure reader: `agent.assessment()` (name open), the lens
-chip, and `lib/answer-account/facts/howSure.ts`, which then reads the one owner instead of saying
+chip, and `answer-account/facts/howSure.ts`, which then reads the one owner instead of saying
 "NOT BUILT". At run time, only in the armed answer layer, for the served forms. A test pins that the
 in-run fold equals the fold of the same recording read afterwards.
 

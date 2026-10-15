@@ -46,7 +46,7 @@ export const STANDING_LINE_VERSION = 1;
  * The line's first words, one per standing — the owner's words. They are
  * plain words a model can write too, so a reader of the answer text never
  * matches on them alone: the answer account finds the line by rebuilding the
- * WHOLE line from the run's record (`lib/answer-account/account.ts` ·
+ * WHOLE line from the run's record (`answer-account/account.ts` ·
  * `readAnswer`, through `standingLineOf`).
  */
 export const STANDING_LINE_OPENINGS: Readonly<Record<AnswerAssessment['standing'], string>> =
@@ -107,7 +107,7 @@ const ASSESSMENTS: readonly AnswerAssessment['assessment'][] = [
 ];
 
 // FOLD · the one reader of the standing as data off a RECORD (`turn_end.answerAssessment`)
-// consumers read this and never re-derive it: lib/answer-account/account.ts · appendedStandingLine
+// consumers read this and never re-derive it: answer-account/account.ts · appendedStandingLine
 /**
  * The standing as data read back off a record — `turn_end.answerAssessment`
  * as a recording holds it — or `undefined` unless every field is in this
@@ -172,7 +172,7 @@ export interface AssumedValuesSource {
 
 // FOLD · the one choice of what the line's assumed values are read from
 // consumers read this and never re-derive it: assessment/stage.ts · assessAnswerStage (to compose
-// the line), lib/answer-account/account.ts · appendedStandingLine (to find it again in the answer)
+// the line), answer-account/account.ts · appendedStandingLine (to find it again in the answer)
 /**
  * The source of the line's assumed values in `record` (committed state) —
  * `undefined` when the line names none: no `argument-assumed` reason, no

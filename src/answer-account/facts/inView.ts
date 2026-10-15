@@ -1,0 +1,165 @@
+/**
+ * Earlier answers' tool results that were IN FRONT OF THE MODEL when it
+ * answered — proven by the record's witness, never by end-of-run state.
+ *
+ * The witness rule, in typed terms:
+ *   N = the `iteration` of the LAST `stream.llm_start` before `turn_end` (the
+ *       answering iteration). Context assembly for an iteration PRECEDES its
+ *       `iteration_start`, and `context.injected` carries no iteration of its
+ *       own, so the rule keys on the compose STAGE:
+ *   the witnesses are the `context.injected` rows with `slot: 'messages'`,
+ *   `source: 'tool-result'`, `sourceId: <toolCallId>` whose
+ *   `meta.runtimeStageId` equals that of the `context.slot_composed` with
+ *   `slot: 'messages'` and `iteration: N`.
+ * The content is parsed from the matching `history` message (by `toolCallId`).
+ *
+ * Only EARLIER answers' results: `distance` (messages a PERSON wrote after the
+ * result, up to and including the current one — `common.ts` · `isPersonEntry`,
+ * never a frame the library wrote in the user role) must be at least 1, and a call of this run
+ * is never "in view" — on the flagship recording the answering compose also
+ * witnesses this run's own `get_array_inventory` result (`events[68]`), which
+ * must never become an in-view line.
+ */
+
+import { toolBytesOf } from '../../lib/toolBytes.js';
+import { v } from '../render.js';
+import type { InViewFact, SentenceVar } from '../types.js';
+import { FACT_TEXT_CHARS } from './calls.js';
+import {
+  isRecord,
+  keptOut as isFieldKeptOut,
+  num,
+  str,
+  type RecordingView,
+  type ViewEvent,
+} from '../view.js';
+import {
+  at,
+  countedFields,
+  historyAt,
+  historyOf,
+  isPersonEntry,
+  readEmptiness,
+  rowsAtOf,
+  type EmptinessReading,
+  type ReadContext,
+} from './common.js';
+
+/** At most this many in-view results are listed, newest first. */
+export const MAX_IN_VIEW = 3;
+
+export interface InViewRead {
+  readonly fact: InViewFact;
+  /** The full tool name (the fact carries it cut at 200) and its sentence var, clipped and pointed. */
+  readonly toolName: string;
+  readonly tool: SentenceVar;
+  readonly witness: ViewEvent;
+  readonly historyIndex: number;
+  readonly reading: EmptinessReading;
+}
+
+/** N — the answering iteration. `undefined` when no `llm_start` is recorded. */
+export function answeringIteration(view: RecordingView): number | undefined {
+  const end = view.last('agent.turn_end');
+  const starts = view
+    .ofType('stream.llm_start')
+    .filter((e) => end === undefined || e.index < end.index);
+  return num(starts[starts.length - 1]?.payload.iteration);
+}
+
+/** The witness rows of the answering iteration's messages compose. */
+export function witnessesOf(view: RecordingView, iteration: number | undefined): ViewEvent[] {
+  if (iteration === undefined) return [];
+  const composed = view
+    .ofType('context.slot_composed')
+    .filter((e) => e.payload.slot === 'messages' && e.payload.iteration === iteration);
+  const stage = str(composed[composed.length - 1]?.meta.runtimeStageId);
+  if (stage === undefined) return [];
+  return view.ofType('context.injected').filter(
+    (e) =>
+      e.meta.runtimeStageId === stage &&
+      e.payload.slot === 'messages' &&
+      e.payload.source === 'tool-result' &&
+      // A witness whose call id the record keeps out is still a witness: a
+      // result was in view, whose call the record will not name.
+      (isFieldKeptOut(e, 'sourceId') || typeof e.payload.sourceId === 'string'),
+  );
+}
+
+export interface InViewAll {
+  /** Every in-view result, newest first — the checks read all of them. */
+  readonly all: readonly InViewRead[];
+  readonly listed: readonly InViewRead[];
+  /** In view but past `MAX_IN_VIEW`. */
+  readonly more: number;
+  /**
+   * Earlier results the record shows were in view (a witness names them) but
+   * that cannot be read: the record keeps the history out. Their emptiness
+   * cannot be told, and the account says so (`signals.ts`).
+   */
+  readonly keptOut: number;
+}
+
+export function readInView(ctx: ReadContext, callIds: ReadonlySet<string>): InViewAll {
+  const history = historyOf(ctx.view);
+  const historyKeptOut = ctx.view.isStateKeptOut('history');
+  const windowed = typeof ctx.view.first('agent.run_configured')?.payload.window === 'string';
+  const reads: InViewRead[] = [];
+  let keptOut = 0;
+  for (const witness of witnessesOf(ctx.view, ctx.answeringIteration)) {
+    // A call id the record keeps out is not one of this run's calls (those are
+    // ids the run recorded, and kept): an earlier result whose call is unnamed.
+    if (isFieldKeptOut(witness, 'sourceId')) {
+      keptOut += 1;
+      continue;
+    }
+    const id = witness.payload.sourceId as string;
+    if (callIds.has(id)) continue;
+    if (historyKeptOut) {
+      keptOut += 1;
+      continue;
+    }
+    const historyIndex = history.findIndex(
+      (m) => isRecord(m) && m.role === 'tool' && m.toolCallId === id,
+    );
+    if (historyIndex < 0) continue;
+    const message = history[historyIndex] as Record<string, unknown>;
+    const toolName = str(message.toolName);
+    if (toolName === undefined) continue;
+    const distance = history.slice(historyIndex + 1).filter((m) => isPersonEntry(m)).length;
+    if (distance < 1) continue;
+    // An EARLIER answer's result: its run's door is not in this record, so the one reader's strict
+    // recognizers read the history text itself — the only evidence of the door that is left. The
+    // TOOL's own bytes (`lib/toolBytes.ts` · `toolBytesOf`): a note the inputs layer appended after
+    // a filled call's result is the library's, and read whole it breaks the parse.
+    const rowsAt = rowsAtOf(ctx.declarations, toolName);
+    const reading = readEmptiness(
+      toolBytesOf({ content: message.content, toolChars: message.toolChars }),
+      rowsAt !== undefined ? { rowsAt } : {},
+    );
+    reads.push({
+      fact: {
+        toolName: toolName.slice(0, FACT_TEXT_CHARS),
+        toolCallId: id.slice(0, FACT_TEXT_CHARS),
+        distance,
+        windowed,
+        emptiness: reading.emptiness,
+        ...countedFields(reading),
+        pointers: [at(witness, 'sourceId'), historyAt(historyIndex, '/toolName', id)],
+      },
+      witness,
+      historyIndex,
+      reading,
+      toolName,
+      tool: v(toolName, 'library', historyAt(historyIndex, '/toolName', id), FACT_TEXT_CHARS),
+    });
+  }
+  // Newest first: the result nearest the current question.
+  reads.sort((a, b) => b.historyIndex - a.historyIndex);
+  return {
+    all: reads,
+    listed: reads.slice(0, MAX_IN_VIEW),
+    more: Math.max(0, reads.length - MAX_IN_VIEW),
+    keptOut,
+  };
+}

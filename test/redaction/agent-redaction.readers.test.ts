@@ -7,7 +7,7 @@
  * record does not show the run finishing", "it did not run any tools", a
  * pause that never happened. Pinned here, reader by reader:
  *
- *   - the answer account (`lib/answer-account/view.ts`): a kept-out value is
+ *   - the answer account (`answer-account/view.ts`): a kept-out value is
  *     said to be KEPT OUT where it is read, and a reader that would touch one
  *     it does not handle makes the account refuse to tell (`notToldAccount`);
  *   - `assessAnswer`: no standing over a state key the record keeps out
@@ -35,7 +35,7 @@ import {
 } from '../../src/doors/observe.js';
 import { defineInstruction } from '../../src/injection-engine.js';
 import { servedViews } from '../../src/index.js';
-import type { AnswerAccount, Sentence } from '../../src/lib/answer-account/types.js';
+import type { AnswerAccount, Sentence } from '../../src/answer-account/types.js';
 import { REDACTION_MARKER_ID, servedUnderPolicy } from '../../src/redaction/marker.js';
 import { assessLive } from '../../src/core/agent/assessment/assess.js';
 import { readEmptiness } from '../../src/core/agent/emptiness.js';

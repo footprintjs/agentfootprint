@@ -1,6 +1,6 @@
 /**
  * The fold over the one REAL field recording the library keeps — the answer
- * account's fixture A (`test/lib/answer-account/fixtures/turn2.recorded.json`).
+ * account's fixture A (`test/answer-account/fixtures/turn2.recorded.json`).
  *
  * That fixture was REDUCED before the fold existed: its state keeps `history`,
  * `userMessage`, `turnNumber` and `pausedToolCallId`, and drops every other
@@ -26,12 +26,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { assessAnswer } from '../../../../src/core/agent/assessment/assess.js';
-import { accountForAnswer } from '../../../../src/lib/answer-account/account.js';
-import {
-  fixtureA,
-  FLAGSHIP_RUN_ID,
-  NEO_DECLARATIONS,
-} from '../../../lib/answer-account/helpers.js';
+import { accountForAnswer } from '../../../../src/answer-account/account.js';
+import { fixtureA, FLAGSHIP_RUN_ID, NEO_DECLARATIONS } from '../../../answer-account/helpers.js';
 
 type Ev = { type: string; payload: Record<string, unknown> };
 

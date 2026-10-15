@@ -35,7 +35,7 @@ import layering from '../../../scripts/layering.config.cjs';
 
 const REPO = resolve(__dirname, '../../..');
 const BUILDER = 'src/core/agent/AgentBuilder.ts';
-const HOST = 'src/lib/trace-toolpack/selfExplainHost.ts';
+const HOST = 'src/trace-toolpack/selfExplainHost.ts';
 
 interface Door {
   readonly door: string;

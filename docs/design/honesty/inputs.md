@@ -444,7 +444,7 @@ it runs" is false when permission denies the call or inner dispatch refuses it).
   only, and `mergeWire` returns `winners` as name → party, so step 3 makes `mergeWire` also return
   the winning `Tool` per served name (engineer review). A name with no known tool — a chart with no
   claimant record — is not decorated; the dispatch re-read is its guard.
-- **Replay.** `lib/time-travel/servedView.ts` · `viewOf` rebuilds the committed list byte for byte,
+- **Replay.** `time-travel/servedView.ts` · `viewOf` rebuilds the committed list byte for byte,
   so the decoration must be a pure function of the committed schema and the rule.
 
 **The `from` property — under the sources arm, on ruled tools only.** `withFindingsArgument` plants
@@ -861,7 +861,7 @@ nothing is served; the events already fired stay in the recording. Only a later 
 stored run can fold it as "ask" (architecture § 5.3).
 
 **Readers that assume a pause came from ToolCalls** learn the reserved key in step 4, each with a
-test: the paused-call guard in `stages/window.ts`, `lib/answer-account/facts/calls.ts` (which reads
+test: the paused-call guard in `stages/window.ts`, `answer-account/facts/calls.ts` (which reads
 `pausedToolCallId`), and the commentary templates that name the paused tool.
 
 ### 4.4 Pass and flag

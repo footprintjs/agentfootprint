@@ -25,7 +25,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..', '..');
 const load = (rel) => JSON.parse(readFileSync(join(ROOT, rel), 'utf8'));
 
-// ── the app's declarations for fixture A (test/lib/answer-account/helpers.ts · NEO_DECLARATIONS) ──
+// ── the app's declarations for fixture A (test/answer-account/helpers.ts · NEO_DECLARATIONS) ──
 const NEO_DECLARATIONS = Object.freeze({
   id: 'neo-seo',
   version: '1',
@@ -139,11 +139,11 @@ function collect() {
     });
   }
 
-  const fixtureA = load('test/lib/answer-account/fixtures/turn2.recorded.json');
+  const fixtureA = load('test/answer-account/fixtures/turn2.recorded.json');
   out.push({
     id: 'field:fixture-A',
     tier: 'full',
-    source: 'test/lib/answer-account/fixtures/turn2.recorded.json',
+    source: 'test/answer-account/fixtures/turn2.recorded.json',
     record: fixtureA,
     declarations: NEO_DECLARATIONS,
     missing: FOLD_KEYS.filter((k) => !(k in fixtureA.snapshot.sharedState)),
@@ -210,9 +210,9 @@ function unreadable() {
     ),
     'test/integrity/reference/dangling-trap-narrative.json',
     'test/core/agent/fixtures/absent-try-instead-not-a-sentence.reference.json',
-    'test/lib/answer-account/golden/turn2.A.account.json',
-    'test/lib/answer-account/golden/turn2.A.shown.json',
-    'test/lib/answer-account/golden/templates.reference.json',
+    'test/answer-account/golden/turn2.A.account.json',
+    'test/answer-account/golden/turn2.A.shown.json',
+    'test/answer-account/golden/templates.reference.json',
   ];
   return files.filter((f) => f.endsWith('.json'));
 }

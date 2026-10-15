@@ -51,13 +51,9 @@ import { producerCorpusOf } from '../../../../src/core/agent/stages/toolCalls.js
 import { _resetUnmountedRulesWarnings } from '../../../../src/core/agent/arguments/dispatch.js';
 import type { ArgumentRow } from '../../../../src/core/agent/arguments/rows.js';
 import { unreadableRulesRefusal } from '../../../../src/core/agent/arguments/serve.js';
-import { accountForAnswer } from '../../../../src/lib/answer-account/account.js';
+import { accountForAnswer } from '../../../../src/answer-account/account.js';
 import type { Recording } from '../../../../src/recorders/observability/recordRun.js';
-import {
-  fixtureA,
-  FLAGSHIP_RUN_ID,
-  NEO_DECLARATIONS,
-} from '../../../lib/answer-account/helpers.js';
+import { fixtureA, FLAGSHIP_RUN_ID, NEO_DECLARATIONS } from '../../../answer-account/helpers.js';
 
 // ─── the harness ─────────────────────────────────────────────────────
 

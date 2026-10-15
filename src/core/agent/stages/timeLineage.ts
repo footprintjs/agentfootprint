@@ -11,7 +11,7 @@
  *          (`./route.ts` · `loadTimeLineage`): `forms.ts` re-resolves a
  *          confirmed reading (`resolve.ts`), so it stays off the graph
  *          `import { Agent }` loads (the optional-family law,
- *          `test/lib/trace-toolpack/browserGraph.test.ts`).
+ *          `test/trace-toolpack/browserGraph.test.ts`).
  * Emits:   N/A.
  *
  * @example

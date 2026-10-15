@@ -6,7 +6,7 @@ validator and freezer; `ontologyHash`, the fingerprint through the receipt's
 own canonical JSON).
 Lens: `serve.ts` (`ontologyPiece` — the one composer of what the model is
 served, called by the wire `core/agent/stages/callLLM.ts · buildCallLLMStage`
-and by the rebuild `lib/time-travel/servedView.ts · viewOf`) ·
+and by the rebuild `time-travel/servedView.ts · viewOf`) ·
 `instruction.ts` (`ONTOLOGY_INSTRUCTION`, the always-on ask
 `AgentBuilder.ontology` registers). Trace: nothing here records — `seed`
 writes the run constant `AgentState.ontology` and `callLLM` emits

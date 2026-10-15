@@ -36,7 +36,7 @@
  * `.time()`. A door of its own because the conversions are the time layer's
  * RUN-TIME half, which a plain agent never loads (`src/time/README.md` ·
  * "What a plain agent carries"; pinned by
- * `test/lib/trace-toolpack/browserGraph.test.ts`): on the main barrel they
+ * `test/trace-toolpack/browserGraph.test.ts`): on the main barrel they
  * would put that half on every consumer's default graph. The shapes they take
  * (`PeriodForm`, `PeriodFacts`, `TimeRange`, `ToolPeriod`) are on the main
  * barrel.

@@ -13,7 +13,7 @@
  *          any `import()` can run, and a bundler places a whole file on the
  *          synchronous graph — so this file imports only the leaves and the
  *          row readers, never `convert.ts` or `resolve.ts` (the optional-family
- *          law, `test/lib/trace-toolpack/browserGraph.test.ts`). `bind.ts`
+ *          law, `test/trace-toolpack/browserGraph.test.ts`). `bind.ts`
  *          re-exports every public name.
  * Emits:   N/A (pure).
  *

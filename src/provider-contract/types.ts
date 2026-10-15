@@ -148,7 +148,7 @@ export interface LLMMessage {
    * (`core/agent/window/toolNames.ts` · `toolNameOfMessage` — the
    * last-tool-result pin, the drop notice, the dangling-reference check); and
    * the trace toolpack's `inspect_tool_call`
-   * (`lib/trace-toolpack/traceToolpack.ts` · `notDispatchedOf`); and, under
+   * (`trace-toolpack/traceToolpack.ts` · `notDispatchedOf`); and, under
    * `.findings()`, the offer, the identity source, the piece's `undeclared:`
    * line, the collapse, the window's `droppedStandings` and a turn's standing
    * (`core/agent/findings/offer.ts`, `findings/serve.ts` · `collapseJudged`,
@@ -187,7 +187,7 @@ export interface LLMMessage {
    * answer — without it, the next call could cite this result as the source of
    * "2h" and an assumption would become an observed value; the answer's
    * standing (`core/agent/assessment/assess.ts` · `assessAnswer`) and the
-   * answer account's in-view results (`lib/answer-account/facts/inView.ts`),
+   * answer account's in-view results (`answer-account/facts/inView.ts`),
    * so the note never breaks the one emptiness reader's parse and hides an
    * empty or absent result; the unsupported-argument seam's grounded corpus
    * (`core/agent/stages/callLLM.ts`, cut on the committed twin — the wire copy
