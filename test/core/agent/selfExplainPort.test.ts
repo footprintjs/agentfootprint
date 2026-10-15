@@ -13,11 +13,18 @@
  *             `AgentBuilder` is one of them — so no consumer on a door can meet
  *             the refusal
  *
- * WHAT A GREEN RUN DOES NOT PROVE: that a bundler keeps the registration. That
- * is decided by package.json `sideEffects` (the host is listed) and by the doors
- * taking `Agent` from the host rather than from `core/Agent.ts`; the second is
- * pinned here (a door that hands out the class must also have registered), the
- * first by `test/esm-packaging.test.ts`'s copy of the list.
+ *   law       the HOST sits on every import path from a door to the builder: no
+ *             door reaches `AgentBuilder.ts` once `selfExplainHost.ts` is taken
+ *             out of the graph. That is what keeps the registration in a bundle.
+ *             Registering from the barrel instead (a bare import beside
+ *             `export { Agent } from './core/Agent.js'`) passes the per-door
+ *             check above under Node, yet webpack and rolldown skip the
+ *             side-effect-free barrel and drop the import, and `.selfExplain()`
+ *             refuses there. Only this law fails on that layout.
+ *
+ * WHAT A GREEN RUN DOES NOT PROVE: that a bundler keeps the host itself. That
+ * is decided by package.json `sideEffects` (the host is listed), pinned by
+ * `test/esm-packaging.test.ts`'s copy of the list.
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -28,12 +35,15 @@ import layering from '../../../scripts/layering.config.cjs';
 
 const REPO = resolve(__dirname, '../../..');
 const BUILDER = 'src/core/agent/AgentBuilder.ts';
+const HOST = 'src/lib/trace-toolpack/selfExplainHost.ts';
 
 interface Door {
   readonly door: string;
   readonly entry: string;
   /** The door's module graph (eager and lazy imports) reaches the builder. */
   readonly loadsBuilder: boolean;
+  /** …and still reaches it with the self-explain host taken out of the graph. */
+  readonly bypassesHost: boolean;
 }
 
 /** Every published code door, with the src module behind it and whether it can reach the builder. */
@@ -47,12 +57,12 @@ function doors(): readonly Door[] {
     if (e.kind === 'type') continue;
     next.set(e.from, [...(next.get(e.from) ?? []), e.to]);
   }
-  const reaches = (entry: string): boolean => {
+  const reaches = (entry: string, without?: string): boolean => {
     const seen = new Set([entry]);
     const queue = [entry];
     while (queue.length > 0) {
       for (const to of next.get(queue.pop()!) ?? []) {
-        if (seen.has(to)) continue;
+        if (seen.has(to) || to === without) continue;
         seen.add(to);
         queue.push(to);
       }
@@ -63,7 +73,7 @@ function doors(): readonly Door[] {
     .filter((row): row is [string, { import: { default: string } }] => typeof row[1] !== 'string')
     .map(([door, target]) => {
       const entry = target.import.default.replace('./dist/esm/', 'src/').replace(/\.js$/, '.ts');
-      return { door, entry, loadsBuilder: reaches(entry) };
+      return { door, entry, loadsBuilder: reaches(entry), bypassesHost: reaches(entry, HOST) };
     });
 }
 
@@ -104,6 +114,10 @@ describe('the self-explain port — every published door', () => {
   it('the doors whose graph reaches the builder are the root and /observe', () => {
     expect(DOORS.length).toBeGreaterThan(10);
     expect(DOORS.filter((d) => d.loadsBuilder).map((d) => d.door)).toEqual(['.', './observe']);
+  });
+
+  it('LAW: no door reaches the builder except through the self-explain host', () => {
+    expect(DOORS.filter((d) => d.bypassesHost).map((d) => d.door)).toEqual([]);
   });
 
   it.each(DOORS.map((d) => [d.door, d] as const))(

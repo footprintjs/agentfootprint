@@ -1,6 +1,6 @@
 /**
  * selfExplainHost — the trace toolpack's binding of the agent builder's
- * `.selfExplain()` port, and the module the published doors take `Agent` and
+ * `.selfExplain()` port, and the module the root door takes `Agent` and
  * `AgentBuilder` from.
  *
  * Pattern: Plugin registration (the `devWarnHost.ts` precedent).
@@ -15,7 +15,7 @@
  * then free to skip a barrel and link `import { Agent }` straight to the module
  * that declares it. A registration placed in the barrel would be skipped with
  * it: webpack and rolldown both drop it (measured on a minimal package, both
- * bundlers, while this file was written). So the doors re-export `Agent` and
+ * bundlers, while this file was written). So the root door re-exports `Agent` and
  * `AgentBuilder` FROM this module, which IS flagged as having side effects —
  * whoever imports the agent through a door runs this file first, and a bundle
  * that never names the agent does not carry it. `traceDebugAgent.ts` builds
