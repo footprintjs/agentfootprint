@@ -1247,7 +1247,7 @@ Defined in: [src/core/agent/types.ts:175](https://github.com/footprintjs/agentfo
 
 Defined in: [src/core/agent/types.ts:325](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L325)
 
-THE TIME LAYER'S CLOCK (`core/time/`) — every run declares its clock: a
+THE TIME LAYER'S CLOCK (`time/`) — every run declares its clock: a
 zone (the run's `time.zone`, else this fallback; with neither the zone is
 unknown — never the server's, never guessed: the person is asked it first)
 and a `now` (the run's, else the turn's
