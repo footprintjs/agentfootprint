@@ -3,10 +3,7 @@ import type { Tool, ToolExecutionContext } from '../core/tools.js';
 import type { ToolArtifactPutInput, ToolArtifacts } from './capability.js';
 import { InvalidArtifactError, type ArtifactMeta } from './types.js';
 import { timeAxisIssues } from '../time/axis.js';
-import {
-  projectionSemanticsIssues,
-  snapshotProjectionSemantics,
-} from '../lib/semantics/projection.js';
+import { projectionSemanticsIssues, snapshotProjectionSemantics } from '../semantics/projection.js';
 
 /** Producer-owned payloads. A source is an optional artifact, not an inferred fact. */
 export interface DatasetArtifactInput {

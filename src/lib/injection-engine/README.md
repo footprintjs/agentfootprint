@@ -415,7 +415,8 @@ this table (a lower row never imports a higher one):
 | `skillMatch.ts` | the data-matcher domain (`match:` on start rules): `SkillMatch`/`SkillMatchData` (regex · keywords · intent), `compileMatch` (ONE compilation → the predicate that routes + the data that describes it; the intent arm compiles to NO predicate — the classifier judges it), `compareMatchers` (only what is provable), `mermaidMatchCaption`. Engine-type-free leaf — imported by `skillGraph.ts` (compile + caption) and `skillGraphCheckup.ts` (compare); imports nothing |
 | `hostContract.ts` | the BOUNDARY contract (9.34.0): `SkillTool` / `SkillToolSchema` / `SkillToolDescriptor` (what a tool looks like to the graph, and how the graph describes one without building it), `SkillCachePolicy` (structural mirror of `cache/types.ts`), and `SkillGraphHost` — the five obligations a host owes the graph, as documentation-that-typechecks. Zero imports, by construction |
 | `skillToolDescriptors.ts` | the graph DESCRIBING `list_skills` + `read_skill`: the enum, the reachability offer, the turn-start menu, the per-`surfaceMode` result. `skillTools.ts` is the one line that wraps each descriptor in `defineTool` |
-| `toolOutcome.ts` | the seven-value `ToolResultStatus` vocabulary `onToolStatus` edges key on. A zero-import leaf both sides read; `core/agent/toolEffects.ts` re-exports it and keeps the envelope grammar |
+| `../../semantics/toolOutcome.ts` | (moved to `semantics/`, read from here) the seven-value `ToolResultStatus` vocabulary `onToolStatus` edges key on. A zero-import leaf both sides read; `semantics/toolEffects.ts` re-exports it and keeps the envelope grammar |
+| `leases.ts` | the accepted transition proposal and the instruction leases a `require-instruction` effect grants (`PendingToolTransition`, `InstructionLease`) and the three pure functions over them (`tenantOf`, `activeLeaseIds`, `pruneLeases`) — the Evaluate stage serves and sweeps them, the tool-calls stage appends grants. Host zone |
 | `devWarn.ts` | the dev-warning seam: the pure core asks a bound reader instead of importing footprintjs's `isDevMode`. `devWarnHost.ts` (host zone, side-effect module) does the binding for this package |
 
 Seams: a new matcher kind = a new arm in `skillMatch.ts` (`SkillMatch` +
@@ -439,7 +440,7 @@ when the answer is one-id-or-none).
 Two 9.19.0 seams worth naming. **Route edges take a third condition**,
 `onToolStatus` (data, drawable — `on … status=denied` in `toMermaid()`):
 route on a tool result's DECLARED outcome (the seven-value `ToolResultStatus`
-vocabulary from `toolOutcome.ts`, re-exported by `core/agent/toolEffects.ts`) instead of its prose; a result
+vocabulary from `toolOutcome.ts`, re-exported by `semantics/toolEffects.ts`) instead of its prose; a result
 with no declared status can never match, `when` + `onToolStatus` together is
 refused, and every determinism filter goes through the ONE
 `isDeterministicRoute` predicate. **The cursor resolver takes a fourth

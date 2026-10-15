@@ -24,9 +24,9 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
-import { composeAnswerWithCoverage } from '../../src/core/agent/coverage/answer.js';
-import { periodLine } from '../../src/core/agent/coverage/period.js';
-import type { DeclaredCoverage } from '../../src/core/agent/coverage/index.js';
+import { composeAnswerWithCoverage } from '../../src/semantics/coverage/answer.js';
+import { periodLine } from '../../src/semantics/coverage/period.js';
+import type { DeclaredCoverage } from '../../src/semantics/coverage/index.js';
 import {
   bindPresentation,
   presentInstant,

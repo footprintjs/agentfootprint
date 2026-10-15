@@ -41,7 +41,7 @@ import {
   periodCheckLine,
   periodRowIsWellFormed,
   type PeriodRow,
-} from '../../src/core/agent/coverage/period.js';
+} from '../../src/semantics/coverage/period.js';
 
 const NOW = '2026-10-09T15:40:00Z';
 const NOW_MS = Date.parse(NOW);

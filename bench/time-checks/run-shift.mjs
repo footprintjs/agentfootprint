@@ -184,10 +184,13 @@ async function loadDoors(beforeDir) {
   const base = resolve(beforeDir);
   if (base === root)
     throw new Error('--before is this checkout: arm before must be the reference build');
-  const concludes = (dir) => {
-    const f = join(dir, 'dist', 'esm', 'core', 'agent', 'coverage', 'period.js');
-    return existsSync(f) && readFileSync(f, 'utf8').includes(CONCLUSION_MARK);
-  };
+  // The coverage primitives moved from core/agent/coverage to semantics/coverage; a reference
+  // build from before the move still has the old path, so both are read.
+  const concludes = (dir) =>
+    [
+      join(dir, 'dist', 'esm', 'semantics', 'coverage', 'period.js'),
+      join(dir, 'dist', 'esm', 'core', 'agent', 'coverage', 'period.js'),
+    ].some((f) => existsSync(f) && readFileSync(f, 'utf8').includes(CONCLUSION_MARK));
   if (!concludes(root))
     throw new Error('arm after: this build serves no conclusion — rebuild (npm run build)');
   if (concludes(base))

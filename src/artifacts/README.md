@@ -40,7 +40,7 @@ This is preservation at this adapter boundary, not complete semantic-schema or f
 validation, an all-purpose unknown-value detector, or enforcement over later UI and
 middleware projections. `checkSemantics` accepts optional paired `projections`
 fixtures for the same check at build time; sample coverage remains the author's
-responsibility. See `src/lib/semantics/README.md`.
+responsibility. See `src/semantics/README.md`.
 
 `stageDatasetArtifacts(datasets, ctx.artifacts)` is the same staging step for a
 tool pipeline that already owns execution and projection. Each publication has a
@@ -85,7 +85,7 @@ project([p]) {
 },
 ```
 
-The answer account and the standing (`core/agent/coverage/emptiness.ts`) count
+The answer account and the standing (`core/agent/emptiness.ts`) count
 that `rows` for the key the app declares as `rowsAt`; a ticket without a
 whole-number `rows` is never guessed ("it reached the model as a ticket … does
 not say how many rows it holds"). Without the count, whether the result was empty

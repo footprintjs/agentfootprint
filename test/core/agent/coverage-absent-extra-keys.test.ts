@@ -25,7 +25,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { absent, coverage, defineTool, Agent, type ToolAbsence } from '../../../src/index.js';
-import { absenceEvidenceProjection } from '../../../src/core/agent/coverage/index.js';
+import { absenceEvidenceProjection } from '../../../src/semantics/coverage/index.js';
 import { mock } from '../../../src/llm-providers.js';
 
 // ── Toolkit ──────────────────────────────────────────────────────────────

@@ -47,9 +47,9 @@
 import { copyInProgressItem, IN_PROGRESS_SECTION_LABEL, inProgressLine } from './inProgress.js';
 import { mergeItems } from './items.js';
 import { copyPeriod, periodLine, type DeclaredPeriod } from './period.js';
-import type { BoundPresentation } from '../../../time/present.js';
+import type { BoundPresentation } from '../../time/present.js';
 import type { Coverage, CoverageItem, DeclaredCoverage, InProgressItem } from './types.js';
-import { isRegExpWhitespace, trimTrailing } from '../../../lib/linearText.js';
+import { isRegExpWhitespace, trimTrailing } from '../../lib/linearText.js';
 
 /**
  * One declaring call's period, as the answer's limits carry it (honesty step
@@ -233,7 +233,7 @@ function inProgressOf(declared: readonly DeclaredCoverage[]): AnswerInProgress[]
   return out;
 }
 
-// reads: scope.coverageDeclared ← read by ../stages/answerCoverage.ts · withAnswerCoverage, on the Route decider's
+// reads: scope.coverageDeclared ← read by ../../core/agent/stages/answerCoverage.ts · withAnswerCoverage, on the Route decider's
 //        terminal decision, and only when the answer is TYPED — the data twin of `composeAnswerWithCoverage`, below.
 /**
  * The run's declarations folded into the ANSWER's coverage — the three lists
@@ -356,10 +356,10 @@ function copyItem(item: CoverageItem): CoverageItem {
 }
 
 // LENS · injected-turn · persistent-history
-// reads: scope.coverageDeclared ← read once by ../stages/prepareFinal.ts · captureTurnPayload — the ONE reader that COMPOSES from it,
+// reads: scope.coverageDeclared ← read once by ../../core/agent/stages/prepareFinal.ts · captureTurnPayload — the ONE reader that COMPOSES from it,
 //        folded and capped (a typed answer never reaches it: its data twin is `coverageOfAnswer`, above). Not the only read
-//        of the key: ../stages/toolCalls.ts · declareCoverage reads it to append to it,
-//        and ../findings/unsettled.ts · withUnsettledRows (9.113.0) reads one call's rows for their `kind` — the witness
+//        of the key: ../../core/agent/stages/toolCalls.ts · declareCoverage reads it to append to it,
+//        and ../../core/agent/findings/unsettled.ts · withUnsettledRows (9.113.0) reads one call's rows for their `kind` — the witness
 //        that the tool returned an absence — and composes nothing from them (its row's words come from the served result).
 // law: may omit, never deny; every clause anchored to the call it was composed on.
 /**

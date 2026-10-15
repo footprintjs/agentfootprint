@@ -35,7 +35,7 @@ import { defineTool } from '../../src/index.js';
 import { readerWindowsOf } from '../../src/time/bind.js';
 import type { ClockRow, TimeReadingRow } from '../../src/time/rows.js';
 import { bindPresentation } from '../../src/time/present.js';
-import { periodCheckLine } from '../../src/core/agent/coverage/period.js';
+import { periodCheckLine } from '../../src/semantics/coverage/period.js';
 import {
   TIME_LINE_SOURCE,
   timeLine,

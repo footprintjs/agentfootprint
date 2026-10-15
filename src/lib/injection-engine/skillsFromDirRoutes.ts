@@ -55,7 +55,7 @@
  */
 
 import type { SkillGraphStep } from './skillGraph.js';
-import { TOOL_RESULT_STATUSES, type ToolResultStatus } from './toolOutcome.js';
+import { TOOL_RESULT_STATUSES, type ToolResultStatus } from '../../semantics/toolOutcome.js';
 
 /**
  * One frontmatter list item, structurally — `skillsFromDir`'s module-private

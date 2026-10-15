@@ -29,7 +29,7 @@ const REPO = resolve(__dirname, '../..');
  * edge is gone; this refuses one that was ADDED. A change that frees edges deletes their
  * entries and lowers this number in the same commit; nothing raises it.
  */
-const ALLOWANCE_COUNT = 18;
+const ALLOWANCE_COUNT = 4;
 
 // ── fixtures ─────────────────────────────────────────────────────────────────
 
@@ -61,14 +61,14 @@ function run(tree: Record<string, string>, config: Record<string, unknown> = {})
 describe('layering config — which layer a file is in', () => {
   const layers = compileLayers([
     { rank: 9, name: 'dir', files: ['src/core/**'] },
-    { rank: 0, name: 'leaf', files: ['src/core/agent/coverage/emptiness.ts'] },
-    { rank: 1, name: 'deeper dir', files: ['src/core/agent/coverage/**'] },
+    { rank: 0, name: 'leaf', files: ['src/core/agent/emptiness.ts'] },
+    { rank: 1, name: 'deeper dir', files: ['src/semantics/coverage/**'] },
   ]);
 
   it('an exact path beats a directory glob, and a deeper directory beats a shallower one', () => {
     expect(rankOf('src/core/Agent.ts', layers)).toBe(9);
-    expect(rankOf('src/core/agent/coverage/absent.ts', layers)).toBe(1);
-    expect(rankOf('src/core/agent/coverage/emptiness.ts', layers)).toBe(0);
+    expect(rankOf('src/semantics/coverage/absent.ts', layers)).toBe(1);
+    expect(rankOf('src/core/agent/emptiness.ts', layers)).toBe(0);
   });
 
   it('`*` stays inside one directory; `**` crosses them', () => {

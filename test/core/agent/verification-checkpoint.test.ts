@@ -30,7 +30,7 @@ import {
   resultIdentityOf,
 } from '../../../src/integrity/claim-binding/capture.js';
 import type { ClaimBindingRule } from '../../../src/integrity/claim-binding/types.js';
-import { readSemantics, semanticsForModel } from '../../../src/lib/semantics/envelope.js';
+import { readSemantics, semanticsForModel } from '../../../src/semantics/envelope.js';
 
 const tracker: RunCheckpointTracker = {
   runId: 'run',

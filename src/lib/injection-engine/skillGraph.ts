@@ -59,7 +59,7 @@
  */
 
 import { devMode, devWarn } from './devWarn.js';
-import type { ToolResultStatus } from './toolOutcome.js';
+import type { ToolResultStatus } from '../../semantics/toolOutcome.js';
 import { toolResultsOf } from './types.js';
 import type { Injection, InjectionContext, InjectionTrigger } from './types.js';
 import type { Embedder } from '../../memory/embedding/types.js';

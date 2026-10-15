@@ -68,7 +68,7 @@ import {
 import type { MemoryIdentity } from '../memory/identity/types.js';
 import type { FoldedSpan } from './agent/window/types.js';
 import { argumentRowIsWellFormed } from './agent/arguments/rows.js';
-import { periodRowIsWellFormed } from './agent/coverage/period.js';
+import { periodRowIsWellFormed } from '../semantics/coverage/period.js';
 import { witnessRowIsWellFormed } from './agent/assessment/witness.js';
 import { isTimeRowKind, timeRowIsWellFormed } from '../time/rows.js';
 import {

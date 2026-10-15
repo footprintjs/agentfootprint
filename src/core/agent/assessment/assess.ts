@@ -56,7 +56,7 @@ import {
   readEmptiness,
   rowsAtProblem,
   type ValueDeclaration,
-} from '../coverage/emptiness.js';
+} from '../emptiness.js';
 import { argumentRewritesOf } from '../middleware/rewrites.js';
 import { REASONS, reasonEntry } from './reasons.js';
 import type {
@@ -617,7 +617,7 @@ function readCoverageRows(coverage: readonly CoverageRow[], g: Gathered): void {
 /**
  * One result of the turn, with what the record holds about its call: the
  * committed coverage rows, and — only when there are none — the envelope in
- * the result itself (`coverage/emptiness.ts` · `declaredByValue`).
+ * the result itself (`agent/emptiness.ts` · `declaredByValue`).
  */
 interface ResultRead {
   readonly result: TurnResult;

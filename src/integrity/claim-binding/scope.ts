@@ -2,8 +2,8 @@
 import { copyJson, ownData } from '../../lib/boundedJson.js';
 import { canonicalJson } from '../../lib/canonicalJson.js';
 import { compareInstants, instantOf } from '../../time/instant.js';
-import { periodProblem } from '../../core/agent/coverage/period.js';
-import type { DeclaredPeriod } from '../../core/agent/coverage/period.js';
+import { periodProblem } from '../../semantics/coverage/period.js';
+import type { DeclaredPeriod } from '../../semantics/coverage/period.js';
 import type { ScopeDeclaration, ScopeDimension } from './types.js';
 
 export const BINDING_LIMITS = Object.freeze({

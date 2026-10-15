@@ -15,7 +15,7 @@ import type { ArtifactMeta } from '../artifacts/types.js';
 import { assertToolWants, type ToolWants } from '../artifacts/wants.js';
 import type { Credential, CredentialNeed, CredentialProvider } from '../identity/types.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
-import { RESULT_CLASSES, type ToolResultClass } from '../lib/semantics/types.js';
+import { RESULT_CLASSES, type ToolResultClass } from '../semantics/types.js';
 import {
   assertResultColumns,
   COLUMN_TYPES,

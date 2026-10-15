@@ -60,7 +60,7 @@
  * import it and keep its "pure over strings" law intact.
  */
 
-import { TOOL_RESULT_STATUSES } from './toolOutcome.js';
+import { TOOL_RESULT_STATUSES } from '../../semantics/toolOutcome.js';
 
 // ─── What a guard IS ────────────────────────────────────────────────────
 

@@ -71,8 +71,8 @@ import {
   notDispatchedResult,
   unknownToolResult,
 } from '../src/core/agent/stages/toolCalls.js';
-import { servedToModel } from '../src/core/agent/coverage/read.js';
-import { semanticsForModel } from '../src/lib/semantics/envelope.js';
+import { servedToModel } from '../src/semantics/coverage/read.js';
+import { semanticsForModel } from '../src/semantics/envelope.js';
 import { WRAP_UP_INSTRUCTION } from '../src/core/agent/stages/wrapUp.js';
 import {
   FINDINGS_ANSWER_ASK,
@@ -83,7 +83,7 @@ import {
   findingsInstructionFor,
 } from '../src/core/agent/findings/reserved.js';
 import { findingsLedgerPiece } from '../src/core/agent/findings/serve.js';
-import { heldLine, UNKNOWN_ZONE_LINE } from '../src/core/agent/coverage/timeLimits.js';
+import { heldLine, UNKNOWN_ZONE_LINE } from '../src/semantics/coverage/timeLimits.js';
 import {
   filledNote,
   keptAnswersNote,
@@ -99,7 +99,7 @@ import {
   withArgumentRules,
 } from '../src/core/agent/arguments/serve.js';
 import { rulesOf } from '../src/core/agent/arguments/declare.js';
-import { periodCheckLine } from '../src/core/agent/coverage/period.js';
+import { periodCheckLine } from '../src/semantics/coverage/period.js';
 import { bindPresentation } from '../src/time/present.js';
 import {
   factExpectation,
@@ -2158,13 +2158,13 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
   },
   {
     id: 'result helpers — the empty-data refusal names absent() (honesty step 7a′)',
-    module: 'src/lib/semantics/envelope.ts',
+    module: 'src/semantics/envelope.ts',
     surface: TOOL_RESULT,
     lifetimeBecause:
       'the mint throws inside the tool’s `execute`, and the dispatch loop turns the throw into ' +
       'that call’s error result — a `role: "tool"` message written into `history` and re-read on ' +
       'every later call of the turn',
-    drivenBy: ['test/lib/semantics/empty-data-refusal.test.ts'],
+    drivenBy: ['test/semantics/empty-data-refusal.test.ts'],
     reaches: [
       /^refused: `facts` is empty — if nothing matched, return absent\(\{ what, checked \}\) instead\. \(field: facts\)$/m,
       /^refused: `series` is empty — if nothing matched, return absent\(\{ what, checked \}\) instead\. \(field: series\)$/m,
@@ -2174,7 +2174,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
   },
   {
     id: 'result doors — the served period verdict word and its one clause (honesty step 7b, bench round 1)',
-    module: 'src/core/agent/coverage/period.ts',
+    module: 'src/semantics/coverage/period.ts',
     surface: TOOL_RESULT,
     lifetimeBecause:
       'the dispatch door serves it inside the `role: "tool"` result of the call whose period it ' +
@@ -2192,7 +2192,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
   },
   {
     id: 'result doors — the served in-progress clause (honesty layer 3, the third outcome)',
-    module: 'src/core/agent/coverage/inProgress.ts',
+    module: 'src/semantics/coverage/inProgress.ts',
     surface: TOOL_RESULT,
     lifetimeBecause:
       'the dispatch door appends it to the note of a `coverage()` ledger that declares a ' +

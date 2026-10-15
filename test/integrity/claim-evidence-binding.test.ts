@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { describedResult, type DeclaredPeriod } from '../../src/index.js';
 import { known, unknown as unknownValue } from '../../src/doors/maps.js';
-import { readSemantics, semanticsForModel } from '../../src/lib/semantics/envelope.js';
+import { readSemantics, semanticsForModel } from '../../src/semantics/envelope.js';
 import {
   captureDispatch,
   captureReturnedEvidence,

@@ -359,7 +359,7 @@ export {
   type SemanticsFinding,
   type SemanticsFindingCode,
   type SemanticsReport,
-} from './lib/semantics/index.js';
+} from './semantics/index.js';
 // recorded-chat — the session-scoped turn recorder. Wraps a consumer agent
 // factory into a recorded conversation: send() freezes each turn's evidence,
 // reason(k)/rerunTurn(k)/fork(k) are the per-turn transparency loop. Absorbs

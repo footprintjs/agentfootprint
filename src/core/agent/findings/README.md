@@ -789,7 +789,7 @@ beside, in the same write, at the two moments that file standings (a call's
   absence?" has one owner: the dispatch door
   (`../stages/toolCalls.ts · declareCoverage`), which reads the value the
   tool RETURNED through the one recognizer
-  (`../coverage/read.ts · readCoverageResult`), delivers the status
+  (`../../../semantics/coverage/read.ts · readCoverageResult`), delivers the status
   `'absent'`, emits `tools.absent` and files the call's rows on
   `AgentState.coverageDeclared`. The rule files a row only when the door's
   rows for the standing's `toolCallId` hold one of `kind: 'absence'` (an

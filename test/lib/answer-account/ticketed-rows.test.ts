@@ -15,7 +15,7 @@
  *   3. the app's after-tool `allow(replacement)` kept the ticket and dropped the rows from what
  *      the model reads ("source rows remain in the artifact store") — right, and the record keeps
  *      both: `tool_end.result` (the rows) and `tool_end.modelResult` (the ticket);
- *   4. the ONE emptiness reader (`core/agent/coverage/emptiness.ts`) reads the value the MODEL
+ *   4. the ONE emptiness reader (`core/agent/emptiness.ts`) reads the value the MODEL
  *      read, with the app's `rowsAt` — no list at `rows`, so `unknown` with "shape not
  *      declared". The FIRST wrong layer: the reader had no rule for rows that went to the store,
  *      and called a declared key undeclared.

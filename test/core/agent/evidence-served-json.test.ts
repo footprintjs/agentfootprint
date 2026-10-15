@@ -37,7 +37,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { absent } from '../../../src/core/agent/coverage/index.js';
+import { absent } from '../../../src/semantics/coverage/index.js';
 import { evidenceFromHistory, readResult } from '../../../src/core/agent/evidence/evidenceIndex.js';
 import { jsonPrefixOf, leadingJsonValues } from '../../../src/core/agent/evidence/servedJson.js';
 

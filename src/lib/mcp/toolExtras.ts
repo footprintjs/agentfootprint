@@ -64,7 +64,7 @@ import {
   type ToolResultCeiling,
   type ToolResultColumns,
 } from '../../core/tools.js';
-import type { ToolResultClass } from '../semantics/types.js';
+import type { ToolResultClass } from '../../semantics/types.js';
 import {
   assertAskOrAssume,
   type AskOrAssume,

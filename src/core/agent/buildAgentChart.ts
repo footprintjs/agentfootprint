@@ -61,7 +61,7 @@ import { withMemoryRecall } from './memoryRecallInjections.js';
 import { offeredResultIds } from './findings/offer.js';
 import { readerWindowsOf } from '../../time/windows.js';
 import { clockOf } from '../../time/rows.js';
-import { timeLimitFactsOf, type TimeLimitFacts } from './coverage/timeLimitFacts.js';
+import { timeLimitFactsOf, type TimeLimitFacts } from '../../semantics/coverage/timeLimitFacts.js';
 import type { FindingsLedger } from './findings/types.js';
 import {
   breakFinalStage,

@@ -63,7 +63,7 @@ absence envelope the model read is still in the committed `history`, and a call
 with no row is read off its bytes — so the reduced record reads what the full
 one does (`test/core/agent/assessment/fold-real-record.test.ts` pins both).
 Every result — here and in the standing — is read by the ONE emptiness reader,
-`core/agent/coverage/emptiness.ts` · `readEmptiness`. They differ in one place,
+`core/agent/emptiness.ts` · `readEmptiness`. They differ in one place,
 named: for this run's calls "It found" holds the door the EVENTS are, so an
 envelope a tool returned as JSON text that the run never recognized is "returned
 a result" there, while the standing — which holds a door only where a committed
@@ -72,7 +72,7 @@ coverage row is — reads the envelope (it may over-report; it never hides).
 **Rows that travel by reference are counted from their ticket.** When the app's
 projection moves a declared rowset into the artifact store and leaves the
 dataset ticket in its place (`{ ref, kind, rows, sourceField }` under
-`datasets[<key>]` / `dataset` — `core/agent/coverage/README.md` § 6), the reader
+`datasets[<key>]` / `dataset` — `semantics/coverage/README.md` § 6), the reader
 counts the ticket's `rows` for the key the app declared. Take 4 of the demo video:
 `pscale_client_health` with `rowsAt: 'rows'`, its 2 rows ticketed —
 
@@ -169,7 +169,7 @@ declared key that holds no list and no ticket (`unreachable.empty.noList`).
 10. **A tool's own words are printed as the tool wrote them** — `lookedFor`,
     `what`, `short`. An author who interpolates the caller's arguments into
     them puts those arguments in the report too (the af-1 "never interpolate"
-    rule, `core/agent/coverage/README.md`); the report is scoped to its owner.
+    rule, `semantics/coverage/README.md`); the report is scoped to its owner.
     Under ANY redaction policy, those words are kept out of every event by
     the value-kind rule (`redaction/knownStrings.ts` · `keepKnownValues`),
     and the account counts the items it cannot print (law 11).

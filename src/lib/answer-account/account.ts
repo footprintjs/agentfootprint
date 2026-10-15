@@ -17,7 +17,7 @@ import {
   rewrittenBehind,
   standingLineOf,
 } from '../../core/agent/assessment/compose.js';
-import { ASSUMED_BLOCK_HEADING, COVERAGE_BLOCK_HEADING } from '../../core/agent/coverage/answer.js';
+import { ASSUMED_BLOCK_HEADING, COVERAGE_BLOCK_HEADING } from '../../semantics/coverage/answer.js';
 import type { Recording } from '../../recorders/observability/recordRun.js';
 import { chip, clipFact, MAX_VAR_CHARS, saidBy, sentence } from './render.js';
 import { ANSWER_ACCOUNT_TEMPLATE_SET_VERSION, type TemplateId } from './templates.js';

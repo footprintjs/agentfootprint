@@ -5,14 +5,14 @@
  * WHY IT LIVES HERE. Two sides read these words and neither may own the
  * other: the agent loop's dispatch boundary (core/agent/stages/toolCalls.ts)
  * recognizes the envelope at run time, and the `check:semantics` build gate
- * (lib/semantics/check.ts) judges the same shapes with no agent anywhere in
+ * (semantics/check.ts) judges the same shapes with no agent anywhere in
  * sight. Declaring the vocabulary in a leaf both sides import keeps the
  * dependency pointing the right way — the loop and the gate depend on the
  * words, never on each other.
  *
  * The one exception to "zero imports" is TYPE-ONLY and deliberate: the
  * envelope's `coverage` field ABSORBS the existing coverage vocabulary
- * (`CoverageItem` / `CoverageInput`, core/agent/coverage/types.ts — itself a
+ * (`CoverageItem` / `CoverageInput`, semantics/coverage/types.ts — itself a
  * pure-data leaf) instead of duplicating it. Two spellings of "ground this
  * result does not cover" would eventually disagree; type-only imports erase
  * at runtime, so this module stays a runtime leaf.
@@ -36,8 +36,8 @@
  * […], status }` is a tool that returns typed data AND proposes a transition.
  */
 
-import type { CoverageDeclaration, CoverageItem } from '../../core/agent/coverage/types.js';
-import type { DeclaredPeriod, PeriodOnWire } from '../../core/agent/coverage/period.js';
+import type { CoverageDeclaration, CoverageItem } from './coverage/types.js';
+import type { DeclaredPeriod, PeriodOnWire } from './coverage/period.js';
 
 /**
  * The reserved key that makes a semantic envelope recognizable. Reserved

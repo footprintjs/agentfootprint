@@ -5,7 +5,7 @@
  * Branches on the call's outcome first: a call that did not run "found nothing"
  * because it did not run; a withheld result is never judged empty (the model
  * read the rule's refusal, not the rows). Emptiness is typed only, read by the
- * one emptiness reader (`core/agent/coverage/emptiness.ts` · `readEmptiness`):
+ * one emptiness reader (`core/agent/emptiness.ts` · `readEmptiness`):
  * a declared absence (or an empty rowset inside a declared boundary), a
  * described result's data counted per kind, a question handed back, a
  * zero-length top-level array, or the app's declared `rowsAt` (then the line

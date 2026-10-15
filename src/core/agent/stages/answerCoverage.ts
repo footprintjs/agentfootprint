@@ -48,8 +48,8 @@
  */
 
 import type { TypedScope } from 'footprintjs';
-import { answerCoverageOf, coverageOfAnswer } from '../coverage/index.js';
-import type { AnswerCoverage, DeclaredCoverage } from '../coverage/index.js';
+import { answerCoverageOf, coverageOfAnswer } from '../../../semantics/coverage/index.js';
+import type { AnswerCoverage, DeclaredCoverage } from '../../../semantics/coverage/index.js';
 import type { FindingsLedger } from '../findings/types.js';
 import type { AgentState } from '../types.js';
 import type { RouteBranch } from './route.js';

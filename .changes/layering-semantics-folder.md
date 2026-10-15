@@ -1,0 +1,4 @@
+---
+type: internal
+---
+**One folder for the honest-result law: `src/semantics/`.** `src/lib/semantics/` (the semantic result envelope and its `check:semantics` gate), `src/core/agent/coverage/` (`absent()`, `coverage()`, the declared period — now `src/semantics/coverage/`), the tool-result envelope grammar (`toolEffects.ts`) and the outcome words (`toolOutcome.ts`, out of the injection engine) moved into one top-level folder below the agent. The instruction leases a tool effect grants moved beside their one reader, `lib/injection-engine/leases.ts`, and `emptiness.ts` (which reads artifacts) stayed in the agent as `core/agent/emptiness.ts`. Fourteen upward imports left the layer table's allowance list (`npm run check:layering`). Internal paths only: every public door exports the same names, and the `agentfootprint-check-semantics` bin reads the moved CLI.

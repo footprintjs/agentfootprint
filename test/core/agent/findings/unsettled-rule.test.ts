@@ -52,8 +52,8 @@ import {
   type PreviousResult,
 } from '../../../../src/core/agent/findings/ledger.js';
 import type { FindingsLedger, StandingRow } from '../../../../src/core/agent/findings/types.js';
-import { readCoverageResult } from '../../../../src/core/agent/coverage/read.js';
-import type { DeclaredCoverage } from '../../../../src/core/agent/coverage/types.js';
+import { readCoverageResult } from '../../../../src/semantics/coverage/read.js';
+import type { DeclaredCoverage } from '../../../../src/semantics/coverage/types.js';
 import { buildCheckpoint, validateCheckpoint } from '../../../../src/core/runCheckpoint.js';
 import { noPolicyScope } from '../../../helpers/noPolicy.js';
 

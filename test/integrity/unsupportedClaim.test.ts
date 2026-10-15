@@ -25,7 +25,7 @@
 import { describe, expect, it } from 'vitest';
 import { unsupportedClaimsOf } from '../../src/integrity/unsupported-claim/check.js';
 import { Agent, defineTool } from '../../src/index.js';
-import { describedResult } from '../../src/lib/semantics/described.js';
+import { describedResult } from '../../src/semantics/described.js';
 import { mock } from '../../src/llm-providers.js';
 import { unknown as unknownClaim } from '../../src/lib/claim/claim.js';
 import { contextErrorIdentity, dedupeContextErrors } from '../../src/integrity/finding/types.js';

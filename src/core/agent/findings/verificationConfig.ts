@@ -17,7 +17,7 @@ import type {
 } from '../../../integrity/claim-binding/types.js';
 import { copyJson, ownData } from '../../../lib/boundedJson.js';
 import { canonicalJson } from '../../../lib/canonicalJson.js';
-import { readSemantics } from '../../../lib/semantics/envelope.js';
+import { readSemantics } from '../../../semantics/envelope.js';
 
 export interface EvidenceAuthorizationInput {
   /** Exact executed identity and selected scope, never all tool arguments. */

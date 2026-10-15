@@ -215,7 +215,7 @@ and that the answer account says the question and the answer are kept out.
      other key is data, checked by the same rule — the keys that fail are kept
      out together, as ONE placeholder entry (a reader reads that entry as a
      positive sign: keys were kept out, so a key it looks for may be among
-     them — `coverage/emptiness.ts`);
+     them — `agent/emptiness.ts`);
    - a value that is not plain data (a class instance, a Map, a Date) is the
      placeholder;
    - what it serves is always a FRESH copy of plain data: each value read

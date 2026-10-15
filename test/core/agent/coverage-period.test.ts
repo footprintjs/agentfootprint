@@ -35,8 +35,8 @@ import {
   periodVerdict,
   readPeriod,
   type DeclaredPeriod,
-} from '../../../src/core/agent/coverage/period.js';
-import { REFUSED_PREFIX } from '../../../src/core/agent/coverage/refusal.js';
+} from '../../../src/semantics/coverage/period.js';
+import { REFUSED_PREFIX } from '../../../src/semantics/coverage/refusal.js';
 import { heldSpanOf } from '../../../src/core/agent/results/subflow.js';
 import * as barrel from '../../../src/index.js';
 

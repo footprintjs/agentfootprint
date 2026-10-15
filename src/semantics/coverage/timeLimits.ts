@@ -23,7 +23,7 @@
  */
 
 import { clockLines, periodCheckLine, type PeriodRow } from './period.js';
-import { bindPresentation, type BoundPresentation } from '../../../time/present.js';
+import { bindPresentation, type BoundPresentation } from '../../time/present.js';
 import type { TimeLimitLines } from './answer.js';
 import {
   timeLimitFactsOf,

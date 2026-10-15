@@ -189,12 +189,8 @@ import {
   type StepPlanFor,
   type StepPointer,
 } from '../../../lib/injection-engine/skillSteps.js';
-import {
-  explainSemantics,
-  readSemantics,
-  semanticsForModel,
-} from '../../../lib/semantics/envelope.js';
-import type { ToolSemantics } from '../../../lib/semantics/types.js';
+import { explainSemantics, readSemantics, semanticsForModel } from '../../../semantics/envelope.js';
+import type { ToolSemantics } from '../../../semantics/types.js';
 import { claimRowsOf } from '../../../integrity/unsupported-claim/ledger.js';
 import type { ClaimLedgerRow } from '../../../integrity/unsupported-claim/check.js';
 import { emptyLookupOf, readLookupResult } from '../../../integrity/empty-lookup/check.js';
@@ -209,22 +205,24 @@ import {
   type CoverageFacts,
   type DeclaredCoverage,
   type ToolAbsence,
-} from '../coverage/index.js';
-import { readItemExtras, type CoverageSection } from '../coverage/items.js';
-import { copyInProgressItem } from '../coverage/inProgress.js';
-import { copyPeriod } from '../coverage/period.js';
-import { servedToModel, strippedOnly } from '../coverage/read.js';
+} from '../../../semantics/coverage/index.js';
+import { readItemExtras, type CoverageSection } from '../../../semantics/coverage/items.js';
+import { copyInProgressItem } from '../../../semantics/coverage/inProgress.js';
+import { copyPeriod } from '../../../semantics/coverage/period.js';
+import { servedToModel, strippedOnly } from '../../../semantics/coverage/read.js';
 import {
-  explainStatusOnlyNearMiss,
   pruneLeases,
-  readToolResultEnvelope,
   tenantOf,
   type InstructionLease,
   type PendingToolTransition,
+} from '../../../lib/injection-engine/leases.js';
+import {
+  explainStatusOnlyNearMiss,
+  readToolResultEnvelope,
   type ProposedEffect,
   type ReadToolResultEnvelope,
   type ToolResultStatus,
-} from '../toolEffects.js';
+} from '../../../semantics/toolEffects.js';
 import type { AgentState } from '../types.js';
 import { assistantReplayFields } from '../assistantReplay.js';
 import { joinSystemPrompt } from '../composeRequest.js';
@@ -1770,7 +1768,7 @@ export function buildToolCallsHandler(
    * behavioural change, and it is deliberately narrow — an absence is not an
    * error, so nothing here sets `error: true`, nothing refuses, nothing
    * retries, and the value the model reads is the value the tool minted. The
-   * direction-of-error argument (see `../coverage/absent.ts`) is that a
+   * direction-of-error argument (see `../../../semantics/coverage/absent.ts`) is that a
    * *nothing-found* routed as a *failure* sends someone to investigate a
    * healthy collector, while a *failure* routed as *nothing-found* declares a
    * system fine that was never checked; giving the outcome its own word is

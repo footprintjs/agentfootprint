@@ -812,15 +812,14 @@ export {
   readToolResultEnvelope,
   TOOL_RESULT_STATUSES,
   type InstructionDeliveryLease,
-  type InstructionLease,
-  type PendingToolTransition,
   type ProposedEffect,
   type ProposeTransitionEffect,
   type ReadToolResultEnvelope,
   type RequireInstructionEffect,
   type ToolResultEnvelope,
   type ToolResultStatus,
-} from './core/agent/toolEffects.js';
+} from './semantics/toolEffects.js';
+export type { InstructionLease, PendingToolTransition } from './lib/injection-engine/leases.js';
 // The two coverage primitives — both invented in FIELD USE, on a live triage
 // agent, because the library had no answer for either.
 //
@@ -863,7 +862,7 @@ export {
   type DeclaredCoverage,
   type ToolAbsence,
   type TryInsteadTool,
-} from './core/agent/coverage/index.js';
+} from './semantics/coverage/index.js';
 // The one period shape (honesty layer 3, step 7b): what a result's READ
 // covered in time — the instants it asked for, what the store holds (or
 // 'unknown', said out loud) — declared on `absent()`, `coverage()` and
@@ -875,7 +874,7 @@ export {
   periodVerdict,
   type DeclaredPeriod,
   type PeriodRow,
-} from './core/agent/coverage/period.js';
+} from './semantics/coverage/period.js';
 // The third outcome (honesty layer 3): what a `coverage()`'s read found still
 // RUNNING — its outcome not known yet, neither a success nor a failure — as
 // the TOOL declares it (`inProgress`; the library never reads a vendor's state
@@ -885,8 +884,8 @@ export {
   IN_PROGRESS_CLAUSE,
   IN_PROGRESS_SECTION_LABEL,
   IN_PROGRESS_WIRE,
-} from './core/agent/coverage/inProgress.js';
-export type { InProgressInput, InProgressItem } from './core/agent/coverage/types.js';
+} from './semantics/coverage/inProgress.js';
+export type { InProgressInput, InProgressItem } from './semantics/coverage/types.js';
 // The semantic tool-result envelope (9.53.0) — typed series/facts/edges with
 // the caveats that make them honest (grain, provenance, coverage) as DATA,
 // so honesty is inherited, not re-authored per tool. A sibling recognizer
@@ -922,7 +921,7 @@ export {
   type SemanticSeriesPoint,
   type ToolResultClass,
   type ToolSemantics,
-} from './lib/semantics/index.js';
+} from './semantics/index.js';
 // Tool sessions (9.7.0) — the identity a tool holds a session under, and the
 // end-signal that releases it. The KEY DERIVATION is exported because it is the
 // isolation boundary: one implementation, or two that disagree.

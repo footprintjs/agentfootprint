@@ -2,7 +2,7 @@
 import { copyJson, ownData } from '../../lib/boundedJson.js';
 import { participates, comparableValueOf } from '../assertion/types.js';
 import type { ClaimLedgerRow } from '../unsupported-claim/check.js';
-import { periodVerdict } from '../../core/agent/coverage/period.js';
+import { periodVerdict } from '../../semantics/coverage/period.js';
 import { resultIdentityOf } from './capture.js';
 import {
   BINDING_LIMITS,

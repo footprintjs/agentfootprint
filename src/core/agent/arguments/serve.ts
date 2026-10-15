@@ -30,9 +30,9 @@
 import type { LLMToolSchema } from '../../../provider-contract/types.js';
 import { shownArgsOf } from '../../toolShownArgs.js';
 import type { InputValue } from '../../inputRequest.js';
-import { ASSUMED_BLOCK_HEADING, type TimeLimitLines } from '../coverage/answer.js';
-import type { TimeLimitFacts } from '../coverage/timeLimitFacts.js';
-import { renderTimeLimits } from '../coverage/timeLimits.js';
+import { ASSUMED_BLOCK_HEADING, type TimeLimitLines } from '../../../semantics/coverage/answer.js';
+import type { TimeLimitFacts } from '../../../semantics/coverage/timeLimitFacts.js';
+import { renderTimeLimits } from '../../../semantics/coverage/timeLimits.js';
 import { argumentRewritesOf, type ArgumentRewrite } from '../middleware/rewrites.js';
 import { isRefused, periodFactsOf, periodFormsOf, rulesOf, type RuledToolLike } from './declare.js';
 import { HIDDEN_VALUE, type ArgumentRow } from './rows.js';

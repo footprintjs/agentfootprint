@@ -35,8 +35,8 @@
  * rule decides those, by name.
  */
 
-import type { ABSENCE_NOTE } from '../core/agent/coverage/absent.js';
-import type { CoveredResult, ToolAbsence } from '../core/agent/coverage/types.js';
+import type { ABSENCE_NOTE } from '../semantics/coverage/absent.js';
+import type { CoveredResult, ToolAbsence } from '../semantics/coverage/types.js';
 import type { FigureDerivation } from '../core/agent/evidence/types.js';
 import type { AgentfootprintEventMap, AgentfootprintEventType } from '../events/registry.js';
 import type { CursorMoveCause, SkillEdgeKind } from '../lib/injection-engine/skillGraph.js';

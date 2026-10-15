@@ -93,9 +93,9 @@
  * with one owner, not in a reader.
  */
 
-import { isArtifactRef } from '../../../artifacts/naming.js';
-import { isPlacedToolResult } from '../../../artifacts/placement.js';
-import { readAbsence, readCoverageLedger } from './recognize.js';
+import { isArtifactRef } from '../../artifacts/naming.js';
+import { isPlacedToolResult } from '../../artifacts/placement.js';
+import { readAbsence, readCoverageLedger } from '../../semantics/coverage/recognize.js';
 
 /**
  * Whether the result the model read came back empty, and who says so.

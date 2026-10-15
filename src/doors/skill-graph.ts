@@ -129,10 +129,7 @@ export type {
   SkillToolDescriptor,
   SkillToolSchema,
 } from '../lib/injection-engine/hostContract.js';
-export {
-  TOOL_RESULT_STATUSES,
-  type ToolResultStatus,
-} from '../lib/injection-engine/toolOutcome.js';
+export { TOOL_RESULT_STATUSES, type ToolResultStatus } from '../semantics/toolOutcome.js';
 
 // ─── The graph (the SkillMap — the agent that mounts it is the SkillWalker) ─
 export {

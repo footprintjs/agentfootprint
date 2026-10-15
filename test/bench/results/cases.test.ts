@@ -11,7 +11,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { periodVerdict } from '../../../src/core/agent/coverage/period.js';
+import { periodVerdict } from '../../../src/semantics/coverage/period.js';
 import {
   CASES,
   NOW,

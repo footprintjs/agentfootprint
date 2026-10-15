@@ -4,6 +4,13 @@ it), plus the build-time gate `check.ts` / `format.ts` / `cli.ts`.
 Lens: `semanticsForModel()` in `envelope.ts` is the model's compact projection
 of the envelope, and `composeNotCovered` writes the absence prose — a served
 view that must not overclaim coverage.
+Also here, so the one law of an honest tool result has one folder (layer L1:
+it imports only `lib/` leaves and `time/`): `coverage/` (the two field-invented
+result primitives, `absent()` and `coverage()`, and the period a result
+declares — its own README), `toolEffects.ts` (the tool-result envelope grammar:
+the two effect kinds, the recognizer) and `toolOutcome.ts` (the outcome words a
+route edge keys on). The instruction leases an effect grants live with their
+reader, `lib/injection-engine/leases.ts`.
 
 # semantics — the semantic tool-result envelope + `check:semantics`
 
@@ -68,7 +75,7 @@ Do **not** rename keys in saved records or foreign-language wire envelopes:
 `ToolSemantics`, its snake_case fields, the marker, note and model projection
 are unchanged. `readSemantics()` continues to recognize valid saved envelopes.
 
-Pinned by `test/lib/semantics/described-result.test.ts`: six independently
+Pinned by `test/semantics/described-result.test.ts`: six independently
 captured historical envelopes and model projections, unchanged inline goldens,
 and the original seeded generator checked against 3,000 ordered legacy outcomes.
 The provenance, wire-type and removed-export compile contracts are pinned by
@@ -77,7 +84,7 @@ The provenance, wire-type and removed-export compile contracts are pinned by
 ## A refusal reads as a refusal; an unknown key is never dropped
 
 The declaration door shares the coverage helpers' law
-(`src/core/agent/coverage/README.md` § 5, the owner `refusal.ts`): every key
+(`src/semantics/coverage/README.md` § 5, the owner `refusal.ts`): every key
 the declaration — or its `grain`, `provenance`, `coverage`, `clarify` or
 `render` — carries is one the mint reads, or a refusal naming the spelling
 meant; and every refusal starts `refused: `, never with a helper's name.
@@ -135,7 +142,7 @@ the rule set untouched and is refused as one — "`facts` must be a non-empty
 array of rows" — where a spread used to crash on an object (a `TypeError`, which
 does not read as a refusal) or refuse a string's characters as malformed rows;
 any other iterable still mints, copied into a fresh array (`envelope.ts` ·
-`copyDataList`). Pinned by `test/lib/semantics/empty-data-refusal.test.ts`,
+`copyDataList`). Pinned by `test/semantics/empty-data-refusal.test.ts`,
 and the refusal is a registered model-facing sentence
 (`test/modelFacingSurfaces.test.ts`).
 
@@ -145,7 +152,7 @@ and the refusal is a registered model-facing sentence
 time: `queried` (the instants it asked for), `held` (what the store holds, or
 `'unknown'`) and `readAt`, every value an ISO 8601 instant with a zone. A
 top-level field on `af_semantics` (after `provenance`), minted by the ONE period
-rule set (`core/agent/coverage/period.ts` · `mintPeriod`) and refused there in
+rule set (`semantics/coverage/period.ts` · `mintPeriod`) and refused there in
 camelCase; `semanticsForModel` serves it as declared; the recognizer holds a
 foreign envelope's period to the same rule set (`period.ts` · `periodProblem`,
 wire spelling) — a fault is one more `semanticIssues` fault, so the envelope
@@ -172,7 +179,7 @@ reproduce exactly to mint an envelope this library will recognize. They are
 published as data alongside the coverage/absence family in
 `canonical-notes.json` at the package root — GENERATED from the built barrel
 by `scripts/gen-canonical-notes.mjs`, never hand-maintained. See
-`src/core/agent/coverage/README.md` for the argument.
+`src/semantics/coverage/README.md` for the argument.
 
 ## Composition
 

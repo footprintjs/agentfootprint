@@ -100,11 +100,15 @@
  * model rules out no such result records the bytes it always did.
  */
 
-import { readAbsence } from '../coverage/absent.js';
-import { mergeItems } from '../coverage/items.js';
-import { readCoverageLedger } from '../coverage/ledger.js';
-import { readCoverageResult, type CoverageReading } from '../coverage/read.js';
-import type { CoverageItem, DeclaredCoverage, ToolAbsence } from '../coverage/types.js';
+import { readAbsence } from '../../../semantics/coverage/absent.js';
+import { mergeItems } from '../../../semantics/coverage/items.js';
+import { readCoverageLedger } from '../../../semantics/coverage/ledger.js';
+import { readCoverageResult, type CoverageReading } from '../../../semantics/coverage/read.js';
+import type {
+  CoverageItem,
+  DeclaredCoverage,
+  ToolAbsence,
+} from '../../../semantics/coverage/types.js';
 import type { PreviousResult } from './ledger.js';
 import type { FindingsRow, StandingRow, UnsettledByAbsenceRow } from './types.js';
 

@@ -14,14 +14,14 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { describedResult, absent, coverage } from '../../../src/index.js';
+import { describedResult, absent, coverage } from '../../src/index.js';
 import {
   checkSemantics,
   coerceSemanticsCatalog,
   formatSemanticsReport,
   runCheckSemanticsCli,
   type SemanticsFinding,
-} from '../../../src/lib/semantics/index.js';
+} from '../../src/semantics/index.js';
 
 const PROVENANCE = { measuredAt: '2026-08-19T10:20:00Z', source: 'Cohesity API' };
 

@@ -39,7 +39,7 @@ import {
   trimLeading,
   trimTrailing,
 } from '../../src/lib/linearText.js';
-import { composeAnswerWithCoverage } from '../../src/core/agent/coverage/answer.js';
+import { composeAnswerWithCoverage } from '../../src/semantics/coverage/answer.js';
 import { timeFormsOfText } from '../../src/time/textForms.js';
 import { placeBeforeTime } from '../../src/time/resolve.js';
 import { idFromIri } from '../../src/ontology/skosJsonLd.js';

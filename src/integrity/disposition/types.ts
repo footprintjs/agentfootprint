@@ -11,7 +11,7 @@
  *          silent again.
  *
  * The vocabulary is deliberately aligned with the coverage primitives'
- * checked / not_checked / cannot_cover words (core/agent/coverage): same
+ * checked / not_checked / cannot_cover words (semantics/coverage): same
  * house, same honesty grammar, different subject (a CHECK's encounter with
  * an assertion, rather than a tool's encounter with ground).
  */

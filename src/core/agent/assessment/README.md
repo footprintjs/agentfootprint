@@ -171,7 +171,7 @@ stays the verdict when both exist. A `steps-unfinished` row fires the reason of 
 name and files no check: the record holds only the unfinished verdict.
 
 Every result is read through the ONE emptiness reader,
-`core/agent/coverage/emptiness.ts` · `readEmptiness`, the one the answer account
+`core/agent/emptiness.ts` · `readEmptiness`, the one the answer account
 reads through too. A call with committed coverage rows is read through the door
 those rows are. A call with NONE is handed no door, so the reader reads the
 envelope in the bytes (`declaredByValue`, the rule the run's own recognizer files

@@ -24,7 +24,7 @@ import {
   toUtc,
   type Instant,
 } from '../../src/time/instant.js';
-import { periodVerdict } from '../../src/core/agent/coverage/period.js';
+import { periodVerdict } from '../../src/semantics/coverage/period.js';
 import { instantOfBefore, periodVerdictBefore, type InstantBefore } from './fixtures/before.js';
 import { instantish, int, pick, prng } from './fixtures/generate.js';
 

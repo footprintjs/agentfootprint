@@ -80,7 +80,6 @@ const PURE_CORE = [
   `${IE}/skillVocabulary.ts`,
   `${IE}/softmax.ts`,
   `${IE}/startRuleClaim.ts`,
-  `${IE}/toolOutcome.ts`,
   `${IE}/types.ts`,
 ];
 
@@ -91,6 +90,13 @@ const PURE_CORE = [
  * loop would hand the loop to the graph through the back door.
  */
 const PURE_LEAVES: ReadonlyArray<readonly [file: string, why: string]> = [
+  [
+    'src/semantics/toolOutcome.ts',
+    '`ToolResultStatus` / `TOOL_RESULT_STATUSES` — the outcome words a route edge keys on ' +
+      '(`onToolStatus`) and `InjectionContext.toolResults[].status` is typed by. A zero-import ' +
+      'leaf; it lives with the tool-result envelope grammar (`semantics/toolEffects.ts` ' +
+      're-exports it), which both the graph and the loop read.',
+  ],
   [
     'src/events/types.ts',
     "`ContextRole` / `ContextSource` — the observability vocabulary an Injection's " +
@@ -204,6 +210,7 @@ const HOST_ZONE = [
   `${IE}/buildInjectionEngineSubflow.ts`,
   `${IE}/devWarnHost.ts`,
   `${IE}/index.ts`,
+  `${IE}/leases.ts`,
   `${IE}/messagesSlotRefusal.ts`,
   `${IE}/skillBodyDelivery.ts`,
   `${IE}/skillTools.ts`,
@@ -343,8 +350,8 @@ function teach(spec: string): string {
     return (
       'that is the AGENT LOOP. The loop depends on the graph, never the reverse — a loop type ' +
       'the graph needs is a type in the wrong place. Move it down to a leaf both sides can ' +
-      'import (`toolOutcome.ts` is the worked example: `ToolResultStatus` moved here and ' +
-      '`core/agent/toolEffects.ts` re-exports it) and put the graph-facing shape on ' +
+      'import (`semantics/toolOutcome.ts` is the worked example: `ToolResultStatus` moved there ' +
+      'and `semantics/toolEffects.ts` re-exports it) and put the graph-facing shape on ' +
       '`hostContract.ts`.'
     );
   }
@@ -629,15 +636,15 @@ describe('skill-graph fence — the structural mirrors', () => {
   });
 
   it('ToolResultStatus is declared once, in the pure leaf', () => {
-    const leaf = `${IE}/toolOutcome.ts`;
+    const leaf = 'src/semantics/toolOutcome.ts';
     expect(aliasText(leaf, 'ToolResultStatus')).toContain("'denied'");
-    // The loop re-exports; it must not re-declare.
-    const effects = readFileSync(resolve(REPO, 'src/core/agent/toolEffects.ts'), 'utf8');
+    // The envelope grammar re-exports; it must not re-declare.
+    const effects = readFileSync(resolve(REPO, 'src/semantics/toolEffects.ts'), 'utf8');
     expect(
       /export type ToolResultStatus\s*=/.test(effects),
-      '`core/agent/toolEffects.ts` declares ToolResultStatus again. Two declarations of a ' +
-        'closed vocabulary drift; the graph reads the one in `toolOutcome.ts`, so the loop ' +
-        'must re-export it, not re-state it.',
+      '`semantics/toolEffects.ts` declares ToolResultStatus again. Two declarations of a ' +
+        'closed vocabulary drift; the graph reads the one in `toolOutcome.ts`, so the envelope ' +
+        'grammar must re-export it, not re-state it.',
     ).toBe(false);
   });
 });

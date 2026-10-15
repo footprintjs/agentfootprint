@@ -266,7 +266,7 @@ describe.skipIf(!built)('the default browser graph of the root entry', () => {
       'time/checkRecord.js',
       'time/windows.js',
       'time/textForms.js',
-      'core/agent/coverage/timeLimitFacts.js',
+      'semantics/coverage/timeLimitFacts.js',
     ]) {
       expect(graph.syncInputs.has(`dist/esm/${stays}`), stays).toBe(true);
     }
@@ -282,7 +282,7 @@ describe.skipIf(!built)('the default browser graph of the root entry', () => {
       'time/bind.js',
       'time/check.js',
       'time/forms.js',
-      'core/agent/coverage/timeLimits.js',
+      'semantics/coverage/timeLimits.js',
       'core/agent/stages/timeLineage.js',
     ]) {
       expect(graph.syncInputs.has(`dist/esm/${lazy}`), lazy).toBe(false);

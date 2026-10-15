@@ -11,7 +11,7 @@ import {
   semanticsForModel,
   coverageOfSemantics,
   periodOfSemantics,
-} from '../../lib/semantics/envelope.js';
+} from '../../semantics/envelope.js';
 import { claimRowsOf } from '../unsupported-claim/ledger.js';
 import { BINDING_LIMITS, boundedText, executedScope, scopeDeclarationOf } from './scope.js';
 import type {

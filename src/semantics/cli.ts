@@ -5,7 +5,7 @@
  *          `bin/agentfootprint-check-semantics.mjs` is a 2-line wrapper;
  *          ALL behavior (arg parsing, catalog coercion, report, exit code)
  *          lives here so it is unit-testable without spawning a process.
- * Role:    `src/lib/semantics/`. Reads ONE JSON file of tools + sample
+ * Role:    `src/semantics/`. Reads ONE JSON file of tools + sample
  *          results, prints a report, returns the process exit code:
  *            0 — report.ok (and, under --strict, zero warnings)
  *            1 — findings failed the gate

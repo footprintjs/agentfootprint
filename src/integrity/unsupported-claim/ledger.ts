@@ -28,7 +28,7 @@
  * everything before it is quotable history — the check reads it that way.
  */
 
-import type { ToolSemantics } from '../../lib/semantics/types.js';
+import type { ToolSemantics } from '../../semantics/types.js';
 import type { ClaimLedgerRow } from './check.js';
 
 /** Which call produced these rows — the provenance a witness quotes. */

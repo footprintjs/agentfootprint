@@ -50,7 +50,7 @@ import type { ToolChoiceEntry } from '../agent/toolChoice/types.js';
 import type { ReaderWindows } from '../../time/bind.js';
 import type { ServedClock } from '../agent/arguments/serve.js';
 import type { ZoneName } from '../../time/zone.js';
-import type { TimeLimitFacts } from '../agent/coverage/timeLimitFacts.js';
+import type { TimeLimitFacts } from '../../semantics/coverage/timeLimitFacts.js';
 
 /**
  * Mutable cache shared between `buildToolsSlot` (writer) and

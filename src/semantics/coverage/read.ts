@@ -5,7 +5,7 @@
  *          precedent). The batch loop and the credential/resume execute
  *          boundary both call this at the moment a handler's return lands, so
  *          a resumed call declares its coverage exactly as an inline one; the
- *          raise site (`../stages/toolCalls.ts` · `declareRaisedAbsence`)
+ *          raise site (`../../core/agent/stages/toolCalls.ts` · `declareRaisedAbsence`)
  *          calls it on the `absence` a `requestInput` declared (9.114.0).
  * Role:    core/ layer, pure. Recognition and normalization only — the caller
  *          owns the events, the scope write and the delivered status.
@@ -17,13 +17,9 @@
  * returned — byte for byte.
  */
 
-import type { ToolResultStatus } from '../../../lib/injection-engine/toolOutcome.js';
-import { readProvenance, type DeclaredProvenance } from '../../../lib/semantics/described.js';
-import {
-  coverageOfSemantics,
-  periodOfSemantics,
-  readSemantics,
-} from '../../../lib/semantics/envelope.js';
+import type { ToolResultStatus } from '../toolOutcome.js';
+import { readProvenance, type DeclaredProvenance } from '../described.js';
+import { coverageOfSemantics, periodOfSemantics, readSemantics } from '../envelope.js';
 import {
   ABSENCE_NOTE,
   ABSENCE_NOTE_HELD_ONLY,
@@ -167,7 +163,7 @@ export interface CoverageReading {
  * inequality stamps nothing new. A structural copy only when a key was
  * present.
  *
- * Asked at the ENTRY of `../stages/toolCalls.ts` · `afterMoment`, which every
+ * Asked at the ENTRY of `../../core/agent/stages/toolCalls.ts` · `afterMoment`, which every
  * dispatch path (the batch loop and the four resume doors) calls for a result
  * that ran — so every after-tool link is handed the served value, and none
  * can re-serve the fields — and by the result ceiling and the column judge at
@@ -191,7 +187,7 @@ const STRIPPED_FROM = new WeakMap<object, unknown>();
 /**
  * True when `modelResult` is exactly what {@link servedToModel} produced from
  * `result` — the two channels carry ONE value and differ only by the
- * record-only fields. `../stages/toolCalls.ts` · `placeResults` then gives
+ * record-only fields. `../../core/agent/stages/toolCalls.ts` · `placeResults` then gives
  * both channels the ticket, as it does when they are one reference, so a
  * declaring tool never keeps its whole payload on `tool_end.result`.
  */

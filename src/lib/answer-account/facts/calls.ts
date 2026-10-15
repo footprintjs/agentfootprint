@@ -19,13 +19,13 @@
  *
  * Emptiness is read from what the MODEL read — `modelResult ?? result` — and
  * never judged on a withheld result. The reader is the ONE emptiness reader
- * (`core/agent/coverage/emptiness.ts` · `readEmptiness`), handed the door this
+ * (`core/agent/emptiness.ts` · `readEmptiness`), handed the door this
  * record holds for the call: its absence (the delivered status, `tools.absent`),
  * its boundary (`tools.coverage_declared`) and its described envelope
  * (`tools.semantics_declared`).
  */
 
-import { strip } from '../../../core/agent/coverage/read.js';
+import { strip } from '../../../semantics/coverage/read.js';
 import { v } from '../render.js';
 import type { RecordPointer, SentenceVar, ToolCallFact } from '../types.js';
 import { isKeptOut, isRecord, keptOut, str, type ViewEvent } from '../view.js';

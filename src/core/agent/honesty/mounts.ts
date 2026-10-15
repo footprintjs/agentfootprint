@@ -94,7 +94,11 @@ import {
 } from '../../../time/rows.js';
 import type { PeriodFacts, PeriodForm } from '../../../time/convert.js';
 import type { ZoneName } from '../../../time/zone.js';
-import { copyPeriod, type DeclaredPeriod, type PeriodRow } from '../coverage/period.js';
+import {
+  copyPeriod,
+  type DeclaredPeriod,
+  type PeriodRow,
+} from '../../../semantics/coverage/period.js';
 import { appendRows, emitRow, type FindingsScope } from '../findings/ledger.js';
 import type { FindingsRow } from '../findings/types.js';
 import type {

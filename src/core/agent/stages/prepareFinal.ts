@@ -32,8 +32,8 @@ import {
   composeAnswerWithCoverage,
   copyAnswerCoverage,
   type AnswerCoverage,
-} from '../coverage/index.js';
-import type { TimeLimitLines } from '../coverage/timeLimits.js';
+} from '../../../semantics/coverage/index.js';
+import type { TimeLimitLines } from '../../../semantics/coverage/timeLimits.js';
 import type { AgentState } from '../types.js';
 import type { FindingsLedger } from '../findings/types.js';
 import { presentationZoneOf } from '../../../time/rows.js';
@@ -293,7 +293,7 @@ async function presentationOf(
 async function timeLinesOf(scope: TypedScope<AgentState>): Promise<TimeLimitLines | undefined> {
   // The composer (and the renderer it binds) loads only here, under `.time()` — the
   // optional-family law, as `presentationOf`.
-  const { timeLimitLinesOf } = await import('../coverage/timeLimits.js');
+  const { timeLimitLinesOf } = await import('../../../semantics/coverage/timeLimits.js');
   return timeLimitLinesOf(
     scope.findingsLedger as FindingsLedger | undefined,
     scope.turnNumber as number | undefined,

@@ -102,7 +102,7 @@ export interface LookupResultReading {
  * @param value the tool's own answer, as it returned it.
  * @param declaredAbsence whether `readAbsence` recognized the value. PASSED
  *   IN rather than re-derived here on purpose: the `af_absent` marker has
- *   exactly one owner (`core/agent/coverage/absent.ts`), a second spelling of
+ *   exactly one owner (`semantics/coverage/absent.ts`), a second spelling of
  *   a reserved word would eventually disagree with the first, and
  *   `src/integrity/` stays a leaf that imports no agent code.
  */

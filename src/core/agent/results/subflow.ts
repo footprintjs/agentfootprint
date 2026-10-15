@@ -64,7 +64,7 @@ import {
   type DeclaredPeriod,
   type HeldSpan,
   type PeriodRow,
-} from '../coverage/period.js';
+} from '../../../semantics/coverage/period.js';
 import {
   periodTimeCheck,
   type PeriodCheckInput,

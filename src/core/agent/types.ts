@@ -1835,7 +1835,7 @@ export interface AgentState {
     toolName: string;
     result: string;
     /** The tool's own declared outcome (9.19.0) — envelope tools only. */
-    status?: import('./toolEffects.js').ToolResultStatus;
+    status?: import('../../semantics/toolEffects.js').ToolResultStatus;
   };
   // NOTE (9.26.0): the repeated-call nudge deliberately keeps NO key here. Its
   // counters are a within-turn tally, not conversation state, and tracked state
@@ -1856,7 +1856,7 @@ export interface AgentState {
     /** The tool's OWN declared outcome (9.19.0) — present only when the tool
      *  returned a result envelope carrying `status`. `onToolStatus` route
      *  edges key on it. */
-    status?: import('./toolEffects.js').ToolResultStatus;
+    status?: import('../../semantics/toolEffects.js').ToolResultStatus;
   }>;
   /**
    * The iteration that DISPATCHED the batch `toolResults` holds — written
@@ -2062,12 +2062,14 @@ export interface AgentState {
    *  batch, stamped with the granting iteration (one-shot by data: the
    *  Evaluate stage honors it exactly once, on the following iteration).
    *  Absent unless a tool proposed one on a skill-graph agent. */
-  pendingToolTransition?: import('./toolEffects.js').PendingToolTransition;
+  pendingToolTransition?: import('../../lib/injection-engine/leases.js').PendingToolTransition;
   /** The granted `require-instruction` leases (9.19.0), in grant order.
    *  Appended by the tool-calls stage (which prunes spent ones as it
    *  writes); validity is computed per Evaluate pass, never mutated.
    *  Absent unless a tool granted one. */
-  instructionLeases?: ReadonlyArray<import('./toolEffects.js').InstructionLease>;
+  instructionLeases?: ReadonlyArray<
+    import('../../lib/injection-engine/leases.js').InstructionLease
+  >;
 
   /**
    * The mount kernel's engagement state (9.58.0) — one record per mounted
@@ -2099,7 +2101,7 @@ export interface AgentState {
    * agent whose tools never return either shape commits exactly what it
    * always did.
    */
-  coverageDeclared?: ReadonlyArray<import('./coverage/index.js').DeclaredCoverage>;
+  coverageDeclared?: ReadonlyArray<import('../../semantics/coverage/index.js').DeclaredCoverage>;
   /**
    * The ANSWER's coverage, as data — `coverageDeclared` folded into the three
    * lists the limits block would have printed (merged in declaration order,
@@ -2120,7 +2122,7 @@ export interface AgentState {
    * did. Read it with `agent.answerCoverage()`; `turn_end.answerCoverage`
    * mirrors it.
    */
-  answerCoverage?: import('./coverage/index.js').AnswerCoverage;
+  answerCoverage?: import('../../semantics/coverage/index.js').AnswerCoverage;
   /**
    * The typed readings this run's tools settled (9.61.0) — one row per
    * (entity, field, value) flattened out of each recognized semantic
