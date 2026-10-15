@@ -18,7 +18,7 @@
  * type (the shape).
  *
  * Pattern: Single-Source-of-Truth const objects + discriminated union.
- *          Mirrors `src/conventions.ts` (SUBFLOW_IDS, INJECTION_KEYS).
+ *          Mirrors `src/lib/conventions.ts` (SUBFLOW_IDS, INJECTION_KEYS).
  *          NEVER enums (TS enums emit runtime objects + opacity).
  *          Const-as-const erases at compile time, accepts string literals,
  *          and gives consumers IDE autocomplete + refactor safety.

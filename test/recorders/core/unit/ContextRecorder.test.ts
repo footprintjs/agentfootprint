@@ -17,7 +17,7 @@ import {
   type InjectionRecord,
   type SlotComposition,
 } from '../../../../src/recorders/core/types.js';
-import { INJECTION_KEYS, SUBFLOW_IDS } from '../../../../src/conventions.js';
+import { INJECTION_KEYS, SUBFLOW_IDS } from '../../../../src/lib/conventions.js';
 import type { RunContext } from '../../../../src/bridge/eventMeta.js';
 
 function makeRun(): RunContext {

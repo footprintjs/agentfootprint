@@ -4,7 +4,7 @@
  *
  * Role:  Lens. One pure function over what a `call-llm` stage already holds.
  *        It reads no scope, emits nothing and commits nothing — the caller
- *        commits what it returns, under `receipt.ts` · `RECEIPT_KEY`.
+ *        commits what it returns, under `conventions.ts` · `RECEIPT_KEY`.
  * Reads: its arguments.
  * Emits: N/A.
  *

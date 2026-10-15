@@ -116,7 +116,7 @@
  * ```
  */
 
-import { assertUnreservedSubflowSegment } from '../conventions.js';
+import { assertUnreservedSubflowSegment } from '../lib/conventions.js';
 import {
   FlowChartExecutor,
   flowChart,

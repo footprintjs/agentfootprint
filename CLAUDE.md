@@ -75,7 +75,7 @@ Entry points — EIGHTEEN doors, and `package.json` `exports` is exhaustive, so 
 | maps/ | (9.58.0, door `/maps`) the mount kernel: claim/ (`Claim<T>` honesty primitive) + engagement/ (lease machine `advanceEngagement` + renewal feed `renewalEvidenceOf` + vocabulary). Pure data/functions; the ONE framework hook is `ctx.parkedIds` in the evaluator (the `leaseActiveIds` mirror), fed by the Evaluate stage; state rides `AgentState.mapEngagement` as a TOP-LEVEL array (the StepPointerCarrier law) |
 | events/ | EventDispatcher (wildcard subs), registry (EVENT_NAMES, AgentfootprintEventMap), payloads |
 | recipes/ | (9.48.0, door `/recipes`) the declared unit of agent CONFIGURATION — `defineAgentRecipe` + `AgentBuilder.recipe()`. PURE and tiny: id/version validators, the provenance value, the refusal sentences. The mutation lives in `AgentBuilder.recipe()` (application stack + two provenance maps); the manifest rows ride `RunManifestSources.recipes`. The door publishes the AUTHORING vocabulary only (`defineAgentRecipe`, `InvalidAgentRecipeError`, 4 types) — every validator and refusal formatter is internal, imported by module path |
-| conventions.ts | THE builder↔recorder protocol: SUBFLOW_IDS/STAGE_IDS (internal), INJECTION_KEYS/stageRole/milestoneFor (exported, Lens-facing) |
+| lib/conventions.ts | THE builder↔recorder protocol: SUBFLOW_IDS/STAGE_IDS (internal), INJECTION_KEYS/stageRole/milestoneFor (exported, Lens-facing) |
 
 Traps: `src/observability/` holds the finder IMPLEMENTATIONS (canonical home; `debug/finders.ts` re-exports them — only the old subpath is deprecated), while real recorders live in `recorders/observability/`; `identity` appears twice (src/identity.ts = tool credentials; memory/identity/ = tenant scoping — unrelated); `resilience` (provider decorators) ≠ `reliability` (in-loop rules gate).
 
@@ -122,5 +122,5 @@ Six mechanisms layered on footprintjs (whose transaction/checkpoint machinery li
 
 ## Pointers
 - [CAPABILITIES.md](CAPABILITIES.md) — what already ships · [.changes/README.md](.changes/README.md) — how a change is recorded
-- [examples/](examples/) — canonical imports (the authority on which subpath exports what) · [src/conventions.ts](src/conventions.ts) — the builder↔recorder protocol
+- [examples/](examples/) — canonical imports (the authority on which subpath exports what) · [src/lib/conventions.ts](src/lib/conventions.ts) — the builder↔recorder protocol
 - Build/test: `npm run build`, `npm test` · docs: `npm run docs:regen` · release: Actions → Release

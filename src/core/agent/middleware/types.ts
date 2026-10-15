@@ -70,7 +70,7 @@
 import type { LLMMessage } from '../../../adapters/types.js';
 import type { AskComponent } from '../../askComponent.js';
 import type { MemoryIdentity } from '../../../memory/identity/types.js';
-import type { LoopMoment } from '../moments.js';
+import type { LoopMoment } from '../../../lib/moments.js';
 
 // ─── The outcomes ────────────────────────────────────────────────────
 

@@ -129,7 +129,7 @@ interface FlowRunFailedEvent {
 import type { AgentfootprintEvent } from '../../events/registry.js';
 import type { ToolEndPayload, ToolStartPayload } from '../../events/payloads.js';
 import type { Unsubscribe } from '../../events/dispatcher.js';
-import { SUBFLOW_IDS, STAGE_IDS, slotFromSubflowId } from '../../conventions.js';
+import { SUBFLOW_IDS, STAGE_IDS, slotFromSubflowId } from '../../lib/conventions.js';
 import type { ContextSlot } from '../../events/types.js';
 import { createRunIdObserver, type RunIdObserver } from './observeRunId.js';
 import { summarizeEmbeddings } from './embeddingSummary.js';

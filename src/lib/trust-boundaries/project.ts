@@ -1,4 +1,4 @@
-import { LOOP_MOMENTS } from '../../core/agent/moments.js';
+import { LOOP_MOMENTS } from '../moments.js';
 import type { EventSourcePosition } from '../../events/types.js';
 import type {
   MiddlewareDecisionPayload,

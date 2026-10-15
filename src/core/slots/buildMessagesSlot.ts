@@ -35,7 +35,7 @@
 
 import { flowChart } from 'footprintjs';
 import type { FlowChart, TypedScope } from 'footprintjs';
-import { INJECTION_KEYS } from '../../conventions.js';
+import { INJECTION_KEYS } from '../../lib/conventions.js';
 import type { ContextRecency, ContextRole, ContextSource } from '../../events/types.js';
 import type { InjectionRecord } from '../../recorders/core/types.js';
 import { COMPOSITION_KEYS } from '../../recorders/core/types.js';

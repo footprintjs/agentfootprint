@@ -67,7 +67,7 @@ src/
 ├── hosting/         → AgentHost + SessionLifecycle ports, nodeHost, memorySessions, standingAgent
 ├── thinking/        → provider thinking-block handlers
 ├── locales/         → message catalogs (commentary + thinking)
-├── conventions.ts   → renderer-facing keys (stageRole, milestoneFor, injection keys)
+├── lib/            → leaves every layer shares (conventions.ts: stageRole, milestoneFor, injection keys)
 └── *.ts             → subpath barrels (providers, llm-providers, observe, stream, status, …)
 ```
 

@@ -245,7 +245,7 @@ import type {
 import type { AgentfootprintEvent } from '../../events/registry.js';
 import { filedNothing } from '../../integrity/disposition/ledger.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
-import { sha256Hex } from '../../lib/time-travel/sha256.js';
+import { sha256Hex } from '../../lib/sha256.js';
 import { toWireJson } from '../../lib/wireJson.js';
 import type { ObservabilityStrategy } from '../../strategies/types.js';
 

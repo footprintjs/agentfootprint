@@ -497,7 +497,7 @@ export function traceToolpack(
  * mounted lazily since 9.94.0); re-exported here so the list still reads as
  * the pack's own.
  */
-export { TRACE_TOOL_NAMES } from './traceToolNames.js';
+export { TRACE_TOOL_NAMES } from '../traceToolNames.js';
 
 // ── Schema fragments ───────────────────────────────────────────────────────
 

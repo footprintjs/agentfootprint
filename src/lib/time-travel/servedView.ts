@@ -216,12 +216,8 @@ function readRunConstant(location: EpochLocation, key: string, served: boolean):
   const value = foldRunConstant(location, key);
   return served && value === LOG_PLACEHOLDER ? undefined : value;
 }
-import {
-  FORCED_OUTPUT_TOOL_KEY,
-  RECEIPT_BOUNDARY,
-  RECEIPT_KEY,
-  type StoredReceipt,
-} from './receipt.js';
+import { FORCED_OUTPUT_TOOL_KEY, RECEIPT_BOUNDARY, type StoredReceipt } from './receipt.js';
+import { RECEIPT_KEY } from '../conventions.js';
 
 /** One piece of the composed system string, in wire order. */
 export interface ServedPiece {

@@ -103,7 +103,7 @@ describe('buildEventMeta — run-level fields', () => {
 describe('INJECTION_KEYS + COMPOSITION_KEYS stability', () => {
   it('exports stable constants (the builder↔recorder contract)', async () => {
     const { INJECTION_KEYS, injectionKeyForSlot, isInjectionKey } = await import(
-      '../../../src/conventions.js'
+      '../../../src/lib/conventions.js'
     );
     expect(INJECTION_KEYS.SYSTEM_PROMPT).toBe('systemPromptInjections');
     expect(INJECTION_KEYS.MESSAGES).toBe('messagesInjections');
@@ -114,7 +114,7 @@ describe('INJECTION_KEYS + COMPOSITION_KEYS stability', () => {
   });
 
   it('COMPOSITION_KEYS are all distinct from INJECTION_KEYS', async () => {
-    const { INJECTION_KEYS } = await import('../../../src/conventions.js');
+    const { INJECTION_KEYS } = await import('../../../src/lib/conventions.js');
     const { COMPOSITION_KEYS } = await import('../../../src/recorders/core/types.js');
     const injection = new Set(Object.values(INJECTION_KEYS));
     for (const comp of Object.values(COMPOSITION_KEYS)) {

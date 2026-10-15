@@ -103,7 +103,8 @@
 import type { LLMMessage, LLMToolSchema } from '../../adapters/types.js';
 import type { ContextRole, ContextSlot, ContextSource } from '../../events/types.js';
 import { contributingPieces } from '../../core/agent/composeRequest.js';
-import { sha256Hex } from './sha256.js';
+import { sha256Hex } from '../sha256.js';
+import { stableJson } from '../stableJson.js';
 import { measureRequest, type RequestMeasurement } from './requestMeasurement.js';
 import type { ReceiptDigests, RunDigests } from './receiptDigests.js';
 
@@ -190,9 +191,6 @@ export const RECEIPT_BOUNDARY =
   'A receipt describes the request as this library last saw it. Whatever ' +
   'handled it after that could have changed it; notes about later preparation ' +
   'do not prove what was sent or accepted.';
-
-/** The scope key the receipt is committed under. */
-export const RECEIPT_KEY = 'receipt';
 
 /** The scope key holding the name of the tool a `'tool-forced'` output
  *  strategy put on the wire. `seed` commits it; `servedView.ts` · `servedAt`
@@ -490,45 +488,6 @@ export type StoredReceipt = Omit<Receipt, 'cache'> & {
  */
 export function receiptHash(runId: string, content: string): string {
   return sha256Hex(`${runId}${SEP}${content}`).slice(0, RECEIPT_HASH_CHARS);
-}
-
-/**
- * JSON with object keys in sorted order, at every depth — so two structurally
- * equal values hash the same however they were built. Property order survives
- * `structuredClone`, but it does NOT survive every path a value takes through
- * a delta-encoded commit log and back, and a fingerprint that depends on
- * insertion order is a fingerprint that reports a change nobody made.
- *
- * Returns `undefined` — never `''` — for anything JSON cannot express (a
- * cycle, a `BigInt`, a value whose `toJSON` throws). It does not throw,
- * because a receipt is bookkeeping and must never be able to stop a run; and
- * it does not collapse, because `''` made every unreadable value equal to
- * every other one. Two requests that both failed to serialize compared EQUAL,
- * and the receipt wrote `transformHash: null` — "the cache strategy changed
- * nothing" — about a pair it had not read. Callers substitute
- * {@link UNSERIALIZABLE} where a digest needs bytes, and branch where a
- * comparison needs truth.
- */
-export function stableJson(value: unknown): string | undefined {
-  const canonical = (input: unknown): unknown => {
-    if (Array.isArray(input)) return input.map(canonical);
-    if (input !== null && typeof input === 'object') {
-      const source = input as Record<string, unknown>;
-      const out: Record<string, unknown> = {};
-      for (const key of Object.keys(source).sort()) {
-        const next = canonical(source[key]);
-        if (next === undefined) continue;
-        out[key] = next;
-      }
-      return out;
-    }
-    return input;
-  };
-  try {
-    return JSON.stringify(canonical(value)) ?? undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 /** `stableJson`, with the unreadable marked rather than dropped — the form a

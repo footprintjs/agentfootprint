@@ -31,7 +31,7 @@ import type { AgentfootprintEvent } from '../../../src/events.js';
 import { mock } from '../../../src/llm-providers.js';
 // The light module — NOT the /observe or /debug door, which carry the whole
 // pack statically (a consumer who imports the debugger wants it eagerly).
-import { NO_COMPLETED_RUN_MESSAGE } from '../../../src/lib/trace-toolpack/traceToolNames.js';
+import { NO_COMPLETED_RUN_MESSAGE } from '../../../src/lib/traceToolNames.js';
 import {
   buildSelfExplainToolProvider,
   SelfExplainBinding,

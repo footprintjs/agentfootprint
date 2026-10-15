@@ -22,7 +22,7 @@ import { buildStepGraph } from '../../../src/recorders/observability/FlowchartRe
 import type { FlowSubflowEvent } from 'footprintjs';
 import type { FlowRunEvent } from 'footprintjs/dist/types/lib/engine/narrative/types.js';
 import { EventDispatcher } from '../../../src/events/dispatcher.js';
-import { SUBFLOW_IDS } from '../../../src/conventions.js';
+import { SUBFLOW_IDS } from '../../../src/lib/conventions.js';
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 

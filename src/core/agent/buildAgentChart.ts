@@ -47,7 +47,7 @@ import { flowChart, select } from 'footprintjs';
 import type { FlowChart, StructureRecorder, TypedScope } from 'footprintjs';
 import type { LLMMessage } from '../../adapters/types.js';
 import type { CachePolicy } from '../../cache/types.js';
-import { STAGE_IDS, SUBFLOW_IDS, milestoneTagsFor } from '../../conventions.js';
+import { STAGE_IDS, SUBFLOW_IDS, milestoneTagsFor } from '../../lib/conventions.js';
 import {
   EMPTY_ACTIVE_BY_SLOT,
   type ActiveBySlot,

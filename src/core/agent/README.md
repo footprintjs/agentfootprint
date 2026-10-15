@@ -5,7 +5,7 @@ Map: `buildAgentChart.ts`, `buildDynamicAgentChart.ts`,
 `buildToolRegistry.ts`, `AgentBuilder.ts`, `skillGraphDeclared.ts`,
 `skillBrains.ts`, `types.ts`.
 Walker: `assistantReplay.ts`, `toolDispatch.ts`, `toolEffects.ts`, `toolArgsValidation.ts`,
-`validators.ts`, `act.ts`, `moments.ts`.
+`validators.ts`, `act.ts` (the five moments it is keyed on are `lib/moments.ts`).
 Trace: `runManifest.ts`, `integrityFindings.ts`, `watch.ts`, `toolSecurityEvents.ts`.
 Fold: `memoryRecallInjections.ts`, `toolsFromActiveSkill.ts`.
 Lens: `selfCallNotice.ts`, `stagedRefs.ts` · `stagedRefsNudgeLine`,

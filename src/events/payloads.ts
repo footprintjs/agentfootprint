@@ -25,7 +25,7 @@ import type { ArtifactOp, ArtifactRefusalReason } from '../artifacts/capability.
 import type { ArtifactOrigin, ArtifactSweepReason } from '../artifacts/types.js';
 import type { DatasetTimeAxis } from '../core/time/axis.js';
 import type { ThinkingBlock } from '../thinking/types.js';
-import type { LoopMoment } from '../core/agent/moments.js';
+import type { LoopMoment } from '../lib/moments.js';
 import type { InstructionDeliveryLease, ToolResultStatus } from '../core/agent/toolEffects.js';
 import type { ToolSemantics } from '../lib/semantics/types.js';
 import type { Basis, Expect, Standing } from '../core/agent/findings/types.js';

@@ -34,7 +34,7 @@
 
 import { messageAt } from './middleware/messagePhase.js';
 import type { MessageMiddleware, ToolMiddleware } from './middleware/types.js';
-import { actKeyFor, LOOP_MOMENTS, type ActKey, type LoopMoment } from './moments.js';
+import { actKeyFor, LOOP_MOMENTS, type ActKey, type LoopMoment } from '../../lib/moments.js';
 import type { WindowStrategy } from './window/strategy.js';
 
 /**

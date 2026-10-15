@@ -41,7 +41,7 @@ import {
   pauseHere,
   type Milestone,
 } from '../../../src/index.js';
-import { STAGE_IDS, SUBFLOW_IDS } from '../../../src/conventions.js';
+import { STAGE_IDS, SUBFLOW_IDS } from '../../../src/lib/conventions.js';
 import { defineSkill, skillGraph } from '../../../src/injection-engine.js';
 import { mock } from '../../../src/llm-providers.js';
 

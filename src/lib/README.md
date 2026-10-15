@@ -9,6 +9,17 @@ cannot answer the same question differently.
 Support: `canonicalJson.ts`, `fnv1a.ts`, `lazyRequire.ts`, `libraryVersion.ts`,
 `sqliteUnavailable.ts`, `embedderMismatch.ts`, `storedPreview.ts`, `sleep.ts`,
 `linearText.ts`.
+Moved down from beside their first callers, so that no layer imports upward for
+a name both sides use (the layer table, `scripts/layering.config.cjs`):
+Map: `conventions.ts` (the builder↔recorder protocol — subflow and stage ids,
+injection keys, the receipt's scope key `RECEIPT_KEY`), `moments.ts` (the five
+places in the loop where a rule may speak), `traceToolNames.ts` (the trace tool
+names `.selfExplain()` reserves before the pack loads, and its "no run yet"
+answer). Support: `toolName.ts` (the LLM tool-name law `defineTool` checks),
+`humanizeLLMError.ts`, `sha256.ts`, `stableJson.ts` (the sorted-key JSON every
+fingerprint hashes).
+These loose files, `claim/` and `context-contract/` import nothing in `src/`
+outside themselves; `npm run check:layering` refuses an import that would.
 Every subfolder here has its own role and its own README.
 
 Trace owner: `trust-boundaries/` projects selected typed events into a bounded,

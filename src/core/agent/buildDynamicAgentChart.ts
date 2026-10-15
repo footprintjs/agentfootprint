@@ -53,7 +53,7 @@ import { ArrayMergeMode } from 'footprintjs/advanced';
 import { flowChart, select } from 'footprintjs';
 import type { FlowChart, TypedScope } from 'footprintjs';
 import type { LLMMessage } from '../../adapters/types.js';
-import { STAGE_IDS, SUBFLOW_IDS, milestoneTagsFor } from '../../conventions.js';
+import { STAGE_IDS, SUBFLOW_IDS, milestoneTagsFor } from '../../lib/conventions.js';
 import {
   EMPTY_ACTIVE_BY_SLOT,
   type ActiveBySlot,

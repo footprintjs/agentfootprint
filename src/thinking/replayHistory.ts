@@ -2,7 +2,7 @@
 import type { LLMMessage } from '../adapters/types.js';
 import type { ReplayPreparation } from './replay.js';
 import { canonicalJson } from '../lib/canonicalJson.js';
-import { sha256Hex } from '../lib/time-travel/sha256.js';
+import { sha256Hex } from '../lib/sha256.js';
 
 /** Only an approved thinking edit, never a replacement conversation or tool result. */
 export interface ReplayRetirement {

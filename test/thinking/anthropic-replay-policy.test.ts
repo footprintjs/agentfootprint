@@ -16,7 +16,7 @@ import { anthropicThinkingHandler } from '../../src/thinking/AnthropicThinkingHa
 import { UnsafeThinkingReplayError } from '../../src/thinking/replay.js';
 import { retireReplayHistory } from '../../src/thinking/replayHistory.js';
 import { replayPreparedHook } from '../../src/recorders/core/replayHooks.js';
-import { RECEIPT_KEY } from '../../src/lib/time-travel/receipt.js';
+import { RECEIPT_KEY } from '../../src/lib/conventions.js';
 import { adoptScopeOutsideRun, outsideRunFor } from '../../src/redaction/runRedaction.js';
 import {
   buildCheckpoint,

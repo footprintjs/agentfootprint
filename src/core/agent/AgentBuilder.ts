@@ -91,7 +91,7 @@ import {
   mergeInnerRuns,
   type InnerRunLookup,
 } from '../../lib/trace-toolpack/innerRunRecords.js';
-import { TRACE_TOOL_NAMES } from '../../lib/trace-toolpack/traceToolNames.js';
+import { TRACE_TOOL_NAMES } from '../../lib/traceToolNames.js';
 import { Agent } from '../Agent.js';
 import { buildSkillGraphDeclared, type SkillGraphDeclaredMap } from './skillGraphDeclared.js';
 import type { AgentOptions, RunConfigFn } from './types.js';

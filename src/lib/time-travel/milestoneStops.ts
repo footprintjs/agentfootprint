@@ -44,7 +44,7 @@ import {
   milestoneFor,
   milestoneFromTags,
   type Milestone,
-} from '../../conventions.js';
+} from '../conventions.js';
 
 /** Is this `meta` a {@link Milestone} — ours, not another strategy's? */
 function isMilestone(meta: unknown): meta is Milestone {

@@ -44,7 +44,7 @@
 
 import type { CommitBundle } from 'foottrace';
 import { parseRuntimeStageId, splitStageId } from 'foottrace';
-import { STAGE_IDS, SUBFLOW_IDS } from '../../conventions.js';
+import { STAGE_IDS, SUBFLOW_IDS } from '../conventions.js';
 import { keyedFold, type FoldBasis, type FoldSourceLike } from './keyedFold.js';
 
 /** The shape a recording has to have for any of this to work — a snapshot, or

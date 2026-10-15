@@ -108,7 +108,7 @@ describe.skipIf(!built)('the default browser graph of the root entry', () => {
     expect(graph.syncInputs.has('dist/esm/core/Agent.js')).toBe(true);
     expect(graph.syncInputs.has(PACK)).toBe(false);
     // The two facts the builder needs before the pack loads ARE on it.
-    expect(graph.syncInputs.has('dist/esm/lib/trace-toolpack/traceToolNames.js')).toBe(true);
+    expect(graph.syncInputs.has('dist/esm/lib/traceToolNames.js')).toBe(true);
   });
 
   it('the pack is still reachable — behind a dynamic-import edge, in its own chunk', async () => {

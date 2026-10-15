@@ -88,7 +88,7 @@ export {
   // declaration doors, not to consumers.
   RESERVED_SUBFLOW_PREFIX,
   isReservedSubflowSegment,
-} from './conventions.js';
+} from './lib/conventions.js';
 // The milestones ON the reader's cursor. `milestoneFor` above classifies ONE
 // stage id; this is that classifier mapped onto a finished run's commit log as
 // a footprintjs `TimeTravelStrategy`, so `timeTravel(snapshot, { strategy:
@@ -146,7 +146,7 @@ export {
 // `STAGE_IDS`, `SUBFLOW_IDS`, `isSlotSubflow`, `slotFromSubflowId`,
 // `isKnownStage`, `isKnownSubflow` are intentionally NOT exported — they
 // are the internal builder↔recorder coordination protocol, not consumer
-// API. Library code reaches them via the relative `./conventions.js`
+// API. Library code reaches them via the relative `./lib/conventions.js`
 // import; downstream code should never need them.
 export {
   COMPOSITION_KEYS,
@@ -300,7 +300,7 @@ export {
 // about its own turn. Pure sugar over the five doors above and below; the keys
 // are locked at compile time against `LoopMoment`, so the bundle cannot fall
 // behind the loop.
-export { LOOP_MOMENTS, actKeyFor, type ActKey, type LoopMoment } from './core/agent/moments.js';
+export { LOOP_MOMENTS, actKeyFor, type ActKey, type LoopMoment } from './lib/moments.js';
 export { ACT_KEYS, type ActOptions } from './core/agent/act.js';
 
 // `.watch(observer, …)` — the other half of the sentence `moments.ts` has
@@ -785,7 +785,6 @@ export type {
 export type { AskOrAssume, ToolPeriod } from './core/agent/arguments/declare.js';
 export {
   defineTool,
-  assertValidToolName,
   assertResultCeiling,
   assertResultClass,
   // The placed-result kind (9.70.0) — `Tool.resultKind` lets a tool declare
@@ -799,8 +798,10 @@ export {
   // consumers assembling `Tool` objects by hand.
   assertComposedOf,
   assertGates,
-  warnIfInvalidToolName,
 } from './core/tools.js';
+// The tool-name law (`lib/toolName.ts`): the strict check and the dev-mode
+// warning `defineTool` runs, for consumers assembling `Tool` objects by hand.
+export { assertValidToolName, warnIfInvalidToolName } from './lib/toolName.js';
 // Typed tool effects (9.19.0) — the result envelope a tool may return to
 // steer the run with DATA instead of string conventions: propose a graph
 // transition, push a registered instruction, declare an outcome status. The

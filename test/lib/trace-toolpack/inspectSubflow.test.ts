@@ -13,7 +13,7 @@ import { controlDepRecorder } from 'footprintjs/trace';
 import { type ControlDepLookup } from 'foottrace';
 
 import { callTraceTool, traceToolpack } from '../../../src/lib/trace-toolpack/traceToolpack';
-import { TRACE_TOOL_NAMES } from '../../../src/lib/trace-toolpack/traceToolNames';
+import { TRACE_TOOL_NAMES } from '../../../src/lib/traceToolNames';
 import type { Tool } from '../../../src/core/tools';
 import { plantedScenario, runPlantedScenario } from '../context-bisect/plantedFactFixture';
 import { innerRunStore } from '../../../src/lib/trace-toolpack/innerRunRecords';

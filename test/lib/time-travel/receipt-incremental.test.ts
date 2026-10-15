@@ -31,8 +31,8 @@ const meter = vi.hoisted(() => ({
   perMint: [] as { sha: number; encode: number; transform: string }[],
 }));
 
-vi.mock('../../../src/lib/time-travel/sha256.js', async (importOriginal) => {
-  const real = await importOriginal<typeof import('../../../src/lib/time-travel/sha256.js')>();
+vi.mock('../../../src/lib/sha256.js', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../../../src/lib/sha256.js')>();
   return {
     ...real,
     sha256Hex: (text: string) => {
@@ -71,11 +71,11 @@ import type { LLMMessage } from '../../../src/adapters/types.js';
 import {
   buildReceipt,
   receiptHash,
-  stableJson,
   transformHashOf,
   TRANSFORM_HASH_PREFIX,
   type BuildReceiptInput,
 } from '../../../src/lib/time-travel/receipt.js';
+import { stableJson } from '../../../src/lib/stableJson.js';
 import { createReceiptDigests } from '../../../src/lib/time-travel/receiptDigests.js';
 import { measureRequest } from '../../../src/lib/time-travel/requestMeasurement.js';
 import { measureRequestWhole } from './fixtures/measureRequestWhole.js';

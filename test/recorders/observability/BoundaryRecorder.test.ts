@@ -36,7 +36,7 @@ import {
   boundaryRecorder,
   type DomainEvent,
 } from '../../../src/recorders/observability/BoundaryRecorder.js';
-import { SUBFLOW_IDS } from '../../../src/conventions.js';
+import { SUBFLOW_IDS } from '../../../src/lib/conventions.js';
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 

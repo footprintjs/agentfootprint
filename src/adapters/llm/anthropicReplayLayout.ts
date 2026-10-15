@@ -6,7 +6,7 @@
 import type { LLMMessage } from '../types.js';
 import type { MessageReplay, ReplayPart } from '../../thinking/replay.js';
 import { canonicalJson } from '../../lib/canonicalJson.js';
-import { sha256Hex } from '../../lib/time-travel/sha256.js';
+import { sha256Hex } from '../../lib/sha256.js';
 import type { AnthropicContentBlock } from './anthropicMessagesWire.js';
 
 /** One domain-separated digest owner for response fidelity and request binding. */

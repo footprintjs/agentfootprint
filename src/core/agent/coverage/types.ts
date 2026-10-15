@@ -148,7 +148,7 @@ export interface CoverageDeclaration {
  * `tool` is NOT looked up. The tool may be served by a provider that resolves
  * per iteration, or be offered on a later turn; `absent()` requires a
  * non-empty name and records it as declared. Which names a provider accepts is
- * `core/tools.ts` · `assertValidToolName`'s question, and the library only
+ * `lib/toolName.ts` · `assertValidToolName`'s question, and the library only
  * warns about it (dev mode), here as at `defineTool`.
  */
 export interface TryInsteadTool {

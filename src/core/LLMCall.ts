@@ -52,7 +52,7 @@ import type { RedactionPolicy } from 'footprintjs';
 import { ArrayMergeMode } from 'footprintjs/advanced';
 import type { GroupMetadata, GroupTranslator } from './translator.js';
 import type { RunnerPauseOutcome } from './pause.js';
-import { SUBFLOW_IDS, STAGE_IDS, milestoneTagsFor } from '../conventions.js';
+import { SUBFLOW_IDS, STAGE_IDS, milestoneTagsFor, RECEIPT_KEY } from '../lib/conventions.js';
 import type { RunContext } from '../bridge/eventMeta.js';
 import { ContextRecorder } from '../recorders/core/ContextRecorder.js';
 import { streamRecorder } from '../recorders/core/StreamRecorder.js';
@@ -66,12 +66,7 @@ import { resilienceHooks } from '../recorders/core/resilienceHooks.js';
 import { resilienceRecorder } from '../recorders/core/ResilienceRecorder.js';
 import type { InjectionRecord } from '../recorders/core/types.js';
 import type { LLMProvider, LLMRequest, PricingTable } from '../adapters/types.js';
-import {
-  buildReceipt,
-  receiptPieces,
-  RECEIPT_KEY,
-  type Receipt,
-} from '../lib/time-travel/receipt.js';
+import { buildReceipt, receiptPieces, type Receipt } from '../lib/time-travel/receipt.js';
 import {
   assertCostBudgetHasPricing,
   emitCostTick,
