@@ -277,3 +277,78 @@ export type AgUiEvent =
 
 /** The `type` of every AG-UI event this adapter writes. */
 export type AgUiEventType = AgUiEvent['type'];
+
+// ─── The request: `RunAgentInput`, as this adapter reads it ───────────────
+
+/** A text part of a message body. */
+export interface AgUiTextPart {
+  readonly type: 'text';
+  readonly text: string;
+}
+
+/** A part of a message body: text, or a media part (named so it can be refused by name). */
+export type AgUiContentPart =
+  | AgUiTextPart
+  | { readonly type: 'image' | 'audio' | 'video' | 'document'; readonly [key: string]: unknown };
+
+/** A call an assistant message made. */
+export interface AgUiToolCall {
+  readonly id: string;
+  readonly type: 'function';
+  readonly function: { readonly name: string; readonly arguments: string };
+}
+
+/** A message of the conversation a request carries, by role. */
+export type AgUiMessage =
+  | {
+      readonly id: string;
+      readonly role: 'user';
+      readonly content: string | readonly AgUiContentPart[];
+    }
+  | {
+      readonly id: string;
+      readonly role: 'assistant';
+      readonly content?: string;
+      readonly toolCalls?: readonly AgUiToolCall[];
+    }
+  | {
+      readonly id: string;
+      readonly role: 'tool';
+      readonly toolCallId: string;
+      readonly content: string | readonly AgUiContentPart[];
+    }
+  | { readonly id: string; readonly role: 'system' | 'developer'; readonly content: string }
+  | { readonly id: string; readonly role: 'reasoning'; readonly content: string }
+  | {
+      readonly id: string;
+      readonly role: 'activity';
+      readonly activityType: string;
+      readonly content: Readonly<Record<string, unknown>>;
+    };
+
+/** An answer to one interrupt, sent on the run that continues from it. */
+export interface AgUiResumeEntry {
+  readonly interruptId: string;
+  readonly status: 'resolved' | 'cancelled';
+  readonly payload?: unknown;
+}
+
+/**
+ * An AG-UI request (`RunAgentInput`) as the browser sent it — UNTRUSTED. Read
+ * by `readAgUiRunInput` (shape and id format), then planned against what the
+ * server holds: only the newest USER message, an answer to the pause the
+ * server is keeping, the names of tools the app allow-listed, and the
+ * `state`/`context` the app's own validators accept are ever used.
+ */
+export interface AgUiRunInput {
+  readonly threadId: string;
+  readonly runId: string;
+  readonly protocolVersion?: string;
+  readonly parentRunId?: string;
+  readonly messages: readonly AgUiMessage[];
+  readonly tools: readonly { readonly name: string; readonly description?: string }[];
+  readonly context: readonly { readonly description: string; readonly value: string }[];
+  readonly state?: unknown;
+  readonly forwardedProps?: unknown;
+  readonly resume?: readonly AgUiResumeEntry[];
+}

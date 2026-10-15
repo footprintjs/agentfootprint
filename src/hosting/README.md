@@ -239,6 +239,19 @@ The rules for the verifiers themselves are in `src/adapters/identity/README.md`.
 - `memorySessions.ts`, `sqliteSessions.ts` — reference session stores.
 - `browserSession.ts`, `webSocketConversation.ts`, `webSocketFrames.ts`,
   `identityVerification.ts`, `durability.ts`.
+- `streamHandler.ts` — the Fetch-API host for a protocol whose response is a
+  stream of EVENTS (AG-UI is one). The request is UNTRUSTED and nothing is
+  shared between requests: a FRESH runner per request from the app's factory
+  (one handed back twice is refused), the thread bound to the caller by the
+  app's `ThreadBinder` (the named id never a key), the conversation and a paused
+  run kept under that binding (`sessions`), one turn per thread at a time, a
+  pause stored BEFORE the caller is told.
+- `protocolAdapter.ts` — the port a protocol implements: `RunTranslation` and
+  `RunSettlement` (the run's served events out), and `ProtocolAdapter` (read an
+  untrusted request, plan the turn against `HeldConversation`, open a
+  translation, name a framing) with `ThreadBinder` / `StreamRunContext`.
+- `refusalStatus.ts` — the ONE status table every HTTP door answers refusals
+  with; `pendingAsk.ts` — the one projection of what a paused run waits on.
 
 ## A hosted agent under `redact` — the record served, the person answered
 

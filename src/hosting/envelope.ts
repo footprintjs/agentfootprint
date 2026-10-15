@@ -326,5 +326,14 @@ function validatePausedRun(value: unknown): PausedRun {
     );
   }
   validateCheckpoint(run.conversation);
+  const wire = run.wire as { protocol?: unknown } | undefined;
+  if (
+    wire !== undefined &&
+    (wire === null || typeof wire !== 'object' || typeof wire.protocol !== 'string')
+  ) {
+    throw new TypeError(
+      `[hosting] paused run's \`wire\` must name the protocol that recorded it when present.`,
+    );
+  }
   return run as PausedRun;
 }

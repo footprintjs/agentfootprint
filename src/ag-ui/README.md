@@ -54,8 +54,28 @@ across a thread, and the same with or without a policy.
 - Pinned by `test/ag-ui/redaction.property.test.ts`: a policy's marked values never
   reach the framed wire, at any depth, even with every event allow-listed.
 
+## A request is untrusted browser input
+`request.ts` reads a `RunAgentInput` (shape, and the thread/run ids' format and
+length — refused by the field's NAME, never by echoing its value) and plans the
+ONE turn it may ask for, against what the server holds: only the newest user
+message is conversation (the page's assistant/tool messages are its own copy and
+are never read; a system/developer message is refused); an answer is taken only
+for the pause the server keeps, matched to the ids its suspension handed out; a
+frontend tool only by the app's name allow-list, with the APP's contract
+(`frontendTools.ts` — a tool that pauses for the page, no server privilege);
+`state`/`context` only through the app's validators. Identity, credentials and
+redaction never come from a request: `hosting/streamHandler.ts` binds the thread
+to the caller the app authenticates and builds a fresh runner per request.
+Pinned by `test/ag-ui/request.test.ts`, `host.scenario.test.ts` (the official
+client) and `tenants.test.ts` (two users at once).
+
 ## Files
-- `types.ts` — the AG-UI events written here, structural (no `@ag-ui/*` import).
+- `types.ts` — the AG-UI events written here and the request read here,
+  structural (no `@ag-ui/*` import).
 - `ids.ts` — the one id grammar.
 - `serializer.ts` — `agUiSerializer`, the per-run translation.
 - `framing.ts` — `agUiSse`, the framing strategy.
+- `request.ts` — `readAgUiRunInput` and the turn a request may ask for.
+- `frontendTools.ts` — the app's allow-listed frontend tools, as tools that pause
+  for the page.
+- `adapter.ts` — `agUi()`, the `ProtocolAdapter` the host takes.

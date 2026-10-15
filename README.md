@@ -228,6 +228,46 @@ Build the entire app against in-memory mocks with **zero API cost**, then swap r
 
 The flowchart, recorders, and tests don't change between dev and prod.
 
+## Any AG-UI frontend — no glue code
+
+AG-UI frontends (CopilotKit, the AG-UI Dojo, any `@ag-ui/client` app) all speak one protocol: POST a `RunAgentInput`, read a stream of typed events. An agentfootprint run is already a stream of typed events, so the only missing piece is the adapter between them — `agUi()`. Hand it to `streamHandler`, a plain `(request) => Promise<Response>` that mounts in Next.js, Hono, Bun, Deno or Workers, and the frontend shows streamed text, tool calls with their results, steps and sub-agents.
+
+A browser request is untrusted, so the handler decides nothing on its word: it builds a fresh agent for every request, binds the thread to the caller *your* code authenticates (`threads`), keeps the conversation on the server (`sessions`) and takes only the person's newest message from the page. It reads only what the run *serves*, so anything your redaction policy hides never reaches the browser.
+
+```ts
+// npm install agentfootprint @ag-ui/core @ag-ui/encoder
+import { Agent } from 'agentfootprint';
+import { mock } from 'agentfootprint/providers';
+import { memorySessions, streamHandler } from 'agentfootprint/hosting';
+import { agUi } from 'agentfootprint/ag-ui';
+
+const handler = streamHandler({
+  // A fresh agent per request — nothing one caller's run leaves behind reaches another.
+  agent: () =>
+    Agent.create({ provider: mock({ reply: 'Hello from agentfootprint.' }), model: 'mock' })
+      .system('Be brief.')
+      .build(),
+  adapter: agUi(),
+  // Who is calling is YOUR answer (verify a cookie or token here); the key is theirs.
+  threads: {
+    bind: ({ conversation, headers }) => ({ sessionId: `${headers['x-user'] ?? 'guest'}:${conversation}` }),
+  },
+  sessions: memorySessions(), // the conversation lives on the server
+}); // Next.js: export const POST = handler;
+
+// What an AG-UI frontend sends, and what it reads back:
+const response = await handler(
+  new Request('http://localhost/agent', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-user': 'ada' },
+    body: JSON.stringify({ threadId: 't1', runId: 'r1', messages: [{ id: 'u1', role: 'user', content: 'Hi' }] }),
+  }),
+);
+console.log(await response.text()); // data: {"type":"RUN_STARTED",…} … data: {"type":"RUN_FINISHED",…}
+```
+
+Two turns with a tool call, end to end: [`examples/deploy/ag-ui.ts`](examples/deploy/ag-ui.ts) · frontend tools, interrupts, what a page may not decide, and what goes out: [AG-UI frontends](https://agentfootprint.dev/docs/infrastructure/ag-ui/).
+
 ## Building with an AI coding assistant
 
 agentfootprint is written to be used — and maintained — by coding agents.

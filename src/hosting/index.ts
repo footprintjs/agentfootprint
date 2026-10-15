@@ -124,7 +124,27 @@ export type {
 
 // The port a wire protocol implements to speak for a run — AG-UI
 // (`agentfootprint/ag-ui`) is one adapter; a future protocol is one more.
-export type { RunSettlement, RunTranslation } from './protocolAdapter.js';
+export type {
+  HeldConversation,
+  PlanFacts,
+  ProtocolAdapter,
+  ProtocolPlan,
+  ProtocolRequestFacts,
+  ProtocolTurn,
+  RunSettlement,
+  RunTranslation,
+  StreamRunContext,
+  ThreadBinder,
+  ThreadBinding,
+} from './protocolAdapter.js';
+export {
+  streamHandler,
+  DEFAULT_STREAM_HEARTBEAT_MS,
+  DEFAULT_STREAM_MAX_BODY_BYTES,
+  type StreamHandler,
+  type StreamHandlerOptions,
+  type StreamRunner,
+} from './streamHandler.js';
 
 export { memorySessions } from './memorySessions.js';
 export {
@@ -410,6 +430,7 @@ export type {
   HostRequest,
   PausedRun,
   PausedRunEnvelope,
+  PausedWire,
   PendingAsk,
   SessionExpiryPolicy,
   SessionLifecycle,

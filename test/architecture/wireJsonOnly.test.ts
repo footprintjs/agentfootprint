@@ -37,6 +37,7 @@ const SCANNED_DIRS = [
 ];
 const SCANNED_FILES = [
   'src/hosting/stream.ts',
+  'src/hosting/streamHandler.ts',
   'src/artifacts/recordingArtifact.ts',
   'src/memory/causal/evidenceRecorder.ts',
 ];

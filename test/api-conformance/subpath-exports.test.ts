@@ -376,10 +376,16 @@ describe('a door added after 9.0.0 is a re-export of its implementation barrel',
     }
   });
 
-  it('./ag-ui serves the SAME agUiSerializer / agUiSse / AG_UI_PROTOCOL_VERSION as src/ag-ui', () => {
+  it('./ag-ui serves the SAME agUi / agUiSerializer / agUiSse / AG_UI_PROTOCOL_VERSION as src/ag-ui', () => {
     const impl = agUi as unknown as Record<string, unknown>;
     const onDoor = agUiDoor as unknown as Record<string, unknown>;
-    for (const sample of ['agUiSerializer', 'agUiSse', 'AG_UI_PROTOCOL_VERSION']) {
+    for (const sample of [
+      'agUi',
+      'agUiSerializer',
+      'agUiSse',
+      'readAgUiRunInput',
+      'AG_UI_PROTOCOL_VERSION',
+    ]) {
       expect(impl[sample], `src/ag-ui lost ${sample}`).toBeDefined();
       expect(onDoor[sample], `./ag-ui's ${sample} is a different object`).toBe(impl[sample]);
     }
