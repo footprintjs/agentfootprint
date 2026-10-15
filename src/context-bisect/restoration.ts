@@ -13,7 +13,7 @@
  * (`[]` = the un-restored baseline) plus a seed, and returns the run's output.
  */
 import { cosineSimilarity } from '../memory/embedding/cosine.js';
-import type { Embedder } from '../lib/influence-core/index.js';
+import type { Embedder } from '../influence-core/index.js';
 import { defaultOutcomeComparator, resolveSamples, similarityStats } from './ablation.js';
 import type { ContextUnit } from './missingContext.js';
 import type { AblationRunStats, OutcomeComparator } from './types.js';

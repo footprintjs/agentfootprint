@@ -311,7 +311,7 @@ describe.skipIf(!built)('the default browser graph of the root entry', () => {
     expect(graph.syncInputs.has('dist/esm/core/Agent.js')).toBe(true);
     expect(graph.syncInputs.has('dist/esm/recorders/observability/recordRun.js')).toBe(true);
     for (const optional of ['capture', 'project']) {
-      const module = `dist/esm/lib/trust-boundaries/${optional}.js`;
+      const module = `dist/esm/trust-boundaries/${optional}.js`;
       expect(graph.syncInputs.has(module), module).toBe(false);
       expect(graph.dynamicInputs.has(module), module).toBe(false);
     }
@@ -320,7 +320,7 @@ describe.skipIf(!built)('the default browser graph of the root entry', () => {
   it('contrast: the /observe door retains the synchronous trust capture factory', async () => {
     const graph = await splitGraph(resolve(DIST, 'observe.js'));
     for (const optional of ['capture', 'project']) {
-      const module = `dist/esm/lib/trust-boundaries/${optional}.js`;
+      const module = `dist/esm/trust-boundaries/${optional}.js`;
       expect(graph.syncInputs.has(module), module).toBe(true);
     }
   });

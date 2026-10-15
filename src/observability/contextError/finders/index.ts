@@ -3,7 +3,7 @@
  *
  * "Which piece of context made the agent's answer wrong?" Pick a finder and call
  * `find(input)`. Each finder is a thin, self-explaining adapter over the engines in
- * `src/context-bisect` + `src/lib/influence-core`; the academic method + citation
+ * `src/context-bisect` + `src/influence-core`; the academic method + citation
  * live in `meta`, never in the import name.
  *
  *   import { rankSuspects } from 'agentfootprint/observe';

@@ -89,7 +89,7 @@ export {
   type SimilarityPair,
   type SnippetUnitsOptions,
   type UnitScore,
-} from './lib/influence-core/index.js';
+} from './influence-core/index.js';
 // Introspection toolpack (RFC-003 Part C) — footprintjs trace evidence
 // exposed as TOOLS a debugging LLM calls over a COMPLETED run's artifacts.
 // Bounded, honest (⚠ markers), redaction-respecting, id-navigable.
@@ -342,7 +342,7 @@ export {
   type StructuralFinding,
   type ToolCatalogReport,
   type ToolLintCliIO,
-} from './lib/tool-lint/index.js';
+} from './tool-lint/index.js';
 // check:semantics (9.53.0) — the tool-lint pattern applied to RESULT shapes:
 // judge sample results (your mock tools' returns, dumped to JSON) against
 // the semantic-envelope vocabulary and the per-class rules declared on

@@ -26,7 +26,7 @@
  */
 
 import { cosineSimilarity } from '../memory/embedding/cosine.js';
-import type { Embedder } from '../lib/influence-core/index.js';
+import type { Embedder } from '../influence-core/index.js';
 import type {
   AblationRerun,
   AblationRunStats,

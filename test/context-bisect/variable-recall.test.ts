@@ -20,7 +20,7 @@ import type { ForwardNode, ForwardSlice, KeyTimeline, KeyMoment } from 'foottrac
 import { Agent, defineTool } from '../../src/index';
 import { defineFact } from '../../src/injection-engine.js';
 import { mock } from '../../src/llm-providers.js';
-import { embeddingCache, type Embedder } from '../../src/lib/influence-core';
+import { embeddingCache, type Embedder } from '../../src/influence-core';
 import { mockEmbedder } from '../../src/memory/embedding/mockEmbedder';
 import {
   assembleTrajectory,

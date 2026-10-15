@@ -23,7 +23,7 @@
  * scenario is probed too and `verdictFor` produces the causal-tier claim —
  * the same discipline as `localizeContextBug`'s causal mode.
  */
-import type { Embedder } from '../lib/influence-core/index.js';
+import type { Embedder } from '../influence-core/index.js';
 import type {
   AblationRunner,
   AblationRunStats,

@@ -33,7 +33,7 @@
 import { Agent, defineTool, type LLMProvider } from '../../src/index.js'
 import { mock } from '../../src/doors/providers.js'
 import { mockEmbedder } from '../../src/doors/memory.js';
-import type { Embedder } from '../../src/lib/influence-core/index.js';
+import type { Embedder } from '../../src/influence-core/index.js';
 import {
   toolChoiceRecorder,
   type ToolChoiceCall,

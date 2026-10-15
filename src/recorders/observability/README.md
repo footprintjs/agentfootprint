@@ -3,7 +3,7 @@
 Trace: `BoundaryRecorder.ts` (the unified ordered stream), `RunStepRecorder.ts`,
 `ToolLineageRecorder.ts`, `RouteRecorder.ts`, `ToolChoiceRecorder.ts`.
 `recordRun.ts` can also own the opt-in typed Trust Boundary trace from
-`../../lib/trust-boundaries/`; its facts are captured live, never replayed from
+`../../trust-boundaries/`; its facts are captured live, never replayed from
 the completed event tail. One versioned bundle is added to `snapshot.recorders`.
 Fold: `FlowchartRecorder.ts` (`buildStepGraph`, rebuilt per call), `trace.ts`
 (`serializeTrace`), `recordingEnvelope.ts`, `recordedManifest.ts` (the run

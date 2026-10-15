@@ -131,7 +131,7 @@
  * local-path rule above buys for bodies.
  *
  * Node-only. `node:fs/promises` and `node:path` are imported lazily inside the
- * call, the same gating `lib/tool-lint/cli.ts` uses: this module is reachable
+ * call, the same gating `tool-lint/cli.ts` uses: this module is reachable
  * from the `agentfootprint/context` barrel, and a TOP-LEVEL node:fs
  * import detonates a browser bundle at module-eval even when nothing calls it.
  */

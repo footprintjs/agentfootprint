@@ -15,7 +15,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { mockEmbedder } from '../../src/memory/embedding/mockEmbedder';
-import { embeddingCache } from '../../src/lib/influence-core';
+import { embeddingCache } from '../../src/influence-core';
 import { localizeContextBug, probeFlipped, runAblationProbe } from '../../src/context-bisect';
 import { decisionChanged, plantedScenario, runPlantedScenario } from './plantedFactFixture';
 

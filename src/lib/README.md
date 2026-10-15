@@ -24,10 +24,6 @@ naming `events/types.ts` · `ContextSlot`, is erased and is not an edge;
 `npm run check:layering` refuses a run-time import that would leave the set.
 Every subfolder here has its own role and its own README.
 
-Trace owner: `trust-boundaries/` projects selected typed events into a bounded,
-content-minimized capture window. Its snapshot reads that runtime-owned record;
-it never reconstructs policy decisions from the completed run.
-
 ## What it reads / what it writes
 Nothing on scope. These are zero- or near-zero-import leaves: values in, values
 out, all detached (`spoken()` returns a fresh `{ named, held }`).

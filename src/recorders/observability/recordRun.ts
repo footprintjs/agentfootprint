@@ -69,7 +69,7 @@ import {
   trustBoundaryRecorder,
   type TrustBoundaryRecorder,
   type TrustBoundaryRecorderOptions,
-} from '../../lib/trust-boundaries/index.js';
+} from '../../trust-boundaries/index.js';
 
 /**
  * One frozen run — everything a viewer needs, and nothing it doesn't.

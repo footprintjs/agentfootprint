@@ -125,7 +125,7 @@ export {
   type TrustBoundaryFact,
   type TrustBoundaryCounters,
   type TrustBoundarySnapshot,
-} from './lib/trust-boundaries/index.js';
+} from './trust-boundaries/index.js';
 
 // accountForAnswer — "Explain this answer": one answer's recording (plus what
 // the app declared) in, a typed account out — facts, each with who vouches for

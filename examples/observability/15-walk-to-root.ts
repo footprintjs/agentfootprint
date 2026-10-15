@@ -16,7 +16,7 @@
  * Run: npx tsx examples/observability/15-walk-to-root.ts
  */
 import { walkTrajectory, type AblationRerun } from '../../src/observe';
-import type { Embedder } from '../../src/lib/influence-core';
+import type { Embedder } from '../../src/influence-core';
 
 export const meta = {
   id: '15',

@@ -26,7 +26,7 @@ and name which files carry which.
 ### Map — what could happen
 
 `src/recipes/` (the declared unit of agent configuration) ·
-`src/lib/tool-lint/` (a check over what is declared, before any run) ·
+`src/tool-lint/` (a check over what is declared, before any run) ·
 `src/memory/wire/` (declared stage compositions).
 
 Mixed folders carrying Map: `src/core-flow/` (three declared control-flow shapes
@@ -68,7 +68,9 @@ Evaluate → Route → Delta pass per iteration) · `src/core/runbook/`
 
 ### Trace — what happened and why
 
-`src/recorders/core/` (always-on writers nobody can disable).
+`src/recorders/core/` (always-on writers nobody can disable) ·
+`src/trust-boundaries/` (the opt-in trust-boundary capture: selected typed
+events admitted live into a bounded window, never rebuilt from a finished run).
 
 Mixed folders carrying Trace: `src/events/` (the 78-name closed contract in
 `registry.ts` + `payloads.ts` and the `dispatcher.ts` that carries them — but
@@ -93,7 +95,7 @@ offline replay — a Fold artifact, not this role. The append-only evidence is
 `src/integrity/**` (the finding kernel plus one folder per check, `disposition/`
 among them — seven of those check folders are Mixed, see the Lens list) ·
 `src/observability/**` (the context-error finders) ·
-`src/context-bisect/**` (the driver and its arms) · `src/lib/influence-core/` ·
+`src/context-bisect/**` (the driver and its arms) · `src/influence-core/` ·
 `src/memory/retrieval/` · `src/lib/time-travel/` (where a reader of a finished run
 may stop — derived from the recorded commit log, never a re-walk) ·
 `src/core/agent/receipt/` (the receipt each call mints, the writer half of

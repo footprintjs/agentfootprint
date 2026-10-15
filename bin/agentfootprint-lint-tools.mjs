@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * agentfootprint-lint-tools — CI gate for tool-catalog confusability
- * (RFC-002 C3). Humble shell: all behavior lives in src/lib/tool-lint/cli.ts
+ * (RFC-002 C3). Humble shell: all behavior lives in src/tool-lint/cli.ts
  * (unit-tested there); this wrapper only resolves the built module and maps
  * the returned code onto process.exitCode.
  *
@@ -10,5 +10,5 @@
  *
  * Guide: https://agentfootprint.dev/docs/debug/tool-catalog-lint/
  */
-const { runToolLintCli } = await import('../dist/esm/lib/tool-lint/cli.js');
+const { runToolLintCli } = await import('../dist/esm/tool-lint/cli.js');
 process.exitCode = await runToolLintCli(process.argv.slice(2));

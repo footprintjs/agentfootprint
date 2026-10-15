@@ -16,7 +16,7 @@ import type { Injection } from '../../src/lib/injection-engine/types';
 import { mock } from '../../src/adapters/llm/MockProvider';
 import type { LLMRequest } from '../../src/provider-contract/types';
 import { mockEmbedder } from '../../src/memory/embedding/mockEmbedder';
-import { embeddingCache, type Embedder } from '../../src/lib/influence-core';
+import { embeddingCache, type Embedder } from '../../src/influence-core';
 import { applyAblations, type AblationSpec } from '../../src/context-bisect';
 import type { ChatFormat, MakeChatAgent } from '../../src/recorded-chat';
 

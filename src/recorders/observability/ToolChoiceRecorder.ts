@@ -75,8 +75,8 @@ import {
   scoreMargin,
   type Embedder,
   type MarginResult,
-} from '../../lib/influence-core/index.js';
-import { confusabilityText } from '../../lib/tool-lint/analyze.js';
+} from '../../influence-core/index.js';
+import { confusabilityText } from '../../tool-lint/analyze.js';
 
 /** Minimal structural slice of footprintjs's run-boundary events — the
  *  `FlowRunEvent` (`onRunStart`/`onRunEnd`/`onRunFailed`). runId is all we

@@ -15,7 +15,7 @@ import { causalChain, type CausalNode, type CommitBundle } from 'foottrace';
 import type { RuntimeSnapshot, StageSnapshot } from 'footprintjs/advanced';
 
 import { mockEmbedder } from '../../src/memory/embedding/mockEmbedder';
-import { embeddingCache, type Embedder } from '../../src/lib/influence-core';
+import { embeddingCache, type Embedder } from '../../src/influence-core';
 import { llmEdgeWeigher, stepOutputText } from '../../src/context-bisect';
 
 // ── Fixture: the 12-parent hairball ─────────────────────────────────

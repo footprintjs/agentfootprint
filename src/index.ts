@@ -347,7 +347,7 @@ export {
 // The context-unit shape a `CheckInScorer` ranks — also exported from
 // `agentfootprint/observe` (alongside `explainChoice`), surfaced here because it
 // is part of the `CheckInScoreInput` contract.
-export type { AttributionUnit } from './lib/influence-core/types.js';
+export type { AttributionUnit } from './influence-core/types.js';
 
 // The built-in check-in audit store — `agent.attach(new CheckInRecorder())`.
 export {

@@ -7,7 +7,7 @@
  *
  * Method: dependency-guided backward search + step-recovery counterfactual.
  */
-import { scoreInfluence } from '../../../lib/influence-core/index.js';
+import { scoreInfluence } from '../../../influence-core/index.js';
 import type { Finder, FindInput, FindResult } from './types.js';
 
 export const traceSteps: Finder = {

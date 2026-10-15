@@ -29,7 +29,7 @@
 import type { ArtifactRef } from '../artifacts/types.js';
 import type { LLMMessage } from '../provider-contract/types.js';
 import type { AskComponent } from '../tools/askComponent.js';
-import type { AttributionUnit } from '../lib/influence-core/types.js';
+import type { AttributionUnit } from '../influence-core/types.js';
 
 // ─── The ask ───────────────────────────────────────────────────────────
 

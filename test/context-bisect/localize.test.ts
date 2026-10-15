@@ -19,7 +19,7 @@ import {
   scoreInfluence,
   type Embedder,
   type InfluenceScorer,
-} from '../../src/lib/influence-core';
+} from '../../src/influence-core';
 import {
   defaultSuspectClassifier,
   formatContextBugReport,

@@ -57,7 +57,7 @@ import {
   type Embedder,
   type EvidenceInput,
   type InfluenceWeights,
-} from '../lib/influence-core/index.js';
+} from '../influence-core/index.js';
 import { safeStringify } from '../lib/trace-toolpack/bounded.js';
 import { CONTEXT_BISECT_DEFAULTS } from './types.js';
 // The one committed key that is a fingerprint, not prose — see NOT_OUTPUT_KEYS.

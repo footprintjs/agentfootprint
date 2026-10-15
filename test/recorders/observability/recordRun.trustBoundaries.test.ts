@@ -23,7 +23,7 @@ import { PolicyHaltError } from '../../../src/security/index.js';
 import {
   trustBoundaryRecorder,
   type TrustBoundaryFact,
-} from '../../../src/lib/trust-boundaries/index.js';
+} from '../../../src/trust-boundaries/index.js';
 import {
   recordRun,
   recordRunWhere,

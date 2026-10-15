@@ -8,7 +8,7 @@
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { mockEmbedder } from '../../src/memory/embedding/mockEmbedder';
-import { embeddingCache } from '../../src/lib/influence-core';
+import { embeddingCache } from '../../src/influence-core';
 import {
   localizeContextBug,
   removableSources,

@@ -38,7 +38,7 @@
 import type { RuntimeSnapshot, StageSnapshot } from 'footprintjs/advanced';
 import type { CommitBundle, ControlDepLookup, ValueBasis } from 'foottrace';
 import type { CapturedEventLike } from '../recorders/observability/recordedManifest.js';
-import type { Embedder, InfluenceWeights } from '../lib/influence-core/index.js';
+import type { Embedder, InfluenceWeights } from '../influence-core/index.js';
 
 // ─── Artifacts (input contract) ──────────────────────────────────────
 

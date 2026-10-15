@@ -2,13 +2,13 @@
  * Context-error finders — the plain, pluggable public surface for context-bug
  * localization. A `Finder` answers one question: "which piece of context made the
  * agent's answer wrong?" Each finder is a thin, named adapter over the engines in
- * `src/context-bisect` + `src/lib/influence-core`; the academic method + citation
+ * `src/context-bisect` + `src/influence-core`; the academic method + citation
  * live in `meta`, never in the import name.
  *
  * Taxonomy (area / category / thing): observability / contextError / finders.
  * Tree-shakeable: one finder = one file = one named export; import only what you use.
  */
-import type { Embedder } from '../../../lib/influence-core/index.js';
+import type { Embedder } from '../../../influence-core/index.js';
 
 /** How sure the finder is. `guessed` = ranked by a similarity proxy only;
  *  `proven` = a removal/re-run actually flipped the outcome (counterfactual). */

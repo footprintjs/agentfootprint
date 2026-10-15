@@ -32,7 +32,7 @@ import {
 } from '../../src/doors/observe.js';
 import { Agent, defineTool, type WriteProvenanceMode } from '../../src/index.js';
 import { defineFact } from '../../src/doors/context.js';
-import { embeddingCache } from '../../src/lib/influence-core/index.js';
+import { embeddingCache } from '../../src/influence-core/index.js';
 import { mock } from '../../src/doors/providers.js';
 import { mockEmbedder } from '../../src/memory/embedding/mockEmbedder.js';
 import { isCliEntry, type ExampleMeta } from '../helpers/cli.js';
