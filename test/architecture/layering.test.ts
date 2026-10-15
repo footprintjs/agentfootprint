@@ -23,6 +23,13 @@ import layering from '../../scripts/layering.config.cjs';
 const { LAYERS, UPWARD_ALLOWANCES, compileLayers, rankOf, listSourceFiles } = layering;
 const REPO = resolve(__dirname, '../..');
 
+/**
+ * THE RATCHET — the exact length of UPWARD_ALLOWANCES. The checker refuses an allowance whose
+ * edge is gone; this refuses one that was ADDED. A change that frees edges deletes their
+ * entries and lowers this number in the same commit; nothing raises it.
+ */
+const ALLOWANCE_COUNT = 81;
+
 // ── fixtures ─────────────────────────────────────────────────────────────────
 
 const FIXTURE_LAYERS = [
@@ -246,6 +253,23 @@ describe('check-layering — what fails', () => {
     );
     expect(r.folderCycles).toEqual([['(root)', 'low']]);
   });
+
+  it('a relative import that names no file fails — an edge cannot drop out unseen', () => {
+    const r = run({
+      'src/low/a.ts': "import { b } from '../high/missing.js';\nexport const a = b;",
+    });
+    expect(r.ok).toBe(false);
+    expect(r.unresolved).toEqual([{ from: 'src/low/a.ts', spec: '../high/missing.js', line: 1 }]);
+  });
+
+  it('a relative import of another file that exists (a `.json` module) is not an edge and not unresolved', () => {
+    const r = run({
+      'src/low/a.ts': "import data from './data.json';\nexport const a = data;",
+      'src/low/data.json': '{}',
+    });
+    expect(r.ok).toBe(true);
+    expect(r.unresolved).toEqual([]);
+  });
 });
 
 // ── scenario: the real tree ──────────────────────────────────────────────────
@@ -265,7 +289,12 @@ describe('check-layering — this repository', () => {
     ).toEqual([]);
     expect(result.staleAllowances).toEqual([]);
     expect(result.duplicateAllowances).toEqual([]);
+    expect(result.unresolved).toEqual([]);
     expect(result.ok).toBe(true);
+  });
+
+  it('the allowance list has exactly ALLOWANCE_COUNT entries — it only shrinks', () => {
+    expect(UPWARD_ALLOWANCES).toHaveLength(ALLOWANCE_COUNT);
   });
 
   it('every allowance points UP the table — the list never names a legal edge', () => {

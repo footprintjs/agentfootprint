@@ -9,7 +9,9 @@
  *
  * WHAT A GREEN RUN PROVES: for every code entry in `package.json` `exports`, the TypeScript
  * checker's export list of the source module behind it equals the committed snapshot
- * (`door-surface.snapshot.json`), name for name.
+ * (`door-surface.snapshot.json`), name for name, split by what the module really hands out
+ * at run time — `values` are the keys of the imported module, `types` the names that exist
+ * for the compiler only — so an `export { fn }` that became `export type { fn }` fails too.
  *
  * WHAT IT DOES NOT PROVE: that a name still means the same thing — a changed signature
  * behind an unchanged name passes. `tsc` and the behaviour suites own that.
@@ -38,7 +40,7 @@ function sourceOf(door: string): string {
   return join(ROOT, 'src', `${match[1]}.ts`);
 }
 
-function doorSurface(): Record<string, string[]> {
+function doorNames(): Record<string, string[]> {
   const doors = Object.keys(PKG.exports).filter((k) => typeof PKG.exports[k] !== 'string');
   const config = ts.getParsedCommandLineOfConfigFile(
     join(ROOT, 'tsconfig.json'),
@@ -66,11 +68,29 @@ function doorSurface(): Record<string, string[]> {
   return surface;
 }
 
+/** Each door's names, split into the run-time values the module hands out and the type-only rest. */
+async function doorSurface(): Promise<Record<string, { values: string[]; types: string[] }>> {
+  const surface: Record<string, { values: string[]; types: string[] }> = {};
+  for (const [door, names] of Object.entries(doorNames())) {
+    const runtime = new Set(Object.keys(await import(sourceOf(door))));
+    // Every run-time key is a name the compiler sees — the reverse need not hold.
+    expect(
+      [...runtime].filter((k) => !names.includes(k)),
+      door,
+    ).toEqual([]);
+    surface[door] = {
+      values: names.filter((n) => runtime.has(n)),
+      types: names.filter((n) => !runtime.has(n)),
+    };
+  }
+  return surface;
+}
+
 describe('door surface — the names behind every package.json door', () => {
   it('matches the committed snapshot, door for door, name for name', async () => {
-    const surface = doorSurface();
+    const surface = await doorSurface();
     expect(Object.keys(surface).length).toBeGreaterThan(10);
-    for (const names of Object.values(surface)) expect(names.length).toBeGreaterThan(0);
+    for (const { values } of Object.values(surface)) expect(values.length).toBeGreaterThan(0);
     await expect(`${JSON.stringify(surface, null, 2)}\n`).toMatchFileSnapshot(
       './door-surface.snapshot.json',
     );

@@ -12,7 +12,9 @@
  *   3. stale allowances   — a UPWARD_ALLOWANCES entry that is no longer an upward runtime
  *                           edge (deleted, type-only now, or downward after a move): the
  *                           list only shrinks, so an entry cannot outlive its edge;
- *   4. closed folders     — a runtime import out of a CLOSED_FOLDERS set.
+ *   4. closed folders     — a runtime import out of a CLOSED_FOLDERS set;
+ *   5. unresolved imports — a relative specifier that names no file at all, so an edge
+ *                           cannot drop out of the analysis unseen.
  *
  *   REPORTS (never fails, today)
  *   - the folder-level value cycle: the strongly connected components of the graph whose
@@ -34,7 +36,7 @@
  * Exit code: 0 clean, 1 any failure.
  */
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -56,14 +58,19 @@ export function folderOf(file) {
 /**
  * Every import edge between files of the tree: `{ from, to, kind, line }`, files
  * repo-relative, `kind` one of `value` (survives compilation), `type` (erased), `dynamic`
- * (a lazy `import()`). Only relative specifiers that resolve to a listed file are edges.
+ * (a lazy `import()`). Only relative specifiers that resolve to a listed file are edges; a
+ * relative specifier naming another file that exists (a `.json` module) is not an edge, and
+ * one that names nothing is pushed onto `unresolved` as `{ from, spec, line }`.
  */
-export function readEdges(root, files) {
+export function readEdges(root, files, unresolved = []) {
   const known = new Set(files);
-  const resolveSpec = (from, spec) => {
+  const resolveSpec = (from, spec, line) => {
     if (!spec.startsWith('.')) return null;
     const base = join(dirname(from), spec.replace(/\.js$/, '')).split('\\').join('/');
-    for (const candidate of [base + '.ts', base + '/index.ts']) if (known.has(candidate)) return candidate;
+    for (const candidate of [base + '.ts', base + '/index.ts'])
+      if (known.has(candidate)) return candidate;
+    const literal = join(root, dirname(from), spec);
+    if (!(existsSync(literal) && statSync(literal).isFile())) unresolved.push({ from, spec, line });
     return null;
   };
   const edges = [];
@@ -81,11 +88,16 @@ export function readEdges(root, files) {
         ts.ScriptTarget.ES2022,
         true,
       )
-      .statements.filter((s) => (ts.isImportDeclaration(s) || ts.isExportDeclaration(s)) && s.moduleSpecifier)
+      .statements.filter(
+        (s) => (ts.isImportDeclaration(s) || ts.isExportDeclaration(s)) && s.moduleSpecifier,
+      )
       .map((s) => s.moduleSpecifier.text);
     let next = 0;
     for (const statement of source.statements) {
-      if (!(ts.isImportDeclaration(statement) || ts.isExportDeclaration(statement)) || !statement.moduleSpecifier)
+      if (
+        !(ts.isImportDeclaration(statement) || ts.isExportDeclaration(statement)) ||
+        !statement.moduleSpecifier
+      )
         continue;
       const spec = statement.moduleSpecifier.text;
       // The transpile only ever REMOVES statements, in order, so the kept list lines up with the
@@ -100,11 +112,13 @@ export function readEdges(root, files) {
         kind = 'value';
         next++;
       }
-      const to = resolveSpec(file, spec);
+      const to = resolveSpec(file, spec, lineOf(statement));
       if (to) edges.push({ from: file, to, kind, line: lineOf(statement) });
     }
     if (next !== kept.length) {
-      throw new Error(`check-layering: could not line up the compiled imports of ${file} with its source`);
+      throw new Error(
+        `check-layering: could not line up the compiled imports of ${file} with its source`,
+      );
     }
     const visit = (node) => {
       if (
@@ -113,14 +127,14 @@ export function readEdges(root, files) {
         node.arguments[0] &&
         ts.isStringLiteralLike(node.arguments[0])
       ) {
-        const to = resolveSpec(file, node.arguments[0].text);
+        const to = resolveSpec(file, node.arguments[0].text, lineOf(node));
         if (to) edges.push({ from: file, to, kind: 'dynamic', line: lineOf(node) });
       } else if (
         ts.isImportTypeNode(node) &&
         ts.isLiteralTypeNode(node.argument) &&
         ts.isStringLiteralLike(node.argument.literal)
       ) {
-        const to = resolveSpec(file, node.argument.literal.text);
+        const to = resolveSpec(file, node.argument.literal.text, lineOf(node));
         if (to) edges.push({ from: file, to, kind: 'type', line: lineOf(node) });
       }
       ts.forEachChild(node, visit);
@@ -201,7 +215,8 @@ export function analyse({ root = REPO_ROOT, config = {} } = {}) {
     }),
   );
   const unassigned = files.filter((f) => rank.get(f) === null);
-  const edges = readEdges(root, files);
+  const unresolved = [];
+  const edges = readEdges(root, files, unresolved);
   const runtime = edges.filter((e) => e.kind === 'value' || e.kind === 'dynamic');
   const eager = edges.filter((e) => e.kind === 'value');
   const layered = (e) => rank.get(e.from) !== null && rank.get(e.to) !== null;
@@ -218,7 +233,12 @@ export function analyse({ root = REPO_ROOT, config = {} } = {}) {
   const allowed = new Set(allowances.map(([from, to]) => pairKey(from, to)));
   const upward = runtime
     .filter(isUpward)
-    .map((e) => ({ ...e, fromRank: rank.get(e.from), toRank: rank.get(e.to), allowed: allowed.has(pairKey(e.from, e.to)) }));
+    .map((e) => ({
+      ...e,
+      fromRank: rank.get(e.from),
+      toRank: rank.get(e.to),
+      allowed: allowed.has(pairKey(e.from, e.to)),
+    }));
   const upwardUnnamed = upward.filter((e) => !e.allowed);
   const upwardPairs = new Set(upward.map((e) => pairKey(e.from, e.to)));
   const duplicateAllowances = allowances
@@ -246,7 +266,9 @@ export function analyse({ root = REPO_ROOT, config = {} } = {}) {
 
   const closedEscapes = closedFolders.flatMap((set) => {
     const inSet = (f) => set.files.some((glob) => defaultConfig.globToRegExp(glob).test(f));
-    return runtime.filter((e) => inSet(e.from) && !inSet(e.to)).map((e) => ({ ...e, closed: set.name }));
+    return runtime
+      .filter((e) => inSet(e.from) && !inSet(e.to))
+      .map((e) => ({ ...e, closed: set.name }));
   });
 
   const result = {
@@ -268,13 +290,15 @@ export function analyse({ root = REPO_ROOT, config = {} } = {}) {
     unassigned,
     ambiguous,
     closedEscapes,
+    unresolved,
   };
   result.ok =
     unassigned.length === 0 &&
     upwardUnnamed.length === 0 &&
     staleAllowances.length === 0 &&
     duplicateAllowances.length === 0 &&
-    closedEscapes.length === 0;
+    closedEscapes.length === 0 &&
+    unresolved.length === 0;
   return result;
 }
 
@@ -301,23 +325,38 @@ export function format(result) {
     `upward runtime edges: ${result.upward.length}   allowances: ${result.allowances}   not allowed: ${result.upwardUnnamed.length}`,
   );
   for (const u of result.upwardUnnamed) {
-    lines.push(`  ${short(u.from)}:${u.line} (L${u.fromRank}) -> ${short(u.to)} (L${u.toRank})   [NOT ALLOWED]`);
+    lines.push(
+      `  ${short(u.from)}:${u.line} (L${u.fromRank}) -> ${short(u.to)} (L${
+        u.toRank
+      })   [NOT ALLOWED]`,
+    );
   }
   lines.push('');
   lines.push(
     `stale allowances: ${result.staleAllowances.length}   duplicate allowances: ${result.duplicateAllowances.length}`,
   );
-  for (const s of result.staleAllowances) lines.push(`  stale: ${short(s.from)} -> ${short(s.to)}  ${s.why}`);
+  for (const s of result.staleAllowances)
+    lines.push(`  stale: ${short(s.from)} -> ${short(s.to)}  ${s.why}`);
   for (const d of result.duplicateAllowances) lines.push(`  duplicate: ${d}`);
   lines.push('');
-  lines.push(`type-only upward imports (erased by tsc, reported only): ${result.typeUpward.length}`);
+  lines.push(
+    `type-only upward imports (erased by tsc, reported only): ${result.typeUpward.length}`,
+  );
   lines.push('');
-  lines.push(`unassigned files: ${result.unassigned.length}   closed-folder escapes: ${result.closedEscapes.length}`);
+  lines.push(
+    `unassigned files: ${result.unassigned.length}   closed-folder escapes: ${result.closedEscapes.length}   unresolved imports: ${result.unresolved.length}`,
+  );
   for (const a of result.ambiguous) lines.push(`  ${a}`);
-  for (const f of result.unassigned.filter((f) => !result.ambiguous.some((a) => a.includes(`"${f}"`))))
+  for (const f of result.unassigned.filter(
+    (f) => !result.ambiguous.some((a) => a.includes(`"${f}"`)),
+  ))
     lines.push(`  unassigned: ${f}  (add it to LAYERS in scripts/layering.config.cjs)`);
   for (const c of result.closedEscapes)
-    lines.push(`  ${short(c.from)}:${c.line} -> ${short(c.to)}   [${c.closed} imports only itself]`);
+    lines.push(
+      `  ${short(c.from)}:${c.line} -> ${short(c.to)}   [${c.closed} imports only itself]`,
+    );
+  for (const u of result.unresolved)
+    lines.push(`  ${short(u.from)}:${u.line} -> '${u.spec}'   [names no file]`);
   lines.push('');
   lines.push(result.ok ? 'OK' : 'FAIL');
   return lines.join('\n');
@@ -326,7 +365,9 @@ export function format(result) {
 /** Every upward runtime edge as UPWARD_ALLOWANCES entries, one per file pair, sorted. */
 export function allowanceEntries(result) {
   const pairs = [...new Set(result.upward.map((u) => JSON.stringify([u.from, u.to])))].sort();
-  return pairs.map((p) => `  ${p.replace('","', "', '").replace(/^\["/, "['").replace(/"\]$/, "']")},`).join('\n');
+  return pairs
+    .map((p) => `  ${p.replace('","', "', '").replace(/^\["/, "['").replace(/"\]$/, "']")},`)
+    .join('\n');
 }
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
@@ -338,5 +379,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const result = analyse({ root });
   if (args.includes('--allowances')) console.log(allowanceEntries(result));
   else console.log(args.includes('--json') ? JSON.stringify(result, null, 2) : format(result));
-  process.exit(result.ok ? 0 : 1);
+  // exitCode, not exit(): a large `--json` piped elsewhere must flush before the process ends.
+  process.exitCode = result.ok ? 0 : 1;
 }

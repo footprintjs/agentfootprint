@@ -46,8 +46,10 @@
  *
  * UPWARD_ALLOWANCES names every upward runtime edge that exists today, file → file. The
  * checker fails on an upward edge NOT on the list, and on a listed edge that is no longer
- * an upward runtime edge — so the list can only shrink. A change that moves a file
- * deletes the entries the move frees; it never adds one.
+ * an upward runtime edge; `test/architecture/layering.test.ts` pins the list's length, so
+ * the list can only shrink. A change that moves a file deletes the entries the move frees
+ * and lowers that number; it never adds an entry. An entry names a FILE PAIR, not the
+ * names imported across it: a new upward import between two already-listed files passes.
  */
 
 const fs = require('fs');
@@ -98,10 +100,19 @@ const LAYERS = [
   {
     rank: 4,
     name: 'identity and validation',
-    files: ['src/identity/**', 'src/answer-validation/**', 'src/observability/**', 'src/lib/tool-lint/**'],
+    files: [
+      'src/identity/**',
+      'src/answer-validation/**',
+      'src/observability/**',
+      'src/lib/tool-lint/**',
+    ],
   },
   { rank: 5, name: 'the trace channel', files: ['src/recorders/**', 'src/debug/**'] },
-  { rank: 6, name: 'rules over the trace', files: ['src/locales/**', 'src/reliability/**', 'src/strategies/**'] },
+  {
+    rank: 6,
+    name: 'rules over the trace',
+    files: ['src/locales/**', 'src/reliability/**', 'src/strategies/**'],
+  },
   { rank: 7, name: 'tools', files: [] },
   { rank: 8, name: 'context assembly', files: ['src/lib/injection-engine/**'] },
   { rank: 9, name: 'the agent', files: ['src/core/**'] },
@@ -257,7 +268,12 @@ function specificity(glob) {
 
 function compileLayers(layers) {
   return layers.flatMap((layer) =>
-    layer.files.map((glob) => ({ glob, rank: layer.rank, re: globToRegExp(glob), spec: specificity(glob) })),
+    layer.files.map((glob) => ({
+      glob,
+      rank: layer.rank,
+      re: globToRegExp(glob),
+      spec: specificity(glob),
+    })),
   );
 }
 
