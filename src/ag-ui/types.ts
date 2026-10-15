@@ -81,7 +81,15 @@ export type AgUiRunOutcome =
   | { readonly type: 'interrupt'; readonly interrupts: readonly AgUiInterrupt[] }
   | { readonly type: 'cancelled' };
 
-/** One scope open where a run paused — the root, or a sub-agent's turn — and its open steps. */
+/** A tool call still open where a run paused. */
+export interface AgUiSuspendedCall {
+  /** Its AG-UI id — answered under it in the run that continues. */
+  readonly toolCallId: string;
+  /** Answered by the CLIENT (a frontend tool): its result is never written back. */
+  readonly client: boolean;
+}
+
+/** One scope open where a run paused — the root, or a sub-agent's turn — and what is open in it. */
 export interface AgUiSuspendedScope {
   /** The scope's mount: the subflow path its turn opened at (`[]` for the root). */
   readonly mount: readonly string[];
@@ -93,6 +101,13 @@ export interface AgUiSuspendedScope {
   readonly parentSubagentRunId?: string;
   /** Its open steps, in the order they opened. */
   readonly steps: readonly string[];
+  /**
+   * Its open tool calls — the one the pause is about, and a parallel sibling's
+   * that paused with it and waits its turn — each answered under its own id.
+   */
+  readonly calls: readonly AgUiSuspendedCall[];
+  /** The assistant message its current model response's calls belong to. */
+  readonly messageId?: string;
 }
 
 /**
@@ -112,15 +127,11 @@ export interface AgUiSuspension {
   /** The interrupt the run waits on — absent when it waits on a frontend tool's result. */
   readonly interruptId?: string;
   /**
-   * The call open where the run paused: its AG-UI id, where it is, and whether
-   * the CLIENT answers it (a frontend tool — `pendingToolCallIds`) rather than
-   * the run continuing it after the interrupt.
+   * The call the pause is about: its AG-UI id, where it is, and whether the
+   * CLIENT answers it (a frontend tool — `pendingToolCallIds`) rather than the
+   * run continuing it after the interrupt. It is also among its scope's `calls`.
    */
-  readonly call?: {
-    readonly toolCallId: string;
-    readonly mount: readonly string[];
-    readonly client: boolean;
-  };
+  readonly call?: AgUiSuspendedCall & { readonly mount: readonly string[] };
   /** The run's root is an agent's turn (its answer is the run's result). */
   readonly rootAgent: boolean;
   /** The scopes open at the pause, outermost first — the root always first. */

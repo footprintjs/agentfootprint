@@ -25,7 +25,8 @@
  *   pause.request + settle('paused')   → RUN_FINISHED { outcome: interrupt }
  *   settle('paused', awaiting caller)  → RUN_FINISHED { outcome: success, pendingToolCallIds }
  *                                        (a tool the client runs: its call is left to answer)
- *   error.fatal + settle('failed')     → RUN_ERROR, in the served error.fatal's words
+ *   error.fatal + settle('failed')     → RUN_ERROR — the served error.fatal's words when they
+ *                                        are a fixed sentence, else "The run failed."
  *   an allow-listed event              → CUSTOM { name: <event type>, value: <its listed fields> }
  *   anything else                      → nothing
  *
@@ -65,6 +66,7 @@
 import type { AgentfootprintEvent } from '../events/registry.js';
 import { CONSUMER_SCOPE_RUN_ID } from '../bridge/eventMeta.js';
 import type { RunTranslation } from '../hosting/protocolAdapter.js';
+import { LLM_ERROR_SENTENCES } from '../lib/humanizeLLMError.js';
 import { toWireJson, withWireErrors } from '../lib/wireJson.js';
 import { agUiIdMinter } from './ids.js';
 import {
@@ -183,8 +185,12 @@ export interface AgUiTranslation extends RunTranslation<AgUiEvent> {
   suspension(awaiting?: 'person' | 'caller'): AgUiSuspension | undefined;
 }
 
-/** Said by `RUN_ERROR` when the run failed without filing an `error.fatal` event to quote. */
+/** Said by `RUN_ERROR` when the run's `error.fatal` is not one of the record's fixed sentences. */
 export const AG_UI_RUN_FAILED = 'The run failed.';
+
+/** Is `said` one of the record's fixed failure sentences — the only `error.fatal` words a `RUN_ERROR` repeats? */
+const isFixedFailure = (said: string): boolean =>
+  (Object.values(LLM_ERROR_SENTENCES) as readonly string[]).includes(said);
 
 /** Said by `SUBAGENT_ERROR` for a sub-agent whose turn ended without an answer. */
 export const AG_UI_SUBAGENT_UNFINISHED = "The sub-agent's turn ended without an answer.";
@@ -732,9 +738,14 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
       case 'agentfootprint.pause.request':
         pause = { event, scope: scopeOf(path) };
         return;
-      case 'agentfootprint.error.fatal':
-        fatal = text(payload.error) ?? fatal;
+      case 'agentfootprint.error.fatal': {
+        // Only a FIXED sentence goes to a browser. The record's own fallback
+        // quotes the raw thrown message ("The AI call failed: …"), which may
+        // hold anything a provider or a tool put in it.
+        const said = text(payload.error);
+        if (said !== undefined && isFixedFailure(said)) fatal = said;
         return;
+      }
       default:
         pushCustom(event, scopeOf(path), out);
     }
@@ -790,18 +801,17 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
         scope.steps.push(stepName);
         events.push({ type: 'STEP_STARTED', stepName, ...owned(scope) });
       }
-    }
-    const call = from.call;
-    if (call !== undefined) {
-      const at = scopes.find((scope) => sameMount(scope.mount, call.mount)) ?? root;
-      at.calls.push({
-        id: call.toolCallId,
-        n: -1,
-        address: '',
-        servedId: undefined,
-        resumed: true,
-        client: call.client,
-      });
+      for (const call of kept.calls) {
+        scope.calls.push({
+          id: call.toolCallId,
+          n: -1,
+          address: '',
+          servedId: undefined,
+          resumed: true,
+          client: call.client,
+        });
+      }
+      if (kept.messageId !== undefined) scope.callMessageId = kept.messageId;
     }
     return events;
   }
@@ -819,6 +829,11 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
         parentSubagentRunId: scope.parentSubagentRunId,
       }),
       steps: [...scope.steps],
+      calls: scope.calls.map((open) => ({
+        toolCallId: open.id,
+        client: open.id === call?.toolCallId ? call.client : open.client === true,
+      })),
+      ...(scope.callMessageId !== undefined && { messageId: scope.callMessageId }),
     }));
     return {
       version: 1,

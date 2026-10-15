@@ -775,6 +775,7 @@
       "AgUiRunOutcome",
       "AgUiSerializerOptions",
       "AgUiSseOptions",
+      "AgUiSuspendedCall",
       "AgUiSuspendedScope",
       "AgUiSuspension",
       "AgUiTranslation"

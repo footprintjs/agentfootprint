@@ -9,7 +9,7 @@ streams, tool calls with their arguments and results, ReAct iterations and
 compositions as steps, nested agents (a `Sequence` step, a `Parallel` branch) as
 sub-agents with their parent links, a pause as an interrupt (or, for a tool the
 client runs, a completed segment with the call pending), a failure as `RUN_ERROR`
-in the record's own words — and `agUiSse()` frames them with the
+in fixed words (never the thrown message) — and `agUiSse()` frames them with the
 official `@ag-ui/encoder` (an optional peer, loaded only when a framing is built,
 refused by name when missing). It reads only the events every listener receives,
 so nothing a redaction policy hides reaches an AG-UI event, at any depth; and since

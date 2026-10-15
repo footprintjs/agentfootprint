@@ -23,6 +23,7 @@ import { describe, expect, it } from 'vitest';
 import { Agent, defineTool, flowchartAsTool, Parallel, Sequence } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
 import { agUiSse } from '../../src/ag-ui/framing.js';
+import { AG_UI_RUN_FAILED } from '../../src/ag-ui/serializer.js';
 import type { AgUiEvent } from '../../src/ag-ui/types.js';
 import { replayThroughClient, runAsAgUi } from './helpers.js';
 
@@ -97,7 +98,7 @@ describe('scenario — a full run with a tool call', () => {
 });
 
 describe('scenario — a run that fails', () => {
-  it('keeps the work it did and ends in RUN_ERROR, in the record’s words', async () => {
+  it('keeps the work it did and ends in RUN_ERROR, never quoting the thrown message', async () => {
     let calls = 0;
     const flaky = {
       name: 'flaky',
@@ -120,12 +121,12 @@ describe('scenario — a run that fails', () => {
     const run = await runAsAgUi(agent, { message: 'Oslo?' });
 
     expect(run.error).toBeInstanceOf(Error);
+    // The record quotes the thrown message; a browser is told only that the run failed.
     const fatal = run.served.find((e) => e.type === 'agentfootprint.error.fatal')!;
+    expect((fatal.payload as { error: string }).error).toContain('upstream 503');
     const last = run.events.at(-1)!;
-    expect(last).toMatchObject({
-      type: 'RUN_ERROR',
-      message: (fatal.payload as { error: string }).error,
-    });
+    expect(last).toMatchObject({ type: 'RUN_ERROR', message: AG_UI_RUN_FAILED });
+    expect(JSON.stringify(run.events)).not.toContain('upstream 503');
     expect(only(run.events, 'RUN_FINISHED')).toEqual([]);
 
     const client = await replayThroughClient(run.events);

@@ -34,10 +34,12 @@ across a thread, and the same with or without a policy.
   text — from whichever home its kind keeps it in — nothing else of the pause's
   payload); a run paused on a tool the client runs (`awaiting: 'caller'`) ends
   with `RUN_FINISHED { outcome: success, pendingToolCallIds }`; a failed one with
-  `RUN_ERROR`, in the words of the record's served `error.fatal` — the
-  settlement never hands an adapter the thrown value.
+  `RUN_ERROR` in fixed words — the served `error.fatal` only when it is one of
+  the library's fixed sentences (`LLM_ERROR_SENTENCES`), else "The run failed."
+  The settlement never hands an adapter the thrown value.
 - A continuation is the SAME invocation: the paused translation's `suspension()`
-  (ids and step names only) passed as `resume` re-opens the suspended sub-agents
+  (ids and step names only — every scope's open calls among them, so parallel
+  branches that paused together are each answered in turn) passed as `resume` re-opens the suspended sub-agents
   under their own ids and their steps, and the first result in the paused call's
   scope answers that call under its own id (a client-run tool's result is never
   written back). `RUN_STARTED` waits until the run names itself.

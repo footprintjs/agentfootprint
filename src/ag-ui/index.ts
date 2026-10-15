@@ -24,6 +24,7 @@ export {
   type AgUiInterrupt,
   type AgUiMetadata,
   type AgUiRunOutcome,
+  type AgUiSuspendedCall,
   type AgUiSuspendedScope,
   type AgUiSuspension,
 } from './types.js';

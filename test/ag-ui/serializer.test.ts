@@ -21,6 +21,7 @@ import {
   type AgUiSerializerOptions,
 } from '../../src/ag-ui/serializer.js';
 import type { AgUiEvent } from '../../src/ag-ui/types.js';
+import { LLM_ERROR_SENTENCES } from '../../src/lib/humanizeLLMError.js';
 
 let clock = 1_000;
 
@@ -665,23 +666,42 @@ describe('agUiSerializer — terminals', () => {
     ]);
   });
 
-  it('a failure is RUN_ERROR in the record’s own words, and nothing is closed before it', () => {
+  it('a failure is RUN_ERROR in the record’s fixed words, and nothing is closed before it', () => {
     const { s } = feed([
       ev(t('agent.turn_start'), { turnIndex: 0 }, { rsid: 'seed#0' }),
       ev(t('agent.iteration_start'), { turnIndex: 0, iterIndex: 1 }, { rsid: 'call-llm#5' }),
       ev(
         t('error.fatal'),
-        { error: 'The AI call failed: provider down', stage: '__root__', scope: 'run' },
+        { error: LLM_ERROR_SENTENCES.rateLimited, stage: '__root__', scope: 'run' },
         { rsid: '__root__#0' },
       ),
     ]);
     expect(s.settle({ kind: 'failed' })).toEqual([
       {
         type: 'RUN_ERROR',
-        message: 'The AI call failed: provider down',
+        message: LLM_ERROR_SENTENCES.rateLimited,
         metadata: { agentfootprint: { runId: 'run-100-1' } },
       },
     ]);
+  });
+
+  it('a failure the record describes by quoting the thrown message never repeats it', () => {
+    const { s } = feed([
+      ev(
+        t('error.fatal'),
+        {
+          error: 'The AI call failed: card 4111 rejected for alice',
+          stage: '__root__',
+          scope: 'run',
+        },
+        { rsid: '__root__#0' },
+      ),
+    ]);
+    expect(s.settle({ kind: 'failed' }).at(-1)).toEqual({
+      type: 'RUN_ERROR',
+      message: AG_UI_RUN_FAILED,
+      metadata: { agentfootprint: { runId: 'run-100-1' } },
+    });
   });
 
   it('a failure the record never described says only that', () => {
@@ -851,7 +871,14 @@ describe('agUiSerializer — which run, and a run that continues another', () =>
       interruptId: finished.outcome.interrupts[0]!.id,
       call: { toolCallId: 'ag-run/tool/0/tool-calls#2', mount: [], client: false },
       rootAgent: true,
-      scopes: [{ mount: [], steps: ['iteration 1'] }],
+      scopes: [
+        {
+          mount: [],
+          steps: ['iteration 1'],
+          calls: [{ toolCallId: 'ag-run/tool/0/tool-calls#2', client: false }],
+          messageId: 'ag-run/text/0/tool-calls#2',
+        },
+      ],
     });
 
     const done = feed(events);
@@ -876,12 +903,13 @@ describe('agUiSerializer — which run, and a run that continues another', () =>
         call: { toolCallId: 'ag-1/tool/0/x/tool-calls#5', mount: ['p', 'x'], client: false },
         rootAgent: false,
         scopes: [
-          { mount: [], steps: ['Sequence'] },
+          { mount: [], steps: ['Sequence'], calls: [] },
           {
             mount: ['p', 'x'],
             subagentRunId: 'ag-1/agent/0/x',
             name: 'p/x',
             steps: ['iteration 1'],
+            calls: [{ toolCallId: 'ag-1/tool/0/x/tool-calls#5', client: false }],
           },
         ],
       },
@@ -948,5 +976,35 @@ describe('agUiSerializer — a pause is kept before the caller is told', () => {
     s.suspension('person');
     expect(s.settle({ kind: 'failed' }).at(-1)).toMatchObject({ type: 'RUN_ERROR' });
     expect(s.suspension()).toBeUndefined();
+  });
+});
+
+describe('agUiSerializer — a call the continuation dispatches belongs to the response that made it', () => {
+  it('joins the assistant message the paused run’s response opened', () => {
+    const s = agUiSerializer({
+      threadId: 'thread-1',
+      runId: 'ag-2',
+      resume: {
+        version: 1,
+        runId: 'ag-1',
+        interruptId: 'ag-1/interrupt/0/x',
+        rootAgent: true,
+        scopes: [
+          {
+            mount: [],
+            steps: [],
+            calls: [{ toolCallId: 'ag-1/tool/0/tool-calls#5', client: false }],
+            messageId: 'ag-1/text/0/call-llm#4',
+          },
+        ],
+      },
+    });
+    const out = [
+      ...s.event(ev(t('stream.tool_end'), { result: 'yes' }, { rsid: 'tool-calls#9' })),
+      ...s.event(
+        ev(t('stream.tool_start'), { toolName: 'next', args: {} }, { rsid: 'tool-calls#9' }),
+      ),
+    ];
+    expect(only(out, 'TOOL_CALL_START')[0]!.parentMessageId).toBe('ag-1/text/0/call-llm#4');
   });
 });

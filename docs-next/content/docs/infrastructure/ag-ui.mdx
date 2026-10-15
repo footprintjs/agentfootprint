@@ -46,7 +46,7 @@ event union by this repository's tests. It speaks protocol
 | `agent.turn_start` / `turn_end` of a nested agent | `SUBAGENT_STARTED` / `SUBAGENT_FINISHED` |
 | `pause.request`, then the run pauses | `RUN_FINISHED` with an `interrupt` outcome (`AgUiRunOutcome`, `AgUiInterrupt`) |
 | the run pauses on a tool the CLIENT runs (`settle({ kind: 'paused', awaiting: 'caller' })`) | `RUN_FINISHED` with a `success` outcome naming the call in `pendingToolCallIds` |
-| `error.fatal`, then the run fails | `RUN_ERROR`, in the words of the served `error.fatal` — never the thrown value |
+| `error.fatal`, then the run fails | `RUN_ERROR` — the served `error.fatal` when it is one of the library's fixed sentences, else "The run failed." — never the thrown value |
 | an event on the CUSTOM allow-list | `CUSTOM`, named by the event type, carrying only its listed fields |
 | anything else | nothing |
 
@@ -79,9 +79,11 @@ request's `threadId` and `runId`, and two decisions that are yours:
   thinking events. Off unless you set `reasoning: true`; whether a person may read
   it is a product decision.
 
-A failure is described by the record: `RUN_ERROR` carries the served
-`error.fatal` description, or the fixed words "The run failed." — never the
-thrown value, its stack or a provider's response body. A pause's interrupt
+A failure is described in FIXED words: `RUN_ERROR` repeats the served
+`error.fatal` only when it is one of the library's fixed sentences (a provider
+unreachable, a key rejected, a rate limit, a timeout), else it says "The run
+failed." — never the thrown value, its stack or a provider's response body,
+which the record's own fallback quotes. A pause's interrupt
 carries the question's text and nothing else of the pause's payload. The run's
 identity (`principal`, `tenant`, `sessionId`) is never written.
 
@@ -97,7 +99,9 @@ A paused run is unfinished work: the next request continues it with
 invocation, so the translation of the paused run hands back what the next one
 needs — `suspension()` on the `AgUiTranslation`, an `AgUiSuspension`: the
 interrupt's id, the call the run stopped in, and every scope (`AgUiSuspendedScope`)
-and step open at the pause. Plain JSON holding ids and step names only; keep it
+open at the pause with its steps and its open calls (`AgUiSuspendedCall` — a
+parallel branch that paused alongside waits its turn, and is answered under its
+own id when it comes). Plain JSON holding ids and step names only; keep it
 with the checkpoint. Pass it as `resume` when you translate the continuation:
 
 ```ts

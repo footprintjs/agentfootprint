@@ -161,7 +161,13 @@ describe('continuation — the run that continues a pause is the same invocation
     const first = await runAsAgUi(agent, { message: 'refund order 7' }, { runId: 'ag-1' });
     const suspension = first.translation.suspension()!;
     expect(suspension.rootAgent).toBe(true);
-    expect(suspension.scopes).toEqual([{ mount: [], steps: ['iteration 1'] }]);
+    expect(suspension.scopes).toEqual([
+      expect.objectContaining({
+        mount: [],
+        steps: ['iteration 1'],
+        calls: [{ toolCallId: suspension.call!.toolCallId, client: false }],
+      }),
+    ]);
 
     const second = await runAsAgUi(agent, undefined, {
       runId: 'ag-2',
@@ -338,5 +344,70 @@ describe('continuation — one model response is one assistant message', () => {
     expect(client.messages.map((m) => m.role)).toEqual(['assistant', 'tool', 'tool', 'assistant']);
     expect(client.messages[0]!).toMatchObject({ role: 'assistant' });
     expect((client.messages[0] as { toolCalls?: unknown[] }).toolCalls).toHaveLength(2);
+  });
+});
+
+describe('continuation — parallel branches that pause together are each answered in turn', () => {
+  it('each branch’s call is answered under its own id, one run per answer', async () => {
+    const pipeline = Sequence.create({ id: 'seq' })
+      .step(
+        'p',
+        Parallel.create({ id: 'fan' })
+          .branch('x', pausing('x done'))
+          .branch('y', pausing('y done'))
+          .mergeWithFn((r) => JSON.stringify(r))
+          .build(),
+      )
+      .build();
+    const runs: { events: AgUiEvent[]; interruptId?: string; answer?: string }[] = [];
+    let out = await runAsAgUi(pipeline, { message: 'go' }, { runId: 'ag-1' });
+    const calls = only(out.events, 'TOOL_CALL_START').map((e) => e.toolCallId);
+    expect(calls).toHaveLength(2);
+    const answered: string[] = [];
+    for (let n = 2; ; n++) {
+      const finished = out.events.at(-1)!;
+      const suspension = out.translation.suspension();
+      if (finished.type !== 'RUN_FINISHED' || finished.outcome?.type !== 'interrupt') {
+        runs.push({ events: out.events });
+        break;
+      }
+      const [interrupt] = finished.outcome.interrupts;
+      // Every interrupt names the call it stopped in — the second one too.
+      expect(calls).toContain(interrupt!.toolCallId);
+      answered.push(interrupt!.toolCallId!);
+      runs.push({ events: out.events, interruptId: interrupt!.id, answer: `yes ${n}` });
+      out = await runAsAgUi(pipeline, undefined, {
+        runId: `ag-${n}`,
+        serializer: { resume: suspension },
+        resume: { checkpoint: (out.out as { checkpoint: unknown }).checkpoint, answer: `yes ${n}` },
+      });
+      expect(n).toBeLessThan(5);
+    }
+    expect(new Set(answered)).toEqual(new Set(calls));
+    // Each call got exactly one result, under its own id, across the runs.
+    const results = runs.flatMap((r) =>
+      only(r.events, 'TOOL_CALL_RESULT').map((e) => e.toolCallId),
+    );
+    expect(results.sort()).toEqual([...calls].sort());
+
+    const client = await replayRunsThroughClient(
+      runs.map((run, i) => ({
+        events: run.events,
+        ...(i > 0 && {
+          resume: [
+            {
+              interruptId: runs[i - 1]!.interruptId!,
+              status: 'resolved' as const,
+              payload: runs[i - 1]!.answer,
+            },
+          ],
+        }),
+      })),
+    );
+    expect(client.warnings).toEqual([]);
+    const toolIds = client.messages
+      .filter((m) => m.role === 'tool')
+      .map((m) => (m as { toolCallId: string }).toolCallId);
+    expect(toolIds.sort()).toEqual([...calls].sort());
   });
 });
