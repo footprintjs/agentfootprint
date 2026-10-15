@@ -4,7 +4,7 @@ title: OutputSchemaOptions
 
 # Interface: OutputSchemaOptions
 
-Defined in: [src/core/outputSchema.ts:109](https://github.com/footprintjs/agentfootprint/blob/main/src/core/outputSchema.ts#L109)
+Defined in: [src/answer-validation/outputSchema.ts:109](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/outputSchema.ts#L109)
 
 Optional configuration for `outputSchema`.
 
@@ -14,7 +14,7 @@ Optional configuration for `outputSchema`.
 
 > `readonly` `optional` **instruction?**: `string`
 
-Defined in: [src/core/outputSchema.ts:124](https://github.com/footprintjs/agentfootprint/blob/main/src/core/outputSchema.ts#L124)
+Defined in: [src/answer-validation/outputSchema.ts:124](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/outputSchema.ts#L124)
 
 Custom system-prompt instruction text. Defaults to a generic
 "Respond with valid JSON matching the output schema. Do not
@@ -28,7 +28,7 @@ domain-specific framing.
 
 > `readonly` `optional` **jsonSchema?**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/core/outputSchema.ts:172](https://github.com/footprintjs/agentfootprint/blob/main/src/core/outputSchema.ts#L172)
+Defined in: [src/answer-validation/outputSchema.ts:172](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/outputSchema.ts#L172)
 
 The JSON Schema for the synthetic tool (`strategy: 'tool-forced'`) or
 for the provider's structured output (`strategy: 'native'`), required by
@@ -65,7 +65,7 @@ judge.
 
 > `readonly` `optional` **name?**: `string`
 
-Defined in: [src/core/outputSchema.ts:116](https://github.com/footprintjs/agentfootprint/blob/main/src/core/outputSchema.ts#L116)
+Defined in: [src/answer-validation/outputSchema.ts:116](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/outputSchema.ts#L116)
 
 Injection id for the auto-generated "respond with this shape"
 instruction. Defaults to `'output-schema'`. Override when you
@@ -78,7 +78,7 @@ want the diagnostic events to disambiguate.
 
 > `readonly` `optional` **retries?**: `number`
 
-Defined in: [src/core/outputSchema.ts:140](https://github.com/footprintjs/agentfootprint/blob/main/src/core/outputSchema.ts#L140)
+Defined in: [src/answer-validation/outputSchema.ts:140](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/outputSchema.ts#L140)
 
 How many corrective re-asks the run may spend when the final answer
 fails the schema. Default `0` — the historical behaviour, where the
@@ -100,7 +100,7 @@ composes on top, unchanged.
 
 > `readonly` `optional` **strategy?**: [`OutputSchemaStrategy`](/docs/api/type-aliases/OutputSchemaStrategy)
 
-Defined in: [src/core/outputSchema.ts:145](https://github.com/footprintjs/agentfootprint/blob/main/src/core/outputSchema.ts#L145)
+Defined in: [src/answer-validation/outputSchema.ts:145](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/outputSchema.ts#L145)
 
 How the schema reaches the model. Default `'instruct'`.
 See [OutputSchemaStrategy](/docs/api/type-aliases/OutputSchemaStrategy).

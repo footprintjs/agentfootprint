@@ -268,7 +268,11 @@ import {
   type AnsweredAsk,
   type TimeAnswerContext,
 } from './inputRequest.js';
-import { applyOutputSchema, OutputSchemaError, type OutputSchemaParser } from './outputSchema.js';
+import {
+  applyOutputSchema,
+  OutputSchemaError,
+  type OutputSchemaParser,
+} from '../answer-validation/outputSchema.js';
 import { InvalidRunInputError, normalizeRunInput } from './runInput.js';
 import { clockOf } from './time/rows.js';
 import {

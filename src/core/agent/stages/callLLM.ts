@@ -62,7 +62,10 @@ import { tagThinkingResponse } from '../../../thinking/dispatch.js';
 import type { InjectionRecord } from '../../../recorders/core/types.js';
 import { emitCostTick, type ResolvedCostBudget } from '../../cost.js';
 import type { ReliabilityConfig } from '../../../reliability/types.js';
-import { applyOutputSchema, type OutputSchemaParser } from '../../outputSchema.js';
+import {
+  applyOutputSchema,
+  type OutputSchemaParser,
+} from '../../../answer-validation/outputSchema.js';
 import {
   carriesFindingsDecoration,
   splitFindings,

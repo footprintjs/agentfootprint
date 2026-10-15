@@ -36,7 +36,10 @@
 
 import type { LLMMessage, LLMRequest, LLMResponse, LLMToolSchema } from '../../adapters/types.js';
 import { fnv1a } from '../slots/helpers.js';
-import { applyOutputSchema, type OutputSchemaParser } from '../outputSchema.js';
+import {
+  applyOutputSchema,
+  type OutputSchemaParser,
+} from '../../answer-validation/outputSchema.js';
 import { SCHEMA_CHECK_FRAME_PREFIX } from '../../lib/saidByPerson.js';
 import { formatToolArgIssues, streamedToolArgIssues } from './toolArgsValidation.js';
 

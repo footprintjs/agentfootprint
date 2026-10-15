@@ -19,7 +19,7 @@ import {
   applyOutputSchema,
   type OutputSchemaParser,
 } from '../../src/index.js';
-import { buildDefaultInstruction } from '../../src/core/outputSchema.js';
+import { buildDefaultInstruction } from '../../src/answer-validation/outputSchema.js';
 import { defineInstruction } from '../../src/injection-engine.js';
 import { mock } from '../../src/llm-providers.js';
 import { expectScalesLinearly } from '../helpers/perf.js';

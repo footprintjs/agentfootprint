@@ -6,7 +6,7 @@ title: isSchemaCheckMessage
 
 > **isSchemaCheckMessage**(`msg`): `boolean`
 
-Defined in: [src/core/agent/outputEnforcement.ts:236](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/outputEnforcement.ts#L236)
+Defined in: [src/core/agent/outputEnforcement.ts:239](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/outputEnforcement.ts#L239)
 
 True when this message is a correction a previous attempt wrote.
 

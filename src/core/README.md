@@ -1,5 +1,5 @@
 **Mixed** — the two primitives that build a map, and the wiring that runs one.
-Map: `LLMCall.ts`, `Agent.ts`'s `buildChart`, `toolContract.ts`, `outputSchema.ts`.
+Map: `LLMCall.ts`, `Agent.ts`'s `buildChart`, `toolContract.ts`.
 Walker: `RunnerBase.ts`, `runner.ts`, `runCheckpoint.ts`, `pause.ts`,
 `toolSessions.ts`, `durabilityBarrier.ts`.
 Fold-feeding: `Agent.ts` · `readSkillOfferFor` and `Agent.ts` ·

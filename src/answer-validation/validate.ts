@@ -1,5 +1,5 @@
 /** One explicit JSON-answer validation; the runner owns when to invoke it. */
-import { applyOutputSchema, type OutputSchemaParser } from '../core/outputSchema.js';
+import { applyOutputSchema, type OutputSchemaParser } from './outputSchema.js';
 import { copyJson as jsonCopy, ownData } from '../lib/boundedJson.js';
 import type { ArtifactScope, ArtifactStore } from '../artifacts/types.js';
 import { computeArtifactDigest } from '../artifacts/payload.js';

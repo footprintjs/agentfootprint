@@ -5,7 +5,7 @@ import {
   type AnswerValidationReport,
 } from '../../../answer-validation/index.js';
 import type { ArtifactStore } from '../../../artifacts/types.js';
-import type { OutputSchemaParser } from '../../outputSchema.js';
+import type { OutputSchemaParser } from '../../../answer-validation/outputSchema.js';
 import type { AgentState } from '../types.js';
 import type { RouteBranch } from './route.js';
 

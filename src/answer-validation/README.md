@@ -1,5 +1,7 @@
 **Mixed** — a contract for checking the exact answer before delivery.
-Map: `types.ts` declares the authored checks, bounds and report vocabulary.
+Map: `types.ts` declares the authored checks, bounds and report vocabulary;
+`outputSchema.ts` declares the answer's shape (`.outputSchema()`: the parser
+port, its default instruction, and the parse every caller applies).
 Walker: `evidence.ts` resolves bounded parcels under the run's existing scope.
 Fold: `validate.ts` derives a verdict from explicit checks and evidence availability.
 
