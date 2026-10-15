@@ -46,7 +46,7 @@ It is a leaf: it imports nothing outside itself, and `readers/` imports only the
 supplied value) and at the resume door (`applyInputResponse`, the person's answer — a refused one
 comes back as the same ask with `refused` and `repeat`); `Agent.resume` hands it the paused turn's
 clock zone and the app's `.time({ messages })`. The sentences live in `src/locales/timeAsk.ts`
-(`defaultTimeAskMessages`), and `lib/mcp/elicitation.ts` carries the ask over MCP.
+(`defaultTimeAskMessages`), and `mcp/elicitation.ts` carries the ask over MCP.
 Who asks it today: `coverage/period.ts` reads a declared period's instants through
 `instant.ts` · `instantOf` in the lenient profile (`periodVerdict` is unchanged, inclusive at both
 ends) and, under `.time()`, renders `periodLine` through `present.ts` in the run's zone — and,

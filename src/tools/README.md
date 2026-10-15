@@ -9,7 +9,7 @@ Lens: `skillScopedTools.ts` (a tool subset while one skill is the most recently 
 ## Why this folder exists
 
 The agent (`core/`), the injection engine (`injection-engine/`), the MCP
-client and server (`lib/mcp/`), the trace toolpack, the code-runner adapter and
+client and server (`mcp/`), the trace toolpack, the code-runner adapter and
 the standing host all need the same few facts: what a `Tool` is, how its
 arguments are declared and judged, how a typed ask is shaped, and how a
 middleware chain is walked. When those facts lived inside `core/`, every one of

@@ -36,7 +36,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 
 import { defineTool, type LLMProvider } from '../../src/index.js';
 import { mcpClient, mcpServe, retryingFetch } from '../../src/doors/providers.js';
-import type { McpClient } from '../../src/lib/mcp/types.js';
+import type { McpClient } from '../../src/mcp/types.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

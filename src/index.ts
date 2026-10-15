@@ -1124,7 +1124,7 @@ export {
   elicitationOf,
   type ElicitationProperty,
   type ElicitationRequest,
-} from './lib/mcp/elicitation.js';
+} from './mcp/elicitation.js';
 // Artifacts, the optional streaming leg (9.25.0) — `putStream`/`getStream` are
 // FEATURE-DETECTED members of the port, so a store that cannot move bytes
 // without holding them whole leaves them absent rather than faking one. The

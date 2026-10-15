@@ -2,7 +2,7 @@
 
 ## What it reads / what it writes
 Reads connection configuration and per-request credentials; returns the remote
-catalog to `src/lib/mcp/`. No scope, no sentence.
+catalog to `src/mcp/`. No scope, no sentence.
 
 ## The one law here
 Vendor shape stops here; the tool declarations it produces are data the tool

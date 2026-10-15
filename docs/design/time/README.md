@@ -600,7 +600,7 @@ Rules, checked at definition, at dispatch and at MCP ingest, refused and never r
 
 **The wire form.** Host tools are often served over MCP from another language, so the declaration
 must travel as JSON: `_meta.agentfootprint.period` carries the same object, field for field, read by
-`lib/mcp/toolExtras.ts` · `readToolExtras` and judged against the listed tool's own `inputSchema`
+`mcp/toolExtras.ts` · `readToolExtras` and judged against the listed tool's own `inputSchema`
 like every other rule there. A two-argument Python tool declares:
 
 ```json
@@ -1181,7 +1181,7 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   `present.ts` renders through `Intl` in that locale (the zone's short name), and `readerIssue`
   refuses a locale `Intl` cannot read at the builder. (5) **MCP.** The library has no
   elicitation door (`mcpServe` cannot pause; the client handles none), so the mapping ships as a
-  pure adapter pair for a host, `lib/mcp/elicitation.ts` · `elicitationOf` /
+  pure adapter pair for a host, `mcp/elicitation.ts` · `elicitationOf` /
   `answerFromElicitation`: a range is two `date-time` properties joined back as `from/to`; a time
   field's choices travel as `enum` + `enumNames` beside the free-entry properties (`<id>.other`
   for an instant or a zone) unless `strict`, and the answer names one or the other; a number or

@@ -58,7 +58,7 @@ import { assertResultColumns, normalizeColumns } from '../../src/integrity/colum
 import { beginIntegrityRun } from '../../src/integrity/disposition/lifecycle.js';
 import { Agent, defineTool } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
-import { readToolExtras, toolExtrasOf } from '../../src/lib/mcp/toolExtras.js';
+import { readToolExtras, toolExtrasOf } from '../../src/mcp/toolExtras.js';
 import type { CheckReport } from '../../src/integrity/disposition/types.js';
 import type { ContextError } from '../../src/integrity/finding/types.js';
 

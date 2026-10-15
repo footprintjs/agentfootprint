@@ -210,7 +210,7 @@ The streamable-HTTP transport serves MCP, statelessly, on the path and port you
 choose, and **nothing else**: it answers neither of the routes the managed
 runtime contract documented in [AgentCore adapters](doc:agentcore-adapters)
 uses, so `GET /ping` and `POST /invocations` are 404s from it. That is pinned in
-`test/lib/mcp/mcpServe.real.test.ts` against the SDK's own client rather than
+`test/mcp/mcpServe.real.test.ts` against the SDK's own client rather than
 left to prose. The two are different protocols: serve the runtime contract with
 `agentCoreRuntimeHost` and MCP with `mcpServe`. They cannot share a port today —
 `mcpServe`'s HTTP transport always owns its listener, and it has no

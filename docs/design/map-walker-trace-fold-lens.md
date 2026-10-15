@@ -184,7 +184,7 @@ no README, whatever this page happens to list.
 Ports, adapters, transports and leaf utilities: `src/adapters/**`,
 `src/hosting/**`, `src/identity/`, `src/security/`, `src/reliability/`,
 `src/resilience/`, `src/strategies/**`, `src/thinking/`, `src/embedders/`,
-`src/locales/`, `src/rag/**`, `src/lib/mcp/`, `src/lib/claim/`, `src/bridge/`,
+`src/locales/`, `src/rag/**`, `src/mcp/`, `src/lib/claim/`, `src/bridge/`,
 `src/debug/` (a re-export-only barrel over the context-error finders),
 `src/artifacts/conformance/`, `src/cache/strategies/`,
 `src/core/agent/delivery/`, `src/time/` (the one owner of every time grammar),

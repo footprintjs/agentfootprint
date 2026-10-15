@@ -147,7 +147,7 @@ const LAYERS = [
       'src/patterns/**',
     ],
   },
-  { rank: 12, name: 'protocol and replay', files: ['src/lib/mcp/**', 'src/recorded-chat/**'] },
+  { rank: 12, name: 'protocol and replay', files: ['src/mcp/**', 'src/recorded-chat/**'] },
   { rank: 13, name: 'provider implementations', files: ['src/adapters/**'] },
   { rank: 14, name: 'tool providers', files: ['src/tool-providers/**', 'src/embedders/**'] },
   { rank: 15, name: 'entry points', files: ['src/*.ts', 'src/doors/**'] },

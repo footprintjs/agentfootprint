@@ -12,14 +12,14 @@
  *   - `retry-after-ms` — milliseconds, sent by the Anthropic and OpenAI APIs
  *     (their own SDKs read it first too);
  *   - `retry-after` — the standard header, delta-seconds or an HTTP-date
- *     (lib/mcp/throttleRetry.ts · parseRetryAfter, the one parser of it).
+ *     (mcp/throttleRetry.ts · parseRetryAfter, the one parser of it).
  *
  * Headers arrive as a fetch `Headers` (anything with `get`) or a plain record
  * (older SDKs, the AWS SDK's `$response.headers`); both are read
  * case-insensitively. Anything unreadable is absent, never a guess.
  */
 
-import { parseRetryAfter } from '../../lib/mcp/throttleRetry.js';
+import { parseRetryAfter } from '../../mcp/throttleRetry.js';
 
 /** The stated wait in ms, or `undefined` when the headers state none. */
 export function retryAfterMsFromHeaders(headers: unknown): number | undefined {

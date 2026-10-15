@@ -76,7 +76,7 @@ import {
   FINDINGS_INSTRUCTION_ID,
 } from '../../../../src/core/agent/findings/reserved.js';
 import { sourceCorpusOf } from '../../../../src/core/agent/honesty/sourceCorpus.js';
-import { mockMcpClient } from '../../../../src/lib/mcp/mockMcpClient.js';
+import { mockMcpClient } from '../../../../src/mcp/mockMcpClient.js';
 import { SHOWN_ARGS } from '../../../../src/core/toolShownArgs.js';
 import { STEP_NUDGE_FRAME_PREFIX } from '../../../../src/lib/saidByPerson.js';
 

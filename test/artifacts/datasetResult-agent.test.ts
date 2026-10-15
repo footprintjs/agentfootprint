@@ -16,7 +16,7 @@ import {
   type ToolExecutionContext,
 } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
-import { mcpClient } from '../../src/lib/mcp/index.js';
+import { mcpClient } from '../../src/mcp/index.js';
 
 const scope = { tenant: 'synthetic-org', principal: 'alice', conversationId: 'dataset-adapter' };
 const secret = 'COMPLETE_ROW_NOT_FOR_MODEL';

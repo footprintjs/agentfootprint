@@ -5,7 +5,7 @@
  * Pattern: one versioned shape, the same object in process and on the wire.
  *          In process it is `ToolExecutionContext.time`; over MCP it travels
  *          in the `tools/call` request's `_meta.agentfootprint.time`
- *          (`lib/mcp/mcpClient.ts` sends it, `lib/mcp/mcpServe.ts` hands it
+ *          (`mcp/mcpClient.ts` sends it, `mcp/mcpServe.ts` hands it
  *          to the served tool); a transport with no metadata slot sends
  *          nothing, and the tool declares its period from its own arguments.
  *          A tool's `period` declaration itself travels in the listing's

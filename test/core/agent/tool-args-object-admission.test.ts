@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { Agent, ask, checkInApproved, defineTool, isPaused } from '../../../src/index.js';
 import type { AgentfootprintEvent } from '../../../src/events/registry.js';
 import { bearer } from '../../../src/identity.js';
-import type { McpSdkServer } from '../../../src/lib/mcp/types.js';
+import type { McpSdkServer } from '../../../src/mcp/types.js';
 import { mock } from '../../../src/providers.js';
 import { mcpServe } from '../../../src/tool-providers/index.js';
 

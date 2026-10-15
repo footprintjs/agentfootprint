@@ -36,8 +36,8 @@
  *   const tools = await gateway.tools();
  */
 
-import { gatewayTransport, type FetchLike } from '../../lib/mcp/gatewayTransport.js';
-import type { McpGatewayTransport } from '../../lib/mcp/types.js';
+import { gatewayTransport, type FetchLike } from '../../mcp/gatewayTransport.js';
+import type { McpGatewayTransport } from '../../mcp/types.js';
 import type { CredentialProvider } from '../../identity/types.js';
 import type { Tool } from '../../tools/tools.js';
 

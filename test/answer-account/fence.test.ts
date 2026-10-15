@@ -3,7 +3,7 @@
  *
  *   1. IMPORT-GRAPH FENCE — `src/answer-account/**` reaches, at run time,
  *      no module under `adapters/`, `llm-providers`, `core/agent/stages/`,
- *      `lib/mcp/` (the precedent is `test/lib/mcp/browserGraph.test.ts`, which
+ *      `mcp/` (the precedent is `test/mcp/browserGraph.test.ts`, which
  *      bundles `dist/`; this walk reads the sources, so it needs no build). Its
  *      DIRECT edges out of the folder are exactly the ones named below, each for
  *      one owner the account must not duplicate.

@@ -1,7 +1,7 @@
 ---
 name: MCP — Model Context Protocol client
 group: context-engineering
-guide: ../../src/lib/mcp/
+guide: ../../src/mcp/
 defaultInput: List files in /tmp
 ---
 

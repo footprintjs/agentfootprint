@@ -101,7 +101,7 @@ taken. `Agent.resume` returns the same ask with `refused: { answer, reason }`
 `.time({ messages })`) and `repeat: { count }`, the field `missing` again, and
 runs nothing. `labels` name each `enum` choice; a `format` field's choices keep
 free entry open unless `strict`. The same field is carried over MCP by
-`lib/mcp/elicitation.ts` (a range as two `date-time` properties).
+`mcp/elicitation.ts` (a range as two `date-time` properties).
 
 ```ts
 requestInput({

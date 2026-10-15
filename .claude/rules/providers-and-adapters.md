@@ -3,7 +3,7 @@ paths:
   - "src/adapters/**"
   - "src/cache/**"
   - "src/thinking/**"
-  - "src/lib/mcp/**"
+  - "src/mcp/**"
   - "src/resilience/**"
   - "src/reliability/**"
   - "src/tool-providers/**"

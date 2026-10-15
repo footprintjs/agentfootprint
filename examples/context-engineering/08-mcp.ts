@@ -18,7 +18,7 @@
 import { Agent, type LLMProvider } from '../../src/index.js'
 import { mcpClient } from '../../src/doors/providers.js'
 import { mock } from '../../src/doors/providers.js';
-import type { McpSdkClient } from '../../src/lib/mcp/types.js';
+import type { McpSdkClient } from '../../src/mcp/types.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

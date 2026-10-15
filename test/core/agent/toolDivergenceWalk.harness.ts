@@ -23,7 +23,7 @@ import {
 } from '../../../src/index.js';
 import { defineSkill, skillGraph, decideSkill } from '../../../src/injection-engine.js';
 import { skillScopedTools, staticTools } from '../../../src/tool-providers/index.js';
-import { mockMcpClient } from '../../../src/lib/mcp/index.js';
+import { mockMcpClient } from '../../../src/mcp/index.js';
 import { mock } from '../../../src/llm-providers.js';
 import type { LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
 import type {
