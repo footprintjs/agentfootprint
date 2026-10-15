@@ -23,6 +23,8 @@
  *   stream.tool_start                  → TOOL_CALL_START + TOOL_CALL_ARGS + TOOL_CALL_END
  *   stream.tool_end                    → TOOL_CALL_RESULT
  *   pause.request + settle('paused')   → RUN_FINISHED { outcome: interrupt }
+ *   settle('paused', awaiting caller)  → RUN_FINISHED { outcome: success, pendingToolCallIds }
+ *                                        (a tool the client runs: its call is left to answer)
  *   error.fatal + settle('failed')     → RUN_ERROR, in the served error.fatal's words
  *   an allow-listed event              → CUSTOM { name: <event type>, value: <its listed fields> }
  *   anything else                      → nothing
@@ -44,6 +46,14 @@
  * that scope's `subagentRunId`. Parallel branches have different mounts, so
  * their interleaved events can never be attributed to each other.
  *
+ * A RUN THAT CONTINUES A PAUSE. A paused run hands back `suspension()` — the
+ * ids it gave the client (the interrupt, the open call) and every scope and
+ * step open at the pause. The run that continues it passes that as `resume`:
+ * the same sub-agents re-open (AG-UI: "a later run may continue the same
+ * invocation"), their steps re-open, and the first result in the paused call's
+ * scope answers that call under its own id — or, for a tool the client ran, is
+ * not written at all, because the client holds the result it sent.
+ *
  * TEXT. The reply is what the record streamed (`stream.token`) — the channel
  * `toSSE({ format: 'text' })` and a hosted reply read. An agent turn whose
  * answer streamed no token (a provider without `stream()`) is written whole
@@ -63,6 +73,8 @@ import {
   type AgUiEvent,
   type AgUiInterrupt,
   type AgUiMetadata,
+  type AgUiSuspendedScope,
+  type AgUiSuspension,
 } from './types.js';
 
 /** What a CUSTOM projection is told beside the payload: where the event landed. */
@@ -143,6 +155,27 @@ export interface AgUiSerializerOptions {
    * shown to a person only when the app decides it is.
    */
   readonly reasoning?: boolean;
+  /**
+   * Which served events are this run's. Default: the events of the first run
+   * an event names (plus events that name no run). Pass it when the listener
+   * can hear more than one run — an instance several callers share — so the
+   * translation never binds to whichever run spoke first.
+   */
+  readonly owns?: (event: AgentfootprintEvent) => boolean;
+  /**
+   * The paused run this one continues — what that run's translation returned
+   * from `suspension()` after it settled `'paused'`. Its suspended sub-agents
+   * and open steps re-open under the same ids, and the call it stopped in is
+   * answered under its own id (or, for a frontend tool, not at all: the client
+   * already holds the result it sent).
+   */
+  readonly resume?: AgUiSuspension;
+}
+
+/** One run's AG-UI translation — and, once it paused, what its continuation needs. */
+export interface AgUiTranslation extends RunTranslation<AgUiEvent> {
+  /** After `settle({ kind: 'paused' })`: the record to `resume` from. `undefined` otherwise. */
+  suspension(): AgUiSuspension | undefined;
 }
 
 /** Said by `RUN_ERROR` when the run failed without filing an `error.fatal` event to quote. */
@@ -167,9 +200,14 @@ interface OpenReasoning {
 
 interface OpenCall {
   readonly id: string;
+  /** Its number in this run — `-1` for a call a paused run opened. */
   readonly n: number;
   readonly address: string;
   readonly servedId: unknown;
+  /** Opened by the paused run this one continues: answered by the first result in its scope. */
+  readonly resumed?: boolean;
+  /** Answered by the CLIENT (a frontend tool): its result is never written back. */
+  readonly client?: boolean;
 }
 
 /** One agent's turn (or the root of the run), and what is open in it. */
@@ -177,6 +215,11 @@ interface Scope {
   readonly mount: readonly string[];
   /** The AG-UI invocation handle — `undefined` for the root, the parent agent. */
   readonly subagentRunId: string | undefined;
+  /** `SUBAGENT_STARTED`'s name and parent — kept so a continuation re-opens it the same. */
+  readonly name?: string;
+  readonly parentSubagentRunId?: string;
+  /** The stage execution of the scope's current LLM call — its message's address. */
+  llmAddress: string | undefined;
   /** An agent's turn opened it (the root: only when the run's runner is an agent). */
   isAgent: boolean;
   text: OpenText | undefined;
@@ -191,9 +234,17 @@ interface Scope {
   readonly calls: OpenCall[];
 }
 
-const newScope = (mount: readonly string[], subagentRunId: string | undefined): Scope => ({
+const newScope = (
+  mount: readonly string[],
+  subagentRunId: string | undefined,
+  name?: string,
+  parentSubagentRunId?: string,
+): Scope => ({
   mount,
   subagentRunId,
+  ...(name !== undefined && { name }),
+  ...(parentSubagentRunId !== undefined && { parentSubagentRunId }),
+  llmAddress: undefined,
   isAgent: false,
   text: undefined,
   callMessageId: undefined,
@@ -243,7 +294,7 @@ const resultText = (value: unknown): string =>
  * }
  * ```
  */
-export function agUiSerializer(options: AgUiSerializerOptions): RunTranslation<AgUiEvent> {
+export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation {
   const { threadId, runId } = options;
   if (typeof threadId !== 'string' || threadId.length === 0) {
     throw new TypeError('AG-UI: `threadId` must be a non-empty string.');
@@ -251,6 +302,7 @@ export function agUiSerializer(options: AgUiSerializerOptions): RunTranslation<A
   const ids = agUiIdMinter(runId);
   const custom = options.custom ?? AG_UI_CUSTOM_EVENTS;
   const reasoning = options.reasoning === true;
+  const owns = options.owns;
 
   const root = newScope([], undefined);
   /** Open scopes — the root always, then each nested agent turn in open order. */
@@ -264,6 +316,8 @@ export function agUiSerializer(options: AgUiSerializerOptions): RunTranslation<A
   let pause: { readonly event: AgentfootprintEvent; readonly scope: Scope } | undefined;
   /** The root agent's answer as the record serves it — `RUN_FINISHED.result`. */
   let rootResult: string | undefined;
+  /** What a continuation needs — set when the run settles paused. */
+  let suspended: AgUiSuspension | undefined;
 
   const scopeOf = (path: readonly string[]): Scope => {
     let best = root;
@@ -431,13 +485,18 @@ export function agUiSerializer(options: AgUiSerializerOptions): RunTranslation<A
         const previous = scopes.find((s) => s !== root && sameMount(s.mount, path));
         if (previous !== undefined) endScope(previous, out, unfinished);
         const parent = scopeOf(path);
-        const scope = newScope(path, ids.next('agent', address).id);
+        const scope = newScope(
+          path,
+          ids.next('agent', address).id,
+          path.join('/'),
+          parent.subagentRunId,
+        );
         scope.isAgent = true;
         scopes.push(scope);
         out.push({
           type: 'SUBAGENT_STARTED',
           subagentRunId: scope.subagentRunId as string,
-          name: path.join('/'),
+          name: scope.name as string,
           ...(parent.subagentRunId !== undefined && { parentSubagentRunId: parent.subagentRunId }),
           timestamp: event.meta.wallClockMs,
           metadata: addressOf(event),
@@ -493,6 +552,7 @@ export function agUiSerializer(options: AgUiSerializerOptions): RunTranslation<A
         closeReasoning(scope, out);
         scope.streamed = false;
         scope.callMessageId = undefined;
+        scope.llmAddress = address;
         return;
       }
       case 'agentfootprint.stream.token': {
@@ -617,6 +677,11 @@ export function agUiSerializer(options: AgUiSerializerOptions): RunTranslation<A
         // message for this call is over, and so is its reasoning.
         closeText(scope, out);
         closeReasoning(scope, out);
+        // Every call of one LLM response belongs to ONE assistant message: the
+        // call's text message when it wrote any, else a message minted at the
+        // LLM call's own address for the first call and held for the rest.
+        if (scope.callMessageId === undefined)
+          scope.callMessageId = ids.next('text', scope.llmAddress ?? address).id;
         const { id, n } = ids.next('tool', address);
         scope.calls.push({ id, n, address, servedId: payload.toolCallId });
         const toolCallName = text(payload.toolName) ?? '';
@@ -624,7 +689,7 @@ export function agUiSerializer(options: AgUiSerializerOptions): RunTranslation<A
           type: 'TOOL_CALL_START',
           toolCallId: id,
           toolCallName,
-          ...(scope.callMessageId !== undefined && { parentMessageId: scope.callMessageId }),
+          parentMessageId: scope.callMessageId,
           ...owned(scope, event),
           metadata: addressOf(event, { toolCallId: text(payload.toolCallId) }),
         });
@@ -646,9 +711,12 @@ export function agUiSerializer(options: AgUiSerializerOptions): RunTranslation<A
           pushCustom(event, scope, out);
           return;
         }
+        // A frontend tool's result is the one the client sent: it holds it already.
+        if (call.client === true) return;
         out.push({
           type: 'TOOL_CALL_RESULT',
-          messageId: ids.at('result', call.n, call.address),
+          messageId:
+            call.n < 0 ? ids.next('result', address).id : ids.at('result', call.n, call.address),
           toolCallId: call.id,
           content: resultText(payload.result),
           role: 'tool',
@@ -684,7 +752,77 @@ export function agUiSerializer(options: AgUiSerializerOptions): RunTranslation<A
         break;
       }
     }
+    // The call a paused run left open is answered by the first result in its
+    // scope: the continuation's stage executions are new, so no address matches.
+    if (at < 0) at = scope.calls.findIndex((call) => call.resumed === true);
     return at < 0 ? undefined : scope.calls.splice(at, 1)[0];
+  }
+
+  /**
+   * Re-open what the paused run left open — the scopes (same `subagentRunId`),
+   * their steps and the call it stopped in — and return the events that say so,
+   * for `start` to write after `RUN_STARTED`.
+   */
+  function restore(from: AgUiSuspension): AgUiEvent[] {
+    const events: AgUiEvent[] = [];
+    root.isAgent = from.rootAgent;
+    for (const kept of from.scopes) {
+      let scope = root;
+      if (kept.subagentRunId !== undefined) {
+        scope = newScope(kept.mount, kept.subagentRunId, kept.name, kept.parentSubagentRunId);
+        scope.isAgent = true;
+        scopes.push(scope);
+        events.push({
+          type: 'SUBAGENT_STARTED',
+          subagentRunId: kept.subagentRunId,
+          name: kept.name ?? kept.mount.join('/'),
+          ...(kept.parentSubagentRunId !== undefined && {
+            parentSubagentRunId: kept.parentSubagentRunId,
+          }),
+        });
+      }
+      for (const stepName of kept.steps) {
+        scope.steps.push(stepName);
+        events.push({ type: 'STEP_STARTED', stepName, ...owned(scope) });
+      }
+    }
+    const call = from.call;
+    if (call !== undefined) {
+      const at = scopes.find((scope) => sameMount(scope.mount, call.mount)) ?? root;
+      at.calls.push({
+        id: call.toolCallId,
+        n: -1,
+        address: '',
+        servedId: undefined,
+        resumed: true,
+        client: call.client,
+      });
+    }
+    return events;
+  }
+
+  /** The record a continuation resumes from: every scope open now, with its steps. */
+  function suspensionOf(
+    interruptId: string | undefined,
+    call: AgUiSuspension['call'],
+  ): AgUiSuspension {
+    const kept: AgUiSuspendedScope[] = scopes.map((scope) => ({
+      mount: [...scope.mount],
+      ...(scope.subagentRunId !== undefined && { subagentRunId: scope.subagentRunId }),
+      ...(scope.name !== undefined && { name: scope.name }),
+      ...(scope.parentSubagentRunId !== undefined && {
+        parentSubagentRunId: scope.parentSubagentRunId,
+      }),
+      steps: [...scope.steps],
+    }));
+    return {
+      version: 1,
+      runId,
+      ...(interruptId !== undefined && { interruptId }),
+      ...(call !== undefined && { call }),
+      rootAgent: root.isAgent,
+      scopes: kept,
+    };
   }
 
   /**
@@ -708,6 +846,10 @@ export function agUiSerializer(options: AgUiSerializerOptions): RunTranslation<A
     });
   }
 
+  /** What `RUN_STARTED` is followed by in a continuation: the scopes and steps it re-opens. */
+  const reopened: readonly AgUiEvent[] =
+    options.resume === undefined ? [] : restore(options.resume);
+
   const start = (out: AgUiEvent[]): void => {
     if (started) return;
     started = true;
@@ -718,6 +860,7 @@ export function agUiSerializer(options: AgUiSerializerOptions): RunTranslation<A
       protocolVersion: AG_UI_PROTOCOL_VERSION,
       ...(runMetadata() !== undefined && { metadata: runMetadata() }),
     });
+    out.push(...reopened);
   };
 
   const interruptOf = (): AgUiInterrupt => {
@@ -727,7 +870,7 @@ export function agUiSerializer(options: AgUiSerializerOptions): RunTranslation<A
     // The question a person is asked, as the record serves it — and nothing
     // else of the pause's payload (a check-in's evidence pack, a typed ask's
     // context), which a browser has no reason to receive.
-    const message = text(record(payload.questionPayload).question);
+    const message = questionOf(record(payload.questionPayload));
     const call = scope.calls[scope.calls.length - 1];
     return {
       id: ids.next('interrupt', event.meta.runtimeStageId).id,
@@ -750,16 +893,24 @@ export function agUiSerializer(options: AgUiSerializerOptions): RunTranslation<A
   return {
     event(event) {
       if (settled) return [];
+      if (owns !== undefined && !owns(event)) return [];
       const named = event.meta?.runId;
-      if (typeof named === 'string' && named !== CONSUMER_SCOPE_RUN_ID) {
-        // The first run id an event names is this run's; another run's event is
-        // never this run's to translate.
+      const namesRun = typeof named === 'string' && named !== CONSUMER_SCOPE_RUN_ID;
+      if (namesRun) {
+        // Without `owns`, the first run an event names is this run's, and
+        // another run's event is never this run's to translate.
         if (recordRunId === undefined) recordRunId = named;
-        else if (named !== recordRunId) return [];
+        else if (owns === undefined && named !== recordRunId) return [];
       }
+      const body: AgUiEvent[] = [];
+      translate(event, body);
+      // `RUN_STARTED` waits for the run to name itself (or to say something):
+      // a continuation opens with the resume's own bookkeeping, which names no
+      // run, and the run's id belongs on its first event.
+      if (!started && !namesRun && body.length === 0) return [];
       const out: AgUiEvent[] = [];
       start(out);
-      translate(event, out);
+      out.push(...body);
       return out;
     },
     settle(settlement) {
@@ -777,7 +928,38 @@ export function agUiSerializer(options: AgUiSerializerOptions): RunTranslation<A
           });
           return out;
         case 'paused': {
+          const at = pause?.scope ?? root;
+          const open = at.calls[at.calls.length - 1];
+          if (settlement.awaiting === 'caller' && open !== undefined) {
+            // A tool the client runs: the run COMPLETED this segment and left
+            // the call for the application to answer in its next input.
+            suspended = suspensionOf(undefined, {
+              toolCallId: open.id,
+              mount: [...at.mount],
+              client: true,
+            });
+            endAllNested(out, () => (subagentRunId) => ({
+              type: 'SUBAGENT_FINISHED',
+              subagentRunId,
+              outcome: { type: 'suspended' },
+            }));
+            closeContents(root, out);
+            out.push({
+              type: 'RUN_FINISHED',
+              threadId,
+              runId,
+              outcome: { type: 'success', pendingToolCallIds: [open.id] },
+              ...(runMetadata() !== undefined && { metadata: runMetadata() }),
+            });
+            return out;
+          }
           const interrupt = interruptOf();
+          suspended = suspensionOf(
+            interrupt.id,
+            open === undefined
+              ? undefined
+              : { toolCallId: open.id, mount: [...at.mount], client: false },
+          );
           endAllNested(out, (scope) => (subagentRunId) => ({
             type: 'SUBAGENT_FINISHED',
             subagentRunId,
@@ -825,7 +1007,22 @@ export function agUiSerializer(options: AgUiSerializerOptions): RunTranslation<A
           return out;
       }
     },
+    suspension: () => suspended,
   };
+}
+
+/**
+ * The question a pause put to a person, from whichever home its kind keeps it
+ * in: a plain ask (`askHuman` / `pauseHere` / an input request) at the top, a
+ * middleware's ask on `ask.question`, a check-in as the plain-words claim of
+ * what the tool will do (`checkIn.evidence.willDo`).
+ */
+function questionOf(payload: Readonly<Record<string, unknown>>): string | undefined {
+  return (
+    text(payload.question) ??
+    text(record(payload.ask).question) ??
+    text(record(record(payload.checkIn).evidence).willDo)
+  );
 }
 
 /** A composition's step name: its kind, and where it is mounted when it is not the run itself. */

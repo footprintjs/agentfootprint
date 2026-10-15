@@ -31,9 +31,16 @@ across a thread, and the same with or without a policy.
   nothing is written whole from `turn_end`; an agent's `llm_end.content` is a
   draft and is never written.
 - A paused run ends with `RUN_FINISHED { outcome: interrupt }` (the question's
-  text, nothing else of the pause's payload); a failed one with `RUN_ERROR`, in
-  the words of the record's served `error.fatal` — the settlement never hands an
-  adapter the thrown value.
+  text — from whichever home its kind keeps it in — nothing else of the pause's
+  payload); a run paused on a tool the client runs (`awaiting: 'caller'`) ends
+  with `RUN_FINISHED { outcome: success, pendingToolCallIds }`; a failed one with
+  `RUN_ERROR`, in the words of the record's served `error.fatal` — the
+  settlement never hands an adapter the thrown value.
+- A continuation is the SAME invocation: the paused translation's `suspension()`
+  (ids and step names only) passed as `resume` re-opens the suspended sub-agents
+  under their own ids and their steps, and the first result in the paused call's
+  scope answers that call under its own id (a client-run tool's result is never
+  written back). `RUN_STARTED` waits until the run names itself.
 - `CUSTOM` is an ALLOW-LIST (`AG_UI_CUSTOM_EVENTS`): progress, spend, the route,
   the answer's standing, retries — each with only the fields its projection
   picks. The rest of the record (the assembled prompt, a raw retry error, memory,

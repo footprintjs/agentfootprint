@@ -789,3 +789,120 @@ describe('agUiSerializer — CUSTOM is an allow-list', () => {
     ]);
   });
 });
+
+describe('agUiSerializer — which run, and a run that continues another', () => {
+  it('`owns` decides which events are the run’s, whichever run spoke first', () => {
+    const mine = (e: AgentfootprintEvent) => e.meta.runId === 'run-mine';
+    const { out } = feed(
+      [
+        ev(
+          t('stream.token'),
+          { iteration: 1, tokenIndex: 0, content: 'theirs' },
+          { runId: 'run-x' },
+        ),
+        ev(t('agent.turn_start'), { turnIndex: 0 }, { rsid: 'seed#0', runId: 'run-mine' }),
+        ev(
+          t('stream.token'),
+          { iteration: 1, tokenIndex: 0, content: 'mine' },
+          { runId: 'run-mine' },
+        ),
+      ],
+      { owns: mine },
+    );
+    expect(out[0]).toMatchObject({ type: 'RUN_STARTED' });
+    expect(out[0]!.metadata?.agentfootprint?.runId).toBe('run-mine');
+    expect(only(out, 'TEXT_MESSAGE_CONTENT').map((e) => e.delta)).toEqual(['mine']);
+  });
+
+  it('opens nothing until the run names itself — the resume’s own bookkeeping names no run', () => {
+    const s = agUiSerializer({ threadId: 'thread-1', runId: 'ag-run' });
+    expect(
+      s.event(
+        ev(t('pause.resume'), { resumeInput: { input: 'yes' } }, { runId: 'consumer-scope' }),
+      ),
+    ).toEqual([]);
+    const first = s.event(ev(t('agent.iteration_start'), { iterIndex: 2 }, { rsid: 'call-llm#9' }));
+    expect(first[0]).toMatchObject({ type: 'RUN_STARTED' });
+    expect(first[0]!.metadata?.agentfootprint?.runId).toBe('run-100-1');
+  });
+
+  it('a pause records what its continuation needs; any other ending records nothing', () => {
+    const events = [
+      ev(t('agent.turn_start'), { turnIndex: 0 }, { rsid: 'seed#0' }),
+      ev(t('agent.iteration_start'), { iterIndex: 1 }, { rsid: 'call-llm#1' }),
+      ev(
+        t('stream.tool_start'),
+        { toolName: 'ask', toolCallId: 'c1', args: {} },
+        { rsid: 'tool-calls#2' },
+      ),
+      ev(
+        t('pause.request'),
+        { reason: 'r', questionPayload: { question: 'Sure?' } },
+        { rsid: 'tool-calls#paused', runId: 'consumer-scope' },
+      ),
+    ];
+    const paused = feed(events);
+    expect(paused.s.suspension()).toBeUndefined();
+    const end = paused.s.settle({ kind: 'paused' });
+    const finished = end.at(-1) as Extract<AgUiEvent, { type: 'RUN_FINISHED' }>;
+    if (finished.outcome?.type !== 'interrupt') throw new Error('expected an interrupt');
+    expect(paused.s.suspension()).toEqual({
+      version: 1,
+      runId: 'ag-run',
+      interruptId: finished.outcome.interrupts[0]!.id,
+      call: { toolCallId: 'ag-run/tool/0/tool-calls#2', mount: [], client: false },
+      rootAgent: true,
+      scopes: [{ mount: [], steps: ['iteration 1'] }],
+    });
+
+    const done = feed(events);
+    done.s.settle({ kind: 'finished' });
+    expect(done.s.suspension()).toBeUndefined();
+  });
+
+  it('a pause that waits on the caller with no call open is an interrupt like any other', () => {
+    const { s } = feed([ev(t('agent.turn_start'), { turnIndex: 0 }, { rsid: 'seed#0' })]);
+    const end = s.settle({ kind: 'paused', awaiting: 'caller' });
+    expect(end.at(-1)).toMatchObject({ type: 'RUN_FINISHED', outcome: { type: 'interrupt' } });
+  });
+
+  it('a continuation re-opens the sub-agents and steps it was handed, then answers the open call', () => {
+    const s = agUiSerializer({
+      threadId: 'thread-1',
+      runId: 'ag-2',
+      resume: {
+        version: 1,
+        runId: 'ag-1',
+        interruptId: 'ag-1/interrupt/0/x',
+        call: { toolCallId: 'ag-1/tool/0/x/tool-calls#5', mount: ['p', 'x'], client: false },
+        rootAgent: false,
+        scopes: [
+          { mount: [], steps: ['Sequence'] },
+          {
+            mount: ['p', 'x'],
+            subagentRunId: 'ag-1/agent/0/x',
+            name: 'p/x',
+            steps: ['iteration 1'],
+          },
+        ],
+      },
+    });
+    const out = s.event(
+      ev(t('stream.tool_end'), { result: 'yes' }, { rsid: 'p/x/tool-calls#9', path: ['p', 'x'] }),
+    );
+    expect(out.map((e) => e.type)).toEqual([
+      'RUN_STARTED',
+      'STEP_STARTED',
+      'SUBAGENT_STARTED',
+      'STEP_STARTED',
+      'TOOL_CALL_RESULT',
+    ]);
+    expect(out[2]).toMatchObject({ subagentRunId: 'ag-1/agent/0/x', name: 'p/x' });
+    expect(out[3]).toMatchObject({ stepName: 'iteration 1', subagentRunId: 'ag-1/agent/0/x' });
+    expect(out[4]).toMatchObject({
+      toolCallId: 'ag-1/tool/0/x/tool-calls#5',
+      content: 'yes',
+      subagentRunId: 'ag-1/agent/0/x',
+    });
+  });
+});

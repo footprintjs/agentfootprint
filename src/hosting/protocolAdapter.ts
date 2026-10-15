@@ -20,8 +20,14 @@ import type { AgentfootprintEvent } from '../events/registry.js';
 export type RunSettlement =
   /** `run()` resolved with an answer. */
   | { readonly kind: 'finished' }
-  /** `run()` resolved with a pause: the run waits on a person (its `pause.request` came first). */
-  | { readonly kind: 'paused' }
+  /**
+   * `run()` resolved with a pause (its `pause.request` came first). `awaiting`
+   * says on whom: a PERSON's answer (the default — an approval, a question), or
+   * the CALLER's — a tool whose work the caller does (an AG-UI frontend tool),
+   * whose result arrives with the caller's next request. Read by whoever ran
+   * the run from the pause it got back, never from a served value.
+   */
+  | { readonly kind: 'paused'; readonly awaiting?: 'person' | 'caller' }
   /** The run was stopped by whoever was running it, and did not fail. */
   | { readonly kind: 'cancelled' }
   /**
@@ -43,4 +49,11 @@ export interface RunTranslation<TEvent> {
   event(event: AgentfootprintEvent): readonly TEvent[];
   /** The closing events. After this, `event` returns nothing. */
   settle(settlement: RunSettlement): readonly TEvent[];
+  /**
+   * After a `'paused'` settlement: what the protocol needs to continue this run
+   * in a later request — the ids it handed the caller for the answer. Plain
+   * JSON, kept with the paused run; `undefined` before or after any other
+   * settlement. Optional: a protocol with nothing to remember omits it.
+   */
+  suspension?(): unknown;
 }

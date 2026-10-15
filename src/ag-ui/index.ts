@@ -13,6 +13,7 @@ export {
   type AgUiCustomContext,
   type AgUiCustomProjection,
   type AgUiSerializerOptions,
+  type AgUiTranslation,
 } from './serializer.js';
 export { agUiSse, type AgUiEncoderModule, type AgUiSseOptions } from './framing.js';
 export {
@@ -23,4 +24,6 @@ export {
   type AgUiInterrupt,
   type AgUiMetadata,
   type AgUiRunOutcome,
+  type AgUiSuspendedScope,
+  type AgUiSuspension,
 } from './types.js';

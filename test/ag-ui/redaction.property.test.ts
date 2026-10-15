@@ -20,7 +20,10 @@
  * allow-lists EVERY event as CUSTOM, because the guarantee is the record's
  * (served events only), not the allow-list's.
  *
- * The second half pins the allow-list itself, with no policy at all: the system
+ * A pause and the run that continues it hold the same law, across both requests:
+ * neither run's frames, nor the suspension kept between them, carry a marked value.
+ *
+ * The last half pins the allow-list itself, with no policy at all: the system
  * prompt, a provider's raw retry error and the model's reasoning are in the
  * record, and none of them goes out by default.
  */
@@ -29,6 +32,7 @@ import { describe, expect, it } from 'vitest';
 
 import { Agent, defineTool, Parallel, Sequence } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
+import { pauseHere } from '../../src/core/pause.js';
 import { withRetry } from '../../src/resilience/withRetry.js';
 import { mockThinkingHandler } from '../../src/thinking/MockThinkingHandler.js';
 import { ALL_EVENT_TYPES } from '../../src/events/registry.js';
@@ -151,6 +155,86 @@ describe('property — a policy holds on the AG-UI wire at every depth', () => {
         // …and the client still accepts what is left.
         await replayThroughClient(run.events);
       }
+    });
+  }
+});
+
+describe('a pause and the run that continues it, under a policy', () => {
+  for (let seed = 1; seed <= 4; seed++) {
+    it(`seed ${seed}: neither run's frames nor the kept suspension hold a marked value`, async () => {
+      const draw = rng(seed * 7919);
+      const secrets: string[] = [];
+      const secret = (): string => {
+        let s = 'zq';
+        for (let i = 0; i < 14; i++)
+          s += 'abcdefghijkmnpqrstuvwxyz23456789'[Math.floor(draw() * 31)];
+        secrets.push(s);
+        return s;
+      };
+      const policy = { keys: ['iban'], fields: { profile: ['email'] } };
+      // A tool that pauses with the question in free text and a marked key beside it.
+      const asking = defineTool({
+        name: 'confirm',
+        description: 'Confirm with a person.',
+        inputSchema: { type: 'object', properties: {} },
+        execute: async () => pauseHere({ question: `Pay ${secret()}?`, iban: secret() }),
+      });
+      const paying = Agent.create({
+        provider: mock({
+          chunkDelayMs: 0,
+          replies: [
+            {
+              content: `about to pay ${secret()}`,
+              toolCalls: [{ id: 'c1', name: 'confirm', args: { iban: secret(), note: secret() } }],
+            },
+            `paid ${secret()}`,
+          ],
+        }),
+        model: 'm',
+        redact: policy,
+      })
+        .system('Pay.')
+        .tool(asking)
+        .build();
+      const pipeline = Sequence.create()
+        .step(
+          'p',
+          Parallel.create()
+            .branch('x', paying)
+            .branch(
+              'y',
+              Agent.create({
+                provider: mock({ chunkDelayMs: 0, replies: [`other ${secret()}`] }),
+                model: 'm',
+                redact: policy,
+              })
+                .system('s')
+                .build(),
+            )
+            .mergeWithFn((r) => JSON.stringify(r))
+            .build(),
+        )
+        .build();
+      const framing = agUiSse();
+      const first = await runAsAgUi(pipeline, { message: `pay ${secret()}` }, { runId: 'ag-1' });
+      const suspension = first.translation.suspension()!;
+      const second = await runAsAgUi(pipeline, undefined, {
+        runId: 'ag-2',
+        serializer: { resume: suspension },
+        resume: {
+          checkpoint: (first.out as { checkpoint: unknown }).checkpoint,
+          answer: { approved: true, iban: secret() },
+        },
+      });
+      const wire = [...first.events, ...second.events].map((e) => framing.frame(e)).join('');
+      const kept = JSON.stringify(suspension);
+      for (const s of secrets) {
+        expect(wire, `secret ${s} reached the wire`).not.toContain(s);
+        expect(kept, `secret ${s} reached the kept suspension`).not.toContain(s);
+      }
+      // The continuation really continued the paused sub-agent.
+      expect(second.events.some((e) => e.type === 'SUBAGENT_STARTED')).toBe(true);
+      expect(second.events.some((e) => e.type === 'TOOL_CALL_RESULT')).toBe(true);
     });
   }
 });

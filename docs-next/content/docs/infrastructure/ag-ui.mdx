@@ -45,6 +45,7 @@ event union by this repository's tests. It speaks protocol
 | `composition.enter` / `exit` | `STEP_STARTED` / `STEP_FINISHED`, named `Sequence`, `Parallel:<mount>` … |
 | `agent.turn_start` / `turn_end` of a nested agent | `SUBAGENT_STARTED` / `SUBAGENT_FINISHED` |
 | `pause.request`, then the run pauses | `RUN_FINISHED` with an `interrupt` outcome (`AgUiRunOutcome`, `AgUiInterrupt`) |
+| the run pauses on a tool the CLIENT runs (`settle({ kind: 'paused', awaiting: 'caller' })`) | `RUN_FINISHED` with a `success` outcome naming the call in `pendingToolCallIds` |
 | `error.fatal`, then the run fails | `RUN_ERROR`, in the words of the served `error.fatal` — never the thrown value |
 | an event on the CUSTOM allow-list | `CUSTOM`, named by the event type, carrying only its listed fields |
 | anything else | nothing |
@@ -88,6 +89,43 @@ Text is what the run STREAMED. A provider that does not stream still shows its
 answer: the turn's answer is written whole when no token of it streamed. An
 agent's intermediate draft (`llm_end.content`) is never written — the library
 may be holding it back (answer validation, an output policy).
+
+## A run that continues a pause
+
+A paused run is unfinished work: the next request continues it with
+`agent.resume(checkpoint, answer)`. AG-UI treats the continuation as the SAME
+invocation, so the translation of the paused run hands back what the next one
+needs — `suspension()` on the `AgUiTranslation`, an `AgUiSuspension`: the
+interrupt's id, the call the run stopped in, and every scope (`AgUiSuspendedScope`)
+and step open at the pause. Plain JSON holding ids and step names only; keep it
+with the checkpoint. Pass it as `resume` when you translate the continuation:
+
+```ts
+const first = agUiSerializer({ threadId, runId });
+// …the run pauses; settle it, then keep both halves
+const kept = { checkpoint: outcome.checkpoint, suspension: first.suspension() };
+
+// a later request answers it
+const next = agUiSerializer({ threadId, runId: nextRunId, resume: kept.suspension });
+const off = agent.on('*', (event) => send(next.event(event)));
+const out = await agent.resume(kept.checkpoint, answer);
+```
+
+The suspended sub-agents re-open under their own `subagentRunId`, their steps
+re-open, and the first result in the paused call's scope answers that call under
+its own id — the client sees one tool call, one result. `RUN_STARTED` waits for
+the continuation to name its run, so it carries agentfootprint's run id like any
+other.
+
+A tool whose work the CLIENT does (an AG-UI frontend tool) pauses the same way.
+Settle it with `{ kind: 'paused', awaiting: 'caller' }`: the segment completes,
+`pendingToolCallIds` names the call, and the client answers it with a `tool`
+message in its next input. That result is the one the client sent, so the
+continuation never writes it back.
+
+A listener that can hear more than one run — an instance several callers share —
+passes `owns` (which events are this run's) so the translation never binds to
+whichever run spoke first.
 
 ## Sub-agents and parallel branches
 

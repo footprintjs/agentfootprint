@@ -2,9 +2,10 @@
  * THE CONTRACT — what real runs become is valid AG-UI 1.0, by the protocol's own
  * schema and its own client.
  *
- * Every shape a run takes here (a tool call, thinking, a pause, a failure, a
- * provider that does not stream, an LLMCall, a composition with parallel
- * branches, a redacted run) is translated by `agUiSerializer`, then:
+ * Every shape a run takes here (a tool call, thinking, a pause, a pause two
+ * levels deep and the run that continues it, a frontend tool's pending call,
+ * a failure, a provider that does not stream, an LLMCall, a composition with
+ * parallel branches, a redacted run) is translated by `agUiSerializer`, then:
  *
  *   1. every event is parsed by `@ag-ui/core/schemas`' `EventSchema` and comes
  *      back unchanged — no field the protocol does not declare (the client's
@@ -22,10 +23,16 @@ import { describe, expect, it } from 'vitest';
 
 import { Agent, defineTool, LLMCall, Parallel, Sequence } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
-import { askHuman } from '../../src/core/pause.js';
+import { askHuman, pauseHere } from '../../src/core/pause.js';
 import { mockThinkingHandler } from '../../src/thinking/MockThinkingHandler.js';
 import type { AgUiEvent } from '../../src/ag-ui/types.js';
-import { replayThroughClient, runAsAgUi, typesOf, type AgUiRun } from './helpers.js';
+import {
+  replayRunsThroughClient,
+  replayThroughClient,
+  runAsAgUi,
+  typesOf,
+  type AgUiRun,
+} from './helpers.js';
 
 const call = (name: string, id: string, args: Record<string, unknown> = {}) => ({
   content: 'Let me check.',
@@ -127,6 +134,84 @@ describe('AG-UI contract — real runs, the protocol’s schema and its client',
     const finished = run.events.at(-1) as Extract<AgUiEvent, { type: 'RUN_FINISHED' }>;
     expect(finished.outcome?.type).toBe('interrupt');
     await expectClientAccepts(run);
+  });
+
+  it('a pause two levels deep, and the run that continues it', async () => {
+    const approve = defineTool({
+      name: 'approve',
+      description: 'Ask a person to approve.',
+      inputSchema: { type: 'object', properties: {} },
+      execute: async () => askHuman({ question: 'Approve?' }),
+    });
+    const pausingAgent = Agent.create({
+      provider: mock({ chunkDelayMs: 0, replies: [call('approve', 'p1'), 'approved'] }),
+      model: 'm',
+    })
+      .system('s')
+      .tool(approve)
+      .build();
+    const pipeline = Sequence.create()
+      .step(
+        'p',
+        Parallel.create()
+          .branch('x', pausingAgent)
+          .branch('y', agentWith(['y done']))
+          .mergeWithFn((r) => JSON.stringify(r))
+          .build(),
+      )
+      .build();
+    const first = await runAsAgUi(pipeline, { message: 'go' }, { runId: 'ag-1' });
+    const suspension = first.translation.suspension()!;
+    const second = await runAsAgUi(pipeline, undefined, {
+      runId: 'ag-2',
+      serializer: { resume: suspension },
+      resume: { checkpoint: (first.out as { checkpoint: unknown }).checkpoint, answer: 'yes' },
+    });
+    expectSchemaValid(first.events);
+    expectSchemaValid(second.events);
+    const client = await replayRunsThroughClient([
+      { events: first.events },
+      {
+        events: second.events,
+        resume: [{ interruptId: suspension.interruptId!, status: 'resolved', payload: 'yes' }],
+      },
+    ]);
+    expect(client.warnings).toEqual([]);
+  });
+
+  it('a frontend tool: the segment completes with the call pending, and the run continues', async () => {
+    const pick = defineTool({
+      name: 'pick',
+      description: 'Pick in the page.',
+      inputSchema: { type: 'object', properties: {} },
+      execute: async () => pauseHere({ clientTool: 'pick' }),
+    });
+    const agent = Agent.create({
+      provider: mock({ chunkDelayMs: 0, replies: [call('pick', 'k1'), 'picked'] }),
+      model: 'm',
+    })
+      .system('s')
+      .tool(pick)
+      .build();
+    const first = await runAsAgUi(agent, { message: 'go' }, { awaiting: 'caller' });
+    const suspension = first.translation.suspension()!;
+    const second = await runAsAgUi(agent, undefined, {
+      runId: 'run-2',
+      serializer: { resume: suspension },
+      resume: { checkpoint: (first.out as { checkpoint: unknown }).checkpoint, answer: 'B' },
+    });
+    expectSchemaValid(first.events);
+    expectSchemaValid(second.events);
+    const client = await replayRunsThroughClient([
+      { events: first.events },
+      {
+        events: second.events,
+        add: [
+          { id: 'tool-1', role: 'tool', toolCallId: suspension.call!.toolCallId, content: 'B' },
+        ],
+      },
+    ]);
+    expect(client.warnings).toEqual([]);
   });
 
   it('a run that fails', async () => {

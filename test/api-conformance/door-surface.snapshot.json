@@ -774,7 +774,10 @@
       "AgUiMetadata",
       "AgUiRunOutcome",
       "AgUiSerializerOptions",
-      "AgUiSseOptions"
+      "AgUiSseOptions",
+      "AgUiSuspendedScope",
+      "AgUiSuspension",
+      "AgUiTranslation"
     ]
   },
   "./cache": {

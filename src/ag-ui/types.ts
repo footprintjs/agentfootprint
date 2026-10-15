@@ -72,11 +72,60 @@ export interface AgUiInterrupt extends Attributable {
   readonly metadata?: AgUiMetadata;
 }
 
-/** Why a run ended — absent means success. */
+/**
+ * Why a run ended — absent means success. A success may leave tool calls for
+ * the application to answer (a frontend tool): `pendingToolCallIds` names them.
+ */
 export type AgUiRunOutcome =
-  | { readonly type: 'success' }
+  | { readonly type: 'success'; readonly pendingToolCallIds?: readonly string[] }
   | { readonly type: 'interrupt'; readonly interrupts: readonly AgUiInterrupt[] }
   | { readonly type: 'cancelled' };
+
+/** One scope open where a run paused — the root, or a sub-agent's turn — and its open steps. */
+export interface AgUiSuspendedScope {
+  /** The scope's mount: the subflow path its turn opened at (`[]` for the root). */
+  readonly mount: readonly string[];
+  /** The sub-agent invocation — absent for the root. */
+  readonly subagentRunId?: string;
+  /** The sub-agent's name as `SUBAGENT_STARTED` gave it. */
+  readonly name?: string;
+  /** The sub-agent that spawned it, when one did. */
+  readonly parentSubagentRunId?: string;
+  /** Its open steps, in the order they opened. */
+  readonly steps: readonly string[];
+}
+
+/**
+ * What a PAUSED run's translation hands the run that continues it
+ * (`agUiSerializer({ resume })`): the ids the paused run gave the client, so the
+ * answer can be matched and the continuation is the same invocation —
+ * suspended sub-agents re-open under their own `subagentRunId`, open steps
+ * re-open, and the call the run stopped in is answered under its own id.
+ *
+ * Plain JSON — keep it with the paused run (a host stores it beside the
+ * checkpoint). It holds ids and step names only, never a value of the run.
+ */
+export interface AgUiSuspension {
+  readonly version: 1;
+  /** The AG-UI run that paused. */
+  readonly runId: string;
+  /** The interrupt the run waits on — absent when it waits on a frontend tool's result. */
+  readonly interruptId?: string;
+  /**
+   * The call open where the run paused: its AG-UI id, where it is, and whether
+   * the CLIENT answers it (a frontend tool — `pendingToolCallIds`) rather than
+   * the run continuing it after the interrupt.
+   */
+  readonly call?: {
+    readonly toolCallId: string;
+    readonly mount: readonly string[];
+    readonly client: boolean;
+  };
+  /** The run's root is an agent's turn (its answer is the run's result). */
+  readonly rootAgent: boolean;
+  /** The scopes open at the pause, outermost first — the root always first. */
+  readonly scopes: readonly AgUiSuspendedScope[];
+}
 
 export interface AgUiRunFinishedEvent extends AgUiEventBase<'RUN_FINISHED'> {
   readonly threadId: string;
