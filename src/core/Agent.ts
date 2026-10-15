@@ -4642,7 +4642,15 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // The time layer's clock: the draft `run()` read (refusing a run with no
       // zone), stamped by seed as the turn's one `clock` row. Absent → the
       // deps object seed always had.
-      ...(this.timeOptions !== undefined && { timeClock: () => this.seedClockDraft() }),
+      // The caller's clock belongs to the agent's OWN run: a member (another
+      // runner's executor) gets the builder's fallback, never a concurrent
+      // direct caller's `time` (`memberRun.ts`).
+      ...(this.timeOptions !== undefined && {
+        timeClock: (scope: object) =>
+          this.ownScopes.has(scope)
+            ? this.seedClockDraft()
+            : draftClock(undefined, this.timeOptions ?? {}),
+      }),
       // The time layer's reader: seed reads the person's words once per turn,
       // after the clock. Absent → nothing is read.
       ...(this.timeOptions?.reader !== undefined &&
@@ -5631,7 +5639,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // resume door compares a resume's passed `time` with the kept clock.
       ...(this.timeOptions !== undefined && {
         time: {
-          takePassedOnResume: () => {
+          takePassedOnResume: (scope: object) => {
+            // Only the agent's own resumed leg takes it — never a member's.
+            if (!this.ownScopes.has(scope)) return undefined;
             const passed = this.resumePassedTime;
             this.resumePassedTime = undefined;
             return passed;

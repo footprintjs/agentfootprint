@@ -151,7 +151,7 @@ export interface SeedStageDeps {
    * (`time/rowsBuild.ts` · `clockRow`). Absent on an agent without the layer,
    * so nothing is read or written.
    */
-  readonly timeClock?: () => ClockDraft | undefined;
+  readonly timeClock?: (scope: object) => ClockDraft | undefined;
   /**
    * THE TIME LAYER'S READER (`.time({ reader, policy })`) — seed reads the
    * turn's message through it ONCE, after the clock is stamped, and files

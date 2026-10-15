@@ -60,7 +60,7 @@ import type { ToolCallsHandlerDeps } from './toolCalls.js';
  * unknown — never the server's.
  */
 export function stampClock(scope: TypedScope<AgentState>, deps: SeedStageDeps): void {
-  const draft = deps.timeClock?.();
+  const draft = deps.timeClock?.(scope);
   if (draft === undefined) return;
   const answered =
     draft.zoneSource === 'unknown'
@@ -233,7 +233,7 @@ export function recordClockOnResume(
   scope: TypedScope<AgentState>,
   time: NonNullable<ToolCallsHandlerDeps['time']>,
 ): void {
-  const passed = time.takePassedOnResume();
+  const passed = time.takePassedOnResume(scope);
   if (passed === undefined) return;
   const kept = clockOf(scope.findingsLedger as FindingsLedger | undefined);
   if (kept === undefined) return;

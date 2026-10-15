@@ -104,4 +104,48 @@ describe('composition members — never the instance’s hand-offs or evidence',
     expect(bob).toContain('read_narrative');
     expect(bob).not.toContain('ALICE-DIRECT-SECRET');
   });
+
+  it('a member never seeds with a concurrent direct run’s clock — the builder fallback instead', async () => {
+    const seen: string[] = [];
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const slow: MessageMiddleware = {
+      name: 'remote-moderation',
+      onMessage: async (msg) => {
+        if (msg.phase === 'input' && msg.content.includes('alice-turn')) await gate;
+        return allow();
+      },
+    };
+    const shared = Agent.create({
+      id: 'clock',
+      provider: mock({
+        respond: (req) => {
+          seen.push(JSON.stringify(req));
+          return 'ok';
+        },
+      }),
+      model: 'mock',
+      maxIterations: 2,
+    })
+      .system('assistant')
+      .time({ zone: 'UTC' })
+      .messageMiddleware(slow)
+      .build();
+    const alice = shared.run({
+      message: 'alice-turn',
+      time: { now: '2031-02-03T04:05:06Z', zone: 'Asia/Kolkata' },
+    } as never);
+    await new Promise((r) => setTimeout(r, 20));
+    const flow = Sequence.create({ id: 'wrap' }).step('clock', shared).build();
+    await flow.run({ message: 'bob asks the time', identity: BOB });
+    const bob = seen.filter((r) => r.includes('bob asks')).join('\n');
+    release();
+    await alice;
+    // The control: Bob's turn was told a time — the builder's zone.
+    expect(bob).toContain('UTC');
+    expect(bob).not.toContain('Kolkata');
+    expect(bob).not.toContain('2031');
+    const aliceTurn = seen.filter((r) => r.includes('alice-turn')).join('\n');
+    expect(aliceTurn).toContain('Kolkata');
+  });
 });

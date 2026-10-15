@@ -693,7 +693,7 @@ export interface ToolCallsHandlerDeps {
    * @internal
    */
   readonly time?: {
-    readonly takePassedOnResume: () => ReadRunTime | undefined;
+    readonly takePassedOnResume: (scope: object) => ReadRunTime | undefined;
     readonly appZone?: ZoneName;
     /**
      * Present exactly under `.time({ reader })` (step T6b): the batch ask asks
