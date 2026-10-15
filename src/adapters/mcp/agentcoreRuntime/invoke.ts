@@ -46,10 +46,11 @@
  * an HTTPS caller would have read: its status, its error type in
  * `x-amzn-errortype`, `retry-after` when the service sent one, and as the body
  * the server's own JSON-RPC error when it sent one (the SDK spreads a body it
- * cannot model onto the exception), else the service's message — except for an
- * auth failure, whose message is withheld (`authFailure.ts`: AWS can quote the
- * signed request in it). So the transport's retry decision sees the 409,
- * `mcpClient`'s 429 retry sees the 429, and the MCP client reports the status. A failure with no status — the
+ * cannot model onto the exception) — never the exception's message, which can
+ * quote the signed request. What the MCP client may read of it is decided
+ * once, by `safeAnswer.ts`. So the transport's retry decision sees the 409,
+ * `mcpClient`'s 429 retry sees the 429, and the MCP client reports the
+ * status. A failure with no status — the
  * network, an abort — never reached the service as an answer, and is thrown as
  * it is.
  *
@@ -65,7 +66,6 @@
 import { lazyRequire } from '../../../lib/lazyRequire.js';
 import { sdkLoadFailure } from '../../../mcp/sdkLoadFailure.js';
 import type { ThrottleFetch } from '../../../mcp/throttleRetry.js';
-import { answerHeaders, authFailureBody, isAuthFailure, isJsonRpcError } from './authFailure.js';
 import { AGENTCORE_RUNTIME_SESSION_HEADER, MCP_SESSION_HEADER } from './session.js';
 
 const MCP_PROTOCOL_VERSION_HEADER = 'Mcp-Protocol-Version';
@@ -239,27 +239,22 @@ function serviceAnswerOf(err: unknown): Response | undefined {
   if (typeof status !== 'number' || !Number.isInteger(status) || status < 400 || status > 599) {
     return undefined;
   }
-  const type = typeof failure.name === 'string' && failure.name !== '' ? failure.name : undefined;
-  const headers = answerHeaders(type);
+  const headers = new Headers({ 'content-type': 'application/json' });
+  if (typeof failure.name === 'string' && failure.name !== '') {
+    headers.set('x-amzn-errortype', failure.name);
+  }
   const retryAfter = failure.$response?.headers?.['retry-after'];
   if (typeof retryAfter === 'string') headers.set('retry-after', retryAfter);
   // The server's own JSON-RPC error when it sent one (a stateful server's 404
-  // "Session not found"), so the MCP client reads what the server said.
-  if (isJsonRpcError(failure)) {
-    const reply = {
-      jsonrpc: failure.jsonrpc ?? '2.0',
-      id: failure.id ?? null,
-      error: failure.error,
-    };
-    return new Response(JSON.stringify(reply), { status, headers });
-  }
-  // An auth failure says what failed, never how — its message can quote the
-  // signed request, credentials included.
-  if (isAuthFailure(status, type)) {
-    return new Response(authFailureBody(status, type), { status, headers });
-  }
-  const message = typeof failure.message === 'string' ? failure.message : '';
-  return new Response(JSON.stringify({ message }), { status, headers });
+  // "Session not found"), for its code. The exception's message is never put
+  // in the answer: it can quote the signed request. What the client reads of
+  // either is decided by `safeAnswer.ts`, outside the retry.
+  const error = failure.error;
+  const body =
+    error !== null && typeof error === 'object' && !Array.isArray(error)
+      ? { jsonrpc: failure.jsonrpc ?? '2.0', id: failure.id ?? null, error }
+      : {};
+  return new Response(JSON.stringify(body), { status, headers });
 }
 
 /** An optional request field: present only when the header was. */

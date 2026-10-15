@@ -78,20 +78,21 @@ export interface SessionStrategy {
 export const MAX_CONNECTIONS = 256;
 
 /**
+ * A fresh runtime session id — `crypto.randomUUID()`, 36 characters, inside the
+ * 33–256 the API takes. Never injectable: freshness IS the isolation, and a
+ * source that repeated itself would put two requests (or two clients) in one
+ * session.
+ */
+const newId = (): string => globalThis.crypto.randomUUID();
+
+/**
  * Build the strategy for one transport.
  *
- * @param newId the source of runtime session ids, for tests; the default is
- *   `crypto.randomUUID()` — 36 characters, inside the 33–256 the API takes.
- *   Connection handles always come from `crypto.randomUUID()`: they are the
- *   isolation key, and no caller supplies them.
  * @throws when `kind` is not one of the two strategies.
  */
-export function sessionStrategy(
-  kind: AgentCoreRuntimeSession,
-  newId: () => string = () => globalThis.crypto.randomUUID(),
-): SessionStrategy {
-  if (kind === 'reuse') return reuse(newId);
-  if (kind === 'per-call') return perCall(newId);
+export function sessionStrategy(kind: AgentCoreRuntimeSession): SessionStrategy {
+  if (kind === 'reuse') return reuse();
+  if (kind === 'per-call') return perCall();
   throw new TypeError(
     `agentCoreRuntimeMcpTransport: \`session\` must be 'reuse' or 'per-call' — got ` +
       `${JSON.stringify(kind)}. 'per-call' gives every request its own session (safe to share); ` +
@@ -105,7 +106,7 @@ interface Connection {
   serverSessionId?: string;
 }
 
-function reuse(newId: () => string): SessionStrategy {
+function reuse(): SessionStrategy {
   const connections = new Map<string, Connection>();
   const remember = (handle: string, connection: Connection): void => {
     connections.delete(handle);
@@ -140,7 +141,7 @@ function reuse(newId: () => string): SessionStrategy {
           if (returned === null) return response;
           if (handle === null) {
             // A new connection: bound under a handle of our own, shown in the server's id's place.
-            const issued = globalThis.crypto.randomUUID();
+            const issued = newId();
             remember(issued, { ...connection, serverSessionId: returned });
             return withSessionHeader(response, issued);
           }
@@ -152,13 +153,12 @@ function reuse(newId: () => string): SessionStrategy {
   };
 }
 
-function perCall(newId: () => string): SessionStrategy {
+function perCall(): SessionStrategy {
   return {
     request(headers) {
       headers.delete(MCP_SESSION_HEADER);
-      // A fresh runtime session of our own for every request — fresh as the
-      // SDK's own default would be, but one the transport knows, so a failure
-      // that quotes it can be scrubbed (`echo.ts`), on both auth paths.
+      // A fresh runtime session of our own for every request — as fresh as the
+      // SDK's own default, and set the same way on both auth paths.
       headers.set(AGENTCORE_RUNTIME_SESSION_HEADER, newId());
       return { settle: (response) => withSessionHeader(response, undefined) };
     },

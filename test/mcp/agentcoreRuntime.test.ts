@@ -234,7 +234,6 @@ describe('agentCoreRuntimeMcpTransport — P2 boundary', () => {
       retry: false,
       session: 'reuse',
       _sdk: sdk.module,
-      _newSessionId: () => 'runtime-session-pinned-0000000000000000',
     });
     // The connection's first request carries no session; the client is handed
     // the transport's handle for it, and carries that from then on.
@@ -263,9 +262,10 @@ describe('agentCoreRuntimeMcpTransport — P2 boundary', () => {
     expect(handle).not.toBe('mcp-7');
     expect(input['mcpSessionId']).toBe('mcp-7');
     expect(input['mcpProtocolVersion']).toBe('2025-06-18');
-    // The 'reuse' strategy's runtime session for this connection — set, never
-    // left to the SDK's per-call random default.
-    expect(input['runtimeSessionId']).toBe('runtime-session-pinned-0000000000000000');
+    // The 'reuse' strategy's runtime session for this connection — the one its
+    // first request opened, set, never left to the SDK's per-call default.
+    expect(input['runtimeSessionId']).toMatch(/^[0-9a-f-]{36}$/);
+    expect(input['runtimeSessionId']).toBe(sdk.inputs[0]?.['runtimeSessionId']);
     expect(new TextDecoder().decode(input['payload'] as Uint8Array)).toBe(
       '{"jsonrpc":"2.0","id":1,"method":"tools/list"}',
     );
@@ -409,9 +409,42 @@ describe('agentCoreRuntimeMcpTransport — P2 boundary', () => {
       method: 'POST',
       body: '{}',
     })) as Response;
-    // Handed over unread: nothing pulled the body except the reader below.
-    expect(res.body).toBe(stream);
-    expect(await res.text()).toBe('data: 1\n\ndata: 2\n\ndata: 3\n\n');
+    // Still a stream: an event is passed on as it arrives, not after the end.
+    const reader = (res.body as ReadableStream<Uint8Array>).getReader();
+    const first = await reader.read();
+    expect(new TextDecoder().decode(first.value)).toBe('data: 1\n\n');
+    expect(pulled).toBeLessThan(3);
+    let rest = '';
+    for (let next = await reader.read(); !next.done; next = await reader.read()) {
+      rest += new TextDecoder().decode(next.value);
+    }
+    expect(rest).toBe('data: 2\n\ndata: 3\n\n');
+  });
+
+  it('P2 an SSE error event is rewritten as it passes; the other events byte for byte', async () => {
+    const secret = 'SECRET-SESSION-TOKEN-SSE-0001';
+    const events =
+      'event: message\ndata: {"jsonrpc":"2.0","method":"notifications/progress","params":{}}\n\n' +
+      `event: message\ndata: {"jsonrpc":"2.0","id":4,"error":{"code":-32603,"message":"boom ${secret}","data":"${secret}"}}\n\n`;
+    const sdk = recordingSdk({
+      statusCode: 200,
+      contentType: 'text/event-stream',
+      response: { transformToWebStream: () => new Response(events).body },
+    });
+    const transport = agentCoreRuntimeMcpTransport({
+      agentRuntimeArn: ARN,
+      region: REGION,
+      _sdk: sdk.module,
+    });
+    const res = (await transport.fetch?.(transport.url, {
+      method: 'POST',
+      body: '{}',
+    })) as Response;
+    const text = await res.text();
+    expect(text).not.toContain(secret);
+    expect(text.startsWith(events.split('\n\n')[0] as string)).toBe(true);
+    expect(text).toContain('"code":-32603');
+    expect(text).toContain('"id":4');
   });
 
   it('P2 the abort signal rides to `send`, beside the command, never inside it', async () => {
@@ -786,7 +819,7 @@ describe('agentCoreRuntimeMcpTransport — P4 property (only the contract’s re
     });
   });
 
-  it('P4 an AWS error with no JSON-RPC body is handed on as its message', async () => {
+  it('P4 an AWS error with no JSON-RPC body is handed on as its type and status — never its message', async () => {
     const sdk = throwingSdk([serviceException('ValidationException', 400)]);
     const transport = agentCoreRuntimeMcpTransport({
       agentRuntimeArn: ARN,
@@ -798,7 +831,10 @@ describe('agentCoreRuntimeMcpTransport — P4 property (only the contract’s re
       body: '{}',
     })) as Response;
     expect(res.status).toBe(400);
-    expect(await res.json()).toEqual({ message: 'ValidationException from the service' });
+    expect(res.headers.get('x-amzn-errortype')).toBe('ValidationException');
+    const { message } = (await res.json()) as { message: string };
+    expect(message).toMatch(/^ValidationException \(HTTP 400\)\./);
+    expect(message).not.toContain('from the service');
   });
 
   it.each([
@@ -834,7 +870,7 @@ describe('agentCoreRuntimeMcpTransport — P4 property (only the contract’s re
     },
   );
 
-  it('P4 a hosted server’s own JSON-RPC error on a 403 is still delivered whole', async () => {
+  it('P4 a hosted server’s JSON-RPC error keeps its code and id; an unknown message is replaced', async () => {
     const denied = Object.assign(serviceException('Unknown', 403), {
       jsonrpc: '2.0',
       id: 3,
@@ -851,11 +887,11 @@ describe('agentCoreRuntimeMcpTransport — P4 property (only the contract’s re
       body: '{}',
     })) as Response;
     expect(res.status).toBe(403);
-    expect(await res.json()).toEqual({
-      jsonrpc: '2.0',
-      id: 3,
-      error: { code: -32001, message: 'Tool not permitted for this caller' },
-    });
+    const reply = (await res.json()) as { id: number; error: { code: number; message: string } };
+    expect(reply.id).toBe(3);
+    expect(reply.error.code).toBe(-32001);
+    expect(reply.error.message).toMatch(/^Server error \(JSON-RPC -32001\)/);
+    expect(reply.error.message).not.toContain('Tool not permitted');
   });
 });
 
@@ -981,8 +1017,12 @@ describe('agentCoreRuntimeMcpTransport — P5 security', () => {
         },
       }),
       new Response(`denied for ${SECRET}`, { status: 403 }),
-      // The hosted server's own JSON-RPC error is its words, kept whole.
-      jsonReply({ jsonrpc: '2.0', id: 1, error: { code: -32001, message: 'not yours' } }, 403),
+      // The hosted server's own JSON-RPC error: its code and id are kept, a
+      // message the library does not know is not.
+      jsonReply(
+        { jsonrpc: '2.0', id: 1, error: { code: -32001, message: `not yours ${SECRET}` } },
+        403,
+      ),
     ];
     const ok = jsonReply({ result: {} });
     replies.push(ok);
@@ -1008,12 +1048,10 @@ describe('agentCoreRuntimeMcpTransport — P5 security', () => {
     expect(forbiddenText).not.toContain(SECRET);
     expect(JSON.parse(forbiddenText).message).toMatch(/^Request refused \(HTTP 403\)/);
 
-    expect(await (await send()).json()).toEqual({
-      jsonrpc: '2.0',
-      id: 1,
-      error: { code: -32001, message: 'not yours' },
-    });
-    // Anything else is handed on as it is — the very object, unread.
+    const rpc = await (await send()).text();
+    expect(rpc).not.toContain(SECRET);
+    expect(JSON.parse(rpc)).toMatchObject({ jsonrpc: '2.0', id: 1, error: { code: -32001 } });
+    // A result is handed on as it is — the very object, unread.
     expect(await send()).toBe(ok);
   });
 
@@ -1193,15 +1231,17 @@ describe("agentCoreRuntimeMcpTransport — P5 'reuse' owns its session key", () 
   });
 });
 
-describe('agentCoreRuntimeMcpTransport — P5 a failure never repeats what the request carried', () => {
+describe('agentCoreRuntimeMcpTransport — P5 a failure is the library’s sentence, never the service’s text', () => {
   it('SigV4: a validation error quoting the session ids reaches the client without them', async () => {
     let sends = 0;
+    const runtimeIds: string[] = [];
     const module = {
       InvokeAgentRuntimeCommand: class {
         constructor(readonly input: Record<string, unknown>) {}
       },
       BedrockAgentCoreClient: class {
         async send(command: { input: Record<string, unknown> }) {
+          runtimeIds.push(String(command.input['runtimeSessionId']));
           if (sends++ === 0) {
             return {
               statusCode: 200,
@@ -1233,7 +1273,6 @@ describe('agentCoreRuntimeMcpTransport — P5 a failure never repeats what the r
       region: REGION,
       session: 'reuse',
       _sdk: module,
-      _newSessionId: () => 'runtime-session-fixed-000000000000001',
     });
     const opened = (await transport.fetch?.(transport.url, {
       method: 'POST',
@@ -1246,8 +1285,9 @@ describe('agentCoreRuntimeMcpTransport — P5 a failure never repeats what the r
     })) as Response;
     const text = await failed.text();
     expect(failed.status).toBe(400);
-    expect(text).toContain('failed to satisfy constraint');
-    expect(text).not.toContain('runtime-session-fixed-000000000000001');
+    expect(JSON.parse(text).message).toMatch(/^ValidationException \(HTTP 400\)\./);
+    expect(runtimeIds.length).toBe(2);
+    for (const id of runtimeIds) expect(text).not.toContain(id);
     expect(text).not.toContain('server-session-0123456789');
   });
 
@@ -1272,7 +1312,7 @@ describe('agentCoreRuntimeMcpTransport — P5 a failure never repeats what the r
     })) as Response;
     const text = await res.text();
     expect(res.status).toBe(400);
-    expect(text).toContain('bad request');
+    expect(JSON.parse(text).message).toMatch(/^Request failed \(HTTP 400\)\./);
     expect(text).not.toContain('SECRET-BEARER-TOKEN-77');
   });
 
@@ -1305,18 +1345,20 @@ describe('agentCoreRuntimeMcpTransport — P5 a failure never repeats what the r
     const text = await (
       (await transport.fetch?.(transport.url, { method: 'POST', body: '{}' })) as Response
     ).text();
-    expect(text).toContain('bad request');
+    expect(JSON.parse(text).message).toMatch(/^Request failed \(HTTP 400\)\./);
     expect(text).not.toContain('SECRET-API-KEY');
     expect(text).not.toContain('SECRET-DPOP-PROOF');
   });
 
-  it("SigV4, the default 'per-call': the fresh runtime session id is the transport's own, and scrubbed", async () => {
+  it("SigV4, the default 'per-call': the fresh runtime session id never comes back", async () => {
+    const runtimeIds: string[] = [];
     const module = {
       InvokeAgentRuntimeCommand: class {
         constructor(readonly input: Record<string, unknown>) {}
       },
       BedrockAgentCoreClient: class {
         async send(command: { input: Record<string, unknown> }) {
+          runtimeIds.push(String(command.input['runtimeSessionId']));
           throw Object.assign(
             new Error(`Value '${String(command.input['runtimeSessionId'])}' failed a constraint`),
             {
@@ -1332,53 +1374,57 @@ describe('agentCoreRuntimeMcpTransport — P5 a failure never repeats what the r
       agentRuntimeArn: ARN,
       region: REGION,
       _sdk: module,
-      _newSessionId: () => 'per-call-runtime-session-00000000000001',
     });
     const text = await (
       (await transport.fetch?.(transport.url, { method: 'POST', body: '{}' })) as Response
     ).text();
-    expect(text).toContain('failed a constraint');
-    expect(text).not.toContain('per-call-runtime-session-00000000000001');
+    expect(JSON.parse(text).message).toMatch(/^ValidationException \(HTTP 400\)\./);
+    expect(runtimeIds[0]).toMatch(/^[0-9a-f-]{36}$/);
+    expect(text).not.toContain(runtimeIds[0]);
   });
 
-  it('a 200 JSON-RPC error quoting the runtime session id is scrubbed too', async () => {
+  it('a 200 JSON-RPC error quoting the runtime session id is rewritten too', async () => {
+    let quoted = '';
     const transport = agentCoreRuntimeMcpTransport({
       agentRuntimeArn: ARN,
       region: REGION,
-      _newSessionId: () => 'quoted-runtime-session-0000000000000001',
       auth: {
         bearer: staticTokens({ runtime: 't' }),
-        fetch: async (_input, init) =>
-          jsonReply({
+        fetch: async (_input, init) => {
+          quoted = new Headers(init?.headers).get(AGENTCORE_RUNTIME_SESSION_HEADER) ?? '';
+          return jsonReply({
             jsonrpc: '2.0',
             id: 1,
-            error: {
-              code: -32000,
-              message: `session ${
-                new Headers(init?.headers).get(AGENTCORE_RUNTIME_SESSION_HEADER) ?? ''
-              } failed`,
-            },
-          }),
+            error: { code: -32000, message: `session ${quoted} failed` },
+          });
+        },
       },
     });
     const text = await (
       (await transport.fetch?.(transport.url, { method: 'POST', body: '{}' })) as Response
     ).text();
-    expect(text).toContain('failed');
-    expect(text).not.toContain('quoted-runtime-session-0000000000000001');
+    expect(JSON.parse(text)).toMatchObject({ jsonrpc: '2.0', id: 1, error: { code: -32000 } });
+    expect(quoted).toMatch(/^[0-9a-f-]{36}$/);
+    expect(text).not.toContain(quoted);
   });
 
   it('a 2xx RESULT is never rewritten, even when it holds a value the request sent', async () => {
-    const result = jsonReply({
-      jsonrpc: '2.0',
-      id: 1,
-      result: { orders: 20261015, note: 'session result-held-0000000000000001' },
-    });
+    let result: Response | undefined;
     const transport = agentCoreRuntimeMcpTransport({
       agentRuntimeArn: ARN,
       region: REGION,
-      _newSessionId: () => 'result-held-0000000000000001',
-      auth: { bearer: staticTokens({ runtime: 't' }), fetch: async () => result },
+      auth: {
+        bearer: staticTokens({ runtime: 't' }),
+        fetch: async (_input, init) => {
+          const id = new Headers(init?.headers).get(AGENTCORE_RUNTIME_SESSION_HEADER) ?? '';
+          result = jsonReply({
+            jsonrpc: '2.0',
+            id: 1,
+            result: { orders: 20261015, note: `session ${id}`, error: 'a field named error' },
+          });
+          return result;
+        },
+      },
     });
     const res = (await transport.fetch?.(transport.url, {
       method: 'POST',

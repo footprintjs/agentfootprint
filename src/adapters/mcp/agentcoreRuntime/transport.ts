@@ -38,10 +38,10 @@
  *
  * in that order, outermost first: the session is applied once per request, so
  * every attempt of it lands in the same runtime session, and every attempt is
- * signed (or vended) afresh, the ordering `mcp/throttleRetry.ts` requires. A
- * failure's text never repeats a session id or credential the request carried
- * (`echo.ts`), and an auth failure's never repeats the service's message
- * (`authFailure.ts`). `mcpClient`'s own 429 retry still wraps the whole thing.
+ * signed (or vended) afresh, the ordering `mcp/throttleRetry.ts` requires.
+ * What the MCP client reads of a failure is rewritten from the library's own
+ * fixed sentences and safe ids (`safeAnswer.ts`), never the service's text.
+ * `mcpClient`'s own 429 retry still wraps the whole thing.
  *
  * ── What it does NOT do ──────────────────────────────────────────────────────
  * Deploy or manage a runtime (a control-plane job), or host one (that is
@@ -70,14 +70,8 @@ import {
   type AgentCoreRuntimeSdkClient,
   type BedrockAgentCoreRuntimeSdkModule,
 } from './invoke.js';
-import { quietAuthFailure } from './authFailure.js';
-import { withoutEcho } from './echo.js';
-import {
-  AGENTCORE_RUNTIME_SESSION_HEADER,
-  MCP_SESSION_HEADER,
-  sessionStrategy,
-  type AgentCoreRuntimeSession,
-} from './session.js';
+import { safeAnswer } from './safeAnswer.js';
+import { sessionStrategy, type AgentCoreRuntimeSession } from './session.js';
 import { sessionBusy } from './sessionBusy.js';
 
 /**
@@ -175,8 +169,6 @@ export interface AgentCoreRuntimeMcpTransportOptions {
   readonly client?: AgentCoreRuntimeSdkClient;
   /** @internal Test injection — the AWS SDK module. */
   readonly _sdk?: BedrockAgentCoreRuntimeSdkModule;
-  /** @internal Test injection — the runtime session id source for `'reuse'`. */
-  readonly _newSessionId?: () => string;
 }
 
 /** The session-busy retry's own ceilings, when the caller set none. */
@@ -201,7 +193,7 @@ export function agentCoreRuntimeMcpTransport(
   const url = agentCoreRuntimeUrl(options);
   const send = authStrategy(options, url);
   const retried = retryingFetchWhen(send, retryConfig(options.retry), sessionBusy) ?? send;
-  const session = sessionStrategy(options.session ?? 'per-call', options._newSessionId);
+  const session = sessionStrategy(options.session ?? 'per-call');
 
   // The session is applied ONCE per request the MCP client makes, outside the
   // retry: every attempt of one request goes to the same runtime session (a
@@ -212,12 +204,9 @@ export function agentCoreRuntimeMcpTransport(
     const step = session.request(headers, (init?.method ?? 'GET').toUpperCase());
     if ('answer' in step) return step.answer;
     const response = await retried(input, { ...init, headers });
-    // The session ids this request carried never come back in a failure's text.
-    const scrubbed = await withoutEcho(response, [
-      headers.get(MCP_SESSION_HEADER),
-      headers.get(AGENTCORE_RUNTIME_SESSION_HEADER),
-    ]);
-    return step.settle(scrubbed);
+    // What the MCP client may read of a failure is rewritten from safe parts —
+    // ONE rule for both auth paths, after the retry has read the original.
+    return step.settle(await safeAnswer(response));
   };
 
   return { transport: 'http', url, fetch: sessioned };
@@ -316,15 +305,9 @@ function authStrategy(options: AgentCoreRuntimeMcpTransportOptions, url: string)
           'user whose `bearer` provider vends that user’s token.',
       );
     }
-    // Beneath the vending, where the final headers are visible: a failure body
-    // never repeats a credential this request carried — whatever header the
-    // provider put it in (`Authorization`, `x-api-key`, a DPoP proof).
-    const base = auth.fetch ?? globalThis.fetch.bind(globalThis);
-    const scrubbingBase: FetchLike = async (input, init) =>
-      withoutEcho(await base(input, init), sentValues(new Headers(init?.headers)));
     // The Gateway's vending fetch, reused as is: the token is vended per
     // request, applied to that one request, and dropped.
-    const vending = createVendingFetch(
+    return createVendingFetch(
       gatewayTransport({
         url,
         credentials: auth.bearer,
@@ -332,37 +315,14 @@ function authStrategy(options: AgentCoreRuntimeMcpTransportOptions, url: string)
         ...(auth.scopes !== undefined && { scopes: auth.scopes }),
         ...(auth.mode !== undefined && { mode: auth.mode }),
       }),
-      scrubbingBase,
+      auth.fetch,
     );
-    // Same rule as the SigV4 strategy: an auth failure's message is withheld.
-    return async (input, init) => quietAuthFailure(await vending(input, init));
   }
   throw new TypeError(
     `agentCoreRuntimeMcpTransport: \`auth\` must be 'sigv4' or { bearer: <CredentialProvider> } ` +
       `— got ${describe(auth)}. Which one is decided by the runtime's inbound auth: IAM is ` +
       "'sigv4', an OAuth (JWT) authorizer is a bearer token.",
   );
-}
-
-/** Request headers that carry no secret, and whose values would only blank useful words. */
-const NOT_SECRET_HEADERS: ReadonlySet<string> = new Set([
-  'accept',
-  'accept-encoding',
-  'connection',
-  'content-length',
-  'content-type',
-  'host',
-  'mcp-protocol-version',
-  'user-agent',
-]);
-
-/** Every value a request sent that could be a credential or a session id. */
-function sentValues(headers: Headers): string[] {
-  const out: string[] = [];
-  headers.forEach((value, name) => {
-    if (!NOT_SECRET_HEADERS.has(name.toLowerCase())) out.push(value);
-  });
-  return out;
 }
 
 // ── The retry strategy's configuration ────────────────────────────────

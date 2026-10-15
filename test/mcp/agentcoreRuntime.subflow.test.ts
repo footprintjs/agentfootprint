@@ -447,6 +447,46 @@ describe('runtime-hosted MCP — SECRECY when it goes wrong', () => {
     }
   });
 
+  it('any other failure that quotes what the request carried, in a fan-out: the model and the record read only the library’s sentence', async () => {
+    const SECRET = 'SECRET-SESSION-TOKEN-7c41';
+    const runtime = fakeAgentCoreRuntime({
+      tools: [{ name: 'lookup_order', answer: () => 'never served' }],
+      sdkFailures: {
+        lookup_order: {
+          name: 'ValidationException',
+          status: 400,
+          message: (input) =>
+            `1 validation error: Value '${String(input['runtimeSessionId'])}' at ` +
+            `'runtimeSessionId' (token ${SECRET}) failed to satisfy constraint`,
+        },
+      },
+    });
+    const a = await branchClient(runtime, 'sigv4');
+    const b = await branchClient(runtime, 'sigv4');
+    const flow = Parallel.create()
+      .branch('a', orderAgent('A-100', a.tools))
+      .branch('b', orderAgent('B-200', b.tools))
+      .mergeWithFn((results) => JSON.stringify(results))
+      .build();
+    const events: AgentfootprintEvent[] = [];
+    flow.on('*', (e) => events.push(e));
+    const { answer, written } = await recorded(flow, 'look both orders up');
+    await a.close();
+    await b.close();
+
+    // The control: both calls failed, and each model was told WHAT failed.
+    expect(runtime.calls()).toHaveLength(2);
+    expect(String(answer)).toContain('ValidationException (HTTP 400)');
+    const sessionIds = runtime.attempts.flatMap((x) =>
+      [x.runtimeSessionId, x.mcpSessionId].filter((id): id is string => id !== undefined),
+    );
+    for (const text of [String(answer), written, JSON.stringify(events)]) {
+      expect(text).not.toContain(SECRET);
+      expect(text).not.toContain('failed to satisfy constraint');
+      for (const id of sessionIds) expect(text).not.toContain(id);
+    }
+  });
+
   it('a caller-built client keeps its OWN retry policy — the documented reason to set maxAttempts: 1', async () => {
     const runtime = fakeAgentCoreRuntime({
       tools: [{ name: 'lookup_order', answer: () => 'never served' }],

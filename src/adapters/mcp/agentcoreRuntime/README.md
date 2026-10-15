@@ -58,9 +58,8 @@ sentence. A vended bearer token is used for one request and dropped.
    `https://bedrock-agentcore.{region}.amazonaws.com/runtimes/{ARN}/invocations`
    with the token vended per request by the same code as `gatewayTransport`.
 4. **`'per-call'` is the default — isolation by construction.** It sends a
-   fresh runtime session id of its own with every request (as fresh as the
-   SDK's default, but one the transport knows, so it can be scrubbed) and no
-   `Mcp-Session-Id`, and hides the `Mcp-Session-Id` the platform returns, so nothing carries over and one client built at startup can serve
+   fresh runtime session id of its own with every request (`crypto.randomUUID()`,
+   never injectable — freshness is the isolation) and no `Mcp-Session-Id`, and hides the `Mcp-Session-Id` the platform returns, so nothing carries over and one client built at startup can serve
    every user of a process. It needs a stateless server (the runtime's
    recommended default). **`'reuse'` keeps one session per CLIENT, keyed by
    the transport:** a request with no `Mcp-Session-Id` (a client's
@@ -91,32 +90,32 @@ sentence. A vended bearer token is used for one request and dropped.
 7. **POST only on the SDK path.** A GET (server-message stream) or DELETE (end a
    session) has no `InvokeAgentRuntime` form; it is answered 405 locally, which
    the MCP Streamable HTTP spec defines as "not offered" for both.
-8. **An auth failure says what failed, never how.** A 401, a 403 or an AWS
-   auth error type (`authFailure.ts`) keeps its status and `x-amzn-errortype`,
-   and its body becomes `"<type> (HTTP <status>) …"`: AWS can quote the signed
-   request back — the session token and both session ids among it — and the
-   MCP client's error text reaches the model, the history and `tool_end`. The
-   hosted server's own JSON-RPC error is kept whole. Both auth strategies.
+8. **What the MCP client reads of a failure is the library's, never the
+   service's.** Every non-2xx answer, a 2xx JSON-RPC error reply and an error
+   event in a 2xx stream are rewritten from parts that cannot carry a secret
+   (`safeAnswer.ts`): the status; the AWS error type when it is a plain name;
+   `Retry-After` when it is seconds or a date; and for a JSON-RPC error its
+   integer `code`, the client's own `id`, and its `message` only when it is one
+   of the fixed sentences the MCP SDK and the AgentCore contract use — any
+   other message, and every `data`, becomes a fixed sentence. A failure with no
+   JSON-RPC reply reads `"<type> (HTTP <status>). The service's message for
+   this request was not passed on …"`. Why an allow-list: AWS quotes the whole
+   signed request on a signature mismatch (the session token among it), its
+   validation errors quote the value they refused, a proxy may echo a header —
+   and the MCP client's error text reaches the model, the history and
+   `tool_end`. Scrubbing known values out of that text misses whatever it was
+   not told about. A `result` is never touched. Both auth strategies, one
+   function, applied outside the retry (which still reads the original).
 9. **No user-delegated bearer.** `auth.mode` must be `'machine'`: the vending
    request names no user, so a `'user'` token would be sent for whoever calls
    through the client. For a token per user, build a transport per user whose
    provider vends that user's token.
-10. **A failure never repeats what the request carried.** Any non-2xx body,
-   and the error of a 2xx JSON-RPC error reply (inside its strings, so it stays
-   valid JSON; a `result` is never touched), has every session id and credential
-   header value this request sent replaced (`echo.ts`; on the bearer path
-   every header but a short list of non-secret ones, so an `x-api-key` or a
-   DPoP proof is covered too): AWS validation errors quote the value they
-   refused, the runtime sends some platform errors as a 200 JSON-RPC error,
-   and the body becomes the model's tool error. Any other 2xx answer, a stream
-   included, is handed on unread.
 
 ## Files
 - `transport.ts` — the facade: options, the endpoint URL, the composition.
 - `sessionBusy.ts` — the retry decision (one function).
 - `session.ts` — `'per-call'` (default) and `'reuse'`.
-- `authFailure.ts` — an auth failure answered with its type and status only.
-- `echo.ts` — a failure body never repeats a session id or credential the request sent.
+- `safeAnswer.ts` — what the MCP client may read of a failure: fixed sentences and safe ids.
 - `errorType.ts` — the bare `x-amzn-errortype` name.
 - `invoke.ts` — the SigV4 strategy over `InvokeAgentRuntimeCommand` (the only
   file that loads `@aws-sdk/client-bedrock-agentcore`).

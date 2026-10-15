@@ -484,14 +484,18 @@ With SigV4, the MCP headers travel on the SDK's own fields — `mcpSessionId`,
 request body as `payload`. When the service answers with a non-2xx status the
 SDK throws; the transport hands that on as the HTTP answer it was (status,
 `x-amzn-errortype`, `retry-after`), so a 429 reaches `mcpClient`'s throttle
-retry and a hosted server's 404 reaches the MCP client as a 404. An auth failure
-(401, 403, or an AWS auth error type) keeps its status and type, but its message
-is replaced by `"<type> (HTTP <status>)"` on both auth paths: AWS can quote the
-signed request back, session token and session ids included, and the MCP
-client's error text reaches the model and the run's record. Any other failure
-keeps its message, but with every session id and credential this request sent
-replaced (any header the credential provider set — `Authorization`, an
-`x-api-key`, a DPoP proof); so does a 200 JSON-RPC error that quotes one. A GET or DELETE
+retry and a hosted server's 404 reaches the MCP client as a 404. What the MCP
+client reads of a failure is the library's sentence, never the service's text,
+on both auth paths: the status, the AWS error type when it is a plain name, and
+for a JSON-RPC error its code, the client's request id and its message only
+when it is one of the fixed sentences the MCP SDK and the AgentCore contract use
+(`"Session not found"`, `"Session operation in progress, please retry"`, …).
+Anything else reads `"<type> (HTTP <status>). The service's message for this
+request was not passed on …"`. AWS quotes the whole signed request on a
+signature mismatch, its validation errors quote the value they refused, and the
+MCP client's error text reaches the model and the run's record — so the text is
+rewritten, not scrubbed. The same holds for a 200 JSON-RPC error and an error
+event in a stream; a tool `result` is never touched. A GET or DELETE
 has no `InvokeAgentRuntime` form, so the transport answers it with 405, which MCP
 defines as "not offered".
 
