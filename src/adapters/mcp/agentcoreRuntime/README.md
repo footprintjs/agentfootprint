@@ -102,7 +102,8 @@ sentence. A vended bearer token is used for one request and dropped.
    through the client. For a token per user, build a transport per user whose
    provider vends that user's token.
 10. **A failure never repeats what the request carried.** Any non-2xx body,
-   and a 2xx JSON body that holds one, has every session id and credential
+   and the error of a 2xx JSON-RPC error reply (inside its strings, so it stays
+   valid JSON; a `result` is never touched), has every session id and credential
    header value this request sent replaced (`echo.ts`; on the bearer path
    every header but a short list of non-secret ones, so an `x-api-key` or a
    DPoP proof is covered too): AWS validation errors quote the value they

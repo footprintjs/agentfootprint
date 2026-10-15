@@ -10,8 +10,10 @@
  * token THIS request sent are replaced in any failure body before the MCP
  * client reads it — the message stays, the values do not. The runtime's MCP
  * contract also sends some platform errors as an HTTP 200 JSON-RPC error, so a
- * 2xx JSON body is read too (a copy of it) and rebuilt only when it holds one
- * of the values; any other 2xx answer, a stream included, is handed on unread.
+ * 2xx JSON body that is ONE JSON-RPC error reply is read too (a copy of it) and
+ * its error's string values scrubbed — parsed and re-serialized, so the reply
+ * stays valid JSON; a `result` is never touched, and any other 2xx answer, a
+ * stream included, is handed on unread.
  *
  * Pattern: pure helper. Role: outer ring, the transport's own hygiene.
  */
@@ -24,8 +26,8 @@ const MIN_SCRUBBED_LENGTH = 8;
 
 /**
  * `response` with every one of `values` replaced in its body when it is a
- * failure (not 2xx), or a 2xx JSON body that holds one; the very object
- * otherwise.
+ * failure (not 2xx), or in the error of a 2xx JSON-RPC error reply that holds
+ * one; the very object otherwise.
  */
 export async function withoutEcho(
   response: Response,
@@ -37,14 +39,15 @@ export async function withoutEcho(
   let text: string;
   if (response.ok) {
     if (!isJson(response.headers.get('content-type'))) return response;
+    let reply: string;
     try {
-      text = await response.clone().text();
+      reply = await response.clone().text();
     } catch {
       return response;
     }
-    if (!sent.some((value) => text.includes(value) || text.includes(escapedOf(value)))) {
-      return response;
-    }
+    const scrubbed = scrubbedErrorReply(reply, sent);
+    if (scrubbed === undefined) return response;
+    return rebuilt(response, scrubbed);
   } else {
     try {
       text = await response.text();
@@ -52,13 +55,46 @@ export async function withoutEcho(
       text = '';
     }
   }
+  return rebuilt(response, scrubText(text, sent));
+}
+
+/** The same answer around a new body. */
+function rebuilt(response: Response, body: string): Response {
   const headers = new Headers(response.headers);
   headers.delete('content-length');
-  return new Response(scrubText(text, sent), {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
-  });
+  return new Response(body, { status: response.status, statusText: response.statusText, headers });
+}
+
+/**
+ * ONE JSON-RPC error reply with every one of `values` replaced inside its
+ * error's string values, re-serialized; `undefined` when `text` is not such a
+ * reply or holds none of them (a `result` is never a target).
+ */
+function scrubbedErrorReply(text: string, values: readonly string[]): string | undefined {
+  let reply: unknown;
+  try {
+    reply = JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+  if (reply === null || typeof reply !== 'object' || Array.isArray(reply)) return undefined;
+  const error = (reply as { readonly error?: unknown }).error;
+  if (error === null || typeof error !== 'object') return undefined;
+  let changed = false;
+  const walk = (value: unknown): unknown => {
+    if (typeof value === 'string') {
+      const out = scrubText(value, values);
+      if (out !== value) changed = true;
+      return out;
+    }
+    if (Array.isArray(value)) return value.map(walk);
+    if (value !== null && typeof value === 'object') {
+      return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, walk(v)]));
+    }
+    return value;
+  };
+  const scrubbed = { ...(reply as Record<string, unknown>), error: walk(error) };
+  return changed ? JSON.stringify(scrubbed) : undefined;
 }
 
 /** `text` with every one of `values` — raw or JSON-escaped — replaced. */

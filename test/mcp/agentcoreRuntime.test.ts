@@ -1368,6 +1368,26 @@ describe('agentCoreRuntimeMcpTransport — P5 a failure never repeats what the r
     expect(text).not.toContain('quoted-runtime-session-0000000000000001');
   });
 
+  it('a 2xx RESULT is never rewritten, even when it holds a value the request sent', async () => {
+    const result = jsonReply({
+      jsonrpc: '2.0',
+      id: 1,
+      result: { orders: 20261015, note: 'session result-held-0000000000000001' },
+    });
+    const transport = agentCoreRuntimeMcpTransport({
+      agentRuntimeArn: ARN,
+      region: REGION,
+      _newSessionId: () => 'result-held-0000000000000001',
+      auth: { bearer: staticTokens({ runtime: 't' }), fetch: async () => result },
+    });
+    const res = (await transport.fetch?.(transport.url, {
+      method: 'POST',
+      body: '{}',
+    })) as Response;
+    expect(res).toBe(result);
+    expect(await res.json()).toMatchObject({ result: { orders: 20261015 } });
+  });
+
   it('a successful answer is handed on as the very object, unread', async () => {
     const ok = jsonReply({ result: {} });
     const transport = agentCoreRuntimeMcpTransport({
