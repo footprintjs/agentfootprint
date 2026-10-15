@@ -303,7 +303,7 @@ describe('check-layering — this repository', () => {
 
   it('nothing below adapters/ imports it, by value or by type — the ports live in provider-contract/', () => {
     const compiled = compileLayers(LAYERS);
-    const adaptersRank = rankOf('src/adapters/types.ts', compiled);
+    const adaptersRank = rankOf('src/adapters/llm/MockProvider.ts', compiled);
     const into = [...result.upward, ...result.typeUpward]
       .filter((e: { to: string }) => e.to.startsWith('src/adapters/'))
       .map((e: { from: string; to: string }) => `${e.from} -> ${e.to}`);

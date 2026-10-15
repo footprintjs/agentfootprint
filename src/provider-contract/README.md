@@ -23,7 +23,7 @@ see; the agent composes the request, an adapter carries it.
 A port is OUR shape; an adapter (`../adapters/`) is THEIR shape. This folder
 holds only the port and the facts read off it, so the agent, the provider
 decorators (`resilience/`), `security/`, `memory/`, `cache/` and `thinking/`
-read it without importing any implementation. It imports only the type
+read it without importing any implementation. It imports only the
 vocabularies below it (`events/`, `thinking/`, `cache/`); `adapters/`
 implements it and nothing below `adapters/` imports `adapters/`
 (`npm run check:layering`).
