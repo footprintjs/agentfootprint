@@ -13,7 +13,8 @@
  *
  * So a 401, a 403, or an answer typed as one of the auth failures below keeps
  * its status and `x-amzn-errortype`, and its body becomes
- * `{ "message": "<type> (HTTP <status>) …" }`. The one body kept whole is the
+ * `{ "message": "<type> (HTTP <status>) …" }` — in the past tense and about
+ * this request, because it lands in the conversation history and is re-read. The one body kept whole is the
  * hosted MCP server's own JSON-RPC error — the server's words, not the
  * platform's echo of the request.
  *
@@ -49,9 +50,9 @@ export function authFailureBody(status: number, type: string | undefined): strin
   const what = type ?? 'Request refused';
   return JSON.stringify({
     message:
-      `${what} (HTTP ${status}). The service's own message is withheld: it can quote the ` +
-      'signed request, credentials included. Check the caller’s credentials and its ' +
-      'permission to invoke this runtime.',
+      `${what} (HTTP ${status}). The service's message for this request was not passed on, ` +
+      'because AWS can quote the signed request in it, credentials included. Check the ' +
+      'caller’s credentials and its permission to invoke this runtime.',
   });
 }
 
