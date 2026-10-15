@@ -181,9 +181,7 @@ const CLOSED_FOLDERS = [
  *
  * @type {ReadonlyArray<readonly [string, string]>}
  */
-const UPWARD_ALLOWANCES = [
-  ['src/core/agent/AgentBuilder.ts', 'src/lib/trace-toolpack/selfExplain.ts'],
-];
+const UPWARD_ALLOWANCES = [];
 
 // ── matching ─────────────────────────────────────────────────────────────────
 

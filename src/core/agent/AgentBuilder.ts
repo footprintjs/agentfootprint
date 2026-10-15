@@ -79,12 +79,8 @@ import type { ToolProvider } from '../../tools/toolProvider.js';
 import type { Watcher } from './watch.js';
 import { defaultCommentaryTemplates } from '../../recorders/observability/commentary/commentaryTemplates.js';
 import { defaultStatusTemplates } from '../../recorders/observability/status/statusTemplates.js';
-import {
-  buildSelfExplainSkill,
-  buildSelfExplainToolProvider,
-  SelfExplainBinding,
-  type SelfExplainOptions,
-} from '../../lib/trace-toolpack/selfExplain.js';
+import type { SelfExplainOptions } from '../../lib/trace-toolpack/selfExplain.js';
+import { requireSelfExplain } from './selfExplainPort.js';
 import { servingConversationOf } from './servingConversation.js';
 import { innerRunsOf, mergeInnerRuns, type InnerRunLookup } from '../innerRunRecords.js';
 import { TRACE_TOOL_NAMES } from '../../lib/traceToolNames.js';
@@ -3443,6 +3439,11 @@ export class AgentBuilder {
     // by name with first-occurrence-wins and the static registry merges
     // FIRST — a consumer tool named like a trace tool would silently shadow
     // it, and the skill body would instruct the model into the wrong tool.
+    //
+    // The pieces come through the port (`selfExplainPort.ts`): the trace
+    // toolpack sits above the agent, so it registers itself and this line
+    // only asks — refusing with one sentence when nothing registered.
+    const selfExplain = this.selfExplainConfig ? requireSelfExplain() : undefined;
     if (this.selfExplainConfig) {
       // Inline mode reserves whatever the pack can mount — read from
       // `TRACE_TOOL_NAMES` rather than retyped here, so a tool added to the
@@ -3481,12 +3482,14 @@ export class AgentBuilder {
         });
       }
     }
-    const selfExplainBinding = this.selfExplainConfig
-      ? new SelfExplainBinding(this.selfExplainConfig.include, this.selfExplainConfig.maxEvents)
-      : undefined;
-    let injections = selfExplainBinding
-      ? [...this.injectionList, buildSelfExplainSkill(this.selfExplainConfig!)]
-      : this.injectionList;
+    const selfExplainBinding =
+      selfExplain && this.selfExplainConfig
+        ? selfExplain.binding(this.selfExplainConfig)
+        : undefined;
+    let injections =
+      selfExplain && selfExplainBinding
+        ? [...this.injectionList, selfExplain.skill(this.selfExplainConfig!)]
+        : this.injectionList;
     // The tier-3 menu envelope's system-prompt half (SG-C): auto-registered
     // whenever the mounted graph can produce a MENU verdict — a menu with no
     // envelope would be a decision the model was never told about, the
@@ -3627,13 +3630,14 @@ export class AgentBuilder {
         injections = [...injections, defineStepsHint()];
       }
     }
-    const toolProvider = selfExplainBinding
-      ? buildSelfExplainToolProvider(
-          selfExplainBinding,
-          this.selfExplainConfig!,
-          this.toolProviderRef,
-        )
-      : this.toolProviderRef;
+    const toolProvider =
+      selfExplain && selfExplainBinding
+        ? selfExplain.toolProvider(
+            selfExplainBinding,
+            this.selfExplainConfig!,
+            this.toolProviderRef,
+          )
+        : this.toolProviderRef;
     // A skill may claim the `read_skill` delivery channel only if `read_skill` is
     // what activates it — otherwise its body reaches the model through no channel at
     // all (8.5.0). Checked HERE, on the final list, for the same reason

@@ -29,7 +29,7 @@ const REPO = resolve(__dirname, '../..');
  * edge is gone; this refuses one that was ADDED. A change that frees edges deletes their
  * entries and lowers this number in the same commit; nothing raises it.
  */
-const ALLOWANCE_COUNT = 1;
+const ALLOWANCE_COUNT = 0;
 
 // ── fixtures ─────────────────────────────────────────────────────────────────
 

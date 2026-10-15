@@ -414,9 +414,12 @@ export {
   buildAgentMessageApiChart,
   type AgentMessageApiChartDeps,
 } from './core/agent/buildAgentMessageApiChart.js';
+// `Agent` and `AgentBuilder` come through the trace toolpack's host, which
+// plugs `.selfExplain()` into the builder's port at load — the registration
+// travels with the class, so a bundler that skips this barrel cannot drop it
+// (`lib/trace-toolpack/selfExplainHost.ts` says why).
+export { Agent, AgentBuilder } from './lib/trace-toolpack/selfExplainHost.js';
 export {
-  Agent,
-  AgentBuilder,
   type AgentArtifactsOptions,
   type AgentRecordingsOptions,
   type AgentInput,

@@ -17,7 +17,10 @@
  * example-01 fixture; the gap widens with run size).
  */
 
-import { Agent } from '../../core/Agent.js';
+// The agent through the self-explain host, as the doors hand it out: the
+// `/observe` door reaches the builder only through this file, so taking the
+// class from the host registers the `.selfExplain()` port there too.
+import { Agent } from './selfExplainHost.js';
 import type { AgentOptions } from '../../core/agent/types.js';
 import { TRACE_DEBUG_METHODOLOGY } from './debugPrompt.js';
 import { traceToolpack } from './traceToolpack.js';

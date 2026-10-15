@@ -63,17 +63,20 @@ describe.skipIf(!built)('ESM packaging', () => {
       sideEffects: unknown;
     };
     expect(shipped.sideEffects).toEqual(esmSideEffects(root.sideEffects));
-    // The list is TRUE, not merely present: the one module-level
-    // registration this package has (the dev-warn host the injection-engine
-    // barrel imports to bind footprintjs's dev flag) is named, as is the
-    // barrel that carries its side-effect import — because a barrel marked
-    // side-effect-free is a barrel a bundler may skip, imports and all. The
+    // The list is TRUE, not merely present: the two module-level
+    // registrations this package has are named — the dev-warn host the
+    // injection-engine barrel imports to bind footprintjs's dev flag (with the
+    // barrel that carries its side-effect import), and the self-explain host
+    // that plugs the trace toolpack into the builder's port and that the doors
+    // take `Agent` from — because a barrel marked side-effect-free is a barrel
+    // a bundler may skip, imports and all. The
     // cache strategies left this list when they stopped registering
     // themselves by provider name: the agent now chooses one from the
     // provider's declared `promptCaching`, so nothing has to run at load.
     expect(shipped.sideEffects).toEqual([
       '**/lib/injection-engine/index.js',
       '**/lib/injection-engine/devWarnHost.js',
+      '**/lib/trace-toolpack/selfExplainHost.js',
     ]);
   });
 
