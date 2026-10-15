@@ -1,7 +1,8 @@
-// A footprintjs door: `footprintjs` or `footprintjs/<subpath>`, never `footprintjs-<other>`.
-const FOOTPRINTJS_DOOR = String.raw`/^footprintjs(\/|$)/`;
-const NAMED_FOOTPRINTJS_ONLY =
-  'Import footprintjs names by name, never off a namespace object (`import * as`, `export * as`, `import()`, `require()`): a name read off a namespace can leave its door with no type error (footprintjs trace-extraction plan, E2).';
+// An engine or record door: `footprintjs`, `foottrace`, or a subpath of either (`footprintjs/trace`,
+// `foottrace/write`, `foottrace/paths`), never a similarly prefixed package (`footprintjs-<other>`).
+const DOOR = String.raw`/^(footprintjs|foottrace)(\/|$)/`;
+const NAMED_IMPORTS_ONLY =
+  'Import footprintjs and foottrace names by name, never off a namespace object (`import * as`, `export * as`, `import()`, `require()`, `import x = require()`): a name read off a namespace can leave its door with no type error (footprintjs trace-extraction plan, E2).';
 
 module.exports = {
   env: {
@@ -69,24 +70,25 @@ module.exports = {
             ],
           },
         ],
-        // NAMED IMPORTS ONLY from footprintjs (footprintjs's trace-extraction plan, step E2).
-        // A name read off a namespace object (`import * as`, `export * as`, a value `import()` or
-        // `require()`, a template-literal specifier included)
-        // can be read through a cast and then leave its door with no type error; the record's
-        // readers are leaving footprintjs/trace for a package of their own, and a named import
-        // of a moved name fails tsc instead. A type query `import('footprintjs').Name` is a named
-        // read (a TSImportType node) and stays allowed. agentfootprint-lens holds the same rule
-        // as a test (test/packaging/named-imports.test.ts).
+        // NAMED IMPORTS ONLY from footprintjs and foottrace, subpaths included (footprintjs's
+        // trace-extraction plan, step E2). A name read off a namespace object (`import * as`,
+        // `export * as`, a value `import()` or `require()`, a template-literal specifier included,
+        // or TypeScript's `import x = require()`) can be read through a cast and then leave its
+        // door with no type error; the record's readers moved from footprintjs/trace to foottrace,
+        // and a named import of a moved name fails tsc instead. A type query
+        // `import('footprintjs').Name` is a named read (a TSImportType node) and stays allowed.
+        // agentfootprint-lens holds the same rule as a test (test/packaging/named-imports.test.ts).
         'no-restricted-syntax': [
           'error',
           ...[
-            `ImportDeclaration[source.value=${FOOTPRINTJS_DOOR}] > ImportNamespaceSpecifier`,
-            `ExportAllDeclaration[source.value=${FOOTPRINTJS_DOOR}][exported]`,
-            `ImportExpression[source.value=${FOOTPRINTJS_DOOR}]`,
-            `ImportExpression[source.type='TemplateLiteral'][source.quasis.0.value.cooked=${FOOTPRINTJS_DOOR}]`,
-            `CallExpression[callee.name='require'][arguments.0.value=${FOOTPRINTJS_DOOR}]`,
-            `CallExpression[callee.name='require'][arguments.0.type='TemplateLiteral'][arguments.0.quasis.0.value.cooked=${FOOTPRINTJS_DOOR}]`,
-          ].map((selector) => ({ selector, message: NAMED_FOOTPRINTJS_ONLY })),
+            `ImportDeclaration[source.value=${DOOR}] > ImportNamespaceSpecifier`,
+            `ExportAllDeclaration[source.value=${DOOR}][exported]`,
+            `ImportExpression[source.value=${DOOR}]`,
+            `ImportExpression[source.type='TemplateLiteral'][source.quasis.0.value.cooked=${DOOR}]`,
+            `CallExpression[callee.name='require'][arguments.0.value=${DOOR}]`,
+            `CallExpression[callee.name='require'][arguments.0.type='TemplateLiteral'][arguments.0.quasis.0.value.cooked=${DOOR}]`,
+            `TSImportEqualsDeclaration > TSExternalModuleReference[expression.value=${DOOR}]`,
+          ].map((selector) => ({ selector, message: NAMED_IMPORTS_ONLY })),
         ],
       },
     },
