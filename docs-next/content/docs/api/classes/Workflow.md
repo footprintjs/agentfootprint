@@ -4,7 +4,7 @@ title: Workflow<TIn, TOut>
 
 # Class: Workflow\<TIn, TOut\>
 
-Defined in: [src/core-flow/Workflow.ts:147](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Workflow.ts#L147)
+Defined in: [src/core-flow/Workflow.ts:157](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Workflow.ts#L157)
 
 A sequential composition that passes values through untouched. Build one
 with [workflow](/docs/api/functions/workflow) — that factory carries the type-level chain proof.
@@ -29,7 +29,7 @@ with [workflow](/docs/api/functions/workflow) — that factory carries the type-
 
 > **new Workflow**\<`TIn`, `TOut`\>(`steps`, `opts?`): `Workflow`\<`TIn`, `TOut`\>
 
-Defined in: [src/core-flow/Workflow.ts:159](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Workflow.ts#L159)
+Defined in: [src/core-flow/Workflow.ts:169](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Workflow.ts#L169)
 
 #### Parameters
 
@@ -72,7 +72,7 @@ instead of N `.on()` subscriptions.
 
 > `readonly` **id**: `string`
 
-Defined in: [src/core-flow/Workflow.ts:149](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Workflow.ts#L149)
+Defined in: [src/core-flow/Workflow.ts:159](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Workflow.ts#L159)
 
 ***
 
@@ -80,7 +80,7 @@ Defined in: [src/core-flow/Workflow.ts:149](https://github.com/footprintjs/agent
 
 > `readonly` **name**: `string`
 
-Defined in: [src/core-flow/Workflow.ts:148](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Workflow.ts#L148)
+Defined in: [src/core-flow/Workflow.ts:158](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Workflow.ts#L158)
 
 ## Methods
 
@@ -700,7 +700,7 @@ calling if you still want them. Does NOT touch attached recorders
 
 > **resume**(`checkpoint`, `input?`, `options?`): `Promise`\<[`RunnerPauseOutcome`](/docs/api/interfaces/RunnerPauseOutcome) \| `TOut`\>
 
-Defined in: [src/core-flow/Workflow.ts:187](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Workflow.ts#L187)
+Defined in: [src/core-flow/Workflow.ts:212](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Workflow.ts#L212)
 
 Resume a paused run from its checkpoint. Default behavior: rebuild the
 chart, wire the same core recorders + consumer recorders, call
@@ -735,7 +735,7 @@ returning. Subclass overrides only if it needs specialized behavior.
 
 > **run**(`input`, `options?`): `Promise`\<[`RunnerPauseOutcome`](/docs/api/interfaces/RunnerPauseOutcome) \| `TOut`\>
 
-Defined in: [src/core-flow/Workflow.ts:177](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Workflow.ts#L177)
+Defined in: [src/core-flow/Workflow.ts:189](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Workflow.ts#L189)
 
 Execute the runner. Subclass may override for specialized input
 mapping, but default invokes getSpec() + FlowChartExecutor.

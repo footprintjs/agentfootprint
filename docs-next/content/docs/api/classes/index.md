@@ -2,7 +2,7 @@
 title: Classes
 ---
 
-44 exported from `agentfootprint`.
+46 exported from `agentfootprint`.
 
 - [`Agent`](/docs/api/classes/Agent)
 - [`AgentBuilder`](/docs/api/classes/AgentBuilder)
@@ -24,11 +24,13 @@ title: Classes
 - [`LLMCallBuilder`](/docs/api/classes/LLMCallBuilder)
 - [`Loop`](/docs/api/classes/Loop)
 - [`LoopBuilder`](/docs/api/classes/LoopBuilder)
+- [`MemberIdentityError`](/docs/api/classes/MemberIdentityError)
 - [`MessageDeniedError`](/docs/api/classes/MessageDeniedError)
 - [`NoConversationError`](/docs/api/classes/NoConversationError)
 - [`OutputSchemaError`](/docs/api/classes/OutputSchemaError)
 - [`Parallel`](/docs/api/classes/Parallel)
 - [`ParallelBuilder`](/docs/api/classes/ParallelBuilder)
+- [`ParentRunRefusedError`](/docs/api/classes/ParentRunRefusedError)
 - [`PauseAnswerRequiredError`](/docs/api/classes/PauseAnswerRequiredError)
 - [`PendingQuestionError`](/docs/api/classes/PendingQuestionError)
 - [`ResumeIdentityConflictError`](/docs/api/classes/ResumeIdentityConflictError)
