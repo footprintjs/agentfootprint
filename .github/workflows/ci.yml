@@ -77,6 +77,10 @@ jobs:
         run: bash scripts/check-docs.sh
       - name: Duplicate type check
         run: node scripts/check-dup-types.mjs
+      # The layer table (scripts/layering.config.cjs): fails on a NEW upward runtime
+      # import, and on an allowance whose edge is gone, so the list only shrinks.
+      - name: Layering check
+        run: npm run check:layering
 
   # Docs gate: builds docs-next (Fumadocs), which twoslash-compiles every
   # "ts twoslash" code block against the real agentfootprint types at build.

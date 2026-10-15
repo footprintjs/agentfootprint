@@ -1,0 +1,304 @@
+'use strict';
+/**
+ * layering.config.cjs — the agentfootprint layer table, as data.
+ *
+ * ONE owner for the fence. Two readers, neither keeps a copy:
+ *   - `scripts/check-layering.mjs`          → the report, and `npm run check:layering` in CI
+ *   - `test/architecture/layering.test.ts`  → the same analysis, inside the suite
+ *
+ * THE RULE — a file imports only files at its own layer or BELOW it. Every file has
+ * exactly one layer: the most specific pattern that matches it (an exact path beats
+ * `dir/**`; a deeper directory beats a shallower one; two equally specific patterns
+ * with different layers are a config error). A file no pattern matches is an error,
+ * not a default.
+ *
+ * Only RUNTIME edges are the law: an import that `ts.transpileModule` keeps, plus a
+ * lazy `import()`. A type-only import (`import type`, an elided import, an
+ * `import('x').T` type reference) is erased by tsc and is reported for information only.
+ *
+ * WHERE THIS TABLE COMES FROM. The design pass that measured the folder-level import
+ * cycle (a value-level SCC of 23 of the 33 folder nodes, the root `src/*.ts` modules
+ * counted as one — `--json` reports it as `folderCycles`) and the order that removes it. The
+ * table below is that order written against TODAY's paths: a top-level folder is placed
+ * at the layer it keeps, and each `src/lib/<sub>/` feature package is placed at the
+ * layer it will hold as a top-level folder of its own. A file that a later change
+ * MOVES to another folder sits, until then, at its current folder's layer — so the edges
+ * that move removes are named below, and the change that frees them deletes them.
+ *
+ *   L0  leaves          imports nothing above itself: `lib/` (its loose files, `claim/`,
+ *                       `context-contract/`), events, bridge, maps, recipes
+ *   L1  vocabularies    the one law each spells: semantics, redaction, thinking, classify,
+ *                       ontology, cache, trust-boundaries
+ *   L2  ports           memory
+ *   L3  stores, folds   artifacts, integrity, influence-core, rag (+ lib/rag), resilience, security
+ *   L4                  identity, answer-validation, observability, tool-lint
+ *   L5  the trace       recorders, debug
+ *   L6                  locales, reliability, strategies
+ *   L7  tools           (no folder yet)
+ *   L8  context         injection-engine
+ *   L9  the agent       core
+ *   L10 lenses          answer-account, time-travel, trace-toolpack, core-flow
+ *   L11                 hosting, context-bisect, context-ledger, bug-report, patterns
+ *   L12                 mcp, recorded-chat
+ *   L13 implementations adapters
+ *   L14                 tool-providers, embedders
+ *   L15 entry points    src/*.ts barrels and doors/ — may import anything
+ *
+ * UPWARD_ALLOWANCES names every upward runtime edge that exists today, file → file. The
+ * checker fails on an upward edge NOT on the list, and on a listed edge that is no longer
+ * an upward runtime edge — so the list can only shrink. A change that moves a file
+ * deletes the entries the move frees; it never adds one.
+ */
+
+const fs = require('fs');
+const path = require('path');
+
+/** @type {ReadonlyArray<{ rank: number, name: string, files: string[] }>} */
+const LAYERS = [
+  {
+    rank: 0,
+    name: 'leaves',
+    files: [
+      'src/lib/*.ts',
+      'src/lib/claim/**',
+      'src/lib/context-contract/**',
+      'src/events/**',
+      'src/bridge/**',
+      'src/maps/**',
+      'src/recipes/**',
+    ],
+  },
+  {
+    rank: 1,
+    name: 'vocabularies',
+    files: [
+      'src/lib/semantics/**',
+      'src/redaction/**',
+      'src/thinking/**',
+      'src/classify/**',
+      'src/ontology/**',
+      'src/cache/**',
+      'src/lib/trust-boundaries/**',
+    ],
+  },
+  { rank: 2, name: 'ports', files: ['src/memory/**'] },
+  {
+    rank: 3,
+    name: 'stores and folds',
+    files: [
+      'src/artifacts/**',
+      'src/integrity/**',
+      'src/lib/influence-core/**',
+      'src/rag/**',
+      'src/lib/rag/**',
+      'src/resilience/**',
+      'src/security/**',
+    ],
+  },
+  {
+    rank: 4,
+    name: 'identity and validation',
+    files: ['src/identity/**', 'src/answer-validation/**', 'src/observability/**', 'src/lib/tool-lint/**'],
+  },
+  { rank: 5, name: 'the trace channel', files: ['src/recorders/**', 'src/debug/**'] },
+  { rank: 6, name: 'rules over the trace', files: ['src/locales/**', 'src/reliability/**', 'src/strategies/**'] },
+  { rank: 7, name: 'tools', files: [] },
+  { rank: 8, name: 'context assembly', files: ['src/lib/injection-engine/**'] },
+  { rank: 9, name: 'the agent', files: ['src/core/**'] },
+  {
+    rank: 10,
+    name: 'lenses over a run',
+    files: [
+      'src/lib/answer-account/**',
+      'src/lib/time-travel/**',
+      'src/lib/trace-toolpack/**',
+      'src/core-flow/**',
+    ],
+  },
+  {
+    rank: 11,
+    name: 'hosts and offline analysis',
+    files: [
+      'src/hosting/**',
+      'src/lib/context-bisect/**',
+      'src/lib/context-ledger/**',
+      'src/lib/bug-report/**',
+      'src/patterns/**',
+    ],
+  },
+  { rank: 12, name: 'protocol and replay', files: ['src/lib/mcp/**', 'src/lib/recorded-chat/**'] },
+  { rank: 13, name: 'provider implementations', files: ['src/adapters/**'] },
+  { rank: 14, name: 'tool providers', files: ['src/tool-providers/**', 'src/embedders/**'] },
+  { rank: 15, name: 'entry points', files: ['src/*.ts', 'src/doors/**'] },
+];
+
+/**
+ * Folders whose files import, at runtime, only files of the same folder set. Off until the
+ * change that makes the law true turns it on.
+ *
+ * @type {ReadonlyArray<{ name: string, files: string[] }>}
+ */
+const CLOSED_FOLDERS = [];
+
+/**
+ * Every upward runtime edge that exists today, file → file (`[from, to]`, repo-relative).
+ * Generated once from the measured tree (`node scripts/check-layering.mjs --allowances`
+ * prints the current list in this shape); from then on it is edited by hand and only shrinks.
+ *
+ * @type {ReadonlyArray<readonly [string, string]>}
+ */
+const UPWARD_ALLOWANCES = [
+  ['src/answer-validation/validate.ts', 'src/core/outputSchema.ts'],
+  ['src/artifacts/datasetResult.ts', 'src/core/time/axis.ts'],
+  ['src/artifacts/index.ts', 'src/core/time/axis.ts'],
+  ['src/artifacts/minting.ts', 'src/core/time/axis.ts'],
+  ['src/cache/cacheRecorder.ts', 'src/conventions.ts'],
+  ['src/core-flow/Conditional.ts', 'src/conventions.ts'],
+  ['src/core-flow/Graph.ts', 'src/conventions.ts'],
+  ['src/core-flow/Parallel.ts', 'src/conventions.ts'],
+  ['src/core/Agent.ts', 'src/adapters/forcedToolChoice.ts'],
+  ['src/core/Agent.ts', 'src/adapters/nativeOutputSchema.ts'],
+  ['src/core/Agent.ts', 'src/adapters/requestRefusal.ts'],
+  ['src/core/Agent.ts', 'src/adapters/types.ts'],
+  ['src/core/Agent.ts', 'src/conventions.ts'],
+  ['src/core/Agent.ts', 'src/lib/time-travel/receiptDigests.ts'],
+  ['src/core/LLMCall.ts', 'src/conventions.ts'],
+  ['src/core/LLMCall.ts', 'src/lib/time-travel/receipt.ts'],
+  ['src/core/agent/AgentBuilder.ts', 'src/lib/trace-toolpack/innerRunRecords.ts'],
+  ['src/core/agent/AgentBuilder.ts', 'src/lib/trace-toolpack/selfExplain.ts'],
+  ['src/core/agent/AgentBuilder.ts', 'src/lib/trace-toolpack/traceToolNames.ts'],
+  ['src/core/agent/AgentBuilder.ts', 'src/tool-providers/skillScopedTools.ts'],
+  ['src/core/agent/buildAgentChart.ts', 'src/conventions.ts'],
+  ['src/core/agent/buildAgentMessageApiChart.ts', 'src/conventions.ts'],
+  ['src/core/agent/buildAgentMessageApiChart.ts', 'src/lib/time-travel/receipt.ts'],
+  ['src/core/agent/buildAgentMessageApiChart.ts', 'src/lib/time-travel/receiptDigests.ts'],
+  ['src/core/agent/buildCacheSubflow.ts', 'src/conventions.ts'],
+  ['src/core/agent/buildDynamicAgentChart.ts', 'src/conventions.ts'],
+  ['src/core/agent/buildMessageApiChart.ts', 'src/conventions.ts'],
+  ['src/core/agent/buildMessageApiChart.ts', 'src/lib/time-travel/receipt.ts'],
+  ['src/core/agent/honesty/mounts.ts', 'src/conventions.ts'],
+  ['src/core/agent/messageApiReceipt.ts', 'src/lib/time-travel/receipt.ts'],
+  ['src/core/agent/stages/callLLM.ts', 'src/adapters/forcedToolChoice.ts'],
+  ['src/core/agent/stages/callLLM.ts', 'src/adapters/nativeOutputSchema.ts'],
+  ['src/core/agent/stages/callLLM.ts', 'src/lib/time-travel/receipt.ts'],
+  ['src/core/agent/stages/deliver.ts', 'src/adapters/types.ts'],
+  ['src/core/agent/stages/reliabilityExecution.ts', 'src/adapters/requestRefusal.ts'],
+  ['src/core/agent/stages/toolCalls.ts', 'src/adapters/types.ts'],
+  ['src/core/codeRunnerTool.ts', 'src/adapters/types.ts'],
+  ['src/core/flowchartAsTool.ts', 'src/lib/trace-toolpack/innerRunRecords.ts'],
+  ['src/core/runCheckpoint.ts', 'src/adapters/llm/contextWindow.ts'],
+  ['src/core/runbook/runbookAsTool.ts', 'src/lib/trace-toolpack/innerRunRecords.ts'],
+  ['src/core/slots/buildMessagesSlot.ts', 'src/conventions.ts'],
+  ['src/core/slots/buildSystemPromptSlot.ts', 'src/conventions.ts'],
+  ['src/core/slots/buildToolsSlot.ts', 'src/conventions.ts'],
+  ['src/hosting/httpHost.ts', 'src/stream.ts'],
+  ['src/integrity/claim-binding/admit.ts', 'src/core/agent/coverage/items.ts'],
+  ['src/integrity/claim-binding/admit.ts', 'src/core/agent/coverage/period.ts'],
+  ['src/integrity/claim-binding/bindEvidence.ts', 'src/core/agent/coverage/period.ts'],
+  ['src/integrity/claim-binding/scope.ts', 'src/core/agent/coverage/period.ts'],
+  ['src/integrity/claim-binding/scope.ts', 'src/core/time/instant.ts'],
+  ['src/lib/context-bisect/trajectory.ts', 'src/conventions.ts'],
+  ['src/lib/context-ledger/contextLedger.ts', 'src/conventions.ts'],
+  ['src/lib/injection-engine/buildInjectionEngineSubflow.ts', 'src/core/agent/toolEffects.ts'],
+  ['src/lib/injection-engine/constrainedEnumPick.ts', 'src/adapters/forcedToolChoice.ts'],
+  ['src/lib/injection-engine/skillTools.ts', 'src/core/tools.ts'],
+  ['src/lib/semantics/check.ts', 'src/core/agent/coverage/read.ts'],
+  ['src/lib/semantics/described.ts', 'src/core/agent/coverage/items.ts'],
+  ['src/lib/semantics/described.ts', 'src/core/agent/coverage/refusal.ts'],
+  ['src/lib/semantics/envelope.ts', 'src/core/agent/coverage/items.ts'],
+  ['src/lib/semantics/envelope.ts', 'src/core/agent/coverage/period.ts'],
+  ['src/lib/semantics/envelope.ts', 'src/core/agent/coverage/refusal.ts'],
+  ['src/lib/semantics/projection.ts', 'src/core/agent/coverage/absent.ts'],
+  ['src/lib/semantics/projection.ts', 'src/core/agent/coverage/ledger.ts'],
+  ['src/lib/semantics/projection.ts', 'src/core/agent/toolEffects.ts'],
+  ['src/lib/time-travel/epochs.ts', 'src/conventions.ts'],
+  ['src/lib/time-travel/milestoneStops.ts', 'src/conventions.ts'],
+  ['src/lib/trace-toolpack/selfExplain.ts', 'src/tool-providers/skillScopedTools.ts'],
+  ['src/lib/trust-boundaries/project.ts', 'src/core/agent/moments.ts'],
+  ['src/ontology/define.ts', 'src/lib/time-travel/receipt.ts'],
+  ['src/ontology/define.ts', 'src/lib/time-travel/sha256.ts'],
+  ['src/recorders/core/ContextRecorder.ts', 'src/conventions.ts'],
+  ['src/recorders/core/ErrorBridge.ts', 'src/core/humanizeLLMError.ts'],
+  ['src/recorders/core/replayHooks.ts', 'src/lib/time-travel/receipt.ts'],
+  ['src/recorders/observability/BoundaryRecorder.ts', 'src/conventions.ts'],
+  ['src/recorders/observability/recordingEnvelope.ts', 'src/lib/context-bisect/arms/manifest.ts'],
+  ['src/resilience/withCircuitBreaker.ts', 'src/adapters/requestRefusal.ts'],
+  ['src/resilience/withFallback.ts', 'src/adapters/forcedToolChoice.ts'],
+  ['src/resilience/withFallback.ts', 'src/adapters/nativeOutputSchema.ts'],
+  ['src/resilience/withFallback.ts', 'src/adapters/requestRefusal.ts'],
+  ['src/resilience/withFallback.ts', 'src/adapters/types.ts'],
+  ['src/security/index.ts', 'src/adapters/types.ts'],
+  ['src/thinking/replayHistory.ts', 'src/lib/time-travel/sha256.ts'],
+];
+
+// ── matching ─────────────────────────────────────────────────────────────────
+
+/** `**` crosses directories, `*` does not. Repo-relative, forward-slash paths only. */
+function globToRegExp(glob) {
+  let re = '';
+  for (let i = 0; i < glob.length; i++) {
+    const c = glob[i];
+    if (c === '*') {
+      if (glob[i + 1] === '*') {
+        re += '.*';
+        i++;
+      } else re += '[^/]*';
+    } else re += c.replace(/[.+^${}()|[\]\\?]/g, '\\$&');
+  }
+  return new RegExp('^' + re + '$');
+}
+
+/** Higher = more specific: segments before the first wildcard, and exact paths beat globs. */
+function specificity(glob) {
+  const segs = glob.split('/');
+  const firstWild = segs.findIndex((s) => s.includes('*'));
+  return firstWild === -1 ? 1000 + segs.length : firstWild;
+}
+
+function compileLayers(layers) {
+  return layers.flatMap((layer) =>
+    layer.files.map((glob) => ({ glob, rank: layer.rank, re: globToRegExp(glob), spec: specificity(glob) })),
+  );
+}
+
+const COMPILED = compileLayers(LAYERS);
+
+/** The layer of a repo-relative file, or null when no pattern matches (a config error). */
+function rankOf(relPath, compiled = COMPILED) {
+  let best = null;
+  for (const entry of compiled) {
+    if (!entry.re.test(relPath)) continue;
+    if (best === null || entry.spec > best.spec) best = entry;
+    else if (entry.spec === best.spec && entry.rank !== best.rank) {
+      throw new Error(
+        `layering: "${relPath}" matches "${best.glob}" (L${best.rank}) and "${entry.glob}" (L${entry.rank}) equally`,
+      );
+    }
+  }
+  return best === null ? null : best.rank;
+}
+
+/** Every `.ts` file (no `.d.ts`) under `<root>/<dir>`, repo-relative and sorted. */
+function listSourceFiles(root, dir = 'src') {
+  const out = [];
+  const walk = (at) => {
+    for (const name of fs.readdirSync(at).sort()) {
+      const full = path.join(at, name);
+      if (fs.statSync(full).isDirectory()) walk(full);
+      else if (name.endsWith('.ts') && !name.endsWith('.d.ts'))
+        out.push(path.relative(root, full).split(path.sep).join('/'));
+    }
+  };
+  walk(path.join(root, dir));
+  return out;
+}
+
+module.exports = {
+  LAYERS,
+  CLOSED_FOLDERS,
+  UPWARD_ALLOWANCES,
+  globToRegExp,
+  compileLayers,
+  rankOf,
+  listSourceFiles,
+};
