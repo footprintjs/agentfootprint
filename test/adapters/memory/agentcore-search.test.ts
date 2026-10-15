@@ -147,7 +147,7 @@ describe('AgentCoreStore.search — retrieval', () => {
       searchQuery: 'where does Ada sit?',
     });
     expect(results).toHaveLength(1);
-    expect(results[0].entry.value).toBe('Ada prefers window seats.');
+    expect(results[0].entry.value).toEqual({ content: 'Ada prefers window seats.' });
     expect(results[0].score).toBe(0.9);
   });
 
@@ -312,7 +312,7 @@ describe('AgentCoreStore.search — the SDK mapping', () => {
     const results = await store.search(identity, VECTOR, { text: 'seats', k: 3 });
     expect(sent[0].command).toBe('RetrieveMemoryRecords');
     expect(sent[0].input.searchCriteria).toMatchObject({ searchQuery: 'seats', topK: 3 });
-    expect(results[0].entry.value).toBe('window seats');
+    expect(results[0].entry.value).toEqual({ content: 'window seats' });
   });
 
   it('reads a plain-string content field as well as the nested one', async () => {
@@ -321,7 +321,7 @@ describe('AgentCoreStore.search — the SDK mapping', () => {
     });
     const store = new AgentCoreStore({ memoryId: 'm-1', _sdk: module });
     const results = await store.search(identity, VECTOR, { text: 'x' });
-    expect(results[0].entry.value).toBe('plain text');
+    expect(results[0].entry.value).toEqual({ content: 'plain text' });
   });
 
   it('an empty response is an empty result set', async () => {

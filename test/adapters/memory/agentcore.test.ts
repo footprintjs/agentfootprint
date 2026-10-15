@@ -526,7 +526,7 @@ describe('AgentCoreStore — string blobs on every read path', () => {
     const store = new AgentCoreStore({ memoryId: 'mem-1', _sdk: sdk as never });
     await store.put(id, makeEntry('a'));
     const hits = await store.search(id, [0.1, 0.2], { text: 'where does Ada sit?' });
-    expect(hits.map((h) => h.entry.value)).toEqual(['Ada prefers window seats.']);
+    expect(hits.map((h) => h.entry.value)).toEqual([{ content: 'Ada prefers window seats.' }]);
     // …and the event-backed half still reads back beside it.
     expect((await store.list(id)).entries.map((e) => e.id)).toEqual(['a']);
   });

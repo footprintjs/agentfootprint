@@ -1070,7 +1070,8 @@ export class AgentCoreStore implements MemoryStore {
    * preferences. The ids therefore belong to AgentCore, not to entries you
    * `put()`, and `store.get(entry.id)` will not find them. They arrive as
    * entries so ranking code needs no special case, with `metadata.source`
-   * saying plainly where they came from.
+   * saying plainly where they came from, and each value is `{ content }` —
+   * the record's text where every memory formatter reads it.
    *
    * Filters: `searchStrategyId` and the namespace reach AgentCore's own side;
    * `k`, `minScore` and `tiers` are applied to what comes back.
@@ -1129,7 +1130,12 @@ export class AgentCoreStore implements MemoryStore {
       const createdAt = record.createdAt ?? Date.now();
       const entry: MemoryEntry<T> = {
         id: record.memoryRecordId,
-        value: record.content as T,
+        // The store's record shape, `{ content }` — never the bare string.
+        // Both prompt formatters read the text off `.content` (the memory
+        // flavour as a message, the rag flavour as a passage), so a bare string
+        // rendered as an EMPTY block: the record was found and the model never
+        // saw it. No `role`: nobody said this; AgentCore derived it.
+        value: { content: record.content } as T,
         version: 1,
         createdAt,
         updatedAt: createdAt,
