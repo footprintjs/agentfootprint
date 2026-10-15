@@ -5,6 +5,117 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.4.0] - 2026-10-15
+
+### Added
+
+- **Serve any agent to AG-UI frontends with one handler — `streamHandler({ agent, adapter: agUi(), threads, sessions })`.**
+  `streamHandler` (on `agentfootprint/hosting`) is a framework-agnostic Fetch-API
+  handler, `(request: Request) => Promise<Response>`, that mounts in Next.js, Hono,
+  Bun, Deno or Workers. It treats every request as untrusted browser input and
+  shares nothing between requests: it builds a FRESH runner per request from your
+  factory (a factory that hands back the same runner twice is refused), binds the
+  thread a request names to the caller YOUR code authenticates (`threads`, a
+  `ThreadBinder` — the named id is format-checked and never a key;
+  `verifiedThreads(identity)` is the ready-made one: the caller verified with the
+  door's identity options, never a header read as a name), keeps the
+  conversation and any paused run on the server under that binding (`sessions`,
+  any session store; another caller's stored conversation is not found, whether or not
+  a turn is running), and allows one turn at a time per thread. It keeps
+  `httpHost`'s laws: the door guard first, a body ceiling, refusals as JSON with
+  their own status and code, a 500 that quotes nothing, an SSE keep-alive, a caller
+  who hangs up cutting the run. A paused run is stored BEFORE the caller is told.
+  `agUi()` (on `agentfootprint/ag-ui`) is the AG-UI `ProtocolAdapter`. Only the
+  newest USER message is taken as conversation — a page's assistant and tool
+  messages are its own copy and are never read, and a system or developer message
+  is refused. An answer is taken only for the pause the server keeps, matched to the
+  ids it handed out (a `resume` entry for its interrupt, or the tool message for the
+  frontend tool it waits on). Frontend tools run only when the app allow-lists them
+  by name with its own description and schema (`frontendTools`) — they run in the
+  page, hold no server privilege and never shadow a server tool. `state` and
+  `context` reach the agent only through the app's validators (`accept`). Identity,
+  credentials and redaction never come from a request. Everything a page may not
+  decide is refused by name. The official `@ag-ui/client` runs agents through it end
+  to end in the tests — a second turn from the server's copy, a frontend tool round
+  trip, an interrupt answered — and two users' requests running at once each see
+  only their own run. The hosting refusal statuses are now one table
+  (`refusalStatus.ts`) shared by every HTTP door, and a stored paused run may carry
+  the wire's own record of it (`PausedRun.wire`).
+
+- **AG-UI: any run, as the AG-UI protocol's events — and `toSSE`'s frames became a pluggable strategy.**
+  A new door, `agentfootprint/ag-ui`, adapts a run's event stream to AG-UI 1.0, the
+  protocol AG-UI frontends (`@ag-ui/client`, CopilotKit, the AG-UI Dojo) drive agents
+  with. `agUiSerializer({ threadId, runId })` translates one run's events — text as it
+  streams, tool calls with their arguments and results, ReAct iterations and
+  compositions as steps, nested agents (a `Sequence` step, a `Parallel` branch) as
+  sub-agents with their parent links, a pause as an interrupt (or, for a tool the
+  client runs, a completed segment with the call pending), a failure as `RUN_ERROR`
+  in fixed words (never the thrown message) — and `agUiSse()` frames them with the
+  official `@ag-ui/encoder` (an optional peer, loaded only when a framing is built,
+  refused by name when missing). It reads only the events every listener receives,
+  so nothing a redaction policy hides reaches an AG-UI event, at any depth; and since
+  the stream goes to a browser, nothing else goes out that a person is not meant to
+  read: `CUSTOM` is an allow-list (`AG_UI_CUSTOM_EVENTS` — progress, spend, the route,
+  the answer's standing, retries, each with only its listed fields, never a tool's own
+  progress payload; extend it with a projection per event type), the model's reasoning
+  is sent only with `reasoning: true`, a failed tool call's result is the fixed words
+  "The tool failed." unless `toolErrors: 'served'`, a failure never carries the thrown
+  value, and the record's process-wide run id is never written. Every id
+  is the record's own address under the request's run id — unique across a thread
+  even when parallel branches reuse a provider's tool-call id, and the same with or
+  without a policy. A paused run's translation hands back `suspension()`, and the
+  run that continues it passes it as `resume`: its sub-agents re-open under their own
+  `subagentRunId`, its open steps re-open, and the call it stopped in is answered under
+  its own id — one invocation across both requests. `owns` binds a translation to its
+  run when one listener hears several. The SSE framing is now a strategy, `SseFraming`: `toSSE` takes
+  `framing` and keeps writing exactly the frames it always wrote by default
+  (`agentfootprintSse`); a protocol adapter implements `RunTranslation` on
+  `agentfootprint/hosting`.
+
+  **Also fixed — a pause two levels deep is addressed like every other event.**
+  `pause.request` and `pause.resume` carried footprintjs's resume cursor as their
+  `meta.subflowPath` — one cumulative mount id per level (`['step-p', 'step-p/x']`)
+  where every other event carries the segments (`['step-p', 'x']`). They now carry the
+  segments, so a reader finds the agent that paused the way it finds the owner of any
+  event. Unchanged at the root and at depth one, where the two forms agree.
+
+- **Call MCP servers hosted on AWS Bedrock AgentCore Runtime.** `agentCoreRuntimeMcpTransport({ agentRuntimeArn, region })` (from `agentfootprint/providers`) is an ordinary MCP transport for a server deployed to AgentCore Runtime with `--protocol MCP`, so `mcpClient` lists and calls its tools like any other server. It handles the three things that make such a server different from a plain URL, each as a strategy you pick by name:
+
+  - **auth** — `'sigv4'` (default) sends every request through the AWS SDK's `InvokeAgentRuntime`, with the MCP headers on the SDK's own fields (`mcpSessionId`, `mcpProtocolVersion`, `runtimeSessionId`, `contentType`, `accept`, `payload`). `{ bearer }` is for a runtime behind an OAuth authorizer: the SDK has no bearer scheme, so the request goes to the documented HTTPS endpoint with a machine token vended per request and dropped, by the same code as `gatewayTransport` (`mode: 'user'` is refused: the request names no user). What the MCP client reads of a failure is rewritten from the library's own fixed sentences and safe ids on both paths — the status, a plain AWS error type, and for a JSON-RPC error its code, request id and a message only when it is one of the MCP SDK's or the AgentCore contract's fixed sentences — never the service's text, which can quote the signed request, session token included. A successful answer is read once, strictly, and re-serialized, so the client reads exactly the value that was checked; an ambiguous one (a duplicated key, two messages in one body, trailing data, a mismatched content type) is refused by name.
+  - **session** — `'per-call'` (default) sends a fresh runtime session id of its own with every request and no `Mcp-Session-Id`, and hides the one the runtime returns, so nothing carries over between requests and one client can serve every user of a process (it needs a stateless server, the runtime's recommended default). `'reuse'` keeps one runtime session per client, keyed by the transport: a client's first request gets a fresh runtime session id, the server's `Mcp-Session-Id` is kept with it, and the client carries a random handle in its place (an unknown handle is answered 404 unsent; at most 256 connections, least recently used forgotten first). Build one `'reuse'` client per conversation. Every attempt of one request goes to the same runtime session, and a failure's text is never the service's.
+  - **retry** — the runtime's "Session operation in progress, please retry" refusal arrives as an HTTP 200 with a JSON-RPC `-32005` error (or, at the API layer, a 409 `RetryableConflictException`), which MCP clients do not retry. It is now retried with bounded, jittered backoff (5 attempts, at most 10 s of waiting by default; `retry: false` turns it off). Only that refusal is retried — not `ConflictException`, which shares the code, and never a 5xx or a dropped connection, which may be the record of a call that ran: the SDK client the transport builds has the SDK's own retry off (`maxAttempts: 1`), and a non-2xx answer is handed to the MCP client as the HTTP status it was. The loop is the same one `mcpClient` uses for HTTP 429, so the ceilings and the `onRetry` report work the same way.
+
+- **Memory write options: skip long-term extraction, and a namespace per tenant.** The `MemoryStore` port's writes (`put`, `putMany`, `putIfVersion`) take an optional third argument with two vendor-neutral options:
+
+  - `extraction: 'skip'` — store the entry, but keep it out of the service's long-term extraction (no fact, summary or preference is derived from it); `defineMemory({ writeOptions: { extraction: 'skip' } })` applies it to every write a memory makes;
+  - `namespaceScope` — the values the service puts into the namespaces its derived records are filed under. `defineMemory({ namespaceScope })` scopes a memory as a whole — `(identity) => ({ tenantid: … })` for one per tenant, or a fixed object for a single-tenant deployment: its writes are filed under the scope and its searches confined to it (`SearchOptions.namespaceScope`), so a scope can never make a later read see another tenant's records. The scope comes only from the run's identity; a write or search that brings its own to a memory that binds one is refused, and a scope that comes back empty or malformed refuses the write or search instead of running without one. Allowed on a `readOnly` memory.
+
+  `AgentCoreStore` honours both, as `CreateEvent`'s own fields: `extractionMode: 'SKIP'` and `extractionConfig.namespaceVariables`. It does so only when they can reach AgentCore intact — an injected client must declare `forwardsWriteOptions: true`, and the installed `@aws-sdk/client-bedrock-agentcore` must model both fields (an older serializer drops them silently) — and it checks the variables against AgentCore's documented domain before sending, refusing by variable name without quoting the value. `agentCoreNamespaceValue(tenant)` maps a tenant id into AgentCore's narrow alphabet one-to-one (it refuses rather than truncates). `searchNamespace` now receives the identity and the memory's scope, and a search under a scope is refused unless rendering `searchNamespace` with canary values shows every scope value in a segment of its own. A search for an identity that names a principal — and every search without a scope — is refused unless its namespace holds that identity's `actorId` — a tenant-wide namespace would serve one person's extracted facts to another; `searchAcrossPrincipals: true` opts a deliberately shared memory in — for scoped searches only, since an unscoped search has no tenant to stay inside. `requireNamespaceScope: true` makes the store refuse any write or search that carries no scope, and a store that has served one scoped call refuses unscoped ones from then on. **`AgentCoreStore` now refuses, before any call to AgentCore, an identity with no `conversationId`** (it encoded to one session every such identity shared) and a `searchNamespace` that returns no path segment (an empty prefix matched every record of the memory). `namespaceScope` beside `corpus` is refused at definition.
+
+  **`AgentCoreStore.search()` now reads only its own namespace.** AgentCore's `namespace` filter is a string prefix, so `/tenants/v1` also matched `/tenants/v12`. Results are now kept only when one of the record's `namespaces` (the SDK's `MemoryRecordSummary.namespaces`, which the adapter previously did not read) is the namespace asked for or lies under it, on whole path segments; a record that reports no namespace is dropped, because it cannot be shown to belong. An actor id can contain `/` (its escape is `/` plus four hex digits), so one actor's id can extend another's by whole segments (`bob@x.com.au` after `bob@x.com`): when the namespace searched ends with `{actorId}`, a record filed under a continuation that starts with four uppercase hex digits is dropped too. A namespace containing `*` is refused by name, since a wildcard cannot be checked for ownership. A custom `AgentCoreLikeClient.retrieveRecords` must now report `namespaces` (or `namespace`) on each record.
+
+  Every other store refuses the options **by name** (`UnsupportedMemoryWriteOptionError`) before writing anything, never ignoring them: a dropped namespace would file one tenant's derived records where another's are read. A store declares what it honours in the new `MemoryStore.writeOptions`, `defineMemory` checks it before the first turn, and a third-party store can refuse in the same words with `refuseUnhonouredWriteOptions`. Writes without options are unchanged.
+
+### Fixed
+
+- **`AgentCoreStore.search()` records now reach the model.** Each record AgentCore
+  extracted came back with its text as a bare string value. Both memory formatters
+  read the text off `.content`, so a read-only memory over the store rendered every
+  record as an empty `<memory>` (or `<source>`) block. The search found the facts
+  and the model never saw them. Each value is now `{ content }`, the store's
+  record shape, and carries no `role`: AgentCore derived the fact, nobody said it.
+  If you read `entry.value` from `search()` directly, read `entry.value.content`.
+
+  Also hardened: a memory or corpus passage can no longer close its block with a
+  close tag spelled with whitespace (`</memory >`, `</ source>`); every such
+  spelling is escaped like the exact one.
+
+### Security
+
+- **Composition members run for the run that mounted them — never for a shared bucket.** A composition (`Sequence`, `Parallel`, `Conditional`, `Loop`, `workflow`, `graph`, and every pattern built from them) runs each member's chart in its own executor, so a member Agent's `run()` never runs — and its memory namespace, its tools' `ctx.identity` and `ctx.runId` were read off the member instance, which every run of the composition shares. An instance never run on its own held the placeholder conversation `'pending'`, so every user of a composition read and wrote ONE memory (one user's earlier messages reached another user's model); an instance that had run on its own handed its last caller's identity to the next composition run's tools.
+
+  Now the outermost composition run opens one run — the caller's identity, passed as `run({ message, identity })` (or `input.identity` for `workflow` and `graph`), and that run's own id — in a private registry, and every composition hands each member that reads it only a link to that run, at any depth of nesting. A `parentRun` that is not a live link (a run-shaped object, a made-up token, the link of a finished run) is refused with `ParentRunRefusedError`, so nothing outside the engine can name the run a member serves, and an `identity` in a member's input never outranks it. A member Agent runs under the caller's identity, or that run's own `{ conversationId: runId }` (recorded `runIdentitySource: 'composition'`), and its tools read `ctx.identity` / `ctx.runId` from the run. An Agent tells its own run from a mount by the scope it was given, so two overlapping runs cannot be confused, and the agent's own runs record exactly what they did before. An Agent mounted in a chart you build yourself must be handed `identity` by your input mapper: one that no run reaches is refused with `MemberIdentityError`, never run under its instance's last run or a placeholder. Runners other than an Agent or a composition are handed exactly the input they were before.
+
 ## [10.3.1] - 2026-10-15
 
 _Internal changes only — nothing a user of the library can see._
