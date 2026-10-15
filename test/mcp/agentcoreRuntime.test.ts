@@ -152,6 +152,44 @@ describe('agentCoreRuntimeMcpTransport — P1 unit', () => {
     expect(isSessionBusyReply([{ jsonrpc: '2.0', id: 1, error: BUSY }])).toBe(false);
     expect(isSessionBusyReply(null)).toBe(false);
   });
+
+  it('P1 the API-layer form: a 409 is the refusal only when its TYPE says so', async () => {
+    const conflict = (type?: string) =>
+      new Response('{"message":"x"}', {
+        status: 409,
+        headers: {
+          'content-type': 'application/json',
+          ...(type !== undefined && { 'x-amzn-errortype': type }),
+        },
+      });
+    expect(await sessionBusy(conflict('RetryableConflictException'))).toEqual({});
+    // The REST protocol's suffix and namespace forms of the same type.
+    expect(
+      await sessionBusy(conflict('RetryableConflictException:http://internal.amazon.com/coral/')),
+    ).toEqual({});
+    expect(await sessionBusy(conflict('com.amazonaws#RetryableConflictException'))).toEqual({});
+    // A 409 that is another conflict, or that names nothing, is delivered.
+    expect(await sessionBusy(conflict('ConflictException'))).toBeUndefined();
+    expect(await sessionBusy(conflict())).toBeUndefined();
+  });
+
+  it('P1 an explicitly undefined retry field keeps the transport’s default of 5 attempts', async () => {
+    let calls = 0;
+    const transport = agentCoreRuntimeMcpTransport({
+      agentRuntimeArn: ARN,
+      region: REGION,
+      retry: { maxAttempts: undefined, maxWaitMs: 60_000 },
+      auth: {
+        bearer: staticTokens({ runtime: 't' }),
+        fetch: async () => {
+          calls++;
+          return jsonReply({ jsonrpc: '2.0', id: 1, error: BUSY });
+        },
+      },
+    });
+    await transport.fetch?.(transport.url, { method: 'POST', body: '{}' });
+    expect(calls).toBe(5);
+  });
 });
 
 // ─── P2 Boundary ─────────────────────────────────────────────────────
@@ -213,8 +251,9 @@ describe('agentCoreRuntimeMcpTransport — P2 boundary', () => {
     expect(new TextDecoder().decode(input['payload'] as Uint8Array)).toBe(
       '{"jsonrpc":"2.0","id":1,"method":"tools/list"}',
     );
-    // The client was built in the transport's region.
-    expect(sdk.configs[0]).toEqual({ region: REGION });
+    // The client was built in the transport's region — with the SDK's own retry
+    // OFF, so nothing but the transport's one loop can ever re-send a call.
+    expect(sdk.configs[0]).toEqual({ region: REGION, maxAttempts: 1 });
   });
 
   it('P2 every response field lands on the header the MCP client reads', async () => {
@@ -257,13 +296,28 @@ describe('agentCoreRuntimeMcpTransport — P2 boundary', () => {
     expect(sdk.inputs).toHaveLength(0);
   });
 
-  it('P2 a 202 (an accepted notification) has no body, and the SDK stream is drained', async () => {
-    let drained = false;
+  it('P2 a 202 (an accepted notification) with no SDK body is delivered empty', async () => {
+    const sdk = recordingSdk({ statusCode: 202 });
+    const transport = agentCoreRuntimeMcpTransport({
+      agentRuntimeArn: ARN,
+      region: REGION,
+      _sdk: sdk.module,
+    });
+    const res = (await transport.fetch?.(transport.url, {
+      method: 'POST',
+      body: '{}',
+    })) as Response;
+    expect(res.status).toBe(202);
+    expect(await res.text()).toBe('');
+  });
+
+  it('P2 a null-body status (204) drains the SDK stream, so its socket is released', async () => {
+    let drained204 = false;
     const sdk = recordingSdk({
-      statusCode: 202,
+      statusCode: 204,
       response: {
         transformToByteArray: async () => {
-          drained = true;
+          drained204 = true;
           return new Uint8Array();
         },
       },
@@ -277,26 +331,35 @@ describe('agentCoreRuntimeMcpTransport — P2 boundary', () => {
       method: 'POST',
       body: '{}',
     })) as Response;
-    expect(res.status).toBe(202);
-    // 202 may carry a body by the Fetch standard; an absent SDK body stays absent.
-    expect(await res.text()).toBe('');
-    const sdk204 = recordingSdk({
-      statusCode: 204,
-      response: {
-        transformToByteArray: async () => {
-          drained = true;
-          return new Uint8Array();
-        },
-      },
+    expect(res.status).toBe(204);
+    expect(res.body).toBeNull();
+    expect(drained204).toBe(true);
+  });
+
+  it("P2 'per-call' hides the platform's Mcp-Session-Id from the MCP client", async () => {
+    const sdk = recordingSdk({
+      statusCode: 200,
+      contentType: 'application/json',
+      mcpSessionId: 'mcp-minted-by-platform',
+      response: { transformToByteArray: async () => new TextEncoder().encode('{}') },
     });
-    const t204 = agentCoreRuntimeMcpTransport({
+    const transport = agentCoreRuntimeMcpTransport({
       agentRuntimeArn: ARN,
       region: REGION,
-      _sdk: sdk204.module,
+      session: 'per-call',
+      _sdk: sdk.module,
     });
-    const res204 = (await t204.fetch?.(t204.url, { method: 'POST', body: '{}' })) as Response;
-    expect(res204.status).toBe(204);
-    expect(drained).toBe(true);
+    const res = (await transport.fetch?.(transport.url, {
+      method: 'POST',
+      headers: { 'mcp-session-id': 'held-by-client', [AGENTCORE_RUNTIME_SESSION_HEADER]: 'x' },
+      body: '{}',
+    })) as Response;
+    // Response side: the minted id never reaches the client to be carried...
+    expect(res.headers.get('mcp-session-id')).toBeNull();
+    expect(await res.text()).toBe('{}');
+    // ...and request side: an id the client held anyway is not sent.
+    expect(sdk.inputs[0]?.['mcpSessionId']).toBeUndefined();
+    expect(sdk.inputs[0]?.['runtimeSessionId']).toBeUndefined();
   });
 
   it('P2 an SSE reply stays a stream — events reach the client as they arrive', async () => {
@@ -557,28 +620,128 @@ describe('agentCoreRuntimeMcpTransport — P4 property (only the contract’s re
     expect(await sessionBusy(res)).toEqual({});
   });
 
-  it('P4 a thrown SDK error is not retried here — the SDK already retried what it could', async () => {
+  /**
+   * A fake SDK whose `send` throws `failures[n]` on call n (as the real SDK does
+   * for a non-2xx answer), then answers 200 with an empty JSON-RPC result.
+   */
+  function throwingSdk(failures: readonly unknown[]) {
     let sends = 0;
+    const configs: unknown[] = [];
     const module = {
       InvokeAgentRuntimeCommand: class {
         constructor(readonly input: unknown) {}
       },
       BedrockAgentCoreClient: class {
+        constructor(config: unknown) {
+          configs.push(config);
+        }
         async send() {
-          sends++;
-          throw Object.assign(new Error('conflict'), { name: 'RetryableConflictException' });
+          const failure = failures[sends++];
+          if (failure !== undefined) throw failure;
+          return {
+            statusCode: 200,
+            contentType: 'application/json',
+            response: {
+              transformToByteArray: async () =>
+                new TextEncoder().encode('{"jsonrpc":"2.0","id":1,"result":{}}'),
+            },
+          };
         }
       },
     };
+    return { module, sends: () => sends, configs };
+  }
+
+  /** An SDK service exception, shaped as the real SDK throws one. */
+  function serviceException(name: string, status: number, headers: Record<string, string> = {}) {
+    return Object.assign(new Error(`${name} from the service`), {
+      name,
+      $fault: status >= 500 ? 'server' : 'client',
+      $metadata: { httpStatusCode: status },
+      $response: { statusCode: status, headers },
+    });
+  }
+
+  it('P4 the API-layer 409 RetryableConflictException is retried like the contract’s refusal', async () => {
+    const sdk = throwingSdk([
+      serviceException('RetryableConflictException', 409),
+      serviceException('RetryableConflictException', 409),
+    ]);
     const transport = agentCoreRuntimeMcpTransport({
       agentRuntimeArn: ARN,
       region: REGION,
-      _sdk: module,
+      _sdk: sdk.module,
+    });
+    const res = (await transport.fetch?.(transport.url, {
+      method: 'POST',
+      body: '{}',
+    })) as Response;
+    expect(sdk.sends()).toBe(3);
+    expect(res.status).toBe(200);
+  });
+
+  it('P4 a 5xx is delivered as its status, sent ONCE — it may be the record of work that ran', async () => {
+    const sdk = throwingSdk([serviceException('InternalServerException', 500)]);
+    const transport = agentCoreRuntimeMcpTransport({
+      agentRuntimeArn: ARN,
+      region: REGION,
+      _sdk: sdk.module,
+    });
+    const res = (await transport.fetch?.(transport.url, {
+      method: 'POST',
+      body: '{}',
+    })) as Response;
+    expect(sdk.sends()).toBe(1);
+    expect(res.status).toBe(500);
+    expect(res.headers.get('x-amzn-errortype')).toBe('InternalServerException');
+    // And the client was built so the SDK could not have re-sent it either.
+    expect(sdk.configs[0]).toMatchObject({ maxAttempts: 1 });
+  });
+
+  it('P4 a failure with no status (the network) is thrown once, never retried', async () => {
+    const reset = Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' });
+    const sdk = throwingSdk([reset]);
+    const transport = agentCoreRuntimeMcpTransport({
+      agentRuntimeArn: ARN,
+      region: REGION,
+      _sdk: sdk.module,
     });
     await expect(
       transport.fetch?.(transport.url, { method: 'POST', body: '{}' }),
-    ).rejects.toMatchObject({ name: 'RetryableConflictException' });
-    expect(sends).toBe(1);
+    ).rejects.toMatchObject({ code: 'ECONNRESET' });
+    expect(sdk.sends()).toBe(1);
+  });
+
+  it('P4 a 429 is handed on as a 429 with its Retry-After — for mcpClient’s throttle retry', async () => {
+    const sdk = throwingSdk([serviceException('ThrottlingException', 429, { 'retry-after': '2' })]);
+    const transport = agentCoreRuntimeMcpTransport({
+      agentRuntimeArn: ARN,
+      region: REGION,
+      _sdk: sdk.module,
+    });
+    const res = (await transport.fetch?.(transport.url, {
+      method: 'POST',
+      body: '{}',
+    })) as Response;
+    // Not retried HERE — the 429 belongs to the one throttle loop mcpClient wraps around this.
+    expect(sdk.sends()).toBe(1);
+    expect(res.status).toBe(429);
+    expect(res.headers.get('retry-after')).toBe('2');
+  });
+
+  it('P4 a hosted server’s 404 reaches the MCP client as a 404, not as "UnknownError"', async () => {
+    const sdk = throwingSdk([serviceException('Unknown', 404)]);
+    const transport = agentCoreRuntimeMcpTransport({
+      agentRuntimeArn: ARN,
+      region: REGION,
+      _sdk: sdk.module,
+    });
+    const res = (await transport.fetch?.(transport.url, {
+      method: 'POST',
+      body: '{}',
+    })) as Response;
+    expect(res.status).toBe(404);
+    expect(sdk.sends()).toBe(1);
   });
 });
 
@@ -638,6 +801,37 @@ describe('agentCoreRuntimeMcpTransport — P5 security', () => {
     expect(message).toMatch(/an object with keys \[token\]/);
     expect(message).not.toContain(SECRET);
   });
+
+  it('P5 a token passed AS `auth` is described by its length, never echoed', () => {
+    let message = '';
+    try {
+      agentCoreRuntimeMcpTransport({
+        agentRuntimeArn: ARN,
+        region: REGION,
+        // The easy mistake from JavaScript: `auth: process.env.RUNTIME_TOKEN`.
+        auth: SECRET as never,
+      });
+    } catch (err) {
+      message = (err as Error).message;
+    }
+    expect(message).toMatch(new RegExp(`a string of ${SECRET.length} characters`));
+    expect(message).not.toContain(SECRET);
+  });
+
+  it('P5 `bearer` must be a provider, not the token — refused at build, not echoed', () => {
+    let message = '';
+    try {
+      agentCoreRuntimeMcpTransport({
+        agentRuntimeArn: ARN,
+        region: REGION,
+        auth: { bearer: SECRET as never },
+      });
+    } catch (err) {
+      message = (err as Error).message;
+    }
+    expect(message).toMatch(/must be a CredentialProvider/);
+    expect(message).not.toContain(SECRET);
+  });
 });
 
 // ─── P6 Performance ──────────────────────────────────────────────────
@@ -656,10 +850,21 @@ describe('agentCoreRuntimeMcpTransport — P6 performance', () => {
         },
       },
     });
-    const started = Date.now();
+    const retries: ThrottleRetryInfo[] = [];
+    const counted = agentCoreRuntimeMcpTransport({
+      agentRuntimeArn: ARN,
+      region: REGION,
+      retry: { onRetry: (info) => retries.push(info) },
+      auth: {
+        bearer: staticTokens({ runtime: 't' }),
+        fetch: async () => jsonReply({ jsonrpc: '2.0', id: 1, result: { tools: [] } }),
+      },
+    });
     await transport.fetch?.(transport.url, { method: 'POST', body: '{}' });
+    await counted.fetch?.(counted.url, { method: 'POST', body: '{}' });
     expect(calls).toBe(1);
-    expect(Date.now() - started).toBeLessThan(150);
+    // No wait was ever scheduled: the loop reported no retry.
+    expect(retries).toEqual([]);
   });
 
   it('P6 a large reply without the code is never parsed — the gate is a substring', async () => {

@@ -30,11 +30,13 @@
  * status, an SSE stream, a batch reply, a body that is not JSON — is delivered
  * as it is.
  *
- * ── The SDK-thrown form ──────────────────────────────────────────────────────
- * At the API layer the same exception is a 409, which the AWS SDK classifies as
- * retryable (`$retryable`) and retries with its own standard strategy before
- * anything reaches this file. Retrying it here as well would multiply the two
- * budgets, so this decision reads only the shape the SDK cannot see.
+ * ── The API-layer form ───────────────────────────────────────────────────────
+ * `InvokeAgentRuntime`'s API reference gives the same exception as an HTTP 409,
+ * its type in the `x-amzn-errortype` header (the REST protocol's error-type
+ * header; the SigV4 strategy rebuilds exactly that from the SDK's exception,
+ * because the transport's SDK client has its own retry off). It is the same
+ * refusal, so it is the same decision — matched by the type, never by the 409
+ * alone.
  *
  * Pattern: Strategy (a `RetryDecision`). Role: outer ring, vendor fact.
  */
@@ -44,6 +46,9 @@ import type { RetryVerdict } from '../../../mcp/throttleRetry.js';
 /** The JSON-RPC error code the contract gives `RetryableConflictException`. */
 export const SESSION_BUSY_CODE = -32005;
 
+/** The exception's name, as the API layer and the SDK both spell it. */
+const SESSION_BUSY_TYPE = 'RetryableConflictException';
+
 /**
  * How the contract's message reads. Matched case-insensitively and as a
  * fragment, so a trailing "please retry" reworded does not stop the match;
@@ -52,13 +57,18 @@ export const SESSION_BUSY_CODE = -32005;
 const SESSION_BUSY_MESSAGE = /session operation in progress/i;
 
 /**
- * Is this response AgentCore Runtime's session-busy refusal?
+ * Is this response AgentCore Runtime's session-busy refusal — in either form:
+ * the MCP contract's HTTP 200 with JSON-RPC -32005, or the API's 409
+ * `RetryableConflictException`?
  *
  * Reads a CLONE of the body, so the response is delivered intact either way.
  * Answers `{}` (wait the loop's own backoff, then send the same request again)
  * or `undefined` (deliver it).
  */
 export async function sessionBusy(response: Response): Promise<RetryVerdict | undefined> {
+  if (response.status === 409) {
+    return errorTypeOf(response) === SESSION_BUSY_TYPE ? {} : undefined;
+  }
   if (response.status !== 200) return undefined;
   if (!isJson(response.headers.get('content-type'))) return undefined;
   let text: string;
@@ -92,6 +102,17 @@ export function isSessionBusyReply(body: unknown): boolean {
   return (
     code === SESSION_BUSY_CODE && typeof message === 'string' && SESSION_BUSY_MESSAGE.test(message)
   );
+}
+
+/**
+ * The error type an AWS REST answer names in `x-amzn-errortype` — which may
+ * carry a `:` suffix (a URL) or a `namespace#` prefix; both are trimmed.
+ */
+function errorTypeOf(response: Response): string | undefined {
+  const raw = response.headers.get('x-amzn-errortype');
+  if (raw === null) return undefined;
+  const withoutSuffix = raw.split(':')[0] ?? '';
+  return withoutSuffix.slice(withoutSuffix.lastIndexOf('#') + 1).trim();
 }
 
 /** `application/json`, with or without parameters, in any case. */

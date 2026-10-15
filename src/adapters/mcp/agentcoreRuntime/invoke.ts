@@ -30,6 +30,26 @@
  * The signature is the SDK's: `send` signs every attempt with the client's own
  * credentials, so no credential passes through this file.
  *
+ * ── The SDK's own retry is OFF ───────────────────────────────────────────────
+ * The client built here has `maxAttempts: 1`. The SDK's standard policy would
+ * re-send a `tools/call` after a 5xx or a dropped connection — a call that may
+ * already have run, in the same pinned session — which is the one thing a retry
+ * here must never do. Every retry goes through the transport's single loop
+ * instead, which repeats only refusals the service made before running
+ * anything. A `client` you pass keeps ITS policy: build it with
+ * `maxAttempts: 1` for the same guarantee.
+ *
+ * ── A service exception is an ANSWER ─────────────────────────────────────────
+ * When the service answers with a non-2xx status, the SDK throws instead of
+ * returning — `RetryableConflictException` (409), `ThrottlingException` (429),
+ * or a hosted server's own 404 as `Unknown`. Each is handed on as the `Response`
+ * an HTTPS caller would have read: its status, its error type in
+ * `x-amzn-errortype`, and `retry-after` when the service sent one. So the
+ * transport's retry decision sees the 409, `mcpClient`'s 429 retry sees the
+ * 429, and the MCP client reports the status. A failure with no status — the
+ * network, an abort — never reached the service as an answer, and is thrown as
+ * it is.
+ *
  * ── What the operation cannot carry ──────────────────────────────────────────
  * Any method but POST. A GET (the optional server-message stream) and a DELETE
  * (ending a session) are answered HERE with 405, which the MCP Streamable HTTP
@@ -54,7 +74,10 @@ export interface AgentCoreRuntimeSdkClient {
 
 /** The slice of `@aws-sdk/client-bedrock-agentcore` this strategy touches. */
 export interface BedrockAgentCoreRuntimeSdkModule {
-  readonly BedrockAgentCoreClient?: new (config: { region?: string }) => AgentCoreRuntimeSdkClient;
+  readonly BedrockAgentCoreClient?: new (config: {
+    region?: string;
+    maxAttempts?: number;
+  }) => AgentCoreRuntimeSdkClient;
   readonly InvokeAgentRuntimeCommand?: new (input: unknown) => unknown;
 }
 
@@ -68,7 +91,10 @@ export interface InvokeTarget {
 /** What the strategy is built from: a region, and optionally what was injected. */
 export interface InvokeSdkOptions {
   readonly region: string;
-  /** A client the caller built — its credentials, region and retry settings win. */
+  /**
+   * A client the caller built — its credentials, region and retry settings win,
+   * so build it with `maxAttempts: 1` (see the module note).
+   */
   readonly client?: AgentCoreRuntimeSdkClient;
   /** The SDK module itself, for tests; otherwise the peer dep is loaded. */
   readonly sdk?: BedrockAgentCoreRuntimeSdkModule;
@@ -102,7 +128,8 @@ export function invokeSdk(options: InvokeSdkOptions): {
     );
   }
   return {
-    client: new mod.BedrockAgentCoreClient({ region: options.region }),
+    // The SDK's own retry OFF: it would re-send work that may have run.
+    client: new mod.BedrockAgentCoreClient({ region: options.region, maxAttempts: 1 }),
     InvokeAgentRuntimeCommand: Command,
   };
 }
@@ -171,12 +198,46 @@ export function invokeFetch(
       ...field('mcpProtocolVersion', headers.get(MCP_PROTOCOL_VERSION_HEADER)),
       ...field('runtimeSessionId', headers.get(AGENTCORE_RUNTIME_SESSION_HEADER)),
     });
-    const answer = ((await client.send(
-      command,
-      init?.signal ? { abortSignal: init.signal } : undefined,
-    )) ?? {}) as InvokeAnswer;
+    let answer: InvokeAnswer;
+    try {
+      answer = ((await client.send(
+        command,
+        init?.signal ? { abortSignal: init.signal } : undefined,
+      )) ?? {}) as InvokeAnswer;
+    } catch (err) {
+      const answered = serviceAnswerOf(err);
+      if (answered === undefined) throw err;
+      return answered;
+    }
     return responseOf(answer);
   };
+}
+
+/**
+ * An SDK service exception as the `Response` the service sent: its status, its
+ * error type, its `retry-after`. `undefined` for anything that carries no
+ * status — that failure never came back from the service as an answer.
+ */
+function serviceAnswerOf(err: unknown): Response | undefined {
+  if (err === null || typeof err !== 'object') return undefined;
+  const failure = err as {
+    readonly name?: unknown;
+    readonly message?: unknown;
+    readonly $metadata?: { readonly httpStatusCode?: unknown };
+    readonly $response?: { readonly headers?: Readonly<Record<string, unknown>> };
+  };
+  const status = failure.$metadata?.httpStatusCode;
+  if (typeof status !== 'number' || !Number.isInteger(status) || status < 400 || status > 599) {
+    return undefined;
+  }
+  const headers = new Headers({ 'content-type': 'application/json' });
+  if (typeof failure.name === 'string' && failure.name !== '') {
+    headers.set('x-amzn-errortype', failure.name);
+  }
+  const retryAfter = failure.$response?.headers?.['retry-after'];
+  if (typeof retryAfter === 'string') headers.set('retry-after', retryAfter);
+  const message = typeof failure.message === 'string' ? failure.message : '';
+  return new Response(JSON.stringify({ message }), { status, headers });
 }
 
 /** An optional request field: present only when the header was. */

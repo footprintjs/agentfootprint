@@ -25,9 +25,11 @@
  * SHARED by two conversations is one session for both. Build per conversation.
  *
  * ── 'per-call' ───────────────────────────────────────────────────────────────
- * Every request in a session of its own: neither id is sent, and the
- * `Mcp-Session-Id` a response carries is not handed to the MCP client, so
- * nothing can carry one call's session into the next. Isolation by
+ * Every request in a session of its own: this strategy sends no session id of
+ * its own — on SigV4 the SDK then fills a fresh random `runtimeSessionId` per
+ * call, which is exactly what this wants — and the `Mcp-Session-Id` a response
+ * carries is not handed to the MCP client, so nothing can carry one call's
+ * session into the next. Isolation by
  * construction, a cold start per call, and it needs a STATELESS server
  * (`stateless_http=True`, the runtime's recommended default) — a stateful one
  * would see every request as a stranger.

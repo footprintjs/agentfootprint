@@ -132,14 +132,26 @@ export interface AgentCoreRuntimeMcpTransportOptions {
    */
   readonly session?: AgentCoreRuntimeSession;
   /**
-   * Retry AgentCore's "session operation in progress" refusal. On by default:
-   * up to 5 attempts, never more than 10 s of waiting in total, jittered
-   * exponential backoff. `false` lets the refusal through on the first attempt.
+   * Retry AgentCore's "session operation in progress" refusal — the MCP
+   * contract's HTTP 200 with JSON-RPC -32005, or the API's 409
+   * `RetryableConflictException`. On by default: up to 5 attempts, never more
+   * than 10 s of waiting in total, jittered exponential backoff. `false` lets
+   * the refusal through on the first attempt.
+   *
+   * Nothing else is retried here: a 429 goes to `mcpClient`'s own throttle
+   * retry, and a 5xx, a dropped connection or any other JSON-RPC error
+   * (throttling's -32003 included) is delivered as it is — it may be the
+   * record of work that ran.
    */
   readonly retry?: boolean | AgentCoreRuntimeRetryOptions;
   /**
    * SigV4 only: a `BedrockAgentCoreClient` you built, so its credentials,
    * region and retry settings are the ones used. Refused with `{ bearer }`.
+   *
+   * **Build it with `maxAttempts: 1`.** The client this transport builds has
+   * the SDK's own retry off, because the SDK's standard policy re-sends a call
+   * after a 5xx or a dropped connection — work that may already have run. Your
+   * client keeps whatever policy you gave it.
    */
   readonly client?: AgentCoreRuntimeSdkClient;
   /** @internal Test injection — the AWS SDK module. */
@@ -248,6 +260,13 @@ function authStrategy(options: AgentCoreRuntimeMcpTransportOptions, url: string)
     );
   }
   if (auth !== null && typeof auth === 'object' && auth.bearer !== undefined) {
+    if (typeof (auth.bearer as { getCredential?: unknown }).getCredential !== 'function') {
+      throw new TypeError(
+        'agentCoreRuntimeMcpTransport: `auth.bearer` must be a CredentialProvider (an object ' +
+          'with getCredential — agentCoreIdentity(), staticTokens(), your own), not the token ' +
+          'itself: a token is vended per request so it can rotate, and is never held here.',
+      );
+    }
     if (options.client !== undefined) {
       throw new TypeError(
         'agentCoreRuntimeMcpTransport: `client` is the SigV4 strategy’s AWS SDK client, and ' +
@@ -279,13 +298,21 @@ function authStrategy(options: AgentCoreRuntimeMcpTransportOptions, url: string)
 
 function retryConfig(retry: AgentCoreRuntimeMcpTransportOptions['retry']): RetryOnThrottle {
   if (retry === false) return false;
-  return { ...DEFAULT_RETRY, ...(typeof retry === 'object' && retry !== null ? retry : {}) };
+  const given = typeof retry === 'object' && retry !== null ? retry : {};
+  // An explicitly `undefined` field means "not set" — it must fall back to this
+  // transport's default, not erase it (and land on the loop's own default).
+  const set = Object.fromEntries(Object.entries(given).filter(([, v]) => v !== undefined));
+  return { ...DEFAULT_RETRY, ...set };
 }
 
-/** A refused value, described without echoing a secret it might hold. */
+/**
+ * A refused value, described by SHAPE — never echoed. A mistyped `auth` can be
+ * the token itself (`auth: process.env.RUNTIME_TOKEN`), and an error message is
+ * the last place it should land.
+ */
 function describe(value: unknown): string {
   if (value === null) return 'null';
-  if (typeof value === 'string') return JSON.stringify(value);
+  if (typeof value === 'string') return `a string of ${value.length} characters`;
   if (typeof value === 'object') return `an object with keys [${Object.keys(value).join(', ')}]`;
   return typeof value;
 }

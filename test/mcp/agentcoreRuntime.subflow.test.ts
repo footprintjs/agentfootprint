@@ -3,23 +3,30 @@
  * decides whether the session and retry strategies hold up where agents
  * actually run: as a composition's member, and side by side in a fan-out.
  *
- * Three things are checked, each against the run's own record:
+ * Three things are checked:
  *
- *   ATTRIBUTION  every tool call, and every retry inside it, belongs to the
- *                runtimeStageId of the stage that made it. A retry is reported
- *                by the client it ran on (`retry.onRetry`); the call in flight
- *                on that client names the toolCallId; the run's
- *                `stream.tool_start` for that toolCallId names the stage.
+ *   ATTRIBUTION  every tool call belongs to the runtimeStageId of the stage
+ *                that made it — read off the run's OWN record (`tool_start` /
+ *                `tool_end` meta). Every retry ran inside that call: a retry is
+ *                reported by the client it ran on (`retry.onRetry`), and this
+ *                test's in-flight probe links the report to the call's
+ *                toolCallId. Stated plainly: the run record does not carry
+ *                retries yet — routing them through a shared attempt record is a
+ *                separate footprintjs packet, and the decision it will route is
+ *                the one small function `sessionBusy`.
  *   ISOLATION    session ids never cross a branch: each branch's requests carry
- *                its own runtime and MCP session, the two sets are disjoint,
- *                and a shared 'per-call' client sends no session id at all.
+ *                its own runtime and MCP session, the two sets are disjoint, and
+ *                a shared 'per-call' client sends no session id at all. For
+ *                'reuse' this holds BY CONSTRUCTION — one transport per branch,
+ *                each with its own pinned id — and this guards it.
  *   SECRECY      no credential — a bearer token, an SDK client's keys — and no
  *                session id reaches the recording (snapshot, events, structure)
- *                or the narrative.
+ *                or the narrative: on the happy path, when the retries run out,
+ *                and when the service answers a call with a 5xx.
  *
  * One client per branch is the documented shape for 'reuse' ("one transport is
  * one session — build one client per conversation"); the test builds exactly
- * that, and the last case shows the 'per-call' alternative for a shared client.
+ * that, and one case shows the 'per-call' alternative for a shared client.
  */
 
 import { narrative } from 'footprintjs/recorders';
@@ -101,6 +108,7 @@ function orderAgent(orderId: string, tools: readonly Tool[]): Agent {
 async function branchClient(
   runtime: FakeRuntime,
   auth: 'sigv4' | { token: string },
+  maxAttempts?: number,
 ): Promise<{ tools: Tool[]; watch: Watch; close: () => Promise<void> }> {
   const watch: Watch = { retries: [] };
   const client = await mcpClient({
@@ -109,6 +117,7 @@ async function branchClient(
       agentRuntimeArn: ARN,
       region: REGION,
       retry: {
+        ...(maxAttempts !== undefined && { maxAttempts }),
         onRetry: (info) =>
           watch.retries.push({
             info,
@@ -310,5 +319,63 @@ describe('runtime-hosted MCP — inside a PARALLEL fan-out', () => {
     expect(answer['b']).toContain('order B-200 is shipped');
     expect(runtime.attempts.every((x) => x.mcpSessionId === undefined)).toBe(true);
     expect(runtime.attempts.every((x) => x.runtimeSessionId === undefined)).toBe(true);
+  });
+});
+
+describe('runtime-hosted MCP — SECRECY when it goes wrong', () => {
+  /** Run `flow`, recording everything a reader could see later. */
+  async function recorded(flow: Parallel | Sequence, message: string) {
+    flow.attach(narrative());
+    const recorder = recordRun(flow);
+    const answer = await flow.run({ message });
+    const recording = recorder.toRecording();
+    recorder.stop();
+    return { answer, written: everythingWritten(recording) };
+  }
+
+  it('retries exhausted in a fan-out: each branch gives up on its own, and nothing secret is written', async () => {
+    const runtime = fakeAgentCoreRuntime({
+      tools: [{ name: 'lookup_order', answer: () => 'never served' }],
+      busyCalls: { lookup_order: 99 },
+    });
+    const a = await branchClient(runtime, { token: TOKEN.a }, 2);
+    const b = await branchClient(runtime, { token: TOKEN.b }, 2);
+    const flow = Parallel.create()
+      .branch('a', orderAgent('A-100', a.tools))
+      .branch('b', orderAgent('B-200', b.tools))
+      .mergeWithFn((results) => JSON.stringify(results))
+      .build();
+    const { answer, written } = await recorded(flow, 'look both orders up');
+    await a.close();
+    await b.close();
+
+    // Bounded: two attempts per call, one retry reported per branch, then the
+    // refusal reached the tool — the model was told, nothing hung.
+    expect(runtime.calls()).toHaveLength(4);
+    expect([a.watch.retries.length, b.watch.retries.length]).toEqual([1, 1]);
+    expect(String(answer)).not.toContain('never served');
+    expect(written).not.toContain(TOKEN.a);
+    expect(written).not.toContain(TOKEN.b);
+    for (const attempt of runtime.attempts) {
+      if (attempt.runtimeSessionId) expect(written).not.toContain(attempt.runtimeSessionId);
+      if (attempt.mcpSessionId) expect(written).not.toContain(attempt.mcpSessionId);
+    }
+  });
+
+  it('a 5xx from the service, as a subflow: sent once (never replayed), no SDK key written', async () => {
+    const runtime = fakeAgentCoreRuntime({
+      tools: [{ name: 'lookup_order', answer: () => 'never served' }],
+      sdkFailures: { lookup_order: { name: 'InternalServerException', status: 500 } },
+    });
+    const branch = await branchClient(runtime, 'sigv4');
+    const flow = Sequence.create().step('lookup', orderAgent('S-7', branch.tools)).build();
+    const { written } = await recorded(flow, 'where is order S-7?');
+    await branch.close();
+
+    // ONE attempt at the call: a 5xx may be the record of work that ran.
+    expect(runtime.calls()).toHaveLength(1);
+    expect(branch.watch.retries).toEqual([]);
+    expect(written).not.toContain(SDK_KEYS.accessKeyId);
+    expect(written).not.toContain(SDK_KEYS.secretAccessKey);
   });
 });

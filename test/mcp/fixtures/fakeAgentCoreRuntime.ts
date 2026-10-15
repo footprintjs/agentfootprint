@@ -71,6 +71,13 @@ export interface FakeRuntimeOptions {
   readonly busyCalls?: Readonly<Record<string, number>>;
   /** `true` → the server answers `application/json`; default SSE, like most servers. */
   readonly jsonResponses?: boolean;
+  /**
+   * SDK path only: every `tools/call` of the named tool is answered with this
+   * service exception, THROWN as the real SDK throws a non-2xx answer.
+   */
+  readonly sdkFailures?: Readonly<
+    Record<string, { readonly name: string; readonly status: number }>
+  >;
 }
 
 /** The platform's reply, in `InvokeAgentRuntimeResponse`'s field names. */
@@ -233,6 +240,30 @@ export function fakeAgentCoreRuntime(options: FakeRuntimeOptions): FakeRuntime {
       }
       async send(command: { input: Record<string, unknown> }): Promise<unknown> {
         const input = command.input;
+        // The SDK path's non-2xx form: the real SDK THROWS a service exception
+        // carrying the status, rather than returning the answer.
+        const called = parseRpc(new TextDecoder().decode(input['payload'] as Uint8Array));
+        const failing =
+          called?.method === 'tools/call'
+            ? options.sdkFailures?.[String(called.params?.['name'])]
+            : undefined;
+        if (failing !== undefined) {
+          attempts.push({
+            via: 'sdk',
+            method: 'POST',
+            rpcMethod: 'tools/call',
+            toolName: String(called?.params?.['name']),
+            ...optionalString(input, 'mcpSessionId'),
+            ...optionalString(input, 'runtimeSessionId'),
+            refusedBusy: false,
+          });
+          throw Object.assign(new Error(`${failing.name} from the service`), {
+            name: failing.name,
+            $fault: failing.status >= 500 ? 'server' : 'client',
+            $metadata: { httpStatusCode: failing.status },
+            $response: { statusCode: failing.status, headers: {} },
+          });
+        }
         const reply = await platform({
           via: 'sdk',
           method: 'POST',
