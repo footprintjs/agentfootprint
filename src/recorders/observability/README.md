@@ -6,7 +6,9 @@ Trace: `BoundaryRecorder.ts` (the unified ordered stream), `RunStepRecorder.ts`,
 `../../lib/trust-boundaries/`; its facts are captured live, never replayed from
 the completed event tail. One versioned bundle is added to `snapshot.recorders`.
 Fold: `FlowchartRecorder.ts` (`buildStepGraph`, rebuilt per call), `trace.ts`
-(`serializeTrace`), `recordingEnvelope.ts`, and `recordRun.ts` — which is the one
+(`serializeTrace`), `recordingEnvelope.ts`, `recordedManifest.ts` (the run
+manifest a recording carries: its event, its shape and `manifestFromEvents`;
+context-bisect's strategy arms read it from here), and `recordRun.ts` — which is the one
 KNOWN BREACH of the detachment law: its snapshot half hands out the runner's own
 objects by reference (see its header, and `docs/design/map-walker-trace-fold-lens.md`).
 Lens (for a human, not the wire): `commentary/`, `status/`, `LoggingRecorder.ts`,

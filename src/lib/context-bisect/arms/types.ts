@@ -64,6 +64,7 @@
  * union — each type still means exactly one thing.
  */
 
+import type { RunManifestLike } from '../../../recorders/observability/recordedManifest.js';
 import type { Embedder } from '../../influence-core/index.js';
 import type {
   AblationRunStats,
@@ -74,45 +75,8 @@ import type {
   SimilarityStats,
 } from '../types.js';
 
-// ─── The manifest, structurally ──────────────────────────────────────
-
-/**
- * One mounted memory as the run manifest describes it — structurally satisfied
- * by `RunConfiguredMemoryPayload`.
- */
-export interface ManifestMemoryLike {
-  readonly id?: string;
-  readonly type?: string;
-  readonly strategy?: string;
-  readonly retrieval?: string;
-  readonly embedderId?: string;
-  readonly flavor?: string;
-}
-
-/**
- * The run-configuration manifest, structurally — satisfied by
- * `AgentRunConfiguredPayload` (the payload of
- * `agentfootprint.agent.run_configured`, 9.41.0).
- *
- * Declared structurally, and every member optional, for the same reason
- * `CapturedEventLike` and `QualityTriggerLookup` are: `context-bisect` is a
- * LEAF. It must not import the event registry to read one payload, and a
- * consumer replaying manifests out of a saved recording must be able to hand in
- * any bag shaped like this.
- */
-export interface RunManifestLike {
-  readonly agentId?: string;
-  readonly llm?: { readonly provider?: string; readonly model?: string };
-  readonly reactMode?: string;
-  readonly memories?: readonly ManifestMemoryLike[];
-  readonly window?: string;
-  readonly skillGraph?: {
-    readonly routing?: string;
-    readonly continuity?: string;
-    readonly scorer?: string;
-  };
-  readonly evidenceGate?: string;
-}
+// The manifest an arm is checked against (`RunManifestLike`, `ManifestMemoryLike`)
+// is the recording's own vocabulary: `recorders/observability/recordedManifest.ts`.
 
 // ─── The arm ─────────────────────────────────────────────────────────
 

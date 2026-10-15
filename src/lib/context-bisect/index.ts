@@ -202,7 +202,6 @@ export {
   type AblationSpec,
   type AblationVerdict,
   type AblationVerdictKind,
-  type CapturedEventLike,
   type ContextBugArtifacts,
   type ContextBugReport,
   type CostRange,
@@ -222,3 +221,5 @@ export {
   type SuspectDetail,
   type SuspectKind,
 } from './types.js';
+// The captured-event envelope a recording holds — the recording's own vocabulary.
+export type { CapturedEventLike } from '../../recorders/observability/recordedManifest.js';
