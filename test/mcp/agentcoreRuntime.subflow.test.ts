@@ -302,7 +302,7 @@ describe('runtime-hosted MCP — inside a PARALLEL fan-out', () => {
     expect(told).toContain('order B-200 is shipped');
   });
 
-  it("ISOLATION — one SHARED client on the default ('per-call'): no request carries any session id", async () => {
+  it("ISOLATION — one SHARED client on the default ('per-call'): no session carries over", async () => {
     const runtime = ordersRuntime();
     const client = await mcpClient({
       name: 'orders',
@@ -328,7 +328,19 @@ describe('runtime-hosted MCP — inside a PARALLEL fan-out', () => {
     expect(answer['a']).toContain('order A-100 is shipped');
     expect(answer['b']).toContain('order B-200 is shipped');
     expect(runtime.attempts.every((x) => x.mcpSessionId === undefined)).toBe(true);
-    expect(runtime.attempts.every((x) => x.runtimeSessionId === undefined)).toBe(true);
+    // A fresh runtime session per request (a refused request's retries keep
+    // its one) — so the branches' calls never share one.
+    expect(runtime.attempts.every((x) => typeof x.runtimeSessionId === 'string')).toBe(true);
+    const runtimeIdsOf = (orderId: string) =>
+      new Set(
+        runtime
+          .calls()
+          .filter((c) => c.args?.['id'] === orderId)
+          .map((c) => c.runtimeSessionId),
+      );
+    const [a, b] = [runtimeIdsOf('A-100'), runtimeIdsOf('B-200')];
+    expect(a.size).toBeGreaterThan(0);
+    expect([...a].some((id) => b.has(id))).toBe(false);
   });
 });
 

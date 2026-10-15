@@ -39,7 +39,7 @@
  * in that order, outermost first: the session is applied once per request, so
  * every attempt of it lands in the same runtime session, and every attempt is
  * signed (or vended) afresh, the ordering `mcp/throttleRetry.ts` requires. A
- * failure's text never repeats a session id or token the request carried
+ * failure's text never repeats a session id or credential the request carried
  * (`echo.ts`), and an auth failure's never repeats the service's message
  * (`authFailure.ts`). `mcpClient`'s own 429 retry still wraps the whole thing.
  *
@@ -317,10 +317,11 @@ function authStrategy(options: AgentCoreRuntimeMcpTransportOptions, url: string)
       );
     }
     // Beneath the vending, where the final headers are visible: a failure body
-    // never repeats the token this request carried.
+    // never repeats a credential this request carried — whatever header the
+    // provider put it in (`Authorization`, `x-api-key`, a DPoP proof).
     const base = auth.fetch ?? globalThis.fetch.bind(globalThis);
     const scrubbingBase: FetchLike = async (input, init) =>
-      withoutEcho(await base(input, init), [new Headers(init?.headers).get('authorization')]);
+      withoutEcho(await base(input, init), sentValues(new Headers(init?.headers)));
     // The Gateway's vending fetch, reused as is: the token is vended per
     // request, applied to that one request, and dropped.
     const vending = createVendingFetch(
@@ -341,6 +342,27 @@ function authStrategy(options: AgentCoreRuntimeMcpTransportOptions, url: string)
       `— got ${describe(auth)}. Which one is decided by the runtime's inbound auth: IAM is ` +
       "'sigv4', an OAuth (JWT) authorizer is a bearer token.",
   );
+}
+
+/** Request headers that carry no secret, and whose values would only blank useful words. */
+const NOT_SECRET_HEADERS: ReadonlySet<string> = new Set([
+  'accept',
+  'accept-encoding',
+  'connection',
+  'content-length',
+  'content-type',
+  'host',
+  'mcp-protocol-version',
+  'user-agent',
+]);
+
+/** Every value a request sent that could be a credential or a session id. */
+function sentValues(headers: Headers): string[] {
+  const out: string[] = [];
+  headers.forEach((value, name) => {
+    if (!NOT_SECRET_HEADERS.has(name.toLowerCase())) out.push(value);
+  });
+  return out;
 }
 
 // ── The retry strategy's configuration ────────────────────────────────

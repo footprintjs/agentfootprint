@@ -57,10 +57,10 @@ sentence. A vended bearer token is used for one request and dropped.
    runtime behind an OAuth authorizer is reached at
    `https://bedrock-agentcore.{region}.amazonaws.com/runtimes/{ARN}/invocations`
    with the token vended per request by the same code as `gatewayTransport`.
-4. **`'per-call'` is the default — isolation by construction.** It sends no
-   session id of its own (on SigV4 the SDK then fills a fresh random
-   `runtimeSessionId` per call) and hides the `Mcp-Session-Id` the platform
-   returns, so nothing carries over and one client built at startup can serve
+4. **`'per-call'` is the default — isolation by construction.** It sends a
+   fresh runtime session id of its own with every request (as fresh as the
+   SDK's default, but one the transport knows, so it can be scrubbed) and no
+   `Mcp-Session-Id`, and hides the `Mcp-Session-Id` the platform returns, so nothing carries over and one client built at startup can serve
    every user of a process. It needs a stateless server (the runtime's
    recommended default). **`'reuse'` keeps one session per CLIENT, keyed by
    the transport:** a request with no `Mcp-Session-Id` (a client's
@@ -101,17 +101,21 @@ sentence. A vended bearer token is used for one request and dropped.
    request names no user, so a `'user'` token would be sent for whoever calls
    through the client. For a token per user, build a transport per user whose
    provider vends that user's token.
-10. **A failure never repeats what the request carried.** Any non-2xx body has
-   the session ids and the bearer token this request sent replaced
-   (`echo.ts`): AWS validation errors quote the value they refused, and the
-   body becomes the model's tool error. A 2xx answer is handed on unread.
+10. **A failure never repeats what the request carried.** Any non-2xx body,
+   and a 2xx JSON body that holds one, has every session id and credential
+   header value this request sent replaced (`echo.ts`; on the bearer path
+   every header but a short list of non-secret ones, so an `x-api-key` or a
+   DPoP proof is covered too): AWS validation errors quote the value they
+   refused, the runtime sends some platform errors as a 200 JSON-RPC error,
+   and the body becomes the model's tool error. Any other 2xx answer, a stream
+   included, is handed on unread.
 
 ## Files
 - `transport.ts` — the facade: options, the endpoint URL, the composition.
 - `sessionBusy.ts` — the retry decision (one function).
 - `session.ts` — `'per-call'` (default) and `'reuse'`.
 - `authFailure.ts` — an auth failure answered with its type and status only.
-- `echo.ts` — a failure body never repeats a session id or token the request sent.
+- `echo.ts` — a failure body never repeats a session id or credential the request sent.
 - `errorType.ts` — the bare `x-amzn-errortype` name.
 - `invoke.ts` — the SigV4 strategy over `InvokeAgentRuntimeCommand` (the only
   file that loads `@aws-sdk/client-bedrock-agentcore`).

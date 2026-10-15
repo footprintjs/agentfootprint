@@ -16,10 +16,10 @@
  *     on every call that leaves it unset.
  *
  * ── 'per-call' (the default) ─────────────────────────────────────────────────
- * Every request in a session of its own: this strategy sends no session id of
- * its own — on SigV4 the SDK then fills a fresh random `runtimeSessionId` per
- * call — and the `Mcp-Session-Id` a response carries is not handed to the MCP
- * client, so nothing can carry one call's session into the next. Isolation by
+ * Every request in a session of its own: this strategy sends a FRESH runtime
+ * session id with every request and no `Mcp-Session-Id`, and the
+ * `Mcp-Session-Id` a response carries is not handed to the MCP client, so
+ * nothing can carry one call's session into the next. Isolation by
  * construction: a client shared by every user of a process (tools built once at
  * startup — the common shape) never puts two users in one microVM. The price is
  * a cold start per call, and it needs a STATELESS server (`stateless_http=True`,
@@ -91,7 +91,7 @@ export function sessionStrategy(
   newId: () => string = () => globalThis.crypto.randomUUID(),
 ): SessionStrategy {
   if (kind === 'reuse') return reuse(newId);
-  if (kind === 'per-call') return PER_CALL;
+  if (kind === 'per-call') return perCall(newId);
   throw new TypeError(
     `agentCoreRuntimeMcpTransport: \`session\` must be 'reuse' or 'per-call' — got ` +
       `${JSON.stringify(kind)}. 'per-call' gives every request its own session (safe to share); ` +
@@ -152,13 +152,18 @@ function reuse(newId: () => string): SessionStrategy {
   };
 }
 
-const PER_CALL: SessionStrategy = {
-  request(headers) {
-    headers.delete(MCP_SESSION_HEADER);
-    headers.delete(AGENTCORE_RUNTIME_SESSION_HEADER);
-    return { settle: (response) => withSessionHeader(response, undefined) };
-  },
-};
+function perCall(newId: () => string): SessionStrategy {
+  return {
+    request(headers) {
+      headers.delete(MCP_SESSION_HEADER);
+      // A fresh runtime session of our own for every request — fresh as the
+      // SDK's own default would be, but one the transport knows, so a failure
+      // that quotes it can be scrubbed (`echo.ts`), on both auth paths.
+      headers.set(AGENTCORE_RUNTIME_SESSION_HEADER, newId());
+      return { settle: (response) => withSessionHeader(response, undefined) };
+    },
+  };
+}
 
 /**
  * The response with its `Mcp-Session-Id` replaced by `value`, or removed when

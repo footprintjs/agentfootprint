@@ -379,9 +379,11 @@ describe('agentCoreRuntimeMcpTransport — P2 boundary', () => {
     // Response side: the minted id never reaches the client to be carried...
     expect(res.headers.get('mcp-session-id')).toBeNull();
     expect(await res.text()).toBe('{}');
-    // ...and request side: an id the client held anyway is not sent.
+    // ...and request side: an id the client held anyway is not sent; the
+    // runtime session is a fresh one of the transport's own.
     expect(sdk.inputs[0]?.['mcpSessionId']).toBeUndefined();
-    expect(sdk.inputs[0]?.['runtimeSessionId']).toBeUndefined();
+    expect(typeof sdk.inputs[0]?.['runtimeSessionId']).toBe('string');
+    expect(sdk.inputs[0]?.['runtimeSessionId']).not.toBe('x');
   });
 
   it('P2 an SSE reply stays a stream — events reach the client as they arrive', async () => {
@@ -527,7 +529,7 @@ describe('agentCoreRuntimeMcpTransport — P3 scenario (real MCP client + real M
     expect(runtime.calls().map((c) => c.refusedBusy)).toEqual([true, false]);
   });
 
-  it("P3 the default, 'per-call': no request carries a session id, so nothing carries over", async () => {
+  it("P3 the default, 'per-call': a fresh session per request, so nothing carries over", async () => {
     const runtime = lookupRuntime();
     const client = await mcpClient({
       name: 'orders',
@@ -544,7 +546,9 @@ describe('agentCoreRuntimeMcpTransport — P3 scenario (real MCP client + real M
     await client.close();
     expect(runtime.attempts.length).toBeGreaterThanOrEqual(4);
     expect(runtime.attempts.every((a) => a.mcpSessionId === undefined)).toBe(true);
-    expect(runtime.attempts.every((a) => a.runtimeSessionId === undefined)).toBe(true);
+    // A fresh runtime session per request: no two requests share one.
+    const runtimeIds = runtime.attempts.map((a) => a.runtimeSessionId);
+    expect(new Set(runtimeIds).size).toBe(runtimeIds.length);
   });
 });
 
@@ -1270,6 +1274,98 @@ describe('agentCoreRuntimeMcpTransport — P5 a failure never repeats what the r
     expect(res.status).toBe(400);
     expect(text).toContain('bad request');
     expect(text).not.toContain('SECRET-BEARER-TOKEN-77');
+  });
+
+  it('bearer: a credential in ANY header (x-api-key, a DPoP proof) is scrubbed from a failure', async () => {
+    const transport = agentCoreRuntimeMcpTransport({
+      agentRuntimeArn: ARN,
+      region: REGION,
+      auth: {
+        bearer: {
+          async getCredential() {
+            return {
+              status: 'issued',
+              credential: {
+                kind: 'bearer',
+                toHeaders: () => ({
+                  'x-api-key': 'SECRET-API-KEY-0123456789',
+                  dpop: 'SECRET-DPOP-PROOF-0123456789',
+                }),
+              },
+            } as never;
+          },
+        },
+        fetch: async (_input, init) => {
+          const echoed: Record<string, string> = {};
+          new Headers(init?.headers).forEach((v, k) => (echoed[k] = v));
+          return new Response(JSON.stringify({ message: 'bad request', echoed }), { status: 400 });
+        },
+      },
+    });
+    const text = await (
+      (await transport.fetch?.(transport.url, { method: 'POST', body: '{}' })) as Response
+    ).text();
+    expect(text).toContain('bad request');
+    expect(text).not.toContain('SECRET-API-KEY');
+    expect(text).not.toContain('SECRET-DPOP-PROOF');
+  });
+
+  it("SigV4, the default 'per-call': the fresh runtime session id is the transport's own, and scrubbed", async () => {
+    const module = {
+      InvokeAgentRuntimeCommand: class {
+        constructor(readonly input: Record<string, unknown>) {}
+      },
+      BedrockAgentCoreClient: class {
+        async send(command: { input: Record<string, unknown> }) {
+          throw Object.assign(
+            new Error(`Value '${String(command.input['runtimeSessionId'])}' failed a constraint`),
+            {
+              name: 'ValidationException',
+              $metadata: { httpStatusCode: 400 },
+              $response: { statusCode: 400, headers: {} },
+            },
+          );
+        }
+      },
+    };
+    const transport = agentCoreRuntimeMcpTransport({
+      agentRuntimeArn: ARN,
+      region: REGION,
+      _sdk: module,
+      _newSessionId: () => 'per-call-runtime-session-00000000000001',
+    });
+    const text = await (
+      (await transport.fetch?.(transport.url, { method: 'POST', body: '{}' })) as Response
+    ).text();
+    expect(text).toContain('failed a constraint');
+    expect(text).not.toContain('per-call-runtime-session-00000000000001');
+  });
+
+  it('a 200 JSON-RPC error quoting the runtime session id is scrubbed too', async () => {
+    const transport = agentCoreRuntimeMcpTransport({
+      agentRuntimeArn: ARN,
+      region: REGION,
+      _newSessionId: () => 'quoted-runtime-session-0000000000000001',
+      auth: {
+        bearer: staticTokens({ runtime: 't' }),
+        fetch: async (_input, init) =>
+          jsonReply({
+            jsonrpc: '2.0',
+            id: 1,
+            error: {
+              code: -32000,
+              message: `session ${
+                new Headers(init?.headers).get(AGENTCORE_RUNTIME_SESSION_HEADER) ?? ''
+              } failed`,
+            },
+          }),
+      },
+    });
+    const text = await (
+      (await transport.fetch?.(transport.url, { method: 'POST', body: '{}' })) as Response
+    ).text();
+    expect(text).toContain('failed');
+    expect(text).not.toContain('quoted-runtime-session-0000000000000001');
   });
 
   it('a successful answer is handed on as the very object, unread', async () => {

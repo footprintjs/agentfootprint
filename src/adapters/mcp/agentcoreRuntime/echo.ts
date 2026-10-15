@@ -8,8 +8,10 @@
  * 'runtimeSessionId' failed to satisfy constraint"), and a proxy or a hosted
  * server may echo a header back in a 4xx. So the session ids and the bearer
  * token THIS request sent are replaced in any failure body before the MCP
- * client reads it — the message stays, the values do not. A 2xx answer is
- * handed on unread.
+ * client reads it — the message stays, the values do not. The runtime's MCP
+ * contract also sends some platform errors as an HTTP 200 JSON-RPC error, so a
+ * 2xx JSON body is read too (a copy of it) and rebuilt only when it holds one
+ * of the values; any other 2xx answer, a stream included, is handed on unread.
  *
  * Pattern: pure helper. Role: outer ring, the transport's own hygiene.
  */
@@ -22,20 +24,33 @@ const MIN_SCRUBBED_LENGTH = 8;
 
 /**
  * `response` with every one of `values` replaced in its body when it is a
- * failure (not 2xx); the very object, unread, otherwise.
+ * failure (not 2xx), or a 2xx JSON body that holds one; the very object
+ * otherwise.
  */
 export async function withoutEcho(
   response: Response,
   values: readonly (string | null | undefined)[],
 ): Promise<Response> {
-  if (response.ok || response.body === null) return response;
+  if (response.body === null) return response;
   const sent = scrubbable(values);
   if (sent.length === 0) return response;
   let text: string;
-  try {
-    text = await response.text();
-  } catch {
-    text = '';
+  if (response.ok) {
+    if (!isJson(response.headers.get('content-type'))) return response;
+    try {
+      text = await response.clone().text();
+    } catch {
+      return response;
+    }
+    if (!sent.some((value) => text.includes(value) || text.includes(escapedOf(value)))) {
+      return response;
+    }
+  } else {
+    try {
+      text = await response.text();
+    } catch {
+      text = '';
+    }
   }
   const headers = new Headers(response.headers);
   headers.delete('content-length');
@@ -51,10 +66,20 @@ export function scrubText(text: string, values: readonly string[]): string {
   let out = text;
   for (const value of values) {
     out = out.split(value).join(ECHO_PLACEHOLDER);
-    const escaped = JSON.stringify(value).slice(1, -1);
+    const escaped = escapedOf(value);
     if (escaped !== value) out = out.split(escaped).join(ECHO_PLACEHOLDER);
   }
   return out;
+}
+
+/** `value` as it appears inside a JSON string. */
+function escapedOf(value: string): string {
+  return JSON.stringify(value).slice(1, -1);
+}
+
+/** `application/json`, with or without parameters, in any case. */
+function isJson(contentType: string | null): boolean {
+  return contentType !== null && /^application\/json\b/i.test(contentType.trim());
 }
 
 /**
