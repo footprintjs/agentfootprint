@@ -31,8 +31,17 @@ else here follows from it: loaders normalise before offsets exist and never
 after, the HTML stripper replaces tags with equal-length whitespace instead of
 deleting them, and `trimSpan` moves offsets rather than trimming text.
 
+## `retriever/` — the run-time half, not on this door
+
+`defineRAG` (declares a read-only retriever over a named corpus) and
+`indexDocuments` (seeds a store from documents already in memory) live in
+`retriever/`, with its own README and role. They are run-time wiring, exported
+by the MAIN barrel; `index.ts` here does not re-export them, so the `/rag` door
+stays the half that runs once, before any agent exists. `indexCorpus` and
+`exportCorpus` read `retriever/defineRAG.ts` · `DEFAULT_CORPUS_IDENTITY` so a
+corpus is indexed and served under one identity.
+
 ## What is NOT here
 
-- `defineRAG` — run-time wiring, main barrel.
 - Re-ranking / MMR — retrieval-side, behind `RetrievalStrategy` in `memory/`.
 - File watching — `indexCorpus` is an explicit call, by design.

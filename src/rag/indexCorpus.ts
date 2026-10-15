@@ -61,7 +61,7 @@ import { assertServesVectors } from '../memory/store/capability.js';
 import type { MemoryIdentity } from '../memory/identity/index.js';
 import type { MemoryEntry } from '../memory/entry/index.js';
 import { emitEmbedding } from '../memory/embedding/emitEmbedding.js';
-import { DEFAULT_CORPUS_IDENTITY } from '../lib/rag/defineRAG.js';
+import { DEFAULT_CORPUS_IDENTITY } from './retriever/defineRAG.js';
 import { loadDocuments } from './loadDocuments.js';
 import { splitDocuments } from './splitDocuments.js';
 import { byHeading } from './splitters/byHeading.js';

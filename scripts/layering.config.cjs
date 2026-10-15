@@ -19,18 +19,17 @@
  * WHERE THIS TABLE COMES FROM. The design pass that measured the folder-level import
  * cycle (a value-level SCC of 23 of the 33 folder nodes, the root `src/*.ts` modules
  * counted as one — `--json` reports it as `folderCycles`) and the order that removes it. The
- * table below is that order written against TODAY's paths: a top-level folder is placed
- * at the layer it keeps, and each `src/lib/<sub>/` feature package is placed at the
- * layer it will hold as a top-level folder of its own. A file that a later change
- * MOVES to another folder sits, until then, at its current folder's layer — so the edges
- * that move removes are named below, and the change that frees them deletes them.
+ * table below is that order: each top-level folder sits at the layer it keeps. `src/lib/`
+ * holds the leaves only — every feature package that once lived under it is now a
+ * top-level folder of its own (the last one, the retriever declaration, is
+ * `src/rag/retriever/`, inside the folder at its own layer).
  *
  *   L0  leaves          imports nothing above itself: `lib/` (its loose files, `claim/`,
  *                       `context-contract/`), events, bridge, maps, recipes, time
  *   L1  vocabularies    the one law each spells: semantics, redaction, thinking, classify,
  *                       ontology, cache, trust-boundaries
  *   L2  ports           provider-contract (what a provider implements), memory
- *   L3  stores, folds   artifacts, integrity, influence-core, rag (+ lib/rag), resilience, security
+ *   L3  stores, folds   artifacts, integrity, influence-core, rag, resilience, security
  *   L4                  identity, answer-validation, observability, tool-lint
  *   L5  the trace       recorders, debug
  *   L6                  locales, reliability, strategies
@@ -96,7 +95,6 @@ const LAYERS = [
       'src/integrity/**',
       'src/influence-core/**',
       'src/rag/**',
-      'src/lib/rag/**',
       'src/resilience/**',
       'src/security/**',
     ],
@@ -158,8 +156,8 @@ const LAYERS = [
  * change that makes the law true turns it on.
  *
  * `lib` — the leaves every layer agrees on (its loose files, `claim/`, `context-contract/`)
- * import nothing in `src/` outside themselves. Its feature subfolders are not part of the set:
- * each sits at its own layer until it leaves `lib/` for a top-level folder of its own.
+ * import nothing in `src/` outside themselves. `lib/` has no feature subfolders any more:
+ * each one left for a top-level folder of its own, at its own layer.
  *
  * `time` — the time layer (instants, ranges, zones, the run clock, the readers) is
  * self-contained: every layer that speaks about time imports it, and it imports none of them.

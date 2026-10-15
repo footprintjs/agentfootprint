@@ -43,7 +43,7 @@ import {
   type CorpusBundle,
   type CorpusBundleEntry,
 } from '../memory/store/staticVectorStore.js';
-import { DEFAULT_CORPUS_IDENTITY } from '../lib/rag/defineRAG.js';
+import { DEFAULT_CORPUS_IDENTITY } from './retriever/defineRAG.js';
 
 /**
  * Export every entry of a corpus namespace as a plain-JSON bundle.

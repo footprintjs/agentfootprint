@@ -1,7 +1,7 @@
 ---
 name: RAG — retrieval-augmented generation
 group: context-engineering
-guide: ../../src/lib/rag/
+guide: ../../src/rag/retriever/
 defaultInput: How long do refunds take?
 ---
 

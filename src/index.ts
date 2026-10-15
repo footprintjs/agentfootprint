@@ -1284,7 +1284,7 @@ export {
   indexDocuments,
   type IndexDocumentsOptions,
   type RagDocument,
-} from './lib/rag/index.js';
+} from './rag/retriever/index.js';
 
 // The retrieval seam (8.8.0) — what a retrieval considered, and the rule
 // that decided what it kept. `topK` is the rule every release before this

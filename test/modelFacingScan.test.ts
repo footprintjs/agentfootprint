@@ -851,7 +851,7 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: 'the never-routes check-up warning handed to the author, same delivery as skillExamples',
     },
   ],
-  'src/lib/rag/defineRAG.ts': [
+  'src/rag/retriever/defineRAG.ts': [
     {
       kind: 'not-model-facing',
       count: 1,
