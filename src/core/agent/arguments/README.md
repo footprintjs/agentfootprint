@@ -710,7 +710,7 @@ the PERFORMANCE block), and the resume adds no model call.
   words do. Whether an `ask` rule should accept only the PERSON (`said`, `answered`) and ask
   about an `app` value is the owner's call; the code keeps `app` traced until then.
 - **Open for the owner — the default output-schema instruction as the app's text.**
-  `.outputSchema()` adds an always-on instruction (`core/outputSchema.ts` ·
+  `.outputSchema()` adds an always-on instruction (`answer-validation/outputSchema.ts` ·
   `buildDefaultInstruction` — the library's sentence, plus the parser's own `description` —
   unless the app passes its own `instruction`), and only the findings and ontology instructions
   are left out of the app corpus (`honesty/sourceCorpus.ts` · `LIBRARY_INSTRUCTIONS`). So a

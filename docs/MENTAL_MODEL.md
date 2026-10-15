@@ -536,7 +536,7 @@ deny → synthetic tool_result, LLM recovers; halt → generic message (never le
 → `PolicyHaltError`. Throwing checker = deny-by-default. `extractSequence` derives the dispatched-call
 sequence from history (excludes denied calls) for sequence-aware policies. `PermissionPolicy.fromRoles`.
 
-**Output schema (`src/core/outputSchema.ts`):** `OutputSchemaParser{parse,description?}` (Zod/Valibot/
+**Output schema (`src/answer-validation/outputSchema.ts`):** `OutputSchemaParser{parse,description?}` (Zod/Valibot/
 ArkType/custom duck-typed). `.outputSchema()` auto-pushes an always-on JSON instruction + feeds the
 reliability loop (schema-fail → retry-with-feedback). `agent.parseOutput`/`runTyped`; 3-tier
 `outputFallback` (LLM-repair → canned, both schema-validated; canned validated at build time).
@@ -762,7 +762,7 @@ src/
     tools.ts               defineTool, Tool, ToolExecutionContext
     pause.ts               pauseHere/askHuman, RunnerPauseOutcome
     runCheckpoint.ts       AgentRunCheckpoint, RunCheckpointError
-    outputSchema.ts / outputFallback.ts   structured output + 3-tier fallback
+    outputFallback.ts      3-tier structured-output fallback (schema: answer-validation/outputSchema.ts)
     translator.ts          GroupTranslator/GroupMetadata (Lens static contract)
     cost.ts                emitCostTick
     agent/

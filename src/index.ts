@@ -585,7 +585,7 @@ export {
   type OutputSchemaParser,
   type OutputSchemaOptions,
   type OutputSchemaStrategy,
-} from './core/outputSchema.js';
+} from './answer-validation/outputSchema.js';
 // 9.101.0 — the findings ledger (`.findings()`): the row shapes
 // `agent.findings()` hands back and `AgentState.findingsLedger` /
 // `AgentRunCheckpoint.findingsLedger` carry, plus the reserved argument name

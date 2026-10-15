@@ -72,7 +72,7 @@
  *     (tier 3 fired — fallback also failed; safety net engaged)
  */
 
-import type { OutputSchemaError, OutputSchemaParser } from './outputSchema.js';
+import type { OutputSchemaError, OutputSchemaParser } from '../answer-validation/outputSchema.js';
 import type { AgentfootprintEventMap } from '../events/registry.js';
 
 // ─── Public types ────────────────────────────────────────────────────

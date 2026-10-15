@@ -19,7 +19,7 @@ import {
   type OutputSchemaOptions,
   type OutputSchemaParser,
   type OutputSchemaStrategy,
-} from '../outputSchema.js';
+} from '../../answer-validation/outputSchema.js';
 import {
   buildSchemaTool,
   resolveJsonSchema,

@@ -37,7 +37,8 @@ message it injects) · `src/patterns/` (seven caller-prompted research
 patterns; `LlmRouter.ts` composes one) · `src/lib/injection-engine/factories/`
 (seven declaration-only `define*` verbs; `defineRelevanceHint.ts` composes its
 own sentence) · `src/core/` (`LLMCall.ts`, `Agent.ts`'s
-`buildChart`, `toolContract.ts`, `outputSchema.ts`) · `src/core/agent/`
+`buildChart`, `toolContract.ts`) · `src/answer-validation/` (`types.ts`,
+`outputSchema.ts`) · `src/core/agent/`
 (`buildAgentChart.ts`, `buildDynamicAgentChart.ts`, `buildToolRegistry.ts`,
 `AgentBuilder.ts`, `skillGraphDeclared.ts`) · `src/lib/injection-engine/`
 (`skillGraph.ts` the compiler, plus the build-time checkers) ·

@@ -159,7 +159,6 @@ const CLOSED_FOLDERS = [];
  * @type {ReadonlyArray<readonly [string, string]>}
  */
 const UPWARD_ALLOWANCES = [
-  ['src/answer-validation/validate.ts', 'src/core/outputSchema.ts'],
   ['src/artifacts/datasetResult.ts', 'src/core/time/axis.ts'],
   ['src/artifacts/index.ts', 'src/core/time/axis.ts'],
   ['src/artifacts/minting.ts', 'src/core/time/axis.ts'],
