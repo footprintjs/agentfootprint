@@ -115,6 +115,31 @@ function checkNamespaceVariables(scope: Readonly<Record<string, string>>): void 
 }
 
 /**
+ * A search under a namespace scope must stay inside it: every scope value must
+ * be a path segment of the namespace searched, as it is of every namespace the
+ * memory's writes were filed under. Otherwise the read could return records
+ * filed under another tenant's scope — refused, naming the variable, never
+ * quoting its value.
+ */
+function assertSearchWithinScope(
+  namespace: string,
+  namespaceScope: Readonly<Record<string, string>>,
+): void {
+  const segments = new Set(namespace.split('/'));
+  for (const [variable, value] of Object.entries(namespaceScope)) {
+    if (!segments.has(value)) {
+      throw new TypeError(
+        `AgentCoreStore.search(): the namespace searched does not hold the value of namespace ` +
+          `variable ${JSON.stringify(variable)} as a path segment of its own, so it could read ` +
+          'records filed under another tenant’s scope. Build `searchNamespace` from the ' +
+          '`namespaceScope` it is handed, one variable per segment (e.g. ' +
+          '`({ namespaceScope }) => "/tenants/" + namespaceScope?.tenantid + "/facts"`).',
+      );
+    }
+  }
+}
+
+/**
  * A caller's value — a tenant id — in the alphabet AgentCore admits for a
  * namespace variable, ONE-TO-ONE.
  *
@@ -345,17 +370,21 @@ export interface AgentCoreStoreOptions {
    * something like `/strategies/{strategyId}/actors/{actorId}`).
    *
    * A function, because the namespace usually contains the actor: it is handed
-   * the resolved AgentCore ids for the identity being searched — and the
-   * identity itself, so a namespace that WRITES filed under a per-tenant
-   * variable (`writeOptions.namespaceScope`) can be searched under the same
-   * one. Use the same mapping on both sides (`agentCoreNamespaceValue`), or the
-   * search reads a namespace nothing was filed in. Default:
-   * `/actors/{actorId}/sessions/{sessionId}` — the session's own records.
+   * the resolved AgentCore ids for the identity being searched, the identity
+   * itself, and — when the memory binds one (`writeOptions.namespaceScope`) —
+   * the SAME namespace scope its writes are filed under, resolved for this
+   * identity. Build the namespace from that scope
+   * (`({ namespaceScope }) => '/tenants/' + namespaceScope?.tenantid + '/facts'`):
+   * a search given a scope is refused unless every one of its values is a
+   * path segment of the namespace, so a read cannot leave the tenant its
+   * writes were filed under. Default: `/actors/{actorId}/sessions/{sessionId}`
+   * — the session's own records.
    */
   readonly searchNamespace?: (scope: {
     readonly actorId: string;
     readonly sessionId: string;
     readonly identity: MemoryIdentity;
+    readonly namespaceScope?: Readonly<Record<string, string>>;
   }) => string;
   /**
    * Restrict `search()` to one extraction strategy (semantic, summary,
@@ -567,6 +596,7 @@ export class AgentCoreStore implements MemoryStore {
     actorId: string;
     sessionId: string;
     identity: MemoryIdentity;
+    namespaceScope?: Readonly<Record<string, string>>;
   }) => string;
   private readonly searchStrategyId: string | undefined;
   /** Why the write options cannot be honoured — `undefined` when they can. */
@@ -873,10 +903,13 @@ export class AgentCoreStore implements MemoryStore {
 
     const scope = this.scope(identity);
     const k = options.k ?? 10;
+    const namespaceScope = options.namespaceScope;
+    if (namespaceScope !== undefined) checkNamespaceVariables(namespaceScope);
     const namespace = this.searchNamespace({
       actorId: scope.actorId,
       sessionId: scope.sessionId,
       identity,
+      ...(namespaceScope !== undefined && { namespaceScope }),
     });
     if (namespace.includes('*')) {
       throw new TypeError(
@@ -886,6 +919,7 @@ export class AgentCoreStore implements MemoryStore {
           'Name the namespace exactly.',
       );
     }
+    if (namespaceScope !== undefined) assertSearchWithinScope(namespace, namespaceScope);
     const page = await this.client.retrieveRecords({
       memoryId: this.memoryId,
       namespace,
@@ -1187,13 +1221,19 @@ function createAgentCoreClient(
   };
 }
 
+/** A namespace compared as a path: repeated `/` collapsed, a trailing one dropped. */
+function pathOf(namespace: string): string {
+  return namespace.replace(/\/{2,}/g, '/').replace(/\/$/, '');
+}
+
 /** What the start of another actor's id extending this one looks like. */
 const ACTOR_ESCAPE_AHEAD = /^[0-9A-F]{4}/;
 
 /**
  * Is `record` filed AT `asked` or under it? Compared on whole path segments —
- * trailing `/` ignored on both sides — because AgentCore's `namespace` filter is
- * a string prefix, and `/tenants/v1` must not admit `/tenants/v12`.
+ * repeated and trailing `/` ignored on both sides — because AgentCore's
+ * `namespace` filter is a string prefix, and `/tenants/v1` must not admit
+ * `/tenants/v12`.
  *
  * One more case, because an actor id can hold a `/`: its escape is `/` + four
  * hex digits (`bob@x.com` → `bob/0040x/002Ecom`), so another actor's id can
@@ -1202,14 +1242,15 @@ const ACTOR_ESCAPE_AHEAD = /^[0-9A-F]{4}/;
  * a continuation that starts with four uppercase hex digits may be that other
  * actor's — and is dropped. A sub-namespace of your own that starts that way
  * is dropped too (put a literal segment after `{actorId}`), never served across
- * actors.
+ * actors. That literal must not itself start with four uppercase hex digits,
+ * or the guard cannot tell it from another actor's id.
  */
 function filedUnder(record: AgentCoreMemoryRecord, asked: string, actorId: string): boolean {
-  const base = asked.replace(/\/+$/, '');
+  const base = pathOf(asked);
   const guardActor = base.endsWith(actorId);
   const filed = record.namespaces ?? (record.namespace !== undefined ? [record.namespace] : []);
   return filed.some((ns) => {
-    const n = ns.replace(/\/+$/, '');
+    const n = pathOf(ns);
     if (n === base) return true;
     if (!n.startsWith(`${base}/`)) return false;
     return !(guardActor && ACTOR_ESCAPE_AHEAD.test(n.slice(base.length + 1)));

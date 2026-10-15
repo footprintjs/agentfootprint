@@ -132,7 +132,8 @@ function orderAgent(
         type: MEMORY_TYPES.EPISODIC,
         strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 10 },
         store,
-        writeOptions: { extraction: 'skip', namespaceScope: SCOPE },
+        writeOptions: { extraction: 'skip' },
+        namespaceScope: SCOPE,
       }),
     )
     .build();

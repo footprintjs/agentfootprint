@@ -23,6 +23,7 @@ export {
   refuseUnhonouredWriteOptions,
   requestedWriteOptions,
   type MemoryWriteOptionName,
+  type MemoryNamespaceScope,
   type MemoryWriteOptions,
   type MemoryWriteOptionsConfig,
 } from './writeOptions.js';

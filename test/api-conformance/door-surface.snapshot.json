@@ -1561,6 +1561,7 @@
       "MemoryEntry",
       "MemoryFlavor",
       "MemoryIdentity",
+      "MemoryNamespaceScope",
       "MemoryPipeline",
       "MemoryScope",
       "MemorySource",

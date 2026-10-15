@@ -34,12 +34,11 @@ const memory = defineMemory({
   type: MEMORY_TYPES.EPISODIC,
   strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 10 },
   store: new AgentCoreStore({ memoryId, region: 'us-west-2' }),
-  writeOptions: {
-    extraction: 'skip',
-    // One namespace per tenant, one-to-one into AgentCore's alphabet; a
-    // missing tenant is refused, never folded into a shared stand-in.
-    namespaceScope: (identity) => ({ tenantid: agentCoreNamespaceValue(identity.tenant ?? '') }),
-  },
+  writeOptions: { extraction: 'skip' },
+  // One namespace per tenant — writes filed under it, searches confined to it —
+  // one-to-one into AgentCore's alphabet; a missing tenant is refused, never
+  // folded into a shared stand-in.
+  namespaceScope: (identity) => ({ tenantid: agentCoreNamespaceValue(identity.tenant ?? '') }),
 });
 // or per write, on the port:  store.put(identity, entry, { extraction: 'skip' })
 ```
@@ -60,8 +59,13 @@ client written before the fields existed would compile and drop them), and the
 installed SDK must model `extractionMode` / `extractionConfig` (read off its own
 `CreateEventInput$` schema — an older serializer drops them silently). It checks
 the variables against AgentCore's documented domain before sending, refusing by
-variable name without quoting the value. `searchNamespace` receives the identity,
-so a search can be mapped to the same per-tenant namespace, and `search()` keeps
+variable name without quoting the value.
+
+**Reads by the same rule as writes.** The scope comes only from the run's
+identity, through the resolver `defineMemory({ namespaceScope })` binds; a write
+or search that brings its own is refused. `search()` gets the same scope
+(`SearchOptions.namespaceScope`, also handed to `searchNamespace`), is refused
+unless every scope value is a path segment of the namespace searched, and keeps
 only records filed at or under that namespace (AgentCore's filter is a string
 prefix; `/tenants/v1` must not return `/tenants/v12`). When the namespace ends
 with `{actorId}`, a continuation starting with four uppercase hex digits is

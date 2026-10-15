@@ -150,40 +150,46 @@ export function refuseUnhonouredWriteOptions(
   }
 }
 
-// ── Binding options to a memory's writes (`defineMemory({ writeOptions })`) ──
+// ── Binding options to a memory (`defineMemory({ namespaceScope, writeOptions })`) ──
 
-/**
- * Write options for every write a memory makes — fixed, or per identity for
- * the namespace scope, which is usually one tenant's.
- */
+/** Write options for every write a memory makes (`defineMemory({ writeOptions })`). */
 export interface MemoryWriteOptionsConfig {
   /** `'skip'` keeps every write of this memory out of long-term extraction. */
   readonly extraction?: 'skip';
-  /**
-   * The namespace scope of every write: one computed from the identity the
-   * write is for — `(identity) => ({ tenantid: … })`, the multi-tenant shape —
-   * or a fixed object, which is right only for a deployment that serves ONE
-   * tenant. Keep the function one-to-one (see
-   * {@link MemoryWriteOptions.namespaceScope}); a store may ship an encoder
-   * into its own alphabet (`agentCoreNamespaceValue` for AgentCore). A write
-   * whose scope comes back empty or malformed is refused, never sent without it.
-   */
-  readonly namespaceScope?:
-    | Readonly<Record<string, string>>
-    | ((identity: MemoryIdentity) => Readonly<Record<string, string>>);
 }
 
 /**
- * Refuse a memory's write options at DEFINITION time when its store does not
- * declare them, or when a fixed one is malformed — the first turn should not be
- * where a configuration that can never work is discovered.
+ * A memory's namespace scope (`defineMemory({ namespaceScope })`): the scope
+ * its writes are filed under AND its reads are confined to.
+ *
+ * One computed from the run's identity — `(identity) => ({ tenantid: … })`,
+ * the multi-tenant shape — or a fixed object, which is right only for a
+ * deployment that serves ONE tenant. Keep the function one-to-one (see
+ * {@link MemoryWriteOptions.namespaceScope}); a store may ship an encoder into
+ * its own alphabet (`agentCoreNamespaceValue` for AgentCore). A scope that
+ * comes back empty or malformed refuses the write or the search, never runs it
+ * without one.
+ */
+export type MemoryNamespaceScope =
+  | Readonly<Record<string, string>>
+  | ((identity: MemoryIdentity) => Readonly<Record<string, string>>);
+
+/** What `defineMemory` binds to its store: the write options and the scope. */
+export interface BoundMemoryOptions extends MemoryWriteOptionsConfig {
+  readonly namespaceScope?: MemoryNamespaceScope;
+}
+
+/**
+ * Refuse a memory's write options or scope at DEFINITION time when its store
+ * does not declare them, or when a fixed one is malformed — the first turn
+ * should not be where a configuration that can never work is discovered.
  *
  * @throws {UnsupportedMemoryWriteOptionError} naming the store and the option
  * @throws {TypeError} for a malformed option
  */
 export function assertStoreHonours(
   store: MemoryStore,
-  config: MemoryWriteOptionsConfig,
+  config: BoundMemoryOptions,
   caller: string,
 ): void {
   const asked: MemoryWriteOptionName[] = [];
@@ -211,31 +217,61 @@ export function assertStoreHonours(
 }
 
 /**
- * The store with the memory's write options applied to every write it makes.
+ * The store with the memory's write options applied to every write it makes —
+ * and its namespace scope applied to every read.
  *
- * Reads, declarations and everything else pass straight through, so the
- * pipeline cannot tell the difference — except that `put`, `putMany` and
- * `putIfVersion` now carry the options. A call's own option overrides the
- * bound one only where it asks for something: an `undefined` field or an empty
- * scope never erases what the memory was configured with.
+ * Writes (`put`, `putMany`, `putIfVersion`) carry the options. A call's own
+ * `extraction` overrides the bound one only where it asks for something (an
+ * `undefined` field never erases it). A bound `namespaceScope` is NEVER
+ * replaced per call: it comes from the run's identity through the configured
+ * resolver and nowhere else, so a call that brings its own is refused.
  *
- * @throws (at a write) a `TypeError` when the configured scope function returns
- *   an empty or malformed scope — the write is refused rather than sent with
- *   its derived records outside every tenant's namespace.
+ * Reads follow the same rule as writes: `search` hands a store that declares
+ * `'namespaceScope'` the scope resolved for that identity
+ * (`SearchOptions.namespaceScope`), so a store that files derived records by it
+ * reads within it. Every other member passes straight through.
+ *
+ * @throws (as a rejected promise, at a write or a search) a `TypeError` when
+ *   the scope function returns an empty or malformed scope — refused rather
+ *   than sent outside every tenant's namespace — or when a call brings its
+ *   own `namespaceScope` to a memory that binds one.
  */
-export function bindWriteOptions(
-  store: MemoryStore,
-  config: MemoryWriteOptionsConfig,
-): MemoryStore {
+export function bindWriteOptions(store: MemoryStore, config: BoundMemoryOptions): MemoryStore {
+  const scopeIsBound = config.namespaceScope !== undefined;
+  const refuseOwnScope = (own: Readonly<Record<string, string>> | undefined): void => {
+    if (scopeIsBound && own !== undefined && Object.keys(own).length > 0) {
+      throw new TypeError(
+        'defineMemory: this memory binds `namespaceScope` to the run’s identity, and a call ' +
+          'cannot replace it — a scope chosen per ' +
+          'call could file or read one tenant’s records under another’s. Change the resolver, ' +
+          'not the call.',
+      );
+    }
+  };
   const resolve = (identity: MemoryIdentity, own?: MemoryWriteOptions): MemoryWriteOptions => {
+    refuseOwnScope(own?.namespaceScope);
     const scope = boundScope(config, identity);
+    const ownScope = own?.namespaceScope;
     return {
       ...(config.extraction !== undefined && { extraction: config.extraction }),
       ...(scope !== undefined && { namespaceScope: scope }),
       ...(own?.extraction !== undefined && { extraction: own.extraction }),
-      ...(own?.namespaceScope !== undefined &&
-        Object.keys(own.namespaceScope).length > 0 && { namespaceScope: own.namespaceScope }),
+      // Only reachable when nothing is bound: the store checks it like any write.
+      ...(ownScope !== undefined &&
+        Object.keys(ownScope).length > 0 && { namespaceScope: ownScope }),
     };
+  };
+  // Reads carry the scope only to a store that files by it — the same store
+  // `assertStoreHonours` let the scope be bound to.
+  const readsByScope = scopeIsBound && (store.writeOptions ?? []).includes('namespaceScope');
+  const readOptions = (
+    identity: MemoryIdentity,
+    options?: SearchOptions,
+  ): SearchOptions | undefined => {
+    refuseOwnScope(options?.namespaceScope);
+    if (!readsByScope) return options;
+    const scope = boundScope(config, identity, 'this search');
+    return scope === undefined ? options : { ...options, namespaceScope: scope };
   };
   const bound: MemoryStore = {
     ...(store.supportsVectorSearch !== undefined && {
@@ -273,12 +309,16 @@ export function bindWriteOptions(
     // Present exactly when the store's is: `if (store.search)` is how callers
     // feature-detect it, so the bound store must not grow or lose one.
     ...(store.search !== undefined && {
-      search: <T>(
+      search: async <T>(
         identity: MemoryIdentity,
         query: readonly number[],
         options?: SearchOptions,
       ): Promise<readonly ScoredEntry<T>[]> =>
-        (store as Required<Pick<MemoryStore, 'search'>>).search<T>(identity, query, options),
+        (store as Required<Pick<MemoryStore, 'search'>>).search<T>(
+          identity,
+          query,
+          readOptions(identity, options),
+        ),
     }),
   };
   return bound;
@@ -288,8 +328,9 @@ export function bindWriteOptions(
 
 /** The configured scope for this identity — present, plain, non-empty, or refused. */
 function boundScope(
-  config: MemoryWriteOptionsConfig,
+  config: BoundMemoryOptions,
   identity: MemoryIdentity,
+  what = 'this write',
 ): Readonly<Record<string, string>> | undefined {
   if (config.namespaceScope === undefined) return undefined;
   const scope =
@@ -297,7 +338,7 @@ function boundScope(
       ? config.namespaceScope(identity)
       : config.namespaceScope;
   assertScopeShape(scope);
-  assertNonEmptyScope(scope, 'this write');
+  assertNonEmptyScope(scope, what);
   return scope;
 }
 
@@ -323,9 +364,9 @@ function assertNonEmptyScope(scope: Readonly<Record<string, string>>, where: str
   if (Object.keys(scope).length === 0) {
     throw new TypeError(
       `[memory] the memory's \`namespaceScope\` came back EMPTY for ${where}. It is refused ` +
-        'rather than sent without one: a write with no scope files its derived records outside ' +
-        'every tenant’s namespace. Return the scope for every identity, or refuse the identity ' +
-        'yourself.',
+        'rather than run without one: a write with no scope files its derived records outside ' +
+        'every tenant’s namespace, and a search with none is confined to no tenant. Return the ' +
+        'scope for every identity, or refuse the identity yourself.',
     );
   }
 }

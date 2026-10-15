@@ -110,6 +110,20 @@ export interface SearchOptions {
    * whenever you have both, and any store can serve the query.
    */
   readonly text?: string;
+
+  /**
+   * The namespace scope this memory's WRITES are filed under
+   * (`MemoryWriteOptions.namespaceScope`), so the read stays inside it.
+   *
+   * A write option must never let a later read see another tenant's records,
+   * so reads follow the same rule as writes: `defineMemory({ writeOptions })`
+   * resolves this from the run's identity with the SAME resolver as its
+   * writes, and passes it only to a store that declares `'namespaceScope'` in
+   * `writeOptions`. A store that receives it reads only within it, or refuses
+   * by name. Stores that file nothing by a namespace never receive it — the
+   * identity is their boundary.
+   */
+  readonly namespaceScope?: Readonly<Record<string, string>>;
 }
 
 /**

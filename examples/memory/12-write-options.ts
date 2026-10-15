@@ -3,12 +3,13 @@
  *
  * A managed memory service (AWS Bedrock AgentCore Memory, here) does more than
  * keep what it is handed: it EXTRACTS long-term records — facts, summaries,
- * preferences — and files them under namespaces. `writeOptions` decides, for
+ * preferences — and files them under namespaces. Two options decide, for
  * every write a memory makes:
  *
- *   extraction: 'skip'   keep the writes out of long-term extraction
- *   namespaceScope       the namespace derived records are filed under —
- *                        here one per tenant, read from each write's identity
+ *   writeOptions.extraction: 'skip'   keep the writes out of long-term extraction
+ *   namespaceScope                    the namespace derived records are filed
+ *                                     under (and searches confined to) — here
+ *                                     one per tenant, read from the run's identity
  *
  * AgentCoreStore sends them as CreateEvent's own fields (`extractionMode`,
  * `extractionConfig.namespaceVariables`). A store that cannot honour them
@@ -58,14 +59,12 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
     type: MEMORY_TYPES.EPISODIC,
     strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 10 },
     store,
-    writeOptions: {
-      // Keep these turns out of long-term extraction...
-      extraction: 'skip',
-      // ...and file whatever IS derived under the tenant's own namespace:
-      // one-to-one into AgentCore's alphabet, and a missing tenant is refused,
-      // never folded into a shared stand-in.
-      namespaceScope: (identity) => ({ tenantid: agentCoreNamespaceValue(identity.tenant ?? '') }),
-    },
+    // Keep these turns out of long-term extraction...
+    writeOptions: { extraction: 'skip' },
+    // ...and scope this memory to the run's tenant — writes filed under it,
+    // searches confined to it: one-to-one into AgentCore's alphabet, and a
+    // missing tenant is refused, never folded into a shared stand-in.
+    namespaceScope: (identity) => ({ tenantid: agentCoreNamespaceValue(identity.tenant ?? '') }),
   });
   // #endregion write-options
 

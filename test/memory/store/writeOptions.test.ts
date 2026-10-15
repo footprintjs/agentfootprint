@@ -31,6 +31,7 @@ import {
   requestedWriteOptions,
   type MemoryStore,
   type MemoryWriteOptions,
+  type MemoryNamespaceScope,
   type MemoryWriteOptionsConfig,
 } from '../../../src/memory/store/index.js';
 import { bindWriteOptions } from '../../../src/memory/store/writeOptions.js';
@@ -365,13 +366,11 @@ describe('memory write options — P3 AgentCoreStore through the SDK', () => {
       type: MEMORY_TYPES.EPISODIC,
       strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 10 },
       store,
-      writeOptions: {
-        extraction: 'skip',
-        // One-to-one into AgentCore's alphabet; an absent tenant is refused, not folded.
-        namespaceScope: (identity) => ({
-          tenantid: agentCoreNamespaceValue(identity.tenant ?? ''),
-        }),
-      },
+      writeOptions: { extraction: 'skip' },
+      // One-to-one into AgentCore's alphabet; an absent tenant is refused, not folded.
+      namespaceScope: (identity) => ({
+        tenantid: agentCoreNamespaceValue(identity.tenant ?? ''),
+      }),
     });
     // The definition still carries the caller's own store.
     expect(memory.store).toBe(store);
@@ -669,13 +668,20 @@ describe('memory write options — AgentCore refuses what could not reach AgentC
 // ─── P2 The bound store (`defineMemory({ writeOptions })`) ───────────
 
 describe('memory write options — the store defineMemory binds', () => {
-  const memoryOf = (store: MemoryStore, writeOptions: MemoryWriteOptionsConfig) =>
+  const memoryOf = (
+    store: MemoryStore,
+    {
+      extraction,
+      namespaceScope,
+    }: MemoryWriteOptionsConfig & { namespaceScope?: MemoryNamespaceScope },
+  ) =>
     defineMemory({
       id: 'm',
       type: MEMORY_TYPES.EPISODIC,
       strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 5 },
       store,
-      writeOptions,
+      ...(extraction !== undefined && { writeOptions: { extraction } }),
+      ...(namespaceScope !== undefined && { namespaceScope }),
     });
 
   /** Run one turn through an agent holding `memory`; return what the store recorded. */
@@ -776,7 +782,8 @@ describe('memory write options — the store defineMemory binds', () => {
         type: c.type,
         strategy: c.strategy,
         store,
-        writeOptions: { extraction: 'skip', namespaceScope: { tenantid: 'acme' } },
+        writeOptions: { extraction: 'skip' },
+        namespaceScope: { tenantid: 'acme' },
       } as Parameters<typeof defineMemory>[0]);
       await oneTurn(memory, 'My name is Ada and I prefer email. We decided to ship on Friday.');
       await oneTurn(memory, 'What do you remember?');
