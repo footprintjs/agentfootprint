@@ -59,7 +59,7 @@
  */
 
 import type { CodeResult, CodeRunner, CodeSession } from '../../provider-contract/types.js';
-import { hashSessionKey } from '../../core/toolSessions.js';
+import { hashSessionKey } from '../../tools/toolSessions.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
 
 export interface AgentCoreCodeRunnerOptions {

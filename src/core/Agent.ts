@@ -116,7 +116,7 @@ import {
   type ToolSessionOrigin,
   TOOL_TEARDOWN_TIMEOUT_MS,
   type ToolSessionReport,
-} from './toolSessions.js';
+} from '../tools/toolSessions.js';
 import { buildEventMeta, eventBelongsToRun } from '../bridge/eventMeta.js';
 import {
   assertIdentityShape,
@@ -270,7 +270,7 @@ import {
   readAwaitingInput,
   type AnsweredAsk,
   type TimeAnswerContext,
-} from './inputRequest.js';
+} from '../tools/inputRequest.js';
 import {
   applyOutputSchema,
   OutputSchemaError,
@@ -290,8 +290,8 @@ import {
 import type { ResolvedOutputEnforcement } from './agent/outputEnforcement.js';
 import { buildOutputRetryStage } from './agent/stages/outputRetry.js';
 import { RunnerBase, makeRunId, withRunSignalInEnv } from './RunnerBase.js';
-import type { Tool, ToolRegistryEntry } from './tools.js';
-import type { ToolProvider } from '../tool-providers/types.js';
+import type { Tool, ToolRegistryEntry } from '../tools/tools.js';
+import type { ToolProvider } from '../tools/toolProvider.js';
 import {
   clampIterations,
   validateMemoryIdUniqueness,
@@ -327,7 +327,7 @@ import { buildCallLLMStage } from './agent/stages/callLLM.js';
 import { buildToolCallsHandler, notServedResult } from './agent/stages/toolCalls.js';
 import { buildToolResolver } from './agent/stages/toolResolver.js';
 import { answeredValuesOf, declaredDefaultsFrom } from './agent/stages/route.js';
-import { isRefused, rulesOf } from './agent/arguments/declare.js';
+import { isRefused, rulesOf } from '../tools/declare.js';
 import {
   honestyLayersOf,
   readInputsLayerOption,
@@ -337,7 +337,7 @@ import { answerFoldReads } from './agent/honesty/mounts.js';
 import { readsMessageFrom } from './messageFrom.js';
 import { carriesArgumentView } from './toolShownArgs.js';
 import { assertMaxToolResultChars } from './agent/toolResultCap.js';
-import type { ToolArgValidationMode } from './agent/toolArgsValidation.js';
+import type { ToolArgValidationMode } from '../tools/toolArgsValidation.js';
 import { buildAgentChart } from './agent/buildAgentChart.js';
 import { buildDynamicAgentChart } from './agent/buildDynamicAgentChart.js';
 import { buildToolRegistry } from './agent/buildToolRegistry.js';

@@ -50,7 +50,7 @@
  *   );
  */
 
-import type { Tool } from '../core/tools.js';
+import type { Tool } from './tools.js';
 
 /**
  * Read-only context the provider receives each iteration. Pure data

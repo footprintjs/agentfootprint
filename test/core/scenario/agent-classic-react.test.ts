@@ -31,7 +31,7 @@ import { describe, it, expect } from 'vitest';
 import type { CombinedRecorder, FlowSubflowEvent } from 'footprintjs';
 import { Agent } from '../../../src/core/Agent.js';
 import { MockProvider } from '../../../src/adapters/llm/MockProvider.js';
-import { defineTool } from '../../../src/core/tools.js';
+import { defineTool } from '../../../src/tools/tools.js';
 import { askHuman, isPaused } from '../../../src/core/pause.js';
 
 /** A tool the LLM can call, to drive the ReAct loop for >1 iteration. */

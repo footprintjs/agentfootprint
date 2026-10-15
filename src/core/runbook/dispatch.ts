@@ -21,7 +21,7 @@
 
 import { readAbsence } from '../../semantics/coverage/absent.js';
 import type { ToolAbsence } from '../../semantics/coverage/types.js';
-import type { ToolDispatch, ToolDispatchCallOptions } from '../tools.js';
+import type { ToolDispatch, ToolDispatchCallOptions } from '../../tools/tools.js';
 
 /** One inner call, as the bridge recorded it. */
 export interface InnerCallRecord {

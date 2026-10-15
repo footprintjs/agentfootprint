@@ -20,7 +20,7 @@ import type {
   EntryScoring,
 } from '../injection-engine/entryScorer.js';
 import type { Injection } from '../injection-engine/types.js';
-import type { ToolGatePredicate } from '../../tool-providers/types.js';
+import type { ToolGatePredicate } from '../../tools/toolProvider.js';
 import type { ContextLedger, PieceKind } from './types.js';
 
 /**

@@ -26,7 +26,7 @@
 
 import type { RuntimeSnapshot } from 'footprintjs';
 
-import type { Tool } from '../../core/tools.js';
+import type { Tool } from '../../tools/tools.js';
 import { callTraceTool, traceToolpack } from './traceToolpack.js';
 import { NO_COMPLETED_RUN_MESSAGE } from '../traceToolNames.js';
 import type { TraceToolpackArtifacts, TraceToolpackOptions } from './types.js';

@@ -30,7 +30,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 
 import { defineTool } from '../../../src/index.js';
-import type { Tool } from '../../../src/core/tools.js';
+import type { Tool } from '../../../src/tools/tools.js';
 import { mcpServe } from '../../../src/tool-providers/index.js';
 import type { McpHttpServeTransport, McpServeHandle } from '../../../src/lib/mcp/types.js';
 import { REAL_TRANSPORT_TIMEOUT } from './realTransportSupport.js';

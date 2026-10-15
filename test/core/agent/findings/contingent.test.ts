@@ -55,7 +55,7 @@ import {
   hasSetAsideStanding,
 } from '../../../../src/core/agent/findings/contingent.js';
 import { foldLedger } from '../../../../src/core/agent/findings/ledger.js';
-import { canonicalForm, lookupForms } from '../../../../src/core/agent/evidence/normalize.js';
+import { canonicalForm, lookupForms } from '../../../../src/tools/normalize.js';
 import type { GroundedValue } from '../../../../src/core/agent/evidence/types.js';
 import { findingsLedgerPiece } from '../../../../src/core/agent/findings/serve.js';
 import {

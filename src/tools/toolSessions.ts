@@ -2,7 +2,7 @@
  * toolSessions — the end-signal a tool can be handed, and the tier that fires it.
  *
  * Pattern: Registrar + Template Method for the firing matrix.
- * Role:    core primitive. `ToolExecutionContext.onTeardown` registers here;
+ * Role:    tools/ layer primitive. `ToolExecutionContext.onTeardown` registers here;
  *          `Agent.run`'s terminals, `RunnerBase.closeToolSessions` and
  *          `RunnerBase.shutdown` fire it.
  * Emits:   nothing itself. `register()` ANSWERS what it did (started/reused) so

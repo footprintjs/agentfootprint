@@ -1,10 +1,10 @@
 **Mixed** — the two primitives that build a map, and the wiring that runs one.
-Map: `LLMCall.ts`, `Agent.ts`'s `buildChart`, `toolContract.ts`.
+Map: `LLMCall.ts`, `Agent.ts`'s `buildChart`.
 Walker: `RunnerBase.ts`, `runner.ts`, `runCheckpoint.ts`, `pause.ts`,
-`toolSessions.ts`, `durabilityBarrier.ts`.
+`durabilityBarrier.ts`.
 Fold-feeding: `Agent.ts` · `readSkillOfferFor` and `Agent.ts` ·
 `hiddenSkillIdsNow` — the two resolvers every model-facing composer downstream
-filters with. Trace: `cost.ts`. Support: `tools.ts`, `runInput.ts`,
+filters with. Trace: `cost.ts`. Support: `runInput.ts`,
 `conversation.ts`, `translator.ts`, `outputFallback.ts`,
 `toolShownArgs.ts` (a tool's own `redact` policy on the arguments an event
 may show), `messageFrom.ts` (which runners read `AgentInput.messageFrom`, and
@@ -24,8 +24,7 @@ core/
 ├── RunnerBase.ts     Shared implementation (.on/.off/.once/.attach/.emit/.enable).
 ├── LLMCall.ts        Primitive: single LLM invocation (no tools, no loop).
 ├── Agent.ts          Primitive: ReAct loop (LLM + tools + iteration).
-├── tools.ts          Tool<TArgs, TResult> contract.
-├── inputRequest.ts   Typed missing fields, accepted values and response validation; pause.ts supplies requestInput().
+├── pause.ts          Pause primitives; supplies requestInput() over ../tools/inputRequest.ts.
 └── slots/            The 3-slot context model (see slots/README.md).
 ```
 
@@ -49,7 +48,7 @@ to the model and asks again. The model re-calls the collecting tool, the tool
 raises the same question, and the person sees the identical prompt with no word
 about the answer they gave — a silent loop any app can fall into.
 
-**How.** Two halves, one owner (`inputRequest.ts`):
+**How.** Two halves, one owner (`../tools/inputRequest.ts`):
 
 - `refused: { answer?, reason }` on the declaration — the refused values
   (judged against `fields` like any answer) and the app's own reason
@@ -57,7 +56,7 @@ about the answer they gave — a silent loop any app can fall into.
   pause outcome, the checkpoint's `pauseData` and the `pause.request` event —
   where the question already travels. `null` is the field omitted.
 - `awaitingInput.repeat: { count, previousAnswer? }` — stamped by the runtime
-  (`inputRequest.ts` · `repeatOf`, called at the raise in
+  (`../tools/inputRequest.ts` · `repeatOf`, called at the raise in
   `agent/stages/toolCalls.ts`) when the ask this run's resume answered is raised
   again with the same `id`. `count` is how many times the person already
   answered it this turn; it crosses checkpoints on the awaiting-input shape
@@ -94,7 +93,7 @@ const collect = defineTool({
 **A time field is checked by the library (the time layer, step T4).** A field
 with `format: 'instant' | 'time-range' | 'zone'` (refused unless
 `type: 'string'`) is judged at the resume door by the time layer's one judge
-(`time/ask.ts` · `checkTimeAnswer`, called from `inputRequest.ts` ·
+(`time/ask.ts` · `checkTimeAnswer`, called from `../tools/inputRequest.ts` ·
 `applyInputResponse`): an answer with no offset, out of order, not a range or
 not a zone — and, under `.time()`, a wall time the person's zone skips — is NOT
 taken. `Agent.resume` returns the same ask with `refused: { answer, reason }`

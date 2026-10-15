@@ -3,7 +3,7 @@
  * answer must be, why one is refused, and the choices a reading offers.
  *
  * Pattern: one judge per boundary (the `range.ts` precedent). A typed ask's
- *          `InputField.format` (`core/inputRequest.ts`) names what the answer
+ *          `InputField.format` (`tools/inputRequest.ts`) names what the answer
  *          is; {@link checkTimeAnswer} is the ONE judge of it — at definition
  *          (a choice, a supplied value) and at the resume door (the person's
  *          answer). A refusal is a CODE with its facts; the sentence is a

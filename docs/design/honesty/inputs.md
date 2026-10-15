@@ -159,7 +159,7 @@ export const searchLogs = defineTool({
 ```
 
 ```ts
-type InputValue = string | number | boolean;                       // core/inputRequest.ts · InputValue
+type InputValue = string | number | boolean;                       // tools/inputRequest.ts · InputValue
 type ArgumentChoice = InputValue | { readonly value: InputValue; readonly said?: readonly string[] };
 type ArgumentRule =
   | { readonly ask: string; readonly choices?: readonly ArgumentChoice[] }
@@ -186,7 +186,7 @@ What each form means:
 - **No rule** — the argument is free. Nothing is filled or asked. A `from` entry naming a free
   argument is still checked and filed (§ 3.5).
 
-**Missing** means, deterministically (`arguments/declare.ts` · `isMissing`, one owner): the call's
+**Missing** means, deterministically (`tools/declare.ts` · `isMissing`, one owner): the call's
 arguments have no own key for it, or its value is `undefined`, `null`, or a string that is empty
 after trimming.
 
@@ -244,7 +244,7 @@ interface DeclaredPeriod {
 
 ### 1.3 Refused at definition, at dispatch and at MCP ingest
 
-`arguments/declare.ts` · `assertAskOrAssume` is called from `core/tools.ts` · `defineTool` beside
+`tools/declare.ts` · `assertAskOrAssume` is called from `tools/tools.ts` · `defineTool` beside
 `assertToolWants` and `assertArgumentsFrom`. `defineTool` copies fields one by one, so it also
 copies `askOrAssume` and `period`. A rule is refused, naming the tool and the argument, when:
 
@@ -252,7 +252,7 @@ copies `askOrAssume` and `period`. A rule is refused, naming the tool and the ar
   `number`, `integer`, `boolean` (a type union, a nullable type, an object or an array is not ruled
   in v1), or it is a `wants` argument (an artifact ref is never the person's to type);
 - the rule has both `ask` and `assume`, neither, or an unknown key;
-- `ask` is blank or longer than 4096 characters (`core/inputRequest.ts` · `validateInputDeclaration`'s
+- `ask` is blank or longer than 4096 characters (`tools/inputRequest.ts` · `validateInputDeclaration`'s
   bound);
 - `choices` is empty, has more than 100 entries, repeats a value, or holds a value that fails the
   property's own schema;
@@ -274,7 +274,7 @@ copies `askOrAssume` and `period`. A rule is refused, naming the tool and the ar
 One warning, not a refusal: a ruled property whose `description` contains the word "default" (the
 rule's own sentence now says it, § 1.6).
 
-**The same rule set runs again at dispatch** (`arguments/declare.ts` · `rulesOf`), because a Tool
+**The same rule set runs again at dispatch** (`tools/declare.ts` · `rulesOf`), because a Tool
 built by hand or delivered by a ToolProvider never passes through `defineTool`. A rule that fails
 there refuses the call and is never repaired (§ 4.5). **And at MCP ingest** (§ 1.4), where a
 failing field is dropped with a warning, like every other extra.
@@ -562,14 +562,14 @@ and never imports `findings/` (devil's review: revision 1 imported in both direc
 
 | Stage | Does | Owner |
 |---|---|---|
-| **Declare** | Resolves each call's tool; re-reads its rules (`rulesOf`); reads `from` under the arm; finds missing values. Returns at once when the predicate says no dispatch, or when no call is ruled and no `from` was declared. | `arguments/declare.ts` |
+| **Declare** | Resolves each call's tool; re-reads its rules (`rulesOf`); reads `from` under the arm; finds missing values. Returns at once when the predicate says no dispatch, or when no call is ruled and no `from` was declared. | `tools/declare.ts` |
 | **Verify** | Runs the checks of § 3.5 — pure functions, handed the corpora. | `arguments/sources.ts` |
 | **Record** | Builds one row per ruled argument per call (and one per `from` entry on a free argument), emits one `agentfootprint.findings.argument` event per row, and stages the rows on the subflow's scope. | `arguments/rows.ts` |
 | **Resolve** | Applies the table of § 4.1: fill, ask, pass, flag or refuse; builds `argumentResolutions`. The ask is two nodes: `Ask`, a pausable stage whose resume half receives the answers, and `Bind`, a small decider that loops back to `Ask` when an answer must be asked again (§ 4.3). | `arguments/resolve.ts`, `arguments/ask.ts` |
 
 ### 3.3 The membership rule — one owner of "the same value"
 
-- **Text.** Both sides go through `evidence/normalize.ts` · `tokenize`, then `canonicalForm` per
+- **Text.** Both sides go through `tools/normalize.ts` · `tokenize`, then `canonicalForm` per
   token (`41,200` ≡ `41200`, `0xef0101` ≡ `ef0101`). A needle is in a text when its token sequence
   occurs contiguously in the text's token sequence. Whole tokens only, never substrings; no
   extractor, so `2h`, `24h` and plain words can all be checked. A number or a boolean is checked
@@ -777,7 +777,7 @@ armed (step 5), and step 4 measures the needless-ask rate before anything else i
 value on one (a reading included).
 
 **The declaration** (`arguments/ask.ts` · `argumentAskDeclaration`), accepted by
-`core/inputRequest.ts` · `validateInputDeclaration`:
+`tools/inputRequest.ts` · `validateInputDeclaration`:
 
 - **A fixed library question**, not the authors' questions joined: "Before the next step can run, a
   few values are needed. Each field says what it is for." Joined questions could pass the
@@ -802,7 +802,7 @@ value on one (a reading included).
 - It is a pausable stage inside the layer's subflow. footprintjs carries a paused subflow's state
   in the checkpoint (`checkpoint.subflowStates`; `fp:test/lib/pause/subflow-scope-resume.test.ts`,
   including a fresh executor resuming a serialized checkpoint).
-- `core/inputRequest.ts` · `stampInputRequest` stamps it. A batch ask has no single call, so
+- `tools/inputRequest.ts` · `stampInputRequest` stamps it. A batch ask has no single call, so
   `origin.toolCallId` names the batch's first asked call and `context` lists the rest — a named
   change to the stamp, in step 4.
 - The rows are already staged and their events already fired (the Record stage ran first). They
@@ -1275,7 +1275,7 @@ open), a "Not covered" section and "What it lets you measure"; one CAPABILITIES 
 | The authors' questions joined into the ask's question | revision 1 | Two long questions pass definition and fail the 4096-character bound at pause time. A fixed library question; each author's question is its field's description. |
 | `whenMissing` as the name | revision 1 | `ask` also fires on a present value once sources are armed. |
 | A `turn` claim resolved by a library search of earlier person words, results and app text | the architecture note's wording | A search the library runs on its own is a hint under law 2; a quote or an id checks the same fact. `turn` resolves to earlier answers only (§ 10.1, R1). |
-| NFKC or another normaliser inside the layer | revision 1 | Two definitions of "the same value" drift. Unicode folding, if wanted, goes into `evidence/normalize.ts` for the gate and the layer together. |
+| NFKC or another normaliser inside the layer | revision 1 | Two definitions of "the same value" drift. Unicode folding, if wanted, goes into `tools/normalize.ts` for the gate and the layer together. |
 | Widening `InputField.type` with `integer` so the door rejects `2.5` | considered for this page | A public type change every host renderer would have to learn, and it covers only one constraint. The re-check at bind covers bounds and patterns too. |
 | Re-asking an invalid answer through the model (refuse, let the model re-propose) | considered for this page | A model call for a typing mistake, and the model may paraphrase the question. The layer asks the field again itself. |
 | Mounting the layer whenever the agent has a ToolProvider | considered for this page | Every provider-using agent's chart would change, including the provider references among the 21. A build-visible rule or one builder option arms it; an unmounted ruled tool is refused, never run unruled. |
@@ -1283,7 +1283,7 @@ open), a "Not covered" section and "What it lets you measure"; one CAPABILITIES 
 | The layer as a Route branch that loops back to Route | the literal "between Route and ToolCalls" | footprintjs refuses a branch loop to anything not declared before the decider (`DeciderList._applyBranchLoop`), and Route would run twice per batch and double its events. |
 | ToolCalls moved into a subflow behind the layer | a way to sit right before ToolCalls | Armed runs would move ToolCalls' stage path under a subflow prefix and break every matcher keyed on the bare `tool-calls` id (agentfootprint CLAUDE.md, landmine 3). |
 | Parsing the person's time phrases | — | The library never interprets free text. Authors declare phrases; anything else is a reading. |
-| Nested or array arguments in v1 | — | The typed ask holds flat primitives only (`core/inputRequest.ts` · `InputField`), like MCP elicitation. |
+| Nested or array arguments in v1 | — | The typed ask holds flat primitives only (`tools/inputRequest.ts` · `InputField`), like MCP elicitation. |
 
 ---
 

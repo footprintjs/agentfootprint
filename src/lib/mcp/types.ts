@@ -21,7 +21,7 @@
  *          agent run, so it emits nothing at all.
  */
 
-import type { Tool } from '../../core/tools.js';
+import type { Tool } from '../../tools/tools.js';
 import type { CredentialProvider } from '../../identity/types.js';
 import type { RetryOnThrottle } from './throttleRetry.js';
 import type { FetchLike } from './gatewayTransport.js';

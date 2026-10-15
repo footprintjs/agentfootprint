@@ -195,12 +195,12 @@ import { buildReadSkillTool, buildSkipStepTool } from '../../lib/injection-engin
 import { stepsOf, SKIP_STEP_TOOL_NAME } from '../../lib/injection-engine/skillSteps.js';
 import { RESERVED_ARGUMENT } from './findings/types.js';
 import { ownsReservedArgument } from './findings/reserved.js';
-import { carriesRules } from './arguments/declare.js';
+import { carriesRules } from '../../tools/declare.js';
 import type { Injection } from '../../lib/injection-engine/types.js';
 import type { LLMToolSchema } from '../../provider-contract/types.js';
 import { PRESENT_TOOL_NAME } from '../../artifacts/present.js';
 import { buildPresentTool } from './presentTool.js';
-import type { Tool, ToolRegistryEntry } from '../tools.js';
+import type { Tool, ToolRegistryEntry } from '../../tools/tools.js';
 import { warnIfInvalidToolName } from '../../lib/toolName.js';
 import type { ToolNameChannel } from '../../events/payloads.js';
 
@@ -295,7 +295,7 @@ export interface BuildToolRegistryOptions {
    * DECLARED SOURCES ARE ARMED (honesty layer 2 — `.inputsLayer({
    * argumentSources: true })` or `.findings({ argumentSources: true })`) —
    * present only then, only ever `true`. Arms `assertReservedArgument` over
-   * every RULED tool of the dispatch map (`arguments/declare.ts` ·
+   * every RULED tool of the dispatch map (`tools/declare.ts` ·
    * `carriesRules`): the tools the wire plants `_findings.from` on, a skill's
    * scoped tools included, whichever door armed it — without `.findings()`,
    * this is the only thing that arms the refusal. An UNRULED tool is never

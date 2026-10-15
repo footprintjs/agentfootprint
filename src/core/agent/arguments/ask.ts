@@ -14,7 +14,7 @@
  * ## One ask for the whole batch, before anything in it runs
  *
  * The layer's Resolve stage names, per call, the `ask` arguments it left out
- * (`ArgumentResolution.ask`). They become ONE typed ask (`core/inputRequest.ts`,
+ * (`ArgumentResolution.ask`). They become ONE typed ask (`tools/inputRequest.ts`,
  * the door `requestInput` uses): one field per distinct (tool, argument), bound
  * to every call of the batch that needs it. Two PERIOD arguments of different
  * tools share one field when their spellings convert (`lookback` ↔
@@ -59,7 +59,7 @@ import {
   type InputField,
   type InputRequestDeclaration,
   type InputValue,
-} from '../../inputRequest.js';
+} from '../../../tools/inputRequest.js';
 import {
   convertForTool,
   formArguments,
@@ -95,7 +95,7 @@ import {
 } from '../../../time/rows.js';
 import { fixedOffsetZone, isZoneName, offsetAt, type ZoneName } from '../../../time/zone.js';
 import { shownArgsOf } from '../../toolShownArgs.js';
-import { validatePropertyValue } from '../toolArgsValidation.js';
+import { validatePropertyValue } from '../../../tools/toolArgsValidation.js';
 import {
   convertSpelling,
   isRefused,
@@ -104,10 +104,10 @@ import {
   rulesOf,
   type PeriodSpelling,
   type RuledArgument,
-} from './declare.js';
+} from '../../../tools/declare.js';
 import { ARGUMENT_ASK_KIND, ASK_CONTEXT_KEY, isArgumentAskContext } from './askMarker.js';
 import type { ArgumentFill, BatchCall, ToolOf } from './resolve.js';
-import { isMissing } from './declare.js';
+import { isMissing } from '../../../tools/declare.js';
 import { HIDDEN_VALUE, answeredRowOf, askedRowOf, shownQuote, type ArgumentRow } from './rows.js';
 
 // The reserved key and its kind have ONE owner (`askMarker.ts`), which a
@@ -118,7 +118,7 @@ export { ARGUMENT_ASK_KIND, ASK_CONTEXT_KEY };
 
 /** How many times one field may be put to the person before its calls are refused. */
 export const MAX_ASK_ROUNDS = 3;
-/** Fields per declaration — the typed ask's own limit (`core/inputRequest.ts`). */
+/** Fields per declaration — the typed ask's own limit (`tools/inputRequest.ts`). */
 export const MAX_ASK_FIELDS = 32;
 /** The declaration's `context` bound — the typed ask's own. */
 export const ASK_CONTEXT_CHARS = 16384;
@@ -773,7 +773,7 @@ export function isArgumentAsk(awaiting: AwaitingInput | undefined): boolean {
  * `Agent.resume` hands the run (`{ status: 'input_received', requestId, values }`,
  * already checked at its door) and a raw `InputResponse` (`{ requestId, values }`)
  * from a runner that resumes the executor directly — both judged by the SAME
- * validator (`core/inputRequest.ts` · `applyInputResponse`): the request id, the
+ * validator (`tools/inputRequest.ts` · `applyInputResponse`): the request id, the
  * declared fields, their types and choices. Throws `InputRequestError` on a
  * reply to another request or a malformed one, and on a PARTIAL reply (only
  * `Agent.resume`'s door keeps a partial answer, without running anything); a

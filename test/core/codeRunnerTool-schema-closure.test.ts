@@ -8,7 +8,7 @@ import type {
   CodeSession,
   LLMToolSchema,
 } from '../../src/provider-contract/types.js';
-import type { ToolArgValidationMode } from '../../src/core/agent/toolArgsValidation.js';
+import type { ToolArgValidationMode } from '../../src/tools/toolArgsValidation.js';
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
 import { staticTokens } from '../../src/identity.js';
 import { mock } from '../../src/providers.js';

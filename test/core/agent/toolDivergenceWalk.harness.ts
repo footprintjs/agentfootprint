@@ -31,7 +31,7 @@ import type {
   ToolsClaimSwallowedPayload,
   ToolsShadowedPayload,
 } from '../../../src/events/payloads.js';
-import type { Tool } from '../../../src/core/tools.js';
+import type { Tool } from '../../../src/tools/tools.js';
 
 // ═════════════════════════════════════════════════════════════════════════
 // The stamp — how a contract and an implementation are told apart

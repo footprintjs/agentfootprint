@@ -8,7 +8,7 @@
  *          by an armed reader). This is the T-spellings law of the time
  *          design (`docs/design/time/README.md`, § 5.4).
  * Role:    L0 leaf (the time layer's one owner). Imports nothing. Asked by
- *          `arguments/declare.ts` · `parsesUnderSpelling` for a look-back.
+ *          `tools/declare.ts` · `parsesUnderSpelling` for a look-back.
  * Emits:   N/A.
  *
  * ## The grammar

@@ -21,7 +21,7 @@ import { describe, expect, it } from 'vitest';
 
 import { Agent, defineTool, servedAt, epochLocations, type Tool } from '../../../../src/index.js';
 import type { LLMRequest, LLMResponse } from '../../../../src/provider-contract/types.js';
-import { validateToolArgs } from '../../../../src/core/agent/toolArgsValidation.js';
+import { validateToolArgs } from '../../../../src/tools/toolArgsValidation.js';
 import { withArgumentRules } from '../../../../src/core/agent/arguments/serve.js';
 import type { ArgumentRow } from '../../../../src/core/agent/arguments/rows.js';
 

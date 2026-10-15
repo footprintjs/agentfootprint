@@ -48,10 +48,10 @@ import type { CommitBundle, ControlDepLookup, HonestyCode } from 'foottrace';
 import { arrayProvenance, elementProvenance, formatSlice, sliceForKey } from 'foottrace';
 
 import type { LLMMessage } from '../../provider-contract/types.js';
-import { formatToolArgIssues, validateToolArgs } from '../../core/agent/toolArgsValidation.js';
+import { formatToolArgIssues, validateToolArgs } from '../../tools/toolArgsValidation.js';
 import type { CheckReport } from '../../integrity/disposition/types.js';
 import type { ContextError, ContextErrorKind } from '../../integrity/finding/types.js';
-import { defineTool, type Tool, type ToolExecutionContext } from '../../core/tools.js';
+import { defineTool, type Tool, type ToolExecutionContext } from '../../tools/tools.js';
 import { unconfiguredCredentialProvider } from '../../identity/types.js';
 import { unconfiguredArtifacts } from '../../artifacts/capability.js';
 import {

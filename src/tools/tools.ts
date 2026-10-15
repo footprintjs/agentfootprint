@@ -25,9 +25,9 @@ import {
 } from '../integrity/column-types/types.js';
 import { assertAskComponent, type AskComponent } from './askComponent.js';
 import { warnIfInvalidToolName } from '../lib/toolName.js';
-import { assertAskOrAssume, type AskOrAssume, type ToolPeriod } from './agent/arguments/declare.js';
+import { assertAskOrAssume, type AskOrAssume, type ToolPeriod } from './declare.js';
 import type { TimeContext } from '../time/wire.js';
-import type { CheckInDemand } from './checkin.js';
+import type { CheckInDemand } from '../core/checkin.js';
 import type { TeardownOptions, TeardownScope } from './toolSessions.js';
 
 /**
@@ -507,7 +507,7 @@ export function assertResultClass(
  * `src/integrity/` is a strict leaf that imports nothing outside itself and
  * the check has to be able to read the words. They are re-exported here
  * because `defineTool` and the MCP ingest both reach for their rules through
- * `core/tools.ts` — one door for every declaration's rule, and no second copy
+ * `tools/tools.ts` — one door for every declaration's rule, and no second copy
  * of any of them anywhere.
  */
 export {

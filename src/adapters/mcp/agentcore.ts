@@ -39,7 +39,7 @@
 import { gatewayTransport, type FetchLike } from '../../lib/mcp/gatewayTransport.js';
 import type { McpGatewayTransport } from '../../lib/mcp/types.js';
 import type { CredentialProvider } from '../../identity/types.js';
-import type { Tool } from '../../core/tools.js';
+import type { Tool } from '../../tools/tools.js';
 
 /**
  * The Gateway's built-in semantic tool search, by its exact wire name.

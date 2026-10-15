@@ -4,7 +4,7 @@
  * Test types:
  *   unit        — parse / spell / covers / overlaps / roundOutward, row by row;
  *   functional  — each § 3.3 boundary on a worked example ("to 8:40" is `[08:00, 08:41)`);
- *   integration — `arguments/declare.ts` reads an `iso-range` through `splitRange` (`byte-identity-rows.test.ts`);
+ *   integration — `tools/declare.ts` reads an `iso-range` through `splitRange` (`byte-identity-rows.test.ts`);
  *   property    — over 5 000 generated ranges: `parseRange` ↔ `spellRange` under both joiners, and EVERY
  *                 boundary round-trips (inclusive span, tool bound under both edges, look-back);
  *   security    — a joiner-only 1 MB string, non-strings and extra keys are refused, never thrown on;

@@ -41,7 +41,7 @@ import {
   type ToolChoiceOutcomeRow,
   type ToolChoiceRow,
 } from '../../../../src/index.js';
-import { defineTool } from '../../../../src/core/tools.js';
+import { defineTool } from '../../../../src/tools/tools.js';
 import { mock } from '../../../../src/llm-providers.js';
 import { defineSkill } from '../../../../src/injection-engine.js';
 import {

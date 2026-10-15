@@ -51,7 +51,7 @@
  * value and so looked like new information each time.
  *
  * A tool that declares `repeatedWhen: 'arguments'` on itself (see
- * `Tool.repeatedWhen` in `core/tools.ts`) tells the ledger to fingerprint on
+ * `Tool.repeatedWhen` in `tools/tools.ts`) tells the ledger to fingerprint on
  * the ARGUMENTS ALONE — the result never enters the key, and the note's
  * wording changes to match (it cannot honestly say "returned exactly this
  * result" when the whole point is that the result is not being compared).

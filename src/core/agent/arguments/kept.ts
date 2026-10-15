@@ -41,7 +41,7 @@
  * when it keeps an answer or drops one it filled from.
  */
 
-import type { InputValue } from '../../inputRequest.js';
+import type { InputValue } from '../../../tools/inputRequest.js';
 
 /** One answer kept for the next call of its (tool, argument), this turn. */
 export interface KeptAnswer {

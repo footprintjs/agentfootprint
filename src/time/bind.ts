@@ -95,7 +95,7 @@ import { windowToConvert, type TurnWindow, type TurnWindows } from './windows.js
 export interface CallToBind {
   readonly args: Readonly<Record<string, unknown>>;
   readonly forms: readonly PeriodForm[];
-  /** The argument is missing from the call (`arguments/declare.ts` · `isMissing`). */
+  /** The argument is missing from the call (`tools/declare.ts` · `isMissing`). */
   readonly isMissing: (argument: string) => boolean;
   /**
    * Under declared sources: the quotes the model declared (`source: 'user'`)

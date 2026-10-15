@@ -49,7 +49,7 @@ import {
   type SourceCorpus,
   type SourceSubject,
 } from '../../../../src/core/agent/arguments/checks.js';
-import { rulesOf, isRefused } from '../../../../src/core/agent/arguments/declare.js';
+import { rulesOf, isRefused } from '../../../../src/tools/declare.js';
 import {
   declareBatch,
   resolutionsOf,
@@ -63,7 +63,7 @@ import {
   evidenceFromHistory,
 } from '../../../../src/core/agent/evidence/evidenceIndex.js';
 import { resultCarries } from '../../../../src/core/agent/evidence/resultCarries.js';
-import { lookupForms, normalizeToken } from '../../../../src/core/agent/evidence/normalize.js';
+import { lookupForms, normalizeToken } from '../../../../src/tools/normalize.js';
 import { readDeclaration, splitFindings } from '../../../../src/core/agent/findings/reserved.js';
 import { absent } from '../../../../src/semantics/coverage/index.js';
 import { defineTool, type Tool } from '../../../../src/index.js';

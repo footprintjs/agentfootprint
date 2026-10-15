@@ -7,7 +7,8 @@ offered. `list(ctx)` IS a model-facing view, and every gate here is an OMISSION.
   cannot tell an AUTHORITY omission (a permission policy; must be invisible)
   from an ATTENTION omission (a budget or scope; must be visible), it emits
   nothing, and it leaves no record of which tools it removed.
-- `skillScopedTools.ts` reads `ctx.activeSkillId`, which its own header
+- `../tools/skillScopedTools.ts` (in the tools layer, re-exported here) reads
+  `ctx.activeSkillId`, which its own header
   (`skillScopedTools.ts` · "`ctx.activeSkillId` is the last `read_skill`
   activation, not the graph cursor") states is the last `read_skill` activation
   and NOT the graph cursor: a skill entered by an entry rule or a graph edge
@@ -24,8 +25,9 @@ class of the omission (authority or attention) has to be known by whoever
 removes it.
 
 ## Files
-- `types.ts` — the `ToolProvider` seam.
+- `../tools/toolProvider.ts` — the `ToolProvider` seam (in the tools layer, re-exported here).
 - `staticTools.ts` — a fixed list, made composable.
 - `gatedTools.ts` — the decorator that filters, per iteration.
-- `skillScopedTools.ts` — a subset while one skill is the most recently loaded.
+- `../tools/skillScopedTools.ts` — a subset while one skill is the most recently loaded
+  (in the tools layer, re-exported here).
 - `index.ts`.

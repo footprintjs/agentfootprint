@@ -34,7 +34,7 @@
  *   L4                  identity, answer-validation, observability, tool-lint
  *   L5  the trace       recorders, debug
  *   L6                  locales, reliability, strategies
- *   L7  tools           (no folder yet)
+ *   L7  tools           tools (a tool's declaration, its asks and argument law, ToolProvider)
  *   L8  context         injection-engine
  *   L9  the agent       core
  *   L10 lenses          answer-account, time-travel, trace-toolpack, core-flow
@@ -117,7 +117,13 @@ const LAYERS = [
     name: 'rules over the trace',
     files: ['src/locales/**', 'src/reliability/**', 'src/strategies/**'],
   },
-  { rank: 7, name: 'tools', files: [] },
+  {
+    rank: 7,
+    name: 'tools',
+    // Declaring a tool, its asks and its argument law, the chain a call walks, and the
+    // `ToolProvider` seam: the agent, the injection engine, MCP and the toolpack all read it.
+    files: ['src/tools/**'],
+  },
   { rank: 8, name: 'context assembly', files: ['src/lib/injection-engine/**'] },
   { rank: 9, name: 'the agent', files: ['src/core/**'] },
   {
@@ -177,9 +183,6 @@ const CLOSED_FOLDERS = [
  */
 const UPWARD_ALLOWANCES = [
   ['src/core/agent/AgentBuilder.ts', 'src/lib/trace-toolpack/selfExplain.ts'],
-  ['src/core/agent/AgentBuilder.ts', 'src/tool-providers/skillScopedTools.ts'],
-  ['src/lib/injection-engine/skillTools.ts', 'src/core/tools.ts'],
-  ['src/lib/trace-toolpack/selfExplain.ts', 'src/tool-providers/skillScopedTools.ts'],
 ];
 
 // ── matching ─────────────────────────────────────────────────────────────────

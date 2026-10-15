@@ -53,7 +53,7 @@ import {
 } from '../../../src/index.js';
 import { mock } from '../../../src/llm-providers.js';
 import type { LLMMessage, LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
-import { stampInputRequest, validateInputDeclaration } from '../../../src/core/inputRequest.js';
+import { stampInputRequest, validateInputDeclaration } from '../../../src/tools/inputRequest.js';
 import { notDispatchedResult } from '../../../src/core/agent/stages/toolCalls.js';
 
 // ─── fixtures ────────────────────────────────────────────────────────

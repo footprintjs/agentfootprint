@@ -13,7 +13,7 @@
 
 import { defineTool } from '../../../../src/index.js';
 import { PermissionPolicy } from '../../../../src/security/index.js';
-import type { Tool } from '../../../../src/core/tools.js';
+import type { Tool } from '../../../../src/tools/tools.js';
 
 export const ECHO_INPUT_SCHEMA: Record<string, unknown> = {
   type: 'object',

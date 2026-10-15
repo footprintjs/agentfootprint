@@ -51,7 +51,7 @@ import type {
   ServedResult,
   SourceCorpus,
 } from '../arguments/checks.js';
-import { isRefused, rulesOf } from '../arguments/declare.js';
+import { isRefused, rulesOf } from '../../../tools/declare.js';
 import type { BatchCall, ToolOf } from '../arguments/resolve.js';
 import type { CallSources } from '../arguments/sources.js';
 import type { SourceInputs } from '../arguments/subflow.js';

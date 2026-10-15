@@ -13,11 +13,8 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import {
-  formatToolArgIssues,
-  validateToolArgs,
-} from '../../../src/core/agent/toolArgsValidation.js';
-import { splitFindings, withFindingsArgument } from '../../../src/core/agent/findings/reserved.js';
+import { formatToolArgIssues, validateToolArgs } from '../../src/tools/toolArgsValidation.js';
+import { splitFindings, withFindingsArgument } from '../../src/core/agent/findings/reserved.js';
 
 const weatherSchema = {
   type: 'object',

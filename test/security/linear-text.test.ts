@@ -54,7 +54,7 @@ import { githubBugReporter } from '../../src/adapters/observability/githubBugRep
 import { githubDeviceSignIn } from '../../src/adapters/observability/githubDeviceSignIn.js';
 import { normalizeKeyRoot } from '../../src/artifacts/scopePath.js';
 import { typesafe } from '../../src/classify/typesafe.js';
-import { normalizeToken } from '../../src/core/agent/evidence/normalize.js';
+import { normalizeToken } from '../../src/tools/normalize.js';
 import { slugify } from '../../src/lib/bug-report/build.js';
 import { parseEnumLine } from '../../src/lib/injection-engine/constrainedEnumPick.js';
 import { cleanValue } from '../../src/memory/facts/patternFactExtractor.js';

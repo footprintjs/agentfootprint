@@ -3,12 +3,12 @@
  *
  * Pattern: one grammar, named profiles (never a second parser). Moved from
  *          `coverage/period.ts` (where it read a result's declared period)
- *          and `arguments/declare.ts` (where a regex plus `Date.parse` checked
+ *          and `tools/declare.ts` (where a regex plus `Date.parse` checked
  *          an `iso-range` argument). Exact: no `Date.parse` guessing, no
  *          sub-millisecond loss.
  * Role:    L0 leaf (the time layer's one owner, `src/time/`). Imports
  *          nothing. Asked by `coverage/period.ts` (lenient) and, through
- *          `range.ts` · `splitRange`, by `arguments/declare.ts` (strict).
+ *          `range.ts` · `splitRange`, by `tools/declare.ts` (strict).
  * Emits:   N/A.
  *
  * ## The two profiles

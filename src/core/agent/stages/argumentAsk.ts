@@ -41,7 +41,7 @@
 
 import { interrupt, type InterruptPayload, type TypedScope } from 'footprintjs';
 
-import { stampInputRequest, type AwaitingInput } from '../../inputRequest.js';
+import { stampInputRequest, type AwaitingInput } from '../../../tools/inputRequest.js';
 import {
   argumentAskDeclaration,
   bindAnswer,

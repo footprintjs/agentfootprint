@@ -58,7 +58,7 @@
  * and never repaired.
  */
 
-import type { InputValue } from '../../inputRequest.js';
+import type { InputValue } from '../../../tools/inputRequest.js';
 import {
   callWindowOf,
   type CallWindow,
@@ -77,7 +77,7 @@ import type { CallWindowRow } from '../../../time/rows.js';
 import { callWindowRow } from '../../../time/rowsBuild.js';
 import type { ZoneName } from '../../../time/zone.js';
 import { shownArgsOf } from '../../toolShownArgs.js';
-import { validatePropertyValue } from '../toolArgsValidation.js';
+import { validatePropertyValue } from '../../../tools/toolArgsValidation.js';
 import { checkSource, isTraced, type SourceCheck, type SourceCorpus } from './checks.js';
 import {
   isMissing,
@@ -93,7 +93,7 @@ import {
   type RuledArgument,
   type RuledToolLike,
   type ToolRules,
-} from './declare.js';
+} from '../../../tools/declare.js';
 import { keptAnswerFor, type KeptAnswer } from './kept.js';
 import {
   HIDDEN_VALUE,

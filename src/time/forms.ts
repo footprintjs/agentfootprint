@@ -349,7 +349,7 @@ const DAY_MS = 86_400_000;
  * half-open range read (`[06:25, 06:46)` is 21 minutes). An end that was not
  * widened gives one length.
  *
- * Only whole-token spellings: the gate compares tokens (`evidence/normalize.ts`
+ * Only whole-token spellings: the gate compares tokens (`tools/normalize.ts`
  * · `tokenize`), so `20 minutes` is two tokens and neither is a candidate,
  * while `20-minute` and `1200s` are one and are asked about. A length that is
  * not a whole number of seconds (a whole day's said end, one millisecond short)

@@ -381,7 +381,7 @@ defineTool({
 ```
 
 - **One recognizer, at raise time.** The declaration's one validator
-  (`../../core/inputRequest.ts` · `validateInputDeclaration`) asks
+  (`../../tools/inputRequest.ts` · `validateInputDeclaration`) asks
   `absent.ts` · `readAbsence` and refuses what it does not read — an
   `InputRequestError` naming `absent()`, thrown from `requestInput`, so the
   call errors like any malformed declaration and nothing pauses. `null` is
@@ -417,7 +417,7 @@ defineTool({
 - **Read once, then never.** The rows are tracked state, so they ride the
   checkpoint: under `.limitsTravelWithTheAnswer()` the resumed run's answer
   carries the same block a returned miss gives. The field does not:
-  `../../core/inputRequest.ts` · `stampInputRequest` leaves it off, so
+  `../../tools/inputRequest.ts` · `stampInputRequest` leaves it off, so
   `awaitingInput` — what the person, the model and the durable pause read —
   never carries it, and `readAwaitingInput` re-validates the same five keys.
   Nothing on resume reads it; the paused call's served result is the

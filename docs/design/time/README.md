@@ -63,7 +63,7 @@ reports, the side panel, vizfootprint and the metrics dashboard.
 | # | What happened | Where it lives today | Owner today |
 |---|---|---|---|
 | 1 | The person's words ("10/09/26 8 AM to 8:40 AM PST", "yesterday morning") are read by app code | `host:be-server/timeContext.ts` (369 lines) · `prepareQueryWindow`, `finishQueryWindow`, `readClockRanges`, `numericReadings`, `zoneMismatch`; `host:be-server/queryWindowFlow.ts` (170 lines) · `createQueryWindowFlow` | the app, English and US only; arms for one source's tools only (a text match on that source's name) |
-| 2 | A refused answer was re-asked in silence, in a loop | `core/inputRequest.ts` · `InputRefusal`, `InputRepeat` | **fixed** in 9.127.0 |
+| 2 | A refused answer was re-asked in silence, in a loop | `tools/inputRequest.ts` · `InputRefusal`, `InputRepeat` | **fixed** in 9.127.0 |
 | 3 | A date in the future was accepted | in flight on the host · `timeContext.ts` · `FutureWindowError` | the app, one flow only; a model-chosen argument or a library ask is never checked |
 | 4 | A tool that takes only a look-back (`window` pattern `^-?[0-9]+[smhdw]$`) was given an absolute window | `host:py-tools/server.py` · `_DUR`; in flight `host:be-server/windowCapability.ts` · `windowCapability` (probes the schema's `pattern` with sample strings), `coveringLookback` | the app, inferred by regex probing; the widening is unrecorded |
 | 5 | Charts are not drawn as time series; the panel guesses the time column | `host:be-server/web/src/artifacts/autoSpec.ts` · `TIMESTAMP_FIELD`, `DATE_SHAPED`; `chartSelection.ts` · `formatBound` (UTC only) | the panel's guess; epoch seconds are never temporal |
@@ -80,8 +80,8 @@ Three time grammars live in the library today, written separately:
 | Grammar | Where | Seconds unit | `2026-10-09t08:00z` (lowercase) | `2026-02-30T08:00Z` | `…T23:59:60Z` (leap second) |
 |---|---|---|---|---|---|
 | a result's instant | `coverage/period.ts` · `instantOf` | — | accepted | refused (day checked) | accepted (RFC 3339) |
-| an `iso-range` argument | `arguments/declare.ts` · `ISO_INSTANT` + `Date.parse` | — | refused | **accepted** (`Date.parse` rolls it to 2 March) | refused (`Date.parse` → NaN) |
-| a look-back | `arguments/declare.ts` · `LOOKBACK` | **no** (`[mhdw]`) | — | — | — |
+| an `iso-range` argument | `tools/declare.ts` · `ISO_INSTANT` + `Date.parse` | — | refused | **accepted** (`Date.parse` rolls it to 2 March) | refused (`Date.parse` → NaN) |
+| a look-back | `tools/declare.ts` · `LOOKBACK` | **no** (`[mhdw]`) | — | — | — |
 | a dataset's interval (in flight) | `artifacts/timeAxis.ts` · `INTERVAL` | **yes** (`[smhdw]`) | — | — | — |
 
 Measured on Node for this page. A tool whose argument spelling passes `declare.ts` can mint a
@@ -136,7 +136,7 @@ whether the read matched the ask. That record is what this layer adds.
 ### 3.1 The folder
 
 `src/time/` is a leaf: it imports nothing from the agent loop. `coverage/period.ts`,
-`arguments/declare.ts`, `artifacts/timeAxis.ts` and `evidence/` import from it; none keeps its own
+`tools/declare.ts`, `artifacts/timeAxis.ts` and `evidence/` import from it; none keeps its own
 grammar.
 
 | File | Owns |
@@ -240,7 +240,7 @@ The typed range keeps `08:41`; no person ever reads it.
 
 ## 4. The run clock — a declared, recorded input
 
-The library has no clock by law today: `coverage/period.ts` · `periodVerdict` says "no clock is read", and `arguments/declare.ts` · `parsesUnderSpelling` says "no instant is compared with 'now'". A future
+The library has no clock by law today: `coverage/period.ts` · `periodVerdict` says "no clock is read", and `tools/declare.ts` · `parsesUnderSpelling` says "no instant is compared with 'now'". A future
 check, a look-back → range conversion and a relative word ("yesterday") all need one. So the clock
 becomes an **input**, never a hidden read.
 
@@ -468,7 +468,7 @@ need several windows. There is no "the" window of a turn:
 
 ## 6. One time ask
 
-Today's ask cannot hold a window: `core/inputRequest.ts` · `InputField.type` is `string | number
+Today's ask cannot hold a window: `tools/inputRequest.ts` · `InputField.type` is `string | number
 | boolean`, so every app re-checks shape, order, zone and future-ness itself.
 
 ### 6.1 The field
@@ -536,7 +536,7 @@ evidence gate counts it as the person's words (§ 9.5).
 
 ### 7.1 The declaration
 
-`ToolPeriod` (owned by `arguments/declare.ts`) grows additively. Today it is `{ argument,
+`ToolPeriod` (owned by `tools/declare.ts`) grows additively. Today it is `{ argument,
 spelling? }`, one argument in one of three single-argument spellings. Real tools spell a period in
 many more shapes: two arguments (`start_time` / `end_time`), epoch milliseconds or seconds
 (Grafana's default, [research.md](research.md)), a date only (`date: '2026-10-09'`), a nested
@@ -644,7 +644,7 @@ tool declares only facts — here, whether it trims its rows to the asked range.
 ### 7.3 Who writes the argument
 
 Two laws of the honesty design hold: the library acts only on declarations, and it never writes
-over a value the model chose — `core/tools.ts` · `Tool.askOrAssume`: "A present value runs as
+over a value the model chose — `tools/tools.ts` · `Tool.askOrAssume`: "A present value runs as
 sent, filed as the model's own."
 
 - The model **left the period out** and exactly one mention resolved (§ 5.6) → the library fills
@@ -1145,7 +1145,7 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   unchanged.
 
 - **T4.** Landed with these smallest faithful choices. (1) **Where the re-ask happens.** At the
-  resume door, the partial-answer precedent: `core/inputRequest.ts` · `applyInputResponse` asks
+  resume door, the partial-answer precedent: `tools/inputRequest.ts` · `applyInputResponse` asks
   the one judge (`time/ask.ts` · `checkTimeAnswer`) for every `format` field in the reply; a
   refused answer is not taken, and the same ask (same `requestId`) comes back with
   `refused: { answer, reason }` — only the refused fields' values — and `repeat: { count }` (no
@@ -1193,7 +1193,7 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   binding reads — `readBack` — and the facts against a range — `periodFactProblem`),
   `time/bind.ts` (the turn's windows read from the record — `turnWindowsOf` — and one call's
   decision — `callWindowOf`), `time/wire.ts` (`TimeContext`, versioned `version: 1`); the
-  declaration stays owned by `arguments/declare.ts` (`ToolPeriod` grows; `periodFormsOf`,
+  declaration stays owned by `tools/declare.ts` (`ToolPeriod` grows; `periodFormsOf`,
   `periodArgumentsOf`, `periodArgumentOf` — the results layer's join key, the first form's first
   bound when there is no single `argument` — and `periodFactsOf`). (2) **Where the record lives.**
   "The argument row gains window, converted, the mention…" became ONE new time-layer row per call,
@@ -1309,7 +1309,7 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   a second window the tool refuses — and without `.time()` sent bounds were handed the assumed
   look-back too. Now the form the call sent, else the form the rules owe (kept answers, else the
   ASSUMED form, else the first form's own asks), is the window and the other forms are untaken
-  (`arguments/declare.ts` · `sentFormOf` / `owedFormOf` / `untakenBesides`); inner dispatch owes
+  (`tools/declare.ts` · `sentFormOf` / `owedFormOf` / `untakenBesides`); inner dispatch owes
   and names the window once. (8) **Not
   in this step:** § 9.1's `partly-future` (a range straddling now to a `past` tool dispatches
   unmarked), and nothing new is exported — `CallRow['drift']` and `CallWindowRow['refused']` name
@@ -1522,7 +1522,7 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   confirmation; the served line before it names the confirmed window and its source).
 - **T7.** Landed with these smallest faithful choices. (1) **The owner.** `time/forms.ts` ·
   `timeFormsOf` takes a `text` (the person's message, a typed answer, the app's prompt — only
-  `said` spellings: the retired `evidence/normalize.ts` · `dateAndClockForms` rules, moved as they
+  `said` spellings: the retired `tools/normalize.ts` · `dateAndClockForms` rules, moved as they
   were; its cases pass unchanged, and a seeded property pins the new code equal to the old table)
   or a recorded `window` (`said` + `derived`). The 24-hour pass restates the gate tokenizer's
   boundary inside the leaf (the leaf imports nothing outside `time/`); the property pins them
@@ -1851,7 +1851,7 @@ probe, the future check, and its private time vocabulary in the metrics adapters
 | TQ3 | Ship our own English reader, or wrap chrono-node? | **Our own, small, no dependency.** A chrono-node adapter can come later as an optional peer (`lib/lazyRequire.ts`) if a bench shows a gain; because a reader returns parts (§ 5.1), such an adapter is cheap. | chrono-node's default takes the first parse and hides the other readings — the ambiguity this layer must keep as data. (Its reading of PST as −08:00 in October is arguably the correct literal one, so it is not the reason.) |
 | TQ4 | May a reader be async (an LLM-backed reader)? | **Yes, as `kind: 'model'`**: same parts shape, same checks, recorded with its id — but its readings are never `said`: they are confirmed through the ask or fold to "not sure", and resume/replay use the recorded reading, never a re-run (§ 5.5). | The checks verify shape, not meaning: a model reading "yesterday" as the wrong day passes every one of them. |
 | TQ5 | When the app passes no `now`? | **The turn's start, recorded `nowSource: 'default'`.** | Admitted like any default; refusing would make every run option mandatory. |
-| TQ6 | The model writes a window that differs from the person's: record, refuse, or replace? | **Record by default** (`mismatch: 'record'`): the call runs as sent, the row says `model-chosen, differs from the person's window`, claims about the person's window fold to "not sure". `'refuse'` with the corrected form is a later opt-in (TQ23). Never replace. | The shipped law (`core/tools.ts` · `Tool.askOrAssume`: "a present value runs as sent, filed as the model's own"); refusing would also block drill-downs, comparisons and baselines. "Never overwrite" argues for recording, not refusing. |
+| TQ6 | The model writes a window that differs from the person's: record, refuse, or replace? | **Record by default** (`mismatch: 'record'`): the call runs as sent, the row says `model-chosen, differs from the person's window`, claims about the person's window fold to "not sure". `'refuse'` with the corrected form is a later opt-in (TQ23). Never replace. | The shipped law (`tools/tools.ts` · `Tool.askOrAssume`: "a present value runs as sent, filed as the model's own"); refusing would also block drill-downs, comparisons and baselines. "Never overwrite" argues for recording, not refusing. |
 | TQ7 | Who writes a refusal reason for a time answer (§ 6.2)? | **A `src/locales/` catalog sentence the app can override**, only for checks the app armed. | Refines 9.127.0's "the library never writes one"; the app still owns the words. |
 | TQ8 | Does a read with `extra` and no `missing` (wider than asked) make the answer "not sure"? | **Yes by default**, and the T8 bench's false-"not sure" rate decides. A result that declares `queried` equal to the asked range (it filtered its own rows; a tool may say it will, with `filtersToAsked`) clears it. Whether to widen at all is app policy (a later `widen: 'refuse'`), never a tool's. | A count over a wider read answers a different question. |
 | TQ9 | The end of a person's range: end of grain, or exact? | **End of grain**, recorded — a fixed law in v1; an `exact` switch only if a bench shows the need. | People mean "through 8:40"; Elasticsearch's `lte` rounding does the same. |

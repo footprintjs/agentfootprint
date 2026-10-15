@@ -69,13 +69,13 @@ import { toolOnlyDeliveryRefusal } from '../../lib/injection-engine/skillBodyDel
 import { defineInstruction } from '../../lib/injection-engine/factories/defineInstruction.js';
 import { messagesToolRoleRefusal } from '../../lib/injection-engine/messagesSlotRefusal.js';
 import { READS_ENTRY_SCORES_METADATA_KEY } from '../../lib/injection-engine/factories/defineRelevanceHint.js';
-import { skillScopedToolsTarget } from '../../tool-providers/skillScopedTools.js';
+import { skillScopedToolsTarget } from '../../tools/skillScopedTools.js';
 import type { MemoryDefinition } from '../../memory/define.types.js';
 import type { ReliabilityConfig } from '../../reliability/types.js';
 import type { ThinkingHandler } from '../../thinking/types.js';
-import type { Tool, ToolRegistryEntry } from '../tools.js';
+import type { Tool, ToolRegistryEntry } from '../../tools/tools.js';
 import type { CheckInBuilderOptions } from '../checkin.js';
-import type { ToolProvider } from '../../tool-providers/types.js';
+import type { ToolProvider } from '../../tools/toolProvider.js';
 import type { Watcher } from './watch.js';
 import { defaultCommentaryTemplates } from '../../recorders/observability/commentary/commentaryTemplates.js';
 import { defaultStatusTemplates } from '../../recorders/observability/status/statusTemplates.js';

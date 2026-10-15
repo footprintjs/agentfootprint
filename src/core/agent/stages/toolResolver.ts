@@ -26,13 +26,13 @@
  *      was never shown under that name.
  */
 
-import type { ToolProvider } from '../../../tool-providers/types.js';
+import type { ToolProvider } from '../../../tools/toolProvider.js';
 import type {
   ProviderToolCache,
   ServedToolParties,
   ToolParty,
 } from '../../slots/buildToolsSlot.js';
-import type { Tool } from '../../tools.js';
+import type { Tool } from '../../../tools/tools.js';
 import type { ToolClaim } from '../buildToolRegistry.js';
 
 /** One name, resolved. */

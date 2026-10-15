@@ -40,7 +40,7 @@
  * inject `_client` and skip the import path entirely.
  */
 
-import type { Tool } from '../../core/tools.js';
+import type { Tool } from '../../tools/tools.js';
 import type {
   McpClient,
   McpClientOptions,

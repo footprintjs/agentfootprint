@@ -9,7 +9,7 @@
  * ablating the planted fact genuinely flips the outcome.
  */
 import { Agent } from '../../../src/core/Agent';
-import { defineTool, type Tool } from '../../../src/core/tools';
+import { defineTool, type Tool } from '../../../src/tools/tools';
 import { defineFact } from '../../../src/lib/injection-engine/factories/defineFact';
 import type { Injection } from '../../../src/lib/injection-engine/types';
 import { mock } from '../../../src/adapters/llm/MockProvider';

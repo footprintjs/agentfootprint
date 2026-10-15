@@ -32,7 +32,7 @@ import type { CredentialProvider } from '../../identity/types.js';
 import type { ArtifactStore } from '../../artifacts/types.js';
 import type { ArtifactPlacement } from '../../artifacts/placement.js';
 import type { AuthorizationRequiredMode } from '../../identity/consent.js';
-import type { ToolArgValidationMode } from './toolArgsValidation.js';
+import type { ToolArgValidationMode } from '../../tools/toolArgsValidation.js';
 import type { ThinkingBlock } from '../../thinking/types.js';
 import type { ReliabilityScope } from '../../reliability/types.js';
 import type { FoldedSpan, WindowRecord } from './window/types.js';

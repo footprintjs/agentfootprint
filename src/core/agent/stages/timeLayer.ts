@@ -39,7 +39,7 @@ import {
   periodFormsOf,
   rulesOf,
   type RuledToolLike,
-} from '../arguments/declare.js';
+} from '../../../tools/declare.js';
 import { recordFindings } from '../findings/ledger.js';
 import type { FindingsLedger } from '../findings/types.js';
 import type { AgentInput, AgentState } from '../types.js';

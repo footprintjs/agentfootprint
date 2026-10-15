@@ -1,8 +1,8 @@
 /**
- * middleware/runChain — INTERNAL. The one place a chain is walked.
+ * tools/runChain — INTERNAL. The one place a chain is walked.
  *
  * Pattern: Chain of Responsibility driver.
- * Role:    core/ layer. Both stages (tool dispatch, message boundary) and
+ * Role:    tools/ layer. Both stages (tool dispatch, message boundary) and
  *          the MCP server call in here, so the ordering law, the
  *          throw-is-a-denial law and the ledger row shape are written once
  *          and cannot drift between the three callers.
@@ -44,8 +44,8 @@
  * value is that a row means somebody looked.
  */
 
-import type { LLMMessage } from '../../../provider-contract/types.js';
-import type { MemoryIdentity } from '../../../memory/identity/types.js';
+import type { LLMMessage } from '../provider-contract/types.js';
+import type { MemoryIdentity } from '../memory/identity/types.js';
 import type {
   AskPayload,
   MessageMiddleware,
@@ -54,7 +54,7 @@ import type {
   ToolMiddleware,
   ToolOutcome,
   ToolResultOutcome,
-} from './types.js';
+} from '../core/agent/middleware/types.js';
 
 /** Tool args, as they travel the chain. */
 export type ToolArgs = Readonly<Record<string, unknown>>;

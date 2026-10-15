@@ -524,7 +524,7 @@ tools must be idempotent, keyed on stable call content.
 
 ## 12. Tools · Security · Output Schema · Pause
 
-**Tools (`src/core/tools.ts`, `src/tool-providers/`):** `defineTool({name,description,inputSchema,
+**Tools (`src/tools/tools.ts`, `src/tool-providers/`):** `defineTool({name,description,inputSchema,
 execute})` → `Tool`. `buildToolRegistry` = static tools + auto `read_skill` + non-autoActivate skill
 tools; cross-source name-uniqueness enforced. `ToolProvider.list(ctx)` for dynamic tools
 (`staticTools`/`gatedTools`/`skillScopedTools`); `ProviderToolCache` shares one `list()` call per

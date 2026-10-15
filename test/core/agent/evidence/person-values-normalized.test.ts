@@ -33,7 +33,7 @@ import {
   exemptLineageOf,
 } from '../../../../src/core/agent/evidence/evidenceIndex.js';
 import { checkAnswer, resolveEvidenceGate } from '../../../../src/core/agent/evidence/gate.js';
-import { tokenize } from '../../../../src/core/agent/evidence/normalize.js';
+import { tokenize } from '../../../../src/tools/normalize.js';
 import { timeFormsOf } from '../../../../src/time/forms.js';
 
 /**

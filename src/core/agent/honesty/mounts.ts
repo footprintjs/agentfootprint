@@ -74,7 +74,7 @@ import {
   periodFactsOf as periodFactsDeclared,
   periodFormsOf as periodFormsDeclared,
   rulesOf,
-} from '../arguments/declare.js';
+} from '../../../tools/declare.js';
 import { keptThisTurn } from '../arguments/kept.js';
 import type { ArgumentRow } from '../arguments/rows.js';
 import type { ArgumentResolution, BatchCall, ToolOf } from '../arguments/resolve.js';
@@ -404,7 +404,7 @@ function emitPeriodRows(scope: TypedScope<ResultsLayerState>, rows: readonly Per
 
 /**
  * The argument a tool's `ToolPeriod` names — read off the implementation that
- * answered the name, by the inputs layer's own reader (`arguments/declare.ts` ·
+ * answered the name, by the inputs layer's own reader (`tools/declare.ts` ·
  * `rulesOf`): a `ToolPeriod` is that layer's declaration, and this layer only
  * reads it. A tool whose rules cannot be read declares nothing here (its calls
  * were refused, never run).

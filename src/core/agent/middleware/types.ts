@@ -68,7 +68,7 @@
  */
 
 import type { LLMMessage } from '../../../provider-contract/types.js';
-import type { AskComponent } from '../../askComponent.js';
+import type { AskComponent } from '../../../tools/askComponent.js';
 import type { MemoryIdentity } from '../../../memory/identity/types.js';
 import type { LoopMoment } from '../../../lib/moments.js';
 

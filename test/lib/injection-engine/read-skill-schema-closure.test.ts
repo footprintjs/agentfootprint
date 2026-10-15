@@ -7,7 +7,7 @@ import { readSkillDescriptor } from '../../../src/doors/skill-graph.js';
 import { mock } from '../../../src/providers.js';
 import type { LLMRequest } from '../../../src/provider-contract/types.js';
 import type { AgentfootprintEvent } from '../../../src/events/registry.js';
-import { validateToolArgs } from '../../../src/core/agent/toolArgsValidation.js';
+import { validateToolArgs } from '../../../src/tools/toolArgsValidation.js';
 import { splitFindings, withFindingsArgument } from '../../../src/core/agent/findings/reserved.js';
 
 const BODY = 'BILLING_BODY_DELIVERY_CANARY';

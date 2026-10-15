@@ -14,7 +14,7 @@
  *          `range.ts`, `zone.ts` and `periodForm.ts` — the declaration half
  *          (the shapes, the sugar, each form's own rules, a declared value's
  *          spelling, the tool's facts), split out for the synchronous doors
- *          (`arguments/declare.ts`, `ask.ts`, `rows.ts`) and re-exported
+ *          (`tools/declare.ts`, `ask.ts`, `rows.ts`) and re-exported
  *          here. Asked by `bind.ts` (the fill and the binding) and `drift.ts`,
  *          which only an armed agent loads.
  * Emits:   N/A.

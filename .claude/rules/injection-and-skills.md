@@ -4,6 +4,7 @@ paths:
   - "src/maps/**"
   - "src/injection-engine.ts"
   - "src/core/agent/**"
+  - "src/tools/**"
   - "src/security/skillTarget.ts"
   - "src/lib/moments.ts"
 ---

@@ -45,7 +45,7 @@
  * identifiers look like" has better information than these heuristics.
  */
 
-import { countDigits, lookupForms, normalizeToken, tokenize } from './normalize.js';
+import { countDigits, lookupForms, normalizeToken, tokenize } from '../../../tools/normalize.js';
 import type { ResolvedEvidenceGate, UnsupportedValue } from './types.js';
 
 /**

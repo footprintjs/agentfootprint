@@ -14,7 +14,7 @@ import { type ControlDepLookup } from 'foottrace';
 
 import { callTraceTool, traceToolpack } from '../../../src/lib/trace-toolpack/traceToolpack';
 import { TRACE_TOOL_NAMES } from '../../../src/lib/traceToolNames';
-import type { Tool } from '../../../src/core/tools';
+import type { Tool } from '../../../src/tools/tools';
 import { plantedScenario, runPlantedScenario } from '../context-bisect/plantedFactFixture';
 import { innerRunStore } from '../../../src/core/innerRunRecords';
 import { Agent } from '../../../src/core/Agent';

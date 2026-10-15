@@ -26,7 +26,7 @@ import { checkPartition } from '../../../src/lib/injection-engine/skillPartition
 import { skillGraph, defineSkill } from '../../../src/injection-engine.js';
 import { defineTool } from '../../../src/index.js';
 import type { Injection } from '../../../src/lib/injection-engine/types.js';
-import type { Tool } from '../../../src/core/tools.js';
+import type { Tool } from '../../../src/tools/tools.js';
 
 // ─── fixtures ────────────────────────────────────────────────────────────────
 

@@ -271,8 +271,8 @@ defineTool({
 The name is `askOrAssume`, not revision 1's `whenMissing`, because `ask` also fires on a value that
 is present but untraceable once sources are armed (devil's review). Other names are open (§ 10).
 
-**Refused at definition** by `arguments/declare.ts` · `assertAskOrAssume`, called from
-`core/tools.ts` · `defineTool` (which copies fields one by one, so it must also copy this one):
+**Refused at definition** by `tools/declare.ts` · `assertAskOrAssume`, called from
+`tools/tools.ts` · `defineTool` (which copies fields one by one, so it must also copy this one):
 - the argument is not in `inputSchema.properties`, is not a string, number, integer or boolean, or
   is a `wants` argument;
 - a rule has both `ask` and `assume`, neither, or an unknown key;
@@ -333,7 +333,7 @@ object map:
 
 The checks run in the inputs layer's Verify stage, before anything dispatches. Each is a membership
 test over whole tokens, using the evidence module's definition of "the same value"
-(`evidence/normalize.ts` · `tokenize`, `canonicalForm`) — one owner, no extractor, so "2h" and
+(`tools/normalize.ts` · `tokenize`, `canonicalForm`) — one owner, no extractor, so "2h" and
 plain words can be checked.
 
 - **`user` + quote.** The quote's tokens must occur, in order and adjacent, in a person message
@@ -415,7 +415,7 @@ needless-ask rate before anything else is decided.
 #### (e) The ask — once per batch, before anything dispatches
 
 - **One typed ask per batch** for everything missing or unverified, accepted by
-  `core/inputRequest.ts` · `validateInputDeclaration`: a fixed library question, and one field per
+  `tools/inputRequest.ts` · `validateInputDeclaration`: a fixed library question, and one field per
   distinct (tool, argument) with the author's question as the field's `description` and the
   author's choices as its `enum`. The answer binds to every call in the batch that needed that
   field. A fixed question keeps the total inside the 4096-character bound, which a joined question
@@ -1131,7 +1131,7 @@ the paper uses it:
 | data provenance (why- and where-provenance) | "Why and Where: A Characterization of Data Provenance" (ICDT 2001); the W3C PROV-DM model (2013) | layer 2's source checks are where-provenance checks in which the model declares the edge and the library checks it |
 | completeness of incomplete databases; local closed-world reasoning | "Integrity = Validity + Completeness" (ACM TODS 1989); "Obtaining Complete Answers from Incomplete Databases" (VLDB 1996); "Completeness of Queries over Incomplete Databases" (VLDB 2011); local closed-world reasoning for planning agents | `absent()`, `coverage()` and the period's queried/held are completeness statements served to an agent and read back into a standing |
 | frame-based slot filling and dialogue state tracking | the GUS frame-driven dialog system (1977); the MultiWOZ benchmark (2018) | ask-or-assume per argument is required and default slot elicitation, plus recorded provenance and a standing |
-| MCP elicitation | the MCP specification revision of 2025-06-18 | the same flat primitive form as `core/inputRequest.ts` · `InputField`, raised by the client's loop from a declaration |
+| MCP elicitation | the MCP specification revision of 2025-06-18 | the same flat primitive form as `tools/inputRequest.ts` · `InputField`, raised by the client's loop from a declaration |
 | verbatim-quote support | "Teaching language models to support answers with verified quotes" (2022); provider citation features | quotes back the tool's arguments, not the answer |
 | selective prediction; self-reported reflection | selective classification and risk–coverage (JMLR 2010; NeurIPS 2017); reflection tokens in Self-RAG (ICLR 2024) | the evaluation frame, and the self-report comparator |
 

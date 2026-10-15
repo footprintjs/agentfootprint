@@ -31,8 +31,8 @@ import {
   hashSessionKey,
   toolSessionKey,
   type ToolSessionReport,
-} from '../../src/core/toolSessions.js';
-import type { ToolExecutionContext } from '../../src/core/tools.js';
+} from '../../src/tools/toolSessions.js';
+import type { ToolExecutionContext } from '../../src/tools/tools.js';
 import { unconfiguredCredentialProvider } from '../../src/identity/types.js';
 
 /** A context carrying exactly the facts a test cares about. */

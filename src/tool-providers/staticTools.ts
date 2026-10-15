@@ -17,8 +17,8 @@
  *   const agent = Agent.create({ provider: llm, model }).tools(visible).build();
  */
 
-import type { Tool } from '../core/tools.js';
-import type { ToolProvider, ToolDispatchContext } from './types.js';
+import type { Tool } from '../tools/tools.js';
+import type { ToolProvider, ToolDispatchContext } from '../tools/toolProvider.js';
 
 // #region staticTools
 export function staticTools(tools: readonly Tool[]): ToolProvider {

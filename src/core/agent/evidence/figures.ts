@@ -70,7 +70,7 @@ import type { LLMMessage } from '../../../provider-contract/types.js';
 import { LIBRARY_NOTE_OPENING } from '../../../lib/saidByPerson.js';
 import { toolBytesOf } from '../../../lib/toolBytes.js';
 import { readResult } from './evidenceIndex.js';
-import { normalizeToken, tokenize } from './normalize.js';
+import { normalizeToken, tokenize } from '../../../tools/normalize.js';
 import type { FigureDerivation, UnsupportedValue } from './types.js';
 
 /** Units that make a number a figure. Lower-case; `/s` may follow a size. */

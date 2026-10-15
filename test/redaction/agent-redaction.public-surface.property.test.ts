@@ -30,7 +30,7 @@ import { mock } from '../../src/doors/providers.js';
 import { conversationRedaction } from '../../src/doors/security.js';
 import { AGENT_PUBLIC_SURFACE } from '../type-regressions/AgentRedactionSurface.completeness.test.js';
 import { adversarialStrings, locationsOf, withoutAnswerBoundary } from './fixture.js';
-import type { ToolProvider } from '../../src/tool-providers/types.js';
+import type { ToolProvider } from '../../src/tools/toolProvider.js';
 import { everySurface, servedArtifacts } from './everySurface.js';
 
 /** mulberry32 — the suite's seeded PRNG (`agent-redaction.property.test.ts`). */

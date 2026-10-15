@@ -71,7 +71,7 @@ export type ToolArgValidationMode = 'enforce' | 'warn' | 'off';
 /** Finite, value-free transport failure through the existing argument refusal owner. */
 export function streamedToolArgIssues(
   failure: NonNullable<
-    import('../../provider-contract/types.js').LLMResponse['toolCalls'][number]['argumentsFailure']
+    import('../provider-contract/types.js').LLMResponse['toolCalls'][number]['argumentsFailure']
   >,
 ): readonly ToolArgIssue[] {
   return [
@@ -401,7 +401,7 @@ export function validateToolArgs(
  * Validate ONE value against ONE property's own schema — the node rule
  * `validateToolArgs` applies below the root, and nothing above it.
  *
- * Exists for the inputs layer (`core/agent/arguments/declare.ts` ·
+ * Exists for the inputs layer (`tools/declare.ts` ·
  * `assertAskOrAssume`): a declared `assume` value or `ask` choice is judged
  * against `inputSchema.properties[argument]` alone. Wrapping it as
  * `validateToolArgs({ [argument]: value }, inputSchema)` would enforce the

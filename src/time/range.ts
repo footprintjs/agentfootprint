@@ -8,7 +8,7 @@
  *          `docs/design/time/README.md` § 3.3), so each crossing is a function
  *          here and its inverse.
  * Role:    L0 leaf (the time layer's one owner). Imports `instant.ts` and
- *          `duration.ts`. Asked by `arguments/declare.ts` ·
+ *          `duration.ts`. Asked by `tools/declare.ts` ·
  *          `parsesUnderSpelling` (an `iso-range` argument is
  *          {@link splitRange} under `'..'` and the strict profile). No other
  *          file splits or joins a range.

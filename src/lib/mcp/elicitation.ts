@@ -9,9 +9,9 @@
  *          2025-06-18); `answerFromElicitation` maps the client's `content`
  *          back to the `InputResponse` `agent.resume` takes. Nothing is
  *          checked here that the resume door checks: the answer goes through
- *          `core/inputRequest.ts` · `applyInputResponse` like any other, and a
+ *          `tools/inputRequest.ts` · `applyInputResponse` like any other, and a
  *          refused time answer comes back as a re-ask to elicit again.
- * Role:    lib/mcp (the transport). Reads `core/inputRequest.ts` types only.
+ * Role:    lib/mcp (the transport). Reads `tools/inputRequest.ts` types only.
  * Emits:   N/A.
  *
  * ## The mapping
@@ -51,7 +51,7 @@ import {
   type InputField,
   type InputResponse,
   type InputValue,
-} from '../../core/inputRequest.js';
+} from '../../tools/inputRequest.js';
 
 /** One primitive property of an elicitation's `requestedSchema`. */
 export type ElicitationProperty =

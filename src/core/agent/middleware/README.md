@@ -1,7 +1,7 @@
 **Mixed** — the governance chain: three verbs walked forwards over a call and
 backwards over its result.
-Walker: `runChain.ts` (the one place a chain is walked), `outcomes.ts`,
-`types.ts`.
+Walker: `outcomes.ts`, `types.ts`. The one place a chain is walked,
+`../../../tools/runChain.ts`, sits one layer down: the MCP server walks it too.
 Trace: `ledger.ts` — one writer for one committed key, where a chain's decisions
 become record.
 Fold: `rewrites.ts` — which ruled argument a before-tool rewrite superseded, read
@@ -139,7 +139,7 @@ secrets").
 ## Files
 
 - `messagePhase.ts` — phase-bound wrappers and conservative output declaration.
-- `runChain.ts` — the Chain-of-Responsibility driver.
+- `../../../tools/runChain.ts` — the Chain-of-Responsibility driver (in the tools layer).
 - `outcomes.ts` — `allow` / `deny` / `ask`, as smart constructors.
 - `ledger.ts` — `recordDecisions`.
 - `rewrites.ts` — `argumentRewritesOf`: under the inputs layer a before-tool

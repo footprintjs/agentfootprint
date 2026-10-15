@@ -32,7 +32,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { Agent, defineTool } from '../../src/index.js';
-import type { ToolExecutionContext } from '../../src/core/tools.js';
+import type { ToolExecutionContext } from '../../src/tools/tools.js';
 import { mock } from '../../src/adapters/llm/MockProvider.js';
 import { chatBubbleLiveStatus } from '../../src/strategies/defaults/chatBubbleLiveStatus.js';
 import { attachStatus } from '../../src/recorders/observability/StatusRecorder.js';

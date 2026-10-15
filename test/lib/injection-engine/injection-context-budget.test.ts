@@ -35,7 +35,7 @@ import type { InjectionContext } from '../../../src/lib/injection-engine/types.j
 import { iterationsRemainingOf } from '../../../src/lib/iterationBudget.js';
 import { computeCacheMarkers } from '../../../src/cache/CacheDecisionSubflow.js';
 import type { LLMProvider, LLMResponse } from '../../../src/provider-contract/types.js';
-import { defineTool } from '../../../src/core/tools.js';
+import { defineTool } from '../../../src/tools/tools.js';
 
 const looker = defineTool({
   name: 'look',

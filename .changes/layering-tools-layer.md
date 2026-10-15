@@ -1,0 +1,4 @@
+---
+type: internal
+---
+**What a tool is now has its own layer: `src/tools/`.** The tool contract and `defineTool` (`core/tools.ts`), the argument declaration and its assert (`core/agent/arguments/declare.ts`), argument validation, the typed ask (`inputRequest.ts`, `askComponent.ts`), tool sessions, the tool-server contract check, the middleware-chain walker (`runChain.ts`), the evidence gate's shared spelling (`normalize.ts`), the `ToolProvider` seam (`tool-providers/types.ts`, now `tools/toolProvider.ts`) and `skillScopedTools` moved into one folder below the injection engine and the agent. The injection engine, MCP, the trace toolpack and the code-runner adapter now reach these without importing the agent. Three upward imports left the layer table's allowance list (`npm run check:layering`). Internal paths only: every public door exports the same names.

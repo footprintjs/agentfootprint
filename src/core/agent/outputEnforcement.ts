@@ -46,7 +46,7 @@ import {
   type OutputSchemaParser,
 } from '../../answer-validation/outputSchema.js';
 import { SCHEMA_CHECK_FRAME_PREFIX } from '../../lib/saidByPerson.js';
-import { formatToolArgIssues, streamedToolArgIssues } from './toolArgsValidation.js';
+import { formatToolArgIssues, streamedToolArgIssues } from '../../tools/toolArgsValidation.js';
 
 // ─── The ledger ──────────────────────────────────────────────────────
 

@@ -20,7 +20,7 @@
  * memo pins at most one inner pack beyond what the snapshot already holds.
  */
 
-import type { Tool } from '../../core/tools.js';
+import type { Tool } from '../../tools/tools.js';
 import type { TraceToolpackArtifacts } from './types.js';
 
 /** What the model asked of an inner record — the narrowest param wins. */

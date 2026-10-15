@@ -16,7 +16,7 @@
  */
 
 import { MAX_INDEX_TOKENS, readResult } from './evidenceIndex.js';
-import { canonicalForm, normalizeToken, tokenize } from './normalize.js';
+import { canonicalForm, normalizeToken, tokenize } from '../../../tools/normalize.js';
 
 /**
  * What `resultCarries` answers: the value is in the result (`found`), it is

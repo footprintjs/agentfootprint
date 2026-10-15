@@ -121,7 +121,7 @@ result kind, no rowset, no fan-out, and it raises an approval gate. That
 consumer exercises the half of this module that has never run, and the repo is
 visibly waiting for it: `WalkDescriptor.walk_segment` (`types.ts`) already ships
 `'pre-pause'`/`'post-resume'` purely so the wire will not break when resumed
-segments arrive, and `Tool.gates` (9.76.0, `core/tools.ts`) already lets a
+segments arrive, and `Tool.gates` (9.76.0, `tools/tools.ts`) already lets a
 procedure declare that it pauses — naming "the runbook grammar's compiler" as
 the reader that would keep a gating tool out of a fan-out branch. Neither has a
 reader in this repo today. A consumer needing both is the evidence that the

@@ -34,7 +34,7 @@
  */
 
 import type { Credential } from '../../identity/types.js';
-import { formatToolArgIssues, validateToolArgs } from './toolArgsValidation.js';
+import { formatToolArgIssues, validateToolArgs } from '../../tools/toolArgsValidation.js';
 import {
   isMissing,
   isRefused,
@@ -42,14 +42,14 @@ import {
   rulesOf,
   sentFormOf,
   untakenBesides,
-} from './arguments/declare.js';
+} from '../../tools/declare.js';
 import { formArguments, type PeriodForm } from '../../time/periodForm.js';
 import type {
   Tool,
   ToolDispatch,
   ToolDispatchCallOptions,
   ToolExecutionContext,
-} from '../tools.js';
+} from '../../tools/tools.js';
 
 /** What the handler wires in — everything the dispatch cannot know itself. */
 export interface AgentToolDispatchDeps {

@@ -20,7 +20,7 @@
 
 import type { CombinedRecorder, FlowChart, RedactionPolicy } from 'footprintjs';
 import type { CoverageItem } from '../../semantics/coverage/types.js';
-import type { ToolDispatch, ToolOwner, ToolResultCeiling } from '../tools.js';
+import type { ToolDispatch, ToolOwner, ToolResultCeiling } from '../../tools/tools.js';
 import type { ToolResultClass } from '../../semantics/types.js';
 import type { ToolWants } from '../../artifacts/wants.js';
 

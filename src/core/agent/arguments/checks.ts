@@ -16,7 +16,7 @@
  *
  * ## One claim, one corpus — and a pass is never support
  *
- * Every check is whole-token membership (`evidence/normalize.ts` · `tokenize`
+ * Every check is whole-token membership (`tools/normalize.ts` · `tokenize`
  * and `canonicalForm`, the evidence gate's own "same value", through
  * `evidence/resultCarries.ts` · `canonicalTokens`) in the ONE place the
  * claimed source lives:
@@ -59,7 +59,7 @@ import {
   sameArgumentValue,
   type PeriodSpelling,
   type RuledArgument,
-} from './declare.js';
+} from '../../../tools/declare.js';
 import { HIDDEN_VALUE, type ArgumentCheckFailed, type ArgumentClaim } from './rows.js';
 import type { DeclaredSource } from './sources.js';
 

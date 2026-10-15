@@ -30,7 +30,7 @@ import { describe, expect, it } from 'vitest';
 
 import { Agent } from '../../src/index.js';
 import { MessageDeniedError, allow, ask } from '../../src/core/agent/middleware/index.js';
-import { runMessageChain } from '../../src/core/agent/middleware/runChain.js';
+import { runMessageChain } from '../../src/tools/runChain.js';
 import type { MessageMiddleware } from '../../src/core/agent/middleware/types.js';
 import { mock } from '../../src/llm-providers.js';
 

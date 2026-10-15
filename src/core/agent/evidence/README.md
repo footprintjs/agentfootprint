@@ -1,7 +1,8 @@
 **Mixed** — what the run can still prove it read, and the sentences that carry
 the verdict back.
 Fold: `evidenceIndex.ts` (the corpus, the exempt corpus, the turn stamp, the
-carriers), `normalize.ts`, `extract.ts`, `types.ts`. One fold, asked at two
+carriers), `extract.ts`, `types.ts`, and the spelling they share,
+`../../../tools/normalize.ts` (one layer down: the inputs layer reads it too). One fold, asked at two
 moments and never stored: `../stages/route.ts` · `judgeEvidence` at the
 answer (handed to `gate.ts` as a parameter), and since 9.110.0
 `../stages/toolCalls.ts` · `towersFor` at dispatch, under `.findings()`
@@ -45,7 +46,7 @@ looks the way it does, and it is stated again at the top of `gate.ts`.
 | file | one job |
 |---|---|
 | `types.ts` | the public vocabulary: posture, shape, options, verdict |
-| `normalize.ts` | one spelling per value, on BOTH sides (`41,200` ≡ `41200`). The other spellings of a date or clock time are NOT here: since time step T7 they are asked of `time/forms.ts` · `timeFormsOf` (its `said` list, by the exempt corpus only) |
+| `../../../tools/normalize.ts` | one spelling per value, on BOTH sides (`41,200` ≡ `41200`). The other spellings of a date or clock time are NOT here: since time step T7 they are asked of `time/forms.ts` · `timeFormsOf` (its `said` list, by the exempt corpus only) |
 | `extract.ts` | which tokens in an answer are DATA — the conservative rule |
 | `evidenceIndex.ts` | the structural walk of tool results, and the exempt corpus; `readResult` is the ONE reading of a result |
 | `servedJson.ts` | a served result that is NOT one JSON value, read by the JSON grammar: its leading value(s) — the tool's JSON before a framework note (a step banner, an effect note, the repeated-call note), an MCP text result's several blocks — and the text after them, and the complete leaves of JSON cut short (a capped result's `head`, a tool that truncated its own output) — never the token the cut falls inside — plus, when the cut falls inside a string, that string's whole words up to its last space, read as text (the word the cut may have split is left out: `mo` may be `more`). Read whole as text, `{"id":4417}` tokenises to `:4417`: every number and boolean the tool returned read as absent, a false flag at the gate and a false `not-in-result` in the inputs layer. Text that opens with a bracket and is not JSON stays text |

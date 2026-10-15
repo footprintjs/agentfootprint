@@ -297,7 +297,7 @@ describe('9.55.0 is preserved', () => {
   it('the scripted provider still sees the request on every call', async () => {
     const { provider, requests } = scripted(9);
     const { Agent } = await import('../../src/index.js');
-    const { defineTool } = await import('../../src/core/tools.js');
+    const { defineTool } = await import('../../src/tools/tools.js');
     const looker = defineTool({
       name: 'look',
       description: 'look one thing up',

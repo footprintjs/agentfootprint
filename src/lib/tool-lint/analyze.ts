@@ -30,7 +30,7 @@
  * fixtures assert ordering, never absolute scores).
  */
 
-import type { Tool } from '../../core/tools.js';
+import type { Tool } from '../../tools/tools.js';
 import { pairwiseSimilarity, type SimilarityPair } from '../influence-core/index.js';
 import { defaultStructuralRules } from './rules.js';
 import type {

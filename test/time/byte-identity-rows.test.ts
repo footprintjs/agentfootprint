@@ -22,7 +22,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { defineTool } from '../../src/index.js';
-import { convertSpelling, parsesUnderSpelling } from '../../src/core/agent/arguments/declare.js';
+import { convertSpelling, parsesUnderSpelling } from '../../src/tools/declare.js';
 import { daysInMonth } from '../../src/time/instant.js';
 import { parsesUnderSpellingBefore } from './fixtures/before.js';
 import { instantish, prng } from './fixtures/generate.js';

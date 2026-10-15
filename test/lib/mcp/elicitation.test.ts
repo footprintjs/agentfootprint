@@ -32,7 +32,7 @@ import {
   type AwaitingInput,
   type InputField,
 } from '../../../src/index.js';
-import { stampInputRequest } from '../../../src/core/inputRequest.js';
+import { stampInputRequest } from '../../../src/tools/inputRequest.js';
 
 const ORIGIN = { originalRequest: 'traffic?', toolCallId: 'c1' };
 const awaiting = (fields: readonly InputField[], extra: object = {}): AwaitingInput =>

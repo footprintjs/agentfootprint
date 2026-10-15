@@ -24,7 +24,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { Agent } from '../../../../src/index.js';
-import { defineTool } from '../../../../src/core/tools.js';
+import { defineTool } from '../../../../src/tools/tools.js';
 import type {
   LLMMessage,
   LLMProvider,
@@ -37,7 +37,7 @@ import {
 } from '../../../../src/core/agent/evidence/evidenceIndex.js';
 import { checkAnswer, resolveEvidenceGate } from '../../../../src/core/agent/evidence/gate.js';
 import { EVIDENCE_CHECK_FRAME_PREFIX } from '../../../../src/core/agent/evidence/frames.js';
-import { lookupForms, normalizeToken } from '../../../../src/core/agent/evidence/normalize.js';
+import { lookupForms, normalizeToken } from '../../../../src/tools/normalize.js';
 import { buildSummaryMessage } from '../../../../src/core/agent/window/summarize.js';
 import { stripFrameworkFields } from '../../../../src/core/agent/composeRequest.js';
 import {

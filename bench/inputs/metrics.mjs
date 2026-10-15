@@ -71,7 +71,7 @@ export function statedDurations(text) {
 }
 
 /**
- * Missing, as the inputs design defines it (`arguments/declare.ts` · `isMissing`, arguments note
+ * Missing, as the inputs design defines it (`tools/declare.ts` · `isMissing`, arguments note
  * § 1.1): no own key, or `undefined`, `null`, or a string that is empty after trimming.
  */
 export function isMissing(args, argument) {

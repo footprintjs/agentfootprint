@@ -5,7 +5,7 @@
  *
  * Pattern: the declaration half of `convert.ts`, split from the conversions so
  *          the SYNCHRONOUS doors — `defineTool({ period })`
- *          (`agent/arguments/declare.ts`), a time answer's check at the resume
+ *          (`tools/declare.ts`), a time answer's check at the resume
  *          door (`ask.ts` · `checkTimeAnswer`) and the checkpoint door's
  *          refusal codes (`rows.ts`) — reach it without the conversion
  *          engine, which only an armed agent loads (`bind.ts`, `drift.ts`,
@@ -267,7 +267,7 @@ const edgeIssue = (value: unknown): string | undefined =>
 /**
  * Why one form's own shape is not a form, or `undefined` when it is one. The
  * schema half (does the argument exist, is it the right type, does it carry a
- * rule) is `arguments/declare.ts`'s — this is the shape alone.
+ * rule) is `tools/declare.ts`'s — this is the shape alone.
  */
 export function formIssue(form: unknown): string | undefined {
   if (!isPlain(form)) return 'a form must be an object with a `kind`.';

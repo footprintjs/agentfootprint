@@ -39,7 +39,7 @@ import {
   type FindingsRow,
   type StandingRow,
 } from '../../../src/index.js';
-import { defineTool } from '../../../src/core/tools.js';
+import { defineTool } from '../../../src/tools/tools.js';
 import { mock } from '../../../src/llm-providers.js';
 import type {
   LLMChunk,

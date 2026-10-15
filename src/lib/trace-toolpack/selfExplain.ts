@@ -57,13 +57,13 @@ import { controlDepRecorder } from 'footprintjs/trace';
 
 import { defineSkill } from '../injection-engine/factories/defineSkill.js';
 import type { Injection } from '../injection-engine/types.js';
-import { defineTool, type Tool } from '../../core/tools.js';
+import { defineTool, type Tool } from '../../tools/tools.js';
 import type { AgentOptions } from '../../core/agent/types.js';
 import type { Unsubscribe } from '../../events/dispatcher.js';
 import { eventTail, type EventTail } from '../../events/eventTail.js';
 import type { AgentfootprintEvent } from '../../events/registry.js';
-import { skillScopedTools } from '../../tool-providers/skillScopedTools.js';
-import type { ToolProvider } from '../../tool-providers/types.js';
+import { skillScopedTools } from '../../tools/skillScopedTools.js';
+import type { ToolProvider } from '../../tools/toolProvider.js';
 import { SELF_EXPLAIN_BODY, SELF_EXPLAIN_WHEN } from './debugPrompt.js';
 import { innerRunsOfConversation, type InnerRunLookup } from '../../core/innerRunRecords.js';
 import { NO_COMPLETED_RUN_MESSAGE } from '../traceToolNames.js';
