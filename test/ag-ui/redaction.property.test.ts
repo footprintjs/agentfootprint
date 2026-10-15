@@ -20,6 +20,9 @@
  * allow-lists EVERY event as CUSTOM, because the guarantee is the record's
  * (served events only), not the allow-list's.
  *
+ * The same worlds through the HOST (`streamHandler` + `agUi()`): the response
+ * body a browser reads holds no secret either.
+ *
  * A pause and the run that continues it hold the same law, across both requests:
  * neither run's frames, nor the suspension kept between them, carry a marked value.
  *
@@ -38,6 +41,8 @@ import { mockThinkingHandler } from '../../src/thinking/MockThinkingHandler.js';
 import { ALL_EVENT_TYPES } from '../../src/events/registry.js';
 import { agUiSse } from '../../src/ag-ui/framing.js';
 import type { AgUiCustomProjection } from '../../src/ag-ui/serializer.js';
+import { agUi } from '../../src/ag-ui/adapter.js';
+import { streamHandler } from '../../src/hosting/streamHandler.js';
 import { replayThroughClient, runAsAgUi } from './helpers.js';
 
 /** mulberry32 — the same draws every run. */
@@ -155,6 +160,35 @@ describe('property — a policy holds on the AG-UI wire at every depth', () => {
         // …and the client still accepts what is left.
         await replayThroughClient(run.events);
       }
+    });
+  }
+});
+
+describe('property — through the host, the bytes a browser receives', () => {
+  for (let seed = 1; seed <= 4; seed++) {
+    it(`seed ${seed}: no marked value in the response body — subflows, parallel branches, failures`, async () => {
+      const w = world(seed);
+      const handle = streamHandler({
+        agent: () => w.pipeline,
+        adapter: agUi({ custom: EVERYTHING, reasoning: true }),
+        heartbeatMs: 0,
+      });
+      const response = await handle(
+        new Request('http://localhost/api/agent', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            threadId: `thread-${seed}`,
+            runId: `run-${seed}`,
+            messages: [{ id: 'u1', role: 'user', content: w.message }],
+            tools: [],
+            context: [],
+          }),
+        }),
+      );
+      const body = await response.text();
+      expect(body).toContain('RUN_STARTED');
+      for (const s of w.secrets) expect(body, `secret ${s} reached the wire`).not.toContain(s);
     });
   }
 });

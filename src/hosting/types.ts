@@ -898,6 +898,22 @@ export interface PausedRun {
   readonly conversation: AgentRunCheckpoint;
   /** What the run is waiting on, as data. */
   readonly pending: PendingAsk;
+  /**
+   * What the WIRE that served the pause recorded about it — the ids it handed
+   * the caller for the answer — so a later request on that wire is matched to
+   * this pause and continued as the same invocation (`streamHandler` keeps the
+   * AG-UI adapter's record here). Absent for a pause a door with nothing to
+   * remember stored, and opaque to the store and to every other door.
+   */
+  readonly wire?: PausedWire;
+}
+
+/** One wire protocol's own record of a pause it served — see {@link PausedRun.wire}. */
+export interface PausedWire {
+  /** The protocol that recorded it: the protocol adapter's `name`. */
+  readonly protocol: string;
+  /** Plain JSON, the protocol's own; ids and names, never a value of the run. */
+  readonly record: unknown;
 }
 
 /**

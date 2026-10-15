@@ -1,37 +1,172 @@
 ---
 title: AG-UI frontends
-description: Speak the AG-UI protocol from any agentfootprint run — streamed text, tool calls, reasoning, steps, sub-agents and interrupts as AG-UI 1.0 events, framed by the official encoder, with nothing a redaction policy hides on the wire.
+description: Serve any agentfootprint agent to AG-UI frontends with no glue code — one Fetch-API handler that treats every request as untrusted, keeps the conversation on the server, and streams text, tool calls, steps, sub-agents and interrupts as AG-UI 1.0 events with nothing a redaction policy hides on the wire.
 ---
 
 > **An AG-UI frontend already knows how to show an agent.** `@ag-ui/client`,
-> CopilotKit and the AG-UI Dojo read one stream of typed events — a message
-> streaming in, a tool being called, a step starting, a run finishing. Give
-> them that stream and there is no frontend glue to write.
+> CopilotKit and the AG-UI Dojo POST one request and read one stream of typed
+> events — a message streaming in, a tool being called, a step starting, a run
+> finishing. Give them that stream and there is no frontend glue to write.
 
-`agentfootprint/ag-ui` is the adapter that turns a run into that stream. It
-reads the same events every listener receives and writes AG-UI 1.0 events;
-nothing about the agent changes.
+`agentfootprint/ag-ui` is the adapter between an agentfootprint run and that
+stream. It reads the same events every listener receives and writes AG-UI 1.0
+events; nothing about the agent changes.
 
-## Quick look
+## Serve it
 
-`agUiSerializer` translates ONE run's events into AG-UI events. `agUiSse` frames
-each one as a Server-Sent Event, exactly as the official `@ag-ui/encoder` writes
-it. Subscribe before the run, translate as events land, settle once when the run
-ends:
+`streamHandler` (from `agentfootprint/hosting`) is a framework-agnostic handler —
+`StreamHandler`, `(request: Request) => Promise<Response>` — that takes an agent
+FACTORY, a protocol adapter, and the two ports that keep a conversation:
+
+<CodeFile path="examples/deploy/ag-ui.ts" region="serve" title="examples/deploy/ag-ui.ts (region: serve)" />
+
+The frontend POSTs a `RunAgentInput` and reads Server-Sent Events back — which is
+all the example does, twice:
+
+<CodeFile path="examples/deploy/ag-ui.ts" region="turn" title="examples/deploy/ag-ui.ts (region: turn)" />
+
+Install the optional peers the framing uses: `npm install @ag-ui/core @ag-ui/encoder`.
+Without them the handler is refused when it is built, by name — never mid-request.
+
+What the handler does, for every protocol (`StreamHandlerOptions`):
+
+- **A fresh runner per request.** `agent` is a factory (`StreamRunner` is what it
+  returns: an `Agent`, an `LLMCall`, a composition), called once per request with
+  that request's `StreamRunContext` — the frontend tools it enabled, the values your
+  validators accepted, the bound thread. Nothing is shared between requests: no
+  listener, recorder, buffer or tool session reaches from one caller's run into
+  another's, and a factory that hands back a runner it handed back before is
+  refused (`ERR_RUNNER_REUSED`). Requests run side by side.
+- **The thread is bound by YOUR code** (`threads`, a `ThreadBinder`). A request
+  names a thread; naming proves nothing. `bind({ conversation, headers })`
+  authenticates the caller your way (a session cookie, a bearer token through
+  `verifyRequestIdentity`) and answers a `ThreadBinding` — the server-side key
+  (`sessionId`) and the run's `identity` — or throws a refusal the caller gets.
+  The same thread id from two callers is two conversations. `verifiedThreads(identity)`
+  is that binder, ready-made: it verifies the caller with the door's identity
+  options (your `verify` — `jwksIdentity` for an IdP — on the bearer token), keys the
+  thread by the VERIFIED person, names them as the run's `principal`, and refuses
+  a caller with no credential (401) — never a name read off a header.
+- **Ownership before activity.** A stored conversation that is not the caller's
+  is not found (404) — whether or not a turn is running, so a caller learns
+  nothing about another's activity and never holds their turn.
+- **The conversation lives on the server** (`sessions`, any session store —
+  `memorySessions()`, `sqliteSessions()`, yours), under the bound key: what was said
+  (an Agent's checkpoint) and a run paused on an answer, kept BEFORE the caller is
+  told. A stored conversation that is not the caller's answers as not found.
+  Without `threads`, every request is a conversation of one message.
+- **One turn per thread at a time** — a second turn while one runs is refused
+  (`ERR_CONCURRENT_RUN`, 409), never raced for the stored state. The guard is
+  PER PROCESS: with several instances (serverless, workers), route a thread to
+  one instance (sticky sessions) — the session store has no compare-and-set, so
+  two instances could resume one paused run twice.
+- The door guard first (421/403/415, the same `allowedOrigins` / `allowedHosts` /
+  `requireJsonContentType` options as every host door); a body ceiling
+  (`maxBodyBytes`, default `DEFAULT_STREAM_MAX_BODY_BYTES`, 1 MiB — 413); refusals
+  as `{ error, code }` under their own status, a 500 that quotes nothing; a caller
+  who hangs up cuts the run; an SSE keep-alive every `heartbeatMs` (default
+  `DEFAULT_STREAM_HEARTBEAT_MS`, 15 s).
+
+Mount it as a Next.js route (`export const POST = handler`), a Hono route
+(`app.post('/agent', (c) => handler(c.req.raw))`), `Bun.serve({ fetch: handler })` or
+`Deno.serve(handler)`.
+
+## What a request may decide
+
+A request is browser input — `readAgUiRunInput` reads it as an `AgUiRunInput`
+(`messages` of `AgUiMessage`, `tools`, `context`, `state`, `resume` entries of
+`AgUiResumeEntry`), refusing a malformed field by its NAME, never by echoing its
+value (`ERR_INVALID_RUN_INPUT`). `threadId` and `runId` must be letters, digits
+and `._:-`, at most `AG_UI_MAX_ID_LENGTH` (128) characters.
+
+Then only what a page may decide is taken:
+
+- **The person's newest message is the run's message.** The page's assistant and
+  tool messages are its own copy of what the server said; the server continues
+  ITS copy, so a page that rewrites history changes nothing the model is shown.
+- **An answer only for the pause the server keeps,** matched to the ids that pause
+  handed out: a `resume` entry naming its interrupt, or the `tool` message
+  answering the frontend tool call it waits on.
+- **Frontend tools only by the app's allow-list** (below).
+- **`state` and `context` only through your validators** — `agUi({ accept: { state,
+  context } })`, each an `AgUiValidator` that gets the value and the bound thread
+  and returns what the agent is given (`StreamRunContext.accepted`).
+- **Identity, credentials and redaction never** — the binding decides who the run
+  is for; the agent decides its own redaction. `forwardedProps` is never read.
+
+Everything else is refused with its own code:
+
+| The request | Code |
+|---|---|
+| a system or developer message — the agent's instructions are its own | `ERR_INSTRUCTIONS_NOT_CARRIED` |
+| a tool the app did not allow-list | `ERR_TOOL_NOT_ALLOWED` |
+| frontend tools on a host that keeps no paused run | `ERR_CLIENT_TOOLS_NOT_CARRIED` |
+| `state` / `context` with no validator (or one that refused) | `ERR_STATE_NOT_CARRIED` · `ERR_CONTEXT_NOT_CARRIED` (`…_REFUSED`) |
+| a tool result for a call the thread is not waiting on | `ERR_UNKNOWN_TOOL_CALL` |
+| an answer when nothing waits (409), or to another interrupt | `ERR_NO_PENDING_ASK` · `ERR_UNKNOWN_INTERRUPT` |
+| a new message while a run waits on an answer (409) | `ERR_AWAITING_DECISION` |
+| cancelling an interrupt — a decline is an answer | `ERR_CANCEL_NOT_CARRIED` |
+| a continued conversation on a host that keeps none | `ERR_CONVERSATION_NOT_KEPT` |
+| a newest message that is not the person's, or empty; a media part | `ERR_NO_USER_TURN` · `ERR_MEDIA_NOT_CARRIED` |
+
+## Frontend tools
+
+A frontend tool runs in the page — a date picker, a confirmation dialog. The app
+allow-lists it by NAME with its own contract (`AgUiFrontendTool`: description and
+input schema — never the page's words, because a description the model reads is an
+instruction):
+
+```ts
+agUi({
+  frontendTools: {
+    pick_date: {
+      description: 'Let the person pick a date in the page.',
+      inputSchema: { type: 'object', properties: { month: { type: 'string' } } },
+    },
+  },
+});
+// the factory adds the ones the page declared this request:
+streamHandler({ agent: ({ tools }) => Agent.create(opts).tools([...mine, ...tools]).build(), … });
+```
+
+A call pauses the run: the segment completes with the call in
+`pendingToolCallIds`, the page runs it and sends the result as a `tool` message in
+its next request, and the SAME run continues with it. The tool holds no server
+privilege (no credential, no artifacts), and a name a server tool already has is
+refused when the agent is built. Frontend tools need a host that keeps the paused
+run: `threads` and `sessions`.
+
+## Interrupts
+
+A pause is continued only on a host that keeps it (`threads` AND `sessions`).
+Without a session store the interrupt still reaches the page, and an answer to it
+is refused (`ERR_NO_PENDING_ASK`) — serve an agent that asks people with both.
+
+A tool that asks a person (`askHuman`, a check-in, a middleware `ask`) ends the
+run with `RUN_FINISHED { outcome: interrupt }`, its question in the interrupt's
+`message`. The frontend answers in its next request's `resume`; the stored run
+continues from exactly where it stopped, the sub-agent and call it stopped in
+re-opened under their own ids.
+
+## Without the handler
+
+`agUiSerializer` translates ONE run's events into AG-UI events, for a transport of
+your own (a WebSocket, a queue). `agUiSse` frames each one as a Server-Sent Event,
+exactly as the official `@ag-ui/encoder` writes it. Subscribe before the run,
+translate as events land, settle once when the run ends:
 
 <CodeFile path="examples/deploy/ag-ui.ts" region="frames" title="examples/deploy/ag-ui.ts (region: frames)" />
 
-`agUiSse` loads `@ag-ui/encoder`, an optional peer, when the framing is built —
-never when the door is imported. Install it with `npm install @ag-ui/core @ag-ui/encoder`;
-without it, `agUiSse()` throws an error that says so. In a runtime this package
-cannot load it from (a browser or edge bundle), import it yourself and pass it:
-`agUiSse({ encoder })` (`AgUiSseOptions`, the module typed structurally as
-`AgUiEncoderModule`).
+`agUiSse` loads `@ag-ui/encoder` when the framing is built — never when the door
+is imported. In a runtime this package cannot load it from (a browser or edge
+bundle), import it yourself and pass it: `agUiSse({ encoder })` (`AgUiSseOptions`,
+the module typed structurally as `AgUiEncoderModule`); `agUi({ encoder })` (`AgUiOptions`)
+passes it on.
 
-The serializer itself imports nothing from AG-UI: its events are plain data
-typed by `AgUiEvent` (and `AgUiEventType`), checked against `@ag-ui/core`'s own
-event union by this repository's tests. It speaks protocol
-`AG_UI_PROTOCOL_VERSION` (`'1.0'`), stated on `RUN_STARTED`.
+The serializer imports nothing from AG-UI: its events are plain data typed by
+`AgUiEvent` (and `AgUiEventType`), checked against `@ag-ui/core`'s own event union
+by this repository's tests. It speaks protocol `AG_UI_PROTOCOL_VERSION` (`'1.0'`),
+stated on `RUN_STARTED`.
 
 ## What a run becomes
 
@@ -174,11 +309,20 @@ shows is the placeholder too.
 
 ## The seams
 
+The protocol is an **adapter**: `streamHandler` takes any `ProtocolAdapter` — it
+reads an untrusted request (`ProtocolRequestFacts` in), names the conversation the
+request claims, plans the turn (`ProtocolPlan`: a `ProtocolTurn` — a message or an
+answer — and what the runner is built with) against `HeldConversation` (what the
+server keeps — never what the request carried) and `PlanFacts`, opens one
+translation per run, and names its framing. `agUi()` is one; a future protocol is
+one more adapter, with nothing in the host to change. A paused run a host keeps
+carries the wire's own record of it (`PausedWire`, on the stored `PausedRun`).
+
+The translation implements a **port** on `agentfootprint/hosting`:
+`RunTranslation` (one run's served events in, protocol events out) and
+`RunSettlement` (how the run ended: `finished`, `paused`, `cancelled`, `failed` —
+the failed one carries nothing of the thrown value).
+
 The framing is a **strategy**: `SseFraming` says how one event becomes one
 frame. `agUiSse` is one; `agentfootprintSse` — the frames `toSSE` has always
 written — is the other, and `toSSE({ framing })` takes any.
-
-The adapter implements a **port** on `agentfootprint/hosting`: `RunTranslation`
-(one run's served events in, protocol events out) and `RunSettlement` (how the
-run ended: `finished`, `paused`, `cancelled`, `failed`). A future protocol is one
-more adapter on the same port.
