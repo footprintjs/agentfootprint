@@ -2,7 +2,7 @@
  * Context-error finders — the plain, pluggable public surface for context-bug
  * localization. A `Finder` answers one question: "which piece of context made the
  * agent's answer wrong?" Each finder is a thin, named adapter over the engines in
- * `src/lib/context-bisect` + `src/lib/influence-core`; the academic method + citation
+ * `src/context-bisect` + `src/lib/influence-core`; the academic method + citation
  * live in `meta`, never in the import name.
  *
  * Taxonomy (area / category / thing): observability / contextError / finders.

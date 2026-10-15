@@ -25,7 +25,7 @@ import type { ArtifactHandOverFailureCause } from '../../../events/payloads.js';
 
 /**
  * Humanize a byte count for prose. Deliberately a LOCAL copy of the same
- * three-branch rule `lib/bug-report/build.ts#formatBytes` uses: the commentary
+ * three-branch rule `bug-report/build.ts#formatBytes` uses: the commentary
  * engine is a leaf that a viewer bundles on its own, and importing a
  * bug-report module (zip building, manifests) to borrow four lines would drag
  * that whole graph in behind a sentence. The shapes are pinned by tests on

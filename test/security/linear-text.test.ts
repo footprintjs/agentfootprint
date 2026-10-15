@@ -55,7 +55,7 @@ import { githubDeviceSignIn } from '../../src/adapters/observability/githubDevic
 import { normalizeKeyRoot } from '../../src/artifacts/scopePath.js';
 import { typesafe } from '../../src/classify/typesafe.js';
 import { normalizeToken } from '../../src/tools/normalize.js';
-import { slugify } from '../../src/lib/bug-report/build.js';
+import { slugify } from '../../src/bug-report/build.js';
 import { parseEnumLine } from '../../src/lib/injection-engine/constrainedEnumPick.js';
 import { cleanValue } from '../../src/memory/facts/patternFactExtractor.js';
 import { countTextWork } from '../helpers/workCount.js';

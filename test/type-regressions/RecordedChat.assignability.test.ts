@@ -15,12 +15,12 @@
  * the `.test.ts` name also lets vitest exercise the trivial runtime checks.
  */
 import { describe, expect, it } from 'vitest';
-import type { ReasonOptions, RecordedChat, RerunTurnOptions } from '../../src/lib/recorded-chat';
+import type { ReasonOptions, RecordedChat, RerunTurnOptions } from '../../src/recorded-chat';
 import type {
   ContextBugReport,
   LocalizeContextBugOptions,
   RerunWithoutSourcesResult,
-} from '../../src/lib/context-bisect';
+} from '../../src/context-bisect';
 import type { Embedder } from '../../src/lib/influence-core';
 
 type RerunTurnReturn = Awaited<ReturnType<RecordedChat['rerunTurn']>>;

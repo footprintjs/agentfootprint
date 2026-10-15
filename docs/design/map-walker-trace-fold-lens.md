@@ -64,7 +64,7 @@ under Lens, and it appears in exactly these two places) · `src/core/agent/`
 `src/lib/injection-engine/` (`buildInjectionEngineSubflow.ts`, one Gather →
 Evaluate → Route → Delta pass per iteration) · `src/core/runbook/`
 (`runbookAsTool.ts`, `dispatch.ts`) · `src/memory/stages/` (load, filter, pick)
-· `src/cache/` (`CacheDecisionSubflow.ts`) · `src/lib/recorded-chat/` (`send()`).
+· `src/cache/` (`CacheDecisionSubflow.ts`) · `src/recorded-chat/` (`send()`).
 
 ### Trace — what happened and why
 
@@ -93,7 +93,7 @@ offline replay — a Fold artifact, not this role. The append-only evidence is
 `src/integrity/**` (the finding kernel plus one folder per check, `disposition/`
 among them — seven of those check folders are Mixed, see the Lens list) ·
 `src/observability/**` (the context-error finders) ·
-`src/lib/context-bisect/**` (the driver and its arms) · `src/lib/influence-core/` ·
+`src/context-bisect/**` (the driver and its arms) · `src/lib/influence-core/` ·
 `src/memory/retrieval/` · `src/lib/time-travel/` (where a reader of a finished run
 may stop — derived from the recorded commit log, never a re-walk) ·
 `src/core/agent/receipt/` (the receipt each call mints, the writer half of
@@ -102,7 +102,7 @@ time-travel's conformance law — `core/agent/receipt/receipt.ts` · `buildRecei
 Mixed folders carrying Fold: `src/lib/injection-engine/`
 (`skillGraph.ts` · `makeReachableSkills`, `skillGraph.ts` ·
 `classifySkillTarget`, `skillGraph.ts` · `makeResolveCursor`, `evaluator.ts`,
-`routingPolicy.ts`) · `src/lib/context-ledger/` (`contextLedger.ts`) ·
+`routingPolicy.ts`) · `src/context-ledger/` (`contextLedger.ts`) ·
 `src/maps/engagement/` (`lease.ts` — the sole owner of the parked set) ·
 `src/core/agent/evidence/` (`evidenceIndex.ts`) · `src/tools/` (`normalize.ts`,
 the one spelling the evidence gate and the inputs layer share) · `src/lib/` (`spokenIds.ts`,
@@ -116,7 +116,7 @@ stated at its header and again below).
 
 `src/tool-providers/` (the tool list itself) · `src/tools/`
 (`skillScopedTools.ts`, a tool subset while one skill is loaded) · `src/lib/trace-toolpack/` (a
-completed run served to a model) · `src/lib/bug-report/` (a run served to a
+completed run served to a model) · `src/bug-report/` (a run served to a
 human) · `src/recorders/observability/commentary/` and
 `src/recorders/observability/status/` (prose for a human viewer).
 

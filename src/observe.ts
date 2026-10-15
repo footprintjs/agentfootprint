@@ -220,7 +220,7 @@ export {
   type Transcript,
   type TranscriptStep,
   type TranscriptTurn,
-} from './lib/bug-report/index.js';
+} from './bug-report/index.js';
 
 // What a recording keeps of a vector: `{ dims, norm }`, not the bytes (8.20.0).
 // Applied by BoundaryRecorder and recordRun unless `recordEmbeddings: true`;
@@ -366,13 +366,13 @@ export {
 
 // context-ledger — which context pieces EARNED their tokens? Post-run
 // bookkeeping (offers/uses/outcomes from the commit log) feeding the gating
-// seams. See src/lib/context-ledger/README.md.
+// seams. See src/context-ledger/README.md.
 export {
   contextLedger,
   ledgerToolGate,
   ledgerEntryScorer,
   ledgerGated,
-} from './lib/context-ledger/index.js';
+} from './context-ledger/index.js';
 export type {
   ContextLedger,
   LedgerJSON,
@@ -381,4 +381,4 @@ export type {
   PieceKind,
   RecordedRun,
   UsedSignal,
-} from './lib/context-ledger/index.js';
+} from './context-ledger/index.js';

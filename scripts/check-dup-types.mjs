@@ -19,7 +19,7 @@ import { join, relative } from 'path';
 const ALLOWLIST = new Set([
   'ContextSource',
   // events/types.ts = a string-union of context-source FLAVORS ('rag' | 'skill' | …)
-  // for the Lens UI. lib/context-bisect/trajectory.ts = a structural trace interface
+  // for the Lens UI. context-bisect/trajectory.ts = a structural trace interface
   // ({ key, writerId, value, … }) for one loop-read source. Same name, different
   // domains and shapes; not consolidatable.
 

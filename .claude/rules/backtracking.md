@@ -16,7 +16,7 @@ paths:
   - src/reliability/**
   - src/resilience/withRetry.ts
   - src/identity/withCredentialRetry.ts
-  - src/lib/context-bisect/**
+  - src/context-bisect/**
   - src/lib/trace-toolpack/**
   - src/lib/traceToolNames.ts
   - src/observability/contextError/finders/**
@@ -118,7 +118,7 @@ Flat chart loops to `sf-injection-engine` (buildAgentChart.ts:473); grouped char
 Invariant: every array a slot re-derives per iteration must be mounted with Replace (footprintjs default CONCATENATES). Breaks when: a new loop-crossed mount omits Replace → injections/tools duplicate every iteration (silently growing prompts).
 
 ## M6 — Counterfactual replay + backward walk (offline analysis)
-Files: `lib/context-bisect/trajectory.ts:411` `assembleTrajectory` (slices commitLog into LoopFrames via findLastWriter/commitValueAt; flat + grouped logs :16-24) · `ablation.ts` (`applyAblations` :116-144 — agent REBUILT from filtered inputs; `runAblationProbe` :221-254 — N seeded re-runs, majority-flip; `verdictFor` :267-309 — unstable baseline ⇒ inconclusive) · `bisect.ts` ddmin · `walk-to-root.ts:169` (narrow → hop along writerId provenance → ablate; beam-k) · finders (`removeAndRetry.ts:12-52`, shrinkToCause, testManyCombos; `FindInput.rerun` contract finders/types.ts:45-47) · `toBacktrackTrace.ts` (UI rewind serialization).
+Files: `context-bisect/trajectory.ts:411` `assembleTrajectory` (slices commitLog into LoopFrames via findLastWriter/commitValueAt; flat + grouped logs :16-24) · `ablation.ts` (`applyAblations` :116-144 — agent REBUILT from filtered inputs; `runAblationProbe` :221-254 — N seeded re-runs, majority-flip; `verdictFor` :267-309 — unstable baseline ⇒ inconclusive) · `bisect.ts` ddmin · `walk-to-root.ts:169` (narrow → hop along writerId provenance → ablate; beam-k) · finders (`removeAndRetry.ts:12-52`, shrinkToCause, testManyCombos; `FindInput.rerun` contract finders/types.ts:45-47) · `toBacktrackTrace.ts` (UI rewind serialization).
 
 | Step | SAVED | RESTORED | DISCARDED |
 |---|---|---|---|
@@ -143,7 +143,7 @@ toolpack tool, `backtrack(variable, element?, before?)`: slice mode =
 (the history mega-key answer: `history[N]` names its birth iteration —
 attribution `append-verb`/EXACT under the agent's `commitValues: 'delta'`
 default). Reserved under selfExplain (AgentBuilder.ts — inline list).
-`src/lib/context-bisect/sliceToBacktrackTrace.ts` — the STRUCTURAL sibling of
+`src/context-bisect/sliceToBacktrackTrace.ts` — the STRUCTURAL sibling of
 toBacktrackTrace: `sliceToJSON` (fp) → atui BacktrackTrace. Always
 `mode: 'correlational'`; every card `upperBound: true`; score = 1/(1+depth)
 hop proximity NAMED in the honesty lines; missing slices render an empty
