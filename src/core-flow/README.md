@@ -213,7 +213,10 @@ the checkpoint by `resume()`. A `parentRun` that is not a live link — a
 run-shaped object, a made-up token, the link of a run that has ended — is
 refused (`ParentRunRefusedError`): nothing outside the engine can name the run
 a member serves, and an `identity` in a member's input never outranks it (a
-`workflow` or `graph` step's input can be an earlier step's output). A member
+`workflow` or `graph` step's input can be an earlier step's output). Nor does a
+member read what its INSTANCE keeps for its own next run: a `continueFrom` /
+`resumeOnError` hand-off is consumed only by the agent's own run, and
+self-explain evidence is served only inside the run the instance is serving. A member
 Agent runs under the caller's identity, or this run's own `{ conversationId:
 runId }` (recorded `runIdentitySource: 'composition'`), and its tools read
 `ctx.identity` / `ctx.runId` from the run, not the instance. Per-run input is

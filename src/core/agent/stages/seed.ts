@@ -600,12 +600,22 @@ function seedFrom(
   const args = scope.$getArgs<AgentInput>();
   scope.userMessage = message;
 
+  // A MEMBER — this chart run by another runner's executor — is decided FIRST:
+  // every hand-off below that lives on the instance (`continueFrom`,
+  // `resumeOnError`, folded spans, the findings ledger, the skill cursor, the
+  // evidence recovery) belongs to the agent's OWN next run, and a member must
+  // neither read another caller's conversation nor take it from them. The run
+  // is looked up by its link in `memberRun.ts`'s private registry; a
+  // `parentRun` that is not a live link is refused there, by name.
+  const parentRun = resolveParentRun(args, 'Agent (composition member)');
+  const mounted = parentRun !== undefined || deps.isOwnRun?.(scope) === false;
+
   // If `run({ continueFrom })` or `resumeOnError(...)` set the side channel,
   // restore the stored conversation; this turn's user entry is `message` —
   // the input chain's verdict — on every path (`historyForTurn`). The
   // accessor clears the field, so a later run without a continuation starts
   // fresh.
-  const resume = deps.consumePendingResumeHistory();
+  const resume = mounted ? undefined : deps.consumePendingResumeHistory();
   const history = historyForTurn(resume, message);
   scope.history = history;
 
@@ -615,7 +625,7 @@ function seedFrom(
   // `.compaction()` must still hand them on rather than quietly drop somebody
   // else's evidence. Written only when there is something to restore, so a
   // conversation that never folded commits exactly the keys it always did.
-  const resumeFolded = deps.consumePendingResumeFolded?.();
+  const resumeFolded = mounted ? undefined : deps.consumePendingResumeFolded?.();
   if (resumeFolded && resumeFolded.length > 0) {
     scope.foldedSpans = [...resumeFolded];
   }
@@ -624,7 +634,7 @@ function seedFrom(
   // and restored as the stored record — a copy, never a `recordFindings`
   // write, so nothing is re-declared and no event fires. Written only when the
   // checkpoint carries rows; every other run seeds exactly the keys it always did.
-  const resumeLedger = deps.consumePendingResumeFindingsLedger?.();
+  const resumeLedger = mounted ? undefined : deps.consumePendingResumeFindingsLedger?.();
   if (resumeLedger && resumeLedger.length > 0) {
     scope.findingsLedger = [...resumeLedger];
   }
@@ -665,10 +675,6 @@ function seedFrom(
   // the `parentRun` its composition handed down — the caller's identity, else
   // that run's own `{ conversationId: runId }` — and with neither that nor an
   // explicit identity it is refused by name, never filed under a shared one.
-  // The run is looked up by its link in `memberRun.ts`'s private registry; a
-  // `parentRun` that is not a live link is refused there, by name.
-  const parentRun = resolveParentRun(args, 'Agent (composition member)');
-  const mounted = parentRun !== undefined || deps.isOwnRun?.(scope) === false;
   const sessionId = mounted ? undefined : deps.getCurrentSessionId?.();
   if (parentRun !== undefined) {
     // The engine's run outranks anything in the input: a step's input can be
@@ -869,7 +875,7 @@ function seedFrom(
   // no second cursor, no new time axis. Consumed unconditionally (the side
   // channel clears whether or not it is honored); written only under the
   // option, so `continuity: 'turn'` commits exactly the keys it always did.
-  const inheritedCursor = deps.consumePendingResumeSkillCursor?.();
+  const inheritedCursor = mounted ? undefined : deps.consumePendingResumeSkillCursor?.();
   if (deps.restoreSkillCursor === true && inheritedCursor !== undefined) {
     scope.currentSkillId = inheritedCursor;
   }
@@ -900,7 +906,7 @@ function seedFrom(
   // an `'assist'` agent (and every agent without the gate) commits exactly
   // the keys it always did.
   if (deps.hasEvidenceRevision === true) {
-    const recovery = deps.consumePendingEvidenceRecovery?.();
+    const recovery = mounted ? undefined : deps.consumePendingEvidenceRecovery?.();
     scope.evidenceRevisionSpent = recovery?.revisionSpent === true;
     if (recovery?.pending !== undefined) {
       scope.evidenceRecovery = {
