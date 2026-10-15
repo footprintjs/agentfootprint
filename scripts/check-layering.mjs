@@ -31,9 +31,11 @@
  * `import('x').T` type reference are type-only edges.
  *
  * Usage:
- *   node scripts/check-layering.mjs [--root <dir>] [--json]
- *     --root  analyse <dir>/src instead of this repo's (with this repo's table)
- *     --json  machine-readable result
+ *   node scripts/check-layering.mjs [--root <dir>] [--json] [--no-type-allowances]
+ *     --root                analyse <dir>/src instead of this repo's (with this repo's table)
+ *     --json                machine-readable result
+ *     --no-type-allowances  apply an empty TYPE_ONLY_ALLOWANCES: for a fixture tree under
+ *                           --root, where this repo's named pairs name files that are not there
  * Exit code: 0 clean, 1 any failure.
  */
 
@@ -299,21 +301,21 @@ export function analyse({ root = REPO_ROOT, config = {} } = {}) {
   const typeUpwardPairs = new Set(typeUpward.map((e) => pairKey(e.from, e.to)));
   const between = (a, kinds) =>
     edges.filter((e) => e.from === a.from && e.to === a.to && kinds.includes(e.kind));
+  /** Why an entry is stale, the most basic reason first. */
+  const whyStale = (a) => {
+    if (!rank.has(a.from) || !rank.has(a.to)) return 'names a file that does not exist';
+    if (rank.get(a.from) === null || rank.get(a.to) === null) return 'names a file with no layer';
+    if (rank.get(a.to) <= rank.get(a.from)) return 'is no longer upward under the table';
+    if (between(a, ['value', 'dynamic']).length > 0)
+      return 'is a RUNTIME import now — the allowance covers type-only imports';
+    return 'no such type-only import exists any more';
+  };
   const staleTypeAllowances = typeOnlyAllowances
     .filter(
       (a) =>
         !typeUpwardPairs.has(pairKey(a.from, a.to)) || between(a, ['value', 'dynamic']).length > 0,
     )
-    .map((a) => ({
-      from: a.from,
-      to: a.to,
-      why:
-        between(a, ['value', 'dynamic']).length > 0
-          ? 'is a RUNTIME import now — the allowance covers type-only imports'
-          : between(a, ['type']).length > 0
-          ? 'is no longer upward under the table'
-          : 'no such type-only import exists any more',
-    }));
+    .map((a) => ({ from: a.from, to: a.to, why: whyStale(a) }));
   const duplicateTypeAllowances = typeOnlyAllowances
     .map((a) => pairKey(a.from, a.to))
     .filter((key, i, all) => all.indexOf(key) !== i);
@@ -408,7 +410,7 @@ export function format(result) {
     );
   lines.push('');
   lines.push(
-    `type-only upward imports: ${result.typeUpward.length}   named: ${result.typeAllowances}   not named: ${result.typeUnnamed.length}   stale: ${result.staleTypeAllowances.length}   duplicate: ${result.duplicateTypeAllowances.length}`,
+    `type-only upward imports: ${result.typeUpward.length}   TYPE_ONLY_ALLOWANCES entries: ${result.typeAllowances}   not named: ${result.typeUnnamed.length}   stale: ${result.staleTypeAllowances.length}   duplicate: ${result.duplicateTypeAllowances.length}`,
   );
   for (const t of result.typeUnnamed) {
     lines.push(
@@ -454,7 +456,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const args = process.argv.slice(2);
   const at = args.indexOf('--root');
   const root = at === -1 ? REPO_ROOT : resolve(args[at + 1]);
-  const result = analyse({ root });
+  const config = args.includes('--no-type-allowances') ? { typeOnlyAllowances: [] } : {};
+  const result = analyse({ root, config });
   console.log(args.includes('--json') ? JSON.stringify(result, null, 2) : format(result));
   // exitCode, not exit(): a large `--json` piped elsewhere must flush before the process ends.
   process.exitCode = result.ok ? 0 : 1;

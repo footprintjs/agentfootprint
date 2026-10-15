@@ -262,6 +262,26 @@ describe('check-layering — what fails', () => {
     expect(r.staleTypeAllowances).toMatchObject([{ why: 'is no longer upward under the table' }]);
   });
 
+  it('a stale entry gives its most basic reason: a downward pair is "no longer upward" even when the import is a runtime one', () => {
+    const r = run(
+      {
+        'src/high/a.ts': "import { b } from '../low/b.js';\nexport const a = b;",
+        'src/low/b.ts': 'export const b = 1;',
+      },
+      { typeOnlyAllowances: [named('src/high/a.ts', 'src/low/b.ts')] },
+    );
+    expect(r.staleTypeAllowances).toMatchObject([{ why: 'is no longer upward under the table' }]);
+  });
+
+  it('a type-only allowance that names a file no longer in the tree is stale', () => {
+    const r = run(
+      { 'src/low/a.ts': 'export const a = 1;' },
+      { typeOnlyAllowances: [named('src/low/a.ts', 'src/high/gone.ts')] },
+    );
+    expect(r.ok).toBe(false);
+    expect(r.staleTypeAllowances).toMatchObject([{ why: 'names a file that does not exist' }]);
+  });
+
   it('a duplicated type-only allowance fails', () => {
     const r = run(
       {
@@ -432,17 +452,27 @@ describe('check-layering — a deliberately upward edge, placed by the REAL tabl
     ]).toEqual([[], [], [], [], [], [], [], []]);
   });
 
-  it('fails the CLI that CI runs: exit code 1, the edge named NOT ALLOWED', () => {
-    const cli = spawnSync(
-      process.execPath,
-      [join(REPO, 'scripts', 'check-layering.mjs'), '--root', makeTree(upward)],
-      { encoding: 'utf8' },
-    );
-    expect(cli.status).toBe(1);
-    expect(cli.stdout).toMatch(
+  it('fails the CLI that CI runs: the clean tree exits 0, the same tree plus the edge exits 1 naming it NOT ALLOWED', () => {
+    const cli = (tree: Record<string, string>) =>
+      spawnSync(
+        process.execPath,
+        [
+          join(REPO, 'scripts', 'check-layering.mjs'),
+          '--root',
+          makeTree(tree),
+          '--no-type-allowances',
+        ],
+        { encoding: 'utf8' },
+      );
+    const control = cli(clean);
+    expect(control.status, control.stdout).toBe(0);
+    expect(control.stdout.trimEnd().endsWith('OK')).toBe(true);
+    const failed = cli(upward);
+    expect(failed.status).toBe(1);
+    expect(failed.stdout).toMatch(
       /events\/probe\.ts:1 \(L0\) -> core\/agent\.ts \(L9\)\s+\[NOT ALLOWED\]/,
     );
-    expect(cli.stdout.trimEnd().endsWith('FAIL')).toBe(true);
+    expect(failed.stdout.trimEnd().endsWith('FAIL')).toBe(true);
   });
 });
 
@@ -500,16 +530,19 @@ describe('check-layering — this repository', () => {
     }
   });
 
-  it('src/lib/** and src/time/** import nothing outside themselves at run time; time/ not even by type', () => {
+  it('src/lib/** and src/time/** import nothing outside themselves at run time; time/ not even by type, lib/ by type only the one named edge', () => {
     expect(CLOSED_FOLDERS).toEqual([
       { name: 'lib', files: ['src/lib/**'] },
       { name: 'time', files: ['src/time/**'] },
     ]);
     expect(result.closedEscapes).toEqual([]);
-    const outOfTime = edges.filter(
-      (e) => e.from.startsWith('src/time/') && !e.to.startsWith('src/time/'),
-    );
-    expect(outOfTime).toEqual([]);
+    const outOf = (dir: string) =>
+      edges
+        .filter((e) => e.from.startsWith(dir) && !e.to.startsWith(dir))
+        .map((e) => `${e.kind}: ${e.from} -> ${e.to}`);
+    expect(outOf('src/time/')).toEqual([]);
+    // Erased by tsc, and named in src/lib/README.md: the slot vocabulary the protocol keys use.
+    expect(outOf('src/lib/')).toEqual(['type: src/lib/conventions.ts -> src/events/types.ts']);
   });
 
   it('src/*.ts and the doors are barrels: `export … from` statements and nothing else', () => {

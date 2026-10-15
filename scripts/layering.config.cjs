@@ -189,18 +189,19 @@ const UPWARD_ALLOWANCES = [];
 // ── type-only upward imports ─────────────────────────────────────────────────
 
 const PAYLOAD_TYPES =
-  "the event registry names this folder's payload types; declaring each payload beside its " +
-  'event is a separate design (the untangle plan, section 5).';
+  "the event registry (`events/payloads.ts`) names this folder's payload types; declaring each " +
+  'payload beside its event instead is a separate design, not yet made.';
 const PORT_TYPES_FROM_CACHE =
-  "the cache layer names the provider port's request/response types. `cache/` sits at L1 " +
-  'although its lowest run-time importer is the injection engine (L8), so ranking it above ' +
-  '`provider-contract/` would retire this entry.';
+  "the cache layer names the provider port's types (`LLMRequest`, `LLMResponse`, `LLMMessage`, " +
+  '`LLMProvider`, `PricingTable`). `cache/` sits at L1 although its lowest run-time importer is ' +
+  'the injection engine (L8), so ranking it above `provider-contract/` would retire this entry.';
 const PORT_TYPES_FROM_THINKING =
   '`provider-contract/requestRefusal.ts` imports `thinking/` at run time (its refusal ' +
   'errors), so thinking sits below the port whose types it names.';
 const SELF_EXPLAIN_TYPES =
-  "the self-explain port names the extension's option and binding types; the implementation " +
-  'reaches the builder only by registering through `trace-toolpack/selfExplainHost.ts`.';
+  'the agent, its builder and the self-explain port (`core/agent/selfExplainPort.ts`) name the ' +
+  "extension's option and binding types; the implementation reaches the builder only by " +
+  'registering through `trace-toolpack/selfExplainHost.ts` (PR #131).';
 const KNOWN_WORDS =
   "the served-event redaction keeps only the library's own words (`LibraryWord`), a union " +
   'built from closed string unions such as this one; the generated word record is checked ' +
@@ -285,8 +286,8 @@ const TYPE_ONLY_ALLOWANCES = [
     from: 'src/events/dispatcher.ts',
     to: 'src/redaction/served.ts',
     reason:
-      "the dispatcher's options name `EventServing`, the served-event policy the redaction " +
-      'layer owns.',
+      'the dispatcher holds and applies `EventServing`, the served-event policy the redaction ' +
+      'layer owns (`EventDispatcher · useServing`, `dispatchForRun`).',
   },
   { from: 'src/events/payloads.ts', to: 'src/artifacts/capability.ts', reason: PAYLOAD_TYPES },
   { from: 'src/events/payloads.ts', to: 'src/artifacts/types.ts', reason: PAYLOAD_TYPES },
@@ -393,14 +394,15 @@ const TYPE_ONLY_ALLOWANCES = [
     to: 'src/core/agent/middleware/types.ts',
     reason:
       'the chain walker names the middleware and outcome types declared in core; moving them ' +
-      'into `tools/` is the follow-up named by packet 9.',
+      'into `tools/` is the follow-up the `tools/` move left open (PR #130).',
   },
   {
     from: 'src/tools/tools.ts',
     to: 'src/core/checkin.ts',
     reason:
-      '`CheckInDemand` is declared beside the check-in runner; moving it into `tools/` is the ' +
-      'follow-up named by packet 9.',
+      '`Tool.checkIn` names `CheckInDemand`, declared in `core/checkin.ts`, the leaf that owns ' +
+      'every check-in type and imports nothing at run time; moving that leaf down is the ' +
+      'follow-up the `tools/` move left open (PR #130).',
   },
 ];
 

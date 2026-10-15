@@ -77,8 +77,10 @@ jobs:
         run: bash scripts/check-docs.sh
       - name: Duplicate type check
         run: node scripts/check-dup-types.mjs
-      # The layer table (scripts/layering.config.cjs): fails on a NEW upward runtime
-      # import, and on an allowance whose edge is gone, so the list only shrinks.
+      # The layer table (scripts/layering.config.cjs): fails on ANY upward runtime import
+      # (the fence is closed), on an upward type-only import not named in
+      # TYPE_ONLY_ALLOWANCES or a stale entry there (the list only shrinks), on a folder
+      # at two layers, on logic in a barrel, and on a value-level folder cycle.
       - name: Layering check
         run: npm run check:layering
 
