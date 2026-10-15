@@ -30,10 +30,16 @@
  * holds one run's context, so a request can neither see another's events nor
  * leave anything behind for one — no shared listener, recorder, buffer or tool
  * session. A factory that hands back a runner it handed back before is refused.
- * The handler's own state is two sets of KEYS, never content: the bound
- * conversations with a turn in flight (a second turn on one conversation is
- * refused rather than racing the first for the stored state), and the runners
- * already used (by identity, held weakly).
+ * The handler's own state is KEYS, never content: the bound conversations
+ * with a turn in flight and who holds each (a second turn on one conversation
+ * is refused rather than racing the first for the stored state), and the
+ * runners already used (by identity, held weakly).
+ *
+ * ONE TURN PER THREAD IS A PER-PROCESS GUARD. Two instances of the handler
+ * (several serverless instances, several workers) do not see each other's
+ * turns: route a thread to one instance (sticky sessions), or a double-sent
+ * answer can resume one paused run twice and a later persist can overwrite an
+ * earlier one. The session store port has no compare-and-set yet.
  *
  * The laws it keeps from `httpHost`:
  *   - The door guard runs first, on the headers alone (`doorGuard.ts`): a Host
@@ -194,10 +200,21 @@ export function streamHandler<TRequest, TEvent>(
   const guard = doorGuard({ ...options, name });
   const framing = adapter.framing();
   const bytes = new TextEncoder();
-  /** Bound conversations with a turn in flight — keys only. */
-  const inFlight = new Set<string>();
+  /**
+   * Bound conversations with a turn in flight — the key, and who holds it (so
+   * anybody else hears "not found", never "busy").
+   */
+  const inFlight = new Map<string, string | undefined>();
   /** Runners already used, by identity — so a factory that shares one is caught. */
   const used = new WeakSet<object>();
+
+  /** One answer for "none", "another's" and "nobody's" — a caller learns no ids. */
+  const notFound = (): WireRequestRefusal =>
+    new WireRequestRefusal(
+      'ERR_SESSION_NOT_FOUND',
+      `'${name}': that conversation is not one you can open.`,
+      404,
+    );
 
   /** Bind the conversation the request names to its caller — the app's port decides. */
   async function bind(request: TRequest, headers: Readonly<Record<string, string>>) {
@@ -207,7 +224,7 @@ export function streamHandler<TRequest, TEvent>(
       throw new TypeError('threads.bind returned no session');
     }
     const bad = checkSessionId(thread.sessionId, name);
-    if (bad !== undefined) throw new WireRequestRefusal(bad.code, bad.message, bad.status);
+    if (bad !== undefined) throw bad;
     return thread;
   }
 
@@ -222,13 +239,8 @@ export function streamHandler<TRequest, TEvent>(
     const stored = await sessions.hydrate(thread.sessionId);
     // Whose conversation this is, before a line of it is read. One answer for
     // "none", "another's" and "nobody's", so a caller learns no ids.
-    if (stored !== undefined && envelopeOwner(stored) !== thread.identity?.principal) {
-      throw new WireRequestRefusal(
-        'ERR_SESSION_NOT_FOUND',
-        `[hosting] '${name}': that conversation is not one you can open.`,
-        404,
-      );
-    }
+    if (stored !== undefined && envelopeOwner(stored) !== thread.identity?.principal)
+      throw notFound();
     return stored;
   }
 
@@ -268,7 +280,7 @@ export function streamHandler<TRequest, TEvent>(
     if (used.has(runner)) {
       throw new WireRequestRefusal(
         'ERR_RUNNER_REUSED',
-        `[hosting] '${name}': the agent factory returned a runner it returned before. Every ` +
+        `'${name}': the agent factory returned a runner it returned before. Every ` +
           `request needs a FRESH runner — a shared one hands one caller's run to another.`,
         500,
       );
@@ -335,18 +347,19 @@ export function streamHandler<TRequest, TEvent>(
       }
     };
     let runId: string | undefined;
-    // The runner is this request's alone; the run filter still holds a fact a
-    // shared resource stamped for another run or session out of the stream.
-    const off = runner.on('*', (event) => {
-      const named = event.meta?.runId;
-      if (runId === undefined && typeof named === 'string' && named !== CONSUMER_SCOPE_RUN_ID)
-        runId = named;
-      if (!eventBelongsToRun(event.meta, { runId: runId ?? '', sessionId: thread?.sessionId }))
-        return;
-      safely(() => translation.event(event));
-    });
+    let off: unknown;
     let settlement: RunSettlement;
     try {
+      // The runner is this request's alone; the run filter still holds a fact a
+      // shared resource stamped for another run or session out of the stream.
+      off = runner.on('*', (event) => {
+        const named = event.meta?.runId;
+        if (runId === undefined && typeof named === 'string' && named !== CONSUMER_SCOPE_RUN_ID)
+          runId = named;
+        if (!eventBelongsToRun(event.meta, { runId: runId ?? '', sessionId: thread?.sessionId }))
+          return;
+        safely(() => translation.event(event));
+      });
       if (signal.aborted) throw new Error('the caller left before the run started');
       const runOptions = {
         signal,
@@ -370,10 +383,15 @@ export function streamHandler<TRequest, TEvent>(
     } catch {
       settlement = { kind: signal.aborted ? 'cancelled' : 'failed' };
     } finally {
-      off();
-      // The conversation is free BEFORE the caller hears the end: a client
-      // that answers on RUN_FINISHED must not find its own turn still running.
+      // The conversation is free BEFORE the caller hears the end — and before
+      // anything else that could throw: a client that answers on RUN_FINISHED
+      // must not find its own turn still running, ever.
       release();
+      try {
+        if (typeof off === 'function') off();
+      } catch {
+        // a runner that cannot unsubscribe is thrown away with this request
+      }
     }
     safely(() => translation.settle(settlement));
     // Tool sessions this request's runner opened close with it; a strategy the
@@ -471,7 +489,10 @@ export function streamHandler<TRequest, TEvent>(
         // Ownership first: a caller the conversation is not answered "not
         // found" whether or not a turn is running, and never claims it.
         await ownersOnly(thread);
+        const principal = thread.identity?.principal;
         if (inFlight.has(thread.sessionId)) {
+          // Even before a first turn has stored anything: the claimant is the owner.
+          if (inFlight.get(thread.sessionId) !== principal) throw notFound();
           return refusal(
             409,
             `[hosting] '${name}': a turn of that conversation is already in flight. Send the ` +
@@ -479,7 +500,7 @@ export function streamHandler<TRequest, TEvent>(
             'ERR_CONCURRENT_RUN',
           );
         }
-        inFlight.add(thread.sessionId);
+        inFlight.set(thread.sessionId, principal);
         claimed = thread.sessionId;
       }
       const held = await hold(thread);

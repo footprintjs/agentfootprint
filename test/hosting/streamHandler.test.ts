@@ -17,7 +17,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { Agent, defineTool } from '../../src/index.js';
+import { Agent, defineTool, Sequence } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
 import type { AgentfootprintEvent } from '../../src/index.js';
 import { pauseHere } from '../../src/core/pause.js';
@@ -512,6 +512,152 @@ describe('streamHandler — the server keeps the conversation', () => {
     });
     await (await handle(post({ message: 'new' }, { headers: { 'x-user': 'alice' } }))).text();
     expect(inputs).toEqual([{ message: 'new' }]);
+  });
+});
+
+describe('streamHandler — the claim is always released, and never held by a stranger', () => {
+  const pausing = () => {
+    const ask = defineTool({
+      name: 'ask',
+      description: 'Ask a person.',
+      inputSchema: { type: 'object', properties: {} },
+      execute: async () => pauseHere({ question: 'Sure?' }),
+    });
+    return Agent.create({
+      provider: mock({
+        chunkDelayMs: 0,
+        replies: [{ content: '', toolCalls: [{ id: 'q1', name: 'ask', args: {} }] }, 'done'],
+      }),
+      model: 'm',
+    })
+      .system('s')
+      .tool(ask)
+      .build();
+  };
+
+  it('a store that cannot keep a PAUSE fails the turn — the caller is never told to answer it', async () => {
+    const sessions = memorySessions();
+    const failing = {
+      ...sessions,
+      hydrate: sessions.hydrate.bind(sessions),
+      persist: async () => {
+        throw new Error('disk full');
+      },
+    };
+    const handle = streamHandler({
+      agent: pausing,
+      adapter: stubAdapter(),
+      threads: byUser,
+      sessions: failing,
+      heartbeatMs: 0,
+    });
+    const out = await frames(await handle(post({ message: 'go' }, { headers: { 'x-user': 'a' } })));
+    expect(out.at(-1)).toEqual({ kind: 'failed' });
+  });
+
+  it('a runner that cannot subscribe still ends its stream, and frees the thread', async () => {
+    let n = 0;
+    const handle = streamHandler({
+      agent: () => {
+        n += 1;
+        if (n === 1)
+          return {
+            on: () => {
+              throw new Error('no listeners here');
+            },
+            run: async () => 'x',
+            resume: async () => 'x',
+          } as unknown as StreamRunner;
+        return agent();
+      },
+      adapter: stubAdapter(),
+      threads: byUser,
+      heartbeatMs: 0,
+    });
+    const alice = { headers: { 'x-user': 'alice' } };
+    expect(await frames(await handle(post({ message: 'a' }, alice)))).toEqual([{ kind: 'failed' }]);
+    expect((await handle(post({ message: 'b' }, alice))).status).toBe(200);
+  });
+
+  it('the thread is free the moment the caller hears the end — before the stream closes', async () => {
+    const handle = streamHandler({
+      agent: () => agent('ok'),
+      adapter: stubAdapter(),
+      threads: byUser,
+      heartbeatMs: 0,
+    });
+    const alice = { headers: { 'x-user': 'alice' } };
+    const res = await handle(post({ message: 'a' }, alice));
+    const reader = res.body!.getReader();
+    const decoder = new TextDecoder();
+    let seen = '';
+    while (!seen.includes('"kind":"finished"')) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      seen += decoder.decode(value);
+    }
+    // Answer on the terminal frame, as a client does — never a 409.
+    const next = await handle(post({ message: 'b' }, alice));
+    expect(next.status).toBe(200);
+    await Promise.all([next.text(), reader.cancel()]);
+  });
+
+  it('while a FIRST turn runs, nothing stored yet, another caller on that key hears 404 — not 409', async () => {
+    const careless = {
+      bind: ({ headers }: { headers: Record<string, string> }) => ({
+        sessionId: 'shared-key',
+        identity: { principal: headers['x-user'] as string, conversationId: 'c' },
+      }),
+    };
+    const handle = streamHandler({
+      agent: () => agent('slow', { thinkingMs: 60 }),
+      adapter: stubAdapter(),
+      threads: careless,
+      sessions: memorySessions(),
+      heartbeatMs: 0,
+    });
+    const first = await handle(post({ message: 'a' }, { headers: { 'x-user': 'alice' } }));
+    const bob = await handle(post({ message: 'b' }, { headers: { 'x-user': 'bob' } }));
+    expect(bob.status).toBe(404);
+    await first.text();
+  });
+
+  it('a runner that keeps no conversation: its pause is kept for its owner, answered, then cleared', async () => {
+    const sessions = memorySessions();
+    const provider = mock({
+      chunkDelayMs: 0,
+      replies: [{ content: '', toolCalls: [{ id: 'q1', name: 'ask', args: {} }] }, 'done', 'again'],
+    });
+    const ask = defineTool({
+      name: 'ask',
+      description: 'Ask a person.',
+      inputSchema: { type: 'object', properties: {} },
+      execute: async () => pauseHere({ question: 'Sure?' }),
+    });
+    const handle = streamHandler({
+      // A composition: no conversation checkpoint of its own.
+      agent: () =>
+        Sequence.create({ id: 'seq' })
+          .step('a', Agent.create({ provider, model: 'm' }).system('s').tool(ask).build())
+          .build() as unknown as StreamRunner,
+      adapter: stubAdapter(),
+      threads: byUser,
+      sessions,
+      heartbeatMs: 0,
+    });
+    const alice = { headers: { 'x-user': 'alice' } };
+    expect((await frames(await handle(post({ message: 'go' }, alice)))).at(-1)).toEqual({
+      kind: 'paused',
+    });
+    expect((await sessions.hydrate('alice:t1'))?.format).toBe('flowchart-v1');
+    expect((await frames(await handle(post({ answer: 'yes' }, alice)))).at(-1)).toEqual({
+      kind: 'finished',
+    });
+    // The pause is cleared, the owner kept: her next message runs, nobody else's does.
+    expect((await sessions.hydrate('alice:t1'))?.format).not.toBe('flowchart-v1');
+    const next = await handle(post({ message: 'more' }, alice));
+    expect(next.status).toBe(200);
+    await next.text();
   });
 });
 

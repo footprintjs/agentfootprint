@@ -44,7 +44,7 @@ What the handler does, for every protocol (`StreamHandlerOptions`):
   (`sessionId`) and the run's `identity` — or throws a refusal the caller gets.
   The same thread id from two callers is two conversations. `verifiedThreads(identity)`
   is that binder, ready-made: it verifies the caller with the door's identity
-  options (your `verify` — `jwksIdentity` for an IdP — or a sign-in), keys the
+  options (your `verify` — `jwksIdentity` for an IdP — on the bearer token), keys the
   thread by the VERIFIED person, names them as the run's `principal`, and refuses
   a caller with no credential (401) — never a name read off a header.
 - **Ownership before activity.** A stored conversation that is not the caller's
@@ -56,7 +56,10 @@ What the handler does, for every protocol (`StreamHandlerOptions`):
   told. A stored conversation that is not the caller's answers as not found.
   Without `threads`, every request is a conversation of one message.
 - **One turn per thread at a time** — a second turn while one runs is refused
-  (`ERR_CONCURRENT_RUN`, 409), never raced for the stored state.
+  (`ERR_CONCURRENT_RUN`, 409), never raced for the stored state. The guard is
+  PER PROCESS: with several instances (serverless, workers), route a thread to
+  one instance (sticky sessions) — the session store has no compare-and-set, so
+  two instances could resume one paused run twice.
 - The door guard first (421/403/415, the same `allowedOrigins` / `allowedHosts` /
   `requireJsonContentType` options as every host door); a body ceiling
   (`maxBodyBytes`, default `DEFAULT_STREAM_MAX_BODY_BYTES`, 1 MiB — 413); refusals
@@ -134,6 +137,10 @@ refused when the agent is built. Frontend tools need a host that keeps the pause
 run: `threads` and `sessions`.
 
 ## Interrupts
+
+A pause is continued only on a host that keeps it (`threads` AND `sessions`).
+Without a session store the interrupt still reaches the page, and an answer to it
+is refused (`ERR_NO_PENDING_ASK`) — serve an agent that asks people with both.
 
 A tool that asks a person (`askHuman`, a check-in, a middleware `ask`) ends the
 run with `RUN_FINISHED { outcome: interrupt }`, its question in the interrupt's

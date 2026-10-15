@@ -256,7 +256,7 @@ const handler = streamHandler({
       .build(),
   adapter: agUi(),
   threads: verifiedThreads({ verify }), // no valid token → 401; the thread is the caller's own
-  sessions: memorySessions(), // the conversation lives on the server
+  sessions: memorySessions(), // the conversation lives on the server (one turn per thread, per process)
 }); // Next.js: export const POST = handler;
 
 // What an AG-UI frontend sends, and what it reads back:

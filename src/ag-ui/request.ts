@@ -171,9 +171,13 @@ export function readAgUiRunInput(body: unknown): AgUiRunInput {
   if (!Array.isArray(body.messages)) throw malformed('`messages` must be an array.');
   const messages = body.messages.map(message);
   const tools = list(body.tools, 'tools');
+  const named = new Set<string>();
   tools.forEach((tool, i) => {
     if (!isRecord(tool) || typeof tool.name !== 'string' || !TOOL_NAME.test(tool.name))
       throw malformed(`\`tools[${i}].name\` must be a tool name (letters, digits, _ and -).`);
+    if (named.has(tool.name))
+      throw malformed(`\`tools[${i}].name\` repeats a tool already declared.`);
+    named.add(tool.name);
   });
   const context = list(body.context, 'context');
   context.forEach((entry, i) => {

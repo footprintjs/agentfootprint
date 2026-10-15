@@ -18,7 +18,13 @@ import { streamHandler } from '../../src/hosting/streamHandler.js';
 import { verifiedThreads } from '../../src/hosting/verifiedThreads.js';
 import { agUi } from '../../src/ag-ui/adapter.js';
 
-const TOKENS: Record<string, string> = { 'tok-ada': 'ada', 'tok-bo': 'bo', 'tok-slash': 'a/b' };
+const TOKENS: Record<string, string> = {
+  'tok-ada': 'ada',
+  'tok-bo': 'bo',
+  'tok-a': 'a',
+  'tok-slash': 'a/b',
+  'tok-jose': 'José Ruiz',
+};
 const verify = async (token: string) => {
   const userId = TOKENS[token];
   if (userId === undefined) throw new Error('unknown token');
@@ -40,9 +46,15 @@ describe('verifiedThreads — the thread is bound to the caller the door verifie
   });
 
   it('is injective: no (person, thread) pair spells another’s key', async () => {
+    // Unescaped, both would be 'a/b/c'.
     const slash = await threads.bind({ conversation: 'c', headers: bearer('tok-slash') });
-    const plain = await threads.bind({ conversation: 'b/c', headers: bearer('tok-ada') });
+    const plain = await threads.bind({ conversation: 'b/c', headers: bearer('tok-a') });
     expect(slash.sessionId).not.toBe(plain.sessionId);
+  });
+
+  it('any verified name makes a key every door accepts (visible ASCII)', async () => {
+    const { sessionId } = await threads.bind({ conversation: 't1', headers: bearer('tok-jose') });
+    expect(sessionId).toMatch(/^[\x21-\x7e]+$/);
   });
 
   it('refuses a caller with no credential, a forged one, and a name read off a header', async () => {
@@ -85,6 +97,9 @@ describe('verifiedThreads — the thread is bound to the caller the door verifie
     expect(anonymous.status).toBe(401);
     expect(await anonymous.json()).toMatchObject({ code: 'ERR_IDENTITY_NOT_VERIFIED' });
     expect((await post(bearer('tok-ada'))).status).toBe(200);
+    const jose = await post(bearer('tok-jose'));
+    expect(jose.status).toBe(200);
+    await jose.text();
     // Bo naming Ada's thread gets his own conversation, never hers.
     const bo = await post(bearer('tok-bo'));
     expect(bo.status).toBe(200);

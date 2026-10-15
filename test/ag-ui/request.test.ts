@@ -105,6 +105,7 @@ describe('readAgUiRunInput — the shape, and the ids', () => {
       base({ messages: [{ id: 'm1', role: SECRET, content: 'x' }] }),
       base({ messages: [{ id: 'm1', role: 'user', content: 7 }] }),
       base({ tools: [{ name: `${SECRET} tool!` }] }),
+      base({ tools: [{ name: 'pick' }, { name: 'pick' }] }),
       base({ context: [{ description: SECRET }] }),
       base({ resume: [{ interruptId: 'i', status: SECRET }] }),
     ]) {
