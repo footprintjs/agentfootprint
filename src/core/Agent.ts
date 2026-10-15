@@ -331,6 +331,7 @@ import {
 } from './agent/honesty/armed.js';
 import { answerFoldReads } from './agent/honesty/mounts.js';
 import { readsMessageFrom } from './messageFrom.js';
+import { readsParentRun } from './memberRun.js';
 import { carriesArgumentView } from './toolShownArgs.js';
 import { assertMaxToolResultChars } from './agent/toolResultCap.js';
 import type { ToolArgValidationMode } from '../tools/toolArgsValidation.js';
@@ -959,6 +960,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  throws does not leave the agent permanently refusing. */
   private inFlightRunId?: string;
 
+  /** The scopes this agent's OWN executors made — see the `isOwnRun` seed dep. */
+  private readonly ownScopes = new WeakSet<object>();
+
   /** The question a person still owes this agent an answer to. Set when a run
    *  ends paused, cleared by `resume()`, `abandonPause()`, or a run that
    *  completes. Read by the `run()` guard — see `PendingQuestionError`. */
@@ -1215,6 +1219,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // the marker only to a runner that reads it.
       readsMessageFrom(this);
     }
+    // A member runs for the run that mounted it: a composition hands it that
+    // run as `parentRun` (`core/memberRun.ts`).
+    readsParentRun(this);
     if (opts.argumentAskContext !== undefined) this.argumentAskContext = opts.argumentAskContext;
     if (opts.toolChoice !== undefined) this.toolChoiceOptions = opts.toolChoice;
     if (opts.ontology !== undefined) this.ontology = opts.ontology;
@@ -3616,11 +3623,20 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // commitValues (#13c-B, commit-log value encoding) and writeProvenance
     // (#P1, per-write read provenance — the exact-dataflow debugging dial).
     const spec = this.getSpec();
+    // Every scope THIS executor makes is marked as the agent's own, so a stage
+    // can tell its own run from a mount in another runner's executor
+    // (`memberRun.ts`) — per scope, never by instance state.
+    const scopeFactory = redaction.scopeFactoryFor(spec);
+    const ownScopes = this.ownScopes;
     const executor = new FlowChartExecutor(spec, {
       readTracking: this.readTracking,
       commitValues: this.commitValues,
       writeProvenance: this.writeProvenance,
-      scopeFactory: redaction.scopeFactoryFor(spec),
+      scopeFactory: (...args: Parameters<typeof scopeFactory>) => {
+        const scope = scopeFactory(...args);
+        if (scope !== null && typeof scope === 'object') ownScopes.add(scope as object);
+        return scope;
+      },
     });
     redaction.applyTo(executor);
     // Enable structured narrative so `getLastNarrativeEntries()` can
@@ -4707,6 +4723,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // the same reason the runId is: the chart is built once, and this
       // changes every run.
       getCurrentSessionId: () => this.currentRunContext?.sessionId,
+      // Whether this stage runs in THIS agent's own executor, or inside another
+      // runner's (a composition, a chart a caller built) — where the accessors
+      // above describe some other run (`memberRun.ts`). Asked per scope.
+      isOwnRun: (scope) => this.ownScopes.has(scope),
       // WHICH TURN THIS IS (9.6.0). Only memories that WRITE the conversation
       // are consulted: they are the ones whose entry ids are turn-stamped, and
       // a corpus (`.rag(...)`, which reads under its own namespace) has no
@@ -5605,6 +5625,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // tier one is lazy on top of that — an agent whose tools hold no sessions
       // never allocates it.
       currentRun: () => this.toolRunFacts(),
+      isOwnRun: (scope) => this.ownScopes.has(scope),
       answeredAsk: () => this.answeredAsk,
       // The time layer: each dispatched call files its `call` row, and the
       // resume door compares a resume's passed `time` with the kept clock.

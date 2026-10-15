@@ -30,6 +30,14 @@ import type { LLMMessage, LLMProvider } from '../provider-contract/types.js';
 import type { Runner } from '../core/runner.js';
 import { RunnerBase, makeRunId, withRunSignalInEnv } from '../core/RunnerBase.js';
 import { normalizeRunInput } from '../core/runInput.js';
+import {
+  adoptParentRun,
+  parentRunIn,
+  readsParentRun,
+  topLevelParentRun,
+  withParentRun,
+} from '../core/memberRun.js';
+import type { MemoryIdentity } from '../memory/identity/types.js';
 import { buildEventMeta, type RunContext } from '../bridge/eventMeta.js';
 import { ContextRecorder } from '../recorders/core/ContextRecorder.js';
 import { streamRecorder } from '../recorders/core/StreamRecorder.js';
@@ -79,6 +87,13 @@ export interface ParallelOptions {
 
 export interface ParallelInput {
   readonly message: string;
+  /**
+   * WHO this run is for — the same tuple as `AgentInput.identity`. Every
+   * member runs for it: its memory, its tools' `ctx.identity`. Omitted, every
+   * member runs under this run's own conversation (`{ conversationId: runId }`),
+   * never a namespace another run shares (`core/memberRun.ts`).
+   */
+  readonly identity?: MemoryIdentity;
 }
 
 export type ParallelOutput = string;
@@ -287,6 +302,8 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
     // Eager chart construction — see `RunnerBase.initChart` JSDoc.
     // Safe: the merge stage's closure captures `this.branchErrors`
     // (an instance field initialized at declaration time, line 130),
+    // It hands the run it serves to its members (`core/memberRun.ts`).
+    readsParentRun(this);
     // which is set BEFORE the constructor body runs.
     this.initChart(() => this.buildChart());
   }
@@ -341,10 +358,16 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
     const runInput = normalizeRunInput<ParallelInput>(input, 'Parallel.run');
     const executor = this.createExecutor();
     this.lastExecutor = executor;
+    // The run every member serves — built once, here, from THIS run's id.
+    const parentRun = topLevelParentRun(
+      this.currentRunContext.runId,
+      runInput.identity,
+      'Parallel.run',
+    );
     let result: unknown;
     try {
       result = await executor.run({
-        input: { message: runInput.message },
+        input: { message: runInput.message, parentRun },
         ...(withRunSignalInEnv(options) ?? {}),
       });
     } catch (err) {
@@ -575,6 +598,7 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
 
     const seed = (scope: TypedScope<ParallelState>) => {
       const args = scope.$getArgs<ParallelInput>();
+      adoptParentRun(scope, args, 'Parallel');
       scope.userMessage = args.message;
       scope.branchResults = {};
       typedEmit(scope, 'agentfootprint.composition.enter', {
@@ -629,7 +653,10 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
           // The caller's own message — composed only when this composition was
           // handed a composed one (`core/messageFrom.ts`).
           const input = { message: (parent.userMessage as string) ?? '' };
-          return parent.messageFrom === 'composed' ? composedInput(branch.runner, input) : input;
+          const mapped =
+            parent.messageFrom === 'composed' ? composedInput(branch.runner, input) : input;
+          // Every branch runs for this run (`core/memberRun.ts`).
+          return withParentRun(mapped, parentRunIn(parent), branch.runner);
         },
         // The child reads its own outcome (`childOutcome.ts`). A branch that
         // ended on a verdict is a FAILED branch: its mapper throws the child's

@@ -129,7 +129,7 @@ await agent.run({
 });
 ```
 
-Without an identity, memory falls back to a global namespace — fine for single-user prototypes, dangerous in production multi-tenant apps. See [Memory guide](doc:memory).
+Without an identity, memory is scoped to the run's own conversation (`{ conversationId: <runId> }`), so nothing is recalled across runs — fine for a script, not for an app whose users come back. See [Memory guide](doc:memory).
 
 ## Per-run config — `.configure()`
 
@@ -439,6 +439,17 @@ const research = Sequence.create()
   .step('summarize', summarizerLLM)
   .build();
 ```
+
+**Pass the identity to the composition.** A composition runs its members in its own executor, so a member never sees the `identity` you would have passed to its own `run()`. Hand it to the composition instead; every member — at any depth of nesting — runs for it, its memory and its tools' `ctx.identity` included:
+
+```ts
+await research.run({
+  message: 'Compare the two refund policies',
+  identity: { tenant: 'acme', principal: 'alice', conversationId: 'thread-42' },
+});
+```
+
+Without one, every member runs under that composition run's own conversation — never a namespace another run shares. Two users running the same composition at the same time never see each other's memory. An agent mounted in a chart you built yourself must be handed `identity` by your input mapper; one that no run reaches is refused with `MemberIdentityError` rather than run under its instance's last run.
 
 There is no separate "multi-agent" class — agents *are* the building blocks. See [Patterns](doc:key-concepts#patterns--named-compositions) for Reflexion / ToT / Debate / Map-Reduce / Swarm recipes.
 

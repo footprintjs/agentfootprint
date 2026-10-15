@@ -60,7 +60,11 @@ async function runMounted(redact: RedactionPolicy | undefined, executorPolicy?: 
     'ask',
   )
     .addSubFlowChartNext('sf-agent', agent.getSpec(), 'Agent', {
-      inputMapper: (parent) => ({ message: String(parent.question) }),
+      // A hand-built chart hands the mounted agent the identity it runs for.
+      inputMapper: (parent) => ({
+        message: String(parent.question),
+        identity: { conversationId: 'app-conversation' },
+      }),
       outputMapper: (out) => ({ answer: out }),
     })
     .build();

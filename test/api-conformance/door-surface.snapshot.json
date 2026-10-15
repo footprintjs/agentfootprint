@@ -59,6 +59,7 @@
       "MILESTONE_KINDS",
       "MILESTONE_LABEL_TAG_PREFIX",
       "MILESTONE_TAG_PREFIX",
+      "MemberIdentityError",
       "MessageDeniedError",
       "NoConversationError",
       "OutputSchemaError",

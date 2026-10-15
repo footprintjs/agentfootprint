@@ -108,7 +108,9 @@ export function restoredIdentityOf(state: unknown): MemoryIdentity | 'malformed'
   const identity = wellFormed(seeded.runIdentity);
   if (identity === undefined) return 'malformed';
   if (seeded.runIdentitySource !== undefined) {
-    if (seeded.runIdentitySource !== 'session' || !conversationOnly(identity)) return 'malformed';
+    const derived =
+      seeded.runIdentitySource === 'session' || seeded.runIdentitySource === 'composition';
+    if (!derived || !conversationOnly(identity)) return 'malformed';
   }
   return identity;
 }

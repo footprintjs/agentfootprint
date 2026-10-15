@@ -28,6 +28,14 @@ import type { RunnerPauseOutcome } from '../core/pause.js';
 import type { Runner } from '../core/runner.js';
 import { RunnerBase, makeRunId, withRunSignalInEnv } from '../core/RunnerBase.js';
 import { normalizeRunInput } from '../core/runInput.js';
+import {
+  adoptParentRun,
+  parentRunIn,
+  readsParentRun,
+  topLevelParentRun,
+  withParentRun,
+} from '../core/memberRun.js';
+import type { MemoryIdentity } from '../memory/identity/types.js';
 import type { RunContext } from '../bridge/eventMeta.js';
 import { ContextRecorder } from '../recorders/core/ContextRecorder.js';
 import { streamRecorder } from '../recorders/core/StreamRecorder.js';
@@ -62,6 +70,13 @@ export interface ConditionalOptions {
 
 export interface ConditionalInput {
   readonly message: string;
+  /**
+   * WHO this run is for — the same tuple as `AgentInput.identity`. Every
+   * member runs for it: its memory, its tools' `ctx.identity`. Omitted, every
+   * member runs under this run's own conversation (`{ conversationId: runId }`),
+   * never a namespace another run shares (`core/memberRun.ts`).
+   */
+  readonly identity?: MemoryIdentity;
 }
 
 export type ConditionalOutput = string;
@@ -130,6 +145,8 @@ export class Conditional extends RunnerBase<ConditionalInput, ConditionalOutput>
       branches.map((b) => b.runner),
     );
     this.fallbackId = fallbackId;
+    // It hands the run it serves to its members (`core/memberRun.ts`).
+    readsParentRun(this);
     // Eager chart construction — see `RunnerBase.initChart` JSDoc.
     this.initChart(() => this.buildChart());
   }
@@ -174,8 +191,14 @@ export class Conditional extends RunnerBase<ConditionalInput, ConditionalOutput>
     const runInput = normalizeRunInput<ConditionalInput>(input, 'Conditional.run');
     const executor = this.createExecutor();
     this.lastExecutor = executor;
+    // The run every member serves — built once, here, from THIS run's id.
+    const parentRun = topLevelParentRun(
+      this.currentRunContext.runId,
+      runInput.identity,
+      'Conditional.run',
+    );
     const result = await executor.run({
-      input: { message: runInput.message },
+      input: { message: runInput.message, parentRun },
       ...(withRunSignalInEnv(options) ?? {}),
     });
     return this.finalizeResult(executor, result);
@@ -244,6 +267,7 @@ export class Conditional extends RunnerBase<ConditionalInput, ConditionalOutput>
 
     const seed = (scope: TypedScope<ConditionalState>) => {
       const args = scope.$getArgs<ConditionalInput>();
+      adoptParentRun(scope, args, 'Conditional');
       scope.userMessage = args.message;
       typedEmit(scope, 'agentfootprint.composition.enter', {
         kind: 'Conditional',
@@ -303,7 +327,9 @@ export class Conditional extends RunnerBase<ConditionalInput, ConditionalOutput>
           // The caller's own message — composed only when this composition was
           // handed a composed one (`core/messageFrom.ts`).
           const input = { message: (parent.userMessage as string) ?? '' };
-          return parent.messageFrom === 'composed' ? composedInput(b.runner, input) : input;
+          const mapped = parent.messageFrom === 'composed' ? composedInput(b.runner, input) : input;
+          // Every branch runs for this run (`core/memberRun.ts`).
+          return withParentRun(mapped, parentRunIn(parent), b.runner);
         },
         // Branch's string return becomes sfOutput; propagate to parent
         // as `result` for the Finalize stage to read.

@@ -192,6 +192,37 @@ const pipeline = Sequence.create().step('draft', drafter).step('review', reviewe
 // relayed under `current` are kept out too.
 ```
 
+### Decision 13: every member runs for the run that mounted it — never for its instance
+
+A composition mounts each member's chart in ITS OWN executor; the member's
+`run()` never runs. So nothing a member instance holds may decide whom a run is
+for: an Agent instance shared by every run of a composition holds `'pending'`
+(never run on its own) or its last direct caller — another person. Before this
+rule, two users of one `Sequence` shared one memory under conversation
+`'pending'`, and a member's tool could be handed an earlier caller's identity.
+
+The rule (`core/memberRun.ts`): the OUTERMOST composition's `run()` builds one
+`ParentRun` — the caller's `identity` (`run({ message, identity })`, or
+`input.identity` for `workflow` and `graph`), and THIS run's id — and passes it
+in its input. Each composition's seed keeps it in its state (`memberRun`), and
+its input mappers hand it to every member that reads it (`readsParentRun`: an
+Agent, and every composition, which hands it on — nesting included). A member
+Agent runs under the caller's identity, or this run's own `{ conversationId:
+runId }` (recorded `runIdentitySource: 'composition'`), and its tools read
+`ctx.identity` / `ctx.runId` from the run, not the instance. Per-run input is
+the carrier because it is the one thing two overlapping runs cannot share.
+
+An Agent tells its own run from a mount by the scope it was given (its own
+executor marks every scope it makes), and a mount that no run reached — no
+`parentRun`, no `identity` in its input — is refused by name
+(`MemberIdentityError`), never filed under a placeholder. Other runners are
+handed the input they always were.
+
+```typescript
+const flow = Sequence.create().step('support', supportAgent).build();
+await flow.run({ message: 'where is my order?', identity: { tenant, principal, conversationId } });
+```
+
 ## Events emitted
 
 | Composition | Events |
