@@ -14,7 +14,7 @@
  *
  * AgentCore is an in-memory stand-in that behaves as the service does for
  * these fields: an event not skipped is EXTRACTED into a record filed under the
- * memory's namespace template (`/tenants/{tenantid}/facts`), and retrieval
+ * memory's namespace template (`/tenants/{tenantid}/actors/{actorId}/facts`), and retrieval
  * matches `namespace` as a string PREFIX.
  */
 
@@ -57,12 +57,12 @@ function extractingAgentCore() {
       created.push(input);
       if (input.extractionMode === 'SKIP') return;
       const tenant = input.extractionConfig?.namespaceVariables['tenantid'];
-      // The template `/tenants/{tenantid}/facts`, substituted as the service does.
+      // The template `/tenants/{tenantid}/actors/{actorId}/facts`, substituted as the service does.
       records.push({
         memoryRecordId: `rec-${records.length + 1}`,
         content: JSON.stringify(input.entry.value),
         score: 0.9,
-        namespaces: [`/tenants/${tenant ?? ''}/facts`],
+        namespaces: [`/tenants/${tenant ?? ''}/actors/${input.actorId}/facts`],
       });
     },
     async listEvents() {
@@ -86,7 +86,8 @@ function storeOver(client: AgentCoreLikeClient): RecallingStore {
   return new RecallingStore({
     memoryId: 'mem-1',
     client,
-    searchNamespace: ({ namespaceScope }) => `/tenants/${namespaceScope?.['tenantid'] ?? ''}/facts`,
+    searchNamespace: ({ actorId, namespaceScope }) =>
+      `/tenants/${namespaceScope?.['tenantid'] ?? ''}/actors/${actorId}/facts`,
   });
 }
 
@@ -185,7 +186,10 @@ describe('memory write options — two tenants, concurrently, each sees only its
 
     // The control: both plans were extracted, each under its own tenant.
     expect(service.records.map((r) => r.namespaces?.[0]).sort()).toEqual(
-      expect.arrayContaining(['/tenants/vacme_z/facts', '/tenants/vglobex_z/facts']),
+      expect.arrayContaining([
+        '/tenants/vacme_z/actors/afp-acme_ada/facts',
+        '/tenants/vglobex_z/actors/afp-globex_gus/facts',
+      ]),
     );
     // Every write carried exactly its own run's tenant.
     for (const event of service.created) {
@@ -197,7 +201,10 @@ describe('memory write options — two tenants, concurrently, each sees only its
     }
     // Every search asked inside one tenant...
     expect(new Set(service.retrieved)).toEqual(
-      new Set(['/tenants/vacme_z/facts', '/tenants/vglobex_z/facts']),
+      new Set([
+        '/tenants/vacme_z/actors/afp-acme_ada/facts',
+        '/tenants/vglobex_z/actors/afp-globex_gus/facts',
+      ]),
     );
     // ...each run's recall held its own tenant's plan, never the other's...
     const recalledBy = (tenant: string) =>
@@ -313,7 +320,9 @@ describe('memory write options — the model, a tool, or a caller cannot choose 
     for (const event of service.created) {
       expect(event.extractionConfig?.namespaceVariables).toEqual({ tenantid: 'vacme_z' });
     }
-    expect(new Set(service.retrieved)).toEqual(new Set(['/tenants/vacme_z/facts']));
+    expect(new Set(service.retrieved)).toEqual(
+      new Set(['/tenants/vacme_z/actors/afp-acme_ada/facts']),
+    );
   });
 
   it('a per-call scope on a memory that binds one is refused — on writes and on reads', async () => {
@@ -373,7 +382,8 @@ describe('memory write options — reads by the same rule as writes', () => {
     const store = new AgentCoreStore({
       memoryId: 'mem-1',
       client: service.client,
-      searchNamespace: ({ namespaceScope }) => `/tenants/${namespaceScope?.['tenantid'] ?? ''}x`,
+      searchNamespace: ({ actorId, namespaceScope }) =>
+        `/tenants/${namespaceScope?.['tenantid'] ?? ''}x/actors/${actorId}`,
     });
     const bound = bindWriteOptions(store, { namespaceScope: perTenant });
     await expect(bound.search?.(ACME, [], { text: 'q' })).rejects.toThrow(/path segment/);
@@ -400,5 +410,155 @@ describe('memory write options — a missing tenant is refused by name', () => {
     await expect(agent.run({ message: 'hello', identity: ACME })).rejects.toThrow(/EMPTY/);
     expect(service.created).toEqual([]);
     expect(service.retrieved).toEqual([]);
+  });
+});
+
+describe('memory write options — one principal never reads another’s, inside one tenant', () => {
+  const ADA: MemoryIdentity = { tenant: 'acme', principal: 'ada', conversationId: 'ada-1' };
+  const BOB: MemoryIdentity = { tenant: 'acme', principal: 'bob', conversationId: 'bob-1' };
+
+  it('a namespace that stops at the tenant is refused for a principal, naming the fix', async () => {
+    const service = extractingAgentCore();
+    const store = new AgentCoreStore({
+      memoryId: 'mem-1',
+      client: service.client,
+      searchNamespace: ({ namespaceScope }) => `/tenants/${namespaceScope?.['tenantid'] ?? ''}`,
+    });
+    const bound = bindWriteOptions(store, { namespaceScope: perTenant });
+    await expect(bound.search?.(BOB, [], { text: 'card?' })).rejects.toThrow(/`actorId`/);
+    expect(service.retrieved).toEqual([]);
+  });
+
+  it('with the actor in the namespace, Bob never receives what was extracted from Ada', async () => {
+    const service = extractingAgentCore();
+    const store = storeOver(service.client);
+    const bound = bindWriteOptions(store, { namespaceScope: perTenant });
+    await bound.put(ADA, { id: 'e1', value: 'ADA-PRIVATE card 4242', version: 1 } as MemoryEntry);
+    const bobFound = (await bound.search?.(BOB, [], { text: 'card?' })) ?? [];
+    const adaFound = (await bound.search?.(ADA, [], { text: 'card?' })) ?? [];
+    expect(bobFound.map((f) => String(f.entry.value))).toEqual([]);
+    expect(adaFound.map((f) => String(f.entry.value)).join()).toContain('ADA-PRIVATE');
+  });
+
+  it('`searchAcrossPrincipals: true` is the explicit opt-in for a tenant-wide memory', async () => {
+    const service = extractingAgentCore();
+    const store = new AgentCoreStore({
+      memoryId: 'mem-1',
+      client: service.client,
+      searchAcrossPrincipals: true,
+      searchNamespace: ({ namespaceScope }) => `/tenants/${namespaceScope?.['tenantid'] ?? ''}`,
+    });
+    const bound = bindWriteOptions(store, { namespaceScope: perTenant });
+    await expect(bound.search?.(BOB, [], { text: 'q' })).resolves.toEqual([]);
+    expect(service.retrieved).toEqual(['/tenants/vacme_z']);
+  });
+});
+
+describe('memory write options — the scope that is checked is the scope that is sent', () => {
+  it('a scope object edited mid-batch never changes what the rest of the batch carries', async () => {
+    const service = extractingAgentCore();
+    const store = storeOver(service.client);
+    const shared: Record<string, string> = { tenantid: 'vacme_z' };
+    const original = service.client.createEvent.bind(service.client);
+    service.client.createEvent = async (input) => {
+      await original(input);
+      shared['tenantid'] = 'vglobex_z'; // another tenant's resolve, reusing the object
+    };
+    const entries = ['a', 'b', 'c'].map((id) => ({ id, value: id, version: 1 } as MemoryEntry));
+    await store.putMany(ACME, entries, { namespaceScope: shared });
+    expect(service.created.map((e) => e.extractionConfig?.namespaceVariables['tenantid'])).toEqual([
+      'vacme_z',
+      'vacme_z',
+      'vacme_z',
+    ]);
+  });
+
+  it('a scope with a getter is refused — it could answer the check one value and the store another', async () => {
+    const service = extractingAgentCore();
+    const memory = tenantMemories(storeOver(service.client), () => {
+      let reads = 0;
+      return Object.defineProperty({}, 'tenantid', {
+        enumerable: true,
+        get: () => (reads++ === 0 ? 'vacme_z' : 'x/../*'),
+      }) as Record<string, string>;
+    });
+    await expect(recordingAgent(memory, []).run({ message: 'hi', identity: ACME })).rejects.toThrow(
+      /plain object of string values/,
+    );
+    expect(service.created).toEqual([]);
+    expect(service.retrieved).toEqual([]);
+  });
+
+  it('a tenant named like a literal segment does not pass a namespace that ignores the scope', async () => {
+    const service = extractingAgentCore();
+    const store = new AgentCoreStore({
+      memoryId: 'mem-1',
+      client: service.client,
+      // Ignores the scope; its literal segment happens to equal one tenant's raw value.
+      searchNamespace: ({ actorId }) => `/facts/actors/${actorId}`,
+    });
+    const bound = bindWriteOptions(store, { namespaceScope: () => ({ tenantid: 'facts' }) });
+    await expect(bound.search?.(ACME, [], { text: 'q' })).rejects.toThrow(/"tenantid"/);
+    expect(service.retrieved).toEqual([]);
+  });
+});
+
+describe('memory write options — a store that requires a scope refuses one without it', () => {
+  function requiringStore(client: AgentCoreLikeClient) {
+    return new AgentCoreStore({
+      memoryId: 'mem-1',
+      client,
+      requireNamespaceScope: true,
+      searchNamespace: ({ actorId, namespaceScope }) =>
+        `/tenants/${namespaceScope?.['tenantid'] ?? ''}/actors/${actorId}/facts`,
+    });
+  }
+
+  it('an unscoped search and an unscoped write are refused by name; nothing is sent', async () => {
+    const service = extractingAgentCore();
+    const store = requiringStore(service.client);
+    await expect(store.search(ACME, [], { text: 'q' })).rejects.toThrow(/requireNamespaceScope/);
+    await expect(
+      store.put(ACME, { id: 'e', value: 'x', version: 1 } as MemoryEntry),
+    ).rejects.toThrow(/requireNamespaceScope/);
+    expect(service.retrieved).toEqual([]);
+    expect(service.created).toEqual([]);
+  });
+
+  it('a second memory on the same store that forgot its scope is refused at its first turn', async () => {
+    const service = extractingAgentCore();
+    const store = requiringStore(service.client);
+    const forgot = defineMemory({
+      id: 'facts-unscoped',
+      type: MEMORY_TYPES.SEMANTIC,
+      strategy: { kind: MEMORY_STRATEGIES.TOP_K, topK: 5 },
+      store,
+      readOnly: true,
+    });
+    const agent = Agent.create({ provider: mock({ reply: 'ok' }), model: 'mock', maxIterations: 1 })
+      .system('s')
+      .memory(forgot)
+      .build();
+    await expect(agent.run({ message: 'hi', identity: ACME })).rejects.toThrow(
+      /requireNamespaceScope/,
+    );
+    expect(service.retrieved).toEqual([]);
+  });
+});
+
+describe('memory write options — a corpus is not scoped by the run', () => {
+  it('`namespaceScope` with `corpus` is refused at definition', () => {
+    const service = extractingAgentCore();
+    expect(() =>
+      defineMemory({
+        id: 'docs',
+        type: MEMORY_TYPES.SEMANTIC,
+        strategy: { kind: MEMORY_STRATEGIES.TOP_K, topK: 5 },
+        store: storeOver(service.client),
+        readOnly: true,
+        corpus: { conversationId: 'shared' },
+        namespaceScope: perTenant,
+      }),
+    ).toThrow(/cannot be combined with `corpus`/);
   });
 });

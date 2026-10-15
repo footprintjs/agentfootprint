@@ -82,6 +82,12 @@ const AGENTCORE_WRITE_OPTIONS: readonly MemoryWriteOptionName[] = Object.freeze(
  * tenant — a refusal here names the variable and the rule, never the value.
  */
 const MAX_NAMESPACE_VARIABLES = 5;
+/** The refusal of a scope-less write or search on a store that requires one. */
+const MISSING_SCOPE = (what: 'write' | 'search'): string =>
+  `AgentCoreStore: this ${what} carries no \`namespaceScope\`, and the store was built with ` +
+  '`requireNamespaceScope: true`. It is refused rather than run under a namespace no tenant ' +
+  'owns. Scope the memory that made it (`defineMemory({ namespaceScope })`).';
+
 const NAMESPACE_KEY = /^(?!memoryStrategyId$|actorId$|sessionId$)[a-z][a-z0-9]{0,31}$/;
 const NAMESPACE_VALUE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 const NAMESPACE_VALUE_MAX = 64;
@@ -115,28 +121,65 @@ function checkNamespaceVariables(scope: Readonly<Record<string, string>>): void 
 }
 
 /**
- * A search under a namespace scope must stay inside it: every scope value must
- * be a path segment of the namespace searched, as it is of every namespace the
- * memory's writes were filed under. Otherwise the read could return records
- * filed under another tenant's scope — refused, naming the variable, never
- * quoting its value.
+ * A scope as the store uses it: read ONCE into a frozen plain copy, so the value
+ * that is checked is the value that is sent — a getter, or an object the
+ * caller's resolver reuses and edits, cannot change it between the two.
+ */
+function frozenScope(scope: Readonly<Record<string, string>>): Readonly<Record<string, string>> {
+  return Object.freeze(Object.fromEntries(Object.entries(scope)));
+}
+
+/**
+ * A search under a namespace scope must stay inside it — checked by RENDERING,
+ * not by looking: `searchNamespace` is asked again with every value replaced
+ * by a canary, and the two namespaces must agree segment for segment — each
+ * canary's segment holding exactly that variable's real value, every other
+ * segment the same literal. So a namespace that ignores the scope, puts a
+ * variable inside a segment, or merely happens to contain a value elsewhere
+ * (a tenant named like a literal segment) is refused, naming the variable and
+ * never quoting its value.
  */
 function assertSearchWithinScope(
+  render: (namespaceScope: Readonly<Record<string, string>>) => string,
   namespace: string,
   namespaceScope: Readonly<Record<string, string>>,
 ): void {
-  const segments = new Set(namespace.split('/'));
-  for (const [variable, value] of Object.entries(namespaceScope)) {
-    if (!segments.has(value)) {
-      throw new TypeError(
-        `AgentCoreStore.search(): the namespace searched does not hold the value of namespace ` +
-          `variable ${JSON.stringify(variable)} as a path segment of its own, so it could read ` +
-          'records filed under another tenant’s scope. Build `searchNamespace` from the ' +
-          '`namespaceScope` it is handed, one variable per segment (e.g. ' +
-          '`({ namespaceScope }) => "/tenants/" + namespaceScope?.tenantid + "/facts"`).',
-      );
+  const variables = Object.keys(namespaceScope);
+  const nonce = globalThis.crypto.randomUUID();
+  const canaries = variables.map((_, i) => `canary${i}-${nonce}`);
+  const canaryScope = Object.fromEntries(variables.map((v, i) => [v, canaries[i] as string]));
+  const real = namespace.split('/');
+  const probe = render(canaryScope).split('/');
+  const refuse = (variable: string): never => {
+    throw new TypeError(
+      `AgentCoreStore.search(): the namespace searched does not hold namespace variable ` +
+        `${JSON.stringify(variable)} as a path segment of its own, so it could read records ` +
+        'filed under another tenant’s scope. Build `searchNamespace` from the ' +
+        '`namespaceScope` it is handed, one variable per segment (e.g. ' +
+        '`({ namespaceScope }) => "/tenants/" + namespaceScope?.tenantid + "/facts"`).',
+    );
+  };
+  const seen = new Set<string>();
+  if (real.length !== probe.length) refuse(variables[0] ?? 'namespaceScope');
+  probe.forEach((segment, i) => {
+    const at = canaries.indexOf(segment);
+    if (at === -1) {
+      if (real[i] !== segment) refuse(variables[0] ?? 'namespaceScope');
+      return;
     }
-  }
+    const variable = variables[at] as string;
+    if (real[i] !== namespaceScope[variable]) refuse(variable);
+    seen.add(variable);
+  });
+  for (const variable of variables) if (!seen.has(variable)) refuse(variable);
+}
+
+/**
+ * Does `namespace` hold `actorId` as whole path segments? (An actor id can
+ * itself contain `/`, its escape.)
+ */
+function holdsActor(namespace: string, actorId: string): boolean {
+  return `/${pathOf(namespace).replace(/^\//, '')}/`.includes(`/${actorId}/`);
 }
 
 /**
@@ -394,6 +437,25 @@ export interface AgentCoreStoreOptions {
    * `minScore` / `k` from {@link SearchOptions} are applied to what comes back.
    */
   readonly searchStrategyId?: string;
+  /**
+   * Refuse, by name, every write and search that carries no `namespaceScope`.
+   *
+   * Set it on a store whose every memory is scoped — a multi-tenant
+   * deployment. A memory, a `defineRAG` or a direct call that forgot its scope
+   * is then refused, instead of filing or reading under a namespace no tenant
+   * owns (a template with an empty variable). Default `false`.
+   */
+  readonly requireNamespaceScope?: boolean;
+  /**
+   * Let a search read the records derived from EVERY principal of a tenant.
+   *
+   * Off by default: a search for an identity that names a principal is refused
+   * unless its namespace holds that identity's `actorId` as path segments —
+   * a namespace that stops at the tenant serves one person's extracted facts,
+   * preferences and summaries to another. Set it only when the memory's
+   * strategies file per tenant ON PURPOSE (knowledge the whole tenant shares).
+   */
+  readonly searchAcrossPrincipals?: boolean;
   /** @internal Test injection — skips the SDK require entirely. */
   readonly _client?: AgentCoreLikeClient;
   /** @internal Test injection — the AWS SDK module (to exercise the real shim with a mock SDK). */
@@ -599,6 +661,8 @@ export class AgentCoreStore implements MemoryStore {
     namespaceScope?: Readonly<Record<string, string>>;
   }) => string;
   private readonly searchStrategyId: string | undefined;
+  private readonly requireNamespaceScope: boolean;
+  private readonly searchAcrossPrincipals: boolean;
   /** Why the write options cannot be honoured — `undefined` when they can. */
   private readonly writeOptionsRefusal: string | undefined;
   private closed = false;
@@ -615,6 +679,8 @@ export class AgentCoreStore implements MemoryStore {
       options.searchNamespace ??
       (({ actorId, sessionId }) => `/actors/${actorId}/sessions/${sessionId}`);
     this.searchStrategyId = options.searchStrategyId;
+    this.requireNamespaceScope = options.requireNamespaceScope === true;
+    this.searchAcrossPrincipals = options.searchAcrossPrincipals === true;
 
     const injected = options._client ?? options.client;
     this.client = injected ?? createAgentCoreClient(options.region, options._sdk);
@@ -707,7 +773,15 @@ export class AgentCoreStore implements MemoryStore {
     options?: MemoryWriteOptions,
   ): Promise<void> {
     this.ensureOpen('put');
-    const extraction = this.extractionFields(options);
+    await this.createEvent(identity, entry, this.extractionFields(options));
+  }
+
+  /** One event, with the write options already turned into fields (and checked) once. */
+  private async createEvent<T>(
+    identity: MemoryIdentity,
+    entry: MemoryEntry<T>,
+    extraction: ReturnType<AgentCoreStore['extractionFields']>,
+  ): Promise<void> {
     if (entry.ttl !== undefined && entry.ttl <= Date.now()) return;
     await this.client.createEvent({
       ...this.scope(identity),
@@ -724,8 +798,11 @@ export class AgentCoreStore implements MemoryStore {
     this.ensureOpen('putMany');
     // AgentCore has no batch-write API; per-session events are conceptually ordered, so
     // sequentialize and let the SDK retry policy handle backoff. The options ride
-    // every event of the batch — a batch is N writes, each asked the same thing.
-    for (const entry of entries) await this.put(identity, entry, options);
+    // every event of the batch — a batch is N writes, each asked the same thing,
+    // and turned into fields ONCE, so no await between events can change them.
+    if (entries.length === 0) return;
+    const extraction = this.extractionFields(options);
+    for (const entry of entries) await this.createEvent(identity, entry, extraction);
   }
 
   /**
@@ -740,15 +817,64 @@ export class AgentCoreStore implements MemoryStore {
   ): Promise<PutIfVersionResult> {
     this.ensureOpen('putIfVersion');
     // Refused BEFORE the read, so an unhonoured option never costs a list.
-    this.extractionFields(options);
+    const extraction = this.extractionFields(options);
     const current = await this.get<T>(identity, entry.id);
     if (current === null) {
       if (expectedVersion !== 0) return { applied: false };
     } else if (current.version !== expectedVersion) {
       return { applied: false, currentVersion: current.version };
     }
-    await this.put(identity, entry, options);
+    await this.createEvent(identity, entry, extraction);
     return { applied: true };
+  }
+
+  /**
+   * The namespace one search reads — rendered by `searchNamespace` and refused
+   * by name when it could read beyond this identity: a wildcard, a namespace
+   * that does not hold the scope segment for segment, or one that stops above
+   * this identity's actor while the identity names a principal.
+   */
+  private namespaceFor(
+    identity: MemoryIdentity,
+    ids: { readonly actorId: string; readonly sessionId: string },
+    given: Readonly<Record<string, string>> | undefined,
+  ): string {
+    const namespaceScope = given === undefined ? undefined : frozenScope(given);
+    if (namespaceScope === undefined && this.requireNamespaceScope) {
+      throw new TypeError(MISSING_SCOPE('search'));
+    }
+    if (namespaceScope !== undefined) checkNamespaceVariables(namespaceScope);
+    const render = (scope: Readonly<Record<string, string>> | undefined): string =>
+      this.searchNamespace({
+        actorId: ids.actorId,
+        sessionId: ids.sessionId,
+        identity,
+        ...(scope !== undefined && { namespaceScope: scope }),
+      });
+    const namespace = render(namespaceScope);
+    if (namespace.includes('*')) {
+      throw new TypeError(
+        'AgentCoreStore.search(): `searchNamespace` returned a namespace containing `*`. ' +
+          'Results are kept only when they are filed at that namespace or under it, and a ' +
+          'wildcard cannot be checked that way — so it is refused rather than matching nothing. ' +
+          'Name the namespace exactly.',
+      );
+    }
+    if (namespaceScope !== undefined) assertSearchWithinScope(render, namespace, namespaceScope);
+    if (
+      identity.principal !== undefined &&
+      !this.searchAcrossPrincipals &&
+      !holdsActor(namespace, ids.actorId)
+    ) {
+      throw new TypeError(
+        'AgentCoreStore.search(): the namespace searched does not hold this identity’s ' +
+          '`actorId`, so it would read records AgentCore derived from every principal it ' +
+          'covers. Put `{actorId}` in the strategy’s namespace template and in ' +
+          '`searchNamespace` (e.g. "/tenants/{tenantid}/actors/{actorId}/facts"), or set ' +
+          '`searchAcrossPrincipals: true` if the memory is shared on purpose.',
+      );
+    }
+    return namespace;
   }
 
   /**
@@ -767,11 +893,15 @@ export class AgentCoreStore implements MemoryStore {
       this.writeOptionsRefusal ?? '',
     );
     const asked = requestedWriteOptions(options);
-    const scope = asked.includes('namespaceScope') ? options?.namespaceScope : undefined;
+    const given = asked.includes('namespaceScope') ? options?.namespaceScope : undefined;
+    const scope = given === undefined ? undefined : frozenScope(given);
+    if (scope === undefined && this.requireNamespaceScope) {
+      throw new TypeError(MISSING_SCOPE('write'));
+    }
     if (scope !== undefined) checkNamespaceVariables(scope);
     return {
       ...(asked.includes('extraction') && { extractionMode: 'SKIP' as const }),
-      ...(scope !== undefined && { extractionConfig: { namespaceVariables: { ...scope } } }),
+      ...(scope !== undefined && { extractionConfig: { namespaceVariables: scope } }),
     };
   }
 
@@ -903,23 +1033,7 @@ export class AgentCoreStore implements MemoryStore {
 
     const scope = this.scope(identity);
     const k = options.k ?? 10;
-    const namespaceScope = options.namespaceScope;
-    if (namespaceScope !== undefined) checkNamespaceVariables(namespaceScope);
-    const namespace = this.searchNamespace({
-      actorId: scope.actorId,
-      sessionId: scope.sessionId,
-      identity,
-      ...(namespaceScope !== undefined && { namespaceScope }),
-    });
-    if (namespace.includes('*')) {
-      throw new TypeError(
-        'AgentCoreStore.search(): `searchNamespace` returned a namespace containing `*`. ' +
-          'Results are kept only when they are filed at that namespace or under it, and a ' +
-          'wildcard cannot be checked that way — so it is refused rather than matching nothing. ' +
-          'Name the namespace exactly.',
-      );
-    }
-    if (namespaceScope !== undefined) assertSearchWithinScope(namespace, namespaceScope);
+    const namespace = this.namespaceFor(identity, scope, options.namespaceScope);
     const page = await this.client.retrieveRecords({
       memoryId: this.memoryId,
       namespace,

@@ -656,11 +656,29 @@ namespace.
 **Reads follow the same rule as writes.** A scope that filed one tenant's
 records must never let a later read see another's, so the search gets the same
 scope (`SearchOptions.namespaceScope`) and `searchNamespace` is handed it. Build
-the namespace from it — `({ namespaceScope }) => '/tenants/' +
-namespaceScope?.tenantid + '/facts'` — one variable per path segment: a search
-whose namespace does not hold every scope value as a segment of its own is
-refused, naming the variable. `namespaceScope` is allowed on a `readOnly: true`
-memory, which is how the records AgentCore extracted are read back.
+the namespace from it, one variable per path segment, and keep the person in it:
+
+```ts
+// The strategy's namespace template on the memory resource:
+//   /tenants/{tenantid}/actors/{actorId}/facts
+searchNamespace: ({ actorId, namespaceScope }) =>
+  `/tenants/${namespaceScope?.tenantid}/actors/${actorId}/facts`,
+```
+
+The store checks this by rendering, not by looking: it asks `searchNamespace`
+again with canary values, and refuses — naming the variable — a namespace that
+ignores the scope, puts a variable inside a segment, or only happens to contain
+a value. A namespace that stops at the tenant is refused for an identity that
+names a principal: AgentCore's extracted facts and preferences are personal, and
+a tenant-wide namespace would serve Ada's to Bob. Set `searchAcrossPrincipals:
+true` on the store only for a memory the whole tenant shares on purpose.
+
+For a multi-tenant deployment, build the store with `requireNamespaceScope:
+true`: a memory, a `defineRAG` or a direct call that forgot its scope is then
+refused by name instead of reading or filing under a namespace no tenant owns.
+`namespaceScope` is allowed on a `readOnly: true` memory, which is how the
+records AgentCore extracted are read back, and refused beside `corpus`, whose
+memory runs under the corpus identity rather than the person's.
 
 …or per write, on the port: `store.put(identity, entry, { extraction: 'skip' })`
 (also `putMany` and `putIfVersion`).

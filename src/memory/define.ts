@@ -102,10 +102,12 @@ import type { MemoryDefinition, ReadonlyMemoryFlowChart } from './define.types.j
 export function defineMemory(options: DefineMemoryOptions): MemoryDefinition {
   validate(options);
 
-  // The write options ride every write the PIPELINE makes, so the pipeline is
-  // built over the store with them bound. The definition still carries the
-  // caller's own store (below): reads are identical, and the turn anchor keeps
-  // deduplicating by reference.
+  // The write options and the scope ride every write AND search the PIPELINE
+  // makes, so the pipeline is built over the store with them bound. The
+  // definition still carries the caller's own store (below), unbound, so the
+  // turn anchor keeps deduplicating by reference — a direct call on
+  // `definition.store` carries no scope (a store built with
+  // `requireNamespaceScope` refuses it).
   const pipeline = buildPipeline(withBoundWrites(options));
 
   // The declared-requirements backstop (9.5.0), deliberately AFTER the
@@ -193,6 +195,14 @@ function validate(options: DefineMemoryOptions): void {
       `defineMemory[id=${options.id}]: \`writeOptions\` cannot be combined with ` +
         '`readOnly: true` — a read-only memory compiles no write half, so there is no ' +
         'write to apply them to. Drop one of the two (`namespaceScope` scopes reads too).',
+    );
+  }
+  if (options.namespaceScope !== undefined && options.corpus !== undefined) {
+    throw new Error(
+      `defineMemory[id=${options.id}]: \`namespaceScope\` cannot be combined with ` +
+        '`corpus` — a corpus memory runs under the corpus identity, not the run’s, so a ' +
+        'per-identity scope would be resolved for the corpus and never for the person. Scope ' +
+        'a corpus by its own identity, or drop one of the two.',
     );
   }
   const bound = boundOptionsOf(options);

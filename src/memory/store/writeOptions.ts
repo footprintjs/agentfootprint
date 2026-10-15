@@ -339,7 +339,9 @@ function boundScope(
       : config.namespaceScope;
   assertScopeShape(scope);
   assertNonEmptyScope(scope, what);
-  return scope;
+  // A frozen copy: the scope that was checked is the scope every store sees,
+  // even if the resolver hands back an object it goes on to reuse.
+  return Object.freeze({ ...scope });
 }
 
 function assertExtraction(value: unknown): void {
@@ -382,5 +384,9 @@ function isStringRecord(value: unknown): value is Readonly<Record<string, string
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
   const proto = Object.getPrototypeOf(value) as unknown;
   if (proto !== Object.prototype && proto !== null) return false;
-  return Object.values(value).every((v) => typeof v === 'string');
+  // Data properties only: a getter could answer the check one value and the
+  // store another.
+  return Object.values(Object.getOwnPropertyDescriptors(value)).every(
+    (d) => 'value' in d && typeof d.value === 'string',
+  );
 }

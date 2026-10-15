@@ -52,6 +52,12 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
   const store = new AgentCoreStore({
     memoryId: 'arn:aws:bedrock-agentcore:us-west-2:000000000000:memory/demo',
     client: standInClient(created), // ← drop this line and pass `region` for the real service
+    // Multi-tenant: every memory on this store must be scoped; a forgotten one is refused.
+    requireNamespaceScope: true,
+    // Searches read this tenant's records for this person — the strategy's
+    // namespace template on the memory is /tenants/{tenantid}/actors/{actorId}/facts.
+    searchNamespace: ({ actorId, namespaceScope }) =>
+      `/tenants/${namespaceScope?.['tenantid'] ?? ''}/actors/${actorId}/facts`,
   });
 
   const memory = defineMemory({

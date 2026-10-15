@@ -939,6 +939,8 @@ describe('memory write options — search never reads a neighbouring namespace',
       memoryId: 'mem-1',
       _sdk: sdk.module,
       searchNamespace: () => '/actors/a/sessions/s',
+      // This case is about the SDK's `namespaces` field, not about actors.
+      searchAcrossPrincipals: true,
     });
     const found = await store.search(IDENTITY, [0], { text: 'q' });
     expect(found.map((f) => f.entry.id)).toEqual(['r-1']);

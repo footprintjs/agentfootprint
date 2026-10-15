@@ -65,13 +65,17 @@ variable name without quoting the value.
 identity, through the resolver `defineMemory({ namespaceScope })` binds; a write
 or search that brings its own is refused. `search()` gets the same scope
 (`SearchOptions.namespaceScope`, also handed to `searchNamespace`), is refused
-unless every scope value is a path segment of the namespace searched, and keeps
+unless rendering `searchNamespace` with canary values shows every scope value in
+a segment of its own, is refused for a principal when the namespace does not
+hold the identity's `actorId` (unless `searchAcrossPrincipals: true`), and keeps
 only records filed at or under that namespace (AgentCore's filter is a string
 prefix; `/tenants/v1` must not return `/tenants/v12`). When the namespace ends
 with `{actorId}`, a continuation starting with four uppercase hex digits is
 dropped — another actor's id can extend this one by whole segments
 (`bob@x.com.au` after `bob@x.com`) — and a namespace containing `*` is refused
-by name. An empty batch stays
+by name. `requireNamespaceScope: true` refuses any write or search with no scope
+— the setting for a multi-tenant store. The scope is read once into a frozen
+copy, so the value checked is the value sent. An empty batch stays
 a no-op, options or not (the port's law).
 
 ## Files
