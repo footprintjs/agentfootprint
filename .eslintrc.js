@@ -4,7 +4,14 @@ const DOOR = String.raw`/^(footprintjs|foottrace)(\/|$)/`;
 const NAMED_IMPORTS_ONLY =
   'Import footprintjs and foottrace names by name, never off a namespace object (`import * as`, `export * as`, `import()`, `require()`, `import x = require()`): a name read off a namespace can leave its door with no type error (footprintjs trace-extraction plan, E2).';
 
+const { layerZones } = require('./scripts/layering.config.cjs');
+
 module.exports = {
+  // Stop config resolution here. Without it, eslint walks UP the directory tree: a checkout
+  // nested inside another checkout of this repo (a worktree under .claude/worktrees/) loads
+  // BOTH copies of this file, and the `import` plugin, resolved from two node_modules, crashes
+  // every lint run with "Cannot redefine plugin".
+  root: true,
   env: {
     node: true,
     es2022: true,
@@ -14,12 +21,17 @@ module.exports = {
     ecmaVersion: 2022,
     sourceType: 'module',
   },
-  plugins: ['@typescript-eslint'],
+  plugins: ['@typescript-eslint', 'import'],
   extends: [
     'eslint:recommended',
     'plugin:@typescript-eslint/recommended',
     'prettier',
   ],
+  settings: {
+    // The checker's own resolution law (`layering.config.cjs` · `resolveRelative`), so the lint
+    // zones and `npm run check:layering` agree on which file every import names.
+    'import/resolver': { [require.resolve('./scripts/eslint-import-resolver.cjs')]: {} },
+  },
   rules: {
     '@typescript-eslint/no-var-requires': 'off',
     '@typescript-eslint/no-explicit-any': 'off',
@@ -89,6 +101,21 @@ module.exports = {
             `CallExpression[callee.name='require'][arguments.0.type='TemplateLiteral'][arguments.0.quasis.0.value.cooked=${DOOR}]`,
             `TSImportEqualsDeclaration > TSExternalModuleReference[expression.value=${DOOR}]`,
           ].map((selector) => ({ selector, message: NAMED_IMPORTS_ONLY })),
+        ],
+      },
+    },
+    {
+      // THE FENCE (src only — tests import whatever they test). The layer table lives in
+      // scripts/layering.config.cjs; `layerZones` turns it into zones, so the table has one
+      // owner and `npm run check:layering` reads the same one: a file imports only its own
+      // layer or below. This rule cannot tell `import type` from a runtime import, so the
+      // upward type-only imports named in TYPE_ONLY_ALLOWANCES are cut out of the zones; the
+      // checker keeps each one type-only and fails on any new one.
+      files: ['src/**/*.ts'],
+      rules: {
+        'import/no-restricted-paths': [
+          'error',
+          { basePath: __dirname, zones: layerZones(__dirname) },
         ],
       },
     },
