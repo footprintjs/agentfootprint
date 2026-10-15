@@ -63,7 +63,11 @@ the variables against AgentCore's documented domain before sending, refusing by
 variable name without quoting the value. `searchNamespace` receives the identity,
 so a search can be mapped to the same per-tenant namespace, and `search()` keeps
 only records filed at or under that namespace (AgentCore's filter is a string
-prefix; `/tenants/v1` must not return `/tenants/v12`). An empty batch stays
+prefix; `/tenants/v1` must not return `/tenants/v12`). When the namespace ends
+with `{actorId}`, a continuation starting with four uppercase hex digits is
+dropped — another actor's id can extend this one by whole segments
+(`bob@x.com.au` after `bob@x.com`) — and a namespace containing `*` is refused
+by name. An empty batch stays
 a no-op, options or not (the port's law).
 
 ## Files

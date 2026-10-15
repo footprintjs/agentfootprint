@@ -878,6 +878,14 @@ export class AgentCoreStore implements MemoryStore {
       sessionId: scope.sessionId,
       identity,
     });
+    if (namespace.includes('*')) {
+      throw new TypeError(
+        'AgentCoreStore.search(): `searchNamespace` returned a namespace containing `*`. ' +
+          'Results are kept only when they are filed at that namespace or under it, and a ' +
+          'wildcard cannot be checked that way — so it is refused rather than matching nothing. ' +
+          'Name the namespace exactly.',
+      );
+    }
     const page = await this.client.retrieveRecords({
       memoryId: this.memoryId,
       namespace,
@@ -892,8 +900,9 @@ export class AgentCoreStore implements MemoryStore {
       // provided prefix"), so `/tenants/v1` also returns `/tenants/v12`'s
       // records. Keep only what is filed AT the namespace asked for or under
       // it — and drop a record that names no namespace, which cannot be shown
-      // to belong here.
-      if (!filedUnder(record, namespace)) continue;
+      // to belong here, or that may be filed under ANOTHER actor (see
+      // `filedUnder`).
+      if (!filedUnder(record, namespace, scope.actorId)) continue;
       const score = record.score ?? 0;
       if (options.minScore !== undefined && score < options.minScore) continue;
       // AgentCore records carry no tier. A tier filter therefore excludes them
@@ -1178,16 +1187,31 @@ function createAgentCoreClient(
   };
 }
 
+/** What the start of another actor's id extending this one looks like. */
+const ACTOR_ESCAPE_AHEAD = /^[0-9A-F]{4}/;
+
 /**
  * Is `record` filed AT `asked` or under it? Compared on whole path segments —
  * trailing `/` ignored on both sides — because AgentCore's `namespace` filter is
  * a string prefix, and `/tenants/v1` must not admit `/tenants/v12`.
+ *
+ * One more case, because an actor id can hold a `/`: its escape is `/` + four
+ * hex digits (`bob@x.com` → `bob/0040x/002Ecom`), so another actor's id can
+ * EXTEND this one by whole segments (`bob@x.com.au` adds `/002Eau`). When the
+ * namespace asked for ends with this identity's `actorId`, a record filed under
+ * a continuation that starts with four uppercase hex digits may be that other
+ * actor's — and is dropped. A sub-namespace of your own that starts that way
+ * is dropped too (put a literal segment after `{actorId}`), never served across
+ * actors.
  */
-function filedUnder(record: AgentCoreMemoryRecord, asked: string): boolean {
+function filedUnder(record: AgentCoreMemoryRecord, asked: string, actorId: string): boolean {
   const base = asked.replace(/\/+$/, '');
+  const guardActor = base.endsWith(actorId);
   const filed = record.namespaces ?? (record.namespace !== undefined ? [record.namespace] : []);
   return filed.some((ns) => {
     const n = ns.replace(/\/+$/, '');
-    return n === base || n.startsWith(`${base}/`);
+    if (n === base) return true;
+    if (!n.startsWith(`${base}/`)) return false;
+    return !(guardActor && ACTOR_ESCAPE_AHEAD.test(n.slice(base.length + 1)));
   });
 }

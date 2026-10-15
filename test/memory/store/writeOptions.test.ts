@@ -33,6 +33,7 @@ import {
   type MemoryWriteOptions,
   type MemoryWriteOptionsConfig,
 } from '../../../src/memory/store/index.js';
+import { bindWriteOptions } from '../../../src/memory/store/writeOptions.js';
 import { mockEmbedder } from '../../../src/memory/embedding/index.js';
 import { defineMemory, MEMORY_STRATEGIES, MEMORY_TYPES } from '../../../src/memory/index.js';
 import { Agent } from '../../../src/index.js';
@@ -697,6 +698,26 @@ describe('memory write options — the store defineMemory binds', () => {
     }
   });
 
+  it('a refused scope is a REJECTED promise from every bound write — never a synchronous throw', async () => {
+    const store = new RecordingStore();
+    const bound = bindWriteOptions(store, {
+      namespaceScope: () => ({} as Record<string, string>),
+    });
+    const writes = [
+      () => bound.put(IDENTITY, entry('a')),
+      () => bound.putMany(IDENTITY, [entry('b')]),
+      () => bound.putIfVersion(IDENTITY, entry('c'), 0),
+    ];
+    for (const write of writes) {
+      let pending: Promise<unknown> | undefined;
+      expect(() => {
+        pending = write();
+      }).not.toThrow();
+      await expect(pending).rejects.toThrow(/namespaceScope/);
+    }
+    expect(store.asked).toEqual([]);
+  });
+
   it('a fixed scope that is empty or malformed is refused at definition', () => {
     const store = new RecordingStore();
     expect(() => memoryOf(store, { namespaceScope: {} })).toThrow(/EMPTY/);
@@ -815,6 +836,75 @@ describe('memory write options — search never reads a neighbouring namespace',
     expect(asked).toEqual(['/tenants/v1']);
     // Tenant 12's record matched AgentCore's prefix — and is not handed to tenant 1.
     expect(found.map((f) => f.entry.id).sort()).toEqual(['mine', 'mine-root']);
+  });
+
+  /** A client that files records where told and answers as AgentCore does: by prefix. */
+  function prefixClient() {
+    const asked: string[] = [];
+    const filed: {
+      memoryRecordId: string;
+      content: string;
+      score: number;
+      namespaces: string[];
+    }[] = [];
+    const client: AgentCoreLikeClient = {
+      createEvent: async () => undefined,
+      listEvents: async () => ({ events: [] }),
+      deleteEvent: async () => undefined,
+      retrieveRecords: async ({ namespace }) => {
+        asked.push(namespace);
+        return { records: filed.filter((r) => r.namespaces.some((n) => n.startsWith(namespace))) };
+      },
+    };
+    return { client, asked, filed };
+  }
+
+  it('an actor whose id EXTENDS another’s is never served to it (bob@x.com / bob@x.com.au)', async () => {
+    const { client, asked, filed } = prefixClient();
+    const store = new AgentCoreStore({
+      memoryId: 'mem-1',
+      client,
+      // The documented shape that ends at the actor.
+      searchNamespace: ({ actorId }) => `/strategies/semantic/actors/${actorId}`,
+    });
+    const bob: MemoryIdentity = { tenant: 't', principal: 'bob@x.com', conversationId: 'c' };
+    const bobAu: MemoryIdentity = { tenant: 't', principal: 'bob@x.com.au', conversationId: 'c' };
+    // Where each actor's records are filed: the namespace each one searches.
+    await store.search(bob, [0], { text: 'q' });
+    await store.search(bobAu, [0], { text: 'q' });
+    const [bobNs = '', auNs = ''] = asked;
+    // The precondition: one actor's namespace is a WHOLE-SEGMENT prefix of the other's.
+    expect(auNs.startsWith(`${bobNs}/`)).toBe(true);
+    filed.push(
+      { memoryRecordId: 'bob', content: 'bob', score: 0.5, namespaces: [bobNs] },
+      {
+        memoryRecordId: 'bob-s',
+        content: 'bob s',
+        score: 0.4,
+        namespaces: [`${bobNs}/sessions/c`],
+      },
+      { memoryRecordId: 'au', content: 'au', score: 0.9, namespaces: [auNs] },
+      { memoryRecordId: 'au-s', content: 'au s', score: 0.8, namespaces: [`${auNs}/sessions/c`] },
+    );
+    const forBob = await store.search(bob, [0], { text: 'q' });
+    const forAu = await store.search(bobAu, [0], { text: 'q' });
+    // AgentCore handed bob all four; only his own two reach him.
+    expect(forBob.map((f) => f.entry.id).sort()).toEqual(['bob', 'bob-s']);
+    expect(forAu.map((f) => f.entry.id).sort()).toEqual(['au', 'au-s']);
+  });
+
+  it('a `*` in the namespace is refused by name — a wildcard cannot be checked for ownership', async () => {
+    const { client, asked } = prefixClient();
+    const store = new AgentCoreStore({
+      memoryId: 'mem-1',
+      client,
+      searchNamespace: () => '/strategies/*/actors',
+    });
+    await expect(store.search({ conversationId: 'c' }, [0], { text: 'q' })).rejects.toThrow(
+      /containing `\*`/,
+    );
+    // Refused before anything was asked.
+    expect(asked).toEqual([]);
   });
 
   it('the built-in client reads the SDK’s `namespaces` array', async () => {

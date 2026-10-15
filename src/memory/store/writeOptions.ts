@@ -244,9 +244,11 @@ export function bindWriteOptions(
     ...(store.ranksBy !== undefined && { ranksBy: store.ranksBy }),
     ...(store.writeOptions !== undefined && { writeOptions: store.writeOptions }),
     get: <T>(identity: MemoryIdentity, id: string) => store.get<T>(identity, id),
-    put: <T>(identity: MemoryIdentity, entry: MemoryEntry<T>, own?: MemoryWriteOptions) =>
+    // `async`, so a refused scope is a rejected promise, as the port promises —
+    // never a synchronous throw from a method the caller awaits.
+    put: async <T>(identity: MemoryIdentity, entry: MemoryEntry<T>, own?: MemoryWriteOptions) =>
       store.put(identity, entry, resolve(identity, own)),
-    putMany: <T>(
+    putMany: async <T>(
       identity: MemoryIdentity,
       entries: readonly MemoryEntry<T>[],
       own?: MemoryWriteOptions,
@@ -255,7 +257,7 @@ export function bindWriteOptions(
       entries.length === 0
         ? store.putMany(identity, entries)
         : store.putMany(identity, entries, resolve(identity, own)),
-    putIfVersion: <T>(
+    putIfVersion: async <T>(
       identity: MemoryIdentity,
       entry: MemoryEntry<T>,
       expectedVersion: number,

@@ -255,7 +255,7 @@ namespaces on the Memory resource, and two options steer `search()` at them:
 
 | Option | What it is | Default |
 |---|---|---|
-| `searchNamespace({ actorId, sessionId })` | Where `search()` looks — a **function**, because the namespace usually contains the actor. Commonly shaped like `/strategies/{strategyId}/actors/{actorId}` | `/actors/{actorId}/sessions/{sessionId}` — the session's own records |
+| `searchNamespace({ actorId, sessionId, identity })` | Where `search()` looks — a **function**, because the namespace usually contains the actor. Commonly shaped like `/strategies/{strategyId}/actors/{actorId}` | `/actors/{actorId}/sessions/{sessionId}` — the session's own records |
 | `searchStrategyId` | Restrict `search()` to **one** extraction strategy. Omit to search across all of them | omitted |
 
 Both are **opaque**: they reach AgentCore's own side as a filter, and this
@@ -684,6 +684,16 @@ sides, or the search reads a namespace nothing was filed in. AgentCore matches
 `namespace` as a string PREFIX, so `search()` keeps only records filed at that
 namespace or under it, on whole path segments (`/tenants/v1` never returns
 `/tenants/v12`), and drops a record that reports no namespace.
+
+Two more cases are refused rather than guessed. An actor id can contain `/` (its
+escape is `/` plus four hex digits), so `bob@x.com.au`'s id extends
+`bob@x.com`'s by whole segments; when the namespace you search ends with
+`{actorId}`, a record filed under a continuation that starts with four
+uppercase hex digits is dropped, because it may be that other actor's. Keep your
+own sub-namespaces under a literal segment (`/actors/{actorId}/sessions/…`), and
+they are unaffected. And a namespace containing `*` is refused by name: a
+wildcard cannot be checked for ownership, and matching nothing would look like
+an empty memory.
 
 `AgentCoreStore` declares the options only when they can reach AgentCore intact:
 an injected `AgentCoreLikeClient` must say `forwardsWriteOptions: true`, and the
