@@ -1420,6 +1420,7 @@
       "UnreadableIndexFileError",
       "UnreadableMemoryEntryError",
       "UnsupportedMemoryWriteOptionError",
+      "agentCoreNamespaceValue",
       "approximateTokenCounter",
       "asConfidence",
       "asImportance",

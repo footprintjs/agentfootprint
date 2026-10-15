@@ -29,6 +29,11 @@
  * Absence of the declaration means "honours none" — the opposite of the
  * `supportsVectorSearch` default — because there an undeclared store changes
  * nothing, and here an undeclared store would quietly drop what was asked.
+ *
+ * One limit, stated: a store written before this existed ignores a third
+ * argument it never knew about. `defineMemory` checks the declaration before
+ * it ever passes one; a caller passing options to `put` directly should check
+ * `store.writeOptions` the same way (`refuseUnhonouredWriteOptions`).
  */
 import type { MemoryEntry } from '../entry/index.js';
 import type { MemoryIdentity } from '../identity/index.js';
@@ -65,19 +70,20 @@ export const MEMORY_WRITE_OPTION_NAMES: readonly MemoryWriteOptionName[] = [
 
 /**
  * The reason a store with NO server-side extraction gives — the shared
- * sentence, so every such store refuses in the same words.
+ * sentence, so every such store refuses in the same words, remedy included.
  */
 export const NO_SERVER_EXTRACTION =
   'it keeps exactly the entries it is given and derives no long-term records from ' +
   'them — there is no extraction to skip and no derived namespace to scope (its ' +
-  'tenant boundary is the identity tuple)';
+  'tenant boundary is the identity tuple). Leave the option off for this store, or ' +
+  'use a store that declares it in `writeOptions`';
 
 /**
  * Thrown when a write asks for an option the store does not honour.
  *
  * Carries the store and the option by name; never a value — a namespace scope
  * names a tenant, and an error message is the one place a tenant id must not
- * travel.
+ * travel. The remedy is in the store's own reason.
  */
 export class UnsupportedMemoryWriteOptionError extends Error {
   readonly code = 'ERR_UNSUPPORTED_MEMORY_WRITE_OPTION' as const;
@@ -90,8 +96,7 @@ export class UnsupportedMemoryWriteOptionError extends Error {
     super(
       `[memory] ${store} cannot honour the write option \`${option}\`: ${why}. It is ` +
         'refused rather than ignored — a write that dropped it would look exactly like one ' +
-        'that honoured it. A store that declares it in `writeOptions` can take it ' +
-        '(AgentCoreStore honours both); for this store, leave the option off.',
+        'that honoured it.',
     );
     this.name = 'UnsupportedMemoryWriteOptionError';
     this.store = store;
@@ -110,25 +115,11 @@ export function requestedWriteOptions(options?: MemoryWriteOptions): MemoryWrite
   if (options === undefined || options === null) return [];
   const asked: MemoryWriteOptionName[] = [];
   if (options.extraction !== undefined) {
-    if (options.extraction !== 'skip') {
-      throw new TypeError(
-        "[memory] the write option `extraction` takes one value, 'skip' — got " +
-          `${
-            typeof options.extraction === 'string'
-              ? JSON.stringify(options.extraction)
-              : typeof options.extraction
-          }.`,
-      );
-    }
+    assertExtraction(options.extraction);
     asked.push('extraction');
   }
   if (options.namespaceScope !== undefined) {
-    if (!isStringRecord(options.namespaceScope)) {
-      throw new TypeError(
-        '[memory] the write option `namespaceScope` must be an object of string values ' +
-          '(variable name → value). The value given is not quoted here: it names a tenant.',
-      );
-    }
+    assertScopeShape(options.namespaceScope);
     if (Object.keys(options.namespaceScope).length > 0) asked.push('namespaceScope');
   }
   return asked;
@@ -142,7 +133,8 @@ export function requestedWriteOptions(options?: MemoryWriteOptions): MemoryWrite
  * @param store    the store's name, as the refusal should say it
  * @param honoured the store's own declaration (`MemoryStore.writeOptions`)
  * @param options  what this write asked for
- * @param why      why this store cannot honour what it does not declare
+ * @param why      why this store cannot honour what it does not declare, and
+ *                 what to do instead
  * @throws {UnsupportedMemoryWriteOptionError} for the first option not honoured
  */
 export function refuseUnhonouredWriteOptions(
@@ -168,9 +160,13 @@ export interface MemoryWriteOptionsConfig {
   /** `'skip'` keeps every write of this memory out of long-term extraction. */
   readonly extraction?: 'skip';
   /**
-   * The namespace scope of every write — a fixed one, or one computed from the
-   * identity the write is for (`(identity) => ({ tenantid: tenantSlug(identity.tenant) })`).
-   * Keep that function one-to-one; see {@link MemoryWriteOptions.namespaceScope}.
+   * The namespace scope of every write: one computed from the identity the
+   * write is for — `(identity) => ({ tenantid: … })`, the multi-tenant shape —
+   * or a fixed object, which is right only for a deployment that serves ONE
+   * tenant. Keep the function one-to-one (see
+   * {@link MemoryWriteOptions.namespaceScope}); a store may ship an encoder
+   * into its own alphabet (`agentCoreNamespaceValue` for AgentCore). A write
+   * whose scope comes back empty or malformed is refused, never sent without it.
    */
   readonly namespaceScope?:
     | Readonly<Record<string, string>>
@@ -179,10 +175,11 @@ export interface MemoryWriteOptionsConfig {
 
 /**
  * Refuse a memory's write options at DEFINITION time when its store does not
- * declare them — the first turn should not be where a configuration that can
- * never work is discovered.
+ * declare them, or when a fixed one is malformed — the first turn should not be
+ * where a configuration that can never work is discovered.
  *
  * @throws {UnsupportedMemoryWriteOptionError} naming the store and the option
+ * @throws {TypeError} for a malformed option
  */
 export function assertStoreHonours(
   store: MemoryStore,
@@ -191,17 +188,23 @@ export function assertStoreHonours(
 ): void {
   const asked: MemoryWriteOptionName[] = [];
   if (config.extraction !== undefined) {
-    requestedWriteOptions({ extraction: config.extraction });
+    assertExtraction(config.extraction);
     asked.push('extraction');
   }
-  if (config.namespaceScope !== undefined) asked.push('namespaceScope');
+  if (config.namespaceScope !== undefined) {
+    if (typeof config.namespaceScope !== 'function') {
+      assertScopeShape(config.namespaceScope);
+      assertNonEmptyScope(config.namespaceScope, caller);
+    }
+    asked.push('namespaceScope');
+  }
   for (const option of asked) {
     if (!(store.writeOptions ?? []).includes(option)) {
       throw new UnsupportedMemoryWriteOptionError(
         storeName(store),
         option,
         `it does not declare \`${option}\` in \`writeOptions\` (checked by ${caller}, before ` +
-          'any turn ran)',
+          'any turn ran). A store that declares it can take it; otherwise leave the option off',
       );
     }
   }
@@ -212,22 +215,26 @@ export function assertStoreHonours(
  *
  * Reads, declarations and everything else pass straight through, so the
  * pipeline cannot tell the difference — except that `put`, `putMany` and
- * `putIfVersion` now carry the options. An option a call passes itself wins
- * over the bound one.
+ * `putIfVersion` now carry the options. A call's own option overrides the
+ * bound one only where it asks for something: an `undefined` field or an empty
+ * scope never erases what the memory was configured with.
+ *
+ * @throws (at a write) a `TypeError` when the configured scope function returns
+ *   an empty or malformed scope — the write is refused rather than sent with
+ *   its derived records outside every tenant's namespace.
  */
 export function bindWriteOptions(
   store: MemoryStore,
   config: MemoryWriteOptionsConfig,
 ): MemoryStore {
   const resolve = (identity: MemoryIdentity, own?: MemoryWriteOptions): MemoryWriteOptions => {
-    const scope =
-      typeof config.namespaceScope === 'function'
-        ? config.namespaceScope(identity)
-        : config.namespaceScope;
+    const scope = boundScope(config, identity);
     return {
       ...(config.extraction !== undefined && { extraction: config.extraction }),
       ...(scope !== undefined && { namespaceScope: scope }),
-      ...own,
+      ...(own?.extraction !== undefined && { extraction: own.extraction }),
+      ...(own?.namespaceScope !== undefined &&
+        Object.keys(own.namespaceScope).length > 0 && { namespaceScope: own.namespaceScope }),
     };
   };
   const bound: MemoryStore = {
@@ -243,7 +250,11 @@ export function bindWriteOptions(
       identity: MemoryIdentity,
       entries: readonly MemoryEntry<T>[],
       own?: MemoryWriteOptions,
-    ) => store.putMany(identity, entries, resolve(identity, own)),
+    ) =>
+      // The port's empty-batch law: no write, so nothing to resolve or refuse.
+      entries.length === 0
+        ? store.putMany(identity, entries)
+        : store.putMany(identity, entries, resolve(identity, own)),
     putIfVersion: <T>(
       identity: MemoryIdentity,
       entry: MemoryEntry<T>,
@@ -271,13 +282,62 @@ export function bindWriteOptions(
   return bound;
 }
 
-/** The store's own name for a refusal — its class, or a generic word. */
-function storeName(store: MemoryStore): string {
-  const ctor = (store as { constructor?: { name?: string } }).constructor?.name;
-  return ctor !== undefined && ctor !== 'Object' && ctor !== '' ? ctor : 'this store';
+// ── Checks ─────────────────────────────────────────────────────────────
+
+/** The configured scope for this identity — present, plain, non-empty, or refused. */
+function boundScope(
+  config: MemoryWriteOptionsConfig,
+  identity: MemoryIdentity,
+): Readonly<Record<string, string>> | undefined {
+  if (config.namespaceScope === undefined) return undefined;
+  const scope =
+    typeof config.namespaceScope === 'function'
+      ? config.namespaceScope(identity)
+      : config.namespaceScope;
+  assertScopeShape(scope);
+  assertNonEmptyScope(scope, 'this write');
+  return scope;
 }
 
+function assertExtraction(value: unknown): void {
+  if (value !== 'skip') {
+    throw new TypeError(
+      "[memory] the write option `extraction` takes one value, 'skip' — got " +
+        `${typeof value === 'string' ? JSON.stringify(value) : typeof value}.`,
+    );
+  }
+}
+
+function assertScopeShape(value: unknown): asserts value is Readonly<Record<string, string>> {
+  if (!isStringRecord(value)) {
+    throw new TypeError(
+      '[memory] the write option `namespaceScope` must be a plain object of string values ' +
+        '(variable name → value). The value given is not quoted here: it names a tenant.',
+    );
+  }
+}
+
+function assertNonEmptyScope(scope: Readonly<Record<string, string>>, where: string): void {
+  if (Object.keys(scope).length === 0) {
+    throw new TypeError(
+      `[memory] the memory's \`namespaceScope\` came back EMPTY for ${where}. It is refused ` +
+        'rather than sent without one: a write with no scope files its derived records outside ' +
+        'every tenant’s namespace. Return the scope for every identity, or refuse the identity ' +
+        'yourself.',
+    );
+  }
+}
+
+/** The store's own name for a refusal — its class, or what the caller holds. */
+function storeName(store: MemoryStore): string {
+  const ctor = (store as { constructor?: { name?: string } }).constructor?.name;
+  return ctor !== undefined && ctor !== 'Object' && ctor !== '' ? ctor : 'the store you passed';
+}
+
+/** A PLAIN object (no class, no Map, no Promise) whose own values are all strings. */
 function isStringRecord(value: unknown): value is Readonly<Record<string, string>> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+  const proto = Object.getPrototypeOf(value) as unknown;
+  if (proto !== Object.prototype && proto !== null) return false;
   return Object.values(value).every((v) => typeof v === 'string');
 }

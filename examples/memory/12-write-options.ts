@@ -21,14 +21,16 @@
 import assert from 'node:assert/strict';
 import { Agent, type LLMProvider } from '../../src/index.js';
 import {
+  agentCoreNamespaceValue,
+  AgentCoreStore,
   defineMemory,
   InMemoryStore,
   MEMORY_STRATEGIES,
   MEMORY_TYPES,
   UnsupportedMemoryWriteOptionError,
+  type AgentCoreLikeClient,
 } from '../../src/doors/memory.js';
 import { mock } from '../../src/doors/providers.js';
-import { AgentCoreStore, type AgentCoreLikeClient } from '../../src/adapters/memory/agentcore.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {
@@ -48,7 +50,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
   // #region write-options
   const store = new AgentCoreStore({
     memoryId: 'arn:aws:bedrock-agentcore:us-west-2:000000000000:memory/demo',
-    _client: standInClient(created), // ← drop this line (and pass `region`) for the real service
+    client: standInClient(created), // ← drop this line and pass `region` for the real service
   });
 
   const memory = defineMemory({
@@ -57,9 +59,12 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
     strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 10 },
     store,
     writeOptions: {
+      // Keep these turns out of long-term extraction...
       extraction: 'skip',
-      // One namespace per tenant. Keep this mapping one-to-one.
-      namespaceScope: (identity) => ({ tenantid: identity.tenant ?? 'none' }),
+      // ...and file whatever IS derived under the tenant's own namespace:
+      // one-to-one into AgentCore's alphabet, and a missing tenant is refused,
+      // never folded into a shared stand-in.
+      namespaceScope: (identity) => ({ tenantid: agentCoreNamespaceValue(identity.tenant ?? '') }),
     },
   });
   // #endregion write-options
@@ -80,7 +85,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
   assert.ok(created.length >= 2);
   assert.ok(created.every((e) => e.extractionMode === 'SKIP'));
   const tenants = new Set(created.map((e) => e.extractionConfig?.namespaceVariables['tenantid']));
-  assert.deepEqual([...tenants].sort(), ['acme', 'globex']);
+  assert.deepEqual([...tenants].sort(), ['vacme_z', 'vglobex_z']);
 
   // A store with no extraction cannot honour them — refused by name, not ignored.
   let refusal = '';

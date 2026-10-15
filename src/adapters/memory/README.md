@@ -36,8 +36,9 @@ const memory = defineMemory({
   store: new AgentCoreStore({ memoryId, region: 'us-west-2' }),
   writeOptions: {
     extraction: 'skip',
-    // One namespace per tenant — keep the mapping one-to-one.
-    namespaceScope: (identity) => ({ tenantid: tenantSlug(identity.tenant) }),
+    // One namespace per tenant, one-to-one into AgentCore's alphabet; a
+    // missing tenant is refused, never folded into a shared stand-in.
+    namespaceScope: (identity) => ({ tenantid: agentCoreNamespaceValue(identity.tenant ?? '') }),
   },
 });
 // or per write, on the port:  store.put(identity, entry, { extraction: 'skip' })
@@ -53,9 +54,17 @@ The strategy per adapter:
 | `staticVectorStore` | refused — every write is | refused — every write is |
 | `BedrockAgentMemory` | no write port at all (Bedrock Agents owns the writes) | — |
 
-An injected `AgentCoreLikeClient` must declare `forwardsWriteOptions: true` —
-a client written before the fields existed would compile and drop them. An
-empty batch stays a no-op, options or not (the port's law).
+`AgentCoreStore` declares them only when they reach AgentCore intact: an
+injected `AgentCoreLikeClient` must declare `forwardsWriteOptions: true` (a
+client written before the fields existed would compile and drop them), and the
+installed SDK must model `extractionMode` / `extractionConfig` (read off its own
+`CreateEventInput$` schema — an older serializer drops them silently). It checks
+the variables against AgentCore's documented domain before sending, refusing by
+variable name without quoting the value. `searchNamespace` receives the identity,
+so a search can be mapped to the same per-tenant namespace, and `search()` keeps
+only records filed at or under that namespace (AgentCore's filter is a string
+prefix; `/tenants/v1` must not return `/tenants/v12`). An empty batch stays
+a no-op, options or not (the port's law).
 
 ## Files
 - `pgVector.ts`, `redis.ts`, `sqliteVector.ts`, `s3Vectors.ts` — durable stores.

@@ -635,23 +635,15 @@ belong to no vendor:
 | `extraction: 'skip'` | Store this entry, but derive nothing long-term from it — a turn that must not become a remembered fact, a scratch note |
 | `namespaceScope: { … }` | The values the service puts into the namespaces its **derived** records are filed under — usually one tenant's |
 
-Set them for every write a memory makes:
+Set them for every write a memory makes. The example runs offline against a
+stand-in AgentCore client; drop that line and pass `region` for the real service:
 
-```ts
-import { AgentCoreStore, defineMemory, MEMORY_STRATEGIES, MEMORY_TYPES } from 'agentfootprint/memory';
+<CodeFile path="examples/memory/12-write-options.ts" region="write-options" title="examples/memory/12-write-options.ts (region: write-options)" />
 
-const memory = defineMemory({
-  id: 'conversation',
-  type: MEMORY_TYPES.EPISODIC,
-  strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 10 },
-  store: new AgentCoreStore({ memoryId, region: 'us-west-2' }),
-  writeOptions: {
-    extraction: 'skip',
-    // One namespace per tenant, read from the identity each write is for.
-    namespaceScope: (identity) => ({ tenantid: tenantSlug(identity.tenant) }),
-  },
-});
-```
+A function of the identity is the multi-tenant shape: each write is filed under
+the tenant it is for. A fixed object (`namespaceScope: { tenantid: 'acme' }`) is
+right only for a deployment that serves one tenant. A scope that comes back empty
+or malformed for some identity refuses that write — it is never sent without one.
 
 …or per write, on the port: `store.put(identity, entry, { extraction: 'skip' })`
 (also `putMany` and `putIfVersion`).
@@ -673,12 +665,34 @@ with `UnsupportedMemoryWriteOptionError`, before writing anything — and
 | `staticVectorStore` | refused (every write is) | refused (every write is) |
 | `BedrockAgentMemory` | no write port | no write port |
 
-Keep the tenant → value mapping **one-to-one**. AgentCore accepts up to 5
-variables, keys like `[a-z][a-z0-9]*` and values like `[a-z0-9][a-z0-9-_]*`
-(≤ 64 characters) and refuses anything else with its own error; a mapping that
-lowercases or truncates tenant ids to fit would merge two tenants' namespaces.
-The namespace keys themselves are declared on the memory resource
-(`namespaceKeys`, used in each strategy's `namespaceTemplates`).
+Keep the tenant → value mapping **one-to-one**. AgentCore accepts at most 5
+variables, keys of 1–32 characters matching `[a-z][a-z0-9]*` and values of 1–64
+characters matching `[a-z0-9][a-z0-9-_]*`; `AgentCoreStore` checks that before
+sending and refuses by variable name — never quoting the value, which names a
+tenant. A mapping that lowercases or truncates tenant ids to fit would merge two
+tenants' namespaces, so use `agentCoreNamespaceValue(tenant)`: it is one-to-one
+into that alphabet (`'acme'` → `'vacme_z'`, `'Acme'` → `'v_0041cme_z'`), never makes
+one tenant's value the beginning of another's, refuses an empty value, and refuses
+rather than truncates one that will not fit. The keys
+themselves are declared on the memory resource (`namespaceKeys`, used in each
+strategy's `namespaceTemplates`).
+
+**Read with the same mapping.** `searchNamespace` is handed the identity too
+(`({ actorId, sessionId, identity }) => …`), so a search can look in the
+namespace the writes were filed under — map the tenant the same way on both
+sides, or the search reads a namespace nothing was filed in. AgentCore matches
+`namespace` as a string PREFIX, so `search()` keeps only records filed at that
+namespace or under it, on whole path segments (`/tenants/v1` never returns
+`/tenants/v12`), and drops a record that reports no namespace.
+
+`AgentCoreStore` declares the options only when they can reach AgentCore intact:
+an injected `AgentCoreLikeClient` must say `forwardsWriteOptions: true`, and the
+installed `@aws-sdk/client-bedrock-agentcore` must model `extractionMode` and
+`extractionConfig` (an older one's serializer would drop them without a word).
+Otherwise both are refused by name, with the fix. One limit, stated: a store
+written before this release ignores a third argument it never knew about —
+`defineMemory` checks `writeOptions` before passing any; check it yourself
+(`refuseUnhonouredWriteOptions`) when calling `put` directly.
 
 ## BedrockAgentMemory (legacy Bedrock Agents — read-only)
 

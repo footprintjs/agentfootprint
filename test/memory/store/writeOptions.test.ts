@@ -31,12 +31,15 @@ import {
   requestedWriteOptions,
   type MemoryStore,
   type MemoryWriteOptions,
+  type MemoryWriteOptionsConfig,
 } from '../../../src/memory/store/index.js';
+import { mockEmbedder } from '../../../src/memory/embedding/index.js';
 import { defineMemory, MEMORY_STRATEGIES, MEMORY_TYPES } from '../../../src/memory/index.js';
 import { Agent } from '../../../src/index.js';
 import { mock } from '../../../src/doors/providers.js';
 import {
   AgentCoreStore,
+  agentCoreNamespaceValue,
   type AgentCoreLikeClient,
 } from '../../../src/adapters/memory/agentcore.js';
 import { RedisStore, type RedisLikeClient } from '../../../src/adapters/memory/redis.js';
@@ -92,11 +95,76 @@ function untouchable(): { readonly value: never; readonly touched: string[] } {
 const tmp = mkdtempSync(join(tmpdir(), 'af-write-options-'));
 afterAll(() => rmSync(tmp, { recursive: true, force: true }));
 
-/** The AgentCore fake SDK, recording every command. */
-function agentCoreSdk() {
+/**
+ * The SDK's own schema of `CreateEventInput`, laid out as 3.1152.0 ships it —
+ * what the store reads to learn that this SDK MODELS the extraction fields.
+ */
+const CREATE_EVENT_INPUT_SCHEMA = [
+  3,
+  'com.amazonaws.bedrockagentcore',
+  'CreateEventInput',
+  0,
+  [
+    'memoryId',
+    'actorId',
+    'eventTimestamp',
+    'payload',
+    'sessionId',
+    'branch',
+    'clientToken',
+    'metadata',
+    'extractionMode',
+    'extractionConfig',
+  ],
+];
+
+/**
+ * The AgentCore fake SDK, recording every command. `models: false` is an SDK
+ * too old to model the extraction fields — its serializer would drop them.
+ */
+function agentCoreSdk(models = true) {
   const row = AWS_COMMAND_PINS.find((p) => p.adapter === 'AgentCoreStore');
   if (!row) throw new Error('no AgentCoreStore pin');
-  return fakeSdk(row, { ListEventsCommand: { events: [] } });
+  const sdk = fakeSdk(row, { ListEventsCommand: { events: [] } });
+  return models
+    ? { ...sdk, module: { ...sdk.module, CreateEventInput$: CREATE_EVENT_INPUT_SCHEMA } }
+    : sdk;
+}
+
+/**
+ * A store that HONOURS both options and records what each write asked for —
+ * the instrument for "every pipeline write carries them". Writes land in the
+ * InMemoryStore underneath, without the options it would refuse.
+ */
+class RecordingStore extends InMemoryStore {
+  readonly writeOptions = ['extraction', 'namespaceScope'] as const;
+  readonly asked: (MemoryWriteOptions | undefined)[] = [];
+
+  override async put<T = unknown>(
+    identity: MemoryIdentity,
+    e: MemoryEntry<T>,
+    options?: MemoryWriteOptions,
+  ): Promise<void> {
+    this.asked.push(options);
+    return super.put(identity, e);
+  }
+  override async putMany<T = unknown>(
+    identity: MemoryIdentity,
+    entries: readonly MemoryEntry<T>[],
+    options?: MemoryWriteOptions,
+  ): Promise<void> {
+    if (entries.length > 0) this.asked.push(options);
+    return super.putMany(identity, entries);
+  }
+  override async putIfVersion<T = unknown>(
+    identity: MemoryIdentity,
+    e: MemoryEntry<T>,
+    expectedVersion: number,
+    options?: MemoryWriteOptions,
+  ) {
+    this.asked.push(options);
+    return super.putIfVersion(identity, e, expectedVersion);
+  }
 }
 
 // ─── P1 Unit ─────────────────────────────────────────────────────────
@@ -157,8 +225,18 @@ describe('memory write options — P2 every shipped store honours or refuses BY 
   const bank = untouchable();
 
   /** Each store, with fakes that record any I/O at all. */
-  const stores: Record<string, { store: () => MemoryStore; touched: () => string[] }> = {
-    InMemoryStore: { store: () => new InMemoryStore(), touched: () => [] },
+  /** For the two stores with no fake to watch, "nothing written" is read back. */
+  const readsEmpty = async (s: MemoryStore) => (await s.list(IDENTITY)).entries.length === 0;
+
+  const stores: Record<
+    string,
+    {
+      store: () => MemoryStore;
+      touched: () => string[];
+      empty?: (s: MemoryStore) => Promise<boolean>;
+    }
+  > = {
+    InMemoryStore: { store: () => new InMemoryStore(), touched: () => [], empty: readsEmpty },
     RedisStore: {
       store: () => new RedisStore({ _client: redis.value as RedisLikeClient }),
       touched: () => redis.touched,
@@ -168,8 +246,9 @@ describe('memory write options — P2 every shipped store honours or refuses BY 
       touched: () => pg.touched,
     },
     sqliteVectorStore: {
-      store: () => sqliteVectorStore({ file: join(tmp, 'refusals.db') }),
+      store: () => sqliteVectorStore({ file: join(tmp, `refusals-${Math.random()}.db`) }),
       touched: () => [],
+      empty: readsEmpty,
     },
     s3VectorsStore: {
       store: () => s3VectorsStore({ bucket: 'b', index: 'i', _client: s3.value, _sdk: s3.value }),
@@ -192,7 +271,7 @@ describe('memory write options — P2 every shipped store honours or refuses BY 
     namespaceScope: { namespaceScope: { tenantid: TENANT_VALUE } },
   };
 
-  for (const [name, { store, touched }] of Object.entries(stores)) {
+  for (const [name, { store, touched, empty }] of Object.entries(stores)) {
     for (const [label, options] of Object.entries(ASKS)) {
       it(`P2 ${name} refuses ${label} on put / putMany / putIfVersion, writing nothing`, async () => {
         const s = store();
@@ -206,6 +285,7 @@ describe('memory write options — P2 every shipped store honours or refuses BY 
         // compare-and-set at all, refused for THAT (still never a write).
         await expect(s.putIfVersion(IDENTITY, entry('c', [1, 0]), 0, options)).rejects.toThrow();
         expect(touched()).toEqual([]);
+        if (empty !== undefined) expect(await empty(s)).toBe(true);
         // And it declares none, so `defineMemory` refuses before any turn too.
         expect(s.writeOptions ?? []).toEqual([]);
       });
@@ -286,7 +366,10 @@ describe('memory write options — P3 AgentCoreStore through the SDK', () => {
       store,
       writeOptions: {
         extraction: 'skip',
-        namespaceScope: (identity) => ({ tenantid: `t-${identity.tenant ?? 'none'}` }),
+        // One-to-one into AgentCore's alphabet; an absent tenant is refused, not folded.
+        namespaceScope: (identity) => ({
+          tenantid: agentCoreNamespaceValue(identity.tenant ?? ''),
+        }),
       },
     });
     // The definition still carries the caller's own store.
@@ -313,27 +396,32 @@ describe('memory write options — P3 AgentCoreStore through the SDK', () => {
         (c.input['extractionConfig'] as { namespaceVariables: { tenantid: string } })
           .namespaceVariables.tenantid,
     );
-    expect(new Set(scopes)).toEqual(new Set(['t-acme', 't-globex']));
+    expect(new Set(scopes)).toEqual(new Set(['vacme_z', 'vglobex_z']));
     // Each tenant's events went to that tenant's actor — the two never mix.
     for (const c of creates) {
       const tenant = (c.input['extractionConfig'] as { namespaceVariables: { tenantid: string } })
         .namespaceVariables.tenantid;
-      expect(String(c.input['actorId'])).toContain(tenant.slice(2));
+      expect(String(c.input['actorId'])).toContain(tenant.slice(1, -2));
     }
   });
 });
 
 // ─── P4 Property ─────────────────────────────────────────────────────
 
-describe('memory write options — P4 property', () => {
-  const CASES: readonly (MemoryWriteOptions | undefined)[] = [
-    undefined,
+describe('memory write options — P4 property (every combination of every field state)', () => {
+  // The whole domain, not a sample: each field absent, explicitly undefined, or
+  // each value it can take — so "exactly the fields asked" is checked everywhere.
+  const EXTRACTION = [{}, { extraction: undefined }, { extraction: 'skip' as const }];
+  const SCOPE = [
     {},
-    { extraction: 'skip' },
-    { namespaceScope: { tenantid: 'a' } },
+    { namespaceScope: undefined },
     { namespaceScope: {} },
-    { extraction: 'skip', namespaceScope: { tenantid: 'a', regionid: 'eu' } },
-    { extraction: undefined, namespaceScope: undefined },
+    { namespaceScope: { tenantid: 'a' } },
+    { namespaceScope: { tenantid: 'a', regionid: 'eu' } },
+  ];
+  const CASES: (MemoryWriteOptions | undefined)[] = [
+    undefined,
+    ...EXTRACTION.flatMap((e) => SCOPE.map((sc) => ({ ...e, ...sc } as MemoryWriteOptions))),
   ];
 
   it.each(CASES.map((c) => [JSON.stringify(c ?? null), c] as const))(
@@ -351,6 +439,51 @@ describe('memory write options — P4 property', () => {
       }
     },
   );
+
+  it('P4 agentCoreNamespaceValue is one-to-one, and always in AgentCore’s alphabet', () => {
+    // The pairs a lossy mapping folds: case, punctuation, the escape itself,
+    // a value that looks escaped, an astral character, and a lone surrogate.
+    const inputs = [
+      'acme',
+      'Acme',
+      'ACME',
+      'a.b',
+      'ab',
+      'a/b',
+      'a_b',
+      'a-b',
+      'a b',
+      '_',
+      '-',
+      '0',
+      'v',
+      'vacme',
+      '_0041cme',
+      'Ünïcode',
+      '😀',
+      '\ud800',
+      'none',
+      '1',
+      '12',
+      'acme-eu',
+      'x'.repeat(61),
+    ];
+    const outputs = inputs.map((raw) => agentCoreNamespaceValue(raw));
+    expect(new Set(outputs).size).toBe(inputs.length);
+    for (const out of outputs) expect(out).toMatch(/^[a-z0-9][a-z0-9_-]{0,63}$/);
+    // Prefix-free: no tenant's value is the beginning of another's — so a
+    // prefix match over namespaces (AgentCore's `namespace` filter) cannot
+    // reach a neighbour ('1' vs '12', 'acme' vs 'acme-eu').
+    for (const a of outputs) {
+      for (const b of outputs)
+        if (a !== b) expect(b.startsWith(a), `${a} prefixes ${b}`).toBe(false);
+    }
+    expect(agentCoreNamespaceValue('acme')).toBe('vacme_z');
+    expect(agentCoreNamespaceValue('Acme')).toBe('v_0041cme_z');
+    // Refused, never folded: an absent tenant, and one too long to fit.
+    expect(() => agentCoreNamespaceValue('')).toThrow(TypeError);
+    expect(() => agentCoreNamespaceValue('x'.repeat(62))).toThrow(RangeError);
+  });
 });
 
 // ─── P5 Security ─────────────────────────────────────────────────────
@@ -451,5 +584,267 @@ describe('memory write options — P7 ROI', () => {
     await declared.put(IDENTITY, entry('b'), { extraction: 'skip' });
     expect(created).toHaveLength(1);
     expect((created[0] as { extractionMode?: string }).extractionMode).toBe('SKIP');
+  });
+});
+
+// ─── P2/P5 AgentCore: what can never reach the service ──────────────
+
+describe('memory write options — AgentCore refuses what could not reach AgentCore intact', () => {
+  it('an SDK too old to MODEL the fields: the store declares none and refuses by name', async () => {
+    const sdk = agentCoreSdk(false);
+    const store = new AgentCoreStore({ memoryId: 'mem-1', _sdk: sdk.module });
+    // Its serializer would drop both fields without a word — so neither is declared...
+    expect(store.writeOptions).toBeUndefined();
+    // ...and a write that asks is refused, naming the fix, before anything is sent.
+    await expect(store.put(IDENTITY, entry('a'), { extraction: 'skip' })).rejects.toThrow(
+      /does not model CreateEvent's `extractionMode`.*Upgrade the SDK/s,
+    );
+    expect(sdk.sent).toEqual([]);
+    // defineMemory says so before any turn runs.
+    expect(() =>
+      defineMemory({
+        id: 'm',
+        type: MEMORY_TYPES.EPISODIC,
+        strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 5 },
+        store,
+        writeOptions: { extraction: 'skip' },
+      }),
+    ).toThrow(UnsupportedMemoryWriteOptionError);
+  });
+
+  it('namespace variables outside AgentCore’s domain are refused by rule, never quoted', async () => {
+    const sdk = agentCoreSdk();
+    const store = new AgentCoreStore({ memoryId: 'mem-1', _sdk: sdk.module });
+    const refusal = async (scope: Record<string, string>) => {
+      try {
+        await store.put(IDENTITY, entry('a'), { namespaceScope: scope });
+      } catch (err) {
+        return (err as Error).message;
+      }
+      return 'no refusal';
+    };
+    const upper = await refusal({ tenantid: 'Tenant-ACME-Secret' });
+    expect(upper).toMatch(/not one AgentCore admits/);
+    expect(upper).not.toContain('Tenant-ACME-Secret');
+    expect(await refusal({ TenantId: 'acme' })).toMatch(/variable name "TenantId"/);
+    expect(await refusal({ a: 'x', b: 'x', c: 'x', d: 'x', e: 'x', f: 'x' })).toMatch(/at most 5/);
+    expect(await refusal({ tenantid: 'x'.repeat(65) })).toMatch(/1–64 characters/);
+    // None of them reached the service.
+    expect(sdk.sent).toEqual([]);
+    // The encoder's output is always admitted.
+    await store.put(IDENTITY, entry('b'), {
+      namespaceScope: { tenantid: agentCoreNamespaceValue('Tenant-ACME') },
+    });
+    expect(sdk.sent).toHaveLength(1);
+  });
+
+  it('a refusal for a custom client names ITS fix — no contradictory advice', async () => {
+    const client: AgentCoreLikeClient = {
+      createEvent: async () => undefined,
+      listEvents: async () => ({ events: [] }),
+      deleteEvent: async () => undefined,
+    };
+    const store = new AgentCoreStore({ memoryId: 'mem-1', client });
+    let message = '';
+    try {
+      await store.put(IDENTITY, entry('a'), { extraction: 'skip' });
+    } catch (err) {
+      message = (err as Error).message;
+    }
+    expect(message).toMatch(/Declare it on the client/);
+    expect(message).not.toMatch(/leave the option off/);
+  });
+
+  it('a wrapper made by spreading the store does not inherit the declaration', () => {
+    const store = new AgentCoreStore({ memoryId: 'mem-1', _sdk: agentCoreSdk().module });
+    expect(store.writeOptions).toEqual(['extraction', 'namespaceScope']);
+    // `{ ...store, put }` copies own fields only — and a wrapper that does not
+    // forward the third argument must not claim to honour it.
+    const wrapped = { ...store } as unknown as MemoryStore;
+    expect(wrapped.writeOptions).toBeUndefined();
+  });
+});
+
+// ─── P2 The bound store (`defineMemory({ writeOptions })`) ───────────
+
+describe('memory write options — the store defineMemory binds', () => {
+  const memoryOf = (store: MemoryStore, writeOptions: MemoryWriteOptionsConfig) =>
+    defineMemory({
+      id: 'm',
+      type: MEMORY_TYPES.EPISODIC,
+      strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 5 },
+      store,
+      writeOptions,
+    });
+
+  /** Run one turn through an agent holding `memory`; return what the store recorded. */
+  async function oneTurn(memory: ReturnType<typeof defineMemory>, message = 'hi') {
+    const agent = Agent.create({ provider: mock({ reply: 'ok' }), model: 'mock', maxIterations: 1 })
+      .system('s')
+      .memory(memory)
+      .build();
+    await agent.run({ message, identity: IDENTITY });
+  }
+
+  it('a scope function that returns nothing usable REFUSES the write instead of sending it bare', async () => {
+    for (const bad of [() => ({}), () => undefined, () => new Map(), () => Promise.resolve({})]) {
+      const store = new RecordingStore();
+      const memory = memoryOf(store, {
+        namespaceScope: bad as unknown as () => Record<string, string>,
+      });
+      await expect(oneTurn(memory)).rejects.toThrow(/namespaceScope/);
+      expect(store.asked).toEqual([]);
+    }
+  });
+
+  it('a fixed scope that is empty or malformed is refused at definition', () => {
+    const store = new RecordingStore();
+    expect(() => memoryOf(store, { namespaceScope: {} })).toThrow(/EMPTY/);
+    expect(() =>
+      memoryOf(store, { namespaceScope: { tenantid: 7 } as unknown as Record<string, string> }),
+    ).toThrow(/plain object of string values/);
+  });
+
+  it('a call’s own undefined or empty option never erases what the memory was bound with', async () => {
+    const store = new RecordingStore();
+    // Reach the bound store the way a pipeline stage does — through the memory's write.
+    const memory = memoryOf(store, { extraction: 'skip', namespaceScope: { tenantid: 'acme' } });
+    await oneTurn(memory);
+    expect(store.asked.length).toBeGreaterThan(0);
+    for (const asked of store.asked) {
+      expect(asked).toEqual({ extraction: 'skip', namespaceScope: { tenantid: 'acme' } });
+    }
+  });
+
+  it('declarations, reads and search pass straight through', async () => {
+    const plain = new RecordingStore();
+    const memory = memoryOf(plain, { extraction: 'skip' });
+    // The definition keeps the caller's own store; the pipeline gets the bound one.
+    expect(memory.store).toBe(plain);
+    await oneTurn(memory, 'remember the blue door');
+    // Reads through the bound store see what was written through it.
+    const listed = await plain.list(IDENTITY);
+    expect(listed.entries.length).toBeGreaterThan(0);
+    // A second turn READS the first one back through the bound store.
+    await oneTurn(memory, 'and now?');
+    expect(plain.asked.every((a) => a?.extraction === 'skip')).toBe(true);
+  });
+
+  it('SEMANTIC (TOP_K over a store with search), and fact / beat extraction all write with them', async () => {
+    const cases = [
+      {
+        type: MEMORY_TYPES.SEMANTIC,
+        strategy: { kind: MEMORY_STRATEGIES.TOP_K, topK: 3, embedder: mockEmbedder() },
+        store: () => new RecordingStore({ embedder: mockEmbedder() }),
+      },
+      {
+        type: MEMORY_TYPES.SEMANTIC,
+        strategy: { kind: MEMORY_STRATEGIES.EXTRACT, extractor: 'pattern' as const },
+        store: () => new RecordingStore(),
+      },
+      {
+        type: MEMORY_TYPES.NARRATIVE,
+        strategy: { kind: MEMORY_STRATEGIES.EXTRACT, extractor: 'pattern' as const },
+        store: () => new RecordingStore(),
+      },
+    ];
+    for (const c of cases) {
+      const store = c.store();
+      const memory = defineMemory({
+        id: 'm',
+        type: c.type,
+        strategy: c.strategy,
+        store,
+        writeOptions: { extraction: 'skip', namespaceScope: { tenantid: 'acme' } },
+      } as Parameters<typeof defineMemory>[0]);
+      await oneTurn(memory, 'My name is Ada and I prefer email. We decided to ship on Friday.');
+      await oneTurn(memory, 'What do you remember?');
+      expect(store.asked.length, `${c.type}/${c.strategy.kind} wrote nothing`).toBeGreaterThan(0);
+      for (const asked of store.asked) {
+        expect(asked).toEqual({ extraction: 'skip', namespaceScope: { tenantid: 'acme' } });
+      }
+    }
+  });
+});
+
+// ─── P5 Security: search reads only its own namespace ───────────────
+
+describe('memory write options — search never reads a neighbouring namespace', () => {
+  it('a prefix match is narrowed to the namespace asked for, on whole path segments', async () => {
+    const asked: string[] = [];
+    const client: AgentCoreLikeClient = {
+      createEvent: async () => undefined,
+      listEvents: async () => ({ events: [] }),
+      deleteEvent: async () => undefined,
+      // AgentCore's documented behaviour: every record whose namespace STARTS
+      // WITH the requested prefix.
+      retrieveRecords: async ({ namespace }) => {
+        asked.push(namespace);
+        const all = [
+          {
+            memoryRecordId: 'mine',
+            content: 'tenant 1 fact',
+            score: 0.9,
+            namespaces: ['/tenants/v1/facts'],
+          },
+          {
+            memoryRecordId: 'mine-root',
+            content: 'tenant 1 root',
+            score: 0.8,
+            namespaces: ['/tenants/v1/'],
+          },
+          {
+            memoryRecordId: 'neighbour',
+            content: 'tenant 12 fact',
+            score: 0.95,
+            namespaces: ['/tenants/v12/facts'],
+          },
+          { memoryRecordId: 'unfiled', content: 'no namespace reported', score: 0.99 },
+        ];
+        return {
+          records: all.filter((r) => (r.namespaces ?? ['']).some((n) => n.startsWith(namespace))),
+        };
+      },
+    };
+    const store = new AgentCoreStore({
+      memoryId: 'mem-1',
+      client,
+      searchNamespace: ({ identity }) => `/tenants/v${identity.tenant ?? ''}`,
+    });
+    const found = await store.search({ tenant: '1', conversationId: 'c' }, [0], { text: 'facts?' });
+    expect(asked).toEqual(['/tenants/v1']);
+    // Tenant 12's record matched AgentCore's prefix — and is not handed to tenant 1.
+    expect(found.map((f) => f.entry.id).sort()).toEqual(['mine', 'mine-root']);
+  });
+
+  it('the built-in client reads the SDK’s `namespaces` array', async () => {
+    const row = AWS_COMMAND_PINS.find((p) => p.adapter === 'AgentCoreStore');
+    if (!row) throw new Error('no AgentCoreStore pin');
+    const sdk = fakeSdk(row, {
+      RetrieveMemoryRecordsCommand: {
+        memoryRecordSummaries: [
+          {
+            memoryRecordId: 'r-1',
+            content: { text: 'ok' },
+            score: 0.5,
+            namespaces: ['/actors/a/sessions/s'],
+          },
+          {
+            memoryRecordId: 'r-2',
+            content: { text: 'other' },
+            score: 0.6,
+            namespaces: ['/actors/a/sessions/s2'],
+          },
+        ],
+      },
+    });
+    const store = new AgentCoreStore({
+      memoryId: 'mem-1',
+      _sdk: sdk.module,
+      searchNamespace: () => '/actors/a/sessions/s',
+    });
+    const found = await store.search(IDENTITY, [0], { text: 'q' });
+    expect(found.map((f) => f.entry.id)).toEqual(['r-1']);
+    expect(found[0]?.entry.metadata).toMatchObject({ namespace: '/actors/a/sessions/s' });
   });
 });

@@ -149,7 +149,8 @@ const ADAPTER = 'memoryBankStore';
 const MEMORY_BANK_WRITES =
   'every write here is itself a long-term memory (there is no extraction step to skip), ' +
   'and its scope comes from `scopeFor(identity)` — a per-write namespace would file it ' +
-  'where no retrieval for that identity looks';
+  'where no retrieval for that identity looks. Leave the option off for this store; ' +
+  'scope it through `scopeFor`';
 
 /**
  * The metadata keys this adapter owns on a `Memory`.
