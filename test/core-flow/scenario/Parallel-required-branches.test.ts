@@ -127,7 +127,6 @@ describe('Parallel required — unit', () => {
   it('wrapBranchOutputMapper coerces a non-Error throw to a string message', () => {
     const errs = new Map<string, BranchErrorRecord>();
     const wrapped = wrapBranchOutputMapper('rogue', errs, () => {
-      // eslint-disable-next-line @typescript-eslint/no-throw-literal
       throw 'string-thrown';
     });
 
@@ -718,7 +717,6 @@ describe('Parallel required — security', () => {
     const rogue: LLMProvider = {
       name: 'rogue',
       complete: async () => {
-        // eslint-disable-next-line @typescript-eslint/no-throw-literal
         throw { mysterious: 'object-thrown' };
       },
     };

@@ -271,7 +271,6 @@ describe('permission — security', () => {
     const checker: PermissionChecker = {
       name: 'weird',
       check: async () => {
-        // eslint-disable-next-line @typescript-eslint/no-throw-literal
         throw { mysterious: 'object' };
       },
     };

@@ -208,7 +208,6 @@ describe('Parallel failure — security', () => {
     const rogue: LLMProvider = {
       name: 'rogue',
       complete: async () => {
-        // eslint-disable-next-line @typescript-eslint/no-throw-literal
         throw { mysterious: 'object-thrown' };
       },
     };
