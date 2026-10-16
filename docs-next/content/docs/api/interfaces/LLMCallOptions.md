@@ -4,7 +4,7 @@ title: LLMCallOptions
 
 # Interface: LLMCallOptions
 
-Defined in: [src/core/LLMCall.ts:90](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L90)
+Defined in: [src/core/LLMCall.ts:91](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L91)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/core/LLMCall.ts:90](https://github.com/footprintjs/agentfootpri
 
 > `readonly` `optional` **contextBudget?**: `object`
 
-Defined in: [src/core/LLMCall.ts:112](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L112)
+Defined in: [src/core/LLMCall.ts:113](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L113)
 
 Per-slot context budgets, in characters (8.11.0). The LLMCall twin of
 `AgentOptions.contextBudget` — two slots here, since an LLMCall has no
@@ -37,7 +37,7 @@ still reaches the LLM; the budget is a signal, not a limiter. Defaults:
 
 > `readonly` `optional` **costBudget?**: `number` \| \{ `onExceed`: `"halt"` \| `"warn"`; `usd`: `number`; \}
 
-Defined in: [src/core/LLMCall.ts:159](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L159)
+Defined in: [src/core/LLMCall.ts:160](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L160)
 
 Cumulative USD budget per run. When provided along with `pricingTable`,
 LLMCall emits `agentfootprint.cost.limit_hit` with `action: 'warn'`
@@ -55,7 +55,7 @@ refused at build rather than silently ignored.
 
 > `readonly` `optional` **groupTranslator?**: [`GroupTranslator`](/docs/api/interfaces/GroupTranslator)\<`unknown`\>
 
-Defined in: [src/core/LLMCall.ts:177](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L177)
+Defined in: [src/core/LLMCall.ts:178](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L178)
 
 Optional per-COMPOSITION translator (UI-agnostic). See
 `core/translator.ts`. When attached, `runner.getUIGroup()` invokes
@@ -71,7 +71,7 @@ Returns `undefined` when omitted.
 
 > `readonly` `optional` **id?**: `string`
 
-Defined in: [src/core/LLMCall.ts:95](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L95)
+Defined in: [src/core/LLMCall.ts:96](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L96)
 
 Stable id used for topology + events. Default: 'llm-call'.
 
@@ -81,7 +81,7 @@ Stable id used for topology + events. Default: 'llm-call'.
 
 > `readonly` `optional` **maxTokens?**: `number`
 
-Defined in: [src/core/LLMCall.ts:101](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L101)
+Defined in: [src/core/LLMCall.ts:102](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L102)
 
 Optional max output tokens.
 
@@ -91,7 +91,7 @@ Optional max output tokens.
 
 > `readonly` **model**: `string`
 
-Defined in: [src/core/LLMCall.ts:97](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L97)
+Defined in: [src/core/LLMCall.ts:98](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L98)
 
 Model to request from the provider.
 
@@ -101,7 +101,7 @@ Model to request from the provider.
 
 > `readonly` `optional` **name?**: `string`
 
-Defined in: [src/core/LLMCall.ts:93](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L93)
+Defined in: [src/core/LLMCall.ts:94](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L94)
 
 Human-friendly name shown in events/metrics. Default: 'LLMCall'.
 
@@ -111,7 +111,7 @@ Human-friendly name shown in events/metrics. Default: 'LLMCall'.
 
 > `readonly` `optional` **pricingTable?**: [`PricingTable`](/docs/api/interfaces/PricingTable)
 
-Defined in: [src/core/LLMCall.ts:147](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L147)
+Defined in: [src/core/LLMCall.ts:148](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L148)
 
 Pricing adapter. When set, LLMCall emits `agentfootprint.cost.tick`
 after every LLM response with per-call and cumulative USD. Run-scoped
@@ -123,7 +123,7 @@ after every LLM response with per-call and cumulative USD. Run-scoped
 
 > `readonly` **provider**: [`LLMProvider`](/docs/api/interfaces/LLMProvider)
 
-Defined in: [src/core/LLMCall.ts:91](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L91)
+Defined in: [src/core/LLMCall.ts:92](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L92)
 
 ***
 
@@ -131,7 +131,7 @@ Defined in: [src/core/LLMCall.ts:91](https://github.com/footprintjs/agentfootpri
 
 > `readonly` `optional` **recordReceipt?**: `boolean`
 
-Defined in: [src/core/LLMCall.ts:141](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L141)
+Defined in: [src/core/LLMCall.ts:142](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L142)
 
 Mint a receipt on the call (9.91.0). Default ON — the LLMCall twin of
 `AgentOptions.recordReceipt`, same field, same contract, same default.
@@ -157,7 +157,7 @@ decline the receipt in a bulk eval loop
 
 > `readonly` `optional` **recordSystemPrompt?**: `boolean`
 
-Defined in: [src/core/LLMCall.ts:125](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L125)
+Defined in: [src/core/LLMCall.ts:126](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L126)
 
 Record the ASSEMBLED system prompt on the LLM call (9.50.0). The LLMCall
 twin of `AgentOptions.recordSystemPrompt` — same field, same contract,
@@ -173,7 +173,7 @@ into every recorder, sink and persisted recording — off, only
 
 > `readonly` `optional` **structureRecorders?**: readonly `StructureRecorder`[]
 
-Defined in: [src/core/LLMCall.ts:167](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L167)
+Defined in: [src/core/LLMCall.ts:168](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L168)
 
 Optional build-time recorders threaded into footprintjs's
 `flowChart()` factory. Each recorder observes per-node build
@@ -187,6 +187,6 @@ omitted, no build-time observation is wired up.
 
 > `readonly` `optional` **temperature?**: `number`
 
-Defined in: [src/core/LLMCall.ts:99](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L99)
+Defined in: [src/core/LLMCall.ts:100](https://github.com/footprintjs/agentfootprint/blob/main/src/core/LLMCall.ts#L100)
 
 Optional sampling temperature.
