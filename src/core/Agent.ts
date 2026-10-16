@@ -24,9 +24,9 @@ import {
   type ObserverDrainResult,
   type ReadTrackingMode,
   type RedactionPolicy,
-  type RunOptions,
   type RuntimeSnapshot,
 } from 'footprintjs';
+import type { RunOptions } from './runner.js';
 import { type CommitValuesMode } from 'foottrace';
 import type { CachePolicy, CacheStrategy } from '../cache/types.js';
 import type { ReliabilityConfig } from '../reliability/types.js';
@@ -331,7 +331,9 @@ import {
 } from './agent/honesty/armed.js';
 import { answerFoldReads } from './agent/honesty/mounts.js';
 import { readsMessageFrom } from './messageFrom.js';
-import { memberIdentityIn, readsParentRun } from './memberRun.js';
+import { memberIdentityIn, memberRequestIn, readsParentRun } from './memberRun.js';
+import { requestOf } from './requestOfRun.js';
+import type { RequestContext } from '../identity/requestContext.js';
 import { carriesArgumentView } from './toolShownArgs.js';
 import { assertMaxToolResultChars } from './agent/toolResultCap.js';
 import type { ToolArgValidationMode } from '../tools/toolArgsValidation.js';
@@ -663,6 +665,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  chart mounted in a composition) never stamps a clock nobody declared for
    *  it (`seedClockDraft`). */
   private runClockDraft: ClockDraft | undefined;
+  /** The incoming request the CURRENT `run()` / `resume()` serves — set beside
+   *  `runClockDraft`, cleared when it ends, and read ONLY for this agent's own
+   *  scopes (`ToolCallsHandlerDeps.currentRequest`): a stage mounted in another
+   *  runner's executor reads its run's request by link (`memberRun.ts`), never
+   *  this field. Never written to scope. */
+  private runRequest: RequestContext | undefined;
   /** The `time` the CURRENT resume passed, as read — TAKEN once by the first
    *  ToolCalls pass of the resumed leg (`ToolCallsHandlerDeps.time`), and
    *  cleared when `run()` or `resume()` ends. */
@@ -2005,6 +2013,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // not at the resume of a pause it would have made impossible to resume.
     assertIdentityShape(runInput.identity, 'Agent.run');
     assertIdentityShape(options?.identity, 'Agent.run');
+    // The incoming request, sealed — refused here when `requestContext` did not build it.
+    const runRequest = requestOf(options, 'Agent.run');
     // A policy handed down for this run is refused here, before anything moves,
     // by the same check `Agent.create({ redact })` gets.
     if (options?.redact !== undefined) assertRedactionPolicy(options.redact, 'Agent.run');
@@ -2075,6 +2085,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // Set here, beside the `try` whose `finally` clears it, so no exit path
     // can leave it behind for a turn this `run()` did not start.
     this.runClockDraft = clockDraft;
+    this.runRequest = runRequest;
 
     try {
       const result = await executor.run({
@@ -2197,6 +2208,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // be stamped by the next seed this agent did not start (a composition
       // mounting its chart) as if the app had declared it.
       this.runClockDraft = undefined;
+      this.runRequest = undefined;
       this.resumePassedTime = undefined;
       // The run's disposition rows, on EVERY path — success, failure, pause —
       // and BEFORE the recording stops, so a recording carries its run's
@@ -2573,6 +2585,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // sound question is "what was asked?".
     assertIdentityShape(options?.identity, 'Agent.resume');
     if (options?.redact !== undefined) assertRedactionPolicy(options.redact, 'Agent.resume');
+    // The incoming request is the RESUMING caller's — never the paused one's:
+    // a checkpoint carries no request, and a resume without one serves none.
+    const resumeRequest = requestOf(options, 'Agent.resume');
     // Native guard lands with the new checkpoint protocol, before its runtime
     // opt-in is mounted. Until then no Agent is armed to consume this carrier.
     requireVerificationOnResume(checkpoint.sharedState ?? {}, false);
@@ -2737,6 +2752,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.consentOutstanding.clear();
     // Beside the `try` whose `finally` clears it (the fresh-run path's terms).
     this.resumePassedTime = passedTime;
+    this.runRequest = resumeRequest;
     const legCheckpoint: FlowchartCheckpoint =
       leg.policy === undefined
         ? checkpoint
@@ -2765,6 +2781,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     } finally {
       // A resume's passed `time` ends with the resume (the fresh-run path's terms).
       this.resumePassedTime = undefined;
+      this.runRequest = undefined;
       // Same terms as the fresh-run path: rows on every exit, before the
       // recording stops (9.60.0).
       this.fileIntegrityDisposition();
@@ -5552,6 +5569,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       toolClaimants,
       ...(permissionChecker && { permissionChecker }),
       ...(credentialProvider && { credentialProvider }),
+      // The request a call's credential is read for: this agent's own run's,
+      // or — on a mount — the run its link names (`memberRun.ts`). An accessor,
+      // because the chart is built once and the request is per run.
+      ...(credentialProvider && {
+        currentRequest: (scope: object) =>
+          this.ownScopes.has(scope) ? this.runRequest : memberRequestIn(scope),
+      }),
       // The claim-check store (9.21.0). Absent → not one new line runs in
       // dispatch: `ctx.artifacts` is the fail-closed teacher and no artifact
       // event can fire (zero-cost-when-unused).

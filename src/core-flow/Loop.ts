@@ -21,10 +21,10 @@ import {
   flowChart,
   type FlowChart,
   type FlowchartCheckpoint,
-  type RunOptions,
   type StructureRecorder,
   type TypedScope,
 } from 'footprintjs';
+import type { RunOptions } from '../core/runner.js';
 import type { RedactionPolicy } from 'footprintjs';
 import type { GroupMember, GroupMetadata, GroupTranslator } from '../core/translator.js';
 import type { RunnerPauseOutcome } from '../core/pause.js';
@@ -40,6 +40,7 @@ import {
   reopenParentRun,
   withParentRun,
 } from '../core/memberRun.js';
+import { requestOf } from '../core/requestOfRun.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
 import type { RunContext } from '../bridge/eventMeta.js';
 import { ContextRecorder } from '../recorders/core/ContextRecorder.js';
@@ -215,7 +216,12 @@ export class Loop extends RunnerBase<LoopInput, LoopOutput> {
     const executor = this.createExecutor();
     this.lastExecutor = executor;
     // The run every member serves — built once, here, from THIS run's id.
-    const parentRun = openParentRun(this.currentRunContext.runId, runInput.identity, 'Loop.run');
+    const parentRun = openParentRun(
+      this.currentRunContext.runId,
+      runInput.identity,
+      'Loop.run',
+      requestOf(options, 'Loop.run'),
+    );
     try {
       const result = await executor.run({
         input: { message: runInput.message, parentRun: parentRun.link },
@@ -238,7 +244,11 @@ export class Loop extends RunnerBase<LoopInput, LoopOutput> {
     const executor = this.createExecutor(resumeLeg);
     this.lastExecutor = executor;
     // The paused run its members serve, re-opened from the checkpoint's own record.
-    const parentRun = reopenParentRun(checkpoint.sharedState, 'Loop.resume');
+    const parentRun = reopenParentRun(
+      checkpoint.sharedState,
+      'Loop.resume',
+      requestOf(options, 'Loop.resume'),
+    );
     try {
       const result = await executor.resume(checkpoint, input, withRunSignalInEnv(options));
       return this.finalizeResult(executor, result);

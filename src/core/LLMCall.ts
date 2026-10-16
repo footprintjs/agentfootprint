@@ -44,10 +44,10 @@ import {
   flowChart,
   type FlowChart,
   type FlowchartCheckpoint,
-  type RunOptions,
   type StructureRecorder,
   type TypedScope,
 } from 'footprintjs';
+import type { RunOptions } from './runner.js';
 import type { RedactionPolicy } from 'footprintjs';
 import { ArrayMergeMode } from 'footprintjs/advanced';
 import type { GroupMetadata, GroupTranslator } from './translator.js';

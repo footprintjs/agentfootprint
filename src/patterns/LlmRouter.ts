@@ -78,9 +78,9 @@ import {
   flowChart,
   type FlowChart,
   type FlowchartCheckpoint,
-  type RunOptions,
   type TypedScope,
 } from 'footprintjs';
+import type { RunOptions } from '../core/runner.js';
 import type { RedactionPolicy } from 'footprintjs';
 import type { LLMProvider } from '../provider-contract/types.js';
 import type { RunContext } from '../bridge/eventMeta.js';

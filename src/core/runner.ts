@@ -19,8 +19,9 @@ import type {
   FlowChart,
   FlowChartExecutor,
   FlowchartCheckpoint,
-  RunOptions,
+  RunOptions as EngineRunOptions,
 } from 'footprintjs';
+import type { RequestContext } from '../identity/requestContext.js';
 import type { RunnerPauseOutcome } from './pause.js';
 import type {
   EventListener,
@@ -311,8 +312,19 @@ export interface Runner<TIn = unknown, TOut = unknown> {
   emit(name: string, payload: Record<string, unknown>): void;
 }
 
-/** Kept for convenience — mirrors the RunOptions export from footprintjs. */
-export type { RunOptions };
+/**
+ * What every runner's `run()` / `resume()` takes: footprintjs's run options,
+ * plus the incoming request.
+ */
+export interface RunOptions extends EngineRunOptions {
+  /**
+   * The incoming request's secrets, sealed by `requestContext({ secrets })` —
+   * read only by a `requestCredentials` provider, for THIS run's tool calls
+   * and its composition members. Never written to state, the record or the
+   * engine's options; a plain object is refused at the door.
+   */
+  readonly request?: RequestContext;
+}
 
 /**
  * Union used in emit() for the `AgentfootprintEvent` type constraint. A

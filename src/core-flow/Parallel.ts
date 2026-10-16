@@ -19,10 +19,10 @@ import {
   type CombinedRecorder,
   type FlowChart,
   type FlowchartCheckpoint,
-  type RunOptions,
   type StructureRecorder,
   type TypedScope,
 } from 'footprintjs';
+import type { RunOptions } from '../core/runner.js';
 import type { RedactionPolicy } from 'footprintjs';
 import type { GroupMember, GroupMetadata, GroupTranslator } from '../core/translator.js';
 import type { RunnerPauseOutcome } from '../core/pause.js';
@@ -39,6 +39,7 @@ import {
   reopenParentRun,
   withParentRun,
 } from '../core/memberRun.js';
+import { requestOf } from '../core/requestOfRun.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
 import { buildEventMeta, type RunContext } from '../bridge/eventMeta.js';
 import { ContextRecorder } from '../recorders/core/ContextRecorder.js';
@@ -365,6 +366,7 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
       this.currentRunContext.runId,
       runInput.identity,
       'Parallel.run',
+      requestOf(options, 'Parallel.run'),
     );
     try {
       let result: unknown;
@@ -393,7 +395,11 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
     const executor = this.createExecutor(resumeLeg);
     this.lastExecutor = executor;
     // The paused run its members serve, re-opened from the checkpoint's own record.
-    const parentRun = reopenParentRun(checkpoint.sharedState, 'Parallel.resume');
+    const parentRun = reopenParentRun(
+      checkpoint.sharedState,
+      'Parallel.resume',
+      requestOf(options, 'Parallel.resume'),
+    );
     try {
       let result: unknown;
       try {

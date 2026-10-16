@@ -49,6 +49,26 @@ export {
   type HeadersCredential,
 } from './identity/kinds.js';
 export { staticTokens, type StaticTokensOptions } from './identity/staticTokens.js';
+// Credentials from the INCOMING REQUEST: the host seals the request's secrets
+// per run (`requestContext`), and `requestCredentials` vends them to a tool's
+// declared `needs` — only for the run that carries them, failing closed by name.
+export {
+  requestContext,
+  isRequestContext,
+  type RequestContext,
+  type RequestContextOptions,
+} from './identity/requestContext.js';
+export {
+  requestCredentials,
+  asBearer,
+  asApiKey,
+  decodedWith,
+  RequestCredentialError,
+  type RequestCredentialsOptions,
+  type RequestCredentialSource,
+  type RequestCredentialStrategy,
+  type RequestCredentialRefusal,
+} from './identity/requestCredentials.js';
 // 3LO consent (8.6.0) — the mode, the caller-facing block, and the typed
 // terminal. The authorization URL reaches a caller HERE (or on `PendingAsk`)
 // and deliberately nowhere else; see the note on the error class.

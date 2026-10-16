@@ -24,6 +24,8 @@
  * with `RedactionPolicy` for defence in depth.
  */
 
+import type { RequestContext } from './requestContext.js';
+
 /** What a tool/agent asks for. `service` ↔ the provider's downstream service id. */
 export interface CredentialRequest {
   /** Downstream service id, e.g. 'github', 'slack', 'google'. */
@@ -64,6 +66,16 @@ export interface CredentialRequest {
    * `staticTokens` does exactly that.
    */
   readonly userToken?: string;
+  /**
+   * The incoming request this call belongs to, sealed — set by the FRAMEWORK
+   * from the run the call is part of, never by a tool or the model.
+   *
+   * Opaque: it carries no readable field. Only `requestCredentials` reads it
+   * (see `./requestContext`); every other provider ignores it. A call made
+   * where no run carries a request has none, and a request-sourced credential
+   * then fails closed.
+   */
+  readonly request?: RequestContext;
   /** Force a fresh authorization, bypassing any cached/refresh token. */
   readonly forceReauth?: boolean;
 }

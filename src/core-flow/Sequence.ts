@@ -15,9 +15,9 @@ import {
   flowChart,
   type FlowChart,
   type FlowchartCheckpoint,
-  type RunOptions,
   type TypedScope,
 } from 'footprintjs';
+import type { RunOptions } from '../core/runner.js';
 import type { RedactionPolicy } from 'footprintjs';
 import type { StructureRecorder } from 'footprintjs';
 import type { GroupMember, GroupMetadata, GroupTranslator } from '../core/translator.js';
@@ -41,6 +41,7 @@ import {
   reopenParentRun,
   withParentRun,
 } from '../core/memberRun.js';
+import { requestOf } from '../core/requestOfRun.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
 import { adoptMemberRedaction } from '../redaction/declared.js';
 import { carryVerdict, childOutcome, raiseChildVerdict } from './childOutcome.js';
@@ -199,6 +200,7 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
       this.currentRunContext.runId,
       runInput.identity,
       'Sequence.run',
+      requestOf(options, 'Sequence.run'),
     );
     try {
       const result = await executor.run({
@@ -222,7 +224,11 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
     const executor = this.createExecutor(resumeLeg);
     this.lastExecutor = executor;
     // The paused run its members serve, re-opened from the checkpoint's own record.
-    const parentRun = reopenParentRun(checkpoint.sharedState, 'Sequence.resume');
+    const parentRun = reopenParentRun(
+      checkpoint.sharedState,
+      'Sequence.resume',
+      requestOf(options, 'Sequence.resume'),
+    );
     try {
       const result = await executor.resume(checkpoint, input, withRunSignalInEnv(options));
       return this.finalizeResult(executor, result);

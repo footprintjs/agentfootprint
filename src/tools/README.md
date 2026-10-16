@@ -27,6 +27,7 @@ up into `core/` and are erased by `tsc`: `tools.ts` reads `CheckInDemand`
 
 - `tools.ts` — `Tool`, `ToolExecutionContext`, `defineTool` and the definition-time asserts.
 - `declare.ts` — `askOrAssume` and `period` rules: `assertAskOrAssume`, `rulesOf`, `isMissing`.
+- `hostFilled.ts` — arguments the HOST fills from `ctx.credential` / `ctx.identity`: removed from the model's schema, a model-sent value refused by name, the credential scrubbed from what comes back. A decorator over `execute`, so every dispatch door gets it without knowing.
 - `toolArgsValidation.ts` — `validateToolArgs`, `validatePropertyValue`.
 - `inputRequest.ts` — the typed ask: `requestInput`'s fields, `applyInputResponse`.
 - `askComponent.ts` — `AskComponent` and its one assert.

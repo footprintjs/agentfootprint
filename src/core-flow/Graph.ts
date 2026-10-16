@@ -124,10 +124,10 @@ import {
   type CombinedRecorder,
   type FlowChart,
   type FlowchartCheckpoint,
-  type RunOptions,
   type StructureRecorder,
   type TypedScope,
 } from 'footprintjs';
+import type { RunOptions } from '../core/runner.js';
 import type { RedactionPolicy } from 'footprintjs';
 import type { RunContext } from '../bridge/eventMeta.js';
 import { composedInput, readsMessageFromIfAny } from '../core/messageFrom.js';
@@ -150,6 +150,7 @@ import {
   reopenParentRun,
   withParentRun,
 } from '../core/memberRun.js';
+import { requestOf } from '../core/requestOfRun.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
 
 // ─── Public shapes ───────────────────────────────────────────────────
@@ -489,6 +490,7 @@ export class Graph extends RunnerBase<GraphInput, GraphOutput> {
       this.currentRunContext.runId,
       (input as { readonly identity?: MemoryIdentity } | undefined)?.identity,
       'graph.run',
+      requestOf(options, 'graph.run'),
     );
     try {
       let result: unknown;
@@ -517,7 +519,11 @@ export class Graph extends RunnerBase<GraphInput, GraphOutput> {
     const executor = this.createExecutor(resumeLeg);
     this.lastExecutor = executor;
     // The paused run its members serve, re-opened from the checkpoint's own record.
-    const parentRun = reopenParentRun(checkpoint.sharedState, 'graph.resume');
+    const parentRun = reopenParentRun(
+      checkpoint.sharedState,
+      'graph.resume',
+      requestOf(options, 'graph.resume'),
+    );
     try {
       let result: unknown;
       try {
