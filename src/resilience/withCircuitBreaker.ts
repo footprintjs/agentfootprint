@@ -332,7 +332,9 @@ export function withCircuitBreaker(
         recordSuccess(hooks);
         return res;
       } catch (err) {
-        recordFailure(err, hooks);
+        // A call the caller cancelled says nothing about the vendor's health,
+        // whatever the error's name — never counted (lib/abort.ts).
+        if (!req.signal?.aborted) recordFailure(err, hooks);
         throw err;
       }
     },
@@ -360,7 +362,7 @@ export function withCircuitBreaker(
           // failed BEFORE yielding any tokens. Mid-stream errors are
           // less indicative of vendor health (could be a content-filter
           // trip on this specific request).
-          if (!yieldedAnyChunk) recordFailure(err, hooks);
+          if (!yieldedAnyChunk && !req.signal?.aborted) recordFailure(err, hooks);
           throw err;
         }
       },

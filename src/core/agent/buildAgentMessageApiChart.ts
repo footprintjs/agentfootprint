@@ -41,6 +41,7 @@ import { SUBFLOW_IDS, STAGE_IDS, milestoneTagsFor, RECEIPT_KEY } from '../../lib
 import type { InjectionRecord } from '../../recorders/core/types.js';
 import { typedEmit } from '../../recorders/core/typedEmit.js';
 import { resilienceHooks } from '../../recorders/core/resilienceHooks.js';
+import { callUnder } from '../../lib/abort.js';
 import { buildSystemPromptSlot } from '../slots/buildSystemPromptSlot.js';
 import { buildMessagesSlot } from '../slots/buildMessagesSlot.js';
 import { buildToolsSlot } from '../slots/buildToolsSlot.js';
@@ -195,24 +196,29 @@ export function buildAgentMessageApiChart(deps: AgentMessageApiChartDeps): FlowC
     });
     if (receipt !== undefined) scope[RECEIPT_KEY] = receipt;
 
-    const response = await provider.complete(
-      request,
-      // Resilience-report channel: a decorated provider's fallback /
-      // retry / recovery becomes an in-run typed event here.
-      //
-      // Where that event GOES is entirely up to the recorders attached to
-      // the executor, and on a bare one the answer is NOWHERE.
-      // footprintjs's `ScopeFacade.emitEvent` dispatches only to
-      // recorders' `onEmit` — it never touches the transaction buffer, and
-      // it fast-returns outright when zero recorders are attached — so an
-      // emit can never become a `CommitBundle`. This chart has no runner
-      // of its own, so the caller must attach a recorder that implements
-      // `onEmit` for the report to be observable at all, and
-      // `resilienceRecorder` (exported from `agentfootprint/observe`)
-      // specifically for `agent.on(...)`. Pinned by the two bare-executor
-      // cases in
-      // test/resilience/integration/resilience-decorator-visibility.test.ts.
-      resilienceHooks(scope, receipt !== undefined),
+    // The run's signal (its deadline included) rides the request and bounds
+    // the wait; an answer that lands after it is refused before `llm_end`
+    // could count it (lib/abort.ts · callUnder).
+    const response = await callUnder(request, scope.$getEnv?.()?.signal, (wired) =>
+      provider.complete(
+        wired,
+        // Resilience-report channel: a decorated provider's fallback /
+        // retry / recovery becomes an in-run typed event here.
+        //
+        // Where that event GOES is entirely up to the recorders attached to
+        // the executor, and on a bare one the answer is NOWHERE.
+        // footprintjs's `ScopeFacade.emitEvent` dispatches only to
+        // recorders' `onEmit` — it never touches the transaction buffer, and
+        // it fast-returns outright when zero recorders are attached — so an
+        // emit can never become a `CommitBundle`. This chart has no runner
+        // of its own, so the caller must attach a recorder that implements
+        // `onEmit` for the report to be observable at all, and
+        // `resilienceRecorder` (exported from `agentfootprint/observe`)
+        // specifically for `agent.on(...)`. Pinned by the two bare-executor
+        // cases in
+        // test/resilience/integration/resilience-decorator-visibility.test.ts.
+        resilienceHooks(scope, receipt !== undefined),
+      ),
     );
     scope.answer = response.content;
     scope.toolCalls = response.toolCalls;

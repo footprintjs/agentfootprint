@@ -84,6 +84,7 @@ import { anthropicThinkingHandler } from '../../thinking/AnthropicThinkingHandle
 import type { ThinkingMode } from '../../thinking/types.js';
 import { retryAfterMsFromHeaders } from './retryAfter.js';
 import { isSlash, trimTrailing } from '../../lib/linearText.js';
+import { abortErrorOf, throwIfAborted, untilAborted } from '../../lib/abort.js';
 
 /** The literal this wire requires in the body in place of a version header. */
 export const INVOKE_MODEL_ANTHROPIC_VERSION = 'bedrock-2023-05-31';
@@ -331,7 +332,10 @@ export function invokeModelGateway(options: InvokeModelGatewayOptions): LLMProvi
     // while an asynchronous key source is resolving.
     const serializedBody = JSON.stringify(body);
     if (preparation.omissions.length > 0) hooks?.onReplayPrepared?.(preparation);
-    const key = await keyFor(options.apiKey, modelId);
+    // A key source can take a while; a call cancelled meanwhile sends nothing
+    // (lib/abort.ts, law 1).
+    const key = await untilAborted(keyFor(options.apiKey, modelId), req.signal);
+    throwIfAborted(req.signal);
     let response: Response;
     try {
       response = await deadline.within(
@@ -344,7 +348,7 @@ export function invokeModelGateway(options: InvokeModelGatewayOptions): LLMProvi
         'the response',
       );
     } catch (err) {
-      throw networkError(err, modelId);
+      throw networkError(err, modelId, req.signal);
     }
     if (!response.ok) throw await deadline.within(statusError(response, modelId), 'the response');
     return { response, body, bindingFactory, omissions: preparation.omissions };
@@ -384,6 +388,7 @@ export function invokeModelGateway(options: InvokeModelGatewayOptions): LLMProvi
     thinkingMode: (model) => modeOf(gatewayModelOf(model, options.model)),
 
     async complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
+      throwIfAborted(req.signal);
       const modelId = modelIdFor(req, options.model);
       const deadline = deadlineFor(timeoutMs, req.signal, modelId);
       try {
@@ -405,6 +410,7 @@ export function invokeModelGateway(options: InvokeModelGatewayOptions): LLMProvi
     },
 
     async *stream(req: LLMRequest, hooks?: LLMCallHooks): AsyncIterable<LLMChunk> {
+      throwIfAborted(req.signal);
       const modelId = modelIdFor(req, options.model);
       const deadline = deadlineFor(timeoutMs, req.signal, modelId);
       try {
@@ -636,10 +642,18 @@ async function* readGatewayEvents(
     if (buffered.length > 0) yield* onLine(buffered);
     yield* flushPending(true);
   } finally {
-    // A read the deadline (or the caller) gave up on may still be pending;
-    // cancelling the body settles it, so the lock is released cleanly.
-    if (deadline.signal?.aborted) await reader.cancel().catch(() => undefined);
-    reader.releaseLock();
+    // CANCEL on every way out — the end (a no-op), a consumer that stops
+    // early, an error event, the deadline, the caller's abort — so a stream
+    // nobody reads never holds its socket open. Not awaited once aborted: a
+    // transport that ignores the abort may never settle its cancel, and the
+    // caller is owed the abort now (lib/abort.ts · bodyChunks, the same rule).
+    const cancelled = reader.cancel().catch(() => undefined);
+    if (!deadline.signal?.aborted) await cancelled;
+    try {
+      reader.releaseLock();
+    } catch {
+      /* a read still pending, or a lock the runtime already dropped */
+    }
   }
 }
 
@@ -771,7 +785,11 @@ function readRetryAfter(header: string | null): number | undefined {
   return /^\d+$/.test(trimmed) ? Number(trimmed) : undefined;
 }
 
-function networkError(err: unknown, modelId: string): Error {
+function networkError(err: unknown, modelId: string, signal?: AbortSignal): Error {
+  // The caller cancelled: the call fails AS the cancellation, with the reason
+  // they gave — never as a 'network' failure a retry would re-send. Checked
+  // before the typed case: a caller abort under a deadline is not a timeout.
+  if (signal?.aborted) return abortErrorOf(signal);
   // Already typed — the deadline's own 'timeout' refusal.
   if (err instanceof InvokeModelGatewayError) return err;
   // An abort is the caller's decision, not a failure — pass it through as-is so
@@ -799,8 +817,8 @@ function networkError(err: unknown, modelId: string): Error {
  * fresh timer: a miss aborts the request — so a real fetch drops the
  * connection — and rejects with the typed 'timeout' error even when the
  * transport ignores the abort. The caller's abort wins: it rejects with the
- * caller's reason, as fetch would. With no `timeoutMs` everything is a pass
- * through and the fetch gets the caller's signal exactly as before.
+ * caller's reason, as fetch would. With no `timeoutMs` there is no timer: the
+ * fetch gets the caller's signal, and every wait is raced against it.
  */
 interface Deadline {
   /** What the fetch listens to: the caller's signal, or one linked to it and the timer. */
@@ -815,9 +833,12 @@ function deadlineFor(
   modelId: string,
 ): Deadline {
   if (timeoutMs === undefined) {
+    // No deadline, but still the caller's abort: every wait is raced against
+    // it, so a transport that ignores its signal cannot hold a cancelled call
+    // open (lib/abort.ts).
     return {
       signal: callerSignal,
-      within: (pending) => pending,
+      within: (pending) => untilAborted(pending, callerSignal),
       dispose: () => undefined,
     };
   }

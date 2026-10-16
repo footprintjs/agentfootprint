@@ -26,6 +26,7 @@ import type {
   WireRole,
 } from '../../provider-contract/types.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
+import { abortableIterable, abortErrorOf, throwIfAborted, untilAborted } from '../../lib/abort.js';
 import { asContextWindowExceeded } from '../../provider-contract/contextWindow.js';
 import { retryAfterMsFromError } from './retryAfter.js';
 import { ANTHROPIC_PROMPT_CACHING } from './anthropicCacheWire.js';
@@ -53,9 +54,18 @@ import {
 
 interface AnthropicClient {
   messages: {
-    create(params: AnthropicCreateParams): Promise<AnthropicMessage>;
-    stream(params: AnthropicCreateParams): AnthropicStream;
+    create(
+      params: AnthropicCreateParams,
+      options?: AnthropicRequestOptions,
+    ): Promise<AnthropicMessage>;
+    stream(params: AnthropicCreateParams, options?: AnthropicRequestOptions): AnthropicStream;
   };
+}
+
+/** The SDK's per-request options — the one this adapter sends is the signal,
+ *  so an aborted run cancels the HTTP request itself (`lib/abort.ts`). */
+interface AnthropicRequestOptions {
+  signal?: AbortSignal;
 }
 
 /** The shared Messages body (anthropicMessagesWire.ts) plus the `model` the
@@ -68,6 +78,8 @@ interface AnthropicCreateParams extends AnthropicMessagesBody {
 interface AnthropicStream {
   finalMessage(): Promise<AnthropicMessage>;
   [Symbol.asyncIterator](): AsyncIterator<AnthropicStreamEvent>;
+  /** The SDK's own close: aborts the request and ends the stream. */
+  abort?(): void;
 }
 
 interface AnthropicStreamEvent {
@@ -214,12 +226,21 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
     // the same function.
     thinkingMode: (model) => modeOf(modelOf(model)),
     async complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
+      // A cancelled call sends nothing (lib/abort.ts, law 1).
+      throwIfAborted(req.signal);
       const preparation = prepareAnthropicReplay(req, modelOf(req.model), 'anthropic');
       const params = buildParams(preparation.request);
       const bindingFactory = thinkingReplayBinding(params, params.model);
       if (preparation.omissions.length > 0) hooks?.onReplayPrepared?.(preparation);
       try {
-        const message = await client.messages.create(params);
+        // The signal rides the SDK's request options, so an abort cancels the
+        // HTTP request itself; the race refuses an answer that lands after it.
+        const message = await untilAborted(
+          req.signal
+            ? client.messages.create(params, { signal: req.signal })
+            : client.messages.create(params),
+          req.signal,
+        );
         // Manifest read from the FINAL params — after tool mapping and cache
         // markers — because the whole point is catching what the body says,
         // not what the request intended (wireManifest.ts).
@@ -229,24 +250,30 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
           ...(preparation.omissions.length > 0 && { replayOmissions: preparation.omissions }),
         };
       } catch (err) {
-        throw wrapError(err);
+        throw wrapError(err, req.signal);
       }
     },
     async *stream(req: LLMRequest, hooks?: LLMCallHooks): AsyncIterable<LLMChunk> {
+      throwIfAborted(req.signal);
       const preparation = prepareAnthropicReplay(req, modelOf(req.model), 'anthropic');
       const params = buildParams(preparation.request);
       const bindingFactory = thinkingReplayBinding(params, params.model);
       if (preparation.omissions.length > 0) hooks?.onReplayPrepared?.(preparation);
       let stream: AnthropicStream;
       try {
-        stream = client.messages.stream(params);
+        stream = req.signal
+          ? client.messages.stream(params, { signal: req.signal })
+          : client.messages.stream(params);
       } catch (err) {
-        throw wrapError(err);
+        throw wrapError(err, req.signal);
       }
+      const opened = stream;
       let tokenIndex = 0;
       const toolArguments = new AnthropicToolArguments();
       try {
-        for await (const event of stream) {
+        // An abort closes the SDK stream and ends this loop at once, even
+        // when a read is still pending (lib/abort.ts, laws 2–3).
+        for await (const event of abortableIterable(opened, req.signal, () => opened.abort?.())) {
           toolArguments.observe(event);
           if (
             event.type === 'content_block_delta' &&
@@ -257,7 +284,7 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
             tokenIndex++;
           }
         }
-        const final = await stream.finalMessage();
+        const final = await untilAborted(opened.finalMessage(), req.signal);
         toolArguments.assertTerminal(final.content.some((block) => block.type === 'tool_use'));
         const argumentFailures = new Map<
           number,
@@ -283,7 +310,7 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
         };
         yield { tokenIndex, content: '', done: true, response };
       } catch (err) {
-        throw wrapError(err);
+        throw wrapError(err, req.signal);
       }
     },
   };
@@ -356,7 +383,11 @@ function resolveClient(options: AnthropicProviderOptions): AnthropicClient {
   });
 }
 
-function wrapError(err: unknown): Error {
+function wrapError(err: unknown, signal?: AbortSignal): Error {
+  // A cancelled call fails AS the cancellation, whatever the SDK threw for it
+  // (its own `APIUserAbortError` included) — never as a provider error that a
+  // retry would re-send (lib/abort.ts).
+  if (signal?.aborted) return abortErrorOf(signal);
   // See OpenAIProvider.wrapError — one shared detector, one typed error, so
   // "prompt is too long" reads the same whichever vendor said it.
   const tooBig = asContextWindowExceeded(err, { provider: 'anthropic' });

@@ -126,7 +126,7 @@ The agent reads `response` off the final chunk to drive ReAct decisioning. UI co
 
 ## AbortSignal support
 
-Honor `req.signal` so consumers can cancel mid-stream:
+The agent puts the run's signal on every request as `req.signal`. It fires when the caller aborts the run or the run's `timeoutMs` passes. Hand it to your transport, so a cancelled run cancels the HTTP request itself and stops paying for tokens nobody will read:
 
 ```ts
 async complete(req: LLMRequest): Promise<LLMResponse> {
@@ -137,6 +137,8 @@ async complete(req: LLMRequest): Promise<LLMResponse> {
   // ...
 }
 ```
+
+An SDK usually takes it as a per-request option (`client.create(params, { signal: req.signal })`). In `stream()`, close the SDK stream or cancel the response body when the signal fires. If your provider ignores the signal, the agent still stops waiting for it and never records an answer that arrives after the abort. The remote call keeps running until it finishes, though, and you are billed for it. When the call fails because of the abort, throw `req.signal.reason`. The decorators (`withRetry`, `withFallback`, `withCircuitBreaker`) never retry, fall back from or count a cancelled call, whatever the error is called.
 
 The library's resilience decorators (`withRetry`, `withFallback`) wrap your custom provider transparently — no special integration needed.
 

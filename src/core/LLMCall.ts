@@ -54,6 +54,7 @@ import { ArrayMergeMode } from 'footprintjs/advanced';
 import type { GroupMetadata, GroupTranslator } from './translator.js';
 import type { RunnerPauseOutcome } from './pause.js';
 import { SUBFLOW_IDS, STAGE_IDS, milestoneTagsFor, RECEIPT_KEY } from '../lib/conventions.js';
+import { callUnder } from '../lib/abort.js';
 import type { RunContext } from '../bridge/eventMeta.js';
 import { ContextRecorder } from '../recorders/core/ContextRecorder.js';
 import { streamRecorder } from '../recorders/core/StreamRecorder.js';
@@ -588,11 +589,17 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
       // layers classify on the raw message). The friendly translation
       // for non-developers happens once at the terminal boundary —
       // ErrorBridge humanizes the `error.fatal` event the monitor reads.
-      const response = await provider.complete(
-        request,
-        // Resilience-report channel: a decorated provider's fallback /
-        // retry / recovery becomes an in-run typed event here.
-        resilienceHooks(scope, recordReceipt),
+      //
+      // The run's signal (its deadline included) rides the request and bounds
+      // the wait, and an answer that lands after it is refused before
+      // `llm_end` or the cost tick could count it (lib/abort.ts · callUnder).
+      const response = await callUnder(request, scope.$getEnv?.()?.signal, (wired) =>
+        provider.complete(
+          wired,
+          // Resilience-report channel: a decorated provider's fallback /
+          // retry / recovery becomes an in-run typed event here.
+          resilienceHooks(scope, recordReceipt),
+        ),
       );
       const durationMs = Date.now() - startMs;
 

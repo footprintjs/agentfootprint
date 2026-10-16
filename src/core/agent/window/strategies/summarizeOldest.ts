@@ -28,6 +28,7 @@ import { indexRange } from '../removal.js';
 import type { WindowStrategy, WindowStrategyInput, WindowStrategyResult } from '../strategy.js';
 import { buildSummaryMessage, isCompactedSummary, runSummarizer } from '../summarize.js';
 import { windowChars } from '../turns.js';
+import { throwIfAborted } from '../../../../lib/abort.js';
 import type { CompactionOptions, CompactionRecord, FoldedSpan, WindowRefusal } from '../types.js';
 
 /** `WindowRecord.strategy` written by every record this strategy files. */
@@ -171,6 +172,9 @@ export function summarizeOldest(options: CompactionOptions): WindowStrategy {
           usage: { input: result.usage.input, output: result.usage.output },
         };
       } catch (err) {
+        // A cancelled run is not a broken summarizer: the abort leaves as
+        // itself, with no refusal filed and no warning (lib/abort.ts).
+        throwIfAborted(input.signal);
         return {
           ...unchanged([
             { reason: 'summarizer-failed', turnIndex: plan.from, messageIndex: spanStart },

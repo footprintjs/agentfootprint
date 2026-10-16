@@ -16,6 +16,7 @@ import type {
   RedactionPolicy,
 } from 'footprintjs';
 import type { RunOptions } from './runner.js';
+import { deadlineSignal, eitherSignal } from '../lib/abort.js';
 import type { RunContext } from '../bridge/eventMeta.js';
 import { EventDispatcher, REFUSE } from '../events/dispatcher.js';
 import { bindChartStages } from '../redaction/chartBinding.js';
@@ -122,12 +123,20 @@ export function isMintedRunId(value: unknown): boolean {
 /**
  * One cancellation signal per run, for every runner. A caller may hand it to
  * the engine (`signal`, which stops the traversal) or to the stages
- * (`env.signal`, which tools and the reliability loop read). Handed only to the
- * engine, it is handed to the stages too — so a stage never takes the run's
- * own abort for a failure (the reliability loop filed it as a fail-fast, and an
- * agent inside a composition retried the cancelled call up to its cap). Every
- * runner's `run` / `resume` passes its options through here. The SAME object
- * when there is nothing to add.
+ * (`env.signal`, which tools, the reliability loop and every provider call
+ * read). Handed only to the engine, it is handed to the stages too — so a
+ * stage never takes the run's own abort for a failure (the reliability loop
+ * filed it as a fail-fast, and an agent inside a composition retried the
+ * cancelled call up to its cap). Handed to both, the stages get BOTH: either
+ * one cancels. Every runner's `run` / `resume` passes its options through
+ * here. The SAME object when there is nothing to add.
+ *
+ * The run's DEADLINE joins the same signal (`timeoutMs`). The engine arms its
+ * own timer for the traversal only, and only when no signal was given — so a
+ * deadline used to stop the chart while the provider call in flight kept
+ * running (and billing), and a deadline beside a caller's signal did nothing
+ * at all. Folded in here, it cancels that call like any abort
+ * (`lib/abort.ts`), and the run still fails with the engine's own words.
  *
  * It is also where the incoming `request` STOPS: the engine is handed the
  * options without it, so a sealed request never reaches footprintjs's run
@@ -135,8 +144,29 @@ export function isMintedRunId(value: unknown): boolean {
  */
 export function withRunSignalInEnv<T extends RunOptions>(options: T | undefined): T | undefined {
   const engine = withoutRequest(options);
-  if (engine?.signal === undefined || engine.env?.signal !== undefined) return engine;
-  return { ...engine, env: { ...engine.env, signal: engine.signal } };
+  if (engine === undefined) return engine;
+  const deadline = runDeadlineOf(engine.timeoutMs);
+  const signal = eitherSignal(engine.signal, deadline);
+  const envSignal = eitherSignal(engine.env?.signal, signal);
+  if (deadline === undefined && envSignal === engine.env?.signal) return engine;
+  // The deadline now rides the signal; the engine is not handed a second timer.
+  const { timeoutMs: _timeoutMs, ...rest } = engine;
+  void _timeoutMs;
+  return {
+    ...rest,
+    ...(signal !== undefined && { signal }),
+    env: { ...engine.env, signal: envSignal },
+  } as T;
+}
+
+/**
+ * The run's deadline as a signal — armed when `run()` starts, as the engine
+ * arms its own (any non-zero finite `timeoutMs`), aborting with the engine's
+ * own error so a timed-out run fails with the words it always did.
+ */
+function runDeadlineOf(timeoutMs: number | undefined): AbortSignal | undefined {
+  if (typeof timeoutMs !== 'number' || !timeoutMs || !Number.isFinite(timeoutMs)) return undefined;
+  return deadlineSignal(timeoutMs, () => new Error(`Execution timed out after ${timeoutMs}ms`));
 }
 
 /** `options` without `request` — the SAME object when it carries none. */

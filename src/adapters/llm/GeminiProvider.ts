@@ -130,6 +130,7 @@ import type {
   WireRole,
 } from '../../provider-contract/types.js';
 import { asContextWindowExceeded } from '../../provider-contract/contextWindow.js';
+import { abortableIterable, abortErrorOf, throwIfAborted, untilAborted } from '../../lib/abort.js';
 import {
   createGoogleGenAIClientResolver,
   resolveGoogleDoor,
@@ -372,7 +373,11 @@ export function gemini(options: GeminiProviderOptions = {}): LLMProvider {
   // never to print — see `wrapError`. Under a callback key the secret CHANGES,
   // so the string to redact is the one the failing call actually used, not the
   // one the options were built with.
-  const wrap = (err: unknown, apiKey: string | undefined): Error => wrapError(err, apiKey);
+  //
+  // A cancelled call fails AS the cancellation, whatever the SDK threw for it
+  // — never as a provider error that a retry would re-send (lib/abort.ts).
+  const wrap = (err: unknown, apiKey: string | undefined, signal?: AbortSignal): Error =>
+    signal?.aborted ? abortErrorOf(signal) : wrapError(err, apiKey);
 
   const provider: LLMProvider = {
     name: 'gemini',
@@ -385,6 +390,9 @@ export function gemini(options: GeminiProviderOptions = {}): LLMProvider {
     carriesForcedToolChoice: true,
 
     async complete(req: LLMRequest): Promise<LLMResponse> {
+      // A cancelled call sends nothing — checked again once the lease is in
+      // hand, because a callback key can take a while (lib/abort.ts, law 1).
+      throwIfAborted(req.signal);
       const params = buildParams(
         req,
         resolveModel(req.model, defaultModel, door),
@@ -393,16 +401,23 @@ export function gemini(options: GeminiProviderOptions = {}): LLMProvider {
       // Resolved BEFORE the try so a lease failure carries no key to redact
       // that we would have had to guess at; the resolver's own refusals never
       // quote the credential.
-      const lease = await connect();
+      const lease = await untilAborted(connect(), req.signal);
+      throwIfAborted(req.signal);
       try {
-        const response = await lease.client.models.generateContent(params);
+        // The signal rides `config.abortSignal` (buildParams), so an abort
+        // cancels the request itself; the race refuses an answer after it.
+        const response = await untilAborted(
+          lease.client.models.generateContent(params),
+          req.signal,
+        );
         return fromGeminiResponse(response, nextToolCallId);
       } catch (err) {
-        throw wrap(err, lease.apiKey);
+        throw wrap(err, lease.apiKey, req.signal);
       }
     },
 
     async *stream(req: LLMRequest): AsyncIterable<LLMChunk> {
+      throwIfAborted(req.signal);
       const params = buildParams(
         req,
         resolveModel(req.model, defaultModel, door),
@@ -411,15 +426,16 @@ export function gemini(options: GeminiProviderOptions = {}): LLMProvider {
       // One lease for the whole stream. A key that rotates mid-stream cannot
       // be applied to a socket that is already open — see the refresh boundary
       // in googleGenAI.ts.
-      const lease = await connect();
+      const lease = await untilAborted(connect(), req.signal);
+      throwIfAborted(req.signal);
       let stream: AsyncIterable<GeminiGenerateResponse>;
       try {
         // Two awaits, one call: `generateContentStream` answers with a PROMISE
         // of an async generator, so `for await` over the return value directly
         // iterates a promise and yields nothing.
-        stream = await lease.client.models.generateContentStream(params);
+        stream = await untilAborted(lease.client.models.generateContentStream(params), req.signal);
       } catch (err) {
-        throw wrap(err, lease.apiKey);
+        throw wrap(err, lease.apiKey, req.signal);
       }
 
       const textParts: string[] = [];
@@ -433,7 +449,9 @@ export function gemini(options: GeminiProviderOptions = {}): LLMProvider {
       let tokenIndex = 0;
 
       try {
-        for await (const chunk of stream) {
+        // An abort ends this loop at once, even when a read is still pending,
+        // and closes the SDK's generator (lib/abort.ts, laws 2–3).
+        for await (const chunk of abortableIterable(stream, req.signal)) {
           // Usage FIRST, and outside any content guard. Gemini puts
           // `usageMetadata` on the chunk that closes the stream, whose
           // candidate carries no new text — a `continue` on an empty part list
@@ -475,7 +493,7 @@ export function gemini(options: GeminiProviderOptions = {}): LLMProvider {
         };
         yield { tokenIndex, content: '', done: true, response };
       } catch (err) {
-        throw wrap(err, lease.apiKey);
+        throw wrap(err, lease.apiKey, req.signal);
       }
     },
   };

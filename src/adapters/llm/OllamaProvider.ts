@@ -78,6 +78,15 @@ import {
   type OllamaRawThinking,
 } from '../../thinking/OllamaThinkingHandler.js';
 import { isSlash, trimTrailing } from '../../lib/linearText.js';
+// The one owner of how a cancellation is honoured (lib/abort.ts) — this file
+// kept private copies of the first three until the other adapters needed them.
+import {
+  abortErrorOf,
+  bodyChunks,
+  eitherSignal,
+  throwIfAborted,
+  untilAborted,
+} from '../../lib/abort.js';
 
 // ─── Wire shapes (Ollama native /api/chat) ──────────────────────────
 
@@ -364,7 +373,10 @@ export function ollama(
       { timeoutMs, baseUrl, ...(req.signal && { signal: req.signal }) },
     );
     if (!response.ok) {
-      throw await describeFailure(response, body.model, baseUrl, fetchImpl, timeoutMs);
+      throw await untilAborted(
+        describeFailure(response, body.model, baseUrl, fetchImpl, timeoutMs),
+        req.signal,
+      );
     }
     return response;
   };
@@ -756,52 +768,35 @@ async function* parseNdjson(
   body: ReadableStream<Uint8Array>,
   signal?: AbortSignal,
 ): AsyncIterable<unknown> {
-  const reader = body.getReader();
   const decoder = new TextDecoder();
   let buf = '';
-  try {
-    for (;;) {
-      // The read is RACED against the caller's signal. A signal that only
-      // reached the headers would be a cancellation that cancels nothing.
-      const { value, done } = await untilAborted(reader.read(), signal);
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      let idx: number;
-      while ((idx = buf.indexOf('\n')) >= 0) {
-        const line = buf.slice(0, idx).trim();
-        buf = buf.slice(idx + 1);
-        if (!line) continue;
-        try {
-          yield JSON.parse(line);
-        } catch {
-          /* skip malformed line */
-        }
-      }
-    }
-    // A final line with no trailing newline still counts.
-    const tail = buf.trim();
-    if (tail) {
+  // `bodyChunks` races every read against the caller's signal — a signal that
+  // only reached the headers would be a cancellation that cancels nothing —
+  // and CANCELS the body on every way out: the terminal `done` frame (the
+  // stream loop breaks on it), a consumer that breaks out, an error frame, a
+  // caller abort. An open body means the local model keeps generating for
+  // nobody and the socket stays up.
+  for await (const value of bodyChunks(body, signal)) {
+    buf += decoder.decode(value, { stream: true });
+    let idx: number;
+    while ((idx = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, idx).trim();
+      buf = buf.slice(idx + 1);
+      if (!line) continue;
       try {
-        yield JSON.parse(tail);
+        yield JSON.parse(line);
       } catch {
-        /* skip malformed tail */
+        /* skip malformed line */
       }
     }
-  } finally {
-    // CANCEL, not merely release the lock. The terminal `done` frame (the
-    // stream loop breaks on it), a consumer that breaks out, an error frame,
-    // a caller abort — every one of them leaves an open body, and an open
-    // body means the local model keeps generating for nobody and the socket
-    // stays up.
+  }
+  // A final line with no trailing newline still counts.
+  const tail = buf.trim();
+  if (tail) {
     try {
-      await reader.cancel();
+      yield JSON.parse(tail);
     } catch {
-      /* already closed or errored — nothing left to close */
-    }
-    try {
-      reader.releaseLock();
-    } catch {
-      /* a lock the runtime already dropped */
+      /* skip malformed tail */
     }
   }
 }
@@ -838,8 +833,11 @@ async function fetchUntilHeaders(
   const controller = new AbortController();
   let timedOut = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const onCallerAbort = () => controller.abort();
-  opts.signal?.addEventListener('abort', onCallerAbort, { once: true });
+  // The fetch listens to the caller's signal for the WHOLE call — the body
+  // included, long after the deadline's timer is cleared — and to the
+  // deadline's own, through one combined signal (lib/abort.ts · eitherSignal),
+  // so no listener is left behind on the caller's.
+  const signal = eitherSignal(opts.signal, controller.signal) ?? controller.signal;
 
   const deadline = new Promise<never>((_resolve, reject) => {
     timer = setTimeout(() => {
@@ -850,10 +848,16 @@ async function fetchUntilHeaders(
   });
 
   try {
-    return await Promise.race([fetchImpl(url, { ...init, signal: controller.signal }), deadline]);
+    // The caller's abort wins the race too: a `fetch` that ignores its signal
+    // must not hold a cancelled call open until the deadline (lib/abort.ts).
+    return await untilAborted(
+      Promise.race([fetchImpl(url, { ...init, signal }), deadline]),
+      opts.signal,
+    );
   } catch (err) {
     if (err instanceof OllamaUnavailableError) throw err; // the deadline fired
-    if (opts.signal?.aborted && !timedOut) throw err; // the caller's call, not ours
+    // The caller's call, not ours — and it fails with the caller's reason.
+    if (opts.signal?.aborted && !timedOut) throw abortErrorOf(opts.signal);
     // Timed out, or connection refused / DNS failure / TLS failure — either
     // way, nothing answered at that address.
     throw new OllamaUnavailableError({
@@ -863,7 +867,6 @@ async function fetchUntilHeaders(
     });
   } finally {
     if (timer !== undefined) clearTimeout(timer);
-    opts.signal?.removeEventListener('abort', onCallerAbort);
     // When the fetch wins the race, the deadline promise may still reject with
     // nobody listening. Swallow it deliberately: the answer already arrived, so
     // an unhandled-rejection warning here would be noise about a non-event.
@@ -994,49 +997,5 @@ function providerError(message: string, status?: number): Error {
   return Object.assign(new Error(message), {
     name: 'OllamaProviderError',
     ...(status !== undefined && { status }),
-  });
-}
-
-/**
- * An abort is the CALLER's word, so it must reach them AS an abort — never
- * dressed up as a daemon failure. The signal's own `reason` is used when it
- * is an Error (what every runtime supplies: a DOMException named
- * 'AbortError'); anything else becomes one, keeping the reason as `cause`.
- */
-function asAbortError(reason: unknown): Error {
-  if (reason instanceof Error) return reason;
-  return Object.assign(new Error('This operation was aborted'), {
-    name: 'AbortError',
-    ...(reason !== undefined && { cause: reason }),
-  });
-}
-
-/** Stop right here when the caller's signal has already fired. */
-function throwIfAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted) throw asAbortError(signal.reason);
-}
-
-/**
- * `promise`, except that a caller abort ends the wait immediately.
- *
- * `fetch` resolves on HEADERS. Everything after that — a streamed body, a
- * large non-streaming JSON read — used to be deaf to the caller's signal, so
- * a cancelled turn kept the local model generating to completion. This is
- * what makes `LLMRequest.signal` honest for the whole call rather than only
- * until the headers land. The CALLER's signal only: `timeoutMs` stays exactly
- * what it always was, a bound on the wait for headers and never on generation.
- */
-function untilAborted<T>(promise: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
-  if (!signal) return promise;
-  if (signal.aborted) {
-    void promise.catch(() => undefined); // the abandoned work must not warn
-    return Promise.reject(asAbortError(signal.reason));
-  }
-  return new Promise<T>((resolve, reject) => {
-    const onAbort = () => reject(asAbortError(signal.reason));
-    signal.addEventListener('abort', onAbort, { once: true });
-    promise.then(resolve, reject).finally(() => {
-      signal.removeEventListener('abort', onAbort);
-    });
   });
 }

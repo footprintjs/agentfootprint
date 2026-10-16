@@ -96,10 +96,15 @@
  */
 import type { TypedScope } from 'footprintjs';
 import type { MemoryEntry } from '../entry/index.js';
-import type { LLMMessage as Message, LLMProvider } from '../../provider-contract/types.js';
+import type {
+  LLMMessage as Message,
+  LLMProvider,
+  LLMRequest,
+} from '../../provider-contract/types.js';
 import type { MemoryStore } from '../store/index.js';
 import type { MemoryState } from './types.js';
 import { emitServed, type EmitScope } from '../../redaction/runRedaction.js';
+import { callUnder, throwIfAborted } from '../../lib/abort.js';
 
 /**
  * The 2.x summarizer shape: the caller makes the call and returns the text.
@@ -472,9 +477,13 @@ export function summarize(config: SummarizeConfig) {
 
     // ── 4. The one call ──────────────────────────────────────────────
     let summary: SummaryText;
+    const signal = scope.$getEnv?.()?.signal;
     try {
-      summary = await callSummarizer(config.llm, provider, model, systemPrompt, span);
+      summary = await callSummarizer(config.llm, provider, model, systemPrompt, span, signal);
     } catch (err) {
+      // A cancelled run is not a summarizer outage: the abort leaves as itself,
+      // with nothing declined, latched or warned about (lib/abort.ts).
+      throwIfAborted(signal);
       const cause = err instanceof Error ? err.message : String(err);
       if (!warned) {
         warned = true;
@@ -648,17 +657,21 @@ async function callSummarizer(
   model: string | undefined,
   systemPrompt: string,
   span: readonly MemoryEntry<Message>[],
+  signal: AbortSignal | undefined,
 ): Promise<SummaryText> {
   if (provider !== undefined && model !== undefined) {
     // Un-decorated on purpose, the same way `runSummarizer` is: no retry loop,
     // no fallback, no cache. A fold is optional work — the recall is correct
     // without it — so it may not spend the agent's resilience budget, and a
     // summarizer outage may not open a circuit in front of the real calls.
-    const response = await provider.complete({
+    // The run's signal rides the request, so a cancelled run stops paying for
+    // the fold too, and a late answer is not counted (lib/abort.ts).
+    const request: LLMRequest = {
       systemPrompt,
       messages: [{ role: 'user', content: renderTranscript(span) }],
       model,
-    });
+    };
+    const response = await callUnder(request, signal, (wired) => provider.complete(wired));
     return {
       text: response.content,
       usage: { input: response.usage.input, output: response.usage.output },

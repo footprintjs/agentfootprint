@@ -95,6 +95,15 @@ import type {
   WireRole,
 } from '../../provider-contract/types.js';
 import { isSlash, trimTrailing } from '../../lib/linearText.js';
+// The one owner of how a cancellation is honoured (lib/abort.ts) — this file
+// kept private copies of the first three until the other adapters needed them.
+import {
+  abortErrorOf,
+  bodyChunks,
+  eitherSignal,
+  throwIfAborted,
+  untilAborted,
+} from '../../lib/abort.js';
 
 // ─── Wire shapes (Foundry Local /v1 — the OpenAI dialect) ───────────
 
@@ -498,7 +507,10 @@ export function foundryLocal(
       { timeoutMs, endpoint, ...(req.signal && { signal: req.signal }) },
     );
     if (!response.ok) {
-      throw await describeFailure(response, body.model, endpoint, fetchImpl, timeoutMs);
+      throw await untilAborted(
+        describeFailure(response, body.model, endpoint, fetchImpl, timeoutMs),
+        req.signal,
+      );
     }
     return response;
   };
@@ -516,7 +528,7 @@ export function foundryLocal(
       // opens — the catalog lookup included. An already-aborted signal never
       // dispatches another 'abort' event, so a listener alone cannot see it.
       throwIfAborted(req.signal);
-      const model = await resolveModel(req.model);
+      const model = await untilAborted(resolveModel(req.model), req.signal);
       const body = buildBody(req, cfg, model, false);
       const response = await post(body, req);
       // `fetch` resolves on HEADERS, so reading the body is the stretch where
@@ -527,7 +539,7 @@ export function foundryLocal(
 
     async *stream(req: LLMRequest): AsyncIterable<LLMChunk> {
       throwIfAborted(req.signal);
-      const model = await resolveModel(req.model);
+      const model = await untilAborted(resolveModel(req.model), req.signal);
       const body = buildBody(req, cfg, model, true);
       const response = await post(body, req);
       if (!response.body) throw new Error('[foundry-local] response has no body');
@@ -924,73 +936,55 @@ async function* parseSse(
   body: ReadableStream<Uint8Array>,
   signal?: AbortSignal,
 ): AsyncIterable<SseFrame> {
-  const reader = body.getReader();
   const decoder = new TextDecoder();
   let buf = '';
   let eventName: string | undefined;
-  try {
-    for (;;) {
-      // The read is RACED against the caller's signal. `fetch` resolved on
-      // headers, so this loop is the whole rest of the call — a signal that
-      // only reached the headers would be a cancellation that cancels nothing.
-      const { value, done } = await untilAborted(reader.read(), signal);
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      let idx: number;
-      while ((idx = buf.indexOf('\n')) >= 0) {
-        const line = buf.slice(0, idx).trim(); // trim eats the \r of a \r\n wire
-        buf = buf.slice(idx + 1);
-        if (line.length === 0) {
-          eventName = undefined; // the blank line ends a frame
-          continue;
-        }
-        if (line.startsWith('event:')) {
-          eventName = line.slice('event:'.length).trim();
-          continue;
-        }
-        if (!line.startsWith('data:')) continue;
-        const payload = line.slice('data:'.length).trim();
-        if (payload === '[DONE]') return;
-        let data: unknown;
-        try {
-          data = JSON.parse(payload);
-        } catch {
-          /* skip malformed line */
-          eventName = undefined;
-          continue;
-        }
-        yield { ...(eventName !== undefined && { event: eventName }), data };
+  // `bodyChunks` races every read against the caller's signal — `fetch`
+  // resolved on headers, so this loop is the whole rest of the call — and
+  // CANCELS the body on every way out: `[DONE]`, a consumer that breaks out of
+  // the loop, an error frame, a caller abort. An open body means the on-device
+  // model keeps generating for nobody and the socket stays up.
+  for await (const value of bodyChunks(body, signal)) {
+    buf += decoder.decode(value, { stream: true });
+    let idx: number;
+    while ((idx = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, idx).trim(); // trim eats the \r of a \r\n wire
+      buf = buf.slice(idx + 1);
+      if (line.length === 0) {
+        eventName = undefined; // the blank line ends a frame
+        continue;
+      }
+      if (line.startsWith('event:')) {
+        eventName = line.slice('event:'.length).trim();
+        continue;
+      }
+      if (!line.startsWith('data:')) continue;
+      const payload = line.slice('data:'.length).trim();
+      if (payload === '[DONE]') return;
+      let data: unknown;
+      try {
+        data = JSON.parse(payload);
+      } catch {
+        /* skip malformed line */
         eventName = undefined;
+        continue;
       }
+      yield { ...(eventName !== undefined && { event: eventName }), data };
+      eventName = undefined;
     }
-    // A final data line with no trailing newline still counts.
-    const tail = buf.trim();
-    if (tail.startsWith('data:')) {
-      const payload = tail.slice('data:'.length).trim();
-      if (payload !== '[DONE]') {
-        let data: unknown;
-        try {
-          data = JSON.parse(payload);
-        } catch {
-          return; // skip a malformed tail — there is nothing after it anyway
-        }
-        yield { ...(eventName !== undefined && { event: eventName }), data };
+  }
+  // A final data line with no trailing newline still counts.
+  const tail = buf.trim();
+  if (tail.startsWith('data:')) {
+    const payload = tail.slice('data:'.length).trim();
+    if (payload !== '[DONE]') {
+      let data: unknown;
+      try {
+        data = JSON.parse(payload);
+      } catch {
+        return; // skip a malformed tail — there is nothing after it anyway
       }
-    }
-  } finally {
-    // CANCEL, not merely release the lock. `[DONE]`, a consumer that breaks
-    // out of the loop, an error frame, a caller abort — every one of them
-    // leaves an open body, and an open body means the on-device model keeps
-    // generating for nobody and the socket stays up.
-    try {
-      await reader.cancel();
-    } catch {
-      /* already closed or errored — nothing left to close */
-    }
-    try {
-      reader.releaseLock();
-    } catch {
-      /* a lock the runtime already dropped */
+      yield { ...(eventName !== undefined && { event: eventName }), data };
     }
   }
 }
@@ -1027,8 +1021,11 @@ async function fetchUntilHeaders(
   const controller = new AbortController();
   let timedOut = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const onCallerAbort = () => controller.abort();
-  opts.signal?.addEventListener('abort', onCallerAbort, { once: true });
+  // The fetch listens to the caller's signal for the WHOLE call — the body
+  // included, long after the deadline's timer is cleared — and to the
+  // deadline's own, through one combined signal (lib/abort.ts · eitherSignal),
+  // so no listener is left behind on the caller's.
+  const signal = eitherSignal(opts.signal, controller.signal) ?? controller.signal;
 
   const deadline = new Promise<never>((_resolve, reject) => {
     timer = setTimeout(() => {
@@ -1044,10 +1041,16 @@ async function fetchUntilHeaders(
   });
 
   try {
-    return await Promise.race([fetchImpl(url, { ...init, signal: controller.signal }), deadline]);
+    // The caller's abort wins the race too: a `fetch` that ignores its signal
+    // must not hold a cancelled call open until the deadline (lib/abort.ts).
+    return await untilAborted(
+      Promise.race([fetchImpl(url, { ...init, signal }), deadline]),
+      opts.signal,
+    );
   } catch (err) {
     if (err instanceof FoundryLocalUnavailableError) throw err; // the deadline fired
-    if (opts.signal?.aborted && !timedOut) throw err; // the caller's call, not ours
+    // The caller's call, not ours — and it fails with the caller's reason.
+    if (opts.signal?.aborted && !timedOut) throw abortErrorOf(opts.signal);
     // Timed out, or connection refused / DNS failure / TLS failure — either
     // way, nothing answered at that endpoint. The original is preserved as
     // `cause` for anyone who wants it — just never in the message.
@@ -1058,7 +1061,6 @@ async function fetchUntilHeaders(
     });
   } finally {
     if (timer !== undefined) clearTimeout(timer);
-    opts.signal?.removeEventListener('abort', onCallerAbort);
     // When the fetch wins the race, the deadline promise may still reject with
     // nobody listening. Swallow it deliberately: the answer already arrived, so
     // an unhandled-rejection warning here would be noise about a non-event.
@@ -1250,48 +1252,5 @@ function providerError(message: string, status?: number): Error {
   return Object.assign(new Error(message), {
     name: 'FoundryLocalProviderError',
     ...(status !== undefined && { status }),
-  });
-}
-
-/**
- * An abort is the CALLER's word, so it must reach them AS an abort — never
- * dressed up as a service failure. The signal's own `reason` is used when it
- * is an Error (what every runtime supplies: a DOMException named
- * 'AbortError'); anything else becomes one, keeping the reason as `cause`.
- */
-function asAbortError(reason: unknown): Error {
-  if (reason instanceof Error) return reason;
-  return Object.assign(new Error('This operation was aborted'), {
-    name: 'AbortError',
-    ...(reason !== undefined && { cause: reason }),
-  });
-}
-
-/** Stop right here when the caller's signal has already fired. */
-function throwIfAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted) throw asAbortError(signal.reason);
-}
-
-/**
- * `promise`, except that a caller abort ends the wait immediately.
- *
- * `fetch` resolves on HEADERS. Everything after that — a streamed body, a
- * large non-streaming JSON read — used to be deaf to the caller's signal, so
- * a cancelled turn kept the local model generating to completion. This is
- * what makes `LLMRequest.signal` honest for the whole call rather than only
- * until the headers land.
- */
-function untilAborted<T>(promise: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
-  if (!signal) return promise;
-  if (signal.aborted) {
-    void promise.catch(() => undefined); // the abandoned work must not warn
-    return Promise.reject(asAbortError(signal.reason));
-  }
-  return new Promise<T>((resolve, reject) => {
-    const onAbort = () => reject(asAbortError(signal.reason));
-    signal.addEventListener('abort', onAbort, { once: true });
-    promise.then(resolve, reject).finally(() => {
-      signal.removeEventListener('abort', onAbort);
-    });
   });
 }

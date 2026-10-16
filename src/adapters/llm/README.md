@@ -39,6 +39,38 @@ const provider = withRetry(
 );
 ```
 
+## A cancelled call stops consuming
+Every adapter honours `LLMRequest.signal` for the WHOLE call, streaming and not,
+through the one owner of the rule, `lib/abort.ts`. The cost of getting it wrong
+is real money: a run that times out or is aborted locally used to leave the
+remote generation running, and billing.
+
+1. Refused before anything is sent when the signal has already fired.
+2. Handed to the request itself: the SDK's request options (`{ signal }`;
+   Bedrock's `{ abortSignal }`; Gemini's `config.abortSignal`) or `fetch`.
+3. Every wait raced against it (`untilAborted`, `abortableIterable`,
+   `bodyChunks`), so a transport that ignores its signal still cannot hold the
+   call, and a stream is CLOSED on abort: the SDK stream's own close, or the
+   fetch body cancelled.
+4. A response or chunk that lands after the abort is refused with the abort,
+   never returned as an answer. The caller's own `reason` comes back as the
+   error, never wrapped as a provider failure, so nothing retries it.
+
+The agent (`callLLM`), `LLMCall`, the summarizers, the extractors and the merge
+step stamp the run's signal onto every request (`callUnder`), and it carries the
+run's deadline too (`RunnerBase · withRunSignalInEnv`). The decorators never
+retry, fall back from or count against a breaker a cancelled call.
+
+```ts
+const controller = new AbortController();
+const pending = agent.run({ message: 'summarize the incident' }, { signal: controller.signal });
+controller.abort(new Error('user left')); // the in-flight request is cancelled; run() rejects with that error
+```
+
+A new adapter is not done until it passes the shared conformance in
+`test/adapters/conformance/abortConformance.ts`; the listing test fails while a
+factory in this folder has no rig there.
+
 ## One body, several transports
 The Anthropic Messages body (`system` top-level, content blocks, `tool_use` /
 `tool_result`, thinking, cache markers) and its SSE event assembly have ONE owner:

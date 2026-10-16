@@ -44,6 +44,7 @@ import { SUBFLOW_IDS, STAGE_IDS, milestoneTagsFor, RECEIPT_KEY } from '../../lib
 import type { InjectionRecord } from '../../recorders/core/types.js';
 import { typedEmit } from '../../recorders/core/typedEmit.js';
 import { resilienceHooks } from '../../recorders/core/resilienceHooks.js';
+import { callUnder } from '../../lib/abort.js';
 import { buildSystemPromptSlot } from '../slots/buildSystemPromptSlot.js';
 import { buildMessagesSlot } from '../slots/buildMessagesSlot.js';
 import { joinSystemPrompt, stripFrameworkFields } from './composeRequest.js';
@@ -195,10 +196,15 @@ export function buildMessageApiChart(deps: MessageApiChartDeps): FlowChart {
       request,
     });
     if (receipt !== undefined) scope[RECEIPT_KEY] = receipt;
-    const response = await provider.complete(
-      request,
-      // Resilience-report channel — see buildAgentMessageApiChart.
-      resilienceHooks(scope, receipt !== undefined),
+    // The run's signal (its deadline included) rides the request and bounds
+    // the wait; an answer that lands after it is refused before `llm_end`
+    // could count it (lib/abort.ts · callUnder).
+    const response = await callUnder(request, scope.$getEnv?.()?.signal, (wired) =>
+      provider.complete(
+        wired,
+        // Resilience-report channel — see buildAgentMessageApiChart.
+        resilienceHooks(scope, receipt !== undefined),
+      ),
     );
     scope.answer = response.content;
     typedEmit(scope, 'agentfootprint.stream.llm_end', {

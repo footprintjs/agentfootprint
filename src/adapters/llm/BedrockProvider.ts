@@ -41,6 +41,7 @@ import type {
   WireRole,
 } from '../../provider-contract/types.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
+import { abortableIterable, abortErrorOf, throwIfAborted, untilAborted } from '../../lib/abort.js';
 import { asContextWindowExceeded } from '../../provider-contract/contextWindow.js';
 import { retryAfterMsFromError } from './retryAfter.js';
 import { anthropicTakesForcedToolChoice } from './anthropicModels.js';
@@ -53,7 +54,22 @@ import { UnsupportedThinkingError } from '../../thinking/errors.js';
 // ─── Bedrock Converse SDK shape (duck-typed) ───────────────────────
 
 interface BedrockClient {
-  send(command: unknown): Promise<unknown>;
+  send(command: unknown, options?: BedrockSendOptions): Promise<unknown>;
+}
+
+/** AWS SDK v3's per-call HTTP options — the one this adapter sends is the
+ *  abort signal, so an aborted run cancels the request itself (`lib/abort.ts`). */
+interface BedrockSendOptions {
+  abortSignal?: AbortSignal;
+}
+
+/** `client.send(cmd)`, with the request's signal when it has one. */
+function sendUnder(
+  client: BedrockClient,
+  cmd: unknown,
+  signal: AbortSignal | undefined,
+): Promise<unknown> {
+  return signal ? client.send(cmd, { abortSignal: signal }) : client.send(cmd);
 }
 
 interface BedrockConverseCommand {
@@ -218,23 +234,34 @@ export function bedrock(options: BedrockProviderOptions = {}): LLMProvider {
     supportsForcedToolChoice: (model) => anthropicTakesForcedToolChoice(modelOf(model)),
     thinkingMode: () => 'none',
     async complete(req: LLMRequest): Promise<LLMResponse> {
+      // A cancelled call sends nothing (lib/abort.ts, law 1).
+      throwIfAborted(req.signal);
       const input = buildInput(req, modelOf(req.model), defaultMaxTokens);
       try {
         const cmd = new Commands.Converse(input);
-        const response = (await client.send(cmd)) as BedrockConverseResponse;
+        // The signal rides the SDK's HTTP options, so an abort cancels the
+        // request itself; the race refuses an answer that lands after it.
+        const response = (await untilAborted(
+          sendUnder(client, cmd, req.signal),
+          req.signal,
+        )) as BedrockConverseResponse;
         return fromBedrockResponse(response);
       } catch (err) {
-        throw wrapError(err);
+        throw wrapError(err, req.signal);
       }
     },
     async *stream(req: LLMRequest): AsyncIterable<LLMChunk> {
+      throwIfAborted(req.signal);
       const input = buildInput(req, modelOf(req.model), defaultMaxTokens);
       let response: BedrockStreamResponse;
       try {
         const cmd = new Commands.ConverseStream(input);
-        response = (await client.send(cmd)) as BedrockStreamResponse;
+        response = (await untilAborted(
+          sendUnder(client, cmd, req.signal),
+          req.signal,
+        )) as BedrockStreamResponse;
       } catch (err) {
-        throw wrapError(err);
+        throw wrapError(err, req.signal);
       }
       const stream = response.stream;
       if (!stream) {
@@ -258,7 +285,9 @@ export function bedrock(options: BedrockProviderOptions = {}): LLMProvider {
         [];
 
       try {
-        for await (const event of stream) {
+        // An abort ends this loop at once, even when a read is still pending,
+        // and closes the event stream (lib/abort.ts, laws 2–3).
+        for await (const event of abortableIterable(stream, req.signal)) {
           // ── Block start: id + name arrive here; arguments follow as
           //    JSON string fragments on deltas at the same index. ──
           const startIndex = event.contentBlockStart?.contentBlockIndex;
@@ -328,7 +357,7 @@ export function bedrock(options: BedrockProviderOptions = {}): LLMProvider {
         });
         yield { tokenIndex, content: '', done: true, response: finalResponse };
       } catch (err) {
-        throw wrapError(err);
+        throw wrapError(err, req.signal);
       }
     },
   };
@@ -633,7 +662,10 @@ function normalizeStopReason(raw: string): string {
   }
 }
 
-function wrapError(err: unknown): Error {
+function wrapError(err: unknown, signal?: AbortSignal): Error {
+  // A cancelled call fails AS the cancellation, whatever the SDK threw for it
+  // — never as a provider error that a retry would re-send (lib/abort.ts).
+  if (signal?.aborted) return abortErrorOf(signal);
   // Already ours (the typed tool-use conditions above) — re-wrapping would
   // drop `code` / `toolName` / `toolUseId` and double-prefix the message.
   if (err instanceof Error && err.name === 'BedrockProviderError') return err;

@@ -30,6 +30,7 @@ import type {
 import type { PromptCaching } from '../../cache/types.js';
 import type { ThinkingHandler } from '../../thinking/types.js';
 import { asContextWindowExceeded } from '../../provider-contract/contextWindow.js';
+import { abortErrorOf, bodyChunks, throwIfAborted, untilAborted } from '../../lib/abort.js';
 import { azureChatCompletionsUrl } from './azureUrl.js';
 
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
@@ -185,36 +186,48 @@ export function browserOpenai(options: BrowserOpenAIProviderOptions): LLMProvide
     carriesForcedToolChoice: !legacyEndpoint,
     ...(!legacyEndpoint && { promptCaching: OPENAI_PROMPT_CACHING }),
     async complete(req: LLMRequest): Promise<LLMResponse> {
+      // A cancelled call sends nothing (lib/abort.ts, law 1).
+      throwIfAborted(req.signal);
       const body: OpenAIRequestBody = buildBody(req, { ...cfg, stream: false });
       let response: Response;
       try {
-        response = await fetchImpl(apiUrl, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify(body),
-          ...(req.signal && { signal: req.signal }),
-        });
+        // The signal rides the fetch, so an abort cancels the request itself;
+        // every wait after it (headers, body) is raced against it as well, so
+        // an answer that lands after the abort is refused (lib/abort.ts).
+        response = await untilAborted(
+          fetchImpl(apiUrl, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(body),
+            ...(req.signal && { signal: req.signal }),
+          }),
+          req.signal,
+        );
       } catch (err) {
-        throw wrapError(err);
+        throw wrapError(err, req.signal);
       }
-      if (!response.ok) throw await wrapStatus(response);
-      const json = (await response.json()) as OpenAIChatCompletion;
+      if (!response.ok) throw await untilAborted(wrapStatus(response), req.signal);
+      const json = (await untilAborted(response.json(), req.signal)) as OpenAIChatCompletion;
       return fromOpenAIResponse(json);
     },
     async *stream(req: LLMRequest): AsyncIterable<LLMChunk> {
+      throwIfAborted(req.signal);
       const body: OpenAIRequestBody = buildBody(req, { ...cfg, stream: true });
       let response: Response;
       try {
-        response = await fetchImpl(apiUrl, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify(body),
-          ...(req.signal && { signal: req.signal }),
-        });
+        response = await untilAborted(
+          fetchImpl(apiUrl, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(body),
+            ...(req.signal && { signal: req.signal }),
+          }),
+          req.signal,
+        );
       } catch (err) {
-        throw wrapError(err);
+        throw wrapError(err, req.signal);
       }
-      if (!response.ok) throw await wrapStatus(response);
+      if (!response.ok) throw await untilAborted(wrapStatus(response), req.signal);
       if (!response.body) throw new Error('[browser-openai] response has no body');
 
       const textParts: string[] = [];
@@ -224,7 +237,9 @@ export function browserOpenai(options: BrowserOpenAIProviderOptions): LLMProvide
       let lastId = '';
       let tokenIndex = 0;
 
-      for await (const data of parseSSE(response.body)) {
+      // The signal rides INTO the parser: each read is raced against it, and
+      // the body is cancelled on the way out (lib/abort.ts · bodyChunks).
+      for await (const data of parseSSE(response.body, req.signal)) {
         if (data === '[DONE]') break;
         const chunk = data as OpenAIStreamChunk;
         // Usage FIRST, outside the choice guard — the `include_usage` chunk
@@ -576,40 +591,40 @@ function normalizeStopReason(raw: string): string {
   }
 }
 
-/** Parse OpenAI's SSE stream — `data: ...\n\n` lines, `[DONE]` terminator. */
-async function* parseSSE(body: ReadableStream<Uint8Array>): AsyncIterable<unknown> {
-  const reader = body.getReader();
+/**
+ * Parse OpenAI's SSE stream — `data: ...\n\n` lines, `[DONE]` terminator.
+ * Read under `signal` through `bodyChunks`, which races every read against it
+ * and CANCELS the body on every way out — `[DONE]`, an early stop, an error,
+ * an abort — so a stream nobody reads never holds its socket open.
+ */
+async function* parseSSE(
+  body: ReadableStream<Uint8Array>,
+  signal: AbortSignal | undefined,
+): AsyncIterable<unknown> {
   const decoder = new TextDecoder();
   let buf = '';
-  try {
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      let idx;
-      while ((idx = buf.indexOf('\n\n')) >= 0) {
-        const raw = buf.slice(0, idx);
-        buf = buf.slice(idx + 2);
-        for (const line of raw.split('\n')) {
-          if (!line.startsWith('data:')) continue;
-          const data = line.slice(5).trim();
-          if (data === '[DONE]') {
-            yield '[DONE]';
-            return;
-          }
-          if (data) {
-            try {
-              yield JSON.parse(data);
-            } catch {
-              /* skip malformed */
-            }
+  for await (const value of bodyChunks(body, signal)) {
+    buf += decoder.decode(value, { stream: true });
+    let idx;
+    while ((idx = buf.indexOf('\n\n')) >= 0) {
+      const raw = buf.slice(0, idx);
+      buf = buf.slice(idx + 2);
+      for (const line of raw.split('\n')) {
+        if (!line.startsWith('data:')) continue;
+        const data = line.slice(5).trim();
+        if (data === '[DONE]') {
+          yield '[DONE]';
+          return;
+        }
+        if (data) {
+          try {
+            yield JSON.parse(data);
+          } catch {
+            /* skip malformed */
           }
         }
       }
     }
-  } finally {
-    reader.releaseLock();
   }
 }
 
@@ -637,7 +652,10 @@ async function wrapStatus(response: Response): Promise<Error> {
   );
 }
 
-function wrapError(err: unknown): Error {
+function wrapError(err: unknown, signal?: AbortSignal): Error {
+  // A cancelled call fails AS the cancellation, never as a provider error that
+  // a retry would re-send (lib/abort.ts).
+  if (signal?.aborted) return abortErrorOf(signal);
   const tooBig = asContextWindowExceeded(err, { provider: 'browser-openai' });
   if (tooBig) return tooBig;
   if (err instanceof Error) {

@@ -25,9 +25,15 @@
  * Emits:   N/A (the stage emits; this file only builds and calls).
  */
 
-import type { LLMMessage, LLMProvider, LLMResponse } from '../../../provider-contract/types.js';
+import type {
+  LLMMessage,
+  LLMProvider,
+  LLMRequest,
+  LLMResponse,
+} from '../../../provider-contract/types.js';
 import type { CompactionRetention } from './types.js';
 import { COMPACTED_FRAME_PREFIX } from '../../../lib/saidByPerson.js';
+import { callUnder } from '../../../lib/abort.js';
 
 // The marker and its recognizer live in the leaf both this file and the
 // injection engine can import — a rule author has to be able to apply the same
@@ -191,11 +197,13 @@ export async function runSummarizer(
   span: readonly LLMMessage[],
   signal: AbortSignal | undefined,
 ): Promise<SummarizeResult> {
-  const response = await provider.complete({
+  // The run's signal rides the request and bounds the wait; an answer that
+  // lands after it is refused rather than folded in (lib/abort.ts · callUnder).
+  const request: LLMRequest = {
     systemPrompt: SUMMARIZER_SYSTEM_PROMPT,
     messages: [{ role: 'user', content: renderTranscript(span) }],
     model,
-    ...(signal !== undefined && { signal }),
-  });
+  };
+  const response = await callUnder(request, signal, (wired) => provider.complete(wired));
   return { text: response.content, usage: response.usage };
 }
