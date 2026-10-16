@@ -610,6 +610,7 @@ async function* parseSSE(
       const raw = buf.slice(0, idx);
       buf = buf.slice(idx + 2);
       for (const line of raw.split('\n')) {
+        throwIfAborted(signal);
         if (!line.startsWith('data:')) continue;
         const data = line.slice(5).trim();
         if (data === '[DONE]') {

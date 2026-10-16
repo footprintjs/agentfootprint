@@ -473,11 +473,13 @@ export function ollama(
         }
         if (message.thinking) {
           thinkingParts.push(message.thinking);
+          throwIfAborted(req.signal);
           yield { tokenIndex, content: '', done: false, thinkingDelta: message.thinking };
           tokenIndex++;
         }
         if (message.content) {
           textParts.push(message.content);
+          throwIfAborted(req.signal);
           yield { tokenIndex, content: message.content, done: false };
           tokenIndex++;
         }
@@ -494,6 +496,7 @@ export function ollama(
       stopReason: normalizeStopReason(doneReason, toolCalls.length > 0),
       ...(rawThinking && { rawThinking }),
     };
+    throwIfAborted(req.signal);
     yield { tokenIndex, content: '', done: true, response: authoritative };
   }
 
@@ -804,6 +807,7 @@ async function* parseNdjson(
     buf += decoder.decode(value, { stream: true });
     let idx: number;
     while ((idx = buf.indexOf('\n')) >= 0) {
+      throwIfAborted(signal);
       const line = buf.slice(0, idx).trim();
       buf = buf.slice(idx + 1);
       if (!line) continue;
@@ -817,6 +821,7 @@ async function* parseNdjson(
   // A final line with no trailing newline still counts.
   const tail = buf.trim();
   if (tail) {
+    throwIfAborted(signal);
     try {
       yield JSON.parse(tail);
     } catch {

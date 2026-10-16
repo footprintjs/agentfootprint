@@ -87,7 +87,8 @@ const ANTHROPIC_EVENTS_FIRST = [
   { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Hello ' } },
 ];
 const ANTHROPIC_EVENTS_REST = [
-  { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'there.' } },
+  { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'the' } },
+  { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 're.' } },
   { type: 'content_block_stop', index: 0 },
   { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 3 } },
   { type: 'message_stop' },
@@ -113,7 +114,11 @@ const OPENAI_CHUNKS_FIRST = [
 const OPENAI_CHUNKS_REST = [
   {
     id: 'chatcmpl-1',
-    choices: [{ index: 0, delta: { content: 'there.' }, finish_reason: 'stop' }],
+    choices: [{ index: 0, delta: { content: 'the' }, finish_reason: null }],
+  },
+  {
+    id: 'chatcmpl-1',
+    choices: [{ index: 0, delta: { content: 're.' }, finish_reason: 'stop' }],
   },
   { id: 'chatcmpl-1', choices: [], usage: { prompt_tokens: 5, completion_tokens: 3 } },
 ];
@@ -357,7 +362,8 @@ const OLLAMA_WIRE = {
     done: false,
   })}\n`,
   streamRest:
-    `${JSON.stringify({ message: { role: 'assistant', content: 'there.' }, done: false })}\n` +
+    `${JSON.stringify({ message: { role: 'assistant', content: 'the' }, done: false })}\n` +
+    `${JSON.stringify({ message: { role: 'assistant', content: 're.' }, done: false })}\n` +
     `${JSON.stringify({
       message: { role: 'assistant', content: '' },
       done: true,

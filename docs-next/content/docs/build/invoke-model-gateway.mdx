@@ -74,7 +74,8 @@ With no deadline, a gateway that never answers holds the run until your own `req
 
 - the response headers;
 - a `complete()` body;
-- **each** stream read: the first chunk, then every gap between chunks. A stream that keeps sending is never cut off, however long it runs.
+- **each** stream read: the first chunk, then every gap between chunks. A stream that keeps sending is never cut off, however long it runs;
+- the response body close, including a transport whose cancellation never settles.
 
 A missed deadline aborts the request (a real `fetch` drops the connection) and raises `reason: 'timeout'` with `retryable: true`. Your `req.signal` still wins: aborting it rejects with your signal's reason (an `AbortError` when you gave none), never a `timeout` or `network` error. With no `timeoutMs` the request is sent exactly as it was before this option existed.
 

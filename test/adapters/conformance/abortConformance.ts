@@ -401,6 +401,22 @@ export function abortConformance(rig: AdapterRig): void {
   }
 
   if (wired) {
+    it('stream(): cancellation between events buffered by one read refuses further text or terminal usage', async () => {
+      const r = rig.make('stream');
+      const controller = new AbortController();
+      const reason = new Error('caller stopped between buffered events');
+      const iterator = r.provider.stream!(requestFor(rig, controller.signal))[
+        Symbol.asyncIterator
+      ]();
+      await firstText(iterator);
+      r.release();
+      // The rest contains two text events plus terminal usage in ONE fetch read. SDK rigs hand the same
+      // events through their iterator, so all adapters keep the same cancellation law.
+      await firstText(iterator);
+      controller.abort(reason);
+      await expect(iterator.next()).rejects.toBe(reason);
+    });
+
     it('stream(): a chunk whose read settled just before the abort is refused, never handed on', async () => {
       const r = rig.make('stream');
       const controller = new AbortController();

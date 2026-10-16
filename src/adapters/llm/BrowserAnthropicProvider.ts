@@ -325,6 +325,7 @@ async function* parseSSE(
     let idx;
     // Events are separated by \n\n.
     while ((idx = buf.indexOf('\n\n')) >= 0) {
+      throwIfAborted(signal);
       const raw = buf.slice(0, idx);
       buf = buf.slice(idx + 2);
       let event = 'message';
