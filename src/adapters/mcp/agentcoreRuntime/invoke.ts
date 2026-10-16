@@ -122,17 +122,18 @@ export function invokeSdk(options: InvokeSdkOptions): {
   const source =
     options.sdk === undefined
       ? `\`${SDK_PACKAGE}\` is installed but has no`
-      : `the \`sdk\` you passed (it should be \`import * as sdk from '${SDK_PACKAGE}'\`) has no`;
+      : `the \`sdk\` you passed (it should hold \`BedrockAgentCoreClient\` and \`InvokeAgentRuntimeCommand\` from \`${SDK_PACKAGE}\`) has no`;
+  const advice = options.sdk === undefined ? 'Upgrade the SDK.' : 'Check the import.';
   const Command = mod.InvokeAgentRuntimeCommand;
   if (typeof Command !== 'function') {
     throw new Error(
-      `agentCoreRuntimeMcpTransport: ${source} \`InvokeAgentRuntimeCommand\`. Upgrade the SDK.`,
+      `agentCoreRuntimeMcpTransport: ${source} \`InvokeAgentRuntimeCommand\`. ${advice}`,
     );
   }
   if (options.client) return { client: options.client, InvokeAgentRuntimeCommand: Command };
   if (typeof mod.BedrockAgentCoreClient !== 'function') {
     throw new Error(
-      `agentCoreRuntimeMcpTransport: ${source} \`BedrockAgentCoreClient\`. Upgrade the SDK.`,
+      `agentCoreRuntimeMcpTransport: ${source} \`BedrockAgentCoreClient\`. ${advice}`,
     );
   }
   return {
@@ -154,7 +155,7 @@ function loadSdk(): BedrockAgentCoreRuntimeSdkModule {
           `  Install:  npm install ${SDK_PACKAGE}\n` +
           '  Installed, and your app is bundled (esbuild, webpack)? The bundler cannot follow\n' +
           '  this lazy load: import the SDK yourself and pass it as `sdk`\n' +
-          `  (import * as sdk from '${SDK_PACKAGE}'; agentCoreRuntimeMcpTransport({ ..., sdk })).\n` +
+          `  (sdk: { BedrockAgentCoreClient, InvokeAgentRuntimeCommand } from '${SDK_PACKAGE}').\n` +
           '  Or use `auth: { bearer }` for a runtime with OAuth inbound auth — that path is plain\n' +
           '  HTTPS and loads no AWS SDK.',
         caller: 'agentCoreRuntimeMcpTransport',

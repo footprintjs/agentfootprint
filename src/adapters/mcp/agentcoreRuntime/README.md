@@ -26,7 +26,8 @@ const orders = await mcpClient({
     //                                     (OAuth inbound auth; `service` = your OAuth2 provider)
     // session: 'reuse'                    (one runtime session per CLIENT — build a
     //                                     client per conversation, never share it)
-    // sdk: agentCoreSdk                   (SigV4: the AWS SDK module YOU imported —
+    // sdk: { BedrockAgentCoreClient, InvokeAgentRuntimeCommand }
+    //                                     (SigV4: the AWS SDK classes YOU imported —
     //                                     needed in a bundled app; see below)
     retry: { onRetry: ({ attempt, waitMs }) => log.info({ attempt, waitMs }, 'runtime session busy') },
   }),
@@ -36,8 +37,9 @@ const agent = Agent.create({ provider, model }).tools(await orders.tools()).buil
 
 ## Bundled apps
 SigV4 loads `@aws-sdk/client-bedrock-agentcore` through a lazy `require`, which
-esbuild and webpack cannot follow. Import the package's namespace yourself and
-pass it as `sdk` (pass the MCP SDK to `mcpClient` as `sdk` too). Either way the
+esbuild and webpack cannot follow. Import `BedrockAgentCoreClient` and
+`InvokeAgentRuntimeCommand` yourself and pass them as `sdk` (pass the MCP SDK to
+`mcpClient` as `sdk` too). Either way the
 SDK is read when the transport is built, so a missing one is refused there, in
 words that name `sdk`, and never at the first call. `_sdk` is the older name of
 `sdk`, kept because it shipped in the published options type.

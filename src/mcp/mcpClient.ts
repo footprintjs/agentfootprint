@@ -197,12 +197,17 @@ function assertSdk(sdk: McpSdk, transport: McpTransport['transport']): void {
     (key) => typeof given !== 'object' || given === null || typeof given[key] !== 'function',
   );
   if (missing.length === 0) return;
+  const sources: Record<keyof McpSdk, string> = {
+    Client: "`import { Client } from '@modelcontextprotocol/sdk/client/index.js'`",
+    StreamableHTTPClientTransport:
+      '`import { StreamableHTTPClientTransport } from ' +
+      "'@modelcontextprotocol/sdk/client/streamableHttp.js'`",
+  };
   throw new TypeError(
     `mcpClient: \`sdk\` has no ${missing.map((key) => `\`${key}\``).join(' or ')} constructor. ` +
-      'Pass the two classes themselves: ' +
-      "`import { Client } from '@modelcontextprotocol/sdk/client/index.js'`, " +
-      "`import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'`, " +
-      'then `sdk: { Client, StreamableHTTPClientTransport }`.',
+      `Pass the class${needed.length > 1 ? 'es' : ''} themselves: ` +
+      `${needed.map((key) => sources[key]).join(', ')}, ` +
+      `then \`sdk: { ${needed.join(', ')} }\`.`,
   );
 }
 

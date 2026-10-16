@@ -343,7 +343,7 @@ what the bundler follows, and the library never touches its loader:
 ```ts
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import * as agentCoreSdk from '@aws-sdk/client-bedrock-agentcore';
+import { BedrockAgentCoreClient, InvokeAgentRuntimeCommand } from '@aws-sdk/client-bedrock-agentcore';
 import { agentCoreRuntimeMcpTransport, mcpClient } from 'agentfootprint/providers';
 
 const orders = await mcpClient({
@@ -352,27 +352,38 @@ const orders = await mcpClient({
   transport: agentCoreRuntimeMcpTransport({
     agentRuntimeArn: process.env.ORDERS_RUNTIME_ARN!,
     region: 'us-west-2',
-    sdk: agentCoreSdk,                                  // the AWS SDK (SigV4 only)
+    sdk: { BedrockAgentCoreClient, InvokeAgentRuntimeCommand }, // the AWS SDK (SigV4 only)
   }),
 });
 ```
 
-Then bundle as usual. With esbuild:
+Then bundle as usual. With esbuild, emit ESM (the example uses top-level
+`await`) and give the bundle a real `require`: the AWS SDK arrives as its
+CommonJS build, which loads Node built-ins with `require`, and without the
+banner esbuild's ESM output throws `Dynamic require of "http" is not supported`
+when the bundle starts:
 
 ```sh
-esbuild src/server.ts --bundle --platform=node --format=esm --outfile=dist/server.mjs
+esbuild src/server.ts --bundle --platform=node --format=esm --outfile=dist/server.mjs \
+  --banner:js="import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);"
 ```
 
 With webpack, target Node and keep the SDKs in the bundle (do not list them in
-`externals`):
+`externals`). Top-level `await` needs `module` set to `es2022` or later in your
+tsconfig:
 
 ```js
 // webpack.config.cjs
 module.exports = {
+  mode: 'production',
   target: 'node',
   entry: './src/server.ts',
   output: { filename: 'server.cjs', library: { type: 'commonjs2' } },
-  resolve: { extensions: ['.ts', '.js'] },
+  resolve: {
+    extensions: ['.ts', '.js'],
+    // TypeScript sources import siblings as './x.js'
+    extensionAlias: { '.js': ['.ts', '.js'] },
+  },
   module: { rules: [{ test: /\.ts$/, loader: 'ts-loader' }] },
 };
 ```

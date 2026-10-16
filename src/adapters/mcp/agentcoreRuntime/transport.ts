@@ -173,9 +173,11 @@ export interface AgentCoreRuntimeMcpTransportOptions {
    *
    * Without it the transport loads the SDK itself through a lazy `require`,
    * which a bundler (esbuild, webpack) cannot follow. Pass it when your app is
-   * bundled, so the bundler sees a static import: import the package's
-   * namespace (`import * as agentCoreSdk`, from `@aws-sdk/client-bedrock-agentcore`)
-   * and call `agentCoreRuntimeMcpTransport({ agentRuntimeArn, region, sdk: agentCoreSdk })`.
+   * bundled, so the bundler sees a static import: import
+   * `BedrockAgentCoreClient` and `InvokeAgentRuntimeCommand` from
+   * `@aws-sdk/client-bedrock-agentcore` and pass
+   * `sdk: { BedrockAgentCoreClient, InvokeAgentRuntimeCommand }` (named
+   * imports let the bundler drop the rest of the client).
    *
    * The transport still builds its own client from it, with the SDK's retry
    * off. Either way the SDK is read when the transport is built, so a missing
@@ -306,10 +308,11 @@ function authStrategy(options: AgentCoreRuntimeMcpTransportOptions, url: string)
       );
     }
     if (sdk !== undefined) {
+      const given = options.sdk !== undefined ? 'sdk' : '_sdk';
       throw new TypeError(
-        'agentCoreRuntimeMcpTransport: `sdk` is the SigV4 strategy’s AWS SDK module, and ' +
+        `agentCoreRuntimeMcpTransport: \`${given}\` is the SigV4 strategy’s AWS SDK module, and ` +
           '`auth: { bearer }` sends no AWS SDK request — this path is plain HTTPS and loads no ' +
-          'AWS SDK. Remove `sdk`, or use `auth: "sigv4"`.',
+          `AWS SDK. Remove \`${given}\`, or use \`auth: "sigv4"\`.`,
       );
     }
     if (options.client !== undefined) {

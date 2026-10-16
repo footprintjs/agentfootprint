@@ -65,7 +65,9 @@ describe('bundled app without the hook: refused at construction, naming `sdk`', 
       const message = (error as Error).message;
       expect(message).toContain('pass it as `sdk`');
       expect(message).toContain('bundled (esbuild, webpack)');
-      expect(message).toContain("import * as sdk from '@aws-sdk/client-bedrock-agentcore'");
+      expect(message).toContain(
+        "sdk: { BedrockAgentCoreClient, InvokeAgentRuntimeCommand } from '@aws-sdk/client-bedrock-agentcore'",
+      );
       expect(loads).toEqual(['@aws-sdk/client-bedrock-agentcore']);
     },
   );
@@ -139,26 +141,48 @@ describe('the public `sdk` hook never touches the loader', () => {
     ).toThrow(/two different AWS SDK modules/);
   });
 
-  it('`sdk` beside a bearer is refused — that path loads no AWS SDK', async () => {
-    const { agentCoreRuntimeMcpTransport } = await withFailingLoader(BUNDLER_FAILURES[0][1]);
-    expect(() =>
-      agentCoreRuntimeMcpTransport({
-        agentRuntimeArn: ARN,
-        region: REGION,
-        auth: { bearer: { id: 'p', getCredential: async () => ({ kind: 'none' }) } as never },
-        sdk: fakeAgentCoreRuntime({ tools: [] }).sdk,
-      }),
-    ).toThrow(/`sdk` is the SigV4 strategy’s AWS SDK module/);
-  });
+  it.each(['sdk', '_sdk'] as const)(
+    '`%s` beside a bearer is refused by the name it was given — that path loads no AWS SDK',
+    async (option) => {
+      const { agentCoreRuntimeMcpTransport } = await withFailingLoader(BUNDLER_FAILURES[0][1]);
+      const build = () =>
+        agentCoreRuntimeMcpTransport({
+          agentRuntimeArn: ARN,
+          region: REGION,
+          auth: { bearer: { id: 'p', getCredential: async () => ({ kind: 'none' }) } as never },
+          [option]: fakeAgentCoreRuntime({ tools: [] }).sdk,
+        });
+      expect(build).toThrow(`\`${option}\` is the SigV4 strategy’s AWS SDK module`);
+      expect(build).toThrow(`Remove \`${option}\``);
+    },
+  );
 
   it('a wrong `sdk` is refused by name when the transport is built', async () => {
     const { agentCoreRuntimeMcpTransport } = await withFailingLoader(BUNDLER_FAILURES[0][1]);
     const build = (sdk: object) => () =>
       agentCoreRuntimeMcpTransport({ agentRuntimeArn: ARN, region: REGION, sdk });
-    expect(build({})).toThrow(/the `sdk` you passed .* has no `InvokeAgentRuntimeCommand`/);
-    expect(build({ InvokeAgentRuntimeCommand: class {} })).toThrow(
-      /the `sdk` you passed .* has no `BedrockAgentCoreClient`/,
+    expect(build({})).toThrow(
+      /the `sdk` you passed .* has no `InvokeAgentRuntimeCommand`\. Check the import\./,
     );
+    expect(build({ InvokeAgentRuntimeCommand: class {} })).toThrow(
+      /the `sdk` you passed .* has no `BedrockAgentCoreClient`\. Check the import\./,
+    );
+  });
+
+  it('mcpClient over stdio needs only `Client` from `sdk`, and says so', async () => {
+    const { mcpClient } = await withFailingLoader(BUNDLER_FAILURES[0][1]);
+    const error = await mcpClient({
+      transport: { transport: 'stdio', command: 'unused' },
+      sdk: {} as unknown as McpSdk,
+    }).then(
+      () => new Error('should have refused'),
+      (e: Error) => e,
+    );
+    expect(error.message).toContain('`sdk` has no `Client` constructor');
+    expect(error.message).toContain('Pass the class themselves');
+    expect(error.message).toContain('`sdk: { Client }`');
+    expect(error.message).not.toContain('StreamableHTTPClientTransport');
+    expect(loads).toEqual([]);
   });
 
   it.each([
