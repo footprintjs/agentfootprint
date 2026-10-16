@@ -82,6 +82,18 @@ including newline separators. Only own data properties are read; getters,
 malformed or over-limit diagnostics use a generic error without partial advice.
 Decoding errors, separately, name the contract without including payload values.
 
+Plain objects and arrays are recognised by structure, not by identity with this
+realm's `Object.prototype`, so data built in another realm (jest's environment,
+`node:vm`) is accepted. What the tool returns is a **copy** made of this realm's
+objects, built from property descriptors read once each — so nothing the source
+does after the check (a Proxy trap, a replaced method on a foreign prototype)
+reaches your code. A null prototype stays null and an own `__proto__` key stays
+a key; a sub-object the source shared is copied (and counted) on each path.
+Class instances, accessors anywhere on the value or its inherited path, and
+forged or `__proto__`-swapped prototypes are refused. Proxies are refused before
+any trap runs wherever the runtime can name one (Node); elsewhere only what
+their traps answered is copied. See `plainData.ts`.
+
 Both opt-in modes preserve nested zero, false and null, and reject non-JSON
 values rather than coercing them. Validation visits at most 1,000,000 values and
 64 nested containers; the JSON-text fallback also accepts at most 16,000,000

@@ -1,5 +1,6 @@
 /** MCP result decoding; default text is unchanged, structured data is opt-in. */
 import type { McpCallToolResult, McpClientOptions } from './types.js';
+import { copyJsonObject } from './plainData.js';
 
 type ResultMode = NonNullable<McpClientOptions['resultMode']>;
 
@@ -49,8 +50,10 @@ export function readToolResult(
   try {
     const structured = Object.getOwnPropertyDescriptor(result, 'structuredContent');
     if (structured !== undefined) {
-      if (!('value' in structured) || !jsonObject(structured.value)) throw invalid();
-      return structured.value;
+      // A copy of this realm's own objects, never the transport's value: see plainData.ts.
+      const copied = 'value' in structured ? copyJsonObject(structured.value) : undefined;
+      if (copied === undefined) throw invalid();
+      return copied;
     }
     if (mode !== 'structured-or-json') throw invalid();
     const content = ownValue(result, 'content');
@@ -61,8 +64,9 @@ export function readToolResult(
     const text = ownValue(block, 'text');
     if (typeof text !== 'string' || text.length > 16_000_000) throw invalid();
     const parsed: unknown = JSON.parse(text);
-    if (!jsonObject(parsed)) throw invalid();
-    return parsed;
+    const copied = copyJsonObject(parsed);
+    if (copied === undefined) throw invalid();
+    return copied;
   } catch {
     // Parser and getter exceptions may echo source bytes. Keep the refusal
     // authored here rather than forwarding arbitrary transport payloads.
@@ -104,47 +108,6 @@ function ownValue(value: object, key: string): unknown {
   if (descriptor !== undefined && !('value' in descriptor))
     throw new Error('Accessor is not JSON data');
   return descriptor?.value;
-}
-
-/** Validate the JSON data domain without invoking toJSON/getters, converting
- * unknown to null or dropping unsupported fields. No clone or normalization. */
-function jsonObject(value: unknown): value is Readonly<Record<string, unknown>> {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
-  const ancestors = new Set<object>();
-  let visited = 0;
-  function visit(item: unknown, depth: number): boolean {
-    if (++visited > 1_000_000) return false;
-    if (item === null || typeof item === 'string' || typeof item === 'boolean') return true;
-    if (typeof item === 'number') return Number.isFinite(item);
-    if (typeof item !== 'object' || depth >= 64 || ancestors.has(item)) return false;
-    const array = Array.isArray(item);
-    const prototype = Object.getPrototypeOf(item);
-    if (
-      array ? prototype !== Array.prototype : prototype !== Object.prototype && prototype !== null
-    )
-      return false;
-    ancestors.add(item);
-    try {
-      const keys = Reflect.ownKeys(item);
-      if (array && keys.length !== item.length + 1) return false;
-      for (const key of keys) {
-        if (array && key === 'length') continue;
-        if (typeof key !== 'string') return false;
-        if (array && (!/^(0|[1-9]\d*)$/.test(key) || Number(key) >= item.length)) return false;
-        const descriptor = Object.getOwnPropertyDescriptor(item, key)!;
-        if (
-          !descriptor.enumerable ||
-          !('value' in descriptor) ||
-          !visit(descriptor.value, depth + 1)
-        )
-          return false;
-      }
-      return true;
-    } finally {
-      ancestors.delete(item);
-    }
-  }
-  return visit(value, 0);
 }
 
 // ─── Reading a tools/call answer (both arms of the protocol) ───────
