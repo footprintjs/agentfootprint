@@ -37,10 +37,12 @@ async function withFailingLoader(failure: (id: string) => Error) {
       throw failure(id);
     },
   }));
-  const [{ mcpClient }, { agentCoreRuntimeMcpTransport }] = await Promise.all([
-    import('../../src/mcp/mcpClient.js'),
-    import('../../src/adapters/mcp/agentcoreRuntime/transport.js'),
-  ]);
+  // Vitest's manual-mock callstack is shared: concurrent imports of these
+  // graphs can bypass their common lazyRequire mock. Resolve them in order.
+  const { mcpClient } = await import('../../src/mcp/mcpClient.js');
+  const { agentCoreRuntimeMcpTransport } = await import(
+    '../../src/adapters/mcp/agentcoreRuntime/transport.js'
+  );
   return { mcpClient, agentCoreRuntimeMcpTransport };
 }
 
