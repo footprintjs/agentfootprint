@@ -44,6 +44,16 @@ const LOCAL: Record<IntrinsicName, object> = {
   Array: Array.prototype,
 };
 
+/**
+ * A realm's own constructor, as `Function.prototype.toString` prints it. V8
+ * prints `function Object() { [native code] }`; SpiderMonkey and JavaScriptCore
+ * put the body on its own lines, so whitespace inside the braces is free.
+ */
+const NATIVE_SOURCE: Record<IntrinsicName, RegExp> = {
+  Object: /^function Object\(\) \{\s*\[native code\]\s*\}$/,
+  Array: /^function Array\(\) \{\s*\[native code\]\s*\}$/,
+};
+
 /** The documented decoding bounds. */
 const MAX_VALUES = 1_000_000;
 const MAX_DEPTH = 64;
@@ -150,8 +160,7 @@ function nativeConstructorLinksBack(proto: object, name: IntrinsicName): boolean
   if (ctor === undefined || !('value' in ctor) || typeof ctor.value !== 'function') return false;
   // Function.prototype.toString never runs user code; a Proxy or bound function
   // prints an anonymous native body, a class prints its source.
-  if (Function.prototype.toString.call(ctor.value) !== `function ${name}() { [native code] }`)
-    return false;
+  if (!NATIVE_SOURCE[name].test(Function.prototype.toString.call(ctor.value))) return false;
   const back = Object.getOwnPropertyDescriptor(ctor.value, 'prototype');
   return back !== undefined && 'value' in back && back.value === proto;
 }
