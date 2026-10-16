@@ -284,12 +284,17 @@ describe('integration: the keyword trap parks after renewalGrace idle passes', (
     return { asked, results: toolResults.join('\n'), reengaged, evaluated: caps.evaluated };
   }
 
-  it('a role that may not read the PARKED cursor is refused — re-engagement is a capability, not a no-op', async () => {
+  it('a role that may not read the trap skill never engages it, so the pick is a policy refusal (9.86.0 parked-cursor case, now unreachable)', async () => {
     const { asked, results, reengaged, evaluated } = await parkedSelfCallUnder(['billing']);
-    // The premise: the map really did park before the pick.
-    expect(skippedAt(evaluated, 3)).toContainEqual(
-      expect.objectContaining({ id: 'zone-audit', reason: 'parked' }),
-    );
+    // Stronger than the original premise: the keyword trap can no longer put a
+    // HIDDEN skill on the cursor at all, so the map never engaged and never
+    // parked. Every pass refused the skill as hidden, the pass before the pick
+    // included — hidden means hidden on the keyword path too.
+    for (let i = 0; i <= 3; i++) {
+      expect(skippedAt(evaluated, i)).toContainEqual(
+        expect.objectContaining({ id: 'zone-audit', reason: 'hidden' }),
+      );
+    }
     // The dispatch of read_skill was put to the policy, not skipped past it.
     expect(asked).toContain('skill:zone-audit');
     // …and the policy's answer stood: nothing re-engaged, nothing activated.

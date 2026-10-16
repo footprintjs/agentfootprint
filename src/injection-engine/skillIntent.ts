@@ -11,7 +11,7 @@
  * the injection-context type.
  */
 
-import type { InjectionContext } from './types.js';
+import { isHiddenSkill, type InjectionContext } from './types.js';
 import type { RouteWitness, SkillMatchData } from './skillMatch.js';
 import type { IntentCandidate, IntentScorer } from './intentScorer.js';
 import { validateIntentScores } from './intentScorer.js';
@@ -48,7 +48,9 @@ export interface TurnRoutingPlan {
    *  DATA and it yielded quotable text (9.28.0; a `when` rule has none).
    *  Unconditional entries are defaults, not rules — they never beat an
    *  inherited cursor. A throwing predicate is a no-match (dev-warned), the
-   *  same law the cursor resolver applies. */
+   *  same law the cursor resolver applies. A rule for a skill the caller's role
+   *  may not read (`ctx.hiddenSkillIds`) is never consulted: tier 1 obeys the
+   *  same role filter as tiers 2 and 3. */
   firstRuleMatch(
     ctx: InjectionContext,
   ): { readonly id: string; readonly witness?: RouteWitness } | undefined;
@@ -80,6 +82,7 @@ export function buildTurnRoutingPlan(input: {
     entryIds: entries.map((e) => e.id),
     firstRuleMatch(ctx) {
       for (const e of ruleEntries) {
+        if (isHiddenSkill(ctx, e.id)) continue;
         try {
           if (!e.when!(ctx)) continue;
           // Evidence is extracted on the WINNER only — and a throwing extractor

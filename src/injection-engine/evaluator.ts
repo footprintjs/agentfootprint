@@ -32,6 +32,12 @@
  * it never reorders), and an injection both triggered AND leased is active
  * once. Absent `leaseActiveIds` = the loop below is byte-identical.
  *
+ * Before everything else, the ROLE gate: a skill named by
+ * `ctx.hiddenSkillIds` (the caller's `skill_read` answer for this pass) is
+ * skipped with the reason `'hidden'`, whatever its trigger, a lease or the
+ * cursor says. This is where activation is decided, so it is where hidden is
+ * enforced. Absent `hiddenSkillIds` = the loop below is byte-identical.
+ *
  * And ONE framework-tier suppression, the admission's mirror (9.58.0): an
  * injection named by `ctx.parkedIds` — a member of a map the mount kernel
  * has PARKED for lack of corroborating evidence — is skipped for this pass
@@ -42,7 +48,7 @@
  * `parkedIds` = the loop below is byte-identical.
  */
 
-import { toolResultsOf } from './types.js';
+import { isHiddenSkill, toolResultsOf } from './types.js';
 import type { Injection, InjectionContext, InjectionEvaluation } from './types.js';
 import { missingFactsFor } from './promptTemplate.js';
 
@@ -56,12 +62,24 @@ export function evaluateInjections(
   const admitted: Injection[] = [];
   const skipped: Array<{
     id: string;
-    reason: 'predicate-threw' | 'unknown-trigger-kind' | 'unknown-fact' | 'parked';
+    reason: 'predicate-threw' | 'unknown-trigger-kind' | 'unknown-fact' | 'parked' | 'hidden';
     error?: string;
   }> = [];
   const active: Injection[] = [];
 
   for (const inj of injections) {
+    // Role visibility — the one activation gate. FIRST, before the park, the
+    // lease and every trigger: whatever moved toward this skill (a keyword
+    // in the user message, a declared route, a tool's lease, a pick), a
+    // skill this caller's role may not read never becomes active.
+    if (inj.flavor === 'skill' && isHiddenSkill(ctx, inj.id)) {
+      skipped.push({
+        id: inj.id,
+        reason: 'hidden',
+        error: `this caller's role may not read this skill (skill_read), so nothing activates it.`,
+      });
+      continue;
+    }
     // The park suppression (9.58.0) — the lease admission's mirror. FIRST,
     // so a parked map's member is skipped whatever its trigger or a lease
     // would have said, and the skip is on the record by name.

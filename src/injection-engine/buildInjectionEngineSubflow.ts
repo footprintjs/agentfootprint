@@ -62,6 +62,7 @@ import { typedEmit } from '../recorders/core/typedEmit.js';
 import { iterationsRemainingOf } from '../lib/iterationBudget.js';
 import { evaluateInjections } from './evaluator.js';
 import {
+  isHiddenSkill,
   projectActiveInjection,
   toolResultsOf,
   type ActiveInjection,
@@ -158,6 +159,17 @@ export interface InjectionEngineConfig {
    * nothing here runs and the evaluation is byte-identical.
    */
   readonly engagement?: EngagementPlan;
+  /**
+   * Which skills the caller's ROLE may not see (`skill_read`), asked once per
+   * iteration — present only when the agent's permission checker governs
+   * `skill_read`. The Gather stage resolves it FIRST, before anything on
+   * this pass decides, and publishes it as `hiddenSkillIds`: the Evaluate
+   * stage hands it to the cursor resolver and the evaluator
+   * (`ctx.hiddenSkillIds`, read through `isHiddenSkill`), and the mount
+   * carries it to the parent for every model-facing composer after it.
+   * Absent → nothing is resolved and the evaluation is byte-identical.
+   */
+  readonly hiddenSkillIds?: (scope: object) => Promise<readonly string[]> | readonly string[];
 }
 
 // ── Route / Delta shapes (visible stage state; no new event contract) ────
@@ -298,7 +310,16 @@ interface InjectionEngineArgs {
 export function buildInjectionEngineSubflow(config: InjectionEngineConfig): FlowChart {
   const injections = config.injections;
 
-  return flowChart<InjectionEngineState>('Gather', gatherStage, 'gather', {
+  const resolveHidden = config.hiddenSkillIds;
+  const gather =
+    resolveHidden === undefined
+      ? gatherStage
+      : async (scope: TypedScope<InjectionEngineState>): Promise<void> => {
+          gatherStage(scope);
+          scope.$setValue('hiddenSkillIds', await hiddenSkillIdsOf(resolveHidden, scope));
+        };
+
+  return flowChart<InjectionEngineState>('Gather', gather, 'gather', {
     description:
       "Snapshot this turn's injection inputs (iteration, history, last tool, LLM-activated)",
   })
@@ -312,6 +333,7 @@ export function buildInjectionEngineSubflow(config: InjectionEngineConfig): Flow
         config.stepPlanFor,
         config.reachableSkills,
         config.engagement,
+        resolveHidden !== undefined,
       ),
       'evaluate',
       'Evaluate every Injection trigger; produce activeInjections + metadata',
@@ -344,6 +366,27 @@ function gatherStage(scope: TypedScope<InjectionEngineState>): void {
   });
 }
 
+// FOLD · the one owner of scope.hiddenSkillIds — which skill ids this caller's role may not see, this iteration
+// consumers read this and never re-derive it: the Evaluate stage below (cursor + activation, via
+// `types.ts` · isHiddenSkill), and, through the mount's outputMapper, the tools slot's read_skill offer,
+// toolCalls.ts · dispatchRoster, the read_skill gate, the propose-transition refusal, callLLM's ontology piece.
+// detached: yes — a plain string[].
+/**
+ * Resolve the role-hidden skill ids for this pass. Resolved HERE, at the top
+ * of the engine, because activation is decided on this pass and nothing may
+ * decide before the answer is in. Its errors are NOT swallowed: the agent's
+ * resolver already hides a skill whose check throws, and a resolver that
+ * fails as a whole fails the iteration — nothing is composed or activated
+ * from a policy that did not answer.
+ */
+async function hiddenSkillIdsOf(
+  resolve: (scope: object) => Promise<readonly string[]> | readonly string[],
+  scope: object,
+): Promise<readonly string[]> {
+  const asked = resolve(scope);
+  return [...(asked instanceof Promise ? await asked : asked)];
+}
+
 // ── Stage 2: Evaluate (logic identical to the old single stage) ──────────
 
 function makeEvaluateStage(
@@ -354,6 +397,9 @@ function makeEvaluateStage(
   stepPlanFor?: StepPlanFor,
   reachableSkills?: (currentSkillId?: string) => readonly string[],
   engagementPlan?: EngagementPlan,
+  /** Gather published `hiddenSkillIds` this pass. Read only then, so an agent
+   *  without per-role visibility records exactly the reads it always did. */
+  readsHidden = false,
 ) {
   return (scope: TypedScope<InjectionEngineState>): void => {
     const args = scope.$getArgs<InjectionEngineArgs>();
@@ -368,6 +414,9 @@ function makeEvaluateStage(
       args.pendingToolTransition.iteration + 1 === iteration
         ? args.pendingToolTransition
         : undefined;
+    const hidden = readsHidden
+      ? (scope.$getValue('hiddenSkillIds') as readonly string[] | undefined)
+      : undefined;
 
     const baseCtx: InjectionContext = {
       iteration,
@@ -391,6 +440,9 @@ function makeEvaluateStage(
       ...(args.entryScores !== undefined && { entryScores: args.entryScores }),
       ...(args.entryScorer !== undefined && { entryScorer: args.entryScorer }),
       ...(args.turnRoute !== undefined && { turnRoute: args.turnRoute }),
+      // Role visibility for this pass, resolved by Gather — read by the cursor
+      // resolver and the evaluator alike, so neither can activate a hidden skill.
+      ...(hidden !== undefined && hidden.length > 0 && { hiddenSkillIds: hidden }),
     };
 
     // KEYSTONE cursor advance — derive the next cursor from the SAME ctx the
@@ -544,7 +596,8 @@ function makeEvaluateStage(
       // as SEPARATE fields, the reason, and the way back named as a concrete
       // call. Built from the state that was just advanced, so the card and
       // the suppression are two views of one decision.
-      parkCardText = parkCard(engagementPlan, advance.next);
+      // Filtered by the role: the card never names a member skill this caller may not read.
+      parkCardText = parkCard(engagementPlan, advance.next, (id) => !isHiddenSkill(ctx, id));
       // Tools come off the wire on the ENGAGEMENT axis, independently of
       // `scopeTools` — see `EngagementAdvance.parkedToolNames`.
       scope.$setValue('parkedToolNames', advance.parkedToolNames);

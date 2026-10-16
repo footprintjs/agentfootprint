@@ -1167,7 +1167,7 @@ function viewOf(location: EpochLocation, served: boolean): ServedView {
   // always was.
   const ontologyRecord = ontologyOf(readRunConstant(location, 'ontology', served));
   // The hidden skill ids the call was composed under (9.108.0) — a per-epoch
-  // key the tools slot publishes, read at the call as the stage read it.
+  // key the Injection Engine's mount publishes, read at the call as the stage read it.
   const hiddenAtCall = readAtCall(location, 'hiddenSkillIds', served) as
     | readonly string[]
     | undefined;

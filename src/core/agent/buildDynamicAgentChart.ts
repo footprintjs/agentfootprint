@@ -315,6 +315,10 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           ...(deps.engagementPlan !== undefined && {
             servedInjectionIds: (parent.servedInjectionIds as readonly string[] | undefined) ?? [],
           }),
+          // A composition member's run, for the Gather stage's skill-visibility
+          // check (`memberRun.ts`) — value-conditional: the agent's own runs
+          // cross no key.
+          ...memberRunArg(parent.memberRun),
         }),
         outputMapper: (sf) => ({
           activeInjections: sf.activeInjections,
@@ -323,6 +327,12 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           // `currentSkillId` is a readonly input here), then mapped onto the
           // ReAct parent's mutable currentSkillId by the outer outputMapper.
           nextSkillCursor: sf.nextSkillCursor,
+          // The role-hidden skill ids this iteration (9.86.0) — first hop, onto
+          // the sf-llm-call scope (the tools slot reads them there); the
+          // boundary's own outputMapper carries them the rest of the way to the
+          // ToolCalls stage. Resolved by the engine's Gather stage before it
+          // decided anything. Value-conditional.
+          ...(sf.hiddenSkillIds !== undefined && { hiddenSkillIds: sf.hiddenSkillIds }),
           // The re-keyed step pointer (9.18.0) — same alias discipline as the
           // cursor one line up, same round trip: out under its own key, mapped
           // onto the ReAct parent's `stepPointer` by the outer outputMapper.
@@ -472,9 +482,13 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
         // sf-llm-call off the boundary's `findingsLedger`. See `AgentChartDeps.timeWindows`.
         ...(deps.timeWindows === true && timeWindowsArg(parent.findingsLedger)),
         ...(deps.timeWindows === true && timeClockArg(parent.findingsLedger)),
-        // A composition member's run, for the slot's skill-visibility check
-        // (`memberRun.ts`) — value-conditional: the agent's own runs cross no key.
-        ...memberRunArg(parent.memberRun),
+        // The role-hidden skill ids the Injection Engine resolved THIS iteration
+        // (owner: `buildInjectionEngineSubflow.ts` · `hiddenSkillIdsOf`) — the
+        // menu is composed from the same answer the activation was refused by.
+        // Value-conditional: an agent without per-role visibility crosses no key.
+        ...(parent.hiddenSkillIds !== undefined && {
+          hiddenSkillIds: parent.hiddenSkillIds as readonly string[],
+        }),
         // The turn's result-check lines (step T8). See `AgentChartDeps.timeLimits`.
         ...(deps.timeLimits === true && timeLimitsArg(parent.findingsLedger)),
         // Tool choice by classifier (9.105.0) — the flat chart's three args,
@@ -514,10 +528,6 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
       outputMapper: (sf) => ({
         toolsInjections: sf.toolsInjections,
         dynamicToolSchemas: sf.toolSchemas,
-        // The role-hidden skill ids this iteration (9.86.0) — first hop, onto
-        // the sf-llm-call scope; the boundary's own outputMapper carries them
-        // the rest of the way to the ToolCalls stage. Value-conditional.
-        ...(sf.hiddenSkillIds !== undefined && { hiddenSkillIds: sf.hiddenSkillIds }),
         ...(sf.integrityFindingIds !== undefined && {
           integrityFindingIds: sf.integrityFindingIds,
         }),
@@ -706,6 +716,11 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           iteration: p.iteration,
           maxIterations: p.maxIterations,
           runIdentity: p.runIdentity,
+          // A composition member's run, crossed into sf-llm-call so the engine's
+          // Gather stage checks skill visibility under the MEMBER's caller, not
+          // under no identity at all. Value-conditional: the agent's own runs
+          // cross no key.
+          ...(p.memberRun !== undefined && { memberRun: p.memberRun }),
           cachingDisabled: p.cachingDisabled,
           recentHitRate: p.recentHitRate,
           activatedInjectionIds: p.activatedInjectionIds,

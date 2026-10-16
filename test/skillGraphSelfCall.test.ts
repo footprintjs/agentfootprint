@@ -1089,19 +1089,15 @@ describe('per-role skill visibility', () => {
     expect(foreignIds(notice, 'alpha', ['alpha', 'beta', 'gamma'])).toEqual([]);
   });
 
-  it('a role that may not READ the cursor still gets the notice, not a policy denial (9.86.0 — a stay exercises no capability, so there was nothing for the policy to gate)', async () => {
-    // The second half of the same defect. `skill_read` is asked BEFORE the
-    // graph gate, and it was asked for the skill the model was already
-    // standing in — whose body was in that call's system prompt and whose
-    // tools were on that call's wire. The policy said no, and the model read
-    // "Skill 'alpha' is not available in this context." about the skill it was
-    // working in: the exact sentence the self-call arm exists to prevent,
-    // arriving from a stage upstream of it.
-    //
-    // Nothing is narrowed by the fix: a stay activates nothing and reveals
-    // nothing the request did not already carry, so there is no capability
-    // here to grant. Every other id still goes through the policy — the
-    // sibling assertion below drives one.
+  it('a role that may not READ the start skill never stands in it — so a read of it is a policy refusal, not a self-call', async () => {
+    // 9.86.0 pinned a stay on a skill the role may not read: the cursor stood
+    // on `alpha` and its body was in the request, for a role whose policy
+    // hides every skill. That was the leak itself, not
+    // a behaviour to keep: hidden means hidden on every activation path, the
+    // graph's own start included. The cursor never enters `alpha`, its body
+    // never reaches the model, and `read_skill("alpha")` is no longer a
+    // self-call — it is a genuine read of a hidden skill, refused by the
+    // policy with the policy's own message, like any other.
     const g = skillGraph({
       skills: [skill('alpha'), skill('beta'), skill('gamma')],
       start: 'alpha',
@@ -1109,16 +1105,18 @@ describe('per-role skill visibility', () => {
       check: 'off',
     });
     const seen: string[] = [];
+    const requests: string[] = [];
     const rejected: Array<Record<string, unknown>> = [];
     let i = 0;
     const script: Turn[] = [readSkill('alpha'), readSkill('gamma', 'c2')];
     const provider = mock({
       respond: (req: { messages?: ReadonlyArray<{ role: string; content: unknown }> }) => {
+        requests.push(JSON.stringify(req));
         for (const m of req.messages ?? []) if (m.role === 'tool') seen.push(String(m.content));
         return script[i++] ?? { content: 'done', toolCalls: [] };
       },
     });
-    // The role may read NOTHING — including the cursor's own skill.
+    // The role may read NOTHING — including the graph's start.
     const policy = PermissionPolicy.fromRoles(
       { support: ['read_skill', 'alpha_tool', 'beta_tool', 'gamma_tool'] },
       'support',
@@ -1141,14 +1139,18 @@ describe('per-role skill visibility', () => {
       .build();
     await agent.run({ message: 'go' });
 
-    const notice = seen.find((r) => r.includes(NOTICE));
-    expect(notice).toBeDefined();
-    expect(seen[0]).not.toContain('is not available in this context');
-    expect(rejected[0]).toMatchObject({ requestedId: 'alpha', reason: 'self-call' });
-    expect(unprovable(notice!)).toEqual([]);
-
-    // The other id — a genuine read of a skill the policy hides — is still
-    // refused by the policy, with the policy's own message.
+    // Never activated: its body is on no request of the run. (Its tool rides
+    // the wire on the default posture like every skill's tool — tool access is
+    // the tool allowlist's question, not this one.)
+    expect(requests.length).toBeGreaterThan(0);
+    for (const r of requests) expect(r).not.toContain('ALPHA_BODY');
+    // Not a self-call: the model was never standing in it.
+    expect(seen.some((r) => r.includes(NOTICE))).toBe(false);
+    expect(rejected.some((row) => row.reason === 'self-call')).toBe(false);
+    // Both reads are refused by the policy, with the policy's own message.
+    expect(
+      seen.some((r) => r.includes("Skill 'alpha' is not available to the 'support' role")),
+    ).toBe(true);
     expect(
       seen.some((r) => r.includes("Skill 'gamma' is not available to the 'support' role")),
     ).toBe(true);

@@ -3407,8 +3407,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   }
 
   // FOLD (resolver) · computes "which skill ids may this caller be told about".
-  // The OWNER of the published fact is src/core/slots/buildToolsSlot.ts · discoverStage, which
-  // resolves it once per iteration and publishes it on scope; every model-facing composer reads THAT.
+  // The OWNER of the published fact is src/injection-engine/buildInjectionEngineSubflow.ts · hiddenSkillIdsOf
+  // (the engine's Gather stage), which resolves it once per iteration, before the cursor and the
+  // evaluator decide, and publishes it on scope; every model-facing composer reads THAT.
   // Second caller: the turn router (stages/routeTurn.ts · resolveHidden) resolves it again, with different
   // failure semantics, and publishes nothing — two sweeps of one policy question per turn.
   /**
@@ -4948,8 +4949,15 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // never drift from the verdicts. Open ids are fixed after build, so they
     // are computed once, exactly as the offer builder does.
     const openForReachable = this.skillGraphReachable ? this.openSkillIds() : [];
+    // Per-role skill visibility (9.11.0). The RESOLVER is handed to the
+    // Injection Engine, the fact's one owner: its Gather stage resolves the
+    // ids once per iteration, BEFORE anything decides, so the cursor and the
+    // evaluator refuse a hidden skill on every activation path; the mount
+    // publishes them on scope for every model-facing composer after it.
+    const hiddenSkillIdsForEngine = this.hiddenSkillIdsNow();
     const injectionEngineSubflow = buildInjectionEngineSubflow({
       injections: this.injections,
+      ...(hiddenSkillIdsForEngine && { hiddenSkillIds: hiddenSkillIdsForEngine }),
       ...(this.skillGraphNextSkill && { nextSkill: this.skillGraphNextSkill }),
       ...(this.skillGraphExplainNextSkill && {
         explainNextSkill: this.skillGraphExplainNextSkill,
@@ -5066,10 +5074,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       notServed: notServedResult,
     });
     const readSkillFor = this.readSkillOfferFor();
-    // Per-role skill visibility. The RESOLVER is handed to the tools slot, which
-    // is the fact's one owner: it resolves the ids once per iteration and
-    // publishes them on scope (`buildToolsSlot.ts` · `discoverStage`). Since 9.86.0 the
-    // description is NOT the only reader — the read_skill gate's refusals, the
+    // Per-role skill visibility. The Injection Engine resolves the ids once per
+    // iteration and publishes them on scope (`buildInjectionEngineSubflow.ts` ·
+    // `hiddenSkillIdsOf`); the tools slot reads that published set through its
+    // mount. Since 9.86.0 the description is NOT the only reader — the read_skill gate's refusals, the
     // `skill.rejected` payload, the propose-transition refusal and the dispatch
     // roster all filter through that published set
     // (`stages/toolCalls.ts` · "── Skill-graph read_skill GATE" the gate, `toolCalls.ts` ·
@@ -5079,7 +5087,6 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // the self-call notice's move offer through them; the notice no longer names
     // a destination at all (see `selfCallNotice`), so there is nothing left to
     // filter and the cache went with the clause that needed it.
-    const hiddenSkillIds = this.hiddenSkillIdsNow();
     // Registration-time owner stamps (9.60.0) — the identity edges the
     // integrity checks read. Built once per chart from the registry.
     const toolOwners = new Map(
@@ -5157,7 +5164,6 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       toolClaimants,
       servedTools,
       ...(readSkillFor && { readSkillFor }),
-      ...(hiddenSkillIds && { hiddenSkillIds }),
       ...(budget?.tools !== undefined && { budgetCap: budget.tools }),
       // Steps (9.18.0): per-step narrowing + banner + the skip_step offer.
       ...(stepPlanFor !== undefined && { stepPlanFor }),

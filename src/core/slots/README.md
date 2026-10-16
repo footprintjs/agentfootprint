@@ -2,8 +2,9 @@
 record of it.
 Lens: `buildSystemPromptSlot.ts` (joined into the prompt by
 `../agent/stages/callLLM.ts` · `systemPrompt`) and `buildToolsSlot.ts` (the
-served tool list, the `read_skill` offer, the step narrowing, and the
-`hiddenSkillIds` publication in `buildToolsSlot.ts` · `discoverStage`).
+served tool list, the `read_skill` offer and the step narrowing; it reads
+`hiddenSkillIds` from its mount, resolved by the Injection Engine —
+`../../injection-engine/buildInjectionEngineSubflow.ts` · `hiddenSkillIdsOf`).
 Trace: `buildMessagesSlot.ts` — its own header says it is not the wire but the
 observability projection of the conversation.
 Correction to the text below: the three slots are not the whole wire. The

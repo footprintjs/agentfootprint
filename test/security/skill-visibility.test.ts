@@ -555,7 +555,7 @@ describe('property — nothing names a hidden skill, on the graph path either', 
       expect(refusal).toContain('Open skills were admitted on that call: gamma.');
     });
 
-    it('a refusal never names a hidden CURSOR — the anchor is the skill, unnamed (9.86.1)', async () => {
+    it('a refusal never names a hidden CURSOR — and a hidden start is never the cursor at all', async () => {
       // The description for this very request withholds `alpha` ("ROLE
       // VISIBILITY WINS OVER THE POSITIVE SIGNAL") and the refusal printed it
       // raw in two clauses: "'delta' was not reachable from 'alpha'. Skills
@@ -586,23 +586,18 @@ describe('property — nothing names a hidden skill, on the graph path either', 
         // Not the cursor, not the hidden hop — on every tool result of the run.
         for (const r of results)
           expect(hiddenIdsNamed(r, ['alpha', 'beta']), reactMode).toEqual([]);
-        // The skill is real and merely unnamed: not "the turn's start", which
-        // is the cold-start anchor and would be a false fact about this call.
-        expect(refusal, reactMode).toContain(
-          "'delta' was not reachable from the skill the cursor stood in.",
-        );
-        expect(refusal, reactMode).not.toMatch(/the turn's start/);
-        // Filtered, not muted: the visible hop is still named.
-        expect(refusal, reactMode).toContain('gamma');
-        expect(rejected[0]?.allowed, reactMode).toEqual(['gamma']);
-        // `skill.rejected.currentSkillId` is the OPERATOR's record of where the
-        // cursor stood, on the event channel a recorder reads — not a sentence
-        // the model reads — and it stays raw, like every other event payload.
-        expect(rejected[0]?.currentSkillId, reactMode).toBe('alpha');
+        // Hidden means hidden on every activation path: the graph's start is a
+        // skill this role may not read, so the cursor never stands on it. The
+        // call is a cold one, and the refusal says so truthfully.
+        expect(refusal, reactMode).toContain("'delta' was not reachable from the turn's start.");
+        expect(rejected[0]?.currentSkillId, reactMode).toBeUndefined();
+        for (const row of rejected) {
+          expect(hiddenIdsNamed(JSON.stringify(row), ['alpha', 'beta']), reactMode).toEqual([]);
+        }
       }
     });
 
-    it('a propose-transition refusal never names a hidden hop or a hidden cursor (9.86.1)', async () => {
+    it('a propose-transition refusal never names a hidden hop or a hidden start (9.86.1)', async () => {
       // The tool-effects judge composed its reachability refusal from the raw
       // hop set and the raw cursor, and the refusal is appended to the tool
       // result the model reads — "'delta' is not reachable from 'alpha' per the
@@ -668,9 +663,10 @@ describe('property — nothing names a hidden skill, on the graph path either', 
       await agent.run({ message: 'go' });
       const refusal = results.find((r) => r.includes('[tool effect refused:'));
       expect(refusal).toBeDefined();
-      expect(refusal).toContain("'delta' is not reachable from the skill the cursor stood in");
-      // Named: the visible hop. Not named: the hidden hop and the hidden cursor.
-      expect(refusal).toContain('(reachable: gamma)');
+      // The graph's start `alpha` is hidden, so the cursor never stood in it:
+      // the proposal is judged from the turn start, and says so.
+      expect(refusal).toContain("'delta' is not reachable from the turn start");
+      // Not named: the hidden hop and the hidden start.
       for (const r of results) expect(hiddenIdsNamed(r, ['alpha', 'beta'])).toEqual([]);
       // The event's refusalReason is the same sentence, so it is filtered too;
       // its `targetSkillId` is the tool's own proposal and stays.

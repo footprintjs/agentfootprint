@@ -7,7 +7,11 @@ Fold: `skillGraph.ts` · `makeReachableSkills`, `skillGraph.ts` ·
 `classifySkillTarget`, `skillGraph.ts` · `makeResolveCursor`, `evaluator.ts`,
 `routingPolicy.ts`, `intentScorer.ts`, `entryScorer.ts`.
 Walker: `buildInjectionEngineSubflow.ts` — Gather → Evaluate → Route → Delta,
-one pass per iteration.
+one pass per iteration. Gather resolves the caller's role-hidden skills first
+(`buildInjectionEngineSubflow.ts` · `hiddenSkillIdsOf`, the one owner of
+`hiddenSkillIds`), and `types.ts` · `isHiddenSkill` is the one rule both the
+cursor resolver and the evaluator ask, so a hidden skill is never activated by
+any path: a keyword or other start rule, a route, a proposal, a lease or a pick.
 Lens: `skillToolDescriptors.ts` (the whole `read_skill` / `list_skills`
 surface), `skillSteps.ts`'s sentence half (`skillSteps.ts` · “─── Every
 sentence the model reads”, that banner to the end of the file),

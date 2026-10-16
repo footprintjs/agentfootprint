@@ -22,7 +22,8 @@ Lens: `selfCallNotice.ts`, `stagedRefs.ts` · `stagedRefsNudgeLine`,
   (`buildAgentChart.ts` · `SUBFLOW_IDS.INJECTION_ENGINE` and
   `buildAgentChart.ts` · `SUBFLOW_IDS.TOOLS`, on their `outputMapper`s).
 - The Lens files read only what they are handed, plus `scope.hiddenSkillIds`
-  (owner: `../slots/buildToolsSlot.ts` · `discoverStage`) where they name skill ids.
+  (owner: `../../injection-engine/buildInjectionEngineSubflow.ts` · `hiddenSkillIdsOf`,
+  published by the engine mount's `outputMapper`) where they name skill ids.
 
 The Route decider also writes `answerGuarantee` on the turn it picks `final`
 (9.100.0): `'native'` when the provider decoded the answer under the schema's
