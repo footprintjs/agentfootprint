@@ -7,18 +7,26 @@ Building Generative AI applications is mostly **context engineering** — decidi
 import {
   Agent, LLMCall, defineTool,
   Sequence, Parallel, Conditional, Loop,
-  defineSkill, defineSteering, defineInstruction, defineFact,
+  askHuman, pauseHere, isPaused,
+} from 'agentfootprint';
+import { defineSkill, defineSteering, defineInstruction, defineFact } from 'agentfootprint/context';
+import {
   defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES, SNAPSHOT_PROJECTIONS,
   InMemoryStore, mockEmbedder,
-  anthropic, openai, bedrock, ollama, mock,
-  askHuman, pauseHere, isPaused,
-  withRetry, withFallback, resilientProvider,
-} from 'agentfootprint';
+} from 'agentfootprint/memory';
+import { anthropic, openai, bedrock, ollama, mock, mcpClient } from 'agentfootprint/providers';
+import { withRetry, withFallback, fallbackProvider } from 'agentfootprint/resilience';
 ```
 
-**Top-level barrel only.** Don't import from stale subpaths like
-`agentfootprint/instructions`, `agentfootprint/observe`,
-`agentfootprint/security`, `agentfootprint/explain`.
+**Import each name from the door that exports it.** `package.json` `exports` is
+exhaustive, so a name imported from the wrong door fails to resolve. The core API
+is on `agentfootprint`. Everything you plug a backend into — LLM providers,
+`mcpClient`, MCP transports such as `agentCoreRuntimeMcpTransport` — is on
+`agentfootprint/providers`. Memory is on `agentfootprint/memory`, context
+engineering on `agentfootprint/context`, resilience on
+`agentfootprint/resilience`, and observability on `agentfootprint/observe`.
+Paths such as `agentfootprint/instructions` and `agentfootprint/explain` do not
+exist.
 
 ## The 6-layer mental model
 
@@ -56,7 +64,8 @@ Build with `mock()` provider + `InMemoryStore` + `mockEmbedder()` + inline tool 
 ### Hello agent — mock-first
 
 ```typescript
-import { Agent, mock } from 'agentfootprint';
+import { Agent } from 'agentfootprint';
+import { mock } from 'agentfootprint/providers';
 
 const agent = Agent.create({ provider: mock({ reply: 'San Francisco: 72°F.' }), model: 'mock' })
   .system('You are a helpful assistant.')
@@ -134,7 +143,8 @@ Strategies: `WINDOW` · `BUDGET` · `SUMMARIZE` · `TOP_K` · `EXTRACT` · `DECA
 ### MCP (Model Context Protocol — connect to external MCP servers)
 
 ```typescript
-import { Agent, mcpClient } from 'agentfootprint';
+import { Agent } from 'agentfootprint';
+import { mcpClient } from 'agentfootprint/providers';
 
 const slack = await mcpClient({
   name: 'slack',
