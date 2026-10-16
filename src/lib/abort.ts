@@ -35,10 +35,22 @@
  * as a provider failure, never retried, never fallen back from.
  */
 
-/** The error an aborted wait rejects with. See the module notes. */
+/**
+ * The error an aborted wait rejects with. See the module notes.
+ *
+ * Never throws. A reason that cannot even be classified (a revoked `Proxy`,
+ * one whose `getPrototypeOf` throws) becomes a plain `AbortError` WITHOUT it:
+ * this runs inside abort listeners, where a throw would escape as an uncaught
+ * exception and leave the wait it should end unsettled.
+ */
 export function abortErrorOf(signal: AbortSignal): Error {
-  const reason: unknown = signal.reason;
-  if (reason instanceof Error) return reason;
+  let reason: unknown;
+  try {
+    reason = signal.reason;
+    if (reason instanceof Error) return reason;
+  } catch {
+    return Object.assign(new Error('This operation was aborted'), { name: 'AbortError' });
+  }
   return Object.assign(new Error('This operation was aborted'), {
     name: 'AbortError',
     ...(reason !== undefined && { cause: reason }),
@@ -86,9 +98,11 @@ export function untilAborted<T>(
  * `undefined` when none is given, the one signal itself when only one is.
  *
  * `AbortSignal.any` where the runtime has it (Node 20.3+, every current
- * browser): it holds its sources weakly, so a long run's signal combined into
- * every call does not collect a listener per call. The fallback listens until
- * the first source fires.
+ * browser): it holds its sources weakly, so a long-lived signal combined into
+ * every call does not collect a listener per call. The fallback (an older
+ * browser) listens until the first source fires, so the library's hot paths do
+ * not lean on it: a run's signal and a call's deadline are combined with
+ * {@link linkedController}, whose links end with the run or the call.
  */
 export function eitherSignal(
   ...signals: readonly (AbortSignal | undefined)[]
@@ -112,18 +126,58 @@ export function eitherSignal(
   return controller.signal;
 }
 
+/** The longest delay a platform timer holds; Node turns a longer one into 1 ms. */
+const MAX_TIMER_MS = 2 ** 31 - 1;
+
 /**
- * A signal that fires `ms` from now with `reason()` — a DEADLINE, not a wait
- * (`sleep.ts` owns waits). The timer is `unref`'d where the platform allows,
- * so a deadline that outlives the work it bounds never holds a process open.
+ * A controller of the caller's own, following `sources` until `unlink()` —
+ * for work that must be cancellable by the caller's signals AND by itself (a
+ * deadline), for exactly that work's lifetime. Aborted at once when a source
+ * already has; aborted with a source's reason when one fires; `unlink()` takes
+ * every listener off the sources, so nothing outlives the work on a
+ * long-lived signal. Idempotent.
  */
-export function deadlineSignal(ms: number, reason: () => unknown): AbortSignal {
+export function linkedController(...sources: readonly (AbortSignal | undefined)[]): {
+  readonly controller: AbortController;
+  readonly unlink: () => void;
+} {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(reason()), ms) as unknown as {
-    unref?: () => void;
+  const linked = [...new Set(sources.filter((s): s is AbortSignal => s !== undefined))];
+  const fired = linked.find((s) => s.aborted);
+  if (fired !== undefined) {
+    controller.abort(fired.reason);
+    return { controller, unlink: () => undefined };
+  }
+  const unlink = (): void => {
+    for (const s of linked) s.removeEventListener('abort', onAbort);
   };
+  const onAbort = (event: Event): void => {
+    unlink();
+    controller.abort((event.target as AbortSignal).reason);
+  };
+  for (const s of linked) s.addEventListener('abort', onAbort, { once: true });
+  return { controller, unlink };
+}
+
+/**
+ * Abort `controller` with `reason()` once `ms` have passed — a DEADLINE, not a
+ * wait (`sleep.ts` owns waits). Returns the disarm: a deadline is released
+ * when the work it bounds settles, as the engine releases its own, so it never
+ * fires on work that already finished. The timer is `unref`'d where the
+ * platform allows, and a delay past what a timer holds (2^31 − 1 ms, about 24.8
+ * days) is held at that maximum rather than firing at once.
+ */
+export function armDeadline(
+  controller: AbortController,
+  ms: number,
+  reason: () => unknown,
+): () => void {
+  const timer = setTimeout(
+    () => controller.abort(reason()),
+    Math.min(Math.max(ms, 0), MAX_TIMER_MS),
+  ) as unknown as { unref?: () => void };
   timer.unref?.();
-  return controller.signal;
+  return () => clearTimeout(timer as unknown as ReturnType<typeof setTimeout>);
 }
 
 /**

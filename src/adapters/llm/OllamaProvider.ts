@@ -83,7 +83,7 @@ import { isSlash, trimTrailing } from '../../lib/linearText.js';
 import {
   abortErrorOf,
   bodyChunks,
-  eitherSignal,
+  linkedController,
   throwIfAborted,
   untilAborted,
 } from '../../lib/abort.js';
@@ -361,7 +361,17 @@ export function ollama(
   let toolCallSeq = 0;
   const nextToolCallId = (): string => `ollama-call-${++toolCallSeq}`;
 
-  const post = async (body: OllamaChatRequest, req: LLMRequest): Promise<Response> => {
+  /**
+   * POST under `call` — the call's own controller, linked to the caller's
+   * signal for the WHOLE call (body included) and aborted by the header
+   * deadline; `complete`/`stream` unlink it when the call ends, so no listener
+   * is left on the caller's signal (lib/abort.ts · linkedController).
+   */
+  const post = async (
+    body: OllamaChatRequest,
+    req: LLMRequest,
+    call: AbortController,
+  ): Promise<Response> => {
     const response = await fetchUntilHeaders(
       fetchImpl,
       chatUrl,
@@ -370,7 +380,7 @@ export function ollama(
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body),
       },
-      { timeoutMs, baseUrl, ...(req.signal && { signal: req.signal }) },
+      { timeoutMs, baseUrl, call, ...(req.signal && { signal: req.signal }) },
     );
     if (!response.ok) {
       throw await untilAborted(
@@ -397,81 +407,95 @@ export function ollama(
       // see it.
       throwIfAborted(req.signal);
       const body = buildBody(req, cfg, false);
-      const response = await post(body, req);
-      // `fetch` resolves on HEADERS, so reading the body is the stretch where
-      // a caller abort would otherwise be inert — honor it for that too.
-      const json = (await untilAborted(response.json(), req.signal)) as OllamaChatResponse;
-      return fromOllamaResponse(json, nextToolCallId);
+      const call = linkedController(req.signal);
+      try {
+        const response = await post(body, req, call.controller);
+        // `fetch` resolves on HEADERS, so reading the body is the stretch where
+        // a caller abort would otherwise be inert — honor it for that too.
+        const json = (await untilAborted(response.json(), req.signal)) as OllamaChatResponse;
+        return fromOllamaResponse(json, nextToolCallId);
+      } finally {
+        call.unlink();
+      }
     },
 
     async *stream(req: LLMRequest): AsyncIterable<LLMChunk> {
       throwIfAborted(req.signal);
-      const body = buildBody(req, cfg, true);
-      const response = await post(body, req);
-      if (!response.body) throw new Error('[ollama] response has no body');
-
-      const textParts: string[] = [];
-      const thinkingParts: string[] = [];
-      const toolCalls: OllamaWireToolCall[] = [];
-      let doneReason = 'stop';
-      let promptEvalCount = 0;
-      let evalCount = 0;
-      let tokenIndex = 0;
-
-      // The signal rides INTO the parser: it is what stops a generation the
-      // caller no longer wants, and what cancels the body when it does.
-      for await (const chunk of parseNdjson(response.body, req.signal)) {
-        const frame = chunk as OllamaChatResponse;
-        // An already-200 stream can still FAIL mid-generation, and this wire
-        // says so IN BAND with an `{"error": "..."}` frame. Such a frame
-        // carries no `message` and no `done`, so the guards below would skip
-        // it and the terminal chunk would report a truncated answer as
-        // `stopReason: 'stop'` with nobody told. Raise instead: a failed
-        // generation is a failure, never a shorter answer.
-        const failure = frameFailureText(frame);
-        if (failure) {
-          throw providerError(`[ollama] the stream failed mid-generation — ${failure}`);
-        }
-        // Counts ride the terminal frame, whose `message.content` is empty —
-        // read them before any content guard, or the only token counts the
-        // stream reports are thrown away (the failure that made streamed
-        // local calls report zero and disarmed `.compaction()`).
-        if (typeof frame.prompt_eval_count === 'number') promptEvalCount = frame.prompt_eval_count;
-        if (typeof frame.eval_count === 'number') evalCount = frame.eval_count;
-        if (frame.done_reason) doneReason = frame.done_reason;
-
-        const message = frame.message;
-        if (message) {
-          if (message.tool_calls && message.tool_calls.length > 0) {
-            // Ollama emits each tool call whole, not as an assembled delta.
-            toolCalls.push(...message.tool_calls);
-          }
-          if (message.thinking) {
-            thinkingParts.push(message.thinking);
-            yield { tokenIndex, content: '', done: false, thinkingDelta: message.thinking };
-            tokenIndex++;
-          }
-          if (message.content) {
-            textParts.push(message.content);
-            yield { tokenIndex, content: message.content, done: false };
-            tokenIndex++;
-          }
-        }
-        if (frame.done) break;
+      const call = linkedController(req.signal);
+      try {
+        yield* streamUnder(req, call.controller);
+      } finally {
+        call.unlink();
       }
-
-      const content = textParts.join('');
-      const rawThinking = describeThinking(content, thinkingParts.join(''));
-      const authoritative: LLMResponse = {
-        content,
-        toolCalls: toolCalls.map((tc) => toLLMToolCall(tc, nextToolCallId)),
-        usage: { input: promptEvalCount, output: evalCount },
-        stopReason: normalizeStopReason(doneReason, toolCalls.length > 0),
-        ...(rawThinking && { rawThinking }),
-      };
-      yield { tokenIndex, content: '', done: true, response: authoritative };
     },
   };
+
+  async function* streamUnder(req: LLMRequest, call: AbortController): AsyncIterable<LLMChunk> {
+    const body = buildBody(req, cfg, true);
+    const response = await post(body, req, call);
+    if (!response.body) throw new Error('[ollama] response has no body');
+
+    const textParts: string[] = [];
+    const thinkingParts: string[] = [];
+    const toolCalls: OllamaWireToolCall[] = [];
+    let doneReason = 'stop';
+    let promptEvalCount = 0;
+    let evalCount = 0;
+    let tokenIndex = 0;
+
+    // The signal rides INTO the parser: it is what stops a generation the
+    // caller no longer wants, and what cancels the body when it does.
+    for await (const chunk of parseNdjson(response.body, req.signal)) {
+      const frame = chunk as OllamaChatResponse;
+      // An already-200 stream can still FAIL mid-generation, and this wire
+      // says so IN BAND with an `{"error": "..."}` frame. Such a frame
+      // carries no `message` and no `done`, so the guards below would skip
+      // it and the terminal chunk would report a truncated answer as
+      // `stopReason: 'stop'` with nobody told. Raise instead: a failed
+      // generation is a failure, never a shorter answer.
+      const failure = frameFailureText(frame);
+      if (failure) {
+        throw providerError(`[ollama] the stream failed mid-generation — ${failure}`);
+      }
+      // Counts ride the terminal frame, whose `message.content` is empty —
+      // read them before any content guard, or the only token counts the
+      // stream reports are thrown away (the failure that made streamed
+      // local calls report zero and disarmed `.compaction()`).
+      if (typeof frame.prompt_eval_count === 'number') promptEvalCount = frame.prompt_eval_count;
+      if (typeof frame.eval_count === 'number') evalCount = frame.eval_count;
+      if (frame.done_reason) doneReason = frame.done_reason;
+
+      const message = frame.message;
+      if (message) {
+        if (message.tool_calls && message.tool_calls.length > 0) {
+          // Ollama emits each tool call whole, not as an assembled delta.
+          toolCalls.push(...message.tool_calls);
+        }
+        if (message.thinking) {
+          thinkingParts.push(message.thinking);
+          yield { tokenIndex, content: '', done: false, thinkingDelta: message.thinking };
+          tokenIndex++;
+        }
+        if (message.content) {
+          textParts.push(message.content);
+          yield { tokenIndex, content: message.content, done: false };
+          tokenIndex++;
+        }
+      }
+      if (frame.done) break;
+    }
+
+    const content = textParts.join('');
+    const rawThinking = describeThinking(content, thinkingParts.join(''));
+    const authoritative: LLMResponse = {
+      content,
+      toolCalls: toolCalls.map((tc) => toLLMToolCall(tc, nextToolCallId)),
+      usage: { input: promptEvalCount, output: evalCount },
+      stopReason: normalizeStopReason(doneReason, toolCalls.length > 0),
+      ...(rawThinking && { rawThinking }),
+    };
+    yield { tokenIndex, content: '', done: true, response: authoritative };
+  }
 
   return provider;
 }
@@ -823,21 +847,19 @@ async function fetchUntilHeaders(
   fetchImpl: typeof fetch,
   url: string,
   init: RequestInit,
-  opts: { timeoutMs: number; baseUrl: string; signal?: AbortSignal },
+  opts: { timeoutMs: number; baseUrl: string; call: AbortController; signal?: AbortSignal },
 ): Promise<Response> {
   // An already-aborted signal never dispatches another 'abort' event, so the
   // bridge below could not fire and the request would go out on a turn the
   // caller has cancelled. Refuse before the socket opens, and refuse with the
   // caller's own reason: an abort is their call, never a daemon fault.
   throwIfAborted(opts.signal);
-  const controller = new AbortController();
+  // The call's controller: it follows the caller's signal for the WHOLE call —
+  // the body included, long after this timer is cleared — and the deadline
+  // aborts it here. Its link is the call's to end (`post`).
+  const controller = opts.call;
   let timedOut = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
-  // The fetch listens to the caller's signal for the WHOLE call — the body
-  // included, long after the deadline's timer is cleared — and to the
-  // deadline's own, through one combined signal (lib/abort.ts · eitherSignal),
-  // so no listener is left behind on the caller's.
-  const signal = eitherSignal(opts.signal, controller.signal) ?? controller.signal;
 
   const deadline = new Promise<never>((_resolve, reject) => {
     timer = setTimeout(() => {
@@ -851,7 +873,7 @@ async function fetchUntilHeaders(
     // The caller's abort wins the race too: a `fetch` that ignores its signal
     // must not hold a cancelled call open until the deadline (lib/abort.ts).
     return await untilAborted(
-      Promise.race([fetchImpl(url, { ...init, signal }), deadline]),
+      Promise.race([fetchImpl(url, { ...init, signal: controller.signal }), deadline]),
       opts.signal,
     );
   } catch (err) {

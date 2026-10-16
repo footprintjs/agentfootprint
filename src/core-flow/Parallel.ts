@@ -29,7 +29,7 @@ import type { RunnerPauseOutcome } from '../core/pause.js';
 import type { LLMMessage, LLMProvider, LLMRequest } from '../provider-contract/types.js';
 import { callUnder } from '../lib/abort.js';
 import type { Runner } from '../core/runner.js';
-import { RunnerBase, makeRunId, withRunSignalInEnv } from '../core/RunnerBase.js';
+import { RunnerBase, makeRunId, underRunSignal } from '../core/RunnerBase.js';
 import { normalizeRunInput } from '../core/runInput.js';
 import {
   adoptParentRun,
@@ -375,10 +375,12 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
     try {
       let result: unknown;
       try {
-        result = await executor.run({
-          input: { message: runInput.message, parentRun: parentRun.link },
-          ...(withRunSignalInEnv(options) ?? {}),
-        });
+        result = await underRunSignal(options, (engine) =>
+          executor.run({
+            input: { message: runInput.message, parentRun: parentRun.link },
+            ...(engine ?? {}),
+          }),
+        );
       } catch (err) {
         this.rethrowWithBranchAttribution(err);
       }
@@ -405,7 +407,9 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
       this.lastExecutor = executor;
       let result: unknown;
       try {
-        result = await executor.resume(checkpoint, input, withRunSignalInEnv(options));
+        result = await underRunSignal(options, (engine) =>
+          executor.resume(checkpoint, input, engine),
+        );
       } catch (err) {
         this.rethrowWithBranchAttribution(err);
       }

@@ -977,7 +977,7 @@ export function buildCallLLMStage(
     // request (`LLMRequest.signal`), so an aborted or timed-out run cancels the
     // provider's own HTTP request — the engine stopping the traversal leaves a
     // call in flight running, and billing. It already holds the run's deadline
-    // (`RunnerBase · withRunSignalInEnv`). Stamped here, at the dispatch, and
+    // (`RunnerBase · runSignalOf`). Stamped here, at the dispatch, and
     // never on `llmRequest`: the receipt above hashes that object, and a signal
     // is no part of what was asked. The same signal bounds every wait below,
     // so an adapter that ignores it still cannot hold the stage open, and an

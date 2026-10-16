@@ -7,7 +7,8 @@
  *                         rejection never surfaces; no listener is left behind
  *   A3 eitherSignal     — fires when any source does, with that reason; the
  *                         same signal back when there is only one
- *   A4 deadlineSignal   — fires with the given reason after `ms`
+ *   A4 linkedController / armDeadline — a run's or a call's links and deadline,
+ *                         released when the work settles
  *   A5 withRequestSignal — the SAME request when there is nothing to add
  *   A6 callUnder        — laws 1, 2 and 4 for one call
  *   A7 abortableIterable — law 3: the source is closed, nothing late is handed on
@@ -19,9 +20,10 @@ import {
   abortErrorOf,
   abortableIterable,
   bodyChunks,
+  armDeadline,
   callUnder,
-  deadlineSignal,
   eitherSignal,
+  linkedController,
   throwIfAborted,
   untilAborted,
   withRequestSignal,
@@ -44,6 +46,25 @@ describe('A1 abortErrorOf', () => {
     const err = abortErrorOf(c.signal);
     expect(err.name).toBe('AbortError');
     expect((err as { cause?: unknown }).cause).toBe('stop');
+  });
+
+  it('never throws, even on a reason that cannot be inspected (a revoked Proxy)', () => {
+    const { proxy, revoke } = Proxy.revocable({}, {});
+    revoke();
+    const c = new AbortController();
+    c.abort(proxy);
+    const err = abortErrorOf(c.signal);
+    expect(err.name).toBe('AbortError');
+    expect((err as { cause?: unknown }).cause).toBeUndefined();
+  });
+
+  it('a wait aborted with such a reason still settles, as an AbortError', async () => {
+    const { proxy, revoke } = Proxy.revocable({}, {});
+    revoke();
+    const c = new AbortController();
+    const pending = untilAborted(new Promise(() => undefined), c.signal);
+    c.abort(proxy);
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
   });
 
   it('a bare abort() is the runtime’s AbortError', () => {
@@ -148,20 +169,68 @@ describe('A3 eitherSignal', () => {
   });
 });
 
-describe('A4 deadlineSignal', () => {
-  it('fires after ms with the given reason', async () => {
+describe('A4 linkedController + armDeadline', () => {
+  it('the deadline aborts the controller with its reason after ms, and the disarm stops it', () => {
     vi.useFakeTimers();
     try {
       const reason = new Error('Execution timed out after 50ms');
-      const signal = deadlineSignal(50, () => reason);
+      const fired = new AbortController();
+      armDeadline(fired, 50, () => reason);
       vi.advanceTimersByTime(49);
-      expect(signal.aborted).toBe(false);
+      expect(fired.signal.aborted).toBe(false);
       vi.advanceTimersByTime(1);
-      expect(signal.aborted).toBe(true);
-      expect(signal.reason).toBe(reason);
+      expect(fired.signal.reason).toBe(reason);
+
+      const released = new AbortController();
+      const disarm = armDeadline(released, 50, () => reason);
+      disarm();
+      vi.advanceTimersByTime(1_000);
+      expect(released.signal.aborted).toBe(false);
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('a delay past what a timer holds is held at the maximum, never fired at once', () => {
+    vi.useFakeTimers();
+    try {
+      const c = new AbortController();
+      armDeadline(c, 2 ** 40, () => new Error('late'));
+      vi.advanceTimersByTime(10);
+      expect(c.signal.aborted).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('follows its sources with their reason, and unlink() leaves no listener behind', () => {
+    const a = new AbortController();
+    const b = new AbortController();
+    const add = vi.spyOn(a.signal, 'addEventListener');
+    const remove = vi.spyOn(a.signal, 'removeEventListener');
+    const { controller, unlink } = linkedController(a.signal, b.signal, undefined);
+    const reason = new Error('b fired');
+    b.abort(reason);
+    expect(controller.signal.reason).toBe(reason);
+    unlink();
+    // Taken off when b fired (every source at once), and unlink() is idempotent.
+    expect(add).toHaveBeenCalledTimes(1);
+    expect(remove.mock.calls.length).toBeGreaterThanOrEqual(1);
+
+    const c = new AbortController();
+    const removeC = vi.spyOn(c.signal, 'removeEventListener');
+    const link = linkedController(c.signal);
+    link.unlink();
+    expect(removeC).toHaveBeenCalledTimes(1);
+    c.abort(new Error('after unlink'));
+    expect(link.controller.signal.aborted).toBe(false);
+  });
+
+  it('is aborted at once when a source already is', () => {
+    const a = new AbortController();
+    const reason = new Error('before');
+    a.abort(reason);
+    expect(linkedController(a.signal).controller.signal.reason).toBe(reason);
   });
 });
 

@@ -168,7 +168,7 @@ const pipeline = Sequence.create().step('draft', agent).step('send', sender).bui
 await pipeline.run({ message: 'hi' }); // agent halts on a policy → rejects: PolicyHaltError; `sender` never runs
 ```
 
-Every runner hands a `{ signal }` to its stages too (`../core/RunnerBase.ts` · `withRunSignalInEnv`), so an agent inside a composition sees the run's abort and never retries a cancelled call.
+Every runner hands a `{ signal }` to its stages too (`../core/RunnerBase.ts` · `runSignalOf`), so an agent inside a composition sees the run's abort and never retries a cancelled call.
 
 Pinned by `test/core-flow/composed-terminal-verdicts.test.ts`: every verdict × every composition × all three `reactMode`s against the standalone agent, the delivered answers (validated pass, observe, rails grounded) against the standalone answer, and an abort inside Sequence / Parallel / Loop. **Known gaps:** the error carries no `snapshot` (the composition's executor is still running when it is raised; the standalone fail-fast error carries the agent's); and a `'tell-model'` credential-consent record travels OFF tracked state by design (the URL is a bearer capability), so a composition cannot see it — a composed agent that finished with a consent outstanding still hands back its answer.
 

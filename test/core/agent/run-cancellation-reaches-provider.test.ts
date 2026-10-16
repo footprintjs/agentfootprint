@@ -10,16 +10,18 @@
  *   C1 the request carries a signal that fires with the run's     (both doors)
  *   C2 an abort mid-call rejects the run at once with the reason   (complete + stream)
  *   C3 the run's deadline (`timeoutMs`) fires that signal too,
- *      with or without a caller signal beside it
+ *      with or without a caller signal beside it — and is released
+ *      with the run, so it never fires on a finished one
  *   C4 an answer that lands after the abort is not recorded: no
  *      `llm_end`, no usage, no cost tick
  *   C5 the decorators never retry, fall back from, or count
  *      against a breaker a cancelled call
  */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Agent, LLMCall, type LLMProvider, type LLMRequest } from '../../../src/index.js';
 import { withCircuitBreaker, withFallback, withRetry } from '../../../src/doors/resilience.js';
+import { runSignalOf } from '../../../src/core/RunnerBase.js';
 
 const MODES = ['classic', 'dynamic', 'dynamic-grouped'] as const;
 
@@ -148,6 +150,72 @@ describe('C3 — the run’s deadline cancels the call in flight', () => {
     expect(controller.signal.aborted).toBe(false);
     release();
     await settle();
+  });
+});
+
+describe('C3b — the run’s signal is released with the run', () => {
+  it('a deadline never fires on a run that already finished', async () => {
+    const seen: (AbortSignal | undefined)[] = [];
+    const provider: LLMProvider = {
+      name: 'quick',
+      complete: async (req) => {
+        seen.push(req.signal);
+        return { ...ANSWER };
+      },
+    };
+    const agent = Agent.create({ provider, model: 'm' }).build();
+    await agent.run('hello', { timeoutMs: 30 });
+    expect(seen[0]).toBeDefined();
+    await new Promise<void>((r) => setTimeout(r, 60));
+    expect(seen[0]!.aborted).toBe(false);
+  });
+
+  it('runSignalOf: the SAME options when there is nothing to add', () => {
+    const c = new AbortController();
+    const bare = { input: 1 };
+    const both = { signal: c.signal, env: { signal: c.signal } };
+    const stagesOnly = { env: { signal: c.signal } };
+    for (const options of [undefined, bare, both, stagesOnly]) {
+      expect(runSignalOf(options).options).toBe(options);
+    }
+    const engineOnly = runSignalOf({ signal: c.signal });
+    expect(engineOnly.options?.env?.signal).toBe(c.signal);
+  });
+
+  it('runSignalOf: follows every signal and the deadline, then lets go of them all', () => {
+    vi.useFakeTimers();
+    try {
+      const caller = new AbortController();
+      const stages = new AbortController();
+      const removed = vi.spyOn(caller.signal, 'removeEventListener');
+      const run = runSignalOf({
+        signal: caller.signal,
+        env: { signal: stages.signal },
+        timeoutMs: 50,
+      });
+      const signal = run.options!.signal!;
+      expect(run.options!.env!.signal).toBe(signal);
+      expect('timeoutMs' in run.options!).toBe(false);
+      run.release();
+      expect(removed).toHaveBeenCalled();
+      caller.abort(new Error('after the run'));
+      vi.advanceTimersByTime(1_000);
+      expect(signal.aborted).toBe(false);
+
+      const timed = runSignalOf({ timeoutMs: 50 });
+      vi.advanceTimersByTime(50);
+      expect(String(timed.options!.signal!.reason)).toContain('Execution timed out after 50ms');
+      timed.release();
+
+      const other = new AbortController();
+      const live = runSignalOf({ signal: other.signal, env: { signal: stages.signal } });
+      const reason = new Error('stages');
+      stages.abort(reason);
+      expect(live.options!.signal!.reason).toBe(reason);
+      live.release();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

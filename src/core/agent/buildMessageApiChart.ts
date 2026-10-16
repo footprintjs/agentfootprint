@@ -109,6 +109,22 @@ export interface MessageApiChartDeps {
 
 /**
  * Build the LLM-only messageAPI merge-tree chart.
+ *
+ * **Cancellation.** Every model call reads its signal from the run's `env`.
+ * For an abort or a deadline to cancel the provider's request, pass the signal
+ * there too: `env: { signal }`, and for a deadline `AbortSignal.timeout(ms)`. A
+ * bare `FlowChartExecutor` hands its own `signal` and `timeoutMs` to the
+ * traversal only. That stops the chart, but a call already in flight runs to
+ * completion, and you are billed for it.
+ *
+ * ```ts
+ * const controller = new AbortController();
+ * await new FlowChartExecutor(chart).run({
+ *   input: { message: 'hi' },
+ *   signal: controller.signal, // stops the traversal
+ *   env: { signal: controller.signal }, // cancels the model call in flight
+ * });
+ * ```
  */
 export function buildMessageApiChart(deps: MessageApiChartDeps): FlowChart {
   const { provider, model, systemPrompt } = deps;

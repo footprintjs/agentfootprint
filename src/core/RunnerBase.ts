@@ -16,7 +16,7 @@ import type {
   RedactionPolicy,
 } from 'footprintjs';
 import type { RunOptions } from './runner.js';
-import { deadlineSignal, eitherSignal } from '../lib/abort.js';
+import { armDeadline, linkedController } from '../lib/abort.js';
 import type { RunContext } from '../bridge/eventMeta.js';
 import { EventDispatcher, REFUSE } from '../events/dispatcher.js';
 import { bindChartStages } from '../redaction/chartBinding.js';
@@ -127,9 +127,10 @@ export function isMintedRunId(value: unknown): boolean {
  * read). Handed only to the engine, it is handed to the stages too — so a
  * stage never takes the run's own abort for a failure (the reliability loop
  * filed it as a fail-fast, and an agent inside a composition retried the
- * cancelled call up to its cap). Handed to both, the stages get BOTH: either
- * one cancels. Every runner's `run` / `resume` passes its options through
- * here. The SAME object when there is nothing to add.
+ * cancelled call up to its cap). Handed to both, the run follows BOTH: either
+ * one cancels. Every runner's `run` / `resume` builds its engine options here
+ * (through {@link underRunSignal} where it can). The SAME object when there is
+ * nothing to add.
  *
  * The run's DEADLINE joins the same signal (`timeoutMs`). The engine arms its
  * own timer for the traversal only, and only when no signal was given — so a
@@ -138,35 +139,79 @@ export function isMintedRunId(value: unknown): boolean {
  * at all. Folded in here, it cancels that call like any abort
  * (`lib/abort.ts`), and the run still fails with the engine's own words.
  *
+ * `release()` ends what this armed — the deadline's timer and the links on
+ * the caller's signals — and is called once the run settles (finished, failed
+ * or paused), as the engine released its own timer: a deadline never fires on
+ * a run that already finished, and no listener outlives the run on a
+ * long-lived signal. A resume arms a fresh one.
+ *
  * It is also where the incoming `request` STOPS: the engine is handed the
  * options without it, so a sealed request never reaches footprintjs's run
  * options (the runner reads it before this call, `memberRun.ts`).
  */
-export function withRunSignalInEnv<T extends RunOptions>(options: T | undefined): T | undefined {
+export function runSignalOf<T extends RunOptions>(options: T | undefined): RunSignal<T> {
   const engine = withoutRequest(options);
-  if (engine === undefined) return engine;
-  const deadline = runDeadlineOf(engine.timeoutMs);
-  const signal = eitherSignal(engine.signal, deadline);
-  const envSignal = eitherSignal(engine.env?.signal, signal);
-  if (deadline === undefined && envSignal === engine.env?.signal) return engine;
+  const timeoutMs = engine?.timeoutMs;
+  const hasDeadline =
+    typeof timeoutMs === 'number' && timeoutMs !== 0 && Number.isFinite(timeoutMs);
+  const signal = engine?.signal;
+  const envSignal = engine?.env?.signal;
+  if (engine === undefined || (!hasDeadline && (signal === undefined || signal === envSignal))) {
+    return { options: engine, release: NOTHING_ARMED };
+  }
+  if (!hasDeadline && envSignal === undefined) {
+    // One signal, handed to the stages as well: nothing to combine, nothing armed.
+    return { options: { ...engine, env: { ...engine.env, signal } }, release: NOTHING_ARMED };
+  }
+  // Two signals, or a deadline: ONE run signal follows them all, for exactly
+  // the run's lifetime (`linkedController`), and the deadline aborts it.
+  const { controller, unlink } = linkedController(signal, envSignal);
+  const disarm = hasDeadline
+    ? armDeadline(
+        controller,
+        timeoutMs,
+        () => new Error(`Execution timed out after ${timeoutMs}ms`),
+      )
+    : NOTHING_ARMED;
   // The deadline now rides the signal; the engine is not handed a second timer.
   const { timeoutMs: _timeoutMs, ...rest } = engine;
   void _timeoutMs;
   return {
-    ...rest,
-    ...(signal !== undefined && { signal }),
-    env: { ...engine.env, signal: envSignal },
-  } as T;
+    options: {
+      ...rest,
+      signal: controller.signal,
+      env: { ...engine.env, signal: controller.signal },
+    } as T,
+    release: () => {
+      disarm();
+      unlink();
+    },
+  };
 }
 
+/** One run's engine options, and the release of what was armed for them. */
+export interface RunSignal<T> {
+  readonly options: T | undefined;
+  /** Disarm the run's deadline and unlink its signals — the run settled. Idempotent. */
+  readonly release: () => void;
+}
+
+const NOTHING_ARMED = (): void => undefined;
+
 /**
- * The run's deadline as a signal — armed when `run()` starts, as the engine
- * arms its own (any non-zero finite `timeoutMs`), aborting with the engine's
- * own error so a timed-out run fails with the words it always did.
+ * `start` with this run's engine options ({@link runSignalOf}), released once
+ * it settles — finished, failed or paused.
  */
-function runDeadlineOf(timeoutMs: number | undefined): AbortSignal | undefined {
-  if (typeof timeoutMs !== 'number' || !timeoutMs || !Number.isFinite(timeoutMs)) return undefined;
-  return deadlineSignal(timeoutMs, () => new Error(`Execution timed out after ${timeoutMs}ms`));
+export async function underRunSignal<T extends RunOptions, R>(
+  options: T | undefined,
+  start: (engine: T | undefined) => Promise<R>,
+): Promise<R> {
+  const run = runSignalOf(options);
+  try {
+    return await start(run.options);
+  } finally {
+    run.release();
+  }
 }
 
 /** `options` without `request` — the SAME object when it carries none. */

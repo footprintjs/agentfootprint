@@ -104,7 +104,7 @@ import type {
 import type { MemoryStore } from '../store/index.js';
 import type { MemoryState } from './types.js';
 import { emitServed, type EmitScope } from '../../redaction/runRedaction.js';
-import { callUnder, throwIfAborted } from '../../lib/abort.js';
+import { callUnder, throwIfAborted, untilAborted } from '../../lib/abort.js';
 
 /**
  * The 2.x summarizer shape: the caller makes the call and returns the text.
@@ -683,5 +683,11 @@ async function callSummarizer(
     { role: 'system', content: systemPrompt },
     ...span.map((e) => e.value),
   ];
-  return { text: await (llm as SummarizeCallback)(messages) };
+  // The callback is handed no signal (its contract), so it cannot be cancelled;
+  // it is still not called on a cancelled run, not waited for once the run is
+  // cancelled, and a summary that lands after that is not folded in.
+  throwIfAborted(signal);
+  const text = await untilAborted((llm as SummarizeCallback)(messages), signal);
+  throwIfAborted(signal);
+  return { text };
 }

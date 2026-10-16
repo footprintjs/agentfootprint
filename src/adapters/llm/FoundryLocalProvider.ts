@@ -100,7 +100,7 @@ import { isSlash, trimTrailing } from '../../lib/linearText.js';
 import {
   abortErrorOf,
   bodyChunks,
-  eitherSignal,
+  linkedController,
   throwIfAborted,
   untilAborted,
 } from '../../lib/abort.js';
@@ -493,7 +493,17 @@ export function foundryLocal(
     return answer;
   };
 
-  const post = async (body: FoundryChatRequest, req: LLMRequest): Promise<Response> => {
+  /**
+   * POST under `call` — the call's own controller, linked to the caller's
+   * signal for the WHOLE call (body included) and aborted by the header
+   * deadline; `complete`/`stream` unlink it when the call ends, so no listener
+   * is left on the caller's signal (lib/abort.ts · linkedController).
+   */
+  const post = async (
+    body: FoundryChatRequest,
+    req: LLMRequest,
+    call: AbortController,
+  ): Promise<Response> => {
     // No Authorization header: no key exists on this wire, and nothing is
     // sent where a secret could be invented, logged, or leaked.
     const response = await fetchUntilHeaders(
@@ -504,7 +514,7 @@ export function foundryLocal(
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body),
       },
-      { timeoutMs, endpoint, ...(req.signal && { signal: req.signal }) },
+      { timeoutMs, endpoint, call, ...(req.signal && { signal: req.signal }) },
     );
     if (!response.ok) {
       throw await untilAborted(
@@ -530,95 +540,113 @@ export function foundryLocal(
       throwIfAborted(req.signal);
       const model = await untilAborted(resolveModel(req.model), req.signal);
       const body = buildBody(req, cfg, model, false);
-      const response = await post(body, req);
-      // `fetch` resolves on HEADERS, so reading the body is the stretch where
-      // a caller abort would otherwise be inert — honor it for that too.
-      const json = (await untilAborted(response.json(), req.signal)) as FoundryChatResponse;
-      return fromFoundryResponse(json, nextToolCallId);
+      const call = linkedController(req.signal);
+      try {
+        const response = await post(body, req, call.controller);
+        // `fetch` resolves on HEADERS, so reading the body is the stretch where
+        // a caller abort would otherwise be inert — honor it for that too.
+        const json = (await untilAborted(response.json(), req.signal)) as FoundryChatResponse;
+        return fromFoundryResponse(json, nextToolCallId);
+      } finally {
+        call.unlink();
+      }
     },
 
     async *stream(req: LLMRequest): AsyncIterable<LLMChunk> {
       throwIfAborted(req.signal);
       const model = await untilAborted(resolveModel(req.model), req.signal);
-      const body = buildBody(req, cfg, model, true);
-      const response = await post(body, req);
-      if (!response.body) throw new Error('[foundry-local] response has no body');
-
-      const textParts: string[] = [];
-      // The dialect streams tool calls as DELTAS — id and name on the first
-      // fragment, argument JSON split across the rest — assembled by index.
-      const toolCallsByIndex = new Map<number, { id: string; name: string; argsJson: string }>();
-      let finishReason: string | null = null;
-      let usage: FoundryWireUsage | undefined;
-      let lastId = '';
-      let tokenIndex = 0;
-
-      // The signal rides INTO the parser: it is what stops a generation the
-      // caller no longer wants, and what cancels the body when it does.
-      for await (const parsed of parseSse(response.body, req.signal)) {
-        const frame = parsed.data as FoundryStreamChunk;
-        // An already-200 stream can still FAIL mid-generation, and this
-        // dialect says so IN BAND. Such a frame carries no `choices`, so the
-        // guard below would drop it and the terminal chunk would report a
-        // truncated answer as `stopReason: 'stop'` with nobody told. Raise
-        // instead: a failed generation is a failure, never a shorter answer.
-        const failure = frameFailureText(parsed);
-        if (failure) {
-          throw providerError(`[foundry-local] the stream failed mid-generation — ${failure}`);
-        }
-        // Usage FIRST, and OUTSIDE the choice guard. With
-        // `stream_options.include_usage` (set in buildBody) the token counts
-        // ride a FINAL chunk whose `choices` array is EMPTY — the exact bug
-        // class 9.73.0 fixed in the OpenAI adapter: a `continue` on a missing
-        // choice threw away the only usage the stream ever reports, and every
-        // streamed local call read zero tokens everywhere usage is consumed.
-        if (frame.id) lastId = frame.id;
-        if (frame.usage) usage = frame.usage;
-        const choice = frame.choices?.[0];
-        if (!choice) continue;
-        if (choice.finish_reason) finishReason = choice.finish_reason;
-        const delta = choice.delta;
-        if (!delta) continue;
-        if (delta.content) {
-          textParts.push(delta.content);
-          yield { tokenIndex, content: delta.content, done: false };
-          tokenIndex++;
-        }
-        if (delta.tool_calls) {
-          for (const tcDelta of delta.tool_calls) {
-            const idx = tcDelta.index ?? 0;
-            const existing = toolCallsByIndex.get(idx) ?? { id: '', name: '', argsJson: '' };
-            if (tcDelta.id) existing.id = tcDelta.id;
-            if (tcDelta.function?.name) existing.name = tcDelta.function.name;
-            if (tcDelta.function?.arguments) existing.argsJson += tcDelta.function.arguments;
-            toolCallsByIndex.set(idx, existing);
-          }
-        }
+      const call = linkedController(req.signal);
+      try {
+        yield* streamUnder(req, model, call.controller);
+      } finally {
+        call.unlink();
       }
-
-      // Sorted by INDEX, not by first-seen order: a wire is free to open
-      // index 1 before index 0, and a consumer reading `toolCalls[0]` as
-      // "the first tool the model asked for" would then name the wrong one.
-      const toolCalls = Array.from(toolCallsByIndex.entries())
-        .sort(([a], [b]) => a - b)
-        .map(([, tc]) => ({
-          id: tc.id.length > 0 ? tc.id : nextToolCallId(),
-          name: tc.name,
-          args: coerceArgs(tc.argsJson),
-        }));
-      const authoritative: LLMResponse = {
-        content: textParts.join(''),
-        toolCalls,
-        usage: {
-          input: usage?.prompt_tokens ?? 0,
-          output: usage?.completion_tokens ?? 0,
-        },
-        stopReason: normalizeStopReason(finishReason ?? 'stop', toolCalls.length > 0),
-        ...(lastId && { providerRef: lastId }),
-      };
-      yield { tokenIndex, content: '', done: true, response: authoritative };
     },
   };
+
+  async function* streamUnder(
+    req: LLMRequest,
+    model: string,
+    call: AbortController,
+  ): AsyncIterable<LLMChunk> {
+    const body = buildBody(req, cfg, model, true);
+    const response = await post(body, req, call);
+    if (!response.body) throw new Error('[foundry-local] response has no body');
+
+    const textParts: string[] = [];
+    // The dialect streams tool calls as DELTAS — id and name on the first
+    // fragment, argument JSON split across the rest — assembled by index.
+    const toolCallsByIndex = new Map<number, { id: string; name: string; argsJson: string }>();
+    let finishReason: string | null = null;
+    let usage: FoundryWireUsage | undefined;
+    let lastId = '';
+    let tokenIndex = 0;
+
+    // The signal rides INTO the parser: it is what stops a generation the
+    // caller no longer wants, and what cancels the body when it does.
+    for await (const parsed of parseSse(response.body, req.signal)) {
+      const frame = parsed.data as FoundryStreamChunk;
+      // An already-200 stream can still FAIL mid-generation, and this
+      // dialect says so IN BAND. Such a frame carries no `choices`, so the
+      // guard below would drop it and the terminal chunk would report a
+      // truncated answer as `stopReason: 'stop'` with nobody told. Raise
+      // instead: a failed generation is a failure, never a shorter answer.
+      const failure = frameFailureText(parsed);
+      if (failure) {
+        throw providerError(`[foundry-local] the stream failed mid-generation — ${failure}`);
+      }
+      // Usage FIRST, and OUTSIDE the choice guard. With
+      // `stream_options.include_usage` (set in buildBody) the token counts
+      // ride a FINAL chunk whose `choices` array is EMPTY — the exact bug
+      // class 9.73.0 fixed in the OpenAI adapter: a `continue` on a missing
+      // choice threw away the only usage the stream ever reports, and every
+      // streamed local call read zero tokens everywhere usage is consumed.
+      if (frame.id) lastId = frame.id;
+      if (frame.usage) usage = frame.usage;
+      const choice = frame.choices?.[0];
+      if (!choice) continue;
+      if (choice.finish_reason) finishReason = choice.finish_reason;
+      const delta = choice.delta;
+      if (!delta) continue;
+      if (delta.content) {
+        textParts.push(delta.content);
+        yield { tokenIndex, content: delta.content, done: false };
+        tokenIndex++;
+      }
+      if (delta.tool_calls) {
+        for (const tcDelta of delta.tool_calls) {
+          const idx = tcDelta.index ?? 0;
+          const existing = toolCallsByIndex.get(idx) ?? { id: '', name: '', argsJson: '' };
+          if (tcDelta.id) existing.id = tcDelta.id;
+          if (tcDelta.function?.name) existing.name = tcDelta.function.name;
+          if (tcDelta.function?.arguments) existing.argsJson += tcDelta.function.arguments;
+          toolCallsByIndex.set(idx, existing);
+        }
+      }
+    }
+
+    // Sorted by INDEX, not by first-seen order: a wire is free to open
+    // index 1 before index 0, and a consumer reading `toolCalls[0]` as
+    // "the first tool the model asked for" would then name the wrong one.
+    const toolCalls = Array.from(toolCallsByIndex.entries())
+      .sort(([a], [b]) => a - b)
+      .map(([, tc]) => ({
+        id: tc.id.length > 0 ? tc.id : nextToolCallId(),
+        name: tc.name,
+        args: coerceArgs(tc.argsJson),
+      }));
+    const authoritative: LLMResponse = {
+      content: textParts.join(''),
+      toolCalls,
+      usage: {
+        input: usage?.prompt_tokens ?? 0,
+        output: usage?.completion_tokens ?? 0,
+      },
+      stopReason: normalizeStopReason(finishReason ?? 'stop', toolCalls.length > 0),
+      ...(lastId && { providerRef: lastId }),
+    };
+    yield { tokenIndex, content: '', done: true, response: authoritative };
+  }
 
   return provider;
 }
@@ -1011,21 +1039,19 @@ async function fetchUntilHeaders(
   fetchImpl: typeof fetch,
   url: string,
   init: RequestInit,
-  opts: { timeoutMs: number; endpoint: string; signal?: AbortSignal },
+  opts: { timeoutMs: number; endpoint: string; call: AbortController; signal?: AbortSignal },
 ): Promise<Response> {
   // An already-aborted signal never dispatches another 'abort' event, so the
   // bridge below could not fire and the request would go out on a turn the
   // caller has cancelled. Refuse before the socket opens, and refuse with the
   // caller's own reason: an abort is their call, never a service fault.
   throwIfAborted(opts.signal);
-  const controller = new AbortController();
+  // The call's controller: it follows the caller's signal for the WHOLE call —
+  // the body included, long after this timer is cleared — and the deadline
+  // aborts it here. Its link is the call's to end (`post`).
+  const controller = opts.call;
   let timedOut = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
-  // The fetch listens to the caller's signal for the WHOLE call — the body
-  // included, long after the deadline's timer is cleared — and to the
-  // deadline's own, through one combined signal (lib/abort.ts · eitherSignal),
-  // so no listener is left behind on the caller's.
-  const signal = eitherSignal(opts.signal, controller.signal) ?? controller.signal;
 
   const deadline = new Promise<never>((_resolve, reject) => {
     timer = setTimeout(() => {
@@ -1044,7 +1070,7 @@ async function fetchUntilHeaders(
     // The caller's abort wins the race too: a `fetch` that ignores its signal
     // must not hold a cancelled call open until the deadline (lib/abort.ts).
     return await untilAborted(
-      Promise.race([fetchImpl(url, { ...init, signal }), deadline]),
+      Promise.race([fetchImpl(url, { ...init, signal: controller.signal }), deadline]),
       opts.signal,
     );
   } catch (err) {

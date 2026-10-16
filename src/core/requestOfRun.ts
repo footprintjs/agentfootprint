@@ -6,7 +6,7 @@
  * refused by name. What it returns goes to exactly two places — the agent's
  * own run (`Agent.runRequest`) or the run a composition opens for its members
  * (`memberRun.ts · openParentRun`). It is never written to state, and the
- * engine is handed the options without it (`RunnerBase · withRunSignalInEnv`).
+ * engine is handed the options without it (`RunnerBase · runSignalOf`).
  *
  * Pattern: guard + accessor. Role: core, run input.
  */

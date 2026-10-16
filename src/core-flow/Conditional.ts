@@ -26,7 +26,7 @@ import type { RedactionPolicy } from 'footprintjs';
 import type { GroupMember, GroupMetadata, GroupTranslator } from '../core/translator.js';
 import type { RunnerPauseOutcome } from '../core/pause.js';
 import type { Runner } from '../core/runner.js';
-import { RunnerBase, makeRunId, withRunSignalInEnv } from '../core/RunnerBase.js';
+import { RunnerBase, makeRunId, underRunSignal } from '../core/RunnerBase.js';
 import { normalizeRunInput } from '../core/runInput.js';
 import {
   adoptParentRun,
@@ -205,10 +205,12 @@ export class Conditional extends RunnerBase<ConditionalInput, ConditionalOutput>
       request,
     );
     try {
-      const result = await executor.run({
-        input: { message: runInput.message, parentRun: parentRun.link },
-        ...(withRunSignalInEnv(options) ?? {}),
-      });
+      const result = await underRunSignal(options, (engine) =>
+        executor.run({
+          input: { message: runInput.message, parentRun: parentRun.link },
+          ...(engine ?? {}),
+        }),
+      );
       return this.finalizeResult(executor, result);
     } finally {
       // Released when the run returns — finished, failed or paused (a resume re-opens it).
@@ -230,7 +232,9 @@ export class Conditional extends RunnerBase<ConditionalInput, ConditionalOutput>
       const resumeLeg = this.emitPauseResume(checkpoint, input);
       const executor = this.createExecutor(resumeLeg);
       this.lastExecutor = executor;
-      const result = await executor.resume(checkpoint, input, withRunSignalInEnv(options));
+      const result = await underRunSignal(options, (engine) =>
+        executor.resume(checkpoint, input, engine),
+      );
       return this.finalizeResult(executor, result);
     } finally {
       closeParentRun(parentRun);

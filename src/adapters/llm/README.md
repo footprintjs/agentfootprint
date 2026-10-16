@@ -58,7 +58,7 @@ remote generation running, and billing.
 
 The agent (`callLLM`), `LLMCall`, the summarizers, the extractors and the merge
 step stamp the run's signal onto every request (`callUnder`), and it carries the
-run's deadline too (`RunnerBase · withRunSignalInEnv`). The decorators never
+run's deadline too (`RunnerBase · runSignalOf`). The decorators never
 retry, fall back from or count against a breaker a cancelled call.
 
 ```ts
