@@ -398,6 +398,7 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   halt: true,
   head: true,
   heuristic: true,
+  hidden: true,
   high: true,
   'history-order': true,
   hold: true,

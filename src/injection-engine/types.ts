@@ -303,6 +303,17 @@ export interface InjectionContext {
    */
   readonly parkedIds?: readonly string[];
   /**
+   * Skill ids the caller's ROLE may not see this pass — the agent's
+   * `skill_read` answer, resolved once per iteration BEFORE anything
+   * decides (the Injection Engine's Gather stage). Read through
+   * {@link isHiddenSkill} and nothing else: the evaluator refuses to activate
+   * a hidden skill whatever activated it (a rule, a lease, a cursor, a pick),
+   * and the skill-graph cursor never moves onto one, so the active set and
+   * the cursor agree. Absent unless the agent's permission checker governs
+   * `skill_read`, so every other evaluation is byte-identical.
+   */
+  readonly hiddenSkillIds?: readonly string[];
+  /**
    * The relevance ranking of entry candidates from an entry scorer (`.entryBy()` /
    * `.entryByRelevance()`) — written by the PickEntry stage at turn start.
    * `defineRelevanceHint()` reads it to detect a near-tie. Absent unless the graph
@@ -338,6 +349,22 @@ export interface InjectionContext {
    * `currentSkillId`: it can never move the cursor.
    */
   readonly stepPointer?: import('./skillSteps.js').StepPointer;
+}
+
+// FOLD · the one rule for "may this skill activate for this caller" — role visibility
+// consumers read this and never re-derive it: the evaluator (activation), the skill-graph cursor
+// resolver (position) and the turn-start cascade's tier 1 (`skillIntent.ts` · firstRuleMatch).
+/**
+ * Is `id` a skill this caller's role may not see, on this pass?
+ *
+ * Hidden means hidden on EVERY activation path: model and user text are
+ * untrusted, so a keyword in the message, a declared route, a tool proposal,
+ * a lease or a `read_skill` pick must never surface a skill the caller's role
+ * may not read. Every place that decides whether a skill becomes active asks
+ * this function, with the set resolved once per pass on the context.
+ */
+export function isHiddenSkill(ctx: Pick<InjectionContext, 'hiddenSkillIds'>, id: string): boolean {
+  return ctx.hiddenSkillIds !== undefined && ctx.hiddenSkillIds.includes(id);
 }
 
 /**
@@ -480,8 +507,18 @@ export interface InjectionEvaluation {
      * parked — its contribution was served without corroboration for the
      * configured grace, so it stops riding until evidence re-engages it.
      * The map's own cursor is untouched.
+     *
+     * `'hidden'`: a skill the caller's role may not see
+     * (`ctx.hiddenSkillIds`). Refused before any trigger or lease is
+     * consulted, so no path can activate it. The id is on this developer
+     * record only; nothing the model reads names it.
      */
-    readonly reason: 'predicate-threw' | 'unknown-trigger-kind' | 'unknown-fact' | 'parked';
+    readonly reason:
+      | 'predicate-threw'
+      | 'unknown-trigger-kind'
+      | 'unknown-fact'
+      | 'parked'
+      | 'hidden';
     readonly error?: string;
   }>;
 }

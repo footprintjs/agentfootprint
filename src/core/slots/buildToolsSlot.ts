@@ -330,22 +330,6 @@ export interface ToolsSlotConfig {
      * a restored transcript still reaches the gate and reads its refusal.
      */
   }) => LLMToolSchema | undefined;
-  /**
-   * Which skills the caller's role may NOT see this run (9.11.0).
-   *
-   * Resolved in the async Discover stage and read by the sync Compose stage —
-   * the same shape `providerToolCache` uses, and for the same reason: a
-   * `PermissionChecker` may be async (a Redis lookup, a hub call) and Compose
-   * is pure. Set only when a checker declares it governs `'skill_read'`; then
-   * every hidden skill's row disappears from the `read_skill` menu, and the
-   * dispatch loop refuses the activation with the policy's own message.
-   *
-   * Its errors are NOT swallowed: a visibility resolver that throws leaves the
-   * iteration to the same reliability rules a failed `ToolProvider.list` does,
-   * because composing a menu from a policy that did not answer is exactly the
-   * fail-open this feature exists to prevent.
-   */
-  readonly hiddenSkillIds?: (scope: object) => Promise<readonly string[]> | readonly string[];
   /** Budget cap (chars). Default: 2000. Set from the public door as
    *  `contextBudget.tools` on `AgentOptions`. */
   readonly budgetCap?: number;
@@ -479,7 +463,8 @@ const EMPTY_NAME_SET: ReadonlySet<string> = new Set();
 const EMPTY_OFFER: readonly string[] = Object.freeze([]);
 
 // LENS · tool-description + tool-list · request-ephemeral
-// reads: hiddenSkillIds ← resolved and PUBLISHED in `discoverStage` — this slot is that fact's owner
+// reads: hiddenSkillIds ← the mount's input, resolved by the Injection Engine this iteration
+//        (owner: src/injection-engine/buildInjectionEngineSubflow.ts · hiddenSkillIdsOf)
 //        the read_skill offer ← readSkillFor({currentSkillId, hiddenSkillIds, menu}) → buildReadSkillTool
 //        menu ← scope.turnRoute.offered while outstanding; step narrowing ← scope.stepPointer + stepPlan
 //        parked tools ← scope.parkedToolNames (owner: src/maps/engagement/lease.ts · advanceEngagement)
@@ -499,7 +484,6 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
   const readSkillFor = config.readSkillFor;
   const toolProvider = config.toolProvider;
   const providerToolCache = config.providerToolCache;
-  const hiddenSkillIdsFor = config.hiddenSkillIds;
   const stepPlanFor = config.stepPlanFor;
   const toolClaimants = config.toolClaimants;
   const servedTools = config.servedTools;
@@ -518,7 +502,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
   // The skip_step schema template — description is rebuilt per iteration
   // (it names the current step), everything else is static.
   const skipStepSchemaTemplate = stepPlanFor ? buildSkipStepTool().schema : undefined;
-  // Written by Discover (async), read by Compose (sync) — see the config note.
+  // Read by Discover from the mount's input, read by Compose (sync).
   //
   // Chart-scoped, and the chart is built ONCE at Agent construction — so this
   // outlives a run. It is never stale at READ time because Discover always runs
@@ -553,28 +537,14 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
   // Sync providers still pay zero microtask overhead — the dynamic
   // `instanceof Promise` check skips await for non-Promise returns.
   const discoverStage = async (scope: TypedScope<ToolsSubflowState>): Promise<void> => {
-    // Per-role skill visibility (9.11.0), resolved on the ONE stage in this
-    // slot that is allowed to await. Before the provider block so an agent
-    // with skills but no `toolProvider` still gets its filter.
-    if (hiddenSkillIdsFor) {
-      const asked = hiddenSkillIdsFor(scope);
-      hiddenSkillIds = asked instanceof Promise ? await asked : asked;
-      // FOLD · the one owner of scope.hiddenSkillIds — which skill ids this caller's role may be TOLD about, this iteration
-      // consumers read this and never re-derive it: the read_skill offer this slot hands to the description (`offered`),
-      // toolCalls.ts · dispatchRoster, the read_skill gate (toolCalls.ts · "── Skill-graph read_skill GATE") and the
-      // propose-transition refusal (toolCalls.ts · "── THE REFUSAL SPEAKS WITH THE FILTERED SETS")
-      // detached: yes — a plain string[]; every consumer copies it into a fresh Set and names through spoken().
-      // ── ROLE VISIBILITY IS A FILTER, NOT A PROPERTY OF ONE BUILDER (9.86.0) ──
-      // Resolved here once per iteration and published on scope, because the
-      // DESCRIPTION is not the only sentence that names skill ids: the
-      // read_skill gate's refusals name them too, and so does the
-      // `skill.rejected` payload. Both used to read the graph's raw sets and
-      // could therefore name a skill this role may never see — the same leak
-      // the description closed, one stage downstream. Written only when a
-      // resolver exists, so an agent without per-role visibility commits the
-      // exact state it always did.
-      scope.$setValue('hiddenSkillIds', hiddenSkillIds);
-    }
+    // Per-role skill visibility (9.11.0). The Injection Engine resolved this
+    // iteration's ids BEFORE it decided anything and published them on scope
+    // (owner: `buildInjectionEngineSubflow.ts` · `hiddenSkillIdsOf`); this
+    // slot reads that one answer through its mount, so the menu it composes
+    // and the activation the engine refused were judged by the same policy
+    // call. Absent on agents without per-role visibility.
+    hiddenSkillIds =
+      scope.$getArgs<{ hiddenSkillIds?: readonly string[] }>().hiddenSkillIds ?? EMPTY_OFFER;
     if (!toolProvider) return; // No-op fast path: keeps trace shape consistent.
 
     const args = scope.$getArgs<{ iteration?: number }>();

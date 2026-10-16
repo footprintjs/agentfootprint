@@ -177,7 +177,7 @@ export function makeRouteTurnStage(deps: RouteTurnDeps) {
       inherited = undefined;
     }
 
-    const ctx: InjectionContext = {
+    let ctx: InjectionContext = {
       iteration: (scope.iteration as number | undefined) ?? 1,
       userMessage: (scope.userMessage as string | undefined) ?? '',
       history: (scope.history as InjectionContext['history'] | undefined) ?? [],
@@ -198,6 +198,18 @@ export function makeRouteTurnStage(deps: RouteTurnDeps) {
       );
     }
     const visibleEntryIds = plan.entryIds.filter((id) => !hidden.has(id));
+    // Tier 1 reads the role filter off the context, like every other
+    // activation decision (`isHiddenSkill`): a keyword in the user message
+    // must not start the turn on a skill this caller may not read.
+    if (hidden.size > 0) ctx = { ...ctx, hiddenSkillIds: [...hidden] };
+    // An inherited cursor on a skill this caller may not read is no cursor:
+    // the turn starts cold among the visible entries (the resolver applies
+    // the same rule, so the two cannot disagree about where the turn starts).
+    if (inherited !== undefined && hidden.has(inherited)) {
+      inherited = undefined;
+      const { currentSkillId: _dropped, ...cold } = ctx;
+      ctx = cold;
+    }
 
     let verdict = await runCascade(deps, plan, ctx, inherited, hidden, visibleEntryIds, env.signal);
 

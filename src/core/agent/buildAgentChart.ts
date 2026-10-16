@@ -702,6 +702,10 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
           ...(deps.engagementPlan !== undefined && {
             servedInjectionIds: (parent.servedInjectionIds as readonly string[] | undefined) ?? [],
           }),
+          // A composition member's run, for the Gather stage's skill-visibility
+          // check (`memberRun.ts`) — value-conditional: the agent's own runs
+          // cross no key.
+          ...memberRunArg(parent.memberRun),
         }),
         // Carry activeByslot back to parent so next turn's inputMapper can
         // feed it as priorActiveByslot (the Delta round-trip). currentSkillId is
@@ -710,6 +714,11 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
           activeInjections: sf.activeInjections,
           activeByslot: sf.activeByslot,
           currentSkillId: sf.nextSkillCursor,
+          // The role-hidden skill ids this iteration, resolved by the engine's
+          // Gather stage before it decided anything — onto the parent key every
+          // model-facing composer and the read_skill gate read. Value-
+          // conditional, so an agent without per-role visibility is unchanged.
+          ...(sf.hiddenSkillIds !== undefined && { hiddenSkillIds: sf.hiddenSkillIds }),
           // The re-keyed pointer (9.18.0), back onto the parent's key — a
           // top-level ARRAY, so `arrayMerge: Replace` below sets it wholesale
           // (a bare object here would shallow-merge and APPEND the nested
@@ -890,9 +899,13 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
         // key. See `AgentChartDeps.timeWindows`.
         ...(deps.timeWindows === true && timeWindowsArg(parent.findingsLedger)),
         ...(deps.timeWindows === true && timeClockArg(parent.findingsLedger)),
-        // A composition member's run, for the slot's skill-visibility check
-        // (`memberRun.ts`) — value-conditional: the agent's own runs cross no key.
-        ...memberRunArg(parent.memberRun),
+        // The role-hidden skill ids the Injection Engine resolved THIS iteration
+        // (owner: `buildInjectionEngineSubflow.ts` · `hiddenSkillIdsOf`) — the
+        // menu is composed from the same answer the activation was refused by.
+        // Value-conditional: an agent without per-role visibility crosses no key.
+        ...(parent.hiddenSkillIds !== undefined && {
+          hiddenSkillIds: parent.hiddenSkillIds as readonly string[],
+        }),
         // The turn's result-check lines (step T8), under `.time()` only and
         // value-conditional. See `AgentChartDeps.timeLimits`.
         ...(deps.timeLimits === true && timeLimitsArg(parent.findingsLedger)),
@@ -939,11 +952,6 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
         // Pass merged tool schemas (registry + injection-supplied)
         // back up so callLLM uses the right list for THIS iteration.
         dynamicToolSchemas: sf.toolSchemas,
-        // The role-hidden skill ids this iteration (9.86.0), onto the parent
-        // key the read_skill GATE reads before it names any id. Resolved by
-        // the slot's Discover stage; value-conditional, so an agent without
-        // per-role skill visibility bubbles exactly what it always did.
-        ...(sf.hiddenSkillIds !== undefined && { hiddenSkillIds: sf.hiddenSkillIds }),
         // The integrity dedup seen-list, back onto the parent key —
         // value-conditional, so agents with no findings are byte-identical.
         ...(sf.integrityFindingIds !== undefined && {

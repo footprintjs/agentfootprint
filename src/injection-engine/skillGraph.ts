@@ -60,7 +60,7 @@
 
 import { devMode, devWarn } from './devWarn.js';
 import type { ToolResultStatus } from '../semantics/toolOutcome.js';
-import { toolResultsOf } from './types.js';
+import { isHiddenSkill, toolResultsOf } from './types.js';
 import type { Injection, InjectionContext, InjectionTrigger } from './types.js';
 import type { Embedder } from '../memory/embedding/types.js';
 import type { EntryScore, EntryScoring, EntryScorer } from './entryScorer.js';
@@ -2247,7 +2247,17 @@ function makeResolveCursor(
 ): (ctx: InjectionContext) => CursorMove {
   const isEntry = (id: string): boolean => entries.some((e) => e.id === id);
   return (ctx) => {
-    const cur = ctx.currentSkillId;
+    // ROLE VISIBILITY. The cursor never moves onto a skill this caller's role
+    // may not read (`isHiddenSkill`, the same rule the evaluator refuses
+    // activation by), so the stored cursor and the active set cannot
+    // disagree. Every clause below asks `may` before it names a destination:
+    // a keyword in the message, a declared edge, a tool proposal and a pick
+    // are all untrusted routes to the same place. A cursor already standing
+    // on a hidden skill (a restored conversation, a grant revoked mid-run) is
+    // treated as no cursor, so the turn re-enters through the visible entries.
+    const may = (id: string): boolean => !isHiddenSkill(ctx, id);
+    const cur =
+      ctx.currentSkillId !== undefined && may(ctx.currentSkillId) ? ctx.currentSkillId : undefined;
     const from = cur !== undefined ? { from: cur } : {};
     // The turn-start cascade's verdict (SG-C) — a PRECOMPUTED input consumed
     // exactly as `pendingSkillPick` is, on iteration 1 only (the RouteTurn
@@ -2260,7 +2270,7 @@ function makeResolveCursor(
     // machinery; the cold-start walk below is suppressed by the verdict's
     // PRESENCE, so falling through can never enter an entry the record does
     // not claim.
-    if (ctx.iteration === 1 && ctx.turnRoute?.to !== undefined) {
+    if (ctx.iteration === 1 && ctx.turnRoute?.to !== undefined && may(ctx.turnRoute.to)) {
       const by =
         ctx.turnRoute.by === 'intent'
           ? ('intent' as const)
@@ -2296,6 +2306,7 @@ function makeResolveCursor(
       // resume) keeps it.
       if (!llmReadEntry && ctx.turnRoute === undefined) {
         for (const e of entries) {
+          if (!may(e.id)) continue;
           if (!e.when) return { to: e.id, by: 'entry' };
           try {
             // The witness is extracted HERE, on the winner only — the losing
@@ -2312,7 +2323,7 @@ function makeResolveCursor(
       // deterministic tool evidence over a model guess, the same order the
       // mid-run walk applies below (9.19.0).
       const coldProposal = ctx.pendingToolTransition?.targetSkillId;
-      if (coldProposal !== undefined && isEntry(coldProposal)) {
+      if (coldProposal !== undefined && isEntry(coldProposal) && may(coldProposal)) {
         return { to: coldProposal, by: 'tool-proposal' };
       }
       // The model's pick becomes the starting cursor. This is what `.entryByRead()`
@@ -2321,11 +2332,17 @@ function makeResolveCursor(
       // picks from the read_skill menu") actually work. An entry's `when` is the
       // AUTOMATIC pick's condition, not a lock on the manual one: the model asked
       // for this skill by name and the gate allowed it.
-      if (ctx.pendingSkillPick !== undefined && isEntry(ctx.pendingSkillPick)) {
+      if (
+        ctx.pendingSkillPick !== undefined &&
+        isEntry(ctx.pendingSkillPick) &&
+        may(ctx.pendingSkillPick)
+      ) {
         return { to: ctx.pendingSkillPick, by: 'model-pick' };
       }
       for (const e of entries) {
-        if (ctx.activatedInjectionIds.includes(e.id)) return { to: e.id, by: 'model-pick' };
+        if (may(e.id) && ctx.activatedInjectionIds.includes(e.id)) {
+          return { to: e.id, by: 'model-pick' };
+        }
       }
       return { by: 'none' };
     }
@@ -2360,6 +2377,7 @@ function makeResolveCursor(
       for (const r of routes) {
         if (r.fromId !== cur) continue;
         if (!isDeterministicRoute(r)) continue; // model edges don't auto-fire
+        if (!may(r.toId)) continue; // an edge into a hidden skill never fires
         try {
           if (r.guard !== undefined) {
             // The guard is judged AFTER the edge's own tool/status
@@ -2435,13 +2453,17 @@ function makeResolveCursor(
     // author's determinism (code that shipped), a pick is the model's guess.
     // A proposal of the CURRENT skill is a no-op stay, not a hop.
     const proposal = ctx.pendingToolTransition?.targetSkillId;
-    if (proposal !== undefined && proposal !== cur) {
+    if (proposal !== undefined && proposal !== cur && may(proposal)) {
       return { ...from, to: proposal, by: 'tool-proposal', ...closed };
     }
     // D2 — the validated volunteer: no declared edge fired, so the model's own
     // (already gated) pick moves the cursor. A pick of the CURRENT skill is a
     // no-op stay, not a hop.
-    if (ctx.pendingSkillPick !== undefined && ctx.pendingSkillPick !== cur) {
+    if (
+      ctx.pendingSkillPick !== undefined &&
+      ctx.pendingSkillPick !== cur &&
+      may(ctx.pendingSkillPick)
+    ) {
       return { ...from, to: ctx.pendingSkillPick, by: 'model-pick', ...closed };
     }
     return { ...from, to: cur, by: 'stay', ...closed }; // sticky stay — no edge out of cur fired

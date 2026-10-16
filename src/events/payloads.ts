@@ -721,8 +721,15 @@ export interface ContextEvaluatedPayload {
      *  fact this evaluation could not supply, so it was skipped whole.
      *  `'parked'` (9.58.0): a member of a map the mount kernel parked —
      *  served without corroboration for the grace window; the map's own
-     *  cursor is untouched and evidence re-engages it. */
-    readonly reason: 'predicate-threw' | 'unknown-trigger-kind' | 'unknown-fact' | 'parked';
+     *  cursor is untouched and evidence re-engages it.
+     *  `'hidden'`: a skill the caller's role may not see (`skill_read`),
+     *  refused whatever tried to activate it. */
+    readonly reason:
+      | 'predicate-threw'
+      | 'unknown-trigger-kind'
+      | 'unknown-fact'
+      | 'parked'
+      | 'hidden';
     readonly error?: string;
   }[];
   /** Count of active injections by trigger kind (always / rule / on-tool-return / llm-activated). */
