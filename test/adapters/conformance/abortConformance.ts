@@ -15,14 +15,30 @@
  *     `release()`, and records whether anything CLOSED the stream (an SDK
  *     stream's own close, its iterator's `return()`, or the body's `cancel()`).
  *
+ * A rig made with `{ hangingClose: true }` has a transport whose close (an
+ * iterator's `return()`, a body's `cancel()`) never finishes — the case where
+ * an abort lands while a consumer that stopped early is still waiting on it.
+ *
  * Every case runs against every rig (`abort.conformance.test.ts`), and the
  * listing test there fails while a factory under `src/adapters/llm/` has none.
+ * `abort.conformance.dist.test.ts` runs the same cases against the BUILT
+ * package, ESM and CJS, so what ships is held to the same law as the source.
  */
 
 import { expect, it } from 'vitest';
 import type { LLMChunk, LLMProvider, LLMRequest } from '../../../src/provider-contract/types.js';
 
 export type RigMode = 'complete' | 'stream';
+
+export interface RigOptions {
+  /**
+   * The transport's close never finishes: an SDK iterator's `return()` and a
+   * body's `cancel()` never settle. Where the SDK hands the adapter a close
+   * handle of its own (a stream's `abort()`, a controller), only THAT counts
+   * as closed — a `return()` still pending has closed nothing.
+   */
+  readonly hangingClose?: boolean;
+}
 
 /** One adapter instance over one mocked transport, for one call. */
 export interface AbortRig {
@@ -33,8 +49,13 @@ export interface AbortRig {
   readonly dispatched: () => number;
   /** Whether anything closed the transport's stream. */
   readonly closed: () => boolean;
-  /** Let the held answer (or the rest of the stream) arrive. */
-  readonly release: () => void;
+  /**
+   * Let the held answer (or the rest of the stream) arrive. `afterDelivery`
+   * runs one microtask after the transport hands the rest of a stream over —
+   * after the read that carries it has settled, before the adapter's own
+   * continuation can run.
+   */
+  readonly release: (afterDelivery?: () => void) => void;
 }
 
 /** One listed adapter: its factory's exported name and how to rig it. */
@@ -45,7 +66,13 @@ export interface AdapterRig {
   readonly variant?: string;
   /** The model the request names. */
   readonly model: string;
-  readonly make: (mode: RigMode) => AbortRig;
+  readonly make: (mode: RigMode, options?: RigOptions) => AbortRig;
+  /**
+   * `false` when the SDK gives the adapter no close handle besides the
+   * iterator itself (Bedrock's event stream, Gemini's generator): there the
+   * transport is closed by the signal the adapter forwarded to the request.
+   */
+  readonly closeHandle?: false;
   /**
    * `'none'` only for the mock, which has no wire: nothing can be handed a
    * signal or closed, and nothing arrives late. It proves the rest.
@@ -53,14 +80,36 @@ export interface AdapterRig {
   readonly transport?: 'none';
 }
 
-/** A promise the test opens. */
-export function gate(): { promise: Promise<void>; release: () => void } {
-  let release!: () => void;
-  const promise = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  return { promise, release };
+/** A promise the test opens, and the hook a transport calls once it delivered. */
+export interface Gate {
+  readonly promise: Promise<void>;
+  readonly release: (afterDelivery?: () => void) => void;
+  /** The transport handed the held data over: run `afterDelivery` one microtask later. */
+  readonly delivered: () => void;
 }
+
+/** A promise the test opens. */
+export function gate(): Gate {
+  let open!: () => void;
+  let after: (() => void) | undefined;
+  const promise = new Promise<void>((resolve) => {
+    open = resolve;
+  });
+  return {
+    promise,
+    release: (afterDelivery) => {
+      after = afterDelivery;
+      open();
+    },
+    delivered: () => {
+      const fn = after;
+      after = undefined;
+      if (fn !== undefined) queueMicrotask(fn);
+    },
+  };
+}
+
+const never = <T>(): Promise<T> => new Promise<T>(() => undefined);
 
 /**
  * A transport-side stream that sends `first`, then waits for `held` before
@@ -68,26 +117,38 @@ export function gate(): { promise: Promise<void>; release: () => void } {
  * generator, so `return()` lands even while a `next()` is pending. A real SDK
  * generator queues `return()` behind its pending read; there the stop comes
  * from the signal the adapter forwarded, which the cases check separately.
+ *
+ * The held step is RESOLVED first and `held.delivered()` called after it, so
+ * a test's `afterDelivery` lands between the settled read and its reader.
+ * With `hangReturn`, `return()` calls `onReturn` and never settles.
  */
 export function heldIterable<T>(
   first: readonly T[],
   rest: readonly T[],
-  held: Promise<void>,
-  onClose: () => void,
+  held: Gate,
+  onReturn: () => void,
+  hangReturn = false,
 ): AsyncIterable<T> {
   return {
     [Symbol.asyncIterator](): AsyncIterator<T> {
       let i = 0;
       const all = [...first, ...rest];
+      const step = (): IteratorResult<T> =>
+        i < all.length ? { done: false, value: all[i++] as T } : { done: true, value: undefined };
       return {
-        async next(): Promise<IteratorResult<T>> {
-          if (i >= first.length) await held;
-          if (i < all.length) return { done: false, value: all[i++] as T };
-          return { done: true, value: undefined };
+        next(): Promise<IteratorResult<T>> {
+          if (i < first.length) return Promise.resolve(step());
+          return new Promise<IteratorResult<T>>((resolve) => {
+            void held.promise.then(() => {
+              resolve(step());
+              held.delivered();
+            });
+          });
         },
-        async return(): Promise<IteratorResult<T>> {
-          onClose();
-          return { done: true, value: undefined };
+        return(): Promise<IteratorResult<T>> {
+          onReturn();
+          if (hangReturn) return never();
+          return Promise.resolve({ done: true, value: undefined });
         },
       };
     },
@@ -101,6 +162,7 @@ export function heldIterable<T>(
  */
 export function heldFetch(
   mode: RigMode,
+  options: RigOptions,
   wire: {
     readonly completeBody: string;
     readonly streamFirst: string;
@@ -140,10 +202,13 @@ export function heldFetch(
         if (closed) return;
         sentRest = true;
         controller.enqueue(encoder.encode(wire.streamRest));
+        held.delivered();
         controller.close();
       },
       cancel() {
         closed = true;
+        if (options.hangingClose === true) return never<void>();
+        return undefined;
       },
     });
     return new Response(body, {
@@ -332,6 +397,52 @@ export function abortConformance(rig: AdapterRig): void {
       r.release();
       controller.abort(reason);
       await expect(next).rejects.toBe(reason);
+    });
+  }
+
+  if (wired) {
+    it('stream(): a chunk whose read settled just before the abort is refused, never handed on', async () => {
+      const r = rig.make('stream');
+      const controller = new AbortController();
+      const reason = new Error('caller stopped');
+      const iterator = r.provider.stream!(requestFor(rig, controller.signal))[
+        Symbol.asyncIterator
+      ]();
+      await firstText(iterator);
+      const next = iterator.next();
+      next.catch(() => undefined);
+      // The transport's read SETTLES with the rest (its text and the usage);
+      // the abort fires one microtask later — after the read, before whoever
+      // awaited it has run. What the read carried arrived after the caller
+      // stopped: it must not come out.
+      r.release(() => controller.abort(reason));
+      await expect(next).rejects.toBe(reason);
+    });
+
+    it('stream(): an abort while a consumer that stopped early waits on the close rejects with the caller’s reason and closes the transport', async () => {
+      const r = rig.make('stream', { hangingClose: true });
+      const controller = new AbortController();
+      const reason = new Error('caller stopped');
+      const iterator = r.provider.stream!(requestFor(rig, controller.signal))[
+        Symbol.asyncIterator
+      ]();
+      await firstText(iterator);
+      // The consumer stops early on a live signal: its `return()` waits for
+      // the transport's close, as `for await` does — and this transport's
+      // close never finishes.
+      const closing = iterator.return!();
+      closing.catch(() => undefined);
+      expect(await hasSettled(closing)).toBe(false);
+      controller.abort(reason);
+      // The wait ends at once, as the abort — never as a clean finish, which
+      // would tell the caller the stream closed when it did not.
+      expect(await hasSettled(closing)).toBe(true);
+      await expect(closing).rejects.toBe(reason);
+      if (rig.closeHandle === false) {
+        expect(r.signalSeen()!.aborted, 'the transport’s signal never fired').toBe(true);
+      } else {
+        expect(r.closed(), 'the transport stream was left open').toBe(true);
+      }
     });
   }
 

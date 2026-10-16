@@ -381,6 +381,43 @@ describe('A7 abortableIterable', () => {
     await expect(pending).rejects.toBe(reason);
   });
 
+  it('an abort while a consumer’s return() waits on the source rejects with the reason and runs close once', async () => {
+    let returns = 0;
+    const iterable: AsyncIterable<number> = {
+      [Symbol.asyncIterator]: () => ({
+        next: async () => ({ done: false, value: 1 }),
+        return: () => {
+          returns++;
+          return never<IteratorResult<number>>();
+        },
+      }),
+    };
+    const c = new AbortController();
+    const close = vi.fn();
+    const it = abortableIterable(iterable, c.signal, close)[Symbol.asyncIterator]();
+    expect(await it.next()).toEqual({ done: false, value: 1 });
+    const closing = it.return!();
+    closing.catch(() => undefined);
+    expect(returns).toBe(1);
+    const reason = new Error('stop during cleanup');
+    c.abort(reason);
+    await expect(closing).rejects.toBe(reason);
+    expect(returns).toBe(1);
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it('a live-signal return() that finishes is a clean finish, close not called', async () => {
+    const { iterable, state } = source([1, 2]);
+    const close = vi.fn();
+    const it = abortableIterable(iterable, new AbortController().signal, close)[
+      Symbol.asyncIterator
+    ]();
+    await it.next();
+    expect((await it.return!()).done).toBe(true);
+    expect(state.returned).toBe(true);
+    expect(close).not.toHaveBeenCalled();
+  });
+
   it('a consumer that stops early closes the source', async () => {
     const { iterable, state } = source([1, 2, 3]);
     const c = new AbortController();
@@ -447,6 +484,63 @@ describe('A8 bodyChunks', () => {
     const reason = new Error('stop');
     c.abort(reason);
     await expect(pending).rejects.toBe(reason);
+  });
+
+  it('a chunk whose read settled just before the abort is refused, and the body cancelled', async () => {
+    let source!: ReadableStreamDefaultController<Uint8Array>;
+    let cancels = 0;
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        source = controller;
+      },
+      cancel() {
+        cancels++;
+      },
+    });
+    const c = new AbortController();
+    const reason = new Error('late chunk');
+    const it = bodyChunks(stream, c.signal);
+    const pending = it.next();
+    pending.catch(() => undefined);
+    // The read settles with the chunk; the abort lands before the reader runs.
+    source.enqueue(new Uint8Array([1]));
+    queueMicrotask(() => c.abort(reason));
+    await expect(pending).rejects.toBe(reason);
+    await it.return();
+    expect(cancels).toBe(1);
+  });
+
+  it('an abort while an early stop waits on the body’s cancel() rejects with the reason', async () => {
+    let cancels = 0;
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array([1]));
+      },
+      cancel() {
+        cancels++;
+        return never<void>();
+      },
+    });
+    const c = new AbortController();
+    const it = bodyChunks(stream, c.signal);
+    await it.next();
+    const closing = it.return();
+    closing.catch(() => undefined);
+    await tick();
+    const reason = new Error('stop during cancel');
+    c.abort(reason);
+    await expect(closing).rejects.toBe(reason);
+    expect(cancels).toBe(1);
+  });
+
+  it('a consumer that aborts and then breaks exits cleanly, the body cancelled', async () => {
+    const { stream, state } = body(['a', 'b'], true);
+    const c = new AbortController();
+    for await (const _ of bodyChunks(stream, c.signal)) {
+      c.abort(new Error('mine'));
+      break;
+    }
+    expect(state.cancelled).toBe(true);
   });
 
   it('a consumer that stops early cancels the body', async () => {

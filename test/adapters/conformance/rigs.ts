@@ -9,31 +9,17 @@
  * folder is either rigged or named, with its reason, as no adapter.
  */
 
-import { anthropic, AnthropicProvider } from '../../../src/adapters/llm/AnthropicProvider.js';
-import { bedrock, BedrockProvider } from '../../../src/adapters/llm/BedrockProvider.js';
-import {
-  browserAnthropic,
-  BrowserAnthropicProvider,
-} from '../../../src/adapters/llm/BrowserAnthropicProvider.js';
-import {
-  browserAzureOpenai,
-  BrowserAzureOpenAIProvider,
-  browserOpenai,
-  BrowserOpenAIProvider,
-} from '../../../src/adapters/llm/BrowserOpenAIProvider.js';
-import { foundry } from '../../../src/adapters/llm/FoundryProvider.js';
-import {
-  foundryLocal,
-  FoundryLocalProvider,
-} from '../../../src/adapters/llm/FoundryLocalProvider.js';
-import { gemini, GeminiProvider } from '../../../src/adapters/llm/GeminiProvider.js';
-import {
-  invokeModelGateway,
-  InvokeModelGatewayProvider,
-} from '../../../src/adapters/llm/InvokeModelGatewayProvider.js';
-import { mock, MockProvider } from '../../../src/adapters/llm/MockProvider.js';
-import { ollama, OllamaProvider } from '../../../src/adapters/llm/OllamaProvider.js';
-import { azureOpenai, openai, OpenAIProvider } from '../../../src/adapters/llm/OpenAIProvider.js';
+import * as AnthropicProviderModule from '../../../src/adapters/llm/AnthropicProvider.js';
+import * as BedrockProviderModule from '../../../src/adapters/llm/BedrockProvider.js';
+import * as BrowserAnthropicProviderModule from '../../../src/adapters/llm/BrowserAnthropicProvider.js';
+import * as BrowserOpenAIProviderModule from '../../../src/adapters/llm/BrowserOpenAIProvider.js';
+import * as FoundryLocalProviderModule from '../../../src/adapters/llm/FoundryLocalProvider.js';
+import * as FoundryProviderModule from '../../../src/adapters/llm/FoundryProvider.js';
+import * as GeminiProviderModule from '../../../src/adapters/llm/GeminiProvider.js';
+import * as InvokeModelGatewayProviderModule from '../../../src/adapters/llm/InvokeModelGatewayProvider.js';
+import * as MockProviderModule from '../../../src/adapters/llm/MockProvider.js';
+import * as OllamaProviderModule from '../../../src/adapters/llm/OllamaProvider.js';
+import * as OpenAIProviderModule from '../../../src/adapters/llm/OpenAIProvider.js';
 import type { LLMProvider } from '../../../src/provider-contract/types.js';
 import {
   gate,
@@ -42,7 +28,43 @@ import {
   type AbortRig,
   type AdapterRig,
   type RigMode,
+  type RigOptions,
 } from './abortConformance.js';
+
+/**
+ * The adapter modules a rig list is built over, by file name under
+ * `src/adapters/llm/`. The source's own (`SOURCE_MODULES`) for the main run;
+ * the built package's, ESM or CJS, for `abort.conformance.dist.test.ts`.
+ */
+export interface AdapterModules {
+  readonly AnthropicProvider: typeof AnthropicProviderModule;
+  readonly BedrockProvider: typeof BedrockProviderModule;
+  readonly BrowserAnthropicProvider: typeof BrowserAnthropicProviderModule;
+  readonly BrowserOpenAIProvider: typeof BrowserOpenAIProviderModule;
+  readonly FoundryLocalProvider: typeof FoundryLocalProviderModule;
+  readonly FoundryProvider: typeof FoundryProviderModule;
+  readonly GeminiProvider: typeof GeminiProviderModule;
+  readonly InvokeModelGatewayProvider: typeof InvokeModelGatewayProviderModule;
+  readonly MockProvider: typeof MockProviderModule;
+  readonly OllamaProvider: typeof OllamaProviderModule;
+  readonly OpenAIProvider: typeof OpenAIProviderModule;
+}
+
+export const SOURCE_MODULES: AdapterModules = {
+  AnthropicProvider: AnthropicProviderModule,
+  BedrockProvider: BedrockProviderModule,
+  BrowserAnthropicProvider: BrowserAnthropicProviderModule,
+  BrowserOpenAIProvider: BrowserOpenAIProviderModule,
+  FoundryLocalProvider: FoundryLocalProviderModule,
+  FoundryProvider: FoundryProviderModule,
+  GeminiProvider: GeminiProviderModule,
+  InvokeModelGatewayProvider: InvokeModelGatewayProviderModule,
+  MockProvider: MockProviderModule,
+  OllamaProvider: OllamaProviderModule,
+  OpenAIProvider: OpenAIProviderModule,
+};
+
+type Build = (o: never) => LLMProvider;
 
 // ─── Wire fixtures ──────────────────────────────────────────────────
 
@@ -118,10 +140,11 @@ const CONVERSE_RESPONSE = {
 // ─── SDK rigs ───────────────────────────────────────────────────────
 
 /** The bookkeeping every SDK rig shares. */
-function sdkState() {
+function sdkState(options: RigOptions = {}) {
   const held = gate();
   const state = {
     held,
+    hangingClose: options.hangingClose === true,
     signal: undefined as AbortSignal | undefined,
     dispatched: 0,
     closed: false,
@@ -143,8 +166,8 @@ function rigOf(provider: LLMProvider, s: ReturnType<typeof sdkState>): AbortRig 
   };
 }
 
-function anthropicRig(build: (o: never) => LLMProvider = anthropic): AbortRig {
-  const s = sdkState();
+function anthropicRig(build: Build, options?: RigOptions): AbortRig {
+  const s = sdkState(options);
   const client = {
     messages: {
       create(_params: unknown, options?: { signal?: AbortSignal }) {
@@ -153,13 +176,15 @@ function anthropicRig(build: (o: never) => LLMProvider = anthropic): AbortRig {
       },
       stream(_params: unknown, options?: { signal?: AbortSignal }) {
         s.dispatch(options?.signal);
+        // A pending `return()` has closed nothing; the stream's `abort()` has.
         const events = heldIterable(
           ANTHROPIC_EVENTS_FIRST,
           ANTHROPIC_EVENTS_REST,
-          s.held.promise,
+          s.held,
           () => {
-            s.closed = true;
+            if (!s.hangingClose) s.closed = true;
           },
+          s.hangingClose,
         );
         return {
           [Symbol.asyncIterator]: () => events[Symbol.asyncIterator](),
@@ -182,13 +207,15 @@ function openaiClient(s: ReturnType<typeof sdkState>) {
         create(params: { stream?: boolean }, options?: { signal?: AbortSignal }) {
           s.dispatch(options?.signal);
           if (params.stream !== true) return s.held.promise.then(() => OPENAI_COMPLETION);
+          // A pending `return()` has closed nothing; the controller's `abort()` has.
           const chunks = heldIterable(
             OPENAI_CHUNKS_FIRST,
             OPENAI_CHUNKS_REST,
-            s.held.promise,
+            s.held,
             () => {
-              s.closed = true;
+              if (!s.hangingClose) s.closed = true;
             },
+            s.hangingClose,
           );
           return Promise.resolve({
             [Symbol.asyncIterator]: () => chunks[Symbol.asyncIterator](),
@@ -204,33 +231,30 @@ function openaiClient(s: ReturnType<typeof sdkState>) {
   };
 }
 
-function openaiRig(
-  extra: { baseURL?: string } = {},
-  build: (o: never) => LLMProvider = openai,
-): AbortRig {
-  const s = sdkState();
+function openaiRig(build: Build, options?: RigOptions, extra: { baseURL?: string } = {}): AbortRig {
+  const s = sdkState(options);
   return rigOf(build({ _client: openaiClient(s), ...extra } as never), s);
 }
 
-function azureOpenaiRig(): AbortRig {
-  const s = sdkState();
-  return rigOf(azureOpenai({ _client: openaiClient(s) as never, deployment: 'dep-a' }), s);
+function azureOpenaiRig(build: Build, options?: RigOptions): AbortRig {
+  const s = sdkState(options);
+  return rigOf(build({ _client: openaiClient(s), deployment: 'dep-a' } as never), s);
 }
 
-function foundryRig(): AbortRig {
-  const s = sdkState();
+function foundryRig(build: Build, options?: RigOptions): AbortRig {
+  const s = sdkState(options);
   return rigOf(
-    foundry({
+    build({
       _client: openaiClient(s) as never,
       projectEndpoint: 'https://acct.services.ai.azure.com/api/projects/proj-1',
       deployment: 'dep-a',
-    }),
+    } as never),
     s,
   );
 }
 
-function bedrockRig(build: (o: never) => LLMProvider = bedrock): AbortRig {
-  const s = sdkState();
+function bedrockRig(build: Build, options?: RigOptions): AbortRig {
+  const s = sdkState(options);
   class Converse {
     constructor(public input: unknown) {}
   }
@@ -249,10 +273,11 @@ function bedrockRig(build: (o: never) => LLMProvider = bedrock): AbortRig {
             { messageStop: { stopReason: 'end_turn' } },
             { metadata: { usage: { inputTokens: 5, outputTokens: 3 } } },
           ],
-          s.held.promise,
+          s.held,
           () => {
             s.closed = true;
           },
+          s.hangingClose,
         ),
       });
     },
@@ -260,8 +285,8 @@ function bedrockRig(build: (o: never) => LLMProvider = bedrock): AbortRig {
   return rigOf(build({ _client: client, _commands: { Converse, ConverseStream } } as never), s);
 }
 
-function geminiRig(build: (o: never) => LLMProvider = gemini): AbortRig {
-  const s = sdkState();
+function geminiRig(build: Build, options?: RigOptions): AbortRig {
+  const s = sdkState(options);
   const client = {
     models: {
       generateContent(params: { config?: { abortSignal?: AbortSignal } }) {
@@ -280,10 +305,11 @@ function geminiRig(build: (o: never) => LLMProvider = gemini): AbortRig {
                 responseId: 'gem-1',
               },
             ],
-            s.held.promise,
+            s.held,
             () => {
               s.closed = true;
             },
+            s.hangingClose,
           ),
         );
       },
@@ -296,10 +322,11 @@ function geminiRig(build: (o: never) => LLMProvider = gemini): AbortRig {
 
 function fetchRig(
   mode: RigMode,
-  wire: Parameters<typeof heldFetch>[1],
+  options: RigOptions | undefined,
+  wire: Parameters<typeof heldFetch>[2],
   build: (fetchImpl: typeof fetch) => LLMProvider,
 ): AbortRig {
-  const { fetch: fetchDouble, rig } = heldFetch(mode, wire);
+  const { fetch: fetchDouble, rig } = heldFetch(mode, options ?? {}, wire);
   return { provider: build(fetchDouble as typeof fetch), ...rig };
 }
 
@@ -346,7 +373,7 @@ const GATEWAY_MODEL = 'us.anthropic.claude-haiku-4-5-20251001-v1:0';
 // ─── The list ───────────────────────────────────────────────────────
 
 /** The mock has no wire; its hold is a long think, or a long gap after the first word. */
-function mockRig(mode: RigMode, build: (o: never) => LLMProvider = mock): AbortRig {
+function mockRig(mode: RigMode, build: Build): AbortRig {
   let answered = 0;
   const provider = build({
     respond: () => {
@@ -381,171 +408,200 @@ const GATEWAY_OPTIONS = {
 
 const FOUNDRY_LOCAL_MODEL = 'qwen2.5-0.5b-instruct-generic-cpu:1';
 
-export const ADAPTER_RIGS: readonly AdapterRig[] = [
-  { factory: 'anthropic', model: 'anthropic', make: () => anthropicRig() },
-  { factory: 'openai', model: 'gpt-4o-mini', make: () => openaiRig() },
-  {
-    factory: 'openai',
-    variant: 'OpenAI-compatible baseURL',
-    model: 'llama3.2',
-    make: () => openaiRig({ baseURL: 'http://localhost:1234/v1' }),
-  },
-  { factory: 'azureOpenai', model: 'dep-a', make: () => azureOpenaiRig() },
-  { factory: 'foundry', model: 'dep-a', make: () => foundryRig() },
-  { factory: 'bedrock', model: 'bedrock', make: () => bedrockRig() },
-  { factory: 'gemini', model: 'gemini-2.5-flash', make: () => geminiRig() },
-  {
-    factory: 'browserAnthropic',
-    model: 'claude-sonnet-4-5',
-    make: (mode) =>
-      fetchRig(mode, ANTHROPIC_SSE_WIRE, (f) => browserAnthropic({ apiKey: 'sk-test', _fetch: f })),
-  },
-  {
-    factory: 'browserOpenai',
-    model: 'gpt-4o-mini',
-    make: (mode) =>
-      fetchRig(mode, OPENAI_SSE_WIRE, (f) => browserOpenai({ apiKey: 'sk-test', _fetch: f })),
-  },
-  {
-    factory: 'browserAzureOpenai',
-    model: 'dep-a',
-    make: (mode) =>
-      fetchRig(mode, OPENAI_SSE_WIRE, (f) =>
-        browserAzureOpenai({
-          apiKey: 'az-test',
-          endpoint: 'https://res.openai.azure.com',
-          apiVersion: '2024-12-01-preview',
-          deployment: 'dep-a',
-          _fetch: f,
-        }),
-      ),
-  },
-  {
-    factory: 'ollama',
-    model: 'llama3.2',
-    make: (mode) => fetchRig(mode, OLLAMA_WIRE, (f) => ollama('llama3.2', { _fetch: f })),
-  },
-  {
-    factory: 'foundryLocal',
-    model: 'qwen2.5-0.5b-instruct-generic-cpu:1',
-    make: (mode) =>
-      fetchRig(mode, OPENAI_SSE_WIRE, (f) =>
-        foundryLocal('qwen2.5-0.5b-instruct-generic-cpu:1', { _fetch: f }),
-      ),
-  },
-  {
-    factory: 'invokeModelGateway',
-    model: GATEWAY_MODEL,
-    make: (mode) =>
-      fetchRig(mode, GATEWAY_WIRE, (f) =>
-        invokeModelGateway({
-          baseUrl: 'https://gw.example.test',
-          apiKeyHeader: 'api-key',
-          apiKey: 'key-one',
-          model: GATEWAY_MODEL,
-          fetch: f,
-        }),
-      ),
-  },
-  {
-    factory: 'invokeModelGateway',
-    variant: 'with its own timeoutMs (a linked signal)',
-    model: GATEWAY_MODEL,
-    make: (mode) =>
-      fetchRig(mode, GATEWAY_WIRE, (f) =>
-        invokeModelGateway({
-          baseUrl: 'https://gw.example.test',
-          apiKeyHeader: 'api-key',
-          apiKey: 'key-one',
-          model: GATEWAY_MODEL,
-          timeoutMs: 60_000,
-          fetch: f,
-        }),
-      ),
-  },
+/** One rig per factory and class form, over `m`. */
+export function adapterRigs(m: AdapterModules): readonly AdapterRig[] {
+  const { anthropic, AnthropicProvider } = m.AnthropicProvider;
+  const { bedrock, BedrockProvider } = m.BedrockProvider;
+  const { browserAnthropic, BrowserAnthropicProvider } = m.BrowserAnthropicProvider;
+  const { browserAzureOpenai, BrowserAzureOpenAIProvider, browserOpenai, BrowserOpenAIProvider } =
+    m.BrowserOpenAIProvider;
+  const { foundry } = m.FoundryProvider;
+  const { foundryLocal, FoundryLocalProvider } = m.FoundryLocalProvider;
+  const { gemini, GeminiProvider } = m.GeminiProvider;
+  const { invokeModelGateway, InvokeModelGatewayProvider } = m.InvokeModelGatewayProvider;
+  const { mock, MockProvider } = m.MockProvider;
+  const { ollama, OllamaProvider } = m.OllamaProvider;
+  const { azureOpenai, openai, OpenAIProvider } = m.OpenAIProvider;
+  return [
+    {
+      factory: 'anthropic',
+      model: 'anthropic',
+      make: (_mode, o) => anthropicRig(anthropic as Build, o),
+    },
+    { factory: 'openai', model: 'gpt-4o-mini', make: (_mode, o) => openaiRig(openai as Build, o) },
+    {
+      factory: 'openai',
+      variant: 'OpenAI-compatible baseURL',
+      model: 'llama3.2',
+      make: (_mode, o) => openaiRig(openai as Build, o, { baseURL: 'http://localhost:1234/v1' }),
+    },
+    {
+      factory: 'azureOpenai',
+      model: 'dep-a',
+      make: (_mode, o) => azureOpenaiRig(azureOpenai as Build, o),
+    },
+    { factory: 'foundry', model: 'dep-a', make: (_mode, o) => foundryRig(foundry as Build, o) },
+    {
+      factory: 'bedrock',
+      model: 'bedrock',
+      closeHandle: false,
+      make: (_mode, o) => bedrockRig(bedrock as Build, o),
+    },
+    {
+      factory: 'gemini',
+      model: 'gemini-2.5-flash',
+      closeHandle: false,
+      make: (_mode, o) => geminiRig(gemini as Build, o),
+    },
+    {
+      factory: 'browserAnthropic',
+      model: 'claude-sonnet-4-5',
+      make: (mode, o) =>
+        fetchRig(mode, o, ANTHROPIC_SSE_WIRE, (f) =>
+          browserAnthropic({ apiKey: 'sk-test', _fetch: f }),
+        ),
+    },
+    {
+      factory: 'browserOpenai',
+      model: 'gpt-4o-mini',
+      make: (mode, o) =>
+        fetchRig(mode, o, OPENAI_SSE_WIRE, (f) => browserOpenai({ apiKey: 'sk-test', _fetch: f })),
+    },
+    {
+      factory: 'browserAzureOpenai',
+      model: 'dep-a',
+      make: (mode, o) =>
+        fetchRig(mode, o, OPENAI_SSE_WIRE, (f) =>
+          browserAzureOpenai({ ...AZURE_BROWSER, _fetch: f }),
+        ),
+    },
+    {
+      factory: 'ollama',
+      model: 'llama3.2',
+      make: (mode, o) => fetchRig(mode, o, OLLAMA_WIRE, (f) => ollama('llama3.2', { _fetch: f })),
+    },
+    {
+      factory: 'foundryLocal',
+      model: FOUNDRY_LOCAL_MODEL,
+      make: (mode, o) =>
+        fetchRig(mode, o, OPENAI_SSE_WIRE, (f) => foundryLocal(FOUNDRY_LOCAL_MODEL, { _fetch: f })),
+    },
+    {
+      factory: 'invokeModelGateway',
+      model: GATEWAY_MODEL,
+      make: (mode, o) =>
+        fetchRig(mode, o, GATEWAY_WIRE, (f) =>
+          invokeModelGateway({ ...GATEWAY_OPTIONS, fetch: f }),
+        ),
+    },
+    {
+      factory: 'invokeModelGateway',
+      variant: 'with its own timeoutMs (a linked signal)',
+      model: GATEWAY_MODEL,
+      make: (mode, o) =>
+        fetchRig(mode, o, GATEWAY_WIRE, (f) =>
+          invokeModelGateway({ ...GATEWAY_OPTIONS, timeoutMs: 60_000, fetch: f }),
+        ),
+    },
 
-  { factory: 'mock', model: 'mock', transport: 'none', make: (mode) => mockRig(mode) },
-  // ── Class forms: each delegates to its factory, and is held to the same law.
-  {
-    factory: 'AnthropicProvider',
-    model: 'anthropic',
-    make: () => anthropicRig((o) => new AnthropicProvider(o)),
-  },
-  {
-    factory: 'OpenAIProvider',
-    model: 'gpt-4o-mini',
-    make: () => openaiRig({}, (o) => new OpenAIProvider(o)),
-  },
-  {
-    factory: 'BedrockProvider',
-    model: 'bedrock',
-    make: () => bedrockRig((o) => new BedrockProvider(o)),
-  },
-  {
-    factory: 'GeminiProvider',
-    model: 'gemini-2.5-flash',
-    make: () => geminiRig((o) => new GeminiProvider(o)),
-  },
-  {
-    factory: 'BrowserAnthropicProvider',
-    model: 'claude-sonnet-4-5',
-    make: (mode) =>
-      fetchRig(
-        mode,
-        ANTHROPIC_SSE_WIRE,
-        (f) => new BrowserAnthropicProvider({ apiKey: 'sk-test', _fetch: f }),
-      ),
-  },
-  {
-    factory: 'BrowserOpenAIProvider',
-    model: 'gpt-4o-mini',
-    make: (mode) =>
-      fetchRig(
-        mode,
-        OPENAI_SSE_WIRE,
-        (f) => new BrowserOpenAIProvider({ apiKey: 'sk-test', _fetch: f }),
-      ),
-  },
-  {
-    factory: 'BrowserAzureOpenAIProvider',
-    model: 'dep-a',
-    make: (mode) =>
-      fetchRig(
-        mode,
-        OPENAI_SSE_WIRE,
-        (f) => new BrowserAzureOpenAIProvider({ ...AZURE_BROWSER, _fetch: f }),
-      ),
-  },
-  {
-    factory: 'OllamaProvider',
-    model: 'llama3.2',
-    make: (mode) =>
-      fetchRig(mode, OLLAMA_WIRE, (f) => new OllamaProvider('llama3.2', { _fetch: f })),
-  },
-  {
-    factory: 'FoundryLocalProvider',
-    model: FOUNDRY_LOCAL_MODEL,
-    make: (mode) =>
-      fetchRig(
-        mode,
-        OPENAI_SSE_WIRE,
-        (f) => new FoundryLocalProvider(FOUNDRY_LOCAL_MODEL, { _fetch: f }),
-      ),
-  },
-  {
-    factory: 'InvokeModelGatewayProvider',
-    model: GATEWAY_MODEL,
-    make: (mode) =>
-      fetchRig(
-        mode,
-        GATEWAY_WIRE,
-        (f) => new InvokeModelGatewayProvider({ ...GATEWAY_OPTIONS, fetch: f }),
-      ),
-  },
-  {
-    factory: 'MockProvider',
-    model: 'mock',
-    transport: 'none',
-    make: (mode) => mockRig(mode, (o) => new MockProvider(o)),
-  },
-];
+    {
+      factory: 'mock',
+      model: 'mock',
+      transport: 'none',
+      make: (mode) => mockRig(mode, mock as Build),
+    },
+    // ── Class forms: each delegates to its factory, and is held to the same law.
+    {
+      factory: 'AnthropicProvider',
+      model: 'anthropic',
+      make: (_mode, o) => anthropicRig((x) => new AnthropicProvider(x), o),
+    },
+    {
+      factory: 'OpenAIProvider',
+      model: 'gpt-4o-mini',
+      make: (_mode, o) => openaiRig((x) => new OpenAIProvider(x), o),
+    },
+    {
+      factory: 'BedrockProvider',
+      model: 'bedrock',
+      closeHandle: false,
+      make: (_mode, o) => bedrockRig((x) => new BedrockProvider(x), o),
+    },
+    {
+      factory: 'GeminiProvider',
+      model: 'gemini-2.5-flash',
+      closeHandle: false,
+      make: (_mode, o) => geminiRig((x) => new GeminiProvider(x), o),
+    },
+    {
+      factory: 'BrowserAnthropicProvider',
+      model: 'claude-sonnet-4-5',
+      make: (mode, o) =>
+        fetchRig(
+          mode,
+          o,
+          ANTHROPIC_SSE_WIRE,
+          (f) => new BrowserAnthropicProvider({ apiKey: 'sk-test', _fetch: f }),
+        ),
+    },
+    {
+      factory: 'BrowserOpenAIProvider',
+      model: 'gpt-4o-mini',
+      make: (mode, o) =>
+        fetchRig(
+          mode,
+          o,
+          OPENAI_SSE_WIRE,
+          (f) => new BrowserOpenAIProvider({ apiKey: 'sk-test', _fetch: f }),
+        ),
+    },
+    {
+      factory: 'BrowserAzureOpenAIProvider',
+      model: 'dep-a',
+      make: (mode, o) =>
+        fetchRig(
+          mode,
+          o,
+          OPENAI_SSE_WIRE,
+          (f) => new BrowserAzureOpenAIProvider({ ...AZURE_BROWSER, _fetch: f }),
+        ),
+    },
+    {
+      factory: 'OllamaProvider',
+      model: 'llama3.2',
+      make: (mode, o) =>
+        fetchRig(mode, o, OLLAMA_WIRE, (f) => new OllamaProvider('llama3.2', { _fetch: f })),
+    },
+    {
+      factory: 'FoundryLocalProvider',
+      model: FOUNDRY_LOCAL_MODEL,
+      make: (mode, o) =>
+        fetchRig(
+          mode,
+          o,
+          OPENAI_SSE_WIRE,
+          (f) => new FoundryLocalProvider(FOUNDRY_LOCAL_MODEL, { _fetch: f }),
+        ),
+    },
+    {
+      factory: 'InvokeModelGatewayProvider',
+      model: GATEWAY_MODEL,
+      make: (mode, o) =>
+        fetchRig(
+          mode,
+          o,
+          GATEWAY_WIRE,
+          (f) => new InvokeModelGatewayProvider({ ...GATEWAY_OPTIONS, fetch: f }),
+        ),
+    },
+    {
+      factory: 'MockProvider',
+      model: 'mock',
+      transport: 'none',
+      make: (mode) => mockRig(mode, (x) => new MockProvider(x)),
+    },
+  ];
+}
+
+/** The rigs over the source, which `abort.conformance.test.ts` runs. */
+export const ADAPTER_RIGS: readonly AdapterRig[] = adapterRigs(SOURCE_MODULES);
