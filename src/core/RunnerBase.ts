@@ -14,8 +14,8 @@ import type {
   FlowChartExecutor,
   FlowchartCheckpoint,
   RedactionPolicy,
-  RunOptions,
 } from 'footprintjs';
+import type { RunOptions } from './runner.js';
 import type { RunContext } from '../bridge/eventMeta.js';
 import { EventDispatcher, REFUSE } from '../events/dispatcher.js';
 import { bindChartStages } from '../redaction/chartBinding.js';
@@ -128,10 +128,23 @@ export function isMintedRunId(value: unknown): boolean {
  * agent inside a composition retried the cancelled call up to its cap). Every
  * runner's `run` / `resume` passes its options through here. The SAME object
  * when there is nothing to add.
+ *
+ * It is also where the incoming `request` STOPS: the engine is handed the
+ * options without it, so a sealed request never reaches footprintjs's run
+ * options (the runner reads it before this call, `memberRun.ts`).
  */
 export function withRunSignalInEnv<T extends RunOptions>(options: T | undefined): T | undefined {
-  if (options?.signal === undefined || options.env?.signal !== undefined) return options;
-  return { ...options, env: { ...options.env, signal: options.signal } };
+  const engine = withoutRequest(options);
+  if (engine?.signal === undefined || engine.env?.signal !== undefined) return engine;
+  return { ...engine, env: { ...engine.env, signal: engine.signal } };
+}
+
+/** `options` without `request` — the SAME object when it carries none. */
+function withoutRequest<T extends RunOptions>(options: T | undefined): T | undefined {
+  if (options === undefined || !('request' in options)) return options;
+  const { request: _request, ...rest } = options;
+  void _request;
+  return rest as T;
 }
 
 export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runner<TIn, TOut> {

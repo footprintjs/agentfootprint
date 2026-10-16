@@ -4,7 +4,7 @@ title: GraphNode<I, O>
 
 # Interface: GraphNode\<I, O\>
 
-Defined in: [src/core-flow/Graph.ts:162](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L162)
+Defined in: [src/core-flow/Graph.ts:163](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L163)
 
 One node of the graph: an id, the runner that does the work, and — when
 the node has more than one parent — how to merge what those parents
@@ -26,7 +26,7 @@ produced into this node's input.
 
 > `readonly` **id**: `string`
 
-Defined in: [src/core-flow/Graph.ts:164](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L164)
+Defined in: [src/core-flow/Graph.ts:165](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L165)
 
 Unique within the graph. Used as the results key and the chart node id.
 
@@ -36,7 +36,7 @@ Unique within the graph. Used as the results key and the chart node id.
 
 > `readonly` `optional` **join?**: (`upstream`) => `I`
 
-Defined in: [src/core-flow/Graph.ts:175](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L175)
+Defined in: [src/core-flow/Graph.ts:176](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L176)
 
 Merge upstream outputs into this node's input. `upstream` is keyed by
 PARENT NODE ID, and each value is that parent's output, unchanged.
@@ -61,7 +61,7 @@ merge is a wrong merge, so the build refuses and names the node.
 
 > `readonly` `optional` **name?**: `string`
 
-Defined in: [src/core-flow/Graph.ts:177](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L177)
+Defined in: [src/core-flow/Graph.ts:178](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L178)
 
 Human-friendly label for events + topology. Default: the node id.
 
@@ -71,6 +71,6 @@ Human-friendly label for events + topology. Default: the node id.
 
 > `readonly` **runner**: [`Runner`](/docs/api/interfaces/Runner)\<`I`, `O`\>
 
-Defined in: [src/core-flow/Graph.ts:166](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L166)
+Defined in: [src/core-flow/Graph.ts:167](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L167)
 
 The work. Any Runner: LLMCall, Agent, a Sequence, another graph.

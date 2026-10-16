@@ -29,6 +29,7 @@
  */
 
 import type { MemoryIdentity } from '../memory/identity/types.js';
+import type { RequestContext } from '../identity/requestContext.js';
 import { assertIdentityShape } from './agent/callerIdentity.js';
 
 /** The state key a runner keeps the run it serves under. */
@@ -61,7 +62,10 @@ export interface ParentRunRecord extends ParentRun {
 // an object brand, because a member's input is copied on its way in, and a
 // copy keeps a string but not an object's identity.
 
-const live = new Map<string, { readonly run: ParentRun; holders: number }>();
+const live = new Map<
+  string,
+  { readonly run: ParentRun; holders: number; readonly request?: RequestContext }
+>();
 
 /**
  * A `parentRun` that is not a live link this module issued — forged, copied
@@ -90,6 +94,7 @@ export function openParentRun(
   runId: string,
   identity: MemoryIdentity | undefined,
   door: string,
+  request?: RequestContext,
 ): ParentRunRecord {
   assertIdentityShape(identity, door);
   const run: ParentRun = {
@@ -97,7 +102,9 @@ export function openParentRun(
     ...(identity !== undefined && { identity: copyIdentity(identity) }),
   };
   const link = globalThis.crypto.randomUUID();
-  live.set(link, { run, holders: 1 });
+  // The request stays HERE, beside the run, and never on the record: the
+  // record is written to the runner's state, and state is the record.
+  live.set(link, { run, holders: 1, ...(request !== undefined && { request }) });
   return { link, ...run };
 }
 
@@ -107,7 +114,11 @@ export function openParentRun(
  * host keeps it server-side or signs it, as for every resume). `undefined`
  * when the paused run recorded none.
  */
-export function reopenParentRun(sharedState: unknown, door: string): ParentRunRecord | undefined {
+export function reopenParentRun(
+  sharedState: unknown,
+  door: string,
+  request?: RequestContext,
+): ParentRunRecord | undefined {
   if (sharedState === null || typeof sharedState !== 'object') return undefined;
   const raw = (sharedState as Record<string, unknown>)[MEMBER_RUN_KEY];
   if (raw === undefined) return undefined;
@@ -125,8 +136,12 @@ export function reopenParentRun(sharedState: unknown, door: string): ParentRunRe
     ...(identity !== undefined && { identity: copyIdentity(identity as MemoryIdentity) }),
   };
   const held = live.get(link);
-  if (held !== undefined) held.holders++;
-  else live.set(link, { run, holders: 1 });
+  if (held !== undefined) {
+    // The run is still open elsewhere. Its members already serve ONE request;
+    // a resume naming another would hand them a second — refused, not merged.
+    if (held.request !== request) throw new ResumeRequestConflictError(door);
+    held.holders++;
+  } else live.set(link, { run, holders: 1, ...(request !== undefined && { request }) });
   return { link, ...(held?.run ?? run) };
 }
 
@@ -136,6 +151,44 @@ export function closeParentRun(record: ParentRunRecord | undefined): void {
   const held = live.get(record.link);
   if (held === undefined) return;
   if (--held.holders <= 0) live.delete(record.link);
+}
+
+/**
+ * The request a live link's run serves, or `undefined` — for a dead link, a
+ * value that is not a link, or a run opened without one.
+ */
+export function requestOfLink(link: unknown): RequestContext | undefined {
+  return typeof link === 'string' ? live.get(link)?.request : undefined;
+}
+
+/**
+ * The request a member's stage serves, read from the stage's own input: the
+ * request of the run its `parentRun` link names. A member with no link (a
+ * chart a caller built and runs itself) serves NO request — never the
+ * request of whatever run its instance is in elsewhere.
+ */
+export function memberRequestIn(scope: object): RequestContext | undefined {
+  const getArgs = (scope as { readonly $getArgs?: () => unknown }).$getArgs;
+  const args = (typeof getArgs === 'function' ? getArgs.call(scope) : undefined) as
+    | { readonly parentRun?: unknown }
+    | undefined;
+  return requestOfLink(args?.parentRun);
+}
+
+/**
+ * A resume names a request while the run it resumes is still open under
+ * another — its members would serve two requests. Refused before anything runs.
+ */
+export class ResumeRequestConflictError extends Error {
+  readonly code = 'ERR_RESUME_REQUEST_CONFLICT' as const;
+
+  constructor(door: string) {
+    super(
+      `${door}: the paused run is still open and serves another request — a resume cannot hand its ` +
+        'members a second one. Resume it once the open leg has returned.',
+    );
+    this.name = 'ResumeRequestConflictError';
+  }
 }
 
 /** The run a live link names, or `undefined`. */
@@ -181,9 +234,15 @@ export function withParentRun<I extends object>(
   record: ParentRunRecord | undefined,
   runner: object,
 ): I | (I & { readonly parentRun: string }) {
-  return record === undefined || !readers.has(runner)
-    ? input
-    : { ...input, parentRun: record.link };
+  if (!readers.has(runner)) return input;
+  if (record !== undefined) return { ...input, parentRun: record.link };
+  // No run to hand down: a `parentRun` already in the input came from a mapper
+  // or an earlier step's data, not from this module — a link is a key to its
+  // run's identity and request, so one that arrived that way is dropped.
+  if (!Object.hasOwn(input, 'parentRun')) return input;
+  const { parentRun: _dropped, ...rest } = input as I & { readonly parentRun?: unknown };
+  void _dropped;
+  return rest as I;
 }
 
 /**

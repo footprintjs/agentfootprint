@@ -81,6 +81,7 @@ import type { MapEngagement } from '../../../maps/engagement/types.js';
 import type { ToolProvider } from '../../../tools/toolProvider.js';
 import type { Credential, CredentialProvider } from '../../../identity/types.js';
 import { unconfiguredCredentialProvider } from '../../../identity/types.js';
+import { bindRequest, type RequestContext } from '../../../identity/requestContext.js';
 import {
   bindArtifacts,
   unconfiguredArtifacts,
@@ -443,6 +444,16 @@ export interface ToolCallsHandlerDeps {
    *  declared `needs` is resolved BEFORE execute and injected as `ctx.credential`;
    *  `ctx.credentials` exposes it for the pull escape hatch. */
   readonly credentialProvider?: CredentialProvider;
+  /**
+   * The incoming request a call made in `scope` serves — the agent's own run's
+   * for its own scopes, the run a composition's link names on a mount, and
+   * `undefined` where no run carries one. Every credential call made in that
+   * scope (declared `needs`, the pull path, inner `ctx.tools` calls) carries
+   * it as `CredentialRequest.request` and nothing else (`bindRequest`), so a
+   * request-sourced credential can never serve another run. Absent → no call
+   * carries a request.
+   */
+  readonly currentRequest?: (scope: object) => RequestContext | undefined;
   /**
    * The claim-check store (9.21.0). When present, every dispatch binds it to
    * the run's scope (`scope.runIdentity` — the tuple memory scopes on) as
@@ -1609,8 +1620,14 @@ export function buildToolCallsHandler(
     deps.onAuthorizationRequired ?? 'pause';
   // Fail-closed: when no provider is attached, `ctx.credentials` is a provider
   // that THROWS on use (never undefined) — so a tool can't silently no-op.
-  const credentials = deps.credentialProvider ?? unconfiguredCredentialProvider();
+  const baseCredentials = deps.credentialProvider ?? unconfiguredCredentialProvider();
   const hasCredentials = deps.credentialProvider !== undefined;
+  // The provider a call in `scope` is handed: bound to THAT run's request
+  // (or to none), whatever the call itself presents — and only for the one
+  // service the tool DECLARES. A tool reaches a request credential through its
+  // own `needs`, never another service's through the pull path.
+  const credentialsIn = (scope: object, service: string | undefined): CredentialProvider =>
+    bindRequest(baseCredentials, deps.currentRequest?.(scope), service);
   // The repeated-call counters (9.26.0), run-keyed and OFF tracked scope — an
   // empty Map here, and not one byte written anywhere a reader can see until a
   // tool actually lands. See `../repeatedCall.ts` for why they are not state.
@@ -2874,7 +2891,7 @@ export function buildToolCallsHandler(
           ...(signal && { signal }),
           ...(redact !== undefined && { redact }),
           credentials: reportingCredentials(
-            credentials,
+            credentialsIn(scope, registryByName.get(name)?.needs?.credential),
             bindToolSecurityEvents(scope, { toolCallId: innerId, iteration: call.iteration }),
             name,
           ),
@@ -3708,7 +3725,7 @@ export function buildToolCallsHandler(
         ...(need.mode && { mode: need.mode }),
       });
       try {
-        const cred = await credentials.getCredential({
+        const cred = await credentialsIn(scope, need.credential).getCredential({
           service: need.credential,
           ...(need.scopes && { scopes: need.scopes }),
           ...(need.mode && { mode: need.mode }),
@@ -3783,7 +3800,11 @@ export function buildToolCallsHandler(
         iteration,
         ...(callTime !== undefined && { time: callTime }),
         ...(env.signal && { signal: env.signal }),
-        credentials: reportingCredentials(credentials, emitSecurity, toolName),
+        credentials: reportingCredentials(
+          credentialsIn(scope, tool.needs?.credential),
+          emitSecurity,
+          toolName,
+        ),
         hasCredentials,
         ...(resolvedCredential && { credential: resolvedCredential }),
         ...toolArtifacts(scope, toolName, toolCallId),
@@ -4792,7 +4813,7 @@ export function buildToolCallsHandler(
               ...(need.mode && { mode: need.mode }),
             });
             try {
-              const cred = await credentials.getCredential({
+              const cred = await credentialsIn(scope, need.credential).getCredential({
                 service: need.credential,
                 ...(need.scopes && { scopes: need.scopes }),
                 ...(need.mode && { mode: need.mode }),
@@ -4927,7 +4948,11 @@ export function buildToolCallsHandler(
                 iteration,
                 ...(callTime !== undefined && { time: callTime }),
                 ...(env.signal && { signal: env.signal }),
-                credentials: reportingCredentials(credentials, emitSecurity, tc.name),
+                credentials: reportingCredentials(
+                  credentialsIn(scope, tool.needs?.credential),
+                  emitSecurity,
+                  tc.name,
+                ),
                 hasCredentials,
                 ...(resolvedCredential && { credential: resolvedCredential }),
                 ...toolArtifacts(scope, tc.name, tc.id),

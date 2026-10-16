@@ -4,7 +4,7 @@ title: GraphOptions
 
 # Interface: GraphOptions
 
-Defined in: [src/core-flow/Graph.ts:186](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L186)
+Defined in: [src/core-flow/Graph.ts:187](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L187)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/core-flow/Graph.ts:186](https://github.com/footprintjs/agentfoo
 
 > `readonly` **edges**: readonly [`GraphEdge`](/docs/api/interfaces/GraphEdge)[]
 
-Defined in: [src/core-flow/Graph.ts:194](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L194)
+Defined in: [src/core-flow/Graph.ts:195](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L195)
 
 The dependencies. Every endpoint must name a declared node.
 
@@ -22,7 +22,7 @@ The dependencies. Every endpoint must name a declared node.
 
 > `readonly` `optional` **id?**: `string`
 
-Defined in: [src/core-flow/Graph.ts:198](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L198)
+Defined in: [src/core-flow/Graph.ts:199](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L199)
 
 Stable id used for topology + events. Default `'graph'`.
 
@@ -32,7 +32,7 @@ Stable id used for topology + events. Default `'graph'`.
 
 > `readonly` `optional` **name?**: `string`
 
-Defined in: [src/core-flow/Graph.ts:196](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L196)
+Defined in: [src/core-flow/Graph.ts:197](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L197)
 
 Human-friendly name for events + topology. Default `'Graph'`.
 
@@ -42,7 +42,7 @@ Human-friendly name for events + topology. Default `'Graph'`.
 
 > `readonly` **nodes**: readonly [`GraphNode`](/docs/api/interfaces/GraphNode)\<`any`, `any`\>[]
 
-Defined in: [src/core-flow/Graph.ts:192](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L192)
+Defined in: [src/core-flow/Graph.ts:193](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L193)
 
 The nodes. Ids must be unique; at least one is required.
 
@@ -52,7 +52,7 @@ The nodes. Ids must be unique; at least one is required.
 
 > `readonly` `optional` **structureRecorders?**: readonly `StructureRecorder`[]
 
-Defined in: [src/core-flow/Graph.ts:206](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L206)
+Defined in: [src/core-flow/Graph.ts:207](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L207)
 
 Optional build-time recorders passed through to footprintjs's
 `flowChart()` factory — they observe this graph's OWN nodes (Seed +

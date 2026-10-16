@@ -721,7 +721,11 @@ export {
 } from './core/conversation.js';
 // A composition member runs for the run that mounted it; one no run reached is
 // refused by name (`core/memberRun.ts`).
-export { MemberIdentityError, ParentRunRefusedError } from './core/memberRun.js';
+export {
+  MemberIdentityError,
+  ParentRunRefusedError,
+  ResumeRequestConflictError,
+} from './core/memberRun.js';
 export {
   flowchartAsTool,
   type FlowchartAsToolOptions,
@@ -805,6 +809,21 @@ export {
   assertComposedOf,
   assertGates,
 } from './tools/tools.js';
+// Host-filled tool arguments: a field the HOST fills from the call's credential
+// or the caller's identity — removed from the model's schema, a model-sent
+// value refused by name, the credential scrubbed from what comes back.
+export {
+  hostFilled,
+  fromCredential,
+  fromIdentity,
+  HostFilledArgumentError,
+  HostFilledValueMissingError,
+  HOST_FILLED_PLACEHOLDER,
+  type HostFill,
+  type HostFillFromCredential,
+  type HostFillFromIdentity,
+  type HostFilledIdentityField,
+} from './tools/hostFilled.js';
 // The tool-name law (`lib/toolName.ts`): the strict check and the dev-mode
 // warning `defineTool` runs, for consumers assembling `Tool` objects by hand.
 export { assertValidToolName, warnIfInvalidToolName } from './lib/toolName.js';

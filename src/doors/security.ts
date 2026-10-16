@@ -7,7 +7,8 @@
  *     `PermissionChecker` port, and thinking-block redaction.
  *   • Identity — the `CredentialProvider` port, the credential kinds
  *     (`bearer`, `apiKey`, `basic`, `headers`), `staticTokens`,
- *     `withCredentialRetry`, and `agentCoreIdentity`.
+ *     `withCredentialRetry`, `agentCoreIdentity`, and `requestCredentials`
+ *     over a run's sealed `requestContext`.
  *   • Who is calling — the inbound verifiers `jwksIdentity` and
  *     `oidcIdentity`, and `identityFromConfig` / `identityConfigFromEnv`,
  *     which pick one strategy per deployment from config at boot.

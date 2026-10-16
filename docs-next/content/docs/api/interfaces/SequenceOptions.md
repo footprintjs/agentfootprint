@@ -4,7 +4,7 @@ title: SequenceOptions
 
 # Interface: SequenceOptions
 
-Defined in: [src/core-flow/Sequence.ts:48](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L48)
+Defined in: [src/core-flow/Sequence.ts:49](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L49)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/core-flow/Sequence.ts:48](https://github.com/footprintjs/agentf
 
 > `readonly` `optional` **groupTranslator?**: [`GroupTranslator`](/docs/api/interfaces/GroupTranslator)\<`unknown`\>
 
-Defined in: [src/core-flow/Sequence.ts:75](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L75)
+Defined in: [src/core-flow/Sequence.ts:76](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L76)
 
 Optional per-COMPOSITION translator (UI-agnostic). See
 `core/translator.ts`. When attached, `runner.getUIGroup()` invokes
@@ -27,7 +27,7 @@ translator produces. When omitted, `getUIGroup()` returns
 
 > `readonly` `optional` **id?**: `string`
 
-Defined in: [src/core-flow/Sequence.ts:52](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L52)
+Defined in: [src/core-flow/Sequence.ts:53](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L53)
 
 Stable id used for topology + events. Default: 'sequence'.
 
@@ -37,7 +37,7 @@ Stable id used for topology + events. Default: 'sequence'.
 
 > `readonly` `optional` **name?**: `string`
 
-Defined in: [src/core-flow/Sequence.ts:50](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L50)
+Defined in: [src/core-flow/Sequence.ts:51](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L51)
 
 Human-friendly name for events + topology. Default: 'Sequence'.
 
@@ -47,7 +47,7 @@ Human-friendly name for events + topology. Default: 'Sequence'.
 
 > `readonly` `optional` **structureRecorders?**: readonly `StructureRecorder`[]
 
-Defined in: [src/core-flow/Sequence.ts:66](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L66)
+Defined in: [src/core-flow/Sequence.ts:67](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L67)
 
 Optional build-time recorders passed through to footprintjs's
 `flowChart()` factory. Each recorder observes per-node build

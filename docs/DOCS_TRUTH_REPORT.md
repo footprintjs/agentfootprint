@@ -6,15 +6,15 @@ _Recorded 2026-09-25._
 
 ## In plain words
 
-The package publishes **19 import paths** carrying **2567 distinct named exports**, plus **124 typed events**. For each one this report asks three separate questions: is it really *exported* (declared), is it *described in prose on the published docs site* (documented), and does a *real run actually use it* (exercised).
+The package publishes **19 import paths** carrying **2591 distinct named exports**, plus **124 typed events**. For each one this report asks three separate questions: is it really *exported* (declared), is it *described in prose on the published docs site* (documented), and does a *real run actually use it* (exercised).
 
-**1856 of 2567 exports (72%) are described in prose on the site.** The rest split into five different problems, which is the whole point of keeping the columns apart:
+**1880 of 2591 exports (73%) are described in prose on the site.** The rest split into five different problems, which is the whole point of keeping the columns apart:
 
 - **30 exist, provably work, and are undocumented.** A reference run exercises them and no page on the site describes them. This is the honest headline number for "features that work and nobody has written about". It is the list to work through.
 - **91 are already written up, just not published.** Prose about them exists inside the repo (`docs/`, `README.md`) but never made it onto the site. These are cheap wins: the writing is done, it needs moving.
 - **16 appear only inside a code sample** and nowhere in the surrounding text. A reader scanning the page never learns they exist, and site search does not find them.
 - **574 are undocumented and no reference run touches them.** This report will not guess whether they work. They are reported as UNKNOWN, which is the honest answer, and they need a human pass.
-- **1623 are documented but no reference run exercises them.** For a function or a class that is the shape a dead or unimplemented feature has. For a type or an interface it is mostly noise, because a type is used, not called — so read that class by kind, and the tables below split it.
+- **1647 are documented but no reference run exercises them.** For a function or a class that is the shape a dead or unimplemented feature has. For a type or an interface it is mostly noise, because a type is used, not called — so read that class by kind, and the tables below split it.
 
 On events: **70** of the 124 typed events are both described on the site and were seen firing in a real run. **24** are described but were never observed firing — that is exactly the shape the resilience events had for months (fully declared, with payload types, and zero emitters), so this number is worth a look every time it moves. **30** are not described in prose on the site at all.
 
@@ -47,7 +47,7 @@ The repo has four documentation locations and they are not equivalent. Getting t
 | Location | Files | Counts as documentation? |
 |---|---|---|
 | `docs-next/content/docs/**.mdx` (hand-written) | 116 | **Yes — the truth source.** This is what the published site renders and what a reader sees. |
-| `docs-next/content/docs/api/**` (TypeDoc-generated) | 759 | **No — excluded.** |
+| `docs-next/content/docs/api/**` (TypeDoc-generated) | 770 | **No — excluded.** |
 | `docs/api-reference/**` (TypeDoc-generated) | 0 | **No — excluded.** |
 | `docs/**.md` + `README.md` (repo-internal prose) | 61 | **No** — but tracked as its own state, "written but not published". |
 
@@ -57,7 +57,7 @@ Freshness is a separate question from documentation. `docs/api-reference/` is re
 
 ## What the existing CI docs gate already covers
 
-CI's `docs` job builds docs-next, which twoslash-compiles code blocks marked `ts twoslash` against the real types. That gate is real, and where it applies nothing can drift. It just applies narrowly: **32 of the 667 TypeScript/JavaScript blocks on the site are twoslash-marked**, and **397 `import … from 'agentfootprint…'` lines sit inside blocks the compiler never sees**. Three genuinely broken imports were found in exactly that blind spot while this report was first built (plain `typescript`-tagged fences in `reference/strategy-everywhere.mdx`), which is the concrete argument for checking the export map directly rather than trusting the build to catch it.
+CI's `docs` job builds docs-next, which twoslash-compiles code blocks marked `ts twoslash` against the real types. That gate is real, and where it applies nothing can drift. It just applies narrowly: **32 of the 669 TypeScript/JavaScript blocks on the site are twoslash-marked**, and **399 `import … from 'agentfootprint…'` lines sit inside blocks the compiler never sees**. Three genuinely broken imports were found in exactly that blind spot while this report was first built (plain `typescript`-tagged fences in `reference/strategy-everywhere.mdx`), which is the concrete argument for checking the export map directly rather than trusting the build to catch it.
 
 ## What each column means
 
@@ -155,7 +155,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `agentfootprint.integrity.context_error` | `docs-next/content/docs/monitor/arming-context-integrity.mdx`, `docs-next/content/docs/monitor/column-types.mdx` |
 | `agentfootprint.integrity.external_ground_used` | `docs-next/content/docs/monitor/arming-context-integrity.mdx` |
 
-**Functions and classes described on the site but not touched by any reference run (488).** The other 1135 in this class are types, interfaces and constants, which a run cannot "call" — they are named in `docs/docs-truth/baseline.json` rather than here.
+**Functions and classes described on the site but not touched by any reference run (501).** The other 1146 in this class are types, interfaces and constants, which a run cannot "call" — they are named in `docs/docs-truth/baseline.json` rather than here.
 
 | Symbol | Kind | Exported from |
 |---|---|---|
@@ -193,8 +193,11 @@ The site describes it and it really is exported, but no reference run touches it
 | `explainStatusOnlyNearMiss` | function | `agentfootprint` |
 | `fileArtifacts` | function | `agentfootprint` |
 | `formatArtifactStoreReport` | function | `agentfootprint` |
+| `fromCredential` | function | `agentfootprint` |
+| `fromIdentity` | function | `agentfootprint` |
 | `gcsArtifacts` | function | `agentfootprint` |
 | `hashSessionKey` | function | `agentfootprint` |
+| `hostFilled` | function | `agentfootprint` |
 | `isArtifactRef` | function | `agentfootprint` |
 | `isBaselineSource` | function | `agentfootprint` |
 | `isContextWindowExceeded` | function | `agentfootprint` |
@@ -257,6 +260,8 @@ The site describes it and it really is exported, but no reference run touches it
 | `ConversationMismatchError` | class | `agentfootprint` |
 | `DecisionRequiredError` | class | `agentfootprint` |
 | `Graph` | class | `agentfootprint` |
+| `HostFilledArgumentError` | class | `agentfootprint` |
+| `HostFilledValueMissingError` | class | `agentfootprint` |
 | `InputRequestError` | class | `agentfootprint` |
 | `InvalidArtifactError` | class | `agentfootprint` |
 | `InvalidAskComponentError` | class | `agentfootprint` |
@@ -268,6 +273,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `PauseAnswerRequiredError` | class | `agentfootprint` |
 | `ResumeIdentityConflictError` | class | `agentfootprint` |
 | `ResumeRedactionError` | class | `agentfootprint` |
+| `ResumeRequestConflictError` | class | `agentfootprint` |
 | `RoutingDecisionError` | class | `agentfootprint` |
 | `RunbookAbsenceSignal` | class | `agentfootprint` |
 | `StaleDecisionError` | class | `agentfootprint` |
@@ -310,6 +316,8 @@ The site describes it and it really is exported, but no reference run touches it
 | `armFacetsFromManifest` | function | `agentfootprint/observe` |
 | `armLabel` | function | `agentfootprint/observe` |
 | `artifactWireBody` | function | `agentfootprint/hosting` |
+| `asApiKey` | function | `agentfootprint/security` |
+| `asBearer` | function | `agentfootprint/security` |
 | `assertCorpusBundle` | function | `agentfootprint/memory` |
 | `assertServesVectors` | function | `agentfootprint/memory` |
 | `assessAnswer` | function | `agentfootprint/observe` |
@@ -364,6 +372,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `costRecorder` | function | `agentfootprint/observe` |
 | `createProvider` | function | `agentfootprint/providers` |
 | `declaredFacetCount` | function | `agentfootprint/observe` |
+| `decodedWith` | function | `agentfootprint/security` |
 | `defineInjection` | function | `agentfootprint/context` |
 | `defineMenuHint` | function | `agentfootprint/context` |
 | `defineOntology` | function | `agentfootprint/ontology` |
@@ -421,6 +430,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `isCredentialIssued` | function | `agentfootprint/security` |
 | `isKnown` | function | `agentfootprint/cache` `agentfootprint/maps` |
 | `isPackedRecording` | function | `agentfootprint/observe` |
+| `isRequestContext` | function | `agentfootprint/security` |
 | `isRetrievalEvidenceKey` | function | `agentfootprint/memory` |
 | `isTentative` | function | `agentfootprint/maps` |
 | `isWireOp` | function | `agentfootprint/hosting` |
@@ -490,6 +500,8 @@ The site describes it and it really is exported, but no reference run touches it
 | `refuseUnhonouredWriteOptions` | function | `agentfootprint/memory` |
 | `refuseUnknownWireOp` | function | `agentfootprint/hosting` |
 | `renewalEvidenceOf` | function | `agentfootprint/maps` |
+| `requestContext` | function | `agentfootprint/security` |
+| `requestCredentials` | function | `agentfootprint/security` |
 | `requestedWriteOptions` | function | `agentfootprint/memory` |
 | `requireCapability` | function | `agentfootprint/hosting` |
 | `resilienceRecorder` | function | `agentfootprint/observe` |
@@ -621,6 +633,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `RecordingTooLargeForAccountError` | class | `agentfootprint/hosting` |
 | `RedirectSignInError` | class | `agentfootprint/hosting` |
 | `RequestArtifactsRevokedError` | class | `agentfootprint/hosting` |
+| `RequestCredentialError` | class | `agentfootprint/security` |
 | `RequestTooLargeError` | class | `agentfootprint/hosting` |
 | `SessionIndexUnavailableError` | class | `agentfootprint/hosting` |
 | `SessionNotFoundError` | class | `agentfootprint/hosting` |
@@ -922,7 +935,7 @@ Whether a symbol comes from the root barrel or only from a subpath is a document
 
 | Import path | Exports | Described in site prose | Coverage |
 |---|---|---|---|
-| `agentfootprint` | 753 | 622 | 83% |
+| `agentfootprint` | 764 | 633 | 83% |
 | `agentfootprint/providers` | 186 | 158 | 85% |
 | `agentfootprint/memory` | 232 | 121 | 52% |
 | `agentfootprint/rag` | 49 | 49 | 100% |
@@ -932,7 +945,7 @@ Whether a symbol comes from the root barrel or only from a subpath is a document
 | `agentfootprint/context` | 161 | 100 | 62% |
 | `agentfootprint/resilience` | 24 | 16 | 67% |
 | `agentfootprint/hosting` | 315 | 315 | 100% |
-| `agentfootprint/security` | 115 | 95 | 83% |
+| `agentfootprint/security` | 128 | 108 | 84% |
 | `agentfootprint/reliability` | 1 | 1 | 100% |
 | `agentfootprint/skill-graph` | 116 | 72 | 62% |
 | `agentfootprint/maps` | 24 | 24 | 100% |

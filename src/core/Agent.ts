@@ -24,9 +24,9 @@ import {
   type ObserverDrainResult,
   type ReadTrackingMode,
   type RedactionPolicy,
-  type RunOptions,
   type RuntimeSnapshot,
 } from 'footprintjs';
+import type { RunOptions } from './runner.js';
 import { type CommitValuesMode } from 'foottrace';
 import type { CachePolicy, CacheStrategy } from '../cache/types.js';
 import type { ReliabilityConfig } from '../reliability/types.js';
@@ -331,7 +331,9 @@ import {
 } from './agent/honesty/armed.js';
 import { answerFoldReads } from './agent/honesty/mounts.js';
 import { readsMessageFrom } from './messageFrom.js';
-import { memberIdentityIn, readsParentRun } from './memberRun.js';
+import { memberIdentityIn, memberRequestIn, readsParentRun } from './memberRun.js';
+import { requestOf } from './requestOfRun.js';
+import type { RequestContext } from '../identity/requestContext.js';
 import { carriesArgumentView } from './toolShownArgs.js';
 import { assertMaxToolResultChars } from './agent/toolResultCap.js';
 import type { ToolArgValidationMode } from '../tools/toolArgsValidation.js';
@@ -663,6 +665,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  chart mounted in a composition) never stamps a clock nobody declared for
    *  it (`seedClockDraft`). */
   private runClockDraft: ClockDraft | undefined;
+  /** The incoming request each of this agent's OWN scopes serves — recorded
+   *  by the executor that made the scope (`createExecutor`), so a scope keeps
+   *  ITS run's request for as long as it lives: a stage still running after
+   *  its run was aborted can never be served the next run's request. A stage
+   *  mounted in another runner's executor reads its run's request by link
+   *  (`memberRun.ts`). Never written to scope. */
+  private readonly scopeRequests = new WeakMap<object, RequestContext>();
   /** The `time` the CURRENT resume passed, as read — TAKEN once by the first
    *  ToolCalls pass of the resumed leg (`ToolCallsHandlerDeps.time`), and
    *  cleared when `run()` or `resume()` ends. */
@@ -2005,6 +2014,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // not at the resume of a pause it would have made impossible to resume.
     assertIdentityShape(runInput.identity, 'Agent.run');
     assertIdentityShape(options?.identity, 'Agent.run');
+    // The incoming request, sealed — refused here when `requestContext` did not build it.
+    const runRequest = requestOf(options, 'Agent.run');
     // A policy handed down for this run is refused here, before anything moves,
     // by the same check `Agent.create({ redact })` gets.
     if (options?.redact !== undefined) assertRedactionPolicy(options.redact, 'Agent.run');
@@ -2045,7 +2056,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // declared at file end via hoisting)
     this.answeredAsk = undefined;
     this.resumePassedTime = undefined;
-    const executor = this.createExecutor(engineOptions);
+    const executor = this.createExecutor(engineOptions, runRequest);
     this.inFlightRunId = this.currentRunContext.runId;
     // One disposition ledger per run (9.60.0) — registration mirrors what
     // this agent's configuration makes applicable; dev posture runs the
@@ -2372,6 +2383,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // else's conversation.
     this.assertNotRunning('Agent.resumeOnError');
     this.assertNoPendingQuestion('Agent.resumeOnError');
+    // A request `run()` would refuse is refused HERE, before the side channel
+    // below is armed — a refusal after it would leave the restored history for
+    // the next, unrelated run.
+    requestOf(options, 'Agent.resumeOnError');
     // Stash the checkpointed history on the side channel; the seed function
     // reads + clears it before scope.history initializes. No message is
     // appended — the failing run's message is already the last user turn in
@@ -2573,6 +2588,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // sound question is "what was asked?".
     assertIdentityShape(options?.identity, 'Agent.resume');
     if (options?.redact !== undefined) assertRedactionPolicy(options.redact, 'Agent.resume');
+    // The incoming request is the RESUMING caller's — never the paused one's:
+    // a checkpoint carries no request, and a resume without one serves none.
+    const resumeRequest = requestOf(options, 'Agent.resume');
     // Native guard lands with the new checkpoint protocol, before its runtime
     // opt-in is mounted. Until then no Agent is armed to consume this carrier.
     requireVerificationOnResume(checkpoint.sharedState ?? {}, false);
@@ -2712,7 +2730,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // (and only when) it completes.
     const recording = this.startRunRecording();
     this.answeredAsk = answeredAsk;
-    const executor = this.createExecutor(resumeOptions);
+    const executor = this.createExecutor(resumeOptions, resumeRequest);
     // The leg's WHOLE policy rides its own state too (`runRedaction`), so a
     // later pause carries what this leg was covered by — names the resume
     // added included — and a third leg is never less covered than this one.
@@ -3564,7 +3582,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     );
   }
 
-  private createExecutor(runOptions?: AgentRunOptions): FlowChartExecutor {
+  private createExecutor(
+    runOptions?: AgentRunOptions,
+    request?: RequestContext,
+  ): FlowChartExecutor {
     this.assertDeliverableRoles();
     this.assertForcedToolChoiceSupported();
     this.assertNativeOutputSchemaSupported();
@@ -3631,13 +3652,18 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // (`memberRun.ts`) — per scope, never by instance state.
     const scopeFactory = redaction.scopeFactoryFor(spec);
     const ownScopes = this.ownScopes;
+    const scopeRequests = this.scopeRequests;
     const executor = new FlowChartExecutor(spec, {
       readTracking: this.readTracking,
       commitValues: this.commitValues,
       writeProvenance: this.writeProvenance,
       scopeFactory: (...args: Parameters<typeof scopeFactory>) => {
         const scope = scopeFactory(...args);
-        if (scope !== null && typeof scope === 'object') ownScopes.add(scope as object);
+        if (scope !== null && typeof scope === 'object') {
+          ownScopes.add(scope as object);
+          // THIS executor's request, bound to the scope for its whole life.
+          if (request !== undefined) scopeRequests.set(scope as object, request);
+        }
         return scope;
       },
     });
@@ -5552,6 +5578,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       toolClaimants,
       ...(permissionChecker && { permissionChecker }),
       ...(credentialProvider && { credentialProvider }),
+      // The request a call's credential is read for: this agent's own run's,
+      // or — on a mount — the run its link names (`memberRun.ts`). An accessor,
+      // because the chart is built once and the request is per run.
+      ...(credentialProvider && {
+        currentRequest: (scope: object) =>
+          this.ownScopes.has(scope) ? this.scopeRequests.get(scope) : memberRequestIn(scope),
+      }),
       // The claim-check store (9.21.0). Absent → not one new line runs in
       // dispatch: `ctx.artifacts` is the fail-closed teacher and no artifact
       // event can fire (zero-cost-when-unused).

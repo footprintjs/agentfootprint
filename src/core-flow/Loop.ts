@@ -21,10 +21,10 @@ import {
   flowChart,
   type FlowChart,
   type FlowchartCheckpoint,
-  type RunOptions,
   type StructureRecorder,
   type TypedScope,
 } from 'footprintjs';
+import type { RunOptions } from '../core/runner.js';
 import type { RedactionPolicy } from 'footprintjs';
 import type { GroupMember, GroupMetadata, GroupTranslator } from '../core/translator.js';
 import type { RunnerPauseOutcome } from '../core/pause.js';
@@ -40,6 +40,7 @@ import {
   reopenParentRun,
   withParentRun,
 } from '../core/memberRun.js';
+import { requestOf } from '../core/requestOfRun.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
 import type { RunContext } from '../bridge/eventMeta.js';
 import { ContextRecorder } from '../recorders/core/ContextRecorder.js';
@@ -211,11 +212,19 @@ export class Loop extends RunnerBase<LoopInput, LoopOutput> {
     input: LoopInput | string,
     options?: RunOptions,
   ): Promise<LoopOutput | RunnerPauseOutcome> {
+    // The incoming request, refused here — before anything moves — when
+    // requestContext() did not build it.
+    const request = requestOf(options, 'Loop.run');
     const runInput = normalizeRunInput<LoopInput>(input, 'Loop.run');
     const executor = this.createExecutor();
     this.lastExecutor = executor;
     // The run every member serves — built once, here, from THIS run's id.
-    const parentRun = openParentRun(this.currentRunContext.runId, runInput.identity, 'Loop.run');
+    const parentRun = openParentRun(
+      this.currentRunContext.runId,
+      runInput.identity,
+      'Loop.run',
+      request,
+    );
     try {
       const result = await executor.run({
         input: { message: runInput.message, parentRun: parentRun.link },
@@ -233,13 +242,15 @@ export class Loop extends RunnerBase<LoopInput, LoopOutput> {
     input?: unknown,
     options?: RunOptions,
   ): Promise<LoopOutput | RunnerPauseOutcome> {
-    // The leg's policy — the paused run's marks — goes to ITS executor, never via the instance.
-    const resumeLeg = this.emitPauseResume(checkpoint, input);
-    const executor = this.createExecutor(resumeLeg);
-    this.lastExecutor = executor;
-    // The paused run its members serve, re-opened from the checkpoint's own record.
-    const parentRun = reopenParentRun(checkpoint.sharedState, 'Loop.resume');
+    // The incoming request, and the paused run its members serve (re-opened
+    // from the checkpoint's own record) — both refused before anything moves.
+    const request = requestOf(options, 'Loop.resume');
+    const parentRun = reopenParentRun(checkpoint.sharedState, 'Loop.resume', request);
     try {
+      // The leg's policy — the paused run's marks — goes to ITS executor, never via the instance.
+      const resumeLeg = this.emitPauseResume(checkpoint, input);
+      const executor = this.createExecutor(resumeLeg);
+      this.lastExecutor = executor;
       const result = await executor.resume(checkpoint, input, withRunSignalInEnv(options));
       return this.finalizeResult(executor, result);
     } finally {

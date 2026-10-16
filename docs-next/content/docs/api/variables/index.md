@@ -2,7 +2,7 @@
 title: Variables
 ---
 
-71 exported from `agentfootprint`.
+72 exported from `agentfootprint`.
 
 - [`ABSENCE_MARKER`](/docs/api/variables/ABSENCE_MARKER)
 - [`ABSENCE_NOTE`](/docs/api/variables/ABSENCE_NOTE)
@@ -36,6 +36,7 @@ title: Variables
 - [`ENGINEERED_SOURCES`](/docs/api/variables/ENGINEERED_SOURCES)
 - [`ERR_CONTEXT_WINDOW_EXCEEDED`](/docs/api/variables/ERR_CONTEXT_WINDOW_EXCEEDED)
 - [`EVIDENCE_CHECK_FRAME_PREFIX`](/docs/api/variables/EVIDENCE_CHECK_FRAME_PREFIX)
+- [`HOST_FILLED_PLACEHOLDER`](/docs/api/variables/HOST_FILLED_PLACEHOLDER)
 - [`IN_PROGRESS_CLAUSE`](/docs/api/variables/IN_PROGRESS_CLAUSE)
 - [`IN_PROGRESS_SECTION_LABEL`](/docs/api/variables/IN_PROGRESS_SECTION_LABEL)
 - [`IN_PROGRESS_WIRE`](/docs/api/variables/IN_PROGRESS_WIRE)

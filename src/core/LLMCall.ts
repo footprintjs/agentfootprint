@@ -44,10 +44,11 @@ import {
   flowChart,
   type FlowChart,
   type FlowchartCheckpoint,
-  type RunOptions,
   type StructureRecorder,
   type TypedScope,
 } from 'footprintjs';
+import type { RunOptions } from './runner.js';
+import { requestOf } from './requestOfRun.js';
 import type { RedactionPolicy } from 'footprintjs';
 import { ArrayMergeMode } from 'footprintjs/advanced';
 import type { GroupMetadata, GroupTranslator } from './translator.js';
@@ -321,6 +322,8 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
     input: LLMCallInput | string,
     options?: RunOptions,
   ): Promise<LLMCallOutput | RunnerPauseOutcome> {
+    // Refused like every runner's; it serves no tool here, so it goes nowhere.
+    requestOf(options, 'LLMCall.run');
     // Normalize or refuse first. Before 8.18.0 a bare string reached here as
     // `input.message === undefined`, the messages slot composed ZERO messages
     // from it, and the model was called with an empty conversation — an
@@ -340,6 +343,8 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
     input?: unknown,
     options?: RunOptions,
   ): Promise<LLMCallOutput | RunnerPauseOutcome> {
+    // Refused like every runner's; it serves no tool here, so it goes nowhere.
+    requestOf(options, 'LLMCall.resume');
     // The leg's policy — the paused run's marks — goes to ITS executor, never via the instance.
     const resumeLeg = this.emitPauseResume(checkpoint, input);
     const executor = this.createExecutor(resumeLeg);
