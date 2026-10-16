@@ -667,7 +667,7 @@ export class EventDispatcher {
  * dev-mode wrapping so `off(type, originalFn)` still finds and removes
  * the stored listener.
  */
-// eslint-disable-next-line @typescript-eslint/ban-types -- WeakMap value preserves arbitrary listener identity; narrowing breaks identity equality.
+// eslint-disable-next-line @typescript-eslint/no-restricted-types -- WeakMap value preserves arbitrary listener identity; narrowing breaks identity equality.
 const originalsMap = new WeakMap<object, Function>();
 
 /**

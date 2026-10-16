@@ -33,17 +33,51 @@ module.exports = {
     'import/resolver': { [require.resolve('./scripts/eslint-import-resolver.cjs')]: {} },
   },
   rules: {
-    '@typescript-eslint/no-var-requires': 'off',
+    // Keep the existing v5 policy while upgrading the parser/plugin. The v8 recommended
+    // preset adds rules; those are separate policy decisions, not dependency fixes.
+    '@typescript-eslint/no-require-imports': 'off',
+    '@typescript-eslint/no-duplicate-enum-values': 'off',
+    '@typescript-eslint/no-unsafe-declaration-merging': 'off',
+    '@typescript-eslint/no-unused-expressions': 'off',
+    '@typescript-eslint/adjacent-overload-signatures': 'error',
+    '@typescript-eslint/no-inferrable-types': 'error',
+    // ban-types was removed. Preserve its exact type-name bans, including `{}` in
+    // intersections and locally shadowed names, which the new specialized rules exempt.
+    '@typescript-eslint/no-restricted-types': [
+      'error',
+      {
+        types: {
+          String: { message: 'Use string instead', fixWith: 'string' },
+          Boolean: { message: 'Use boolean instead', fixWith: 'boolean' },
+          Number: { message: 'Use number instead', fixWith: 'number' },
+          Symbol: { message: 'Use symbol instead', fixWith: 'symbol' },
+          BigInt: { message: 'Use bigint instead', fixWith: 'bigint' },
+          Function: true,
+          Object: true,
+          '{}': true,
+        },
+      },
+    ],
+    '@typescript-eslint/no-empty-interface': 'error',
+    '@typescript-eslint/no-empty-object-type': 'off',
+    '@typescript-eslint/no-unsafe-function-type': 'off',
+    '@typescript-eslint/no-wrapper-object-types': 'off',
     '@typescript-eslint/no-explicit-any': 'off',
     '@typescript-eslint/explicit-function-return-type': 'off',
     '@typescript-eslint/explicit-module-boundary-types': 'off',
     '@typescript-eslint/no-empty-function': 'warn',
-    '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+    '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', caughtErrors: 'none' }],
     // Non-null-assertion enforced in SRC (each `!` justified inline via
     // eslint-disable-next-line with a reason, OR refactored to a guard).
     // Test files override below — `!` is idiomatic in test assertions
     // where a result has just been verified non-null.
     '@typescript-eslint/no-non-null-assertion': 'warn',
+    // Core equivalents of the removed TS aliases, and the previous core overrides.
+    'no-extra-semi': 'error',
+    'no-empty-function': 'off',
+    'no-class-assign': 'error',
+    'no-with': 'error',
+    'valid-typeof': 'off',
     'no-unused-vars': 'off',
     'no-use-before-define': 'off',
   },

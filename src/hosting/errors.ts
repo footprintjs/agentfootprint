@@ -1084,6 +1084,7 @@ export class WireRequestRefusal extends Error {
     readonly code: string,
     detail: string,
     /** HTTP status for this refusal. Default 400 — the request is what is wrong. */
+    // eslint-disable-next-line @typescript-eslint/no-inferrable-types -- Keep the public parameter-property type explicit in the generated declaration.
     readonly status: number = 400,
   ) {
     super(`[hosting] ${detail}`);

@@ -67,7 +67,7 @@ export type LLMProviderName =
   | 'local'
   | 'custom'
   | 'mock'
-  // eslint-disable-next-line @typescript-eslint/ban-types -- (string & {}) preserves string-literal autocomplete while accepting any other string
+  // eslint-disable-next-line @typescript-eslint/no-restricted-types -- (string & {}) preserves string-literal autocomplete while accepting any other string
   | (string & {});
 
 export type ToolProtocol = 'native' | 'mcp' | 'http' | 'python-fn';
