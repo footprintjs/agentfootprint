@@ -33,7 +33,10 @@ see [governing by server](#which-server-served-this-tool) below.
 whose result contract declares structured data, choose `resultMode: 'structured'`.
 The tool returns the validated JSON object in `structuredContent`, preserving
 data for an application adapter such as `withDatasetArtifacts` instead of
-flattening it into prose.
+flattening it into prose. It returns a copy made of plain objects and arrays,
+not the transport's value itself, so plain data built in another realm (a jest
+environment, `node:vm`) is accepted, while class instances, Proxies and getters
+are refused.
 
 `resultMode: 'structured-or-json'` additionally accepts exactly one text block
 containing one JSON object when structured content is absent. Use it only for

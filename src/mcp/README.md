@@ -84,9 +84,14 @@ Decoding errors, separately, name the contract without including payload values.
 
 Plain objects and arrays are recognised by structure, not by identity with this
 realm's `Object.prototype`, so data built in another realm (jest's environment,
-`node:vm`) is accepted as it is. Class instances, Proxies, accessors anywhere on
+`node:vm`) is accepted. What the tool returns is a **copy** made of this realm's
+objects, built from property descriptors read once each — so nothing the source
+does after the check (a Proxy trap, a replaced method on a foreign prototype)
+reaches your code. Shared sub-objects stay shared, a null prototype stays null
+and an own `__proto__` key stays a key. Class instances, accessors anywhere on
 the value or its inherited path, and forged or `__proto__`-swapped prototypes
-are still refused (`realmPrototype.ts`).
+are refused, as are Proxies, before any trap runs, wherever the runtime can name
+one (Node). See `plainData.ts`.
 
 Both opt-in modes preserve nested zero, false and null, and reject non-JSON
 values rather than coercing them. Validation visits at most 1,000,000 values and

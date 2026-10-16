@@ -1,6 +1,6 @@
 /** MCP result decoding; default text is unchanged, structured data is opt-in. */
 import type { McpCallToolResult, McpClientOptions } from './types.js';
-import { isPlainArrayPrototype, isPlainObjectPrototype } from './realmPrototype.js';
+import { copyJsonObject } from './plainData.js';
 
 type ResultMode = NonNullable<McpClientOptions['resultMode']>;
 
@@ -50,8 +50,10 @@ export function readToolResult(
   try {
     const structured = Object.getOwnPropertyDescriptor(result, 'structuredContent');
     if (structured !== undefined) {
-      if (!('value' in structured) || !jsonObject(structured.value)) throw invalid();
-      return structured.value;
+      // A copy of this realm's own objects, never the transport's value: see plainData.ts.
+      const copied = 'value' in structured ? copyJsonObject(structured.value) : undefined;
+      if (copied === undefined) throw invalid();
+      return copied;
     }
     if (mode !== 'structured-or-json') throw invalid();
     const content = ownValue(result, 'content');
@@ -62,8 +64,9 @@ export function readToolResult(
     const text = ownValue(block, 'text');
     if (typeof text !== 'string' || text.length > 16_000_000) throw invalid();
     const parsed: unknown = JSON.parse(text);
-    if (!jsonObject(parsed)) throw invalid();
-    return parsed;
+    const copied = copyJsonObject(parsed);
+    if (copied === undefined) throw invalid();
+    return copied;
   } catch {
     // Parser and getter exceptions may echo source bytes. Keep the refusal
     // authored here rather than forwarding arbitrary transport payloads.
@@ -105,68 +108,6 @@ function ownValue(value: object, key: string): unknown {
   if (descriptor !== undefined && !('value' in descriptor))
     throw new Error('Accessor is not JSON data');
   return descriptor?.value;
-}
-
-/** Validate the JSON data domain without invoking toJSON/getters, converting
- * unknown to null or dropping unsupported fields. No normalization: the value
- * handed back is the one validated. Plain objects and arrays are recognised by
- * structure, so data built in another realm (jest, `node:vm`) is accepted. */
-function jsonObject(value: unknown): value is Readonly<Record<string, unknown>> {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
-  const ancestors = new Set<object>();
-  const verified = new WeakSet<object>();
-  let visited = 0;
-  function visit(item: unknown, depth: number): boolean {
-    if (++visited > 1_000_000) return false;
-    if (item === null || typeof item === 'string' || typeof item === 'boolean') return true;
-    if (typeof item === 'number') return Number.isFinite(item);
-    if (typeof item !== 'object' || depth >= 64 || ancestors.has(item)) return false;
-    const array = Array.isArray(item);
-    const prototype = Object.getPrototypeOf(item);
-    if (
-      !(array
-        ? isPlainArrayPrototype(prototype, verified)
-        : isPlainObjectPrototype(prototype, verified))
-    )
-      return false;
-    ancestors.add(item);
-    try {
-      const keys = Reflect.ownKeys(item);
-      // The length descriptor, not `item.length`: a Get would run a Proxy trap.
-      const length = array ? Object.getOwnPropertyDescriptor(item, 'length')?.value : 0;
-      if (typeof length !== 'number' || (array && keys.length !== length + 1)) return false;
-      for (const key of keys) {
-        if (array && key === 'length') continue;
-        if (typeof key !== 'string') return false;
-        if (array && (!/^(0|[1-9]\d*)$/.test(key) || Number(key) >= length)) return false;
-        const descriptor = Object.getOwnPropertyDescriptor(item, key)!;
-        if (
-          !descriptor.enumerable ||
-          !('value' in descriptor) ||
-          !visit(descriptor.value, depth + 1)
-        )
-          return false;
-      }
-      return true;
-    } finally {
-      ancestors.delete(item);
-    }
-  }
-  return visit(value, 0) && noProxy(value);
-}
-
-/** A Proxy reports whatever prototype and descriptors its traps choose, so the
- * walk above cannot see one. The structured-clone algorithm refuses every
- * Proxy before running a trap; the walk has already proved every property on
- * the way to it is plain data, so the clone runs no getter either. The copy is
- * discarded: the caller keeps the value it validated. */
-function noProxy(value: object): boolean {
-  try {
-    structuredClone(value);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 // ─── Reading a tools/call answer (both arms of the protocol) ───────
