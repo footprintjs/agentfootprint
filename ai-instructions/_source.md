@@ -7,18 +7,27 @@ Building Generative AI applications is mostly **context engineering** — decidi
 import {
   Agent, LLMCall, defineTool,
   Sequence, Parallel, Conditional, Loop,
-  defineSkill, defineSteering, defineInstruction, defineFact,
+  askHuman, pauseHere, isPaused,
+} from 'agentfootprint';
+import { defineSkill, defineSteering, defineInstruction, defineFact } from 'agentfootprint/context';
+import {
   defineMemory, MEMORY_TYPES, MEMORY_STRATEGIES, SNAPSHOT_PROJECTIONS,
   InMemoryStore, mockEmbedder,
-  anthropic, openai, bedrock, ollama, mock,
-  askHuman, pauseHere, isPaused,
-  withRetry, withFallback, resilientProvider,
-} from 'agentfootprint';
+} from 'agentfootprint/memory';
+import { anthropic, openai, bedrock, ollama, mock, mcpClient } from 'agentfootprint/providers';
+import { withRetry, withFallback, fallbackProvider } from 'agentfootprint/resilience';
 ```
 
-**Top-level barrel only.** Don't import from stale subpaths like
-`agentfootprint/instructions`, `agentfootprint/observe`,
-`agentfootprint/security`, `agentfootprint/explain`.
+**Import each name from the door that exports it.** `package.json` `exports` is
+exhaustive: a path that is not a door does not resolve, and a name imported from
+a door that does not export it fails to compile (and is `undefined` under
+`require`). The core API is on `agentfootprint`. LLM providers, embedders,
+`mcpClient` and MCP transports such as `agentCoreRuntimeMcpTransport` are on
+`agentfootprint/providers`. Memory, its stores included, is on
+`agentfootprint/memory`, context engineering on `agentfootprint/context`,
+resilience on `agentfootprint/resilience`, and observability on
+`agentfootprint/observe`. Paths such as `agentfootprint/instructions` and
+`agentfootprint/explain` do not exist.
 
 ## The 6-layer mental model
 
@@ -56,7 +65,8 @@ Build with `mock()` provider + `InMemoryStore` + `mockEmbedder()` + inline tool 
 ### Hello agent — mock-first
 
 ```typescript
-import { Agent, mock } from 'agentfootprint';
+import { Agent } from 'agentfootprint';
+import { mock } from 'agentfootprint/providers';
 
 const agent = Agent.create({ provider: mock({ reply: 'San Francisco: 72°F.' }), model: 'mock' })
   .system('You are a helpful assistant.')
@@ -134,7 +144,8 @@ Strategies: `WINDOW` · `BUDGET` · `SUMMARIZE` · `TOP_K` · `EXTRACT` · `DECA
 ### MCP (Model Context Protocol — connect to external MCP servers)
 
 ```typescript
-import { Agent, mcpClient } from 'agentfootprint';
+import { Agent } from 'agentfootprint';
+import { mcpClient } from 'agentfootprint/providers';
 
 const slack = await mcpClient({
   name: 'slack',
@@ -188,7 +199,7 @@ const tot = Parallel.create()
 ## Anti-patterns — Don't
 
 - ❌ `agent.run('string')` → use `agent.run({ message: '...', identity? })`
-- ❌ Stale subpaths: `agentfootprint/instructions`, `agentfootprint/observe`, `agentfootprint/security`
+- ❌ Paths that are not doors: `agentfootprint/instructions`, `agentfootprint/explain` (see `package.json` `exports`)
 - ❌ `.memoryPipeline(pipeline)` (v1) → use `.memory(defineMemory({...}))`
 - ❌ Shipping a `ReflexionAgent` class → compose `Sequence(Agent, critique-LLM, Agent)`
 - ❌ Closures or class instances in scope (can't be cloned)
