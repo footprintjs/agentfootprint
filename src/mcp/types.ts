@@ -224,17 +224,21 @@ export interface McpClientOptions {
 
   /**
    * Pre-resolved SDK modules. Give these and the library never touches its Node
-   * `require` loader — which is the whole reason a browser bundle can now speak
-   * MCP over `http`.
+   * `require` loader — which is what lets a browser bundle speak MCP over
+   * `http`, and what a server bundle (esbuild, webpack) needs too: a bundler
+   * cannot follow the lazy `require`, so without `sdk` a bundled app that did
+   * not ship `node_modules` is refused when the client is built.
    *
    * Everything else keeps working, because the library still builds the
    * transport: gateway vending, `retryOnThrottle`, `headers`, your own `fetch`,
    * `_meta` ingestion. Omit it and the loader runs exactly as it always has.
+   * Either way the modules are read, and checked, when `mcpClient()` is
+   * called — never at a later tool call.
    *
-   * Ignored for `transport: 'stdio'`, which spawns a subprocess and therefore
-   * cannot run in a browser at all — that branch keeps loading
-   * `client/stdio.js` through the Node loader, which is also what keeps the
-   * SDK's only Node-bound client module off a browser's module graph.
+   * For `transport: 'stdio'` only `Client` is taken from here: stdio spawns a
+   * subprocess and therefore cannot run in a browser at all, so that branch
+   * keeps loading `client/stdio.js` through the Node loader, which is also what
+   * keeps the SDK's only Node-bound client module off a browser's module graph.
    *
    * @see McpSdk for the two static imports that produce it.
    */

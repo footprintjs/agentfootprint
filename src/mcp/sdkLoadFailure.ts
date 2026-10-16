@@ -17,10 +17,10 @@
  * already have, watches nothing change, and concludes MCP does not work here.
  *
  * ── The contract ─────────────────────────────────────────────────────────────
- * The absent-package message is passed IN and returned VERBATIM, so the message
- * every release before this one produced is byte-identical to the one this one
- * produces. Only the second arm is new, and it names the underlying failure and
- * the seam that gets past it.
+ * The absent-package message is passed IN and returned VERBATIM: each load
+ * site owns its own wording (install the package, or — in a bundled app — pass
+ * the module as `sdk`). The second arm names the underlying failure and the
+ * seam that gets past it.
  *
  * Pattern: pure classifier. No I/O, no throwing, no vendor names beyond the
  * package it reports on. Role: Layer-3 tool transport, shared by `mcpClient`
@@ -34,9 +34,8 @@
  */
 export interface SdkLoadFailureNotes {
   /**
-   * The exact message this site produced before the classifier existed — the
-   * absent-package case, returned unchanged. Byte-compatibility is the point:
-   * a consumer scripting against that text keeps working.
+   * The site's own absent-package message, returned unchanged — the
+   * classifier never rewrites it.
    */
   readonly notInstalled: string;
   /** The function the consumer called, e.g. `'mcpClient'`. */

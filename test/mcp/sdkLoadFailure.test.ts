@@ -34,14 +34,14 @@ const SERVED = [
   }),
 ];
 
-/** The exact text every release before this one produced. */
-const HISTORICAL_CLIENT_MESSAGE =
+/** A site's absent-package message, as the classifier receives it. */
+const ABSENT_MESSAGE =
   'mcpClient requires @modelcontextprotocol/sdk.\n' +
   '  Install:  npm install @modelcontextprotocol/sdk\n' +
   '  Or pass `_client` for test injection.';
 
 const NOTES = {
-  notInstalled: HISTORICAL_CLIENT_MESSAGE,
+  notInstalled: ABSENT_MESSAGE,
   caller: 'mcpClient',
   specifier: '@modelcontextprotocol/sdk/client/index.js',
   instead: 'Pass `sdk` (the two SDK modules, imported statically) or `connection`.',
@@ -56,8 +56,8 @@ describe('sdkLoadFailure', () => {
     ['ERR_MODULE_NOT_FOUND', 'node ESM'],
     ['Failed to resolve module specifier', 'a bundler'],
     ['Dynamic require of "x" is not supported', "esbuild's shim"],
-  ])('LAW: %s (%s) keeps the historical message byte for byte', (message) => {
-    expect(sdkLoadFailure(new Error(message), NOTES)).toBe(HISTORICAL_CLIENT_MESSAGE);
+  ])("LAW: %s (%s) returns the site's absent-package message byte for byte", (message) => {
+    expect(sdkLoadFailure(new Error(message), NOTES)).toBe(ABSENT_MESSAGE);
   });
 
   it('LAW: a loader failure says so, and names the seam instead of an install', () => {
@@ -66,7 +66,7 @@ describe('sdkLoadFailure', () => {
       NOTES,
     );
 
-    expect(browser).not.toBe(HISTORICAL_CLIENT_MESSAGE);
+    expect(browser).not.toBe(ABSENT_MESSAGE);
     expect(browser).not.toContain('npm install');
     expect(browser).toContain('could not load @modelcontextprotocol/sdk/client/index.js');
     expect(browser).toContain('nodeModule.createRequire is not a function');
@@ -96,7 +96,7 @@ describe('mcpClient — which message a real failed load produces', () => {
     },
   });
 
-  it('an absent package is still reported exactly as it always was', async () => {
+  it('an absent package is reported as absent, and names the `sdk` hook a bundled app needs', async () => {
     vi.resetModules();
     vi.doMock('../../src/lib/lazyRequire.js', () =>
       failingLoader(new Error("Cannot find module '@modelcontextprotocol/sdk/client/index.js'")),
@@ -105,7 +105,13 @@ describe('mcpClient — which message a real failed load produces', () => {
       const fresh = await import('../../src/mcp/mcpClient.js');
       await expect(
         fresh.mcpClient({ transport: { transport: 'http', url: 'https://example.invalid/mcp' } }),
-      ).rejects.toThrow(HISTORICAL_CLIENT_MESSAGE);
+      ).rejects.toThrow(
+        'mcpClient requires @modelcontextprotocol/sdk.\n' +
+          '  Install:  npm install @modelcontextprotocol/sdk\n' +
+          '  Installed, and your app is bundled (esbuild, webpack)? The bundler cannot follow\n' +
+          '  this lazy load: import the SDK yourself and pass it as `sdk`\n' +
+          '  (sdk: { Client, StreamableHTTPClientTransport }), or pass `connection`.',
+      );
     } finally {
       vi.doUnmock('../../src/mcp/mcpClient.js');
       vi.doUnmock('../../src/lib/lazyRequire.js');

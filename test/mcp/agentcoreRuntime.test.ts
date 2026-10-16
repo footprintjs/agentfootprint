@@ -106,7 +106,7 @@ describe('agentCoreRuntimeMcpTransport — P1 unit', () => {
         agentRuntimeArn: ARN,
         region: REGION,
         session: 'sticky' as never,
-        _sdk: runtime.sdk,
+        sdk: runtime.sdk,
       }),
     ).toThrow(/'reuse' or 'per-call'/);
     expect(() =>
@@ -114,7 +114,7 @@ describe('agentCoreRuntimeMcpTransport — P1 unit', () => {
         agentRuntimeArn: ARN,
         region: REGION,
         auth: 'iam' as never,
-        _sdk: runtime.sdk,
+        sdk: runtime.sdk,
       }),
     ).toThrow(/'sigv4' or \{ bearer/);
   });
@@ -132,8 +132,8 @@ describe('agentCoreRuntimeMcpTransport — P1 unit', () => {
 
   it('P1 a missing SDK command is refused at build, not mid-run', () => {
     expect(() =>
-      agentCoreRuntimeMcpTransport({ agentRuntimeArn: ARN, region: REGION, _sdk: {} }),
-    ).toThrow(/InvokeAgentRuntimeCommand/);
+      agentCoreRuntimeMcpTransport({ agentRuntimeArn: ARN, region: REGION, sdk: {} }),
+    ).toThrow(/the `sdk` you passed .* has no `InvokeAgentRuntimeCommand`/);
   });
 
   it('P1 the decision matches the contract’s refusal and nothing else', () => {
@@ -233,7 +233,7 @@ describe('agentCoreRuntimeMcpTransport — P2 boundary', () => {
       accountId: '123456789012',
       retry: false,
       session: 'reuse',
-      _sdk: sdk.module,
+      sdk: sdk.module,
     });
     // The connection's first request carries no session; the client is handed
     // the transport's handle for it, and carries that from then on.
@@ -288,7 +288,7 @@ describe('agentCoreRuntimeMcpTransport — P2 boundary', () => {
       region: REGION,
       retry: false,
       session: 'reuse',
-      _sdk: sdk.module,
+      sdk: sdk.module,
     });
     const res = (await transport.fetch?.(transport.url, {
       method: 'POST',
@@ -311,7 +311,7 @@ describe('agentCoreRuntimeMcpTransport — P2 boundary', () => {
     const transport = agentCoreRuntimeMcpTransport({
       agentRuntimeArn: ARN,
       region: REGION,
-      _sdk: sdk.module,
+      sdk: sdk.module,
     });
     const get = (await transport.fetch?.(transport.url, { method: 'GET' })) as Response;
     const del = (await transport.fetch?.(transport.url, { method: 'DELETE' })) as Response;
@@ -324,7 +324,7 @@ describe('agentCoreRuntimeMcpTransport — P2 boundary', () => {
     const transport = agentCoreRuntimeMcpTransport({
       agentRuntimeArn: ARN,
       region: REGION,
-      _sdk: sdk.module,
+      sdk: sdk.module,
     });
     const res = (await transport.fetch?.(transport.url, {
       method: 'POST',
@@ -348,7 +348,7 @@ describe('agentCoreRuntimeMcpTransport — P2 boundary', () => {
     const transport = agentCoreRuntimeMcpTransport({
       agentRuntimeArn: ARN,
       region: REGION,
-      _sdk: sdk.module,
+      sdk: sdk.module,
     });
     const res = (await transport.fetch?.(transport.url, {
       method: 'POST',
@@ -370,7 +370,7 @@ describe('agentCoreRuntimeMcpTransport — P2 boundary', () => {
       agentRuntimeArn: ARN,
       region: REGION,
       session: 'per-call',
-      _sdk: sdk.module,
+      sdk: sdk.module,
     });
     const res = (await transport.fetch?.(transport.url, {
       method: 'POST',
@@ -408,7 +408,7 @@ describe('agentCoreRuntimeMcpTransport — P2 boundary', () => {
     const transport = agentCoreRuntimeMcpTransport({
       agentRuntimeArn: ARN,
       region: REGION,
-      _sdk: sdk.module,
+      sdk: sdk.module,
     });
     const res = (await transport.fetch?.(transport.url, {
       method: 'POST',
@@ -440,7 +440,7 @@ describe('agentCoreRuntimeMcpTransport — P2 boundary', () => {
     const transport = agentCoreRuntimeMcpTransport({
       agentRuntimeArn: ARN,
       region: REGION,
-      _sdk: sdk.module,
+      sdk: sdk.module,
     });
     const res = (await transport.fetch?.(transport.url, {
       method: 'POST',
@@ -458,7 +458,7 @@ describe('agentCoreRuntimeMcpTransport — P2 boundary', () => {
     const transport = agentCoreRuntimeMcpTransport({
       agentRuntimeArn: ARN,
       region: REGION,
-      _sdk: sdk.module,
+      sdk: sdk.module,
     });
     const controller = new AbortController();
     await transport.fetch?.(transport.url, {
@@ -476,7 +476,7 @@ describe('agentCoreRuntimeMcpTransport — P2 boundary', () => {
       agentRuntimeArn: ARN,
       region: REGION,
       retry: false,
-      _sdk: sdk.module,
+      sdk: sdk.module,
     });
     await expect(
       transport.fetch?.(transport.url, {
@@ -501,7 +501,7 @@ describe('agentCoreRuntimeMcpTransport — P3 scenario (real MCP client + real M
         region: REGION,
         retry: { onRetry: (info) => retries.push(info) },
         session: 'reuse',
-        _sdk: runtime.sdk,
+        sdk: runtime.sdk,
       }),
     });
     const tools = await client.tools();
@@ -534,7 +534,7 @@ describe('agentCoreRuntimeMcpTransport — P3 scenario (real MCP client + real M
       transport: agentCoreRuntimeMcpTransport({
         agentRuntimeArn: ARN,
         region: REGION,
-        _sdk: runtime.sdk,
+        sdk: runtime.sdk,
       }),
     });
     const tools = await client.tools();
@@ -576,7 +576,7 @@ describe('agentCoreRuntimeMcpTransport — P3 scenario (real MCP client + real M
       transport: agentCoreRuntimeMcpTransport({
         agentRuntimeArn: ARN,
         region: REGION,
-        _sdk: runtime.sdk,
+        sdk: runtime.sdk,
       }),
     });
     const tools = await client.tools();
@@ -738,7 +738,7 @@ describe('agentCoreRuntimeMcpTransport — P4 property (only the contract’s re
     const transport = agentCoreRuntimeMcpTransport({
       agentRuntimeArn: ARN,
       region: REGION,
-      _sdk: sdk.module,
+      sdk: sdk.module,
     });
     const res = (await transport.fetch?.(transport.url, {
       method: 'POST',
@@ -753,7 +753,7 @@ describe('agentCoreRuntimeMcpTransport — P4 property (only the contract’s re
     const transport = agentCoreRuntimeMcpTransport({
       agentRuntimeArn: ARN,
       region: REGION,
-      _sdk: sdk.module,
+      sdk: sdk.module,
     });
     const res = (await transport.fetch?.(transport.url, {
       method: 'POST',
@@ -772,7 +772,7 @@ describe('agentCoreRuntimeMcpTransport — P4 property (only the contract’s re
     const transport = agentCoreRuntimeMcpTransport({
       agentRuntimeArn: ARN,
       region: REGION,
-      _sdk: sdk.module,
+      sdk: sdk.module,
     });
     await expect(
       transport.fetch?.(transport.url, { method: 'POST', body: '{}' }),
@@ -785,7 +785,7 @@ describe('agentCoreRuntimeMcpTransport — P4 property (only the contract’s re
     const transport = agentCoreRuntimeMcpTransport({
       agentRuntimeArn: ARN,
       region: REGION,
-      _sdk: sdk.module,
+      sdk: sdk.module,
     });
     const res = (await transport.fetch?.(transport.url, {
       method: 'POST',
@@ -810,7 +810,7 @@ describe('agentCoreRuntimeMcpTransport — P4 property (only the contract’s re
     const transport = agentCoreRuntimeMcpTransport({
       agentRuntimeArn: ARN,
       region: REGION,
-      _sdk: sdk.module,
+      sdk: sdk.module,
     });
     const res = (await transport.fetch?.(transport.url, {
       method: 'POST',
@@ -830,7 +830,7 @@ describe('agentCoreRuntimeMcpTransport — P4 property (only the contract’s re
     const transport = agentCoreRuntimeMcpTransport({
       agentRuntimeArn: ARN,
       region: REGION,
-      _sdk: sdk.module,
+      sdk: sdk.module,
     });
     const res = (await transport.fetch?.(transport.url, {
       method: 'POST',
@@ -861,7 +861,7 @@ describe('agentCoreRuntimeMcpTransport — P4 property (only the contract’s re
       const transport = agentCoreRuntimeMcpTransport({
         agentRuntimeArn: ARN,
         region: REGION,
-        _sdk: sdk.module,
+        sdk: sdk.module,
       });
       const res = (await transport.fetch?.(transport.url, {
         method: 'POST',
@@ -886,7 +886,7 @@ describe('agentCoreRuntimeMcpTransport — P4 property (only the contract’s re
     const transport = agentCoreRuntimeMcpTransport({
       agentRuntimeArn: ARN,
       region: REGION,
-      _sdk: sdk.module,
+      sdk: sdk.module,
     });
     const res = (await transport.fetch?.(transport.url, {
       method: 'POST',
@@ -1067,7 +1067,7 @@ describe('agentCoreRuntimeMcpTransport — P5 security', () => {
       agentRuntimeArn: ARN,
       region: REGION,
       session: 'reuse',
-      _sdk: runtime.sdk,
+      sdk: runtime.sdk,
     });
     // Interleaved, as two conversations sharing a process would be.
     const alice = await mcpClient({ name: 'orders', transport });
@@ -1278,7 +1278,7 @@ describe('agentCoreRuntimeMcpTransport — P5 a failure is the library’s sente
       agentRuntimeArn: ARN,
       region: REGION,
       session: 'reuse',
-      _sdk: module,
+      sdk: module,
     });
     const opened = (await transport.fetch?.(transport.url, {
       method: 'POST',
@@ -1379,7 +1379,7 @@ describe('agentCoreRuntimeMcpTransport — P5 a failure is the library’s sente
     const transport = agentCoreRuntimeMcpTransport({
       agentRuntimeArn: ARN,
       region: REGION,
-      _sdk: module,
+      sdk: module,
     });
     const text = await (
       (await transport.fetch?.(transport.url, { method: 'POST', body: '{}' })) as Response

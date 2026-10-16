@@ -170,6 +170,7 @@ async function resolveClient(
   retryOnThrottle?: RetryOnThrottle,
   sdk?: McpSdk,
 ): Promise<McpSdkClient> {
+  if (sdk !== undefined) assertSdk(sdk, transport.transport);
   const mod: McpSdkExports = sdk ?? loadClientModule();
 
   const client: McpSdkClient = new mod.Client(clientInfo ?? DEFAULT_CLIENT_INFO, {
@@ -183,6 +184,39 @@ async function resolveClient(
   return client;
 }
 
+/**
+ * An injected `sdk` is checked before anything is built, so a wrong import (a
+ * namespace object, one module of the two) is refused by name here rather
+ * than surfacing later as "x is not a constructor".
+ */
+function assertSdk(sdk: McpSdk, transport: McpTransport['transport']): void {
+  const needed: ReadonlyArray<keyof McpSdk> =
+    transport === 'stdio' ? ['Client'] : ['Client', 'StreamableHTTPClientTransport'];
+  const given = sdk as unknown as Readonly<Record<string, unknown>> | null;
+  const missing = needed.filter(
+    (key) => typeof given !== 'object' || given === null || typeof given[key] !== 'function',
+  );
+  if (missing.length === 0) return;
+  const sources: Record<keyof McpSdk, string> = {
+    Client: "`import { Client } from '@modelcontextprotocol/sdk/client/index.js'`",
+    StreamableHTTPClientTransport:
+      '`import { StreamableHTTPClientTransport } from ' +
+      "'@modelcontextprotocol/sdk/client/streamableHttp.js'`",
+  };
+  throw new TypeError(
+    `mcpClient: \`sdk\` has no ${missing.map((key) => `\`${key}\``).join(' or ')} constructor. ` +
+      `Pass ${needed.length > 1 ? 'the classes themselves' : 'the class itself'}: ` +
+      `${needed.map((key) => sources[key]).join(', ')}, ` +
+      `then \`sdk: { ${needed.join(', ')} }\`.`,
+  );
+}
+
+/** What every not-installed message adds: the bundler case, and the hook past it. */
+const BUNDLED_HINT =
+  '  Installed, and your app is bundled (esbuild, webpack)? The bundler cannot follow\n' +
+  '  this lazy load: import the SDK yourself and pass it as `sdk`\n' +
+  '  (sdk: { Client, StreamableHTTPClientTransport }), or pass `connection`.';
+
 /** The Node loader path, unchanged — reached only when no `sdk` was supplied. */
 function loadClientModule(): McpSdkExports {
   try {
@@ -193,7 +227,7 @@ function loadClientModule(): McpSdkExports {
         notInstalled:
           'mcpClient requires @modelcontextprotocol/sdk.\n' +
           '  Install:  npm install @modelcontextprotocol/sdk\n' +
-          '  Or pass `_client` for test injection.',
+          BUNDLED_HINT,
         caller: 'mcpClient',
         specifier: '@modelcontextprotocol/sdk/client/index.js',
         instead:
@@ -281,7 +315,8 @@ function loadHttpModule(transport: 'http' | 'gateway'): McpHttpExports {
       sdkLoadFailure(err, {
         notInstalled:
           `mcpClient(${transport}) requires @modelcontextprotocol/sdk/client/streamableHttp.js — ` +
-          'check that @modelcontextprotocol/sdk is installed at the latest version.',
+          'check that @modelcontextprotocol/sdk is installed at the latest version.\n' +
+          BUNDLED_HINT,
         caller: `mcpClient(${transport})`,
         specifier: '@modelcontextprotocol/sdk/client/streamableHttp.js',
         instead:
