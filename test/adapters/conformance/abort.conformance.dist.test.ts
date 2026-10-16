@@ -9,6 +9,7 @@
  *
  * Skips when `dist` is not built, so a bare `vitest` does not false-fail —
  * except under CI, which builds before it tests: there a missing build fails.
+ * Locally it tests whatever `dist` holds — rebuild after changing `src/`.
  */
 
 import { existsSync } from 'node:fs';

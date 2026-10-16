@@ -401,7 +401,7 @@ export function abortConformance(rig: AdapterRig): void {
   }
 
   if (wired) {
-    it('stream(): a chunk whose read settled just before the abort is refused, never handed on or billed', async () => {
+    it('stream(): a chunk whose read settled just before the abort is refused, never handed on', async () => {
       const r = rig.make('stream');
       const controller = new AbortController();
       const reason = new Error('caller stopped');

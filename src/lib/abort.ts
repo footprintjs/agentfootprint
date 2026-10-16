@@ -32,8 +32,10 @@
  *
  * And a CLOSE is a wait like any other: a consumer that stops early waits for
  * the transport to finish closing while the signal is live; once it fires,
- * that wait ends with the abort (never as a clean finish — the stream did not
- * close) and the caller's own close runs, so the transport is shut either way.
+ * that wait ends with the abort and the caller's own close runs, so the
+ * transport is shut either way. The abort wins whenever it is seen before the
+ * close's result is handed back — even if the source finished closing a moment
+ * earlier.
  *
  * ── WHAT AN ABORT REACHES THE CALLER AS ──────────────────────────────────
  * The signal's own `reason` when it is an `Error` — what every runtime
@@ -347,6 +349,8 @@ export async function* bodyChunks(
       // Only an abort that lands DURING the wait is thrown here: one that
       // fired before it is already the error on its way out (or a consumer
       // that broke after aborting, which exits cleanly, as abortableIterable).
+      // An abort during the wait replaces any error already leaving: the
+      // caller asked to stop, and that is what they are owed.
       if (!signal?.aborted) {
         await untilAborted(cancelled, signal);
         throwIfAborted(signal);
