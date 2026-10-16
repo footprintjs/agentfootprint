@@ -530,6 +530,33 @@ describe('the list fails closed — a check that reads an incomplete list cannot
     });
   });
 
+  it('in flight: a pending result a ceiling refused is still unsettled', async () => {
+    const seen: AnswerToolCallsView[] = [];
+    const startJob = defineTool({
+      name: 'run_code',
+      description: 'Start a code job.',
+      inputSchema: { type: 'object', properties: {} },
+      resultCeiling: { maxChars: 10 },
+      execute: async () => ({ content: 'x'.repeat(500), effects: [], status: 'pending' }),
+    });
+    const agent = trusting(
+      mock({
+        chunkDelayMs: 0,
+        replies: [{ content: '', toolCalls: [call('c1', 'run_code', {})] }, CODE_ANSWER] as never,
+      }),
+      [startJob],
+      seen,
+    );
+    await agent.run({ message: 'add' }).catch(() => undefined);
+    // The ceiling refused the payload (the bracket now says `invalid`, so the
+    // call is an error) — and the tool had declared its work pending.
+    expect(seen[0]).toEqual({
+      calls: [{ name: 'run_code', callId: 'c1', outcome: 'error' }],
+      complete: false,
+    });
+    expect(agent.answerValidation()?.status).toBe('unverified');
+  });
+
   it('in flight: a last reply whose calls never went out makes the list incomplete', async () => {
     const seen: AnswerToolCallsView[] = [];
     const agent = trusting(
@@ -738,6 +765,15 @@ describe('tool-call ledger primitives', () => {
     expect(
       appendToolCall(ledger, { name: 't', callId: 'b', outcome: 'ok' }, 10, false).complete,
     ).toBe(false);
+  });
+
+  it('a list off its declared shape (a redaction placeholder) is unknown, never empty', () => {
+    const placeholder = { calls: 'REDACTED', inFlight: 'REDACTED', complete: true } as never;
+    expect(ledgerAtCheck(placeholder, 0)).toEqual({ calls: [], complete: false });
+    expect(toolCallsView(placeholder, 10)).toEqual({ calls: [], complete: false });
+    expect(ledgerAtCheck({ calls: [], complete: true, inFlight: 'x' } as never, 0).complete).toBe(
+      false,
+    );
   });
 
   it('stops listing at the bound and keeps the same ledger once it is incomplete', () => {

@@ -105,9 +105,17 @@ export function ledgerAtCheck(
   undispatched: number,
 ): AnswerToolCallsView {
   if (ledger === undefined) return incompleteToolCalls();
-  const calls = Array.isArray(ledger.calls) ? ledger.calls : [];
-  const open = Array.isArray(ledger.inFlight) ? ledger.inFlight.length : 0;
-  return { calls, complete: ledger.complete === true && open === 0 && undispatched === 0 };
+  // Anything off the declared shape (a placeholder where a list belongs) is
+  // unknown, never "empty": fail closed.
+  const wellFormed =
+    Array.isArray(ledger.calls) &&
+    (ledger.inFlight === undefined || Array.isArray(ledger.inFlight));
+  if (!wellFormed) return incompleteToolCalls();
+  const open = ledger.inFlight?.length ?? 0;
+  return {
+    calls: ledger.calls,
+    complete: ledger.complete === true && open === 0 && undispatched === 0,
+  };
 }
 
 /**
@@ -122,9 +130,10 @@ export function toolCallsView(
   // No ledger is not "nothing ran": a checkpoint written before the run kept
   // one, or a caller that passed none. Fail closed — say the list is partial.
   if (ledger === undefined) return Object.freeze({ calls: Object.freeze([]), complete: false });
-  const source = Array.isArray(ledger.calls) ? ledger.calls : [];
+  const listed = Array.isArray(ledger.calls);
+  const source = listed ? ledger.calls : [];
   const calls: AnswerToolCall[] = [];
-  let complete = ledger.complete === true && source.length <= max;
+  let complete = listed && ledger.complete === true && source.length <= max;
   for (const raw of source.slice(0, max)) {
     const name = raw?.name;
     const callId = raw?.callId;

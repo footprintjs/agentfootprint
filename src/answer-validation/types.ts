@@ -47,7 +47,8 @@ export interface AnswerToolCall {
   readonly name: string;
   readonly callId: string;
   /**
-   * `ok`: the tool ran and returned. `error`: it threw, declared `failure`,
+   * `ok`: the tool ran and returned — including a call that paused for a
+   * person, whose answer on `resume()` is its result. `error`: it threw, declared `failure`,
    * `denied` or `invalid`, or could not run as written (an unknown name,
    * rejected arguments, a missing consent). `not-run`: it never ran (a
    * permission policy, an `onToolCall` link or a person declined it, or a

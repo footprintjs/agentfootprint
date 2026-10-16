@@ -2638,6 +2638,7 @@ export function buildToolCallsHandler(
     toolName: string,
     payload: AgentfootprintEventMap['agentfootprint.stream.tool_end']['payload'],
     ran: boolean,
+    declaredStatus: string | undefined = payload.status,
   ): void => {
     typedEmit(scope, 'agentfootprint.stream.tool_end', payload);
     const ledger = deps.toolCallLedger;
@@ -2647,8 +2648,10 @@ export function buildToolCallsHandler(
       prior,
       { name: toolName, callId: payload.toolCallId, outcome: toolOutcomeOf(payload, ran) },
       ledger.maxCalls,
-      // A tool that declared `pending` returned before its own work settled.
-      payload.status !== 'pending',
+      // A tool that declared `pending` returned before its own work settled —
+      // read off what the TOOL declared, before a ceiling or contract refusal
+      // rewrote the bracket's status.
+      declaredStatus !== 'pending' && payload.status !== 'pending',
     );
     if (next !== prior) scope.toolCallLedger = next;
   };
@@ -5614,6 +5617,7 @@ export function buildToolCallsHandler(
             ...(denied && { notExecuted: true as const }),
           },
           executed,
+          toolEnvelope?.status,
         );
         let resultStr = typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
         // The tool's OWN answer, before any framework suffix joins it — what

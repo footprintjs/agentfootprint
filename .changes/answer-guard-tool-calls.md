@@ -17,3 +17,10 @@ ends in `RUN_ERROR`. Agents without `answerValidation` record exactly what they
 did before; agents with it commit one more state key, `toolCallLedger`.
 `AnswerToolCall`, `AnswerToolCallsView` and `AnswerValidationContext` are now
 exported from the main barrel. Example: `examples/features/99-guard-presented-code.ts`.
+
+Two things change for existing setups. A validator that reads `context` whole
+(spreading it, or destructuring `toolCalls`) counts as reading the list, so it
+is held to completeness: on a run cut off with calls pending, or on a
+`resumeOnError` leg, it now comes back `unverified`. And `conversationRedaction()`
+gains the field entry `toolCallLedger: ['calls', 'inFlight']`, which changes its
+derived vocabulary version for every agent under that policy.
