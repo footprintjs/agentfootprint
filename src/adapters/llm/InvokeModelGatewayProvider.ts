@@ -54,7 +54,8 @@
  *   `withRetry` waits max(its schedule, that), capped by its `maxDelayMs`.
  * - The deadline. `timeoutMs` bounds the wait for the response headers, for a
  *   complete() body, and for EACH stream read (the first chunk and every gap
- *   between chunks — a stream that is still talking is never cut off). A miss
+ *   between chunks — a stream that is still talking is never cut off), and
+ *   for the response body to close. A miss
  *   aborts the request and raises `reason: 'timeout'`, retryable; the
  *   caller's `req.signal` still wins.
  */
@@ -165,7 +166,7 @@ export interface InvokeModelGatewayOptions {
    * Per-request deadline in ms. Bounds the wait for the response headers, for
    * a complete() body, and for each stream read — the first chunk and every
    * gap between chunks (an idle deadline: a stream that keeps talking is never
-   * cut off). A miss aborts the request and raises an
+   * cut off), and the response body close. A miss aborts the request and raises an
    * {@link InvokeModelGatewayError} with `reason: 'timeout'`, `retryable:
    * true` — `withRetry` asks again only while no chunk has reached the caller.
    * A wrapper of your own that re-sends on `retryable` alone must make the
@@ -587,6 +588,7 @@ async function* readGatewayEvents(
   let pending: string[] = [];
 
   function* flushPending(final: boolean): Generator<AnthropicStreamEvent> {
+    throwIfAborted(deadline.signal);
     if (pending.length === 0) return;
     const joined = pending.join('\n');
     const data = tryParse(joined);
@@ -602,6 +604,7 @@ async function* readGatewayEvents(
   }
 
   function* onLine(rawLine: string): Generator<AnthropicStreamEvent> {
+    throwIfAborted(deadline.signal);
     const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine;
     if (line === '') {
       yield* flushPending(true);
@@ -657,7 +660,7 @@ async function* readGatewayEvents(
       // fired before it is already the error on its way out (or a consumer
       // that broke after aborting, which exits cleanly, as abortableIterable).
       if (!deadline.signal?.aborted) {
-        await untilAborted(cancelled, deadline.signal);
+        await deadline.within(cancelled, 'the stream close');
         throwIfAborted(deadline.signal);
       }
     } finally {

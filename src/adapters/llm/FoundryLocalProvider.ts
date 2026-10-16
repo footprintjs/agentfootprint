@@ -645,6 +645,7 @@ export function foundryLocal(
       stopReason: normalizeStopReason(finishReason ?? 'stop', toolCalls.length > 0),
       ...(lastId && { providerRef: lastId }),
     };
+    throwIfAborted(req.signal);
     yield { tokenIndex, content: '', done: true, response: authoritative };
   }
 
@@ -976,6 +977,7 @@ async function* parseSse(
     buf += decoder.decode(value, { stream: true });
     let idx: number;
     while ((idx = buf.indexOf('\n')) >= 0) {
+      throwIfAborted(signal);
       const line = buf.slice(0, idx).trim(); // trim eats the \r of a \r\n wire
       buf = buf.slice(idx + 1);
       if (line.length === 0) {
@@ -1004,6 +1006,7 @@ async function* parseSse(
   // A final data line with no trailing newline still counts.
   const tail = buf.trim();
   if (tail.startsWith('data:')) {
+    throwIfAborted(signal);
     const payload = tail.slice('data:'.length).trim();
     if (payload !== '[DONE]') {
       let data: unknown;
