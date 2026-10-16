@@ -82,6 +82,12 @@ including newline separators. Only own data properties are read; getters,
 malformed or over-limit diagnostics use a generic error without partial advice.
 Decoding errors, separately, name the contract without including payload values.
 
+Plain objects and arrays are recognised by structure, not by identity with this
+realm's `Object.prototype`, so data built in another realm (jest's environment,
+`node:vm`) is accepted as it is. Class instances, Proxies, accessors anywhere on
+the value or its inherited path, and forged or `__proto__`-swapped prototypes
+are still refused (`realmPrototype.ts`).
+
 Both opt-in modes preserve nested zero, false and null, and reject non-JSON
 values rather than coercing them. Validation visits at most 1,000,000 values and
 64 nested containers; the JSON-text fallback also accepts at most 16,000,000

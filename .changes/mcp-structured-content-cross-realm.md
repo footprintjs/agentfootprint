@@ -1,0 +1,4 @@
+---
+type: fixed
+---
+**MCP `structuredContent` built in another realm (jest, `node:vm`) is no longer refused.** `resultMode: 'structured'` / `'structured-or-json'` used to require each object's prototype to be exactly this realm's `Object.prototype` (and each array's `Array.prototype`), so plain data from a test environment or a `vm` context failed with "did not provide valid structuredContent". Plain objects and arrays are now recognised by structure: a null prototype, or a realm's `Object.prototype` / `Array.prototype` identified by its native constructor's link back to it and its own-key shape. Everything the check exists to keep out is still refused — class instances, Proxies (now refused even when they mimic a plain object, and without reading through them), accessors on the value or its inherited path, and forged or `__proto__`-swapped prototypes.
