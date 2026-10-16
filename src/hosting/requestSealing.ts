@@ -8,16 +8,18 @@
  * `streamHandler`) cannot know which header holds the credential, so it asks
  * the app — once per request, with the request's headers — through the
  * {@link RequestSealer} option `sealRequest`, and passes the handle to that
- * request's `run()` / `resume()` and nowhere else.
+ * request's `run()` / `resume()` and nowhere else. The sealer is handed the
+ * headers ONLY: nothing about who is calling, so it can never be tempted to
+ * look a stored credential up by a name the caller could have claimed.
  *
  * THE RULES, in one funnel ({@link requestSealing}):
  *   - asked only for a request that runs, after the caller is bound and every
  *     refusal is behind it — a refused request never seals anything;
  *   - the answer is a handle `requestContext` built, or `undefined` (no
  *     request: a tool that needs one fails closed, by name);
- *   - ONE HANDLE, ONE RUN: a handle the sealer returned before is refused, so
- *     a sealer that caches one cannot hand one caller's credential to another
- *     caller's run;
+ *   - ONE HANDLE, ONE RUN, PROCESS-WIDE: a handle any host was handed before
+ *     is refused, so a sealer that caches one — even one shared by two doors
+ *     — cannot hand one caller's credential to another caller's run;
  *   - a sealer that throws refuses the request in FIXED words
  *     (`ERR_REQUEST_NOT_SEALED`, 400). Its own message is never sent: it may
  *     quote the value it could not read.
@@ -28,22 +30,18 @@
  */
 
 import { isRequestContext, type RequestContext } from '../identity/requestContext.js';
-import type { MemoryIdentity } from '../memory/identity/types.js';
 import { WireRequestRefusal } from './errors.js';
 
-/** What a host hands the app's {@link RequestSealer} — one request, as the host read it. */
+/** What a host hands the app's {@link RequestSealer} — one request's headers, and nothing else. */
 export interface RequestSealFacts {
   /**
    * The request's headers, names lower-cased — where a per-request credential
    * travels (a gateway's encrypted token, a session-bound key). Untrusted, as
    * every header is: what a sealer reads here is the CALLER's credential for
-   * the caller's own run, never proof of who the caller is.
+   * the caller's own run, never proof of who the caller is — so seal what the
+   * request CARRIES, and never look a stored credential up by a header.
    */
   readonly headers: Readonly<Record<string, string>>;
-  /** The conversation the run belongs to, as the host bound it — absent when none. */
-  readonly sessionId?: string;
-  /** Who the run is for, as the host composed it — never from a request body. */
-  readonly identity?: MemoryIdentity;
 }
 
 /**
@@ -67,6 +65,13 @@ export type RequestSealer = (
 export const REQUEST_NOT_SEALED = 'ERR_REQUEST_NOT_SEALED';
 
 /**
+ * Every handle any host in this process handed to a run — held weakly,
+ * compared by identity. Module-wide on purpose: two doors sharing one caching
+ * sealer must not each accept the same handle once.
+ */
+const handedToARun = new WeakSet<object>();
+
+/**
  * The one funnel a host seals through: the app's sealer, checked. `undefined`
  * when no sealer was given — the host passes no request, exactly as before.
  *
@@ -83,8 +88,6 @@ export function requestSealing(
         'requestContext({ secrets }) for one request, or undefined.',
     );
   }
-  /** Handles already handed to a run — held weakly, compared by identity. */
-  const sealed = new WeakSet<object>();
   return async (facts) => {
     let handle: unknown;
     try {
@@ -105,14 +108,14 @@ export function requestSealing(
           'values would travel wherever the run options are logged or copied.',
       );
     }
-    if (sealed.has(handle)) {
+    if (handedToARun.has(handle)) {
       throw new TypeError(
         `[hosting] '${door}': sealRequest returned a handle it returned before. Every ` +
           "request seals its own — a shared handle hands one caller's credential to another " +
           "caller's run.",
       );
     }
-    sealed.add(handle);
+    handedToARun.add(handle);
     return handle;
   };
 }

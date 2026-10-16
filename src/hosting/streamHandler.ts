@@ -135,7 +135,7 @@ export interface StreamHandlerOptions<TRequest, TEvent> extends CrossSiteOptions
    * a gateway's per-request token in a header, read by a `requestCredentials`
    * provider for the tools that declare a `needs` for it. Called once per
    * request that runs, after the thread is bound and the turn is planned, with
-   * the request's headers and the binding; its handle goes to THAT request's
+   * the request's headers; its handle goes to THAT request's
    * `run()` / `resume()` and nowhere else — never a frame, a stored session or
    * a checkpoint. A handle returned twice is refused; a sealer that throws
    * refuses the request in fixed words (`ERR_REQUEST_NOT_SEALED`, 400).
@@ -541,11 +541,7 @@ export function streamHandler<TRequest, TEvent>(
         keepsPauses: threads !== undefined && sessions !== undefined,
       });
       // Sealed only for a request that runs: every refusal is behind it.
-      const sealed = await seal?.({
-        headers,
-        ...(thread !== undefined && { sessionId: thread.sessionId }),
-        ...(thread?.identity !== undefined && { identity: thread.identity }),
-      });
+      const sealed = await seal?.({ headers });
       const runner = build({
         tools: plan.tools ?? [],
         accepted: plan.accepted ?? {},

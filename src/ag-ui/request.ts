@@ -11,9 +11,11 @@
  *                      sends its own body shape passes its own
  *                      ({@link AgUiRequestReader}). Mapping only — it decides
  *                      nothing below;
- *   readAgUiRunInput   what the reader produced, copied as plain JSON (so a
- *                      getter or a proxy cannot answer the check one way and
- *                      the plan another), then its SHAPE, field by field, and
+ *   readAgUiRunInput   what a custom reader produced, copied as plain JSON (so
+ *                      a getter or a proxy cannot answer the check one way and
+ *                      the plan another; the default reader's body is parsed
+ *                      JSON already and is read as it is), then its SHAPE,
+ *                      field by field, and
  *                      the ids' FORMAT and length — nothing here is trusted,
  *                      nothing the server holds is read;
  *   planAgUiTurn       the turn, from the request AND what the server holds
@@ -279,7 +281,9 @@ export const runAgentInputReader: AgUiRequestReader = ({ body }) => body as AgUi
 
 /**
  * The core's read of one request: `reader` maps the body, and what it produced
- * is checked by {@link readAgUiRunInput} — whichever reader it was.
+ * is checked by {@link readAgUiRunInput} — whichever reader it was. A custom
+ * reader's answer is copied as plain JSON first; the default reader's is the
+ * parsed body itself, read exactly as before readers were replaceable.
  *
  * @throws WireRequestRefusal — the reader's own refusal, or the core's by name
  *   (400, `ERR_INVALID_RUN_INPUT`).
@@ -288,6 +292,7 @@ export function readAgUiRequest(
   reader: AgUiRequestReader,
   request: AgUiRequestFacts,
 ): AgUiRunInput {
+  if (reader === runAgentInputReader) return readAgUiRunInput(request.body);
   let produced: unknown;
   try {
     produced = plainJson(reader(request));
@@ -300,10 +305,11 @@ export function readAgUiRequest(
 }
 
 /**
- * A reader's answer as plain JSON — every value read ONCE, here: a getter, a
- * proxy or a `toJSON` cannot answer the core's check one way and its plan
- * another. The default reader's body is JSON already, so this changes nothing
- * it reads.
+ * A custom reader's answer as plain JSON — every value read ONCE, here: a
+ * getter, a proxy or a `toJSON` cannot answer the core's check one way and its
+ * plan another. JSON's own rules apply (a non-finite number becomes `null`); a
+ * value JSON cannot hold (a cycle, a BigInt, nesting too deep to write) is
+ * refused as a malformed request.
  */
 function plainJson(value: unknown): unknown {
   const text = JSON.stringify(value);

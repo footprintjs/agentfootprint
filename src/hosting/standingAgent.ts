@@ -1670,11 +1670,7 @@ export async function standingAgent<TH extends HostHandle>(
        * the stored session or the checkpoint.
        */
       const withSealedRequest = async (): Promise<AgentRunOptions | undefined> => {
-        const sealed = await sealRequest?.({
-          headers: request.headers ?? {},
-          ...(sessionId !== undefined && { sessionId }),
-          ...(identity !== undefined && { identity }),
-        });
+        const sealed = await sealRequest?.({ headers: request.headers ?? {} });
         return sealed === undefined ? runOptions : { ...runOptions, request: sealed };
       };
 

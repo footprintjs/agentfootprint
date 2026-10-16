@@ -18,12 +18,13 @@ them slightly differently. Deliberately vendor-neutral — a test greps for it.
 ## A request's own credential (`requestSealing.ts`)
 `standingAgent` and `streamHandler` take `sealRequest`: the app's
 `RequestSealer`, called once per request that RUNS — after every refusal —
-with the headers, the session and the run's identity. It returns
+with the headers and nothing else (no claimed identity to look a stored
+credential up by). It returns
 `requestContext({ secrets })` (or `undefined`), and the host hands the handle to
 that request's `run()` / `resume()` only: never a reply, a frame, a stored
 session or a checkpoint. `requestSealing` is the one funnel: it refuses a value
 `requestContext` did not build, a handle returned twice (one handle, one run),
-and turns a sealer's throw into `ERR_REQUEST_NOT_SEALED` (400) in fixed words.
+process-wide, and turns a sealer's throw into `ERR_REQUEST_NOT_SEALED` (400) in fixed words.
 `nodeHost`/`httpHost` deliver the headers; they never seal. Pinned by
 `test/hosting/request-sealing.test.ts`.
 

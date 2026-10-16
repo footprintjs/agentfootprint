@@ -177,7 +177,19 @@ function translationOf(options: AgUiOptions): AgUiTranslationStrategy {
         'agUi(): `translation` was given with `custom` or `reasoning`, which tune the default ' +
           'translation only — your translation decides both itself. Pass one or the other.',
       );
-    return translation;
+    // One translation, one run: a strategy that hands one back twice would
+    // write one run's open messages and ids into another run's stream.
+    const opened = new WeakSet<object>();
+    return (run) => {
+      const opening = translation(run);
+      if (typeof opening !== 'object' || opening === null || opened.has(opening))
+        throw new TypeError(
+          'agUi(): `translation` must return a NEW translation for every run — one it returned ' +
+            "before would carry another run's state into this one.",
+        );
+      opened.add(opening);
+      return opening;
+    };
   }
   return (run) =>
     agUiSerializer({

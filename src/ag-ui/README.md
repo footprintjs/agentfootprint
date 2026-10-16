@@ -74,9 +74,10 @@ client) and `tenants.test.ts` (two users at once).
 a `RunAgentInput`), a TRANSLATION (default `agUiSerializer`) and a FRAMING
 (default `agUiSse`). Each is replaceable on its own — a gateway that sends its
 own body and expects its own envelope replaces the reader and the framing.
-The CORE is not a strategy: `readAgUiRequest` copies what the reader returned as
-plain JSON (each value read once — a getter cannot answer the check one way and
-the plan another) and runs `readAgUiRunInput` on it, then `planAgUiTurn` — the
+The CORE is not a strategy: `readAgUiRequest` copies what a custom reader
+returned as plain JSON (each value read once — a getter cannot answer the check
+one way and the plan another; the default reader's body is parsed JSON and is
+read as it is) and runs `readAgUiRunInput` on it, then `planAgUiTurn` — the
 same checks for every reader. A reader's own `WireRequestRefusal` keeps its
 status; anything else it throws is the fixed `ERR_INVALID_RUN_INPUT`. A framing
 keeps no per-stream state: the host hands it each frame's number in its stream

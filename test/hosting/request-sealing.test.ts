@@ -339,6 +339,44 @@ describe('streamHandler — sealRequest', () => {
     expect(badId.status).toBe(400);
     expect(sealed).toBe(0);
   });
+
+  it('the sealer is handed the headers and nothing else — no claimed identity to look a credential up by', async () => {
+    const facts: object[] = [];
+    const handle = streamHandler({
+      agent: lookupAgent,
+      adapter: agUi({ reader: gatewayReader }),
+      threads: byUser,
+      sessions: memorySessions(),
+      sealRequest: (seen) => {
+        facts.push(seen);
+        return fromHeader(seen);
+      },
+      heartbeatMs: 0,
+    });
+    await send(
+      handle,
+      { conversationId: 'c', requestId: 'r-1', text: 'Acme?' },
+      { 'x-user': 'alice', 'x-crm-token': TOKEN('alice') },
+    );
+    expect(facts).toHaveLength(1);
+    expect(Object.keys(facts[0]!)).toEqual(['headers']);
+  });
+
+  it('one handle, one run, process-wide: a handle one door used is refused at another', async () => {
+    const shared = requestContext({ secrets: { crmToken: TOKEN('shared') } });
+    const door = () =>
+      streamHandler({
+        agent: lookupAgent,
+        adapter: agUi({ reader: gatewayReader }),
+        sealRequest: () => shared,
+        heartbeatMs: 0,
+      });
+    const body = { conversationId: 'c', requestId: 'r-1', text: 'Acme?' };
+    expect((await send(door(), body, {})).status).toBe(200);
+    const other = await send(door(), body, {});
+    expect(other.status).toBe(500);
+    expect(seenByCrm).toEqual([TOKEN('shared')]);
+  });
 });
 
 describe('standingAgent — sealRequest (any host that delivers headers)', () => {

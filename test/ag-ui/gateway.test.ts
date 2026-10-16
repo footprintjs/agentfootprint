@@ -115,6 +115,33 @@ describe('1 — the default composition is byte-identical', () => {
     expect(replayed.map((e) => e.label)).toEqual(golden.map((e) => (e as { label: string }).label));
     expect(replayed).toEqual(golden);
   });
+
+  it('the default reader reads the parsed body as it is — JSON-only spellings and depth refuse as before', async () => {
+    const handle = streamHandler({
+      agent: () =>
+        Agent.create({ provider: mock({ chunkDelayMs: 0, reply: 'ok' }), model: 'm' })
+          .system('s')
+          .build(),
+      adapter: agUi(),
+      heartbeatMs: 0,
+    });
+    const send = (text: string) =>
+      handle(
+        new Request('http://localhost/x', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: text,
+        }),
+      ).then(async (r) => ({ status: r.status, text: await r.text() }));
+    const turn = '"threadId":"t","runId":"r","messages":[{"id":"u","role":"user","content":"hi"}]';
+    // `1e999` parses to Infinity: still a state no validator accepted, as before.
+    const infinite = await send(`{${turn},"state":1e999}`);
+    expect(infinite.status).toBe(400);
+    expect(infinite.text).toContain('ERR_STATE_NOT_CARRIED');
+    // Nesting no JSON writer could re-serialise is never re-serialised: it is not read.
+    const deep = `${'['.repeat(100_000)}${']'.repeat(100_000)}`;
+    expect((await send(`{${turn},"forwardedProps":${deep}}`)).status).toBe(200);
+  });
 });
 
 describe('2 — a gateway body and a gateway envelope, end to end', () => {
@@ -250,6 +277,33 @@ describe('2 — a gateway body and a gateway envelope, end to end', () => {
     expect(() => agUi({ translation: (run) => agUiSerializer(run), reasoning: true })).toThrow(
       /`translation`/,
     );
+  });
+
+  it('a translation strategy that hands one translation to two runs is refused', async () => {
+    let cached: ReturnType<typeof agUiSerializer> | undefined;
+    const handle = streamHandler({
+      agent: () =>
+        Agent.create({ provider: mock({ chunkDelayMs: 0, reply: 'first answer' }), model: 'm' })
+          .system('s')
+          .build(),
+      adapter: agUi({
+        reader: gatewayReader,
+        translation: (run) => (cached ??= agUiSerializer(run)),
+      }),
+      heartbeatMs: 0,
+    });
+    const send = (requestId: string) =>
+      handle(
+        new Request('http://localhost/x', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ conversationId: 'c', requestId, text: 'hi' }),
+        }),
+      ).then(async (r) => ({ status: r.status, text: await r.text() }));
+    expect((await send('r-1')).status).toBe(200);
+    const second = await send('r-2');
+    expect(second.status).toBe(500);
+    expect(second.text).not.toContain('first answer');
   });
 
   it('refuses a strategy that is not one, at construction', () => {

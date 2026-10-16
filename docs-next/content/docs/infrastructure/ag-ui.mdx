@@ -66,9 +66,12 @@ What the handler does, for every protocol (`StreamHandlerOptions`):
   that request's `run()` / `resume()` and nowhere else — never a frame, the stored
   session or the checkpoint — and a `requestCredentials` provider hands it to the
   tool that declares it. Called once per request that runs, after every refusal,
-  with the request's headers and the binding (`RequestSealFacts`). A handle returned
-  twice is refused; a sealer that throws refuses the request in fixed words
-  (`ERR_REQUEST_NOT_SEALED`, 400). See [Behind a gateway](#behind-a-gateway).
+  with the request's headers only (`RequestSealFacts`): seal what the request
+  carries, never a stored credential looked up by a header. A handle any host was
+  handed before is refused; a sealer that throws refuses the request in fixed
+  words (`ERR_REQUEST_NOT_SEALED`, 400). The library never writes the credential;
+  a tool that returns its value would (`hostFilled` scrubs an echo). See
+  [Behind a gateway](#behind-a-gateway).
 - The door guard first (421/403/415, the same `allowedOrigins` / `allowedHosts` /
   `requireJsonContentType` options as every host door); a body ceiling
   (`maxBodyBytes`, default `DEFAULT_STREAM_MAX_BODY_BYTES`, 1 MiB — 413); refusals
@@ -173,8 +176,9 @@ on its own (`AgUiOptions`):
 
 The reader only MAPS. Whatever it returns — an `AgUiTurnRequest`: the thread and
 run ids, the messages (newest last), the tools the caller offers, `state`,
-`context`, `resume` answers — is copied as plain JSON (every value read once)
-and checked by the same core as a `RunAgentInput`: the ids' format, the roles,
+`context`, `resume` answers — is copied as plain JSON (every value read once; a
+value JSON cannot hold is refused) and checked by the same core as a
+`RunAgentInput`: the ids' format, the roles,
 no system or developer message, frontend tools only by the app's allow-list,
 `state` and `context` only through `accept`, an answer only for the pause the
 server keeps. Nothing it adds beside the turn is read, and it never decides
@@ -203,7 +207,8 @@ tool that declares it:
   validator passed, so no framing can write any before; a refused draft is never
   written at all, and the run ends in `RUN_ERROR`.
 - `translation` is refused beside `custom` or `reasoning`, and `framing` beside
-  `encoder`: each tunes the default only.
+  `encoder`: each tunes the default only. A `translation` must return a new
+  translation for every run; one it returned before is refused.
 
 ## Without the handler
 

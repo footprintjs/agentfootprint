@@ -1469,13 +1469,15 @@ export interface StandingAgentBaseOptions<TH extends HostHandle = HostHandle> {
    * artifact or session op, never a refused request), after the caller is
    * verified and the session's ownership is checked, with the request's
    * headers ({@link HostRequest.headers}: `nodeHost` and `httpHost` deliver
-   * them), the session and the run's identity. Return
+   * them) and nothing else. Return
    * `requestContext({ secrets })`, or `undefined` for a request that carries
    * none; the handle goes to THAT request's `run()` / `resume()` only — never
    * the reply, the stored session or the checkpoint, so a resumed run is
-   * served the RESUMING request's credential. A handle returned twice is
-   * refused; a sealer that throws refuses the request in fixed words
-   * (`ERR_REQUEST_NOT_SEALED`, 400).
+   * served the RESUMING request's credential. A handle any host was handed
+   * before is refused; a sealer that throws refuses the request in fixed words
+   * (`ERR_REQUEST_NOT_SEALED`, 400) — so decrypt at vend time
+   * (`decodedWith`), not here. The HANDLE never reaches a reply; a tool that
+   * returns the credential's value itself does (`hostFilled` scrubs an echo).
    *
    * Unset — the default — no run carries a request, exactly as before.
    *

@@ -60,6 +60,10 @@ const ALLOWED: Readonly<Record<string, { readonly count: number; readonly why: s
     count: 5,
     why: 'stated option values quoted inside refusal messages — not the record',
   },
+  'src/ag-ui/request.ts': {
+    count: 1,
+    why: "an INBOUND request reader's answer copied as plain JSON (`plainJson`) so the core reads each value once — a request, never the record, and nothing it writes leaves the process",
+  },
 };
 
 function walk(dir: string): string[] {
