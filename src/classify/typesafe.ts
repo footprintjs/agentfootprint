@@ -33,6 +33,7 @@
  */
 
 import { sleep } from '../lib/sleep.js';
+import { abortErrorOf, linkedController, throwIfAborted, untilAborted } from '../lib/abort.js';
 import { isSlash, trimTrailing } from '../lib/linearText.js';
 import {
   ClassifierError,
@@ -119,13 +120,28 @@ export function typesafe(options: TypesafeClassifierOptions = {}): Classifier {
       const startedAt = Date.now();
       for (let attempt = 0; ; attempt++) {
         throwIfAborted(signal);
-        const response = await attemptOnce(url, headers, body, timeout, signal);
-        if (response.ok) {
-          const wire = await readJson(response);
-          return mapResult(wire, Date.now() - startedAt);
+        // The attempt's own controller follows the caller's signal for the
+        // WHOLE attempt — the body read included — and is unlinked when the
+        // attempt ends (lib/abort.ts · linkedController). Every wait is raced
+        // against the caller's signal, so a classification that lands after
+        // the abort is refused, never returned.
+        const call = linkedController(signal);
+        let status: number;
+        let text: string;
+        try {
+          const response = await attemptOnce(url, headers, body, timeout, signal, call.controller);
+          if (response.ok) {
+            const wire = await untilAborted(readJson(response), signal);
+            return mapResult(wire, Date.now() - startedAt);
+          }
+          status = response.status;
+          text = await untilAborted(
+            response.text().catch(() => ''),
+            signal,
+          );
+        } finally {
+          call.unlink();
         }
-        const status = response.status;
-        const text = await response.text().catch(() => '');
         const retryable = RETRYABLE_STATUSES.has(status);
         if (!retryable || attempt >= maxRetries) {
           throw new ClassifierError(
@@ -135,7 +151,7 @@ export function typesafe(options: TypesafeClassifierOptions = {}): Classifier {
             { status, retryable },
           );
         }
-        await sleep(retryDelayMs * 2 ** attempt, signal, abortReason);
+        await sleep(retryDelayMs * 2 ** attempt, signal, abortErrorOf);
       }
     },
   };
@@ -143,29 +159,34 @@ export function typesafe(options: TypesafeClassifierOptions = {}): Classifier {
 
 // ─── One attempt ───────────────────────────────────────────────────────
 
-/** One HTTP attempt under the per-attempt timeout and the caller's signal. */
+/**
+ * One HTTP attempt under the per-attempt timeout (headers only) and the
+ * caller's signal. `controller` is the attempt's own, already following the
+ * caller's signal; the timeout aborts it here.
+ */
 async function attemptOnce(
   url: string,
   headers: Record<string, string>,
   body: string,
   timeout: number,
   signal: AbortSignal | undefined,
+  controller: AbortController,
 ): Promise<Response> {
-  const controller = new AbortController();
-  const onAbort = (): void => controller.abort(signal?.reason);
-  signal?.addEventListener('abort', onAbort, { once: true });
   const timer = setTimeout(() => controller.abort(new Error('timeout')), timeout);
   try {
-    return await fetch(url, { method: 'POST', headers, body, signal: controller.signal });
+    return await untilAborted(
+      fetch(url, { method: 'POST', headers, body, signal: controller.signal }),
+      signal,
+    );
   } catch (err) {
-    if (signal?.aborted) throw err; // the caller's abort: theirs to read, not wrapped
+    // The caller's abort: theirs to read, never wrapped as a classifier failure.
+    if (signal?.aborted) throw abortErrorOf(signal);
     throw new ClassifierError(
       `typesafe: request failed — ${err instanceof Error ? err.message : String(err)}`,
       { retryable: false },
     );
   } finally {
     clearTimeout(timer);
-    signal?.removeEventListener('abort', onAbort);
   }
 }
 
@@ -178,14 +199,6 @@ async function readJson(response: Response): Promise<unknown> {
       { status: response.status, retryable: false },
     );
   }
-}
-
-function throwIfAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted) throw abortReason(signal);
-}
-
-function abortReason(signal: AbortSignal): unknown {
-  return signal.reason ?? new Error('aborted');
 }
 
 function readEnvKey(): string | undefined {

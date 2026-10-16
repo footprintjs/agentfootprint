@@ -191,6 +191,15 @@ describe('A4 linkedController + armDeadline', () => {
     }
   });
 
+  it('the deadline holds the process like the engine’s did (not unref’d)', () => {
+    const spy = vi.spyOn(globalThis, 'setTimeout');
+    const disarm = armDeadline(new AbortController(), 1_000, () => new Error('t'));
+    const handle = spy.mock.results[0]!.value as { hasRef?: () => boolean };
+    spy.mockRestore();
+    expect(handle.hasRef?.()).toBe(true);
+    disarm();
+  });
+
   it('a delay past what a timer holds is held at the maximum, never fired at once', () => {
     vi.useFakeTimers();
     try {
@@ -358,6 +367,20 @@ describe('A7 abortableIterable', () => {
     await expect(pending).rejects.toBe(reason);
   });
 
+  it('an abort ends the iteration even when the source’s return() never settles', async () => {
+    const iterable: AsyncIterable<number> = {
+      [Symbol.asyncIterator]: () => ({
+        next: () => never<IteratorResult<number>>(),
+        return: () => never<IteratorResult<number>>(),
+      }),
+    };
+    const c = new AbortController();
+    const pending = abortableIterable(iterable, c.signal)[Symbol.asyncIterator]().next();
+    const reason = new Error('stop');
+    c.abort(reason);
+    await expect(pending).rejects.toBe(reason);
+  });
+
   it('a consumer that stops early closes the source', async () => {
     const { iterable, state } = source([1, 2, 3]);
     const c = new AbortController();
@@ -413,6 +436,17 @@ describe('A8 bodyChunks', () => {
     await expect(pending).rejects.toBe(reason);
     await tick();
     expect(state.cancelled).toBe(true);
+  });
+
+  it('an abort ends the read even when the body’s cancel() never settles', async () => {
+    const stream = new ReadableStream<Uint8Array>({
+      cancel: () => never<void>(),
+    });
+    const c = new AbortController();
+    const pending = bodyChunks(stream, c.signal).next();
+    const reason = new Error('stop');
+    c.abort(reason);
+    await expect(pending).rejects.toBe(reason);
   });
 
   it('a consumer that stops early cancels the body', async () => {

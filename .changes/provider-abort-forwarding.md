@@ -12,8 +12,10 @@ Now one rule, in `lib/abort.ts`, covers every provider call. The run's signal, i
 
 The abort reaches the caller as the reason they gave, never wrapped as a provider error. `withRetry`, `withFallback` and `withCircuitBreaker` never retry it, fall back from it or count it as a failure, whatever the error is called.
 
-`timeoutMs` now applies even when a `signal` is passed with it (the engine used to ignore it in that case). A run that times out still fails with `Execution timed out after <n>ms`. The deadline is released when the run settles, so it never fires on a run that already finished.
+`timeoutMs` now applies even when a `signal` is passed with it (the engine used to ignore it in that case). A run that times out still fails with `Execution timed out after <n>ms`. The deadline is released when the run settles, so it never fires on a run that already finished. `resume(checkpoint, input, { timeoutMs })` now enforces its deadline too; the engine ignored `timeoutMs` on resume. When a run is given both a `signal` and a different `env.signal`, or a deadline, either one now stops the traversal as well as the stages.
 
 `buildAgentMessageApiChart` and `buildMessageApiChart` run on your own `FlowChartExecutor`, which hands its `signal` and `timeoutMs` to the traversal only. Pass the signal in `env` as well (`env: { signal }`) so an abort cancels the model call in flight.
 
-A shared conformance test (`test/adapters/conformance/`) runs every adapter against a mocked SDK or `fetch` that ignores its signal. A new adapter fails the listing check until it has a rig there.
+The TypeSafe classifier follows the same rule: a classification that lands after the abort is refused.
+
+A shared conformance test (`test/adapters/conformance/`) runs every adapter factory and class form against a mocked SDK or `fetch` that ignores its signal. The listing check fails closed: a new export or file in `src/adapters/llm/` fails until it has a rig there or is named as no adapter.

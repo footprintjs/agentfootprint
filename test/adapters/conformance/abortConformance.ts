@@ -65,8 +65,9 @@ export function gate(): { promise: Promise<void>; release: () => void } {
 /**
  * A transport-side stream that sends `first`, then waits for `held` before
  * sending `rest` — ignoring every signal. A hand-written iterator, not a
- * generator, so `return()` lands even while a `next()` is pending, as a real
- * SDK stream's close does.
+ * generator, so `return()` lands even while a `next()` is pending. A real SDK
+ * generator queues `return()` behind its pending read; there the stop comes
+ * from the signal the adapter forwarded, which the cases check separately.
  */
 export function heldIterable<T>(
   first: readonly T[],
@@ -315,6 +316,24 @@ export function abortConformance(rig: AdapterRig): void {
     );
     expect(after.done).toBe(true);
   });
+
+  if (wired) {
+    it('stream(): a chunk that lands after the abort is refused, never handed on', async () => {
+      const r = rig.make('stream');
+      const controller = new AbortController();
+      const reason = new Error('caller stopped');
+      const iterator = r.provider.stream!(requestFor(rig, controller.signal))[
+        Symbol.asyncIterator
+      ]();
+      await firstText(iterator);
+      const next = iterator.next();
+      next.catch(() => undefined);
+      // The rest is released first, then the abort fires in the same tick.
+      r.release();
+      controller.abort(reason);
+      await expect(next).rejects.toBe(reason);
+    });
+  }
 
   it('stream(): an already-aborted signal sends nothing', async () => {
     const r = rig.make('stream');

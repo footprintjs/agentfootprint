@@ -4,10 +4,11 @@
  * Pattern: Small pure helpers over `AbortSignal`. No state between calls.
  * Role:    Leaf. Every provider adapter, the provider decorators and the
  *          agent's own provider calls stop through these, so "the caller
- *          cancelled" means the same thing at every layer. Three adapters
- *          (Ollama, Foundry Local, the InvokeModel gateway) each kept a
- *          private copy of the first three helpers; the others kept none,
- *          and an aborted run left their remote calls running — and billing.
+ *          cancelled" means the same thing at every layer. Two adapters
+ *          (Ollama, Foundry Local) each kept a private copy of the first
+ *          three helpers and the classifier kept a third; most adapters kept
+ *          none, and an aborted run left their remote calls running — and
+ *          billing. `test/architecture/abortOwner.test.ts` refuses a fourth.
  * Emits:   N/A.
  *
  * ── THE LAW ──────────────────────────────────────────────────────────────
@@ -163,9 +164,14 @@ export function linkedController(...sources: readonly (AbortSignal | undefined)[
  * Abort `controller` with `reason()` once `ms` have passed — a DEADLINE, not a
  * wait (`sleep.ts` owns waits). Returns the disarm: a deadline is released
  * when the work it bounds settles, as the engine releases its own, so it never
- * fires on work that already finished. The timer is `unref`'d where the
- * platform allows, and a delay past what a timer holds (2^31 − 1 ms, about 24.8
- * days) is held at that maximum rather than firing at once.
+ * fires on work that already finished. A delay past what a timer holds
+ * (2^31 − 1 ms, about 24.8 days) is held at that maximum rather than firing at
+ * once.
+ *
+ * The timer is NOT `unref`'d, exactly like the engine's: while the work it
+ * bounds is pending it keeps the process alive, so a stage that hangs on work
+ * holding no handle of its own still gets its timeout instead of a process
+ * that exits with the run never settled. The disarm is what lets it go.
  */
 export function armDeadline(
   controller: AbortController,
@@ -175,9 +181,8 @@ export function armDeadline(
   const timer = setTimeout(
     () => controller.abort(reason()),
     Math.min(Math.max(ms, 0), MAX_TIMER_MS),
-  ) as unknown as { unref?: () => void };
-  timer.unref?.();
-  return () => clearTimeout(timer as unknown as ReturnType<typeof setTimeout>);
+  );
+  return () => clearTimeout(timer);
 }
 
 /**
@@ -202,13 +207,25 @@ export function withRequestSignal<R extends { readonly signal?: AbortSignal }>(
  * and refused when its answer lands after the abort — so a late answer is
  * never recorded or billed as if the call had completed.
  */
-export async function callUnder<R extends { readonly signal?: AbortSignal }, T>(
+export function callUnder<R extends { readonly signal?: AbortSignal }, T>(
   request: R,
   signal: AbortSignal | undefined,
   call: (request: R) => T | PromiseLike<T>,
 ): Promise<T> {
+  return awaitUnder(signal, () => call(withRequestSignal(request, signal)));
+}
+
+/**
+ * Laws 1, 2 and 4 for one piece of work that cannot be handed the signal (a
+ * callback with no signal in its contract): not started when the signal has
+ * already fired, not waited for once it fires, and refused when it lands after.
+ */
+export async function awaitUnder<T>(
+  signal: AbortSignal | undefined,
+  start: () => T | PromiseLike<T>,
+): Promise<T> {
   throwIfAborted(signal);
-  const answer = await untilAborted(call(withRequestSignal(request, signal)), signal);
+  const answer = await untilAborted(start(), signal);
   throwIfAborted(signal);
   return answer;
 }
@@ -221,7 +238,8 @@ export async function callUnder<R extends { readonly signal?: AbortSignal }, T>(
  * `close()` first (an SDK stream's `abort()`, a body reader's `cancel()`),
  * then its iterator's `return()` — and the iteration rejects with the abort. A
  * step that lands after the abort is refused, never handed on. A consumer that
- * stops early (`break`, a throw) closes the source the same way.
+ * stops early (`break`, a throw) on a live signal closes the source as
+ * `for await` does — its `return()` waited for, its errors propagated.
  *
  * The source's `return()` is NOT awaited: a source suspended inside its own
  * await (a read the transport will never answer) cannot finish returning, and
@@ -263,6 +281,16 @@ export function abortableIterable<T>(
           return step;
         },
         async return(value?: unknown): Promise<IteratorResult<T>> {
+          // A consumer that stops early on a live signal closes the source
+          // the way `for await` always did: waited for, its errors its own.
+          // Only once the signal has fired is the close not waited for.
+          if (!shut && !watched.aborted) {
+            shut = true;
+            await untilAborted(it.return?.(value), watched).catch((err: unknown) => {
+              if (!watched.aborted) throw err;
+            });
+            return { done: true, value: value as T };
+          }
           closeSource();
           return { done: true, value: value as T };
         },
