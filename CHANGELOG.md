@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.5.1] - 2026-10-16
+
+### Fixed
+
+- **Cancellation also stops events already buffered by a stream parser, and a gateway close obeys its timeout.** A single transport read can contain several text and usage events. Fetch-based adapters now recheck the caller's signal between those events, so cancelling after one event cannot produce more text or a terminal success from the same read. The InvokeModel gateway also applies `timeoutMs` while waiting for the response body's close: a transport that never finishes cancelling now rejects with the typed timeout instead of holding the caller open. No retry is added; a timeout after text was delivered must still never replay the answer. Tests use injected transports only.
+
+- **An abort while a stream is closing now rejects and closes the transport, and a chunk read just before an abort is never handed on.** Two cancellation gaps in every streaming provider adapter. First: when a consumer stopped a stream early (`break`, `return()`) and the transport's close did not finish, an abort that fired during that wait resolved the close as a clean finish and never ran the adapter's own close — the SDK stream (Anthropic's `abort()`, OpenAI's controller) stayed open. It now rejects with the caller's abort reason and closes the transport. Second: a body read that settled a moment before the abort, but whose reader had not yet run, was still handed on — so the raw-`fetch` adapters (browser Anthropic/OpenAI/Azure, Ollama, Foundry Local) could yield a chunk after the caller had cancelled. The signal is now checked again after every read, and the InvokeModel gateway's own reader does the same. Both cases are in the shared adapter cancellation conformance, which now also runs against the built package in ESM and CJS.
+
 ## [10.5.0] - 2026-10-16
 
 ### Added
