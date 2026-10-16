@@ -499,7 +499,8 @@ export function streamHandler<TRequest, TEvent>(
           allow: 'POST',
         });
       }
-      const headers = headersOf(request);
+      // Frozen: the reader, the binder and the sealer each read the same headers.
+      const headers = Object.freeze(headersOf(request));
       const refused = guard.check({ method: request.method, headers });
       if (refused !== undefined) return refusal(refused.status, refused.message, refused.code);
       const text = await readBody(request, limit, name);

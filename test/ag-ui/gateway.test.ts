@@ -488,6 +488,27 @@ describe('3 — a reader cannot weaken the core', () => {
     expect(own.json?.code).toBe('ERR_GATEWAY_BODY');
   });
 
+  it('an async reader is the app’s mistake, never blamed on the caller', async () => {
+    const { handle, built } = host((async () => turn()) as never);
+    const out = await post(handle, {});
+    expect(out.status).toBe(500);
+    expect(out.json?.code).toBe('ERR_INTERNAL');
+    expect(built).toEqual([]);
+  });
+
+  it('a reader cannot rewrite the headers the binder reads', async () => {
+    const { handle, built } = host(({ headers }) => {
+      try {
+        (headers as Record<string, string>)['x-user'] = 'bob';
+      } catch {
+        // frozen
+      }
+      return turn();
+    });
+    await post(handle, {}, 'alice');
+    expect(built.map((b) => b.thread?.sessionId)).toEqual(['alice:t-1']);
+  });
+
   it('the reader sees the headers, and still cannot bind the thread — the binder does', async () => {
     const seen: string[] = [];
     const { handle, built } = host(({ headers }) => {

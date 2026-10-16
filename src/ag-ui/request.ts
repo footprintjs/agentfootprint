@@ -11,11 +11,11 @@
  *                      sends its own body shape passes its own
  *                      ({@link AgUiRequestReader}). Mapping only — it decides
  *                      nothing below;
- *   readAgUiRunInput   what a custom reader produced, copied as plain JSON (so
+ *   readAgUiRequest    what a custom reader produced, copied as plain JSON (so
  *                      a getter or a proxy cannot answer the check one way and
  *                      the plan another; the default reader's body is parsed
- *                      JSON already and is read as it is), then its SHAPE,
- *                      field by field, and
+ *                      JSON already and is read as it is), then
+ *   readAgUiRunInput   its SHAPE, field by field, and
  *                      the ids' FORMAT and length — nothing here is trusted,
  *                      nothing the server holds is read;
  *   planAgUiTurn       the turn, from the request AND what the server holds
@@ -50,6 +50,7 @@ import type {
   HeldConversation,
   PlanFacts,
   ProtocolPlan,
+  ProtocolRequestFacts,
   ProtocolTurn,
   ThreadBinding,
 } from '../hosting/protocolAdapter.js';
@@ -248,13 +249,11 @@ export interface AgUiTurnRequest {
   readonly resume?: readonly AgUiResumeEntry[];
 }
 
-/** What a request reader is given: the request as the host read it — UNTRUSTED. */
-export interface AgUiRequestFacts {
-  /** The request's JSON body, parsed. */
-  readonly body: unknown;
-  /** The request's headers, names lower-cased. */
-  readonly headers: Readonly<Record<string, string>>;
-}
+/**
+ * What a request reader is given: the request as the host read it — UNTRUSTED.
+ * The host port's own `ProtocolRequestFacts` (the parsed body, the headers).
+ */
+export type AgUiRequestFacts = ProtocolRequestFacts;
 
 /**
  * The request-reading strategy: a body → the turn it asks for. Mapping only;
@@ -293,16 +292,25 @@ export function readAgUiRequest(
   request: AgUiRequestFacts,
 ): AgUiRunInput {
   if (reader === runAgentInputReader) return readAgUiRunInput(request.body);
+  let answer: unknown;
   let produced: unknown;
   try {
-    produced = plainJson(reader(request));
+    answer = reader(request);
+    if (!isThenable(answer)) produced = plainJson(answer);
   } catch (err) {
     if (err instanceof WireRequestRefusal) throw err;
     // Never the reader's message: it may quote the body it could not read.
     throw malformed('the request reader could not read the body.');
   }
+  // An app's mistake, never the caller's: a reader answers at once. (A
+  // Promise copied as JSON would be `{}`, refused as the CALLER's fault.)
+  if (isThenable(answer))
+    throw new TypeError('agUi(): reader must return the turn itself, not a Promise.');
   return readAgUiRunInput(produced);
 }
+
+const isThenable = (value: unknown): boolean =>
+  typeof (value as { then?: unknown } | null | undefined)?.then === 'function';
 
 /**
  * A custom reader's answer as plain JSON — every value read ONCE, here: a

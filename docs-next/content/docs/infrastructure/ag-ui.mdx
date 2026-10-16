@@ -68,7 +68,7 @@ What the handler does, for every protocol (`StreamHandlerOptions`):
   tool that declares it. Called once per request that runs, after every refusal,
   with the request's headers only (`RequestSealFacts`): seal what the request
   carries, never a stored credential looked up by a header. A handle any host was
-  handed before is refused; a sealer that throws refuses the request in fixed
+  handed before, or a plain object, is a programming error (500); a sealer that throws refuses the request in fixed
   words (`ERR_REQUEST_NOT_SEALED`, 400). The library never writes the credential;
   a tool that returns its value would (`hostFilled` scrubs an echo). See
   [Behind a gateway](#behind-a-gateway).

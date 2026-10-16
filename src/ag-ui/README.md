@@ -74,7 +74,8 @@ client) and `tenants.test.ts` (two users at once).
 a `RunAgentInput`), a TRANSLATION (default `agUiSerializer`) and a FRAMING
 (default `agUiSse`). Each is replaceable on its own — a gateway that sends its
 own body and expects its own envelope replaces the reader and the framing.
-The CORE is not a strategy: `readAgUiRequest` copies what a custom reader
+The CORE is not a strategy: `readAgUiRequest` (an async reader is refused as the
+app's mistake) copies what a custom reader
 returned as plain JSON (each value read once — a getter cannot answer the check
 one way and the plan another; the default reader's body is parsed JSON and is
 read as it is) and runs `readAgUiRunInput` on it, then `planAgUiTurn` — the
@@ -86,9 +87,13 @@ by `test/ag-ui/gateway.test.ts` against a capture taken before the split
 (`fixtures/default-wire.golden.json`).
 
 ```ts
+type GatewayBody = { conversationId: string; requestId: string; text: string };
 agUi({
-  reader: ({ body }) => ({ threadId: b(body).conversationId, runId: b(body).requestId,
-    messages: [{ id: 'm', role: 'user', content: b(body).text }] }),
+  reader: ({ body }) => {
+    const b = body as GatewayBody; // untrusted: the core checks what this returns
+    return { threadId: b.conversationId, runId: b.requestId,
+      messages: [{ id: 'm', role: 'user', content: b.text }] };
+  },
   framing: { contentType: 'text/event-stream',
     frame: (event, { sequence }) => `data: ${JSON.stringify({ event: { ...event, eventSequence: sequence } })}\n\n` },
 });
