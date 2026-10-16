@@ -16,12 +16,6 @@ export const MAX_TOOL_CALL_TEXT = 256;
 const fits = (text: unknown): text is string =>
   typeof text === 'string' && text.length > 0 && text.length <= MAX_TOOL_CALL_TEXT;
 
-/** A run's ledger before any call landed — written by seed on every run that keeps one. */
-export const EMPTY_TOOL_CALLS: AnswerToolCallsView = Object.freeze({
-  calls: Object.freeze([]) as readonly AnswerToolCall[],
-  complete: true,
-});
-
 /**
  * The ledger after one landing. Past `max` calls (or for an oversized name or
  * id) nothing more is listed and the view says it is incomplete, so a rule
@@ -33,7 +27,10 @@ export function appendToolCall(
   call: AnswerToolCall,
   max: number,
 ): AnswerToolCallsView {
-  const ledger = prior ?? EMPTY_TOOL_CALLS;
+  // Seed starts a ledger on every run that keeps one, so none here means a run
+  // resumed from a checkpoint written before ledgers existed: what it did
+  // before the pause was not observed.
+  const ledger = prior ?? incompleteToolCalls();
   if (ledger.calls.length >= max || !fits(call.name) || !fits(call.callId)) {
     return ledger.complete ? { calls: [...ledger.calls], complete: false } : ledger;
   }

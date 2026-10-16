@@ -327,6 +327,45 @@ describe('answerValidation — context.toolCalls', () => {
     expect(agent.answerValidation()?.status).toBe('unverified');
   });
 
+  it('a checkpoint written before ledgers existed resumes into an incomplete view', async () => {
+    const seen: AnswerToolCallsView[] = [];
+    const confirm = defineTool({
+      name: 'confirm',
+      description: 'Ask a person.',
+      inputSchema: { type: 'object', properties: {} },
+      execute: async () => askHuman({ question: 'Show it?' }),
+    });
+    const agent = guarded(
+      [
+        { content: '', toolCalls: [call('c1', 'run_code', { source: 'x' })] },
+        { content: '', toolCalls: [call('c2', 'confirm', {})] },
+        CODE_ANSWER,
+      ],
+      [runCode, confirm],
+      seen,
+    );
+    const paused = (await agent.run({ message: 'add' })) as { checkpoint: unknown };
+    // Strip the ledger wherever the checkpoint carries it: an older release wrote none.
+    let stripped = 0;
+    const strip = (value: unknown): void => {
+      if (value === null || typeof value !== 'object') return;
+      if (Object.hasOwn(value, 'toolCallLedger')) {
+        delete (value as Record<string, unknown>).toolCallLedger;
+        stripped += 1;
+      }
+      for (const child of Object.values(value)) strip(child);
+    };
+    const checkpoint = structuredClone(paused.checkpoint);
+    strip(checkpoint);
+    expect(stripped).toBeGreaterThan(0);
+    await agent.resume(checkpoint as never, 'yes').catch(() => undefined);
+    // The paused call is listed, but what ran before the pause was not observed.
+    expect(seen[0]).toEqual({
+      calls: [{ name: 'confirm', callId: 'c2', outcome: 'ok' }],
+      complete: false,
+    });
+  });
+
   it('past limits.maxToolCalls the view says it is incomplete', async () => {
     const seen: AnswerToolCallsView[] = [];
     const agent = Agent.create({

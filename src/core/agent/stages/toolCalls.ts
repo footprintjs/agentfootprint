@@ -2623,8 +2623,8 @@ export function buildToolCallsHandler(
   };
 
   /**
-   * THE one door for a `stream.tool_end` bracket. Every dispatch path closes a
-   * call here, so the run's tool-call ledger (when `answerValidation` keeps
+   * THE one door for a `stream.tool_end` bracket in this handler. Every
+   * dispatch path here closes a call through it, so the run's tool-call ledger (when `answerValidation` keeps
    * one) lists exactly the brackets the stream reported — never arguments,
    * never results. `ran` is whether the tool's own code ran: a call a person
    * declined or a rule refused without an `error` is listed `not-run`, never `ok`.

@@ -1656,7 +1656,8 @@ export interface AgentState {
    * `context.toolCalls`. Written beside every `stream.tool_end` bracket, and
    * ONLY on an agent with `answerValidation` (`ToolCallsHandlerDeps.toolCallLedger`),
    * so every other agent commits exactly the keys it always did. Run state:
-   * a new turn starts without it, a pause carries it to the resumed leg.
+   * seed starts a fresh, empty one on every run; a pause carries it to the
+   * resumed leg.
    */
   toolCallLedger?: import('../../answer-validation/index.js').AnswerToolCallsView;
   /** Set only at the final capture after a validation report was accepted. */

@@ -34,7 +34,9 @@ state of the run that owns the check (`AgentState.toolCallLedger`), written besi
 every `stream.tool_end` bracket (`src/core/agent/stages/toolCalls.ts` · `emitToolEnd`) and only
 on an agent with `answerValidation`, so it cannot hold another run's calls and
 no other agent's record changes. `complete: false` says calls may be missing
-(past `limits.maxToolCalls`, or a `resumeOnError` leg).
+(past `limits.maxToolCalls`, an oversized name or id, a `resumeOnError` leg, or
+a resumed checkpoint written before ledgers existed). It lists the model's own
+calls; a call a tool makes from inside itself is that tool's work.
 
 The rule "the answer presents code, but no code-execution tool ran":
 

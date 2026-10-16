@@ -425,6 +425,9 @@ run's own state, and never holds another run's calls, even when runs share one
 process. Under `conversationRedaction()` the record keeps the ledger's
 `complete` flag and none of the tool names; the check still reads them live.
 
+The second argument is typed `AnswerValidationContext`; its `toolCalls` is an
+`AnswerToolCallsView`, and each entry an `AnswerToolCall`.
+
 A rule that holds the reply when the answer presents code but nothing
 executed it:
 
