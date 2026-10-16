@@ -27,6 +27,7 @@ import type {
 } from '../provider-contract/types.js';
 import { forcedToolChoiceFor } from '../provider-contract/forcedToolChoice.js';
 import { anyOf, trimLeading, trimTrailing } from '../lib/linearText.js';
+import { callUnder } from '../lib/abort.js';
 
 /** The synthetic pick tool, named by the caller (the wire shows this name). */
 export interface EnumPickTool {
@@ -163,7 +164,8 @@ async function complete(
     ...(req.tools !== undefined && { tools: req.tools }),
     ...(req.toolChoice !== undefined && { toolChoice: req.toolChoice }),
     model: req.model ?? '',
-    ...(req.signal !== undefined && { signal: req.signal }),
   };
-  return provider.complete(request);
+  // The signal rides the request and bounds the wait; an answer that lands
+  // after it is refused, never taken as a pick (lib/abort.ts · callUnder).
+  return callUnder(request, req.signal, (wired) => provider.complete(wired));
 }

@@ -28,6 +28,7 @@ import type {
   WireRole,
 } from '../../provider-contract/types.js';
 import { asContextWindowExceeded } from '../../provider-contract/contextWindow.js';
+import { abortErrorOf, bodyChunks, throwIfAborted, untilAborted } from '../../lib/abort.js';
 import { ANTHROPIC_PROMPT_CACHING } from './anthropicCacheWire.js';
 import { thinkingModeWith } from './anthropicThinkingWire.js';
 import {
@@ -147,6 +148,8 @@ export function browserAnthropic(options: BrowserAnthropicProviderOptions): LLMP
     // …and the same per-model thinking shapes (anthropicThinkingWire.ts).
     thinkingMode: (model) => modeOf(modelOf(model, defaultModel)),
     async complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
+      // A cancelled call sends nothing (lib/abort.ts, law 1).
+      throwIfAborted(req.signal);
       const preparation = prepareAnthropicReplay(
         req,
         modelOf(req.model, defaultModel),
@@ -166,17 +169,23 @@ export function browserAnthropic(options: BrowserAnthropicProviderOptions): LLMP
       if (preparation.omissions.length > 0) hooks?.onReplayPrepared?.(preparation);
       let response: Response;
       try {
-        response = await fetchImpl(apiUrl, {
-          method: 'POST',
-          headers,
-          body: serializedBody,
-          ...(req.signal && { signal: req.signal }),
-        });
+        // The signal rides the fetch, so an abort cancels the request itself;
+        // every wait after it (headers, body) is raced against it as well, so
+        // an answer that lands after the abort is refused (lib/abort.ts).
+        response = await untilAborted(
+          fetchImpl(apiUrl, {
+            method: 'POST',
+            headers,
+            body: serializedBody,
+            ...(req.signal && { signal: req.signal }),
+          }),
+          req.signal,
+        );
       } catch (err) {
-        throw wrapError(err);
+        throw wrapError(err, req.signal);
       }
-      if (!response.ok) throw await wrapStatus(response);
-      const json = (await response.json()) as AnthropicMessage;
+      if (!response.ok) throw await untilAborted(wrapStatus(response), req.signal);
+      const json = (await untilAborted(response.json(), req.signal)) as AnthropicMessage;
       // Manifest read from the FINAL body — the very object JSON.stringify
       // sent — after every transform (wireManifest.ts).
       return {
@@ -186,6 +195,7 @@ export function browserAnthropic(options: BrowserAnthropicProviderOptions): LLMP
       };
     },
     async *stream(req: LLMRequest, hooks?: LLMCallHooks): AsyncIterable<LLMChunk> {
+      throwIfAborted(req.signal);
       const preparation = prepareAnthropicReplay(
         req,
         modelOf(req.model, defaultModel),
@@ -206,21 +216,26 @@ export function browserAnthropic(options: BrowserAnthropicProviderOptions): LLMP
       if (preparation.omissions.length > 0) hooks?.onReplayPrepared?.(preparation);
       let response: Response;
       try {
-        response = await fetchImpl(apiUrl, {
-          method: 'POST',
-          headers,
-          body: serializedBody,
-          ...(req.signal && { signal: req.signal }),
-        });
+        response = await untilAborted(
+          fetchImpl(apiUrl, {
+            method: 'POST',
+            headers,
+            body: serializedBody,
+            ...(req.signal && { signal: req.signal }),
+          }),
+          req.signal,
+        );
       } catch (err) {
-        throw wrapError(err);
+        throw wrapError(err, req.signal);
       }
-      if (!response.ok) throw await wrapStatus(response);
+      if (!response.ok) throw await untilAborted(wrapStatus(response), req.signal);
       if (!response.body) throw new Error('[browser-anthropic] response has no body');
 
       // Malformed tool-argument JSON becomes `{}` here — this adapter's
       // behaviour since it shipped (the gateway adapter refuses instead).
-      yield* assembleAnthropicStream(parseSSE(response.body), {
+      // The signal rides INTO the parser: each read is raced against it, and
+      // the body is cancelled on the way out (lib/abort.ts · bodyChunks).
+      yield* assembleAnthropicStream(parseSSE(response.body, req.signal), {
         bindingFactory,
         replayOmissions: preparation.omissions,
         wireManifest: toolManifestOf(body.tools, body.output_config),
@@ -293,45 +308,45 @@ function buildBody(
   };
 }
 
-/** Parse Anthropic's SSE event stream from a fetch ReadableStream. */
-async function* parseSSE(body: ReadableStream<Uint8Array>): AsyncIterable<AnthropicStreamEvent> {
-  const reader = body.getReader();
+/**
+ * Parse Anthropic's SSE event stream from a fetch ReadableStream — read under
+ * `signal` through `bodyChunks`, which races every read against it and
+ * CANCELS the body on every way out (the end, an early stop, an error, an
+ * abort), so a stream nobody reads never holds its socket open.
+ */
+async function* parseSSE(
+  body: ReadableStream<Uint8Array>,
+  signal: AbortSignal | undefined,
+): AsyncIterable<AnthropicStreamEvent> {
   const decoder = new TextDecoder();
   let buf = '';
-  try {
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      let idx;
-      // Events are separated by \n\n.
-      while ((idx = buf.indexOf('\n\n')) >= 0) {
-        const raw = buf.slice(0, idx);
-        buf = buf.slice(idx + 2);
-        let event = 'message';
-        const dataLines: string[] = [];
-        for (const line of raw.split('\n')) {
-          if (line.startsWith('event:')) event = line.slice(6).trim();
-          else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim());
-        }
-        // Belt-and-suspenders: a malformed SSE chunk should not throw out of
-        // the async generator and tear down the whole stream. v1 wrapped
-        // this; an upstream proxy or a partial flush could in principle
-        // produce a non-JSON `data:` line.
-        let data: unknown = {};
-        if (dataLines.length > 0) {
-          try {
-            data = JSON.parse(dataLines.join('\n'));
-          } catch {
-            data = {};
-          }
-        }
-        yield { event, data };
+  for await (const value of bodyChunks(body, signal)) {
+    buf += decoder.decode(value, { stream: true });
+    let idx;
+    // Events are separated by \n\n.
+    while ((idx = buf.indexOf('\n\n')) >= 0) {
+      const raw = buf.slice(0, idx);
+      buf = buf.slice(idx + 2);
+      let event = 'message';
+      const dataLines: string[] = [];
+      for (const line of raw.split('\n')) {
+        if (line.startsWith('event:')) event = line.slice(6).trim();
+        else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim());
       }
+      // Belt-and-suspenders: a malformed SSE chunk should not throw out of
+      // the async generator and tear down the whole stream. v1 wrapped
+      // this; an upstream proxy or a partial flush could in principle
+      // produce a non-JSON `data:` line.
+      let data: unknown = {};
+      if (dataLines.length > 0) {
+        try {
+          data = JSON.parse(dataLines.join('\n'));
+        } catch {
+          data = {};
+        }
+      }
+      yield { event, data };
     }
-  } finally {
-    reader.releaseLock();
   }
 }
 
@@ -361,7 +376,10 @@ async function wrapStatus(response: Response): Promise<Error> {
   );
 }
 
-function wrapError(err: unknown): Error {
+function wrapError(err: unknown, signal?: AbortSignal): Error {
+  // A cancelled call fails AS the cancellation, never as a provider error that
+  // a retry would re-send (lib/abort.ts).
+  if (signal?.aborted) return abortErrorOf(signal);
   const tooBig = asContextWindowExceeded(err, { provider: 'browser-anthropic' });
   if (tooBig) return tooBig;
   if (err instanceof Error) {

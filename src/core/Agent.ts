@@ -285,7 +285,7 @@ import {
 } from '../time/clock.js';
 import type { ResolvedOutputEnforcement } from './agent/outputEnforcement.js';
 import { buildOutputRetryStage } from './agent/stages/outputRetry.js';
-import { RunnerBase, makeRunId, withRunSignalInEnv } from './RunnerBase.js';
+import { RunnerBase, makeRunId, runSignalOf } from './RunnerBase.js';
 import type { Tool, ToolRegistryEntry } from '../tools/tools.js';
 import type { ToolProvider } from '../tools/toolProvider.js';
 import {
@@ -2023,7 +2023,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // starts — a run with no zone anywhere runs with its zone UNKNOWN (G15),
     // never on the server's zone.
     const clockDraft = this.clockDraftFor(runInput.time ?? options?.time, 'Agent.run');
-    const engineOptions = withRunSignalInEnv(withoutTime(options));
+    // The engine's options; the run's signal (and its deadline) is armed just
+    // before the run starts and released in its `finally` (`runSignalOf`).
+    const engineOptions = withoutTime(options);
     // Timing next, and before the executor exists: both of these refuse a call
     // that would have SUCCEEDED into corrupted per-instance state or an
     // orphaned human question. See ./conversation.ts for why they are throws.
@@ -2086,6 +2088,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // Set here, beside the `try` whose `finally` clears it, so no exit path
     // can leave it behind for a turn this `run()` did not start.
     this.runClockDraft = clockDraft;
+    // Armed here, beside the `try` whose `finally` releases it: no refused
+    // call above can leave a deadline running.
+    const runSignal = runSignalOf(engineOptions);
 
     try {
       const result = await executor.run({
@@ -2105,7 +2110,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         // budget — give it headroom (×2 + 10 covers double-hop loop shapes).
         // Consumer-provided options win.
         maxIterations: this.maxIterations * 2 + 10,
-        ...(engineOptions ?? {}),
+        ...(runSignal.options ?? {}),
       });
       const finalized = this.finalizeResult(executor, result);
       if (typeof finalized === 'string') this.lastRunAnswer = finalized;
@@ -2204,6 +2209,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       }
       throw cause;
     } finally {
+      // The run's deadline and signal links end with the run (`runSignalOf`).
+      runSignal.release();
       // The time layer's per-run inputs end with the run: a stale draft would
       // be stamped by the next seed this agent did not start (a composition
       // mounting its chart) as if the app had declared it.
@@ -2606,7 +2613,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // moves; it is never applied — the paused turn's clock is kept, and a
     // differing value is recorded by the ToolCalls resume door.
     const passedTime = this.passedTimeFor(options?.time, 'Agent.resume');
-    options = withRunSignalInEnv(withoutTime(options));
+    options = withoutTime(options);
     const gate = pauseDemandsDecision(checkpoint.pauseData);
     if (gate && !isCheckInDecision(input)) throw new DecisionRequiredError(gate, input);
     // One run, one identity — refused before anything moves. The paused run's
@@ -2765,8 +2772,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
               runRedaction: carriedRunPolicy(leg.policy),
             },
           };
+    // A resume arms its own run signal and deadline (`runSignalOf`), released in
+    // the `finally` below.
+    const runSignal = runSignalOf(resumeOptions);
     try {
-      const result = await executor.resume(legCheckpoint, input, resumeOptions);
+      const result = await executor.resume(legCheckpoint, input, runSignal.options);
       const finalized = this.finalizeResult(executor, result);
       if (typeof finalized === 'string') this.lastRunAnswer = finalized;
       // The question this resume answered is settled; a resume that paused
@@ -2781,6 +2791,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       await this.endRunToolSessions(cause);
       throw cause;
     } finally {
+      runSignal.release();
       // A resume's passed `time` ends with the resume (the fresh-run path's terms).
       this.resumePassedTime = undefined;
       // Same terms as the fresh-run path: rows on every exit, before the

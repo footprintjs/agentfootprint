@@ -134,7 +134,7 @@ import { composedInput, readsMessageFromIfAny } from '../core/messageFrom.js';
 import { adoptMemberRedaction } from '../redaction/declared.js';
 import type { RunnerPauseOutcome } from '../core/pause.js';
 import type { Runner } from '../core/runner.js';
-import { RunnerBase, makeRunId, withRunSignalInEnv } from '../core/RunnerBase.js';
+import { RunnerBase, makeRunId, underRunSignal } from '../core/RunnerBase.js';
 import { agentRecorder } from '../recorders/core/AgentRecorder.js';
 import { compositionRecorder } from '../recorders/core/CompositionRecorder.js';
 import { ContextRecorder } from '../recorders/core/ContextRecorder.js';
@@ -498,10 +498,12 @@ export class Graph extends RunnerBase<GraphInput, GraphOutput> {
     try {
       let result: unknown;
       try {
-        result = await executor.run({
-          input: { ...input, parentRun: parentRun.link },
-          ...(withRunSignalInEnv(options) ?? {}),
-        });
+        result = await underRunSignal(options, (engine) =>
+          executor.run({
+            input: { ...input, parentRun: parentRun.link },
+            ...(engine ?? {}),
+          }),
+        );
       } catch (err) {
         this.rethrowWithNodeAttribution(err);
       }
@@ -528,7 +530,9 @@ export class Graph extends RunnerBase<GraphInput, GraphOutput> {
       this.lastExecutor = executor;
       let result: unknown;
       try {
-        result = await executor.resume(checkpoint, input, withRunSignalInEnv(options));
+        result = await underRunSignal(options, (engine) =>
+          executor.resume(checkpoint, input, engine),
+        );
       } catch (err) {
         this.rethrowWithNodeAttribution(err);
       }

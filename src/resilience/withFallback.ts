@@ -45,6 +45,7 @@ import { forcedToolChoiceFor } from '../provider-contract/forcedToolChoice.js';
 import { nativeOutputSchemaFor } from '../provider-contract/nativeOutputSchema.js';
 import { isRequestRefusal } from '../provider-contract/requestRefusal.js';
 import { replayAttempts } from './replayAttempt.js';
+import { throwIfAborted } from '../lib/abort.js';
 
 /**
  * The message roles BOTH providers carry — the only honest capability for a
@@ -282,6 +283,10 @@ export function withFallback(
           ),
         );
       } catch (err) {
+        // A cancelled call never moves to the other side, whatever
+        // `shouldFallback` says: that would start a second billed call for a
+        // caller who has gone (lib/abort.ts).
+        throwIfAborted(req.signal);
         if (!shouldFallback(err)) throw err;
         onFallback?.(err);
         reportFellBack(hooks, err);
@@ -332,6 +337,7 @@ export function withFallback(
           yield attempts.chunk(chunk);
         }
       } catch (err) {
+        throwIfAborted(req.signal);
         if (yieldedAny || !shouldFallback(err)) throw err;
         onFallback?.(err);
         reportFellBack(hooks, err);

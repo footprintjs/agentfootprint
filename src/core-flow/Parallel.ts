@@ -26,9 +26,10 @@ import type { RunOptions } from '../core/runner.js';
 import type { RedactionPolicy } from 'footprintjs';
 import type { GroupMember, GroupMetadata, GroupTranslator } from '../core/translator.js';
 import type { RunnerPauseOutcome } from '../core/pause.js';
-import type { LLMMessage, LLMProvider } from '../provider-contract/types.js';
+import type { LLMMessage, LLMProvider, LLMRequest } from '../provider-contract/types.js';
+import { callUnder } from '../lib/abort.js';
 import type { Runner } from '../core/runner.js';
-import { RunnerBase, makeRunId, withRunSignalInEnv } from '../core/RunnerBase.js';
+import { RunnerBase, makeRunId, underRunSignal } from '../core/RunnerBase.js';
 import { normalizeRunInput } from '../core/runInput.js';
 import {
   adoptParentRun,
@@ -374,10 +375,12 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
     try {
       let result: unknown;
       try {
-        result = await executor.run({
-          input: { message: runInput.message, parentRun: parentRun.link },
-          ...(withRunSignalInEnv(options) ?? {}),
-        });
+        result = await underRunSignal(options, (engine) =>
+          executor.run({
+            input: { message: runInput.message, parentRun: parentRun.link },
+            ...(engine ?? {}),
+          }),
+        );
       } catch (err) {
         this.rethrowWithBranchAttribution(err);
       }
@@ -404,7 +407,9 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
       this.lastExecutor = executor;
       let result: unknown;
       try {
-        result = await executor.resume(checkpoint, input, withRunSignalInEnv(options));
+        result = await underRunSignal(options, (engine) =>
+          executor.resume(checkpoint, input, engine),
+        );
       } catch (err) {
         this.rethrowWithBranchAttribution(err);
       }
@@ -1003,16 +1008,22 @@ async function mergeWithLLM(
     ...(opts.temperature !== undefined && { temperature: opts.temperature }),
   });
   const startMs = Date.now();
-  const response = await opts.provider.complete(
-    {
-      messages,
-      model: opts.model,
-      ...(opts.temperature !== undefined && { temperature: opts.temperature }),
-      ...(opts.maxTokens !== undefined && { maxTokens: opts.maxTokens }),
-    },
-    // Resilience-report channel: a decorated merge provider's fallback /
-    // retry / recovery becomes an in-run typed event here.
-    resilienceHooks(scope),
+  const request: LLMRequest = {
+    messages,
+    model: opts.model,
+    ...(opts.temperature !== undefined && { temperature: opts.temperature }),
+    ...(opts.maxTokens !== undefined && { maxTokens: opts.maxTokens }),
+  };
+  // The run's signal rides the request and bounds the wait; an answer that
+  // lands after it is refused before `llm_end` could count it
+  // (lib/abort.ts · callUnder).
+  const response = await callUnder(request, scope.$getEnv?.()?.signal, (wired) =>
+    opts.provider.complete(
+      wired,
+      // Resilience-report channel: a decorated merge provider's fallback /
+      // retry / recovery becomes an in-run typed event here.
+      resilienceHooks(scope),
+    ),
   );
   const durationMs = Date.now() - startMs;
   typedEmit(scope, 'agentfootprint.stream.llm_end', {

@@ -51,6 +51,7 @@ import type {
   LLMResponse,
 } from '../provider-contract/types.js';
 import { sleep } from '../lib/sleep.js';
+import { throwIfAborted } from '../lib/abort.js';
 import { statedRetryAfterMs } from './statedWait.js';
 import { replayAttempts } from './replayAttempt.js';
 
@@ -178,6 +179,10 @@ export function withRetry(provider: LLMProvider, options: WithRetryOptions = {})
     req: LLMRequest,
     hooks: LLMCallHooks | undefined,
   ): Promise<void> {
+    // A cancelled call is never asked again, whatever `shouldRetry` says — a
+    // retry would re-send (and re-bill) a request nobody is waiting for. The
+    // failure is the cancellation itself (lib/abort.ts).
+    throwIfAborted(req.signal);
     if (attempt >= maxAttempts || !shouldRetry(err, attempt)) throw err;
     const scheduled = Math.min(maxDelayMs, initialDelayMs * Math.pow(backoffFactor, attempt - 1));
     // The server's word beats our guess — waiting less than it asked only

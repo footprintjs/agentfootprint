@@ -36,7 +36,12 @@
  * });
  * ```
  */
-import type { LLMProvider, LLMMessage as Message } from '../../provider-contract/types.js';
+import type {
+  LLMProvider,
+  LLMMessage as Message,
+  LLMRequest,
+} from '../../provider-contract/types.js';
+import { callUnder } from '../../lib/abort.js';
 import type { BeatExtractor, ExtractArgs } from './extractor.js';
 import type { NarrativeBeat } from './types.js';
 import { asImportance } from './types.js';
@@ -151,12 +156,14 @@ export function llmExtractor(config: LLMExtractorConfig): BeatExtractor {
     async extract(args: ExtractArgs): Promise<readonly NarrativeBeat[]> {
       const userContent = formatMessagesForExtractor(args.messages, args.turnNumber);
 
-      const response = await provider.complete({
+      // The run's signal rides the request and bounds the wait; an answer
+      // that lands after it is refused (lib/abort.ts · callUnder).
+      const request: LLMRequest = {
         systemPrompt,
         messages: [{ role: 'user', content: userContent }],
         model: 'memory-extractor',
-        ...(args.signal ? { signal: args.signal } : {}),
-      });
+      };
+      const response = await callUnder(request, args.signal, (wired) => provider.complete(wired));
 
       return parseBeatsResponse(response.content ?? '', onParseError);
     },

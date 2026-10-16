@@ -4,7 +4,7 @@ title: SequenceBuilder
 
 # Class: SequenceBuilder
 
-Defined in: [src/core-flow/Sequence.ts:381](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L381)
+Defined in: [src/core-flow/Sequence.ts:385](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L385)
 
 Fluent builder. Reads as natural English:
   Sequence.create().step('a', A).pipeVia(fn).step('b', B).build()
@@ -20,7 +20,7 @@ next step (otherwise the default string-chain mapper is used).
 
 > **new SequenceBuilder**(`opts`): `SequenceBuilder`
 
-Defined in: [src/core-flow/Sequence.ts:388](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L388)
+Defined in: [src/core-flow/Sequence.ts:392](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L392)
 
 #### Parameters
 
@@ -38,7 +38,7 @@ Defined in: [src/core-flow/Sequence.ts:388](https://github.com/footprintjs/agent
 
 > **build**(): [`Sequence`](/docs/api/classes/Sequence)
 
-Defined in: [src/core-flow/Sequence.ts:433](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L433)
+Defined in: [src/core-flow/Sequence.ts:437](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L437)
 
 #### Returns
 
@@ -50,7 +50,7 @@ Defined in: [src/core-flow/Sequence.ts:433](https://github.com/footprintjs/agent
 
 > **pipeVia**(`fn`): `this`
 
-Defined in: [src/core-flow/Sequence.ts:428](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L428)
+Defined in: [src/core-flow/Sequence.ts:432](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L432)
 
 Transform the previous step's string output before it reaches the
 next step. Consumed once by the next `.step()` call. Default
@@ -75,7 +75,7 @@ Reads as English: `.step('a', A).pipeVia(fn).step('b', B)`
 
 > **step**(`id`, `runner`, `opts?`): `this`
 
-Defined in: [src/core-flow/Sequence.ts:402](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L402)
+Defined in: [src/core-flow/Sequence.ts:406](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L406)
 
 Add a step. Runner must accept `{ message: string }` and return `string`.
 First step receives the Sequence input; subsequent steps receive the

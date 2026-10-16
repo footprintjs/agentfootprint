@@ -605,3 +605,78 @@ describe('summarize — refusals at build', () => {
     expect(summary.lastAccessedAt).toBeGreaterThan(summary.updatedAt);
   });
 });
+
+// ── Cancellation ────────────────────────────────────────────
+
+describe('summarize — a cancelled run', () => {
+  /** A scope whose run carries `signal`, as `$getEnv()` serves it to a stage. */
+  function cancellable(signal: AbortSignal): MemoryState {
+    const scope = makeScope({ loaded: conversation(10) });
+    (scope as unknown as { $getEnv: () => { signal: AbortSignal } }).$getEnv = () => ({ signal });
+    return scope;
+  }
+
+  it('the callback is not called on a run already cancelled, and nothing is declined', async () => {
+    const llm = mockLLM();
+    const controller = new AbortController();
+    const reason = new Error('user left');
+    controller.abort(reason);
+    const scope = cancellable(controller.signal);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      await expect(
+        summarize({ llm, triggerMinEntries: 5, preserveRecent: 3 })(scope as never),
+      ).rejects.toBe(reason);
+      expect(llm).not.toHaveBeenCalled();
+      expect(warn).not.toHaveBeenCalled();
+      expect(scope.loaded).toHaveLength(10);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('a summary that lands after the abort is not folded in or stored', async () => {
+    let answer!: (text: string) => void;
+    const llm = vi.fn(() => new Promise<string>((resolve) => (answer = resolve)));
+    const store = new InMemoryStore();
+    const put = vi.spyOn(store, 'put');
+    const controller = new AbortController();
+    const reason = new Error('user left');
+    const scope = cancellable(controller.signal);
+    const pending = summarize({ llm, store, triggerMinEntries: 5, preserveRecent: 3 })(
+      scope as never,
+    );
+    await new Promise<void>((r) => setImmediate(r));
+    expect(llm).toHaveBeenCalledTimes(1);
+    answer('A late summary.');
+    controller.abort(reason);
+    await expect(pending).rejects.toBe(reason);
+    expect(put).not.toHaveBeenCalled();
+    expect(scope.loaded).toHaveLength(10);
+  });
+
+  it('the provider is handed the run’s signal, and an abort leaves as itself', async () => {
+    const seen: (AbortSignal | undefined)[] = [];
+    const provider = {
+      name: 'held',
+      complete: (req: { signal?: AbortSignal }) => {
+        seen.push(req.signal);
+        return new Promise(() => undefined);
+      },
+    };
+    const controller = new AbortController();
+    const reason = new Error('user left');
+    const scope = cancellable(controller.signal);
+    const pending = summarize({
+      llm: provider as never,
+      model: 'haiku',
+      triggerMinEntries: 5,
+      preserveRecent: 3,
+    })(scope as never);
+    await new Promise<void>((r) => setImmediate(r));
+    expect(seen[0]).toBe(controller.signal);
+    controller.abort(reason);
+    await expect(pending).rejects.toBe(reason);
+    expect(scope.loaded).toHaveLength(10);
+  });
+});

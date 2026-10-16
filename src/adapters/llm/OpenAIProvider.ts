@@ -33,6 +33,7 @@ import type { PromptCaching } from '../../cache/types.js';
 import type { ThinkingHandler } from '../../thinking/types.js';
 import { openAIThinkingHandler } from '../../thinking/OpenAIThinkingHandler.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
+import { abortableIterable, abortErrorOf, throwIfAborted, untilAborted } from '../../lib/abort.js';
 import { asContextWindowExceeded } from '../../provider-contract/contextWindow.js';
 import { retryAfterMsFromError } from './retryAfter.js';
 import { azureBaseUrl } from './azureUrl.js';
@@ -46,9 +47,32 @@ interface OpenAIClient {
     completions: {
       create(
         params: OpenAICreateParams,
+        options?: OpenAIRequestOptions,
       ): Promise<OpenAIChatCompletion> | AsyncIterable<OpenAIStreamChunk>;
     };
   };
+}
+
+/** The SDK's per-request options — the one this adapter sends is the signal,
+ *  so an aborted run cancels the HTTP request itself (`lib/abort.ts`). */
+interface OpenAIRequestOptions {
+  signal?: AbortSignal;
+}
+
+/** `create(params)`, with the request's signal in the SDK's options when it has one. */
+function createUnder(
+  client: OpenAIClient,
+  params: OpenAICreateParams,
+  signal: AbortSignal | undefined,
+): Promise<OpenAIChatCompletion> | AsyncIterable<OpenAIStreamChunk> {
+  return signal
+    ? client.chat.completions.create(params, { signal })
+    : client.chat.completions.create(params);
+}
+
+/** The SDK stream's own close, where it has one (`Stream.controller`). */
+function closeOpenAIStream(stream: AsyncIterable<OpenAIStreamChunk>): void {
+  (stream as { controller?: { abort?: () => void } }).controller?.abort?.();
 }
 
 interface OpenAICreateParams {
@@ -324,20 +348,31 @@ export function openai(options: OpenAIProviderOptions = {}): LLMProvider {
     ...(!legacyEndpoint && { promptCaching: OPENAI_PROMPT_CACHING }),
     thinkingHandler: openAIThinkingHandler,
     async complete(req: LLMRequest): Promise<LLMResponse> {
+      // A cancelled call sends nothing — checked again once the credential is
+      // in hand, because asking for it can take a while (lib/abort.ts, law 1).
+      throwIfAborted(req.signal);
       const params = buildParams(req, { ...cfg, stream: false });
       // The credential is asked for HERE, per request, so a token that expired
       // since the last call is a new token and not a 401.
-      const client = await connect();
+      const client = await untilAborted(connect(), req.signal);
+      throwIfAborted(req.signal);
       try {
-        const response = (await client.chat.completions.create(params)) as OpenAIChatCompletion;
+        // The signal rides the SDK's request options, so an abort cancels the
+        // HTTP request itself; the race refuses an answer that lands after it.
+        const response = (await untilAborted<unknown>(
+          createUnder(client, params, req.signal),
+          req.signal,
+        )) as OpenAIChatCompletion;
         return fromOpenAIResponse(response);
       } catch (err) {
-        throw wrapError(err);
+        throw wrapError(err, req.signal);
       }
     },
     async *stream(req: LLMRequest): AsyncIterable<LLMChunk> {
+      throwIfAborted(req.signal);
       const params = buildParams(req, { ...cfg, stream: true });
-      const client = await connect();
+      const client = await untilAborted(connect(), req.signal);
+      throwIfAborted(req.signal);
       let stream: AsyncIterable<OpenAIStreamChunk>;
       try {
         // AWAIT, then check. The SDK's `create()` returns an `APIPromise` — a
@@ -348,10 +383,14 @@ export function openai(options: OpenAIProviderOptions = {}): LLMProvider {
         // doubles hid it for a year by returning an async generator directly
         // from `create()`, which is why the guard accepts BOTH shapes: `await`
         // on a non-thenable is the identity.
-        stream = await asChunkStream(client.chat.completions.create(params));
+        stream = await untilAborted(
+          asChunkStream(createUnder(client, params, req.signal)),
+          req.signal,
+        );
       } catch (err) {
-        throw wrapError(err);
+        throw wrapError(err, req.signal);
       }
+      const opened = stream;
 
       // Accumulate the streamed pieces so we can synthesize the
       // authoritative LLMResponse on the terminal chunk. OpenAI streams
@@ -364,7 +403,11 @@ export function openai(options: OpenAIProviderOptions = {}): LLMProvider {
       let tokenIndex = 0;
 
       try {
-        for await (const chunk of stream) {
+        // An abort closes the SDK stream and ends this loop at once, even
+        // when a read is still pending (lib/abort.ts, laws 2–3).
+        for await (const chunk of abortableIterable(opened, req.signal, () =>
+          closeOpenAIStream(opened),
+        )) {
           // Usage FIRST, and outside the choice guard. With
           // `stream_options.include_usage` (set in buildParams) OpenAI sends the
           // token counts on a final chunk whose `choices` array is EMPTY — so a
@@ -413,7 +456,7 @@ export function openai(options: OpenAIProviderOptions = {}): LLMProvider {
         };
         yield { tokenIndex, content: '', done: true, response };
       } catch (err) {
-        throw wrapError(err);
+        throw wrapError(err, req.signal);
       }
     },
   };
@@ -1103,7 +1146,11 @@ function normalizeStopReason(raw: string): string {
   }
 }
 
-function wrapError(err: unknown): Error {
+function wrapError(err: unknown, signal?: AbortSignal): Error {
+  // A cancelled call fails AS the cancellation, whatever the SDK threw for it
+  // (its own `APIUserAbortError` included) — never as a provider error that a
+  // retry would re-send (lib/abort.ts).
+  if (signal?.aborted) return abortErrorOf(signal);
   // "Your request was too big" is a distinct failure with distinct fixes, so
   // it leaves this adapter as a typed error rather than as one more opaque
   // 400 that a retry loop will re-send forever. Nothing else is translated.

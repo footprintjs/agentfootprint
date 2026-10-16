@@ -44,6 +44,7 @@ import { SUBFLOW_IDS, STAGE_IDS, milestoneTagsFor, RECEIPT_KEY } from '../../lib
 import type { InjectionRecord } from '../../recorders/core/types.js';
 import { typedEmit } from '../../recorders/core/typedEmit.js';
 import { resilienceHooks } from '../../recorders/core/resilienceHooks.js';
+import { callUnder } from '../../lib/abort.js';
 import { buildSystemPromptSlot } from '../slots/buildSystemPromptSlot.js';
 import { buildMessagesSlot } from '../slots/buildMessagesSlot.js';
 import { joinSystemPrompt, stripFrameworkFields } from './composeRequest.js';
@@ -108,6 +109,22 @@ export interface MessageApiChartDeps {
 
 /**
  * Build the LLM-only messageAPI merge-tree chart.
+ *
+ * **Cancellation.** Every model call reads its signal from the run's `env`.
+ * For an abort or a deadline to cancel the provider's request, pass the signal
+ * there too: `env: { signal }`, and for a deadline `AbortSignal.timeout(ms)`. A
+ * bare `FlowChartExecutor` hands its own `signal` and `timeoutMs` to the
+ * traversal only. That stops the chart, but a call already in flight runs to
+ * completion, and you are billed for it.
+ *
+ * ```ts
+ * const controller = new AbortController();
+ * await new FlowChartExecutor(chart).run({
+ *   input: { message: 'hi' },
+ *   signal: controller.signal, // stops the traversal
+ *   env: { signal: controller.signal }, // cancels the model call in flight
+ * });
+ * ```
  */
 export function buildMessageApiChart(deps: MessageApiChartDeps): FlowChart {
   const { provider, model, systemPrompt } = deps;
@@ -195,10 +212,15 @@ export function buildMessageApiChart(deps: MessageApiChartDeps): FlowChart {
       request,
     });
     if (receipt !== undefined) scope[RECEIPT_KEY] = receipt;
-    const response = await provider.complete(
-      request,
-      // Resilience-report channel — see buildAgentMessageApiChart.
-      resilienceHooks(scope, receipt !== undefined),
+    // The run's signal (its deadline included) rides the request and bounds
+    // the wait; an answer that lands after it is refused before `llm_end`
+    // could count it (lib/abort.ts · callUnder).
+    const response = await callUnder(request, scope.$getEnv?.()?.signal, (wired) =>
+      provider.complete(
+        wired,
+        // Resilience-report channel — see buildAgentMessageApiChart.
+        resilienceHooks(scope, receipt !== undefined),
+      ),
     );
     scope.answer = response.content;
     typedEmit(scope, 'agentfootprint.stream.llm_end', {

@@ -8,7 +8,7 @@ their first caller so that readers in folders that cannot import each other
 cannot answer the same question differently.
 Support: `canonicalJson.ts`, `fnv1a.ts`, `lazyRequire.ts`, `libraryVersion.ts`,
 `sqliteUnavailable.ts`, `embedderMismatch.ts`, `storedPreview.ts`, `sleep.ts`,
-`linearText.ts`.
+`abort.ts`, `linearText.ts`.
 Moved down from beside their first callers, so that no layer imports upward for
 a name both sides use (the layer table, `scripts/layering.config.cjs`):
 Map: `conventions.ts` (the builder↔recorder protocol — subflow and stage ids,
@@ -85,6 +85,31 @@ and stays beside the work it bounds. `test/lib/sleep.test.ts` proves the law
 with a timer that fires early on purpose; `test/architecture/sleepOwner.test.ts`
 refuses a private sleep anywhere else in `src/`.
 
+## A cancellation from here stops everything after it
+`abort.ts` is the one owner of how the library honours an `AbortSignal`. Once a
+request's signal has fired, nothing more is sent (`throwIfAborted`), nothing more
+is waited for (`untilAborted` races every wait), nothing more is read
+(`abortableIterable` and `bodyChunks` close the stream or cancel the body), and
+nothing that lands late counts: a response that arrives after the abort is
+refused with it, so it is never recorded as an answer or billed into a run's
+usage. The error is the signal's own `reason` when that is an `Error` (an
+`AbortError`-named one otherwise), so a caller gets back what they aborted with.
+`linkedController` is a controller that follows the caller's signals until
+`unlink()` (a run, a call), so no listener outlives the work on a long-lived
+signal; `armDeadline` aborts it after `ms` and returns the disarm, so a deadline
+never fires on work that already finished; `eitherSignal` combines signals
+where nothing has a lifetime to end (`AbortSignal.any`); `callUnder` is the
+four laws for one non-streaming provider call. `abortErrorOf` never throws,
+even on a reason that cannot be inspected.
+
+```ts
+import { callUnder } from '../lib/abort.js';
+
+const response = await callUnder(request, scope.$getEnv?.()?.signal, (wired) =>
+  provider.complete(wired),
+);
+```
+
 ## A trim from here costs one pass
 `linearText.ts` is where a run of characters comes off the end of text the
 library did not write: a base URL or prefix from configuration, a token or a
@@ -138,6 +163,9 @@ each regex's worst case (`test/helpers/workCount.ts`, never a timer).
   somebody's stored data a refusal may quote.
 - `sleep.ts` — `sleep`, the one wait that keeps its minimum; `makeSleep` builds
   one over a test's own clock and timer.
+- `abort.ts` — the cancellation law: `throwIfAborted`, `untilAborted`,
+  `abortableIterable`, `bodyChunks`, `callUnder`, `eitherSignal`,
+  `linkedController`, `armDeadline`.
 - `linearText.ts` — `trimLeading` / `trimTrailing` / `trimBoth` over a
   `CharTest` (`isSlash`, `isHyphen`, `isRegExpWhitespace`, `anyOf`, `either`):
   the regex's answer in one pass.

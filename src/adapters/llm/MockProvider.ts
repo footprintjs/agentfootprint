@@ -23,6 +23,7 @@
 
 import { isSaidByPerson } from '../../lib/saidByPerson.js';
 import { sleep } from '../../lib/sleep.js';
+import { abortErrorOf, throwIfAborted } from '../../lib/abort.js';
 import type {
   LLMChunk,
   LLMProvider,
@@ -197,7 +198,10 @@ export class MockProvider implements LLMProvider {
   }
 
   async complete(req: LLMRequest): Promise<LLMResponse> {
-    await sleep(pickMs(this.thinkingMs), req.signal);
+    // The same law as every real adapter (lib/abort.ts): a cancelled call is
+    // not answered — even with no thinking time to wait out.
+    throwIfAborted(req.signal);
+    await sleep(pickMs(this.thinkingMs), req.signal, abortErrorOf);
     return this.buildResponse(req);
   }
 
@@ -208,7 +212,8 @@ export class MockProvider implements LLMProvider {
    * that is how real providers (OpenAI, Anthropic) deliver them too.
    */
   async *stream(req: LLMRequest): AsyncIterable<LLMChunk> {
-    await sleep(pickMs(this.thinkingMs), req.signal);
+    throwIfAborted(req.signal);
+    await sleep(pickMs(this.thinkingMs), req.signal, abortErrorOf);
     const response = this.buildResponse(req);
     const tokens = tokenizeWords(response.content);
     let tokenIndex = 0;
@@ -216,7 +221,10 @@ export class MockProvider implements LLMProvider {
       yield { tokenIndex: tokenIndex++, content: tok, done: false };
       // Inter-chunk delay AFTER yielding so the first token shows up
       // immediately once thinking is done — matches OpenAI's pattern.
-      await sleep(pickMs(this.chunkDelayMs), req.signal);
+      await sleep(pickMs(this.chunkDelayMs), req.signal, abortErrorOf);
+      // A zero delay waits for nothing, so the abort is asked for here too:
+      // a cancelled stream yields nothing more.
+      throwIfAborted(req.signal);
     }
     // Final chunk carries the authoritative LLMResponse (toolCalls,
     // usage, stopReason). Agent uses this to drive the ReAct loop

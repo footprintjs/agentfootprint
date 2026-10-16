@@ -4,7 +4,7 @@ title: AgentMessageApiChartDeps
 
 # Interface: AgentMessageApiChartDeps
 
-Defined in: [src/core/agent/buildAgentMessageApiChart.ts:74](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildAgentMessageApiChart.ts#L74)
+Defined in: [src/core/agent/buildAgentMessageApiChart.ts:75](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildAgentMessageApiChart.ts#L75)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/core/agent/buildAgentMessageApiChart.ts:74](https://github.com/
 
 > `readonly` `optional` **getRunId?**: () => `string` \| `undefined`
 
-Defined in: [src/core/agent/buildAgentMessageApiChart.ts:102](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildAgentMessageApiChart.ts#L102)
+Defined in: [src/core/agent/buildAgentMessageApiChart.ts:103](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildAgentMessageApiChart.ts#L103)
 
 The id of the run this chart is about to make (9.91.0) — supply it and
 Call-LLM mints a receipt on every turn of the loop, the fingerprint of
@@ -47,7 +47,7 @@ await new FlowChartExecutor(chart).run({ input: { message: 'hi' } });
 
 > `readonly` `optional` **maxIterations?**: `number`
 
-Defined in: [src/core/agent/buildAgentMessageApiChart.ts:79](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildAgentMessageApiChart.ts#L79)
+Defined in: [src/core/agent/buildAgentMessageApiChart.ts:80](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildAgentMessageApiChart.ts#L80)
 
 ***
 
@@ -55,7 +55,7 @@ Defined in: [src/core/agent/buildAgentMessageApiChart.ts:79](https://github.com/
 
 > `readonly` **model**: `string`
 
-Defined in: [src/core/agent/buildAgentMessageApiChart.ts:76](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildAgentMessageApiChart.ts#L76)
+Defined in: [src/core/agent/buildAgentMessageApiChart.ts:77](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildAgentMessageApiChart.ts#L77)
 
 ***
 
@@ -63,7 +63,7 @@ Defined in: [src/core/agent/buildAgentMessageApiChart.ts:76](https://github.com/
 
 > `readonly` **provider**: [`LLMProvider`](/docs/api/interfaces/LLMProvider)
 
-Defined in: [src/core/agent/buildAgentMessageApiChart.ts:75](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildAgentMessageApiChart.ts#L75)
+Defined in: [src/core/agent/buildAgentMessageApiChart.ts:76](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildAgentMessageApiChart.ts#L76)
 
 ***
 
@@ -71,7 +71,7 @@ Defined in: [src/core/agent/buildAgentMessageApiChart.ts:75](https://github.com/
 
 > `readonly` `optional` **structureRecorders?**: readonly `StructureRecorder`[]
 
-Defined in: [src/core/agent/buildAgentMessageApiChart.ts:80](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildAgentMessageApiChart.ts#L80)
+Defined in: [src/core/agent/buildAgentMessageApiChart.ts:81](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildAgentMessageApiChart.ts#L81)
 
 ***
 
@@ -79,7 +79,7 @@ Defined in: [src/core/agent/buildAgentMessageApiChart.ts:80](https://github.com/
 
 > `readonly` **systemPrompt**: `string`
 
-Defined in: [src/core/agent/buildAgentMessageApiChart.ts:77](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildAgentMessageApiChart.ts#L77)
+Defined in: [src/core/agent/buildAgentMessageApiChart.ts:78](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildAgentMessageApiChart.ts#L78)
 
 ***
 
@@ -87,4 +87,4 @@ Defined in: [src/core/agent/buildAgentMessageApiChart.ts:77](https://github.com/
 
 > `readonly` **tools**: readonly [`LLMToolSchema`](/docs/api/interfaces/LLMToolSchema)[]
 
-Defined in: [src/core/agent/buildAgentMessageApiChart.ts:78](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildAgentMessageApiChart.ts#L78)
+Defined in: [src/core/agent/buildAgentMessageApiChart.ts:79](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildAgentMessageApiChart.ts#L79)

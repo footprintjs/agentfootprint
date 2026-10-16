@@ -38,7 +38,12 @@
  * });
  * ```
  */
-import type { LLMProvider, LLMMessage as Message } from '../../provider-contract/types.js';
+import type {
+  LLMProvider,
+  LLMMessage as Message,
+  LLMRequest,
+} from '../../provider-contract/types.js';
+import { callUnder } from '../../lib/abort.js';
 import type { FactExtractArgs, FactExtractor } from './extractor.js';
 import type { Fact } from './types.js';
 import { asConfidence } from './types.js';
@@ -184,12 +189,14 @@ export function llmFactExtractor(config: LLMFactExtractorConfig): FactExtractor 
       const prior = formatExistingFacts(args.existing ?? [], includeExistingLimit);
       const userContent = prior.length > 0 ? `${prior}\n\n${turn}` : turn;
 
-      const response = await provider.complete({
+      // The run's signal rides the request and bounds the wait; an answer
+      // that lands after it is refused (lib/abort.ts · callUnder).
+      const request: LLMRequest = {
         systemPrompt,
         messages: [{ role: 'user', content: userContent }],
         model: 'memory-extractor',
-        ...(args.signal ? { signal: args.signal } : {}),
-      });
+      };
+      const response = await callUnder(request, args.signal, (wired) => provider.complete(wired));
 
       return parseFactsResponse(response.content ?? '', onParseError);
     },

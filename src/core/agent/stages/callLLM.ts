@@ -59,6 +59,12 @@ import { findStagedRefs, stagedRefsNudgeLine } from '../stagedRefs.js';
 import { fileIntegrityFindings } from '../integrityFindings.js';
 import { resilienceHooks } from '../../../recorders/core/resilienceHooks.js';
 import { replayAttempts } from '../../../resilience/replayAttempt.js';
+import {
+  abortableIterable,
+  throwIfAborted,
+  untilAborted,
+  withRequestSignal,
+} from '../../../lib/abort.js';
 import { tagThinkingResponse } from '../../../thinking/dispatch.js';
 import type { InjectionRecord } from '../../../recorders/core/types.js';
 import { emitCostTick, type ResolvedCostBudget } from '../../cost.js';
@@ -967,10 +973,25 @@ export function buildCallLLMStage(
       deps.onReplayPrepared,
     );
     let answeredBy = { provider: provider.name, model };
+    // THE RUN'S SIGNAL REACHES THE WIRE. Every attempt carries it on its
+    // request (`LLMRequest.signal`), so an aborted or timed-out run cancels the
+    // provider's own HTTP request — the engine stopping the traversal leaves a
+    // call in flight running, and billing. It already holds the run's deadline
+    // (`RunnerBase · runSignalOf`). Stamped here, at the dispatch, and
+    // never on `llmRequest`: the receipt above hashes that object, and a signal
+    // is no part of what was asked. The same signal bounds every wait below,
+    // so an adapter that ignores it still cannot hold the stage open, and an
+    // answer that lands after it is refused before anything records or bills
+    // it (`lib/abort.ts`, law 4).
+    const runSignal = scope.$getEnv?.()?.signal;
     const singleProviderCall: LLMCallFn = async (req, hooks): Promise<LLMResponse> => {
       const selectedProvider = hooks.provider ?? provider;
       assertForcedRequestSupported(selectedProvider, req);
-      const attempts = replayAttempts(req, hooks.providerHooks ?? providerHooks);
+      throwIfAborted(runSignal);
+      const attempts = replayAttempts(
+        withRequestSignal(req, runSignal),
+        hooks.providerHooks ?? providerHooks,
+      );
       let resp: LLMResponse | undefined;
       let firstChunkFired = false;
       // THE STREAM CARRIES WHAT STANDS (9.114.2, `.findings()`): each chunk
@@ -985,7 +1006,10 @@ export function buildCallLLMStage(
           : undefined;
       let lastTokenIndex = -1;
       if (selectedProvider.stream) {
-        for await (const chunk of selectedProvider.stream(attempts.request, attempts.hooks)) {
+        for await (const chunk of abortableIterable(
+          selectedProvider.stream(attempts.request, attempts.hooks),
+          runSignal,
+        )) {
           if (chunk.done) {
             if (chunk.response) resp = chunk.response;
             break;
@@ -1047,8 +1071,14 @@ export function buildCallLLMStage(
         // those are two genuinely billed calls and collapsing them would
         // hide real double-billing. (That this branch can re-call at all
         // after a stream is a pre-existing quirk; see MENTAL_MODEL §14.)
-        resp = await selectedProvider.complete(attempts.request, attempts.hooks);
+        resp = await untilAborted(
+          selectedProvider.complete(attempts.request, attempts.hooks),
+          runSignal,
+        );
       }
+      // An answer that arrived after the abort is not an answer: refused here,
+      // before the usage is counted, the turn committed or `llm_end` fired.
+      throwIfAborted(runSignal);
       // `'tool-forced'`: the answer arrived as the synthetic tool's ARGUMENTS,
       // so it is moved into `content` and the call is taken off the list here,
       // at the single seam every later reader goes through. Everything

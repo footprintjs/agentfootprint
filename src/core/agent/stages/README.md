@@ -234,7 +234,7 @@ cancelled run up to the loop's cap), never counted against a breaker — and a c
 that returned anyway is not judged or retried. No `reliability.*` event, no
 record. The loop reads the signal from `$getEnv()`, so EVERY runner's `run` /
 `resume` hands a signal passed as `{ signal }` to the stages too
-(`core/RunnerBase.ts` · `withRunSignalInEnv`) — a composition included: an
+(`core/RunnerBase.ts` · `runSignalOf`) — a composition included: an
 agent inside one used to retry a cancelled call up to its cap. Recorded: a
 stage that calls `$getEnv()` on such a run is marked
 `untrackedSources: ['env']`, and tools see the signal as `ctx.signal`. Pinned

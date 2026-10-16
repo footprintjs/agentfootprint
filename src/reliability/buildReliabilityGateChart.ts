@@ -68,6 +68,7 @@ import { classifyError } from './classifyError.js';
 import type { ReliabilityConfig, ReliabilityRule, ReliabilityScope } from './types.js';
 import { typedEmit } from '../recorders/core/typedEmit.js';
 import { resilienceHooks } from '../recorders/core/resilienceHooks.js';
+import { callUnder, throwIfAborted } from '../lib/abort.js';
 
 // ─── Stage IDs (also used for narrative/topology readability) ────────
 
@@ -246,6 +247,7 @@ export function buildReliabilityGateChart(config: ReliabilityConfig): FlowChart 
     }
 
     const t0 = Date.now();
+    const runSignal = scope.$getEnv?.()?.signal;
     try {
       // Breaker check (pure): admit + transition based on cooldown.
       if (breakerConfig !== undefined) {
@@ -272,9 +274,11 @@ export function buildReliabilityGateChart(config: ReliabilityConfig): FlowChart 
       // `singleProviderCall` in `core/agent/stages/callLLM.ts`, which
       // passes the same hooks. Wiring the dead site anyway keeps it from
       // being a silent hole if the chart is ever revived.
-      const response: LLMResponse = await providerEntry.provider.complete(
+      // The run's signal rides the request (lib/abort.ts · callUnder).
+      const response: LLMResponse = await callUnder(
         scope.request as LLMRequest,
-        resilienceHooks(scope),
+        runSignal,
+        (wired) => providerEntry.provider.complete(wired, resilienceHooks(scope)),
       );
       scope.response = response;
       scope.error = undefined;
@@ -287,6 +291,9 @@ export function buildReliabilityGateChart(config: ReliabilityConfig): FlowChart 
         );
       }
     } catch (err) {
+      // A cancelled run is not a provider failure: never classified, counted
+      // against a breaker or handed to a rule that might re-ask it.
+      throwIfAborted(runSignal);
       scope.response = undefined;
       scope.error = err instanceof Error ? err : new Error(String(err));
       scope.errorKind = classifyError(err);

@@ -201,6 +201,14 @@ const PROVIDER_LEAVES: ReadonlyArray<readonly [file: string, why: string]> = [
       'door shares. Character arithmetic over a string, ZERO imports, nothing in it that ' +
       'knows what an agent or a provider is.',
   ],
+  [
+    'src/lib/abort.ts',
+    '`callUnder` — a constrained-enum pick IS a model call, and a cancelled run must ' +
+      'cancel it: the signal rides the request, the wait is raced against it, and an ' +
+      'answer that lands after it is refused rather than taken as a pick. The one owner ' +
+      'of that rule for every provider call in the library. Helpers over `AbortSignal`, ' +
+      'ZERO imports, nothing in it that knows what an agent or a provider is.',
+  ],
 ];
 
 /** Files where importing the framework is the job. Listed so the zone check
