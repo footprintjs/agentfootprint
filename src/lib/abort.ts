@@ -25,7 +25,15 @@
  *      generating for nobody;
  *   4. nothing that arrives LATE counts — a response or chunk that lands after
  *      the abort is refused with the abort, never returned as a success, so it
- *      cannot be recorded as an answer or billed into a run's usage.
+ *      cannot be recorded as an answer or billed into a run's usage. "After"
+ *      means after the abort was SEEN: a read that settled a moment before the
+ *      abort, but whose reader had not yet run, is refused too — the signal is
+ *      checked again after every wait, not only raced during it.
+ *
+ * And a CLOSE is a wait like any other: a consumer that stops early waits for
+ * the transport to finish closing while the signal is live; once it fires,
+ * that wait ends with the abort (never as a clean finish — the stream did not
+ * close) and the caller's own close runs, so the transport is shut either way.
  *
  * ── WHAT AN ABORT REACHES THE CALLER AS ──────────────────────────────────
  * The signal's own `reason` when it is an `Error` — what every runtime
@@ -239,7 +247,9 @@ export async function awaitUnder<T>(
  * then its iterator's `return()` — and the iteration rejects with the abort. A
  * step that lands after the abort is refused, never handed on. A consumer that
  * stops early (`break`, a throw) on a live signal closes the source as
- * `for await` does — its `return()` waited for, its errors propagated.
+ * `for await` does — its `return()` waited for, its errors propagated; an
+ * abort during that wait ends it with the abort and runs `close()`, so the
+ * transport is closed even when its `return()` never finishes.
  *
  * The source's `return()` is NOT awaited: a source suspended inside its own
  * await (a read the transport will never answer) cannot finish returning, and
@@ -283,12 +293,20 @@ export function abortableIterable<T>(
         async return(value?: unknown): Promise<IteratorResult<T>> {
           // A consumer that stops early on a live signal closes the source
           // the way `for await` always did: waited for, its errors its own.
-          // Only once the signal has fired is the close not waited for.
+          // Once the signal fires — before or DURING that wait — the close is
+          // not waited for: the caller's `close()` shuts the transport (its
+          // `return()` was already asked) and the abort is what comes back.
           if (!shut && !watched.aborted) {
             shut = true;
-            await untilAborted(it.return?.(value), watched).catch((err: unknown) => {
+            try {
+              await untilAborted(it.return?.(value), watched);
+            } catch (err) {
               if (!watched.aborted) throw err;
-            });
+            }
+            if (watched.aborted) {
+              settleQuietly(() => close?.());
+              throw abortErrorOf(watched);
+            }
             return { done: true, value: value as T };
           }
           closeSource();
@@ -301,10 +319,12 @@ export function abortableIterable<T>(
 
 /**
  * The chunks of a fetch body, read under `signal` — the raw-`fetch` adapters'
- * one reader. Each read is raced against the signal, and the body is
- * CANCELLED on every way out (the end, a consumer that stops early, an error,
- * an abort): an open body is a socket held and, on a local model, a
- * generation that keeps running for nobody.
+ * one reader. Each read is raced against the signal and the signal checked
+ * again once it settles, so a chunk read a moment before the abort is never
+ * handed on. The body is CANCELLED on every way out (the end, a consumer that
+ * stops early, an error, an abort): an open body is a socket held and, on a
+ * local model, a generation that keeps running for nobody. A cancel waited on
+ * by a consumer that stopped early ends with the abort if one fires during it.
  */
 export async function* bodyChunks(
   body: ReadableStream<Uint8Array>,
@@ -314,18 +334,29 @@ export async function* bodyChunks(
   try {
     for (;;) {
       const { value, done } = await untilAborted(reader.read(), signal);
+      throwIfAborted(signal);
       if (done) return;
       if (value !== undefined) yield value;
     }
   } finally {
-    // Not awaited when aborted: a reader whose transport ignores the abort may
-    // never settle its cancel, and the caller is owed the abort now.
+    // Not waited for once aborted — before the cancel or during it: a reader
+    // whose transport ignores the abort may never settle its cancel, and the
+    // caller is owed the abort now.
     const cancelled = reader.cancel().catch(() => undefined);
-    if (!signal?.aborted) await cancelled;
     try {
-      reader.releaseLock();
-    } catch {
-      /* a lock the runtime already dropped, or a read still pending */
+      // Only an abort that lands DURING the wait is thrown here: one that
+      // fired before it is already the error on its way out (or a consumer
+      // that broke after aborting, which exits cleanly, as abortableIterable).
+      if (!signal?.aborted) {
+        await untilAborted(cancelled, signal);
+        throwIfAborted(signal);
+      }
+    } finally {
+      try {
+        reader.releaseLock();
+      } catch {
+        /* a lock the runtime already dropped, or a read still pending */
+      }
     }
   }
 }

@@ -628,6 +628,9 @@ async function* readGatewayEvents(
         reader.read(),
         chunks === 0 ? 'the first stream chunk' : 'the next stream chunk',
       );
+      // A read that settled a moment before the abort is still refused
+      // (lib/abort.ts, law 4).
+      throwIfAborted(deadline.signal);
       if (done) break;
       chunks++;
       buffered += decoder.decode(value, { stream: true });
@@ -646,13 +649,23 @@ async function* readGatewayEvents(
     // early, an error event, the deadline, the caller's abort — so a stream
     // nobody reads never holds its socket open. Not awaited once aborted: a
     // transport that ignores the abort may never settle its cancel, and the
-    // caller is owed the abort now (lib/abort.ts · bodyChunks, the same rule).
+    // caller is owed the abort now — also when it fires DURING the wait
+    // (lib/abort.ts · bodyChunks, the same rule).
     const cancelled = reader.cancel().catch(() => undefined);
-    if (!deadline.signal?.aborted) await cancelled;
     try {
-      reader.releaseLock();
-    } catch {
-      /* a read still pending, or a lock the runtime already dropped */
+      // Only an abort that lands DURING the wait is thrown here: one that
+      // fired before it is already the error on its way out (or a consumer
+      // that broke after aborting, which exits cleanly, as abortableIterable).
+      if (!deadline.signal?.aborted) {
+        await untilAborted(cancelled, deadline.signal);
+        throwIfAborted(deadline.signal);
+      }
+    } finally {
+      try {
+        reader.releaseLock();
+      } catch {
+        /* a read still pending, or a lock the runtime already dropped */
+      }
     }
   }
 }
