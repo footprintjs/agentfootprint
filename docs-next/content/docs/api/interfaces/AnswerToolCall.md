@@ -34,9 +34,10 @@ The tool name the model called (a registered name, or an unknown one it made up)
 
 > `readonly` **outcome**: `"ok"` \| `"error"` \| `"not-run"`
 
-Defined in: [src/answer-validation/types.ts:56](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L56)
+Defined in: [src/answer-validation/types.ts:57](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L57)
 
-`ok`: the tool ran and returned. `error`: it threw, declared `failure`,
+`ok`: the tool ran and returned — including a call that paused for a
+person, whose answer on `resume()` is its result. `error`: it threw, declared `failure`,
 `denied` or `invalid`, or could not run as written (an unknown name,
 rejected arguments, a missing consent). `not-run`: it never ran (a
 permission policy, an `onToolCall` link or a person declined it, or a

@@ -4,7 +4,7 @@ title: AnswerValidationOptions<T>
 
 # Interface: AnswerValidationOptions\<T\>
 
-Defined in: [src/answer-validation/types.ts:114](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L114)
+Defined in: [src/answer-validation/types.ts:115](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L115)
 
 Opt-in contract. The callback cannot replace the accepted answer.
 
@@ -20,7 +20,7 @@ Opt-in contract. The callback cannot replace the accepted answer.
 
 > `readonly` **id**: `string`
 
-Defined in: [src/answer-validation/types.ts:115](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L115)
+Defined in: [src/answer-validation/types.ts:116](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L116)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [src/answer-validation/types.ts:115](https://github.com/footprintjs/
 
 > `readonly` `optional` **limits?**: `AnswerValidationLimits`
 
-Defined in: [src/answer-validation/types.ts:119](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L119)
+Defined in: [src/answer-validation/types.ts:120](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L120)
 
 ***
 
@@ -36,7 +36,7 @@ Defined in: [src/answer-validation/types.ts:119](https://github.com/footprintjs/
 
 > `readonly` `optional` **mode?**: `"enforce"` \| `"observe"`
 
-Defined in: [src/answer-validation/types.ts:118](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L118)
+Defined in: [src/answer-validation/types.ts:119](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L119)
 
 Enforce withholds non-passing results; observe records them. Default enforce.
 
@@ -46,7 +46,7 @@ Enforce withholds non-passing results; observe records them. Default enforce.
 
 > `readonly` **version**: `string`
 
-Defined in: [src/answer-validation/types.ts:116](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L116)
+Defined in: [src/answer-validation/types.ts:117](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L117)
 
 ## Methods
 
@@ -54,7 +54,7 @@ Defined in: [src/answer-validation/types.ts:116](https://github.com/footprintjs/
 
 > **validate**(`candidate`, `context`): `AnswerValidationResult` \| `Promise`\<`AnswerValidationResult`\>
 
-Defined in: [src/answer-validation/types.ts:120](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L120)
+Defined in: [src/answer-validation/types.ts:121](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L121)
 
 #### Parameters
 
