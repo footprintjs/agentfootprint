@@ -167,7 +167,26 @@ export interface AgentCoreRuntimeMcpTransportOptions {
    * client keeps whatever policy you gave it.
    */
   readonly client?: AgentCoreRuntimeSdkClient;
-  /** @internal Test injection — the AWS SDK module. */
+  /**
+   * SigV4 only: the `@aws-sdk/client-bedrock-agentcore` module, imported by
+   * YOU. Refused with `{ bearer }`, which loads no AWS SDK.
+   *
+   * Without it the transport loads the SDK itself through a lazy `require`,
+   * which a bundler (esbuild, webpack) cannot follow. Pass it when your app is
+   * bundled, so the bundler sees a static import: import the package's
+   * namespace (`import * as agentCoreSdk`, from `@aws-sdk/client-bedrock-agentcore`)
+   * and call `agentCoreRuntimeMcpTransport({ agentRuntimeArn, region, sdk: agentCoreSdk })`.
+   *
+   * The transport still builds its own client from it, with the SDK's retry
+   * off. Either way the SDK is read when the transport is built, so a missing
+   * one is refused there, not at the first tool call.
+   */
+  readonly sdk?: BedrockAgentCoreRuntimeSdkModule;
+  /**
+   * @deprecated Use {@link AgentCoreRuntimeMcpTransportOptions.sdk}. Kept
+   * because it shipped in the published options type; it means exactly `sdk`,
+   * and passing both with different modules is refused.
+   */
   readonly _sdk?: BedrockAgentCoreRuntimeSdkModule;
 }
 
@@ -184,8 +203,10 @@ const REGION_SHAPE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
  * An MCP transport for a server hosted on AgentCore Runtime.
  *
  * @throws when the runtime or region is missing, when a strategy is unknown,
- *   when `client` is given beside `{ bearer }`, or — for `'sigv4'` — when the
- *   AWS SDK peer dependency cannot be loaded.
+ *   when `client` or `sdk` is given beside `{ bearer }`, or — for `'sigv4'` —
+ *   when the AWS SDK peer dependency cannot be loaded and no `sdk` was passed.
+ *   All of these are thrown here, when the transport is built, never at the
+ *   first call.
  */
 export function agentCoreRuntimeMcpTransport(
   options: AgentCoreRuntimeMcpTransportOptions,
@@ -259,11 +280,12 @@ export function agentCoreRuntimeUrl(options: AgentCoreRuntimeUrlOptions): string
 /** The innermost `fetch`: the one that authenticates and sends. */
 function authStrategy(options: AgentCoreRuntimeMcpTransportOptions, url: string): ThrottleFetch {
   const auth = options.auth ?? 'sigv4';
+  const sdk = injectedSdk(options);
   if (auth === 'sigv4') {
     const { client, InvokeAgentRuntimeCommand } = invokeSdk({
       region: options.region,
       ...(options.client !== undefined && { client: options.client }),
-      ...(options._sdk !== undefined && { sdk: options._sdk }),
+      ...(sdk !== undefined && { sdk }),
     });
     return invokeFetch(
       {
@@ -281,6 +303,13 @@ function authStrategy(options: AgentCoreRuntimeMcpTransportOptions, url: string)
         'agentCoreRuntimeMcpTransport: `auth.bearer` must be a CredentialProvider (an object ' +
           'with getCredential — agentCoreIdentity(), staticTokens(), your own), not the token ' +
           'itself: a token is vended per request so it can rotate, and is never held here.',
+      );
+    }
+    if (sdk !== undefined) {
+      throw new TypeError(
+        'agentCoreRuntimeMcpTransport: `sdk` is the SigV4 strategy’s AWS SDK module, and ' +
+          '`auth: { bearer }` sends no AWS SDK request — this path is plain HTTPS and loads no ' +
+          'AWS SDK. Remove `sdk`, or use `auth: "sigv4"`.',
       );
     }
     if (options.client !== undefined) {
@@ -323,6 +352,20 @@ function authStrategy(options: AgentCoreRuntimeMcpTransportOptions, url: string)
       `— got ${describe(auth)}. Which one is decided by the runtime's inbound auth: IAM is ` +
       "'sigv4', an OAuth (JWT) authorizer is a bearer token.",
   );
+}
+
+/** The injected SDK module: `sdk`, or the older `_sdk` spelling of it. */
+function injectedSdk(
+  options: AgentCoreRuntimeMcpTransportOptions,
+): BedrockAgentCoreRuntimeSdkModule | undefined {
+  const { sdk, _sdk: legacy } = options;
+  if (sdk !== undefined && legacy !== undefined && sdk !== legacy) {
+    throw new TypeError(
+      'agentCoreRuntimeMcpTransport: `sdk` and `_sdk` name two different AWS SDK modules. ' +
+        '`_sdk` is the older spelling of `sdk`; pass only `sdk`.',
+    );
+  }
+  return sdk ?? legacy;
 }
 
 // ── The retry strategy's configuration ────────────────────────────────

@@ -463,7 +463,10 @@ endpoint; pass your own credential provider and drop the stand-in `fetch` to rea
 For a bearer token from AgentCore Identity, `service` is the name of your OAuth2
 credential provider: `auth: { bearer: agentCoreIdentity({ region }), service: 'my-runtime-oauth' }`.
 For IAM, omit `auth` (SigV4 is the default) — the AWS SDK signs with your
-credential chain.
+credential chain. In a bundled app (esbuild, webpack), import
+`@aws-sdk/client-bedrock-agentcore` yourself and pass it as `sdk`, because a
+bundler cannot follow the transport's lazy load. See
+[Bundling](/docs/build/mcp-client#bundling-esbuild-webpack).
 
 Three choices, each a strategy you pick by name:
 

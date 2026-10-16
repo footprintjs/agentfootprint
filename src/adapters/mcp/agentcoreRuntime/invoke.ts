@@ -100,7 +100,7 @@ export interface InvokeSdkOptions {
    * so build it with `maxAttempts: 1` (see the module note).
    */
   readonly client?: AgentCoreRuntimeSdkClient;
-  /** The SDK module itself, for tests; otherwise the peer dep is loaded. */
+  /** The SDK module the caller imported; otherwise the peer dep is loaded. */
   readonly sdk?: BedrockAgentCoreRuntimeSdkModule;
 }
 
@@ -117,18 +117,22 @@ export function invokeSdk(options: InvokeSdkOptions): {
   readonly InvokeAgentRuntimeCommand: new (input: unknown) => unknown;
 } {
   const mod = options.sdk ?? loadSdk();
+  // Whose module it is decides the advice: an injected one may simply be the
+  // wrong import, a loaded one an old install.
+  const source =
+    options.sdk === undefined
+      ? `\`${SDK_PACKAGE}\` is installed but has no`
+      : `the \`sdk\` you passed (it should be \`import * as sdk from '${SDK_PACKAGE}'\`) has no`;
   const Command = mod.InvokeAgentRuntimeCommand;
-  if (!Command) {
+  if (typeof Command !== 'function') {
     throw new Error(
-      `agentCoreRuntimeMcpTransport: \`${SDK_PACKAGE}\` is installed but has no ` +
-        '`InvokeAgentRuntimeCommand`. Upgrade the SDK.',
+      `agentCoreRuntimeMcpTransport: ${source} \`InvokeAgentRuntimeCommand\`. Upgrade the SDK.`,
     );
   }
   if (options.client) return { client: options.client, InvokeAgentRuntimeCommand: Command };
-  if (!mod.BedrockAgentCoreClient) {
+  if (typeof mod.BedrockAgentCoreClient !== 'function') {
     throw new Error(
-      `agentCoreRuntimeMcpTransport: \`${SDK_PACKAGE}\` is installed but has no ` +
-        '`BedrockAgentCoreClient`. Upgrade the SDK.',
+      `agentCoreRuntimeMcpTransport: ${source} \`BedrockAgentCoreClient\`. Upgrade the SDK.`,
     );
   }
   return {
@@ -148,13 +152,16 @@ function loadSdk(): BedrockAgentCoreRuntimeSdkModule {
           `agentCoreRuntimeMcpTransport (auth: 'sigv4') requires the \`${SDK_PACKAGE}\` peer ` +
           'dependency.\n' +
           `  Install:  npm install ${SDK_PACKAGE}\n` +
+          '  Installed, and your app is bundled (esbuild, webpack)? The bundler cannot follow\n' +
+          '  this lazy load: import the SDK yourself and pass it as `sdk`\n' +
+          `  (import * as sdk from '${SDK_PACKAGE}'; agentCoreRuntimeMcpTransport({ ..., sdk })).\n` +
           '  Or use `auth: { bearer }` for a runtime with OAuth inbound auth — that path is plain\n' +
           '  HTTPS and loads no AWS SDK.',
         caller: 'agentCoreRuntimeMcpTransport',
         specifier: SDK_PACKAGE,
         instead:
-          'SigV4 signs with AWS credentials, which belong on a server. From a browser, use ' +
-          '`auth: { bearer }` — plain HTTPS, no AWS SDK.',
+          'Pass the SDK module you imported as `sdk`. SigV4 signs with AWS credentials, which ' +
+          'belong on a server: from a browser, use `auth: { bearer }` — plain HTTPS, no AWS SDK.',
       }),
     );
   }

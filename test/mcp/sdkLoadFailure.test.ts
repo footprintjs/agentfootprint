@@ -96,7 +96,7 @@ describe('mcpClient — which message a real failed load produces', () => {
     },
   });
 
-  it('an absent package is still reported exactly as it always was', async () => {
+  it('an absent package is reported as absent, and names the `sdk` hook a bundled app needs', async () => {
     vi.resetModules();
     vi.doMock('../../src/lib/lazyRequire.js', () =>
       failingLoader(new Error("Cannot find module '@modelcontextprotocol/sdk/client/index.js'")),
@@ -105,7 +105,13 @@ describe('mcpClient — which message a real failed load produces', () => {
       const fresh = await import('../../src/mcp/mcpClient.js');
       await expect(
         fresh.mcpClient({ transport: { transport: 'http', url: 'https://example.invalid/mcp' } }),
-      ).rejects.toThrow(HISTORICAL_CLIENT_MESSAGE);
+      ).rejects.toThrow(
+        'mcpClient requires @modelcontextprotocol/sdk.\n' +
+          '  Install:  npm install @modelcontextprotocol/sdk\n' +
+          '  Installed, and your app is bundled (esbuild, webpack)? The bundler cannot follow\n' +
+          '  this lazy load: import the SDK yourself and pass it as `sdk`\n' +
+          '  (sdk: { Client, StreamableHTTPClientTransport }), or pass `connection`.',
+      );
     } finally {
       vi.doUnmock('../../src/mcp/mcpClient.js');
       vi.doUnmock('../../src/lib/lazyRequire.js');

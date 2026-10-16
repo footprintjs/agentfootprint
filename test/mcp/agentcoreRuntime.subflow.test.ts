@@ -133,7 +133,7 @@ async function branchClient(
           }),
       },
       ...(auth === 'sigv4'
-        ? { _sdk: runtime.sdk }
+        ? { sdk: runtime.sdk }
         : auth === 'sigv4-callers'
         ? {
             // A client the caller built, holding its own keys — they must never
@@ -142,7 +142,7 @@ async function branchClient(
               region: REGION,
               credentials: SDK_KEYS,
             }),
-            _sdk: runtime.sdk,
+            sdk: runtime.sdk,
           }
         : { auth: { bearer: staticTokens({ runtime: auth.token }), fetch: runtime.https } }),
     }),
@@ -310,7 +310,7 @@ describe('runtime-hosted MCP — inside a PARALLEL fan-out', () => {
       transport: agentCoreRuntimeMcpTransport({
         agentRuntimeArn: ARN,
         region: REGION,
-        _sdk: runtime.sdk,
+        sdk: runtime.sdk,
       }),
     });
     const tools = await client.tools();

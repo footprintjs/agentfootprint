@@ -328,6 +328,71 @@ the first time a tool with an `outputSchema` is validated — escapable only
 through the SDK's `jsonSchemaValidator`, which is why the `connection` arm
 exists beside `sdk`.
 
+## Bundling (esbuild, webpack)
+
+`mcpClient` loads `@modelcontextprotocol/sdk`, and
+`agentCoreRuntimeMcpTransport` (SigV4) loads `@aws-sdk/client-bedrock-agentcore`,
+through a lazy `require` — so an app that never uses MCP never needs the SDK. A
+bundler cannot follow that `require`: esbuild and webpack leave it for run time,
+and a bundle deployed without `node_modules` (a Lambda zip, a container that
+copies only the bundle) cannot find the SDK there.
+
+**Import the SDKs yourself and pass them as `sdk`.** Your static imports are
+what the bundler follows, and the library never touches its loader:
+
+```ts
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import * as agentCoreSdk from '@aws-sdk/client-bedrock-agentcore';
+import { agentCoreRuntimeMcpTransport, mcpClient } from 'agentfootprint/providers';
+
+const orders = await mcpClient({
+  name: 'orders',
+  sdk: { Client, StreamableHTTPClientTransport },       // the MCP SDK
+  transport: agentCoreRuntimeMcpTransport({
+    agentRuntimeArn: process.env.ORDERS_RUNTIME_ARN!,
+    region: 'us-west-2',
+    sdk: agentCoreSdk,                                  // the AWS SDK (SigV4 only)
+  }),
+});
+```
+
+Then bundle as usual. With esbuild:
+
+```sh
+esbuild src/server.ts --bundle --platform=node --format=esm --outfile=dist/server.mjs
+```
+
+With webpack, target Node and keep the SDKs in the bundle (do not list them in
+`externals`):
+
+```js
+// webpack.config.cjs
+module.exports = {
+  target: 'node',
+  entry: './src/server.ts',
+  output: { filename: 'server.cjs', library: { type: 'commonjs2' } },
+  resolve: { extensions: ['.ts', '.js'] },
+  module: { rules: [{ test: /\.ts$/, loader: 'ts-loader' }] },
+};
+```
+
+**A missing SDK is refused when you build the client, not at the first tool
+call.** `mcpClient()` reads both MCP modules before it connects, and
+`agentCoreRuntimeMcpTransport()` reads the AWS SDK when it is called. Without
+`sdk`, a bundle that cannot find a package fails right there, with a message
+that names `sdk`. A wrong `sdk` is refused by name too (a missing `Client`,
+`StreamableHTTPClientTransport`, `InvokeAgentRuntimeCommand` or
+`BedrockAgentCoreClient`), never later as "is not a constructor".
+
+Two notes:
+
+- `stdio` always loads `client/stdio.js` through the loader. It spawns a
+  subprocess, so it belongs in an unbundled Node process.
+- `_sdk` on `agentCoreRuntimeMcpTransport` is the older name of `sdk`. It still
+  works and means exactly the same thing, but passing both with two different
+  modules is refused.
+
 ## What the package exports
 
 From `agentfootprint/providers`:
