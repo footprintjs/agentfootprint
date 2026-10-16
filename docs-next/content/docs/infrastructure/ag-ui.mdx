@@ -170,8 +170,8 @@ on its own (`AgUiOptions`):
 
 | Strategy | Default | A gateway's own |
 |---|---|---|
-| `reader` — a body → the turn it asks for (`AgUiRequestReader`) | the body is a `RunAgentInput` | maps its body onto an `AgUiTurnRequest` |
-| `translation` — one run's served events → AG-UI events (`AgUiTranslationStrategy`) | `agUiSerializer`, tuned by `custom` and `reasoning` | rarely needed: the AG-UI vocabulary is unchanged |
+| `reader` — a body → the turn it asks for (`AgUiRequestReader`, handed `AgUiRequestFacts`: the parsed body and the headers) | the body is a `RunAgentInput` | maps its body onto an `AgUiTurnRequest` |
+| `translation` — one run's served events → AG-UI events (`AgUiTranslationStrategy`, opened with `AgUiTranslationRun`: the checked thread and run ids, and the pause it continues) | `agUiSerializer`, tuned by `custom` and `reasoning` | rarely needed: the AG-UI vocabulary is unchanged |
 | `framing` — each AG-UI event → its bytes (`SseFraming`) | `agUiSse()`, the official encoder's frames | writes its envelope |
 
 The reader only MAPS. Whatever it returns — an `AgUiTurnRequest`: the thread and
