@@ -482,6 +482,9 @@ export class Graph extends RunnerBase<GraphInput, GraphOutput> {
   }
 
   async run(input: GraphInput, options?: RunOptions): Promise<GraphOutput | RunnerPauseOutcome> {
+    // The incoming request, refused here — before anything moves — when
+    // requestContext() did not build it.
+    const request = requestOf(options, 'graph.run');
     const executor = this.createExecutor();
     this.lastExecutor = executor;
     // The run every node serves — the caller's identity when the input names
@@ -490,7 +493,7 @@ export class Graph extends RunnerBase<GraphInput, GraphOutput> {
       this.currentRunContext.runId,
       (input as { readonly identity?: MemoryIdentity } | undefined)?.identity,
       'graph.run',
-      requestOf(options, 'graph.run'),
+      request,
     );
     try {
       let result: unknown;
@@ -514,17 +517,15 @@ export class Graph extends RunnerBase<GraphInput, GraphOutput> {
     input?: unknown,
     options?: RunOptions,
   ): Promise<GraphOutput | RunnerPauseOutcome> {
-    // The leg's policy — the paused run's marks — goes to ITS executor, never via the instance.
-    const resumeLeg = this.emitPauseResume(checkpoint, input);
-    const executor = this.createExecutor(resumeLeg);
-    this.lastExecutor = executor;
-    // The paused run its members serve, re-opened from the checkpoint's own record.
-    const parentRun = reopenParentRun(
-      checkpoint.sharedState,
-      'graph.resume',
-      requestOf(options, 'graph.resume'),
-    );
+    // The incoming request, and the paused run its members serve (re-opened
+    // from the checkpoint's own record) — both refused before anything moves.
+    const request = requestOf(options, 'graph.resume');
+    const parentRun = reopenParentRun(checkpoint.sharedState, 'graph.resume', request);
     try {
+      // The leg's policy — the paused run's marks — goes to ITS executor, never via the instance.
+      const resumeLeg = this.emitPauseResume(checkpoint, input);
+      const executor = this.createExecutor(resumeLeg);
+      this.lastExecutor = executor;
       let result: unknown;
       try {
         result = await executor.resume(checkpoint, input, withRunSignalInEnv(options));

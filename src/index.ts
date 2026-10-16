@@ -724,7 +724,7 @@ export {
 export {
   MemberIdentityError,
   ParentRunRefusedError,
-  RequestOfRunConflictError,
+  ResumeRequestConflictError,
 } from './core/memberRun.js';
 export {
   flowchartAsTool,

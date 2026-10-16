@@ -2383,6 +2383,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // else's conversation.
     this.assertNotRunning('Agent.resumeOnError');
     this.assertNoPendingQuestion('Agent.resumeOnError');
+    // A request `run()` would refuse is refused HERE, before the side channel
+    // below is armed — a refusal after it would leave the restored history for
+    // the next, unrelated run.
+    requestOf(options, 'Agent.resumeOnError');
     // Stash the checkpointed history on the side channel; the seed function
     // reads + clears it before scope.history initializes. No message is
     // appended — the failing run's message is already the last user turn in

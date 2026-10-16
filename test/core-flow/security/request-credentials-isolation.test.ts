@@ -252,9 +252,12 @@ describe('request credentials — pause and resume', () => {
   });
 });
 
-describe('request credentials — a run aborted mid-batch', () => {
-  it('its remaining calls never receive the NEXT run’s request on the same instance', async () => {
-    const auths: { label: string; auth?: string; refused?: string }[] = [];
+describe('request credentials — a tool still running after its run was aborted', () => {
+  // Pins the per-scope binding: a stage outliving an aborted run, on an
+  // instance that has since started another run, still reads its OWN run's
+  // request — never the next one's.
+  it('keeps its own run’s request while the next run on the instance has another', async () => {
+    const seen: { label: string; pulled?: string }[] = [];
     let release!: () => void;
     const gate = new Promise<void>((r) => (release = r));
     const slow = defineTool({
@@ -264,11 +267,13 @@ describe('request credentials — a run aborted mid-batch', () => {
       needs: { credential: 'crm' },
       execute: async (args, ctx) => {
         const label = String((args as { label?: string }).label);
-        if (label === 'a-first') await gate;
-        auths.push({
-          label,
-          ...(ctx.credential && { auth: ctx.credential.toHeaders().authorization }),
-        });
+        if (label === 'a') await gate;
+        // Pulled AFTER the gate — after run A was aborted and run B ran.
+        const pulled = await ctx.credentials
+          .getCredential({ service: 'crm' })
+          .then((r) => (r.status === 'issued' ? r.credential.toHeaders().authorization : 'x'))
+          .catch((e: Error) => e.message);
+        seen.push({ label, pulled });
         return 'noted';
       },
     });
@@ -278,16 +283,8 @@ describe('request credentials — a run aborted mid-batch', () => {
         respond: (req) => {
           turn++;
           if (req.messages.some((m) => m.role === 'tool')) return { content: 'ok' };
-          // Run A's one batch: two calls, the first held at the gate.
-          if (turn === 1) {
-            return {
-              toolCalls: [
-                { id: 'a1', name: 'crm_lookup', args: { label: 'a-first' } },
-                { id: 'a2', name: 'crm_lookup', args: { label: 'a-second' } },
-              ],
-            };
-          }
-          return { toolCalls: [{ id: 'b1', name: 'crm_lookup', args: { label: 'b' } }] };
+          const label = turn === 1 ? 'a' : 'b';
+          return { toolCalls: [{ id: `c-${label}`, name: 'crm_lookup', args: { label } }] };
         },
       }),
       model: 'mock',
@@ -302,14 +299,13 @@ describe('request credentials — a run aborted mid-batch', () => {
       .catch(() => 'aborted');
     await new Promise((r) => setTimeout(r, 10));
     abort.abort();
-    await runA;
-    // The instance is free again: BOB's run starts while A's stage is still alive.
+    expect(await runA).toBe('aborted');
     await agent.run({ message: 'b' }, { request: requestFor(BOB_TOKEN) });
     release();
     await new Promise((r) => setTimeout(r, 30));
-    for (const a of auths.filter((x) => x.label.startsWith('a-'))) {
-      expect(a.auth).not.toBe(bearerOf(BOB_TOKEN));
-    }
-    expect(auths.find((x) => x.label === 'b')?.auth).toBe(bearerOf(BOB_TOKEN));
+    expect(seen).toEqual([
+      { label: 'b', pulled: bearerOf(BOB_TOKEN) },
+      { label: 'a', pulled: bearerOf(ALICE_TOKEN) },
+    ]);
   });
 });

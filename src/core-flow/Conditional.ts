@@ -191,6 +191,9 @@ export class Conditional extends RunnerBase<ConditionalInput, ConditionalOutput>
     input: ConditionalInput | string,
     options?: RunOptions,
   ): Promise<ConditionalOutput | RunnerPauseOutcome> {
+    // The incoming request, refused here — before anything moves — when
+    // requestContext() did not build it.
+    const request = requestOf(options, 'Conditional.run');
     const runInput = normalizeRunInput<ConditionalInput>(input, 'Conditional.run');
     const executor = this.createExecutor();
     this.lastExecutor = executor;
@@ -199,7 +202,7 @@ export class Conditional extends RunnerBase<ConditionalInput, ConditionalOutput>
       this.currentRunContext.runId,
       runInput.identity,
       'Conditional.run',
-      requestOf(options, 'Conditional.run'),
+      request,
     );
     try {
       const result = await executor.run({
@@ -218,17 +221,15 @@ export class Conditional extends RunnerBase<ConditionalInput, ConditionalOutput>
     input?: unknown,
     options?: RunOptions,
   ): Promise<ConditionalOutput | RunnerPauseOutcome> {
-    // The leg's policy — the paused run's marks — goes to ITS executor, never via the instance.
-    const resumeLeg = this.emitPauseResume(checkpoint, input);
-    const executor = this.createExecutor(resumeLeg);
-    this.lastExecutor = executor;
-    // The paused run its members serve, re-opened from the checkpoint's own record.
-    const parentRun = reopenParentRun(
-      checkpoint.sharedState,
-      'Conditional.resume',
-      requestOf(options, 'Conditional.resume'),
-    );
+    // The incoming request, and the paused run its members serve (re-opened
+    // from the checkpoint's own record) — both refused before anything moves.
+    const request = requestOf(options, 'Conditional.resume');
+    const parentRun = reopenParentRun(checkpoint.sharedState, 'Conditional.resume', request);
     try {
+      // The leg's policy — the paused run's marks — goes to ITS executor, never via the instance.
+      const resumeLeg = this.emitPauseResume(checkpoint, input);
+      const executor = this.createExecutor(resumeLeg);
+      this.lastExecutor = executor;
       const result = await executor.resume(checkpoint, input, withRunSignalInEnv(options));
       return this.finalizeResult(executor, result);
     } finally {

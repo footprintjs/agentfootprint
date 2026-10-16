@@ -212,6 +212,9 @@ export class Loop extends RunnerBase<LoopInput, LoopOutput> {
     input: LoopInput | string,
     options?: RunOptions,
   ): Promise<LoopOutput | RunnerPauseOutcome> {
+    // The incoming request, refused here — before anything moves — when
+    // requestContext() did not build it.
+    const request = requestOf(options, 'Loop.run');
     const runInput = normalizeRunInput<LoopInput>(input, 'Loop.run');
     const executor = this.createExecutor();
     this.lastExecutor = executor;
@@ -220,7 +223,7 @@ export class Loop extends RunnerBase<LoopInput, LoopOutput> {
       this.currentRunContext.runId,
       runInput.identity,
       'Loop.run',
-      requestOf(options, 'Loop.run'),
+      request,
     );
     try {
       const result = await executor.run({
@@ -239,17 +242,15 @@ export class Loop extends RunnerBase<LoopInput, LoopOutput> {
     input?: unknown,
     options?: RunOptions,
   ): Promise<LoopOutput | RunnerPauseOutcome> {
-    // The leg's policy — the paused run's marks — goes to ITS executor, never via the instance.
-    const resumeLeg = this.emitPauseResume(checkpoint, input);
-    const executor = this.createExecutor(resumeLeg);
-    this.lastExecutor = executor;
-    // The paused run its members serve, re-opened from the checkpoint's own record.
-    const parentRun = reopenParentRun(
-      checkpoint.sharedState,
-      'Loop.resume',
-      requestOf(options, 'Loop.resume'),
-    );
+    // The incoming request, and the paused run its members serve (re-opened
+    // from the checkpoint's own record) — both refused before anything moves.
+    const request = requestOf(options, 'Loop.resume');
+    const parentRun = reopenParentRun(checkpoint.sharedState, 'Loop.resume', request);
     try {
+      // The leg's policy — the paused run's marks — goes to ITS executor, never via the instance.
+      const resumeLeg = this.emitPauseResume(checkpoint, input);
+      const executor = this.createExecutor(resumeLeg);
+      this.lastExecutor = executor;
       const result = await executor.resume(checkpoint, input, withRunSignalInEnv(options));
       return this.finalizeResult(executor, result);
     } finally {

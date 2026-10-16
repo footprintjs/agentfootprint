@@ -139,7 +139,7 @@ export function reopenParentRun(
   if (held !== undefined) {
     // The run is still open elsewhere. Its members already serve ONE request;
     // a resume naming another would hand them a second — refused, not merged.
-    if (held.request !== request) throw new RequestOfRunConflictError(door);
+    if (held.request !== request) throw new ResumeRequestConflictError(door);
     held.holders++;
   } else live.set(link, { run, holders: 1, ...(request !== undefined && { request }) });
   return { link, ...(held?.run ?? run) };
@@ -179,15 +179,15 @@ export function memberRequestIn(scope: object): RequestContext | undefined {
  * A resume names a request while the run it resumes is still open under
  * another — its members would serve two requests. Refused before anything runs.
  */
-export class RequestOfRunConflictError extends Error {
-  readonly code = 'ERR_REQUEST_OF_RUN_CONFLICT' as const;
+export class ResumeRequestConflictError extends Error {
+  readonly code = 'ERR_RESUME_REQUEST_CONFLICT' as const;
 
   constructor(door: string) {
     super(
       `${door}: the paused run is still open and serves another request — a resume cannot hand its ` +
         'members a second one. Resume it once the open leg has returned.',
     );
-    this.name = 'RequestOfRunConflictError';
+    this.name = 'ResumeRequestConflictError';
   }
 }
 

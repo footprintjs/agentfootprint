@@ -54,9 +54,13 @@ export interface RequestContextOptions {
  * when {@link requestContext} built it.
  */
 export interface RequestContext {
-  /** Brand — a value built anywhere else is refused, never read. */
-  readonly __requestContext: true;
+  /** Type-only brand: no value carries it at run time. A value built anywhere
+   *  else is refused at the door (`assertRequestContext`), never read. */
+  readonly [requestContextBrand]: never;
 }
+
+/** The brand's key — declared, never created; it exists only in the types. */
+declare const requestContextBrand: unique symbol;
 
 const PLACEHOLDER = '[request context]';
 

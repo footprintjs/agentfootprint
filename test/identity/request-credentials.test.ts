@@ -41,7 +41,7 @@ describe('requestContext — the sealed handle', () => {
 
   it('is recognised only when requestContext built it', () => {
     expect(isRequestContext(requestContext({ secrets: {} }))).toBe(true);
-    expect(isRequestContext({ __requestContext: true })).toBe(false);
+    expect(isRequestContext({ kind: 'request-context' })).toBe(false);
     expect(isRequestContext(structuredClone(requestContext({ secrets: { a: 'b' } })))).toBe(false);
   });
 

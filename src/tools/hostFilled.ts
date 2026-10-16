@@ -114,6 +114,9 @@ export class HostFilledValueMissingError extends Error {
   }
 }
 
+/** Below this length a credential's OTHER values (header values) are not scrubbed. */
+const MIN_SCRUB_LENGTH = 8;
+
 /** What replaces a credential value in a result or an error. */
 export const HOST_FILLED_PLACEHOLDER = '[host-filled]';
 
@@ -149,12 +152,15 @@ export function hostFilled(
   const unused = new Set(Object.keys(checked));
   const out = tools.map((tool) => {
     const own = Object.fromEntries(
+      // The tools that take the field as an argument of the call. One that
+      // declares it only through a root combinator (`allOf`/`anyOf`/`oneOf`,
+      // `if`/`then`, `$defs`) takes it too, and cannot have it removed — it is
+      // refused, never left model-settable. One that names it only inside a
+      // nested object (a `cursor.token` pagination field) has a different
+      // argument and is left alone.
       Object.entries(checked).filter(([field]) => {
-        if (propertiesOf(tool)[field] !== undefined) return true;
-        // Declared only inside a combinator or a nested schema: it cannot be
-        // removed from everywhere the model reads it, so it is refused rather
-        // than left model-settable.
-        if (mentionsElsewhere(tool.schema?.inputSchema, field)) refuseNested(tool, field);
+        if (Object.hasOwn(propertiesOf(tool), field)) return true;
+        if (declaresAtRoot(tool.schema?.inputSchema, field)) refuseNested(tool, field);
         return false;
       }),
     );
@@ -245,10 +251,14 @@ function wrapTool(tool: Tool, fills: Readonly<Record<string, HostFill>>, strict:
   const name = tool.schema.name;
   const props = propertiesOf(tool);
   for (const field of Object.keys(fills)) {
-    if (mentionsElsewhere(tool.schema.inputSchema, field)) refuseNested(tool, field);
-    if (strict && props[field] === undefined) {
+    if (strict && !Object.hasOwn(props, field)) {
+      if (declaresAtRoot(tool.schema.inputSchema, field)) refuseNested(tool, field);
       throw new TypeError(`hostFilled: tool '${name}' has no argument '${field}'.`);
     }
+    // Also named in a combinator or a nested schema: it cannot be removed from
+    // everything the model reads, so the tool is refused rather than left
+    // half-hidden.
+    if (mentionsElsewhere(tool.schema.inputSchema, field)) refuseNested(tool, field);
     if (tool.wants !== undefined && Object.hasOwn(tool.wants, field)) {
       throw new TypeError(
         `hostFilled: tool '${name}' declares '${field}' under \`wants\` — an argument is filled ` +
@@ -338,6 +348,51 @@ function mentionsElsewhere(schema: unknown, field: string): boolean {
   return walk(schema, true);
 }
 
+/**
+ * Whether the ROOT object's shape names `field` through a combinator or a
+ * definition — anything that makes it an argument of the call without being
+ * one of the root's own `properties`. Nested objects' properties are not
+ * walked.
+ */
+function declaresAtRoot(schema: unknown, field: string): boolean {
+  const SHAPE_KEYS = [
+    'allOf',
+    'anyOf',
+    'oneOf',
+    'not',
+    'if',
+    'then',
+    'else',
+    '$defs',
+    'definitions',
+  ];
+  const seen = new Set<object>();
+  const walk = (node: unknown, root: boolean): boolean => {
+    if (node === null || typeof node !== 'object' || seen.has(node)) return false;
+    seen.add(node);
+    if (Array.isArray(node)) return node.some((n) => walk(n, false));
+    const obj = node as Record<string, unknown>;
+    if (!root) {
+      const props = obj.properties;
+      if (props !== null && typeof props === 'object' && Object.hasOwn(props, field)) return true;
+      if (Array.isArray(obj.required) && obj.required.includes(field)) return true;
+    }
+    for (const key of ['dependentRequired', 'dependencies', 'dependentSchemas']) {
+      const dep = obj[key];
+      if (dep !== null && typeof dep === 'object' && Object.hasOwn(dep, field)) return true;
+    }
+    for (const key of SHAPE_KEYS) {
+      const value = obj[key];
+      if (value === null || typeof value !== 'object') continue;
+      // `$defs` / `definitions` are maps of schemas; the others are schemas or lists.
+      const children = key === '$defs' || key === 'definitions' ? Object.values(value) : [value];
+      if (children.some((c) => walk(c, false))) return true;
+    }
+    return false;
+  };
+  return walk(schema, true);
+}
+
 function refuseNested(tool: Tool, field: string): never {
   throw new TypeError(
     `hostFilled: tool '${tool.schema.name}' names '${field}' inside a nested schema or a ` +
@@ -415,7 +470,10 @@ function credentialValues(credential: Credential | undefined): string[] {
   } catch {
     // A credential that cannot produce headers adds nothing.
   }
-  return out.filter((v): v is string => typeof v === 'string' && v.length > 0);
+  // A short value (a header like `json`) would mangle ordinary text; only a
+  // value long enough to be a credential is scrubbed. The filled value itself
+  // is always scrubbed.
+  return out.filter((v): v is string => typeof v === 'string' && v.length >= MIN_SCRUB_LENGTH);
 }
 
 function defaultRead(credential: Credential): unknown {

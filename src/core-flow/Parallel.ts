@@ -358,6 +358,9 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
     input: ParallelInput | string,
     options?: RunOptions,
   ): Promise<ParallelOutput | RunnerPauseOutcome> {
+    // The incoming request, refused here — before anything moves — when
+    // requestContext() did not build it.
+    const request = requestOf(options, 'Parallel.run');
     const runInput = normalizeRunInput<ParallelInput>(input, 'Parallel.run');
     const executor = this.createExecutor();
     this.lastExecutor = executor;
@@ -366,7 +369,7 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
       this.currentRunContext.runId,
       runInput.identity,
       'Parallel.run',
-      requestOf(options, 'Parallel.run'),
+      request,
     );
     try {
       let result: unknown;
@@ -390,17 +393,15 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
     input?: unknown,
     options?: RunOptions,
   ): Promise<ParallelOutput | RunnerPauseOutcome> {
-    // The leg's policy — the paused run's marks — goes to ITS executor, never via the instance.
-    const resumeLeg = this.emitPauseResume(checkpoint, input);
-    const executor = this.createExecutor(resumeLeg);
-    this.lastExecutor = executor;
-    // The paused run its members serve, re-opened from the checkpoint's own record.
-    const parentRun = reopenParentRun(
-      checkpoint.sharedState,
-      'Parallel.resume',
-      requestOf(options, 'Parallel.resume'),
-    );
+    // The incoming request, and the paused run its members serve (re-opened
+    // from the checkpoint's own record) — both refused before anything moves.
+    const request = requestOf(options, 'Parallel.resume');
+    const parentRun = reopenParentRun(checkpoint.sharedState, 'Parallel.resume', request);
     try {
+      // The leg's policy — the paused run's marks — goes to ITS executor, never via the instance.
+      const resumeLeg = this.emitPauseResume(checkpoint, input);
+      const executor = this.createExecutor(resumeLeg);
+      this.lastExecutor = executor;
       let result: unknown;
       try {
         result = await executor.resume(checkpoint, input, withRunSignalInEnv(options));

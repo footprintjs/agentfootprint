@@ -192,6 +192,9 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
     input: SequenceInput | string,
     options?: RunOptions,
   ): Promise<SequenceOutput | RunnerPauseOutcome> {
+    // The incoming request, refused here — before anything moves — when
+    // requestContext() did not build it.
+    const request = requestOf(options, 'Sequence.run');
     const runInput = normalizeRunInput<SequenceInput>(input, 'Sequence.run');
     const executor = this.createExecutor();
     this.lastExecutor = executor;
@@ -200,7 +203,7 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
       this.currentRunContext.runId,
       runInput.identity,
       'Sequence.run',
-      requestOf(options, 'Sequence.run'),
+      request,
     );
     try {
       const result = await executor.run({
@@ -219,17 +222,15 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
     input?: unknown,
     options?: RunOptions,
   ): Promise<SequenceOutput | RunnerPauseOutcome> {
-    // The leg's policy — the paused run's marks — goes to ITS executor, never via the instance.
-    const resumeLeg = this.emitPauseResume(checkpoint, input);
-    const executor = this.createExecutor(resumeLeg);
-    this.lastExecutor = executor;
-    // The paused run its members serve, re-opened from the checkpoint's own record.
-    const parentRun = reopenParentRun(
-      checkpoint.sharedState,
-      'Sequence.resume',
-      requestOf(options, 'Sequence.resume'),
-    );
+    // The incoming request, and the paused run its members serve (re-opened
+    // from the checkpoint's own record) — both refused before anything moves.
+    const request = requestOf(options, 'Sequence.resume');
+    const parentRun = reopenParentRun(checkpoint.sharedState, 'Sequence.resume', request);
     try {
+      // The leg's policy — the paused run's marks — goes to ITS executor, never via the instance.
+      const resumeLeg = this.emitPauseResume(checkpoint, input);
+      const executor = this.createExecutor(resumeLeg);
+      this.lastExecutor = executor;
       const result = await executor.resume(checkpoint, input, withRunSignalInEnv(options));
       return this.finalizeResult(executor, result);
     } finally {

@@ -81,6 +81,7 @@ import {
   type TypedScope,
 } from 'footprintjs';
 import type { RunOptions } from '../core/runner.js';
+import { requestOf } from '../core/requestOfRun.js';
 import type { RedactionPolicy } from 'footprintjs';
 import type { LLMProvider } from '../provider-contract/types.js';
 import type { RunContext } from '../bridge/eventMeta.js';
@@ -380,6 +381,8 @@ class RouterStep extends RunnerBase<{ message: string }, string> {
     input: { message: string } | string,
     options?: RunOptions,
   ): Promise<string | RunnerPauseOutcome> {
+    // Refused like every runner's; it serves no tool here, so it goes nowhere.
+    requestOf(options, 'LlmRouter.run');
     const runInput = normalizeRunInput<{ message: string }>(input, 'LlmRouter.run');
     const executor = this.createExecutor();
     this.lastExecutor = executor;
@@ -395,6 +398,8 @@ class RouterStep extends RunnerBase<{ message: string }, string> {
     input?: unknown,
     options?: RunOptions,
   ): Promise<string | RunnerPauseOutcome> {
+    // Refused like every runner's; it serves no tool here, so it goes nowhere.
+    requestOf(options, 'LlmRouter.resume');
     // The leg's policy — the paused run's marks — goes to ITS executor, never via the instance.
     const resumeLeg = this.emitPauseResume(checkpoint, input);
     const executor = this.createExecutor(resumeLeg);

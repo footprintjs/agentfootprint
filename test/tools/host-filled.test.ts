@@ -369,6 +369,41 @@ describe('hostFilled — a field named where it cannot be removed is refused', (
   });
 });
 
+describe('hostFilled — a list leaves a nested field of the same name alone', () => {
+  it('a tool with only `cursor.token` is returned unchanged', () => {
+    const paged = defineTool({
+      name: 'paged',
+      description: 'p',
+      inputSchema: {
+        type: 'object',
+        properties: { cursor: { type: 'object', properties: { token: { type: 'string' } } } },
+      },
+      execute: async () => 'ok',
+    });
+    const real = defineTool({
+      name: 'real',
+      description: 'r',
+      inputSchema: { type: 'object', properties: { token: { type: 'string' } } },
+      execute: async () => 'ok',
+    });
+    const out = hostFilled([paged, real], { token: fromCredential({ service: 's' }) });
+    expect(out[0]).toBe(paged);
+    expect(out[1]).not.toBe(real);
+  });
+
+  it('an argument named like an Object.prototype member is not taken for one', () => {
+    const t = defineTool({
+      name: 't',
+      description: 't',
+      inputSchema: { type: 'object', properties: { a: {} } },
+      execute: async () => 'ok',
+    });
+    expect(() => hostFilled(t, { constructor: fromIdentity('tenant') })).toThrow(
+      /has no argument 'constructor'/,
+    );
+  });
+});
+
 describe('hostFilled — the raw credential is scrubbed, whatever form was filled', () => {
   const echo = (mode: 'result' | 'aggregate') =>
     hostFilled(

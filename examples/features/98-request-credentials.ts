@@ -99,6 +99,23 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
 
   const record =
     JSON.stringify(agent.getSnapshot() ?? {}) + JSON.stringify(agent.getLastNarrativeEntries());
+  const proof = {
+    modelSawTokenField: sawTokenField.some(Boolean),
+    serverCalls: received.length,
+    serverGotToken: received[0]?.token === TOKEN,
+    tokenInRecord: record.includes(TOKEN) || record.includes(header),
+  };
+  // The smoke run checks the claims, not just that the file runs.
+  if (
+    proof.modelSawTokenField ||
+    proof.serverCalls !== 1 ||
+    !proof.serverGotToken ||
+    proof.tokenInRecord
+  ) {
+    throw new Error(
+      `98-request-credentials: a stated guarantee did not hold: ${JSON.stringify(proof)}`,
+    );
+  }
   return {
     answer,
     modelSawTokenField: sawTokenField.some(Boolean), // false — removed from the schema
