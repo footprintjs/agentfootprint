@@ -19,14 +19,15 @@ import { withRetry, withFallback, fallbackProvider } from 'agentfootprint/resili
 ```
 
 **Import each name from the door that exports it.** `package.json` `exports` is
-exhaustive, so a name imported from the wrong door fails to resolve. The core API
-is on `agentfootprint`. Everything you plug a backend into — LLM providers,
-`mcpClient`, MCP transports such as `agentCoreRuntimeMcpTransport` — is on
-`agentfootprint/providers`. Memory is on `agentfootprint/memory`, context
-engineering on `agentfootprint/context`, resilience on
-`agentfootprint/resilience`, and observability on `agentfootprint/observe`.
-Paths such as `agentfootprint/instructions` and `agentfootprint/explain` do not
-exist.
+exhaustive: a path that is not a door does not resolve, and a name imported from
+a door that does not export it fails to compile (and is `undefined` under
+`require`). The core API is on `agentfootprint`. LLM providers, embedders,
+`mcpClient` and MCP transports such as `agentCoreRuntimeMcpTransport` are on
+`agentfootprint/providers`. Memory, its stores included, is on
+`agentfootprint/memory`, context engineering on `agentfootprint/context`,
+resilience on `agentfootprint/resilience`, and observability on
+`agentfootprint/observe`. Paths such as `agentfootprint/instructions` and
+`agentfootprint/explain` do not exist.
 
 ## The 6-layer mental model
 
@@ -198,7 +199,7 @@ const tot = Parallel.create()
 ## Anti-patterns — Don't
 
 - ❌ `agent.run('string')` → use `agent.run({ message: '...', identity? })`
-- ❌ Stale subpaths: `agentfootprint/instructions`, `agentfootprint/observe`, `agentfootprint/security`
+- ❌ Paths that are not doors: `agentfootprint/instructions`, `agentfootprint/explain` (see `package.json` `exports`)
 - ❌ `.memoryPipeline(pipeline)` (v1) → use `.memory(defineMemory({...}))`
 - ❌ Shipping a `ReflexionAgent` class → compose `Sequence(Agent, critique-LLM, Agent)`
 - ❌ Closures or class instances in scope (can't be cloned)
