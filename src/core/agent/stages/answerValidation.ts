@@ -94,12 +94,15 @@ export function withAnswerValidation(
   };
 }
 
-/** The last reply's calls the terminal branch will never dispatch — all of
- *  them but a forced-output strategy's own answer tool. */
+/** Calls the model asked for that the terminal branch will never dispatch:
+ *  the last reply's (all but a forced-output strategy's own answer tool), or —
+ *  on a wrapped-up turn, whose last reply was asked with the tools withheld —
+ *  the cut-off reply's, which the route recorded on `stoppedEarly`. */
 function undispatchedCalls(scope: TypedScope<AgentState>): number {
   const calls = scope.llmLatestToolCalls ?? [];
   const forced = scope.forcedOutputToolName;
   let count = 0;
   for (const call of calls) if (call?.name !== forced) count += 1;
-  return count;
+  const cutOff = scope.stoppedEarly?.pendingToolCalls;
+  return Math.max(count, typeof cutOff === 'number' ? cutOff : 0);
 }

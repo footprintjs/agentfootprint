@@ -37,10 +37,12 @@ no other agent's record changes. It is read at the moment of the check
 (`toolLedger.ts` · `ledgerAtCheck`). `complete: false` says the list may
 disagree with what the run did: past `limits.maxToolCalls`, an oversized name or
 id, a call still open (its `tool_start` with no `tool_end`), a tool that
-declared `pending`, a last reply whose calls never went out, a `resumeOnError`
+declared `pending`, a reply whose calls never went out (a cut-off or wrapped-up
+turn), a `resumeOnError`
 leg, or a resumed checkpoint written before ledgers existed. It fails closed: a
 check that reads the list while it is incomplete gets `unverified`
-(`tool-calls-incomplete`) whatever it returns. It lists the model's own calls; a
+(`tool-calls-incomplete`) whatever it returns, so read it only when the rule
+needs it (destructuring it in the parameter list counts as a read). It lists the model's own calls; a
 call a tool makes from inside itself is that tool's work.
 
 The rule "the answer presents code, but no code-execution tool ran":
@@ -50,26 +52,24 @@ const presentedCodeWasExecuted: AnswerValidationOptions<{ text: string }> = {
   id: 'presented-code-was-executed',
   version: '1',
   mode: 'enforce',
-  validate(answer, { toolCalls }) {
-    const presentsCode = answer.text.includes('```');
-    const executed = toolCalls.calls.some(
+  validate(answer, context) {
+    // The parser already required `text`; this is the check that always runs.
+    const checks: AnswerCheck[] = [{ id: 'answer-is-text', disposition: 'checked-pass' }];
+    if (!answer.text.includes('```')) {
+      // No code shown: nothing to hold, and the tool list is never read — a
+      // check that reads an incomplete list is refused as unverified.
+      checks.push({ id: 'code-was-executed', disposition: 'not-applicable' });
+      return { checks };
+    }
+    const executed = context.toolCalls.calls.some(
       (call) => call.name === 'run_code' && call.outcome === 'ok',
     );
-    return {
-      checks: [
-        {
-          id: 'code-was-executed',
-          disposition: !presentsCode
-            ? 'not-applicable'
-            : executed
-            ? 'checked-pass'
-            : toolCalls.complete
-            ? 'checked-fail'
-            : 'unreachable', // a partial list cannot say nothing ran
-        },
-        { id: 'answer-is-text', disposition: 'checked-pass' },
-      ],
-    };
+    checks.push({
+      id: 'code-was-executed',
+      disposition: executed ? 'checked-pass' : 'checked-fail',
+      ...(!executed && { reason: 'code was presented but never executed' }),
+    });
+    return { checks };
   },
 };
 ```

@@ -71,7 +71,8 @@ export interface AnswerToolCallsView {
    * `false` when the list may disagree with what the run did: more than
    * `limits.maxToolCalls`, an oversized name or id, a call still open (its
    * `tool_start` with no `tool_end`), a tool that declared its work
-   * `pending`, a last reply whose calls never went out, a `resumeOnError` leg
+   * `pending`, a reply whose calls never went out (a cut-off or wrapped-up
+   * turn), a `resumeOnError` leg
    * whose failed attempt's calls this run never observed, or a resumed
    * checkpoint written before the run kept a ledger.
    *

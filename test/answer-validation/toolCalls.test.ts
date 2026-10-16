@@ -60,33 +60,32 @@ const search = defineTool({
 });
 
 /** The README rule: an answer that presents code must have code that ran. */
-function presentedCodeRanCheck(seen: AnswerToolCallsView[] = []) {
+/** The README rule. It reads the tool list only when the answer presents code;
+ *  `seen`, when a test passes one, records the list (and so reads it). */
+function presentedCodeRanCheck(seen?: AnswerToolCallsView[]) {
   return (candidate: Readonly<Reply>, context: { toolCalls: AnswerToolCallsView }) => {
-    seen.push(context.toolCalls);
-    const presentsCode = candidate.text.includes('```');
+    if (seen) seen.push(context.toolCalls);
+    // Something must be checked for a pass; the shape check is that.
+    const checks: {
+      id: string;
+      disposition: 'checked-pass' | 'checked-fail' | 'not-applicable';
+    }[] = [{ id: 'has-text', disposition: 'checked-pass' }];
+    if (!candidate.text.includes('```')) {
+      checks.push({ id: 'presented-code-was-executed', disposition: 'not-applicable' });
+      return { checks };
+    }
     const executed = context.toolCalls.calls.some(
       (call) => call.name === 'run_code' && call.outcome === 'ok',
     );
-    return {
-      checks: [
-        {
-          id: 'presented-code-was-executed',
-          disposition: !presentsCode
-            ? ('not-applicable' as const)
-            : executed
-            ? ('checked-pass' as const)
-            : context.toolCalls.complete
-            ? ('checked-fail' as const)
-            : ('unreachable' as const),
-        },
-        // Something must be checked for a pass; the shape check is that.
-        { id: 'has-text', disposition: 'checked-pass' as const },
-      ],
-    };
+    checks.push({
+      id: 'presented-code-was-executed',
+      disposition: executed ? 'checked-pass' : 'checked-fail',
+    });
+    return { checks };
   };
 }
 
-function guarded(replies: unknown[], tools = [runCode, search], seen: AnswerToolCallsView[] = []) {
+function guarded(replies: unknown[], tools = [runCode, search], seen?: AnswerToolCallsView[]) {
   let builder = Agent.create({
     provider: mock({ chunkDelayMs: 0, replies: replies as never }),
     model: 'mock',
@@ -646,6 +645,34 @@ describe('the list fails closed — a check that reads an incomplete list cannot
       reason: 'tool-calls-incomplete',
       checks: [{ id: 'ran', disposition: 'checked-pass' }],
     });
+  });
+
+  it('the README rule passes a plain answer on a resumeOnError leg — it never reads the list', async () => {
+    let step = 0;
+    const agent = Agent.create({
+      provider: mock({
+        chunkDelayMs: 0,
+        respond: () => {
+          step += 1;
+          if (step === 1) return { content: '', toolCalls: [call('c0', 'run_code', {})] };
+          if (step === 2) throw new Error('provider outage');
+          return { content: PLAIN_ANSWER, toolCalls: [] };
+        },
+      }),
+      model: 'mock',
+    })
+      .outputSchema(replyParser)
+      .tool(runCode)
+      .answerValidation<Reply>({
+        id: 'readme-rule',
+        version: '1',
+        validate: presentedCodeRanCheck(),
+      })
+      .build();
+    const failed = await agent.run({ message: 'add' }).catch((err: unknown) => err);
+    const checkpoint = (failed as { checkpoint?: unknown }).checkpoint;
+    expect(await agent.resumeOnError(checkpoint as never)).toBe(PLAIN_ANSWER);
+    expect(agent.answerValidation()?.status).toBe('passed');
   });
 
   it('a check that never reads the list is not held to it', async () => {

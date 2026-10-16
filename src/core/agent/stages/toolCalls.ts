@@ -2664,7 +2664,9 @@ export function buildToolCallsHandler(
     typedEmit(scope, 'agentfootprint.stream.tool_start', payload);
     const ledger = deps.toolCallLedger;
     if (ledger === undefined) return;
-    scope.toolCallLedger = startToolCall(scope.toolCallLedger, payload.toolCallId, ledger.maxCalls);
+    const prior = scope.toolCallLedger;
+    const next = startToolCall(prior, payload.toolCallId, ledger.maxCalls);
+    if (next !== prior) scope.toolCallLedger = next;
   };
 
   const sessionContext = (

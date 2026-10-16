@@ -16,6 +16,7 @@ import {
   Agent,
   AnswerValidationError,
   defineTool,
+  type AnswerCheck,
   type AnswerValidationOptions,
   type OutputSchemaParser,
 } from '../../src/index.js';
@@ -62,27 +63,24 @@ const presentedCodeWasExecuted: AnswerValidationOptions<Reply> = {
   id: 'presented-code-was-executed',
   version: '1',
   mode: 'enforce',
-  validate(answer, { toolCalls }) {
-    const presentsCode = answer.text.includes('```');
-    const executed = toolCalls.calls.some(
+  validate(answer, context) {
+    // The parser already required `text`; this is the check that always runs.
+    const checks: AnswerCheck[] = [{ id: 'answer-is-text', disposition: 'checked-pass' }];
+    if (!answer.text.includes('```')) {
+      // No code shown: nothing to hold, and the tool list is never read — a
+      // check that reads an incomplete list is refused as unverified.
+      checks.push({ id: 'code-was-executed', disposition: 'not-applicable' });
+      return { checks };
+    }
+    const executed = context.toolCalls.calls.some(
       (call) => call.name === 'run_code' && call.outcome === 'ok',
     );
-    return {
-      checks: [
-        {
-          id: 'code-was-executed',
-          disposition: !presentsCode
-            ? 'not-applicable' // no code shown, nothing to hold
-            : executed
-            ? 'checked-pass'
-            : toolCalls.complete
-            ? 'checked-fail' // code shown, and the full list has no run
-            : 'unreachable', // the list is partial: cannot say nothing ran
-          ...(presentsCode && !executed && { reason: 'code was presented but never executed' }),
-        },
-        { id: 'answer-is-text', disposition: 'checked-pass' },
-      ],
-    };
+    checks.push({
+      id: 'code-was-executed',
+      disposition: executed ? 'checked-pass' : 'checked-fail',
+      ...(!executed && { reason: 'code was presented but never executed' }),
+    });
+    return { checks };
   },
 };
 // #endregion guard
@@ -112,8 +110,9 @@ export async function run(input: string): Promise<string> {
   check(refused instanceof AnswerValidationError, 'the unexecuted answer to be refused');
   const report = (refused as AnswerValidationError).report;
   check(report.status === 'failed', 'a failed report');
+  const failed = report.checks.find((c) => c.disposition === 'checked-fail');
 
-  return `ran → delivered · claimed → ${report.status} (${report.checks[0]?.reason})`;
+  return `ran → delivered · claimed → ${report.status} (${failed?.reason})`;
 }
 
 if (isCliEntry(import.meta.url)) {
