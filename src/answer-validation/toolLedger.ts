@@ -17,32 +17,97 @@ const fits = (text: unknown): text is string =>
   typeof text === 'string' && text.length > 0 && text.length <= MAX_TOOL_CALL_TEXT;
 
 /**
- * The ledger after one landing. Past `max` calls (or for an oversized name or
- * id) nothing more is listed and the view says it is incomplete, so a rule
- * that counts can tell "none ran" from "not listed". Returns `prior` itself
+ * The ledger as the run's state holds it: the view's fields plus the ids of
+ * calls whose `stream.tool_start` bracket opened and whose `tool_end` has not
+ * yet closed. A call still open at the check makes the view incomplete.
+ */
+export interface ToolCallLedger extends AnswerToolCallsView {
+  readonly inFlight?: readonly string[];
+}
+
+/** A ledger that may have missed calls: what ran before this run observed it. */
+export function incompleteToolCalls(): ToolCallLedger {
+  return { calls: [], complete: false };
+}
+
+// Seed starts a ledger on every run that keeps one, so a missing one at a
+// landing means a run resumed from a checkpoint written before ledgers
+// existed: what it did before the pause was not observed.
+const orIncomplete = (prior: ToolCallLedger | undefined): ToolCallLedger =>
+  prior ?? incompleteToolCalls();
+
+const withInFlight = (
+  ledger: ToolCallLedger,
+  inFlight: readonly string[],
+  complete: boolean,
+): ToolCallLedger => ({
+  calls: [...ledger.calls],
+  complete,
+  ...(inFlight.length > 0 && { inFlight: [...inFlight] }),
+});
+
+/**
+ * The ledger after a call's `tool_start` bracket: the call is open until its
+ * `tool_end` lands. Past `max` open calls, or for an oversized id, the ledger
+ * cannot track it and says it is incomplete instead.
+ */
+export function startToolCall(
+  prior: ToolCallLedger | undefined,
+  callId: string,
+  max: number,
+): ToolCallLedger {
+  const ledger = orIncomplete(prior);
+  const inFlight = ledger.inFlight ?? [];
+  if (inFlight.length >= max || !fits(callId)) {
+    return ledger.complete ? withInFlight(ledger, inFlight, false) : ledger;
+  }
+  return withInFlight(ledger, [...inFlight, callId], ledger.complete);
+}
+
+/**
+ * The ledger after one call's `tool_end` bracket: the call is closed and
+ * listed. Past `max` calls (or for an oversized name or id) nothing more is
+ * listed and the ledger says it is incomplete, so a rule that counts can tell
+ * "none ran" from "not listed". A call whose own work has not settled (a tool
+ * that declared `pending`) makes it incomplete too. Returns `prior` itself
  * when nothing changes, so the caller can skip the write.
  */
 export function appendToolCall(
-  prior: AnswerToolCallsView | undefined,
+  prior: ToolCallLedger | undefined,
   call: AnswerToolCall,
   max: number,
-): AnswerToolCallsView {
-  // Seed starts a ledger on every run that keeps one, so none here means a run
-  // resumed from a checkpoint written before ledgers existed: what it did
-  // before the pause was not observed.
-  const ledger = prior ?? incompleteToolCalls();
+  settled = true,
+): ToolCallLedger {
+  const ledger = orIncomplete(prior);
+  const open = ledger.inFlight ?? [];
+  const at = open.indexOf(call.callId);
+  const inFlight = at === -1 ? open : [...open.slice(0, at), ...open.slice(at + 1)];
+  const complete = ledger.complete && settled;
   if (ledger.calls.length >= max || !fits(call.name) || !fits(call.callId)) {
-    return ledger.complete ? { calls: [...ledger.calls], complete: false } : ledger;
+    if (at === -1 && !ledger.complete) return ledger;
+    return withInFlight(ledger, inFlight, false);
   }
   return {
+    ...withInFlight(ledger, inFlight, complete),
     calls: [...ledger.calls, { name: call.name, callId: call.callId, outcome: call.outcome }],
-    complete: ledger.complete,
   };
 }
 
-/** A ledger that may have missed earlier calls of the same turn. */
-export function incompleteToolCalls(): AnswerToolCallsView {
-  return { calls: [], complete: false };
+/**
+ * The ledger as one check sees it, read at the moment of the check: incomplete
+ * when there is none, when a call is still open, or when the model's last
+ * reply asked for calls that never went out (`undispatched` — the check runs
+ * on the terminal branch, so a call on that reply was never dispatched: a run
+ * cut off by its iteration or cost budget with calls still pending).
+ */
+export function ledgerAtCheck(
+  ledger: ToolCallLedger | undefined,
+  undispatched: number,
+): AnswerToolCallsView {
+  if (ledger === undefined) return incompleteToolCalls();
+  const calls = Array.isArray(ledger.calls) ? ledger.calls : [];
+  const open = Array.isArray(ledger.inFlight) ? ledger.inFlight.length : 0;
+  return { calls, complete: ledger.complete === true && open === 0 && undispatched === 0 };
 }
 
 /**

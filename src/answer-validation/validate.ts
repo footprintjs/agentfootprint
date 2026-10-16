@@ -141,6 +141,10 @@ export async function executeAnswerValidation(
   // Detached and frozen before the callback exists: the check reads a copy of
   // this run's ledger, never the run's state.
   const calls = toolCallsView(toolCalls, config.limits.maxToolCalls);
+  // A check that READ an incomplete list cannot pass on it: the verdict is
+  // unverified whatever the check returned (fail closed). A check that never
+  // looks at the list is not held to it.
+  let toolCallsRead = false;
   const evidence = createAnswerEvidenceResolver(store, scope, config.limits, controller.signal);
   let reason: string | undefined;
   let schemaAccepted = false;
@@ -205,7 +209,10 @@ export async function executeAnswerValidation(
           Object.freeze({
             signal: controller.signal,
             artifacts: evidence.resolver,
-            toolCalls: calls,
+            get toolCalls() {
+              toolCallsRead = true;
+              return calls;
+            },
           }),
         );
         if (!active || controller.signal.aborted) return;
@@ -235,6 +242,7 @@ export async function executeAnswerValidation(
   const unreachable = checks.filter((check) => check.disposition === 'unreachable').length;
   const notApplicable = checks.filter((check) => check.disposition === 'not-applicable').length;
   if (!reason && evidence.failureReason()) reason = `evidence-${evidence.failureReason()}`;
+  if (!reason && toolCallsRead && !calls.complete) reason = 'tool-calls-incomplete';
   if (!reason && checked === 0) reason = 'no-comparable-checks';
   if (!reason && unreachable > 0) reason = 'unreachable-checks';
   const status = reason ? 'unverified' : failed > 0 ? 'failed' : 'passed';

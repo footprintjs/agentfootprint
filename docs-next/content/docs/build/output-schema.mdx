@@ -433,11 +433,17 @@ executed it:
 
 <CodeFile path="examples/features/99-guard-presented-code.ts" region="guard" title="examples/features/99-guard-presented-code.ts (region: guard)" />
 
-`toolCalls.complete` is `false` when the list may be missing calls: more than
-`limits.maxToolCalls` (default 256, at most 10,000), a `resumeOnError` leg,
-whose failed attempt's calls this run never observed, or a resumed checkpoint
-written before the run kept a list. A rule that needs the whole list should say
-`unreachable` then, which withholds the answer as unverified. A call a person
+`toolCalls.complete` is `false` when the list may disagree with what the run
+did: more than `limits.maxToolCalls` (default 256, at most 10,000), a call
+still open, a tool that declared its work `pending`, a last reply whose calls
+never went out (a run cut off by its iteration or cost budget), a
+`resumeOnError` leg, whose failed attempt's calls this run never observed, or a
+resumed checkpoint written before the run kept a list. The list is read at the
+moment of the check, on the terminal branch, after every dispatched call has
+closed. **It fails closed:** a check that reads `toolCalls` while it is
+incomplete gets an `unverified` report (reason `tool-calls-incomplete`) whatever
+it returns, so enforce mode withholds the answer. A check that never reads it is
+not held to it. A call a person
 answered on `resume()` is listed, with the calls before the pause.
 
 Served by `streamHandler` with `agUi()`, an enforced refusal sends no

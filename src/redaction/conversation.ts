@@ -221,7 +221,7 @@ const FIELDS: Readonly<Record<string, readonly string[]>> = {
   injectionContextSummary: ['lastToolName'],
   // The answer check's tool-call ledger keeps `complete`; the calls carry tool
   // names, which the model may have made up (`lastToolName`'s reasoning).
-  toolCallLedger: ['calls'],
+  toolCallLedger: ['calls', 'inFlight'],
 };
 
 /** The vocabulary as one frozen policy. */

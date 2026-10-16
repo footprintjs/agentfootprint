@@ -15,4 +15,12 @@ export {
   type ResolvedAnswerValidation,
 } from './types.js';
 export { resolveAnswerValidation, executeAnswerValidation } from './validate.js';
-export { appendToolCall, incompleteToolCalls, toolCallsView, toolOutcomeOf } from './toolLedger.js';
+export {
+  appendToolCall,
+  incompleteToolCalls,
+  ledgerAtCheck,
+  startToolCall,
+  toolCallsView,
+  toolOutcomeOf,
+  type ToolCallLedger,
+} from './toolLedger.js';

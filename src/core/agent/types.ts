@@ -1659,7 +1659,7 @@ export interface AgentState {
    * seed starts a fresh, empty one on every run; a pause carries it to the
    * resumed leg.
    */
-  toolCallLedger?: import('../../answer-validation/index.js').AnswerToolCallsView;
+  toolCallLedger?: import('../../answer-validation/toolLedger.js').ToolCallLedger;
   /** Set only at the final capture after a validation report was accepted. */
   answerValidationCommitted?: boolean;
   /** In-flight hand-off from the Route decider (which judges the answer and

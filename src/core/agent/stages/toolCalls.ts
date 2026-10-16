@@ -64,7 +64,11 @@ import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import { policyInForce } from '../../../redaction/runRedaction.js';
 import { bindToolSecurityEvents, type ToolSecurityEmitter } from '../toolSecurityEvents.js';
 import type { AgentfootprintEventMap, AgentfootprintEventType } from '../../../events/registry.js';
-import { appendToolCall, toolOutcomeOf } from '../../../answer-validation/toolLedger.js';
+import {
+  appendToolCall,
+  startToolCall,
+  toolOutcomeOf,
+} from '../../../answer-validation/toolLedger.js';
 import { extractSequence } from '../../../security/extractSequence.js';
 import { skillTarget } from '../../../security/skillTarget.js';
 import { menuOutstanding, type TurnRoute } from '../../../injection-engine/routingPolicy.js';
@@ -2643,8 +2647,21 @@ export function buildToolCallsHandler(
       prior,
       { name: toolName, callId: payload.toolCallId, outcome: toolOutcomeOf(payload, ran) },
       ledger.maxCalls,
+      // A tool that declared `pending` returned before its own work settled.
+      payload.status !== 'pending',
     );
     if (next !== prior) scope.toolCallLedger = next;
+  };
+
+  /** `emitToolEnd`'s twin: the call is open in the ledger until its `tool_end` lands. */
+  const emitToolStart = (
+    scope: TypedScope<AgentState>,
+    payload: AgentfootprintEventMap['agentfootprint.stream.tool_start']['payload'],
+  ): void => {
+    typedEmit(scope, 'agentfootprint.stream.tool_start', payload);
+    const ledger = deps.toolCallLedger;
+    if (ledger === undefined) return;
+    scope.toolCallLedger = startToolCall(scope.toolCallLedger, payload.toolCallId, ledger.maxCalls);
   };
 
   const sessionContext = (
@@ -3671,7 +3688,7 @@ export function buildToolCallsHandler(
    */
   const bracketSettled = (scope: TypedScope<AgentState>, settlement: BatchSettlement): void => {
     for (const { call, result } of settlement.settled) {
-      typedEmit(scope, 'agentfootprint.stream.tool_start', {
+      emitToolStart(scope, {
         toolName: call.name,
         toolCallId: call.id,
         args: peelCall(call).args,
@@ -4255,7 +4272,7 @@ export function buildToolCallsHandler(
             turnStampOf(scope),
           );
         }
-        typedEmit(scope, 'agentfootprint.stream.tool_start', {
+        emitToolStart(scope, {
           toolName: tc.name,
           toolCallId: tc.id,
           args,

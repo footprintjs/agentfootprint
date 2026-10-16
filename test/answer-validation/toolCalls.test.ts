@@ -7,13 +7,20 @@ import {
   Agent,
   AnswerValidationError,
   defineTool,
+  Parallel,
   type AnswerToolCallsView,
   type OutputSchemaParser,
 } from '../../src/index.js';
 import { askHuman } from '../../src/core/pause.js';
 import { mock } from '../../src/llm-providers.js';
 import { conversationRedaction } from '../../src/doors/security.js';
-import { appendToolCall, toolCallsView, toolOutcomeOf } from '../../src/answer-validation/index.js';
+import {
+  appendToolCall,
+  ledgerAtCheck,
+  startToolCall,
+  toolCallsView,
+  toolOutcomeOf,
+} from '../../src/answer-validation/index.js';
 
 interface Reply {
   text: string;
@@ -398,10 +405,10 @@ describe('answerValidation — context.toolCalls', () => {
       ],
       complete: false,
     });
-    // Incomplete: the rule cannot say nothing ran, so the report is unverified.
+    // Incomplete: a check that read the list cannot pass on it.
     expect(agent.answerValidation()).toMatchObject({
       status: 'unverified',
-      reason: 'unreachable-checks',
+      reason: 'tool-calls-incomplete',
     });
   });
 
@@ -470,6 +477,225 @@ describe('answerValidation — context.toolCalls', () => {
   });
 });
 
+/** A check that passes whenever run_code ran — it never looks at `complete`.
+ *  The framework must still refuse to pass it on a list that is not whole. */
+function trustingCheck(seen: AnswerToolCallsView[]) {
+  return (_answer: Readonly<Reply>, context: { toolCalls: AnswerToolCallsView }) => {
+    seen.push(context.toolCalls);
+    const ran = context.toolCalls.calls.some((c) => c.name === 'run_code' && c.outcome === 'ok');
+    return {
+      checks: [
+        { id: 'ran', disposition: ran ? ('checked-pass' as const) : ('checked-fail' as const) },
+      ],
+    };
+  };
+}
+
+function trusting(provider: unknown, tools: unknown[], seen: AnswerToolCallsView[], extra = {}) {
+  let builder = Agent.create({ provider: provider as never, model: 'mock', ...extra }).outputSchema(
+    replyParser,
+  );
+  for (const tool of tools) builder = builder.tool(tool as never);
+  return builder
+    .answerValidation<Reply>({ id: 'trusting', version: '1', validate: trustingCheck(seen) })
+    .build();
+}
+
+describe('the list fails closed — a check that reads an incomplete list cannot pass', () => {
+  it('in flight: a tool that declared its work pending makes the list incomplete', async () => {
+    const seen: AnswerToolCallsView[] = [];
+    const startJob = defineTool({
+      name: 'run_code',
+      description: 'Start a code job.',
+      inputSchema: { type: 'object', properties: {} },
+      execute: async () => ({ content: 'job started', effects: [], status: 'pending' }),
+    });
+    const agent = trusting(
+      mock({
+        chunkDelayMs: 0,
+        replies: [{ content: '', toolCalls: [call('c1', 'run_code', {})] }, CODE_ANSWER] as never,
+      }),
+      [startJob],
+      seen,
+    );
+    await expect(agent.run({ message: 'add' })).rejects.toBeInstanceOf(AnswerValidationError);
+    expect(seen[0]).toEqual({
+      calls: [{ name: 'run_code', callId: 'c1', outcome: 'ok' }],
+      complete: false,
+    });
+    expect(agent.answerValidation()).toMatchObject({
+      status: 'unverified',
+      reason: 'tool-calls-incomplete',
+      checks: [{ id: 'ran', disposition: 'checked-pass' }],
+    });
+  });
+
+  it('in flight: a last reply whose calls never went out makes the list incomplete', async () => {
+    const seen: AnswerToolCallsView[] = [];
+    const agent = trusting(
+      mock({
+        chunkDelayMs: 0,
+        replies: [
+          { content: '', toolCalls: [call('c1', 'run_code', {})] },
+          { content: '', toolCalls: [call('c2', 'run_code', {})] },
+          // Cut off by the iteration budget: this reply's call is never dispatched.
+          { content: CODE_ANSWER, toolCalls: [call('c3', 'run_code', {})] },
+        ] as never,
+      }),
+      [runCode],
+      seen,
+      { maxIterations: 2 },
+    );
+    const outcome = await agent.run({ message: 'add' }).catch((err: unknown) => err);
+    expect(outcome).toBeInstanceOf(AnswerValidationError);
+    expect(seen[0]?.complete).toBe(false);
+    expect(agent.answerValidation()).toMatchObject({ reason: 'tool-calls-incomplete' });
+  });
+
+  it('a retried call: the failed attempt and the retry are both listed, in order', async () => {
+    const seen: AnswerToolCallsView[] = [];
+    let attempts = 0;
+    const flaky = defineTool({
+      name: 'run_code',
+      description: 'Execute Python.',
+      inputSchema: { type: 'object', properties: {} },
+      execute: async () => {
+        attempts += 1;
+        if (attempts === 1) throw new Error('sandbox busy');
+        return '4';
+      },
+    });
+    const agent = trusting(
+      mock({
+        chunkDelayMs: 0,
+        replies: [
+          { content: '', toolCalls: [call('c1', 'run_code', {})] },
+          { content: '', toolCalls: [call('c2', 'run_code', {})] },
+          CODE_ANSWER,
+        ] as never,
+      }),
+      [flaky],
+      seen,
+    );
+    expect(await agent.run({ message: 'add' })).toBe(CODE_ANSWER);
+    expect(seen[0]).toEqual({
+      calls: [
+        { name: 'run_code', callId: 'c1', outcome: 'error' },
+        { name: 'run_code', callId: 'c2', outcome: 'ok' },
+      ],
+      complete: true,
+    });
+  });
+
+  it('a retried request (resumeOnError): a passing check over a partial list is refused', async () => {
+    const seen: AnswerToolCallsView[] = [];
+    let step = 0;
+    const agent = trusting(
+      mock({
+        chunkDelayMs: 0,
+        respond: () => {
+          step += 1;
+          if (step === 1) return { content: '', toolCalls: [call('c0', 'run_code', {})] };
+          if (step === 2) throw new Error('provider outage');
+          if (step === 3) return { content: '', toolCalls: [call('c1', 'run_code', {})] };
+          return { content: CODE_ANSWER, toolCalls: [] };
+        },
+      }),
+      [runCode],
+      seen,
+    );
+    const failed = await agent.run({ message: 'add' }).catch((err: unknown) => err);
+    const checkpoint = (failed as { checkpoint?: unknown }).checkpoint;
+    await expect(agent.resumeOnError(checkpoint as never)).rejects.toBeInstanceOf(
+      AnswerValidationError,
+    );
+    // The retried leg's own call is listed; the failed leg's is not observed.
+    expect(seen[0]).toEqual({
+      calls: [{ name: 'run_code', callId: 'c1', outcome: 'ok' }],
+      complete: false,
+    });
+    expect(agent.answerValidation()).toMatchObject({
+      status: 'unverified',
+      reason: 'tool-calls-incomplete',
+      checks: [{ id: 'ran', disposition: 'checked-pass' }],
+    });
+  });
+
+  it('a check that never reads the list is not held to it', async () => {
+    const agent = Agent.create({
+      provider: mock({
+        chunkDelayMs: 0,
+        replies: [
+          { content: '', toolCalls: [call('c1', 'run_code', {})] },
+          { content: CODE_ANSWER, toolCalls: [call('c2', 'run_code', {})] },
+        ] as never,
+      }),
+      model: 'mock',
+      maxIterations: 2,
+    })
+      .outputSchema(replyParser)
+      .tool(runCode)
+      .answerValidation<Reply>({
+        id: 'shape-only',
+        version: '1',
+        validate: () => ({ checks: [{ id: 'shape', disposition: 'checked-pass' }] }),
+      })
+      .build();
+    await agent.run({ message: 'add' }).catch(() => undefined);
+    expect(agent.answerValidation()?.reason).not.toBe('tool-calls-incomplete');
+  });
+
+  it('two concurrent member runs in one composition each read only their own calls', async () => {
+    const seen = new Map<string, AnswerToolCallsView>();
+    const member = (label: string, delayMs: number) =>
+      Agent.create({
+        provider: mock({
+          chunkDelayMs: 0,
+          replies: [
+            { content: '', toolCalls: [call(`${label}-1`, `tool_${label}`, {})] },
+            PLAIN_ANSWER,
+          ] as never,
+        }),
+        model: 'mock',
+      })
+        .tool(
+          defineTool({
+            name: `tool_${label}`,
+            description: label,
+            inputSchema: { type: 'object', properties: {} },
+            execute: async () => {
+              await new Promise((resolve) => setTimeout(resolve, delayMs));
+              return 'ok';
+            },
+          }),
+        )
+        .outputSchema(replyParser)
+        .answerValidation<Reply>({
+          id: `member-${label}`,
+          version: '1',
+          validate(_answer, context) {
+            seen.set(label, context.toolCalls);
+            return { checks: [{ id: 'seen', disposition: 'checked-pass' }] };
+          },
+        })
+        .build();
+    const fan = Parallel.create()
+      .branch('x', member('x', 5))
+      .branch('y', member('y', 1))
+      .mergeWithFn((results) => JSON.stringify(results))
+      .build();
+    await fan.run({ message: 'go' });
+    expect(seen.get('x')).toEqual({
+      calls: [{ name: 'tool_x', callId: 'x-1', outcome: 'ok' }],
+      complete: true,
+    });
+    expect(seen.get('y')).toEqual({
+      calls: [{ name: 'tool_y', callId: 'y-1', outcome: 'ok' }],
+      complete: true,
+    });
+  });
+});
+
 describe('tool-call ledger primitives', () => {
   it('reads the outcome a tool_end bracket states', () => {
     expect(toolOutcomeOf({}, true)).toBe('ok');
@@ -496,6 +722,22 @@ describe('tool-call ledger primitives', () => {
     });
     (source.calls as unknown as { name: string }[])[0]!.name = 'changed';
     expect(view.calls[0]!.name).toBe('ok_tool');
+  });
+
+  it('an opened call with no closing bracket keeps the check-time list incomplete', () => {
+    let ledger = startToolCall({ calls: [], complete: true }, 'a', 10);
+    expect(ledgerAtCheck(ledger, 0).complete).toBe(false);
+    ledger = appendToolCall(ledger, { name: 't', callId: 'a', outcome: 'ok' }, 10);
+    expect(ledgerAtCheck(ledger, 0)).toEqual({
+      calls: [{ name: 't', callId: 'a', outcome: 'ok' }],
+      complete: true,
+    });
+    expect(ledgerAtCheck(ledger, 1).complete).toBe(false);
+    expect(ledgerAtCheck(undefined, 0).complete).toBe(false);
+    // A call the tool says is still working is not settled.
+    expect(
+      appendToolCall(ledger, { name: 't', callId: 'b', outcome: 'ok' }, 10, false).complete,
+    ).toBe(false);
   });
 
   it('stops listing at the bound and keeps the same ledger once it is incomplete', () => {

@@ -33,10 +33,15 @@ The check also reads this run's tool calls: `name`, `callId` and `outcome`
 state of the run that owns the check (`AgentState.toolCallLedger`), written beside
 every `stream.tool_end` bracket (`src/core/agent/stages/toolCalls.ts` · `emitToolEnd`) and only
 on an agent with `answerValidation`, so it cannot hold another run's calls and
-no other agent's record changes. `complete: false` says calls may be missing
-(past `limits.maxToolCalls`, an oversized name or id, a `resumeOnError` leg, or
-a resumed checkpoint written before ledgers existed). It lists the model's own
-calls; a call a tool makes from inside itself is that tool's work.
+no other agent's record changes. It is read at the moment of the check
+(`toolLedger.ts` · `ledgerAtCheck`). `complete: false` says the list may
+disagree with what the run did: past `limits.maxToolCalls`, an oversized name or
+id, a call still open (its `tool_start` with no `tool_end`), a tool that
+declared `pending`, a last reply whose calls never went out, a `resumeOnError`
+leg, or a resumed checkpoint written before ledgers existed. It fails closed: a
+check that reads the list while it is incomplete gets `unverified`
+(`tool-calls-incomplete`) whatever it returns. It lists the model's own calls; a
+call a tool makes from inside itself is that tool's work.
 
 The rule "the answer presents code, but no code-execution tool ran":
 

@@ -67,11 +67,16 @@ export interface AnswerToolCall {
 export interface AnswerToolCallsView {
   readonly calls: readonly AnswerToolCall[];
   /**
-   * `false` when the run may have made calls this list leaves out: more than
-   * `limits.maxToolCalls`, an oversized name or id, a `resumeOnError` leg
+   * `false` when the list may disagree with what the run did: more than
+   * `limits.maxToolCalls`, an oversized name or id, a call still open (its
+   * `tool_start` with no `tool_end`), a tool that declared its work
+   * `pending`, a last reply whose calls never went out, a `resumeOnError` leg
    * whose failed attempt's calls this run never observed, or a resumed
-   * checkpoint written before the run kept a ledger. A rule that needs
-   * the whole list should report `unreachable` then, not pass.
+   * checkpoint written before the run kept a ledger.
+   *
+   * Fail closed: a check that reads `toolCalls` while it is incomplete gets
+   * an `unverified` report (reason `tool-calls-incomplete`) whatever it
+   * returns, so enforce mode withholds the answer.
    */
   readonly complete: boolean;
 }
