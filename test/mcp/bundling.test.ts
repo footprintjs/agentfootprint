@@ -179,7 +179,7 @@ describe('the public `sdk` hook never touches the loader', () => {
       (e: Error) => e,
     );
     expect(error.message).toContain('`sdk` has no `Client` constructor');
-    expect(error.message).toContain('Pass the class themselves');
+    expect(error.message).toContain('Pass the class itself');
     expect(error.message).toContain('`sdk: { Client }`');
     expect(error.message).not.toContain('StreamableHTTPClientTransport');
     expect(loads).toEqual([]);

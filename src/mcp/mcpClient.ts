@@ -205,7 +205,7 @@ function assertSdk(sdk: McpSdk, transport: McpTransport['transport']): void {
   };
   throw new TypeError(
     `mcpClient: \`sdk\` has no ${missing.map((key) => `\`${key}\``).join(' or ')} constructor. ` +
-      `Pass the class${needed.length > 1 ? 'es' : ''} themselves: ` +
+      `Pass ${needed.length > 1 ? 'the classes themselves' : 'the class itself'}: ` +
       `${needed.map((key) => sources[key]).join(', ')}, ` +
       `then \`sdk: { ${needed.join(', ')} }\`.`,
   );
