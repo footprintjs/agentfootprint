@@ -5,6 +5,91 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.5.0] - 2026-10-16
+
+### Added
+
+- **AG-UI behind a gateway: your own request body, your own envelope, and the request's credential through a hosted run.** `agUi()` is now three strategies you can replace one at a time. `reader` maps a gateway's own request body onto the AG-UI turn (`AgUiRequestReader` → `AgUiTurnRequest`). `translation` turns a run's events into AG-UI events, and the default `agUiSerializer` is unchanged. `framing` writes each event, for example as `{"eventType":"TextMessageContentEvent","event":{…,"eventSequence":n}}`. With no options, `agUi()` writes the same bytes as before.
+
+  The untrusted-input rules stay in the core, whichever reader you use. A custom reader's output is copied as plain JSON, so each value is read once, and then checked exactly like a `RunAgentInput`. That means the id format checks, no system or developer message, frontend tools only from the allow-list, `state` and `context` only through your validators, and answers only for the pause the server keeps. A custom `translation` must return a new translation for every run.
+
+  `SseFraming.frame(event, at)` now receives `{ sequence }`, the frame's number in its own stream. `streamHandler` and `toSSE` count it per stream, so a framing that numbers its frames keeps no counter, and two runs at once never share one. This is a signature change in a minor release, on purpose: a framing you implement is unaffected, but TypeScript code that calls a framing's `frame` itself no longer compiles with one argument. Migration: pass the frame's number in your stream, `framing.frame(event, { sequence: n })`, counting from 1.
+
+  `standingAgent` and `streamHandler` take `sealRequest`. It is given the request's headers only, and seals the credential the request carries, for example a gateway's per-request token in a header, with `requestContext` for that request's run only. A resume gets the credential of the request that resumes it. `nodeHost` and `httpHost` deliver the headers. The library never writes the credential to a frame, a reply, a stored session or a checkpoint; a tool that returns its value itself would, and `hostFilled` scrubs such an echo. A handle that any host in the process was given before is refused, and so is a plain object; both are programming errors and answer 500 (`ERR_INTERNAL` from `streamHandler`). A sealer that throws refuses the request with `ERR_REQUEST_NOT_SEALED` (400) and a fixed message.
+
+- **An output guard can see which tools ran.** `.answerValidation()`'s check now
+  receives `context.toolCalls`: this run's tool calls in landing order, each with
+  its `name`, `callId` and `outcome` (`'ok'`, `'error'` or `'not-run'`). Arguments
+  and results are never in it. The list is frozen, read from the run's own state
+  (never another run's, even under concurrency) at the moment of the check,
+  bounded by the new `limits.maxToolCalls` (default 256), and says
+  `complete: false` when it may disagree with what the run did (a call still open
+  or `pending`, a cut-off reply's calls, a `resumeOnError` leg, …). It fails
+  closed: a check that reads an incomplete list gets an `unverified` report,
+  whatever it returns. So a rule like "the answer presents code, but no code-execution tool
+  ran" can hold the reply in `mode: 'enforce'` and fail the run. Over
+  `streamHandler` + `agUi()` such a refusal sends no `TEXT_MESSAGE_CONTENT` and
+  ends in `RUN_ERROR`. Agents without `answerValidation` record exactly what they
+  did before; agents with it commit one more state key, `toolCallLedger`.
+  `AnswerToolCall`, `AnswerToolCallsView` and `AnswerValidationContext` are now
+  exported from the main barrel. Example: `examples/features/99-guard-presented-code.ts`.
+
+  Two things change for existing setups. A validator that reads `context` whole
+  (spreading it, or destructuring `toolCalls`) counts as reading the list, so it
+  is held to completeness: on a run cut off with calls pending, or on a
+  `resumeOnError` leg, it now comes back `unverified`. And `conversationRedaction()`
+  gains the field entry `toolCallLedger: ['calls', 'inFlight']`, which changes its
+  derived vocabulary version for every agent under that policy.
+
+- **Bundled apps (esbuild, webpack) can hand the MCP and AWS SDKs to the MCP path through a public `sdk` option.** `mcpClient` and `agentCoreRuntimeMcpTransport` load their SDKs through a lazy `require` that a bundler cannot follow, so a bundle deployed without `node_modules` could not find them. `agentCoreRuntimeMcpTransport({ ..., sdk })` now takes `BedrockAgentCoreClient` and `InvokeAgentRuntimeCommand` from `@aws-sdk/client-bedrock-agentcore` (or the whole module) as you imported them, for SigV4. It was previously reachable only as the underscore-private `_sdk`, which keeps working as the older name; passing both with two different modules is refused. **Either one beside `auth: { bearer }` is now refused by name** — that path loads no AWS SDK, and `_sdk` there used to be ignored silently. `mcpClient({ sdk })` already took the MCP SDK.
+
+  A missing or wrong SDK is refused when the client or transport is built, never at the first tool call. The "not installed" message now names `sdk` and the bundler case instead of the internal `_client` test seam, and an `sdk` with a missing `Client`, `StreamableHTTPClientTransport`, `InvokeAgentRuntimeCommand` or `BedrockAgentCoreClient` is refused by name instead of failing later as "is not a constructor". The MCP client docs gain a "Bundling (esbuild, webpack)" section.
+
+- **Credentials from the incoming request, and tool arguments the host fills.** `requestContext({ secrets })` seals a request's per-request credential (an encrypted token from a header, a session key) for one run: `agent.run(input, { request })`. A `requestCredentials({ services })` provider, built once at boot and holding no secret, vends it to any tool that declares `needs`, through the usual `ctx.credential`. Strategies cover a bearer token, an API-key header, or a value to decrypt first (`decodedWith`). A call reads only the request of the run it belongs to, including composition members at any depth and the request passed to a `resume()`. A missing one is refused by name (`RequestCredentialError`) and is never borrowed from another run. The handle has no readable fields and never enters the input, the state, the record or the engine's options.
+
+  `hostFilled(tools, { token: fromCredential({ service }), tenantId: fromIdentity('tenant') })` declares tool arguments, including those of an MCP server's tools from `mcpClient().tools()`, as filled by the host. The field is removed from the schema the model sees. A value the model sends for it is refused by name and the tool does not run. The value is filled inside `execute`, so the recorded arguments never hold it. A credential the tool echoes back in its result or a thrown error is scrubbed. This replaces a hand-written wrapper that hides an MCP token field.
+
+  Two related safeguards apply to existing compositions. A `parentRun` link that a step's mapper or an earlier step's output placed in a member's input is now dropped when no run is handed down, because a link is a key to its run's identity and request. Two resumes of the same still-open composition run that name different requests are refused with `ResumeRequestConflictError`. Every runner's `run()` and `resume()` also refuses a `request` that `requestContext` did not build, before anything moves.
+
+### Fixed
+
+- **The AI-assistant instruction files (`npx agentfootprint-setup`) now import each name from the door that exports it.** They showed `import { Agent, mcpClient } from 'agentfootprint'`, but `mcpClient` (like `agentCoreRuntimeMcpTransport`) is on `agentfootprint/providers`; their core-API block also put provider, memory, context and resilience names on the main barrel, named a `resilientProvider` that does not exist (`fallbackProvider` does), and called `agentfootprint/observe` and `agentfootprint/security` stale when both are live doors. Re-run `npx agentfootprint-setup` to refresh an installed copy.
+
+- **MCP `structuredContent` built in another realm (jest, `node:vm`) is no longer refused.** `resultMode: 'structured'` / `'structured-or-json'` used to require each object's prototype to be exactly this realm's `Object.prototype` (and each array's `Array.prototype`), so plain data from a test environment or a `vm` context failed with "did not provide valid structuredContent". Plain objects and arrays are now recognised by structure: a null prototype, or a realm's `Object.prototype` / `Array.prototype` identified by its native constructor's link back to it and its own-key shape.
+
+  The tool now returns a **copy** of the structured object, made of this realm's own objects and arrays from property descriptors read once each, instead of the transport's value itself. A null prototype stays null and an own `__proto__` key stays a key (a sub-object the source shared is copied, and counted against the limits, on each path); nothing the source does after the check (a Proxy trap, a replaced method on a foreign prototype) reaches your code. Everything the check exists to keep out is still refused: class instances, accessors on the value or its inherited path, forged or `__proto__`-swapped prototypes, and Proxies — now refused before any trap runs on Node, where the old check let a Proxy that reported a plain prototype through.
+
+### Security
+
+- **A skill hidden by `skill_read` can no longer be activated by a keyword rule, or by any other path.** A start rule (`match: { keywords }`, a RegExp or `when`) could put the skill-graph cursor on a skill the caller's role may not read, and the skill's body reached the model. This happened in plain runs, through the declaration-order cold walk, and in the turn-start cascade's tier 1. That let user text surface a hidden skill. Hidden now means hidden on every activation path.
+
+  - The Injection Engine resolves the caller's hidden skills first on every iteration, before anything decides. The tools slot reads that same answer, so a menu and an activation are never judged by two different policy calls.
+  - The cursor never moves onto a hidden skill. This covers a keyword or other start rule, the cascade's verdict, a declared route, a tool's `propose-transition`, a `read_skill` pick, and a cursor restored from a conversation the caller may no longer read. A graph whose start is hidden enters through its visible entries instead.
+  - The evaluator never activates a hidden skill, whatever its trigger or a `require-instruction` lease says. `context.evaluated` records the skip with the new reason `'hidden'`.
+  - A composition member under `reactMode: 'dynamic-grouped'` is now checked under the member run's caller. Before, the check ran with no identity. That hid a skill from an allowed caller, and could show one to a caller a policy keyed on identity should refuse.
+  - A parked map's status card no longer names a member skill the caller may not read. A parked map with no visible member gets no card line.
+
+  `InjectionContext` gains an optional `hiddenSkillIds` field, and `InjectionEngineConfig` gains an optional `hiddenSkillIds` resolver. Code that switches exhaustively over `skippedDetails[].reason` must handle `'hidden'`.
+
+- **An aborted or timed-out run now cancels the model call in flight, and a late answer is never billed.** Before this, aborting a run (or hitting its `timeoutMs`) stopped the flowchart but left the provider's HTTP request running, and billing. The agent never put the run's signal on the request, a run's `timeoutMs` never reached the stages, and several adapters (Anthropic, OpenAI and every OpenAI-compatible route, Azure OpenAI, Foundry, Bedrock) never passed a signal to their SDK.
+
+  Now one rule, in `lib/abort.ts`, covers every provider call. The run's signal, its deadline and the caller's own signal are combined into one signal and placed on every request: from the agent, `LLMCall`, the summarizers, the memory extractors, the constrained pick and the parallel merge. Every adapter hands that signal to the SDK (`{ signal }`, Bedrock's `{ abortSignal }`, Gemini's `config.abortSignal`) or to `fetch`. Each adapter also enforces it itself:
+
+  - nothing is sent once the signal has fired;
+  - every wait is raced against the signal, so a transport that ignores it cannot hold the call open;
+  - a stream is closed on abort (the SDK's own close, or the fetch body is cancelled);
+  - an answer that arrives after the abort is refused and is never recorded, counted in usage or reported in `llm_end`.
+
+  The abort reaches the caller as the reason they gave, never wrapped as a provider error. `withRetry`, `withFallback` and `withCircuitBreaker` never retry it, fall back from it or count it as a failure, whatever the error is called.
+
+  `timeoutMs` now applies even when a `signal` is passed with it (the engine used to ignore it in that case). A run that times out still fails with `Execution timed out after <n>ms`. The deadline is released when the run settles, so it never fires on a run that already finished. `resume(checkpoint, input, { timeoutMs })` now enforces its deadline too; the engine ignored `timeoutMs` on resume. When a run is given both a `signal` and a different `env.signal`, or a deadline, either one now stops the traversal as well as the stages.
+
+  `buildAgentMessageApiChart` and `buildMessageApiChart` run on your own `FlowChartExecutor`, which hands its `signal` and `timeoutMs` to the traversal only. Pass the signal in `env` as well (`env: { signal }`) so an abort cancels the model call in flight.
+
+  The TypeSafe classifier follows the same rule: a classification that lands after the abort is refused.
+
+  A shared conformance test (`test/adapters/conformance/`) runs every adapter factory and class form against a mocked SDK or `fetch` that ignores its signal. The listing check fails closed: a new export or file in `src/adapters/llm/` fails until it has a rig there or is named as no adapter.
+
 ## [10.4.0] - 2026-10-15
 
 ### Added
