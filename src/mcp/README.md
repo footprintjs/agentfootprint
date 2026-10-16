@@ -87,8 +87,8 @@ realm's `Object.prototype`, so data built in another realm (jest's environment,
 `node:vm`) is accepted. What the tool returns is a **copy** made of this realm's
 objects, built from property descriptors read once each — so nothing the source
 does after the check (a Proxy trap, a replaced method on a foreign prototype)
-reaches your code. Shared sub-objects stay shared, a null prototype stays null
-and an own `__proto__` key stays a key. Class instances, accessors anywhere on
+reaches your code. A null prototype stays null and an own `__proto__` key stays
+a key; a sub-object the source shared is copied (and counted) on each path. Class instances, accessors anywhere on
 the value or its inherited path, and forged or `__proto__`-swapped prototypes
 are refused, as are Proxies, before any trap runs, wherever the runtime can name
 one (Node). See `plainData.ts`.

@@ -12,8 +12,7 @@
  * was checked (a Proxy trap that redefines a property it already reported, a
  * foreign prototype whose methods were replaced) cannot reach the copy. The
  * copy keeps every own key as a data property (`__proto__` included), keeps a
- * null prototype null, keeps a sub-object shared where the source shared it,
- * and holds nothing else: no getter, no foreign prototype, no Proxy.
+ * null prototype null, and holds nothing else: no getter, no foreign prototype, no Proxy.
  *
  * Plain objects and arrays are recognised by STRUCTURE, not by identity with
  * this realm's `Object.prototype`, because each realm has its own intrinsics:
@@ -65,11 +64,16 @@ export function copyJsonObject(value: unknown): Record<string, unknown> | undefi
   }
 }
 
-/** One walk: its counters, its cycle guard and its shared-node memo. */
+/**
+ * One walk: its visit counter and its cycle guard.
+ *
+ * No memo for shared sub-objects, on purpose: each path is walked and counted,
+ * so the bounds hold for what the copy really contains (a memo let a DAG of a
+ * few hundred references stand for a copy of 2^60 nodes).
+ */
 class JsonCopier {
   private visited = 0;
   private readonly ancestors = new Set<object>();
-  private readonly copies = new Map<object, object>();
   private readonly verified = new WeakSet<object>();
 
   /** The copy of `item`, or `undefined` when it is not JSON data. */
@@ -79,12 +83,8 @@ class JsonCopier {
     if (typeof item === 'number') return Number.isFinite(item) ? item : undefined;
     if (typeof item !== 'object' || depth >= MAX_DEPTH || this.ancestors.has(item))
       return undefined;
-    const done = this.copies.get(item);
-    if (done !== undefined) return done;
     if (isProxyValue(item)) return undefined;
-    const copied = this.copyContainer(item, depth);
-    if (copied !== undefined) this.copies.set(item, copied);
-    return copied;
+    return this.copyContainer(item, depth);
   }
 
   private copyContainer(item: object, depth: number): object | undefined {

@@ -85,7 +85,7 @@ describe('MCP structuredContent from another realm', () => {
     expect(Object.getPrototypeOf(parsed)).toBe(Object.prototype);
   });
 
-  it('keeps shared sub-objects shared, and mixes local and foreign data', async () => {
+  it('accepts shared sub-objects and mixed local/foreign data, copying each path', async () => {
     const { run } = realm();
     const foreign = run('({ rows: [] })') as { rows: unknown[] };
     const received = (await execute({ outer: foreign, again: foreign, list: [foreign.rows] })) as {
@@ -93,8 +93,14 @@ describe('MCP structuredContent from another realm', () => {
       again: object;
       list: unknown[];
     };
-    expect(received.outer).toBe(received.again);
-    expect(received.list[0]).toBe((received.outer as { rows: unknown[] }).rows);
+    expect(received).toEqual({ outer: { rows: [] }, again: { rows: [] }, list: [[]] });
+    expect(received.outer).not.toBe(received.again);
+  });
+
+  it('counts a shared sub-object on every path, so a small DAG cannot stand for a huge copy', async () => {
+    let node: Record<string, unknown> = { leaf: 1 };
+    for (let level = 0; level < 60; level++) node = { l: node, r: node };
+    await expectRefused(node);
   });
 
   it('hands back a copy: a later change to the source never reaches it', async () => {
