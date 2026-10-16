@@ -716,6 +716,11 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           iteration: p.iteration,
           maxIterations: p.maxIterations,
           runIdentity: p.runIdentity,
+          // A composition member's run, crossed into sf-llm-call so the engine's
+          // Gather stage checks skill visibility under the MEMBER's caller, not
+          // under no identity at all. Value-conditional: the agent's own runs
+          // cross no key.
+          ...(p.memberRun !== undefined && { memberRun: p.memberRun }),
           cachingDisabled: p.cachingDisabled,
           recentHitRate: p.recentHitRate,
           activatedInjectionIds: p.activatedInjectionIds,

@@ -59,10 +59,15 @@ function reasonOf(record: MapEngagementRecord): string {
  *
  * Returns `undefined` when nothing is parked — the caller then adds nothing to
  * the prompt at all, which keeps the unparked path byte-identical.
+ *
+ * `mayName` is the caller's role filter (`isHiddenSkill`, negated): a member
+ * skill the role may not read is never named, and a parked map with no member
+ * left to name gets no card line at all (may omit, never deny).
  */
 export function parkCard(
   plan: EngagementPlan,
   engagement: MapEngagement | undefined,
+  mayName: (skillId: string) => boolean = () => true,
 ): string | undefined {
   if (engagement === undefined || engagement.length === 0) return undefined;
   const byId = new Map<string, MountedMap>(plan.maps.map((m) => [m.id, m]));
@@ -77,8 +82,10 @@ export function parkCard(
     // "engagement: parked" beside a skill id needs to be told in the same
     // breath that its position did not move, or the obvious inference is that
     // it was thrown out of the skill.
-    const cursor = record.at ?? '(unknown)';
-    const members = map.memberIds.join(', ');
+    const visible = map.memberIds.filter(mayName);
+    if (visible.length === 0) continue;
+    const cursor = record.at !== undefined && mayName(record.at) ? record.at : '(unknown)';
+    const members = visible.join(', ');
     lines.push(
       `  - ${map.id} — cursor: ${cursor} (unchanged) · engagement: PARKED · ` +
         `reason: ${reasonOf(record)} · re-engage: available`,

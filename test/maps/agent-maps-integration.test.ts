@@ -284,7 +284,7 @@ describe('integration: the keyword trap parks after renewalGrace idle passes', (
     return { asked, results: toolResults.join('\n'), reengaged, evaluated: caps.evaluated };
   }
 
-  it('a role that may not read the PARKED cursor is refused — re-engagement is a capability, not a no-op', async () => {
+  it('a role that may not read the trap skill never engages it, so the pick is a policy refusal (9.86.0 parked-cursor case, now unreachable)', async () => {
     const { asked, results, reengaged, evaluated } = await parkedSelfCallUnder(['billing']);
     // Stronger than the original premise: the keyword trap can no longer put a
     // HIDDEN skill on the cursor at all, so the map never engaged and never

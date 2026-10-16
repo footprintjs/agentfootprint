@@ -32,6 +32,8 @@ import {
 } from '../../src/injection-engine.js';
 import { mock } from '../../src/llm-providers.js';
 import type { PermissionChecker } from '../../src/provider-contract/types.js';
+import { parkCard } from '../../src/maps/engagement/parkCard.js';
+import type { EngagementPlan, MapEngagement } from '../../src/maps/engagement/types.js';
 
 // ─── Fixtures ────────────────────────────────────────────────────────
 
@@ -201,6 +203,36 @@ describe('unit: the activation gate', () => {
   });
 });
 
+describe('unit: the park card names no hidden member', () => {
+  const plan: EngagementPlan = {
+    renewalGrace: 3,
+    maps: [{ id: 'desk-map', memberIds: ['vip', 'billing'], toolNames: ['lookup'] }],
+  };
+  const parked = (at: string): MapEngagement =>
+    [
+      {
+        mapId: 'desk-map',
+        standing: 'parked',
+        by: 'lexical',
+        since: 4,
+        foundedBy: 'lexical',
+        foundedAt: 1,
+        at,
+        idle: 3,
+      },
+    ] as unknown as MapEngagement;
+
+  it('filters hidden members and a hidden cursor out of the card', () => {
+    const card = parkCard(plan, parked('vip'), (id) => id !== 'vip') ?? '';
+    expect(card).toContain('read_skill for any of: billing.');
+    expect(card).not.toContain('vip');
+  });
+
+  it('omits a parked map whose every member is hidden', () => {
+    expect(parkCard(plan, parked('billing'), () => false)).toBeUndefined();
+  });
+});
+
 // ─── Scenario — the keyword path ────────────────────────────────────
 
 describe('the keyword path: user text never surfaces a hidden skill', () => {
@@ -212,10 +244,11 @@ describe('the keyword path: user text never surfaces a hidden skill', () => {
         provider,
         model: 'mock',
         maxIterations: 3,
+        reactMode,
         permissionChecker: hideVip(),
       })
         .system('s')
-        .skillGraph(keywordGraph(false), { reactMode } as never)
+        .skillGraph(keywordGraph(false))
         .watch(rec.watch)
         .build();
       await agent.run({ message: 'I am a vip customer' });
@@ -235,10 +268,11 @@ describe('the keyword path: user text never surfaces a hidden skill', () => {
         provider,
         model: 'mock',
         maxIterations: 3,
+        reactMode,
         permissionChecker: hideVip(),
       })
         .system('s')
-        .skillGraph(keywordGraph(true), { reactMode } as never)
+        .skillGraph(keywordGraph(true))
         .watch(rec.watch)
         .build();
       await agent.run({ message: 'I am a vip customer' });
@@ -271,31 +305,51 @@ describe('the keyword path: user text never surfaces a hidden skill', () => {
     expect(requests.some((r) => r.includes(SECRET))).toBe(true);
   });
 
-  it('inside a composition, the member run is judged by ITS caller', async () => {
-    const { provider, requests } = scripted();
-    const agent = Agent.create({
-      provider,
-      model: 'mock',
-      maxIterations: 3,
-      permissionChecker: hideVip({ allowPrincipal: 'alice' }),
-    })
-      .system('s')
-      .skillGraph(keywordGraph(false))
-      .build();
-    // Alice ran it directly first; Bob's composition run must not inherit her answer.
-    await agent.run({
-      message: 'hello',
-      identity: { principal: 'alice', conversationId: 'c-alice' },
+  for (const reactMode of ['dynamic', 'dynamic-grouped'] as const) {
+    it(`inside a composition, the member run is judged by ITS caller [${reactMode}]`, async () => {
+      const asked: string[] = [];
+      const allowAlice = hideVip({ allowPrincipal: 'alice' });
+      const spy: PermissionChecker = {
+        ...allowAlice,
+        check: (req) => {
+          if (req.capability === 'skill_read' && req.target === 'skill:vip') {
+            asked.push(String(req.identity?.principal));
+          }
+          return allowAlice.check(req);
+        },
+      };
+      const { provider, requests } = scripted();
+      const agent = Agent.create({
+        provider,
+        model: 'mock',
+        maxIterations: 3,
+        reactMode,
+        permissionChecker: spy,
+      })
+        .system('s')
+        .skillGraph(keywordGraph(false))
+        .build();
+      const flow = Sequence.create({ id: 'wrap' }).step('desk', agent).build();
+      // Bob may not read vip: never activated.
+      await flow.run({
+        message: 'I am a vip customer',
+        identity: { principal: 'bob', conversationId: 'c-bob' },
+      });
+      expect(requests.length).toBeGreaterThan(0);
+      for (const r of requests) expect(r).not.toContain(SECRET);
+      expect(asked.length).toBeGreaterThan(0);
+      expect(new Set(asked)).toEqual(new Set(['bob'])); // never asked with no identity
+      // Alice may: the same keyword activates it — the identity really reached the check.
+      requests.length = 0;
+      asked.length = 0;
+      await flow.run({
+        message: 'I am a vip customer',
+        identity: { principal: 'alice', conversationId: 'c-alice' },
+      });
+      expect(new Set(asked)).toEqual(new Set(['alice']));
+      expect(requests.some((r) => r.includes(SECRET))).toBe(true);
     });
-    const flow = Sequence.create({ id: 'wrap' }).step('desk', agent).build();
-    requests.length = 0;
-    await flow.run({
-      message: 'I am a vip customer',
-      identity: { principal: 'bob', conversationId: 'c-bob' },
-    });
-    expect(requests.length).toBeGreaterThan(0);
-    for (const r of requests) expect(r).not.toContain(SECRET);
-  });
+  }
 });
 
 // ─── Security — every other activation path ─────────────────────────

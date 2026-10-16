@@ -6,5 +6,7 @@ type: security
 - The Injection Engine resolves the caller's hidden skills first on every iteration, before anything decides. The tools slot reads that same answer, so a menu and an activation are never judged by two different policy calls.
 - The cursor never moves onto a hidden skill. This covers a keyword or other start rule, the cascade's verdict, a declared route, a tool's `propose-transition`, a `read_skill` pick, and a cursor restored from a conversation the caller may no longer read. A graph whose start is hidden enters through its visible entries instead.
 - The evaluator never activates a hidden skill, whatever its trigger or a `require-instruction` lease says. `context.evaluated` records the skip with the new reason `'hidden'`.
+- A composition member under `reactMode: 'dynamic-grouped'` is now checked under the member run's caller. Before, the check ran with no identity. That hid a skill from an allowed caller, and could show one to a caller a policy keyed on identity should refuse.
+- A parked map's status card no longer names a member skill the caller may not read. A parked map with no visible member gets no card line.
 
 `InjectionContext` gains an optional `hiddenSkillIds` field, and `InjectionEngineConfig` gains an optional `hiddenSkillIds` resolver. Code that switches exhaustively over `skippedDetails[].reason` must handle `'hidden'`.

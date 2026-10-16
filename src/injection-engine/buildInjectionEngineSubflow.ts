@@ -62,6 +62,7 @@ import { typedEmit } from '../recorders/core/typedEmit.js';
 import { iterationsRemainingOf } from '../lib/iterationBudget.js';
 import { evaluateInjections } from './evaluator.js';
 import {
+  isHiddenSkill,
   projectActiveInjection,
   toolResultsOf,
   type ActiveInjection,
@@ -595,7 +596,8 @@ function makeEvaluateStage(
       // as SEPARATE fields, the reason, and the way back named as a concrete
       // call. Built from the state that was just advanced, so the card and
       // the suppression are two views of one decision.
-      parkCardText = parkCard(engagementPlan, advance.next);
+      // Filtered by the role: the card never names a member skill this caller may not read.
+      parkCardText = parkCard(engagementPlan, advance.next, (id) => !isHiddenSkill(ctx, id));
       // Tools come off the wire on the ENGAGEMENT axis, independently of
       // `scopeTools` — see `EngagementAdvance.parkedToolNames`.
       scope.$setValue('parkedToolNames', advance.parkedToolNames);
