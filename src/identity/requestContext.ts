@@ -135,10 +135,13 @@ export function requestSecretOf(request: unknown, name: string): string | undefi
 }
 
 /**
- * The provider a call of ONE run is handed: every `getCredential` carries
- * that run's request — and only that run's. A `request` the caller put on
- * the request itself is replaced (or removed, when the run carries none), so
- * a tool cannot present another run's handle through `ctx.credentials`.
+ * The provider a call of ONE run is handed: a `getCredential` for `service` —
+ * the service the calling tool DECLARES in its `needs` — carries that run's
+ * request, and only that run's. A request the caller put on the request
+ * itself is always replaced (or removed), so a tool cannot present another
+ * run's handle through `ctx.credentials`; and a call for any OTHER service
+ * carries no request, so a tool cannot pull a request credential it never
+ * declared. `service` undefined → no call carries a request.
  *
  * Every other field passes through untouched; the provider's `id` is kept.
  *
@@ -147,13 +150,15 @@ export function requestSecretOf(request: unknown, name: string): string | undefi
 export function bindRequest(
   provider: CredentialProvider,
   request: RequestContext | undefined,
+  service: string | undefined,
 ): CredentialProvider {
   return {
     id: provider.id,
     getCredential(req: CredentialRequest) {
       const { request: _presented, ...rest } = req;
       void _presented;
-      return provider.getCredential(request === undefined ? rest : { ...rest, request });
+      const carries = request !== undefined && service !== undefined && req.service === service;
+      return provider.getCredential(carries ? { ...rest, request } : rest);
     },
   };
 }

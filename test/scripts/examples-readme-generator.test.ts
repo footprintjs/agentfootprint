@@ -158,12 +158,12 @@ describe('Block E — concatenated meta descriptions are never truncated', () =>
   it('a fixture with mixed-quote concatenation renders whole, and cleanup restores the README', () => {
     runGenerator();
     const original = readFileSync(README_PATH, 'utf-8');
-    const fixturePath = join(REPO_ROOT, 'examples/features/98-tmp-concat-fixture.ts');
+    const fixturePath = join(REPO_ROOT, 'examples/features/999-tmp-concat-fixture.ts');
     const fixture = [
       "import type { ExampleMeta } from '../helpers/cli.js';",
       '',
       'export const meta: ExampleMeta = {',
-      "  id: 'features/98-tmp-concat-fixture',",
+      "  id: 'features/999-tmp-concat-fixture',",
       "  title: 'Concat fixture — ' + 'joined title',",
       "  group: 'features',",
       '  description:',
@@ -221,8 +221,8 @@ describe('Block E — duplicate example numbers are refused', () => {
       expect(check.err).toContain('one number must name ONE example');
       expect(check.err).toContain('97-tmp-collision-a.ts');
       expect(check.err).toContain('97-tmp-collision-b.ts');
-      // Next free number = highest in the folder (the 97 fixtures) + 1.
-      expect(check.err).toContain('Next free number in features/: 98');
+      // Next free number = highest in the folder (98, above the 97 fixtures) + 1.
+      expect(check.err).toContain('Next free number in features/: 99');
 
       const regen = runGenerator();
       expect(regen.code).toBe(1);

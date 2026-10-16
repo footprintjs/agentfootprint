@@ -251,3 +251,65 @@ describe('request credentials — pause and resume', () => {
     expect(seen[0]?.refused).toMatch(/carries none/);
   });
 });
+
+describe('request credentials — a run aborted mid-batch', () => {
+  it('its remaining calls never receive the NEXT run’s request on the same instance', async () => {
+    const auths: { label: string; auth?: string; refused?: string }[] = [];
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const slow = defineTool({
+      name: 'crm_lookup',
+      description: 'Looks something up.',
+      inputSchema: { type: 'object', properties: { label: { type: 'string' } } },
+      needs: { credential: 'crm' },
+      execute: async (args, ctx) => {
+        const label = String((args as { label?: string }).label);
+        if (label === 'a-first') await gate;
+        auths.push({
+          label,
+          ...(ctx.credential && { auth: ctx.credential.toHeaders().authorization }),
+        });
+        return 'noted';
+      },
+    });
+    let turn = 0;
+    const agent = Agent.create({
+      provider: mock({
+        respond: (req) => {
+          turn++;
+          if (req.messages.some((m) => m.role === 'tool')) return { content: 'ok' };
+          // Run A's one batch: two calls, the first held at the gate.
+          if (turn === 1) {
+            return {
+              toolCalls: [
+                { id: 'a1', name: 'crm_lookup', args: { label: 'a-first' } },
+                { id: 'a2', name: 'crm_lookup', args: { label: 'a-second' } },
+              ],
+            };
+          }
+          return { toolCalls: [{ id: 'b1', name: 'crm_lookup', args: { label: 'b' } }] };
+        },
+      }),
+      model: 'mock',
+      maxIterations: 3,
+      credentials,
+    })
+      .tools([slow])
+      .build();
+    const abort = new AbortController();
+    const runA = agent
+      .run({ message: 'a' }, { request: requestFor(ALICE_TOKEN), signal: abort.signal })
+      .catch(() => 'aborted');
+    await new Promise((r) => setTimeout(r, 10));
+    abort.abort();
+    await runA;
+    // The instance is free again: BOB's run starts while A's stage is still alive.
+    await agent.run({ message: 'b' }, { request: requestFor(BOB_TOKEN) });
+    release();
+    await new Promise((r) => setTimeout(r, 30));
+    for (const a of auths.filter((x) => x.label.startsWith('a-'))) {
+      expect(a.auth).not.toBe(bearerOf(BOB_TOKEN));
+    }
+    expect(auths.find((x) => x.label === 'b')?.auth).toBe(bearerOf(BOB_TOKEN));
+  });
+});

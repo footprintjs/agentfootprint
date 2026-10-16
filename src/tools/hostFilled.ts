@@ -149,7 +149,14 @@ export function hostFilled(
   const unused = new Set(Object.keys(checked));
   const out = tools.map((tool) => {
     const own = Object.fromEntries(
-      Object.entries(checked).filter(([field]) => propertiesOf(tool)[field] !== undefined),
+      Object.entries(checked).filter(([field]) => {
+        if (propertiesOf(tool)[field] !== undefined) return true;
+        // Declared only inside a combinator or a nested schema: it cannot be
+        // removed from everywhere the model reads it, so it is refused rather
+        // than left model-settable.
+        if (mentionsElsewhere(tool.schema?.inputSchema, field)) refuseNested(tool, field);
+        return false;
+      }),
     );
     for (const field of Object.keys(own)) unused.delete(field);
     return Object.keys(own).length === 0 ? tool : wrapTool(tool, own, false);
@@ -238,6 +245,7 @@ function wrapTool(tool: Tool, fills: Readonly<Record<string, HostFill>>, strict:
   const name = tool.schema.name;
   const props = propertiesOf(tool);
   for (const field of Object.keys(fills)) {
+    if (mentionsElsewhere(tool.schema.inputSchema, field)) refuseNested(tool, field);
     if (strict && props[field] === undefined) {
       throw new TypeError(`hostFilled: tool '${name}' has no argument '${field}'.`);
     }
@@ -271,7 +279,7 @@ function wrapTool(tool: Tool, fills: Readonly<Record<string, HostFill>>, strict:
         const fill = fills[field] as HostFill;
         const value = valueOf(name, field, fill, ctx);
         filled[field] = value;
-        if (fill.from === 'credential') secrets.push(value);
+        if (fill.from === 'credential') secrets.push(value, ...credentialValues(ctx.credential));
       }
       const base = isRecord(args) ? args : {};
       try {
@@ -284,6 +292,58 @@ function wrapTool(tool: Tool, fills: Readonly<Record<string, HostFill>>, strict:
       }
     },
   } as Tool;
+}
+
+/**
+ * Whether `field` is named anywhere in the schema OTHER than the root's own
+ * `properties` / `required` — a combinator (`allOf`/`anyOf`/`oneOf`, `if`/
+ * `then`/`else`, `not`), `$defs`, `dependentRequired`/`dependencies`, or a
+ * nested object's `properties`/`required`. The root's own property schema is
+ * not walked.
+ */
+function mentionsElsewhere(schema: unknown, field: string): boolean {
+  if (schema === null || typeof schema !== 'object') return false;
+  const seen = new Set<object>();
+  const walk = (node: unknown, root: boolean): boolean => {
+    if (node === null || typeof node !== 'object' || seen.has(node)) return false;
+    seen.add(node);
+    if (Array.isArray(node)) return node.some((n) => walk(n, false));
+    const obj = node as Record<string, unknown>;
+    if (!root) {
+      const props = obj.properties;
+      if (props !== null && typeof props === 'object' && Object.hasOwn(props, field)) return true;
+      if (Array.isArray(obj.required) && obj.required.includes(field)) return true;
+    }
+    for (const key of ['dependentRequired', 'dependencies', 'dependentSchemas']) {
+      const dep = obj[key];
+      if (dep !== null && typeof dep === 'object') {
+        if (Object.hasOwn(dep, field)) return true;
+        for (const v of Object.values(dep)) {
+          if (Array.isArray(v) && v.includes(field)) return true;
+        }
+      }
+    }
+    for (const [key, value] of Object.entries(obj)) {
+      if (root && key === 'required') continue;
+      if (root && key === 'properties' && value !== null && typeof value === 'object') {
+        for (const [prop, sub] of Object.entries(value)) {
+          if (prop !== field && walk(sub, false)) return true;
+        }
+        continue;
+      }
+      if (walk(value, false)) return true;
+    }
+    return false;
+  };
+  return walk(schema, true);
+}
+
+function refuseNested(tool: Tool, field: string): never {
+  throw new TypeError(
+    `hostFilled: tool '${tool.schema.name}' names '${field}' inside a nested schema or a ` +
+      'combinator (allOf/anyOf/oneOf, $defs, dependentRequired …), where it cannot be removed ' +
+      'from what the model reads — declare it as a top-level property, or wrap the tool yourself.',
+  );
 }
 
 function withoutFields(
@@ -312,14 +372,14 @@ function valueOf(tool: string, field: string, fill: HostFill, ctx: ToolExecution
       throw new HostFilledValueMissingError(
         tool,
         field,
-        `this run's caller named no identity ${fill.field}`,
+        `the run's caller named no identity ${fill.field}`,
       );
     }
     return value;
   }
   const credential = ctx?.credential;
   if (credential === undefined) {
-    throw new HostFilledValueMissingError(tool, field, 'no credential was resolved for this call');
+    throw new HostFilledValueMissingError(tool, field, 'no credential was resolved for the call');
   }
   let value: unknown;
   try {
@@ -336,6 +396,26 @@ function valueOf(tool: string, field: string, fill: HostFill, ctx: ToolExecution
     );
   }
   return value;
+}
+
+/**
+ * Every value of the credential itself, beside the filled one — its raw
+ * token or key and its header values — so an echo of the bare token is
+ * scrubbed even when `read` filled a decorated form (`Bearer …`).
+ */
+function credentialValues(credential: Credential | undefined): string[] {
+  if (credential === undefined) return [];
+  const out: unknown[] = [defaultRead(credential)];
+  try {
+    for (const v of Object.values(credential.toHeaders())) {
+      out.push(v);
+      if (typeof v === 'string' && /^(?:Bearer|Basic) /.test(v))
+        out.push(v.slice(v.indexOf(' ') + 1));
+    }
+  } catch {
+    // A credential that cannot produce headers adds nothing.
+  }
+  return out.filter((v): v is string => typeof v === 'string' && v.length > 0);
 }
 
 function defaultRead(credential: Credential): unknown {
@@ -360,7 +440,10 @@ function isPlainContainer(v: unknown): v is Record<string, unknown> | unknown[] 
 
 function scrubText(text: string, secrets: readonly string[]): string {
   let out = text;
-  for (const s of secrets) out = out.split(s).join(HOST_FILLED_PLACEHOLDER);
+  // Longest first, so `Bearer x` is replaced whole before `x`.
+  for (const s of [...new Set(secrets)].sort((a, b) => b.length - a.length)) {
+    out = out.split(s).join(HOST_FILLED_PLACEHOLDER);
+  }
   return out;
 }
 
@@ -409,12 +492,10 @@ function carries(
   if (typeof value === 'string') return secrets.some((s) => value.includes(s));
   if (value === null || typeof value !== 'object' || depth > 8 || seen.has(value)) return false;
   seen.add(value);
-  if (value instanceof Error) {
-    if (carries(value.message, secrets, depth, seen)) return true;
-    if (carries(value.stack, secrets, depth, seen)) return true;
-    if (carries((value as { cause?: unknown }).cause, secrets, depth + 1, seen)) return true;
-  }
-  for (const key of Object.keys(value)) {
+  // An error's own fields are mostly non-enumerable (`message`, `stack`,
+  // `cause`, `AggregateError.errors`), so every own name is read.
+  const keys = value instanceof Error ? Object.getOwnPropertyNames(value) : Object.keys(value);
+  for (const key of keys) {
     let item: unknown;
     try {
       item = (value as Record<string, unknown>)[key];
@@ -428,8 +509,13 @@ function carries(
 
 /** A replacement error: the name and the scrubbed message, nothing else. */
 function scrubbedError(err: unknown, secrets: readonly string[]): Error {
-  const message = err instanceof Error ? err.message : String(err);
+  let message: string;
+  try {
+    message = err instanceof Error ? String(err.message) : String(err);
+  } catch {
+    message = 'the tool failed';
+  }
   const out = new Error(scrubText(message, secrets));
-  out.name = err instanceof Error ? err.name : 'Error';
+  out.name = err instanceof Error ? scrubText(err.name, secrets) : 'Error';
   return out;
 }

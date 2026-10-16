@@ -150,7 +150,7 @@ export function requestCredentials(options: RequestCredentialsOptions): Credenti
           'no-request',
           service,
           `requestCredentials: service '${service}' takes its credential from the incoming ` +
-            'request, and this call carries none — pass `request: requestContext({ secrets })` ' +
+            'request, and the call carries none — pass `request: requestContext({ secrets })` ' +
             'to the run. A credential is never borrowed from another request.',
         );
       }

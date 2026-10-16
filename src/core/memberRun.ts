@@ -184,7 +184,7 @@ export class RequestOfRunConflictError extends Error {
 
   constructor(door: string) {
     super(
-      `${door}: this run is still open and serves another request — a resume cannot hand its ` +
+      `${door}: the paused run is still open and serves another request — a resume cannot hand its ` +
         'members a second one. Resume it once the open leg has returned.',
     );
     this.name = 'RequestOfRunConflictError';
@@ -234,9 +234,15 @@ export function withParentRun<I extends object>(
   record: ParentRunRecord | undefined,
   runner: object,
 ): I | (I & { readonly parentRun: string }) {
-  return record === undefined || !readers.has(runner)
-    ? input
-    : { ...input, parentRun: record.link };
+  if (!readers.has(runner)) return input;
+  if (record !== undefined) return { ...input, parentRun: record.link };
+  // No run to hand down: a `parentRun` already in the input came from a mapper
+  // or an earlier step's data, not from this module — a link is a key to its
+  // run's identity and request, so one that arrived that way is dropped.
+  if (!Object.hasOwn(input, 'parentRun')) return input;
+  const { parentRun: _dropped, ...rest } = input as I & { readonly parentRun?: unknown };
+  void _dropped;
+  return rest as I;
 }
 
 /**

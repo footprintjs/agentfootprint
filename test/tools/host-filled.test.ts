@@ -222,7 +222,7 @@ describe('hostFilled — values come from the run, failing closed', () => {
     );
     const out = await runOnce([tool], {});
     expect(out.toolResults.join('\n')).toContain(
-      "argument 'tenant' is filled by the host, and this run's caller named no identity tenant",
+      "argument 'tenant' is filled by the host, and the run's caller named no identity tenant",
     );
   });
 });
@@ -265,9 +265,7 @@ describe('hostFilled — the credential does not come back', () => {
     );
     const ctx = { credential: staticCredential() } as never;
     const thrown = await Promise.resolve(tool.execute({}, ctx)).catch((e: unknown) => e);
-    expect((thrown as Error).message).toBe(
-      `401 for Authorization: Bearer ${HOST_FILLED_PLACEHOLDER}`,
-    );
+    expect((thrown as Error).message).toBe(`401 for Authorization: ${HOST_FILLED_PLACEHOLDER}`);
     expect((thrown as Error & { cause?: unknown }).cause).toBeUndefined();
     expect(JSON.stringify(thrown) + String((thrown as Error).stack)).not.toContain(TOKEN);
     await expect(Promise.resolve(tool.execute({ mode: 'plain' }, ctx))).rejects.toBe(plain);
@@ -325,6 +323,87 @@ describe('hostFilled — refused at build', () => {
       credential: 's',
       mode: 'user',
     });
+  });
+});
+
+describe('hostFilled — a field named where it cannot be removed is refused', () => {
+  const nested = (inputSchema: Record<string, unknown>) =>
+    defineTool({ name: 'n', description: 'n', inputSchema, execute: async () => 'ok' });
+
+  it.each([
+    [
+      'inside anyOf',
+      {
+        type: 'object',
+        properties: { token: { type: 'string' } },
+        anyOf: [{ required: ['token'] }],
+      },
+    ],
+    [
+      'only inside allOf',
+      { type: 'object', properties: {}, allOf: [{ properties: { token: { type: 'string' } } }] },
+    ],
+    [
+      'in dependentRequired',
+      {
+        type: 'object',
+        properties: { token: { type: 'string' }, a: {} },
+        dependentRequired: { a: ['token'] },
+      },
+    ],
+    [
+      'in $defs',
+      {
+        type: 'object',
+        properties: { token: { type: 'string' } },
+        $defs: { x: { properties: { token: {} } } },
+      },
+    ],
+  ])('%s — single tool and list alike', (_, schema) => {
+    expect(() => hostFilled(nested(schema), { token: fromCredential({ service: 's' }) })).toThrow(
+      /inside a nested schema or a combinator/,
+    );
+    expect(() => hostFilled([nested(schema)], { token: fromCredential({ service: 's' }) })).toThrow(
+      /inside a nested schema or a combinator/,
+    );
+  });
+});
+
+describe('hostFilled — the raw credential is scrubbed, whatever form was filled', () => {
+  const echo = (mode: 'result' | 'aggregate') =>
+    hostFilled(
+      defineTool({
+        name: 'e',
+        description: 'e',
+        inputSchema: { type: 'object', properties: { auth: { type: 'string' } } },
+        execute: async () => {
+          if (mode === 'aggregate') {
+            throw new AggregateError([new Error(`inner ${TOKEN}`)], 'several failed');
+          }
+          return { echoed: `raw=${TOKEN}` };
+        },
+      }),
+      {
+        auth: fromCredential({
+          service: 's',
+          read: (c) => `Bearer ${(c as { token: string }).token}`,
+        }),
+      },
+    );
+  const ctx = { credential: staticCredential() } as never;
+
+  it('an echo of the bare token, when the filled value was decorated', async () => {
+    expect(await echo('result').execute({}, ctx)).toEqual({
+      echoed: `raw=${HOST_FILLED_PLACEHOLDER}`,
+    });
+  });
+
+  it('a secret inside AggregateError.errors replaces the error', async () => {
+    const thrown = await Promise.resolve(echo('aggregate').execute({}, ctx)).catch(
+      (e: unknown) => e,
+    );
+    expect(thrown).not.toBeInstanceOf(AggregateError);
+    expect((thrown as Error).message).toBe('several failed');
   });
 });
 

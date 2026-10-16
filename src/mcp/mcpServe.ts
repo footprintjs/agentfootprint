@@ -68,6 +68,7 @@ import type { Tool, ToolExecutionContext } from '../tools/tools.js';
 import { ToolSessionTier, type TeardownScope } from '../tools/toolSessions.js';
 import type { Credential, CredentialProvider } from '../identity/types.js';
 import { unconfiguredCredentialProvider } from '../identity/types.js';
+import { bindRequest } from '../identity/requestContext.js';
 import { unconfiguredArtifacts } from '../artifacts/capability.js';
 import { wantsNeedsStoreRefusal } from '../artifacts/wants.js';
 import type {
@@ -106,7 +107,14 @@ export async function mcpServe(
   const name = opts.name ?? DEFAULT_SERVER_NAME;
   const version = opts.version ?? DEFAULT_SERVER_VERSION;
   const byName = validateServableTools(tools, name, opts.credentials);
-  const credentials = opts.credentials ?? unconfiguredCredentialProvider();
+  // A served call belongs to no agent run, so it carries no incoming request:
+  // whatever `request` a tool presents is removed (`bindRequest`), and a
+  // request-sourced credential fails closed here by name.
+  const credentials = bindRequest(
+    opts.credentials ?? unconfiguredCredentialProvider(),
+    undefined,
+    undefined,
+  );
 
   const listing = tools.map((t) => {
     // The declaration half of the tool, in MCP's own extensibility bag

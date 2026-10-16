@@ -665,12 +665,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  chart mounted in a composition) never stamps a clock nobody declared for
    *  it (`seedClockDraft`). */
   private runClockDraft: ClockDraft | undefined;
-  /** The incoming request the CURRENT `run()` / `resume()` serves — set beside
-   *  `runClockDraft`, cleared when it ends, and read ONLY for this agent's own
-   *  scopes (`ToolCallsHandlerDeps.currentRequest`): a stage mounted in another
-   *  runner's executor reads its run's request by link (`memberRun.ts`), never
-   *  this field. Never written to scope. */
-  private runRequest: RequestContext | undefined;
+  /** The incoming request each of this agent's OWN scopes serves — recorded
+   *  by the executor that made the scope (`createExecutor`), so a scope keeps
+   *  ITS run's request for as long as it lives: a stage still running after
+   *  its run was aborted can never be served the next run's request. A stage
+   *  mounted in another runner's executor reads its run's request by link
+   *  (`memberRun.ts`). Never written to scope. */
+  private readonly scopeRequests = new WeakMap<object, RequestContext>();
   /** The `time` the CURRENT resume passed, as read — TAKEN once by the first
    *  ToolCalls pass of the resumed leg (`ToolCallsHandlerDeps.time`), and
    *  cleared when `run()` or `resume()` ends. */
@@ -2055,7 +2056,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // declared at file end via hoisting)
     this.answeredAsk = undefined;
     this.resumePassedTime = undefined;
-    const executor = this.createExecutor(engineOptions);
+    const executor = this.createExecutor(engineOptions, runRequest);
     this.inFlightRunId = this.currentRunContext.runId;
     // One disposition ledger per run (9.60.0) — registration mirrors what
     // this agent's configuration makes applicable; dev posture runs the
@@ -2085,7 +2086,6 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // Set here, beside the `try` whose `finally` clears it, so no exit path
     // can leave it behind for a turn this `run()` did not start.
     this.runClockDraft = clockDraft;
-    this.runRequest = runRequest;
 
     try {
       const result = await executor.run({
@@ -2208,7 +2208,6 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // be stamped by the next seed this agent did not start (a composition
       // mounting its chart) as if the app had declared it.
       this.runClockDraft = undefined;
-      this.runRequest = undefined;
       this.resumePassedTime = undefined;
       // The run's disposition rows, on EVERY path — success, failure, pause —
       // and BEFORE the recording stops, so a recording carries its run's
@@ -2727,7 +2726,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // (and only when) it completes.
     const recording = this.startRunRecording();
     this.answeredAsk = answeredAsk;
-    const executor = this.createExecutor(resumeOptions);
+    const executor = this.createExecutor(resumeOptions, resumeRequest);
     // The leg's WHOLE policy rides its own state too (`runRedaction`), so a
     // later pause carries what this leg was covered by — names the resume
     // added included — and a third leg is never less covered than this one.
@@ -2752,7 +2751,6 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.consentOutstanding.clear();
     // Beside the `try` whose `finally` clears it (the fresh-run path's terms).
     this.resumePassedTime = passedTime;
-    this.runRequest = resumeRequest;
     const legCheckpoint: FlowchartCheckpoint =
       leg.policy === undefined
         ? checkpoint
@@ -2781,7 +2779,6 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     } finally {
       // A resume's passed `time` ends with the resume (the fresh-run path's terms).
       this.resumePassedTime = undefined;
-      this.runRequest = undefined;
       // Same terms as the fresh-run path: rows on every exit, before the
       // recording stops (9.60.0).
       this.fileIntegrityDisposition();
@@ -3581,7 +3578,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     );
   }
 
-  private createExecutor(runOptions?: AgentRunOptions): FlowChartExecutor {
+  private createExecutor(
+    runOptions?: AgentRunOptions,
+    request?: RequestContext,
+  ): FlowChartExecutor {
     this.assertDeliverableRoles();
     this.assertForcedToolChoiceSupported();
     this.assertNativeOutputSchemaSupported();
@@ -3648,13 +3648,18 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // (`memberRun.ts`) — per scope, never by instance state.
     const scopeFactory = redaction.scopeFactoryFor(spec);
     const ownScopes = this.ownScopes;
+    const scopeRequests = this.scopeRequests;
     const executor = new FlowChartExecutor(spec, {
       readTracking: this.readTracking,
       commitValues: this.commitValues,
       writeProvenance: this.writeProvenance,
       scopeFactory: (...args: Parameters<typeof scopeFactory>) => {
         const scope = scopeFactory(...args);
-        if (scope !== null && typeof scope === 'object') ownScopes.add(scope as object);
+        if (scope !== null && typeof scope === 'object') {
+          ownScopes.add(scope as object);
+          // THIS executor's request, bound to the scope for its whole life.
+          if (request !== undefined) scopeRequests.set(scope as object, request);
+        }
         return scope;
       },
     });
@@ -5574,7 +5579,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // because the chart is built once and the request is per run.
       ...(credentialProvider && {
         currentRequest: (scope: object) =>
-          this.ownScopes.has(scope) ? this.runRequest : memberRequestIn(scope),
+          this.ownScopes.has(scope) ? this.scopeRequests.get(scope) : memberRequestIn(scope),
       }),
       // The claim-check store (9.21.0). Absent → not one new line runs in
       // dispatch: `ctx.artifacts` is the fail-closed teacher and no artifact

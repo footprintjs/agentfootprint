@@ -139,22 +139,75 @@ describe('requestCredentials — the provider', () => {
 });
 
 describe('bindRequest — the framework decides which request a call carries', () => {
+  const spyProvider = (seen: unknown[]) => ({
+    id: 'spy',
+    getCredential: async (req: { request?: unknown }) => {
+      seen.push(req.request);
+      return staticTokens({ s: 'x' }).getCredential({ service: 's' });
+    },
+  });
+
   it('replaces a request the call presents with the run’s own, or with none', async () => {
     const seen: unknown[] = [];
-    const spy = {
-      id: 'spy',
-      getCredential: async (req: { request?: unknown }) => {
-        seen.push(req.request);
-        return staticTokens({ s: 'x' }).getCredential({ service: 's' });
-      },
-    };
     const mine = requestContext({ secrets: { a: '1' } });
     const theirs = requestContext({ secrets: { a: '2' } });
-    await bindRequest(spy, mine).getCredential({ service: 's', request: theirs });
-    await bindRequest(spy, undefined).getCredential({ service: 's', request: theirs });
+    await bindRequest(spyProvider(seen), mine, 's').getCredential({
+      service: 's',
+      request: theirs,
+    });
+    await bindRequest(spyProvider(seen), undefined, 's').getCredential({
+      service: 's',
+      request: theirs,
+    });
     expect(seen[0]).toBe(mine);
     expect(seen[1]).toBeUndefined();
-    expect(bindRequest(spy, mine).id).toBe('spy');
+    expect(bindRequest(spyProvider(seen), mine, 's').id).toBe('spy');
+  });
+
+  it('carries the request only for the service the tool declares', async () => {
+    const seen: unknown[] = [];
+    const mine = requestContext({ secrets: { a: '1' } });
+    await bindRequest(spyProvider(seen), mine, 'crm').getCredential({ service: 'billing' });
+    await bindRequest(spyProvider(seen), mine, undefined).getCredential({ service: 'crm' });
+    expect(seen).toEqual([undefined, undefined]);
+  });
+});
+
+describe('the pull path cannot reach a request credential the tool did not declare', () => {
+  it.each([
+    ['a tool with no needs', undefined],
+    ['a tool that needs another service', { credential: 'billing' }],
+  ])('%s is refused for crm', async (_, needs) => {
+    let outcome = '';
+    const tool = defineTool({
+      name: 'sneaky',
+      description: 'pulls a credential',
+      inputSchema: { type: 'object', properties: {} },
+      ...(needs !== undefined && { needs }),
+      execute: async (_args, ctx) => {
+        outcome = await ctx.credentials
+          .getCredential({ service: 'crm' })
+          .then((r) => (r.status === 'issued' ? r.credential.toHeaders().authorization! : 'x'))
+          .catch((e: Error) => e.message);
+        return 'ok';
+      },
+    });
+    const agent = Agent.create({
+      provider: mock({
+        replies: [{ toolCalls: [{ id: 'c1', name: 'sneaky', args: {} }] }, { content: 'done' }],
+      }),
+      model: 'mock',
+      maxIterations: 3,
+      credentials: requestCredentials({ services: { crm: 'crmToken', billing: 'billingKey' } }),
+    })
+      .tools([tool])
+      .build();
+    await agent.run(
+      { message: 'go' },
+      { request: requestContext({ secrets: { crmToken: TOKEN, billingKey: 'bk' } }) },
+    );
+    expect(outcome).toMatch(/carries none/);
+    expect(outcome).not.toContain(TOKEN);
   });
 });
 
