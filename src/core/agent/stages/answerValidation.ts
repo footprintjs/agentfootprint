@@ -76,6 +76,9 @@ export function withAnswerValidation(
         ...(identity.principal !== undefined && { principal: identity.principal }),
       },
       scope.$getEnv().signal,
+      // This run's own ledger, read off its own state — never another run's.
+      // `executeAnswerValidation` detaches and freezes it before the check runs.
+      scope.toolCallLedger,
     );
     scope.answerValidation = result.report;
     if (config.mode === 'enforce' && result.report.status !== 'passed') {

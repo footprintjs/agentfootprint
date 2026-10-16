@@ -411,6 +411,36 @@ The framework counts the callback's declared outcomes; the application author
 is responsible for implementing the comparisons and covering the claims it
 allows into an answer.
 
+### Which tools ran
+
+The check's second argument also carries `toolCalls`: this run's tool calls, in
+the order they landed, each with its `name`, `callId` and `outcome` —
+`'ok'` (it ran and returned), `'error'` (it threw, declared `failure`,
+`denied` or `invalid`, or could not run as written, such as an unknown name or
+rejected arguments) or `'not-run'` (a permission policy, a rule or a person
+declined it, or a paused batch never dispatched it). Arguments and results are
+never in it. These are the model's own calls: a call a tool makes from inside
+itself is that tool's work and is not listed. The list is frozen, read from the
+run's own state, and never holds another run's calls, even when runs share one
+process. Under `conversationRedaction()` the record keeps the ledger's
+`complete` flag and none of the tool names; the check still reads them live.
+
+A rule that holds the reply when the answer presents code but nothing
+executed it:
+
+<CodeFile path="examples/features/99-guard-presented-code.ts" region="guard" title="examples/features/99-guard-presented-code.ts (region: guard)" />
+
+`toolCalls.complete` is `false` when the list may be missing calls: more than
+`limits.maxToolCalls` (default 256, at most 10,000), a `resumeOnError` leg,
+whose failed attempt's calls this run never observed, or a resumed checkpoint
+written before the run kept a list. A rule that needs the whole list should say
+`unreachable` then, which withholds the answer as unverified. A call a person
+answered on `resume()` is listed, with the calls before the pause.
+
+Served by `streamHandler` with `agUi()`, an enforced refusal sends no
+`TEXT_MESSAGE_CONTENT` and ends the run with `RUN_ERROR` in fixed words; the
+report stays on the server.
+
 A report is available from `agent.answerValidation()` and the execution snapshot.
 `undefined` means no terminal validation ran. Reports name the validator and
 version, identify the exact candidate with a digest, and separate `checked-pass`,
@@ -435,7 +465,7 @@ they do not perform scoped evidence validation.
 
 Limits are configured on `.answerValidation({ limits: ... })`, not supplied by
 the model: `maxReads` (16), `maxBytes` (4 MiB total resolved payloads), `maxChecks`
-(100), `maxCandidateBytes` (1 MiB) and `timeoutMs` (5000). Metadata is checked
+(100), `maxCandidateBytes` (1 MiB), `timeoutMs` (5000) and `maxToolCalls` (256). Metadata is checked
 before fetching a payload; digest-verifying `get` is used, and returned data is
 checked again before delivery to the callback. A custom store or callback is
 trusted application code; these bounds are not a process memory or CPU sandbox.

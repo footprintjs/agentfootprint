@@ -13,11 +13,21 @@
 
 import { describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const REPO_ROOT = join(__dirname, '../..');
 const README_PATH = join(REPO_ROOT, 'examples/README.md');
+
+/** The first number no committed `examples/features/` file uses — fixtures take it,
+ *  so a new example never collides with a fixture's hard-coded number. */
+const FREE = (() => {
+  const numbers = readdirSync(join(REPO_ROOT, 'examples/features'))
+    .map((name) => /^(\d+)-/.exec(name)?.[1])
+    .filter((n): n is string => n !== undefined)
+    .map(Number);
+  return Math.max(0, ...numbers) + 1;
+})();
 const SCRIPT_PATH = join(REPO_ROOT, 'scripts/generate-examples-readme.mjs');
 const START_MARKER = '<!-- AUTO-GENERATED:examples:start -->';
 const END_MARKER = '<!-- AUTO-GENERATED:examples:end -->';
@@ -158,12 +168,12 @@ describe('Block E — concatenated meta descriptions are never truncated', () =>
   it('a fixture with mixed-quote concatenation renders whole, and cleanup restores the README', () => {
     runGenerator();
     const original = readFileSync(README_PATH, 'utf-8');
-    const fixturePath = join(REPO_ROOT, 'examples/features/999-tmp-concat-fixture.ts');
+    const fixturePath = join(REPO_ROOT, `examples/features/${FREE}-tmp-concat-fixture.ts`);
     const fixture = [
       "import type { ExampleMeta } from '../helpers/cli.js';",
       '',
       'export const meta: ExampleMeta = {',
-      "  id: 'features/999-tmp-concat-fixture',",
+      `  id: 'features/${FREE}-tmp-concat-fixture',`,
       "  title: 'Concat fixture — ' + 'joined title',",
       "  group: 'features',",
       '  description:',
@@ -206,8 +216,8 @@ describe('Block E — concatenated meta descriptions are never truncated', () =>
 // colliding files and the folder's next free number.
 
 describe('Block E — duplicate example numbers are refused', () => {
-  const fixtureA = join(REPO_ROOT, 'examples/features/97-tmp-collision-a.ts');
-  const fixtureB = join(REPO_ROOT, 'examples/features/97-tmp-collision-b.ts');
+  const fixtureA = join(REPO_ROOT, `examples/features/${FREE}-tmp-collision-a.ts`);
+  const fixtureB = join(REPO_ROOT, `examples/features/${FREE}-tmp-collision-b.ts`);
 
   it('a new number collision fails BOTH modes with a teaching message and never writes the README', () => {
     runGenerator(); // pre: README up to date
@@ -219,10 +229,10 @@ describe('Block E — duplicate example numbers are refused', () => {
       const check = runGenerator(['--check']);
       expect(check.code).toBe(1);
       expect(check.err).toContain('one number must name ONE example');
-      expect(check.err).toContain('97-tmp-collision-a.ts');
-      expect(check.err).toContain('97-tmp-collision-b.ts');
-      // Next free number = highest in the folder (98, above the 97 fixtures) + 1.
-      expect(check.err).toContain('Next free number in features/: 99');
+      expect(check.err).toContain(`${FREE}-tmp-collision-a.ts`);
+      expect(check.err).toContain(`${FREE}-tmp-collision-b.ts`);
+      // Next free number = highest in the folder (the colliding fixtures) + 1.
+      expect(check.err).toContain(`Next free number in features/: ${FREE + 1}`);
 
       const regen = runGenerator();
       expect(regen.code).toBe(1);

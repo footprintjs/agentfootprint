@@ -4,7 +4,9 @@ import { copyJson as jsonCopy, ownData } from '../lib/boundedJson.js';
 import type { ArtifactScope, ArtifactStore } from '../artifacts/types.js';
 import { computeArtifactDigest } from '../artifacts/payload.js';
 import { createAnswerEvidenceResolver } from './evidence.js';
+import { toolCallsView } from './toolLedger.js';
 import type {
+  AnswerToolCallsView,
   AnswerCheck,
   AnswerValidationContext,
   AnswerValidationOptions,
@@ -18,7 +20,10 @@ const DEFAULT_LIMITS = Object.freeze({
   maxChecks: 100,
   maxCandidateBytes: 1024 * 1024,
   timeoutMs: 5000,
+  maxToolCalls: 256,
 });
+/** The ceiling `limits.maxToolCalls` may be raised to. */
+const MAX_TOOL_CALLS = 10_000;
 const encoder = new TextEncoder();
 const dispositions = new Set(['checked-pass', 'checked-fail', 'not-applicable', 'unreachable']);
 
@@ -51,7 +56,9 @@ export function resolveAnswerValidation<T = unknown>(
         typeof value !== 'number' ||
         !Number.isSafeInteger(value) ||
         value <= 0 ||
-        (key === 'timeoutMs' && value > 2147483647)
+        (key === 'timeoutMs' && value > 2147483647) ||
+        // Each landing rewrites the ledger, so its cost grows with the square.
+        (key === 'maxToolCalls' && value > MAX_TOOL_CALLS)
       )
         throw new Error(`answerValidation.limits.${key} must be a positive bounded integer.`);
       limits[key] = value;
@@ -128,8 +135,12 @@ export async function executeAnswerValidation(
   store: ArtifactStore | undefined,
   scope: ArtifactScope,
   signal?: AbortSignal,
+  toolCalls?: AnswerToolCallsView,
 ): Promise<{ report: AnswerValidationReport; content?: string }> {
   const controller = new AbortController();
+  // Detached and frozen before the callback exists: the check reads a copy of
+  // this run's ledger, never the run's state.
+  const calls = toolCallsView(toolCalls, config.limits.maxToolCalls);
   const evidence = createAnswerEvidenceResolver(store, scope, config.limits, controller.signal);
   let reason: string | undefined;
   let schemaAccepted = false;
@@ -191,7 +202,11 @@ export async function executeAnswerValidation(
         candidateDigest = digest;
         const returned = await config.validate(
           candidate,
-          Object.freeze({ signal: controller.signal, artifacts: evidence.resolver }),
+          Object.freeze({
+            signal: controller.signal,
+            artifacts: evidence.resolver,
+            toolCalls: calls,
+          }),
         );
         if (!active || controller.signal.aborted) return;
         if (Date.now() >= deadline) {

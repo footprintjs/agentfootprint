@@ -42,6 +42,7 @@ import { carriedRunPolicy } from '../../../redaction/conversation.js';
 import { policyInForce } from '../../../redaction/runRedaction.js';
 import { MemberIdentityError, memberIdentityOf, resolveParentRun } from '../../memberRun.js';
 import { makeRunId } from '../../RunnerBase.js';
+import { incompleteToolCalls } from '../../../answer-validation/toolLedger.js';
 
 /**
  * A stored conversation handed to the next run — what
@@ -102,6 +103,13 @@ export interface SeedStageDeps {
   readonly consumePendingResumeHistory: () => PendingResumeHistory | undefined;
   /** Same-request recovery only. A new human turn never supplies this state. */
   readonly consumePendingEvidenceRecovery?: () => EvidenceRecoveryCheckpoint | undefined;
+  /**
+   * The agent keeps a tool-call ledger for `answerValidation`
+   * (`AgentState.toolCallLedger`). Seed starts it on every run: a `resumeOnError` leg
+   * continues a failed turn whose earlier calls this run never observed, so
+   * its ledger starts marked incomplete rather than claiming they never ran.
+   */
+  readonly toolCallLedger?: boolean;
   /**
    * The same read-AND-CLEAR accessor for the conversation's folded spans.
    *
@@ -618,6 +626,14 @@ function seedFrom(
   const resume = mounted ? undefined : deps.consumePendingResumeHistory();
   const history = historyForTurn(resume, message);
   scope.history = history;
+  // Every run that keeps a ledger starts one, so a missing key always means
+  // "not observed" (a checkpoint from before) and the view fails closed.
+  if (deps.toolCallLedger === true) {
+    scope.toolCallLedger =
+      resume !== undefined && !resume.appendsUserTurn
+        ? incompleteToolCalls()
+        : { calls: [], complete: true };
+  }
 
   // The window's durable companion. Restored whether or not THIS agent is
   // configured to fold: the spans belong to the conversation, not to the

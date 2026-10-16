@@ -64,6 +64,7 @@ import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import { policyInForce } from '../../../redaction/runRedaction.js';
 import { bindToolSecurityEvents, type ToolSecurityEmitter } from '../toolSecurityEvents.js';
 import type { AgentfootprintEventMap, AgentfootprintEventType } from '../../../events/registry.js';
+import { appendToolCall, toolOutcomeOf } from '../../../answer-validation/toolLedger.js';
 import { extractSequence } from '../../../security/extractSequence.js';
 import { skillTarget } from '../../../security/skillTarget.js';
 import { menuOutstanding, type TurnRoute } from '../../../injection-engine/routingPolicy.js';
@@ -503,6 +504,14 @@ export interface ToolCallsHandlerDeps {
    * just authorised would be the framework arguing with the human.
    */
   readonly repeatedCallNudge?: boolean;
+  /**
+   * Keep this run's tool-call ledger (`AgentState.toolCallLedger`) for an
+   * `answerValidation` check: name, call id and outcome per `stream.tool_end`
+   * bracket, at most `maxCalls`. Threaded ONLY on an agent with
+   * `answerValidation` — absent, no bracket writes anything, and the agent
+   * commits exactly the keys it always did.
+   */
+  readonly toolCallLedger?: { readonly maxCalls: number };
   /**
    * Skill-graph read_skill GATE (`graph.reachableSkills`). When present, a
    * `read_skill('id')` whose `id` is not reachable from the current cursor is
@@ -2613,6 +2622,31 @@ export function buildToolCallsHandler(
     };
   };
 
+  /**
+   * THE one door for a `stream.tool_end` bracket. Every dispatch path closes a
+   * call here, so the run's tool-call ledger (when `answerValidation` keeps
+   * one) lists exactly the brackets the stream reported — never arguments,
+   * never results. `ran` is whether the tool's own code ran: a call a person
+   * declined or a rule refused without an `error` is listed `not-run`, never `ok`.
+   */
+  const emitToolEnd = (
+    scope: TypedScope<AgentState>,
+    toolName: string,
+    payload: AgentfootprintEventMap['agentfootprint.stream.tool_end']['payload'],
+    ran: boolean,
+  ): void => {
+    typedEmit(scope, 'agentfootprint.stream.tool_end', payload);
+    const ledger = deps.toolCallLedger;
+    if (ledger === undefined) return;
+    const prior = scope.toolCallLedger;
+    const next = appendToolCall(
+      prior,
+      { name: toolName, callId: payload.toolCallId, outcome: toolOutcomeOf(payload, ran) },
+      ledger.maxCalls,
+    );
+    if (next !== prior) scope.toolCallLedger = next;
+  };
+
   const sessionContext = (
     scope: TypedScope<AgentState>,
     toolName: string,
@@ -3644,12 +3678,17 @@ export function buildToolCallsHandler(
         parallelCount: settlement.size,
         notDispatched: notDispatchedMarker(settlement.paused),
       });
-      typedEmit(scope, 'agentfootprint.stream.tool_end', {
-        toolCallId: call.id,
-        result,
-        durationMs: 0,
-        notDispatched: notDispatchedMarker(settlement.paused),
-      });
+      emitToolEnd(
+        scope,
+        call.name,
+        {
+          toolCallId: call.id,
+          result,
+          durationMs: 0,
+          notDispatched: notDispatchedMarker(settlement.paused),
+        },
+        false,
+      );
     }
   };
 
@@ -5535,25 +5574,30 @@ export function buildToolCallsHandler(
         const modelResult = capped.modelResult;
 
         const durationMs = Date.now() - startMs;
-        typedEmit(scope, 'agentfootprint.stream.tool_end', {
-          toolCallId: tc.id,
-          result: capped.result,
-          durationMs,
-          ...(error === true && { error: true }),
-          // The tool's own declared outcome (9.19.0) — additive, envelope
-          // tools only.
-          ...(toolStatus !== undefined && { status: toolStatus }),
-          // Each only when a CONFIGURED RULE acted — an `onToolResult` link or
-          // the cap (`modelResult`), an `onToolCall` link or the tool's own
-          // redaction (`changedArgKeys`), a permission policy or a link that
-          // refused (`notExecuted`). With no rule, `tool_end` is the bytes it
-          // always was: a call that failed to run on its own (an unknown name,
-          // an args rejection, a credential block) keeps saying so with
-          // `error: true` alone.
-          ...(modelResult !== capped.result && { modelResult }),
-          ...(executed && changedKeys.length > 0 && { changedArgKeys: changedKeys }),
-          ...(denied && { notExecuted: true as const }),
-        });
+        emitToolEnd(
+          scope,
+          tc.name,
+          {
+            toolCallId: tc.id,
+            result: capped.result,
+            durationMs,
+            ...(error === true && { error: true }),
+            // The tool's own declared outcome (9.19.0) — additive, envelope
+            // tools only.
+            ...(toolStatus !== undefined && { status: toolStatus }),
+            // Each only when a CONFIGURED RULE acted — an `onToolResult` link or
+            // the cap (`modelResult`), an `onToolCall` link or the tool's own
+            // redaction (`changedArgKeys`), a permission policy or a link that
+            // refused (`notExecuted`). With no rule, `tool_end` is the bytes it
+            // always was: a call that failed to run on its own (an unknown name,
+            // an args rejection, a credential block) keeps saying so with
+            // `error: true` alone.
+            ...(modelResult !== capped.result && { modelResult }),
+            ...(executed && changedKeys.length > 0 && { changedArgKeys: changedKeys }),
+            ...(denied && { notExecuted: true as const }),
+          },
+          executed,
+        );
         let resultStr = typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
         // The tool's OWN answer, before any framework suffix joins it — what
         // the repeated-call ledger fingerprints. Fingerprinting the decorated
@@ -6144,16 +6188,21 @@ export function buildToolCallsHandler(
           iteration,
           turnStampOf(scope),
         );
-        typedEmit(scope, 'agentfootprint.stream.tool_end', {
-          toolCallId,
-          result: askCapped.result,
-          durationMs: Date.now() - startMs,
-          ...(error === true && { error: true }),
-          ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
-          ...(askCapped.modelResult !== askCapped.result && {
-            modelResult: askCapped.modelResult,
-          }),
-        });
+        emitToolEnd(
+          scope,
+          toolName,
+          {
+            toolCallId,
+            result: askCapped.result,
+            durationMs: Date.now() - startMs,
+            ...(error === true && { error: true }),
+            ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
+            ...(askCapped.modelResult !== askCapped.result && {
+              modelResult: askCapped.modelResult,
+            }),
+          },
+          toolRan,
+        );
         bracketSettled(scope, askSettlement);
         typedEmit(scope, 'agentfootprint.agent.iteration_end', {
           turnIndex: 0,
@@ -6327,16 +6376,21 @@ export function buildToolCallsHandler(
           iteration,
           turnStampOf(scope),
         );
-        typedEmit(scope, 'agentfootprint.stream.tool_end', {
-          toolCallId,
-          result: decisionCapped.result,
-          durationMs: Date.now() - startMs,
-          ...(error === true && { error: true }),
-          ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
-          ...(decisionCapped.modelResult !== decisionCapped.result && {
-            modelResult: decisionCapped.modelResult,
-          }),
-        });
+        emitToolEnd(
+          scope,
+          toolName,
+          {
+            toolCallId,
+            result: decisionCapped.result,
+            durationMs: Date.now() - startMs,
+            ...(error === true && { error: true }),
+            ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
+            ...(decisionCapped.modelResult !== decisionCapped.result && {
+              modelResult: decisionCapped.modelResult,
+            }),
+          },
+          toolRan,
+        );
         bracketSettled(scope, decisionSettlement);
         typedEmit(scope, 'agentfootprint.agent.iteration_end', {
           turnIndex: 0,
@@ -6473,16 +6527,21 @@ export function buildToolCallsHandler(
           iteration,
           turnStampOf(scope),
         );
-        typedEmit(scope, 'agentfootprint.stream.tool_end', {
-          toolCallId,
-          result: consentCapped.result,
-          durationMs: Date.now() - startMs,
-          ...(error === true && { error: true }),
-          ...(consentEnvelope?.status !== undefined && { status: consentEnvelope.status }),
-          ...(consentCapped.modelResult !== consentCapped.result && {
-            modelResult: consentCapped.modelResult,
-          }),
-        });
+        emitToolEnd(
+          scope,
+          toolName,
+          {
+            toolCallId,
+            result: consentCapped.result,
+            durationMs: Date.now() - startMs,
+            ...(error === true && { error: true }),
+            ...(consentEnvelope?.status !== undefined && { status: consentEnvelope.status }),
+            ...(consentCapped.modelResult !== consentCapped.result && {
+              modelResult: consentCapped.modelResult,
+            }),
+          },
+          dispatched.executed === true,
+        );
         bracketSettled(scope, consentSettlement);
         typedEmit(scope, 'agentfootprint.agent.iteration_end', {
           turnIndex: 0,
@@ -6606,17 +6665,22 @@ export function buildToolCallsHandler(
         turnStampOf(scope),
       );
 
-      typedEmit(scope, 'agentfootprint.stream.tool_end', {
-        toolCallId,
-        // The REAL value the pause returned, not what a rule let the model read
-        // — the same split the other four paths keep. Capped when a ceiling is
-        // configured, because the marker IS the result on every channel.
-        result: pauseCapped.result,
-        durationMs: Date.now() - startMs,
-        ...(pauseCapped.modelResult !== pauseCapped.result && {
-          modelResult: pauseCapped.modelResult,
-        }),
-      });
+      emitToolEnd(
+        scope,
+        toolName,
+        {
+          toolCallId,
+          // The REAL value the pause returned, not what a rule let the model read
+          // — the same split the other four paths keep. Capped when a ceiling is
+          // configured, because the marker IS the result on every channel.
+          result: pauseCapped.result,
+          durationMs: Date.now() - startMs,
+          ...(pauseCapped.modelResult !== pauseCapped.result && {
+            modelResult: pauseCapped.modelResult,
+          }),
+        },
+        true,
+      );
       bracketSettled(scope, pauseSettlement);
       typedEmit(scope, 'agentfootprint.agent.iteration_end', {
         turnIndex: 0,

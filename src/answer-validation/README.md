@@ -2,7 +2,8 @@
 Map: `types.ts` declares the authored checks, bounds and report vocabulary;
 `outputSchema.ts` declares the answer's shape (`.outputSchema()`: the parser
 port, its default instruction, and the parse every caller applies).
-Walker: `evidence.ts` resolves bounded parcels under the run's existing scope.
+Walker: `evidence.ts` resolves bounded parcels under the run's existing scope;
+`toolLedger.ts` hands the check this run's tool calls as one frozen parcel.
 Fold: `validate.ts` derives a verdict from explicit checks and evidence availability.
 
 The host supplies the comparisons. This folder supplies no domain rules,
@@ -24,3 +25,48 @@ Without configuration the agent mounts none of this boundary. With it, both
 modes suppress draft tokens. Enforce refuses failed or unverified reports;
 observe permits delivery with the report available for inspection. Diagnostics
 can still contain the original model candidate; this does not replace redaction.
+
+## Which tools ran — `context.toolCalls`
+
+The check also reads this run's tool calls: `name`, `callId` and `outcome`
+(`ok` / `error` / `not-run`), never arguments or results. The ledger is tracked
+state of the run that owns the check (`AgentState.toolCallLedger`), written beside
+every `stream.tool_end` bracket (`src/core/agent/stages/toolCalls.ts` · `emitToolEnd`) and only
+on an agent with `answerValidation`, so it cannot hold another run's calls and
+no other agent's record changes. `complete: false` says calls may be missing
+(past `limits.maxToolCalls`, or a `resumeOnError` leg).
+
+The rule "the answer presents code, but no code-execution tool ran":
+
+```ts
+const presentedCodeWasExecuted: AnswerValidationOptions<{ text: string }> = {
+  id: 'presented-code-was-executed',
+  version: '1',
+  mode: 'enforce',
+  validate(answer, { toolCalls }) {
+    const presentsCode = answer.text.includes('```');
+    const executed = toolCalls.calls.some(
+      (call) => call.name === 'run_code' && call.outcome === 'ok',
+    );
+    return {
+      checks: [
+        {
+          id: 'code-was-executed',
+          disposition: !presentsCode
+            ? 'not-applicable'
+            : executed
+            ? 'checked-pass'
+            : toolCalls.complete
+            ? 'checked-fail'
+            : 'unreachable', // a partial list cannot say nothing ran
+        },
+        { id: 'answer-is-text', disposition: 'checked-pass' },
+      ],
+    };
+  },
+};
+```
+
+Runnable: `examples/features/99-guard-presented-code.ts`. Over `streamHandler` +
+`agUi()` a refusal sends no `TEXT_MESSAGE_CONTENT` and ends in `RUN_ERROR`
+(`test/ag-ui/answer-validation-guard.test.ts`).

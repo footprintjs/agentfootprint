@@ -4690,6 +4690,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // on ruled tools, and the run's `messageFrom` constant is written — only
       // under the arm (refused at build without the inputs layer).
       ...(this.argumentSourcesArmed === true && { argumentSources: true as const }),
+      // The answer check's tool-call ledger — value-conditional, so an agent
+      // without `answerValidation` hands seed the deps it always did.
+      ...(this.answerValidationConfig !== undefined && { toolCallLedger: true }),
       get consumePendingResumeFindingsLedger() {
         return ledgerRestoreArmed ? consumeResumeLedger : undefined;
       },
@@ -5601,6 +5604,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // the VALUE-conditional pattern, so an agent on the default hands the
       // handler exactly the deps object it always did.
       ...(this.repeatedCallNudge === false && { repeatedCallNudge: false }),
+      // The answer check's tool-call ledger (`context.toolCalls`) — kept ONLY
+      // when `answerValidation` is configured, so no other agent's record changes.
+      ...(this.answerValidationConfig !== undefined && {
+        toolCallLedger: { maxCalls: this.answerValidationConfig.limits.maxToolCalls },
+      }),
       // Skill-graph read_skill gate: bound the model's read_skill jumps to the
       // reachable set from the current cursor. Undefined → gate off (back-compat).
       ...(this.skillGraphReachable && {

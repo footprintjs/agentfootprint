@@ -219,6 +219,9 @@ const FIELDS: Readonly<Record<string, readonly string[]>> = {
   // The injection engine's observability summary keeps its counts; the name of
   // the tool the model called last may be one the model made up.
   injectionContextSummary: ['lastToolName'],
+  // The answer check's tool-call ledger keeps `complete`; the calls carry tool
+  // names, which the model may have made up (`lastToolName`'s reasoning).
+  toolCallLedger: ['calls'],
 };
 
 /** The vocabulary as one frozen policy. */
