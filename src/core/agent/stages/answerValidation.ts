@@ -4,6 +4,7 @@ import {
   type ResolvedAnswerValidation,
   type AnswerValidationReport,
 } from '../../../answer-validation/index.js';
+import { ledgerAtCheck } from '../../../answer-validation/toolLedger.js';
 import type { ArtifactStore } from '../../../artifacts/types.js';
 import type { OutputSchemaParser } from '../../../answer-validation/outputSchema.js';
 import type { AgentState } from '../types.js';
@@ -76,6 +77,12 @@ export function withAnswerValidation(
         ...(identity.principal !== undefined && { principal: identity.principal }),
       },
       scope.$getEnv().signal,
+      // This run's own ledger, read off its own state at the moment of the
+      // check — never another run's, never a cached copy. Incomplete while a
+      // call is open or the last reply's calls never went out (this is the
+      // terminal branch, so they never will). `executeAnswerValidation`
+      // detaches and freezes it before the check runs.
+      ledgerAtCheck(scope.toolCallLedger, undispatchedCalls(scope)),
     );
     scope.answerValidation = result.report;
     if (config.mode === 'enforce' && result.report.status !== 'passed') {
@@ -85,4 +92,17 @@ export function withAnswerValidation(
     }
     return 'final';
   };
+}
+
+/** Calls the model asked for that the terminal branch will never dispatch:
+ *  the last reply's (all but a forced-output strategy's own answer tool), or —
+ *  on a wrapped-up turn, whose last reply was asked with the tools withheld —
+ *  the cut-off reply's, which the route recorded on `stoppedEarly`. */
+function undispatchedCalls(scope: TypedScope<AgentState>): number {
+  const calls = scope.llmLatestToolCalls ?? [];
+  const forced = scope.forcedOutputToolName;
+  let count = 0;
+  for (const call of calls) if (call?.name !== forced) count += 1;
+  const cutOff = scope.stoppedEarly?.pendingToolCalls;
+  return Math.max(count, typeof cutOff === 'number' ? cutOff : 0);
 }

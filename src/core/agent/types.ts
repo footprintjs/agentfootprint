@@ -1650,6 +1650,16 @@ export interface AgentState {
   answerValidation?: import('../../answer-validation/index.js').AnswerValidationReport;
   /** Refusal carrier: prevents final capture, history, memory and token delivery. */
   answerValidationBlocked?: boolean;
+  /**
+   * This run's tool calls — name, call id, outcome; never arguments or
+   * results — the ledger `answerValidation` hands a check as
+   * `context.toolCalls`. Written beside every `stream.tool_end` bracket, and
+   * ONLY on an agent with `answerValidation` (`ToolCallsHandlerDeps.toolCallLedger`),
+   * so every other agent commits exactly the keys it always did. Run state:
+   * seed starts a fresh, empty one on every run; a pause carries it to the
+   * resumed leg.
+   */
+  toolCallLedger?: import('../../answer-validation/toolLedger.js').ToolCallLedger;
   /** Set only at the final capture after a validation report was accepted. */
   answerValidationCommitted?: boolean;
   /** In-flight hand-off from the Route decider (which judges the answer and

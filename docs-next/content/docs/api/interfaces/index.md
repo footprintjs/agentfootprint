@@ -2,7 +2,7 @@
 title: Interfaces
 ---
 
-355 exported from `agentfootprint`.
+358 exported from `agentfootprint`.
 
 - [`AbsenceDeclaration`](/docs/api/interfaces/AbsenceDeclaration)
 - [`ActOptions`](/docs/api/interfaces/ActOptions)
@@ -18,6 +18,9 @@ title: Interfaces
 - [`AnswerEvidenceResolver`](/docs/api/interfaces/AnswerEvidenceResolver)
 - [`AnswerGroundingReading`](/docs/api/interfaces/AnswerGroundingReading)
 - [`AnswerInProgress`](/docs/api/interfaces/AnswerInProgress)
+- [`AnswerToolCall`](/docs/api/interfaces/AnswerToolCall)
+- [`AnswerToolCallsView`](/docs/api/interfaces/AnswerToolCallsView)
+- [`AnswerValidationContext`](/docs/api/interfaces/AnswerValidationContext)
 - [`AnswerValidationOptions`](/docs/api/interfaces/AnswerValidationOptions)
 - [`AnswerValidationReport`](/docs/api/interfaces/AnswerValidationReport)
 - [`ArgumentRow`](/docs/api/interfaces/ArgumentRow)

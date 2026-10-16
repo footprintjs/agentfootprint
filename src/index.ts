@@ -1346,4 +1346,7 @@ export {
   type AnswerValidationReport,
   type AnswerCheck,
   type AnswerEvidenceResolver,
+  type AnswerToolCall,
+  type AnswerToolCallsView,
+  type AnswerValidationContext,
 } from './answer-validation/index.js';

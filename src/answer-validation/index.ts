@@ -5,6 +5,8 @@ export {
   type AnswerEvidenceRefusal,
   type AnswerEvidenceResolution,
   type AnswerEvidenceResolver,
+  type AnswerToolCall,
+  type AnswerToolCallsView,
   type AnswerValidationContext,
   type AnswerValidationLimits,
   type AnswerValidationOptions,
@@ -13,3 +15,12 @@ export {
   type ResolvedAnswerValidation,
 } from './types.js';
 export { resolveAnswerValidation, executeAnswerValidation } from './validate.js';
+export {
+  appendToolCall,
+  incompleteToolCalls,
+  ledgerAtCheck,
+  startToolCall,
+  toolCallsView,
+  toolOutcomeOf,
+  type ToolCallLedger,
+} from './toolLedger.js';

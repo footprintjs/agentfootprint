@@ -319,6 +319,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 96 | [`96-thinking-per-model.ts`](features/96-thinking-per-model.ts) | Thinking per model | One .thinking({ budget }) on three Claude models: adaptive thinking on Opus 5.5 (no budget on the wire), budget_tokens on Haiku 4.5, and a build-time refusal for Claude 3 Haiku, which cannot think. |
 | 97 | [`97-agentcore-runtime-mcp.ts`](features/97-agentcore-runtime-mcp.ts) | MCP server hosted on AgentCore Runtime | mcpClient over agentCoreRuntimeMcpTransport: one runtime session carried across calls, and the runtime’s "session operation in progress" refusal retried instead of reaching the model as a failed tool. |
 | 98 | [`98-request-credentials.ts`](features/98-request-credentials.ts) | Request credentials — a per-request token, filled into MCP tool arguments by the host | requestContext seals the incoming request’s secrets for one run; requestCredentials vends them to declared needs and fails closed by name. hostFilled removes a tool argument from the model’s schema, refuses a model-sent value by name and fills it from the credential — the MCP token wrapper, in the library. |
+| 99 | [`99-guard-presented-code.ts`](features/99-guard-presented-code.ts) | An output guard that sees which tools ran — refuse code that was never executed | answerValidation reads context.toolCalls (name, call id, outcome — no arguments or results) and fails the run when the answer presents code but no code-execution tool ran. |
 
 ### [`canonical/`](canonical/) — end-to-end patterns
 
