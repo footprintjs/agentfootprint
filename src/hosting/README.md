@@ -15,6 +15,25 @@ me, outlive the request — plus local adapters that prove the ports work.
 Admission, ownership and retention are decided once, here, so no store can get
 them slightly differently. Deliberately vendor-neutral — a test greps for it.
 
+## A request's own credential (`requestSealing.ts`)
+`standingAgent` and `streamHandler` take `sealRequest`: the app's
+`RequestSealer`, called once per request that RUNS — after every refusal —
+with the headers, the session and the run's identity. It returns
+`requestContext({ secrets })` (or `undefined`), and the host hands the handle to
+that request's `run()` / `resume()` only: never a reply, a frame, a stored
+session or a checkpoint. `requestSealing` is the one funnel: it refuses a value
+`requestContext` did not build, a handle returned twice (one handle, one run),
+and turns a sealer's throw into `ERR_REQUEST_NOT_SEALED` (400) in fixed words.
+`nodeHost`/`httpHost` deliver the headers; they never seal. Pinned by
+`test/hosting/request-sealing.test.ts`.
+
+```ts
+sealRequest: ({ headers }) =>
+  headers['x-crm-token'] === undefined
+    ? undefined
+    : requestContext({ secrets: { crmToken: headers['x-crm-token'] } }),
+```
+
 ## The door guard (`doorGuard.ts`)
 Every door `httpHost` serves checks a request before any handler sees it, with
 or without an identity verifier. Being able to reach the port is not

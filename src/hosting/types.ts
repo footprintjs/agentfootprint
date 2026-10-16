@@ -35,6 +35,7 @@ import type { AnswerAccountsOptions } from './answerAccounts.js';
 import type { DoorIdentity } from './identityVerification.js';
 import type { AdmissionPolicy } from './admission.js';
 import type { IngressSink } from './ingressRecord.js';
+import type { RequestSealer } from './requestSealing.js';
 import type { SessionSummary, SessionWireRequest, SessionWireResult } from './sessionWire.js';
 
 export type { Unsubscribe };
@@ -1459,6 +1460,32 @@ export interface StandingAgentBaseOptions<TH extends HostHandle = HostHandle> {
    * decided against a window none of them had joined.
    */
   readonly admission?: AdmissionPolicy;
+  /**
+   * Seal the credential a request carries for its run — a gateway's
+   * per-request token in a header, read by a `requestCredentials` provider
+   * (`agentfootprint/security`) for the tools that declare a `needs` for it.
+   *
+   * Called once per request that RUNS (a turn or an answer — never an
+   * artifact or session op, never a refused request), after the caller is
+   * verified and the session's ownership is checked, with the request's
+   * headers ({@link HostRequest.headers}: `nodeHost` and `httpHost` deliver
+   * them), the session and the run's identity. Return
+   * `requestContext({ secrets })`, or `undefined` for a request that carries
+   * none; the handle goes to THAT request's `run()` / `resume()` only — never
+   * the reply, the stored session or the checkpoint, so a resumed run is
+   * served the RESUMING request's credential. A handle returned twice is
+   * refused; a sealer that throws refuses the request in fixed words
+   * (`ERR_REQUEST_NOT_SEALED`, 400).
+   *
+   * Unset — the default — no run carries a request, exactly as before.
+   *
+   * @example
+   *   sealRequest: ({ headers }) =>
+   *     headers['x-crm-token'] === undefined
+   *       ? undefined
+   *       : requestContext({ secrets: { crmToken: headers['x-crm-token'] } }),
+   */
+  readonly sealRequest?: RequestSealer;
   /**
    * Where this door's ingress decisions go (9.32.0) — one record per request,
    * including every request that never became a run.

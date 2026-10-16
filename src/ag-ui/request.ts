@@ -2,14 +2,25 @@
  * request — an AG-UI request (`RunAgentInput`) read as UNTRUSTED browser input,
  * and the one turn it may ask for.
  *
- * Two steps, each refusing by NAME (a `WireRequestRefusal`: its own status and
- * code; the field named, the value never quoted back):
+ * Three steps. The first is the app's to replace; the other two are the CORE,
+ * and run whichever reader produced the request — so a reader can map another
+ * body onto a turn, and never weaken a rule:
  *
- *   readAgUiRunInput   the body's SHAPE, field by field, and the ids' FORMAT
- *                      and length — nothing here is trusted, nothing the
- *                      server holds is read;
+ *   the READER         a body → an {@link AgUiTurnRequest}. The default takes
+ *                      the body as an AG-UI `RunAgentInput`; a gateway that
+ *                      sends its own body shape passes its own
+ *                      ({@link AgUiRequestReader}). Mapping only — it decides
+ *                      nothing below;
+ *   readAgUiRunInput   what the reader produced, copied as plain JSON (so a
+ *                      getter or a proxy cannot answer the check one way and
+ *                      the plan another), then its SHAPE, field by field, and
+ *                      the ids' FORMAT and length — nothing here is trusted,
+ *                      nothing the server holds is read;
  *   planAgUiTurn       the turn, from the request AND what the server holds
  *                      for the bound conversation.
+ *
+ * The core's steps refuse by NAME (a `WireRequestRefusal`: its own status and
+ * code; the field named, the value never quoted back).
  *
  * WHAT A REQUEST MAY DECIDE, and what it may not:
  *   - the newest USER message is the run's message. Nothing else the browser
@@ -202,6 +213,101 @@ export function readAgUiRunInput(body: unknown): AgUiRunInput {
     context: context as AgUiRunInput['context'],
     ...(resume.length > 0 && { resume: resume as readonly AgUiResumeEntry[] }),
   };
+}
+
+/**
+ * What a request reader hands the core: the one turn a request asks for, in
+ * AG-UI's terms. `AgUiRunInput` is one (a `RunAgentInput` as sent); a reader
+ * for another body builds one from it — `tools` and `context` may be left out.
+ *
+ * It carries no identity, credential or redaction setting, and the core reads
+ * nothing else a reader adds: the caller is bound by the host's `ThreadBinder`,
+ * a credential reaches a run only through the host's `sealRequest`.
+ */
+export interface AgUiTurnRequest {
+  /** The conversation the request NAMES — format-checked, never a key. */
+  readonly threadId: string;
+  /** The run id the stream names this run by — format-checked. */
+  readonly runId: string;
+  readonly parentRunId?: string;
+  /**
+   * The messages, newest last. Only the newest is read — a user message (the
+   * run's message), or the `tool` message answering the frontend tool call a
+   * paused run waits on. A system or developer message anywhere is refused.
+   */
+  readonly messages: readonly AgUiMessage[];
+  /** The frontend tools the caller offers — run only when the app allow-listed the name. */
+  readonly tools?: AgUiRunInput['tools'];
+  /** Reaches the agent only through the app's `accept.context` validator. */
+  readonly context?: AgUiRunInput['context'];
+  /** Reaches the agent only through the app's `accept.state` validator. */
+  readonly state?: unknown;
+  /** Answers to the interrupt a paused run waits on — matched to the server's own record. */
+  readonly resume?: readonly AgUiResumeEntry[];
+}
+
+/** What a request reader is given: the request as the host read it — UNTRUSTED. */
+export interface AgUiRequestFacts {
+  /** The request's JSON body, parsed. */
+  readonly body: unknown;
+  /** The request's headers, names lower-cased. */
+  readonly headers: Readonly<Record<string, string>>;
+}
+
+/**
+ * The request-reading strategy: a body → the turn it asks for. Mapping only;
+ * every rule runs after it, in the core. Refuse a body it cannot read by
+ * throwing a `WireRequestRefusal` (its status and code reach the caller);
+ * anything else it throws is refused as a malformed request, in fixed words.
+ *
+ * @example A gateway that sends `{ conversationId, requestId, text }`
+ * ```ts
+ * const reader: AgUiRequestReader = ({ body }) => {
+ *   const b = body as { conversationId?: unknown; requestId?: unknown; text?: unknown };
+ *   return {
+ *     threadId: String(b.conversationId),
+ *     runId: String(b.requestId),
+ *     messages: [{ id: 'gateway-turn', role: 'user', content: String(b.text) }],
+ *   };
+ * };
+ * ```
+ */
+export type AgUiRequestReader = (request: AgUiRequestFacts) => AgUiTurnRequest;
+
+/** The default reader: the body IS an AG-UI `RunAgentInput`. */
+export const runAgentInputReader: AgUiRequestReader = ({ body }) => body as AgUiTurnRequest;
+
+/**
+ * The core's read of one request: `reader` maps the body, and what it produced
+ * is checked by {@link readAgUiRunInput} — whichever reader it was.
+ *
+ * @throws WireRequestRefusal — the reader's own refusal, or the core's by name
+ *   (400, `ERR_INVALID_RUN_INPUT`).
+ */
+export function readAgUiRequest(
+  reader: AgUiRequestReader,
+  request: AgUiRequestFacts,
+): AgUiRunInput {
+  let produced: unknown;
+  try {
+    produced = plainJson(reader(request));
+  } catch (err) {
+    if (err instanceof WireRequestRefusal) throw err;
+    // Never the reader's message: it may quote the body it could not read.
+    throw malformed('the request reader could not read the body.');
+  }
+  return readAgUiRunInput(produced);
+}
+
+/**
+ * A reader's answer as plain JSON — every value read ONCE, here: a getter, a
+ * proxy or a `toJSON` cannot answer the core's check one way and its plan
+ * another. The default reader's body is JSON already, so this changes nothing
+ * it reads.
+ */
+function plainJson(value: unknown): unknown {
+  const text = JSON.stringify(value);
+  return text === undefined ? undefined : (JSON.parse(text) as unknown);
 }
 
 /** What a page's `state` or `context` is checked by before the agent may see it. */

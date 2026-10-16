@@ -119,7 +119,8 @@ async function agUiFrames(agent: Agent, message: string): Promise<string[]> {
   const framing = agUiSse(); // the official @ag-ui/encoder writes every frame
   const frames: string[] = [];
   const write = (events: readonly AgUiEvent[]) => {
-    for (const event of events) frames.push(framing.frame(event));
+    // Each frame's number in this stream — the driver counts, the framing reads.
+    for (const event of events) frames.push(framing.frame(event, { sequence: frames.length + 1 }));
   };
   // Subscribe BEFORE the run: every event the run serves, translated as it lands.
   const off = agent.on('*', (event) => write(serializer.event(event)));

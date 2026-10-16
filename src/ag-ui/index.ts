@@ -2,8 +2,10 @@
  * ag-ui — the AG-UI protocol adapter over agentfootprint's event stream.
  *
  * `agUi()` is the adapter a host takes (`streamHandler` on
- * `agentfootprint/hosting`): it reads an untrusted `RunAgentInput`, plans the
- * turn against what the server holds, and translates the run.
+ * `agentfootprint/hosting`): it reads an untrusted request (a `RunAgentInput`,
+ * or a gateway's own body through a `reader`), plans the turn against what the
+ * server holds, translates the run and frames it (`agUiSse`, or a gateway's
+ * own envelope through `framing`).
  * `agUiSerializer` turns one run's served events into AG-UI events; `agUiSse`
  * frames them for the wire with the official `@ag-ui/encoder`. Published
  * through the `agentfootprint/ag-ui` door. The fixed sentences and the id
@@ -19,9 +21,21 @@ export {
   type AgUiTranslation,
 } from './serializer.js';
 export { agUiSse, type AgUiEncoderModule, type AgUiSseOptions } from './framing.js';
-export { agUi, type AgUiOptions } from './adapter.js';
+export {
+  agUi,
+  type AgUiOptions,
+  type AgUiTranslationRun,
+  type AgUiTranslationStrategy,
+} from './adapter.js';
 export type { AgUiFrontendTool } from './frontendTools.js';
-export { AG_UI_MAX_ID_LENGTH, readAgUiRunInput, type AgUiValidator } from './request.js';
+export {
+  AG_UI_MAX_ID_LENGTH,
+  readAgUiRunInput,
+  type AgUiRequestFacts,
+  type AgUiRequestReader,
+  type AgUiTurnRequest,
+  type AgUiValidator,
+} from './request.js';
 export {
   AG_UI_PROTOCOL_VERSION,
   type AgUiAddress,

@@ -103,8 +103,30 @@ export interface ToSSEOptions {
 export interface SseFraming<E> {
   /** The media type a response framed this way declares. */
   readonly contentType: string;
-  /** The whole frame for one event, its terminating blank line included. */
-  frame(event: E): string;
+  /**
+   * The whole frame for one event, its terminating blank line included.
+   *
+   * `at` is where the frame stands in ITS stream ({@link SseFramePosition}),
+   * counted by whoever drives the stream: a framing that numbers its frames
+   * (a gateway's `eventSequence`) reads the number here and keeps no counter
+   * of its own, so one framing serving many streams at once never numbers one
+   * stream's frames with another's.
+   */
+  frame(event: E, at: SseFramePosition): string;
+}
+
+/**
+ * Where one frame stands in its stream — handed to {@link SseFraming.frame} by
+ * whoever drives the stream (`toSSE`, `streamHandler`), never kept by a framing.
+ */
+export interface SseFramePosition {
+  /**
+   * The frame's number in this stream: 1 for the first, one more for each frame
+   * written after it. Counted per stream — one response, one run — and never
+   * shared: a resumed run is a new stream and counts from 1 again. Keep-alive
+   * comments are not frames and are not counted.
+   */
+  readonly sequence: number;
 }
 
 /**
@@ -214,6 +236,8 @@ export async function* toSSE<TIn, TOut>(
     }, heartbeatMs);
   }
 
+  /** Frames written to THIS stream so far — the {@link SseFramePosition} of the next one. */
+  let written = 0;
   try {
     while (!done || queue.length > 0) {
       while (queue.length > 0) {
@@ -230,7 +254,9 @@ export async function* toSSE<TIn, TOut>(
             if (payload?.content) yield payload.content;
           }
         } else {
-          yield framing.frame(event);
+          const frame = framing.frame(event, { sequence: written + 1 });
+          written += 1;
+          yield frame;
         }
       }
       if (done) break;

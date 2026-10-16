@@ -224,7 +224,10 @@ export interface ProtocolAdapter<TRequest, TEvent> {
   open(request: TRequest, resumed?: unknown): RunTranslation<TEvent>;
   /**
    * How its events are written — built once per host, so a framing that loads
-   * an optional peer refuses when the host is built, not mid-request.
+   * an optional peer refuses when the host is built, not mid-request. One
+   * framing serves every stream at once, so it keeps nothing per stream: the
+   * host counts each stream's frames and hands the number to `frame`
+   * (`SseFramePosition`).
    */
   framing(): SseFraming<TEvent>;
 }

@@ -60,6 +60,15 @@ What the handler does, for every protocol (`StreamHandlerOptions`):
   PER PROCESS: with several instances (serverless, workers), route a thread to
   one instance (sticky sessions) — the session store has no compare-and-set, so
   two instances could resume one paused run twice.
+- **A credential the request carries reaches its own run only** (`sealRequest`, a
+  `RequestSealer`). A gateway that forwards a per-request token in a header has the
+  app seal it with `requestContext` (`agentfootprint/security`); the handle goes to
+  that request's `run()` / `resume()` and nowhere else — never a frame, the stored
+  session or the checkpoint — and a `requestCredentials` provider hands it to the
+  tool that declares it. Called once per request that runs, after every refusal,
+  with the request's headers and the binding (`RequestSealFacts`). A handle returned
+  twice is refused; a sealer that throws refuses the request in fixed words
+  (`ERR_REQUEST_NOT_SEALED`, 400). See [Behind a gateway](#behind-a-gateway).
 - The door guard first (421/403/415, the same `allowedOrigins` / `allowedHosts` /
   `requireJsonContentType` options as every host door); a body ceiling
   (`maxBodyBytes`, default `DEFAULT_STREAM_MAX_BODY_BYTES`, 1 MiB — 413); refusals
@@ -147,6 +156,54 @@ run with `RUN_FINISHED { outcome: interrupt }`, its question in the interrupt's
 `message`. The frontend answers in its next request's `resume`; the stored run
 continues from exactly where it stopped, the sub-agent and call it stopped in
 re-opened under their own ids.
+
+## Behind a gateway
+
+A gateway in front of the agent may send its OWN request body rather than a
+`RunAgentInput`, and expect its own envelope rather than plain AG-UI frames —
+say `{"eventType":"TextMessageContentEvent","event":{…, "eventSequence": n}}`.
+`agUi()` is three strategies around one core, and each strategy is replaceable
+on its own (`AgUiOptions`):
+
+| Strategy | Default | A gateway's own |
+|---|---|---|
+| `reader` — a body → the turn it asks for (`AgUiRequestReader`) | the body is a `RunAgentInput` | maps its body onto an `AgUiTurnRequest` |
+| `translation` — one run's served events → AG-UI events (`AgUiTranslationStrategy`) | `agUiSerializer`, tuned by `custom` and `reasoning` | rarely needed: the AG-UI vocabulary is unchanged |
+| `framing` — each AG-UI event → its bytes (`SseFraming`) | `agUiSse()`, the official encoder's frames | writes its envelope |
+
+The reader only MAPS. Whatever it returns — an `AgUiTurnRequest`: the thread and
+run ids, the messages (newest last), the tools the caller offers, `state`,
+`context`, `resume` answers — is copied as plain JSON (every value read once)
+and checked by the same core as a `RunAgentInput`: the ids' format, the roles,
+no system or developer message, frontend tools only by the app's allow-list,
+`state` and `context` only through `accept`, an answer only for the pause the
+server keeps. Nothing it adds beside the turn is read, and it never decides
+who is calling — the binder does. A reader refuses a body it cannot read by
+throwing a `WireRequestRefusal`; anything else it throws is refused as a
+malformed request, in fixed words.
+
+<CodeFile path="examples/deploy/ag-ui-gateway.ts" region="reader" title="examples/deploy/ag-ui-gateway.ts (region: reader)" />
+
+The framing writes the envelope. `eventSequence` is the frame's number in its
+own stream: the host counts each response's frames and hands the number to
+`frame(event, { sequence })` (`SseFramePosition`), so the framing keeps no
+counter and two runs at once never share one. A continuation (the answer to an
+interrupt) is a new stream and counts from 1 again.
+
+<CodeFile path="examples/deploy/ag-ui-gateway.ts" region="framing" title="examples/deploy/ag-ui-gateway.ts (region: framing)" />
+
+The gateway here also forwards a per-request credential. `sealRequest` seals it
+for that request's run, and a `requestCredentials` provider hands it to the one
+tool that declares it:
+
+<CodeFile path="examples/deploy/ag-ui-gateway.ts" region="serve" title="examples/deploy/ag-ui-gateway.ts (region: serve)" />
+
+- **Enforced answer validation holds through any framing.** With
+  `.answerValidation()` in enforce mode the agent streams no text until the
+  validator passed, so no framing can write any before; a refused draft is never
+  written at all, and the run ends in `RUN_ERROR`.
+- `translation` is refused beside `custom` or `reasoning`, and `framing` beside
+  `encoder`: each tunes the default only.
 
 ## Without the handler
 
@@ -325,4 +382,7 @@ the failed one carries nothing of the thrown value).
 
 The framing is a **strategy**: `SseFraming` says how one event becomes one
 frame. `agUiSse` is one; `agentfootprintSse` — the frames `toSSE` has always
-written — is the other, and `toSSE({ framing })` takes any.
+written — is the other, and `toSSE({ framing })` takes any. Whoever drives a
+stream (`streamHandler`, `toSSE`, your own loop) numbers its frames and passes
+the number as `frame(event, { sequence })`; a framing that writes one reads it
+there and keeps no state.

@@ -69,13 +69,39 @@ to the caller the app authenticates and builds a fresh runner per request.
 Pinned by `test/ag-ui/request.test.ts`, `host.scenario.test.ts` (the official
 client) and `tenants.test.ts` (two users at once).
 
+## Three strategies around one core
+`agUi()` composes a READER (a body → an `AgUiTurnRequest`; default: the body is
+a `RunAgentInput`), a TRANSLATION (default `agUiSerializer`) and a FRAMING
+(default `agUiSse`). Each is replaceable on its own — a gateway that sends its
+own body and expects its own envelope replaces the reader and the framing.
+The CORE is not a strategy: `readAgUiRequest` copies what the reader returned as
+plain JSON (each value read once — a getter cannot answer the check one way and
+the plan another) and runs `readAgUiRunInput` on it, then `planAgUiTurn` — the
+same checks for every reader. A reader's own `WireRequestRefusal` keeps its
+status; anything else it throws is the fixed `ERR_INVALID_RUN_INPUT`. A framing
+keeps no per-stream state: the host hands it each frame's number in its stream
+(`SseFramePosition`). The default composition's wire is pinned byte for byte
+by `test/ag-ui/gateway.test.ts` against a capture taken before the split
+(`fixtures/default-wire.golden.json`).
+
+```ts
+agUi({
+  reader: ({ body }) => ({ threadId: b(body).conversationId, runId: b(body).requestId,
+    messages: [{ id: 'm', role: 'user', content: b(body).text }] }),
+  framing: { contentType: 'text/event-stream',
+    frame: (event, { sequence }) => `data: ${JSON.stringify({ event: { ...event, eventSequence: sequence } })}\n\n` },
+});
+```
+
 ## Files
 - `types.ts` — the AG-UI events written here and the request read here,
   structural (no `@ag-ui/*` import).
 - `ids.ts` — the one id grammar.
 - `serializer.ts` — `agUiSerializer`, the per-run translation.
 - `framing.ts` — `agUiSse`, the framing strategy.
-- `request.ts` — `readAgUiRunInput` and the turn a request may ask for.
+- `request.ts` — the reader port (`AgUiRequestReader`), the core's read
+  (`readAgUiRequest` → `readAgUiRunInput`) and the turn a request may ask for.
 - `frontendTools.ts` — the app's allow-listed frontend tools, as tools that pause
   for the page.
-- `adapter.ts` — `agUi()`, the `ProtocolAdapter` the host takes.
+- `adapter.ts` — `agUi()`, the `ProtocolAdapter` the host takes: the three
+  strategies, composed.

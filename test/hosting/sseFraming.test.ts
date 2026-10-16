@@ -49,7 +49,9 @@ describe('SSE framing — the default strategy', () => {
       payload: { content: 'x' },
     } as unknown as AgentfootprintEvent;
     expect(agentfootprintSse.contentType).toBe('text/event-stream');
-    expect(agentfootprintSse.frame(event)).toBe(encodeSSE('agentfootprint.stream.token', event));
+    expect(agentfootprintSse.frame(event, { sequence: 1 })).toBe(
+      encodeSSE('agentfootprint.stream.token', event),
+    );
   });
 
   it('toSSE with no framing writes exactly those frames, event for event', async () => {
@@ -79,6 +81,23 @@ describe('SSE framing — a strategy of the caller’s own', () => {
     const { frames } = await stream({ framing: counted });
     expect(frames.length).toBeGreaterThan(0);
     expect(frames.every((f) => /^data: agentfootprint\.[a-z_]+\.[a-z_]+\n\n$/.test(f))).toBe(true);
+  });
+
+  it('hands every frame its number in ITS stream — one framing, two streams, two counts', async () => {
+    // One framing object shared by two streams at once, keeping no counter: the
+    // number each frame carries is the stream's own, from 1, with no gaps.
+    const numbered: SseFraming<AgentfootprintEvent> = {
+      contentType: 'text/event-stream',
+      frame: (_e, at) => `data: ${at.sequence}\n\n`,
+    };
+    const [a, b] = await Promise.all([
+      stream({ framing: numbered }),
+      stream({ framing: numbered }),
+    ]);
+    for (const { frames } of [a, b]) {
+      expect(frames.length).toBeGreaterThan(1);
+      expect(frames).toEqual(frames.map((_f, i) => `data: ${i + 1}\n\n`));
+    }
   });
 
   it('refuses a framing beside eventName, and beside the text format — by name', async () => {

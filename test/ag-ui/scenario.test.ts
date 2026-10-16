@@ -302,7 +302,7 @@ describe('scenario — subflows, sub-agents and a parallel fan-out', () => {
     await checkStructure(run.events);
 
     const framing = agUiSse();
-    const wire = run.events.map((e) => framing.frame(e)).join('');
+    const wire = run.events.map((e, i) => framing.frame(e, { sequence: i + 1 })).join('');
     for (const secret of SECRETS) expect(wire, secret).not.toContain(secret);
     // What the policy hid is SAID to be hidden, not silently dropped.
     expect(wire).toContain('[REDACTED]');
