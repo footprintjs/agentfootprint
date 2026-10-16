@@ -4,7 +4,7 @@ title: ParentRunRefusedError
 
 # Class: ParentRunRefusedError
 
-Defined in: [src/core/memberRun.ts:70](https://github.com/footprintjs/agentfootprint/blob/main/src/core/memberRun.ts#L70)
+Defined in: [src/core/memberRun.ts:74](https://github.com/footprintjs/agentfootprint/blob/main/src/core/memberRun.ts#L74)
 
 A `parentRun` that is not a live link this module issued — forged, copied
 from another run, or a run already over. Refused, never used.
@@ -19,7 +19,7 @@ from another run, or a run already over. Refused, never used.
 
 > **new ParentRunRefusedError**(`door`): `ParentRunRefusedError`
 
-Defined in: [src/core/memberRun.ts:73](https://github.com/footprintjs/agentfootprint/blob/main/src/core/memberRun.ts#L73)
+Defined in: [src/core/memberRun.ts:77](https://github.com/footprintjs/agentfootprint/blob/main/src/core/memberRun.ts#L77)
 
 #### Parameters
 
@@ -53,7 +53,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_PARENT_RUN_REFUSED"`
 
-Defined in: [src/core/memberRun.ts:71](https://github.com/footprintjs/agentfootprint/blob/main/src/core/memberRun.ts#L71)
+Defined in: [src/core/memberRun.ts:75](https://github.com/footprintjs/agentfootprint/blob/main/src/core/memberRun.ts#L75)
 
 ***
 

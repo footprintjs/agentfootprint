@@ -6,4 +6,4 @@ title: ConditionalOutput
 
 > **ConditionalOutput** = `string`
 
-Defined in: [src/core-flow/Conditional.ts:84](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Conditional.ts#L84)
+Defined in: [src/core-flow/Conditional.ts:85](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Conditional.ts#L85)

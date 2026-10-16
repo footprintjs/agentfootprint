@@ -2,7 +2,7 @@
 title: Interfaces
 ---
 
-353 exported from `agentfootprint`.
+355 exported from `agentfootprint`.
 
 - [`AbsenceDeclaration`](/docs/api/interfaces/AbsenceDeclaration)
 - [`ActOptions`](/docs/api/interfaces/ActOptions)
@@ -150,6 +150,8 @@ title: Interfaces
 - [`GroupMetadata`](/docs/api/interfaces/GroupMetadata)
 - [`GroupTranslator`](/docs/api/interfaces/GroupTranslator)
 - [`HoldsToolSessions`](/docs/api/interfaces/HoldsToolSessions)
+- [`HostFillFromCredential`](/docs/api/interfaces/HostFillFromCredential)
+- [`HostFillFromIdentity`](/docs/api/interfaces/HostFillFromIdentity)
 - [`IndexDocumentsOptions`](/docs/api/interfaces/IndexDocumentsOptions)
 - [`InjectionRecord`](/docs/api/interfaces/InjectionRecord)
 - [`InMemoryArtifacts`](/docs/api/interfaces/InMemoryArtifacts)

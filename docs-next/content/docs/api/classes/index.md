@@ -2,7 +2,7 @@
 title: Classes
 ---
 
-46 exported from `agentfootprint`.
+49 exported from `agentfootprint`.
 
 - [`Agent`](/docs/api/classes/Agent)
 - [`AgentBuilder`](/docs/api/classes/AgentBuilder)
@@ -16,6 +16,8 @@ title: Classes
 - [`ConversationMismatchError`](/docs/api/classes/ConversationMismatchError)
 - [`DecisionRequiredError`](/docs/api/classes/DecisionRequiredError)
 - [`Graph`](/docs/api/classes/Graph)
+- [`HostFilledArgumentError`](/docs/api/classes/HostFilledArgumentError)
+- [`HostFilledValueMissingError`](/docs/api/classes/HostFilledValueMissingError)
 - [`InputRequestError`](/docs/api/classes/InputRequestError)
 - [`InvalidArtifactError`](/docs/api/classes/InvalidArtifactError)
 - [`InvalidAskComponentError`](/docs/api/classes/InvalidAskComponentError)
@@ -35,6 +37,7 @@ title: Classes
 - [`PendingQuestionError`](/docs/api/classes/PendingQuestionError)
 - [`ResumeIdentityConflictError`](/docs/api/classes/ResumeIdentityConflictError)
 - [`ResumeRedactionError`](/docs/api/classes/ResumeRedactionError)
+- [`ResumeRequestConflictError`](/docs/api/classes/ResumeRequestConflictError)
 - [`RoutingDecisionError`](/docs/api/classes/RoutingDecisionError)
 - [`RunbookAbsenceSignal`](/docs/api/classes/RunbookAbsenceSignal)
 - [`RunCheckpointError`](/docs/api/classes/RunCheckpointError)

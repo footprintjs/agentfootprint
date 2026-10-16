@@ -6,4 +6,4 @@ title: SequenceOutput
 
 > **SequenceOutput** = `string`
 
-Defined in: [src/core-flow/Sequence.ts:89](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L89)
+Defined in: [src/core-flow/Sequence.ts:90](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L90)

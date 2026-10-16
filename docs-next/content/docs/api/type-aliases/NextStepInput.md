@@ -6,7 +6,7 @@ title: NextStepInput<TPreviousOutput>
 
 > **NextStepInput**\<`TPreviousOutput`\> = `TPreviousOutput` *extends* `string` ? `object` : `TPreviousOutput`
 
-Defined in: [src/core-flow/Workflow.ts:107](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Workflow.ts#L107)
+Defined in: [src/core-flow/Workflow.ts:108](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Workflow.ts#L108)
 
 What the NEXT step must accept, given what the previous one returns.
 

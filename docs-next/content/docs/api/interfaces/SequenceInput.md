@@ -4,7 +4,7 @@ title: SequenceInput
 
 # Interface: SequenceInput
 
-Defined in: [src/core-flow/Sequence.ts:78](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L78)
+Defined in: [src/core-flow/Sequence.ts:79](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L79)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/core-flow/Sequence.ts:78](https://github.com/footprintjs/agentf
 
 > `readonly` `optional` **identity?**: `MemoryIdentity`
 
-Defined in: [src/core-flow/Sequence.ts:86](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L86)
+Defined in: [src/core-flow/Sequence.ts:87](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L87)
 
 WHO this run is for — the same tuple as `AgentInput.identity`. Every
 member runs for it: its memory, its tools' `ctx.identity`. Omitted, every
@@ -25,4 +25,4 @@ never a namespace another run shares (`core/memberRun.ts`).
 
 > `readonly` **message**: `string`
 
-Defined in: [src/core-flow/Sequence.ts:79](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L79)
+Defined in: [src/core-flow/Sequence.ts:80](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Sequence.ts#L80)

@@ -4,7 +4,7 @@ title: MemberIdentityError
 
 # Class: MemberIdentityError
 
-Defined in: [src/core/memberRun.ts:263](https://github.com/footprintjs/agentfootprint/blob/main/src/core/memberRun.ts#L263)
+Defined in: [src/core/memberRun.ts:322](https://github.com/footprintjs/agentfootprint/blob/main/src/core/memberRun.ts#L322)
 
 A member mounted where no run reaches it — another runner's executor is
 running this agent's chart, and neither a `parentRun` nor an `identity`
@@ -20,7 +20,7 @@ arrived in its input. Refused rather than run under its instance's last run.
 
 > **new MemberIdentityError**(): `MemberIdentityError`
 
-Defined in: [src/core/memberRun.ts:266](https://github.com/footprintjs/agentfootprint/blob/main/src/core/memberRun.ts#L266)
+Defined in: [src/core/memberRun.ts:325](https://github.com/footprintjs/agentfootprint/blob/main/src/core/memberRun.ts#L325)
 
 #### Returns
 
@@ -48,7 +48,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_MEMBER_NO_IDENTITY"`
 
-Defined in: [src/core/memberRun.ts:264](https://github.com/footprintjs/agentfootprint/blob/main/src/core/memberRun.ts#L264)
+Defined in: [src/core/memberRun.ts:323](https://github.com/footprintjs/agentfootprint/blob/main/src/core/memberRun.ts#L323)
 
 ***
 

@@ -2,7 +2,7 @@
 title: Functions
 ---
 
-147 exported from `agentfootprint`.
+150 exported from `agentfootprint`.
 
 - [`absenceSignalOf`](/docs/api/functions/absenceSignalOf)
 - [`absent`](/docs/api/functions/absent)
@@ -58,9 +58,12 @@ title: Functions
 - [`foldedSpanFor`](/docs/api/functions/foldedSpanFor)
 - [`formatArtifactStoreReport`](/docs/api/functions/formatArtifactStoreReport)
 - [`formatToolContractCheckup`](/docs/api/functions/formatToolContractCheckup)
+- [`fromCredential`](/docs/api/functions/fromCredential)
+- [`fromIdentity`](/docs/api/functions/fromIdentity)
 - [`gcsArtifacts`](/docs/api/functions/gcsArtifacts)
 - [`graph`](/docs/api/functions/graph)
 - [`hashSessionKey`](/docs/api/functions/hashSessionKey)
+- [`hostFilled`](/docs/api/functions/hostFilled)
 - [`indexDocuments`](/docs/api/functions/indexDocuments)
 - [`injectionKeyForSlot`](/docs/api/functions/injectionKeyForSlot)
 - [`inMemoryArtifacts`](/docs/api/functions/inMemoryArtifacts)

@@ -2,7 +2,7 @@
 title: Type Aliases
 ---
 
-136 exported from `agentfootprint`.
+138 exported from `agentfootprint`.
 
 - [`ActKey`](/docs/api/type-aliases/ActKey)
 - [`AgentOutput`](/docs/api/type-aliases/AgentOutput)
@@ -57,6 +57,8 @@ title: Type Aliases
 - [`GraphInput`](/docs/api/type-aliases/GraphInput)
 - [`GraphOutput`](/docs/api/type-aliases/GraphOutput)
 - [`GroupKind`](/docs/api/type-aliases/GroupKind)
+- [`HostFill`](/docs/api/type-aliases/HostFill)
+- [`HostFilledIdentityField`](/docs/api/type-aliases/HostFilledIdentityField)
 - [`InjectionKey`](/docs/api/type-aliases/InjectionKey)
 - [`InProgressInput`](/docs/api/type-aliases/InProgressInput)
 - [`InputValue`](/docs/api/type-aliases/InputValue)
