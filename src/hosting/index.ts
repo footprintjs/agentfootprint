@@ -146,6 +146,9 @@ export {
   type StreamRunner,
 } from './streamHandler.js';
 export { verifiedThreads } from './verifiedThreads.js';
+// A credential the request carries, sealed for its own run — `standingAgent`
+// and `streamHandler` take `sealRequest`.
+export type { RequestSealer, RequestSealFacts } from './requestSealing.js';
 
 export { memorySessions } from './memorySessions.js';
 export {

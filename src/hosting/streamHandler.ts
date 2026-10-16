@@ -23,17 +23,23 @@
  *     (`sessions`), or the agent's own memory keyed by the bound session;
  *   - WHAT A PAUSED RUN WAITS ON is the stored run's own record — an answer is
  *     matched to it by the adapter, never taken on the request's word;
- *   - identity, credentials and redaction settings never come from a request.
+ *   - identity and redaction settings never come from a request. A credential
+ *     the request CARRIES (a gateway's per-request token) reaches its own run
+ *     only through the app's `sealRequest`, sealed: never a frame, a stored
+ *     session or a checkpoint.
  *
  * NOTHING IS SHARED BETWEEN REQUESTS. Every request builds a FRESH runner
  * (`agent`, a factory): footprintjs runs one executor per run and a runner
  * holds one run's context, so a request can neither see another's events nor
- * leave anything behind for one — no shared listener, recorder, buffer or tool
- * session. A factory that hands back a runner it handed back before is refused.
- * The handler's own state is KEYS, never content: the bound conversations
- * with a turn in flight and who holds each (a second turn on one conversation
- * is refused rather than racing the first for the stored state), and the
- * runners already used (by identity, held weakly).
+ * leave anything behind for one — no shared listener, recorder, buffer, tool
+ * session or frame count (each stream numbers its own frames, and hands the
+ * number to the framing: `SseFramePosition`). A factory that hands back a
+ * runner it handed back before is refused; so is a `sealRequest` that hands
+ * back a sealed request twice. The handler's own state is KEYS, never content:
+ * the bound conversations with a turn in flight and who holds each (a second
+ * turn on one conversation is refused rather than racing the first for the
+ * stored state), and the runners and sealed requests already used (by
+ * identity, held weakly).
  *
  * ONE TURN PER THREAD IS A PER-PROCESS GUARD. Two instances of the handler
  * (several serverless instances, several workers) do not see each other's
@@ -79,7 +85,9 @@ import type {
   ThreadBinding,
 } from './protocolAdapter.js';
 import { REFUSAL_STATUS } from './refusalStatus.js';
+import { requestSealing, type RequestSealer } from './requestSealing.js';
 import type { PausedRun, SessionLifecycle } from './types.js';
+import type { RequestContext } from '../identity/requestContext.js';
 
 /** The default body ceiling — 1 MiB, the same as `nodeHost`. */
 export const DEFAULT_STREAM_MAX_BODY_BYTES = 1_048_576;
@@ -122,6 +130,18 @@ export interface StreamHandlerOptions<TRequest, TEvent> extends CrossSiteOptions
    * `threads`: nothing is ever kept under the id a request names.
    */
   readonly sessions?: SessionLifecycle;
+  /**
+   * Seal the credential a request carries for its run ({@link RequestSealer}) —
+   * a gateway's per-request token in a header, read by a `requestCredentials`
+   * provider for the tools that declare a `needs` for it. Called once per
+   * request that runs, after the thread is bound and the turn is planned, with
+   * the request's headers; its handle goes to THAT request's
+   * `run()` / `resume()` and nowhere else — never a frame, a stored session or
+   * a checkpoint. A handle returned twice is refused; a sealer that throws
+   * refuses the request in fixed words (`ERR_REQUEST_NOT_SEALED`, 400).
+   * Without it, no run carries a request.
+   */
+  readonly sealRequest?: RequestSealer;
   /** The largest request body read, in bytes. Default {@link DEFAULT_STREAM_MAX_BODY_BYTES}. */
   readonly maxBodyBytes?: number;
   /**
@@ -151,6 +171,8 @@ interface Turn<TEvent> {
   readonly thread?: ThreadBinding;
   readonly runner: StreamRunner;
   readonly translation: RunTranslation<TEvent>;
+  /** This request's sealed credential — its run's alone. */
+  readonly request?: RequestContext;
 }
 
 /**
@@ -199,6 +221,7 @@ export function streamHandler<TRequest, TEvent>(
   }
   const guard = doorGuard({ ...options, name });
   const framing = adapter.framing();
+  const seal = requestSealing(options.sealRequest, name);
   const bytes = new TextEncoder();
   /**
    * Bound conversations with a turn in flight — the key, and who holds it (so
@@ -336,7 +359,7 @@ export function streamHandler<TRequest, TEvent>(
     signal: AbortSignal,
     release: () => void,
   ): Promise<void> {
-    const { plan, held, thread, runner, translation } = turn;
+    const { plan, held, thread, runner, translation, request } = turn;
     // A translation that throws is a fault in the adapter, never the run's: the
     // run goes on, and the stream still ends.
     const safely = (produce: () => readonly TEvent[]): void => {
@@ -365,6 +388,7 @@ export function streamHandler<TRequest, TEvent>(
         signal,
         ...(thread !== undefined && { sessionId: thread.sessionId }),
         ...(thread?.identity !== undefined && { identity: thread.identity }),
+        ...(request !== undefined && { request }),
       };
       const out =
         plan.turn.kind === 'answer'
@@ -423,8 +447,14 @@ export function streamHandler<TRequest, TEvent>(
             stop(); // the stream went away under us
           }
         };
+        // This stream's own count — never the framing's, never another stream's.
+        let written = 0;
         const write = (events: readonly TEvent[]): void => {
-          for (const event of events) send(framing.frame(event));
+          for (const event of events) {
+            const frame = framing.frame(event, { sequence: written + 1 });
+            written += 1;
+            send(frame);
+          }
         };
         if (heartbeatMs > 0) {
           heartbeat = setInterval(() => send(': ping\n\n'), heartbeatMs);
@@ -469,7 +499,8 @@ export function streamHandler<TRequest, TEvent>(
           allow: 'POST',
         });
       }
-      const headers = headersOf(request);
+      // Frozen: the reader, the binder and the sealer each read the same headers.
+      const headers = Object.freeze(headersOf(request));
       const refused = guard.check({ method: request.method, headers });
       if (refused !== undefined) return refusal(refused.status, refused.message, refused.code);
       const text = await readBody(request, limit, name);
@@ -510,6 +541,8 @@ export function streamHandler<TRequest, TEvent>(
         keepsConversation: threads !== undefined,
         keepsPauses: threads !== undefined && sessions !== undefined,
       });
+      // Sealed only for a request that runs: every refusal is behind it.
+      const sealed = await seal?.({ headers });
       const runner = build({
         tools: plan.tools ?? [],
         accepted: plan.accepted ?? {},
@@ -523,7 +556,14 @@ export function streamHandler<TRequest, TEvent>(
       const owned = claimed;
       claimed = undefined;
       return respond(
-        { plan, held, ...(thread !== undefined && { thread }), runner, translation },
+        {
+          plan,
+          held,
+          ...(thread !== undefined && { thread }),
+          runner,
+          translation,
+          ...(sealed !== undefined && { request: sealed }),
+        },
         request,
         () => {
           if (owned !== undefined) inFlight.delete(owned);

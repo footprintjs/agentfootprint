@@ -53,7 +53,8 @@ export const AG_UI_ENCODER_MISSING =
  * @example
  * ```ts
  * const framing = agUiSse();
- * for (const event of serializer.event(e)) res.write(framing.frame(event));
+ * let sequence = 0; // this stream's own count
+ * for (const event of serializer.event(e)) res.write(framing.frame(event, { sequence: ++sequence }));
  * ```
  */
 export function agUiSse(options: AgUiSseOptions = {}): SseFraming<AgUiEvent> {
@@ -67,6 +68,7 @@ export function agUiSse(options: AgUiSseOptions = {}): SseFraming<AgUiEvent> {
   const encoder = new module.EventEncoder();
   return {
     contentType: 'text/event-stream',
+    // The frame's position is not written: an AG-UI frame is the event alone.
     frame: (event) => encoder.encodeSSE(event as never),
   };
 }

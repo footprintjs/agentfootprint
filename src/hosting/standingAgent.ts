@@ -158,6 +158,7 @@ import { withHostedConversation } from '../core/agent/servingConversation.js';
 import { verifyRequestIdentity, type VerifiedIdentity } from './identityVerification.js';
 import { spendKeyFor, spendLedger, type SpendLedger } from './admission.js';
 import { beginIngress, recordHostRefusal, type IngressNote } from './ingressRecord.js';
+import { requestSealing } from './requestSealing.js';
 import { openTurnArtifacts } from './turnArtifacts.js';
 import type { SessionWireRequest, SessionWireResult } from './sessionWire.js';
 import { SESSION_LIST_OP, SESSION_TRANSCRIPT_OP } from './sessionWire.js';
@@ -302,6 +303,12 @@ export async function standingAgent<TH extends HostHandle>(
   const identityOptions = options.identity;
   /** The admission policy (9.26.0), or `undefined`. */
   const admission = options.admission;
+  /**
+   * The app's sealer for a request's own credential, checked once per run, or
+   * `undefined` — no run carries a request, as before. Refused at
+   * construction when it is not a function.
+   */
+  const sealRequest = requestSealing(options.sealRequest, 'standingAgent');
   /**
    * The rolling-window accountant — built ONLY when a policy exists, because
    * with no policy nobody would ever read it and keeping a per-caller map of a
@@ -1655,6 +1662,17 @@ export async function standingAgent<TH extends HostHandle>(
         sessionId === undefined
           ? withHostedConversation(optionsForRun, globalThis.crypto.randomUUID())
           : optionsForRun;
+      /**
+       * The options THIS run is handed, with the credential the request
+       * carries sealed by the app (`sealRequest`) — asked only on the two
+       * paths that run, after every refusal, so a refused request seals
+       * nothing. The handle rides the run's options alone: never the reply,
+       * the stored session or the checkpoint.
+       */
+      const withSealedRequest = async (): Promise<AgentRunOptions | undefined> => {
+        const sealed = await sealRequest?.({ headers: request.headers ?? {} });
+        return sealed === undefined ? runOptions : { ...runOptions, request: sealed };
+      };
 
       // ── The one discriminant ─────────────────────────────────────────
       // A request carrying `decision` answers a pending question; a request
@@ -1714,9 +1732,10 @@ export async function standingAgent<TH extends HostHandle>(
             return;
           }
         }
+        const resumeOptions = await withSealedRequest();
         await deliver(
           lane,
-          await runner.resume(paused.checkpoint, request.decision, runOptions),
+          await runner.resume(paused.checkpoint, request.decision, resumeOptions),
           store,
           reply,
           sessionId,
@@ -1732,9 +1751,10 @@ export async function standingAgent<TH extends HostHandle>(
         return;
       }
 
+      const turnOptions = await withSealedRequest();
       const output = prior
-        ? await runner.run({ message: request.input, continueFrom: prior }, runOptions)
-        : await runner.run({ message: request.input }, runOptions);
+        ? await runner.run({ message: request.input, continueFrom: prior }, turnOptions)
+        : await runner.run({ message: request.input }, turnOptions);
       await deliver(lane, output, store, reply, sessionId, offer);
     } catch (err) {
       // A run that threw still has to drain. A write left in flight would race

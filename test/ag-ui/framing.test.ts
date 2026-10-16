@@ -37,8 +37,9 @@ describe('agUiSse — the frames', () => {
     const framing = agUiSse();
     const official = new EventEncoder();
     expect(framing.contentType).toBe('text/event-stream');
-    for (const event of EVENTS) {
-      const frame = framing.frame(event);
+    for (const [i, event] of EVENTS.entries()) {
+      // The position is the host's fact; an AG-UI frame is the event alone.
+      const frame = framing.frame(event, { sequence: i + 1 });
       expect(frame).toBe(official.encodeSSE(event as never));
       expect(frame.startsWith('data: ')).toBe(true);
       expect(frame.endsWith('\n\n')).toBe(true);
@@ -59,7 +60,7 @@ describe('agUiSse — the frames', () => {
         }
       }
       const framing = agUiSse({ encoder: { EventEncoder: StubEncoder as never } });
-      expect(framing.frame(EVENTS[0]!)).toBe('data: RUN_STARTED\n\n');
+      expect(framing.frame(EVENTS[0]!, { sequence: 1 })).toBe('data: RUN_STARTED\n\n');
       expect(frames).toEqual(['RUN_STARTED']);
     } finally {
       loader.failure = undefined;

@@ -151,7 +151,7 @@ describe('property — a policy holds on the AG-UI wire at every depth', () => {
       for (const options of [{}, { reasoning: true, custom: EVERYTHING }]) {
         const w = world(seed);
         const run = await runAsAgUi(w.pipeline, { message: w.message }, { serializer: options });
-        const wire = run.events.map((e) => framing.frame(e)).join('');
+        const wire = run.events.map((e, i) => framing.frame(e, { sequence: i + 1 })).join('');
         for (const s of w.secrets) expect(wire, `secret ${s} reached the wire`).not.toContain(s);
         // The run really happened at every depth, and ended as the seed says.
         expect(run.events.filter((e) => e.type === 'SUBAGENT_STARTED')).toHaveLength(4);
@@ -260,7 +260,9 @@ describe('a pause and the run that continues it, under a policy', () => {
           answer: { approved: true, iban: secret() },
         },
       });
-      const wire = [...first.events, ...second.events].map((e) => framing.frame(e)).join('');
+      const wire = [...first.events, ...second.events]
+        .map((e, i) => framing.frame(e, { sequence: i + 1 }))
+        .join('');
       const kept = JSON.stringify(suspension);
       for (const s of secrets) {
         expect(wire, `secret ${s} reached the wire`).not.toContain(s);
@@ -308,7 +310,7 @@ describe('the allow-list — what is not meant for a person stays off the wire, 
       expect(record).toContain(s);
     // …and none of them reaches the wire.
     const framing = agUiSse();
-    const wire = run.events.map((e) => framing.frame(e)).join('');
+    const wire = run.events.map((e, i) => framing.frame(e, { sequence: i + 1 })).join('');
     for (const s of ['zqRETRYSECRET', 'zqTHINKSECRET', 'zqPROMPTSECRET'])
       expect(wire).not.toContain(s);
     // What does go out: the answer, and the retry as a count.

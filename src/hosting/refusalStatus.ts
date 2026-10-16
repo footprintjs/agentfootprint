@@ -78,4 +78,8 @@ export const REFUSAL_STATUS: Readonly<Record<string, number>> = Object.freeze({
   ERR_ORIGIN_NOT_ALLOWED: 403,
   ERR_HOST_NOT_ALLOWED: 421,
   ERR_INVALID_SESSION_ID: 400,
+  // The app's `sealRequest` could not seal the credential the request carries
+  // (a header missing or unreadable) — the request is what is wrong, and the
+  // same caller can send it again with the credential.
+  ERR_REQUEST_NOT_SEALED: 400,
 });
