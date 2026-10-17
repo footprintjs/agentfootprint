@@ -1349,4 +1349,7 @@ export {
   type AnswerToolCall,
   type AnswerToolCallsView,
   type AnswerValidationContext,
+  checkClaimRequirements,
+  type ClaimRequirementPolicy,
+  type ClaimRequirementAssessment,
 } from './answer-validation/index.js';

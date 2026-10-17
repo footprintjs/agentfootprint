@@ -16,6 +16,11 @@ export {
 } from './types.js';
 export { resolveAnswerValidation, executeAnswerValidation } from './validate.js';
 export {
+  checkClaimRequirements,
+  type ClaimRequirementPolicy,
+  type ClaimRequirementAssessment,
+} from './requirements.js';
+export {
   appendToolCall,
   incompleteToolCalls,
   ledgerAtCheck,

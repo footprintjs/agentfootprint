@@ -77,3 +77,41 @@ const presentedCodeWasExecuted: AnswerValidationOptions<{ text: string }> = {
 Runnable: `examples/features/99-guard-presented-code.ts`. Over `streamHandler` +
 `agUi()` a refusal sends no `TEXT_MESSAGE_CONTENT` and ends in `RUN_ERROR`
 (`test/ag-ui/answer-validation-guard.test.ts`).
+
+## Claim prerequisites — `checkClaimRequirements`
+
+This pure helper checks a host-authored, nonempty list of requirement references
+for one exact claim, finding and window. It uses Foottrace's public structural
+reader and returns an `AnswerCheck` plus matched `RequirementResult.id` selectors.
+Those selectors are not artifact references: they never populate `evidenceRefs`
+because this helper performs no artifact read.
+
+Every expected obligation must have an exact satisfied binding. Any unresolved
+report in that same finding/window affecting the claim blocks it, including an
+extra obligation or another report for an already satisfied requirement. Other
+claims and historical windows cannot satisfy this binding. Missing obligations
+return `unreachable/not-collected`; an otherwise matching obligation available
+only in a foreign finding/window returns `unreachable/incompatible`. Malformed
+receipt sets return `unreachable/invalid-data`. Matching selectors are sorted;
+if several reports are unresolved, the first by result ID supplies the reason.
+Malformed host policies throw a fixed error with code
+`ERR_CLAIM_REQUIREMENT_POLICY`. Policies are closed own-data JSON objects bounded
+to 16 KiB, 16 distinct requirement references, 512 characters per opaque
+reference, and 128 for `claimRef` so the check fits answer validation's ID limit.
+
+`checked-pass` means only that the supplied producer reports meet these
+prerequisites. The caller must authenticate their producer, query/run/scope,
+authorized receipt access, time validity and domain meaning, including whether a
+producer's nested checks justify its stated result. Neither structural admission
+nor this helper authenticates a producer or checks a measured value. Executable
+actions and permission to disclose remain host decisions.
+
+In `.answerValidation()`, return this check only when the candidate asserts the
+corresponding fact. A host may check an explicit unknown attribution as
+`not-applicable` while independently checking its measured latency. An asserted
+attribution with missing mapping is unreachable and enforce mode withholds that
+candidate; it does not project or rewrite it. A safe candidate with a verified
+latency and explicit unknown attribution can still pass. Use the existing output
+middleware before validation if the host needs to render its own bounded values.
+This helper mounts no agent stage, changes no existing mode, performs no IO and
+does not compare values or inspect prose.

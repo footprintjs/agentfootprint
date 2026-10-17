@@ -453,6 +453,43 @@ Served by `streamHandler` with `agUi()`, an enforced refusal sends no
 `TEXT_MESSAGE_CONTENT` and ends the run with `RUN_ERROR` in fixed words; the
 report stays on the server.
 
+### Missing prerequisites block only the claims that need them
+
+`checkClaimRequirements(policy, results)` checks Foottrace requirement records
+against a host-owned `ClaimRequirementPolicy`: the claim, finding, window and
+complete list of required references. Its `ClaimRequirementAssessment` contains
+an `AnswerCheck` and the matched requirement-result IDs. Those IDs remain
+references, not artifact tickets or executable actions.
+
+Use this for a question such as “which workload caused this client's high
+latency?” The measured latency can remain supported while a missing
+client-to-workload mapping blocks attribution. A satisfied record cannot
+override an unresolved record affecting that same claim. Missing expected
+records are `not-collected`; malformed records are `invalid-data`.
+
+The helper's `checked-pass` means the supplied reports satisfy the policy's
+prerequisites. It does **not** compare measurement values, authenticate a
+producer, establish physical cause, or authorize an action. The host must
+authenticate reports and bind them to the exact current query, source,
+subject, window and run before passing them to the helper. A digest and a
+model-supplied `satisfied` record cannot establish that authority. A
+conversation-scoped artifact can still belong to an earlier query.
+
+The runnable example uses synthetic samples and a deliberately unsupported
+workload attribution. Existing output middleware renders independently checked
+statistics and an explicit unknown; enforcing `.answerValidation()` then checks
+that exact structured answer before any final tokens or memory are delivered:
+
+<CodeFile path="examples/features/100-required-evidence.ts" region="required-evidence" title="examples/features/100-required-evidence.ts (region: required-evidence)" />
+
+Keep factual output in declared structured slots. Free-form model prose could
+repeat a blocked claim, so the example renders its answer entirely from the
+assessed host data. A forged factual attribution presented directly to enforcing
+answer validation is withheld. The validator cannot replace an answer; the
+selective rendering happens in output middleware before validation. Observe
+mode records checks without withholding output and therefore does not enforce
+this gate. Agents that do not opt in keep their existing behavior.
+
 A report is available from `agent.answerValidation()` and the execution snapshot.
 `undefined` means no terminal validation ran. Reports name the validator and
 version, identify the exact candidate with a digest, and separate `checked-pass`,
