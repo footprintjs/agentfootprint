@@ -33,11 +33,12 @@ function webpackConfig(isServer) {
   );
 }
 
-test('all three public Foottrace doors share the library root in the client', () => {
+test('every current public Foottrace door shares the library root in the client', () => {
   const aliases = webpackConfig(false).resolve.alias;
   const doors = publicDoors('foottrace');
   assert.deepEqual(doors.map(([name]) => name).sort(), [
     'foottrace',
+    'foottrace/cause',
     'foottrace/paths',
     'foottrace/write',
   ]);
