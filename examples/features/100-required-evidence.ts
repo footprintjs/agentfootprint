@@ -9,8 +9,10 @@ import {
   defineTool,
   inMemoryArtifacts,
   type AnswerCheck,
+  type AnswerValidationOptions,
   type ArtifactMeta,
   type ClaimRequirementPolicy,
+  type MessageMiddleware,
 } from '../../src/index.js';
 import { mock } from '../../src/doors/providers.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
@@ -154,103 +156,107 @@ export async function run(input: string): Promise<string> {
         : [],
     );
 
+  const projection: MessageMiddleware = {
+    name: 'host-required-evidence',
+    onMessage(message) {
+      if (message.phase !== 'output') return allow();
+      const candidate = Reply.parse(JSON.parse(message.content));
+      const assessment = assess();
+      // The host builds a closed answer. It never forwards arbitrary model prose
+      // or accepts model-supplied requirement states as evidence.
+      const safe: Reply = {
+        meanMs: candidate.meanMs,
+        count: candidate.count,
+        observedNode: candidate.observedNode,
+        measurementRef: candidate.measurementRef,
+        attribution: {
+          status: 'unverified',
+          workload: null,
+          reason: assessment.check.reason ?? 'unavailable',
+          requirementResultRefs: [...assessment.requirementResultRefs],
+        },
+      };
+      return allow(JSON.stringify(safe), 'No client-to-workload mapping was collected.');
+    },
+  };
+  const validation: AnswerValidationOptions<Reply> = {
+    id: 'measured-facts-and-honest-attribution',
+    version: '1',
+    async validate(answer, context) {
+      // Liveness is separate from producer authority and measured value truth.
+      const calls = context.toolCalls;
+      const sources = calls.calls.filter((call) => call.name === toolName);
+      const sourceCompleted =
+        calls.complete &&
+        sources.length === 1 &&
+        sources[0].outcome === 'ok' &&
+        sources[0].callId === issued?.measurement.origin?.toolCallId;
+
+      const parcel = await context.artifacts.resolve(answer.measurementRef, {
+        kind: 'example/client-samples',
+      });
+      const measured = Samples.safeParse(parcel.ok ? parcel.record.data : undefined);
+      const values = measured.success ? measured.data.values : [];
+      const matches =
+        issued !== undefined &&
+        parcel.ok &&
+        measured.success &&
+        answer.measurementRef === issued.measurement.ref &&
+        parcel.record.meta.digest === issued.measurement.digest &&
+        parcel.record.meta.origin?.runId === issued.runId &&
+        measured.data.queryRef === queryRef &&
+        measured.data.windowRef === policy.windowRef &&
+        answer.meanMs === values.reduce((sum, value) => sum + value, 0) / values.length &&
+        answer.count === values.length &&
+        answer.observedNode === measured.data.node;
+      const assessment = assess();
+      const honestUnknown =
+        assessment.check.disposition !== 'checked-pass' &&
+        answer.attribution.status === 'unverified' &&
+        answer.attribution.workload === null &&
+        answer.attribution.reason === assessment.check.reason &&
+        JSON.stringify(answer.attribution.requirementResultRefs) ===
+          JSON.stringify(assessment.requirementResultRefs);
+      // A prerequisite check concerns only the asserted connection. Its
+      // unavailable disposition must survive unchanged; it is not a conflict.
+      // This source collected no mapping value, so even a satisfied wire
+      // prerequisite could not supply that separate factual comparison.
+      const attributionChecks: AnswerCheck[] =
+        answer.attribution.status === 'supported'
+          ? [
+              assessment.check,
+              { id: 'mapping-value', disposition: 'unreachable', reason: 'not-collected' },
+            ]
+          : [
+              {
+                id: 'no-unsupported-attribution',
+                disposition: honestUnknown ? 'not-applicable' : 'checked-fail',
+              },
+            ];
+      return {
+        checks: [
+          {
+            id: 'measured-latency',
+            disposition: matches ? 'checked-pass' : 'checked-fail',
+            ...(parcel.ok && { evidenceRefs: [parcel.record.meta.ref] }),
+          },
+          {
+            id: 'source-call-completed',
+            disposition: sourceCompleted ? 'checked-pass' : 'checked-fail',
+          },
+          ...attributionChecks,
+        ],
+      };
+    },
+  };
+
   // #region required-evidence
+  // Compose the host projection with validation of the exact delivered answer.
   const agent = Agent.create({ provider, model: 'mock', artifacts: inMemoryArtifacts() })
     .tool(source)
-    .messageMiddleware({
-      name: 'host-required-evidence',
-      onMessage(message) {
-        if (message.phase !== 'output') return allow();
-        const candidate = Reply.parse(JSON.parse(message.content));
-        const assessment = assess();
-        // The host builds a closed answer. It never forwards arbitrary model prose
-        // or accepts model-supplied requirement states as evidence.
-        const safe: Reply = {
-          meanMs: candidate.meanMs,
-          count: candidate.count,
-          observedNode: candidate.observedNode,
-          measurementRef: candidate.measurementRef,
-          attribution: {
-            status: 'unverified',
-            workload: null,
-            reason: assessment.check.reason ?? 'unavailable',
-            requirementResultRefs: [...assessment.requirementResultRefs],
-          },
-        };
-        return allow(JSON.stringify(safe), 'No client-to-workload mapping was collected.');
-      },
-    })
+    .messageMiddleware(projection)
     .outputSchema(Reply)
-    .answerValidation<Reply>({
-      id: 'measured-facts-and-honest-attribution',
-      version: '1',
-      async validate(answer, context) {
-        // Liveness is separate from producer authority and measured value truth.
-        const calls = context.toolCalls;
-        const sources = calls.calls.filter((call) => call.name === toolName);
-        const sourceCompleted =
-          calls.complete &&
-          sources.length === 1 &&
-          sources[0].outcome === 'ok' &&
-          sources[0].callId === issued?.measurement.origin?.toolCallId;
-
-        const parcel = await context.artifacts.resolve(answer.measurementRef, {
-          kind: 'example/client-samples',
-        });
-        const measured = Samples.safeParse(parcel.ok ? parcel.record.data : undefined);
-        const values = measured.success ? measured.data.values : [];
-        const matches =
-          issued !== undefined &&
-          parcel.ok &&
-          measured.success &&
-          answer.measurementRef === issued.measurement.ref &&
-          parcel.record.meta.digest === issued.measurement.digest &&
-          parcel.record.meta.origin?.runId === issued.runId &&
-          measured.data.queryRef === queryRef &&
-          measured.data.windowRef === policy.windowRef &&
-          answer.meanMs === values.reduce((sum, value) => sum + value, 0) / values.length &&
-          answer.count === values.length &&
-          answer.observedNode === measured.data.node;
-        const assessment = assess();
-        const honestUnknown =
-          assessment.check.disposition !== 'checked-pass' &&
-          answer.attribution.status === 'unverified' &&
-          answer.attribution.workload === null &&
-          answer.attribution.reason === assessment.check.reason &&
-          JSON.stringify(answer.attribution.requirementResultRefs) ===
-            JSON.stringify(assessment.requirementResultRefs);
-        // A prerequisite check concerns only the asserted connection. Its
-        // unavailable disposition must survive unchanged; it is not a conflict.
-        // This source collected no mapping value, so even a satisfied wire
-        // prerequisite could not supply that separate factual comparison.
-        const attributionChecks: AnswerCheck[] =
-          answer.attribution.status === 'supported'
-            ? [
-                assessment.check,
-                { id: 'mapping-value', disposition: 'unreachable', reason: 'not-collected' },
-              ]
-            : [
-                {
-                  id: 'no-unsupported-attribution',
-                  disposition: honestUnknown ? 'not-applicable' : 'checked-fail',
-                },
-              ];
-        return {
-          checks: [
-            {
-              id: 'measured-latency',
-              disposition: matches ? 'checked-pass' : 'checked-fail',
-              ...(parcel.ok && { evidenceRefs: [parcel.record.meta.ref] }),
-            },
-            {
-              id: 'source-call-completed',
-              disposition: sourceCompleted ? 'checked-pass' : 'checked-fail',
-            },
-            ...attributionChecks,
-          ],
-        };
-      },
-    })
+    .answerValidation<Reply>(validation)
     .build();
   // #endregion required-evidence
   const answer = await agent.runTyped<Reply>({ message: input, identity });
