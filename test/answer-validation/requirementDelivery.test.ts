@@ -2,6 +2,7 @@
  * unsupported attribution, then validate the exact delivered answer separately. */
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
+import type { RequirementReason } from 'foottrace';
 import {
   Agent,
   AnswerValidationError,
@@ -9,6 +10,7 @@ import {
   checkClaimRequirements,
   defineTool,
   inMemoryArtifacts,
+  type AnswerCheck,
   type ArtifactMeta,
   type ClaimRequirementPolicy,
   type LLMProvider,
@@ -104,6 +106,7 @@ function fixture(
     modelForgedReceipt?: boolean;
     collectAgain?: boolean;
     tamperUnknown?: 'reason' | 'refs';
+    sourceFailsAfterReceipt?: boolean;
   } = {},
 ) {
   const artifacts = inMemoryArtifacts();
@@ -227,6 +230,8 @@ function fixture(
             : [requirement(query, mapping)],
       };
       previous = { ...issued, queryRef: query };
+      if (options.sourceFailsAfterReceipt === true)
+        throw new Error('SYNTHETIC_SOURCE_NOT_COMPLETED');
       // The VM is a real inventory value. Its presence is no client-to-VM relationship.
       return {
         statistics: { count: 3, meanMs: 20, peakMs: 30, node: 7 },
@@ -237,8 +242,12 @@ function fixture(
   });
   // Trusted producer admission is app-owned. No candidate refs select this
   // expected universe; same conversation and provider call id are insufficient.
+  const refused = (reason: RequirementReason) => {
+    const check: AnswerCheck = { id: POLICY.claimRef, disposition: 'unreachable', reason };
+    return { check, pass: false, reason, refs: [] };
+  };
   const assess = () => {
-    if (mapping === 'denied') return { pass: false, reason: 'not-permitted', refs: [] };
+    if (mapping === 'denied') return refused('not-permitted');
     if (
       issued === undefined ||
       issued.queryRef !== query ||
@@ -246,9 +255,10 @@ function fixture(
       issued.producer !== TOOL ||
       issued.principal !== callerPrincipal
     )
-      return { pass: false, reason: 'unavailable', refs: [] };
+      return refused('unavailable');
     const assessment = checkClaimRequirements(POLICY, issued.results);
     return {
+      check: assessment.check,
       pass: assessment.check.disposition === 'checked-pass',
       reason: assessment.check.reason ?? 'unavailable',
       refs: assessment.requirementResultRefs,
@@ -308,6 +318,16 @@ function fixture(
         id: 'measured-client-and-safe-attribution',
         version: '1',
         validate: async (candidate, context) => {
+          // A minted parcel is not proof its source completed. The ledger is
+          // only liveness; producer/run/query/scope/digest admission stays below.
+          const calls = context.toolCalls;
+          const sources = calls.calls.filter((call) => call.name === TOOL);
+          const sourceCompleted =
+            calls.complete &&
+            sources.length === 1 &&
+            sources[0].outcome === 'ok' &&
+            sources[0].callId === issued?.stats.origin?.toolCallId;
+
           const resolved = await context.artifacts.resolve(candidate.source.measurementRef, {
             kind: 'test/client-measurements',
           });
@@ -343,6 +363,26 @@ function fixture(
             candidate.attribution.workload === issued.mapping.workload &&
             JSON.stringify(candidate.attribution.requirementResultRefs) ===
               JSON.stringify(assessed.refs);
+          const attributionChecks: AnswerCheck[] =
+            candidate.attribution.status === 'supported'
+              ? [
+                  assessed.check,
+                  {
+                    id: 'mapping-value',
+                    disposition: !assessed.pass
+                      ? 'unreachable'
+                      : supported
+                      ? 'checked-pass'
+                      : 'checked-fail',
+                    ...(!assessed.pass && { reason: assessed.reason }),
+                  },
+                ]
+              : [
+                  {
+                    id: 'attribution-is-permitted',
+                    disposition: unknown ? 'not-applicable' : 'checked-fail',
+                  },
+                ];
           return {
             checks: [
               {
@@ -351,13 +391,10 @@ function fixture(
                 ...(resolved.ok && { evidenceRefs: [resolved.record.meta.ref] }),
               },
               {
-                id: 'attribution-is-permitted',
-                disposition: unknown
-                  ? 'not-applicable'
-                  : supported
-                  ? 'checked-pass'
-                  : 'checked-fail',
+                id: 'source-call-completed',
+                disposition: sourceCompleted ? 'checked-pass' : 'checked-fail',
               },
+              ...attributionChecks,
             ],
           };
         },
@@ -407,12 +444,25 @@ async function selective(mode: Mode, typed: boolean) {
   expect(stored).not.toContain(VM);
   expect(setup.agent.answerValidation()).toMatchObject({
     status: 'passed',
-    checked: 1,
+    checked: 2,
     notApplicable: 1,
   });
 }
 for (const mode of ['classic', 'dynamic', 'dynamic-grouped'] as const) {
   describe(`required evidence delivery — ${mode}`, () => {
+    it('withholds an issued receipt when its producer later fails', async () => {
+      const setup = fixture({ mode, sourceFailsAfterReceipt: true });
+      await expect(setup.agent.run({ message: 'Triage.', identity: OWNER })).rejects.toBeInstanceOf(
+        AnswerValidationError,
+      );
+      expect(setup.tokens).toEqual([]);
+      expect(setup.ends).toEqual([]);
+      expect((await setup.memory.list(OWNER)).entries).toEqual([]);
+      expect(setup.agent.answerValidation()?.checks).toContainEqual({
+        id: 'source-call-completed',
+        disposition: 'checked-fail',
+      });
+    });
     it('preserves measured facts while withholding attribution across native sinks', () =>
       selective(mode, false));
     it('preserves the same canonical answer in typed delivery', () => selective(mode, true));
@@ -429,9 +479,11 @@ for (const mode of ['classic', 'dynamic', 'dynamic-grouped'] as const) {
         expect.objectContaining({ id: 'measured-latency', disposition: 'checked-pass' }),
       );
       expect(setup.agent.answerValidation()?.checks).toContainEqual({
-        id: 'attribution-is-permitted',
-        disposition: 'checked-fail',
+        id: POLICY.claimRef,
+        disposition: 'unreachable',
+        reason: 'not-collected',
       });
+      expect(setup.agent.answerValidation()?.status).toBe('unverified');
     });
     it('without the opt-in delivers the original streamed draft unchanged', async () => {
       const setup = fixture({ mode, enabled: false });
@@ -494,7 +546,7 @@ describe('host receipt authority', () => {
     const setup = fixture({ mapping: 'satisfied' });
     const answer = await setup.agent.runTyped<Answer>({ message: 'Triage.', identity: OWNER });
     expect(answer.attribution).toMatchObject({ status: 'supported', workload: VM });
-    expect(setup.agent.answerValidation()).toMatchObject({ status: 'passed', checked: 2 });
+    expect(setup.agent.answerValidation()).toMatchObject({ status: 'passed', checked: 4 });
   });
   it('does not reuse earlier authority for a new run in the same conversation', async () => {
     const setup = fixture({ mapping: 'satisfied' });

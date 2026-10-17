@@ -8,6 +8,7 @@ import {
   checkClaimRequirements,
   defineTool,
   inMemoryArtifacts,
+  type AnswerCheck,
   type ArtifactMeta,
   type ClaimRequirementPolicy,
 } from '../../src/index.js';
@@ -184,6 +185,15 @@ export async function run(input: string): Promise<string> {
       id: 'measured-facts-and-honest-attribution',
       version: '1',
       async validate(answer, context) {
+        // Liveness is separate from producer authority and measured value truth.
+        const calls = context.toolCalls;
+        const sources = calls.calls.filter((call) => call.name === toolName);
+        const sourceCompleted =
+          calls.complete &&
+          sources.length === 1 &&
+          sources[0].outcome === 'ok' &&
+          sources[0].callId === issued?.measurement.origin?.toolCallId;
+
         const parcel = await context.artifacts.resolve(answer.measurementRef, {
           kind: 'example/client-samples',
         });
@@ -209,8 +219,22 @@ export async function run(input: string): Promise<string> {
           answer.attribution.reason === assessment.check.reason &&
           JSON.stringify(answer.attribution.requirementResultRefs) ===
             JSON.stringify(assessment.requirementResultRefs);
-        // Prerequisites are not value truth. The measured value has its OWN check;
-        // no mapping is asserted here, so that claim is explicitly not applicable.
+        // A prerequisite check concerns only the asserted connection. Its
+        // unavailable disposition must survive unchanged; it is not a conflict.
+        // This source collected no mapping value, so even a satisfied wire
+        // prerequisite could not supply that separate factual comparison.
+        const attributionChecks: AnswerCheck[] =
+          answer.attribution.status === 'supported'
+            ? [
+                assessment.check,
+                { id: 'mapping-value', disposition: 'unreachable', reason: 'not-collected' },
+              ]
+            : [
+                {
+                  id: 'no-unsupported-attribution',
+                  disposition: honestUnknown ? 'not-applicable' : 'checked-fail',
+                },
+              ];
         return {
           checks: [
             {
@@ -219,9 +243,10 @@ export async function run(input: string): Promise<string> {
               ...(parcel.ok && { evidenceRefs: [parcel.record.meta.ref] }),
             },
             {
-              id: 'no-unsupported-attribution',
-              disposition: honestUnknown ? 'not-applicable' : 'checked-fail',
+              id: 'source-call-completed',
+              disposition: sourceCompleted ? 'checked-pass' : 'checked-fail',
             },
+            ...attributionChecks,
           ],
         };
       },

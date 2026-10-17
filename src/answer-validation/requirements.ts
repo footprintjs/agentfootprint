@@ -52,7 +52,15 @@ function readPolicy(value: ClaimRequirementPolicy): ClaimRequirementPolicy {
     if (typeof length !== 'number' || length < 1 || length > REQUIREMENT_RESULT_LIMITS.refs)
       throw new Error();
     const copied = ownData(copyJson(source, POLICY_BYTES, true));
-    const requirementRefs = (copied.requirementRefs as unknown[]).map((item) => ref(item));
+    const copiedRefs = copied.requirementRefs;
+    // Preflight limits the read; only the detached copy supplies admitted policy facts.
+    if (
+      !Array.isArray(copiedRefs) ||
+      copiedRefs.length < 1 ||
+      copiedRefs.length > REQUIREMENT_RESULT_LIMITS.refs
+    )
+      throw new Error();
+    const requirementRefs = copiedRefs.map((item: unknown) => ref(item));
     if (new Set(requirementRefs).size !== requirementRefs.length) throw new Error();
     return Object.freeze({
       claimRef: ref(copied.claimRef, CHECK_ID_CHARACTERS),

@@ -138,7 +138,7 @@ describe('claim requirement prerequisites', () => {
     {},
     [receipt(), receipt()],
     [receipt({ state: 'invented' } as never)],
-    [receipt({ reason: 'node-limit' } as never)],
+    [receipt({ state: 'unresolved', reason: 'node-limit' } as never)],
     Array.from({ length: 513 }, (_, index) => receipt({ id: `result:${index}` })),
   ])(
     'sanitizes malformed or oversized receipt sets without passing structural refusal codes through',
@@ -225,6 +225,27 @@ describe('claim requirement prerequisites', () => {
     expect(() => checkClaimRequirements({ ...policy, requirementRefs: array }, [])).toThrow();
     expect(calls).toBe(0);
   });
+
+  it.each([0, 17])(
+    'rejects copied policy length %i when a proxy preflight reports one',
+    (count) => {
+      const target = Array.from({ length: count }, (_, index) => `requirement:${index}`);
+      const requirementRefs = new Proxy(target, {
+        getOwnPropertyDescriptor(array, key) {
+          const descriptor = Reflect.getOwnPropertyDescriptor(array, key);
+          return key === 'length' && descriptor ? { ...descriptor, value: 1 } : descriptor;
+        },
+      });
+      expect(() => checkClaimRequirements({ ...policy, requirementRefs }, [])).toThrow(
+        'Invalid claim requirement policy.',
+      );
+      try {
+        checkClaimRequirements({ ...policy, requirementRefs }, []);
+      } catch (error) {
+        expect(error).toMatchObject({ code: 'ERR_CLAIM_REQUIREMENT_POLICY' });
+      }
+    },
+  );
 
   it('accepts the distinct expected-reference ceiling and exact opaque names without folding', () => {
     const requirements = Array.from({ length: 16 }, (_, index) => `requirement:${index}`);
