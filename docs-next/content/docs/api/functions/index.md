@@ -2,7 +2,7 @@
 title: Functions
 ---
 
-150 exported from `agentfootprint`.
+151 exported from `agentfootprint`.
 
 - [`absenceSignalOf`](/docs/api/functions/absenceSignalOf)
 - [`absent`](/docs/api/functions/absent)
@@ -29,6 +29,7 @@ title: Functions
 - [`canStageCodeInputs`](/docs/api/functions/canStageCodeInputs)
 - [`canStreamArtifacts`](/docs/api/functions/canStreamArtifacts)
 - [`chartWalkPutInput`](/docs/api/functions/chartWalkPutInput)
+- [`checkClaimRequirements`](/docs/api/functions/checkClaimRequirements)
 - [`checkerGoverns`](/docs/api/functions/checkerGoverns)
 - [`checkInApproved`](/docs/api/functions/checkInApproved)
 - [`checkInDeclined`](/docs/api/functions/checkInDeclined)

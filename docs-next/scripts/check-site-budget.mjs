@@ -268,7 +268,12 @@ const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_325_000, records: 2_000 };
 // TRANSFORM_HASH_PREFIX) and the packed-recording sections of the recordings
 // and time-travel pages. ~2% over the measurement, the rule every raise here
 // follows.
-const OUTPUT_LIMITS = { bytes: 223_400_000, files: 8_270, duplicateRscBytes: 0 };
+// RAISED 2026-10-17, bytes only, owner-approved for the required-evidence gate's
+// three generated API pages. After shortening the runnable example's displayed
+// region, EXPORT=true measures 223.63 MB across 5,639 files, duplicate RSC pairs 0
+// (CI before that shortening: 223.65 MB). Owner approved a 224 MB total-export
+// allowance; page, runtime JS, search, file-count and duplicate budgets stay fixed.
+const OUTPUT_LIMITS = { bytes: 224_000_000, files: 8_270, duplicateRscBytes: 0 };
 // Raised for 9.61.0: 394.1 KB → 400.3 KB. The skill-graph demo imports
 // `defineTool` from 'agentfootprint', so the library's MAIN ENTRY and its
 // whole transitive graph ride this chunk — and this release added the
