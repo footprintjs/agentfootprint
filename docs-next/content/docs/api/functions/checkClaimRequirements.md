@@ -6,7 +6,7 @@ title: checkClaimRequirements
 
 > **checkClaimRequirements**(`policy`, `results`): [`ClaimRequirementAssessment`](/docs/api/interfaces/ClaimRequirementAssessment)
 
-Defined in: [src/answer-validation/requirements.ts:101](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/requirements.ts#L101)
+Defined in: [src/answer-validation/requirements.ts:109](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/requirements.ts#L109)
 
 Check every expected prerequisite for one exact claim/finding/window binding.
 Any same-scope unresolved report affecting this claim denies it, including an
