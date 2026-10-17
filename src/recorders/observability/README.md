@@ -13,6 +13,12 @@ KNOWN BREACH of the detachment law: its snapshot half hands out the runner's own
 objects by reference (see its header, and `docs/design/map-walker-trace-fold-lens.md`).
 Lens (for a human, not the wire): `commentary/`, `status/`, `LoggingRecorder.ts`,
 `AgentThinkingTraceRecorder.ts`.
+For an answer with output middleware or answer validation, its Story answer beat
+is collected only at a delivered `agent.turn_end`, using its final content and
+that event's stage. Refused attempts are not delivered answers. Validation's
+observe mode still delivers the candidate with its report; the Story records
+that delivery, not an independent approval. Ungoverned answers keep their
+existing `stream.llm_end` content and stage.
 Name to watch: the exported type `Trace` (`trace.ts` · `Trace`) is a redacted
 projection — a Fold artifact. The append-only evidence is `BoundaryRecorder.ts`.
 
