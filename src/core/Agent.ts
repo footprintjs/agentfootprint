@@ -5281,8 +5281,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(argumentSources && { argumentSources: true as const }),
       ...((this.answerValidationConfig !== undefined || governsOutput) && {
         suppressDraftTokens: true,
+        withholdDraftContent: true,
       }),
-      ...(governsOutput && { withholdDraftContent: true }),
       // Tool choice by classifier (9.105.0): the outcome row after the reply.
       ...(this.toolChoiceOptions !== undefined && { toolChoice: true as const }),
       // The declared ontology (9.106.0): the piece served from the run

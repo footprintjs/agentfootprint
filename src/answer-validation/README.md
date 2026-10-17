@@ -22,9 +22,12 @@ foreign refs remain indistinguishable. Application stores and callbacks are
 trusted ports; time and size limits are not a CPU or process-memory sandbox.
 
 Without configuration the agent mounts none of this boundary. With it, both
-modes suppress draft tokens. Enforce refuses failed or unverified reports;
-observe permits delivery with the report available for inspection. Diagnostics
-can still contain the original model candidate; this does not replace redaction.
+modes suppress draft tokens and withhold `stream.llm_end.content` with the
+`contentWithheld` marker. Enforce refuses failed or unverified reports; observe
+permits delivery with the report available for inspection. The Story recorder
+uses the delivered canonical content at `agent.turn_end` in either mode. Other
+diagnostics can still contain the original model candidate; this does not
+replace redaction.
 
 ## Which tools ran — `context.toolCalls`
 

@@ -12,7 +12,9 @@
  * Mapping (from the events already on the stream):
  *   stream.llm_end (toolCalls>0)  → the brain reasoned; content + usage become
  *                                   the upcoming ask's `brain` + `cost`.
- *   stream.llm_end (toolCalls==0) → the final `answer`.
+ *   stream.llm_end (toolCalls==0) → the final `answer`, unless contentWithheld.
+ *   agent.turn_end                → a withheld answer becomes a beat only on
+ *                                   accepted delivery, using finalContent.
  *   stream.tool_start             → `ask`  (read_skill → reaching for a skill).
  *   stream.tool_end               → `return` (read_skill → replyType:'instruction'
  *                                   + skill; any other tool → replyType:'data').
@@ -156,6 +158,7 @@ const LLM_END = 'agentfootprint.stream.llm_end';
 const TOOL_START = 'agentfootprint.stream.tool_start';
 const TOOL_END = 'agentfootprint.stream.tool_end';
 const THINKING_END = 'agentfootprint.stream.thinking_end';
+const TURN_END = 'agentfootprint.agent.turn_end';
 const CONTEXT_EVALUATED = 'agentfootprint.context.evaluated';
 // Skill-graph routing verdicts (9.16.0/9.17.0) — narrated via the same
 // commentary engine and stashed to lead the next beat, exactly like the
@@ -207,6 +210,11 @@ export function agentThinkingTrace(
   // which fires before the call) — attached to the iteration's first ask / its
   // answer so an expert can expand "what was on the menu". undefined when none.
   let pendingToolsSeen: readonly AttToolSeen[] | undefined;
+  // Keep metadata only while output governance decides; withheld text is not
+  // a delivered answer, and the accepted content belongs to the final stage.
+  let pendingAnswer:
+    | { cost: AttCost; toolsSeen?: readonly AttToolSeen[]; thinking?: string }
+    | undefined;
   const byId = new Map<string, { toolName: string; isSkill: boolean; skillId?: string }>();
 
   // Commentary engine — the SAME one the Lens uses. Merged once: consumer
@@ -241,6 +249,21 @@ export function agentThinkingTrace(
     return brain ? `${lead}\n\n${brain}` : lead;
   }
 
+  function recordAnswer(
+    e: EmitEvent,
+    content: string,
+    metadata: NonNullable<typeof pendingAnswer>,
+  ): void {
+    at.push(e.runtimeStageId);
+    steps.push({
+      kind: 'answer',
+      to: options.asker ?? 'you',
+      brain: leadWithRouting(content),
+      answer: { headline: headlineOf(content), text: content },
+      ...metadata,
+    });
+  }
+
   function reset(): void {
     task = '';
     steps = [];
@@ -252,6 +275,7 @@ export function agentThinkingTrace(
     pendingRouting = '';
     lastRoutingLine = '';
     pendingToolsSeen = undefined;
+    pendingAnswer = undefined;
     byId.clear();
   }
 
@@ -263,6 +287,8 @@ export function agentThinkingTrace(
       lastPipelineId = e.pipelineId;
 
       if (e.name === LLM_START) {
+        // A later call supersedes an attempt still waiting for delivery.
+        pendingAnswer = undefined;
         // Fires as the call begins — capture the tool menu the model saw, to
         // attach to this iteration's first beat. Empty/absent when no tools.
         const p = e.payload as { tools?: readonly AttToolSeen[] };
@@ -306,6 +332,7 @@ export function agentThinkingTrace(
       if (e.name === LLM_END) {
         const p = e.payload as {
           content?: string;
+          contentWithheld?: true;
           toolCallCount?: number;
           usage?: { input?: number; output?: number; cacheRead?: number };
           durationMs?: number;
@@ -317,20 +344,14 @@ export function agentThinkingTrace(
           tokensOut: p.usage?.output,
           tokensCached: p.usage?.cacheRead,
         };
+        pendingAnswer = undefined;
         if ((p.toolCallCount ?? 0) === 0) {
-          // No tool calls → this is the final answer.
-          const content = p.content ?? '';
-          at.push(e.runtimeStageId);
-          steps.push({
-            kind: 'answer',
-            to: options.asker ?? 'you',
-            // Single-iteration terminal answer → this is the iteration's first
-            // beat, so lead with the routing decision if one happened.
-            brain: leadWithRouting(content),
-            answer: { headline: headlineOf(content), text: content },
+          const metadata = {
             cost,
             ...(pendingToolsSeen ? { toolsSeen: pendingToolsSeen } : {}),
-          });
+          };
+          if (p.contentWithheld === true) pendingAnswer = metadata;
+          else recordAnswer(e, p.content ?? '', metadata);
         } else {
           // Reasoning that will drive the upcoming ask step(s) this iteration.
           pendingBrain = p.content ?? '';
@@ -340,17 +361,31 @@ export function agentThinkingTrace(
         return;
       }
 
+      if (e.name === TURN_END) {
+        const pending = pendingAnswer;
+        pendingAnswer = undefined;
+        const p = e.payload as { finalContent?: unknown; refused?: unknown };
+        // Ungoverned answers were already recorded. A refusal can carry
+        // diagnostic content; only an accepted delivery creates this beat.
+        if (pending && p.refused === undefined && typeof p.finalContent === 'string')
+          recordAnswer(e, p.finalContent, pending);
+        return;
+      }
+
       if (e.name === THINKING_END) {
         // Extended-thinking blocks for this iteration. `thinking_end` fires just
-        // AFTER `llm_end`, so a terminal answer is already on `steps` — back-fill
-        // its reasoning; an upcoming ask picks `pendingThinking` up below.
+        // AFTER `llm_end`: retain for a withheld answer or back-fill one already
+        // delivered; an upcoming ask picks `pendingThinking` up below.
         const p = e.payload as { blocks?: ReadonlyArray<{ content?: string }> };
         pendingThinking = (p.blocks ?? [])
           .map((b) => (b.content ?? '').trim())
           .filter(Boolean)
           .join('\n\n');
-        const last = steps[steps.length - 1];
-        if (last && last.kind === 'answer' && pendingThinking) last.thinking = pendingThinking;
+        if (pendingAnswer) pendingAnswer.thinking = pendingThinking || undefined;
+        else {
+          const last = steps[steps.length - 1];
+          if (last && last.kind === 'answer' && pendingThinking) last.thinking = pendingThinking;
+        }
         return;
       }
 
