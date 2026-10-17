@@ -2,7 +2,7 @@
 title: Interfaces
 ---
 
-358 exported from `agentfootprint`.
+360 exported from `agentfootprint`.
 
 - [`AbsenceDeclaration`](/docs/api/interfaces/AbsenceDeclaration)
 - [`ActOptions`](/docs/api/interfaces/ActOptions)
@@ -72,6 +72,8 @@ title: Interfaces
 - [`CheckInScoreInput`](/docs/api/interfaces/CheckInScoreInput)
 - [`CheckInStats`](/docs/api/interfaces/CheckInStats)
 - [`CheckInTrail`](/docs/api/interfaces/CheckInTrail)
+- [`ClaimRequirementAssessment`](/docs/api/interfaces/ClaimRequirementAssessment)
+- [`ClaimRequirementPolicy`](/docs/api/interfaces/ClaimRequirementPolicy)
 - [`ClockOnResumeRow`](/docs/api/interfaces/ClockOnResumeRow)
 - [`ClockRow`](/docs/api/interfaces/ClockRow)
 - [`CodeInput`](/docs/api/interfaces/CodeInput)
