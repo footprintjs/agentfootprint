@@ -19,6 +19,7 @@ export async function readCause(
   if (signal?.aborted) return causeGap(operation, 'cancelled');
   if (performance.now() >= deadline) return causeGap(operation, 'timeout');
   const source = artifacts.cause ?? snapshotCauseArtifacts(artifacts, nodes);
+  if (source === 'truncated') return causeGap(operation, 'truncated');
   if (source === undefined) return causeGap(operation, 'not-collected');
   const remaining = Math.floor(deadline - performance.now());
   if (signal?.aborted) return causeGap(operation, 'cancelled');

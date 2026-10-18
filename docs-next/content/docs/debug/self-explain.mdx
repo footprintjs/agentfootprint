@@ -224,6 +224,8 @@ By default the AgentFootprint wrapper limits backward node, edge and call work t
 
 Each query shares one deadline, including loading the cause reader, and honors a caller signal through lazy, inner and delegated calls. Defaults are 25 nodes, depth 6, 100 edges, 100 calls, one second and 8,000 JSON characters. Hard ceilings are 100 nodes, depth 20, 1,000 edges, 1,000 calls, five seconds and 16,000 characters. If a result exceeds its character allowance, the tool returns a fixed `truncated` gap and withholds the finding; it does not cut a proof in half and leave a seemingly supported root. Failures use fixed gap wording rather than forwarding a host exception.
 
+The legacy snapshot projection also refuses more than 4,096 commits or stages with a `truncated` gap. This local size refusal is distinct from evidence that was not collected.
+
 The public cause entry point supports both ESM and CommonJS. No import bridge, `eval` or private distribution path is needed. Keep one module format consistently where possible, and compare public errors by their code rather than relying on `instanceof` across formats.
 
 ### Let a model explain the finding

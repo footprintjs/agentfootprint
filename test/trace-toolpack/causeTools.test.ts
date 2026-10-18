@@ -123,6 +123,24 @@ describe('read-only cause tools', () => {
     expect(JSON.stringify(result)).not.toContain(SECRET);
   });
 
+  it('names the local legacy projection size refusal instead of claiming capture was absent', async () => {
+    const large = {
+      ...snapshot,
+      commitLog: Array.from({ length: 4097 }, () => ({
+        runtimeStageId: 'oversized#0',
+        trace: [],
+        overwrite: {},
+        updates: {},
+      })),
+    } as unknown as RuntimeSnapshot;
+    const result = JSON.parse(
+      await callTraceTool(traceToolpack({ snapshot: large }), 'attention_list'),
+    );
+    expect(result.confidence).toBe('incomplete');
+    expect(result.gaps).toEqual([{ code: 'truncated', evidence: [] }]);
+    expect(result.finding).toBeUndefined();
+  });
+
   it.each([
     'not-checked',
     'not-collected',

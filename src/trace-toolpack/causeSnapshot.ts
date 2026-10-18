@@ -14,7 +14,7 @@ function own(object: object, key: string): unknown {
 export function snapshotCauseArtifacts(
   artifacts: TraceToolpackArtifacts,
   nodes: ReadonlyMap<string, StageSnapshot>,
-): TraceCauseArtifacts | undefined {
+): TraceCauseArtifacts | 'truncated' | undefined {
   const snapshot = artifacts.snapshot;
   // A snapshot-local namespace is not a storage address or a service-correlation claim.
   const recordedAddress = own(snapshot, 'logAddress') as RecordScope['address'] | undefined;
@@ -24,13 +24,14 @@ export function snapshotCauseArtifacts(
     (typeof runId === 'string' ? { logRunId: `snapshot:${runId}`, drillPath: [] } : undefined);
   if (address === undefined) return undefined;
   const log = own(snapshot, 'commitLog') as RecordScope['commitLog'];
-  if (!Array.isArray(log) || log.length > 4096) return undefined;
+  if (!Array.isArray(log)) return undefined;
+  if (log.length > 4096) return 'truncated';
   const reads: Record<string, readonly string[]> = Object.create(null);
   const marks: Record<string, unknown> = Object.create(null);
   const control: Record<string, { deciderId: string }> = Object.create(null);
   let visited = 0;
   for (const [id, stage] of nodes) {
-    if (visited++ >= 4096) return undefined;
+    if (visited++ >= 4096) return 'truncated';
     const capturedReads = own(stage, 'stageReads');
     if (capturedReads !== null && typeof capturedReads === 'object')
       reads[id] = Object.keys(capturedReads);
