@@ -188,6 +188,8 @@ Runnable: [`examples/observability/01-trace-debug-session.ts`](https://github.co
 
 These three tools ask the public `foottrace/cause` reader to reason over a recorded graph. No model is needed to obtain the finding. They do not replay business work, run a payment, or infer what happened inside a provider.
 
+`TraceCauseArtifacts` is the host-supplied graph and optional discovery IDs for one authorized artifact scope. `TraceCauseOperation` names the three read-only questions in the table below. `TraceCauseOptions` configures their default total work, directional allowances and served character limit through `TraceToolpackOptions.cause`.
+
 | tool | question | what to cite |
 |---|---|---|
 | `attention_list` | Which captured nodes need attention? Optional `nodeIds` restricts discovery. | Returned node IDs, attention reasons and proof references. Missing capture is unknown, not a clean bill of health. |
