@@ -188,7 +188,7 @@ Runnable: [`examples/observability/01-trace-debug-session.ts`](https://github.co
 
 These three tools ask the public `foottrace/cause` reader to reason over a recorded graph. No model is needed to obtain the finding. They do not replay business work, run a payment, or infer what happened inside a provider.
 
-`TraceCauseArtifacts` is the host-supplied graph and optional discovery IDs for one authorized artifact scope. `TraceCauseOperation` names the three read-only questions in the table below. `TraceCauseOptions` configures their default total work, directional allowances and served character limit through `TraceToolpackOptions.cause`.
+`TraceCauseArtifacts` is the host-supplied graph and optional discovery IDs for one authorized artifact scope. `TraceCauseOperation` names the three read-only questions in the table below. The host configures query ceilings, directional allowances and the served character limit through `TraceCauseOptions` on `TraceToolpackOptions.cause`. Model-facing cause schemas accept only node IDs; they expose no resource or output-size controls.
 
 | tool | question | what to cite |
 |---|---|---|
@@ -204,7 +204,9 @@ The runnable fixture below uses public `createRecordGraph`. Its synthetic record
 
 For saved records, the host can instead provide a graph from public `createStoredRecordGraph(host)`. That host loads only authorized scopes, honors the supplied abort signal and returns capture gaps honestly. Storage and service resolution stay in the host adapter. The tools do not invent a second storage reader or dependency walker.
 
-Without `artifacts.cause`, the tools use captured snapshot evidence when it is available. This fallback has no complete capture/end-marker attestation, so missing evidence remains `not-collected`; older step-level provenance may also be conservative. An absent mark does not establish that a step was healthy, or even reached. Unrecorded service internals and unreached branches remain outside the finding.
+**The normal snapshot fallback cannot return a supported `rootCause` today.** When `artifacts.cause` is absent, the tools can inspect available snapshot evidence, but the snapshot has no engine-written capture/end attestation. The fallback therefore always projects `complete: false` and reports `not-collected`. This also applies to a fully tracked run that returned normally: finishing cleanly does not attest that every required read, control dependency and attention channel was captured. An absent attention mark does not establish that a step was healthy, or even reached. Older step-level provenance may also be conservative.
+
+To obtain a supported recorded root now, supply an authorized host `CauseGraph` through `artifacts.cause`, backed by evidence whose capture coverage and completion the host can actually assure. A trusted complete record can be served through public `createRecordGraph` or `createStoredRecordGraph`; setting a completeness flag from a successful return alone is not sufficient. Even with that assurance, ties, query limits or other backward evidence gaps can still prevent a unique root. Unrecorded service internals and unreached branches remain outside the finding.
 
 ### Read one question, keep ambiguity
 
@@ -218,11 +220,11 @@ Cause IDs are opaque, graph-scoped references. They are not the `runtimeStageId`
 
 ### Keep the query bounded
 
-Set defaults through `TraceToolpackOptions.cause`. A tool call may further choose total `maxNodes`, `maxDepth`, `maxEdges`, `maxCalls`, `timeoutMs` and `maxChars`, plus directional `backward` and `impact` work allowances on `root_cause` and `impact`. Directional allowances only restrict the one enclosing ceiling; they do not grant extra work or another deadline.
+The host sets total `maxNodes`, `maxDepth`, `maxEdges`, `maxCalls`, `timeoutMs` and `maxChars` through `TraceToolpackOptions.cause`, with optional `backward` and `impact` work allowances. These are host-only settings. `attention_list` accepts optional `nodeIds`; `root_cause` and `impact` require `nodeId`. Model-supplied budget, deadline, directional or output-limit arguments are rejected by the schemas, so a model cannot override the host's ceiling. Directional allowances restrict the one enclosing query ceiling; they do not grant extra work or another deadline.
 
 By default the AgentFootprint wrapper limits backward node, edge and call work to approximately 80% of the total, rounded down with a minimum of one; depth is unchanged. Forward impact can spend what remains. This leaves capacity rather than promising a complete answer: a tiny budget may still return a named limit gap. Foottrace's own default behavior is unchanged.
 
-Each query shares one deadline, including loading the cause reader, and honors a caller signal through lazy, inner and delegated calls. Defaults are 25 nodes, depth 6, 100 edges, 100 calls, one second and 8,000 JSON characters. Hard ceilings are 100 nodes, depth 20, 1,000 edges, 1,000 calls, five seconds and 16,000 characters. If a result exceeds its character allowance, the tool returns a fixed `truncated` gap and withholds the finding; it does not cut a proof in half and leave a seemingly supported root. Failures use fixed gap wording rather than forwarding a host exception.
+Each invocation has one query deadline, including loading the cause reader, and honors a caller signal through lazy, inner and delegated calls. If the host omits configuration, limits are 25 nodes, depth 6, 100 edges, 100 calls, one second and 8,000 JSON characters. Host configuration remains bounded by library ceilings of 100 nodes, depth 20, 1,000 edges, 1,000 calls, five seconds and 16,000 characters. If a result exceeds its character allowance, the tool returns a fixed `truncated` gap and withholds the finding; it does not cut a proof in half and leave a seemingly supported root. Failures use fixed gap wording rather than forwarding a host exception.
 
 The legacy snapshot projection also refuses more than 4,096 commits or stages with a `truncated` gap. This local size refusal is distinct from evidence that was not collected.
 
@@ -257,8 +259,8 @@ Step-oriented tools use a `runtimeStageId` — `stageId#executionIndex`, for exa
 | `inspect_tool_call` | `toolCallId` | One tool call, end to end. |
 | `inspect_tool_run` | `toolCallId`, `find?`, `variable?`, `runtimeStageId?`, `key?`, `cause?`, `nodeId?` | Inside one tool call, when the tool kept its own record. |
 | `inspect_subflow` | `mount`, `find?`, `variable?`, `runtimeStageId?`, `key?`, `cause?`, `nodeId?` | Inside one subflow mount's own record. |
-| `attention_list` | `nodeIds?`, total work and output bounds | Captured abnormal nodes and their evidence; gaps preserve unknown coverage. |
-| `root_cause` / `impact` | `nodeId`, total bounds, `backward?`, `impact?` | A bounded public recorded-cause query, projected as root evidence or downstream impact. |
+| `attention_list` | `nodeIds?` | Captured abnormal nodes and their evidence; gaps preserve unknown coverage. Query limits are host-only. |
+| `root_cause` / `impact` | `nodeId` | A public recorded-cause query within host-only ceilings, projected as root evidence or downstream impact. |
 | `read_narrative` | `offset?`, `maxLines?` (default 40, cap 200) | The run's story, one page at a time. |
 
 The defaults come from `TraceToolpackOptions` (`previewChars`, `sliceMaxDepth`, `sliceMaxNodes`, `valueMaxChars`), which you pass as the second argument to `traceToolpack` or as `toolpack` on `traceDebugAgent` and `.selfExplain()`. The caps are `TOOLPACK_HARD_CAPS`, and no argument can go past them.
@@ -307,7 +309,7 @@ For a tool that reached into someone else's system, the answer ends at the tool 
 
 ## The contracts
 
-- **Bounded by default.** Previews are capped, slices have depth and node budgets, and values have character budgets. The model can raise a budget per call, but only up to `TOOLPACK_HARD_CAPS`. A value cut short says so: `⚠ truncated: served N of M chars`.
+- **Bounded by default.** Previews are capped, slices have depth and node budgets, and values have character budgets. Legacy slice/value tools let the model raise a per-call budget up to `TOOLPACK_HARD_CAPS`; cause-query work, deadlines and output limits are host-only. A value cut short says so: `⚠ truncated: served N of M chars`.
 - **Honest, never silent.** A truncated slice is marked, and so is a step that consumed inputs the commit log cannot see (run args, env, untracked reads). A missing `controlDeps` lookup, missing read tracking and values that never enter the commit log (pre-run state, values carried in closures) are named, not left out. `who_wrote` on a key with no tracked write says the value may have come from one of those places. It does not say "nothing wrote it".
 - **Redaction-respecting.** footprintjs scrubs the commit log at commit time. The tools pass the placeholders through as they are, flag the key `(redacted by policy)`, and never reconstruct around a redaction.
 - **Strict schemas.** On a small run (48 steps or fewer), step-id parameters carry an `enum` of every real step id, so a made-up id is rejected before the tool runs and the model corrects itself. Key parameters have **no** enum on purpose: a question about a key outside the commit log has an honest answer ("args, env and pre-run values never enter the commit log"), not a validation error. A bad id that gets through returns a correction naming the real steps.

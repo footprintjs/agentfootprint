@@ -23,10 +23,10 @@ describe('independent lazy cause reader deadline/cancellation boundary', () => {
       return { readCause: async () => '{"lateReaderInvoked":true}' };
     });
     const { buildCauseTools } = await import('../../src/trace-toolpack/causeTools.js');
-    const tool = buildCauseTools({ snapshot: {} } as never, new Map()).find(
+    const tool = buildCauseTools({ snapshot: {} } as never, new Map(), { timeoutMs: 10 }).find(
       (t) => t.schema.name === 'root_cause',
     )!;
-    const pending = tool.execute({ nodeId: 'opaque', timeoutMs: 10 }, {} as never);
+    const pending = tool.execute({ nodeId: 'opaque' }, {} as never);
     try {
       await started;
       const result = await Promise.race([
@@ -61,7 +61,7 @@ describe('independent lazy cause reader deadline/cancellation boundary', () => {
     const tool = buildCauseTools({ snapshot: {} } as never, new Map()).find(
       (t) => t.schema.name === 'root_cause',
     )!;
-    const pending = tool.execute({ nodeId: 'opaque', timeoutMs: 1000 }, {
+    const pending = tool.execute({ nodeId: 'opaque' }, {
       signal: controller.signal,
     } as never);
     try {

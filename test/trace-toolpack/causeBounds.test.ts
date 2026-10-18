@@ -18,7 +18,7 @@ describe('cause work policy', () => {
   });
 
   it('keeps the remaining default dimensions when one backward dimension is overridden', () => {
-    expect(causeLimits({}, { backward: { maxDepth: 2 } }).backward).toEqual({
+    expect(causeLimits({ backward: { maxDepth: 2 } }).backward).toEqual({
       maxNodes: 20,
       maxEdges: 80,
       maxCalls: 80,
@@ -27,14 +27,14 @@ describe('cause work policy', () => {
   });
 
   it.each([1, 2, 3])('never invents a zero allowance or extra work for total %i', (total) => {
-    const limits = causeLimits({}, { maxNodes: total, maxEdges: total, maxCalls: total });
+    const limits = causeLimits({ maxNodes: total, maxEdges: total, maxCalls: total });
     expect(limits.backward.maxCalls).toBeGreaterThanOrEqual(1);
     expect(limits.backward.maxCalls).toBeLessThanOrEqual(total);
     expect(limits.maxCalls).toBe(total);
   });
 
   it('rejects a directional deadline and refuses accessors without executing them', () => {
-    expect(() => causeLimits({}, { backward: { timeoutMs: 2 } } as never)).toThrow();
+    expect(() => causeLimits({ backward: { timeoutMs: 2 } } as never)).toThrow();
     let reads = 0;
     const backward = Object.defineProperty({}, 'maxCalls', {
       enumerable: true,
@@ -43,7 +43,7 @@ describe('cause work policy', () => {
         return 1;
       },
     });
-    expect(() => causeLimits({}, { backward })).toThrow();
+    expect(() => causeLimits({ backward })).toThrow();
     expect(reads).toBe(0);
   });
 
@@ -75,10 +75,11 @@ describe('cause work policy', () => {
       },
     };
     const result = JSON.parse(
-      await callTraceTool(traceToolpack({ snapshot, cause: { graph } }), 'root_cause', {
-        nodeId: 'a0',
-        maxDepth: 20,
-      }),
+      await callTraceTool(
+        traceToolpack({ snapshot, cause: { graph } }, { cause: { maxDepth: 20 } }),
+        'root_cause',
+        { nodeId: 'a0' },
+      ),
     );
     expect(result.finding.confidence).toBe('incomplete');
     expect(result.finding.rootCause).toBeUndefined();
@@ -117,11 +118,9 @@ describe('cause work policy', () => {
         return [];
       },
     };
-    const tools = traceToolpack({ snapshot, cause: { graph } });
+    const tools = traceToolpack({ snapshot, cause: { graph } }, { cause: { timeoutMs: 20 } });
     await callTraceTool(tools, 'attention_list', { nodeIds: [] });
-    const result = JSON.parse(
-      await callTraceTool(tools, 'root_cause', { nodeId: 'root', timeoutMs: 20 }),
-    );
+    const result = JSON.parse(await callTraceTool(tools, 'root_cause', { nodeId: 'root' }));
     expect(aborted).toBe(true);
     expect(calls).toBeGreaterThan(0);
     expect(calls).toBe(callsAtAbort);

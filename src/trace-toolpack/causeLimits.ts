@@ -1,5 +1,5 @@
 import type { TraversalLimits } from 'foottrace/cause';
-import type { TraceCauseOptions, TraceCauseQuestion } from './causeTypes.js';
+import type { TraceCauseOptions } from './causeTypes.js';
 
 /** Tool ceilings are deliberately smaller than the reader's absolute ceilings. */
 export const CAUSE_TOOL_CAPS = Object.freeze({
@@ -55,12 +55,12 @@ function direction(value: unknown, total: Required<TraversalLimits>): TraversalL
   return result;
 }
 
-/** Resolve one total and optional directional restrictions; never allocate a second query budget. */
-export function causeLimits(defaults: TraceCauseOptions = {}, question: TraceCauseQuestion = {}) {
+/** Resolve host policy only. Model arguments never enter this resource boundary. */
+export function causeLimits(options: TraceCauseOptions = {}) {
   const resolved = { ...DEFAULTS };
   for (const key of Object.keys(DEFAULTS) as (keyof typeof DEFAULTS)[]) {
     resolved[key] = integer(
-      data(question, key) ?? data(defaults, key),
+      data(options, key),
       DEFAULTS[key],
       key === 'maxDepth' ? 0 : key === 'maxChars' ? 512 : 1,
       CAUSE_TOOL_CAPS[key],
@@ -70,11 +70,13 @@ export function causeLimits(defaults: TraceCauseOptions = {}, question: TraceCau
     maxNodes: Math.max(1, Math.floor(resolved.maxNodes * 0.8)),
     maxEdges: Math.max(1, Math.floor(resolved.maxEdges * 0.8)),
     maxCalls: Math.max(1, Math.floor(resolved.maxCalls * 0.8)),
-    ...direction(data(question, 'backward') ?? data(defaults, 'backward'), resolved),
+    ...direction(data(options, 'backward'), resolved),
   };
   return {
     ...resolved,
     backward,
-    impact: direction(data(question, 'impact') ?? data(defaults, 'impact'), resolved),
+    impact: direction(data(options, 'impact'), resolved),
   };
 }
+
+export type CauseLimits = ReturnType<typeof causeLimits>;

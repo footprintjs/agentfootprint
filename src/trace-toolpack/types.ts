@@ -55,9 +55,10 @@ export interface TraceToolpackArtifacts {
  * Bounding dials. Every output is bounded BY DEFAULT — these set the
  * defaults; per-call params (`maxDepth`, `maxNodes`, `maxChars`, `maxLines`)
  * let the LLM ask for more up to hard caps the consumer cannot exceed.
+ * Cause tools are the exception: their resource controls are host-only ceilings.
  */
 export interface TraceToolpackOptions {
-  /** Bounded cause-tool defaults; missing snapshot coverage remains unknown. */
+  /** Host-only cause-tool ceilings, never overridable by model arguments. Snapshot-only capture cannot prove a root without engine attestation. */
   readonly cause?: TraceCauseOptions;
   /** Value-preview length in chars (trace_node / who_wrote). Default 160. */
   readonly previewChars?: number;

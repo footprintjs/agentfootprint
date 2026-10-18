@@ -7,7 +7,7 @@ export interface TraceCauseArtifacts {
   readonly nodeIds?: readonly string[];
 }
 
-/** Read-only cause-query defaults. Every call stays within the toolpack's hard ceilings. */
+/** Host-owned cause-query ceilings. Model arguments cannot select or override them. */
 export interface TraceCauseOptions extends WalkLimits {
   /** Default: floor(80% of the total node/edge/call limits), at least one. Depth is unchanged. */
   readonly backward?: TraversalLimits;
@@ -20,7 +20,8 @@ export interface TraceCauseOptions extends WalkLimits {
 /** The three public read-only questions, also available inside an opened child record. */
 export type TraceCauseOperation = 'attention_list' | 'root_cause' | 'impact';
 
-export interface TraceCauseQuestion extends TraceCauseOptions {
+/** Model questions select evidence only; resource policy stays in TraceCauseOptions. */
+export interface TraceCauseQuestion {
   readonly nodeId?: string;
   readonly nodeIds?: readonly string[];
 }

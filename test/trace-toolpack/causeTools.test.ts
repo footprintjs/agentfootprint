@@ -83,9 +83,8 @@ describe('read-only cause tools', () => {
   it('keeps a tiny total call limit, and reports incomplete instead of guessing', async () => {
     const { artifacts, calls } = fixture();
     const result = JSON.parse(
-      await callTraceTool(traceToolpack(artifacts), 'root_cause', {
+      await callTraceTool(traceToolpack(artifacts, { cause: { maxCalls: 1 } }), 'root_cause', {
         nodeId: 'symptom',
-        maxCalls: 1,
       }),
     );
     expect(calls()).toBeLessThanOrEqual(1);
@@ -176,10 +175,13 @@ describe('read-only cause tools', () => {
             },
           ]
         : [];
-    const text = await callTraceTool(traceToolpack(artifacts), 'attention_list', {
-      nodeIds: ['root'],
-      maxChars: 512,
-    });
+    const text = await callTraceTool(
+      traceToolpack(artifacts, { cause: { maxChars: 512 } }),
+      'attention_list',
+      {
+        nodeIds: ['root'],
+      },
+    );
     expect(text.length).toBeLessThanOrEqual(512);
     const result = JSON.parse(text);
     expect(result.confidence).toBe('incomplete');

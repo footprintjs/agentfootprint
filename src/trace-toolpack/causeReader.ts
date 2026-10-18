@@ -2,7 +2,7 @@ import { attentionList, explain } from 'foottrace/cause';
 import type { StageSnapshot } from 'footprintjs/advanced';
 import type { TraceToolpackArtifacts } from './types.js';
 import type { TraceCauseOperation, TraceCauseQuestion } from './causeTypes.js';
-import type { causeLimits } from './causeLimits.js';
+import type { CauseLimits } from './causeLimits.js';
 import { snapshotCauseArtifacts } from './causeSnapshot.js';
 import { causeGap, causeResponse } from './causeResponse.js';
 
@@ -12,18 +12,19 @@ export async function readCause(
   artifacts: TraceToolpackArtifacts,
   nodes: ReadonlyMap<string, StageSnapshot>,
   question: TraceCauseQuestion,
-  limits: ReturnType<typeof causeLimits>,
+  limits: CauseLimits,
   deadline: number,
   signal?: AbortSignal,
 ): Promise<string> {
-  if (signal?.aborted) return causeGap(operation, 'cancelled');
-  if (performance.now() >= deadline) return causeGap(operation, 'timeout');
+  const snapshotOnly = artifacts.cause === undefined;
+  if (signal?.aborted) return causeGap(operation, 'cancelled', snapshotOnly);
+  if (performance.now() >= deadline) return causeGap(operation, 'timeout', snapshotOnly);
   const source = artifacts.cause ?? snapshotCauseArtifacts(artifacts, nodes);
-  if (source === 'truncated') return causeGap(operation, 'truncated');
-  if (source === undefined) return causeGap(operation, 'not-collected');
+  if (source === 'truncated') return causeGap(operation, 'truncated', snapshotOnly);
+  if (source === undefined) return causeGap(operation, 'not-collected', snapshotOnly);
   const remaining = Math.floor(deadline - performance.now());
-  if (signal?.aborted) return causeGap(operation, 'cancelled');
-  if (remaining < 1) return causeGap(operation, 'timeout');
+  if (signal?.aborted) return causeGap(operation, 'cancelled', snapshotOnly);
+  if (remaining < 1) return causeGap(operation, 'timeout', snapshotOnly);
   const { maxChars, backward, impact, maxNodes, maxDepth, maxEdges, maxCalls } = limits;
   const options = { maxNodes, maxDepth, maxEdges, maxCalls, timeoutMs: remaining, signal };
   if (operation === 'attention_list') {
@@ -47,10 +48,11 @@ export async function readCause(
         ? 'Not sure, because coverage is incomplete. An absent mark is not proof of a healthy or reached step.'
         : 'Recorded attention within this query only. Cite the returned node and evidence IDs.',
       maxChars,
+      snapshotOnly,
     );
   }
-  // Both tools project the SAME bounded query, rather than independently spending two budgets.
-  if (question.nodeId === undefined) return causeGap(operation, 'invalid-data');
+  // Each invocation projects one bounded query. Separate root/impact calls do not share a result yet.
+  if (question.nodeId === undefined) return causeGap(operation, 'invalid-data', snapshotOnly);
   const finding = await explain(source.graph, question.nodeId, { ...options, backward, impact });
   if (operation === 'impact') {
     return causeResponse(
@@ -60,6 +62,7 @@ export async function readCause(
         ? 'Not sure of the full impact, because the returned gaps limit the recorded forward slice.'
         : 'Recorded reachable impact only; this does not prove effects in unrecorded services or unreached branches.',
       maxChars,
+      snapshotOnly,
     );
   }
   return causeResponse(
@@ -71,5 +74,6 @@ export async function readCause(
       ? 'Not sure, because the returned gaps prevent a unique supported root. Alternatives are not confirmed causes.'
       : 'No unique marked root in the checked graph. Cite alternatives without selecting one as fact.',
     maxChars,
+    snapshotOnly,
   );
 }
