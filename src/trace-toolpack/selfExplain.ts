@@ -459,7 +459,12 @@ function buildExplainRunTool(
       // trace tools served it, its answer) keeps out what the agent's does.
       const out = await debuggerAgent.run(
         { message: question },
-        ctx.redact !== undefined ? { redact: ctx.redact } : undefined,
+        ctx.redact === undefined && ctx.signal === undefined
+          ? undefined
+          : {
+              ...(ctx.redact !== undefined && { redact: ctx.redact }),
+              ...(ctx.signal !== undefined && { env: { signal: ctx.signal } }),
+            },
       );
       return typeof out === 'object' && out !== null && 'content' in out
         ? String((out as { content: unknown }).content)

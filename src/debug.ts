@@ -102,6 +102,9 @@ export {
   traceToolpack,
   type TraceToolpackArtifacts,
   type TraceToolpackOptions,
+  type TraceCauseArtifacts,
+  type TraceCauseOptions,
+  type TraceCauseOperation,
 } from './trace-toolpack/index.js';
 // `openRecording` — a saved run (`recordRun(...).toRecording()`, live or
 // parsed back from JSON) reopened as toolpack artifacts. The one adapter

@@ -107,6 +107,10 @@ describe.skipIf(!built)('the default browser graph of the root entry', () => {
     expect(graph.syncInputs.size).toBeGreaterThan(200);
     expect(graph.syncInputs.has('dist/esm/core/Agent.js')).toBe(true);
     expect(graph.syncInputs.has(PACK)).toBe(false);
+    for (const file of ['causeReader.js', 'causeSnapshot.js']) {
+      expect(graph.syncInputs.has(`dist/esm/trace-toolpack/${file}`), file).toBe(false);
+      expect(graph.dynamicInputs.has(`dist/esm/trace-toolpack/${file}`), file).toBe(true);
+    }
     // The two facts the builder needs before the pack loads ARE on it.
     expect(graph.syncInputs.has('dist/esm/lib/traceToolNames.js')).toBe(true);
   });

@@ -218,8 +218,8 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
   'src/trace-toolpack/debugPrompt.ts': [
     {
       kind: 'ephemeral',
-      count: 2,
-      why: 'the self-explain skill body and its trigger line — system text composed for the debugging request that serves the trace tools',
+      count: 3,
+      why: 'the self-explain skill body, its trigger line and the host-opted hypothesis frame — system text composed for the debugging request that serves the trace tools, never a persistent result assertion',
     },
   ],
   'src/trace-toolpack/traceToolpack.ts': [
@@ -1165,10 +1165,12 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // files 98 → 99, total 192 → 193, notModelFacing 129 → 130.
         // The native output strategy: one host-only run-start refusal in
         // Agent.ts. total 193 → 194, notModelFacing 130 → 131.
+        // Recorded-cause tools: the explicit host-opted hypothesis frame is
+        // one additional ephemeral system string. No persistent claim is excused.
         files: 99,
-        total: 194,
+        total: 195,
         registry: 8,
-        ephemeral: 22,
+        ephemeral: 23,
         unrepaired: 33,
         notModelFacing: 131,
         unrepairedEntries: 13,
