@@ -69,7 +69,7 @@ function memoryService(): { store: AgentCoreStore; sdk: FakeSdk } {
       ['memoryId', 'actorId', 'eventTimestamp', 'payload', 'extractionMode', 'extractionConfig'],
     ],
   };
-  return { store: new AgentCoreStore({ memoryId: 'mem-1', _sdk: module }), sdk };
+  return { store: new AgentCoreStore({ memoryId: 'mem-1', sdk: module }), sdk };
 }
 
 /** One branch's tools, its retry reports, and the call in flight when each fired. */

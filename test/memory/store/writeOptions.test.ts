@@ -324,7 +324,7 @@ describe('memory write options — P2 every shipped store honours or refuses BY 
 describe('memory write options — P3 AgentCoreStore through the SDK', () => {
   it('P3 the options become CreateEvent’s own fields', async () => {
     const sdk = agentCoreSdk();
-    const store = new AgentCoreStore({ memoryId: 'mem-1', _sdk: sdk.module });
+    const store = new AgentCoreStore({ memoryId: 'mem-1', sdk: sdk.module });
     expect(store.writeOptions).toEqual(['extraction', 'namespaceScope']);
 
     await store.put(IDENTITY, entry('a'), {
@@ -333,7 +333,7 @@ describe('memory write options — P3 AgentCoreStore through the SDK', () => {
     });
     // A store that served a scoped write refuses an unscoped one — these go
     // through a store of their own.
-    const unscoped = new AgentCoreStore({ memoryId: 'mem-1', _sdk: sdk.module });
+    const unscoped = new AgentCoreStore({ memoryId: 'mem-1', sdk: sdk.module });
     await unscoped.putMany(IDENTITY, [entry('b'), entry('c')], { extraction: 'skip' });
     await unscoped.put(IDENTITY, entry('d'));
 
@@ -354,7 +354,7 @@ describe('memory write options — P3 AgentCoreStore through the SDK', () => {
 
   it('P3 putIfVersion carries them to the write it makes', async () => {
     const sdk = agentCoreSdk();
-    const store = new AgentCoreStore({ memoryId: 'mem-1', _sdk: sdk.module });
+    const store = new AgentCoreStore({ memoryId: 'mem-1', sdk: sdk.module });
     const result = await store.putIfVersion(IDENTITY, entry('a'), 0, { extraction: 'skip' });
     expect(result.applied).toBe(true);
     const create = sdk.sent.find((s) => s.command === 'CreateEventCommand');
@@ -363,7 +363,7 @@ describe('memory write options — P3 AgentCoreStore through the SDK', () => {
 
   it('P3 defineMemory binds them to every pipeline write — a namespace per tenant', async () => {
     const sdk = agentCoreSdk();
-    const store = new AgentCoreStore({ memoryId: 'mem-1', _sdk: sdk.module });
+    const store = new AgentCoreStore({ memoryId: 'mem-1', sdk: sdk.module });
     const memory = defineMemory({
       id: 'conversation',
       type: MEMORY_TYPES.EPISODIC,
@@ -431,7 +431,7 @@ describe('memory write options — P4 property (every combination of every field
     'P4 %s → exactly the fields asked, and nothing else',
     async (_label, options) => {
       const sdk = agentCoreSdk();
-      const store = new AgentCoreStore({ memoryId: 'mem-1', _sdk: sdk.module });
+      const store = new AgentCoreStore({ memoryId: 'mem-1', sdk: sdk.module });
       await store.put(IDENTITY, entry('a'), options);
       const input = sdk.sent[0]?.input ?? {};
       const asked = requestedWriteOptions(options);
@@ -553,7 +553,7 @@ describe('memory write options — P7 ROI', () => {
   });
 
   it('P7 defineMemory refuses writeOptions on a read-only memory', () => {
-    const store = new AgentCoreStore({ memoryId: 'mem-1', _sdk: agentCoreSdk().module });
+    const store = new AgentCoreStore({ memoryId: 'mem-1', sdk: agentCoreSdk().module });
     expect(() =>
       defineMemory({
         id: 'm',
@@ -595,7 +595,7 @@ describe('memory write options — P7 ROI', () => {
 describe('memory write options — AgentCore refuses what could not reach AgentCore intact', () => {
   it('an SDK too old to MODEL the fields: the store declares none and refuses by name', async () => {
     const sdk = agentCoreSdk(false);
-    const store = new AgentCoreStore({ memoryId: 'mem-1', _sdk: sdk.module });
+    const store = new AgentCoreStore({ memoryId: 'mem-1', sdk: sdk.module });
     // Its serializer would drop both fields without a word — so neither is declared...
     expect(store.writeOptions).toBeUndefined();
     // ...and a write that asks is refused, naming the fix, before anything is sent.
@@ -617,7 +617,7 @@ describe('memory write options — AgentCore refuses what could not reach AgentC
 
   it('namespace variables outside AgentCore’s domain are refused by rule, never quoted', async () => {
     const sdk = agentCoreSdk();
-    const store = new AgentCoreStore({ memoryId: 'mem-1', _sdk: sdk.module });
+    const store = new AgentCoreStore({ memoryId: 'mem-1', sdk: sdk.module });
     const refusal = async (scope: Record<string, string>) => {
       try {
         await store.put(IDENTITY, entry('a'), { namespaceScope: scope });
@@ -659,7 +659,7 @@ describe('memory write options — AgentCore refuses what could not reach AgentC
   });
 
   it('a wrapper made by spreading the store does not inherit the declaration', () => {
-    const store = new AgentCoreStore({ memoryId: 'mem-1', _sdk: agentCoreSdk().module });
+    const store = new AgentCoreStore({ memoryId: 'mem-1', sdk: agentCoreSdk().module });
     expect(store.writeOptions).toEqual(['extraction', 'namespaceScope']);
     // `{ ...store, put }` copies own fields only — and a wrapper that does not
     // forward the third argument must not claim to honour it.
@@ -943,7 +943,7 @@ describe('memory write options — search never reads a neighbouring namespace',
     });
     const store = new AgentCoreStore({
       memoryId: 'mem-1',
-      _sdk: sdk.module,
+      sdk: sdk.module,
       searchNamespace: ({ actorId }) => `/actors/${actorId}/sessions/s`,
     });
     const found = await store.search(IDENTITY, [0], { text: 'q' });

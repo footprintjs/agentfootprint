@@ -213,6 +213,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 10 | [`10-durable-vector-index.ts`](memory/10-durable-vector-index.ts) | Durable vector index — embed the corpus once, ever | sqliteVectorStore keeps the corpus in one file, so a restart re-embeds nothing. Exact cosine search, zero dependencies, and a refusal when a second embedder tries to enter the same index. |
 | 11 | [`11-decay-strategy.ts`](memory/11-decay-strategy.ts) | Decay strategy — old memory fades on a half-life | Score every recalled entry by age against a half-life and drop what has faded. For long-running agents that should stop rehearsing last month. Free — no LLM, no embeddings. |
 | 12 | [`12-write-options.ts`](memory/12-write-options.ts) | Memory write options — skip extraction, a namespace per tenant | defineMemory({ writeOptions }) over AgentCoreStore: every event is kept out of long-term extraction and filed under its own tenant’s namespace; InMemoryStore refuses the same options by name. |
+| 13 | [`13-agentcore-bounded-pages.ts`](memory/13-agentcore-bounded-pages.ts) | AgentCore — public SDK injection and bounded pages | A scripted SDK serves 251 stored entries in three capped pages. No AWS calls. |
 
 ### [`features/`](features/) — runtime features
 

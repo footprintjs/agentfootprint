@@ -435,6 +435,13 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: 'the test double`s exhaustion error, thrown to whoever scripted it',
     },
   ],
+  'src/adapters/memory/agentcore.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: 'the pageSize configuration refusal is thrown to the host at store construction, before an SDK client or model request exists; its cursor guidance teaches the caller how to configure and page the store',
+    },
+  ],
   'src/adapters/memory/memoryBank.ts': [
     {
       kind: 'not-model-facing',
@@ -1183,12 +1190,15 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // the current request's tools array; it is not a persistent result.
         // Decimal rounding: one host-only invalid-option refusal in gate.ts.
         // The persistent and unrepaired budgets are unchanged.
-        files: 100,
-        total: 197,
+        // AgentCore pages: one constructor-time host configuration refusal,
+        // not a model instruction. One new file and one host-facing literal;
+        // the registry, ephemeral and unrepaired counts are unchanged.
+        files: 101,
+        total: 198,
         registry: 8,
         ephemeral: 24,
         unrepaired: 33,
-        notModelFacing: 132,
+        notModelFacing: 133,
         unrepairedEntries: 13,
       });
       // And the ledger's own total is the number of literals the scan flagged —

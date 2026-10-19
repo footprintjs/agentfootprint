@@ -1541,6 +1541,7 @@
       "AutoPipelineState",
       "BeatExtractor",
       "BeatImportance",
+      "BedrockAgentCoreSdkModule",
       "BedrockAgentMemoryLikeClient",
       "BedrockAgentMemoryOptions",
       "BedrockAgentSummary",

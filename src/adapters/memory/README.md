@@ -10,6 +10,31 @@ The identity tuple is the tenant boundary; every call is scoped by it. A store
 declares its own capabilities — search, and the write options it honours —
 rather than being assumed to have them.
 
+## AgentCore pages and bundled SDKs
+`AgentCoreStore` accepts `pageSize` only as an integer from 1 through 100
+(default 100), before constructing a client. A larger `list({ limit })` is a
+legal `MemoryStore` request: the adapter caps the AWS call at 100 and preserves
+its cursor. Keep following `ListResult.cursor`, even when filtering leaves a
+page empty. Session scans (`get`, `delete`, `forget`) use the validated page
+size. Retrieval caps both `RetrieveMemoryRecords.maxResults` and
+`SearchCriteria.topK` at 100.
+
+Bundled hosts can pass a statically imported module through the public `sdk`
+option; the adapter still builds and sends the commands. Its exported
+`BedrockAgentCoreSdkModule` type also accepts scripted modules for offline tests:
+
+```ts
+import * as sdk from '@aws-sdk/client-bedrock-agentcore';
+import { AgentCoreStore } from 'agentfootprint/memory';
+const store = new AgentCoreStore({ memoryId, region: 'us-west-2', sdk });
+```
+
+Without `sdk`, construction lazy-loads the optional peer as before. A host can
+still supply its entry-semantic `client`. The old internal `_sdk` spelling is
+removed; migrate it to `sdk` (there is no alias). `_client` remains an internal
+test seam. The offline `examples/memory/13-agentcore-bounded-pages.ts` exercises
+public module injection and follows three capped pages.
+
 ## Write options: honoured, or refused by name
 A managed memory service EXTRACTS long-term records (facts, summaries,
 preferences) from what it stores and files them under namespaces. Two things
@@ -57,7 +82,11 @@ The strategy per adapter:
 injected `AgentCoreLikeClient` must declare `forwardsWriteOptions: true` (a
 client written before the fields existed would compile and drop them), and the
 installed SDK must model `extractionMode` / `extractionConfig` (read off its own
-`CreateEventInput$` schema — an older serializer drops them silently). It checks
+`CreateEventInput$` schema — an older serializer drops them silently). Both
+fields are available from `@aws-sdk/client-bedrock-agentcore` 3.1114.0; the
+[official SDK changelog](https://github.com/aws/aws-sdk-js-v3/blob/v3.1114.0/clients/client-bedrock-agentcore/CHANGELOG.md)
+introduces `extractionConfig` there, after `extractionMode` in 3.1074.0. An
+older or unreadable schema still fails closed before writing. It checks
 the variables against AgentCore's documented domain before sending, refusing by
 variable name without quoting the value.
 

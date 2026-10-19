@@ -5,7 +5,7 @@
  * Two layers:
  *  1. Store behaviour — a mock `AgentCoreLikeClient` (entry-semantic) exercises
  *     put/get/list/delete/forget/CAS/feedback without AWS.
- *  2. SDK-shim regression guard — a mock SDK module (`_sdk`) asserts the adapter
+ *  2. SDK-shim regression guard — a mock SDK module (`sdk`) asserts the adapter
  *     dispatches the REAL AgentCore commands with the right inputs, so the
  *     wrong-service bug (it used to target `bedrock-agent-runtime` with
  *     non-existent `PutMemoryEventCommand`s) can never recur silently.
@@ -212,7 +212,7 @@ describe('AgentCoreStore — SDK shim (regression guard: REAL AgentCore commands
     const store = new AgentCoreStore({
       memoryId: 'mem-1',
       region: 'us-west-2',
-      _sdk: sdk as never,
+      sdk: sdk as never,
     });
     await store.put(id, makeEntry('a'));
     const create = sent.find((s) => s.cmd === 'CreateEvent');
@@ -236,7 +236,7 @@ describe('AgentCoreStore — SDK shim (regression guard: REAL AgentCore commands
 
   it('list → ListEventsCommand with includePayloads', async () => {
     const { sdk, sent } = spySdk();
-    const store = new AgentCoreStore({ memoryId: 'mem-1', _sdk: sdk as never });
+    const store = new AgentCoreStore({ memoryId: 'mem-1', sdk: sdk as never });
     await store.list(id);
     const list = sent.find((s) => s.cmd === 'ListEvents');
     expect(list).toBeDefined();
@@ -244,7 +244,7 @@ describe('AgentCoreStore — SDK shim (regression guard: REAL AgentCore commands
   });
 
   it('throws a clear error naming the correct peer when the SDK lacks the client', () => {
-    expect(() => new AgentCoreStore({ memoryId: 'm', _sdk: {} as never })).toThrow(
+    expect(() => new AgentCoreStore({ memoryId: 'm', sdk: {} as never })).toThrow(
       /BedrockAgentCoreClient/,
     );
   });
@@ -347,7 +347,7 @@ describe('AgentCoreStore — an unreadable entry', () => {
 
   it('refuses LOUDLY now, naming the event and the session', async () => {
     const { sdk } = statefulSdk([MANGLED_BLOB]);
-    const store = new AgentCoreStore({ memoryId: 'mem-1', _sdk: sdk as never });
+    const store = new AgentCoreStore({ memoryId: 'mem-1', sdk: sdk as never });
     await expect(store.list(id)).rejects.toBeInstanceOf(UnreadableMemoryEntryError);
     await expect(store.list(id)).rejects.toThrow(/event 'ev-0'/);
     await expect(store.list(id)).rejects.toThrow(/session 'afp-/);
@@ -356,7 +356,7 @@ describe('AgentCoreStore — an unreadable entry', () => {
 
   it('carries the code and the blob SHAPE, and quotes none of the memory', async () => {
     const { sdk } = statefulSdk([MANGLED_BLOB]);
-    const store = new AgentCoreStore({ memoryId: 'mem-1', _sdk: sdk as never });
+    const store = new AgentCoreStore({ memoryId: 'mem-1', sdk: sdk as never });
     const err = await store.list(id).then(
       () => undefined,
       (e: unknown) => e as UnreadableMemoryEntryError,
@@ -381,7 +381,7 @@ describe('AgentCoreStore — an unreadable entry', () => {
 
   it('refuses on every read path, not just list', async () => {
     const { sdk } = statefulSdk([MANGLED_BLOB]);
-    const store = new AgentCoreStore({ memoryId: 'mem-1', _sdk: sdk as never });
+    const store = new AgentCoreStore({ memoryId: 'mem-1', sdk: sdk as never });
     // `get`, `delete` and `forget` all walk the same events. A read that cannot
     // see a memory must not report "not there" on any of them.
     await expect(store.get(id, 'a')).rejects.toBeInstanceOf(UnreadableMemoryEntryError);
@@ -396,7 +396,7 @@ describe('AgentCoreStore — an unreadable entry', () => {
     ['truncated JSON', '{"id":"a","value":{'],
   ])('refuses %s the same way — present is not absent', async (_label, blob) => {
     const { sdk } = statefulSdk([blob]);
-    const store = new AgentCoreStore({ memoryId: 'mem-1', _sdk: sdk as never });
+    const store = new AgentCoreStore({ memoryId: 'mem-1', sdk: sdk as never });
     await expect(store.list(id)).rejects.toBeInstanceOf(UnreadableMemoryEntryError);
   });
 
@@ -429,7 +429,7 @@ describe('AgentCoreStore — an unreadable entry', () => {
       ListEventsCommand: cmd('ListEvents'),
       DeleteEventCommand: cmd('DeleteEvent'),
     };
-    const store = new AgentCoreStore({ memoryId: 'mem-1', _sdk: sdk as never });
+    const store = new AgentCoreStore({ memoryId: 'mem-1', sdk: sdk as never });
     expect((await store.list(id)).entries).toEqual([]);
     expect(await store.get(id, 'a')).toBeNull();
   });
@@ -493,7 +493,7 @@ describe('AgentCoreStore — string blobs on every read path', () => {
 
   it('put → list round-trips through JSON text, with every field intact', async () => {
     const { sdk, written } = statefulSdk();
-    const store = new AgentCoreStore({ memoryId: 'mem-1', _sdk: sdk as never });
+    const store = new AgentCoreStore({ memoryId: 'mem-1', sdk: sdk as never });
     await store.put(
       id,
       makeEntry('p', {
@@ -514,7 +514,7 @@ describe('AgentCoreStore — string blobs on every read path', () => {
 
   it('get and delete find an entry stored as text', async () => {
     const { sdk, deleted } = statefulSdk();
-    const store = new AgentCoreStore({ memoryId: 'mem-1', _sdk: sdk as never });
+    const store = new AgentCoreStore({ memoryId: 'mem-1', sdk: sdk as never });
     await store.put(id, makeEntry('a'));
     expect((await store.get<{ text: string }>(id, 'a'))?.value.text).toBe('value-a');
     await store.delete(id, 'a');
@@ -523,7 +523,7 @@ describe('AgentCoreStore — string blobs on every read path', () => {
 
   it('search is unaffected — it reads records, not the blobs this store writes', async () => {
     const { sdk } = statefulSdk();
-    const store = new AgentCoreStore({ memoryId: 'mem-1', _sdk: sdk as never });
+    const store = new AgentCoreStore({ memoryId: 'mem-1', sdk: sdk as never });
     await store.put(id, makeEntry('a'));
     const hits = await store.search(id, [0.1, 0.2], { text: 'where does Ada sit?' });
     expect(hits.map((h) => h.entry.value)).toEqual([{ content: 'Ada prefers window seats.' }]);
