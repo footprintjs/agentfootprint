@@ -592,6 +592,14 @@
     {
       "idx": 15,
       "overwrite": {
+        "findingsRequest": [
+          {
+            "complete": true,
+            "iteration": 1,
+            "results": [],
+            "version": 1
+          }
+        ],
         "llmLatestToolCalls": [
           {
             "args": {
@@ -701,6 +709,10 @@
           "verb": "set"
         },
         {
+          "path": "findingsRequest",
+          "verb": "set"
+        },
+        {
           "path": "llmLatestToolCalls",
           "verb": "append"
         }
@@ -724,6 +736,7 @@
     {
       "idx": 17,
       "overwrite": {
+        "findingsBatchRecordedAt": "<volatile>",
         "findingsLedger": [
           {
             "basis": "exploratory",
@@ -811,6 +824,10 @@
         "milestone-label:Tool call"
       ],
       "trace": [
+        {
+          "path": "findingsBatchRecordedAt",
+          "verb": "set"
+        },
         {
           "path": "lastToolResult",
           "verb": "set"
@@ -1188,6 +1205,22 @@
     {
       "idx": 32,
       "overwrite": {
+        "findingsRequest": [
+          {
+            "complete": true,
+            "iteration": 2,
+            "results": [
+              {
+                "execution": "result",
+                "identified": true,
+                "toolCallId": "c1",
+                "toolName": "alpha_tool",
+                "visibility": "body"
+              }
+            ],
+            "version": 1
+          }
+        ],
         "llmLatestToolCalls": [
           {
             "args": {
@@ -1321,6 +1354,10 @@
           "verb": "set"
         },
         {
+          "path": "findingsRequest",
+          "verb": "set"
+        },
+        {
           "path": "llmLatestToolCalls",
           "verb": "set"
         }
@@ -1344,6 +1381,7 @@
     {
       "idx": 34,
       "overwrite": {
+        "findingsBatchRecordedAt": "<volatile>",
         "findingsLedger": [
           {
             "assertions": [
@@ -1463,6 +1501,10 @@
         "milestone-label:Tool call"
       ],
       "trace": [
+        {
+          "path": "findingsBatchRecordedAt",
+          "verb": "set"
+        },
         {
           "path": "toolResults",
           "verb": "set"
@@ -1860,6 +1902,29 @@
     {
       "idx": 49,
       "overwrite": {
+        "findingsRequest": [
+          {
+            "complete": true,
+            "iteration": 3,
+            "results": [
+              {
+                "execution": "result",
+                "identified": true,
+                "toolCallId": "c1",
+                "toolName": "alpha_tool",
+                "visibility": "body"
+              },
+              {
+                "execution": "result",
+                "identified": true,
+                "toolCallId": "c2",
+                "toolName": "alpha_tool",
+                "visibility": "body"
+              }
+            ],
+            "version": 1
+          }
+        ],
         "llmLatestContent": "{\"done\":true,\"_findings\":{\"previous\":[{\"toolCallId\":\"c2\",\"standing\":\"noise\"}]}}",
         "llmLatestToolCalls": [],
         "receipt": {
@@ -1976,6 +2041,10 @@
       "trace": [
         {
           "path": "receipt",
+          "verb": "set"
+        },
+        {
+          "path": "findingsRequest",
           "verb": "set"
         },
         {

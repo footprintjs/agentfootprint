@@ -60,7 +60,7 @@ export function captureFindingsRequest(
         ? 'ambiguous'
         : source === undefined
         ? 'not-served'
-        : source.notDispatched !== undefined
+        : source.notDispatched !== undefined || source.toolResultOrigin !== undefined
         ? 'not-a-result'
         : undefined;
     const message = messages[0]!;
@@ -93,7 +93,8 @@ export function captureFindingsRequest(
       execution:
         reason === undefined
           ? ('result' as const)
-          : reason === 'not-a-result'
+          : reason === 'not-a-result' &&
+            (source?.notDispatched !== undefined || source?.toolResultOrigin === 'not-entered')
           ? ('not-dispatched' as const)
           : ('unknown' as const),
       visibility:
@@ -159,6 +160,7 @@ export function findingsReferenceRefusal(
     (entry) => !entry.identified || entry.execution !== 'result',
   ).length;
   const notDispatched = observations.some((entry) => entry.execution === 'not-dispatched');
+  const notice = observations.some((entry) => entry.identified && entry.reason === 'not-a-result');
   if (refused === 0 && malformed === 0) return undefined;
   return JSON.stringify({
     refused: 'findings-reference',
@@ -168,6 +170,8 @@ export function findingsReferenceRefusal(
         ? 'The reserved findings metadata was malformed.'
         : notDispatched
         ? 'A referenced notice was shown, but its tool was not dispatched; it is not executed-result evidence.'
+        : notice
+        ? 'A referenced notice was shown, but it is not a completed tool result.'
         : 'A findings reference could not be identified in the request that produced this response.',
     instruction:
       'Copy an unambiguous tool_result id served to this response, or read the source again on a later call. No tool was invoked for this refused proposal.',

@@ -1707,6 +1707,9 @@ export async function standingAgent<TH extends HostHandle>(
                 role: 'tool',
                 toolName: call.name,
                 toolCallId: call.id,
+                ...(paused.checkpoint.sharedState.findingsServe !== undefined && {
+                  toolResultOrigin: 'input-cancelled' as const,
+                }),
                 content: JSON.stringify({
                   status: 'input_cancelled',
                   requestId: response.requestId,

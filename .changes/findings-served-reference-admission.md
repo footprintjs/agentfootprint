@@ -13,4 +13,11 @@ Attempted declarations remain in the masked ledger with bounded refusal diagnost
 and refusal-containing checkpoints remain readable. Invalid JSON answers are denied
 or spend only an already configured output retry and the remaining iteration budget.
 Already emitted streaming drafts cannot be retracted. Tool schemas, instruction and
-cache layouts are unchanged; this change adds no model call or paid validation.
+cache layouts are unchanged; this change adds no new model-call budget or paid validation.
+
+**Entry-boundary correction:** a failure while preparing dispatch context or time,
+before entering `tool.execute`, is no longer reported as an executed tool on the
+resume path and no longer invokes after-tool middleware. This correction also
+applies when findings is off; entered tool errors and cached returns stay results.
+Nominal off-findings reference records and request bytes are unchanged, rather
+than a promise of byte identity for this previously misclassified failure.

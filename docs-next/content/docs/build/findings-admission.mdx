@@ -94,7 +94,12 @@ sandbox against a host deliberately altering its own run.
 
 This phase leaves schema enums, tool and system layouts, instruction cache
 policies, `toolsVaryPerCall`, cache markers and normal request rendering as they
-were. Agents without findings do not capture or read the new evidence keys.
+were. Agents without findings do not capture the request witness or add producer markers.
+A shared entry-boundary correction also applies without findings: if dispatch
+context or time preparation fails before `execute` is entered, resumed calls no
+longer report entry or run after-tool middleware. The nominal reference and wire
+identity checks do not promise identity for that previously misclassified failure.
+
 It uses no model, network lookup or paid validation service. Cache layout work
 and any paid benchmark are separate work; no savings or hosted behavior has
 been measured by this feature's mock tests.

@@ -3840,6 +3840,7 @@ export function buildToolCallsHandler(
         return { result: `credential error for '${need.credential}': ${reason}`, error: true };
       }
     }
+    let executed = false;
     try {
       // The time layer's dispatch moment — a resumed call is dispatched NOW,
       // so its `dispatchedAt` is the resume's, not the pause's.
@@ -3858,7 +3859,7 @@ export function buildToolCallsHandler(
       if (dispatched !== undefined) args = dispatched.args;
       // `let`, not `const`: the semantic projection below replaces the value
       // on the non-envelope path exactly as the batch loop does.
-      let result = await tool.execute(args, {
+      const executionContext = {
         toolCallId,
         iteration,
         ...(callTime !== undefined && { time: callTime }),
@@ -3875,7 +3876,9 @@ export function buildToolCallsHandler(
         ...toolProgress(scope, { toolName, toolCallId, iteration }),
         ...sessionContext(scope, toolName, toolCallId),
         ...toolDispatchCtx(scope, { toolName, toolCallId, iteration }, env.signal),
-      });
+      };
+      executed = true;
+      let result = await tool.execute(args, executionContext);
       await endCall(toolCallId);
       // The typed effects channel (9.19.0) — same unwrap as the batch loop,
       // at this path's own execute boundary, so a resumed call's envelope is
@@ -4017,7 +4020,7 @@ export function buildToolCallsHandler(
           result: `tool '${toolName}' requested a pause while resuming an approved check-in, which is not supported`,
           error: true,
           // It ran — a tool that asked to pause had already started work.
-          executed: true,
+          executed,
         };
       }
       // A tool that threw still RAN, and may have done half its work; the
@@ -4025,7 +4028,7 @@ export function buildToolCallsHandler(
       return {
         result: err instanceof Error ? err.message : String(err),
         error: true,
-        executed: true,
+        executed,
       };
     }
   };
@@ -4061,6 +4064,7 @@ export function buildToolCallsHandler(
         }[]),
       ];
       const iteration = scope.iteration as number;
+      // ── STANDINGS OF EARLIER RESULTS AND REFERENCE ADMISSION ───────
       // Freeze admission before batch asks, kept-answer consumption or any
       // policy/credential callback. A sibling result never enlarges it.
       const findingsPeels = deps.findings === true ? toolCalls.map(peelCall) : [];
@@ -5029,8 +5033,7 @@ export function buildToolCallsHandler(
               // Set BEFORE the await: a tool that throws has still run, and a
               // tool that does not exist has not. This flag is the entire
               // precondition of the after-tool moment below.
-              executed = true;
-              result = await tool.execute(callArgs, {
+              const executionContext = {
                 toolCallId: tc.id,
                 iteration,
                 ...(callTime !== undefined && { time: callTime }),
@@ -5051,7 +5054,9 @@ export function buildToolCallsHandler(
                   { toolName: tc.name, toolCallId: tc.id, iteration },
                   env.signal,
                 ),
-              });
+              };
+              executed = true;
+              result = await tool.execute(callArgs, executionContext);
               // A code-runner tool leaves the SHAPE of what it just ran, keyed by
               // this call. Taken and deleted here so the map cannot grow across
               // a long run, and emitted from the dispatch loop rather than from
@@ -5779,6 +5784,7 @@ export function buildToolCallsHandler(
           content: resultStr,
           toolCallId: tc.id,
           toolName: tc.name,
+          ...(deps.findings === true && !executed && { toolResultOrigin: 'not-entered' as const }),
           ...(layerNote !== '' && { toolChars: deliveredResult.length }),
           ...(tc.argumentsFailure !== undefined && {
             toolArgumentsFailure: { ...tc.argumentsFailure },
@@ -6243,7 +6249,14 @@ export function buildToolCallsHandler(
         const askSettlement = settleBatch(
           [
             ...(scope.history as readonly LLMMessage[]),
-            { role: 'tool', content: askResultStr, toolCallId, toolName },
+            {
+              role: 'tool',
+              content: askResultStr,
+              toolCallId,
+              toolName,
+              ...(deps.findings === true &&
+                !toolRan && { toolResultOrigin: 'not-entered' as const }),
+            },
           ],
           { toolName, toolCallId },
         );
@@ -6430,7 +6443,14 @@ export function buildToolCallsHandler(
         const decisionSettlement = settleBatch(
           [
             ...(scope.history as readonly LLMMessage[]),
-            { role: 'tool', content: decisionResultStr, toolCallId, toolName },
+            {
+              role: 'tool',
+              content: decisionResultStr,
+              toolCallId,
+              toolName,
+              ...(deps.findings === true &&
+                !toolRan && { toolResultOrigin: 'not-entered' as const }),
+            },
           ],
           { toolName, toolCallId },
         );
@@ -6582,7 +6602,14 @@ export function buildToolCallsHandler(
         const consentSettlement = settleBatch(
           [
             ...(scope.history as readonly LLMMessage[]),
-            { role: 'tool', content: consentResultStr, toolCallId, toolName },
+            {
+              role: 'tool',
+              content: consentResultStr,
+              toolCallId,
+              toolName,
+              ...(deps.findings === true &&
+                dispatched.executed !== true && { toolResultOrigin: 'not-entered' as const }),
+            },
           ],
           { toolName, toolCallId },
         );
