@@ -52,6 +52,73 @@ The model routes the ticket (`art_h7Kq…`) between tools. The window spent on s
 
 Runnable version: [`examples/features/56-artifacts.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/56-artifacts.ts) — mint in one tool, redeem in another, a derived artifact, and expiry stating itself.
 
+## Open selected details of a stored proof
+
+Use `artifactDetailTool` when a model needs a small section of an already stored
+JSON result. A reference alone does not make the result readable: mount the tool
+and supply a trusted `admit(ref, ctx)` callback. Every navigation call repeats that
+callback. The helper never reads a store automatically or caches an admission.
+
+<CodeFile path="examples/artifacts/artifact-detail.ts" region="viewer" title="A mounted detail viewer" />
+
+`ArtifactDetailOptions` configures the trusted host callbacks; model request
+fields use `ArtifactDetailArgs`. Responses use `ArtifactDetailResult`, whose
+child pages contain `ArtifactDetailChild` entries with `ArtifactDetailAction`
+follow-ups that the mounted tool can execute.
+
+The model sends a complete artifact `ref`, a JSON-pointer `path` (empty opens the
+root), and optional `offset`/`limit`. A small section returns `mode: 'value'` with
+the actual JSON. A larger object or array returns `mode: 'children'`, child actions
+for the same tool, and exact `shown`/`total`/`complete`/`nextOffset` fields. Follow
+those actions or request the next page. An oversized scalar returns
+`mode: 'scalar-omitted'` and `complete: false`; identifiers and values are never
+split into partial strings. An omitted scalar cannot be recovered by pagination.
+
+**Admission belongs to the host.** The example admits only its producer's issued
+reference in the same caller scope and native run. It checks kind, producer call,
+size and digest identity, then uses fresh scoped `head`/`get` reads. The configured
+store owns payload integrity. Adapt these checks to your application's source,
+permissions, query/window and evidence contracts; the viewer does not certify any
+of them. Authenticate the caller before supplying its run identity. Opening a
+section grants no additional authority to attribute a cause or make a claim.
+
+Host `context(root, path)` receives the detached frozen root and returns caveats
+nested under the result's `context`. Keep provenance, window limitations and unknown
+causes there; context cannot override navigation fields. Results travel through
+the existing tool-message channel. This is source-data framing, not a global
+taint flag or a guarantee of prompt-injection immunity.
+
+The fixed limits are 1 MiB of admitted ordinary JSON (depth 100), 4 KiB of host
+context, 8 KiB per inline value, and 12 KiB UTF-8 for the whole response including
+context. Pages contain at most 20 direct children; pointers have at most 16
+segments and 2,048 UTF-16 code units, and offsets are at most 1,000,000. Escape
+`~` as `~0` and `/` as `~1`; prototype keys and malformed pointers are refused.
+Getters, cycles, non-finite numbers, negative zero and unsupported JSON values are refused.
+These bounds do not limit transport deserialization or preempt synchronous host
+callbacks or arbitrary JavaScript proxy traps.
+
+Direct callers can inspect `ArtifactDetailError.code` (`ArtifactDetailErrorCode`): malformed requests,
+failed admission/unavailable sections, and cancellation use
+`ERR_ARTIFACT_DETAIL_INVALID`, `ERR_ARTIFACT_DETAIL_UNAVAILABLE`, and
+`ERR_ARTIFACT_DETAIL_CANCELLED` with fixed messages. An agent serves failures
+through its existing tool-result handling; it does not promise a structured
+error-code envelope to the model. Callback error text and cancellation reasons
+are not echoed by the viewer.
+Cancellation stops waiting and prevents late delivery; the host still owns
+underlying I/O cancellation and cleanup.
+
+Runnable example: [`examples/artifacts/artifact-detail.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/artifacts/artifact-detail.ts)
+uses a real agent, in-memory artifacts and a scripted mock. It follows two sample
+pages into an exact stored source value with five fresh admissions and one
+synthetic source read. Its evidence-shaped fixture is not a causal-analysis API.
+
+For an actual [recorded cause result](doc:self-explain), a host can explicitly
+retain a complete `traceToolpack` `root_cause` JSON result and admit it through
+this viewer, preserving its gaps and interpretation. Existing cause-response
+overflow still returns an explicit `truncated` gap and stores no reference;
+the viewer cannot recover that discarded finding. Automatic overflow storage,
+lifetime and admission remain a consumer integration, and cause caps are unchanged.
+
 ## The data legs (9.22.0) — refs the model routes, not just holds
 
 ### Declare datasets once, independently of transport

@@ -789,6 +789,14 @@ export type {
   // clean retry). The record keeps the true size (tools.result_refused).
   ToolResultCeiling,
 } from './tools/tools.js';
+export { artifactDetailTool, type ArtifactDetailOptions } from './tools/artifactDetailTool.js';
+export { ArtifactDetailError, type ArtifactDetailErrorCode } from './artifacts/detailError.js';
+export type {
+  ArtifactDetailAction,
+  ArtifactDetailArgs,
+  ArtifactDetailChild,
+  ArtifactDetailResult,
+} from './artifacts/detailTypes.js';
 // The inputs layer's declarations (honesty layer 2): per-argument rules —
 // `Tool.askOrAssume` (the library fills an `assume` default and files it) —
 // and which argument sets the period the answer covers (`Tool.period`).

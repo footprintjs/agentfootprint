@@ -2,7 +2,7 @@
 title: Functions
 ---
 
-151 exported from `agentfootprint`.
+152 exported from `agentfootprint`.
 
 - [`absenceSignalOf`](/docs/api/functions/absenceSignalOf)
 - [`absent`](/docs/api/functions/absent)
@@ -10,6 +10,7 @@ title: Functions
 - [`allow`](/docs/api/functions/allow)
 - [`answerFromElicitation`](/docs/api/functions/answerFromElicitation)
 - [`applyOutputSchema`](/docs/api/functions/applyOutputSchema)
+- [`artifactDetailTool`](/docs/api/functions/artifactDetailTool)
 - [`ask`](/docs/api/functions/ask)
 - [`assertAskComponent`](/docs/api/functions/assertAskComponent)
 - [`assertComposedOf`](/docs/api/functions/assertComposedOf)

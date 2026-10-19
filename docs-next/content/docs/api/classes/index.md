@@ -2,11 +2,12 @@
 title: Classes
 ---
 
-49 exported from `agentfootprint`.
+50 exported from `agentfootprint`.
 
 - [`Agent`](/docs/api/classes/Agent)
 - [`AgentBuilder`](/docs/api/classes/AgentBuilder)
 - [`AnswerValidationError`](/docs/api/classes/AnswerValidationError)
+- [`ArtifactDetailError`](/docs/api/classes/ArtifactDetailError)
 - [`ArtifactIntegrityError`](/docs/api/classes/ArtifactIntegrityError)
 - [`CheckInRecorder`](/docs/api/classes/CheckInRecorder)
 - [`CompactionUnmeasurableError`](/docs/api/classes/CompactionUnmeasurableError)
