@@ -154,6 +154,51 @@ describe('artifact detail public admission and provider boundary', () => {
     expect(admit).toHaveBeenCalledTimes(3);
   });
 
+  it.each(['admit', 'context'] as const)(
+    'sanitizes a real typed %s callback error whose message was replaced with private text',
+    async (phase) => {
+      const secret = `PRIVATE_TYPED_HOST_ERROR: ${phase} authorization details`;
+      const hostile = new ArtifactDetailError('ERR_ARTIFACT_DETAIL_INVALID');
+      hostile.message = secret;
+      Object.defineProperty(hostile, 'cause', { value: { secret }, enumerable: true });
+      const fail = vi.fn(() => {
+        throw hostile;
+      });
+      const tool = artifactDetailTool({
+        name: NAME,
+        admit: phase === 'admit' ? async () => fail() : async () => ({ count: 1 }),
+        context: phase === 'context' ? fail : undefined,
+      });
+
+      const error = await open(tool, { ref: REF, path: '/count' }).catch(
+        (failure: unknown) => failure,
+      );
+      expect(error).toBeInstanceOf(ArtifactDetailError);
+      expect(error).not.toBe(hostile);
+      expect(error).toMatchObject({
+        code: 'ERR_ARTIFACT_DETAIL_UNAVAILABLE',
+        message: 'Artifact detail is unavailable.',
+      });
+      expect(error).not.toHaveProperty('cause');
+      expect(String(error)).not.toContain(secret);
+      expect(JSON.stringify(error)).not.toContain(secret);
+      expect(fail).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('serves an ordinary error-shaped JSON value as data without promoting its code', async () => {
+    const value = {
+      name: 'ArtifactDetailError',
+      code: 'ERR_ARTIFACT_DETAIL_INVALID',
+      message: 'An ordinary recorded source value.',
+    };
+    const { tool } = viewer({ error: value });
+    const result = await open(tool, { ref: REF, path: '/error' });
+    expect(result).toMatchObject({ mode: 'value', value, complete: true });
+    expect(result).not.toHaveProperty('code');
+    expect(result).not.toHaveProperty('message');
+  });
+
   it('does not invoke admission for a pre-aborted request', async () => {
     const controller = new AbortController();
     const reason = new Error('SECRET_ABORT_REASON: synthetic caller cancellation');

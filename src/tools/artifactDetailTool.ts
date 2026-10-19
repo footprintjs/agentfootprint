@@ -81,6 +81,8 @@ export function artifactDetailTool(
     },
     async execute(value, ctx) {
       const args = readDetailArgs(value);
+      let root: unknown;
+      let domain: Readonly<Record<string, unknown>> | undefined;
       try {
         throwIfAborted(ctx.signal);
         const supplied = await untilAborted(
@@ -91,19 +93,20 @@ export function artifactDetailTool(
           ctx.signal,
         );
         throwIfAborted(ctx.signal);
-        const root = copyJson(supplied, DETAIL_LIMITS.inputBytes, true);
+        root = copyJson(supplied, DETAIL_LIMITS.inputBytes, true);
         throwIfAborted(ctx.signal);
         const presented = context?.(root, args.path);
-        const domain =
+        domain =
           presented === undefined
             ? undefined
             : ownData(copyJson(presented, DETAIL_LIMITS.contextBytes, true));
         throwIfAborted(ctx.signal);
-        return projectArtifactDetail(root, args, name, domain);
       } catch {
         if (ctx.signal?.aborted) throw new ArtifactDetailError('ERR_ARTIFACT_DETAIL_CANCELLED');
         return unavailableDetail();
       }
+      // Host failures are sanitized above; the pure view owns its fixed request refusals.
+      return projectArtifactDetail(root, args, name, domain);
     },
   });
 }

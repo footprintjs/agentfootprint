@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { artifactDetailTool, bindArtifacts, inMemoryArtifacts } from '../../src/index.js';
+import {
+  ArtifactDetailError,
+  artifactDetailTool,
+  bindArtifacts,
+  inMemoryArtifacts,
+} from '../../src/index.js';
 import type { ToolExecutionContext } from '../../src/index.js';
 
 async function fixture() {
@@ -40,6 +45,26 @@ describe('artifact detail tool', () => {
       name: 'ArtifactDetailError',
       code: 'ERR_ARTIFACT_DETAIL_CANCELLED',
       message: 'Artifact detail request was cancelled.',
+    });
+  });
+
+  it('retains the invalid-request refusal for a non-index segment into an admitted array', async () => {
+    const { ref, ctx } = await fixture();
+    const tool = artifactDetailTool({
+      name: 'proof_detail',
+      admit: async () => ({ rows: [{ latency: 40 }] }),
+    });
+    const error: unknown = await Promise.resolve()
+      .then(() => tool.execute({ ref, path: '/rows/not-an-index' }, ctx))
+      .catch((error: unknown) => error);
+    expect(error).toBeInstanceOf(ArtifactDetailError);
+    expect(error).toMatchObject({
+      code: 'ERR_ARTIFACT_DETAIL_INVALID',
+      message: 'Invalid artifact detail request.',
+    });
+    expect(await tool.execute({ ref, path: '/rows/0/latency' }, ctx)).toMatchObject({
+      mode: 'value',
+      value: 40,
     });
   });
 
