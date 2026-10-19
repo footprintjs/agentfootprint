@@ -47,6 +47,7 @@
  * `recordDecisions` spells `agentfootprint.middleware.decision`.
  */
 
+import { referenceObservation, type FindingsRequest } from './admission.js';
 import { isPlacedToolResult } from '../../../artifacts/placement.js';
 import { conflictsOf, type Conflict } from '../../../integrity/assertion/conflicts.js';
 import { assertionKey, type Assertion } from '../../../integrity/assertion/types.js';
@@ -467,11 +468,27 @@ export function standingRowsFrom(
   declaration: FindingsDeclaration,
   declaredOn: DeclaredOn,
   iteration: number,
+  request?: { readonly witness: FindingsRequest | undefined },
 ): StandingRow[] {
   const on: DeclaredOn = declaredOn === 'answer' ? 'answer' : { toolCallId: declaredOn.toolCallId };
   return (declaration.previous ?? []).map((entry) => {
-    const found = known.find((r) => r.toolCallId === entry.toolCallId);
-    const ref = found === undefined ? undefined : placedRefOf(found.result);
+    const knownResult =
+      request === undefined ? known.find((r) => r.toolCallId === entry.toolCallId) : undefined;
+    const reference =
+      request === undefined
+        ? undefined
+        : referenceObservation(request.witness, iteration, entry.toolCallId);
+    const identified =
+      reference === undefined
+        ? knownResult !== undefined
+        : reference.identified && reference.execution === 'result';
+    const toolName = identified ? reference?.toolName ?? knownResult?.toolName : undefined;
+    const ref =
+      reference === undefined
+        ? knownResult === undefined
+          ? undefined
+          : placedRefOf(knownResult.result)
+        : reference.ref;
     const provenance = ref !== undefined ? `artifact:${ref}` : `tool:${entry.toolCallId}`;
     const stratum = entry.standing === 'fact' ? 'asserted' : 'quoted';
     const assertions: Assertion[] =
@@ -487,7 +504,7 @@ export function standingRowsFrom(
     return {
       kind: 'standing',
       toolCallId: entry.toolCallId,
-      ...(found?.toolName !== undefined && { toolName: found.toolName }),
+      ...(toolName !== undefined && { toolName }),
       ...(ref !== undefined && { ref }),
       standing: entry.standing,
       ...(entry.sought !== undefined && { sought: entry.sought }),
@@ -496,7 +513,7 @@ export function standingRowsFrom(
       assertions,
       declaredOn: on,
       iteration,
-      ...(found === undefined && { unknownId: true as const }),
+      ...(!identified && { unknownId: true as const }),
     };
   });
 }

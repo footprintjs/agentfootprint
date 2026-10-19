@@ -46,6 +46,7 @@ import { forcedToolChoiceFor } from '../provider-contract/forcedToolChoice.js';
 import { nativeOutputSchemaFor } from '../provider-contract/nativeOutputSchema.js';
 import { isRequestRefusal } from '../provider-contract/requestRefusal.js';
 import { replayAttempts } from './replayAttempt.js';
+import { requestAttempt } from '../provider-contract/requestObserver.js';
 import { throwIfAborted } from '../lib/abort.js';
 
 /**
@@ -292,12 +293,15 @@ export function withFallback(
     async complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
       const attempts = replayAttempts(req, hooks);
       try {
-        return attempts.response(
-          answered(
-            await primary.complete(requestFor(primary, attempts.request), attempts.hooks),
-            'primary',
-          ),
-        );
+        const primaryRequest = requestFor(primary, attempts.request);
+        const attempt = requestAttempt(attempts.hooks, primaryRequest);
+        try {
+          return attempts.response(
+            answered(await primary.complete(primaryRequest, attempt.hooks), 'primary'),
+          );
+        } finally {
+          attempt.close();
+        }
       } catch (err) {
         // A cancelled call never moves to the other side, whatever
         // `shouldFallback` says: that would start a second billed call for a
@@ -306,12 +310,15 @@ export function withFallback(
         if (!shouldFallback(err)) throw err;
         onFallback?.(err);
         reportFellBack(hooks, err);
-        return attempts.response(
-          answered(
-            await fallback.complete(requestFor(fallback, attempts.request), attempts.hooks),
-            'fallback',
-          ),
-        );
+        const fallbackRequest = requestFor(fallback, attempts.request);
+        const attempt = requestAttempt(attempts.hooks, fallbackRequest);
+        try {
+          return attempts.response(
+            answered(await fallback.complete(fallbackRequest, attempt.hooks), 'fallback'),
+          );
+        } finally {
+          attempt.close();
+        }
       }
     },
   };
@@ -331,13 +338,18 @@ export function withFallback(
       // `stream()`. Calling this a fallback would be a lie.
       const fromFallback = async function* (): AsyncIterable<LLMChunk> {
         const fallbackReq = requestFor(fallback, attempts.request);
-        for await (const chunk of answeredStream(
-          fallback.stream
-            ? fallback.stream(fallbackReq, attempts.hooks)
-            : completeAsStream(fallback, fallbackReq, attempts.hooks),
-          'fallback',
-        ))
-          yield attempts.chunk(chunk);
+        const attempt = requestAttempt(attempts.hooks, fallbackReq);
+        try {
+          for await (const chunk of answeredStream(
+            fallback.stream
+              ? fallback.stream(fallbackReq, attempt.hooks)
+              : completeAsStream(fallback, fallbackReq, attempt.hooks),
+            'fallback',
+          ))
+            yield attempts.chunk(chunk);
+        } finally {
+          attempt.close();
+        }
       };
       if (!primary.stream) {
         yield* fromFallback();
@@ -345,12 +357,18 @@ export function withFallback(
       }
       let yieldedAny = false;
       try {
-        for await (const chunk of answeredStream(
-          primary.stream(requestFor(primary, attempts.request), attempts.hooks),
-          'primary',
-        )) {
-          yieldedAny = true;
-          yield attempts.chunk(chunk);
+        const primaryRequest = requestFor(primary, attempts.request);
+        const attempt = requestAttempt(attempts.hooks, primaryRequest);
+        try {
+          for await (const chunk of answeredStream(
+            primary.stream(primaryRequest, attempt.hooks),
+            'primary',
+          )) {
+            yieldedAny = true;
+            yield attempts.chunk(chunk);
+          }
+        } finally {
+          attempt.close();
         }
       } catch (err) {
         throwIfAborted(req.signal);

@@ -448,6 +448,7 @@ export interface UnsettledByAbsenceRow {
 }
 
 export type FindingsRow =
+  | import('./refusal.js').ReferenceRefusalRow
   | BasisRow
   | StandingRow
   | ConflictRow

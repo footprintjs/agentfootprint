@@ -854,6 +854,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           // LLM result the outer Route / tool-calls / final read.
           llmLatestContent: s.llmLatestContent,
           llmLatestToolCalls: s.llmLatestToolCalls,
+          ...(deps.hasFindingsLedger === true && { findingsRequest: s.findingsRequest }),
           thinkingBlocks: s.thinkingBlocks,
           // Atomic tuple + Replace below: never merge a former layout or
           // binding into a new provider proof. Present undefined clears it.

@@ -1,3 +1,6 @@
+import { referenceRefusalRow } from '../findings/refusal.js';
+import { findingsReferenceRefusal } from '../findings/admission.js';
+import { assertAnswerReferences, withFindingsAdmission } from '../findings/answerAdmission.js';
 /**
  * route — decider that branches the ReAct loop into 'tool-calls' or 'final'.
  *
@@ -543,16 +546,10 @@ function recordAnswerGuarantee(
  * back). Until 9.114.1 only the enforcing decider ran this, so a plain agent
  * handed its caller the raw key and filed nothing.
  *
- * Identified against the results the run can identify (`findings/offer.ts ·
- * knownResults`): the last batch AND every tool message on `history` as this
- * call was served it — the same list the offer was read from — so an id
- * copied from the offer resolves whichever batch it came from (9.102.0). A
- * ruled-out standing whose result the dispatch door recorded as an absence
- * (`coverageDeclared`) AND the model was served as one (the served string —
- * the door records the return before the after-tool chain acts) gets its
- * `unsettled-by-absence` row immediately after it, worded from what was
- * served; the key is read only for such a standing (9.113.0,
- * `findings/unsettled.ts`).
+ * Identity is read from the accepted response's request-local witness.
+ * The existing known-results/coverage reader only supplies the independent
+ * absence interpretation beside a ruled-out declaration; it cannot grant a
+ * missing reference or borrow the most recent batch as authority.
  *
  * Returns the string the answer held before the key was taken off — what every
  * RE-ASK exit puts back (see `restoreEmission`) — or `undefined` when nothing
@@ -569,7 +566,7 @@ async function peelAnswerStandings(
   // Loaded only under the arm (`findings/peel.ts`): an unarmed agent returned
   // on the line above and never loads the scanner.
   const { peelAnswerFindings } = await import('../findings/peel.js');
-  const peeled = peelAnswerFindings(raw);
+  const peeled = peelAnswerFindings(raw, { captureMalformed: true });
   if (peeled.findings?.previous !== undefined) {
     const known = knownResults(
       [...((scope.history as readonly LLMMessage[] | undefined) ?? [])],
@@ -578,13 +575,36 @@ async function peelAnswerStandings(
     recordFindings(
       scope,
       withUnsettledRows(
-        standingRowsFrom(known, peeled.findings, 'answer', scope.iteration as number),
+        standingRowsFrom(known, peeled.findings, 'answer', scope.iteration as number, {
+          witness: scope.findingsRequest?.[0],
+        }),
         known,
         () => [...((scope.coverageDeclared ?? []) as readonly DeclaredCoverage[])],
       ),
       turnStampOf(scope, inputs, answer),
     );
   }
+  if (
+    findingsReferenceRefusal(
+      peeled.findings,
+      scope.findingsRequest?.[0],
+      scope.iteration,
+      peeled.malformed,
+    ) !== undefined
+  ) {
+    const row = referenceRefusalRow(
+      'answer',
+      scope.iteration,
+      (peeled.malformed ?? 0) > 0,
+      peeled.attemptedMalformed,
+    );
+    recordFindings(
+      scope,
+      [{ ...row, ...(peeled.attemptedTruncated === true && { truncated: true }) }],
+      turnStampOf(scope, inputs, answer),
+    );
+  }
+  assertAnswerReferences(scope, peeled.findings, peeled.malformed);
   if (peeled.content === raw) return undefined;
   scope.llmLatestContent = peeled.content;
   return raw;
@@ -1115,7 +1135,7 @@ export const routeDeciderStage = buildSimpleDecider(false);
  * never judged or retried: it was withheld on purpose, and re-asking for it
  * would be the library working around a rule the app wrote.
  */
-export function buildRouteDeciderStage(
+function routeDeciderFor(
   messageMiddleware?: readonly MessageMiddleware[],
   enforcement?: ResolvedOutputEnforcement,
   stepPlanFor?: StepPlanFor,
@@ -1784,5 +1804,24 @@ function recordContractUnmet(
             ? `, and this agent's .outputFallback() tiers run there — run() does not reach them.`
             : `.`)) +
       ` Read agent.outputContractUnmet() for the same facts after the run.`,
+  );
+}
+
+/** Findings adds admission around every Route shape, without a new chart branch. */
+export function buildRouteDeciderStage(
+  ...args: Parameters<typeof routeDeciderFor>
+): ReturnType<typeof routeDeciderFor> {
+  const decider = routeDeciderFor(...args);
+  const findings = args[8];
+  if (findings !== true) return decider;
+  return withFindingsAdmission(
+    decider,
+    args[1],
+    (scope) => peelAnswerStandings(scope, true, args[9], args[10]),
+    emitRouteDecided,
+    (scope) => {
+      const base = decideBranch(scope);
+      return base.chosen === 'final' && !wantsWrapUp(scope, base.earlyStop, args[4] ?? false);
+    },
   );
 }

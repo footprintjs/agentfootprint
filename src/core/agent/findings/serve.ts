@@ -101,6 +101,8 @@
  * a change.
  */
 
+import { type CollapsedToolResult } from './ticket.js';
+export { isCollapsedToolResult, type CollapsedToolResult } from './ticket.js';
 import type { LLMMessage } from '../../../provider-contract/types.js';
 import { CONTEXT_FIELD_MEANINGS } from '../../../lib/context-contract/index.js';
 import { assertionKey, type Assertion } from '../../../integrity/assertion/types.js';
@@ -130,27 +132,6 @@ export interface FindingsLedgerPiece {
   readonly rawContent: string;
   readonly slot: 'system-prompt';
   readonly source: 'findings';
-}
-
-/** The ticket a collapsed tool message carries instead of its result. */
-export interface CollapsedToolResult {
-  /** Always `true`. The field a consumer branches on. */
-  readonly collapsed: true;
-  readonly standing: Standing;
-  readonly toolCallId: string;
-  /** The placement ref when the collapsed result was placed. */
-  readonly ref?: string;
-}
-
-/** Type guard for a consumer reading a served tool message. */
-export function isCollapsedToolResult(value: unknown): value is CollapsedToolResult {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    (value as { collapsed?: unknown }).collapsed === true &&
-    typeof (value as { standing?: unknown }).standing === 'string' &&
-    typeof (value as { toolCallId?: unknown }).toolCallId === 'string'
-  );
 }
 
 /**

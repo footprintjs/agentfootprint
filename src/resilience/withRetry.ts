@@ -54,6 +54,7 @@ import { sleep } from '../lib/sleep.js';
 import { throwIfAborted } from '../lib/abort.js';
 import { statedRetryAfterMs } from './statedWait.js';
 import { replayAttempts } from './replayAttempt.js';
+import { requestAttempt } from '../provider-contract/requestObserver.js';
 
 export interface WithRetryOptions {
   /** Total attempts including the first. Default 3. Must be >= 1. */
@@ -157,12 +158,16 @@ export function withRetry(provider: LLMProvider, options: WithRetryOptions = {})
       // not a recovered fact.
       const startedMs = Date.now();
       for (let attempt = 1; ; attempt++) {
+        const invocation = requestAttempt(attempts.hooks, attempts.request);
         try {
-          const res = await provider.complete(attempts.request, attempts.hooks);
+          const res = await provider.complete(attempts.request, invocation.hooks);
           reportRecovered(hooks, attempt, startedMs);
           return attempts.response(res);
         } catch (err) {
+          invocation.close();
           await backOffOrThrow(err, attempt, req, hooks);
+        } finally {
+          invocation.close();
         }
       }
     },
@@ -221,13 +226,18 @@ export function withRetry(provider: LLMProvider, options: WithRetryOptions = {})
     const openStream = async (
       req: LLMRequest,
       hooks: LLMCallHooks | undefined,
-    ): Promise<{ iterator: AsyncIterator<LLMChunk>; first: IteratorResult<LLMChunk> }> => {
+    ): Promise<{
+      iterator: AsyncIterator<LLMChunk>;
+      first: IteratorResult<LLMChunk>;
+      close(): void;
+    }> => {
       const attempts = replayAttempts(req, hooks);
       const startedMs = Date.now();
       for (let attempt = 1; ; attempt++) {
+        const invocation = requestAttempt(attempts.hooks, attempts.request);
         try {
           const iterator = attempts.iterator(
-            innerStream(attempts.request, attempts.hooks)[Symbol.asyncIterator](),
+            innerStream(attempts.request, invocation.hooks)[Symbol.asyncIterator](),
           );
           const first = await iterator.next();
           // The stream got through: its first step arrived. Reported here —
@@ -235,8 +245,9 @@ export function withRetry(provider: LLMProvider, options: WithRetryOptions = {})
           // (a consumer that stops reading at `done: true` would otherwise
           // never see it), and so `recovered` lands before the first token.
           reportRecovered(hooks, attempt, startedMs);
-          return { iterator, first };
+          return { iterator, first, close: invocation.close };
         } catch (err) {
+          invocation.close();
           await backOffOrThrow(err, attempt, req, hooks);
         }
       }
@@ -246,8 +257,11 @@ export function withRetry(provider: LLMProvider, options: WithRetryOptions = {})
       req: LLMRequest,
       hooks?: LLMCallHooks,
     ): AsyncGenerator<LLMChunk, void, undefined> {
-      const { iterator, first } = await openStream(req, hooks);
-      if (first.done === true) return;
+      const { iterator, first, close } = await openStream(req, hooks);
+      if (first.done === true) {
+        close();
+        return;
+      }
       // From here on there is no catch: nothing below can start a retry.
       let delegated = false;
       try {
@@ -257,6 +271,7 @@ export function withRetry(provider: LLMProvider, options: WithRetryOptions = {})
         // stream, exactly as the old pass-through did.
         yield* { [Symbol.asyncIterator]: () => iterator };
       } finally {
+        close();
         // A consumer that stopped at the first chunk still closes the wire.
         if (!delegated) await iterator.return?.();
       }
