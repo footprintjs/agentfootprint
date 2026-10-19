@@ -30,6 +30,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import { FlowChartExecutor, flowChart, type PausableHandler } from 'footprintjs';
+import { controlDepRecorder } from 'footprintjs/trace';
 import { flowchartAsTool, type FlowchartToolSnapshot } from '../../src/index.js';
 import { innerRunsOf } from '../../src/observe.js';
 import { servableSnapshot } from '../../src/core/servableSnapshot.js';
@@ -338,9 +339,10 @@ describe('flowchartAsTool without `redact` — byte-identical to before', () => 
     // No policy ⇒ no omission: the fold base travels, exactly as it did.
     expect(snapshot.initialState).toEqual({});
 
-    // The same chart run directly has the same snapshot shape — the tool adds
-    // and removes nothing on the raw path.
+    // Compare the same chart AND recorder configuration: keepRecord attaches
+    // a fresh control-dependence recorder, whose saved rows must survive too.
     const direct = new FlowChartExecutor(flatChart());
+    direct.attachCombinedRecorder(controlDepRecorder());
     await direct.run({ input: {} });
     const reference = direct.getSnapshot() as unknown as Record<string, unknown>;
     expect(Object.keys(snapshot as unknown as Record<string, unknown>).sort()).toEqual(
