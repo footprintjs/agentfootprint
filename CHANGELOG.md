@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.8.0] - 2026-10-19
+
+### Added
+
+- **Bedrock Converse prompt caching is model-aware and measurable.** Supported exact model and documented geography-profile IDs receive bounded `cachePoint` blocks; unknown models and custom profile ARNs receive none. Nova omits tool checkpoints and unsupported TTL fields. Both Converse response paths preserve optional cache counters, including measured zero. `cacheStrategyFor(provider, model)` and resilience decorators share the same declaration. Explicit policies without provider/model support give one development warning per agent build. Default policies warn only for a model-aware provider with an unrecognized model; Mock and Ollama defaults stay silent. Fixed run metadata distinguishes explicit from default policy sources. The cache meter now accepts the engine event envelope delivered by `.watch()`, as well as typed-stream forwarding. Tests and the runnable example use scripted SDK responses without AWS calls.
+
+
+  **Type compatibility (breaking for direct readers). Migration:** `LLMProvider.promptCaching` now accepts either a static declaration or a model function. Consumers that read `.mode` directly must use the shared `promptCachingFor(provider, model)` resolver from `agentfootprint/cache` before inspecting the declaration. Existing static provider declarations remain supported.
+
+- **Opt-in precision-bounded rounding for plain decimals.**
+  `namesAndNumbersFromEvidence({ decimalRounding: true })` checks plain decimals
+  and accepts only a carried number rounded at the answer's written precision,
+  recording `computed` with `derivation: 'rounded'` and `from`. It is off by
+  default; whole numbers and identifiers keep exact matching, and no new
+  unitless sums or ratios are accepted.
+
+### Changed
+
+- **Numeric ranges are checked endpoint by endpoint when no intact value was read.**
+  An exact whole-token result wins first: a carried ZIP+4 `12345-6789`, part
+  number `1020-3040`, or rack `10-20` stays one grounded identifier. Otherwise,
+  exactly-two-number hyphen or en-dash ranges check their endpoints independently,
+  after app-declared ID shapes. Dates, clock ranges, dotted versions and multipart
+  IDs stay intact. Short bare endpoints below `minDigits` remain unchecked prose.
+  This default classification change is independent of opt-in decimal rounding.
+
 ## [10.7.0] - 2026-10-19
 
 ### Added
