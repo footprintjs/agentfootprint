@@ -152,12 +152,21 @@ Existing regression coverage lives in `test/core/agent/findings-ledger.test.ts`,
 The implementation must commit the additional reproduction fixtures listed below.
 No existing benchmark percentage is restated here as new evidence.
 
-Implementation must begin red-first: stable schema bytes across changing offers; markers at the correct boundary;
-served/capped/retired/windowed/ticketed/continued references; forged, foreign, ambiguous and guessed same-batch IDs;
-pre-invoke refusal, retained unknown declarations, JSON-answer parity and no extra invocation on refusal;
-old-record replay, exact receipt reconstruction, byte identity for flows without findings and Anthropic/Bedrock stub-wire layouts.
-Include global-off, unsupported model, privacy menus, parallel-run isolation and output-schema ownership controls.
-Then run the repository gates and independent security review followed by code review.
+Each implementation phase begins with failing tests and ends with repository gates,
+an independent security review, a code review and the owner's final commit review.
+
+Phase A proves served/capped/retired/windowed/ticketed/continued references;
+forged, foreign, ambiguous and guessed same-batch IDs; pre-invoke refusal;
+retained unknown declarations; JSON-answer parity and no extra invocation on refusal.
+Pin the accepted provider attempt's actual request, including retry/fallback cases and receipt recording disabled.
+When no existing repair allowance is available, stop factually instead of adding a hidden model call.
+Any already streamed draft remains unvalidated; final admission cannot retract text already emitted.
+Tool schemas, prompt rendering, cache policy and markers stay unchanged in this phase.
+
+Phase B proves stable schema bytes across changing offers, marker placement,
+old-record replay, exact receipt reconstruction and Anthropic/Bedrock stub-wire layouts.
+Include global-off, unsupported models, privacy menus, parallel-run isolation,
+output-schema ownership and byte identity for flows without findings.
 
 Use `bench/findings-context.mjs`, `bench/findings-shuffle.mjs` and `bench/cache` as audited fixtures, not unrestricted paid commands.
 A future paired Haiku 4.5 pilot compares layouts under **identical reference-admission policy** in both arms.
@@ -171,7 +180,20 @@ No savings claim or default rollout is justified until that bounded experiment a
 
 ## 10. Delivery order
 
-Open this design addendum alone against the reviewed main branch; stop for human review.
-After approval, build one implementation PR with free fixtures and the guarded benchmark kit; stop for review again.
-Run a paid pilot only with separate approval, then save reproducible results and an honest recommendation.
+The owner's review approves the design with three separate delivery phases:
+
+1. **Phase A: served-reference admission only.** Refuse invalid or ambiguous citations before effects,
+   preserve the attempted declarations, and apply the same rule to final answers.
+   Keep existing schemas and request/cache layout. Release this correctness and safety change as a minor,
+   with a **Changed** note for newly refused inputs, then check Neo adoption.
+2. **Phase B: stable definitions and late context.** Move the mutable ID offer and ledger late,
+   make only the immutable findings frame cacheable, and prove byte stability and marker placement with free tests.
+   Keep the Phase A admission policy identical, so layout effects can be measured separately.
+3. **Phase C: the paid pilot.** Only after separate owner approval and a hard budget,
+   measure actual cache reads, cost per run, valid citations and extra turns on Haiku 4.5.
+   A suggested budget is a proposal, not approval. Save reproducible results and honest limits;
+   make no savings claim before the experiment.
+
+Keep Phase A and Phase B in separate implementation PRs and stop for review after each.
+The benchmark kit must prove its hard bounds before requesting Phase C execution approval.
 Do not add a legacy per-call-enum flag without evidence that the new layout needs it.
