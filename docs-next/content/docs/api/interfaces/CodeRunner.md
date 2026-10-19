@@ -4,7 +4,7 @@ title: CodeRunner
 
 # Interface: CodeRunner
 
-Defined in: [src/provider-contract/types.ts:1083](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1083)
+Defined in: [src/provider-contract/types.ts:1092](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1092)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/provider-contract/types.ts:1083](https://github.com/footprintjs
 
 > `readonly` **id**: `string`
 
-Defined in: [src/provider-contract/types.ts:1086](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1086)
+Defined in: [src/provider-contract/types.ts:1095](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1095)
 
 Stable id — reported on every `agentfootprint.tools.session_*` event so a
  row names its backend, not just its tool.
@@ -23,7 +23,7 @@ Stable id — reported on every `agentfootprint.tools.session_*` event so a
 
 > **start**(`req`): `Promise`\<[`CodeSession`](/docs/api/interfaces/CodeSession)\>
 
-Defined in: [src/provider-contract/types.ts:1093](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1093)
+Defined in: [src/provider-contract/types.ts:1102](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1102)
 
 Open a session.
 

@@ -4,7 +4,7 @@ title: PermissionDecision
 
 # Interface: PermissionDecision
 
-Defined in: [src/provider-contract/types.ts:885](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L885)
+Defined in: [src/provider-contract/types.ts:894](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L894)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/provider-contract/types.ts:885](https://github.com/footprintjs/
 
 > `readonly` `optional` **gateId?**: `string`
 
-Defined in: [src/provider-contract/types.ts:900](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L900)
+Defined in: [src/provider-contract/types.ts:909](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L909)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/provider-contract/types.ts:900](https://github.com/footprintjs/
 
 > `readonly` `optional` **policyRuleId?**: `string`
 
-Defined in: [src/provider-contract/types.ts:898](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L898)
+Defined in: [src/provider-contract/types.ts:907](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L907)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [src/provider-contract/types.ts:898](https://github.com/footprintjs/
 
 > `readonly` `optional` **rationale?**: `string`
 
-Defined in: [src/provider-contract/types.ts:899](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L899)
+Defined in: [src/provider-contract/types.ts:908](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L908)
 
 ***
 
@@ -36,7 +36,7 @@ Defined in: [src/provider-contract/types.ts:899](https://github.com/footprintjs/
 
 > `readonly` `optional` **reason?**: `string`
 
-Defined in: [src/provider-contract/types.ts:907](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L907)
+Defined in: [src/provider-contract/types.ts:916](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L916)
 
 v2.12 — telemetry tag (machine-readable, stable across versions).
 Surfaces on `agentfootprint.permission.halt.reason` for routing
@@ -49,7 +49,7 @@ alerts (e.g. `'security:exfiltration'` → PagerDuty,
 
 > `readonly` **result**: `"allow"` \| `"deny"` \| `"halt"` \| `"gate_open"`
 
-Defined in: [src/provider-contract/types.ts:897](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L897)
+Defined in: [src/provider-contract/types.ts:906](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L906)
 
 v2.12 — `'halt'` is NEW. Terminates the run cleanly with a typed
 `PolicyHaltError`. The framework writes a synthetic `tool_result`
@@ -67,7 +67,7 @@ continues and can pick differently.
 
 > `readonly` `optional` **tellLLM?**: `string`
 
-Defined in: [src/provider-contract/types.ts:914](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L914)
+Defined in: [src/provider-contract/types.ts:923](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L923)
 
 v2.12 — content delivered to the LLM as the synthetic `tool_result`
 on `'deny'` and `'halt'`. When omitted, defaults to a deliberately

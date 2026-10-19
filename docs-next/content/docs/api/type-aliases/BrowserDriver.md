@@ -6,6 +6,6 @@ title: BrowserDriver
 
 > **BrowserDriver** = `"agent"` \| `"person"`
 
-Defined in: [src/provider-contract/types.ts:1012](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1012)
+Defined in: [src/provider-contract/types.ts:1021](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1021)
 
 Who is driving a browser session right now.
