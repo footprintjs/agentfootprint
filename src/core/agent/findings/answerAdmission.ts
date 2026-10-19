@@ -54,6 +54,17 @@ export function withFindingsAdmission(
       return await decider(scope);
     } catch (error) {
       if (!(error instanceof FindingsAnswerRefusal)) throw error;
+      // A host output denial is terminal. The peel already preserved the
+      // invalid attempted findings; neither a retry nor a replacement denial
+      // may work around the owner's decision to withhold this answer.
+      if (scope.messageDeniedPhase === 'output' && scope.messageDeniedReason !== undefined) {
+        announce(
+          scope,
+          'final',
+          'host output denial remains terminal; findings retained as diagnostics',
+        );
+        return 'final';
+      }
       const attempt = (scope.outputAttempts?.length ?? 0) + 1;
       if (
         enforcement !== undefined &&
