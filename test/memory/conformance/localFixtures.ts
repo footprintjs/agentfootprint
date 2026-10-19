@@ -2,6 +2,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { InMemoryStore } from '../../../src/memory/store/InMemoryStore.js';
 import {
   staticVectorStore,
@@ -18,6 +19,7 @@ import {
 export const localPagination: readonly PaginationHarness[] = [
   {
     name: 'InMemoryStore',
+    supportsSearch: true,
     maximumReturnedPage: 1000,
     async create() {
       const store = new InMemoryStore();
@@ -27,6 +29,7 @@ export const localPagination: readonly PaginationHarness[] = [
   },
   {
     name: 'staticVectorStore (read-only corpus fixture)',
+    supportsSearch: true,
     maximumReturnedPage: 1000,
     async create() {
       const store = staticVectorStore({
@@ -45,10 +48,36 @@ export const localPagination: readonly PaginationHarness[] = [
   },
   {
     name: 'sqliteVectorStore (temporary local SQLite file)',
+    supportsSearch: true,
     maximumReturnedPage: 1000,
     async create() {
       const directory = mkdtempSync(join(tmpdir(), 'af-list-conformance-'));
-      const store = sqliteVectorStore({ file: join(directory, 'entries.db') });
+      let backendCalls = 0;
+      // Keep real SQLite semantics while observing the database boundary; a
+      // rejected request must not prepare or run SQL, even on an empty namespace.
+      class ObservedDatabase extends DatabaseSync {
+        override exec(sql: string): void {
+          backendCalls += 1;
+          super.exec(sql);
+        }
+        override prepare(sql: string) {
+          backendCalls += 1;
+          return new Proxy(super.prepare(sql), {
+            get(statement, property) {
+              const member = Reflect.get(statement, property, statement);
+              if (typeof member !== 'function') return member;
+              return (...parameters: unknown[]) => {
+                backendCalls += 1;
+                return Reflect.apply(member, statement, parameters);
+              };
+            },
+          });
+        }
+      }
+      const store = sqliteVectorStore({
+        file: join(directory, 'entries.db'),
+        _sqlite: ObservedDatabase,
+      });
       try {
         await store.putMany(PAGINATION_IDENTITY, PAGINATION_ENTRIES);
       } catch (error) {
@@ -58,6 +87,7 @@ export const localPagination: readonly PaginationHarness[] = [
       }
       return {
         store,
+        backendCalls: () => backendCalls,
         close: () => {
           store.close();
           rmSync(directory, { recursive: true, force: true });

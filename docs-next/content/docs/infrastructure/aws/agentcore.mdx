@@ -48,6 +48,12 @@ at 100. These are the service's documented limits:
 [RetrieveMemoryRecords](https://docs.aws.amazon.com/bedrock-agentcore/latest/APIReference/API_RetrieveMemoryRecords.html)
 and [SearchCriteria](https://docs.aws.amazon.com/bedrock-agentcore/latest/APIReference/API_SearchCriteria.html).
 
+As on every shipped `MemoryStore`, caller `limit` and `k` must be finite positive
+integers when provided. Zero, negatives, fractions and nonfinite values fail
+locally with a `RangeError` before an AWS call, including when no rows would be
+returned. Omission/`undefined` preserves the existing defaults. A larger positive
+integer still receives the caps described above.
+
 A bundler may not follow the default lazy SDK loader. Supply the module you
 imported instead; command construction still belongs to the adapter:
 

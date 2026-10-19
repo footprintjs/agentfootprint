@@ -43,6 +43,7 @@
  *          in use.  Emits: N/A (storage adapters don't emit).
  */
 
+import { storeRequestLimit } from '../../memory/store/requestLimit.js';
 import type {
   ListOptions,
   ListResult,
@@ -1003,9 +1004,10 @@ export class AgentCoreStore implements MemoryStore {
     options: ListOptions = {},
   ): Promise<ListResult<T>> {
     this.ensureOpen('list');
+    const limit = storeRequestLimit(options.limit, 'limit') ?? this.pageSize;
     const page = await this.client.listEvents({
       ...this.scope(identity),
-      maxResults: Math.min(options.limit ?? this.pageSize, MAX_EVENT_PAGE_SIZE),
+      maxResults: Math.min(limit, MAX_EVENT_PAGE_SIZE),
       ...(options.cursor !== undefined && { nextToken: options.cursor }),
     });
     const out: MemoryEntry<T>[] = [];
@@ -1107,6 +1109,7 @@ export class AgentCoreStore implements MemoryStore {
     options: SearchOptions = {},
   ): Promise<readonly ScoredEntry<T>[]> {
     this.ensureOpen('search');
+    const k = Math.min(storeRequestLimit(options.k, 'k') ?? 10, MAX_RETRIEVAL_RESULTS);
     const text = options.text?.trim();
     if (!text) {
       throw new Error(
@@ -1126,7 +1129,6 @@ export class AgentCoreStore implements MemoryStore {
     }
 
     const scope = this.scope(identity);
-    const k = Math.min(options.k ?? 10, MAX_RETRIEVAL_RESULTS);
     const namespace = this.namespaceFor(identity, scope, options.namespaceScope);
     const page = await this.client.retrieveRecords({
       memoryId: this.memoryId,

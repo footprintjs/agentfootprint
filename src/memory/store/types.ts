@@ -44,7 +44,12 @@ export type MemoryCursor = string;
 export interface ListOptions {
   /** Continuation token from a previous `list` call. Omit for the first page. */
   readonly cursor?: MemoryCursor;
-  /** Maximum entries to return in this page. Adapters may cap this lower. */
+  /**
+   * Maximum entries in this page: a positive integer when provided. Zero,
+   * negatives, fractions and nonfinite values reject with RangeError before
+   * backend work, including on an empty store. Undefined keeps the adapter's
+   * default. Adapters may cap a larger positive integer lower; follow cursor.
+   */
   readonly limit?: number;
   /** Optional filter — only return entries matching these tiers. */
   readonly tiers?: ReadonlyArray<'hot' | 'warm' | 'cold'>;
@@ -72,8 +77,10 @@ export interface PutIfVersionResult {
 /** Options for a vector similarity search. */
 export interface SearchOptions {
   /**
-   * How many top-scoring entries to return. Default 10. Adapters may
-   * cap this lower (Pinecone: 10000, pgvector: user-defined, etc.).
+   * How many top-scoring entries to return: a positive integer when provided.
+   * Zero, negatives, fractions and nonfinite values reject with RangeError
+   * before backend work or empty-result shortcuts. Undefined keeps the
+   * default 10. Adapters may cap a larger positive integer lower.
    */
   readonly k?: number;
 

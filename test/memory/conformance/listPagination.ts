@@ -23,9 +23,15 @@ export const PAGINATION_ENTRIES: readonly MemoryEntry[] = Array.from(
 );
 export interface PaginationHarness {
   readonly name: string;
+  readonly supportsSearch: boolean;
   /** Contract bound for the returned page, not the provider's internal batch. */
   readonly maximumReturnedPage: number;
-  readonly create: () => Promise<{ readonly store: MemoryStore; readonly close?: () => void }>;
+  readonly create: () => Promise<{
+    readonly store: MemoryStore;
+    /** Counts real adapter calls across an observable service/database boundary. */
+    readonly backendCalls?: () => number;
+    readonly close?: () => void;
+  }>;
 }
 
 function requireContract(condition: unknown, message: string): asserts condition {

@@ -32,6 +32,13 @@ export async function run(): Promise<string> {
     pages++;
     cursor = page.cursor;
   } while (cursor !== undefined);
+  // Zero is an invalid caller bound, not a request for zero or all rows.
+  try {
+    await store.list(identity, { limit: 0 });
+    throw new Error('An invalid request size was accepted.');
+  } catch (error) {
+    if (!(error instanceof RangeError)) throw error;
+  }
   await store.close();
   // #endregion sdk-and-pages
   if (count !== 251 || pages !== 3) throw new Error('The capped scan lost a page.');

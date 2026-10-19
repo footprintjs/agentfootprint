@@ -29,8 +29,10 @@ const COLUMNS = [
 export const vectorPagination: readonly PaginationHarness[] = [
   {
     name: 'pgVectorStore (fake SQL client)',
+    supportsSearch: true,
     maximumReturnedPage: 1000,
     async create() {
+      let backendCalls = 0;
       const rows = PAGINATION_ENTRIES.map((entry) => ({
         id: entry.id,
         value: JSON.stringify(entry.value),
@@ -47,8 +49,10 @@ export const vectorPagination: readonly PaginationHarness[] = [
       }));
       const client = {
         async query(sql: string, params: readonly unknown[] = []) {
+          backendCalls += 1;
           if (sql.includes('information_schema.columns'))
             return { rows: COLUMNS.map((column_name) => ({ column_name })) };
+          if (sql.includes('WHERE "key" = $1') || sql.includes('AS af_score')) return { rows: [] };
           if (!sql.includes('ORDER BY') || !sql.includes('LIMIT $3'))
             throw new Error('Unexpected SQL outside pagination fixture');
           const [namespace, after, limit] = params;
@@ -56,13 +60,15 @@ export const vectorPagination: readonly PaginationHarness[] = [
           return { rows: rows.filter((row) => row.id > String(after)).slice(0, Number(limit)) };
         },
       };
-      return { store: pgVectorStore({ _client: client }) };
+      return { store: pgVectorStore({ _client: client }), backendCalls: () => backendCalls };
     },
   },
   {
     name: 's3VectorsStore (fake ListVectors capped at 500 per service call)',
+    supportsSearch: true,
     maximumReturnedPage: 1000,
     async create() {
+      let backendCalls = 0;
       const rows = PAGINATION_ENTRIES.map((entry) => ({
         key: `${NAMESPACE}#${entry.id}`,
         metadata: { ns: NAMESPACE, af: JSON.stringify(entry) },
@@ -70,6 +76,7 @@ export const vectorPagination: readonly PaginationHarness[] = [
       }));
       const client = {
         async send(command: unknown) {
+          backendCalls += 1;
           const input = command as { __command: string; maxResults?: number; nextToken?: string };
           if (input.__command === 'GetIndex')
             return {
@@ -78,6 +85,7 @@ export const vectorPagination: readonly PaginationHarness[] = [
                 metadataConfiguration: { nonFilterableMetadataKeys: ['af'] },
               },
             };
+          if (input.__command === 'QueryVectors') return { vectors: [] };
           if (input.__command !== 'ListVectors')
             throw new Error('Unexpected operation outside S3 pagination fixture');
           const size = input.maxResults ?? 100;
@@ -95,6 +103,7 @@ export const vectorPagination: readonly PaginationHarness[] = [
           index: 'fixture-index',
           _client: client,
         }),
+        backendCalls: () => backendCalls,
       };
     },
   },

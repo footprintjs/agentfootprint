@@ -10,6 +10,16 @@ The identity tuple is the tenant boundary; every call is scoped by it. A store
 declares its own capabilities — search, and the write options it honours —
 rather than being assumed to have them.
 
+## One request-size rule for every store
+A provided `list(..., { limit })` or implemented `search(..., { k })` accepts only
+finite positive integers. Zero, negatives, fractions, `NaN`, infinities and
+runtime non-numbers reject with a fixed `RangeError` before backend work, even
+for an empty store or query. Omission/`undefined` retains each adapter's default;
+existing upper caps and continuation cursors remain unchanged. This applies to
+InMemory, static vector, SQLite, pgvector, S3 Vectors, Redis, Memory Bank and
+AgentCore; Redis still has no `search()` method. The rule lives once in
+`src/memory/store/requestLimit.ts`, not in provider-specific copies.
+
 ## AgentCore pages and bundled SDKs
 `AgentCoreStore` accepts `pageSize` only as an integer from 1 through 100
 (default 100), before constructing a client. A larger `list({ limit })` is a

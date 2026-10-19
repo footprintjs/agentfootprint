@@ -13,24 +13,34 @@ const unsupported = async (): Promise<never> => {
 export const managedPagination: readonly PaginationHarness[] = [
   {
     name: 'RedisStore (fake key/set client)',
+    supportsSearch: false,
     maximumReturnedPage: 1000,
     async create() {
+      let backendCalls = 0;
       const values = new Map<string, string>();
       const indexes = new Map<string, Set<string>>();
       const client: RedisLikeClient = {
-        get: async (key) => values.get(key) ?? null,
+        get: async (key) => {
+          backendCalls += 1;
+          return values.get(key) ?? null;
+        },
         set: async (key, value) => {
+          backendCalls += 1;
           values.set(key, value);
           return 'OK';
         },
         sadd: async (key, ...members) => {
+          backendCalls += 1;
           const held = indexes.get(key) ?? new Set<string>();
           const before = held.size;
           members.forEach((member) => held.add(member));
           indexes.set(key, held);
           return held.size - before;
         },
-        smembers: async (key) => [...(indexes.get(key) ?? [])],
+        smembers: async (key) => {
+          backendCalls += 1;
+          return [...(indexes.get(key) ?? [])];
+        },
         del: unsupported,
         srem: unsupported,
         sismember: unsupported,
@@ -60,13 +70,15 @@ export const managedPagination: readonly PaginationHarness[] = [
       };
       const store = new RedisStore({ _client: client });
       await store.putMany(PAGINATION_IDENTITY, PAGINATION_ENTRIES);
-      return { store };
+      return { store, backendCalls: () => backendCalls };
     },
   },
   {
     name: 'MemoryBankStore (fake retrieve API capped at 100)',
+    supportsSearch: true,
     maximumReturnedPage: 100,
     async create() {
+      let backendCalls = 0;
       const scope = {
         tenant: PAGINATION_IDENTITY.tenant,
         principal: PAGINATION_IDENTITY.principal,
@@ -89,16 +101,21 @@ export const managedPagination: readonly PaginationHarness[] = [
       const retrieve = async (params: {
         requestBody: {
           scope: Record<string, string>;
-          simpleRetrievalParams: { pageSize: number; pageToken?: string };
+          simpleRetrievalParams?: { pageSize: number; pageToken?: string };
+          similaritySearchParams?: { searchQuery: string; topK: number };
         };
       }) => {
+        backendCalls += 1;
         const request = params.requestBody;
         if (JSON.stringify(request.scope) !== JSON.stringify(scope))
           return { data: { retrievedMemories: [] } };
-        const size = request.simpleRetrievalParams.pageSize;
-        if (!Number.isInteger(size) || size < 1 || size > 100)
+        const size =
+          request.simpleRetrievalParams?.pageSize ?? request.similaritySearchParams?.topK;
+        if (typeof size !== 'number' || !Number.isInteger(size) || size < 1 || size > 100)
           throw new RangeError('MemoryBank fixture requires pageSize 1..100');
-        const start = Number(request.simpleRetrievalParams.pageToken ?? 0);
+        if (request.similaritySearchParams !== undefined)
+          return { data: { retrievedMemories: [] } };
+        const start = Number(request.simpleRetrievalParams?.pageToken ?? 0);
         const retrievedMemories = rows.slice(start, start + size);
         const end = start + retrievedMemories.length;
         return {
@@ -115,6 +132,7 @@ export const managedPagination: readonly PaginationHarness[] = [
           reasoningEngine: 'fixture-engine',
           _client: client as never,
         }),
+        backendCalls: () => backendCalls,
       };
     },
   },

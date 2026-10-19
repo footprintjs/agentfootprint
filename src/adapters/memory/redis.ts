@@ -27,6 +27,7 @@
  *   - Multi-writer correctness ⇒ prefer `putIfVersion` in stage code.
  */
 
+import { storeRequestLimit } from '../../memory/store/requestLimit.js';
 import type {
   ListOptions,
   ListResult,
@@ -294,6 +295,7 @@ export class RedisStore implements MemoryStore {
     options: ListOptions = {},
   ): Promise<ListResult<T>> {
     this.ensureOpen('list');
+    const requestedLimit = storeRequestLimit(options.limit, 'limit');
     const idxKey = this.indexKey(identity);
     const ids = await this.client.smembers(idxKey);
     if (ids.length === 0) return { entries: [] };
@@ -310,7 +312,7 @@ export class RedisStore implements MemoryStore {
     }
 
     const start = options.cursor ? parseInt(options.cursor, 10) : 0;
-    const limit = options.limit ?? entries.length;
+    const limit = requestedLimit ?? entries.length;
     const page = entries.slice(start, start + limit);
     const next = start + limit;
     return next < entries.length ? { entries: page, cursor: String(next) } : { entries: page };

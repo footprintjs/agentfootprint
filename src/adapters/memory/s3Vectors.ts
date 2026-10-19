@@ -148,6 +148,7 @@ import {
   parseFingerprint,
   type Fingerprint,
 } from '../../lib/embedderMismatch.js';
+import { storeRequestLimit } from '../../memory/store/requestLimit.js';
 import type { MemoryIdentity } from '../../memory/identity/index.js';
 import type { MemoryEntry } from '../../memory/entry/index.js';
 import type {
@@ -727,9 +728,9 @@ export function s3VectorsStore(options: S3VectorsStoreOptions): S3VectorsStore {
       listOptions?: ListOptions,
     ): Promise<ListResult<T>> {
       open('list entries');
+      const limit = storeRequestLimit(listOptions?.limit, 'limit') ?? 100;
       const ns = identityNamespace(identity);
       const prefix = `${ns}#`;
-      const limit = Math.max(1, Math.floor(listOptions?.limit ?? 100));
       const tierFilter = listOptions?.tiers ? new Set(listOptions.tiers) : undefined;
 
       const page: MemoryEntry<T>[] = [];
@@ -841,8 +842,8 @@ export function s3VectorsStore(options: S3VectorsStoreOptions): S3VectorsStore {
       searchOptions?: SearchOptions,
     ): Promise<readonly ScoredEntry<T>[]> {
       open('search');
+      const k = storeRequestLimit(searchOptions?.k, 'k') ?? 10;
       const ns = identityNamespace(identity);
-      const k = Math.max(1, Math.floor(searchOptions?.k ?? 10));
       if (query.length === 0) return [];
 
       // The index's own dimension, which outranks anything this process has

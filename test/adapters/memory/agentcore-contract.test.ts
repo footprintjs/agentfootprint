@@ -54,7 +54,15 @@ function sdkDouble() {
   class RetrieveMemoryRecordsCommand extends Command {}
   const send = vi.fn(async (command: unknown) => {
     if (command instanceof ListEventsCommand) return { events: [] };
-    if (command instanceof RetrieveMemoryRecordsCommand) return { memoryRecordSummaries: [] };
+    if (command instanceof RetrieveMemoryRecordsCommand) {
+      const input = command.input as { maxResults: number; searchCriteria: { topK: number } };
+      for (const size of [input.maxResults, input.searchCriteria.topK]) {
+        if (!Number.isInteger(size) || size < 1 || size > 100) {
+          throw new Error('ValidationException: retrieval size must be an integer from 1 to 100');
+        }
+      }
+      return { memoryRecordSummaries: [] };
+    }
     return {};
   });
   const sdk: BedrockAgentCoreSdkModule = {
@@ -159,5 +167,82 @@ describe('AgentCoreStore — public SDK injection and retrieval limits', () => {
       /3\.1114\.0/,
     );
     expect(send).not.toHaveBeenCalled();
+  });
+});
+
+const invalidCallerLimits = [0, -1, 1.5, Number.NaN, Infinity, -Infinity, null] as const;
+describe('AgentCoreStore — caller limits fail locally before RPC', () => {
+  it.each(invalidCallerLimits)('rejects list limit %s without calling ListEvents', async (raw) => {
+    const { client, listEvents } = boundedClient();
+    const store = new AgentCoreStore({ memoryId: 'memory', client });
+    const failure = await store
+      .list(identity, { limit: raw as number })
+      .catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(RangeError);
+    expect((failure as Error).message).toBe(
+      'MemoryStore.list(): `limit` must be a positive integer when provided.',
+    );
+    expect(listEvents).not.toHaveBeenCalled();
+  });
+
+  it.each(invalidCallerLimits)(
+    'rejects search k %s without sending either AWS size field',
+    async (raw) => {
+      const { sdk, send } = sdkDouble();
+      const store = new AgentCoreStore({ memoryId: 'memory', sdk });
+      const failure = await store
+        .search(identity, [], {
+          text: 'shipping preference',
+          k: raw as number,
+        })
+        .catch((error: unknown) => error);
+      expect(failure).toBeInstanceOf(RangeError);
+      expect((failure as Error).message).toBe(
+        'MemoryStore.search(): `k` must be a positive integer when provided.',
+      );
+      expect(send).not.toHaveBeenCalled();
+    },
+  );
+
+  it('sends the same list bound that was validated, reading a caller getter once', async () => {
+    const { client, listEvents } = boundedClient();
+    const store = new AgentCoreStore({ memoryId: 'memory', client });
+    let reads = 0;
+    await store.list(identity, {
+      get limit() {
+        reads++;
+        return reads === 1 ? 7 : 0;
+      },
+    });
+    expect(reads).toBe(1);
+    expect(listEvents.mock.calls[0]?.[0].maxResults).toBe(7);
+  });
+
+  it('sends the same search bound that was validated, reading a caller getter once', async () => {
+    const { sdk, send } = sdkDouble();
+    const store = new AgentCoreStore({ memoryId: 'memory', sdk });
+    let reads = 0;
+    await store.search(identity, [], {
+      text: 'shipping preference',
+      get k() {
+        reads++;
+        return reads === 1 ? 7 : 0;
+      },
+    });
+    expect(reads).toBe(1);
+    expect(send.mock.calls[0]?.[0]).toMatchObject({
+      input: { maxResults: 7, searchCriteria: { topK: 7 } },
+    });
+  });
+
+  it('keeps undefined retrieval defaults and a positive caller bound unchanged', async () => {
+    const { sdk, send } = sdkDouble();
+    const store = new AgentCoreStore({ memoryId: 'memory', sdk });
+    await store.search(identity, [], { text: 'shipping preference' });
+    await store.search(identity, [], { text: 'shipping preference', k: 7 });
+    expect(send.mock.calls.map(([command]) => command)).toMatchObject([
+      { input: { maxResults: 10, searchCriteria: { topK: 10 } } },
+      { input: { maxResults: 7, searchCriteria: { topK: 7 } } },
+    ]);
   });
 });
