@@ -278,6 +278,9 @@ export interface BuildBrainForArgs {
   readonly agentProvider: LLMProvider;
   readonly agentCacheStrategy: CacheStrategy;
   readonly agentModel?: string;
+  /** A host-supplied strategy remains authoritative for this provider,
+   * including model-only brains. Never inspect its unused declaration. */
+  readonly agentCacheStrategyIsOverride?: true;
 }
 
 /** Build the runtime consult. See {@link BrainFor}. */
@@ -285,13 +288,17 @@ export function buildBrainFor(args: BuildBrainForArgs): BrainFor {
   const strategyFor = (
     provider: LLMProvider | undefined,
     model: string | undefined,
-  ): CacheStrategy =>
-    (provider === undefined || provider === args.agentProvider) &&
-    (model === undefined ||
-      model === args.agentModel ||
-      typeof args.agentProvider.promptCaching !== 'function')
+  ): CacheStrategy => {
+    const inheritsProvider = provider === undefined || provider === args.agentProvider;
+    if (inheritsProvider && args.agentCacheStrategyIsOverride === true)
+      return args.agentCacheStrategy;
+    return inheritsProvider &&
+      (model === undefined ||
+        model === args.agentModel ||
+        typeof args.agentProvider.promptCaching !== 'function')
       ? args.agentCacheStrategy
       : cacheStrategyFor(provider ?? args.agentProvider, model ?? args.agentModel);
+  };
 
   const bySkill = new Map<string, ResolvedBrain>();
   for (const [skillId, choice] of args.brains.bySkill) {

@@ -1,4 +1,4 @@
-/** Explicit Converse caching facts, verified against AWS's model table.
+/** Explicit Converse caching facts, verified 2026-10-19 against AWS's model table.
  * Unknown model IDs, custom aliases and ARNs are intentionally unsupported.
  * https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html
  * Only this table owns model support; never infer it from a family prefix.

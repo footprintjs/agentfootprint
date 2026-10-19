@@ -64,7 +64,18 @@ export function cacheStrategyFor(
 
 /** Resolve the provider's one declaration for this model. An omitted model
  * cannot establish a model-aware capability, so it fails closed. Static
- * declarations retain the existing one-argument behavior. */
+ * declarations retain the existing one-argument behavior.
+ *
+ * Use this reader instead of accessing `provider.promptCaching.mode`: the
+ * port also permits a model function. No resolver is duplicated in adapters.
+ *
+ * @example
+ * ```ts
+ * import { promptCachingFor } from 'agentfootprint/cache';
+ * const declaration = promptCachingFor(provider, model);
+ * if (declaration?.mode === 'breakpoints') console.log(declaration.maxBreakpoints);
+ * ```
+ */
 export function promptCachingFor(
   provider: Pick<LLMProvider, 'name' | 'promptCaching'>,
   model?: string,

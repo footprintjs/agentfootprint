@@ -1,8 +1,8 @@
 /**
  * applyCachePolicy — internal helper for injection factories.
  *
- * Each factory (`defineSkill`, `defineSteering`, `defineFact`,
- * `defineInstruction`, `defineMemory`) calls this to merge the
+ * The injection factories (`defineSkill`, `defineSteering`, `defineFact`,
+ * `defineInstruction`) call this to merge the
  * consumer-supplied `cache` option with the flavor-specific default.
  * The merged policy lands in `Injection.metadata.cache` for the
  * CacheDecision subflow (Phase 4) to read back.
@@ -44,6 +44,21 @@ export function resolveCachePolicy(
   // Fall back to per-flavor default; if flavor unknown, default is 'never'
   // (conservative — unfamiliar injections shouldn't accidentally cache).
   return FLAVOR_DEFAULTS[flavor] ?? 'never';
+}
+
+/** Preserve whether the caller supplied the policy before resolving its
+ * flavor default. Only configuration metadata; never projected into a request. */
+export function cachePolicyMetadata(
+  flavor: string,
+  consumerValue: CachePolicy | undefined,
+): {
+  readonly cache: CachePolicy;
+  readonly cachePolicySource: 'explicit' | 'default';
+} {
+  return {
+    cache: resolveCachePolicy(flavor, consumerValue),
+    cachePolicySource: consumerValue === undefined ? 'default' : 'explicit',
+  };
 }
 
 /**

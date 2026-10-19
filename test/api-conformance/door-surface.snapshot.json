@@ -833,6 +833,7 @@
       "isKnown",
       "known",
       "notApplicable",
+      "promptCachingFor",
       "unknown",
       "valueOr"
     ],

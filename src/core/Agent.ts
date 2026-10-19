@@ -526,7 +526,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    */
   private readonly cacheStrategy: CacheStrategy;
   private readonly cacheStrategyIsOverride: boolean;
-  private readonly cacheUnsupported: boolean;
+  private readonly cacheUnsupported: 'explicit' | 'default' | undefined;
   private readonly registry: readonly ToolRegistryEntry[];
   /**
    * The Injection list — Skills, Steering, Instructions, Facts (and
@@ -1112,6 +1112,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     mapsPlan?: import('../maps/engagement/types.js').EngagementPlan,
     claimContract?: readonly import('../integrity/unsupported-claim/check.js').DeclaredClaim[],
     answerValidationConfig?: ResolvedAnswerValidation,
+    systemPromptCacheExplicit = false,
   ) {
     super();
     // Which conversation this instance's self-explain evidence belongs to —
@@ -1148,6 +1149,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       providerName: opts.provider.name,
       systemPrompt: systemPromptValue,
       systemPolicy: systemPromptCachePolicy,
+      systemExplicit: systemPromptCacheExplicit,
+      modelAwareUnavailable:
+        cacheStrategy === undefined &&
+        typeof opts.provider.promptCaching === 'function' &&
+        this.cacheStrategy.name === 'none',
       injections,
       disabled: cachingDisabled,
     });
@@ -4039,7 +4045,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         model: this.model,
         hasRunConfig: this.runConfigFn !== undefined,
         hasSkillBrains: this.skillBrains !== undefined,
-        ...(this.cacheUnsupported && { cacheUnsupported: true }),
+        ...(this.cacheUnsupported !== undefined && { cacheUnsupported: this.cacheUnsupported }),
         reactMode: this.reactMode,
         memories: this.memories,
         ...(this.windowStrategy !== undefined && {
@@ -5385,6 +5391,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
             agentProvider: provider,
             agentCacheStrategy: cacheStrategy,
             agentModel: model,
+            ...(this.cacheStrategyIsOverride && { agentCacheStrategyIsOverride: true as const }),
           }),
         }),
     });

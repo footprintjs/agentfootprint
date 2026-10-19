@@ -40,9 +40,13 @@ describe('current skill option vocabulary', () => {
     expect(() => defineSkill(options)).toThrow('unsupported option refreshPolicy');
     expect(evaluated).toBe(false);
   });
-  it('leaves the supported declaration and metadata unchanged', () => {
+  it('keeps the supported declaration and records its default cache policy source', () => {
     const skill = defineSkill({ ...base, surfaceMode: 'both' });
-    expect(skill.metadata).toEqual({ surfaceMode: 'both', cache: 'while-active' });
+    expect(skill.metadata).toEqual({
+      surfaceMode: 'both',
+      cache: 'while-active',
+      cachePolicySource: 'default',
+    });
     expect(skill.trigger).toEqual({ kind: 'llm-activated', viaToolName: 'read_skill' });
   });
 });

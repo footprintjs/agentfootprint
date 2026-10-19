@@ -18,6 +18,7 @@ import type { LLMChunk, LLMProvider, LLMRequest } from '../../src/provider-contr
 import { anthropic } from '../../src/adapters/llm/AnthropicProvider.js';
 import { invokeModelGateway } from '../../src/adapters/llm/InvokeModelGatewayProvider.js';
 import { withFallback } from '../../src/resilience/withFallback.js';
+import { promptCachingFor } from '../../src/cache/index.js';
 
 const markers = (n: number): CacheMarker[] =>
   Array.from({ length: n }, (_, i) => ({
@@ -73,7 +74,7 @@ describe('withFallback — markers reach only the side that declares them', () =
       },
     });
     const pair = withFallback(gateway, anthropic({ _client: {} as never }));
-    expect(pair.promptCaching?.mode).toBe('breakpoints'); // the agent still places them
+    expect(promptCachingFor(pair, REQ.model)?.mode).toBe('breakpoints'); // the agent still places them
     await pair.complete(REQ);
     expect(bodies).toHaveLength(1);
     expect(bodies[0]!.split('cache_control').length - 1).toBe(0);

@@ -47,7 +47,7 @@ export {
 } from '../lib/claim/claim.js';
 
 // Strategy selection — by the provider's declared capability, never its name
-export { cacheStrategyFor } from './cacheStrategyFor.js';
+export { cacheStrategyFor, promptCachingFor } from './cacheStrategyFor.js';
 
 // Built-in strategy classes (for consumers who want explicit overrides via
 // `Agent.create({ cacheStrategy })`)

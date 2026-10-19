@@ -2948,10 +2948,10 @@ export interface AgentRunConfiguredPayload {
    *  A study that runs two differently-configured agents groups on this. */
   readonly agentId: string;
   readonly llm: RunConfiguredLlmPayload;
-  /** A requested cache policy cannot be honored by the default provider/model.
+  /** The configured cache strategy cannot apply the declared policy.
    * Configuration metadata only; absent when caching is off or supported. */
   readonly cache?: {
-    readonly requested: true;
+    readonly requested: 'explicit' | 'default';
     readonly strategy: 'none';
     readonly status: 'not-applicable';
   };

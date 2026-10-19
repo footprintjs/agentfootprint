@@ -70,6 +70,11 @@ prompt content is never reordered. Prefixes below the model's minimum may
 complete without being cached. Cache writes can cost more than fresh input,
 and repeated prompts do not guarantee a hit.
 
+`minimumTokens` documents AWS's threshold; the adapter does not suppress
+checkpoints using a token estimate. A below-minimum prefix does not cache:
+the cache meter reports measured zero writes when AWS returns zero, rather
+than pretending the provider measured nothing.
+
 ### Verified model facts
 
 Checked against [AWS's caching guide](https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html)
@@ -94,14 +99,21 @@ lifts these to `usage.cacheRead` / `cacheWrite`. Missing counts remain
 unknown; a reported zero is measured zero. `usage.input` remains **fresh**
 input, so the cache meter adds the three buckets once when calculating totals.
 
-When a cache policy requests caching but the selected strategy is `none`,
-development mode warns once per Agent build. Each run's existing
+When an explicit cache policy cannot be honored, development mode warns once
+per Agent build. A default policy warns only when the provider declares
+model-aware caching but cannot cache the selected model. Ordinary Mock and
+Ollama defaults are silent. Each run's existing
 `agentfootprint.agent.run_configured` event includes only fixed cache
-metadata: `{ requested: true, strategy: 'none', status: 'not-applicable' }`.
+metadata with its source: `{ requested: 'explicit' | 'default', strategy: 'none', status: 'not-applicable' }`.
 No prompt, policy function or provider configuration enters that field. The
 manifest describes the default model; it does not claim every runtime model
 override has the same support. `caching: 'off'` or all policies set to `never`
 produces no warning or cache field.
+
+Code that reads `provider.promptCaching.mode` directly must instead call
+`promptCachingFor(provider, model)` from `agentfootprint/cache`, then inspect
+the resolved declaration. The field can now be a model function; this is a
+breaking TypeScript shape change. Existing static declarations still work.
 
 ## Thinking support
 
