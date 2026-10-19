@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.7.0] - 2026-10-19
+
+### Added
+
+- **Open bounded sections of a stored JSON artifact through a host-admitted tool.** `artifactDetailTool` serves small values or paginated child actions with explicit completeness, omits oversized scalars whole, and carries bounded host context. Every call repeats the host's admission callback; scope, integrity, permissions and claim authority remain with the host. `ArtifactDetailError` reports fixed invalid, unavailable and cancelled codes without exposing callback errors or cancellation reasons.
+
+- **Read recorded causes and downstream impact without asking a model to reconstruct the trace.** The trace toolpack adds `attention_list`, `root_cause` and `impact` over the public Foottrace cause reader, with host-only resource ceilings, scoped proof references and explicit gaps. Model-facing schemas accept node IDs, without budget or output-limit overrides. Hosts can supply an authorized in-memory or stored graph backed by assured capture coverage. The normal snapshot fallback cannot support a root yet because it has no engine-written capture/end attestation, even when the run finished cleanly. Cause questions can also be asked inside retained tool runs and subflows. Cancellation reaches lazy, nested and delegated reads, and a child's graph is kept separate from its parent's. The dedicated debugger defaults to recorded findings; its explicit hypothesis mode changes the prompt while the tools remain evidence readers. Optional debugger prose still needs host-authored answer validation when semantic delivery guarantees are required.
+
 ## [10.6.1] - 2026-10-17
 
 ### Fixed
