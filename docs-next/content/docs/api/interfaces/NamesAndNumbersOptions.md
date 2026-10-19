@@ -10,6 +10,20 @@ Options for `.namesAndNumbersFromEvidence()`.
 
 ## Properties
 
+### decimalRounding?
+
+> `readonly` `optional` **decimalRounding?**: `boolean`
+
+Defined in: [src/core/agent/evidence/types.ts:162](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L162)
+
+Opt-in precision-bounded rounding for plain decimals. Default false.
+Plain decimals become checked data even below minDigits. An exact result
+wins; otherwise only one carried number may round at the written precision.
+Whole numbers, identifiers, sums, ratios and unit conversions gain no new
+acceptance. Numeric derivations use `computed` with `rounded` and `from`.
+
+***
+
 ### exempt?
 
 > `readonly` `optional` **exempt?**: readonly (`string` \| `RegExp`)[]
@@ -111,7 +125,7 @@ Default `'assist'` — record and flag, change nothing.
 
 > `readonly` `optional` **recoveryInstruction?**: [`EvidenceRecoveryInstruction`](/docs/api/type-aliases/EvidenceRecoveryInstruction)
 
-Defined in: [src/core/agent/evidence/types.ts:160](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L160)
+Defined in: [src/core/agent/evidence/types.ts:168](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L168)
 
 Extra guidance after an evidence check requests revision. At most 4000
 UTF-16 code units; callbacks receive a frozen context and must return

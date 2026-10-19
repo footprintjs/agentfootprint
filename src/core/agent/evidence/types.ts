@@ -152,6 +152,14 @@ export interface NamesAndNumbersOptions {
    * stay prose. See `figures.ts` for the derivation set and its bounds.
    */
   readonly figures?: boolean;
+  /**
+   * Opt-in precision-bounded rounding for plain decimals. Default false.
+   * Plain decimals become checked data even below minDigits. An exact result
+   * wins; otherwise only one carried number may round at the written precision.
+   * Whole numbers, identifiers, sums, ratios and unit conversions gain no new
+   * acceptance. Numeric derivations use `computed` with `rounded` and `from`.
+   */
+  readonly decimalRounding?: boolean;
   /** Extra guidance after an evidence check requests revision. At most 4000
    * UTF-16 code units; callbacks receive a frozen context and must return
    * synchronously. Invalid output or a thrown callback fails the run.
@@ -182,7 +190,7 @@ export type FigureDerivation =
 
 /**
  * A number no tool result carried that IS a declared derivation of the
- * numbers they do carry (the figures dial). Not invented and not read: the
+ * numbers they do carry (figures, or opt-in plain decimal rounding). Not invented and not read: the
  * model computed it, and the library reconstructed how. `from` names the
  * operands in the result's own keys (`sum of rows[].usable_tb`).
  */
@@ -223,6 +231,8 @@ export interface ResolvedEvidenceGate {
   readonly nudge: boolean;
   /** The figures dial (`figures.ts`). `false` is today's verdict. */
   readonly figures: boolean;
+  /** Present only when true: an absent dial preserves resolved default bytes. */
+  readonly decimalRounding?: true;
   readonly recoveryInstruction?: EvidenceRecoveryInstruction;
 }
 
@@ -265,10 +275,10 @@ export interface EvidenceVerdict {
    */
   readonly derived?: readonly UnsupportedValue[];
   /**
-   * Under the figures dial: the numbers no tool result carried that are a
-   * declared derivation of the numbers they did carry (`figures.ts` ·
+   * Under the figures or decimal-rounding dial: numbers no tool result carried
+   * that are a declared derivation of the numbers they did carry (`figures.ts` ·
    * `explainFigure`), each with its derivation. Never `unsupported`; counted
-   * in `lookedUp`. Absent when the dial is off.
+   * in `lookedUp`. Absent when both numeric dials are off.
    */
   readonly computed?: readonly ComputedFigure[];
   /**
