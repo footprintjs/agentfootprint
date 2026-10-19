@@ -47,6 +47,7 @@ import {
   fileStory,
   filedOf,
   gatedProvider,
+  gatedStore,
   hangingStore,
   harness,
   inputAgent,
@@ -213,7 +214,7 @@ describe('R2-2 — a flood of refusals cannot erase somebody else’s timeline',
 
 describe('R2-3 — a tool’s late mint is stamped with the run it was made in', () => {
   it('shared shape: alice’s background upload finishing during bob’s run stays out of bob’s recording', async () => {
-    const store = slowStore(80, (input) => input.kind === 'tool/secret');
+    const store = gatedStore((_scope, input) => input.kind === 'tool/secret');
     const floating = defineTool<Record<string, never>, string>({
       name: 'float',
       description: 'files in the background',
@@ -267,21 +268,33 @@ describe('R2-3 — a tool’s late mint is stamped with the run it was made in',
       .build();
     const recordings = recordingsOf(agent);
     const minted: AgentfootprintEvent[] = [];
-    agent.on('agentfootprint.artifacts.minted', (event: AgentfootprintEvent) => minted.push(event));
+    let toolMinted: () => void = () => undefined;
+    const uploaded = new Promise<void>((resolve) => (toolMinted = resolve));
+    agent.on('agentfootprint.artifacts.minted', (event: AgentfootprintEvent) => {
+      minted.push(event);
+      if ((event.payload as { kind: string }).kind === 'tool/secret') toolMinted();
+    });
     const { host } = await served(agent, { verify: true });
 
     expect((await host.deliver({ input: 'do it', sessionId: 'sA', headers: ALICE })).output).toBe(
       'ok',
     );
+    expect((await within(store.entered, 1_000)).settled).toBe(true);
     const aliceRun = recordings()[0]?.origin?.runId as string;
     armed = true;
     let release: () => void = () => undefined;
     wait = new Promise<void>((resolve) => (release = resolve));
     const started = new Promise<void>((resolve) => (opened = resolve));
     const bob = host.deliver({ input: 'hi', sessionId: 'sB', headers: BOB });
-    await started;
-    await new Promise((resolve) => setTimeout(resolve, 150)); // alice's upload lands now
-    release();
+    try {
+      expect((await within(started, 1_000)).settled).toBe(true);
+      store.release();
+      // Pin the late mint while Bob's provider is still held, not after a sleep.
+      expect((await within(uploaded, 1_000)).settled).toBe(true);
+    } finally {
+      store.release();
+      release();
+    }
     expect((await bob).output).toBe('ok');
 
     const toolMint = minted.find(
@@ -302,8 +315,10 @@ describe('R2-4 — a put that never settles no longer holds the lane', () => {
     const store = hangingStore(
       (scope, input) => scope.principal === 'alice' && input.kind === 'story/turn',
     );
+    const gate = gatedProvider();
+    const pending = gate.arm();
     const agent = Agent.create({
-      provider: mock({ reply: 'ok' }),
+      provider: gate.provider,
       model: 'm',
       artifacts: store,
     }).build();
@@ -324,7 +339,17 @@ describe('R2-4 — a put that never settles no longer holds the lane', () => {
           void turn.artifacts.put({ kind: 'story/turn', mediaType: 'text/plain', data: 'x' });
       },
     });
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    try {
+      expect((await within(pending.started, 1_000)).settled).toBe(true);
+      let reachedDrain = false;
+      void store.entered.then(() => (reachedDrain = true));
+      await Promise.resolve();
+      expect(reachedDrain).toBe(false); // A held provider has not handed over its answer.
+    } finally {
+      pending.release();
+    }
+    // Provider completion is not the drain boundary: wait for the store itself.
+    expect((await within(store.entered, 1_000)).settled).toBe(true);
     const bob = host.deliver({ input: 'b', sessionId: 'sB', headers: BOB });
     controller.abort();
     const [a, b] = await Promise.all([within(alice, 1_000), within(bob, 1_000)]);
@@ -369,6 +394,8 @@ describe('R2-4 — a put that never settles no longer holds the lane', () => {
     const store = hangingStore((_scope, input) => input.kind === 'story/turn');
     let made = 0;
     let retired = 0;
+    let noteRetired: () => void = () => undefined;
+    const allRetired = new Promise<void>((resolve) => (noteRetired = resolve));
     const { host } = await served(
       {
         agentFactory: () => {
@@ -381,6 +408,7 @@ describe('R2-4 — a put that never settles no longer holds the lane', () => {
           const shutdown = agent.shutdown.bind(agent);
           agent.shutdown = (async (options?: unknown) => {
             retired += 1;
+            if (retired === 5) noteRetired();
             return shutdown(options as never);
           }) as typeof agent.shutdown;
           return agent;
@@ -402,7 +430,7 @@ describe('R2-4 — a put that never settles no longer holds the lane', () => {
     // are released, the next arrival retires the idle ones back under it.
     expect(made).toBe(6);
     await host.deliver({ input: 'x', sessionId: 's-next', headers: ALICE });
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect((await within(allRetired, 1_000)).settled).toBe(true);
     expect(retired).toBe(5);
   });
 });
@@ -420,28 +448,41 @@ describe('R2-5 — a hook that keeps starting operations is still bounded', () =
       extra: { turnArtifactsTimeoutMs: SHORT },
     });
     let timer: ReturnType<typeof setInterval> | undefined;
+    let noteStarted: () => void = () => undefined;
+    const started = new Promise<void>((resolve) => (noteStarted = resolve));
+    let noteExpired: () => void = () => undefined;
+    const expired = new Promise<void>((resolve) => (noteExpired = resolve));
+    agent.on('agentfootprint.artifacts.hand_over_failed', (event: AgentfootprintEvent) => {
+      const payload = event.payload as { cause: string; op?: string };
+      if (event.meta.sessionId === 'sA' && payload.cause === 'expired' && payload.op === 'put')
+        noteExpired();
+    });
     const unhandled = await unhandledDuring(async () => {
-      const alice = host.deliver({
-        input: 'a',
-        sessionId: 'sA',
-        headers: ALICE,
-        onTurn: (turn) => {
-          if (!turn.bound) return;
-          // One upload now, then one every 5 ms against a 20 ms store: the
-          // in-flight set never empties, so only the bound can end the wait.
-          void turn.artifacts.put({ kind: 'progress', mediaType: 'text/plain', data: 'first' });
-          timer = setInterval(() => {
-            void turn.artifacts.put({ kind: 'progress', mediaType: 'text/plain', data: 'tick' });
-          }, 5);
-        },
-      });
-      await new Promise((resolve) => setTimeout(resolve, 30));
-      const bob = host.deliver({ input: 'b', sessionId: 'sB', headers: BOB });
-      const [a, b] = await Promise.all([within(alice, 2_000), within(bob, 2_000)]);
-      expect(a.settled).toBe(true);
-      expect(b.settled).toBe(true);
-      await new Promise((resolve) => setTimeout(resolve, 30));
-      clearInterval(timer);
+      try {
+        const alice = host.deliver({
+          input: 'a',
+          sessionId: 'sA',
+          headers: ALICE,
+          onTurn: (turn) => {
+            if (!turn.bound) return;
+            // One upload now, then one every 5 ms against a 20 ms store: the
+            // in-flight set never empties, so only the bound can end the wait.
+            void turn.artifacts.put({ kind: 'progress', mediaType: 'text/plain', data: 'first' });
+            timer = setInterval(() => {
+              void turn.artifacts.put({ kind: 'progress', mediaType: 'text/plain', data: 'tick' });
+            }, 5);
+            noteStarted();
+          },
+        });
+        expect((await within(started, 1_000)).settled).toBe(true);
+        const bob = host.deliver({ input: 'b', sessionId: 'sB', headers: BOB });
+        const [a, b] = await Promise.all([within(alice, 2_000), within(bob, 2_000)]);
+        expect(a.settled).toBe(true);
+        expect(b.settled).toBe(true);
+        expect((await within(expired, 1_000)).settled).toBe(true);
+      } finally {
+        clearInterval(timer);
+      }
     });
     expect(unhandled).toEqual([]);
     expect(failures().map((f) => f.cause)).toContain('timeout');
