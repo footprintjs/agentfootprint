@@ -46,7 +46,7 @@ import { plainLineProblem } from '../../lib/plainLine.js';
 import { assertKnownOptions } from '../optionKeys.js';
 import type { Injection } from '../types.js';
 import type { Tool } from '../../tools/tools.js';
-import { resolveCachePolicy } from '../../cache/applyCachePolicy.js';
+import { cachePolicyMetadata } from '../../cache/applyCachePolicy.js';
 import type { CachePolicy } from '../../cache/types.js';
 import { validateSkillSteps, type OnSkipPolicy, type SkillStep } from '../skillSteps.js';
 import { assertArtifactVocabulary } from '../skillVocabulary.js';
@@ -414,7 +414,7 @@ function createSkill(
       // declared, so a skill without them serializes byte-identically.
       ...(opts.produces !== undefined && { produces: Object.freeze([...opts.produces]) }),
       ...(opts.consumes !== undefined && { consumes: Object.freeze([...opts.consumes]) }),
-      cache: resolveCachePolicy('skill', opts.cache),
+      ...cachePolicyMetadata('skill', opts.cache),
     }),
   }) as unknown as Injection;
 }

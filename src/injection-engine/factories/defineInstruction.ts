@@ -33,7 +33,7 @@ import type { WireRole } from '../../provider-contract/types.js';
 import type { Injection, InjectionContext, InjectionContent } from '../types.js';
 import { messagesToolRoleRefusal } from '../messagesSlotRefusal.js';
 import { assertKnownFacts, isTemplate, TEMPLATE_FACTS } from '../promptTemplate.js';
-import { resolveCachePolicy } from '../../cache/applyCachePolicy.js';
+import { cachePolicyMetadata } from '../../cache/applyCachePolicy.js';
 import type { CachePolicy } from '../../cache/types.js';
 
 interface DefineInstructionBase {
@@ -210,7 +210,7 @@ export function defineInstruction(opts: DefineInstructionOptions): Injection {
   const inject: InjectionContent = toMessages
     ? { messages: [{ role: raw.role as WireRole, content: text }] }
     : { systemPrompt: text };
-  const cache = resolveCachePolicy('instruction', opts.cache);
+  const cacheMetadata = cachePolicyMetadata('instruction', opts.cache);
   return Object.freeze({
     id: opts.id,
     ...(opts.description && { description: opts.description }),
@@ -223,6 +223,6 @@ export function defineInstruction(opts: DefineInstructionOptions): Injection {
     // this feature exists to prevent. Top-level fields survive every
     // `{...injection}` spread in the repo.
     ...(templated && { templated: true as const }),
-    metadata: Object.freeze({ cache }),
+    metadata: Object.freeze(cacheMetadata),
   }) as unknown as Injection;
 }

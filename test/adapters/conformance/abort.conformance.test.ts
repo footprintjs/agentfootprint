@@ -47,6 +47,10 @@ const HELPER_FILES: Readonly<Record<string, string>> = {
   'anthropicThinkingWire.ts': 'thinking request shapes per model',
   'anthropicToolArguments.ts': 'streamed tool-argument checks',
   'azureUrl.ts': 'Azure URL composition',
+  'bedrockCacheWire.ts':
+    'synchronous cache-marker projection, usage reading and capability lookup; no client, I/O or provider construction',
+  'bedrockModels.ts':
+    'frozen model facts and synchronous exact-ID lookup; no client, I/O or provider construction',
   'googleGenAI.ts': 'the Google client resolver both Gemini doors share',
   'retryAfter.ts': 'Retry-After parsing',
   'wireManifest.ts': 'the manifest read back from a serialized body',
@@ -125,6 +129,16 @@ describe('cancellation conformance — the listing (fails closed)', () => {
     for (const rig of ADAPTER_RIGS) {
       expect(names.has(rig.factory), rig.factory).toBe(true);
       if (rig.transport === 'none') expect(['mock', 'MockProvider']).toContain(rig.factory);
+    }
+  });
+
+  it('Bedrock providers remain rigged; only their pure cache helpers are classified as helpers', () => {
+    expect(HELPER_FILES).not.toHaveProperty('BedrockProvider.ts');
+    for (const factory of ['bedrock', 'BedrockProvider']) {
+      expect(NOT_ADAPTERS).not.toHaveProperty(factory);
+      const rig = ADAPTER_RIGS.find((entry) => entry.factory === factory);
+      expect(rig, factory).toBeDefined();
+      expect(rig?.transport).not.toBe('none');
     }
   });
 });

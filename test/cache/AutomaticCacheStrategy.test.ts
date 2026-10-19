@@ -4,10 +4,8 @@
  *
  * `mode: 'automatic'` is OpenAI's wire: the provider caches on its own, so the
  * strategy passes the request through and the meter says what the adapter
- * can report. A provider that declares nothing (Bedrock Converse, Ollama,
- * Mock) gets the no-op strategy — a statement about the ADAPTER, never about
- * the vendor: AWS's Converse API can cache Claude prompts, and this Bedrock
- * adapter implements neither half, so it does not declare it.
+ * can report. A provider that declares nothing (Ollama, Mock) gets the no-op
+ * strategy. Bedrock's separate tests cover its model-aware declaration.
  *
  *   - unit:        name + which adapters select it
  *   - boundary:    empty markers, kill switch
@@ -25,7 +23,6 @@ import { cacheStrategyFor } from '../../src/cache/cacheStrategyFor';
 import type { CacheMarker, CacheStrategyContext } from '../../src/cache/types';
 import type { LLMRequest } from '../../src/provider-contract/types';
 import { openai } from '../../src/adapters/llm/OpenAIProvider';
-import { bedrock } from '../../src/adapters/llm/BedrockProvider';
 import { ollama } from '../../src/adapters/llm/OllamaProvider';
 import { mock } from '../../src/adapters/llm/MockProvider';
 import { expectScalesLinearly } from '../helpers/perf.js';
@@ -59,15 +56,11 @@ describe('AutomaticCacheStrategy — unit', () => {
     expect(OPENAI.name).toBe('automatic');
   });
 
-  it('is what openai() selects; Bedrock, Ollama and Mock declare nothing and get none', () => {
+  it('is what openai() selects; Ollama and Mock declare nothing and get none', () => {
     expect(cacheStrategyFor(openai({ _client: fakeClient }))).toBeInstanceOf(
       AutomaticCacheStrategy,
     );
-    for (const p of [
-      bedrock({ _client: {} as never, _commands: {} as never }),
-      ollama({ model: 'llama3' }),
-      mock({ reply: 'x' }),
-    ]) {
+    for (const p of [ollama({ model: 'llama3' }), mock({ reply: 'x' })]) {
       expect(p.promptCaching, p.name).toBe(undefined);
       expect(cacheStrategyFor(p), p.name).toBeInstanceOf(NoOpCacheStrategy);
     }

@@ -224,3 +224,7 @@ invokeModelGateway({ baseUrl, apiKeyHeader: 'api-key', apiKey, model, timeoutMs:
 - `anthropicCacheWire.ts`, `azureUrl.ts`, `googleGenAI.ts`, `createProvider.ts`,
   `wireManifest.ts` — shared client/URL/cache helpers and the read-back of what
   actually crossed the wire.
+
+## Bedrock cache-table maintenance
+
+`bedrockModels.ts` was verified on 2026-10-19 against [AWS’s caching guide](https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html) and model-card Programmatic access lists. To add a model, verify its exact ID, checkpoint fields, maximum points, minimum prefix, TTLs and each allowed geography profile in those official sources; update the one table and its tests together. Unlisted IDs and unverified profiles fail closed. Do not infer support from a family prefix or suppress checkpoints using a token estimate.

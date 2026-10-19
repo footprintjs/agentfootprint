@@ -214,6 +214,7 @@ export class AgentBuilder {
    * the base prompt is stable per-turn and an ideal cache anchor.
    */
   private systemPromptCachePolicy: CachePolicy = 'always';
+  private systemPromptCacheExplicit = false;
   /**
    * Global cache kill switch. Set via `Agent.create({ caching: 'off' })`
    * (handled in `AgentOptions` propagation). Defaults to `false`
@@ -527,6 +528,7 @@ export class AgentBuilder {
     this.systemPromptValue = prompt;
     if (options?.cache !== undefined) {
       this.systemPromptCachePolicy = options.cache;
+      this.systemPromptCacheExplicit = true;
     }
     return this;
   }
@@ -3890,6 +3892,7 @@ export class AgentBuilder {
       mapsPlan,
       claimContract,
       this.answerValidationConfig,
+      this.systemPromptCacheExplicit,
     );
     // Attach the observers collected by `.watch()` so they receive events
     // from the very first run. Mirrors what consumers would do post-build

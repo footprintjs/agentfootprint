@@ -190,7 +190,7 @@ describe('agentfootprint.tools.shadowed', () => {
     ]);
   });
 
-  it('functional: no provider, or no collision → no event and no warning', async () => {
+  it('functional: no collision → no shadow event or warning; unsupported caching stays visible', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     enableDevMode();
     try {
@@ -204,7 +204,7 @@ describe('agentfootprint.tools.shadowed', () => {
       });
       const graph = skillGraph({ skills: [s], start: 'alpha', check: 'throw' });
       const agent = Agent.create({ provider: script(), model: 'mock', maxIterations: 2 })
-        .system('s')
+        .system('s', { cache: 'always' })
         .skillGraph(graph)
         .toolProvider(
           staticTools([defineTool({ name: 'other_tool', description: 'o', execute: () => 'ok' })]),
@@ -214,7 +214,14 @@ describe('agentfootprint.tools.shadowed', () => {
       await agent.run({ message: 'hi' });
       expect(out.shadowed).toEqual([]);
       expect(out.swallowed).toEqual([]);
-      expect(warn).not.toHaveBeenCalled();
+      const warnings = warn.mock.calls.map((call) => String(call[0]));
+      expect(warnings.filter((line) => line.startsWith('agentfootprint tools:'))).toEqual([]);
+      // This fixture deliberately requests caching on Mock, which declares
+      // none. Its separate build diagnostic must remain visible; no other
+      // warning is allowed to slip through this assertion.
+      expect(warnings).toEqual([
+        expect.stringContaining("caching was requested, but provider 'mock'"),
+      ]);
     } finally {
       disableDevMode();
       warn.mockRestore();

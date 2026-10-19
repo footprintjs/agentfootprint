@@ -39,7 +39,10 @@ import { NoOpCacheStrategy } from './strategies/NoOpCacheStrategy.js';
 const NO_CACHING = new NoOpCacheStrategy();
 
 /**
- * The strategy that serves `provider`'s declared prompt caching.
+ * The strategy that serves `provider`'s declared prompt caching for `model`.
+ * Static declarations keep the one-argument form. For a model-aware adapter,
+ * pass its model (including its own supported shorthand); omitting it selects
+ * no caching rather than guessing a model.
  *
  * @throws TypeError when the declaration is malformed (an unknown `mode`, a
  *   `maxBreakpoints` that is not a positive integer, a non-boolean
@@ -49,18 +52,52 @@ const NO_CACHING = new NoOpCacheStrategy();
  */
 export function cacheStrategyFor(
   provider: Pick<LLMProvider, 'name' | 'promptCaching'>,
+  model?: string,
 ): CacheStrategy {
-  const declared = provider.promptCaching;
+  const declared = promptCachingFor(provider, model);
   if (declared === undefined) return NO_CACHING;
   const who = `the '${provider.name}' provider`;
-  assertDeclaration(declared, who);
   return declared.mode === 'breakpoints'
     ? new BreakpointCacheStrategy(declared, who)
     : new AutomaticCacheStrategy(declared, who);
 }
 
+/** Resolve the provider's one declaration for this model. An omitted model
+ * cannot establish a model-aware capability, so it fails closed. Static
+ * declarations retain the existing one-argument behavior.
+ *
+ * Use this reader instead of accessing `provider.promptCaching.mode`: the
+ * port also permits a model function. No resolver is duplicated in adapters.
+ *
+ * @example
+ * ```ts
+ * import { promptCachingFor } from 'agentfootprint/cache';
+ * const declaration = promptCachingFor(provider, model);
+ * if (declaration?.mode === 'breakpoints') console.log(declaration.maxBreakpoints);
+ * ```
+ */
+export function promptCachingFor(
+  provider: Pick<LLMProvider, 'name' | 'promptCaching'>,
+  model?: string,
+): PromptCaching | undefined {
+  const declaration = provider.promptCaching;
+  const declared =
+    typeof declaration === 'function'
+      ? model === undefined
+        ? undefined
+        : declaration(model)
+      : declaration;
+  if (declared !== undefined) assertDeclaration(declared, `the '${provider.name}' provider`);
+  return declared;
+}
+
 function assertDeclaration(declared: PromptCaching, who: string): void {
-  const shape = declared as { mode?: unknown; maxBreakpoints?: unknown; reportsUsage?: unknown };
+  const shape = declared as {
+    mode?: unknown;
+    maxBreakpoints?: unknown;
+    reportsUsage?: unknown;
+    fields?: unknown;
+  };
   const refuse = (what: string): never => {
     throw new TypeError(
       `${who} declares promptCaching ${what}. Declare { mode: 'breakpoints', maxBreakpoints, ` +
@@ -79,5 +116,15 @@ function assertDeclaration(declared: PromptCaching, who: string): void {
   }
   if (typeof shape.reportsUsage !== 'boolean') {
     refuse(`with reportsUsage ${JSON.stringify(shape.reportsUsage)} (true or false)`);
+  }
+  if (
+    shape.fields !== undefined &&
+    (!Array.isArray(shape.fields) ||
+      shape.fields.length === 0 ||
+      shape.fields.length > 3 ||
+      shape.fields.some((field) => !['system', 'tools', 'messages'].includes(field)) ||
+      new Set(shape.fields).size !== shape.fields.length)
+  ) {
+    refuse('with fields other than a nonempty unique subset of system, tools, messages');
   }
 }

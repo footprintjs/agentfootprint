@@ -195,6 +195,9 @@ export type PromptCaching =
       /** Breakpoints the wire honours on one request (Anthropic: 4). */
       readonly maxBreakpoints: number;
       readonly reportsUsage: boolean;
+      /** Optional wire-supported fields. Absent means all marker fields;
+       * models such as Bedrock Nova accept system/messages but not tools. */
+      readonly fields?: readonly CacheMarker['field'][];
     }
   | {
       readonly mode: 'automatic';

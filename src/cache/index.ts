@@ -3,12 +3,12 @@
  *
  * The strategy an agent runs is chosen by CAPABILITY: the provider adapter
  * declares how its wire caches (`LLMProvider.promptCaching`) and
- * `cacheStrategyFor(provider)` returns the one strategy that serves it —
+ * `cacheStrategyFor(provider, model?)` returns the strategy that serves it —
  *   - `BreakpointCacheStrategy` — `mode: 'breakpoints'` (Anthropic's
  *     `cache_control`; `anthropic()`, `browserAnthropic()`);
  *   - `AutomaticCacheStrategy` — `mode: 'automatic'` (OpenAI and Azure
  *     OpenAI cache on their own);
- *   - `NoOpCacheStrategy` — nothing declared (Mock, Ollama, Bedrock Converse,
+ *   - `NoOpCacheStrategy` — nothing declared for the model (Mock, Ollama,
  *     Gemini, any adapter that has not said).
  * Nothing registers at module load and nothing is keyed by provider name, so
  * a decorator that renames its provider keeps caching by forwarding the
@@ -47,7 +47,7 @@ export {
 } from '../lib/claim/claim.js';
 
 // Strategy selection — by the provider's declared capability, never its name
-export { cacheStrategyFor } from './cacheStrategyFor.js';
+export { cacheStrategyFor, promptCachingFor } from './cacheStrategyFor.js';
 
 // Built-in strategy classes (for consumers who want explicit overrides via
 // `Agent.create({ cacheStrategy })`)

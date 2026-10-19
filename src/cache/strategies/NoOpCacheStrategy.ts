@@ -1,6 +1,6 @@
 /**
  * NoOpCacheStrategy — for a provider that declares no prompt caching
- * (`LLMProvider.promptCaching` absent): Mock, Ollama, Bedrock Converse,
+ * (`LLMProvider.promptCaching` absent or undefined for this model): Mock, Ollama,
  * any adapter that has not said, or an intentional opt-out.
  *
  * Returns the request unchanged and reports *not applicable* — never a zero.
@@ -34,7 +34,7 @@ export class NoOpCacheStrategy implements CacheStrategy {
 
   extractMetrics(_usage: CacheUsage | undefined): Claim<CacheMetrics> {
     return notApplicable(
-      'the provider declares no prompt caching (LLMProvider.promptCaching is absent), so no ' +
+      'the provider declares no prompt caching for this model (LLMProvider.promptCaching is absent or resolves to undefined), so no ' +
         'cache traffic is driven or reported',
     );
   }

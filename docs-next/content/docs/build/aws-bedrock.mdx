@@ -39,6 +39,82 @@ Converse API's tool_use / tool_result blocks map cleanly to agentfootprint's `To
 
 The mapping holds on **both** paths — `complete()` and `stream()` produce the same `toolCalls` for the same logical response, and a parity test pins them together so they cannot drift apart.
 
+## Prompt caching
+
+`bedrock()` declares caching **per model**. Pass the model to
+`cacheStrategyFor(provider, model)` when attaching a cache meter; the Agent
+resolves it automatically, including a model chosen by `.configure()` or a
+skill brain. `withRetry`, `withCircuitBreaker` and `withFallback` preserve
+this capability. Unknown IDs, custom aliases and profile ARNs have no
+declared caching; the adapter sends no `cachePoint` for them. This is a
+verified subset, not a statement that AWS cannot cache every omitted model.
+
+<CodeFile path="examples/features/102-bedrock-prompt-cache.ts" region="cache" title="Two scripted calls, no AWS requests" />
+
+The executable example uses a fake SDK, including a cache write on the first
+call and a read on the second. These fixture counts prove the wiring;
+they do not measure AWS latency or savings. A real request uses the normal
+`bedrock({ region })` factory and your AWS credentials.
+
+All listed models allow at most four checkpoints across the request. Claude
+models accept them in `tools`, `system` and `messages`; Nova accepts `system`
+and `messages` only. A marker becomes a separate union block after its exact
+message or tool boundary. The port currently carries the composed system
+prompt as one string, so a system marker covers that whole string. Skipped
+messages never move a checkpoint onto a neighboring message.
+
+`short` uses the default five-minute TTL. `long` becomes `ttl: '1h'` only
+where the model documents it. Otherwise it is shortened to the default,
+and a long checkpoint following a short one in wire order is shortened too;
+prompt content is never reordered. Prefixes below the model's minimum may
+complete without being cached. Cache writes can cost more than fresh input,
+and repeated prompts do not guarantee a hit.
+
+`minimumTokens` documents AWS's threshold; the adapter does not suppress
+checkpoints using a token estimate. A below-minimum prefix does not cache:
+the cache meter reports measured zero writes when AWS returns zero, rather
+than pretending the provider measured nothing.
+
+### Verified model facts
+
+Checked against [AWS's caching guide](https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html)
+and its model cards. `bedrockModels.ts` is the single support table. Exact
+geography profiles are allowed only where verified for that model; support
+does not guarantee account access, region availability or a working bare
+model endpoint. In particular, Haiku 4.5 on-demand calls require a documented
+geography/global inference profile.
+
+| Base model IDs | Minimum prefix | TTLs |
+| --- | --- | --- |
+| `anthropic.claude-haiku-5-5`, `anthropic.claude-sonnet-5-5`, `anthropic.claude-opus-5-5`, `anthropic.claude-fable-5-1`, `anthropic.claude-mythos-5-1`, `anthropic.claude-fable-5`, `anthropic.claude-mythos-5`, `anthropic.claude-opus-5` | 512 | 5 minutes, 1 hour |
+| `anthropic.claude-opus-4-8`, `anthropic.claude-sonnet-5`, `anthropic.claude-sonnet-4-6`, `anthropic.claude-sonnet-4-5-20250929-v1:0` | 1,024 | 5 minutes, 1 hour |
+| `anthropic.claude-opus-4-7`, `anthropic.claude-opus-4-6-v1`, `anthropic.claude-opus-4-5-20251101-v1:0`, `anthropic.claude-haiku-4-5-20251001-v1:0` | 4,096 | 5 minutes, 1 hour |
+| `anthropic.claude-3-7-sonnet-20250219-v1:0`, `anthropic.claude-3-5-sonnet-20241022-v2:0`, `anthropic.claude-sonnet-4-20250514-v1:0`, `anthropic.claude-opus-4-1-20250805-v1:0` | 1,024 | 5 minutes |
+| `amazon.nova-2-lite-v1:0`, `amazon.nova-pro-v1:0`, `amazon.nova-lite-v1:0`, `amazon.nova-micro-v1:0` | 1K, as AWS states it; maximum 20K | 5 minutes |
+
+The [API cache-point schema](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_CachePointBlock.html)
+defines `type: 'default'` and optional TTL. Both Converse and ConverseStream
+report optional `cacheReadInputTokens` / `cacheWriteInputTokens`; the adapter
+lifts these to `usage.cacheRead` / `cacheWrite`. Missing counts remain
+unknown; a reported zero is measured zero. `usage.input` remains **fresh**
+input, so the cache meter adds the three buckets once when calculating totals.
+
+When an explicit cache policy cannot be honored, development mode warns once
+per Agent build. A default policy warns only when the provider declares
+model-aware caching but cannot cache the selected model. Ordinary Mock and
+Ollama defaults are silent. Each run's existing
+`agentfootprint.agent.run_configured` event includes only fixed cache
+metadata with its source: `{ requested: 'explicit' | 'default', strategy: 'none', status: 'not-applicable' }`.
+No prompt, policy function or provider configuration enters that field. The
+manifest describes the default model; it does not claim every runtime model
+override has the same support. `caching: 'off'` or all policies set to `never`
+produces no warning or cache field.
+
+Code that reads `provider.promptCaching.mode` directly must instead call
+`promptCachingFor(provider, model)` from `agentfootprint/cache`, then inspect
+the resolved declaration. The field can now be a model function; this is a
+breaking TypeScript shape change. Existing static declarations still work.
+
 ## Thinking support
 
 The current `bedrock()` Converse adapter does not implement the request and

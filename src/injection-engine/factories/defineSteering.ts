@@ -19,7 +19,7 @@
  */
 
 import type { Injection } from '../types.js';
-import { resolveCachePolicy } from '../../cache/applyCachePolicy.js';
+import { cachePolicyMetadata } from '../../cache/applyCachePolicy.js';
 import type { CachePolicy } from '../../cache/types.js';
 
 export interface DefineSteeringOptions {
@@ -47,13 +47,13 @@ export function defineSteering(opts: DefineSteeringOptions): Injection {
   if (!opts.prompt || opts.prompt.length === 0) {
     throw new Error(`defineSteering(${opts.id}): \`prompt\` is required.`);
   }
-  const cache = resolveCachePolicy('steering', opts.cache);
+  const cacheMetadata = cachePolicyMetadata('steering', opts.cache);
   return Object.freeze({
     id: opts.id,
     ...(opts.description && { description: opts.description }),
     flavor: 'steering' as const,
     trigger: { kind: 'always' as const },
     inject: { systemPrompt: opts.prompt },
-    metadata: Object.freeze({ cache }),
+    metadata: Object.freeze(cacheMetadata),
   }) as unknown as Injection;
 }
