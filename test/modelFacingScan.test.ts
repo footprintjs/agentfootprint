@@ -146,6 +146,13 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
   ],
 
   // ── model-facing, but composed for ONE request and never re-read ──
+  'src/tools/artifactDetailTool.ts': [
+    {
+      kind: 'ephemeral',
+      count: 1,
+      why: "the artifact detail tool's description — one request's tools array; it teaches issued-reference navigation and its fixed bounds, never reports an admission or result in persistent history",
+    },
+  ],
   'src/injection-engine/factories/defineMenuHint.ts': [
     {
       kind: 'ephemeral',
@@ -1167,10 +1174,12 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // Agent.ts. total 193 → 194, notModelFacing 130 → 131.
         // Recorded-cause tools: the explicit host-opted hypothesis frame is
         // one additional ephemeral system string. No persistent claim is excused.
-        files: 99,
-        total: 195,
+        // Artifact detail: one tool-schema description teaches navigation in
+        // the current request's tools array; it is not a persistent result.
+        files: 100,
+        total: 196,
         registry: 8,
-        ephemeral: 23,
+        ephemeral: 24,
         unrepaired: 33,
         notModelFacing: 131,
         unrepairedEntries: 13,

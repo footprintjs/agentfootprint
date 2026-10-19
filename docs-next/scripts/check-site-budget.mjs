@@ -273,7 +273,11 @@ const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_325_000, records: 2_000 };
 // region, EXPORT=true measures 223.63 MB across 5,639 files, duplicate RSC pairs 0
 // (CI before that shortening: 223.65 MB). Owner approved a 224 MB total-export
 // allowance; page, runtime JS, search, file-count and duplicate budgets stay fixed.
-const OUTPUT_LIMITS = { bytes: 224_000_000, files: 8_270, duplicateRscBytes: 0 };
+// RAISED 2026-10-18, bytes only, owner-approved for the shared artifact detail
+// viewer's eight generated API pages. EXPORT=true measures 225.06 MB across
+// 5,689 files, duplicate RSC pairs 0. The total allowance is 226 MB; page,
+// runtime JS, search, file-count and duplicate budgets stay fixed.
+const OUTPUT_LIMITS = { bytes: 226_000_000, files: 8_270, duplicateRscBytes: 0 };
 // Raised for 9.61.0: 394.1 KB → 400.3 KB. The skill-graph demo imports
 // `defineTool` from 'agentfootprint', so the library's MAIN ENTRY and its
 // whole transitive graph ride this chunk — and this release added the

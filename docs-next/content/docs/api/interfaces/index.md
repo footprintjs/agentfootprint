@@ -2,7 +2,7 @@
 title: Interfaces
 ---
 
-360 exported from `agentfootprint`.
+364 exported from `agentfootprint`.
 
 - [`AbsenceDeclaration`](/docs/api/interfaces/AbsenceDeclaration)
 - [`ActOptions`](/docs/api/interfaces/ActOptions)
@@ -25,6 +25,10 @@ title: Interfaces
 - [`AnswerValidationReport`](/docs/api/interfaces/AnswerValidationReport)
 - [`ArgumentRow`](/docs/api/interfaces/ArgumentRow)
 - [`ArtifactConformanceKit`](/docs/api/interfaces/ArtifactConformanceKit)
+- [`ArtifactDetailAction`](/docs/api/interfaces/ArtifactDetailAction)
+- [`ArtifactDetailArgs`](/docs/api/interfaces/ArtifactDetailArgs)
+- [`ArtifactDetailChild`](/docs/api/interfaces/ArtifactDetailChild)
+- [`ArtifactDetailOptions`](/docs/api/interfaces/ArtifactDetailOptions)
 - [`ArtifactListOptions`](/docs/api/interfaces/ArtifactListOptions)
 - [`ArtifactListResult`](/docs/api/interfaces/ArtifactListResult)
 - [`ArtifactMeta`](/docs/api/interfaces/ArtifactMeta)

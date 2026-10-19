@@ -9,6 +9,17 @@ after the store has changed.
 
 # src/artifacts — the claim-check store
 
+## Bounded JSON detail views
+
+`artifactDetailTool` lives in `tools/` at L7. It calls a trusted host's `admit`
+callback afresh for every request, then bounded-detaches/freezes ordinary JSON.
+This folder's L3 `detailRequest`/`detailView`/`detailTypes`/`detailError` modules
+own pointer admission, navigation, output bounds and fixed error vocabulary.
+They read no store, follow no artifact parents and authorize no claims. Host
+context is presentation under its own `context` key and consumes the same served
+byte budget. Scope, current-run/source/kind/integrity checks, permissions and
+domain caveats stay with the callback; no cached approval is implied.
+
 ## Declared datasets from any tool
 
 `withDatasetArtifacts(tool, adapter)` wraps an existing tool without changing its
