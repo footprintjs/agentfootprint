@@ -790,6 +790,12 @@ export type {
   ToolResultCeiling,
 } from './tools/tools.js';
 export { artifactDetailTool, type ArtifactDetailOptions } from './tools/artifactDetailTool.js';
+export {
+  sessionArtifactAdmission,
+  type SessionArtifactAdmissionOptions,
+  type SessionArtifactAdmission,
+} from './tools/sessionArtifactAdmission.js';
+export type { ArtifactReadingOptions } from './tools/artifactReading.js';
 export { ArtifactDetailError, type ArtifactDetailErrorCode } from './artifacts/detailError.js';
 export type {
   ArtifactDetailAction,

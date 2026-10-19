@@ -336,6 +336,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | — | [`artifact-detail.ts`](artifacts/artifact-detail.ts) | Open bounded sections of a stored proof | Re-authorize each read, follow actual child actions, and keep source caveats with the value. |
 | — | [`dataset-result.ts`](artifacts/dataset-result.ts) | Publish a dataset, then follow its reference | Declare producer-owned rowsets, keep source lineage, and redeem the reference on a later turn. |
 | — | [`dataset-time-axis.ts`](artifacts/dataset-time-axis.ts) | Declare which column is time | A tool declares the time column, its unit and how each row summarises its interval; a viewer reads the ticket instead of guessing and compares times as UTC instants. |
+| — | [`saved-json-reading.ts`](artifacts/saved-json-reading.ts) | Read a placed JSON result a page at a time | Enable the existing detail viewer for this conversation and follow an issued action. |
 
 ### [`deploy/`](deploy/) — examples
 

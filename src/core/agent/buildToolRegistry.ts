@@ -201,6 +201,8 @@ import type { LLMToolSchema } from '../../provider-contract/types.js';
 import { PRESENT_TOOL_NAME } from '../../artifacts/present.js';
 import { buildPresentTool } from './presentTool.js';
 import type { Tool, ToolRegistryEntry } from '../../tools/tools.js';
+import type { ConfiguredArtifactReading } from '../../tools/artifactReading.js';
+import { ALWAYS_SERVED_TOOLS } from './toolChoice/types.js';
 import { warnIfInvalidToolName } from '../../lib/toolName.js';
 import type { ToolNameChannel } from '../../events/payloads.js';
 
@@ -284,6 +286,7 @@ export interface BuildToolRegistryOptions {
    * may keep its own `present`.
    */
   readonly hasArtifactStore?: boolean;
+  readonly artifactReading?: ConfiguredArtifactReading;
   /**
    * THE FINDINGS LEDGER IS ARMED (9.101.0, `.findings()`) — present only
    * then, only ever `true`. Arms `assertReservedArgument`: a REGISTRY schema
@@ -473,12 +476,26 @@ export function buildToolRegistry(
     });
   }
 
+  if (
+    options.artifactReading !== undefined &&
+    ALWAYS_SERVED_TOOLS.includes(options.artifactReading.name)
+  ) {
+    throw new Error('Artifact reader name is reserved for another framework door.');
+  }
+  const readingEntries: readonly ToolRegistryEntry[] =
+    options.artifactReading === undefined
+      ? []
+      : [{ name: options.artifactReading.name, tool: options.artifactReading.tool }];
   const augmentedRegistry: readonly ToolRegistryEntry[] = [
     ...registry,
     ...readSkillEntries,
     ...presentEntries,
+    ...readingEntries,
     ...skillToolEntries,
   ];
+  if (options.artifactReading !== undefined && sharedSkillTools.has(options.artifactReading.name)) {
+    throw new Error('Artifact reader tool name is already held by a skill.');
+  }
 
   // Final cross-source name-uniqueness check: static .tool() vs
   // read_skill vs (deduped) skill tools. Catches collisions BETWEEN
@@ -513,7 +530,7 @@ export function buildToolRegistry(
       tool: e.tool,
     });
   }
-  for (const e of [...readSkillEntries, ...presentEntries]) {
+  for (const e of [...readSkillEntries, ...presentEntries, ...readingEntries]) {
     claim(e.name, { channel: 'framework', tool: e.tool });
   }
   for (const { name, claim: c } of skillClaims) claim(name, c);
