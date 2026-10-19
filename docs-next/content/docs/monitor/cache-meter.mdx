@@ -24,7 +24,7 @@ Fixing only the first would have left a meter that still cannot say *unmeasured*
 import { cacheRecorder, cacheStrategyFor, isKnown, describeClaim } from 'agentfootprint/cache';
 
 // The same strategy the agent runs: chosen from the provider's declared prompt caching.
-const meter = cacheRecorder({ strategy: cacheStrategyFor(provider), pricing, model });
+const meter = cacheRecorder({ strategy: cacheStrategyFor(provider, model), pricing, model });
 const agent = Agent.create({ provider, model }).watch(meter).build();
 await agent.run('…');
 
@@ -74,10 +74,13 @@ Below a model's minimum cacheable prefix, a request is processed **without cachi
 
 | Declared by | Strategy | Sends markers | Reads cache usage | What `extractMetrics` says |
 |---|---|---|---|---|
-| `anthropic()`, `browserAnthropic()` | `BreakpointCacheStrategy` | yes | yes | `known` / `unknown` — the one end-to-end path |
+| `anthropic()`, `browserAnthropic()`, supported `bedrock()` models | `BreakpointCacheStrategy` | yes | yes | `known` / `unknown` |
 | `openai()`, Azure, Foundry | `AutomaticCacheStrategy` | n/a (auto-caches) | **no** | `not-applicable` |
-| nothing declared (`bedrock()`, `ollama()`, `gemini()`, `mock()`) | `NoOpCacheStrategy` | no | no | `not-applicable` |
+| nothing declared (`ollama()`, `gemini()`, `mock()`), or a model outside Bedrock's verified table | `NoOpCacheStrategy` | no | no | `not-applicable` |
 
-"Nothing declared" is about **the adapter**, not the vendor: AWS's Converse API can cache Claude prompts, but our Bedrock provider implements neither half.
+"Nothing declared" is about **the adapter and selected model**, not the vendor.
+Bedrock support is checked per exact model/profile ID; pass `model` to the
+strategy selector, and see [Bedrock caching](doc:aws-bedrock#prompt-caching)
+for its supported fields, TTLs and honest limits.
 
 OpenAI is the costliest of the gaps, because it is the auto-caching provider: caching is happening on every call and nothing lifts `prompt_tokens_details.cached_tokens` onto the port — which is exactly what its `reportsUsage: false` says.

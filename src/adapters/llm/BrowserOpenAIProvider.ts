@@ -297,7 +297,7 @@ export class BrowserOpenAIProvider implements LLMProvider {
   /** Read off `inner` — it depends on the options, not on the class. */
   readonly carriesForcedToolChoice: boolean;
   /** Read off `inner` — it depends on the options, not on the class. */
-  readonly promptCaching?: PromptCaching;
+  readonly promptCaching?: LLMProvider['promptCaching'];
   readonly thinkingHandler?: ThinkingHandler;
   private readonly inner: LLMProvider;
 
@@ -423,7 +423,7 @@ export class BrowserAzureOpenAIProvider implements LLMProvider {
   /** Read off `inner` — it depends on the options, not on the class. */
   readonly carriesForcedToolChoice: boolean;
   /** Read off `inner` — it depends on the options, not on the class. */
-  readonly promptCaching?: PromptCaching;
+  readonly promptCaching?: LLMProvider['promptCaching'];
   readonly thinkingHandler?: ThinkingHandler;
   private readonly inner: LLMProvider;
 

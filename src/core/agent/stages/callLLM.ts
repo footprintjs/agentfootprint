@@ -39,6 +39,7 @@ import {
   UnsupportedNativeOutputError,
 } from '../../../provider-contract/nativeOutputSchema.js';
 import type { CacheMarker, CacheStrategy } from '../../../cache/types.js';
+import { cacheStrategyFor } from '../../../cache/cacheStrategyFor.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import { wireViolationsOf } from '../../../integrity/invariant-violation/wire.js';
 import { danglingReferencesOf } from '../../../integrity/dangling-reference/check.js';
@@ -244,6 +245,8 @@ export interface CallLLMStageDeps {
   readonly maxIterations: number;
   /** Cache strategy (provider-aware; v2.6+). Pass-through if no markers. */
   readonly cacheStrategy: CacheStrategy;
+  /** Host-supplied strategies retain authority over model-aware defaults. */
+  readonly cacheStrategyIsOverride?: true;
   /** Static tool schemas, late-bound (see seed.ts for the same
    *  pattern — toolSchemas is computed AFTER stage factories are
    *  built). The getter resolves the eventual value at run time. */
@@ -520,7 +523,6 @@ export function buildCallLLMStage(
       : undefined;
     const firstReliabilityProvider = deps.reliability?.providers?.[0];
     const provider = firstReliabilityProvider?.provider ?? brain?.provider ?? deps.provider;
-    const cacheStrategy = brain?.cacheStrategy ?? deps.cacheStrategy;
 
     // The model for this run. `.configure()` resolved it at seed and
     // COMMITTED it to scope, so what gets called, what the `llm_start`
@@ -533,6 +535,15 @@ export function buildCallLLMStage(
       brain?.model ??
       (deps.runConfigured ? (scope.resolvedModel as string | undefined) : undefined) ??
       deps.model;
+    // A configured/skill model can differ from the build default. Resolve the
+    // adapter's same capability for the model actually being sent, while a
+    // host's explicit strategy remains authoritative.
+    const cacheStrategy =
+      deps.cacheStrategyIsOverride === true && provider === deps.provider
+        ? deps.cacheStrategy
+        : typeof provider.promptCaching === 'function'
+        ? cacheStrategyFor(provider, model)
+        : brain?.cacheStrategy ?? deps.cacheStrategy;
 
     // Per-iteration boundary marker (was a dedicated `IterationStart` stage —
     // folded here since emitting is passive observability, not work that needs

@@ -641,8 +641,13 @@ export interface LLMProvider {
    * from `agentfootprint/cache`). The agent picks its cache strategy from
    * this, never from `name`. Absent = no caching the agent drives or meters.
    * A wrapper must forward it, like `carriesInMessages`.
+   * A model-aware declaration returns undefined for an unknown/unsupported
+   * model. `cacheStrategyFor(provider, model)` resolves either form; adapters
+   * must consult the same rule before putting cache markers on the wire.
    */
-  readonly promptCaching?: import('../cache/types.js').PromptCaching;
+  readonly promptCaching?:
+    | import('../cache/types.js').PromptCaching
+    | ((model: string) => import('../cache/types.js').PromptCaching | undefined);
   /**
    * The handler that normalizes this wire's thinking (`rawThinking`). The
    * agent uses it unless `.thinkingHandler()` overrides it; absent = no

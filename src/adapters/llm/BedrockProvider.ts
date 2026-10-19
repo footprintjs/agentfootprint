@@ -50,6 +50,14 @@ import {
   UnsupportedToolChoiceError,
 } from '../../provider-contract/forcedToolChoice.js';
 import { UnsupportedThinkingError } from '../../thinking/errors.js';
+import {
+  applyCacheMarkers,
+  bedrockPromptCaching,
+  readCacheUsage,
+  type BedrockCachePoint,
+  type BedrockCacheUsage,
+  type BedrockMessagePosition,
+} from './bedrockCacheWire.js';
 
 // ─── Bedrock Converse SDK shape (duck-typed) ───────────────────────
 
@@ -75,9 +83,9 @@ function sendUnder(
 interface BedrockConverseCommand {
   modelId: string;
   messages: BedrockMessage[];
-  system?: Array<{ text: string }>;
+  system?: Array<{ text: string } | BedrockCachePoint>;
   toolConfig?: {
-    tools: BedrockTool[];
+    tools: Array<BedrockTool | BedrockCachePoint>;
     /** v7.26 — Converse's forced choice of one named tool. `{ tool: { name } }`
      *  is the arm that names it; the API also has `auto` / `any`, which this
      *  library has no use for and therefore does not model. */
@@ -96,6 +104,7 @@ interface BedrockMessage {
 }
 
 type BedrockContentBlock =
+  | BedrockCachePoint
   | { text: string }
   | { toolUse: { toolUseId: string; name: string; input: Record<string, unknown> } }
   | {
@@ -129,7 +138,7 @@ interface BedrockConverseResponse {
     | 'guardrail_intervened'
     | 'content_filtered'
     | string;
-  usage?: { inputTokens: number; outputTokens: number };
+  usage?: BedrockCacheUsage;
   ResponseMetadata?: { RequestId?: string };
 }
 
@@ -153,7 +162,7 @@ export interface BedrockStreamEvent {
   };
   contentBlockStop?: { contentBlockIndex?: number };
   messageStop?: { stopReason?: string };
-  metadata?: { usage?: { inputTokens: number; outputTokens: number } };
+  metadata?: { usage?: BedrockCacheUsage };
   // Many other event shapes exist; we ignore the ones not needed here.
 }
 
@@ -227,6 +236,7 @@ export function bedrock(options: BedrockProviderOptions = {}): LLMProvider {
 
   const provider: LLMProvider = {
     name: 'bedrock',
+    promptCaching: (model) => bedrockPromptCaching(modelOf(model)),
     carriesInMessages: CARRIES_IN_MESSAGES,
     // The existing boolean describes the wire. The optional model predicate
     // narrows it where the shared Claude table knows a model rejects it.
@@ -274,7 +284,7 @@ export function bedrock(options: BedrockProviderOptions = {}): LLMProvider {
 
       const textParts: string[] = [];
       let stopReason = 'stop';
-      let usage = { input: 0, output: 0 };
+      let usage: LLMResponse['usage'] = { input: 0, output: 0 };
       let tokenIndex = 0;
 
       // Tool-use blocks under construction, keyed by `contentBlockIndex`.
@@ -341,6 +351,7 @@ export function bedrock(options: BedrockProviderOptions = {}): LLMProvider {
             usage = {
               input: event.metadata.usage.inputTokens,
               output: event.metadata.usage.outputTokens,
+              ...readCacheUsage(event.metadata.usage),
             };
           }
         }
@@ -371,10 +382,12 @@ export class BedrockProvider implements LLMProvider {
   readonly carriesForcedToolChoice = true;
   readonly thinkingMode: (model: string) => 'none' = () => 'none';
   readonly supportsForcedToolChoice: (model: string) => boolean;
+  readonly promptCaching: LLMProvider['promptCaching'];
   private readonly inner: LLMProvider;
 
   constructor(options: BedrockProviderOptions = {}) {
     this.inner = bedrock(options);
+    this.promptCaching = this.inner.promptCaching;
     this.supportsForcedToolChoice = (model) => forcedToolChoiceFor(this.inner, model);
   }
 
@@ -472,9 +485,10 @@ function buildInput(
   ) {
     throw new UnsupportedToolChoiceError({ provider: 'bedrock', model });
   }
+  const positions: (BedrockMessagePosition | undefined)[] = [];
   const input: BedrockConverseCommand = {
     modelId: model,
-    messages: toBedrockMessages(req.messages),
+    messages: toBedrockMessages(req.messages, positions),
   };
   if (req.systemPrompt) input.system = [{ text: req.systemPrompt }];
   if (req.tools && req.tools.length > 0) {
@@ -492,15 +506,20 @@ function buildInput(
   if (req.temperature !== undefined) inference.temperature = req.temperature;
   if (req.stop && req.stop.length > 0) inference.stopSequences = [...req.stop];
   input.inferenceConfig = inference;
+  if (req.cacheMarkers !== undefined) applyCacheMarkers(input, req.cacheMarkers, model, positions);
   return input;
 }
 
-function toBedrockMessages(messages: readonly LLMMessage[]): BedrockMessage[] {
+function toBedrockMessages(
+  messages: readonly LLMMessage[],
+  positions: (BedrockMessagePosition | undefined)[],
+): BedrockMessage[] {
   const result: BedrockMessage[] = [];
-  for (const m of messages) {
+  for (const [messageIndex, m] of messages.entries()) {
     if (m.role === 'system') continue; // system goes in `system` field
     if (m.role === 'user') {
       result.push({ role: 'user', content: [{ text: m.content }] });
+      positions[messageIndex] = { message: result.length - 1, content: 0 };
       continue;
     }
     if (m.role === 'assistant') {
@@ -518,6 +537,7 @@ function toBedrockMessages(messages: readonly LLMMessage[]): BedrockMessage[] {
       // Anthropic wire keeps (`anthropicMessagesWire.ts` · `toAnthropicMessages`).
       if (blocks.length === 0) continue;
       result.push({ role: 'assistant', content: blocks });
+      positions[messageIndex] = { message: result.length - 1, content: blocks.length - 1 };
       continue;
     }
     if (m.role === 'tool') {
@@ -533,6 +553,10 @@ function toBedrockMessages(messages: readonly LLMMessage[]): BedrockMessage[] {
       } else {
         result.push({ role: 'user', content: [block] });
       }
+      positions[messageIndex] = {
+        message: result.length - 1,
+        content: result[result.length - 1].content.length - 1,
+      };
       continue;
     }
   }
@@ -571,6 +595,7 @@ function fromBedrockResponse(response: BedrockConverseResponse): LLMResponse {
     usage: {
       input: response.usage?.inputTokens ?? 0,
       output: response.usage?.outputTokens ?? 0,
+      ...readCacheUsage(response.usage),
     },
     stopReason: normalizeStopReason(response.stopReason ?? 'end_turn'),
     providerRef: response.ResponseMetadata?.RequestId,

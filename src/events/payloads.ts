@@ -2948,6 +2948,13 @@ export interface AgentRunConfiguredPayload {
    *  A study that runs two differently-configured agents groups on this. */
   readonly agentId: string;
   readonly llm: RunConfiguredLlmPayload;
+  /** A requested cache policy cannot be honored by the default provider/model.
+   * Configuration metadata only; absent when caching is off or supported. */
+  readonly cache?: {
+    readonly requested: true;
+    readonly strategy: 'none';
+    readonly status: 'not-applicable';
+  };
   /** Which chart shape ran the loop. A strategy choice with its own
    *  behaviour, not a cosmetic one (see `AgentOptions.reactMode`). */
   readonly reactMode: 'classic' | 'dynamic' | 'dynamic-grouped';

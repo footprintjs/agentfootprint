@@ -38,6 +38,7 @@ import type {
   WireRole,
 } from '../provider-contract/types.js';
 import type { PromptCaching } from '../cache/types.js';
+import { promptCachingFor } from '../cache/cacheStrategyFor.js';
 import type { ThinkingHandler, ThinkingMode } from '../thinking/types.js';
 import { dispatchThinkingHandler, tagThinkingResponse } from '../thinking/dispatch.js';
 import { DEFAULT_CARRIES_IN_MESSAGES } from '../provider-contract/types.js';
@@ -68,18 +69,26 @@ function carriedByBoth(a: LLMProvider, b: LLMProvider): readonly WireRole[] {
  * `cacheMarkers` field. Usage is reported when either side reports it — a
  * call the other side served then reads as *unmeasured*, never as a zero.
  */
-function cachingOfPair(a: LLMProvider, b: LLMProvider): PromptCaching | undefined {
-  const sides = [a.promptCaching, b.promptCaching].filter(
+function cachingOfPair(a: LLMProvider, b: LLMProvider, model?: string): PromptCaching | undefined {
+  const sides = [promptCachingFor(a, model), promptCachingFor(b, model)].filter(
     (c): c is PromptCaching => c !== undefined,
   );
   if (sides.length === 0) return undefined;
   const reportsUsage = sides.some((c) => c.reportsUsage);
   const breakpoints = sides.flatMap((c) => (c.mode === 'breakpoints' ? [c.maxBreakpoints] : []));
   if (breakpoints.length > 0) {
+    const marked = sides.filter(
+      (side): side is Extract<PromptCaching, { mode: 'breakpoints' }> =>
+        side.mode === 'breakpoints',
+    );
+    const fields = marked.every((side) => side.fields !== undefined)
+      ? [...new Set(marked.flatMap((side) => side.fields ?? []))]
+      : undefined;
     return Object.freeze({
       mode: 'breakpoints',
       maxBreakpoints: Math.min(...breakpoints),
       reportsUsage,
+      ...(fields !== undefined && { fields }),
     });
   }
   return Object.freeze({ mode: 'automatic', reportsUsage });
@@ -92,11 +101,15 @@ function cachingOfPair(a: LLMProvider, b: LLMProvider): PromptCaching | undefine
 function requestFor(side: LLMProvider, req: LLMRequest): LLMRequest {
   const markers = req.cacheMarkers;
   if (markers === undefined) return req;
-  const caching = side.promptCaching;
+  const caching = promptCachingFor(side, req.model);
   if (caching?.mode === 'breakpoints') {
-    return markers.length <= caching.maxBreakpoints
+    const supported =
+      caching.fields === undefined
+        ? markers
+        : markers.filter((marker) => caching.fields?.includes(marker.field));
+    return supported === markers && markers.length <= caching.maxBreakpoints
       ? req
-      : { ...req, cacheMarkers: markers.slice(0, caching.maxBreakpoints) };
+      : { ...req, cacheMarkers: supported.slice(0, caching.maxBreakpoints) };
   }
   const rest: LLMRequest = { ...req };
   delete (rest as { cacheMarkers?: unknown }).cacheMarkers;
@@ -219,7 +232,10 @@ export function withFallback(
     });
   }
 
-  const promptCaching = cachingOfPair(primary, fallback);
+  const promptCaching =
+    typeof primary.promptCaching === 'function' || typeof fallback.promptCaching === 'function'
+      ? (model: string) => cachingOfPair(primary, fallback, model)
+      : cachingOfPair(primary, fallback);
   const thinkingHandler = thinkingOfPair(primary, fallback);
   const thinkingMode = thinkingModeOfPair(primary, fallback);
   const tagsThinking = primary.thinkingHandler !== fallback.thinkingHandler;

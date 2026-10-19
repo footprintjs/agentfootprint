@@ -4,7 +4,7 @@ title: CodeInput
 
 # Interface: CodeInput
 
-Defined in: [src/provider-contract/types.ts:1116](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1116)
+Defined in: [src/provider-contract/types.ts:1121](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1121)
 
 One payload staged INTO a code session before code runs (9.26.0).
 
@@ -20,7 +20,7 @@ recognition, because the manifest is keyed by what it was ASKED for.
 
 > `readonly` **data**: `string` \| `Uint8Array`
 
-Defined in: [src/provider-contract/types.ts:1135](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1135)
+Defined in: [src/provider-contract/types.ts:1140](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1140)
 
 The bytes. A string is written as UTF-8 text; a `Uint8Array` verbatim.
 
@@ -30,7 +30,7 @@ The bytes. A string is written as UTF-8 text; a `Uint8Array` verbatim.
 
 > `readonly` `optional` **fileName?**: `string`
 
-Defined in: [src/provider-contract/types.ts:1133](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1133)
+Defined in: [src/provider-contract/types.ts:1138](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1138)
 
 The file name to write it under, when it should differ from `name` — the
 tool derives one from the artifact's media type (`dataset` +
@@ -47,7 +47,7 @@ ended up being called.
 
 > `readonly` `optional` **mediaType?**: `string`
 
-Defined in: [src/provider-contract/types.ts:1137](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1137)
+Defined in: [src/provider-contract/types.ts:1142](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1142)
 
 The producer's own statement about the payload, when it has one.
 
@@ -57,7 +57,7 @@ The producer's own statement about the payload, when it has one.
 
 > `readonly` **name**: `string`
 
-Defined in: [src/provider-contract/types.ts:1122](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1122)
+Defined in: [src/provider-contract/types.ts:1127](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1127)
 
 The MANIFEST KEY — what the executing code looks this input up by. The
 tool uses the declared argument name (`dataset`), so a static description

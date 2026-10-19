@@ -34,6 +34,7 @@ export class BreakpointCacheStrategy implements CacheStrategy {
   private readonly maxBreakpoints: number;
   private readonly reportsUsage: boolean;
   private readonly who: string;
+  private readonly fields?: readonly CacheMarker['field'][];
 
   /**
    * @param declared  the provider's `promptCaching` declaration
@@ -44,6 +45,7 @@ export class BreakpointCacheStrategy implements CacheStrategy {
     this.maxBreakpoints = declared.maxBreakpoints;
     this.reportsUsage = declared.reportsUsage;
     this.who = who;
+    this.fields = declared.fields;
   }
 
   async prepareRequest(
@@ -60,10 +62,12 @@ export class BreakpointCacheStrategy implements CacheStrategy {
     if (ctx.cachingDisabled || candidates.length === 0) {
       return { request: req, markersApplied: [] };
     }
-    const markersApplied =
-      candidates.length <= this.maxBreakpoints
+    const supported =
+      this.fields === undefined
         ? candidates
-        : candidates.slice(0, this.maxBreakpoints);
+        : candidates.filter((marker) => this.fields?.includes(marker.field));
+    const markersApplied =
+      supported.length <= this.maxBreakpoints ? supported : supported.slice(0, this.maxBreakpoints);
     return { request: { ...req, cacheMarkers: markersApplied }, markersApplied };
   }
 

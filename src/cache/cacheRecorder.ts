@@ -51,7 +51,7 @@
  * number, which is what this file now does.
  */
 
-import type { CombinedRecorder } from 'footprintjs';
+import type { CombinedRecorder, EmitEvent } from 'footprintjs';
 import type { FlowDecisionEvent } from 'footprintjs';
 import { splitStageId } from 'foottrace';
 import { STAGE_IDS } from '../lib/conventions.js';
@@ -183,8 +183,11 @@ export function cacheRecorder(options: CacheRecorderOptions = {}): CacheRecorder
       };
     },
 
-    onEmit(event: AgentfootprintEvent): void {
-      if (event.type !== 'agentfootprint.stream.llm_end') return;
+    onEmit(event: EmitEvent | AgentfootprintEvent): void {
+      // .watch() receives the engine envelope (`name`); explicit typed-stream
+      // forwarding uses `type`. Both carry the same already-normalized usage.
+      const type = 'type' in event ? event.type : event.name;
+      if (type !== 'agentfootprint.stream.llm_end') return;
       iterationCounter++;
       // The PORT shape, which is the only shape this event has ever carried.
       const usage = (event.payload as { usage?: CacheUsage }).usage;

@@ -35,6 +35,7 @@ import { extractSequence } from '../security/extractSequence.js';
 import { PolicyHaltError } from '../security/PolicyHaltError.js';
 import { updateSkillHistory as updateSkillHistoryStage } from '../cache/CacheGateDecider.js';
 import { cacheStrategyFor } from '../cache/cacheStrategyFor.js';
+import { cacheRequestedWithoutSupport } from './agent/cacheSupport.js';
 import {
   forcedToolChoiceFor,
   UnsupportedToolChoiceError,
@@ -524,6 +525,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * consumer passes one explicitly.
    */
   private readonly cacheStrategy: CacheStrategy;
+  private readonly cacheStrategyIsOverride: boolean;
+  private readonly cacheUnsupported: boolean;
   private readonly registry: readonly ToolRegistryEntry[];
   /**
    * The Injection list — Skills, Steering, Instructions, Facts (and
@@ -1138,7 +1141,16 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // caller overrides it — never one looked up by `provider.name`, which a
     // renaming decorator (`withRetry`, an app's own wrapper) rewrites. A
     // provider that declares nothing gets the no-op strategy.
-    this.cacheStrategy = cacheStrategy ?? cacheStrategyFor(opts.provider);
+    this.cacheStrategy = cacheStrategy ?? cacheStrategyFor(opts.provider, opts.model);
+    this.cacheStrategyIsOverride = cacheStrategy !== undefined;
+    this.cacheUnsupported = cacheRequestedWithoutSupport({
+      strategy: this.cacheStrategy,
+      providerName: opts.provider.name,
+      systemPrompt: systemPromptValue,
+      systemPolicy: systemPromptCachePolicy,
+      injections,
+      disabled: cachingDisabled,
+    });
     this.registry = registry;
     this.injections = injections;
     this.skillGraphNextSkill = skillGraphNextSkill;
@@ -4027,6 +4039,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         model: this.model,
         hasRunConfig: this.runConfigFn !== undefined,
         hasSkillBrains: this.skillBrains !== undefined,
+        ...(this.cacheUnsupported && { cacheUnsupported: true }),
         reactMode: this.reactMode,
         memories: this.memories,
         ...(this.windowStrategy !== undefined && {
@@ -5313,6 +5326,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(costBudget !== undefined && { costBudget }),
       maxIterations,
       cacheStrategy,
+      ...(this.cacheStrategyIsOverride && { cacheStrategyIsOverride: true as const }),
       get toolSchemas() {
         return toolSchemasResolved;
       },
@@ -5370,6 +5384,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
             brains: this.skillBrains,
             agentProvider: provider,
             agentCacheStrategy: cacheStrategy,
+            agentModel: model,
           }),
         }),
     });

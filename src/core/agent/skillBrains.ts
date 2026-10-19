@@ -277,21 +277,28 @@ export interface BuildBrainForArgs {
   readonly brains: FoldedSkillBrains;
   readonly agentProvider: LLMProvider;
   readonly agentCacheStrategy: CacheStrategy;
+  readonly agentModel?: string;
 }
 
 /** Build the runtime consult. See {@link BrainFor}. */
 export function buildBrainFor(args: BuildBrainForArgs): BrainFor {
-  const strategyFor = (provider: LLMProvider | undefined): CacheStrategy =>
-    provider === undefined || provider === args.agentProvider
+  const strategyFor = (
+    provider: LLMProvider | undefined,
+    model: string | undefined,
+  ): CacheStrategy =>
+    (provider === undefined || provider === args.agentProvider) &&
+    (model === undefined ||
+      model === args.agentModel ||
+      typeof args.agentProvider.promptCaching !== 'function')
       ? args.agentCacheStrategy
-      : cacheStrategyFor(provider);
+      : cacheStrategyFor(provider ?? args.agentProvider, model ?? args.agentModel);
 
   const bySkill = new Map<string, ResolvedBrain>();
   for (const [skillId, choice] of args.brains.bySkill) {
     bySkill.set(skillId, {
       provider: choice.provider,
       ...(choice.model !== undefined && { model: choice.model }),
-      cacheStrategy: strategyFor(choice.provider),
+      cacheStrategy: strategyFor(choice.provider, choice.model),
       via: 'skill',
       skillId,
     });
@@ -302,7 +309,7 @@ export function buildBrainFor(args: BuildBrainForArgs): BrainFor {
         ...(args.brains.escalation.model !== undefined && {
           model: args.brains.escalation.model,
         }),
-        cacheStrategy: strategyFor(args.brains.escalation.provider),
+        cacheStrategy: strategyFor(args.brains.escalation.provider, args.brains.escalation.model),
         via: 'escalation',
       }
     : undefined;

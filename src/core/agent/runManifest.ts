@@ -52,6 +52,9 @@ export interface RunManifestSources {
   readonly hasRunConfig: boolean;
   /** Per-skill brains are mounted: they may replace provider/model per call. */
   readonly hasSkillBrains: boolean;
+  /** The default provider/model cannot honor a requested cache policy.
+   * Fixed metadata only: no prompt, policy predicate, options or credentials. */
+  readonly cacheUnsupported?: true;
   readonly reactMode: 'classic' | 'dynamic' | 'dynamic-grouped';
   readonly memories: readonly MemoryDefinition[];
   /** `WindowStrategy.name` from `.window()` / `.compaction()`. */
@@ -120,6 +123,13 @@ export function buildRunManifest(sources: RunManifestSources): AgentRunConfigure
       ...(modelOverrides.length > 0 && { modelOverrides }),
     },
     reactMode: sources.reactMode,
+    ...(sources.cacheUnsupported === true && {
+      cache: {
+        requested: true as const,
+        strategy: 'none' as const,
+        status: 'not-applicable' as const,
+      },
+    }),
     // `[]` rather than an omitted field: "no memory is mounted" is an arm, and
     // a consumer grouping on retrieval strategy must be able to tell it from a
     // manifest that forgot to look.

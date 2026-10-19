@@ -475,7 +475,7 @@ export class OpenAIProvider implements LLMProvider {
    *  made it. */
   readonly carriesForcedToolChoice: boolean;
   /** Read off `inner` for the same reason. */
-  readonly promptCaching?: PromptCaching;
+  readonly promptCaching?: LLMProvider['promptCaching'];
   readonly thinkingHandler?: ThinkingHandler;
   private readonly inner: LLMProvider;
 
