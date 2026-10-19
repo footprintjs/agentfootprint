@@ -354,16 +354,30 @@ describe('only a result the TOOL produced is judged', () => {
           ? { result: 'deny', reason: 'policy:test' }
           : { result: 'allow' },
     };
+    // c2 explicitly tries to stand on denied c1. That proposal must now be
+    // refused; an independent c3 still proves the original judge boundary.
+    const turns: readonly Partial<LLMResponse>[] = [
+      ...TWO_CALLS.slice(0, 2),
+      { toolCalls: [{ id: 'c3', name: 'lookup', args: { q: 'port' } }] },
+      TWO_CALLS[2]!,
+    ];
+    const executed: string[] = [];
     const judge = mockClassifier([verdict('fact')]);
     const seen: number[] = [];
     const events: Row[] = [];
     const agent = Agent.create({
-      provider: scripted(TWO_CALLS, seen, judge),
+      provider: scripted(turns, seen, judge),
       model: 'mock',
       maxIterations: 6,
       permissionChecker: checker,
     })
-      .tool(lookup)
+      .tool({
+        ...lookup,
+        execute: (args, context) => {
+          executed.push(context.toolCallId);
+          return lookup.execute(args, context);
+        },
+      })
       .findings({ judge })
       .build();
     agent.on('*', (e) =>
@@ -371,25 +385,49 @@ describe('only a result the TOOL produced is judged', () => {
     );
     const answer = await agent.run({ message: 'why is fc1/7 down?' });
     expect(answer).toBe('the port is down');
-    // c1 was denied: the denial text is not a tool result — one classifier
-    // call in the whole run, for c2, the call that ran.
+    // Neither the policy refusal c1 nor the invalid citation c2 enters
+    // execute or buys a judgment. Only independent c3 supplies a result.
+    expect(executed).toEqual(['c3']);
+    expect(seen).toEqual([0, 0, 0, 1]);
+    const refusedMessage = agent
+      .checkpoint()
+      ?.history.find((message) => message.role === 'tool' && message.toolCallId === 'c2');
+    expect(refusedMessage?.toolResultOrigin).toBe('not-entered');
+    expect(JSON.parse(refusedMessage!.content)).toMatchObject({
+      refused: 'findings-reference',
+      count: 1,
+    });
     expect(judge.calls).toHaveLength(1);
     expect(judge.calls[0]!.state).toMatchObject({ tool: 'lookup', result: 'RESULT for port' });
     const ledger = agent.findings() ?? [];
+    expect(ledger.filter((row) => row.kind === 'reference-refusal')).toEqual([
+      expect.objectContaining({
+        declaredOn: { toolCallId: 'c2' },
+        reason: 'unidentified',
+      }),
+    ]);
     const judged = ledger.filter((r): r is JudgmentRow => r.kind === 'judgment');
-    expect(judged.map((r) => r.toolCallId)).toEqual(['c2']);
+    expect(judged.map((r) => r.toolCallId)).toEqual(['c3']);
     expect(ledger.some((r) => r.kind === 'judgment-error')).toBe(false);
     expect(
       events
         .filter((e) => e.type === 'agentfootprint.findings.judged')
         .map((e) => e.payload.toolCallId),
-    ).toEqual(['c2']);
+    ).toEqual(['c3']);
     // The model's own standing on the denied call is still filed — and,
     // with no judgment to compare against, carries no `agrees`.
     const standing = events.filter((e) => e.type === 'agentfootprint.findings.standing');
     expect(standing).toHaveLength(1);
     expect(standing[0]!.payload).toMatchObject({ toolCallId: 'c1', standing: 'ruled-out' });
     expect(standing[0]!.payload).not.toHaveProperty('agrees');
+    expect(ledger).toContainEqual(
+      expect.objectContaining({
+        kind: 'standing',
+        toolCallId: 'c1',
+        standing: 'ruled-out',
+        unknownId: true,
+      }),
+    );
   });
 });
 
