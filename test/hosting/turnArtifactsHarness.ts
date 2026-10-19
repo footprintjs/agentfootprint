@@ -420,24 +420,45 @@ export async function unhandledDuring(work: () => Promise<void>): Promise<unknow
   return seen;
 }
 
-/** A store whose `put` for the matching input NEVER settles — a hung bucket. */
-export function hangingStore(
+type SignalledStore = ReturnType<typeof inMemoryArtifacts> & {
+  /** Resolves only when a matching put has actually reached the store. */
+  readonly entered: Promise<void>;
+};
+
+/** A store whose matching puts wait for the test to release them. */
+export function gatedStore(
   hangWhen: (scope: { readonly principal?: string }, input: { readonly kind: string }) => boolean,
-): ReturnType<typeof inMemoryArtifacts> {
+): SignalledStore & { readonly release: () => void } {
   const inner = inMemoryArtifacts();
+  let opened: () => void = () => undefined;
+  const entered = new Promise<void>((resolve) => (opened = resolve));
+  let release: () => void = () => undefined;
+  const wait = new Promise<void>((resolve) => (release = resolve));
   return new Proxy(inner, {
     get(target, prop) {
+      if (prop === 'entered') return entered;
+      if (prop === 'release') return release;
       const value = Reflect.get(target, prop, target) as unknown;
       if (typeof value !== 'function') return value;
       if (prop === 'put') {
-        return (scope: { principal?: string }, input: { kind: string }) =>
-          hangWhen(scope, input)
-            ? new Promise(() => undefined)
-            : (value as (...a: unknown[]) => unknown).call(target, scope, input);
+        return async (scope: { principal?: string }, input: { kind: string }) => {
+          if (hangWhen(scope, input)) {
+            opened();
+            await wait;
+          }
+          return (value as (...a: unknown[]) => unknown).call(target, scope, input);
+        };
       }
       return (value as (...a: unknown[]) => unknown).bind(target);
     },
-  });
+  }) as SignalledStore & { readonly release: () => void };
+}
+
+/** A store whose matching put never settles, with a signal that it began. */
+export function hangingStore(
+  hangWhen: (scope: { readonly principal?: string }, input: { readonly kind: string }) => boolean,
+): SignalledStore {
+  return gatedStore(hangWhen);
 }
 
 /** A store whose `put` takes `ms` for the matching input — a slow bucket. */
