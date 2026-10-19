@@ -25,7 +25,7 @@ export async function run(input: string): Promise<unknown> {
     respond: (request) =>
       request.messages.some((message) => message.role === 'tool')
         ? 'The reading is 5.20; ports 1000–9000 were observed.'
-        : { content: '', toolCalls: [{ id: 'read-1', name: 'read_measurements', arguments: {} }] },
+        : { content: '', toolCalls: [{ id: 'read-1', name: 'read_measurements', args: {} }] },
   });
   // #region numeric-evidence
   const agent = Agent.create({ provider, model: 'mock' })

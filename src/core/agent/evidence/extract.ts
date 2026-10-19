@@ -193,26 +193,16 @@ export function extractCandidates(
    *  (`figures.ts` · `figureNumbersOf`, computed by the caller that loaded
    *  it — the module stays off a plain agent's graph). */
   figures?: ReadonlySet<string>,
+  /** A read-only exact-token view supplied by the caller's corpus. Whole
+   *  carried values win before a numeric range is interpreted as endpoints. */
+  exactTokens?: { readonly has: (value: string) => boolean },
 ): readonly Candidate[] {
   const seen = new Map<string, number>();
   const out: Candidate[] = [];
   let budget = MAX_ANSWER_TOKENS;
   const spellings = answerTokenSpellings(answer);
-  const add = (spelling: string, rangeToken?: string): void => {
-    if (budget-- <= 0) return;
-    const token = normalizeToken(spelling);
-    let candidate = classifyToken(token, gate, figures);
-    // Declared shapes and exemptions win, including over precision promotion.
-    if (
-      gate.decimalRounding === true &&
-      /^[-+]?\d+\.\d+$/.test(spelling) &&
-      !isDeclaredExempt(token, gate) &&
-      !gate.shapes.some((shape) => shape.match.test(token))
-    ) {
-      candidate = { value: token, shape: 'number', decimalSpelling: spelling };
-    }
+  const record = (candidate: Candidate | undefined): void => {
     if (candidate === undefined) return;
-    if (rangeToken !== undefined) candidate = { ...candidate, rangeToken };
     const prior = seen.get(candidate.value);
     if (prior !== undefined) {
       // One value may be written at two precisions. Check the stricter one;
@@ -228,6 +218,25 @@ export function extractCandidates(
     seen.set(candidate.value, out.length);
     out.push(candidate);
   };
+  const add = (spelling: string, rangeToken?: string): void => {
+    if (budget-- <= 0) return;
+    const token = normalizeToken(spelling);
+    let candidate = classifyToken(token, gate, figures);
+    // Declared shapes and exemptions win, including over precision promotion.
+    if (
+      gate.decimalRounding === true &&
+      /^[-+]?\d+\.\d+$/.test(spelling) &&
+      !isDeclaredExempt(token, gate) &&
+      !gate.shapes.some((shape) => shape.match.test(token))
+    ) {
+      candidate = { value: token, shape: 'number', decimalSpelling: spelling };
+    }
+    record(
+      candidate !== undefined && rangeToken !== undefined
+        ? { ...candidate, rangeToken }
+        : candidate,
+    );
+  };
   for (let index = 0; index < spellings.length; index += 1) {
     if (budget <= 0) break;
     const spelling = spellings[index] ?? '';
@@ -238,6 +247,11 @@ export function extractCandidates(
       continue;
     }
     const range = splitNumericRange(spelling, spellings[index + 1]);
+    if (range !== undefined && exactTokens?.has(token) === true) {
+      budget -= 1;
+      record({ value: token, shape: 'identifier' });
+      continue;
+    }
     if (range !== undefined) {
       const suffix = range.unit ?? '';
       add(`${range.first}${suffix}`, token);

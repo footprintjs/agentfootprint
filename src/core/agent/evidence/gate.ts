@@ -257,7 +257,12 @@ export function checkAnswer(
     readonly figures?: FigureCheck;
   },
 ): EvidenceVerdict {
-  const candidates = extractCandidates(answer, args.gate, args.figures?.numbers);
+  const candidates = extractCandidates(
+    answer,
+    args.gate,
+    args.figures?.numbers,
+    args.evidence.values,
+  );
   const unsupported: UnsupportedValue[] = [];
   const derived: UnsupportedValue[] = [];
   const computed: ComputedFigure[] = [];

@@ -118,7 +118,7 @@ export function groundedArgumentValues(
   const out: GroundedValue[] = [];
   const seen = new Set<string>();
   for (const leaf of stringLeaves(args, '')) {
-    for (const candidate of extractCandidates(leaf.value, gate)) {
+    for (const candidate of extractCandidates(leaf.value, gate, undefined, corpus.values)) {
       if (seen.has(candidate.value)) continue;
       seen.add(candidate.value);
       const forms = candidateForms(candidate);

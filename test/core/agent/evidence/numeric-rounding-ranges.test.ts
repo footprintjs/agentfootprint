@@ -169,7 +169,7 @@ it('records the rounded derivation in an actual mock run', async () => {
     respond: (request) =>
       request.messages.some((message) => message.role === 'tool')
         ? { content: 'The reading is 5.20.' }
-        : { content: '', toolCalls: [{ id: 'read-1', name: 'read_measurement', arguments: {} }] },
+        : { content: '', toolCalls: [{ id: 'read-1', name: 'read_measurement', args: {} }] },
   });
   const agent = Agent.create({ provider, model: 'mock' })
     .tool(tool)

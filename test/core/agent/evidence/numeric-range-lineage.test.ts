@@ -28,5 +28,5 @@ it('can meet a literal tool-result range without widening the evidence index', (
     exempt: new Set(),
   });
   expect(verdict.unsupported).toEqual([]);
-  expect(verdict.grounded.map((value) => value.value)).toEqual(['1000', '9000']);
+  expect(verdict.grounded).toEqual([{ value: '1000-9000', forms: ['1000-9000'] }]);
 });

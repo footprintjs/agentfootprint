@@ -136,7 +136,10 @@ its established arithmetic checks.
 ## Check a range endpoint by endpoint
 
 A range of exactly two plain numbers, separated by a hyphen or en dash, is
-checked as two values. `1000–9000` checks `1000` and `9000` independently;
+checked as two values only when the intact token was not returned by a tool.
+An exact whole-token match wins first: a carried ZIP+4 `12345-6789`, part
+number `1020-3040` or rack `10-20` remains one grounded identifier. Otherwise,
+`1000–9000` checks `1000` and `9000` independently;
 if a result carries only `1000`, only `9000` is flagged. `2-9ms` and
 `2–9 ms` apply the trailing unit to both endpoints under `figures: true`.
 The trailing unit must be one of the measurement units recognized by figures
@@ -144,8 +147,8 @@ The trailing unit must be one of the measurement units recognized by figures
 endpoints and decimals are supported; no interval arithmetic is inferred.
 
 **Short bare endpoints are still prose.** At the default `minDigits: 4`,
-`0-13` is split but neither endpoint is checked. Use `minDigits: 1` if both
-short counts must be verified. Opt-in decimal rounding and measurement figures
+an uncarried `0-13` is split but neither endpoint is checked. Use `minDigits: 1`
+if both short counts must be verified. Opt-in decimal rounding and measurement figures
 keep their own rules. This is token evidence, not proof that a range is ordered
 correctly or that every number inside it was observed.
 

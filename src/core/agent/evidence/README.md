@@ -198,25 +198,29 @@ a declared ID shape is also excluded, even when its rounded spelling would
 no longer match that shape. Unsafe large answer spellings are refused for rounding. The new path keeps
 the original normalized source spelling before Number conversion and compares
 its decimal half-unit interval exactly, with no floating-point slack. Source
-spellings above 256 characters are withheld from rounding rather than clipped. The `figures` dial's pre-existing unit and
-arithmetic behavior is unchanged when this new dial is off.
+spellings above 256 characters are withheld from rounding rather than clipped.
+The `figures` dial's pre-existing unit and arithmetic behavior is unchanged when this new dial is off.
 
 Ranges with exactly two plain numeric endpoints, separated by `-` or `–`, are
-split after declared identifier shapes. `0-13` and `0–13` become `0`, `13`;
+split after declared identifier shapes, unless the tool corpus carries that
+exact whole token. Exact evidence wins: `12345-6789`, `1020-3040` and
+`10-20` stay one grounded identifier when returned intact. Otherwise, `0-13`
+and `0–13` become `0`, `13`;
 `2-9ms` or `2–9 ms` apply `ms` to both endpoints. A single trailing unit uses
 `FIGURE_UNITS` (optionally `/s`). Endpoints may be signed decimals. Dates,
 clock ranges, dotted versions and multipart IDs (`2026-10-19`, `10:00-10:10`,
 `1.2.3-4`, `1-2-3`) do not match this grammar. A custom ID shape matching
 `1-13` wins and preserves that ID intact.
 
-The intact range remains a lookup/exemption spelling for both endpoints: a
-range the person supplied stays exempt, and a tool result carrying that literal
-range can ground its endpoints without widening the evidence index.
+Whole-token precedence uses the same pure extractor at the answer and tool
+argument moments. The intact spelling remains an exemption form for split
+endpoints, so a range the person supplied stays exempt. The evidence index
+is never widened: one carried range cannot ground a different identifier.
 
 Each endpoint then follows the ordinary rules: exact evidence, `minDigits`,
 opt-in decimal rounding, and opt-in measurement figures. **Short bare
-endpoints below `minDigits` are prose and are not verified.** Thus `0-13`
-produces no checked value with the default `minDigits: 4`; set `minDigits: 1`
+endpoints below `minDigits` are prose and are not verified.** Thus an uncarried
+`0-13` produces no checked value with the default `minDigits: 4`; set `minDigits: 1`
 when both short counts must be checked. Range recognition is an intentional
 narrow correction to identifier classification, independent of the opt-in
 rounding dial. Ordinary non-range answers keep their previous off-dial bytes.
