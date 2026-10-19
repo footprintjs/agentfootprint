@@ -64,6 +64,8 @@ Reuse the existing offer producer and folded ledger; do not create a second ledg
 One pure composer produces bounded, quoted DATA: current advisory IDs plus mutable ledger context.
 Quote opaque IDs with JSON encoding; do not interpolate them as instructions or grant executable authority.
 Retain the existing limits, model-declaration strata and explicit omission counts.
+The app owns an explicit bound for this new tail before request preparation; the existing contextBudget only warns and runs earlier.
+When that bound is reached, omit whole IDs or ledger rows with counts; never clip an identifier into a different identity.
 The constant instruction explains the format and asks the model to copy IDs without guessing.
 The changing ledger and offer do not remain in the cacheable system frame.
 
@@ -71,6 +73,7 @@ Append that context through the existing request-only message seam after the com
 A delimited user-role DATA message is the smallest supported provider-neutral shape today.
 It is framework context, not a new user request and not independently verified tool truth.
 It never enters `scope.history`, the user-source exemption corpus or an accumulated tail.
+Register this framework DATA frame with `saidByPerson` explicitly so it cannot become apparent human testimony merely because its wire role is user.
 Re-asks, resume and wrap-up compose the correct context once for that request.
 The design will pin its order relative to the existing nudge, time and evidence-conclusion messages.
 
@@ -108,6 +111,7 @@ These cases require explicit fixtures so continuation, collapse and privacy rule
 Apply one deterministic served-reference admission helper at tool dispatch and at JSON-answer Route.
 Preserve the attempted declaration and existing `unknownId` evidence, plus a bounded refusal reason.
 An unserved or ambiguous reference causes a structured teaching refusal **before `tool.execute`**.
+Admission also precedes effectful middleware, credential resolution and other dispatch callbacks; rejecting metadata after those callbacks is too late.
 The refusal explains that the reference cannot be identified in this request and asks for a served ID or fresh read.
 Do not substitute an ordinal, map a name to a result, leak foreign-run data or manufacture provenance.
 For a tool call with mixed valid/invalid references, refuse invocation rather than invoke with partially admitted metadata.
@@ -122,8 +126,10 @@ Valid reference admission leaves assertion stratum and separate evidence checks 
 ## 7. Receipt, replay and honest trace evidence
 
 Share the late-context composer between `callLLM` and `servedView` over the same committed inputs.
-Record its request-only reason and the actual prepared request through existing receipt conventions.
+Record its request-only reason and the prepared-request hashes and measurements through existing receipt conventions.
+This introduces no raw request dump; retain the existing masking and persistence choices.
 Keep the sent-request identity boundary available to dispatch and answer Route; do not reconstruct it from future state.
+`recordReceipt: false` may disable persistence, never live admission. A receipt or matching hash is evidence of a request, not an authorization grant.
 Use a recorded layout/version discriminator so old records retain their original enum/system-ledger rendering.
 A missing old discriminator must not be interpreted using the currently installed package version.
 If a saved record cannot reconstruct identity or layout exactly, disclose a gap rather than assert equivalence.
