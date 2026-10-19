@@ -52,6 +52,72 @@ The model routes the ticket (`art_h7Kq…`) between tools. The window spent on s
 
 Runnable version: [`examples/features/56-artifacts.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/56-artifacts.ts) — mint in one tool, redeem in another, a derived artifact, and expiry stating itself.
 
+## Open a placed JSON result in this conversation
+
+Enable `reading` beside the existing store and optional placement threshold. It
+mounts `artifact_detail` by default; `ArtifactReadingOptions.name` can choose a
+different ordinary tool name. A conflicting name is refused at build time.
+Omitting `reading` preserves the existing tool catalog, prompts and placement
+tickets.
+
+<CodeFile path="examples/artifacts/saved-json-reading.ts" region="policy" title="Choose allowed kinds and a payload limit" />
+
+<CodeFile path="examples/artifacts/saved-json-reading.ts" region="reading" title="Enable the existing JSON viewer" />
+
+The host must bind a real session before the reader can resolve anything:
+
+<CodeFile path="examples/artifacts/saved-json-reading.ts" region="session" title="A local synthetic session" />
+
+A deployed host authenticates the caller and uses its existing session-ownership
+policy. The example uses a fixed local session and a scripted mock. It follows
+the placed result's `detail` action, opens two child pages, and reads one exact
+sample after three fresh admissions and one synthetic source capture.
+
+`sessionArtifactAdmission(options)` returns a `SessionArtifactAdmission` callback
+with signature `(ref, context) => Promise<ArtifactRecord>`. Its
+`SessionArtifactAdmissionOptions` requires exact allowed `kinds` and a positive
+safe-integer `maxBytes`, at most 1 MiB. Each call requires a session and attached
+store, checks fresh scoped `head`/`get` results, bounds metadata separately at
+16 KiB, validates actual payload bytes and compares the metadata before returning
+a detached frozen record. The optional `check(record, context)` must return
+exactly `true`; it can further restrict admission but cannot widen kinds/limits
+or replace the data. Missing digests supply no integrity assurance; digest
+verification remains the configured store's `get` contract.
+
+The auto-mounted path composes this record callback with the existing viewer.
+For `application/json` text it performs one bounded decode, without changing
+stored bytes or what `wants` and code consumers receive. Structured ordinary
+JSON needs no text parse. It does not recursively decode strings, infer JSON from
+plain text, or enable binary navigation. Malformed or over-bound stored content
+is unavailable with fixed wording.
+
+Eligible placement tickets carry `PlacedToolResult.detail`, an
+`ArtifactDetailAction`, only when the reader is currently offered, a session is
+bound, and its kind, JSON representation and size are eligible. The action is
+re-admitted when used; it is not a permission token. With reading enabled but no
+eligible action, `detailUnavailable: 'unavailable'` reports that limit. A detail
+result or ticket that cannot fit the host's downstream inline budget becomes a
+short fixed unavailable response, with no recursive placement/action chain.
+
+This generic admission does not prove producer identity, current-run origin,
+parent integrity, source freshness, domain correctness or claim authority. Keep
+stricter application checks when they are needed. Existing
+`ArtifactDetailOptions.admit` callbacks still return JSON; there is no ambiguous
+record-or-payload overload. A custom viewer can adapt the admitted record to its
+JSON payload. The intended single admission contract and thin JSON adapter do not
+remove or silently weaken that manual callback.
+
+The reader still loads a bounded admitted snapshot on every request, up to 1 MiB.
+`maxBytes` bounds what the helper accepts and copies, not the store's physical
+I/O or process allocation. Existing file and SQLite `head` paths can load the
+whole payload before the helper checks metadata; each adapter still owns those
+costs. This feature adds no range reads, row queries or live-source pagination. Redact/filter the
+saved snapshot before publication: visible keys and counts are information too.
+Returned strings remain source data in tool messages; admission is not a prompt
+injection defense. Reading does not satisfy a claim requirement.
+
+Runnable example: [`examples/artifacts/saved-json-reading.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/artifacts/saved-json-reading.ts).
+
 ## Open selected details of a stored proof
 
 Use `artifactDetailTool` when a model needs a small section of an already stored
@@ -305,7 +371,7 @@ The declaration's shape is the exported `ToolWants` type — `Readonly<Record<ar
 
 ### The placement threshold — oversized results become tickets automatically
 
-The object form of the option (the exported `AgentArtifactsOptions` — `{ store, placement? }`) carries the operator's dial, an `ArtifactPlacement`: `artifacts: { store, placement: { maxInlineChars: N } }`. Any tool result whose finalized text exceeds N is checked into the store as kind `tool-result/<toolName>` — the exported `placedResultKind(toolName)` composes that vocabulary, so a `wants` declaration can name it without spelling the prefix, and a tool that declares its own `resultKind` ([below](#resultkind--a-placed-result-the-wants-rail-can-spend-9700)) is minted under that instead — with label `<toolName> result` (the payload is the **exact text the model would have read**), and every channel — history, `stream.tool_end`, recorders — carries the one-shape `PlacedToolResult` substitute instead:
+The object form of the option (the exported `AgentArtifactsOptions` — `{ store, placement?, reading?, recordings? }`) carries the operator's dial, an `ArtifactPlacement`: `artifacts: { store, placement: { maxInlineChars: N } }`. Any tool result whose finalized text exceeds N is checked into the store as kind `tool-result/<toolName>` — the exported `placedResultKind(toolName)` composes that vocabulary, so a `wants` declaration can name it without spelling the prefix, and a tool that declares its own `resultKind` ([below](#resultkind--a-placed-result-the-wants-rail-can-spend-9700)) is minted under that instead — with label `<toolName> result` (the payload is the **exact text the model would have read**), and every channel — history, `stream.tool_end`, recorders — carries the one-shape `PlacedToolResult` substitute instead:
 
 ```json
 { "placed": true, "ref": "art_h7Kq…", "kind": "tool-result/get_data",

@@ -2,7 +2,7 @@
 title: Functions
 ---
 
-152 exported from `agentfootprint`.
+153 exported from `agentfootprint`.
 
 - [`absenceSignalOf`](/docs/api/functions/absenceSignalOf)
 - [`absent`](/docs/api/functions/absent)
@@ -136,6 +136,7 @@ title: Functions
 - [`semanticsForModel`](/docs/api/functions/semanticsForModel)
 - [`servedAt`](/docs/api/functions/servedAt)
 - [`servedViews`](/docs/api/functions/servedViews)
+- [`sessionArtifactAdmission`](/docs/api/functions/sessionArtifactAdmission)
 - [`slidingWindow`](/docs/api/functions/slidingWindow)
 - [`sqliteArtifacts`](/docs/api/functions/sqliteArtifacts)
 - [`stageDatasetArtifacts`](/docs/api/functions/stageDatasetArtifacts)

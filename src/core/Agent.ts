@@ -64,6 +64,10 @@ import type {
 import type { CredentialProvider } from '../identity/types.js';
 import type { ArtifactScope, ArtifactStore } from '../artifacts/types.js';
 import { assertArtifactPlacement, type ArtifactPlacement } from '../artifacts/placement.js';
+import {
+  configureArtifactReading,
+  type ConfiguredArtifactReading,
+} from '../tools/artifactReading.js';
 import { recordingPutInput } from '../artifacts/recordingArtifact.js';
 import { recordRunWhere, type RunRecorder } from '../recorders/observability/recordRun.js';
 import type { AuthorizationRequiredMode } from '../identity/consent.js';
@@ -744,6 +748,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   /** The placement threshold (9.22.0) — the operator's ref-ing dial from the
    *  object form of AgentOptions.artifacts. Only ever set beside a store. */
   private readonly artifactPlacement?: ArtifactPlacement;
+  private readonly artifactReading?: ConfiguredArtifactReading;
   /** Recordings-as-artifacts (9.26.0) — the operator's dial from the object
    *  form of AgentOptions.artifacts. Only ever set beside a store; absent
    *  means no recorder is ever attached and no run is ever recorded. */
@@ -1442,6 +1447,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // form `{ store, placement? }` — normalized HERE so every downstream
     // reader keeps seeing exactly one store and one optional dial.
     if (opts.artifacts) {
+      if (
+        'reading' in opts.artifacts &&
+        !('store' in opts.artifacts) &&
+        typeof Reflect.get(opts.artifacts, 'put') !== 'function'
+      ) {
+        throw new Error('Artifact reading requires an artifact store.');
+      }
       if ('store' in opts.artifacts) {
         // The object form. A shape with `placement` but no store cannot be
         // SPELLED in TypeScript, but plain JavaScript can hand us one — and a
@@ -1457,6 +1469,15 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         }
         assertArtifactPlacement('Agent', opts.artifacts.placement);
         this.artifactStore = opts.artifacts.store;
+        if (opts.artifacts.reading !== undefined) {
+          this.artifactReading = configureArtifactReading(
+            opts.artifacts.reading,
+            Math.min(
+              opts.artifacts.placement?.maxInlineChars ?? Infinity,
+              opts.maxToolResultChars ?? Infinity,
+            ),
+          );
+        }
         if (opts.artifacts.placement !== undefined) {
           this.artifactPlacement = opts.artifacts.placement;
         }
@@ -4815,6 +4836,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       this.injections,
       {
         hasArtifactStore: artifactStore !== undefined,
+        ...(this.artifactReading !== undefined && { artifactReading: this.artifactReading }),
         // The reserved-argument refusal (9.101.0) — only when the ledger is
         // armed may a registry tool's own `_findings` be refused.
         ...(this.findingsOptions !== undefined && { findings: true as const }),
@@ -5603,6 +5625,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // dispatch: `ctx.artifacts` is the fail-closed teacher and no artifact
       // event can fire (zero-cost-when-unused).
       ...(artifactStore && { artifactStore }),
+      ...(this.artifactReading !== undefined && { artifactReading: this.artifactReading }),
       // The placement threshold (9.22.0) — only ever set beside a store (the
       // option's own shape enforces it). Absent → results are never measured
       // against it and never placed.

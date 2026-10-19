@@ -4,7 +4,7 @@ title: AgentArtifactsOptions
 
 # Interface: AgentArtifactsOptions
 
-Defined in: [src/core/agent/types.ts:88](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L88)
+Defined in: [src/core/agent/types.ts:89](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L89)
 
 The object form of `AgentOptions.artifacts` (9.22.0): the store plus its
 operator dials. `placement` cannot be spelled without `store` — a
@@ -17,7 +17,7 @@ lies, and the shape refuses it before a runtime check has to.
 
 > `readonly` `optional` **placement?**: [`ArtifactPlacement`](/docs/api/interfaces/ArtifactPlacement)
 
-Defined in: [src/core/agent/types.ts:101](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L101)
+Defined in: [src/core/agent/types.ts:102](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L102)
 
 The placement threshold. A tool result whose finalized text exceeds
 `maxInlineChars` is checked into the store (under the tool's declared
@@ -30,11 +30,21 @@ results are never measured and never placed, exactly as before.
 
 ***
 
+### reading?
+
+> `readonly` `optional` **reading?**: [`ArtifactReadingOptions`](/docs/api/interfaces/ArtifactReadingOptions)
+
+Defined in: [src/core/agent/types.ts:104](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L104)
+
+Opt-in conversation-scoped JSON paging through artifact_detail (or the configured name).
+
+***
+
 ### recordings?
 
 > `readonly` `optional` **recordings?**: `boolean` \| [`AgentRecordingsOptions`](/docs/api/interfaces/AgentRecordingsOptions)
 
-Defined in: [src/core/agent/types.ts:139](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L139)
+Defined in: [src/core/agent/types.ts:142](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L142)
 
 Check each completed run's RECORDING into the store (9.26.0), so a screen
 can replay the turn later without the deployment inventing a place to keep
@@ -78,6 +88,6 @@ RESUMED run — which is what the recorder saw.
 
 > `readonly` **store**: [`ArtifactStore`](/docs/api/interfaces/ArtifactStore)
 
-Defined in: [src/core/agent/types.ts:90](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L90)
+Defined in: [src/core/agent/types.ts:91](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L91)
 
 The claim-check store — same seam as the bare `ArtifactStore` form.

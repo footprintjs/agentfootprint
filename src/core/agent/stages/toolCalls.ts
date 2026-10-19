@@ -94,6 +94,10 @@ import {
   type ToolArtifacts,
 } from '../../../artifacts/capability.js';
 import type { ArtifactMeta, ArtifactScope, ArtifactStore } from '../../../artifacts/types.js';
+import {
+  READING_UNAVAILABLE,
+  type ConfiguredArtifactReading,
+} from '../../../tools/artifactReading.js';
 import { resolveToolWants, wantsNeedsStoreRefusal } from '../../../artifacts/wants.js';
 import { PRESENT_TOOL_NAME, presentArtifact } from '../../../artifacts/present.js';
 import {
@@ -480,6 +484,7 @@ export interface ToolCallsHandlerDeps {
    * default — and results are never measured against it (zero-cost).
    */
   readonly placement?: ArtifactPlacement;
+  readonly artifactReading?: ConfiguredArtifactReading;
   /** Tool-args validation mode (#9). Default 'enforce': LLM-produced args
    *  are checked against the tool's `inputSchema` BEFORE dispatch; a
    *  mismatch rejects the call with a model-visible retry message.
@@ -3223,6 +3228,20 @@ export function buildToolCallsHandler(
     eligible: boolean,
   ): Promise<{ readonly result: unknown; readonly modelResult: unknown }> => {
     const placement = deps.placement;
+    const reading = deps.artifactReading;
+    if (
+      reading !== undefined &&
+      call.toolName === reading.name &&
+      lookupTool(reading.name) === reading.tool
+    ) {
+      const text =
+        typeof values.modelResult === 'string'
+          ? values.modelResult
+          : safeStringify(values.modelResult);
+      return text.length <= reading.maxChars
+        ? values
+        : { result: READING_UNAVAILABLE, modelResult: READING_UNAVAILABLE };
+    }
     if (placement === undefined || deps.artifactStore === undefined || !eligible) return values;
     const text =
       typeof values.modelResult === 'string'
@@ -3263,7 +3282,33 @@ export function buildToolCallsHandler(
       }
       return values;
     }
-    const substitute = placedToolResult(call.toolName, meta, text.length, placement.maxInlineChars);
+    const detail =
+      reading !== undefined &&
+      scope.wrapUpAsked !== true &&
+      servedTools?.current.has(reading.name) === true &&
+      lookupTool(reading.name) === reading.tool &&
+      reading.allows(meta, runFactsOf(scope)?.sessionId) &&
+      meta.mediaType === 'application/json'
+        ? { tool: reading.name, args: { ref: meta.ref, path: '' } }
+        : undefined;
+    const substitute = placedToolResult(
+      call.toolName,
+      meta,
+      text.length,
+      placement.maxInlineChars,
+      reading === undefined
+        ? undefined
+        : detail === undefined
+        ? { detailUnavailable: 'unavailable' }
+        : { detail },
+    );
+    if (
+      reading !== undefined &&
+      deps.maxToolResultChars !== undefined &&
+      safeStringify(substitute).length > deps.maxToolResultChars
+    ) {
+      return { result: READING_UNAVAILABLE, modelResult: READING_UNAVAILABLE };
+    }
     return {
       // One ticket when the two channels carry one value — the capResults
       // law. A value that differs from what the model reads ONLY by the

@@ -9,6 +9,24 @@ after the store has changed.
 
 # src/artifacts — the claim-check store
 
+## Opt-in saved JSON reading
+
+`AgentArtifactsOptions.reading` mounts the existing detail viewer through
+`tools/artifactReading`. The `tools/sessionArtifactAdmission` owner reuses the
+call's bound `ctx.artifacts` capability, requires a session, checks fresh head/get
+metadata and bounded payloads, then permits only a narrowing host callback.
+This folder's `storedJson` decodes declared JSON text once for that reader;
+placement keeps its original stored bytes and `wants` representation.
+The existing detail modules remain the only JSON pointer/navigation owner.
+Admission limits bound accepted/copied data, not physical adapter I/O or memory:
+file/SQLite metadata paths can already load payloads before the size check.
+This phase adds no range capability or process-memory guarantee.
+
+Omitted reading leaves the catalog and tickets unchanged. This helper supplies
+conversation admission, not producer/current-run/domain proof or claim authority.
+The intended single admission contract can be adapted to the manual JSON callback;
+there is no guessed payload-or-record overload or second viewer.
+
 ## Bounded JSON detail views
 
 `artifactDetailTool` lives in `tools/` at L7. It calls a trusted host's `admit`

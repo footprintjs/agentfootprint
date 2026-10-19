@@ -2,7 +2,7 @@
 title: Interfaces
 ---
 
-364 exported from `agentfootprint`.
+366 exported from `agentfootprint`.
 
 - [`AbsenceDeclaration`](/docs/api/interfaces/AbsenceDeclaration)
 - [`ActOptions`](/docs/api/interfaces/ActOptions)
@@ -35,6 +35,7 @@ title: Interfaces
 - [`ArtifactOrigin`](/docs/api/interfaces/ArtifactOrigin)
 - [`ArtifactPlacement`](/docs/api/interfaces/ArtifactPlacement)
 - [`ArtifactPutResult`](/docs/api/interfaces/ArtifactPutResult)
+- [`ArtifactReadingOptions`](/docs/api/interfaces/ArtifactReadingOptions)
 - [`ArtifactRecord`](/docs/api/interfaces/ArtifactRecord)
 - [`ArtifactRetention`](/docs/api/interfaces/ArtifactRetention)
 - [`ArtifactStore`](/docs/api/interfaces/ArtifactStore)
@@ -289,6 +290,7 @@ title: Interfaces
 - [`ServedRequestOnly`](/docs/api/interfaces/ServedRequestOnly)
 - [`ServedView`](/docs/api/interfaces/ServedView)
 - [`ServerToolEntry`](/docs/api/interfaces/ServerToolEntry)
+- [`SessionArtifactAdmissionOptions`](/docs/api/interfaces/SessionArtifactAdmissionOptions)
 - [`SkillGraphOptions`](/docs/api/interfaces/SkillGraphOptions)
 - [`SlidingWindowOptions`](/docs/api/interfaces/SlidingWindowOptions)
 - [`SlidingWindowRecord`](/docs/api/interfaces/SlidingWindowRecord)

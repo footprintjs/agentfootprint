@@ -31,6 +31,7 @@ import type { MemoryIdentity } from '../../memory/identity/types.js';
 import type { CredentialProvider } from '../../identity/types.js';
 import type { ArtifactStore } from '../../artifacts/types.js';
 import type { ArtifactPlacement } from '../../artifacts/placement.js';
+import type { ArtifactReadingOptions } from '../../tools/artifactReading.js';
 import type { AuthorizationRequiredMode } from '../../identity/consent.js';
 import type { ToolArgValidationMode } from '../../tools/toolArgsValidation.js';
 import type { ThinkingBlock } from '../../thinking/types.js';
@@ -99,6 +100,8 @@ export interface AgentArtifactsOptions {
    * results are never measured and never placed, exactly as before.
    */
   readonly placement?: ArtifactPlacement;
+  /** Opt-in conversation-scoped JSON paging through artifact_detail (or the configured name). */
+  readonly reading?: ArtifactReadingOptions;
   /**
    * Check each completed run's RECORDING into the store (9.26.0), so a screen
    * can replay the turn later without the deployment inventing a place to keep

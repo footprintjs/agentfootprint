@@ -32,6 +32,7 @@
  */
 
 import type { ArtifactMeta } from './types.js';
+import type { ArtifactDetailAction } from './detailTypes.js';
 
 /** The dial. One field today; a plain object so field number two (a
  *  per-kind override, say) can arrive additively. */
@@ -103,6 +104,10 @@ export function placedResultKind(toolName: string, declared?: string): string {
  * `role: 'tool'` message).
  */
 export interface PlacedToolResult {
+  /** Present only when the opt-in reader was offered and can read this representation. Re-admitted on use. */
+  readonly detail?: ArtifactDetailAction;
+  /** No usable reader action was available when this ticket was issued. */
+  readonly detailUnavailable?: 'unavailable';
   /** Always `true`. The field a consumer branches on. */
   readonly placed: true;
   readonly ref: string;
@@ -137,6 +142,7 @@ export function placedToolResult(
   meta: ArtifactMeta,
   sizeChars: number,
   maxInlineChars: number,
+  reading?: Pick<PlacedToolResult, 'detail' | 'detailUnavailable'>,
 ): PlacedToolResult {
   return {
     placed: true,
@@ -144,12 +150,16 @@ export function placedToolResult(
     kind: meta.kind,
     mediaType: meta.mediaType,
     bytes: meta.bytes,
+    ...reading,
     reason:
       `${toolName} returned ${sizeChars} chars, over the ${maxInlineChars}-char placement ` +
       `threshold, so the full result was stored as artifact '${meta.ref}' ` +
       `(${meta.kind}) instead of entering this conversation. Route the ref: pass the ` +
       `string '${meta.ref}' to a tool whose argument wants '${meta.kind}', or call ` +
       `present({ ref: '${meta.ref}', as: … }) to hand it to the screen. Do not retype or ` +
-      `summarize content you have not read.`,
+      `summarize content you have not read.` +
+      (reading?.detail === undefined
+        ? ''
+        : ' Use the issued detail action to read saved JSON; each page is admitted again.'),
   };
 }
