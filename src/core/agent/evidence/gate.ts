@@ -143,6 +143,15 @@ export function resolveEvidenceGate(opts: NamesAndNumbersOptions = {}): Resolved
     );
   }
 
+  const decimalRounding = opts.decimalRounding ?? false;
+  if (typeof decimalRounding !== 'boolean') {
+    throw new Error(
+      'AgentBuilder.namesAndNumbersFromEvidence: decimalRounding must be a boolean. ' +
+        'Use true to check plain decimals and accept only a single carried number rounded ' +
+        'at the answer precision; absent or false keeps exact matching.',
+    );
+  }
+
   const shapes: EvidenceShape[] = [];
   const names = new Set<string>();
   for (const shape of opts.shapes ?? []) {
@@ -193,6 +202,7 @@ export function resolveEvidenceGate(opts: NamesAndNumbersOptions = {}): Resolved
     minDigits,
     nudge,
     figures,
+    ...(decimalRounding && { decimalRounding: true }),
     ...(opts.recoveryInstruction !== undefined && {
       recoveryInstruction: opts.recoveryInstruction,
     }),
@@ -281,7 +291,11 @@ export function checkAnswer(
       // A number the model computed from numbers the results carry
       // (`figures.ts`): not read, not invented — named with its derivation.
       const how =
-        args.figures !== undefined && (candidate.shape === 'number' || candidate.shape === 'figure')
+        args.gate.decimalRounding === true && candidate.decimalSpelling !== undefined
+          ? args.figures?.explainDecimal?.(candidate.decimalSpelling)
+          : args.gate.figures &&
+            args.figures !== undefined &&
+            (candidate.shape === 'number' || candidate.shape === 'figure')
           ? args.figures.explain(candidate.value)
           : undefined;
       if (how !== undefined) {

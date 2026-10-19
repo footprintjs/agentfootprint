@@ -2,8 +2,8 @@
  * extract — which tokens in an answer are DATA, and therefore have to be
  * grounded in a tool result.
  *
- * Pattern: a pure classifier over normalized tokens (tools/normalize.ts is the only
- *          import), so it can be unit-tested on strings with no agent, no
+ * Pattern: a pure classifier over normalized tokens and the small shared
+ *          range/precision leaves, so it can be unit-tested on strings with no agent, no
  *          chart and no model.
  * Role:    core/ layer. The hard half of `namesAndNumbersFromEvidence`.
  * Emits:   N/A.
@@ -45,7 +45,15 @@
  * identifiers look like" has better information than these heuristics.
  */
 
-import { countDigits, lookupForms, normalizeToken, tokenize } from '../../../tools/normalize.js';
+import {
+  answerTokenSpellings,
+  countDigits,
+  lookupForms,
+  normalizeToken,
+  tokenize,
+} from '../../../tools/normalize.js';
+import { splitNumericRange } from './numericRanges.js';
+import { decimalsOf } from './numberPrecision.js';
 import type { ResolvedEvidenceGate, UnsupportedValue } from './types.js';
 
 /**
@@ -55,7 +63,13 @@ import type { ResolvedEvidenceGate, UnsupportedValue } from './types.js';
  * under that spelling too (`candidateForms`), and the index is never
  * widened to do it (9.110.0).
  */
-export type Candidate = UnsupportedValue & { readonly token?: string };
+export type Candidate = UnsupportedValue & {
+  readonly token?: string;
+  /** The precision the answer actually wrote, only under the decimal dial. */
+  readonly decimalSpelling?: string;
+  /** An intact range can ground or exempt both of the endpoints it spelled. */
+  readonly rangeToken?: string;
+};
 
 /** Structural punctuation an identifier is allowed to be built from. */
 const STRUCTURAL = /[:_\-/.]/;
@@ -165,8 +179,9 @@ export function classifyToken(
  */
 export function candidateForms(candidate: Candidate): readonly string[] {
   const forms = [...lookupForms(candidate.value)];
-  if (candidate.token !== undefined) {
-    for (const f of lookupForms(candidate.token)) if (!forms.includes(f)) forms.push(f);
+  for (const token of [candidate.token, candidate.rangeToken]) {
+    if (token === undefined) continue;
+    for (const form of lookupForms(token)) if (!forms.includes(form)) forms.push(form);
   }
   return forms;
 }
@@ -179,15 +194,58 @@ export function extractCandidates(
    *  it — the module stays off a plain agent's graph). */
   figures?: ReadonlySet<string>,
 ): readonly Candidate[] {
-  const seen = new Set<string>();
+  const seen = new Map<string, number>();
   const out: Candidate[] = [];
   let budget = MAX_ANSWER_TOKENS;
-  for (const token of tokenize(answer)) {
-    if (budget-- <= 0) break;
-    const candidate = classifyToken(token, gate, figures);
-    if (candidate === undefined || seen.has(candidate.value)) continue;
-    seen.add(candidate.value);
+  const spellings = answerTokenSpellings(answer);
+  const add = (spelling: string, rangeToken?: string): void => {
+    if (budget-- <= 0) return;
+    const token = normalizeToken(spelling);
+    let candidate = classifyToken(token, gate, figures);
+    // Declared shapes and exemptions win, including over precision promotion.
+    if (
+      gate.decimalRounding === true &&
+      /^[-+]?\d+\.\d+$/.test(spelling) &&
+      !isDeclaredExempt(token, gate) &&
+      !gate.shapes.some((shape) => shape.match.test(token))
+    ) {
+      candidate = { value: token, shape: 'number', decimalSpelling: spelling };
+    }
+    if (candidate === undefined) return;
+    if (rangeToken !== undefined) candidate = { ...candidate, rangeToken };
+    const prior = seen.get(candidate.value);
+    if (prior !== undefined) {
+      // One value may be written at two precisions. Check the stricter one;
+      // an earlier coarse spelling cannot launder a later overprecise claim.
+      const previous = out[prior];
+      if (
+        candidate.decimalSpelling !== undefined &&
+        decimalsOf(candidate.decimalSpelling) > decimalsOf(previous?.decimalSpelling ?? '')
+      )
+        out[prior] = candidate;
+      return;
+    }
+    seen.set(candidate.value, out.length);
     out.push(candidate);
+  };
+  for (let index = 0; index < spellings.length; index += 1) {
+    if (budget <= 0) break;
+    const spelling = spellings[index] ?? '';
+    const token = normalizeToken(spelling);
+    // Test app-owned ID declarations on the intact token before heuristics.
+    if (isDeclaredExempt(token, gate) || gate.shapes.some((shape) => shape.match.test(token))) {
+      add(spelling);
+      continue;
+    }
+    const range = splitNumericRange(spelling, spellings[index + 1]);
+    if (range !== undefined) {
+      const suffix = range.unit ?? '';
+      add(`${range.first}${suffix}`, token);
+      add(`${range.last}${suffix}`, token);
+      continue;
+    }
+    // An en dash outside our narrow grammar retains the tokenizer's old meaning.
+    for (const piece of spelling.includes('–') ? tokenize(spelling) : [spelling]) add(piece);
   }
   return out;
 }

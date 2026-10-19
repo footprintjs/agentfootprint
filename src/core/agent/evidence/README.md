@@ -47,6 +47,9 @@ looks the way it does, and it is stated again at the top of `gate.ts`.
 |---|---|
 | `types.ts` | the public vocabulary: posture, shape, options, verdict |
 | `../../../tools/normalize.ts` | one spelling per value, on BOTH sides (`41,200` ≡ `41200`). The other spellings of a date or clock time are NOT here: since time step T7 they are asked of `time/forms.ts` · `timeFormsOf` (its `said` list, by the exempt corpus only) |
+| `numericRanges.ts` | pure recognition of exactly two numeric endpoints, after app-owned identifier shapes |
+| `numberPrecision.ts` | the single precision and half-unit rounding rule used by both numeric dials |
+| `figureUnits.ts` | the one measurement-unit vocabulary, shared by figures and ranges |
 | `extract.ts` | which tokens in an answer are DATA — the conservative rule |
 | `evidenceIndex.ts` | the structural walk of tool results, and the exempt corpus; `readResult` is the ONE reading of a result |
 | `servedJson.ts` | a served result that is NOT one JSON value, read by the JSON grammar: its leading value(s) — the tool's JSON before a framework note (a step banner, an effect note, the repeated-call note), an MCP text result's several blocks — and the text after them, and the complete leaves of JSON cut short (a capped result's `head`, a tool that truncated its own output) — never the token the cut falls inside — plus, when the cut falls inside a string, that string's whole words up to its last space, read as text (the word the cut may have split is left out: `mo` may be `more`). Read whole as text, `{"id":4417}` tokenises to `:4417`: every number and boolean the tool returned read as absent, a false flag at the gate and a false `not-in-result` in the inputs layer. Text that opens with a bracket and is not JSON stays text |
@@ -174,6 +177,51 @@ reconstructed and is flagged. Every derivation is a window an invented number
 can fall through by coincidence, so the set is closed and the window is the
 answer's precision: ±0.5 for a whole number, ±0.05 for one decimal. Pinned by
 `test/core/agent/evidence/figures.test.ts`.
+
+## Plain decimal rounding (`decimalRounding: true`) and numeric ranges
+
+Plain decimals can opt in to the same precision-bounded rounding rule used by
+figures. This is a separate dial so existing exact-match applications do not
+silently become more permissive. It makes a plain decimal data even below
+`minDigits`: carried `5.203` permits `5.20` or `5.2`, but not `5.3`; carried
+`1234.56` permits `1234.6`, but not the whole-number approximation `1235`.
+The written precision is kept before normalization: `5.249` permits `5.2`
+but not `5.20`. Repeating a value at several precisions uses the strictest.
+
+Exact tool evidence is checked first. Otherwise one carried number may ground
+a decimal through `computed: [{ value, shape: 'number', derivation: 'rounded',
+from }]`. This uses the existing numeric carrier; `derived` remains the time
+lineage channel. No new unitless sums, ratios, differences or conversions are
+accepted. Whole numbers still use exact matching and `minDigits`; app-declared
+ID shapes and the default identifier rule never round. A carried source matching
+a declared ID shape is also excluded, even when its rounded spelling would
+no longer match that shape. Unsafe large answer spellings are refused for rounding. The new path keeps
+the original normalized source spelling before Number conversion and compares
+its decimal half-unit interval exactly, with no floating-point slack. Source
+spellings above 256 characters are withheld from rounding rather than clipped. The `figures` dial's pre-existing unit and
+arithmetic behavior is unchanged when this new dial is off.
+
+Ranges with exactly two plain numeric endpoints, separated by `-` or `–`, are
+split after declared identifier shapes. `0-13` and `0–13` become `0`, `13`;
+`2-9ms` or `2–9 ms` apply `ms` to both endpoints. A single trailing unit uses
+`FIGURE_UNITS` (optionally `/s`). Endpoints may be signed decimals. Dates,
+clock ranges, dotted versions and multipart IDs (`2026-10-19`, `10:00-10:10`,
+`1.2.3-4`, `1-2-3`) do not match this grammar. A custom ID shape matching
+`1-13` wins and preserves that ID intact.
+
+The intact range remains a lookup/exemption spelling for both endpoints: a
+range the person supplied stays exempt, and a tool result carrying that literal
+range can ground its endpoints without widening the evidence index.
+
+Each endpoint then follows the ordinary rules: exact evidence, `minDigits`,
+opt-in decimal rounding, and opt-in measurement figures. **Short bare
+endpoints below `minDigits` are prose and are not verified.** Thus `0-13`
+produces no checked value with the default `minDigits: 4`; set `minDigits: 1`
+when both short counts must be checked. Range recognition is an intentional
+narrow correction to identifier classification, independent of the opt-in
+rounding dial. Ordinary non-range answers keep their previous off-dial bytes.
+
+Run the zero-cost [numeric evidence example](../../../../examples/features/103-evidence-rounding-ranges.ts).
 
 ## Why `guard` is a Route branch and not a loop of its own
 

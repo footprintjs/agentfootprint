@@ -289,6 +289,11 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       count: 4,
       why: 'the posture-name error thrown at build time, and the refusal/warning sentence handed to the CALLER (it names `posture: assist` and the `shapes` option — nobody but the developer can act on it)',
     },
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: 'the decimalRounding option refusal thrown to the developer at setup; it cannot become a model message or a trusted result',
+    },
   ],
   'src/core/agent/evidence/recovery.ts': [
     {
@@ -1176,12 +1181,14 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // one additional ephemeral system string. No persistent claim is excused.
         // Artifact detail: one tool-schema description teaches navigation in
         // the current request's tools array; it is not a persistent result.
+        // Decimal rounding: one host-only invalid-option refusal in gate.ts.
+        // The persistent and unrepaired budgets are unchanged.
         files: 100,
-        total: 196,
+        total: 197,
         registry: 8,
         ephemeral: 24,
         unrepaired: 33,
-        notModelFacing: 131,
+        notModelFacing: 132,
         unrepairedEntries: 13,
       });
       // And the ledger's own total is the number of literals the scan flagged —

@@ -5,8 +5,8 @@
  * Pattern: two pure folds — over the answer's text (`figureNumbersOf`) and
  *          over the tool results (`figureBasisOf`) — and one question
  *          (`explainFigure`). Deterministic arithmetic, no model.
- * Role:    core/ layer, `namesAndNumbersFromEvidence({ figures: true })` only.
- *          Off, nothing here runs and the gate is byte-identical.
+ * Role:    core/ layer, loaded only under `figures` or `decimalRounding`.
+ *          Both off, nothing here runs and ordinary verdicts are byte-identical.
  * Emits:   N/A.
  *
  * ## The hole this closes
@@ -71,28 +71,13 @@ import { LIBRARY_NOTE_OPENING } from '../../../lib/saidByPerson.js';
 import { toolBytesOf } from '../../../lib/toolBytes.js';
 import { readResult } from './evidenceIndex.js';
 import { normalizeToken, tokenize } from '../../../tools/normalize.js';
-import type { FigureDerivation, UnsupportedValue } from './types.js';
+import type { EvidenceShape, FigureDerivation, UnsupportedValue } from './types.js';
 
 /** Units that make a number a figure. Lower-case; `/s` may follow a size. */
-export const FIGURE_UNITS: readonly string[] = [
-  '%',
-  'percent',
-  'kb',
-  'mb',
-  'gb',
-  'tb',
-  'pb',
-  'kib',
-  'mib',
-  'gib',
-  'tib',
-  'pib',
-  'iops',
-  'mbps',
-  'gbps',
-  'ms',
-  'us',
-];
+export { FIGURE_UNITS } from './figureUnits.js';
+import { FIGURE_UNITS } from './figureUnits.js';
+import { numericRangesOf } from './numericRanges.js';
+import { decimalsOf, MAX_ROUNDING_SPELLING_CHARS, roundsTo } from './numberPrecision.js';
 
 /** A number (thousands separators allowed) followed, glued or one space apart, by a unit. */
 const FIGURE_RE = new RegExp(
@@ -119,6 +104,11 @@ export function figureNumbersOf(answer: string): ReadonlySet<string> {
     const n = normalizeToken(m[1] ?? '');
     if (n !== '') out.add(n);
   }
+  for (const range of numericRangesOf(answer)) {
+    if (range.unit === undefined) continue;
+    out.add(normalizeToken(range.first));
+    out.add(normalizeToken(range.last));
+  }
   return out;
 }
 
@@ -126,6 +116,8 @@ export function figureNumbersOf(answer: string): ReadonlySet<string> {
 interface Carried {
   readonly x: number;
   readonly at: string;
+  /** New-dial metadata, read before Number conversion; absent for legacy folds. */
+  readonly roundingSource?: { readonly spelling?: string; readonly allowed: boolean };
   /** The field it sat under, when it sat under one. */
   readonly key?: string;
 }
@@ -181,7 +173,23 @@ function rowsOf(node: unknown): readonly Record<string, unknown>[] | undefined {
   return undefined;
 }
 
+/** Source spellings are bounded and checked before a lossy Number conversion. */
+function roundingSourceOf(
+  leaf: unknown,
+  shapes: readonly EvidenceShape[] | undefined,
+): Carried['roundingSource'] {
+  if (shapes === undefined) return undefined;
+  const spelling = normalizeToken(String(leaf));
+  if (spelling.length > MAX_ROUNDING_SPELLING_CHARS) return { allowed: false };
+  if (typeof leaf === 'string' && !/^[-+]?\d+(?:\.\d+)?$/.test(spelling)) return undefined;
+  return { spelling, allowed: !shapes.some((shape) => shape.match.test(spelling)) };
+}
+
 class Fold {
+  constructor(
+    private readonly deriveColumns = true,
+    private readonly roundingShapes?: readonly EvidenceShape[],
+  ) {}
   readonly carried: Carried[] = [];
   readonly derived: Derived[] = [];
   truncated = false;
@@ -204,21 +212,36 @@ class Fold {
   }
 
   walk(node: unknown, at: string, key?: string): void {
+    const roundingSource =
+      typeof node === 'string' || typeof node === 'number'
+        ? roundingSourceOf(node, this.roundingShapes)
+        : undefined;
     const x = numberOf(node);
     if (x !== undefined) {
-      this.addCarried({ x, at, ...(key !== undefined && { key }) });
+      this.addCarried({
+        x,
+        at,
+        ...(key !== undefined && { key }),
+        ...(roundingSource !== undefined && { roundingSource }),
+      });
       return;
     }
     if (typeof node === 'string') {
       // A sentence inside a JSON leaf: its numbers are carried too.
       for (const t of tokenize(node)) {
+        const tokenSource = roundingSourceOf(t, this.roundingShapes);
         const n = numberOf(t);
-        if (n !== undefined) this.addCarried({ x: n, at });
+        if (n !== undefined)
+          this.addCarried({
+            x: n,
+            at,
+            ...(tokenSource !== undefined && { roundingSource: tokenSource }),
+          });
       }
       return;
     }
     const rows = rowsOf(node);
-    if (rows !== undefined) this.columns(rows, at);
+    if (rows !== undefined && this.deriveColumns) this.columns(rows, at);
     if (Array.isArray(node)) {
       node.forEach((el, i) => this.walk(el, `${at}[${i}]`));
     } else if (isPlainObject(node)) {
@@ -316,8 +339,12 @@ class Fold {
  * `lib/toolBytes.ts` · `toolBytesOf`) into the numbers they carry and the
  * column derivations over their lists.
  */
-export function figureBasisOf(history: readonly LLMMessage[]): FigureBasis {
-  const fold = new Fold();
+export function figureBasisOf(
+  history: readonly LLMMessage[],
+  deriveColumns = true,
+  roundingShapes?: readonly EvidenceShape[],
+): FigureBasis {
+  const fold = new Fold(deriveColumns, roundingShapes);
   for (const msg of history) {
     if (msg.role !== 'tool') continue;
     const read = readResult(toolBytesOf(msg));
@@ -335,6 +362,10 @@ export function figureBasisOf(history: readonly LLMMessage[]): FigureBasis {
 export interface FigureCheck {
   /** The normalized numbers the answer writes as figures (rule 1). */
   readonly numbers: ReadonlySet<string>;
+  /** Opt-in unitless decimal rounding, using the written precision. */
+  readonly explainDecimal?: (
+    value: string,
+  ) => { readonly derivation: 'rounded'; readonly from: string } | undefined;
   /** The derivation question over the results' numbers (rule 2). */
   readonly explain: (
     value: string,
@@ -342,25 +373,70 @@ export interface FigureCheck {
 }
 
 /**
- * The gate's figures input for one judgement — the answer's figures and the
+ * The gate's numeric input for one judgement — the answer's figures and the
  * results' basis. This module loads through `import()` under the dial only
  * (`stages/route.ts` · `loadFigures`), so a plain agent's graph never carries it.
  */
-export function figureCheckOf(answer: string, history: readonly LLMMessage[]): FigureCheck {
-  const basis = figureBasisOf(history);
-  return { numbers: figureNumbersOf(answer), explain: (value) => explainFigure(value, basis) };
+export function figureCheckOf(
+  answer: string,
+  history: readonly LLMMessage[],
+  options?: {
+    readonly figures: boolean;
+    readonly decimalRounding?: boolean;
+    readonly shapes?: readonly EvidenceShape[];
+  },
+): FigureCheck {
+  const basis = figureBasisOf(
+    history,
+    options?.figures !== false,
+    options?.decimalRounding === true ? options.shapes ?? [] : undefined,
+  );
+  return {
+    numbers: options?.figures === false ? new Set() : figureNumbersOf(answer),
+    explain: (value) => explainFigure(value, basis),
+    ...(options?.decimalRounding === true && {
+      explainDecimal: (value: string) => explainRoundedDecimal(value, basis),
+    }),
+  };
 }
 
-/** Decimal places the answer wrote the value with. */
-function decimalsOf(value: string): number {
-  const dot = value.indexOf('.');
-  return dot === -1 ? 0 : value.length - dot - 1;
+/** A plain decimal may round ONE carried number, never a column derivation. */
+export function explainRoundedDecimal(
+  value: string,
+  basis: FigureBasis,
+): { readonly derivation: 'rounded'; readonly from: string } | undefined {
+  if (!/^[-+]?\d+\.\d+$/.test(value) || value.replace(/[^0-9]/g, '').length > 15) {
+    return undefined;
+  }
+  return roundedFrom(
+    value,
+    basis,
+    (source) =>
+      Math.abs(source.x) <= Number.MAX_SAFE_INTEGER && source.roundingSource?.allowed === true,
+    'bounded',
+  );
 }
 
-/** True when `x`, rounded to `decimals` places, is `f` (half-unit window, inclusive). */
-function roundsTo(x: number, f: number, decimals: number): boolean {
-  const half = 0.5 * 10 ** -decimals;
-  return Math.abs(x - f) <= half * (1 + 1e-9) + 1e-12;
+/** The one carried-number rounding rule, shared by both opt-in dials. */
+function roundedFrom(
+  value: string,
+  basis: FigureBasis,
+  sourceAllowed?: (source: Carried) => boolean,
+  precision: 'legacy' | 'bounded' = 'legacy',
+): { readonly derivation: 'rounded'; readonly from: string } | undefined {
+  const f = Number(value);
+  const d = decimalsOf(value);
+  for (const carried of basis.carried) {
+    if (sourceAllowed !== undefined && !sourceAllowed(carried)) continue;
+    const sourceSpelling = carried.roundingSource?.spelling;
+    const spellings =
+      precision === 'bounded' ? { source: sourceSpelling ?? '', answer: value } : undefined;
+    if (roundsTo(carried.x, f, d, spellings)) {
+      const original = precision === 'bounded' ? sourceSpelling : undefined;
+      return { derivation: 'rounded', from: `${original ?? shown(carried.x)} at ${carried.at}` };
+    }
+  }
+  return undefined;
 }
 
 const SCALES: readonly { readonly by: number; readonly label: string }[] = [1, 2, 3, 4, 5].flatMap(
@@ -389,9 +465,8 @@ export function explainFigure(
   const f = Number(value);
   if (!Number.isFinite(f)) return undefined;
   const d = decimalsOf(value);
-  for (const c of basis.carried) {
-    if (roundsTo(c.x, f, d)) return { derivation: 'rounded', from: `${shown(c.x)} at ${c.at}` };
-  }
+  const rounded = roundedFrom(value, basis);
+  if (rounded !== undefined) return rounded;
   for (const c of basis.carried) {
     if (Math.abs(c.x) < 1000) continue;
     for (const s of SCALES) {

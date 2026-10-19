@@ -1,0 +1,20 @@
+/** The closed measurement-unit vocabulary shared by figures and numeric ranges. */
+export const FIGURE_UNITS: readonly string[] = [
+  '%',
+  'percent',
+  'kb',
+  'mb',
+  'gb',
+  'tb',
+  'pb',
+  'kib',
+  'mib',
+  'gib',
+  'tib',
+  'pib',
+  'iops',
+  'mbps',
+  'gbps',
+  'ms',
+  'us',
+];
