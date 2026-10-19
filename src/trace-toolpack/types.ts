@@ -12,6 +12,7 @@ import type { ControlDepLookup } from 'foottrace';
 
 import type { AgentfootprintEvent } from '../events/registry.js';
 import type { InnerRunLookup } from '../core/innerRunRecords.js';
+import type { TraceCauseArtifacts, TraceCauseOptions } from './causeTypes.js';
 
 /**
  * The frozen evidence of one completed run.
@@ -42,6 +43,8 @@ import type { InnerRunLookup } from '../core/innerRunRecords.js';
  */
 export interface TraceToolpackArtifacts {
   readonly snapshot: RuntimeSnapshot;
+  /** Optional host-authorized graph for this bag; no storage locations or caller scopes come from model arguments. */
+  readonly cause?: TraceCauseArtifacts;
   readonly controlDeps?: ControlDepLookup;
   readonly narrative?: readonly string[];
   readonly events?: readonly AgentfootprintEvent[];
@@ -52,8 +55,11 @@ export interface TraceToolpackArtifacts {
  * Bounding dials. Every output is bounded BY DEFAULT — these set the
  * defaults; per-call params (`maxDepth`, `maxNodes`, `maxChars`, `maxLines`)
  * let the LLM ask for more up to hard caps the consumer cannot exceed.
+ * Cause tools are the exception: their resource controls are host-only ceilings.
  */
 export interface TraceToolpackOptions {
+  /** Host-only cause-tool ceilings, never overridable by model arguments. Snapshot-only capture cannot prove a root without engine attestation. */
+  readonly cause?: TraceCauseOptions;
   /** Value-preview length in chars (trace_node / who_wrote). Default 160. */
   readonly previewChars?: number;
   /** Default causal-slice depth for trace_slice. Default 6 (hard cap 20). */

@@ -20,11 +20,13 @@
  * memo pins at most one inner pack beyond what the snapshot already holds.
  */
 
-import type { Tool } from '../tools/tools.js';
+import type { Tool, ToolExecutionContext } from '../tools/tools.js';
 import type { TraceToolpackArtifacts } from './types.js';
 
 /** What the model asked of an inner record — the narrowest param wins. */
 export interface InnerQuestion {
+  readonly cause?: 'attention_list' | 'root_cause' | 'impact';
+  readonly nodeId?: string;
   readonly runtimeStageId?: string;
   readonly key?: string;
   readonly variable?: string;
@@ -46,6 +48,7 @@ export type CallTraceTool = (
   tools: readonly Tool[],
   name: string,
   args: Record<string, unknown>,
+  context?: ToolExecutionContext,
 ) => Promise<string>;
 
 /** Open (or reuse) the inner pack for `id`; a string is an honest refusal. */
@@ -82,18 +85,26 @@ export async function askInner(
   tools: readonly Tool[],
   question: InnerQuestion,
   call: CallTraceTool,
+  context?: ToolExecutionContext,
 ): Promise<string> {
-  const { runtimeStageId, key, variable, find } = question;
-  if (find !== undefined) return call(tools, 'find_in_trace', { query: find });
-  if (variable !== undefined) return call(tools, 'backtrack', { variable });
+  const { runtimeStageId, key, variable, find, cause, nodeId } = question;
+  if (cause !== undefined)
+    return call(
+      tools,
+      cause,
+      cause === 'attention_list' || nodeId === undefined ? {} : { nodeId },
+      context,
+    );
+  if (find !== undefined) return call(tools, 'find_in_trace', { query: find }, context);
+  if (variable !== undefined) return call(tools, 'backtrack', { variable }, context);
   if (runtimeStageId !== undefined && key !== undefined) {
-    return call(tools, 'get_value', { runtimeStageId, key });
+    return call(tools, 'get_value', { runtimeStageId, key }, context);
   }
-  if (runtimeStageId !== undefined) return call(tools, 'trace_node', { runtimeStageId });
+  if (runtimeStageId !== undefined) return call(tools, 'trace_node', { runtimeStageId }, context);
   // A key with no step asks who wrote it LAST in there — the writer, its value,
   // and the reason codes the basis twins attach.
-  if (key !== undefined) return call(tools, 'who_wrote', { key });
-  return call(tools, 'run_overview', {});
+  if (key !== undefined) return call(tools, 'who_wrote', { key }, context);
+  return call(tools, 'run_overview', {}, context);
 }
 
 /** The answer, inside its frame. */

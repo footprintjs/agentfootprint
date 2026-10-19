@@ -92,10 +92,16 @@ export function lazyTraceToolpack(
   // Retention note: the memo pins at most ONE prior snapshot (whatever a
   // trace tool last executed against) until the next call rebinds it.
   let memoSnapshot: RuntimeSnapshot | undefined;
+  let memoCause: TraceToolpackArtifacts['cause'];
   let memoTools: Tool[] | undefined;
   const realTools = (artifacts: TraceToolpackArtifacts): Tool[] => {
-    if (memoTools === undefined || memoSnapshot !== artifacts.snapshot) {
+    if (
+      memoTools === undefined ||
+      memoSnapshot !== artifacts.snapshot ||
+      memoCause !== artifacts.cause
+    ) {
       memoSnapshot = artifacts.snapshot;
+      memoCause = artifacts.cause;
       memoTools = traceToolpack(artifacts, options);
     }
     return memoTools;
@@ -103,14 +109,14 @@ export function lazyTraceToolpack(
 
   return template.map((tool) => ({
     ...tool,
-    execute: async (args: Record<string, unknown>) => {
+    execute: async (args: Record<string, unknown>, ctx) => {
       const artifacts = resolve();
       if (!artifacts) return NO_COMPLETED_RUN_MESSAGE;
       const real = realTools(artifacts);
       if (!real.some((candidate) => candidate.schema.name === tool.schema.name)) {
         return missingArtifactMessage(tool.schema.name);
       }
-      return callTraceTool(real, tool.schema.name, args);
+      return callTraceTool(real, tool.schema.name, args, ctx);
     },
   }));
 }

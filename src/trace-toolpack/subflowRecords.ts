@@ -102,6 +102,17 @@ export function innerCommitCount(
   return historyOf(results?.[mount])?.length ?? 0;
 }
 
+/** Optional metadata is copied as captured data; accessors never stand in for evidence. */
+function capturedField<T>(source: unknown, key: string): T | undefined {
+  if (source === null || typeof source !== 'object') return undefined;
+  try {
+    const field = Object.getOwnPropertyDescriptor(source, key);
+    return field && 'value' in field ? (field.value as T) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Open `mount`'s own record — or say, in the record's terms, why it cannot be.
  *
@@ -136,6 +147,16 @@ export function openSubflow(snapshot: RuntimeSnapshot, mount: string): RuntimeSn
     );
   }
   const subtree = getSubtreeSnapshot(snapshot, mount);
+  const treeContext = capturedField<unknown>(results[mount], 'treeContext');
+  const logAddress =
+    capturedField<RuntimeSnapshot['logAddress']>(subtree, 'logAddress') ??
+    capturedField<RuntimeSnapshot['logAddress']>(treeContext, 'logAddress');
+  const runId =
+    capturedField<RuntimeSnapshot['runId']>(subtree, 'runId') ??
+    capturedField<RuntimeSnapshot['runId']>(snapshot, 'runId');
+  const writeProvenance =
+    capturedField<RuntimeSnapshot['writeProvenance']>(subtree, 'writeProvenance') ??
+    capturedField<RuntimeSnapshot['writeProvenance']>(snapshot, 'writeProvenance');
   const history = (subtree?.history ?? []) as RuntimeSnapshot['commitLog'];
   return {
     commitLog: history,
@@ -145,5 +166,8 @@ export function openSubflow(snapshot: RuntimeSnapshot, mount: string): RuntimeSn
     subflowResults: results,
     // A dial propagates into every subflow, so the encoding is the run's.
     commitValues: snapshot.commitValues,
+    ...(runId !== undefined && { runId }),
+    ...(logAddress !== undefined && { logAddress }),
+    ...(writeProvenance !== undefined && { writeProvenance }),
   } as unknown as RuntimeSnapshot;
 }

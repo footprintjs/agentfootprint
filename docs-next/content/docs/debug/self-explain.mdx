@@ -25,11 +25,13 @@ That's it. Day to day nothing changes — the agent runs with its production too
 - `backtrack` — variable-first: why is `K` what it is, and (with `element`) which step produced `K[i]`
 - `inspect_tool_call` — **one tool call end to end**: the args the model *proposed*, the args it actually *ran with* (they differ when a governance rule rewrote them), the result, the outcome, the duration, and the step that ran it
 - `inspect_tool_run` — **inside** one tool call, when that tool kept its own record (see [Through the tool boundary](#through-the-tool-boundary) below)
+- `inspect_subflow` — open one subflow mount's own record
+- `attention_list` / `root_cause` / `impact` — read recorded abnormal nodes, dependency roots and downstream impact with explicit proof references and coverage gaps (see [Recorded cause and impact](#recorded-cause-and-impact))
 - `read_narrative` — the run's plain-English story, paginated
 
 So the cost model is honest: the production catalog stays clean, and the trace tools appear **exactly once**, on the iteration where the question was asked. The example prints the per-call catalog to prove it.
 
-Eleven definitions is a real bulge on the tools slot for that one iteration. The 2000-char `contextBudget.tools` default is a **signal, not a limiter** (nothing is ever truncated) — an agent that opts into `.selfExplain()` should raise it: `contextBudget: { tools: 7000 }`.
+The expanded catalog is a real bulge on the tools slot for that one iteration. The 2000-char `contextBudget.tools` default is a **signal, not a limiter** (nothing is ever truncated) — an agent that opts into `.selfExplain()` should measure its catalog and raise that budget as needed.
 
 The same is true of the bytes. The toolpack is the largest single module in the library, and since 9.94.0 it is loaded through a dynamic `import()` **on the first iteration the skill is active** — not at `build()`, not on a turn where nobody asked why, and never for an agent that did not call `.selfExplain()`. A bundler puts it in its own chunk, so a browser consumer who imports `Agent` does not ship it; Node loads it through the same `require` one microtask later. Nothing about the run changes with the load: the catalog on an idle iteration is still answered synchronously, and a cold mount and a warm one record the same events in the same order (`test/trace-toolpack/lazyMount.test.ts` pins both; `browserGraph.test.ts` fences the bundle graph).
 
@@ -143,14 +145,14 @@ Mental model: **Causal memory pulls the right *run*; `.selfExplain()` drills the
 ## Gotchas
 
 - **Needs `reactMode: 'dynamic'`** (the default) or `'dynamic-grouped'`. `'classic'` caches the tools slot on turn 1, so a mid-turn skill activation could never surface the trace tools — `.selfExplain()` **fails loud at build** rather than silently never answering. (Need it on a classic-mode agent? Run `traceDebugAgent()` as a separate session instead.)
-- **Reserved tool names.** Inline mode reserves all eleven names the pack can mount — `run_overview` / `find_context_errors` / `find_in_trace` / `trace_node` / `trace_slice` / `backtrack` / `who_wrote` / `get_value` / `inspect_tool_call` / `inspect_tool_run` / `read_narrative`; delegate mode reserves `explain_run`. The tools slot dedupes by name (first wins), so a consumer tool with one of those names would silently shadow the trace tool — `.build()` throws to stop it. The list is read from `TRACE_TOOL_NAMES` (the pack's own export) rather than retyped beside it, so it cannot fall behind the pack.
+- **Reserved tool names.** Inline mode reserves the names in `TRACE_TOOL_NAMES`, including `inspect_subflow`, `attention_list`, `root_cause` and `impact`; delegate mode reserves `explain_run`. The tools slot dedupes by name (first wins), so a consumer tool with one of those names would silently shadow the trace tool — `.build()` throws to stop it. The reservation is derived from the pack's own list.
 
 ## Without `.selfExplain()` — the toolpack and a dedicated debugger
 
 `.selfExplain()` is one of three doors over the same tools. The other two take the evidence of a completed run as a plain object — a `TraceToolpackArtifacts` bag — and work on any agent, including a `'classic'`-mode one:
 
-- `traceToolpack(artifacts, options?)` returns the raw tools. Mount them on any agent, or drive them from a script with `callTraceTool(tools, name, args)` — it validates the arguments against the tool's schema first, exactly as an Agent would, and returns the same correction string on a bad call instead of executing.
-- `traceDebugAgent({ artifacts, provider, model })` returns a ready `Agent` whose whole catalog is the toolpack and whose system prompt is the debugging method (overview → drill by id → cite evidence → respect ⚠). Options: `maxIterations` (default 8), `instruction` (appended to the method), `toolpack` (the bounding dials), `name`.
+- `traceToolpack(artifacts, options?)` returns the raw tools. Mount them on any agent, or drive them from a script with `callTraceTool(tools, name, args, context?)` — it validates the arguments against the tool's schema first, exactly as an Agent would, and returns the same correction string on a bad call instead of executing. An optional `ToolExecutionContext` retains the caller's cancellation and scoped capabilities; omitting it keeps the offline context.
+- `traceDebugAgent({ artifacts, provider, model })` returns a ready `Agent` whose whole catalog is the toolpack and whose system prompt is the debugging method (overview → drill by id → cite evidence → respect ⚠). Options: `maxIterations` (default 8), `mode` (`'recorded'` by default, with explicit `'hypothesis'` opt-in), `instruction` (appended to the method), `toolpack` (the bounding dials), `name`.
 
 ```ts
 import { recordRun, openRecording, traceToolpack, callTraceTool, traceDebugAgent } from 'agentfootprint/observe';
@@ -169,7 +171,7 @@ const debuggerAi = traceDebugAgent({ artifacts, provider: anthropic(), model: 'c
 await debuggerAi.run({ message: 'Why was loan APP-7 approved?' });
 ```
 
-The bag has one required field and four optional ones. Each optional one switches on something, and a tool whose evidence is missing says so rather than answering emptily:
+The bag has one required field and optional evidence. A tool whose evidence is missing says so rather than answering emptily:
 
 | field | what it is | what it adds |
 |---|---|---|
@@ -178,12 +180,71 @@ The bag has one required field and four optional ones. Each optional one switche
 | `narrative` | the narrative lines | the `read_narrative` tool (it is not mounted without them) |
 | `events` | the run's typed events | `inspect_tool_call` durations and outcomes, and every `find_context_errors` finding |
 | `innerRuns` | the records chart tools kept (see [Wiring it by hand](#wiring-it-by-hand)) | `inspect_tool_run` |
+| `cause` | `{ graph, nodeIds? }`, a host-authorized public Foottrace `CauseGraph` for this exact artifact scope | an explicit source for `attention_list`, `root_cause` and `impact`; `nodeIds` supplies bounded discovery references when the graph has no `roots` port |
 
 Runnable: [`examples/observability/01-trace-debug-session.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/observability/01-trace-debug-session.ts) (scripted) and [`examples/observability/07-trace-debug-agent.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/observability/07-trace-debug-agent.ts) (the dedicated debugger).
 
+## Recorded cause and impact
+
+These three tools ask the public `foottrace/cause` reader to reason over a recorded graph. No model is needed to obtain the finding. They do not replay business work, run a payment, or infer what happened inside a provider.
+
+`TraceCauseArtifacts` is the host-supplied graph and optional discovery IDs for one authorized artifact scope. `TraceCauseOperation` names the three read-only questions in the table below. The host configures query ceilings, directional allowances and the served character limit through `TraceCauseOptions` on `TraceToolpackOptions.cause`. Model-facing cause schemas accept only node IDs; they expose no resource or output-size controls.
+
+| tool | question | what to cite |
+|---|---|---|
+| `attention_list` | Which captured nodes need attention? Optional `nodeIds` restricts discovery. | Returned node IDs, attention reasons and proof references. Missing capture is unknown, not a clean bill of health. |
+| `root_cause` | What recorded dependency explains this `nodeId`? | A supported `rootCause` and its `path`, or the `alternatives` and `gaps` that prevent selecting one. |
+| `impact` | What recorded downstream nodes depend on this `nodeId`? | `nodes`, `edges`, confidence and gaps. A reachable dependency is not proof of an unrecorded real-world effect. |
+
+**Authorize before building the artifact bag.** The host checks tenant, principal, run and scope, then supplies `artifacts.cause`. A graph is a trusted executable capability, not an authorization policy. Its node IDs and proof references must be safe to serve; do not put credentials, customer payloads or private storage paths into them. The tools accept opaque node IDs, not URLs, storage credentials or arbitrary run lookups. A model choosing a node never grants access to another run.
+
+The runnable fixture below uses public `createRecordGraph`. Its synthetic records carry per-write `readKeys`, explicit reads/control/attention maps, and a host-attested completed capture. `complete: true` is an assertion the fixture author can make about this fixture. Do not derive it merely from finding no errors. For real flows, enable `writeProvenance: 'reads-prefix'` when recording and verify coverage and the end marker before attesting completeness.
+
+<CodeFile path="examples/features/101-recorded-cause-and-impact.ts" region="authorized-record" title="An authorized synthetic record, using public Foottrace APIs" />
+
+For saved records, the host can instead provide a graph from public `createStoredRecordGraph(host)`. That host loads only authorized scopes, honors the supplied abort signal and returns capture gaps honestly. Storage and service resolution stay in the host adapter. The tools do not invent a second storage reader or dependency walker.
+
+**The normal snapshot fallback cannot return a supported `rootCause` today.** When `artifacts.cause` is absent, the tools can inspect available snapshot evidence, but the snapshot has no engine-written capture/end attestation. The fallback therefore always projects `complete: false` and reports `not-collected`. This also applies to a fully tracked run that returned normally: finishing cleanly does not attest that every required read, control dependency and attention channel was captured. An absent attention mark does not establish that a step was healthy, or even reached. Older step-level provenance may also be conservative.
+
+To obtain a supported recorded root now, supply an authorized host `CauseGraph` through `artifacts.cause`, backed by evidence whose capture coverage and completion the host can actually assure. A trusted complete record can be served through public `createRecordGraph` or `createStoredRecordGraph`; setting a completeness flag from a successful return alone is not sufficient. Even with that assurance, ties, query limits or other backward evidence gaps can still prevent a unique root. Unrecorded service internals and unreached branches remain outside the finding.
+
+### Read one question, keep ambiguity
+
+The example checks a unique root and its impact, then checks two marked ancestors tied as alternatives and a record missing its completion marker. The latter cases must not assert a unique root:
+
+<CodeFile path="examples/features/101-recorded-cause-and-impact.ts" region="recorded-questions" title="Read findings directly; no model required" />
+
+Read the result fields separately. Missing backward evidence can prevent a supported root. A gap confined to forward impact can leave an established recorded root intact while limiting what is known about its effects; report both facts rather than discarding the root or calling the impact complete.
+
+Cause IDs are opaque, graph-scoped references. They are not the `runtimeStageId` accepted by `trace_node`. To descend, first call `inspect_tool_run({ toolCallId, cause: 'attention_list' })` or `inspect_subflow({ mount, cause: 'attention_list' })`; then send that child's returned ID back through the same entry point with `cause: 'root_cause'` or `'impact'` and `nodeId`. A child uses its own captured record, and does not inherit the parent's graph capability. Existing inner overview, key and variable questions keep their behavior when `cause` is omitted.
+
+### Keep the query bounded
+
+The host sets total `maxNodes`, `maxDepth`, `maxEdges`, `maxCalls`, `timeoutMs` and `maxChars` through `TraceToolpackOptions.cause`, with optional `backward` and `impact` work allowances. These are host-only settings. `attention_list` accepts optional `nodeIds`; `root_cause` and `impact` require `nodeId`. Model-supplied budget, deadline, directional or output-limit arguments are rejected by the schemas, so a model cannot override the host's ceiling. Directional allowances restrict the one enclosing query ceiling; they do not grant extra work or another deadline.
+
+By default the AgentFootprint wrapper limits backward node, edge and call work to approximately 80% of the total, rounded down with a minimum of one; depth is unchanged. Forward impact can spend what remains. This leaves capacity rather than promising a complete answer: a tiny budget may still return a named limit gap. Foottrace's own default behavior is unchanged.
+
+Each invocation has one query deadline, including loading the cause reader, and honors a caller signal through lazy, inner and delegated calls. If the host omits configuration, limits are 25 nodes, depth 6, 100 edges, 100 calls, one second and 8,000 JSON characters. Host configuration remains bounded by library ceilings of 100 nodes, depth 20, 1,000 edges, 1,000 calls, five seconds and 16,000 characters. If a result exceeds its character allowance, the tool returns a fixed `truncated` gap and withholds the finding; it does not cut a proof in half and leave a seemingly supported root. Failures use fixed gap wording rather than forwarding a host exception.
+
+The legacy snapshot projection also refuses more than 4,096 commits or stages with a `truncated` gap. This local size refusal is distinct from evidence that was not collected.
+
+The public cause entry point supports both ESM and CommonJS. No import bridge, `eval` or private distribution path is needed. Keep one module format consistently where possible, and compare public errors by their code rather than relying on `instanceof` across formats.
+
+### Let a model explain the finding
+
+`traceDebugAgent` can read the same tools in a separate session. This example's scripted `mock` asks three real tools and composes its summary from their actual node and proof IDs. It makes no paid model calls:
+
+<CodeFile path="examples/features/101-recorded-cause-and-impact.ts" region="mock-summary" title="A mock debugger cites returned proof" />
+
+The debugger's `mode` defaults to `'recorded'`: its prompt asks for findings supported by the returned fields, citations and relevant gaps. A host may explicitly select `mode: 'hypothesis'` to invite separately labelled hypotheses. That changes the prompt, not the evidence: the tools always return recorded findings, and a hypothesis does not become a validated cause.
+
+The deterministic guarantee belongs to the returned tool findings. Arbitrary model prose is not automatically semantically validated: a model could cite a real ID while making the wrong connection. When delivery must enforce your domain's claim rules, mount `traceToolpack(...)` on an Agent builder and attach the existing [host-authored answer validation](doc:output-schema). The mock's final assertion is a demo check, not a general prose validator. A prompt alone does not enforce semantic correctness. The tools do not generate hypotheses or silently replace unknown evidence with a guess.
+
+Run the complete example with `npm run example -- examples/features/101-recorded-cause-and-impact.ts`.
+
 ## The tools, one by one
 
-Every step id is a `runtimeStageId` — `stageId#executionIndex`, for example `normalize#1`. The `#index` counts across the whole run, not per stage. It is the one key that links the commit log, the execution tree and the events, and every tool that takes a step accepts it.
+Step-oriented tools use a `runtimeStageId` — `stageId#executionIndex`, for example `normalize#1`. The `#index` counts across the whole run, not per stage. It links the commit log, execution tree and events. The cause tools instead use the opaque graph-scoped `nodeId` returned by their evidence reader.
 
 | tool | parameters | answers |
 |---|---|---|
@@ -196,7 +257,10 @@ Every step id is a `runtimeStageId` — `stageId#executionIndex`, for example `n
 | `who_wrote` | `key`, `beforeStageId?` | Which step last wrote K (optionally, strictly before step Y)? |
 | `get_value` | `runtimeStageId`, `key`, `maxChars?` (default 2000, cap 8000) | The full value of K as of step X. It works on delta commit logs. |
 | `inspect_tool_call` | `toolCallId` | One tool call, end to end. |
-| `inspect_tool_run` | `toolCallId`, `find?`, `variable?`, `runtimeStageId?`, `key?` | Inside one tool call, when the tool kept its own record. |
+| `inspect_tool_run` | `toolCallId`, `find?`, `variable?`, `runtimeStageId?`, `key?`, `cause?`, `nodeId?` | Inside one tool call, when the tool kept its own record. |
+| `inspect_subflow` | `mount`, `find?`, `variable?`, `runtimeStageId?`, `key?`, `cause?`, `nodeId?` | Inside one subflow mount's own record. |
+| `attention_list` | `nodeIds?` | Captured abnormal nodes and their evidence; gaps preserve unknown coverage. Query limits are host-only. |
+| `root_cause` / `impact` | `nodeId` | A public recorded-cause query within host-only ceilings, projected as root evidence or downstream impact. |
 | `read_narrative` | `offset?`, `maxLines?` (default 40, cap 200) | The run's story, one page at a time. |
 
 The defaults come from `TraceToolpackOptions` (`previewChars`, `sliceMaxDepth`, `sliceMaxNodes`, `valueMaxChars`), which you pass as the second argument to `traceToolpack` or as `toolpack` on `traceDebugAgent` and `.selfExplain()`. The caps are `TOOLPACK_HARD_CAPS`, and no argument can go past them.
@@ -245,7 +309,7 @@ For a tool that reached into someone else's system, the answer ends at the tool 
 
 ## The contracts
 
-- **Bounded by default.** Previews are capped, slices have depth and node budgets, and values have character budgets. The model can raise a budget per call, but only up to `TOOLPACK_HARD_CAPS`. A value cut short says so: `⚠ truncated: served N of M chars`.
+- **Bounded by default.** Previews are capped, slices have depth and node budgets, and values have character budgets. Legacy slice/value tools let the model raise a per-call budget up to `TOOLPACK_HARD_CAPS`; cause-query work, deadlines and output limits are host-only. A value cut short says so: `⚠ truncated: served N of M chars`.
 - **Honest, never silent.** A truncated slice is marked, and so is a step that consumed inputs the commit log cannot see (run args, env, untracked reads). A missing `controlDeps` lookup, missing read tracking and values that never enter the commit log (pre-run state, values carried in closures) are named, not left out. `who_wrote` on a key with no tracked write says the value may have come from one of those places. It does not say "nothing wrote it".
 - **Redaction-respecting.** footprintjs scrubs the commit log at commit time. The tools pass the placeholders through as they are, flag the key `(redacted by policy)`, and never reconstruct around a redaction.
 - **Strict schemas.** On a small run (48 steps or fewer), step-id parameters carry an `enum` of every real step id, so a made-up id is rejected before the tool runs and the model corrects itself. Key parameters have **no** enum on purpose: a question about a key outside the commit log has an honest answer ("args, env and pre-run values never enter the commit log"), not a validation error. A bad id that gets through returns a correction naming the real steps.

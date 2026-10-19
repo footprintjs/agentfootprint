@@ -125,14 +125,21 @@ describe('lazyTraceToolpack — late-bound artifacts', () => {
       'inspect_tool_call',
       'inspect_tool_run',
       'inspect_subflow',
+      'attention_list',
+      'root_cause',
+      'impact',
       'read_narrative',
     ]);
     for (const tool of tools) {
       // minimal valid args per tool so validation passes and execute runs
       const args =
-        tool.schema.name === 'run_overview' ||
-        tool.schema.name === 'read_narrative' ||
-        tool.schema.name === 'find_context_errors'
+        tool.schema.name === 'attention_list'
+          ? {}
+          : tool.schema.name === 'root_cause' || tool.schema.name === 'impact'
+          ? { nodeId: 'node:example' }
+          : tool.schema.name === 'run_overview' ||
+            tool.schema.name === 'read_narrative' ||
+            tool.schema.name === 'find_context_errors'
           ? {}
           : tool.schema.name === 'who_wrote'
           ? { key: 'x' }
@@ -344,7 +351,7 @@ describe('.selfExplain() — inline mode', () => {
     // 11 tools; the count is pinned deliberately. Adding one to the pack
     // without adding it here fails HERE, which is the reminder that a new
     // toolpack tool also needs a CHANGELOG line and a CLAUDE.md update.
-    expect(TRACE_TOOL_NAMES).toHaveLength(12);
+    expect(TRACE_TOOL_NAMES).toHaveLength(15);
     for (const reserved of TRACE_TOOL_NAMES) {
       const shadow = defineTool<{ x: string }, string>({
         name: reserved,
@@ -614,6 +621,28 @@ describe('traceDebugAgent — the dedicated debugger', () => {
     }).run({ message: 'hi' });
     expect(sysSeen).toContain('run_overview first');
     expect(sysSeen).toContain('DOMAIN-HINT-42');
+    expect(sysSeen).toContain('By default explain recorded findings only');
+    expect(sysSeen).not.toContain('HYPOTHESIS MODE: the host explicitly allows');
+  });
+
+  it('requires explicit host opt-in for the labelled hypothesis prompt', async () => {
+    const artifacts = await completedRunArtifacts();
+    let sysSeen = '';
+    const provider = mock({
+      chunkDelayMs: 0,
+      respond: (req: ProviderReq) => {
+        sysSeen = req.systemPrompt ?? '';
+        return 'ok';
+      },
+    });
+    await traceDebugAgent({ artifacts, provider, model: 'mock-1', mode: 'hypothesis' }).run({
+      message: 'hi',
+    });
+    expect(sysSeen).toContain('HYPOTHESIS MODE: the host explicitly allows');
+    expect(sysSeen).toContain('never present it as a recorded cause');
+    expect(() =>
+      traceDebugAgent({ artifacts, provider, model: 'mock-1', mode: 'automatic' as never }),
+    ).toThrow('invalid explanation mode');
   });
 });
 

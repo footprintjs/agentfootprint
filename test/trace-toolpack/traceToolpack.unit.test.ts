@@ -151,7 +151,7 @@ function manyStageArtifacts(count: number): TraceToolpackArtifacts {
 // ─── traceToolpack factory ─────────────────────────────────────────────────
 
 describe('traceToolpack — factory', () => {
-  it('returns the 11 core tools, plus read_narrative only when narrative is provided', () => {
+  it('returns the 14 core tools, plus read_narrative only when narrative is provided', () => {
     const withNarrative = traceToolpack(fixture.artifacts);
     expect(withNarrative.map((t) => t.schema.name)).toEqual([
       'run_overview',
@@ -165,11 +165,14 @@ describe('traceToolpack — factory', () => {
       'inspect_tool_call',
       'inspect_tool_run',
       'inspect_subflow',
+      'attention_list',
+      'root_cause',
+      'impact',
       'read_narrative',
     ]);
     const bare = traceToolpack(fixture.artifactsBare);
     expect(bare.map((t) => t.schema.name)).not.toContain('read_narrative');
-    expect(bare).toHaveLength(11);
+    expect(bare).toHaveLength(14);
     // `inspect_tool_run` mounts UNCONDITIONALLY, like `inspect_tool_call`:
     // whether a tool kept a record is a per-run fact, and a tool that
     // disappears when the answer is "none" cannot say which switch turns

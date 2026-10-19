@@ -20,7 +20,8 @@ const misplaced = (text: string, fileName = 'input.ts'): string[] =>
 
 describe('canonical record ownership', () => {
   it('derives both values and types from every published Foottrace door', () => {
-    expect(entries).toHaveLength(3);
+    // The dual-format cause door joins root/read/write; ownership still comes from the manifest.
+    expect(entries).toHaveLength(4);
     for (const name of [
       'CommitValuesMode',
       'ControlDepLookup',
@@ -29,6 +30,8 @@ describe('canonical record ownership', () => {
       'SharedMemory',
       'setNestedValue',
       'pathSegments',
+      'CauseGraph',
+      'TraversalLimits',
     ]) {
       expect(recordNames.has(name), name).toBe(true);
     }

@@ -22,7 +22,11 @@
 // class from the host registers the `.selfExplain()` port there too.
 import { Agent } from './selfExplainHost.js';
 import type { AgentOptions } from '../core/agent/types.js';
-import { TRACE_DEBUG_METHODOLOGY } from './debugPrompt.js';
+import {
+  TRACE_DEBUG_METHODOLOGY,
+  CAUSE_FINDING_METHODOLOGY,
+  TRACE_HYPOTHESIS_MODE,
+} from './debugPrompt.js';
 import { traceToolpack } from './traceToolpack.js';
 import type { TraceToolpackArtifacts, TraceToolpackOptions } from './types.js';
 
@@ -34,6 +38,8 @@ export interface TraceDebugAgentOptions {
   readonly model: string;
   /** ReAct budget for one debugging question. Default 8. */
   readonly maxIterations?: number;
+  /** Default recorded findings only. Hypothesis mode permits labelled suggestions, never new tool facts. Prose still needs host answerValidation for semantic enforcement. */
+  readonly mode?: 'recorded' | 'hypothesis';
   /** Appended to the methodology system prompt (domain hints, tone). */
   readonly instruction?: string;
   /** Bounding dials forwarded to the toolpack. */
@@ -48,8 +54,15 @@ export interface TraceDebugAgentOptions {
  * answers from the recorded evidence, citing runtimeStageIds.
  */
 export function traceDebugAgent(options: TraceDebugAgentOptions): Agent {
+  if (options.mode !== undefined && options.mode !== 'recorded' && options.mode !== 'hypothesis') {
+    throw new TypeError('traceDebugAgent: invalid explanation mode');
+  }
   const system =
-    TRACE_DEBUG_METHODOLOGY + (options.instruction ? `\n\n${options.instruction}` : '');
+    TRACE_DEBUG_METHODOLOGY +
+    '\n\n' +
+    CAUSE_FINDING_METHODOLOGY +
+    (options.mode === 'hypothesis' ? '\n\n' + TRACE_HYPOTHESIS_MODE : '') +
+    (options.instruction ? `\n\n${options.instruction}` : '');
   return Agent.create({
     provider: options.provider,
     model: options.model,

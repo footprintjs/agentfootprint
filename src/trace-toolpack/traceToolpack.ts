@@ -63,9 +63,10 @@ import {
   renderPreview,
   safeStringify,
 } from './bounded.js';
-import { askInner, framed, innerPackSlot } from './innerDescent.js';
+import { askInner, framed, innerPackSlot, type InnerQuestion } from './innerDescent.js';
 import type { InnerRunRecord } from '../core/innerRunRecords.js';
 import { openRecording } from './openRecording.js';
+import { buildCauseTools } from './causeTools.js';
 import {
   homeMountOf,
   innerCommitCount,
@@ -484,6 +485,7 @@ export function traceToolpack(
     buildInspectToolCall(artifacts, calls),
     buildInspectToolRun(artifacts, calls, options),
     buildInspectSubflow(artifacts, index, options),
+    ...buildCauseTools(artifacts, index.nodes, options?.cause),
   ];
   if (artifacts.narrative !== undefined) {
     tools.push(buildReadNarrative(artifacts.narrative));
@@ -2697,6 +2699,8 @@ function buildInspectToolRun(
       key?: string;
       variable?: string;
       find?: string;
+      cause?: InnerQuestion['cause'];
+      nodeId?: string;
     },
     string
   >({
@@ -2740,11 +2744,20 @@ function buildInspectToolRun(
           type: 'string',
           description: 'Optional: free text to locate inside the inner run (returns inner ids).',
         },
+        cause: {
+          type: 'string',
+          enum: ['attention_list', 'root_cause', 'impact'],
+          description: 'Optional: ask a bounded cause tool inside this retained run.',
+        },
+        nodeId: {
+          type: 'string',
+          description: 'An opaque node id returned by attention_list inside this retained run.',
+        },
       },
       required: ['toolCallId'],
       additionalProperties: false,
     },
-    execute: async ({ toolCallId, runtimeStageId, key, variable, find }) => {
+    execute: async ({ toolCallId, runtimeStageId, key, variable, find, cause, nodeId }, ctx) => {
       const lookup = artifacts.innerRuns;
       if (lookup === undefined) return noInnerRecordsMessage(toolCallId);
 
@@ -2754,7 +2767,12 @@ function buildInspectToolRun(
       const inner = slot(record.toolCallId, () => openRecord(record));
       if (typeof inner === 'string') return inner;
 
-      const body = await askInner(inner, { runtimeStageId, key, variable, find }, callTraceTool);
+      const body = await askInner(
+        inner,
+        { runtimeStageId, key, variable, find, cause, nodeId },
+        callTraceTool,
+        ctx,
+      );
       return framed(
         {
           header:
@@ -2831,7 +2849,15 @@ function buildInspectSubflow(
   };
 
   return defineTool<
-    { mount: string; runtimeStageId?: string; key?: string; variable?: string; find?: string },
+    {
+      mount: string;
+      runtimeStageId?: string;
+      key?: string;
+      variable?: string;
+      find?: string;
+      cause?: InnerQuestion['cause'];
+      nodeId?: string;
+    },
     string
   >({
     name: 'inspect_subflow',
@@ -2847,12 +2873,21 @@ function buildInspectSubflow(
         key: { type: 'string', description: 'Optional: an inner state key.' },
         variable: { type: 'string', description: 'Optional: an inner state key to explain.' },
         find: { type: 'string', description: 'Optional: free text to locate inside.' },
+        cause: {
+          type: 'string',
+          enum: ['attention_list', 'root_cause', 'impact'],
+          description: 'Optional: ask a bounded cause tool inside this subflow.',
+        },
+        nodeId: {
+          type: 'string',
+          description: 'An opaque node id returned by attention_list inside this subflow.',
+        },
       },
       required: ['mount'],
       additionalProperties: false,
     },
-    execute: async ({ mount, runtimeStageId, key, variable, find }) => {
-      const question = { runtimeStageId, key, variable, find };
+    execute: async ({ mount, runtimeStageId, key, variable, find, cause, nodeId }, ctx) => {
+      const question = { runtimeStageId, key, variable, find, cause, nodeId };
       const results = index.subflowResults;
       const isMount = index.nodes.get(mount)?.subflowId !== undefined;
 
@@ -2863,7 +2898,7 @@ function buildInspectSubflow(
           const parent = chain[0] as string;
           const pack = slot(parent, () => openSubflowArtifacts(artifacts, parent));
           if (typeof pack === 'string') return pack;
-          return callTraceTool(pack, 'inspect_subflow', { mount, ...definedOf(question) });
+          return callTraceTool(pack, 'inspect_subflow', { mount, ...definedOf(question) }, ctx);
         }
       }
       if (!isMount) return notAMount(mount);
@@ -2883,7 +2918,7 @@ function buildInspectSubflow(
       const inner = slot(mount, () => openSubflowArtifacts(artifacts, mount));
       if (typeof inner === 'string') return inner;
 
-      const body = await askInner(inner, question, callTraceTool);
+      const body = await askInner(inner, question, callTraceTool, ctx);
       const name = index.nodes.get(mount)?.name;
       const parent = index.homeMountOf(mount);
       const commits = innerCommitCount(index.subflowResults, mount);
@@ -3107,6 +3142,7 @@ export async function callTraceTool(
   tools: readonly Tool[],
   name: string,
   args: Record<string, unknown> = {},
+  context: ToolExecutionContext = OFFLINE_CONTEXT,
 ): Promise<string> {
   const tool = tools.find((candidate) => candidate.schema.name === name);
   if (!tool) {
@@ -3115,5 +3151,5 @@ export async function callTraceTool(
   }
   const verdict = validateToolArgs(args, tool.schema.inputSchema);
   if (!verdict.ok) return formatToolArgIssues(name, verdict.issues);
-  return String(await tool.execute(args, OFFLINE_CONTEXT));
+  return String(await tool.execute(args, context));
 }
