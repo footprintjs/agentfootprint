@@ -1,8 +1,11 @@
 # Saved data references and bounded paging
 
-**Status: draft for design review, 2026-10-19.** This note proposes library contracts;
-it implements nothing. It does not change Neo, dependencies, releases, storage policy or
-public exports. Implementation starts only after the owner approves this design.
+**Status: approved in principle, 2026-10-19. Phase 1 is approved for implementation.**
+This note proposes library contracts and implements nothing. It does not change Neo,
+dependencies, releases, deployed storage policy or public exports. Only sections 1–2
+are approved for a separate implementation PR now. The later sections record direction
+and policy decisions; each later phase needs a short focused design, a real need and
+fresh owner approval before code.
 
 ## Decision in one paragraph
 
@@ -11,9 +14,10 @@ model, generated code and a screen request bounded views of that same saved snap
 Check the current caller's permission on every request, including continuation pages.
 Reuse the artifact store, retention planner, JSON detail viewer and hosting scope owner.
 Add typed table views above the store, rather than a query language inside it. Make
-oversized cause retention an explicit host choice, default off. Defer a generic read
-lease: today's adapters cannot make its proposed guarantee. Coordinate exact read
-provenance with Foottrace before adding an export mapping.
+oversized cause retention a per-app host choice, default off, in the conversation's own
+store and scope until session end, capped at 24 hours and 1 MiB. Accept deferral of a
+generic read lease: today's adapters cannot make its proposed guarantee. Coordinate
+exact read provenance with Foottrace after footPrint #113 before adding an export mapping.
 
 This is a library for different applications and storage backends. Neo's proof viewer
 is one field example of domain admission composed with the shared viewer.
@@ -181,6 +185,10 @@ foreign refs, redaction and action/output bounds. Test the three ceiling precede
 and that the detail response cannot itself be placed into an endless ticket chain:
 reader output must fit both its fixed bound and the host's downstream inline budget,
 or return a short fixed refusal without another detail action.
+The neo #18-style regression is a **required phase 1 test**: pass an instruction-like
+source label through the actual provider-port request boundary and prove it remains
+tool data, without becoming or changing system instructions. A source-only assertion
+or a future test plan does not satisfy this gate.
 
 This does not page arbitrary oversized text, recordings or every binary media type.
 It does not raise the JSON viewer ceiling or silently enable tools in existing apps.
@@ -236,6 +244,11 @@ door; no guessed union of record and payload is added to it. The auto-mounted pa
 composes the helper and decoder internally. Apps with custom domain proofs can opt
 into the helper before their own checks, or keep their existing stricter callback.
 The library never substitutes the generic helper for an app's proof-chain checks.
+The intended end state is one admitted-record contract, with the JSON-returning form
+as a thin documented adapter over that contract, rather than two permanent admission
+doors. Phase 1 keeps the existing manual callback contract intact; a later convergence
+change must be explicitly reviewed, naming any breaking API change instead of adding
+an indefinite compatibility shim.
 
 For screens and host routes, reuse `standingAgent.artifactsForRequest` and its existing
 verified session binding, revocation lifetime and operation budget. Do not export a
@@ -360,8 +373,9 @@ are unique and schema-declared, no coercions or locale parsing; numeric comparis
 accept finite numbers, string equality is exact, `ne` on null is false and null tests
 are explicit. Missing declared cells or wrong cell types invalidate the saved row view;
 they are not silently converted to null or skipped. Sort strings by one specified
-code-unit order, booleans false before
-true, numbers numerically; nulls last in both directions. Break ties by saved visible
+code-unit order, booleans false before true, numbers numerically; nulls last in both
+directions. Code-unit ordering is deterministic, not human or locale collation; screens
+must not describe it as alphabetical ordering. Break ties by saved visible
 row ordinal. Without sorting, use saved ordinal order. Offset counts rows **after**
 the complete filter/sort. `total` is the exact count of the authorized matched view,
 `shown` equals returned rows, `complete` means no later matched rows, and `nextOffset`
@@ -439,11 +453,16 @@ to mint detail: that can produce different evidence. Retain the **authorized/red
 answer, with the same graph scope and caveats as the short answer.
 Retain only that already-computed finding/gaps/interpretation object; do not capture
 the graph, raw record, samples or a second cause envelope.
+The owner adopted this later-phase policy: use the **same artifact store and scope as
+the conversation**, end retention with that session, cap lifetime at **24 hours from
+mint**, and cap the retained payload at the viewer's **1 MiB** input ceiling. Retention
+stays **off by default and enabled per app**. This policy decision does not authorize
+phase 3 implementation now.
 
 ```ts
 interface CauseRetentionPolicy {
-  readonly ttlMs: number;
-  readonly maxBytes: number;
+  readonly ttlMs: number; // host-resolved remaining session lifetime, at most 24 hours
+  readonly maxBytes: number; // positive safe integer, at most 1 MiB
 }
 interface RetainedCause {
   readonly ref: ArtifactRef;
@@ -471,9 +490,11 @@ allowlist entry, `application/json`, digest requested at mint. Source artifact r
 parents only when actually known and resolvable in that scope; graph node IDs are not
 silently treated as artifact parents.
 
-Require finite positive TTL and byte budget when enabled. The store's policy can make
-expiry earlier, and source policy can cap it further; never mint beyond any applicable
-limit. No global library TTL is selected in this design. Dependent manifests/chunks
+Require finite positive TTL and byte budget within the adopted caps when enabled.
+Expiry is the earlier of the session's end and 24 hours from mint; store/source policy
+can make it earlier. Reads never extend it. The later focused design must specify the
+known-session-end and early-close cleanup contract before enabling retention; an unknown
+session lifetime is not permission to retain indefinitely. Dependent manifests/chunks
 cannot outlive that authorization/lifetime policy. Eviction, storage failure, no eligible
 viewer, unsupported size or timeout yields the existing safe gap, with a fixed unavailable
 retention status, no unusable action and no raw exception. Do not fall back to showing
@@ -492,14 +513,15 @@ Test off means zero writes and byte-identical old output. When on, assert one gr
 computation, exact retained answer, redacted content, origin, kind, digest, clamped TTL,
 viewer admission on every page and no authority gain. Test quota eviction during mint,
 missing parents, late completion, unavailable store, oversized serialization and a link
-expiring between pages. Foreign refs must give the ordinary missing response, without
+expiring between pages. Test the same conversation store/scope, early session end, the
+24-hour cap and the 1 MiB cap. Foreign refs must give the ordinary missing response, without
 counts or retention details. Test compact output at minimum host limits.
 
 No always-on archive, automatic quota increase, permanent retention or recovery of
 already discarded historic answers is proposed. Apps opt in through existing cause
-options; old answers and gate behavior stay unchanged. **Owner decision:** how long may
-an oversized answer be held, under which approved storage policy and size budget?
-Keep implementation disabled until those settings are explicitly supplied.
+options; old answers and gate behavior stay unchanged. **Adopted owner decision:**
+retention follows the session/24-hour/1 MiB policy above. Keep implementation disabled
+until the later focused design and app-specific configuration are approved.
 
 ## 5. Optional bounded range reads and paged screens
 
@@ -682,9 +704,9 @@ data. A matching digest precondition never sets integrity to verified.
 No persistent or cross-run verification cache is introduced, so no migration is required.
 
 This deliberately does not speed up Neo's chain checks or promise data survival after
-deletion. **Owner decision:** accept deferral, or identify one backend and a precise
-deletion/expiry contract for a separately reviewed optional capability. A cross-adapter
-promise cannot be approved from synthetic behavior alone.
+deletion. **Adopted owner decision: defer the generic lease.** Reopen it only for a named
+backend and a precise, provable generation and deletion/expiry contract in a separately
+reviewed design. A cross-adapter promise cannot be approved from synthetic behavior alone.
 
 ## 7. Record exact artifact use for Foottrace provenance
 
@@ -781,6 +803,9 @@ not an available public plugin seam. `admitProvRecord` does not consume artifact
 events, and ordinary `mapReads` deliberately withholds version-specific `prov:used`.
 Section 7 therefore needs coordinated Foottrace admission/mapping work; agentfootprint
 cannot achieve it by attaching a callback to a public translator today.
+This is approved direction only. Start its focused design jointly with Foottrace after
+[footPrint #113](https://github.com/footprintjs/footPrint/issues/113), which addresses
+exact read versions; it is not part of the phase 1 implementation approval.
 
 ### Proof, exclusions and migration
 
@@ -807,28 +832,37 @@ step? Resolve those before implementation.
 
 ## Review gates and implementation order
 
-This draft asks for design approval only. No phase starts automatically when it merges.
+The owner approved the design in principle and **only phase 1 for implementation now**.
+Merging this note does not approve code for the later phases. Their sketches are
+direction, and each needs a short focused design and owner approval when a real need arrives.
 
 1. **Placed JSON and conversation admission (sections 1–2).** Preserve old bytes and
    opt-in behavior; prove every-page isolation, bounded parse, usable ticket actions and
-   unchanged defaults. Do not promise large-object random access yet.
-2. **Typed row pages (section 3).** Agree schema, comparator/null semantics and budgets;
+   unchanged defaults. The instruction-like-label provider-boundary regression is
+   required in this phase. Do not promise large-object random access yet.
+2. **Typed row pages (section 3), direction only.** When a real table need exists, first
+   write the focused design; the first adopter's dataset panel is a likely need.
+   Agree schema, comparator/null semantics and budgets;
    prove exact totals or explicit gaps. Add runner page access only where its host can
    support per-page admission; keep whole-file analysis explicit.
-3. **Optional retained cause answers (section 4).** Owner supplies approved storage,
-   lifetime and size policy. Keep off by default and preserve all uncertainty.
-4. **Storage/screen pages and consistency decision (sections 5–6).** Prove genuine
+3. **Optional retained cause answers (section 4), policy adopted, implementation deferred.**
+   A short focused design must apply the conversation/session/24-hour/1 MiB policy
+   before code. Keep off by default per app and preserve all uncertainty.
+4. **Storage/screen pages and consistency decision (sections 5–6), direction only.**
+   Measure real artifact sizes first: the largest known first-adopter proofs are at
+   most 512 KiB, below the 1 MiB viewer limit. Then write the focused design. Prove genuine
    adapter bounds and saved indexes before advertising large paged rendering. Initial
    recommendation is no general read lease; every page remains freshly admitted.
-5. **Exact read provenance (section 7), with Foottrace.** Approve the recorder/translator
-   seam and privacy rules together. No invented PROV terms or inferred authority.
+5. **Exact read provenance (section 7), direction only, with Foottrace after footPrint #113.**
+   Write the focused design and approve the recorder/translator seam and privacy rules
+   together. No invented PROV terms or inferred authority.
 
 Each phase has a separate reviewed implementation PR with failing-first tests, public
 door/type checks, runnable examples and a change fragment where source changes require
 one. Library changes land before app adoption. No bundled unpublished builds, duplicate
 stores/viewers, compatibility shims or automatic migrations of saved payloads.
 
-The two owner decisions returned now are the oversized-cause retention policy and
-accepting the lease deferral (or naming a backend whose stronger contract can be proven).
-All API names and numeric defaults beyond existing viewer limits remain proposed until
-this review is complete.
+The owner adopted the later oversized-cause retention policy and the generic-lease
+deferral. Those decisions do not enable either feature. API names and other numeric
+defaults remain proposed until their phase's focused review; only phase 1 is approved
+for implementation now.
