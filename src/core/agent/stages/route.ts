@@ -157,7 +157,9 @@ type FiguresModule = typeof import('../evidence/figures.js');
 async function loadFigures(
   gate: ResolvedEvidenceGate | undefined,
 ): Promise<FiguresModule | undefined> {
-  return gate?.figures === true ? import('../evidence/figures.js') : undefined;
+  return gate?.figures === true || gate?.decimalRounding === true
+    ? import('../evidence/figures.js')
+    : undefined;
 }
 
 async function loadTimeLineage(
@@ -772,7 +774,7 @@ function judgeEvidence(
     ...(time !== undefined && { derived: derivedFormsOf(time.derived) }),
     // The figures dial: the results' numbers, folded for the derivation
     // question (`evidence/figures.ts`). Off → not built, the verdict as it was.
-    ...(figures !== undefined && { figures: figures.figureCheckOf(answer, history) }),
+    ...(figures !== undefined && { figures: figures.figureCheckOf(answer, history, gate) }),
     exempt: exemptFromRun({
       userMessage: scope.userMessage as string | undefined,
       history,
@@ -889,7 +891,7 @@ function judgeEvidence(
 
   if (mayRevise) {
     const values = verdict.unsupported.slice(0, MAX_REPORTED_VALUES);
-    const conclusion = figures?.figuresConclusionLine(values);
+    const conclusion = gate.figures ? figures?.figuresConclusionLine(values) : undefined;
     scope.evidenceUnsupported = {
       values,
       candidates: verdict.candidates,

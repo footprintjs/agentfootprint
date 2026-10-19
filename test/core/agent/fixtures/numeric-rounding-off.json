@@ -1,0 +1,928 @@
+{
+  "sourceCommit": "fa9651dc4e1331c93b05c41a07a10588602d2734",
+  "history": [
+    {
+      "role": "user",
+      "content": "Read the data."
+    },
+    {
+      "role": "tool",
+      "toolCallId": "r1",
+      "content": "{\"reading\":5.203,\"count\":1234.56,\"port\":\"fc1/3\",\"load\":61.1,\"latency\":\"1007us\",\"rows\":[{\"tb\":435.5},{\"tb\":1090.8}]}"
+    }
+  ],
+  "cases": [
+    {
+      "answer": "The reading is 5.20 and the counter is 1234.6.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"1234.6\",\"shape\":\"number\"}],\"candidates\":1,\"lookedUp\":1,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "fc1/3 carries 41,200 IOPS; latency is 1007us.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"41200\",\"shape\":\"number\"}],\"candidates\":3,\"lookedUp\":3,\"grounded\":[{\"value\":\"fc1/3\",\"forms\":[\"fc1/3\"]},{\"value\":\"1007\",\"forms\":[\"1007\",\"1007us\"]}],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":2,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "The order ORD-4471 has 2048.0 items.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"ord-4471\",\"shape\":\"identifier\"},{\"value\":\"2048\",\"shape\":\"number\"}],\"candidates\":2,\"lookedUp\":2,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "0xef0101 and ef0101 point at fc1.3.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"0xef0101\",\"shape\":\"identifier\"},{\"value\":\"ef0101\",\"shape\":\"identifier\"},{\"value\":\"fc1.3\",\"shape\":\"identifier\"}],\"candidates\":3,\"lookedUp\":3,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "v7.0.3 dates 2026-10-19 at 10:00-10:10.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"v7.0.3\",\"shape\":\"identifier\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"},{\"value\":\"10:00-10:10\",\"shape\":\"identifier\"}],\"candidates\":3,\"lookedUp\":3,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "61% used and 1526.3 TB in total.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"1526.3\",\"shape\":\"number\"}],\"candidates\":1,\"lookedUp\":1,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "The serial 90071992547409931234 is retained.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"90071992547409931234\",\"shape\":\"number\"}],\"candidates\":1,\"lookedUp\":1,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "1,234.560 and $1234.56 are one value.",
+      "options": {},
+      "expected": "{\"unsupported\":[],\"candidates\":1,\"lookedUp\":1,\"grounded\":[{\"value\":\"1234.56\",\"forms\":[\"1234.56\"]}],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":1,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "alpha–fc1/3 and 3 issues are ordinary text.",
+      "options": {},
+      "expected": "{\"unsupported\":[],\"candidates\":1,\"lookedUp\":1,\"grounded\":[{\"value\":\"fc1/3\",\"forms\":[\"fc1/3\"]}],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":1,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "24/7 and a 48-port switch.",
+      "options": {},
+      "expected": "{\"unsupported\":[],\"candidates\":0,\"lookedUp\":0,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "5.2 5.20 5.203 is exact only.",
+      "options": {},
+      "expected": "{\"unsupported\":[],\"candidates\":1,\"lookedUp\":1,\"grounded\":[{\"value\":\"5.203\",\"forms\":[\"5.203\"]}],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":1,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "",
+      "options": {},
+      "expected": "{\"unsupported\":[],\"candidates\":0,\"lookedUp\":0,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1000: reading 0; quantity 12000, serial 90071992547409930, unit 1000ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1000\",\"shape\":\"identifier\"},{\"value\":\"12000\",\"shape\":\"number\"},{\"value\":\"90071992547409930\",\"shape\":\"number\"},{\"value\":\"1000\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1001: reading 1.2; quantity 12001, serial 90071992547409931, unit 1001ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1001\",\"shape\":\"identifier\"},{\"value\":\"12001\",\"shape\":\"number\"},{\"value\":\"90071992547409931\",\"shape\":\"number\"},{\"value\":\"1001\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1002: reading 2.20; quantity 12002, serial 90071992547409932, unit 1002ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1002\",\"shape\":\"identifier\"},{\"value\":\"12002\",\"shape\":\"number\"},{\"value\":\"90071992547409932\",\"shape\":\"number\"},{\"value\":\"1002\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1003: reading 3.203; quantity 12003, serial 90071992547409933, unit 1003ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1003\",\"shape\":\"identifier\"},{\"value\":\"3.203\",\"shape\":\"number\"},{\"value\":\"12003\",\"shape\":\"number\"},{\"value\":\"90071992547409933\",\"shape\":\"number\"},{\"value\":\"1003\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":6,\"lookedUp\":6,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1004: reading 4; quantity 12004, serial 90071992547409934, unit 1004ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1004\",\"shape\":\"identifier\"},{\"value\":\"12004\",\"shape\":\"number\"},{\"value\":\"90071992547409934\",\"shape\":\"number\"},{\"value\":\"1004\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1005: reading 5.2; quantity 12005, serial 90071992547409935, unit 1005ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1005\",\"shape\":\"identifier\"},{\"value\":\"12005\",\"shape\":\"number\"},{\"value\":\"90071992547409935\",\"shape\":\"number\"},{\"value\":\"1005\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1006: reading 6.20; quantity 12006, serial 90071992547409936, unit 1006ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1006\",\"shape\":\"identifier\"},{\"value\":\"12006\",\"shape\":\"number\"},{\"value\":\"90071992547409936\",\"shape\":\"number\"},{\"value\":\"1006\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1007: reading 7.203; quantity 12007, serial 90071992547409937, unit 1007ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1007\",\"shape\":\"identifier\"},{\"value\":\"7.203\",\"shape\":\"number\"},{\"value\":\"12007\",\"shape\":\"number\"},{\"value\":\"90071992547409937\",\"shape\":\"number\"},{\"value\":\"1007\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":6,\"lookedUp\":6,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1008: reading 8; quantity 12008, serial 90071992547409938, unit 1008ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1008\",\"shape\":\"identifier\"},{\"value\":\"12008\",\"shape\":\"number\"},{\"value\":\"90071992547409938\",\"shape\":\"number\"},{\"value\":\"1008\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1009: reading 9.2; quantity 12009, serial 90071992547409939, unit 1009ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1009\",\"shape\":\"identifier\"},{\"value\":\"12009\",\"shape\":\"number\"},{\"value\":\"90071992547409939\",\"shape\":\"number\"},{\"value\":\"1009\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1010: reading 10.20; quantity 12010, serial 900719925474099310, unit 1010ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1010\",\"shape\":\"identifier\"},{\"value\":\"12010\",\"shape\":\"number\"},{\"value\":\"900719925474099310\",\"shape\":\"number\"},{\"value\":\"1010\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1011: reading 11.203; quantity 12011, serial 900719925474099311, unit 1011ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1011\",\"shape\":\"identifier\"},{\"value\":\"11.203\",\"shape\":\"number\"},{\"value\":\"12011\",\"shape\":\"number\"},{\"value\":\"900719925474099311\",\"shape\":\"number\"},{\"value\":\"1011\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":6,\"lookedUp\":6,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1012: reading 12; quantity 12012, serial 900719925474099312, unit 1012ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1012\",\"shape\":\"identifier\"},{\"value\":\"12012\",\"shape\":\"number\"},{\"value\":\"900719925474099312\",\"shape\":\"number\"},{\"value\":\"1012\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1013: reading 13.2; quantity 12013, serial 900719925474099313, unit 1013ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1013\",\"shape\":\"identifier\"},{\"value\":\"12013\",\"shape\":\"number\"},{\"value\":\"900719925474099313\",\"shape\":\"number\"},{\"value\":\"1013\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1014: reading 14.20; quantity 12014, serial 900719925474099314, unit 1014ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1014\",\"shape\":\"identifier\"},{\"value\":\"12014\",\"shape\":\"number\"},{\"value\":\"900719925474099314\",\"shape\":\"number\"},{\"value\":\"1014\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1015: reading 15.203; quantity 12015, serial 900719925474099315, unit 1015ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1015\",\"shape\":\"identifier\"},{\"value\":\"15.203\",\"shape\":\"number\"},{\"value\":\"12015\",\"shape\":\"number\"},{\"value\":\"900719925474099315\",\"shape\":\"number\"},{\"value\":\"1015\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":6,\"lookedUp\":6,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1016: reading 16; quantity 12016, serial 900719925474099316, unit 1016ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1016\",\"shape\":\"identifier\"},{\"value\":\"12016\",\"shape\":\"number\"},{\"value\":\"900719925474099316\",\"shape\":\"number\"},{\"value\":\"1016\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1017: reading 17.2; quantity 12017, serial 900719925474099317, unit 1017ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1017\",\"shape\":\"identifier\"},{\"value\":\"12017\",\"shape\":\"number\"},{\"value\":\"900719925474099317\",\"shape\":\"number\"},{\"value\":\"1017\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1018: reading 18.20; quantity 12018, serial 900719925474099318, unit 1018ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1018\",\"shape\":\"identifier\"},{\"value\":\"12018\",\"shape\":\"number\"},{\"value\":\"900719925474099318\",\"shape\":\"number\"},{\"value\":\"1018\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1019: reading 19.203; quantity 12019, serial 900719925474099319, unit 1019ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1019\",\"shape\":\"identifier\"},{\"value\":\"19.203\",\"shape\":\"number\"},{\"value\":\"12019\",\"shape\":\"number\"},{\"value\":\"900719925474099319\",\"shape\":\"number\"},{\"value\":\"1019\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":6,\"lookedUp\":6,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1020: reading 20; quantity 12020, serial 900719925474099320, unit 1020ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1020\",\"shape\":\"identifier\"},{\"value\":\"12020\",\"shape\":\"number\"},{\"value\":\"900719925474099320\",\"shape\":\"number\"},{\"value\":\"1020\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1021: reading 21.2; quantity 12021, serial 900719925474099321, unit 1021ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1021\",\"shape\":\"identifier\"},{\"value\":\"12021\",\"shape\":\"number\"},{\"value\":\"900719925474099321\",\"shape\":\"number\"},{\"value\":\"1021\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1022: reading 22.20; quantity 12022, serial 900719925474099322, unit 1022ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1022\",\"shape\":\"identifier\"},{\"value\":\"12022\",\"shape\":\"number\"},{\"value\":\"900719925474099322\",\"shape\":\"number\"},{\"value\":\"1022\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1023: reading 23.203; quantity 12023, serial 900719925474099323, unit 1023ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1023\",\"shape\":\"identifier\"},{\"value\":\"23.203\",\"shape\":\"number\"},{\"value\":\"12023\",\"shape\":\"number\"},{\"value\":\"900719925474099323\",\"shape\":\"number\"},{\"value\":\"1023\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":6,\"lookedUp\":6,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1024: reading 24; quantity 12024, serial 900719925474099324, unit 1024ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1024\",\"shape\":\"identifier\"},{\"value\":\"12024\",\"shape\":\"number\"},{\"value\":\"900719925474099324\",\"shape\":\"number\"},{\"value\":\"1024\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1025: reading 25.2; quantity 12025, serial 900719925474099325, unit 1025ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1025\",\"shape\":\"identifier\"},{\"value\":\"12025\",\"shape\":\"number\"},{\"value\":\"900719925474099325\",\"shape\":\"number\"},{\"value\":\"1025\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1026: reading 26.20; quantity 12026, serial 900719925474099326, unit 1026ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1026\",\"shape\":\"identifier\"},{\"value\":\"12026\",\"shape\":\"number\"},{\"value\":\"900719925474099326\",\"shape\":\"number\"},{\"value\":\"1026\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1027: reading 27.203; quantity 12027, serial 900719925474099327, unit 1027ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1027\",\"shape\":\"identifier\"},{\"value\":\"27.203\",\"shape\":\"number\"},{\"value\":\"12027\",\"shape\":\"number\"},{\"value\":\"900719925474099327\",\"shape\":\"number\"},{\"value\":\"1027\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":6,\"lookedUp\":6,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1028: reading 28; quantity 12028, serial 900719925474099328, unit 1028ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1028\",\"shape\":\"identifier\"},{\"value\":\"12028\",\"shape\":\"number\"},{\"value\":\"900719925474099328\",\"shape\":\"number\"},{\"value\":\"1028\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1029: reading 29.2; quantity 12029, serial 900719925474099329, unit 1029ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1029\",\"shape\":\"identifier\"},{\"value\":\"12029\",\"shape\":\"number\"},{\"value\":\"900719925474099329\",\"shape\":\"number\"},{\"value\":\"1029\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1030: reading 30.20; quantity 12030, serial 900719925474099330, unit 1030ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1030\",\"shape\":\"identifier\"},{\"value\":\"12030\",\"shape\":\"number\"},{\"value\":\"900719925474099330\",\"shape\":\"number\"},{\"value\":\"1030\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1031: reading 31.203; quantity 12031, serial 900719925474099331, unit 1031ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1031\",\"shape\":\"identifier\"},{\"value\":\"31.203\",\"shape\":\"number\"},{\"value\":\"12031\",\"shape\":\"number\"},{\"value\":\"900719925474099331\",\"shape\":\"number\"},{\"value\":\"1031\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":6,\"lookedUp\":6,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1032: reading 32; quantity 12032, serial 900719925474099332, unit 1032ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1032\",\"shape\":\"identifier\"},{\"value\":\"12032\",\"shape\":\"number\"},{\"value\":\"900719925474099332\",\"shape\":\"number\"},{\"value\":\"1032\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1033: reading 33.2; quantity 12033, serial 900719925474099333, unit 1033ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1033\",\"shape\":\"identifier\"},{\"value\":\"12033\",\"shape\":\"number\"},{\"value\":\"900719925474099333\",\"shape\":\"number\"},{\"value\":\"1033\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1034: reading 34.20; quantity 12034, serial 900719925474099334, unit 1034ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1034\",\"shape\":\"identifier\"},{\"value\":\"12034\",\"shape\":\"number\"},{\"value\":\"900719925474099334\",\"shape\":\"number\"},{\"value\":\"1034\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1035: reading 35.203; quantity 12035, serial 900719925474099335, unit 1035ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1035\",\"shape\":\"identifier\"},{\"value\":\"35.203\",\"shape\":\"number\"},{\"value\":\"12035\",\"shape\":\"number\"},{\"value\":\"900719925474099335\",\"shape\":\"number\"},{\"value\":\"1035\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":6,\"lookedUp\":6,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1036: reading 36; quantity 12036, serial 900719925474099336, unit 1036ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1036\",\"shape\":\"identifier\"},{\"value\":\"12036\",\"shape\":\"number\"},{\"value\":\"900719925474099336\",\"shape\":\"number\"},{\"value\":\"1036\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1037: reading 37.2; quantity 12037, serial 900719925474099337, unit 1037ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1037\",\"shape\":\"identifier\"},{\"value\":\"12037\",\"shape\":\"number\"},{\"value\":\"900719925474099337\",\"shape\":\"number\"},{\"value\":\"1037\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1038: reading 38.20; quantity 12038, serial 900719925474099338, unit 1038ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1038\",\"shape\":\"identifier\"},{\"value\":\"12038\",\"shape\":\"number\"},{\"value\":\"900719925474099338\",\"shape\":\"number\"},{\"value\":\"1038\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1039: reading 39.203; quantity 12039, serial 900719925474099339, unit 1039ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1039\",\"shape\":\"identifier\"},{\"value\":\"39.203\",\"shape\":\"number\"},{\"value\":\"12039\",\"shape\":\"number\"},{\"value\":\"900719925474099339\",\"shape\":\"number\"},{\"value\":\"1039\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":6,\"lookedUp\":6,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1040: reading 40; quantity 12040, serial 900719925474099340, unit 1040ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1040\",\"shape\":\"identifier\"},{\"value\":\"12040\",\"shape\":\"number\"},{\"value\":\"900719925474099340\",\"shape\":\"number\"},{\"value\":\"1040\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1041: reading 41.2; quantity 12041, serial 900719925474099341, unit 1041ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1041\",\"shape\":\"identifier\"},{\"value\":\"12041\",\"shape\":\"number\"},{\"value\":\"900719925474099341\",\"shape\":\"number\"},{\"value\":\"1041\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1042: reading 42.20; quantity 12042, serial 900719925474099342, unit 1042ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1042\",\"shape\":\"identifier\"},{\"value\":\"12042\",\"shape\":\"number\"},{\"value\":\"900719925474099342\",\"shape\":\"number\"},{\"value\":\"1042\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1043: reading 43.203; quantity 12043, serial 900719925474099343, unit 1043ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1043\",\"shape\":\"identifier\"},{\"value\":\"43.203\",\"shape\":\"number\"},{\"value\":\"12043\",\"shape\":\"number\"},{\"value\":\"900719925474099343\",\"shape\":\"number\"},{\"value\":\"1043\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":6,\"lookedUp\":6,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1044: reading 44; quantity 12044, serial 900719925474099344, unit 1044ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1044\",\"shape\":\"identifier\"},{\"value\":\"12044\",\"shape\":\"number\"},{\"value\":\"900719925474099344\",\"shape\":\"number\"},{\"value\":\"1044\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1045: reading 45.2; quantity 12045, serial 900719925474099345, unit 1045ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1045\",\"shape\":\"identifier\"},{\"value\":\"12045\",\"shape\":\"number\"},{\"value\":\"900719925474099345\",\"shape\":\"number\"},{\"value\":\"1045\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1046: reading 46.20; quantity 12046, serial 900719925474099346, unit 1046ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1046\",\"shape\":\"identifier\"},{\"value\":\"12046\",\"shape\":\"number\"},{\"value\":\"900719925474099346\",\"shape\":\"number\"},{\"value\":\"1046\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1047: reading 47.203; quantity 12047, serial 900719925474099347, unit 1047ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1047\",\"shape\":\"identifier\"},{\"value\":\"47.203\",\"shape\":\"number\"},{\"value\":\"12047\",\"shape\":\"number\"},{\"value\":\"900719925474099347\",\"shape\":\"number\"},{\"value\":\"1047\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":6,\"lookedUp\":6,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1048: reading 48; quantity 12048, serial 900719925474099348, unit 1048ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1048\",\"shape\":\"identifier\"},{\"value\":\"12048\",\"shape\":\"number\"},{\"value\":\"900719925474099348\",\"shape\":\"number\"},{\"value\":\"1048\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1049: reading 49.2; quantity 12049, serial 900719925474099349, unit 1049ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1049\",\"shape\":\"identifier\"},{\"value\":\"12049\",\"shape\":\"number\"},{\"value\":\"900719925474099349\",\"shape\":\"number\"},{\"value\":\"1049\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1050: reading 50.20; quantity 12050, serial 900719925474099350, unit 1050ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1050\",\"shape\":\"identifier\"},{\"value\":\"12050\",\"shape\":\"number\"},{\"value\":\"900719925474099350\",\"shape\":\"number\"},{\"value\":\"1050\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1051: reading 51.203; quantity 12051, serial 900719925474099351, unit 1051ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1051\",\"shape\":\"identifier\"},{\"value\":\"51.203\",\"shape\":\"number\"},{\"value\":\"12051\",\"shape\":\"number\"},{\"value\":\"900719925474099351\",\"shape\":\"number\"},{\"value\":\"1051\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":6,\"lookedUp\":6,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1052: reading 52; quantity 12052, serial 900719925474099352, unit 1052ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1052\",\"shape\":\"identifier\"},{\"value\":\"12052\",\"shape\":\"number\"},{\"value\":\"900719925474099352\",\"shape\":\"number\"},{\"value\":\"1052\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1053: reading 53.2; quantity 12053, serial 900719925474099353, unit 1053ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1053\",\"shape\":\"identifier\"},{\"value\":\"12053\",\"shape\":\"number\"},{\"value\":\"900719925474099353\",\"shape\":\"number\"},{\"value\":\"1053\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1054: reading 54.20; quantity 12054, serial 900719925474099354, unit 1054ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1054\",\"shape\":\"identifier\"},{\"value\":\"12054\",\"shape\":\"number\"},{\"value\":\"900719925474099354\",\"shape\":\"number\"},{\"value\":\"1054\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1055: reading 55.203; quantity 12055, serial 900719925474099355, unit 1055ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1055\",\"shape\":\"identifier\"},{\"value\":\"55.203\",\"shape\":\"number\"},{\"value\":\"12055\",\"shape\":\"number\"},{\"value\":\"900719925474099355\",\"shape\":\"number\"},{\"value\":\"1055\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":6,\"lookedUp\":6,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1056: reading 56; quantity 12056, serial 900719925474099356, unit 1056ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1056\",\"shape\":\"identifier\"},{\"value\":\"12056\",\"shape\":\"number\"},{\"value\":\"900719925474099356\",\"shape\":\"number\"},{\"value\":\"1056\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1057: reading 57.2; quantity 12057, serial 900719925474099357, unit 1057ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1057\",\"shape\":\"identifier\"},{\"value\":\"12057\",\"shape\":\"number\"},{\"value\":\"900719925474099357\",\"shape\":\"number\"},{\"value\":\"1057\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1058: reading 58.20; quantity 12058, serial 900719925474099358, unit 1058ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1058\",\"shape\":\"identifier\"},{\"value\":\"12058\",\"shape\":\"number\"},{\"value\":\"900719925474099358\",\"shape\":\"number\"},{\"value\":\"1058\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1059: reading 59.203; quantity 12059, serial 900719925474099359, unit 1059ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1059\",\"shape\":\"identifier\"},{\"value\":\"59.203\",\"shape\":\"number\"},{\"value\":\"12059\",\"shape\":\"number\"},{\"value\":\"900719925474099359\",\"shape\":\"number\"},{\"value\":\"1059\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":6,\"lookedUp\":6,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1060: reading 60; quantity 12060, serial 900719925474099360, unit 1060ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1060\",\"shape\":\"identifier\"},{\"value\":\"12060\",\"shape\":\"number\"},{\"value\":\"900719925474099360\",\"shape\":\"number\"},{\"value\":\"1060\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1061: reading 61.2; quantity 12061, serial 900719925474099361, unit 1061ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1061\",\"shape\":\"identifier\"},{\"value\":\"12061\",\"shape\":\"number\"},{\"value\":\"900719925474099361\",\"shape\":\"number\"},{\"value\":\"1061\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1062: reading 62.20; quantity 12062, serial 900719925474099362, unit 1062ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1062\",\"shape\":\"identifier\"},{\"value\":\"12062\",\"shape\":\"number\"},{\"value\":\"900719925474099362\",\"shape\":\"number\"},{\"value\":\"1062\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1063: reading 63.203; quantity 12063, serial 900719925474099363, unit 1063ms and date 2026-10-19.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"row-1063\",\"shape\":\"identifier\"},{\"value\":\"63.203\",\"shape\":\"number\"},{\"value\":\"12063\",\"shape\":\"number\"},{\"value\":\"900719925474099363\",\"shape\":\"number\"},{\"value\":\"1063\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":6,\"lookedUp\":6,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "The reading is 5.20 and the counter is 1234.6.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[],\"candidates\":1,\"lookedUp\":1,\"grounded\":[],\"computed\":[{\"value\":\"1234.6\",\"shape\":\"number\",\"derivation\":\"rounded\",\"from\":\"1234.56 at count\"}],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "fc1/3 carries 41,200 IOPS; latency is 1007us.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"41200\",\"shape\":\"number\"}],\"candidates\":3,\"lookedUp\":3,\"grounded\":[{\"value\":\"fc1/3\",\"forms\":[\"fc1/3\"]},{\"value\":\"1007\",\"forms\":[\"1007\",\"1007us\"]}],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":2,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "The order ORD-4471 has 2048.0 items.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"ord-4471\",\"shape\":\"identifier\"},{\"value\":\"2048\",\"shape\":\"number\"}],\"candidates\":2,\"lookedUp\":2,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "0xef0101 and ef0101 point at fc1.3.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"0xef0101\",\"shape\":\"identifier\"},{\"value\":\"ef0101\",\"shape\":\"identifier\"},{\"value\":\"fc1.3\",\"shape\":\"identifier\"}],\"candidates\":3,\"lookedUp\":3,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "v7.0.3 dates 2026-10-19 at 10:00-10:10.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"v7.0.3\",\"shape\":\"identifier\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"},{\"value\":\"10:00-10:10\",\"shape\":\"identifier\"}],\"candidates\":3,\"lookedUp\":3,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "61% used and 1526.3 TB in total.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[],\"candidates\":2,\"lookedUp\":2,\"grounded\":[],\"computed\":[{\"value\":\"61\",\"shape\":\"figure\",\"derivation\":\"rounded\",\"from\":\"61.1 at load\"},{\"value\":\"1526.3\",\"shape\":\"number\",\"derivation\":\"column-sum\",\"from\":\"sum of rows[].tb\"}],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "The serial 90071992547409931234 is retained.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"90071992547409931234\",\"shape\":\"number\"}],\"candidates\":1,\"lookedUp\":1,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "1,234.560 and $1234.56 are one value.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[],\"candidates\":1,\"lookedUp\":1,\"grounded\":[{\"value\":\"1234.56\",\"forms\":[\"1234.56\"]}],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":1,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "alpha–fc1/3 and 3 issues are ordinary text.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[],\"candidates\":1,\"lookedUp\":1,\"grounded\":[{\"value\":\"fc1/3\",\"forms\":[\"fc1/3\"]}],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":1,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "24/7 and a 48-port switch.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[],\"candidates\":0,\"lookedUp\":0,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "5.2 5.20 5.203 is exact only.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[],\"candidates\":1,\"lookedUp\":1,\"grounded\":[{\"value\":\"5.203\",\"forms\":[\"5.203\"]}],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":1,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[],\"candidates\":0,\"lookedUp\":0,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1000: reading 0; quantity 12000, serial 90071992547409930, unit 1000ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1000\",\"shape\":\"identifier\"},{\"value\":\"12000\",\"shape\":\"number\"},{\"value\":\"90071992547409930\",\"shape\":\"number\"},{\"value\":\"1000\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1001: reading 1.2; quantity 12001, serial 90071992547409931, unit 1001ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1001\",\"shape\":\"identifier\"},{\"value\":\"12001\",\"shape\":\"number\"},{\"value\":\"90071992547409931\",\"shape\":\"number\"},{\"value\":\"1001\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1002: reading 2.20; quantity 12002, serial 90071992547409932, unit 1002ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1002\",\"shape\":\"identifier\"},{\"value\":\"12002\",\"shape\":\"number\"},{\"value\":\"90071992547409932\",\"shape\":\"number\"},{\"value\":\"1002\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1003: reading 3.203; quantity 12003, serial 90071992547409933, unit 1003ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1003\",\"shape\":\"identifier\"},{\"value\":\"3.203\",\"shape\":\"number\"},{\"value\":\"12003\",\"shape\":\"number\"},{\"value\":\"90071992547409933\",\"shape\":\"number\"},{\"value\":\"1003\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":6,\"lookedUp\":6,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1004: reading 4; quantity 12004, serial 90071992547409934, unit 1004ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1004\",\"shape\":\"identifier\"},{\"value\":\"12004\",\"shape\":\"number\"},{\"value\":\"90071992547409934\",\"shape\":\"number\"},{\"value\":\"1004\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1005: reading 5.2; quantity 12005, serial 90071992547409935, unit 1005ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1005\",\"shape\":\"identifier\"},{\"value\":\"12005\",\"shape\":\"number\"},{\"value\":\"90071992547409935\",\"shape\":\"number\"},{\"value\":\"1005\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1006: reading 6.20; quantity 12006, serial 90071992547409936, unit 1006ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1006\",\"shape\":\"identifier\"},{\"value\":\"12006\",\"shape\":\"number\"},{\"value\":\"90071992547409936\",\"shape\":\"number\"},{\"value\":\"1006\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1007: reading 7.203; quantity 12007, serial 90071992547409937, unit 1007ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1007\",\"shape\":\"identifier\"},{\"value\":\"7.203\",\"shape\":\"number\"},{\"value\":\"12007\",\"shape\":\"number\"},{\"value\":\"90071992547409937\",\"shape\":\"number\"},{\"value\":\"1007\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":6,\"lookedUp\":6,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1008: reading 8; quantity 12008, serial 90071992547409938, unit 1008ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1008\",\"shape\":\"identifier\"},{\"value\":\"12008\",\"shape\":\"number\"},{\"value\":\"90071992547409938\",\"shape\":\"number\"},{\"value\":\"1008\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1009: reading 9.2; quantity 12009, serial 90071992547409939, unit 1009ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1009\",\"shape\":\"identifier\"},{\"value\":\"12009\",\"shape\":\"number\"},{\"value\":\"90071992547409939\",\"shape\":\"number\"},{\"value\":\"1009\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1010: reading 10.20; quantity 12010, serial 900719925474099310, unit 1010ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1010\",\"shape\":\"identifier\"},{\"value\":\"12010\",\"shape\":\"number\"},{\"value\":\"900719925474099310\",\"shape\":\"number\"},{\"value\":\"1010\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1011: reading 11.203; quantity 12011, serial 900719925474099311, unit 1011ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1011\",\"shape\":\"identifier\"},{\"value\":\"11.203\",\"shape\":\"number\"},{\"value\":\"12011\",\"shape\":\"number\"},{\"value\":\"900719925474099311\",\"shape\":\"number\"},{\"value\":\"1011\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":6,\"lookedUp\":6,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1012: reading 12; quantity 12012, serial 900719925474099312, unit 1012ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1012\",\"shape\":\"identifier\"},{\"value\":\"12012\",\"shape\":\"number\"},{\"value\":\"900719925474099312\",\"shape\":\"number\"},{\"value\":\"1012\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1013: reading 13.2; quantity 12013, serial 900719925474099313, unit 1013ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1013\",\"shape\":\"identifier\"},{\"value\":\"12013\",\"shape\":\"number\"},{\"value\":\"900719925474099313\",\"shape\":\"number\"},{\"value\":\"1013\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1014: reading 14.20; quantity 12014, serial 900719925474099314, unit 1014ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1014\",\"shape\":\"identifier\"},{\"value\":\"12014\",\"shape\":\"number\"},{\"value\":\"900719925474099314\",\"shape\":\"number\"},{\"value\":\"1014\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1015: reading 15.203; quantity 12015, serial 900719925474099315, unit 1015ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1015\",\"shape\":\"identifier\"},{\"value\":\"15.203\",\"shape\":\"number\"},{\"value\":\"12015\",\"shape\":\"number\"},{\"value\":\"900719925474099315\",\"shape\":\"number\"},{\"value\":\"1015\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":6,\"lookedUp\":6,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1016: reading 16; quantity 12016, serial 900719925474099316, unit 1016ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1016\",\"shape\":\"identifier\"},{\"value\":\"12016\",\"shape\":\"number\"},{\"value\":\"900719925474099316\",\"shape\":\"number\"},{\"value\":\"1016\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1017: reading 17.2; quantity 12017, serial 900719925474099317, unit 1017ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1017\",\"shape\":\"identifier\"},{\"value\":\"12017\",\"shape\":\"number\"},{\"value\":\"900719925474099317\",\"shape\":\"number\"},{\"value\":\"1017\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1018: reading 18.20; quantity 12018, serial 900719925474099318, unit 1018ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1018\",\"shape\":\"identifier\"},{\"value\":\"12018\",\"shape\":\"number\"},{\"value\":\"900719925474099318\",\"shape\":\"number\"},{\"value\":\"1018\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1019: reading 19.203; quantity 12019, serial 900719925474099319, unit 1019ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1019\",\"shape\":\"identifier\"},{\"value\":\"19.203\",\"shape\":\"number\"},{\"value\":\"12019\",\"shape\":\"number\"},{\"value\":\"900719925474099319\",\"shape\":\"number\"},{\"value\":\"1019\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":6,\"lookedUp\":6,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1020: reading 20; quantity 12020, serial 900719925474099320, unit 1020ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1020\",\"shape\":\"identifier\"},{\"value\":\"12020\",\"shape\":\"number\"},{\"value\":\"900719925474099320\",\"shape\":\"number\"},{\"value\":\"1020\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1021: reading 21.2; quantity 12021, serial 900719925474099321, unit 1021ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1021\",\"shape\":\"identifier\"},{\"value\":\"12021\",\"shape\":\"number\"},{\"value\":\"900719925474099321\",\"shape\":\"number\"},{\"value\":\"1021\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1022: reading 22.20; quantity 12022, serial 900719925474099322, unit 1022ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1022\",\"shape\":\"identifier\"},{\"value\":\"12022\",\"shape\":\"number\"},{\"value\":\"900719925474099322\",\"shape\":\"number\"},{\"value\":\"1022\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1023: reading 23.203; quantity 12023, serial 900719925474099323, unit 1023ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1023\",\"shape\":\"identifier\"},{\"value\":\"23.203\",\"shape\":\"number\"},{\"value\":\"12023\",\"shape\":\"number\"},{\"value\":\"900719925474099323\",\"shape\":\"number\"},{\"value\":\"1023\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":6,\"lookedUp\":6,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1024: reading 24; quantity 12024, serial 900719925474099324, unit 1024ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1024\",\"shape\":\"identifier\"},{\"value\":\"12024\",\"shape\":\"number\"},{\"value\":\"900719925474099324\",\"shape\":\"number\"},{\"value\":\"1024\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1025: reading 25.2; quantity 12025, serial 900719925474099325, unit 1025ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1025\",\"shape\":\"identifier\"},{\"value\":\"12025\",\"shape\":\"number\"},{\"value\":\"900719925474099325\",\"shape\":\"number\"},{\"value\":\"1025\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1026: reading 26.20; quantity 12026, serial 900719925474099326, unit 1026ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1026\",\"shape\":\"identifier\"},{\"value\":\"12026\",\"shape\":\"number\"},{\"value\":\"900719925474099326\",\"shape\":\"number\"},{\"value\":\"1026\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1027: reading 27.203; quantity 12027, serial 900719925474099327, unit 1027ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1027\",\"shape\":\"identifier\"},{\"value\":\"27.203\",\"shape\":\"number\"},{\"value\":\"12027\",\"shape\":\"number\"},{\"value\":\"900719925474099327\",\"shape\":\"number\"},{\"value\":\"1027\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":6,\"lookedUp\":6,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1028: reading 28; quantity 12028, serial 900719925474099328, unit 1028ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1028\",\"shape\":\"identifier\"},{\"value\":\"12028\",\"shape\":\"number\"},{\"value\":\"900719925474099328\",\"shape\":\"number\"},{\"value\":\"1028\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1029: reading 29.2; quantity 12029, serial 900719925474099329, unit 1029ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1029\",\"shape\":\"identifier\"},{\"value\":\"12029\",\"shape\":\"number\"},{\"value\":\"900719925474099329\",\"shape\":\"number\"},{\"value\":\"1029\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1030: reading 30.20; quantity 12030, serial 900719925474099330, unit 1030ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1030\",\"shape\":\"identifier\"},{\"value\":\"12030\",\"shape\":\"number\"},{\"value\":\"900719925474099330\",\"shape\":\"number\"},{\"value\":\"1030\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1031: reading 31.203; quantity 12031, serial 900719925474099331, unit 1031ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1031\",\"shape\":\"identifier\"},{\"value\":\"31.203\",\"shape\":\"number\"},{\"value\":\"12031\",\"shape\":\"number\"},{\"value\":\"900719925474099331\",\"shape\":\"number\"},{\"value\":\"1031\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":6,\"lookedUp\":6,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1032: reading 32; quantity 12032, serial 900719925474099332, unit 1032ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1032\",\"shape\":\"identifier\"},{\"value\":\"12032\",\"shape\":\"number\"},{\"value\":\"900719925474099332\",\"shape\":\"number\"},{\"value\":\"1032\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1033: reading 33.2; quantity 12033, serial 900719925474099333, unit 1033ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1033\",\"shape\":\"identifier\"},{\"value\":\"12033\",\"shape\":\"number\"},{\"value\":\"900719925474099333\",\"shape\":\"number\"},{\"value\":\"1033\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1034: reading 34.20; quantity 12034, serial 900719925474099334, unit 1034ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1034\",\"shape\":\"identifier\"},{\"value\":\"12034\",\"shape\":\"number\"},{\"value\":\"900719925474099334\",\"shape\":\"number\"},{\"value\":\"1034\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1035: reading 35.203; quantity 12035, serial 900719925474099335, unit 1035ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1035\",\"shape\":\"identifier\"},{\"value\":\"35.203\",\"shape\":\"number\"},{\"value\":\"12035\",\"shape\":\"number\"},{\"value\":\"900719925474099335\",\"shape\":\"number\"},{\"value\":\"1035\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":6,\"lookedUp\":6,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1036: reading 36; quantity 12036, serial 900719925474099336, unit 1036ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1036\",\"shape\":\"identifier\"},{\"value\":\"12036\",\"shape\":\"number\"},{\"value\":\"900719925474099336\",\"shape\":\"number\"},{\"value\":\"1036\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1037: reading 37.2; quantity 12037, serial 900719925474099337, unit 1037ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1037\",\"shape\":\"identifier\"},{\"value\":\"12037\",\"shape\":\"number\"},{\"value\":\"900719925474099337\",\"shape\":\"number\"},{\"value\":\"1037\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1038: reading 38.20; quantity 12038, serial 900719925474099338, unit 1038ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1038\",\"shape\":\"identifier\"},{\"value\":\"12038\",\"shape\":\"number\"},{\"value\":\"900719925474099338\",\"shape\":\"number\"},{\"value\":\"1038\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1039: reading 39.203; quantity 12039, serial 900719925474099339, unit 1039ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1039\",\"shape\":\"identifier\"},{\"value\":\"39.203\",\"shape\":\"number\"},{\"value\":\"12039\",\"shape\":\"number\"},{\"value\":\"900719925474099339\",\"shape\":\"number\"},{\"value\":\"1039\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":6,\"lookedUp\":6,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1040: reading 40; quantity 12040, serial 900719925474099340, unit 1040ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1040\",\"shape\":\"identifier\"},{\"value\":\"12040\",\"shape\":\"number\"},{\"value\":\"900719925474099340\",\"shape\":\"number\"},{\"value\":\"1040\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1041: reading 41.2; quantity 12041, serial 900719925474099341, unit 1041ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1041\",\"shape\":\"identifier\"},{\"value\":\"12041\",\"shape\":\"number\"},{\"value\":\"900719925474099341\",\"shape\":\"number\"},{\"value\":\"1041\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1042: reading 42.20; quantity 12042, serial 900719925474099342, unit 1042ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1042\",\"shape\":\"identifier\"},{\"value\":\"12042\",\"shape\":\"number\"},{\"value\":\"900719925474099342\",\"shape\":\"number\"},{\"value\":\"1042\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1043: reading 43.203; quantity 12043, serial 900719925474099343, unit 1043ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1043\",\"shape\":\"identifier\"},{\"value\":\"43.203\",\"shape\":\"number\"},{\"value\":\"12043\",\"shape\":\"number\"},{\"value\":\"900719925474099343\",\"shape\":\"number\"},{\"value\":\"1043\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":6,\"lookedUp\":6,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1044: reading 44; quantity 12044, serial 900719925474099344, unit 1044ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1044\",\"shape\":\"identifier\"},{\"value\":\"12044\",\"shape\":\"number\"},{\"value\":\"900719925474099344\",\"shape\":\"number\"},{\"value\":\"1044\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1045: reading 45.2; quantity 12045, serial 900719925474099345, unit 1045ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1045\",\"shape\":\"identifier\"},{\"value\":\"12045\",\"shape\":\"number\"},{\"value\":\"900719925474099345\",\"shape\":\"number\"},{\"value\":\"1045\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1046: reading 46.20; quantity 12046, serial 900719925474099346, unit 1046ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1046\",\"shape\":\"identifier\"},{\"value\":\"12046\",\"shape\":\"number\"},{\"value\":\"900719925474099346\",\"shape\":\"number\"},{\"value\":\"1046\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1047: reading 47.203; quantity 12047, serial 900719925474099347, unit 1047ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1047\",\"shape\":\"identifier\"},{\"value\":\"47.203\",\"shape\":\"number\"},{\"value\":\"12047\",\"shape\":\"number\"},{\"value\":\"900719925474099347\",\"shape\":\"number\"},{\"value\":\"1047\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":6,\"lookedUp\":6,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1048: reading 48; quantity 12048, serial 900719925474099348, unit 1048ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1048\",\"shape\":\"identifier\"},{\"value\":\"12048\",\"shape\":\"number\"},{\"value\":\"900719925474099348\",\"shape\":\"number\"},{\"value\":\"1048\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1049: reading 49.2; quantity 12049, serial 900719925474099349, unit 1049ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1049\",\"shape\":\"identifier\"},{\"value\":\"12049\",\"shape\":\"number\"},{\"value\":\"900719925474099349\",\"shape\":\"number\"},{\"value\":\"1049\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1050: reading 50.20; quantity 12050, serial 900719925474099350, unit 1050ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1050\",\"shape\":\"identifier\"},{\"value\":\"12050\",\"shape\":\"number\"},{\"value\":\"900719925474099350\",\"shape\":\"number\"},{\"value\":\"1050\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1051: reading 51.203; quantity 12051, serial 900719925474099351, unit 1051ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1051\",\"shape\":\"identifier\"},{\"value\":\"51.203\",\"shape\":\"number\"},{\"value\":\"12051\",\"shape\":\"number\"},{\"value\":\"900719925474099351\",\"shape\":\"number\"},{\"value\":\"1051\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":6,\"lookedUp\":6,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1052: reading 52; quantity 12052, serial 900719925474099352, unit 1052ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1052\",\"shape\":\"identifier\"},{\"value\":\"12052\",\"shape\":\"number\"},{\"value\":\"900719925474099352\",\"shape\":\"number\"},{\"value\":\"1052\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1053: reading 53.2; quantity 12053, serial 900719925474099353, unit 1053ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1053\",\"shape\":\"identifier\"},{\"value\":\"12053\",\"shape\":\"number\"},{\"value\":\"900719925474099353\",\"shape\":\"number\"},{\"value\":\"1053\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1054: reading 54.20; quantity 12054, serial 900719925474099354, unit 1054ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1054\",\"shape\":\"identifier\"},{\"value\":\"12054\",\"shape\":\"number\"},{\"value\":\"900719925474099354\",\"shape\":\"number\"},{\"value\":\"1054\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1055: reading 55.203; quantity 12055, serial 900719925474099355, unit 1055ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1055\",\"shape\":\"identifier\"},{\"value\":\"55.203\",\"shape\":\"number\"},{\"value\":\"12055\",\"shape\":\"number\"},{\"value\":\"900719925474099355\",\"shape\":\"number\"},{\"value\":\"1055\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":6,\"lookedUp\":6,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1056: reading 56; quantity 12056, serial 900719925474099356, unit 1056ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1056\",\"shape\":\"identifier\"},{\"value\":\"12056\",\"shape\":\"number\"},{\"value\":\"900719925474099356\",\"shape\":\"number\"},{\"value\":\"1056\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1057: reading 57.2; quantity 12057, serial 900719925474099357, unit 1057ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1057\",\"shape\":\"identifier\"},{\"value\":\"12057\",\"shape\":\"number\"},{\"value\":\"900719925474099357\",\"shape\":\"number\"},{\"value\":\"1057\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1058: reading 58.20; quantity 12058, serial 900719925474099358, unit 1058ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1058\",\"shape\":\"identifier\"},{\"value\":\"12058\",\"shape\":\"number\"},{\"value\":\"900719925474099358\",\"shape\":\"number\"},{\"value\":\"1058\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1059: reading 59.203; quantity 12059, serial 900719925474099359, unit 1059ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1059\",\"shape\":\"identifier\"},{\"value\":\"59.203\",\"shape\":\"number\"},{\"value\":\"12059\",\"shape\":\"number\"},{\"value\":\"900719925474099359\",\"shape\":\"number\"},{\"value\":\"1059\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":6,\"lookedUp\":6,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1060: reading 60; quantity 12060, serial 900719925474099360, unit 1060ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1060\",\"shape\":\"identifier\"},{\"value\":\"12060\",\"shape\":\"number\"},{\"value\":\"900719925474099360\",\"shape\":\"number\"},{\"value\":\"1060\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1061: reading 61.2; quantity 12061, serial 900719925474099361, unit 1061ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1061\",\"shape\":\"identifier\"},{\"value\":\"12061\",\"shape\":\"number\"},{\"value\":\"900719925474099361\",\"shape\":\"number\"},{\"value\":\"1061\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1062: reading 62.20; quantity 12062, serial 900719925474099362, unit 1062ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1062\",\"shape\":\"identifier\"},{\"value\":\"12062\",\"shape\":\"number\"},{\"value\":\"900719925474099362\",\"shape\":\"number\"},{\"value\":\"1062\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":5,\"lookedUp\":5,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "row-1063: reading 63.203; quantity 12063, serial 900719925474099363, unit 1063ms and date 2026-10-19.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"row-1063\",\"shape\":\"identifier\"},{\"value\":\"63.203\",\"shape\":\"number\"},{\"value\":\"12063\",\"shape\":\"number\"},{\"value\":\"900719925474099363\",\"shape\":\"number\"},{\"value\":\"1063\",\"shape\":\"number\"},{\"value\":\"2026-10-19\",\"shape\":\"identifier\"}],\"candidates\":6,\"lookedUp\":6,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":1,\"indexTruncated\":false}}"
+    }
+  ]
+}

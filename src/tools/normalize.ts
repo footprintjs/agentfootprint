@@ -35,6 +35,8 @@ import { anyOf, trimTrailing } from '../lib/linearText.js';
  * bare one.
  */
 const INTRA_TOKEN = /[^A-Za-z0-9:_\-/.,%+@#$]+/g;
+/** The answer's range reader keeps an en dash until it knows whether it is numeric. */
+const RANGE_TOKEN = /[^A-Za-z0-9:_\-/.,%+@#$–]+/g;
 
 /**
  * A comma that is NOT flanked by digits on both sides — i.e. a list comma
@@ -58,6 +60,7 @@ const LEADING_DECORATION = /^[$#@+'"`([{<]+/;
  * run (`lib/linearText.ts` · "Why these exist").
  */
 const TRAILING_DECORATION = anyOf('.,;:!?%\'"`)]}>');
+const ANSWER_TRAILING_DECORATION = anyOf('.,;:!?\'"`)]}>');
 
 /** `1,234` / `12,345,678` / `1,234.56` — a number wearing thousands separators. */
 const THOUSANDS = /^-?\d{1,3}(,\d{3})+(\.\d+)?$/;
@@ -78,15 +81,23 @@ const MAX_EXACT_DIGITS = 15;
  *
  * Returns `''` for a token that is nothing but decoration — callers drop those.
  */
-export function normalizeToken(raw: string): string {
+function tokenSpelling(raw: string, preservePercent = false): string {
   let v = raw.toLowerCase().trim();
   if (v === '') return '';
-  v = trimTrailing(v.replace(LEADING_DECORATION, ''), TRAILING_DECORATION);
+  v = trimTrailing(
+    v.replace(LEADING_DECORATION, ''),
+    preservePercent ? ANSWER_TRAILING_DECORATION : TRAILING_DECORATION,
+  );
   if (v === '') return '';
   // Thousands separators are PRESENTATION. `41,200` in prose and `41200` in
   // JSON are one value, and this is the single most common way a correct
   // answer looks fabricated to a naive matcher.
   if (THOUSANDS.test(v)) v = v.replace(/,/g, '');
+  return v;
+}
+
+export function normalizeToken(raw: string): string {
+  let v = tokenSpelling(raw);
   // `98304.0` (a JSON float printed by a spreadsheet exporter) and `98304`
   // (the same float printed by JSON.stringify) are one value. Canonicalise
   // through Number — but only while Number can hold the digits exactly.
@@ -121,6 +132,23 @@ export function tokenize(text: string): string[] {
     for (const piece of rough.split(LIST_COMMA)) {
       const norm = normalizeToken(piece);
       if (norm !== '') out.push(norm);
+    }
+  }
+  return out;
+}
+
+/**
+ * Answer-side spellings, before numeric canonicalization, for precision and
+ * exactly-two-endpoint ranges. Ordinary tokenization remains unchanged on the
+ * evidence and exemption sides. A non-range en-dash token is split normally by
+ * the caller after it has declined the range grammar.
+ */
+export function answerTokenSpellings(text: string): string[] {
+  const out: string[] = [];
+  for (const rough of text.replace(RANGE_TOKEN, ' ').split(/\s+/)) {
+    for (const piece of rough.split(LIST_COMMA)) {
+      const spelling = tokenSpelling(piece, true);
+      if (spelling !== '') out.push(spelling);
     }
   }
   return out;

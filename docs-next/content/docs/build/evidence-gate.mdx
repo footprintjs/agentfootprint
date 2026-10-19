@@ -109,6 +109,54 @@ Spelling differences are normalised on both sides, which is where a naive
 implementation produces its worst false positives: `41,200` in prose matches the
 JSON number `41200`, `2048.0` matches `2048`, and `0xef0101` matches `ef0101`.
 
+## Round a plain decimal without inventing evidence
+
+Use `decimalRounding: true` when an answer should report a carried measurement
+at fewer decimal places. It is off by default, so existing applications keep
+exact matching. With it on, plain decimals become checked data even below
+`minDigits`: `5.203` can ground `5.20` or `5.2`, but not `5.3`. The answer's
+written precision matters: `5.249` can ground `5.2`, but not `5.20`.
+Original normalized decimal spellings are compared exactly: a source of `1`
+does not justify invented low-order digits such as `1.000000000001`. Source
+spellings above 256 characters are not eligible for rounding.
+
+<CodeFile path="examples/features/103-evidence-rounding-ranges.ts" region="numeric-evidence" title="Decimal rounding and numeric ranges (mock only)" />
+
+The evidence event reports the accepted rounding under `computed`, with
+`derivation: 'rounded'` and `from` naming the carried value and its result
+location. Exact evidence wins first. This option only rounds one carried
+number; it adds no unitless sums, ratios, differences or unit conversions.
+Whole numbers still need an exact match if they are checked, and identifiers
+never round. Declare a shape when a numeric spelling is an ID in your app: a carried source
+matching that shape is excluded from rounding too, even when a rounded
+spelling would no longer match it.
+The existing `figures: true` option separately enables measurement units and
+its established arithmetic checks.
+
+## Check a range endpoint by endpoint
+
+A range of exactly two plain numbers, separated by a hyphen or en dash, is
+checked as two values only when the intact token was not returned by a tool.
+An exact whole-token match wins first: a carried ZIP+4 `12345-6789`, part
+number `1020-3040` or rack `10-20` remains one grounded identifier. Otherwise,
+`1000–9000` checks `1000` and `9000` independently;
+if a result carries only `1000`, only `9000` is flagged. `2-9ms` and
+`2–9 ms` apply the trailing unit to both endpoints under `figures: true`.
+The trailing unit must be one of the measurement units recognized by figures
+(`%`, byte sizes, IOPS, throughput, `ms`, `us`, optionally `/s`). Signed
+endpoints and decimals are supported; no interval arithmetic is inferred.
+
+**Short bare endpoints are still prose.** At the default `minDigits: 4`,
+an uncarried `0-13` is split but neither endpoint is checked. Use `minDigits: 1`
+if both short counts must be verified. Opt-in decimal rounding and measurement figures
+keep their own rules. This is token evidence, not proof that a range is ordered
+correctly or that every number inside it was observed.
+
+Dates, clock ranges, dotted versions and multipart IDs, such as
+`2026-10-19`, `10:00-10:10`, `1.2.3-4` and `1-2-3`, are not numeric ranges.
+App-declared identifier shapes are checked first: a shape matching `1-13`
+keeps the token intact as your ID.
+
 ## Teaching it your identifiers
 
 The default extractor guesses from digits and punctuation. It cannot know that
@@ -130,7 +178,7 @@ replacing them, and `exempt` removes what you know is safe.
 
 A `NamesAndNumbersOptions` bag: `posture` (`EvidencePosture`), `shapes`
 (`EvidenceShape[]` — each a `name` plus a `match` pattern, anchored to a whole
-token), `exempt`, `minDigits`, `nudge`, and `recoveryInstruction`.
+token), `exempt`, `minDigits`, `nudge`, `figures`, `decimalRounding`, and `recoveryInstruction`.
 
 Since 9.96.0, `recoveryInstruction` accepts the exported
 `EvidenceRecoveryInstruction` type: a string or synchronous callback returning
