@@ -12,7 +12,7 @@
  * wrong answer nobody investigates.
  *
  * **Contract-mapped and injection-tested.** Every AWS interaction runs through
- * the `_client` / `_sdk` seams; nothing here reaches AWS and nothing pretends
+ * the `_client` / `sdk` seams; nothing here reaches AWS and nothing pretends
  * to. Real-cloud verification lands with a field deployment.
  */
 
@@ -308,7 +308,7 @@ describe('AgentCoreStore.search — the SDK mapping', () => {
         { memoryRecordId: 'r-1', content: { text: 'window seats' }, score: 0.7 },
       ],
     });
-    const store = new AgentCoreStore({ memoryId: 'm-1', region: 'us-west-2', _sdk: module });
+    const store = new AgentCoreStore({ memoryId: 'm-1', region: 'us-west-2', sdk: module });
     const results = await store.search(identity, VECTOR, { text: 'seats', k: 3 });
     expect(sent[0].command).toBe('RetrieveMemoryRecords');
     expect(sent[0].input.searchCriteria).toMatchObject({ searchQuery: 'seats', topK: 3 });
@@ -319,14 +319,14 @@ describe('AgentCoreStore.search — the SDK mapping', () => {
     const { module } = fakeSdk({
       memoryRecordSummaries: [{ memoryRecordId: 'r-1', content: 'plain text', score: 0.5 }],
     });
-    const store = new AgentCoreStore({ memoryId: 'm-1', _sdk: module });
+    const store = new AgentCoreStore({ memoryId: 'm-1', sdk: module });
     const results = await store.search(identity, VECTOR, { text: 'x' });
     expect(results[0].entry.value).toEqual({ content: 'plain text' });
   });
 
   it('an empty response is an empty result set', async () => {
     const { module } = fakeSdk({});
-    const store = new AgentCoreStore({ memoryId: 'm-1', _sdk: module });
+    const store = new AgentCoreStore({ memoryId: 'm-1', sdk: module });
     expect(await store.search(identity, VECTOR, { text: 'x' })).toEqual([]);
   });
 
@@ -338,7 +338,7 @@ describe('AgentCoreStore.search — the SDK mapping', () => {
       ListEventsCommand: module.ListEventsCommand!,
       DeleteEventCommand: module.DeleteEventCommand!,
     };
-    const store = new AgentCoreStore({ memoryId: 'm-1', _sdk: stripped });
+    const store = new AgentCoreStore({ memoryId: 'm-1', sdk: stripped });
     await expect(store.search(identity, VECTOR, { text: 'x' })).rejects.toThrow(
       /RetrieveMemoryRecordsCommand/,
     );

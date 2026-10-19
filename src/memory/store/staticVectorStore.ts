@@ -39,6 +39,7 @@
  * because a corpus that indexes perfectly and renders an empty passage was
  * this door's worst shipped bug (8.19.0).
  */
+import { storeRequestLimit } from './requestLimit.js';
 import type { MemoryIdentity } from '../identity/index.js';
 import { identityNamespace } from '../identity/index.js';
 import type { MemoryEntry } from '../entry/index.js';
@@ -300,8 +301,8 @@ export function staticVectorStore(
       identity: MemoryIdentity,
       options?: ListOptions,
     ): Promise<ListResult<T>> {
+      const limit = Math.min(storeRequestLimit(options?.limit, 'limit') ?? 100, 1000);
       if (!inNamespace(identity)) return { entries: [] };
-      const limit = Math.max(1, Math.min(options?.limit ?? 100, 1000));
       const all = [...entries.values()];
       const offset = options?.cursor ? parseInt(options.cursor, 10) : 0;
       const safeOffset = Number.isFinite(offset) && offset >= 0 ? offset : 0;
@@ -326,6 +327,7 @@ export function staticVectorStore(
       query: readonly number[],
       options?: SearchOptions,
     ): Promise<readonly ScoredEntry<T>[]> {
+      const k = storeRequestLimit(options?.k, 'k') ?? 10;
       // A wrong-space query is refused BY NAME rather than ranked to an empty
       // page — the loud version of the mismatch machinery, because on a
       // static corpus "no results" reads as "the corpus has nothing to say".
@@ -348,7 +350,6 @@ export function staticVectorStore(
       }
       if (!inNamespace(identity)) return [];
 
-      const k = options?.k ?? 10;
       const tierFilter = options?.tiers ? new Set(options.tiers) : undefined;
       const minScore = options?.minScore;
       const scored: ScoredEntry<T>[] = [];

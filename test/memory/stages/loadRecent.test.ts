@@ -6,7 +6,7 @@
  * stage's contract from the rest of the library. Integration tests (Layer
  * 5 / 6) will drive the stage through a real pipeline.
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { InMemoryStore } from '../../../src/memory/store';
 import { loadRecent } from '../../../src/memory/stages/loadRecent';
 import type { MemoryState } from '../../../src/memory/stages/types';
@@ -121,6 +121,66 @@ describe('loadRecent — boundary', () => {
     await loadRecent({ store, count: 0 })(scope as never);
     expect(scope.loaded).toEqual([]);
   });
+
+  it.each(['preloaded', 'undefined'] as const)(
+    'count=0 skips store I/O while preserving %s loaded state and the stage write',
+    async (initialState) => {
+      const initial =
+        initialState === 'preloaded'
+          ? [makeEntry('prior-stage', msg('assistant', 'kept'), 50)]
+          : undefined;
+      const list = vi.spyOn(store, 'list').mockRejectedValue(new Error('unexpected store read'));
+      const scope = makeScope();
+      let loaded = initial;
+      let writes = 0;
+      let identityReads = 0;
+      Object.defineProperty(scope, 'loaded', {
+        get: () => loaded,
+        set: (next: MemoryState['loaded']) => {
+          writes++;
+          loaded = next;
+        },
+      });
+      Object.defineProperty(scope, 'identity', {
+        get: () => {
+          identityReads++;
+          return ID;
+        },
+      });
+
+      await loadRecent({ store, count: 0 })(scope as never);
+
+      expect(list).not.toHaveBeenCalled();
+      expect(identityReads).toBe(1);
+      expect(loaded).toEqual(initial ?? []);
+      expect(loaded).not.toBe(initial);
+      expect(writes).toBe(1);
+      expect(scope.identity).toBe(ID);
+    },
+  );
+
+  it('positive count still forwards identity, count and tiers and appends chronologically', async () => {
+    await store.put(ID, { ...makeEntry('m1', msg('user', 'first'), 100), tier: 'hot' });
+    await store.put(ID, { ...makeEntry('m2', msg('assistant', 'second'), 200), tier: 'hot' });
+    const prior = makeEntry('prior-stage', msg('assistant', 'kept'), 50);
+    const scope = makeScope({ loaded: [prior] });
+    const list = vi.spyOn(store, 'list');
+
+    await loadRecent({ store, count: 2, tiers: ['hot'] })(scope as never);
+
+    expect(list).toHaveBeenCalledExactlyOnceWith(ID, { limit: 2, tiers: ['hot'] });
+    expect(scope.loaded.map((entry) => entry.id)).toEqual(['prior-stage', 'm1', 'm2']);
+    expect(scope.identity).toBe(ID);
+  });
+
+  it.each([-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
+    'count=%s retains the store request-size refusal',
+    async (count) => {
+      const scope = makeScope();
+      await expect(loadRecent({ store, count })(scope as never)).rejects.toThrow(RangeError);
+      expect(scope.loaded).toEqual([]);
+    },
+  );
 
   it('filters by tier when `tiers` is provided', async () => {
     await store.put(ID, { ...makeEntry('hot1', msg('user', 'h'), 100), tier: 'hot' });

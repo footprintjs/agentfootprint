@@ -43,6 +43,7 @@
  *          in use.  Emits: N/A (storage adapters don't emit).
  */
 
+import { storeRequestLimit } from '../../memory/store/requestLimit.js';
 import type {
   ListOptions,
   ListResult,
@@ -62,6 +63,18 @@ import {
   type MemoryWriteOptionName,
   type MemoryWriteOptions,
 } from '../../memory/store/writeOptions.js';
+
+/**
+ * ListEvents.maxResults: integer 1..100 (AWS API reference, verified 2026-10-19).
+ * https://docs.aws.amazon.com/bedrock-agentcore/latest/APIReference/API_ListEvents.html
+ */
+const MAX_EVENT_PAGE_SIZE = 100;
+/**
+ * RetrieveMemoryRecords.maxResults and SearchCriteria.topK both admit 1..100.
+ * https://docs.aws.amazon.com/bedrock-agentcore/latest/APIReference/API_RetrieveMemoryRecords.html
+ * https://docs.aws.amazon.com/bedrock-agentcore/latest/APIReference/API_SearchCriteria.html
+ */
+const MAX_RETRIEVAL_RESULTS = 100;
 
 /** What this store honours when its client forwards CreateEvent's extraction fields. */
 const AGENTCORE_WRITE_OPTIONS: readonly MemoryWriteOptionName[] = Object.freeze([
@@ -452,7 +465,7 @@ export interface AgentCoreStoreOptions {
   readonly region?: string;
   /** Pre-built AgentCore client (shares one SDK config across the host app). */
   readonly client?: AgentCoreLikeClient;
-  /** Page size for `listEvents`. Default 100. */
+  /** Page size for session scans and default `list()` calls: integer 1..100. Default 100. */
   readonly pageSize?: number;
   /**
    * Where `search()` looks. AgentCore organises extracted memory records into
@@ -507,8 +520,12 @@ export interface AgentCoreStoreOptions {
   readonly searchAcrossPrincipals?: boolean;
   /** @internal Test injection — skips the SDK require entirely. */
   readonly _client?: AgentCoreLikeClient;
-  /** @internal Test injection — the AWS SDK module (to exercise the real shim with a mock SDK). */
-  readonly _sdk?: BedrockAgentCoreSdkModule;
+  /**
+   * Statically imported `@aws-sdk/client-bedrock-agentcore` module. Bypasses the
+   * lazy loader for bundled hosts; the adapter still owns command construction.
+   * A scripted module also exercises the real mapping without AWS calls.
+   */
+  readonly sdk?: BedrockAgentCoreSdkModule;
 }
 
 /**
@@ -634,7 +651,7 @@ function boundedId(body: string, max: number, field: 'actor' | 'session'): strin
 /**
  * AgentCore Memory-backed `MemoryStore`. Implements every method except `search()`.
  *
- * @throws when `@aws-sdk/client-bedrock-agentcore` is not installed and no `_client`/`_sdk`
+ * @throws when `@aws-sdk/client-bedrock-agentcore` is not installed and no `client`/`sdk`
  *         is supplied.
  */
 export class AgentCoreStore implements MemoryStore {
@@ -730,7 +747,14 @@ export class AgentCoreStore implements MemoryStore {
   constructor(options: AgentCoreStoreOptions) {
     if (!options.memoryId) throw new Error('AgentCoreStore requires `memoryId`.');
     this.memoryId = options.memoryId;
-    this.pageSize = options.pageSize ?? 100;
+    const pageSize = options.pageSize ?? MAX_EVENT_PAGE_SIZE;
+    if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > MAX_EVENT_PAGE_SIZE) {
+      throw new RangeError(
+        `AgentCoreStore: \`pageSize\` must be an integer from 1 to ${MAX_EVENT_PAGE_SIZE} ` +
+          '(the ListEvents limit). Use list() cursors to read more than one page.',
+      );
+    }
+    this.pageSize = pageSize;
     this.searchNamespace =
       options.searchNamespace ??
       (({ actorId, sessionId }) => `/actors/${actorId}/sessions/${sessionId}`);
@@ -739,7 +763,7 @@ export class AgentCoreStore implements MemoryStore {
     this.searchAcrossPrincipals = options.searchAcrossPrincipals === true;
 
     const injected = options._client ?? options.client;
-    this.client = injected ?? createAgentCoreClient(options.region, options._sdk);
+    this.client = injected ?? createAgentCoreClient(options.region, options.sdk);
     this.writeOptionsRefusal =
       this.client.forwardsWriteOptions === true
         ? undefined
@@ -749,7 +773,7 @@ export class AgentCoreStore implements MemoryStore {
           'forwards both fields unchanged'
         : "the installed `@aws-sdk/client-bedrock-agentcore` does not model CreateEvent's " +
           '`extractionMode` / `extractionConfig`, and its serializer drops a field it does not ' +
-          'model. Upgrade the SDK';
+          'model. Upgrade the SDK to `@aws-sdk/client-bedrock-agentcore` >=3.1114.0';
   }
 
   // MemoryIdentity → AgentCore (actorId, sessionId). The actor is the user/tenant; the
@@ -980,9 +1004,10 @@ export class AgentCoreStore implements MemoryStore {
     options: ListOptions = {},
   ): Promise<ListResult<T>> {
     this.ensureOpen('list');
+    const limit = storeRequestLimit(options.limit, 'limit') ?? this.pageSize;
     const page = await this.client.listEvents({
       ...this.scope(identity),
-      maxResults: options.limit ?? this.pageSize,
+      maxResults: Math.min(limit, MAX_EVENT_PAGE_SIZE),
       ...(options.cursor !== undefined && { nextToken: options.cursor }),
     });
     const out: MemoryEntry<T>[] = [];
@@ -1084,6 +1109,7 @@ export class AgentCoreStore implements MemoryStore {
     options: SearchOptions = {},
   ): Promise<readonly ScoredEntry<T>[]> {
     this.ensureOpen('search');
+    const k = Math.min(storeRequestLimit(options.k, 'k') ?? 10, MAX_RETRIEVAL_RESULTS);
     const text = options.text?.trim();
     if (!text) {
       throw new Error(
@@ -1103,7 +1129,6 @@ export class AgentCoreStore implements MemoryStore {
     }
 
     const scope = this.scope(identity);
-    const k = options.k ?? 10;
     const namespace = this.namespaceFor(identity, scope, options.namespaceScope);
     const page = await this.client.retrieveRecords({
       memoryId: this.memoryId,
@@ -1176,15 +1201,20 @@ export class AgentCoreStore implements MemoryStore {
 // (`fnv1a` lived here to build the hash tail of a truncated id. Truncation is
 // gone — see `boundedId` — and with it the only caller.)
 
-/** The slice of `@aws-sdk/client-bedrock-agentcore` the shim touches. */
+/**
+ * The slice of `@aws-sdk/client-bedrock-agentcore` the shim touches.
+ * Command inputs are SDK-owned: `never` keeps their specific constructor
+ * signatures assignable without importing the optional peer's types. The
+ * adapter alone supplies each command's wire input at its internal boundary.
+ */
 export interface BedrockAgentCoreSdkModule {
   readonly BedrockAgentCoreClient?: new (config: { region?: string }) => {
     send(cmd: unknown): Promise<unknown>;
   };
-  readonly CreateEventCommand?: new (input: unknown) => unknown;
-  readonly ListEventsCommand?: new (input: unknown) => unknown;
-  readonly DeleteEventCommand?: new (input: unknown) => unknown;
-  readonly RetrieveMemoryRecordsCommand?: new (input: unknown) => unknown;
+  readonly CreateEventCommand?: new (input: never) => unknown;
+  readonly ListEventsCommand?: new (input: never) => unknown;
+  readonly DeleteEventCommand?: new (input: never) => unknown;
+  readonly RetrieveMemoryRecordsCommand?: new (input: never) => unknown;
   /**
    * The SDK's own schema of `CreateEventInput` — read only to learn whether this
    * SDK MODELS the extraction fields (see `sdkModelsExtraction`).
@@ -1198,7 +1228,10 @@ export interface BedrockAgentCoreSdkModule {
  * word, so an older SDK would accept the write options and send neither.
  *
  * Read off the SDK's own schema of the input (`CreateEventInput$`, whose member
- * names include both in 3.1152.0); anything that cannot be read that way counts
+ * names include both since 3.1114.0). The SDK changelog first adds
+ * `extractionConfig` in that version (it adds `extractionMode` in 3.1074.0):
+ * https://github.com/aws/aws-sdk-js-v3/blob/v3.1114.0/clients/client-bedrock-agentcore/CHANGELOG.md
+ * Anything that cannot be read that way counts
  * as "no" — the options are then refused by name, never sent into a drop.
  */
 function sdkModelsExtraction(mod: BedrockAgentCoreSdkModule): boolean {
@@ -1275,7 +1308,7 @@ function createAgentCoreClient(
       throw new Error(
         'AgentCoreStore requires the `@aws-sdk/client-bedrock-agentcore` peer dependency.\n' +
           '  Install:  npm install @aws-sdk/client-bedrock-agentcore\n' +
-          '  Or pass `client` / `_client` for a pre-built or mock client.',
+          '  Or pass `sdk` for a statically imported module, or `client` for a pre-built client.',
       );
     }
   }
@@ -1288,7 +1321,7 @@ function createAgentCoreClient(
   const sdk = new mod.BedrockAgentCoreClient({ ...(region && { region }) });
 
   const send = async (
-    Ctor: (new (i: unknown) => unknown) | undefined,
+    Ctor: (new (input: never) => unknown) | undefined,
     name: string,
     input: unknown,
   ) => {
@@ -1297,7 +1330,10 @@ function createAgentCoreClient(
         `AgentCoreStore: \`@aws-sdk/client-bedrock-agentcore\` is missing ${name}. Upgrade the SDK.`,
       );
     }
-    return sdk.send(new Ctor(input));
+    // The public module keeps the SDK's narrower constructor input opaque.
+    // This boundary supplies the wire shape owned by this adapter below.
+    const Command = Ctor as new (input: unknown) => unknown;
+    return sdk.send(new Command(input));
   };
 
   return {

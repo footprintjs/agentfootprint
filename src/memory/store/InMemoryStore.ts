@@ -13,6 +13,7 @@
  * TTL is enforced lazily on read (cheapest; no background sweeper needed).
  * Pagination cursor is a monotonic integer — entries sorted by updatedAt desc.
  */
+import { storeRequestLimit } from './requestLimit.js';
 import type { MemoryIdentity } from '../identity/index.js';
 import { identityNamespace } from '../identity/index.js';
 import type { MemoryEntry } from '../entry/index.js';
@@ -156,8 +157,11 @@ export class InMemoryStore implements MemoryStore {
   }
 
   async list<T = unknown>(identity: MemoryIdentity, options?: ListOptions): Promise<ListResult<T>> {
+    const limit = Math.min(
+      storeRequestLimit(options?.limit, 'limit') ?? DEFAULT_LIST_LIMIT,
+      MAX_LIST_LIMIT,
+    );
     const slot = this.slot(identity);
-    const limit = Math.min(options?.limit ?? DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT);
     const tierFilter = options?.tiers ? new Set(options.tiers) : undefined;
 
     // Collect non-expired matching entries, sorted by updatedAt desc
@@ -249,8 +253,8 @@ export class InMemoryStore implements MemoryStore {
     query: readonly number[],
     options?: SearchOptions,
   ): Promise<readonly ScoredEntry<T>[]> {
+    const k = storeRequestLimit(options?.k, 'k') ?? 10;
     const slot = this.slot(identity);
-    const k = options?.k ?? 10;
     const tierFilter = options?.tiers ? new Set(options.tiers) : undefined;
     const minScore = options?.minScore;
     const embedderId = options?.embedderId;

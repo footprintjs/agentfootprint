@@ -19,8 +19,22 @@ store.put(identity, entry, { extraction: 'skip' });
 // InMemoryStore:  UnsupportedMemoryWriteOptionError (option: 'extraction')
 ```
 
+## Caller request sizes
+`ListOptions.limit` and `SearchOptions.k`, when provided, must be finite positive
+integers. Every shipped store rejects zero, negatives, fractions, `NaN`,
+infinities and runtime non-numbers with a fixed `RangeError`, before backend
+work or an empty-result shortcut. Omit the option, or pass `undefined`, to keep
+the adapter's default. Zero never means "return everything" or "return nothing".
+
+One private boundary helper (`requestLimit.ts`) validates and returns the number
+once; adapters use that captured value for their existing defaults and upper
+caps. A changing option getter cannot substitute an unchecked second value.
+There is no shared maximum: a positive request may be capped by its adapter,
+and a list caller follows `ListResult.cursor` to continue.
+
 ## Files
 - `types.ts` — the I/O boundary.
+- `requestLimit.ts` — the private positive-integer request-size rule.
 - `InMemoryStore.ts` — the deliberately small reference implementation.
 - `staticVectorStore.ts` — serve a corpus built somewhere else, read-only.
 - `writeOptions.ts` — the vendor-neutral write options, their one refusal, and

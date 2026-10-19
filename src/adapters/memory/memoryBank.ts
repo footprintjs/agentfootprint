@@ -103,6 +103,7 @@
  * through the shared REST client in `adapters/google/aiPlatform.ts`.
  */
 
+import { storeRequestLimit } from '../../memory/store/requestLimit.js';
 import type { MemoryEntry } from '../../memory/entry/index.js';
 import type { MemoryIdentity } from '../../memory/identity/index.js';
 import { encodeIdentityField } from '../../memory/identity/index.js';
@@ -399,8 +400,9 @@ export class MemoryBankStore implements MemoryStore {
     options: ListOptions = {},
   ): Promise<ListResult<T>> {
     this.ensureOpen('list');
+    const requestedLimit = storeRequestLimit(options.limit, 'limit');
     const scope = this.resolveScope(identity);
-    const pageSize = clampPage(options.limit ?? this.pageSize);
+    const pageSize = clampPage(requestedLimit ?? this.pageSize);
     let page;
     try {
       page = (
@@ -478,6 +480,7 @@ export class MemoryBankStore implements MemoryStore {
     options: SearchOptions = {},
   ): Promise<readonly ScoredEntry<T>[]> {
     this.ensureOpen('search');
+    const requestedK = storeRequestLimit(options.k, 'k');
     const text = options.text?.trim();
     if (!text) {
       throw new Error(
@@ -503,7 +506,7 @@ export class MemoryBankStore implements MemoryStore {
     }
 
     const scope = this.resolveScope(identity);
-    const topK = clampPage(options.k ?? 10);
+    const topK = clampPage(requestedK ?? 10);
     let page;
     try {
       page = (

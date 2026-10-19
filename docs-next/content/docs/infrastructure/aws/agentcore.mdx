@@ -34,6 +34,48 @@ find-and-replace on the import line.
 
 The store implements every `MemoryStore` method. Pair with `defineMemory({ store, ... })` like any other adapter.
 
+## Bounded pages and bundled SDKs
+
+`MemoryStore.list()` allows an adapter to return a smaller page. AgentCore
+accepts at most 100 events per `ListEvents` request, so this adapter caps a
+larger caller limit while preserving the service cursor. Always follow
+`ListResult.cursor` to continue; an empty filtered page can still have a cursor.
+`pageSize` must be an integer from 1 through 100 (default 100), checked before
+any SDK client is constructed. The same bound applies to its session scans.
+Search caps both `RetrieveMemoryRecords.maxResults` and `SearchCriteria.topK`
+at 100. These are the service's documented limits:
+[AWS ListEvents](https://docs.aws.amazon.com/bedrock-agentcore/latest/APIReference/API_ListEvents.html),
+[RetrieveMemoryRecords](https://docs.aws.amazon.com/bedrock-agentcore/latest/APIReference/API_RetrieveMemoryRecords.html)
+and [SearchCriteria](https://docs.aws.amazon.com/bedrock-agentcore/latest/APIReference/API_SearchCriteria.html).
+
+As on every shipped `MemoryStore`, caller `limit` and `k` must be finite positive
+integers when provided. Zero, negatives, fractions and nonfinite values fail
+locally with a `RangeError` before an AWS call, including when no rows would be
+returned. Omission/`undefined` preserves the existing defaults. A larger positive
+integer still receives the caps described above.
+
+A bundler may not follow the default lazy SDK loader. Supply the module you
+imported instead; command construction still belongs to the adapter:
+
+```ts
+import * as sdk from '@aws-sdk/client-bedrock-agentcore';
+import { AgentCoreStore } from 'agentfootprint/memory';
+const store = new AgentCoreStore({ memoryId, region: 'us-west-2', sdk });
+```
+
+`BedrockAgentCoreSdkModule` is exported from the memory door for typed wrappers
+and offline doubles. The former internal `_sdk` option is removed: rename it to
+`sdk`, without an alias. An entry-semantic `client` remains supported. This
+runnable example uses a scripted module and makes no AWS calls:
+
+<CodeFile path="examples/memory/13-agentcore-bounded-pages.ts" region="sdk-and-pages" title="Public SDK injection and three bounded pages" />
+
+For extraction write options, use `@aws-sdk/client-bedrock-agentcore` **3.1114.0
+or later**: that is the first version modelling both `extractionMode` and
+`extractionConfig`. The [official changelog](https://github.com/aws/aws-sdk-js-v3/blob/v3.1114.0/clients/client-bedrock-agentcore/CHANGELOG.md)
+introduces them in 3.1074.0 and 3.1114.0 respectively. The runtime schema check
+still refuses them before writing if either field cannot be carried.
+
 ## Mapping to AgentCore primitives
 
 AgentCore Memory is an **append-only event log**, not a key-value store: the server assigns each event's `eventId` on write (you cannot choose it), and there is no "delete the whole session" call. That single fact shapes every row below — including the two that cost O(events in session).

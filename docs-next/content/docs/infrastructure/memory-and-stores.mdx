@@ -33,6 +33,20 @@ reading before you write an adapter:
 4. **`putMany` with an empty batch MUST be a no-op** — callers rely on it to skip
    a round-trip for a turn that produced nothing.
 
+### Request sizes: positive integers, or a local refusal
+
+All eight shipped stores share this rule: a provided `ListOptions.limit`, or
+`SearchOptions.k` where search is implemented, must be a finite positive integer.
+Zero, negatives, fractions, `NaN`, infinities and runtime non-numbers reject
+with a clear `RangeError` before backend work or empty-result shortcuts. This
+covers InMemory, static vector, SQLite, pgvector, S3 Vectors, Redis, Memory Bank
+and AgentCore; Redis still has no search method.
+
+Omit the option, or pass `undefined`, to retain the existing adapter default.
+A larger positive integer remains legal; existing provider-specific caps still
+apply. Continue lists using `ListResult.cursor` rather than assuming the page
+contains the number requested. Zero has no "all rows" or "empty rows" meaning.
+
 ### The optional, feature-detected members
 
 Four, and each answers a different question:

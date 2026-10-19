@@ -41,6 +41,7 @@ export {
   type AgentCoreLikeClient,
   type AgentCoreEvent,
   type AgentCoreMemoryRecord,
+  type BedrockAgentCoreSdkModule,
 } from './adapters/memory/agentcore.js';
 
 // Vertex AI Memory Bank — a NATURAL-LANGUAGE memory service, not a vector

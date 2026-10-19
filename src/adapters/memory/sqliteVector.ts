@@ -97,6 +97,7 @@ import {
   parseFingerprint,
   type Fingerprint,
 } from '../../lib/embedderMismatch.js';
+import { storeRequestLimit } from '../../memory/store/requestLimit.js';
 import type { MemoryIdentity } from '../../memory/identity/index.js';
 import type { MemoryEntry } from '../../memory/entry/index.js';
 import type {
@@ -665,8 +666,8 @@ export function sqliteVectorStore(options: SqliteVectorStoreOptions): SqliteVect
       listOptions?: ListOptions,
     ): Promise<ListResult<T>> {
       open('list entries');
+      const limit = storeRequestLimit(listOptions?.limit, 'limit') ?? 100;
       const ns = identityNamespace(identity);
-      const limit = Math.max(1, Math.floor(listOptions?.limit ?? 100));
       const after = listOptions?.cursor ?? '';
       const rows = stmt.list.all(ns, after, limit + 1) as RawRow[];
 
@@ -760,8 +761,8 @@ export function sqliteVectorStore(options: SqliteVectorStoreOptions): SqliteVect
       searchOptions?: SearchOptions,
     ): Promise<readonly ScoredEntry<T>[]> {
       open('search');
+      const k = storeRequestLimit(searchOptions?.k, 'k') ?? 10;
       const ns = identityNamespace(identity);
-      const k = Math.max(1, Math.floor(searchOptions?.k ?? 10));
 
       // Refused BEFORE the scan, on both halves of the fingerprint. A swapped
       // embedder must not score against the old vectors — the numbers come back

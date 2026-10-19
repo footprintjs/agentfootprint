@@ -22,6 +22,7 @@
  */
 import type { TypedScope } from 'footprintjs';
 import type { MemoryStore } from '../store/index.js';
+import type { MemoryEntry } from '../entry/index.js';
 import type { LLMMessage as Message } from '../../provider-contract/types.js';
 import type { MemoryState } from './types.js';
 
@@ -32,6 +33,8 @@ export interface LoadRecentConfig {
    * Maximum number of entries to return. Defaults to 20 — large enough
    * for typical chat recency, small enough to fit most context windows.
    * Stores may cap this lower; in that case you get whatever fits.
+   * Zero disables this load without calling the store; existing loaded
+   * entries are retained through the normal stage write.
    */
   readonly count?: number;
   /**
@@ -56,10 +59,15 @@ export function loadRecent(config: LoadRecentConfig) {
 
   return async (scope: TypedScope<MemoryState>): Promise<void> => {
     const identity = scope.identity;
-    const { entries } = await config.store.list<Message>(identity, {
-      limit: count,
-      ...(config.tiers && { tiers: config.tiers }),
-    });
+    const entries: readonly MemoryEntry<Message>[] =
+      count === 0
+        ? []
+        : (
+            await config.store.list<Message>(identity, {
+              limit: count,
+              ...(config.tiers && { tiers: config.tiers }),
+            })
+          ).entries;
 
     // Store returns most-recently-updated first (see InMemoryStore.list).
     // Chat consumers want oldest-first for natural reading order, so

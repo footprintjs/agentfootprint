@@ -116,6 +116,7 @@ import {
   parseFingerprint,
   type Fingerprint,
 } from '../../lib/embedderMismatch.js';
+import { storeRequestLimit } from '../../memory/store/requestLimit.js';
 import type { MemoryIdentity } from '../../memory/identity/index.js';
 import type { MemoryEntry } from '../../memory/entry/index.js';
 import type {
@@ -720,8 +721,8 @@ export function pgVectorStore(options: PgVectorStoreOptions = {}): PgVectorStore
       listOptions?: ListOptions,
     ): Promise<ListResult<T>> {
       open('list entries');
+      const limit = storeRequestLimit(listOptions?.limit, 'limit') ?? 100;
       const ns = identityNamespace(identity);
-      const limit = Math.max(1, Math.floor(listOptions?.limit ?? 100));
       const after = listOptions?.cursor ?? '';
       // Keyset pagination on the primary key: stable under concurrent writes,
       // unlike OFFSET, and the cursor is the last id rather than a position.
@@ -830,8 +831,8 @@ export function pgVectorStore(options: PgVectorStoreOptions = {}): PgVectorStore
       searchOptions?: SearchOptions,
     ): Promise<readonly ScoredEntry<T>[]> {
       open('search');
+      const k = storeRequestLimit(searchOptions?.k, 'k') ?? 10;
       const ns = identityNamespace(identity);
-      const k = Math.max(1, Math.floor(searchOptions?.k ?? 10));
       if (queryVector.length === 0) return [];
       // pgvector's cosine distance is undefined for a zero vector (it divides
       // by the norm) and comes back as NaN, which sorts unpredictably. An
