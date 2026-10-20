@@ -78,10 +78,33 @@ client with a fixed first-party Messages destination, redirects disabled and a
 one-HTTP-attempt allowance. Responses are bounded at 128 KiB. SDK logging is off.
 There is no fallback, server tool, thinking budget, credential-bearing transcript
 or raw SDK error saved in the report.
-Usage accepts only the documented token counts and known standard/global
-metadata, with no paid server-tool or thinking counts. Unknown fields, regional
-pricing, unexpected tiers or new charge classes halt as unknown; arbitrary
-response metadata never enters the durable journal.
+Usage accepts documented token counts and explicitly admitted labels: standard
+service and speed, plus `global` or `not_available` geography for the frozen Haiku
+4.5 model. Older models do not support geographic routing premiums. Metadata is
+preserved verbatim rather than rewritten, and the pricing arithmetic is unchanged.
+Fast speed, regional premiums, unexpected tiers, paid server tools, thinking and
+new charge classes still halt as unknown. Missing/null cache counts never become
+zero. These rules were checked against the official
+[Messages contract](https://platform.claude.com/docs/en/api/messages/create) and
+[data-residency contract](https://platform.claude.com/docs/en/manage-claude/data-residency)
+on 2026-10-20.
+
+Before an unaccepted usage object is discarded, a `usage-refused` event records a
+bounded projection of field paths, types and non-negative integer values. Only
+explicitly known label values are included; arbitrary strings, provider text,
+credentials, requests and answers remain excluded. Unsafe field names are omitted
+with a count, never renamed into potentially colliding paths. The projection is
+limited to 8KiB input, 64 rows and three path segments; `complete`, `truncated`,
+`withheldNames` and fixed gaps disclose missing evidence. Withheld string/boolean
+values, array contents and out-of-bound numbers have explicit row gaps and set
+`complete: false`. If this evidence cannot
+be durably written, the guard stays halted and never settles the usage.
+
+The original failed smoke did not retain its rejected usage shape. The offline
+regressions are documented synthetic contract cases, not a claimed recovery of
+that response or a retroactive bill. Known cost remains separate from reservations.
+Fractional remaining time is rounded down at the SDK boundary, never up. This
+source change does not reopen the existing paid journal or authorize a fresh run.
 
 ## Prepare and rehearse for $0
 
@@ -119,7 +142,7 @@ only the consumer and output paths with the admitted install and a new private f
 node --env-file=/Users/sanjay/github/footprintjs/neo-seo-local/.env bench/cache/pilot/run.mjs \
   --consumer /path/to/reviewed-pilot-consumer \
   --out /path/to/new-private-summary.json \
-  --approve-manifest 5f60970741af04d77dbaffbab0b745d844a975463073e0b5827fb5310cb70490 \
+  --approve-manifest 8dac9b8c4135f5bbc27c9dab2a2257b8b1b38b198f24b7b38508ffa9dc30a681 \
   --execute
 ```
 

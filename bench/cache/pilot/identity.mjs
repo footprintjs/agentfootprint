@@ -9,6 +9,7 @@ export const KIT_FILES = Object.freeze(
   [
     'arms.mjs',
     'budget.mjs',
+    'usageEvidence.mjs',
     'fixture.mjs',
     'identity.mjs',
     'inspect.mjs',

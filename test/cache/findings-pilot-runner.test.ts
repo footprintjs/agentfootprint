@@ -50,7 +50,7 @@ describe('findings pilot free end-to-end setup', () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
-  it('the pinned SDK also ignores an unhashed root package self-reference', async () => {
+  it('the pinned SDK ignores root self-reference and accepts fractional remaining deadlines', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'af-pilot-sdk-self-reference-'));
     try {
       symlinkSync(join(process.cwd(), 'node_modules'), join(dir, 'node_modules'), 'dir');
@@ -79,7 +79,7 @@ describe('findings pilot free end-to-end setup', () => {
           max_tokens: 1,
           messages: [{ role: 'user', content: 'synthetic' }],
         },
-        { timeout: 500, signal: new AbortController().signal },
+        { timeout: 500.125, signal: new AbortController().signal },
       );
       expect(network).toHaveBeenCalledTimes(1);
     } finally {
