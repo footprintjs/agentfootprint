@@ -22,6 +22,8 @@
 import { readFileSync } from 'node:fs';
 import { relative, dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import aliases from '../docs-next/lib/generated-api-aliases.json' with { type: 'json' };
+import { resolveApiAlias } from '../docs-next/lib/api-groups.mjs';
 
 const HERE = dirname(new URL(import.meta.url).pathname);
 const DOC_IDS = pathToFileURL(resolve(HERE, '..', 'docs-next', 'lib', 'doc-ids.mjs')).href;
@@ -51,7 +53,7 @@ for (const file of sources) {
     LINK_RE.lastIndex = 0;
     let m;
     while ((m = LINK_RE.exec(lines[i]))) {
-      const raw = m[1];
+      const raw = resolveApiAlias(m[1], aliases);
       if (/^(https?:|mailto:|tel:|data:)/i.test(raw)) continue;
       if (/\.(png|svg|jpe?g|webp|gif|ico|pdf|mp4)$/i.test(raw)) continue;
       const where = `${relative(DOCS_ROOT, file)}:${i + 1}`;
@@ -108,7 +110,8 @@ try {
     while ((m = README_LINK_RE.exec(readmeLines[i]))) {
       readmeLinks++;
       const where = `README.md:${i + 1}`;
-      const [pathPart, anchor] = m[1].split('#');
+      const resolved = resolveApiAlias('/' + m[1], aliases);
+      const [pathPart, anchor] = resolved.slice(1).split('#');
       const route = '/' + pathPart.replace(/\/$/, ''); // strip trailing slash; '' -> site root '/'
       if (!routes.has(route) && !APP_ROUTES.has(route)) {
         brokenPaths.push({ where, raw: m[0], note: `no page at ${route}` });

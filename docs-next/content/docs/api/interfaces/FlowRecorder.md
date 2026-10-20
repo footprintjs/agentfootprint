@@ -58,7 +58,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 ##### event
 
-[`FlowBreakEvent`](/docs/api/interfaces/FlowBreakEvent)
+[`FlowBreakEvent`](/docs/api/interfaces/flow-events#interface-flowbreakevent)
 
 #### Returns
 
@@ -76,7 +76,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 ##### event
 
-[`FlowDecisionEvent`](/docs/api/interfaces/FlowDecisionEvent)
+[`FlowDecisionEvent`](/docs/api/interfaces/flow-events#interface-flowdecisionevent)
 
 #### Returns
 
@@ -94,7 +94,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 ##### event
 
-[`FlowErrorEvent`](/docs/api/interfaces/FlowErrorEvent)
+[`FlowErrorEvent`](/docs/api/interfaces/flow-events#interface-flowerrorevent)
 
 #### Returns
 
@@ -112,7 +112,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 ##### event
 
-[`FlowForkEvent`](/docs/api/interfaces/FlowForkEvent)
+[`FlowForkEvent`](/docs/api/interfaces/flow-events#interface-flowforkevent)
 
 #### Returns
 
@@ -130,7 +130,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 ##### event
 
-[`FlowLoopEvent`](/docs/api/interfaces/FlowLoopEvent)
+[`FlowLoopEvent`](/docs/api/interfaces/flow-events#interface-flowloopevent)
 
 #### Returns
 
@@ -148,7 +148,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 ##### event
 
-[`FlowNextEvent`](/docs/api/interfaces/FlowNextEvent)
+[`FlowNextEvent`](/docs/api/interfaces/flow-events#interface-flownextevent)
 
 #### Returns
 
@@ -268,7 +268,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 ##### event
 
-[`FlowSelectedEvent`](/docs/api/interfaces/FlowSelectedEvent)
+[`FlowSelectedEvent`](/docs/api/interfaces/flow-events#interface-flowselectedevent)
 
 #### Returns
 
@@ -286,7 +286,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 ##### event
 
-[`FlowStageEvent`](/docs/api/interfaces/FlowStageEvent)
+[`FlowStageEvent`](/docs/api/interfaces/flow-events#interface-flowstageevent)
 
 #### Returns
 
@@ -327,7 +327,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 ##### event
 
-[`FlowSubflowEvent`](/docs/api/interfaces/FlowSubflowEvent)
+[`FlowSubflowEvent`](/docs/api/interfaces/flow-events#interface-flowsubflowevent)
 
 #### Returns
 
@@ -345,7 +345,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 ##### event
 
-[`FlowSubflowEvent`](/docs/api/interfaces/FlowSubflowEvent)
+[`FlowSubflowEvent`](/docs/api/interfaces/flow-events#interface-flowsubflowevent)
 
 #### Returns
 
@@ -365,7 +365,7 @@ Called when a dynamic subflow is registered during traversal.
 
 ##### event
 
-[`FlowSubflowRegisteredEvent`](/docs/api/interfaces/FlowSubflowRegisteredEvent)
+[`FlowSubflowRegisteredEvent`](/docs/api/interfaces/flow-events#interface-flowsubflowregisteredevent)
 
 #### Returns
 

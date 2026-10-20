@@ -13,6 +13,8 @@
  */
 import { visit } from 'unist-util-visit';
 import { buildIdMap } from './doc-ids.mjs';
+import aliases from './generated-api-aliases.json' with { type: 'json' };
+import { resolveApiAlias } from './api-groups.mjs';
 
 let MAP;
 function idMap() {
@@ -25,6 +27,10 @@ export function remarkDocLinks() {
     const map = idMap();
     visit(tree, 'link', (node) => {
       const url = node.url;
+      if (typeof url === 'string' && url.startsWith('/docs/api/')) {
+        node.url = resolveApiAlias(url, aliases);
+        return;
+      }
       if (typeof url !== 'string' || !url.startsWith('doc:')) return;
       const [id, anchor] = url.slice('doc:'.length).split('#');
       const entry = map.get(id);

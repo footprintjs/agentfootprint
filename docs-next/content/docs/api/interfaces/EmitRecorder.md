@@ -53,7 +53,7 @@ Called for every `scope.$emit(name, payload)` call in any stage.
 
 ##### event
 
-[`EmitEvent`](/docs/api/interfaces/EmitEvent)
+[`EmitEvent`](/docs/api/interfaces/scope-events#interface-emitevent)
 
 #### Returns
 

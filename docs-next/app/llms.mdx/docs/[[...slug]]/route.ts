@@ -1,16 +1,19 @@
 import { getLLMText } from '@/lib/get-llm-text';
 import { source } from '@/lib/source';
 import { notFound } from 'next/navigation';
+import aliases from '@/lib/generated-api-aliases.json';
 
 // Per-page raw Markdown: any doc page is fetchable as text/markdown for AI agents
 // (the "copy as Markdown / open in ChatGPT" foundation) — e.g. /llms.mdx/docs/getting-started
 export const revalidate = false;
 
-export async function GET(
-  _req: Request,
-  { params }: { params: Promise<{ slug?: string[] }> },
-) {
+export async function GET(_req: Request, { params }: { params: Promise<{ slug?: string[] }> }) {
   const { slug } = await params;
+  const alias = aliases.find((entry) => entry.from === `/docs/${(slug ?? []).join('/')}`);
+  if (alias)
+    return new Response(alias.markdown, {
+      headers: { 'Content-Type': 'text/markdown; charset=utf-8' },
+    });
   const page = source.getPage(slug);
   if (!page) notFound();
 

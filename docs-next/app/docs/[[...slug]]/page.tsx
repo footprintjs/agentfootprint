@@ -1,24 +1,38 @@
 import { navTrees, source } from '@/lib/source';
 import { DocsShell } from '@/components/DocsShell';
 import { DocsBody, DocsDescription, DocsPage, DocsTitle } from 'fumadocs-ui/layouts/notebook/page';
-import { notFound } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
 import { getMDXComponents } from '@/components/mdx';
 import { createRelativeLink } from 'fumadocs-ui/mdx';
 import type { Metadata } from 'next';
 import { SITE } from '@/lib/site';
+import aliases from '@/lib/generated-api-aliases.json';
+import { resolveApiAlias } from '@/lib/api-groups.mjs';
+
+function pageFor(slug: string[] | undefined) {
+  const requested = `/docs/${(slug ?? []).join('/')}`.replace(/\/$/, '');
+  const canonical = resolveApiAlias(requested, aliases);
+  if (canonical !== requested) permanentRedirect(canonical);
+  const page = source.getPage(slug);
+  if (!page) notFound();
+  return page;
+}
 
 export default async function Page(props: { params: Promise<{ slug?: string[] }> }) {
   const params = await props.params;
-  const page = source.getPage(params.slug);
-  if (!page) notFound();
+  const page = pageFor(params.slug);
 
   const MDX = page.data.body;
   const tree =
     params.slug?.[0] === 'api' && navTrees.apiTree ? navTrees.apiTree : navTrees.guideTree;
+  // Topic pages navigate by interface; all property anchors remain available in the body.
+  const toc = aliases.some((alias) => alias.to === page.url)
+    ? page.data.toc.filter((item) => item.depth <= 2)
+    : page.data.toc;
 
   return (
     <DocsShell tree={tree}>
-      <DocsPage toc={page.data.toc} full={page.data.full} tableOfContent={{ style: 'clerk' }}>
+      <DocsPage toc={toc} full={page.data.full} tableOfContent={{ style: 'clerk' }}>
         <DocsTitle>{page.data.title}</DocsTitle>
         <DocsDescription>{page.data.description}</DocsDescription>
         <DocsBody>
@@ -37,8 +51,7 @@ export async function generateMetadata(props: {
   params: Promise<{ slug?: string[] }>;
 }): Promise<Metadata> {
   const params = await props.params;
-  const page = source.getPage(params.slug);
-  if (!page) notFound();
+  const page = pageFor(params.slug);
 
   const url = `${SITE.url}${page.url}`;
   const description = page.data.description ?? SITE.description;

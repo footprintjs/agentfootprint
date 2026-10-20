@@ -67,7 +67,7 @@ the recorder lands on.
 
 ##### event
 
-[`ErrorEvent`](/docs/api/interfaces/ErrorEvent) \| [`FlowErrorEvent`](/docs/api/interfaces/FlowErrorEvent)
+[`ErrorEvent`](/docs/api/interfaces/scope-events#interface-errorevent) \| [`FlowErrorEvent`](/docs/api/interfaces/flow-events#interface-flowerrorevent)
 
 #### Returns
 

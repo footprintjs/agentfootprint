@@ -11,7 +11,8 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import GithubSlugger from 'github-slugger';
+import { headingSlugs } from './heading-slugs.mjs';
+export { headingSlugs } from './heading-slugs.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const DOCS_ROOT = resolve(HERE, '..', 'content', 'docs');
@@ -43,33 +44,6 @@ export function fileToId(file) {
   let leaf = parts[parts.length - 1];
   if (leaf === 'index') leaf = parts.length > 1 ? parts[parts.length - 2] : 'index';
   return leaf;
-}
-
-/** Heading slugs of a page, using the SAME github-slugger Fumadocs uses for ids. */
-export function headingSlugs(content) {
-  const slugger = new GithubSlugger();
-  const slugs = new Set();
-  const noFences = content.replace(/```[\s\S]*?```/g, '').replace(/~~~[\s\S]*?~~~/g, '');
-  for (const line of noFences.split('\n')) {
-    const m = /^#{1,6}\s+(.*?)\s*#*\s*$/.exec(line);
-    if (!m) continue;
-    let text = m[1];
-    const explicit = /\{#([\w-]+)\}\s*$/.exec(text);
-    if (explicit) {
-      slugs.add(explicit[1]);
-      text = text.replace(/\{#[\w-]+\}\s*$/, '');
-    }
-    text = text
-      .replace(/`([^`]*)`/g, '$1')
-      .replace(/\*\*([^*]*)\*\*/g, '$1')
-      .replace(/\*([^*]*)\*/g, '$1')
-      // CommonMark: `_` emphasis never opens/closes inside a word (find_context_errors keeps its underscores)
-      .replace(/(^|[^\w])_([^_]+)_(?![\w])/g, '$1$2')
-      .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
-      .trim();
-    if (text) slugs.add(slugger.slug(text));
-  }
-  return slugs;
 }
 
 /**

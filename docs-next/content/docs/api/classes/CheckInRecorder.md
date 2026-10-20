@@ -118,7 +118,7 @@ structured events. See `EmitRecorder` for the focused interface
 
 ##### event
 
-[`EmitEvent`](/docs/api/interfaces/EmitEvent)
+[`EmitEvent`](/docs/api/interfaces/scope-events#interface-emitevent)
 
 #### Returns
 
