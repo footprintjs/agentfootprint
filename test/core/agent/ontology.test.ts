@@ -1,3 +1,4 @@
+import { findingsFrame } from '../../helpers/findingsData.js';
 /**
  * Integration — the declared ontology (9.106.0, `.ontology(map)`), driven
  * through real agent runs on a scripted provider that keeps every request
@@ -264,8 +265,12 @@ describe('the declared ontology — served on every call', () => {
     const ontology = sources.indexOf('ontology');
     const findings = sources.indexOf('findings');
     expect(ontology).toBeGreaterThan(-1);
-    expect(findings).toBe(ontology + 1);
-    expect(findings).toBe(sources.length - 1);
+    expect(findings).toBe(-1);
+    expect(ontology).toBe(sources.length - 1);
+    expect(findingsFrame(view.messages.requestOnly).text).toBe(r.wire[2]!.messages.at(-1)!.content);
+    expect(findingsFrame(view.messages.requestOnly).data.facts).toMatchObject([
+      { toolCallId: 'c1' },
+    ]);
     expect(r.wire[2]!.systemPrompt).toBe(view.system.text);
     // Epoch 1: no standing yet, so the ontology piece is last.
     const at1 = servedAt(r.snapshot, 1)!.system.pieces.map((p) => p.source);

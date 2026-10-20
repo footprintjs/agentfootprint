@@ -1,3 +1,4 @@
+import { findingsFrame } from '../../helpers/findingsData.js';
 /**
  * Integration — the judge on a real agent run (9.104.0, `.findings({ judge })`).
  *
@@ -215,9 +216,10 @@ describe('the second-source law', () => {
     expect(fold.judgments.get('c1')?.standing).toBe('noise');
     // Policy A: the served piece on the answer call quotes the MODEL's ruled-out; the judge's noise
     // is nowhere on the wire.
-    const system = seen[2]!.systemPrompt ?? '';
-    expect(system).toContain('ruled out (lookup, tool:c1): no swap');
-    expect(system).not.toMatch(/judge|0\.69|0\.7\b/);
+    const frame = findingsFrame(seen[2]!.messages);
+    expect(frame.data.limitations).toMatchObject([{ toolCallId: 'c1', line: 'no swap' }]);
+    expect(frame.data.noise).toEqual([]);
+    expect(frame.text).not.toMatch(/judge|0\.69|0\.7\b/);
   });
 });
 

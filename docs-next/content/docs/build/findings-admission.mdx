@@ -39,7 +39,7 @@ resembles a ticket; admission does not import authority or refs from that shape.
 
 - A unique executed result actually served to that response can be referenced.
   The schema's advisory offer cap and retirement rules stay unchanged: a
-  uniquely served older ID outside the enum is still identifiable.
+  uniquely served older ID outside the advisory list is still identifiable.
 - A ticket can identify an executed result while withholding its body. Identity
   admission does not treat that body as visible or validate an assertion about it.
   Other request rewrites have unknown body visibility unless their carrier is a known ticket.
@@ -92,9 +92,7 @@ sandbox against a host deliberately altering its own run.
 
 ## Scope
 
-This phase leaves schema enums, tool and system layouts, instruction cache
-policies, `toolsVaryPerCall`, cache markers and normal request rendering as they
-were. Agents without findings do not capture the request witness or add producer markers.
+Admission is independent of the [findings cache layout](/docs/build/caching#findings-uses-a-stable-prefix). The late DATA vocabulary guides the model; it grants no authority. Agents without findings do not capture the request witness or add producer markers.
 A shared entry-boundary correction also applies without findings: if dispatch
 context or time preparation fails before `execute` is entered, resumed calls no
 longer report entry or run after-tool middleware. The nominal reference and wire

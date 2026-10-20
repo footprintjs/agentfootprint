@@ -1,3 +1,4 @@
+import { findingsFrame } from '../../../helpers/findingsData.js';
 /**
  * Integration — the unsettled-by-absence rule meets the batch settlement
  * (both 9.113.0): a call the settlement answered is no witness, and the row
@@ -308,15 +309,20 @@ describe('unsettled by absence × typed suggestion — the row carries `try_inst
       });
 
       // The section on the next call quotes the sentence and no typed tool.
-      const system = r.requests[2]!.systemPrompt ?? '';
-      const section = system.slice(system.indexOf('unsettled by absence (read off the record):'));
-      expect(section.split('\n\n')[0]!.split('\n')).toEqual([
-        'unsettled by absence (read off the record):',
-        'ruled out (host_hbas, tool:c1) on an absence',
-        'tool:c1 not_checked: whether nas-cluster-06 is a hypervisor host at all — this lookup reads HBA rows, never the host inventory',
-        `tool:c1 try_instead: ${SENTENCE}`,
+      const frame = findingsFrame(r.requests[2]!.messages);
+      expect(frame.data.unsettledByAbsence).toEqual([
+        {
+          toolCallId: 'c1',
+          notChecked: [
+            {
+              what: 'whether nas-cluster-06 is a hypervisor host at all',
+              why: 'this lookup reads HBA rows, never the host inventory',
+            },
+          ],
+          tryInstead: SENTENCE,
+        },
       ]);
-      expect(system).not.toContain('try_instead_tool');
+      expect(frame.text).not.toContain('try_instead_tool');
     },
   );
 });

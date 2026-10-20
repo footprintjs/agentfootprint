@@ -136,6 +136,9 @@ export const LIBRARY_NOTE_OPENING =
  *  match on it. Written by `stagedRefsNudgeLine`, appended by `callLLM`. */
 export const STAGED_DATA_FRAME_PREFIX = '[staged data';
 
+/** Request-only findings DATA, quoted from the record rather than a person's message. */
+export const FINDINGS_DATA_FRAME_PREFIX = '[AgentFootprint findings DATA v1]';
+
 /**
  * Every opening this library puts on a `role: 'user'` message it wrote itself.
  *
@@ -164,6 +167,7 @@ export const LIBRARY_AUTHORED_PREFIXES: readonly string[] = Object.freeze([
   STEP_NUDGE_FRAME_PREFIX,
   LIBRARY_NOTE_OPENING,
   STAGED_DATA_FRAME_PREFIX,
+  FINDINGS_DATA_FRAME_PREFIX,
 ]);
 
 /** True when this user-role message opens with a frame this library authored. */

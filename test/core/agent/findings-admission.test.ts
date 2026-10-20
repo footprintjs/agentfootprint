@@ -1,3 +1,4 @@
+import { findingsFrame } from '../../helpers/findingsData.js';
 import { conversationRedaction } from '../../../src/redaction/conversation.js';
 /** Phase A: reference admission changes invocation, never schema/cache layout. */
 import { describe, expect, it, vi } from 'vitest';
@@ -130,7 +131,8 @@ describe('findings served-reference admission', () => {
     };
     expect(
       schema.properties._findings.properties.previous.items.properties.toolCallId.enum,
-    ).toEqual(['c1']);
+    ).toBeUndefined();
+    expect(findingsFrame(f.requests[1]!.messages).data.advisoryResultIds).toEqual(['c1']);
     expect(f.requests[1]?.cacheMarkers).toBeUndefined();
   });
   it('plain JSON answer with an unserved reference is denied with no additional model call', async () => {

@@ -1,3 +1,4 @@
+import { findingsFrame } from '../helpers/findingsData.js';
 /**
  * THE CONFORMANCE LAW — hash(servedAt(k)) === receiptAt(k).hash, on real runs.
  *
@@ -664,9 +665,7 @@ describe('a run that paused and resumed', () => {
       expect(last.messages.find((m) => m.toolCallId === 'c3')?.content).toContain(
         'was not executed on that call',
       );
-      expect(last.systemPrompt).toContain(
-        'undeclared: 3 results, served in full below (tool:c1, tool:c2, tool:d1)',
-      );
+      expect(findingsFrame(last.messages).data.undeclaredResultIds).toEqual(['c1', 'c2', 'd1']);
       // And no request the provider received carried the marker: the ones
       // after the resume were built on the collapse path (x1 judged noise),
       // which strips after it collapses (`callLLM.ts` · `buildCallLLMStage`).
@@ -2461,16 +2460,11 @@ describe('an armed findings ledger: the receipt hashes the DECORATED schema and 
           const planted = properties._findings as {
             properties: { previous: { items: { properties: { toolCallId: { enum?: unknown } } } } };
           };
-          if (offer.length === 0) {
-            expect(planted, `${served.name} @ epoch ${view.epoch}`).toEqual(
-              FINDINGS_ARGUMENT_SCHEMA,
-            );
-          } else {
-            expect(
-              planted.properties.previous.items.properties.toolCallId.enum,
-              `${served.name} @ epoch ${view.epoch}`,
-            ).toEqual(offer);
-          }
+          expect(planted, `${served.name} @ epoch ${view.epoch}`).toEqual(FINDINGS_ARGUMENT_SCHEMA);
+          expect(planted.properties.previous.items.properties.toolCallId).not.toHaveProperty(
+            'enum',
+          );
+          expect(findingsFrame(view.messages.requestOnly).data.advisoryResultIds).toEqual(offer);
           expect(served.inputSchema.required ?? []).not.toContain('_findings');
           // 1. The receipt's row is the served (decorated) schema's digest.
           expect(hash(toolDigestInput(served))).toBe(receipt.tools.schemaHashes[served.name]);
@@ -2484,13 +2478,13 @@ describe('an armed findings ledger: the receipt hashes the DECORATED schema and 
             ...served,
             inputSchema: { ...served.inputSchema, properties: rest },
           };
-          expect(hash(toolDigestInput(withFindingsArgument(undecorated, offer)))).toBe(
+          expect(hash(toolDigestInput(withFindingsArgument(undecorated)))).toBe(
             receipt.tools.schemaHashes[served.name],
           );
           // …and NOT the offer-less decoration once an offer is served: the
           // hash tells the truth about what was offered.
           if (offer.length > 0) {
-            expect(hash(toolDigestInput(withFindingsArgument(undecorated)))).not.toBe(
+            expect(hash(toolDigestInput(withFindingsArgument(undecorated)))).toBe(
               receipt.tools.schemaHashes[served.name],
             );
           }
@@ -2586,18 +2580,12 @@ describe('an armed findings ledger, served: the receipt hashes the piece and the
       for (const view of views) {
         const receipt = receiptAt(r.snapshot, view.epoch)!;
         const hash = (content: string): string => receiptHash(receipt.basis.runId, content);
-        // Nothing request-only was added: the piece is a SYSTEM piece.
-        expect(receipt.messages.requestOnly).toEqual([]);
-        expect(view.messages.requestOnly).toEqual([]);
-        const piece = view.system.pieces.find((p) => p.source === 'findings');
-        if (view.epoch < 3) {
-          // No standing declared yet: no piece, nothing collapsed.
-          expect(piece).toBeUndefined();
-          continue;
-        }
-        expect(piece).toBeDefined();
-        expect(receipt.system.pieces.map((p) => p.hash)).toContain(hash(piece!.text));
-        expect(receipt.system.pieces[receipt.system.pieces.length - 1]!.source).toBe('findings');
+        expect(receipt.messages.requestOnly).toHaveLength(1);
+        expect(view.messages.requestOnly).toHaveLength(1);
+        const frame = findingsFrame(view.messages.requestOnly);
+        expect(frame.text).toBe(r.wire[view.epoch - 1]!.messages.at(-1)!.content);
+        expect(receipt.system.pieces.some((piece) => piece.source === 'findings')).toBe(false);
+        expect(receipt.system.hash).toBe(hash(view.system.text));
       }
       // Epoch 4: c2 was declared noise on c3, so the wire carried its ticket
       // and the receipt hashed THAT — not the raw result history still holds.
@@ -2637,19 +2625,15 @@ describe('an armed findings ledger, served: the receipt hashes the piece and the
       for (const view of views) {
         const receipt = receiptAt(r.snapshot, view.epoch)!;
         const hash = (content: string): string => receiptHash(receipt.basis.runId, content);
-        const piece = view.system.pieces.find((p) => p.source === 'findings');
-        // The wire and the rebuild agree byte for byte, ask included.
         expect(r.wire[view.epoch - 1]!.systemPrompt).toBe(view.system.text);
-        if (view.epoch < 3) {
-          expect(piece).toBeUndefined();
-          expect(view.system.text).not.toContain(FINDINGS_ANSWER_ASK);
-          continue;
-        }
-        expect(piece!.text.endsWith(`\n\n${FINDINGS_ANSWER_ASK}`)).toBe(true);
-        expect(receipt.system.pieces.map((p) => p.hash)).toContain(hash(piece!.text));
-        expect(receipt.system.pieces[receipt.system.pieces.length - 1]!.source).toBe('findings');
+        expect(view.system.text).toContain(
+          'When answering, copy values exactly from the facts assertions or a served tool result.',
+        );
         expect(receipt.system.hash).toBe(hash(view.system.text));
-        expect(receipt.messages.requestOnly).toEqual([]);
+        expect(receipt.messages.requestOnly).toHaveLength(1);
+        expect(findingsFrame(view.messages.requestOnly).text).toBe(
+          r.wire[view.epoch - 1]!.messages.at(-1)!.content,
+        );
       }
       // …and the collapse is the default's: c2 a ticket at epoch 4, c1 verbatim.
       const at4 = servedAt(r.snapshot, 4)!;

@@ -1,59 +1,11 @@
-/**
- * findings/offer — the ids a model may name, and the results a standing
- * resolves against.
- *
- * Pattern: pure functions over a message list and the folded ledger (the
- *          twin of `serve.ts`'s piece: same input, same bytes; no scope, no
- *          I/O).
- * Role:    core/ layer leaf, imports `ledger.ts` only. ONE owner of two sets
- *          over the served wire, both read off `servedToolCallIds`:
- *            - `undeclaredIds` — served ids with NO standing, wire order; the
- *              piece's `undeclared:` line (`serve.ts · findingsLedgerPiece`),
- *              the honest absence.
- *            - `offeredResultIds` — THE OFFER: served ids the model may still
- *              name, newest first; bound into `previous[].toolCallId`'s enum
- *              at the decoration site (`buildToolsSlot`, after `mergeWire`,
- *              through `reserved.ts · withFindingsArgument`).
- *          and ONE identity source, `knownResults` — what `ledger.ts ·
- *          standingRowsFrom` resolves a named id against. The offer and the
- *          identity source read the SAME served history, so every id the
- *          offer lists resolves: the law "the offer is what the model may
- *          COPY" holds at the row, not only at the schema. All of them ask
- *          ONE predicate, `isResultMessage`: a message the batch settlement
- *          wrote (9.113.0, `LLMMessage.notDispatched`) is served — the model
- *          reads its sentence — and is no result, so it is never offered,
- *          resolved or counted undeclared.
- *
- * WHY AN OFFER. On a hosted model the ask "by its tool_result id" produced
- * standings named by ORDINAL ("0", "1"), recorded as `unknownId` and settling
- * nothing (docs/design/2026-09-findings-ledger-real-model.md). A model does
- * not copy a long opaque id from prose; it copies an enum member. The offer
- * is the enum. It is what the model may COPY, never what the library
- * resolves: an id outside it is recorded exactly as written
- * (`ledger.ts · standingRowsFrom`, `unknownId: true`) and never mapped to a
- * position.
- *
- * WHAT THE OFFER HOLDS — the results the model can still READ. A result with
- * no standing is served verbatim; a `fact` is stood on in the piece (its
- * assertions, under every serve mode) and served verbatim under the default
- * mode; an `open` result is served verbatim and carries `settles` — what a
- * later call may do. All three stay nameable, so a standing can be REVISED:
- * `open` → `fact` when a later call settles it, `fact` → `ruled-out` when a
- * conflict resolves; the fold's last-wins law (`ledger.ts · foldLedger`) is
- * reachable through the enum. A `noise` or `ruled-out` result leaves the
- * offer: it is a ticket on the wire under every mode (`serve.ts ·
- * collapses`) and the piece carries a count or one line, never the content,
- * so there is nothing left for the model to re-judge — a wrong `ruled-out`
- * is answered by a NEW call and a standing on its result. The instruction
- * asks the model to name a result again only to change its standing, so a
- * listed fact is not an invitation to restate it; the ask promises nothing.
- *
- * Newest first because the cap (`reserved.ts · FINDINGS_OFFER_CAP`) cuts the
- * tail: the results the model saw most recently are the ones a standing is
- * most likely about, and the ones the window keeps longest. A fact the
- * window holds (`keepLedgerFacts`) stays on the wire and therefore in the
- * offer until the cap cuts it — the cost of revision, stated on the design
- * page.
+/** Canonical result vocabulary, shared by live late DATA and legacy replay.
+ * `offeredResultIds` lists nameable served results newest first; `undeclaredIds`
+ * reports the absence of a standing in wire order. Neither grants authority.
+ * Admission separately checks the actual request that produced the response.
+ * Window eviction and retirement remain the same: noise/ruled-out results
+ * leave the advisory list, while open/fact results remain revisable.
+ * `knownResults` resolves declarations without guessing a positional ID.
+ * All readers use `isResultMessage`, so settlement notices never become results.
  */
 
 import type { LLMMessage } from '../../../provider-contract/types.js';
@@ -150,7 +102,7 @@ export function nameableIds(
  * reverse of wire order), each once. `rows` may be absent (no declaration
  * yet): every served result is then offered. Pure — safe on a deep-frozen
  * history and a spread of the committed ledger. Uncapped here; the cap and
- * its statement belong to the schema (`reserved.ts · offeredFindingsSchema`).
+ * its omission count belong to the late DATA (`context.ts`).
  */
 export function offeredResultIds(
   messages: readonly LLMMessage[],

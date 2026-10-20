@@ -1,3 +1,4 @@
+import { findingsFrame, findingsPrefix } from '../../helpers/findingsData.js';
 /**
  * Integration — the findings ledger on the record (9.101.0, step 2 of the
  * findings-ledger program), driven through real agent runs on the mock
@@ -65,6 +66,7 @@ import { TOOL_RESULTS } from './fixtures/sanEvidence.js';
 
 type Row = { type: string; payload: Record<string, unknown> };
 type Shot = {
+  readonly advisory: readonly string[];
   readonly tools: readonly LLMToolSchema[];
   readonly system: string | undefined;
   /** The `role: 'tool'` ids on the wire, in wire order — what an offer may list. */
@@ -75,6 +77,9 @@ type Shot = {
 const shotOf = (req: LLMRequest): Shot => ({
   tools: JSON.parse(JSON.stringify(req.tools ?? [])) as LLMToolSchema[],
   system: req.systemPrompt,
+  advisory: req.messages.some((message) => message.content.startsWith(findingsPrefix))
+    ? findingsFrame(req.messages).data.advisoryResultIds
+    : [],
   toolIds: req.messages
     .filter((m) => m.role === 'tool' && m.toolCallId !== undefined)
     .map((m) => m.toolCallId as string),
@@ -411,7 +416,15 @@ describe('.findings() — the unarmed agent is the agent it always was', () => {
     // …plus the ONE run constant the arm seeds on every run (`findingsServe`,
     // step 3 — `seed.ts · seedFrom`): the serve mode the rebuild reads. No
     // ledger, because the model declared nothing.
-    expect(keysOf(on)).toEqual([...keysOf(off), 'findingsRequest', 'findingsServe'].sort());
+    expect(keysOf(on)).toEqual(
+      [
+        ...keysOf(off),
+        'findingsRequest',
+        'findingsServe',
+        'findingsLayout',
+        'findingsContextBytes',
+      ].sort(),
+    );
     expect(keysOf(on)).not.toContain('findingsLedger');
     expect(on.findings()).toBeUndefined();
     expect(rowsOn.filter((r) => r.type.startsWith('agentfootprint.findings.'))).toEqual([]);
@@ -1088,7 +1101,7 @@ describe('.findings() — the door', () => {
       Agent.create({ provider: mock({ reply: 'x' }), model: 'm', reactMode: 'classic' })
         .findings()
         .build(),
-    ).toThrow(/reactMode 'classic' caches the tools slot/);
+    ).toThrow(/reactMode 'classic' is not supported/);
     expect(() =>
       Agent.create({
         provider: mock({ reply: 'x' }),
@@ -1096,7 +1109,7 @@ describe('.findings() — the door', () => {
         reactMode: 'classic',
         findings: {},
       }).build(),
-    ).toThrow(/per-iteration slot recomposition/);
+    ).toThrow(/reactMode 'classic' is not supported/);
     expect(() =>
       Agent.create({ provider: mock({ reply: 'x' }), model: 'm', reactMode: 'dynamic-grouped' })
         .findings()
@@ -1266,6 +1279,8 @@ describe('.findings() — the unarmed twin of a declaring model', () => {
         'findingsLedger',
         'findingsRequest',
         'findingsServe',
+        'findingsLayout',
+        'findingsContextBytes',
       ].sort(),
     );
     expect(keysOf(off)).not.toContain('findingsLedger');
@@ -1727,7 +1742,7 @@ describe('.findings() — the offer: every served schema lists the ids the model
     ] as { properties: { previous: { items: { properties: { toolCallId: unknown } } } } };
     return findings.properties.previous.items.properties.toolCallId as Record<string, unknown>;
   };
-  const enumOf = (shot: Shot): unknown => idProperty(shot).enum;
+  const offerOf = (shot: Shot): unknown => shot.advisory;
 
   const CALL_THREE: Partial<LLMResponse> = {
     content: '',
@@ -1748,7 +1763,7 @@ describe('.findings() — the offer: every served schema lists the ids the model
 
     // Call 1: nothing served yet → no offer, the frozen base by value.
     expect(seen[0]!.toolIds).toEqual([]);
-    expect(enumOf(seen[0]!)).toBeUndefined();
+    expect(offerOf(seen[0]!)).toEqual([]);
     const base = (
       seen[0]!.tools.find((t) => t.name === 'look')!.inputSchema.properties as Record<
         string,
@@ -1760,20 +1775,22 @@ describe('.findings() — the offer: every served schema lists the ids the model
     // Call 2: c1's result is on the wire and has no standing → the offer is
     // exactly ['c1'], and the property says what the list means.
     expect(seen[1]!.toolIds).toEqual(['c1']);
-    expect(enumOf(seen[1]!)).toEqual(['c1']);
-    expect(idProperty(seen[1]!).description).toContain('one of the ids listed');
-    expect(idProperty(seen[1]!).description).toContain('a result not listed cannot be named');
+    expect(offerOf(seen[1]!)).toEqual(['c1']);
+    expect(idProperty(seen[1]!)).not.toHaveProperty('enum');
+    expect(seen.map((shot) => JSON.stringify(shot.tools))).toEqual(
+      Array(4).fill(JSON.stringify(seen[0]!.tools)),
+    );
 
     // Call 3: c1 was declared a fact ON call 2 (filed before c2 dispatched).
     // A fact is still served (verbatim on the wire, its assertions in the
     // piece), so it stays nameable — a later call may retire it; c2 has no
     // standing → ['c2', 'c1'], newest first.
     expect(seen[2]!.toolIds).toEqual(['c1', 'c2']);
-    expect(enumOf(seen[2]!)).toEqual(['c2', 'c1']);
+    expect(offerOf(seen[2]!)).toEqual(['c2', 'c1']);
 
     // The answer call: c2 and c3 undeclared, c1 a fact → all three, NEWEST FIRST.
     expect(seen[3]!.toolIds).toEqual(['c1', 'c2', 'c3']);
-    expect(enumOf(seen[3]!)).toEqual(['c3', 'c2', 'c1']);
+    expect(offerOf(seen[3]!)).toEqual(['c3', 'c2', 'c1']);
 
     // The rest of the property is the base's: `required` untouched, the
     // reserved key never required, the tool's own property first.
@@ -1821,7 +1838,7 @@ describe('.findings() — the offer: every served schema lists the ids the model
     await agent.run({ message: 'go' });
 
     // The offer at call 2 listed c1 and only c1: both names were outside it.
-    expect(enumOf(seen[1]!)).toEqual(['c1']);
+    expect(offerOf(seen[1]!)).toEqual(['c1']);
     const standings = ledgerOf(agent)!.filter((r): r is StandingRow => r.kind === 'standing');
     expect(standings.map((r) => [r.toolCallId, r.standing, r.unknownId])).toEqual([
       ['0', 'noise', true],
@@ -1830,7 +1847,7 @@ describe('.findings() — the offer: every served schema lists the ids the model
     for (const row of standings) expect(row).not.toHaveProperty('toolName');
     // c1 still has no standing, so it is still offered on the answer call —
     // the library resolved nothing on the model's behalf.
-    expect(enumOf(seen[2]!)).toEqual(['c2', 'c1']);
+    expect(offerOf(seen[2]!)).toEqual(['c2', 'c1']);
   });
 
   it("the served view's tools.schemas equal the committed decorated schemas — offer included — at every epoch", async () => {
@@ -1847,7 +1864,7 @@ describe('.findings() — the offer: every served schema lists the ids the model
     const views = servedViews(agent.getSnapshot()!);
     expect(views.map((v) => v.epoch)).toEqual([1, 2, 3, 4]);
     const expectedOffer: Record<number, readonly string[] | undefined> = {
-      1: undefined,
+      1: [],
       2: ['c1'],
       3: ['c2', 'c1'],
       4: ['c3', 'c2', 'c1'],
@@ -1856,8 +1873,13 @@ describe('.findings() — the offer: every served schema lists the ids the model
       // The rebuild reads the committed `dynamicToolSchemas` — which hold the
       // offer — so it is byte-equal to the wire with no recomposition.
       expect(view.tools.schemas, `epoch ${view.epoch}`).toEqual(seen[view.epoch - 1]!.tools);
-      const rebuilt: Shot = { tools: view.tools.schemas, system: undefined, toolIds: [] };
-      expect(enumOf(rebuilt), `epoch ${view.epoch}`).toEqual(expectedOffer[view.epoch]);
+      const rebuilt: Shot = {
+        tools: view.tools.schemas,
+        system: undefined,
+        toolIds: [],
+        advisory: findingsFrame(view.messages.requestOnly).data.advisoryResultIds,
+      };
+      expect(offerOf(rebuilt), `epoch ${view.epoch}`).toEqual(expectedOffer[view.epoch]);
     }
   });
 
@@ -1887,13 +1909,11 @@ describe('.findings() — the offer: every served schema lists the ids the model
     expect(last.toolIds.length).toBeGreaterThan(0);
     // …and the offer is exactly those, newest first — never an evicted id
     // the model could not see, never one more than the wire carries.
-    expect(enumOf(last)).toEqual([...last.toolIds].reverse());
-    expect(enumOf(last)).not.toContain('c1');
+    expect(offerOf(last)).toEqual([...last.toolIds].reverse());
+    expect(offerOf(last)).not.toContain('c1');
     // Every call's offer is its own wire's undeclared results, newest first.
     for (const shot of seen) {
-      expect(enumOf(shot)).toEqual(
-        shot.toolIds.length === 0 ? undefined : [...shot.toolIds].reverse(),
-      );
+      expect(offerOf(shot)).toEqual([...shot.toolIds].reverse());
     }
   });
 
@@ -1936,7 +1956,7 @@ describe('.findings() — the offer: every served schema lists the ids the model
       .findings()
       .build();
     await agent.run({ message: 'go' });
-    expect(seen.map(enumOf)).toEqual([undefined, ['c1'], ['c2'], ['c3']]);
+    expect(seen.map(offerOf)).toEqual([[], ['c1'], ['c2'], ['c3']]);
     // …and the wire agrees: the retired results are tickets, the offered one verbatim.
     const last = seen[3]!;
     expect(last.toolIds).toEqual(['c1', 'c2', 'c3']);
@@ -1955,7 +1975,7 @@ describe('.findings() — the offer: every served schema lists the ids the model
       const provider = mock({
         respond: (req: LLMRequest) => {
           seen.push(shotOf(req));
-          const offer = (enumOf(seen[seen.length - 1]!) as readonly string[] | undefined) ?? [];
+          const offer = (offerOf(seen[seen.length - 1]!) as readonly string[] | undefined) ?? [];
           offersSeen.push(offer.length === 0 ? undefined : offer);
           k += 1;
           if (k <= 3) {

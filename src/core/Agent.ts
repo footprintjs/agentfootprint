@@ -1,3 +1,4 @@
+import { findingsContextBytes } from './agent/findings/context.js';
 /**
  * Agent — ReAct primitive (LLM + tools + iteration loop).
  *
@@ -1219,7 +1220,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     if (opts.contextBudget !== undefined) this.contextBudget = opts.contextBudget;
     if (opts.permissionChecker) this.permissionChecker = opts.permissionChecker;
     if (opts.toolArgValidation !== undefined) this.toolArgValidation = opts.toolArgValidation;
-    if (opts.findings !== undefined) this.findingsOptions = opts.findings;
+    if (opts.findings !== undefined)
+      this.findingsOptions = {
+        ...opts.findings,
+        maxContextBytes: findingsContextBytes(opts.findings.maxContextBytes),
+      };
     // The inputs layer's door (honesty layer 2): `true`, or `{ argumentSources }`
     // — either form mounts the layer; the object form may also arm declared
     // sources without the findings ledger.
@@ -1342,21 +1347,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // precedent.
     if (opts.keepLedgerFacts !== undefined) requireKeepLedgerFacts(opts.keepLedgerFacts, 'Agent');
     if (this.findingsOptions !== undefined) {
-      // The ledger needs the tools slot recomposed every call: from the second
-      // call on, the served `_findings` property binds the ids the model may
-      // name (`findings/offer.ts · offeredResultIds`, bound at the Tools
-      // mount) — and on a hosted model that binding is what makes a standing
-      // resolve at all (docs/design/2026-09-findings-ledger-real-model.md).
-      // `reactMode: 'classic'` selects the Tools branch on turn 1 only, so an
-      // armed classic agent would serve the offer-less base on every call and
-      // file every standing as `unknownId`. Refused loud, here at build, the
-      // `AgentBuilder.selfExplain` twin — never a silent degrade.
+      // Keep the supported findings execution modes explicit. This change
+      // restores prefix caching; it does not add findings support to classic.
       if (this.reactMode === 'classic') {
         throw new Error(
-          "Agent: .findings() requires per-iteration slot recomposition — reactMode 'classic' " +
-            'caches the tools slot on turn 1, so the ids the model may name (bound into every ' +
-            'served tool schema from the second call on) would never reach it and every standing ' +
-            "would file as unknownId. Use the default 'dynamic' mode (or 'dynamic-grouped').",
+          "Agent: .findings() is supported in 'dynamic' and 'dynamic-grouped' modes only; reactMode 'classic' is not supported.",
         );
       }
       this.keepLedgerFacts = resolveKeepLedgerFacts(
@@ -4752,6 +4747,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(this.findingsOptions !== undefined && {
         findings: true as const,
         findingsServe: this.findingsOptions.serve ?? 'ledger-and-facts',
+        findingsContextBytes: this.findingsOptions.maxContextBytes,
         // The answer-turn ask (9.103.0): VALUE-conditional inside the arm —
         // the default `'none'` threads nothing and writes no key.
         ...(this.findingsOptions.answerAsk === 'quote-facts' && {
@@ -5288,6 +5284,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         findings: true as const,
         hasFindingsLedger: true as const,
         findingsServe: this.findingsOptions.serve ?? 'ledger-and-facts',
+        findingsContextBytes: this.findingsOptions.maxContextBytes,
         // The answer-turn ask (9.103.0): the same value seed records, so the
         // wire and the rebuild append it from one fact; absent on `'none'`.
         ...(this.findingsOptions.answerAsk === 'quote-facts' && {

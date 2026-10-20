@@ -487,8 +487,8 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
   'src/core/Agent.ts': [
     {
       kind: 'not-model-facing',
-      count: 10,
-      why: "typed-output, option-validation, forced-tool and native-output (`strategy: 'native'` run-start) errors thrown to the caller, the build-time refusals of `.findings()` and `.toolChoice()` under reactMode 'classic', plus one console warning about a cached menu",
+      count: 9,
+      why: "typed-output, option-validation, forced-tool and native-output (`strategy: 'native'` run-start) errors thrown to the caller, the build-time refusal of `.toolChoice()` under reactMode 'classic' (findings is still refused, but its corrected sentence no longer matches this grammar), plus one console warning about a cached menu",
     },
   ],
   'src/core/agent/toolChoice/pick.ts': [
@@ -1194,11 +1194,11 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // not a model instruction. One new file and one host-facing literal;
         // the registry, ephemeral and unrepaired counts are unchanged.
         files: 101,
-        total: 198,
+        total: 197,
         registry: 8,
         ephemeral: 24,
         unrepaired: 33,
-        notModelFacing: 133,
+        notModelFacing: 132,
         unrepairedEntries: 13,
       });
       // And the ledger's own total is the number of literals the scan flagged —

@@ -39,10 +39,8 @@ import { messageDigestInput } from '../../../src/time-travel/index.js';
 import type { LLMMessage, LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
 import type { AgentState } from '../../../src/core/agent/types.js';
 import { isCollapsedToolResult } from '../../../src/core/agent/findings/serve.js';
-import {
-  FINDINGS_ANSWER_ASK,
-  FINDINGS_INSTRUCTION,
-} from '../../../src/core/agent/findings/reserved.js';
+import { FINDINGS_INSTRUCTION } from '../../../src/core/agent/findings/reserved.js';
+import { findingsFrame } from '../../helpers/findingsData.js';
 import { toolNameOfMessage } from '../../../src/core/agent/window/toolNames.js';
 
 // ─── the harness ─────────────────────────────────────────────────────
@@ -124,7 +122,9 @@ const ticketOf = (m: LLMMessage | undefined): unknown =>
   m === undefined ? undefined : (JSON.parse(m.content) as unknown);
 
 const findingsPieceOf = (r: Run, epoch: number) =>
-  servedAt(r.snapshot, epoch)!.system.pieces.find((p) => p.source === 'findings');
+  findingsFrame(servedAt(r.snapshot, epoch)!.messages.requestOnly);
+const quoteAsk =
+  'When answering, copy values exactly from the facts assertions or a served tool result.';
 
 // ─── the script every scenario shares ───────────────────────────────
 //
@@ -211,55 +211,48 @@ describe('served from the ledger — both chart shapes', () => {
 
 // ─── 2. the piece: source, order, content ───────────────────────────
 
-describe('served from the ledger — the piece', () => {
+describe('served from the ledger — late DATA', () => {
   for (const reactMode of ['dynamic', 'dynamic-grouped'] as const) {
-    it(`${reactMode}: a piece with source 'findings' from the first epoch with a standing, last in the join, after the instruction piece`, async () => {
+    it(`${reactMode}: mutable declarations ride after committed history, outside the immutable system prompt`, async () => {
       const r = await run(reactMode, DECLARING, armed);
-      // Epochs 1 and 2: no standing yet (a basis-only ledger serves nothing).
-      expect(findingsPieceOf(r, 1)).toBeUndefined();
-      expect(findingsPieceOf(r, 2)).toBeUndefined();
-      expect(r.wire[1]!.systemPrompt).not.toContain('[AgentFootprint findings ledger');
-      for (const epoch of [3, 4, 5, 6]) {
+      const firstSystem = r.wire[0]!.systemPrompt;
+      for (const epoch of [1, 2, 3, 4, 5, 6]) {
         const view = servedAt(r.snapshot, epoch)!;
-        const piece = view.system.pieces[view.system.pieces.length - 1]!;
-        expect(piece.source, `epoch ${epoch}`).toBe('findings');
-        expect(piece.slot).toBe('system-prompt');
-        expect(piece.text.startsWith('[AgentFootprint findings ledger')).toBe(true);
-        // No per-call byte: the header is a constant (the cache law, §7).
-        expect(piece.text).not.toMatch(/iteration \d/);
-        expect(piece.text).toContain('port/p1 · state = down ← tool:c1');
-        // The always-on instruction is still there, BEFORE the piece — the
-        // ledger piece is joined, never registered as an injection.
-        const instruction = view.system.pieces.findIndex((p) => p.text === FINDINGS_INSTRUCTION);
-        expect(instruction).toBeGreaterThanOrEqual(0);
-        expect(instruction).toBeLessThan(view.system.pieces.length - 1);
-        expect(view.system.pieces.filter((p) => p.source === 'findings')).toHaveLength(1);
-        // The wire carried it, at the end of the joined system prompt.
-        expect(r.wire[epoch - 1]!.systemPrompt!.endsWith(piece.text)).toBe(true);
+        const frame = findingsPieceOf(r, epoch);
+        expect(view.system.pieces.some((piece) => piece.source === 'findings')).toBe(false);
+        expect(view.system.pieces.some((piece) => piece.text === FINDINGS_INSTRUCTION)).toBe(true);
+        expect(r.wire[epoch - 1]!.systemPrompt).toBe(firstSystem);
+        expect(r.wire[epoch - 1]!.messages.at(-1)!.content).toBe(frame.text);
+        expect(frame.meaning).toContain('Model declarations are not verified facts');
+        expect(frame.text).not.toMatch(/iteration \d/);
       }
-      // Epoch 4: c1 fact, c2 noise, c3 undeclared — named as such, never open.
-      const at4 = findingsPieceOf(r, 4)!.text;
-      expect(at4).toContain('noise (declared by the model): 1 result (tool:c2)');
-      expect(at4).toContain('undeclared: 1 result, served in full below (tool:c3)');
-      // The header quotes every field's MEANING; a bucket appears only when
-      // it has lines — no open row yet, so no evidenceRefs / nextSteps bucket.
-      expect(at4).not.toContain('evidenceRefs (declared by the model):');
-      expect(at4).not.toContain('nextSteps (declared by the model):');
-      expect(at4).not.toContain('limitations (declared by the model):');
-      // Epoch 6: every bucket the script reaches.
-      const at6 = findingsPieceOf(r, 6)!.text;
-      expect(at6).toContain('ruled out (alpha_tool, tool:c4): p2 is not on switch B');
-      expect(at6).toContain('open (alpha_tool, tool:c3) · settles: the log for p2');
-      expect(at6).toContain('the log for p2 (to settle tool:c3)');
-      expect(at6).toContain('undeclared: 1 result, served in full below (tool:c5)');
+      expect(findingsPieceOf(r, 1).data.advisoryResultIds).toEqual([]);
+      expect(findingsPieceOf(r, 2).data.advisoryResultIds).toEqual(['c1']);
+      const at4 = findingsPieceOf(r, 4).data;
+      expect(at4.facts[0]).toMatchObject({ toolCallId: 'c1', assertions: [FACT] });
+      expect(at4.noise).toEqual(['c2']);
+      expect(at4.undeclaredResultIds).toEqual(['c3']);
+      expect(at4.evidenceRefs).toEqual([]);
+      expect(at4.limitations).toEqual([]);
+      const at6 = findingsPieceOf(r, 6).data;
+      expect(at6.limitations).toMatchObject([{ toolCallId: 'c4', line: 'p2 is not on switch B' }]);
+      expect(at6.evidenceRefs).toMatchObject([{ toolCallId: 'c3', settles: 'the log for p2' }]);
+      expect(at6.undeclaredResultIds).toEqual(['c5']);
     });
   }
-
-  it('the piece is NOT an injection: systemPromptInjections never carries a findings record', async () => {
+  it('DATA is not registered as an injection or committed into history', async () => {
     const r = await run('dynamic', DECLARING, armed);
-    const injections = stateOf(r).systemPromptInjections ?? [];
-    expect(injections.some((i) => i.source === 'findings')).toBe(false);
-    expect((stateOf(r).activeInjections ?? []).some((i) => i.source === 'findings')).toBe(false);
+    expect(
+      (stateOf(r).systemPromptInjections ?? []).some((piece) => piece.source === 'findings'),
+    ).toBe(false);
+    expect((stateOf(r).activeInjections ?? []).some((piece) => piece.source === 'findings')).toBe(
+      false,
+    );
+    expect(
+      (stateOf(r).history ?? []).some((message) =>
+        message.content.startsWith('[AgentFootprint findings DATA'),
+      ),
+    ).toBe(false);
   });
 });
 
@@ -274,7 +267,9 @@ describe('served from the ledger — the collapse', () => {
       for (const epoch of [1, 2, 3, 4, 5, 6]) {
         const view = servedAt(r.snapshot, epoch)!;
         const sent = r.wire[epoch - 1]!.messages;
-        expect(sent.length, `epoch ${epoch}`).toBe(view.messages.asSent.length);
+        expect(sent.length, `epoch ${epoch}`).toBe(
+          view.messages.asSent.length + view.messages.requestOnly.length,
+        );
         for (const m of sent.filter((x) => x.role === 'tool')) {
           const id = m.toolCallId!;
           const rebuilt = toolMessage(view.messages.asSent, id)!;
@@ -370,8 +365,10 @@ describe('served from the ledger — the receipt', () => {
             hash(messageDigestInput(sent.messages[i]!)),
           );
         });
-        expect(receipt.messages.requestOnly).toEqual([]);
-        expect(view.messages.requestOnly).toEqual([]);
+        expect(receipt.messages.requestOnly).toHaveLength(1);
+        expect(view.messages.requestOnly).toHaveLength(1);
+        expect(view.messages.requestOnly[0]!.reason).toBe('findings-data');
+        expect(findingsPieceOf(r, view.epoch).text).toBe(sent.messages.at(-1)!.content);
       }
     });
   }
@@ -393,11 +390,14 @@ describe('served from the ledger — nothing served differently without a standi
         expect(m.content).toBe(toolMessage(history, m.toolCallId!)!.content);
         expect(m.content).not.toContain('"collapsed"');
       }
-      expect(JSON.stringify(view.messages.asSent)).toBe(JSON.stringify(sent));
+      expect([
+        ...view.messages.asSent,
+        ...view.messages.requestOnly.map(({ role, text }) => ({ role, content: text })),
+      ]).toEqual(sent);
     }
   });
 
-  it('armed, basis-only: the model named no standing, so the piece and the tickets are absent and only the run constant is on the record', async () => {
+  it('armed, basis-only: the model named no standing, so DATA has no facts and raw results remain unchanged', async () => {
     const BASIS_ONLY: readonly Reply[] = [
       call('c1', 'alpha_tool', { q: 'ports', _findings: { basis: 'exploratory' } }),
       call('c2', 'alpha_tool', { q: 'p1', _findings: { basis: 'direct' } }),
@@ -414,7 +414,11 @@ describe('served from the ledger — nothing served differently without a standi
       for (const m of sent.filter((x) => x.role === 'tool')) {
         expect(m.content).toBe(toolMessage(history, m.toolCallId!)!.content);
       }
-      expect(JSON.stringify(view.messages.asSent)).toBe(JSON.stringify(sent));
+      expect(findingsPieceOf(r, view.epoch).data.facts).toEqual([]);
+      expect([
+        ...view.messages.asSent,
+        ...view.messages.requestOnly.map(({ role, text }) => ({ role, content: text })),
+      ]).toEqual(sent);
     }
   });
 });
@@ -469,9 +473,11 @@ describe('served from the ledger — the piece never excuses an argument', () =>
         .findings(),
     );
     // The piece at epoch 3 is the only non-assistant place the id appears.
-    expect(findingsPieceOf(r, 3)!.text).toContain('machine/4417-ganymede');
+    expect(findingsPieceOf(r, 3).data.facts[0].assertions[0].subject.id).toBe('4417-ganymede');
     const sent = r.wire[2]!;
-    for (const m of sent.messages.filter((x) => x.role !== 'assistant')) {
+    for (const m of sent.messages.filter(
+      (x) => x.role !== 'assistant' && !x.content.startsWith('[AgentFootprint findings DATA'),
+    )) {
       expect(m.content).not.toContain('4417-ganymede');
     }
     const filed = r.findings.filter((f) => f.kind === 'unsupported-argument');
@@ -609,25 +615,18 @@ describe("served from the ledger — a ruled-out line quotes the judged call's o
     return reply;
   });
 
-  it('the piece at the answer call reads `ruled out (…): <line> — tested: <proposition>`; open the same; facts never', async () => {
+  it('the answer DATA links each open/ruled-out declaration to its own proposition, never predicts', async () => {
     const r = await run('dynamic', TESTING, armed);
-    const at6 = findingsPieceOf(r, 6)!.text;
-    expect(at6).toContain(
-      'ruled out (alpha_tool, tool:c4): p2 is not on switch B — tested: p2 is on switch B',
-    );
-    expect(at6).toContain(
-      'open (alpha_tool, tool:c3) · settles: the log for p2 — tested: p2 has a log entry',
-    );
-    // A fact line does not repeat it; `predicts` never reaches the piece;
-    // the proposition is the JUDGED call's, not the declaring call's (c5
-    // declared c4's standing and wrote no proposition of its own).
-    expect(at6).toContain('port/p1 · state = down ← tool:c1\n');
-    expect(at6).not.toContain('state = down ← tool:c1 — tested');
-    expect(at6).not.toContain('switch inventory');
-    // The nextSteps proposal is the model's `settles`, unadorned.
-    expect(at6).toContain('the log for p2 (to settle tool:c3)\n');
-    // The wire carried the same bytes the rebuild composed.
-    expect(r.wire[5]!.systemPrompt!.endsWith(at6)).toBe(true);
+    const frame = findingsPieceOf(r, 6);
+    expect(frame.data.limitations).toMatchObject([
+      { toolCallId: 'c4', line: 'p2 is not on switch B', proposition: 'p2 is on switch B' },
+    ]);
+    expect(frame.data.evidenceRefs).toMatchObject([
+      { toolCallId: 'c3', settles: 'the log for p2', proposition: 'p2 has a log entry' },
+    ]);
+    expect(frame.data.facts[0]).not.toHaveProperty('proposition');
+    expect(frame.text).not.toContain('switch inventory');
+    expect(r.wire[5]!.messages.at(-1)!.content).toBe(frame.text);
   });
 
   it('the record holds both texts on the basis row; the event carries only the flag', async () => {
@@ -660,96 +659,78 @@ describe("served from the ledger — a ruled-out line quotes the judged call's o
 
   it('no proposition declared, no `tested:` anywhere on the piece', async () => {
     const r = await run('dynamic', DECLARING, armed);
-    expect(findingsPieceOf(r, 6)!.text).not.toContain('tested:');
+    for (const row of [
+      ...findingsPieceOf(r, 6).data.evidenceRefs,
+      ...findingsPieceOf(r, 6).data.limitations,
+    ])
+      expect(row).not.toHaveProperty('proposition');
   });
 });
 
 // ─── 10. the answer-turn ask (9.103.0): a dial on the piece ─────────
 
-describe('served from the ledger — the answer-turn ask (findings({ answerAsk }))', () => {
+describe('served from the ledger — immutable answer instruction', () => {
   const asking = (a: ReturnType<typeof Agent.create>) =>
     a.system('bot').tool(tool('alpha_tool')).findings({ answerAsk: 'quote-facts' });
   const askingNone = (a: ReturnType<typeof Agent.create>) =>
     a.system('bot').tool(tool('alpha_tool')).findings({ answerAsk: 'none' });
-
-  for (const reactMode of ['dynamic', 'dynamic-grouped'] as const) {
-    it(`${reactMode}: under 'quote-facts' the served system text ends with the ask at every epoch with a piece, the wire agrees, and the rebuild is byte-equal`, async () => {
-      const r = await run(reactMode, DECLARING, asking);
+  for (const mode of ['dynamic', 'dynamic-grouped'] as const) {
+    it(`${mode}: the quote instruction is immutable from the first call, and replay equals the wire`, async () => {
+      const r = await run(mode, DECLARING, asking);
       expect(stateOf(r).findingsAnswerAsk).toBe('quote-facts');
-      expect(stateOf(r).findingsServe).toBe('ledger-and-facts');
-      for (const epoch of [1, 2]) {
-        // No standing yet: no piece, so no ask — it never rides alone.
-        expect(findingsPieceOf(r, epoch)).toBeUndefined();
-        expect(r.wire[epoch - 1]!.systemPrompt).not.toContain(FINDINGS_ANSWER_ASK);
-      }
-      for (const epoch of [3, 4, 5, 6]) {
-        const view = servedAt(r.snapshot, epoch)!;
-        const piece = findingsPieceOf(r, epoch)!;
-        expect(piece.text.endsWith(`\n\n${FINDINGS_ANSWER_ASK}`), `epoch ${epoch}`).toBe(true);
-        expect(piece.text.split(FINDINGS_ANSWER_ASK)).toHaveLength(2);
-        expect(view.system.text.endsWith(FINDINGS_ANSWER_ASK)).toBe(true);
-        // The wire carried exactly what the rebuild says, ask included.
-        expect(r.wire[epoch - 1]!.systemPrompt).toBe(view.system.text);
-        expect(r.wire[epoch - 1]!.systemPrompt!.endsWith(FINDINGS_ANSWER_ASK)).toBe(true);
+      const first = r.wire[0]!.systemPrompt;
+      expect(first).toContain(quoteAsk);
+      for (const view of servedViews(r.snapshot)) {
+        expect(view.system.text).toBe(first);
+        expect(r.wire[view.epoch - 1]!.systemPrompt).toBe(view.system.text);
+        expect(view.system.text.split(quoteAsk)).toHaveLength(2);
       }
     });
   }
-
-  it('both chart shapes serve byte-equal system text under the dial', async () => {
-    const flat = await run('dynamic', DECLARING, asking);
-    const grouped = await run('dynamic-grouped', DECLARING, asking);
-    for (const epoch of [1, 2, 3, 4, 5, 6]) {
-      expect(servedAt(grouped.snapshot, epoch)!.system.text, `epoch ${epoch}`).toBe(
-        servedAt(flat.snapshot, epoch)!.system.text,
-      );
-      expect(grouped.wire[epoch - 1]!.systemPrompt).toBe(flat.wire[epoch - 1]!.systemPrompt);
-    }
-  });
-
-  it("the dial changes the piece and NOTHING else: same messages, same tickets, and the system text is the default's plus the ask", async () => {
+  it('the dial changes only fixed system instructions and its recorded option, not DATA or collapsed messages', async () => {
     const on = await run('dynamic', DECLARING, asking);
     const off = await run('dynamic', DECLARING, armed);
     for (const epoch of [1, 2, 3, 4, 5, 6]) {
       const a = servedAt(on.snapshot, epoch)!;
       const b = servedAt(off.snapshot, epoch)!;
-      expect(JSON.stringify(a.messages.asSent), `epoch ${epoch} asSent`).toBe(
-        JSON.stringify(b.messages.asSent),
+      expect(a.messages.asSent).toEqual(b.messages.asSent);
+      expect(a.system.pieces.map((piece) => piece.source)).toEqual(
+        b.system.pieces.map((piece) => piece.source),
       );
-      expect(a.system.pieces.map((p) => p.source)).toEqual(b.system.pieces.map((p) => p.source));
-      if (epoch < 3) expect(a.system.text).toBe(b.system.text);
-      else expect(a.system.text).toBe(`${b.system.text}\n\n${FINDINGS_ANSWER_ASK}`);
+      expect(a.system.text).toContain(b.system.text);
+      expect(a.system.text).toContain(quoteAsk);
+      expect(b.system.text).not.toContain(quoteAsk);
     }
-    // The one key the dial adds to the record, and no other.
     expect(keysOf(on)).toEqual([...keysOf(off), 'findingsAnswerAsk'].sort());
   });
-
-  it("without the dial — absent or an explicit 'none' — the run is byte-identical to 9.102.0: no ask, no key", async () => {
+  it('absent and explicit none have identical request bytes; an unarmed agent gets neither DATA nor instruction', async () => {
     const absent = await run('dynamic', DECLARING, armed);
     const none = await run('dynamic', DECLARING, askingNone);
     expect(keysOf(absent)).not.toContain('findingsAnswerAsk');
     expect(keysOf(none)).toEqual(keysOf(absent));
-    for (const epoch of [1, 2, 3, 4, 5, 6]) {
-      expect(servedAt(none.snapshot, epoch)!.system.text).toBe(
-        servedAt(absent.snapshot, epoch)!.system.text,
-      );
-      expect(absent.wire[epoch - 1]!.systemPrompt).not.toContain(FINDINGS_ANSWER_ASK);
-      expect(none.wire[epoch - 1]!.systemPrompt).toBe(absent.wire[epoch - 1]!.systemPrompt);
-    }
-    // …and an unarmed agent never sees the constant either.
+    expect(none.wire).toEqual(absent.wire);
     const bare = await run('dynamic', DECLARING, unarmed);
-    for (const req of bare.wire) expect(req.systemPrompt).not.toContain(FINDINGS_ANSWER_ASK);
+    for (const request of bare.wire) {
+      expect(request.systemPrompt).not.toContain(quoteAsk);
+      expect(
+        request.messages.some((message) =>
+          message.content.startsWith('[AgentFootprint findings DATA'),
+        ),
+      ).toBe(false);
+    }
   });
-
-  it('a basis-only ledger under the dial serves no piece and so no ask, but the run constant is on the record', async () => {
-    const BASIS_ONLY: readonly Reply[] = [
-      call('c1', 'alpha_tool', { q: 'ports', _findings: { basis: 'exploratory' } }),
-      answer('p1 is down'),
-    ];
-    const r = await run('dynamic', BASIS_ONLY, asking);
-    expect(stateOf(r).findingsAnswerAsk).toBe('quote-facts');
+  it('a basis-only run keeps the fixed instruction while its DATA carries no facts', async () => {
+    const r = await run(
+      'dynamic',
+      [
+        call('c1', 'alpha_tool', { q: 'ports', _findings: { basis: 'exploratory' } }),
+        answer('done'),
+      ],
+      asking,
+    );
     for (const view of servedViews(r.snapshot)) {
-      expect(view.system.pieces.some((p) => p.source === 'findings')).toBe(false);
-      expect(view.system.text).not.toContain(FINDINGS_ANSWER_ASK);
+      expect(view.system.text).toContain(quoteAsk);
+      expect(findingsPieceOf(r, view.epoch).data.facts).toEqual([]);
     }
   });
 });

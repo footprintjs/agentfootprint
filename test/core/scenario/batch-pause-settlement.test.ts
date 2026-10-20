@@ -1,3 +1,4 @@
+import { findingsFrame } from '../../helpers/findingsData.js';
 /**
  * THE BATCH SETTLEMENT (9.113.0) — a paused batch's un-dispatched siblings.
  *
@@ -1375,16 +1376,8 @@ describe('batch settlement — under `.findings()` a settled call is not a resul
     { content: 'done' },
   ];
 
-  /** The ids `previous[].toolCallId` may take on this request's `look` schema. */
-  const offerOf = (req: LLMRequest): unknown => {
-    const schema = (req.tools ?? []).find((t) => t.name === 'look')!;
-    const reserved = (schema.inputSchema.properties as Record<string, unknown>)[
-      RESERVED_ARGUMENT
-    ] as {
-      properties: { previous: { items: { properties: { toolCallId: { enum?: unknown } } } } };
-    };
-    return reserved.properties.previous.items.properties.toolCallId.enum;
-  };
+  /** Advisory IDs in actual request-only DATA; they do not grant admission. */
+  const offerOf = (req: LLMRequest): unknown => findingsFrame(req.messages).data.advisoryResultIds;
 
   async function judgedRun(window?: 'evicting') {
     const requests: LLMRequest[] = [];
@@ -1452,9 +1445,7 @@ describe('batch settlement — under `.findings()` a settled call is not a resul
     const { requests } = await judgedRun();
     // Request 3: x1 is judged, so the piece is served; the settled c3 is not
     // a served result nobody judged.
-    expect(requests[2]!.systemPrompt).toContain(
-      'undeclared: 2 results, served in full below (tool:c1, tool:c2)',
-    );
+    expect(findingsFrame(requests[2]!.messages).data.undeclaredResultIds).toEqual(['c1', 'c2']);
     // Request 4: the model's own standing on c3 is quoted with the ledger
     // (it is what the model declared), but the settled message is not a
     // result, so the wire still carries the library's sentence for it.
@@ -1465,9 +1456,11 @@ describe('batch settlement — under `.findings()` a settled call is not a resul
     // The control: x1, judged noise, IS collapsed to its ticket.
     const x1 = requests[3]!.messages.find((m) => m.role === 'tool' && m.toolCallId === 'x1');
     expect(x1?.content).toContain('"collapsed":true');
-    expect(requests[3]!.systemPrompt).toContain(
-      'undeclared: 3 results, served in full below (tool:c1, tool:c2, tool:d1)',
-    );
+    expect(findingsFrame(requests[3]!.messages).data.undeclaredResultIds).toEqual([
+      'c1',
+      'c2',
+      'd1',
+    ]);
     // And no request carried the marker. Requests 3 and 4 were built on the
     // COLLAPSE path (x1's ticket), which collapses the committed conversation
     // — marker and all — and strips afterwards (`callLLM.ts` ·
@@ -1488,9 +1481,10 @@ describe('batch settlement — under `.findings()` a settled call is not a resul
     views.forEach((view, i) => {
       const sent = requests[2 + i]!;
       expect(view.system.text, `epoch ${view.epoch}`).toBe(sent.systemPrompt);
-      expect(view.messages.asSent.map((m) => [m.toolCallId, m.content])).toEqual(
-        sent.messages.map((m) => [m.toolCallId, m.content]),
-      );
+      expect([
+        ...view.messages.asSent.map((m) => [m.toolCallId, m.content]),
+        ...view.messages.requestOnly.map((m) => [undefined, m.text]),
+      ]).toEqual(sent.messages.map((m) => [m.toolCallId, m.content]));
       expect(view.messages.asSent.some((m) => m.notDispatched !== undefined)).toBe(false);
     });
   });

@@ -58,11 +58,9 @@ import { memoryInjectionKey, retrievalEvidenceKey } from '../../memory/define.ty
 import { unwrapMemoryFlowChart } from '../../memory/define.js';
 import { mountMemoryRead, mountMemoryWrite } from '../../memory/wire/mountMemoryPipeline.js';
 import { withMemoryRecall } from './memoryRecallInjections.js';
-import { offeredResultIds } from './findings/offer.js';
 import { readerWindowsOf } from '../../time/windows.js';
 import { clockOf } from '../../time/rows.js';
 import { timeLimitFactsOf, type TimeLimitFacts } from '../../semantics/coverage/timeLimitFacts.js';
-import type { FindingsLedger } from './findings/types.js';
 import {
   breakFinalStage,
   breakFinalWithValidationStage,
@@ -343,18 +341,9 @@ export interface AgentChartDeps {
    */
   readonly hasEscalation?: boolean;
 
-  /**
-   * The findings ledger is armed (`.findings()`; 9.102.0 for this dep).
-   * Gates the OFFER on the Tools branch's `inputMapper`: the ids of the
-   * served tool results the model may still name (no standing, `fact` or
-   * `open` — never `noise` or `ruled-out`), newest first, computed by the
-   * ONE producer `findings/offer.ts · offeredResultIds` from
-   * `parent.history` (the served list — the window stage has already run)
-   * and `parent.findingsLedger`, handed to the slot as `findingsOffer`. The
-   * tools slot is an isolated subflow that never sees either key, so the
-   * mount is the only place the two meet. Absent — the default — the mount
-   * maps exactly the keys it always did and reads neither key; the slot's
-   * own gate (`ToolsSlotConfig.findings`) decorates nothing.
+  /** Findings is armed. The tools slot plants a stable optional schema;
+   * live call assembly serves the current offer and ledger in late DATA.
+   * This flag never makes the cache subflow suppress findings cache markers.
    */
   readonly hasFindingsLedger?: boolean;
 
@@ -881,19 +870,6 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
         ...(parent.integrityFindingIds !== undefined && {
           priorIntegrityFindingIds: parent.integrityFindingIds,
         }),
-        // The findings OFFER (9.102.0), under the arm only: the served
-        // results the model may still name, newest first, from `history` as the
-        // window stage left it (COMPACT runs before this fan-out, so this is
-        // the list `callLLM` serves — the collapse never changes an id) and
-        // the ledger as it stands at this call. The slot binds it into
-        // `previous[].toolCallId`'s enum at the one decoration site. An
-        // unarmed agent maps neither key and this key never exists.
-        ...(deps.hasFindingsLedger === true && {
-          findingsOffer: offeredResultIds(
-            (parent.history as readonly LLMMessage[] | undefined) ?? [],
-            parent.findingsLedger as FindingsLedger | undefined,
-          ),
-        }),
         // The reader's settled windows (step T6b) and the app's control window,
         // under `.time()` only and value-conditional: a turn with none crosses no
         // key. See `AgentChartDeps.timeWindows`.
@@ -997,43 +973,35 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
     // outputs only the gated cacheMarkers (Replace, not concat, across the
     // loop). The attached provider's CacheStrategy turns markers into wire
     // format later. See buildCacheSubflow.ts.
-    // Under the findings door the tools slot binds the offer into every tool
-    // schema, so the tools — first on a breakpoint wire — change from one
-    // tool-calling call to the next and no breakpoint would be read back
-    // (`CacheDecisionState.toolsVaryPerCall`). A build-time fact, closed over
-    // by the decision stage: an unarmed agent's sf-cache is unchanged.
-    .addSubFlowChartNext(
-      SUBFLOW_IDS.CACHE,
-      buildCacheSubflow({ toolsVaryPerCall: deps.hasFindingsLedger === true }),
-      'Cache',
-      {
-        inputMapper: (parent) => ({
-          // decideCacheMarkers inputs
-          activeInjections: (parent.activeInjections as readonly Injection[] | undefined) ?? [],
-          iteration: (parent.iteration as number | undefined) ?? 1,
-          maxIterations: (parent.maxIterations as number | undefined) ?? deps.maxIterations,
-          userMessage: (parent.userMessage as string | undefined) ?? '',
-          ...(parent.lastToolResult !== undefined && {
-            lastToolName: (parent.lastToolResult as { toolName: string } | undefined)?.toolName,
-          }),
-          cumulativeInputTokens: (parent.totalInputTokens as number | undefined) ?? 0,
-          systemPromptCachePolicy: deps.systemPromptCachePolicy,
-          cachingDisabled: (parent.cachingDisabled as boolean | undefined) ?? false,
-          // The window AS IT WILL BE SENT (7.21). A `CacheMarker{field:'messages'}`
-          // names a position in the request's message array, so it has to be
-          // computed against that array — post-window, post-delivery — and not
-          // against a count of injections, which is what it used to be and why
-          // the marker pointed at the wrong message.
-          history: (parent.history as readonly LLMMessage[] | undefined) ?? [],
-          // CacheGate inputs (read-only: skillHistory is updated in the main
-          // loop above, so it is NOT mapped back out)
-          recentHitRate: parent.recentHitRate as number | undefined,
-          skillHistory: (parent.skillHistory as readonly (string | undefined)[] | undefined) ?? [],
+    // Findings uses stable tool definitions and late request-only DATA, so
+    // its changing ledger does not disable prefix cache markers.
+    .addSubFlowChartNext(SUBFLOW_IDS.CACHE, buildCacheSubflow(), 'Cache', {
+      inputMapper: (parent) => ({
+        // decideCacheMarkers inputs
+        activeInjections: (parent.activeInjections as readonly Injection[] | undefined) ?? [],
+        iteration: (parent.iteration as number | undefined) ?? 1,
+        maxIterations: (parent.maxIterations as number | undefined) ?? deps.maxIterations,
+        userMessage: (parent.userMessage as string | undefined) ?? '',
+        ...(parent.lastToolResult !== undefined && {
+          lastToolName: (parent.lastToolResult as { toolName: string } | undefined)?.toolName,
         }),
-        outputMapper: (sf) => ({ cacheMarkers: sf.cacheMarkers }),
-        arrayMerge: ArrayMergeMode.Replace,
-      },
-    )
+        cumulativeInputTokens: (parent.totalInputTokens as number | undefined) ?? 0,
+        systemPromptCachePolicy: deps.systemPromptCachePolicy,
+        cachingDisabled: (parent.cachingDisabled as boolean | undefined) ?? false,
+        // The window AS IT WILL BE SENT (7.21). A `CacheMarker{field:'messages'}`
+        // names a position in the request's message array, so it has to be
+        // computed against that array — post-window, post-delivery — and not
+        // against a count of injections, which is what it used to be and why
+        // the marker pointed at the wrong message.
+        history: (parent.history as readonly LLMMessage[] | undefined) ?? [],
+        // CacheGate inputs (read-only: skillHistory is updated in the main
+        // loop above, so it is NOT mapped back out)
+        recentHitRate: parent.recentHitRate as number | undefined,
+        skillHistory: (parent.skillHistory as readonly (string | undefined)[] | undefined) ?? [],
+      }),
+      outputMapper: (sf) => ({ cacheMarkers: sf.cacheMarkers }),
+      arrayMerge: ArrayMergeMode.Replace,
+    })
     // CallLLM emits the per-iteration `iteration_start` marker itself (no
     // dedicated IterationStart stage — emitting is passive observability).
     .addFunction('CallLLM', deps.callLLM as never, STAGE_IDS.CALL_LLM, 'LLM invocation')

@@ -274,208 +274,70 @@ const plantedOf = (schema: LLMToolSchema): Record<string, any> =>
 const toolCallIdOf = (planted: Record<string, any>): Record<string, any> =>
   planted.properties.previous.items.properties.toolCallId;
 
-/** The offered copy with `toolCallId` put back to the base's — everything else must be the base, byte for byte. */
-function withoutOffer(planted: Record<string, any>): unknown {
-  const base = FINDINGS_ARGUMENT_SCHEMA.properties as Record<string, any>;
-  return {
-    ...planted,
-    properties: {
-      ...planted.properties,
-      previous: {
-        ...planted.properties.previous,
-        items: {
-          ...planted.properties.previous.items,
-          properties: {
-            ...planted.properties.previous.items.properties,
-            toolCallId: base.previous.items.properties.toolCallId,
-          },
-        },
-      },
-    },
-  };
-}
-
 const BASE_BYTES = JSON.stringify(FINDINGS_ARGUMENT_SCHEMA);
-const OFFER = deepFreeze(['toolu_03', 'toolu_02', 'toolu_01']);
 
-describe('withFindingsArgument — the offer', () => {
+describe('withFindingsArgument — stable schema, advisory offer outside the contract', () => {
   const original = deepFreeze(
     schemaOf({ port: { type: 'string' } }, { required: ['port'], additionalProperties: false }),
   );
-
-  it('an empty or absent offer plants the frozen base BY REFERENCE (byte-identical to before)', () => {
-    expect(plantedOf(withFindingsArgument(original))).toBe(FINDINGS_ARGUMENT_SCHEMA);
-    expect(plantedOf(withFindingsArgument(original, []))).toBe(FINDINGS_ARGUMENT_SCHEMA);
-    expect(JSON.stringify(withFindingsArgument(original, []))).toBe(
-      JSON.stringify(withFindingsArgument(original)),
-    );
+  it('plants the same frozen base regardless of the result vocabulary', () => {
+    const bytes = JSON.stringify(withFindingsArgument(original));
+    for (let iteration = 0; iteration < 3; iteration++) {
+      const decorated = withFindingsArgument(original);
+      expect(plantedOf(decorated)).toBe(FINDINGS_ARGUMENT_SCHEMA);
+      expect(JSON.stringify(decorated)).toBe(bytes);
+      expect(toolCallIdOf(plantedOf(decorated))).not.toHaveProperty('enum');
+      expect(decorated.inputSchema.required).toBe(original.inputSchema.required);
+      expect(decorated.inputSchema.additionalProperties).toBe(false);
+      expect(Object.keys(decorated.inputSchema.properties as object)).toEqual([
+        'port',
+        '_findings',
+      ]);
+    }
   });
-
-  it('a non-empty offer plants a rebuilt copy whose previous[].toolCallId carries enum: offer, exact strings, in order', () => {
-    const decorated = withFindingsArgument(original, OFFER);
-    const planted = plantedOf(decorated);
-    expect(planted).not.toBe(FINDINGS_ARGUMENT_SCHEMA);
-    const toolCallId = toolCallIdOf(planted);
-    expect(toolCallId.type).toBe('string');
-    expect(toolCallId.enum).toEqual(['toolu_03', 'toolu_02', 'toolu_01']);
-    expect(toolCallId.enum).not.toBe(OFFER);
-    expect(toolCallId.description).toBe(
-      'The tool_result id being judged — one of the ids listed; a result not listed cannot be ' +
-        'named here.',
-    );
-    expect(toolCallId.description).not.toContain('cap');
-    // the author's contract is untouched, exactly as without an offer
-    expect(decorated.inputSchema.required).toBe(original.inputSchema.required);
-    expect(decorated.inputSchema.additionalProperties).toBe(false);
-    expect(Object.keys(decorated.inputSchema.properties as object)).toEqual(['port', '_findings']);
-  });
-
-  it('only the enum and its description move: everything else is the base, byte for byte, key order included', () => {
-    const planted = plantedOf(withFindingsArgument(original, OFFER));
-    expect(JSON.stringify(withoutOffer(planted))).toBe(BASE_BYTES);
-    expect(Object.keys(planted)).toEqual(Object.keys(FINDINGS_ARGUMENT_SCHEMA));
-    expect(Object.keys(planted.properties.previous.items.properties)).toEqual(
-      Object.keys((FINDINGS_ARGUMENT_SCHEMA.properties as any).previous.items.properties),
-    );
-    expect(Object.keys(toolCallIdOf(planted))).toEqual(['type', 'enum', 'description']);
-  });
-
-  it('the cap is applied AND stated when the offer is clipped; a fitting offer states nothing', () => {
-    const forty = Array.from({ length: 40 }, (_, i) => `toolu_${40 - i}`);
-    const toolCallId = toolCallIdOf(plantedOf(withFindingsArgument(original, forty)));
-    expect(toolCallId.enum).toHaveLength(FINDINGS_OFFER_CAP);
-    expect(toolCallId.enum).toEqual(forty.slice(0, FINDINGS_OFFER_CAP));
-    expect(toolCallId.description).toBe(
-      'The tool_result id being judged — one of the ids listed; a result not listed cannot be ' +
-        `named here. The ${FINDINGS_OFFER_CAP} newest results you may still name are listed; 8 ` +
-        `older ones are not (cap ${FINDINGS_OFFER_CAP}).`,
-    );
-    const one = Array.from({ length: FINDINGS_OFFER_CAP + 1 }, (_, i) => `t${i}`);
-    expect(toolCallIdOf(plantedOf(withFindingsArgument(original, one))).description).toMatch(
-      /; 1 older one is not \(cap 32\)\.$/,
-    );
-    const exact = Array.from({ length: FINDINGS_OFFER_CAP }, (_, i) => `t${i}`);
-    const fitting = toolCallIdOf(plantedOf(withFindingsArgument(original, exact)));
-    expect(fitting.enum).toHaveLength(FINDINGS_OFFER_CAP);
-    expect(fitting.description).not.toContain('cap');
-  });
-
-  it('the frozen base is untouched by every offer — deep-frozen, no enum, same bytes', () => {
-    withFindingsArgument(original, OFFER);
-    withFindingsArgument(
-      original,
-      Array.from({ length: 50 }, (_, i) => `t${i}`),
-    );
-    expect(isDeepFrozen(FINDINGS_ARGUMENT_SCHEMA)).toBe(true);
+  it('never mutates a frozen base or aliases a mutable offer', () => {
+    const decorated = withFindingsArgument(original);
+    const bytes = JSON.stringify(decorated);
+    expect(JSON.stringify(decorated)).toBe(bytes);
+    expect(isDeepFrozen(plantedOf(decorated))).toBe(true);
     expect(JSON.stringify(FINDINGS_ARGUMENT_SCHEMA)).toBe(BASE_BYTES);
-    const base = FINDINGS_ARGUMENT_SCHEMA.properties as Record<string, any>;
-    expect(
-      Object.prototype.hasOwnProperty.call(base.previous.items.properties.toolCallId, 'enum'),
-    ).toBe(false);
-  });
-
-  it('the offered copy is deep-frozen too (served, never edited), and does not alias the base', () => {
-    const planted = plantedOf(withFindingsArgument(original, OFFER));
-    expect(isDeepFrozen(planted)).toBe(true);
     expect(() => {
-      (toolCallIdOf(planted).enum as string[]).push('toolu_99');
+      toolCallIdOf(plantedOf(decorated)).enum = ['forged'];
     }).toThrow();
-    expect(planted.properties.previous).not.toBe(
-      (FINDINGS_ARGUMENT_SCHEMA.properties as any).previous,
-    );
-    expect(planted.properties.basis).toBe((FINDINGS_ARGUMENT_SCHEMA.properties as any).basis);
   });
-
-  it("the caller's offer array is copied: a later mutation of it never reaches the enum", () => {
-    const mutable = ['a', 'b'];
-    const planted = plantedOf(withFindingsArgument(original, mutable));
-    mutable.push('c');
-    mutable[0] = 'z';
-    expect(toolCallIdOf(planted).enum).toEqual(['a', 'b']);
-  });
-
-  it('passed point-free to `.map` (a JavaScript caller — the compiler refuses it), the index is no offer: the base by reference, never a crash', () => {
-    // `.map` hands (schema, index, array); the index would be the offer.
+  it('ignores a JavaScript map index rather than interpreting it as an offer', () => {
     const mapped = [original, original].map(
       withFindingsArgument as never as (s: LLMToolSchema) => LLMToolSchema,
     );
-    expect(mapped.map(plantedOf)).toEqual([FINDINGS_ARGUMENT_SCHEMA, FINDINGS_ARGUMENT_SCHEMA]);
-    expect(plantedOf(mapped[1]!)).toBe(FINDINGS_ARGUMENT_SCHEMA);
-    expect(plantedOf(withFindingsArgument(original, 'toolu_1' as never))).toBe(
-      FINDINGS_ARGUMENT_SCHEMA,
-    );
+    for (const schema of mapped) expect(plantedOf(schema)).toBe(FINDINGS_ARGUMENT_SCHEMA);
   });
-
-  it('an author-owned schema is the SAME reference with or without an offer', () => {
+  it('preserves author-owned schemas and idempotence', () => {
     const authored = schemaOf({ _findings: { type: 'string' } });
-    expect(withFindingsArgument(authored, OFFER)).toBe(authored);
-    expect(withFindingsArgument(authored, [])).toBe(authored);
-    expect((authored.inputSchema.properties as any)._findings).toEqual({ type: 'string' });
+    expect(withFindingsArgument(authored)).toBe(authored);
+    const decorated = withFindingsArgument(original);
+    expect(withFindingsArgument(decorated)).toBe(decorated);
+    expect(withFindingsArgument(decorated)).toBe(decorated);
   });
-
-  it('is idempotent with an offer: decorating a decorated schema is the same reference', () => {
-    const once = withFindingsArgument(original, OFFER);
-    expect(withFindingsArgument(once, OFFER)).toBe(once);
-    expect(withFindingsArgument(once, [])).toBe(once);
-    expect(withFindingsArgument(once)).toBe(once);
-    // the decoration site decorates UNDECORATED candidates, so a new offer is a new call on the original
-    expect(toolCallIdOf(plantedOf(withFindingsArgument(original, ['only']))).enum).toEqual([
-      'only',
-    ]);
-  });
-
-  it('the enum survives a JSON round-trip byte-equal (what every wire mapping carries)', () => {
-    const decorated = withFindingsArgument(original, OFFER);
-    const bytes = JSON.stringify(decorated);
-    const back = JSON.parse(bytes);
-    expect(JSON.stringify(back)).toBe(bytes);
-    expect(back).toEqual(decorated);
-    expect(toolCallIdOf(back.inputSchema.properties._findings).enum).toEqual([
-      'toolu_03',
-      'toolu_02',
-      'toolu_01',
-    ]);
-    // and the same offer twice is the same bytes (a receipt hash can compare epochs)
-    expect(JSON.stringify(withFindingsArgument(original, [...OFFER]))).toBe(bytes);
-    expect(JSON.stringify(withFindingsArgument(original, ['toolu_02', 'toolu_03']))).not.toBe(
-      bytes,
-    );
-  });
-
-  it('property: with a random offer, never mutates a deep-frozen schema, never adds `_findings` to required', () => {
+  it('keeps JSON wire bytes stable after a round trip and across arbitrary offers', () => {
+    const bytes = JSON.stringify(withFindingsArgument(original));
+    expect(JSON.stringify(JSON.parse(bytes))).toBe(bytes);
     for (const seed of SEEDS) {
       const rnd = mulberry32(seed);
-      const size = Math.floor(rnd() * 40);
-      const offer = Array.from({ length: size }, (_, i) => `t${seed}_${i}`);
       const required = rnd() < 0.5 ? Object.keys(dictionary(rnd)) : undefined;
-      const original = deepFreeze(
+      const schema = deepFreeze(
         schemaOf(dictionary(rnd), {
           ...(required !== undefined && { required }),
-          ...(rnd() < 0.5 && { additionalProperties: rnd() < 0.5 }),
+          additionalProperties: false,
         }),
       );
-      const decorated = withFindingsArgument(original, offer);
-      const message = `seed ${seed}`;
-      const planted = plantedOf(decorated);
-      if (size === 0) expect(planted, message).toBe(FINDINGS_ARGUMENT_SCHEMA);
-      else {
-        expect(toolCallIdOf(planted).enum, message).toEqual(offer.slice(0, FINDINGS_OFFER_CAP));
-        expect(JSON.stringify(withoutOffer(planted)), message).toBe(BASE_BYTES);
-        expect(toolCallIdOf(planted).description.includes('cap'), message).toBe(
-          size > FINDINGS_OFFER_CAP,
-        );
-      }
-      expect(decorated.inputSchema.required, message).toBe(original.inputSchema.required);
-      expect(decorated.inputSchema.additionalProperties, message).toBe(
-        original.inputSchema.additionalProperties,
+      const decorated = withFindingsArgument(schema);
+      expect(plantedOf(decorated), `seed ${seed}`).toBe(FINDINGS_ARGUMENT_SCHEMA);
+      expect(JSON.stringify(decorated), `seed ${seed}`).toBe(
+        JSON.stringify(withFindingsArgument(schema)),
       );
-      expect(withFindingsArgument(decorated, offer), message).toBe(decorated);
-      expect(
-        Object.prototype.hasOwnProperty.call(original.inputSchema.properties, '_findings'),
-        message,
-      ).toBe(false);
+      expect(decorated.inputSchema.required).toBe(schema.inputSchema.required);
+      expect(JSON.stringify(FINDINGS_ARGUMENT_SCHEMA)).toBe(BASE_BYTES);
     }
-    expect(JSON.stringify(FINDINGS_ARGUMENT_SCHEMA)).toBe(BASE_BYTES);
   });
 });
 
@@ -495,7 +357,7 @@ describe('withoutFindingsArgument', () => {
   });
 
   it('peels an OFFER copy — the offered ids are never an enum the model may hide an argument behind', () => {
-    const served = withFindingsArgument(tool, OFFER);
+    const served = withFindingsArgument(tool);
     const peeled = withoutFindingsArgument(served.inputSchema);
     expect(peeled).not.toBe(served.inputSchema);
     expect(peeled).toEqual(tool.inputSchema);
@@ -503,8 +365,8 @@ describe('withoutFindingsArgument', () => {
   });
 
   it('peels a structuredClone of either — the committed tool list is a clone, so the reference alone never holds on the live path', () => {
-    for (const offer of [[], OFFER] as const) {
-      const cloned = structuredClone(withFindingsArgument(tool, [...offer]).inputSchema);
+    for (const from of [false, true]) {
+      const cloned = structuredClone(withFindingsArgument(tool, { from }).inputSchema);
       expect((cloned.properties as any)._findings).not.toBe(FINDINGS_ARGUMENT_SCHEMA);
       expect(withoutFindingsArgument(cloned)).toEqual(tool.inputSchema);
     }
@@ -840,11 +702,11 @@ describe('the model-facing strings', () => {
       'Before an exploratory call, add `proposition` (what the call tests) and `predicts` (what the ' +
         'result should show if it holds) — optional, one line each.',
     );
-    expect(lines[lines.length - 1]).toBe(
-      "Name a result by the id exactly as it appears in the tool schema's list for " +
-        "`previous[].toolCallId` — the provider's tool_result id copied whole, never a position or " +
-        'a count.',
+    expect(FINDINGS_INSTRUCTION).toContain(
+      'whole opaque id in the late findings DATA advisory list',
     );
+    expect(FINDINGS_INSTRUCTION).toContain('grants no authority');
+    expect(FINDINGS_INSTRUCTION).toContain('Facts are model assertions');
   });
 
   /** Every `description` in a schema tree — the model reads each on every served tool. */
@@ -867,13 +729,8 @@ describe('the model-facing strings', () => {
     const original = schemaOf({ port: { type: 'string' } });
     const trees = [
       FINDINGS_ARGUMENT_SCHEMA,
-      plantedOf(withFindingsArgument(original, OFFER)),
-      plantedOf(
-        withFindingsArgument(
-          original,
-          Array.from({ length: 40 }, (_, i) => `t${i}`),
-        ),
-      ),
+      plantedOf(withFindingsArgument(original)),
+      plantedOf(withFindingsArgument(original)),
     ];
     for (const tree of trees) {
       const texts = descriptionsOf(tree);

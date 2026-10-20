@@ -1,3 +1,4 @@
+import { FINDINGS_LAYOUT, findingsContextBytes } from '../findings/context.js';
 /**
  * seed — initial stage of the agent's chart. Initializes every mutable
  * field of `AgentState` from the consumer's input.
@@ -302,6 +303,7 @@ export interface SeedStageDeps {
    * it is checking. Absent → this stage commits exactly the keys it always did.
    */
   readonly findingsServe?: 'ledger-and-facts' | 'ledger-only';
+  readonly findingsContextBytes?: number;
   /**
    * The answer-turn ask on this run (9.103.0) — present ONLY on an armed
    * agent whose `findings({ answerAsk })` is `'quote-facts'`; `Agent.ts`
@@ -800,7 +802,7 @@ function seedFrom(
   const isRuled = (s: LLMToolSchema): boolean =>
     deps.argumentSources === true && carriesRules(ruledTools?.get(s.name));
   const planted = (s: LLMToolSchema): LLMToolSchema =>
-    isRuled(s) ? withFindingsArgument(s, [], { from: true }) : withFindingsArgument(s);
+    isRuled(s) ? withFindingsArgument(s, { from: true }) : withFindingsArgument(s);
   scope.dynamicToolSchemas =
     deps.findings === true
       ? ruled.map((s) => planted(s))
@@ -831,6 +833,10 @@ function seedFrom(
   // `findingsLedger` once the model declares). The `!== undefined` guard is
   // defence for a hand-built `SeedStageDeps`, not the common path. An
   // unarmed agent writes nothing here.
+  if (deps.findings === true) {
+    scope.findingsLayout = FINDINGS_LAYOUT;
+    scope.findingsContextBytes = findingsContextBytes(deps.findingsContextBytes);
+  }
   if (deps.findings === true && deps.findingsServe !== undefined) {
     scope.findingsServe = deps.findingsServe;
   }

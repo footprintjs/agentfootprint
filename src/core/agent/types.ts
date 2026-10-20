@@ -402,6 +402,10 @@ export interface AgentOptions {
     /** What the model is served from the ledger: the default keeps fact results
      *  verbatim beside the piece; `'ledger-only'` collapses them too (bench-gated). */
     readonly serve?: 'ledger-and-facts' | 'ledger-only';
+    /** Hard UTF-8 byte ceiling for the request-only findings DATA frame.
+     * Whole entries are omitted with counts; identifiers are never clipped.
+     * Default 16384; valid integers 1024–262144. */
+    readonly maxContextBytes?: number;
     /** Whether the served piece ends with the answer-turn ask
      *  (`FINDINGS_ANSWER_ASK`): `'none'` (default) or `'quote-facts'` (bench-gated). */
     readonly answerAsk?: 'none' | 'quote-facts';
@@ -1957,6 +1961,9 @@ export interface AgentState {
    * a default).
    */
   findingsServe?: 'ledger-and-facts' | 'ledger-only';
+  /** Recorded layout and resolved bound; absent on older records. */
+  findingsLayout?: 'late-v1';
+  findingsContextBytes?: number;
   /**
    * The answer-turn ask on this run (9.103.0) — present ONLY when
    * `AgentOptions.findings.answerAsk` is `'quote-facts'`, seeded by

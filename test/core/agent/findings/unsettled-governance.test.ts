@@ -1,3 +1,4 @@
+import { findingsFrame } from '../../../helpers/findingsData.js';
 /**
  * Regression — the leak probe from the rule's second review, copied into the
  * suite with its assertions turned around (9.113.0, `findings/unsettled.ts`).
@@ -170,7 +171,10 @@ describe('unsettled by absence — the review’s leak probe: after-tool governa
       // declared, and nothing the rule withheld — no envelope word, and no
       // "on an absence" the model never read.
       const sys3 = wire[2]!.systemPrompt ?? '';
-      expect(sys3).toContain('\nruled out (host_hbas, tool:c1): could not read the HBAs\n');
+      expect(findingsFrame(wire[2]!.messages).data.limitations).toMatchObject([
+        { toolCallId: 'c1', line: 'could not read the HBAs' },
+      ]);
+      expect(findingsFrame(wire[2]!.messages).data.unsettledByAbsence).toEqual([]);
       expect(sys3).not.toContain(WITHHELD);
       expect(sys3).not.toContain('on an absence');
       expect(sys3).not.toContain('unsettled by absence');
@@ -200,14 +204,13 @@ describe('unsettled by absence — the review’s leak probe: after-tool governa
       // is honored, neither undone nor a reason to drop the row.
       const sys3 = wire[2]!.systemPrompt ?? '';
       expect(sys3).not.toContain(WITHHELD);
-      expect(sys3).toContain(
-        [
-          'unsettled by absence (read off the record):',
-          'ruled out (host_hbas, tool:c1) on an absence',
-          'tool:c1 cannot_cover: HBAs on hosts outside the collected inventory — the collector exports only the hosts it was pointed at',
-          'tool:c1 try_instead: Look nas-cluster-06 up in cluster_inventory.',
-        ].join('\n') + '\n\n',
-      );
+      expect(findingsFrame(wire[2]!.messages).data.unsettledByAbsence).toEqual([
+        {
+          toolCallId: 'c1',
+          cannotCover: HBA_MISS.cannotCover,
+          tryInstead: HBA_MISS.tryInstead,
+        },
+      ]);
       expect(ledger.find((row) => row.kind === 'unsettled-by-absence')).toEqual({
         kind: 'unsettled-by-absence',
         toolCallId: 'c1',

@@ -362,16 +362,8 @@ export interface ToolsSlotConfig {
    * site: after `mergeWire`, before `scope.toolSchemas` is written. Absent —
    * the default — and the committed list is the merged list, byte for byte.
    *
-   * THE OFFER (9.102.0) rides in as the per-iteration arg `findingsOffer`:
-   * the ids of the served tool results the model may still name (no
-   * standing, `fact` or `open`), newest first, computed by the ONE producer
-   * `findings/offer.ts · offeredResultIds`
-   * at the mount (`buildAgentChart` / `buildDynamicAgentChart` · the Tools
-   * branch's `inputMapper`, under `AgentChartDeps.hasFindingsLedger`) —
-   * this subflow has an isolated runtime and never sees `history` or
-   * `findingsLedger`; the mount reads both, once, and hands the list in.
-   * Read here under this gate only; absent (a hand-built mount) it is an
-   * empty offer, which serves the base decoration.
+   * The decoration is stable: mutable result IDs are served in the call's
+   * request-only DATA, outside this slot and its cached tool contract.
    */
   readonly findings?: true;
   /**
@@ -627,7 +619,6 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       currentSkillId?: string;
       turnRoute?: TurnRoute;
       stepPointer?: StepPointerCarrier;
-      findingsOffer?: readonly string[];
       timeWindows?: ReaderWindows;
       timeClock?: ServedClock;
       timeLimits?: TimeLimitFacts;
@@ -966,30 +957,8 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       // judges. `merged` itself stays undecorated for the names-only reads
       // below. Unarmed: the merged list, byte for byte.
       //
-      // THE OFFER (9.102.0). The decoration binds the ids the model may NAME
-      // into `previous[].toolCallId`'s enum: the served results the model can
-      // still read — no standing, `fact` or `open`; a `noise` or `ruled-out`
-      // result is a ticket and leaves — newest first (`findings/offer.ts ·
-      // offeredResultIds`,
-      // computed at the mount and handed in as `findingsOffer` — see
-      // `ToolsSlotConfig.findings`). An explicit lambda, on purpose: passed
-      // point-free, `.map` would hand the INDEX in as the offer. The committed
-      // list therefore holds the offer, so the rebuild is byte-equal without
-      // recomposition and `receipt.tools.schemaHashes` moves when the offer
-      // does — the record telling the truth. An empty offer (the first call;
-      // everything declared; no mount arg) is the base decoration by reference.
-      // The offer is what the model may COPY, never what the library resolves:
-      // an id outside it still files as written, `unknownId: true`, and every
-      // id inside it resolves — the rows are identified against the same served
-      // history (`findings/ledger.ts · standingRowsFrom` over
-      // `findings/offer.ts · knownResults`).
-      //
-      // THE NARROWING (9.105.0) is the SAME site, one step earlier: `served`
-      // is the narrowed list when `.toolChoice({ serve: { top } })` decided
-      // one, so the decoration, the commit, the receipt and the rebuild all
-      // see the narrowed list — nothing downstream learns a new mode.
-      const offer: readonly string[] =
-        config.findings === true ? args.findingsOffer ?? EMPTY_OFFER : EMPTY_OFFER;
+      // Result IDs no longer change tool contracts. The late DATA composer
+      // alone reads the current offer; dispatch admission remains separate.
       // THE INPUTS LAYER'S RULES (honesty layer 2) decorate FIRST, from the
       // rules of the implementation that WINS each name — `served` itself,
       // by reference, when the layer is not armed or no served tool is ruled.
@@ -1046,7 +1015,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
         isRuled(s) ? { from: true } : undefined;
       scope.toolSchemas =
         config.findings === true
-          ? ruled.map((s) => withFindingsArgument(s, offer, from(s)))
+          ? ruled.map((s) => withFindingsArgument(s, from(s)))
           : config.argumentSources === true
           ? sourcesOnWire(ruled, isRuled)
           : ruled;

@@ -1,3 +1,5 @@
+import { findingsInstruction } from './findings/instruction.js';
+import { findingsContextBytes } from './findings/context.js';
 /**
  * AgentBuilder — fluent builder for Agent. Extracted from Agent.ts in
  * v2.11.2 as part of the core/agent decomposition. Same surface, same
@@ -87,11 +89,7 @@ import { TRACE_TOOL_NAMES } from '../../lib/traceToolNames.js';
 import { Agent } from '../Agent.js';
 import { buildSkillGraphDeclared, type SkillGraphDeclaredMap } from './skillGraphDeclared.js';
 import type { AgentOptions, RunConfigFn } from './types.js';
-import {
-  FINDINGS_INSTRUCTION,
-  FINDINGS_INSTRUCTION_ID,
-  findingsInstructionFor,
-} from './findings/reserved.js';
+import { FINDINGS_INSTRUCTION_ID } from './findings/reserved.js';
 import { readInputsLayerOption } from './honesty/armed.js';
 import { readTimeOptions, type TimeOptions } from '../../time/clock.js';
 import { ONTOLOGY_INSTRUCTION, ONTOLOGY_INSTRUCTION_ID } from '../../ontology/instruction.js';
@@ -2354,6 +2352,7 @@ export class AgentBuilder {
         `AgentBuilder.findings: expected an options object or nothing, got ${typeof options}.`,
       );
     }
+    const maxContextBytes = findingsContextBytes(options?.maxContextBytes);
     const serve = options?.serve ?? 'ledger-and-facts';
     if (serve !== 'ledger-and-facts' && serve !== 'ledger-only') {
       throw new Error(
@@ -2409,6 +2408,7 @@ export class AgentBuilder {
     // an explicit `'none'` and an absent one reach the run as the same thing.
     this.findingsValue = {
       serve,
+      maxContextBytes,
       ...(answerAsk !== undefined && { answerAsk }),
       ...(keep !== undefined && { keepLedgerFacts: keep }),
       ...(judge !== undefined && { judge }),
@@ -2418,13 +2418,7 @@ export class AgentBuilder {
     // that activates every iteration, so a long run keeps the vocabulary
     // present, and a system PIECE on the receipt (never an injected turn, so
     // nothing in it is exempt from the evidence gate and nothing persists).
-    this.injectionList.push(
-      defineInstruction({
-        id: FINDINGS_INSTRUCTION_ID,
-        activeWhen: () => true,
-        prompt: FINDINGS_INSTRUCTION,
-      }),
-    );
+    this.injectionList.push(findingsInstruction(false, answerAsk === 'quote-facts'));
     this.injectionSources.set(FINDINGS_INSTRUCTION_ID, this.currentSource());
     return this;
   }
@@ -3477,11 +3471,10 @@ export class AgentBuilder {
     if (this.findingsValue !== undefined && this.evidenceGate !== undefined) {
       const at = this.injectionList.findIndex((i) => i.id === FINDINGS_INSTRUCTION_ID);
       if (at >= 0) {
-        this.injectionList[at] = defineInstruction({
-          id: FINDINGS_INSTRUCTION_ID,
-          activeWhen: () => true,
-          prompt: findingsInstructionFor({ contingent: true }),
-        });
+        this.injectionList[at] = findingsInstruction(
+          true,
+          this.findingsValue.answerAsk === 'quote-facts',
+        );
       }
     }
     const selfExplainBinding =

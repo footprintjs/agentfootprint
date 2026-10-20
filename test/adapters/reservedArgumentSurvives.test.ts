@@ -155,7 +155,7 @@ const REQUEST: LLMRequest = {
 };
 
 // ─── The same property with an OFFER bound in (packet 6) ───────────
-// Owner: `reserved.ts · offeredFindingsSchema`. The only bytes that differ
+// Historical schema-offer fixture: old schemas remain legal adapter inputs. The only bytes that differ
 // from FINDINGS_PROPERTY are `previous.items.properties.toolCallId`'s `enum`
 // and its description — pinned by the first test of the offer block below.
 

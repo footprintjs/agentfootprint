@@ -78,9 +78,9 @@ cache markers at all. It skips them when:
 3. three or more different skills were active in the last five iterations —
    each switch invalidates the cache, so marking would only add write cost.
 
-Under `.findings()` no marker is placed: its offer changes every tool schema
-per call, so nothing could be read back. The gate's decision is recorded with
-the run, like every other decision.
+Under `.findings()`, stable tool definitions and immutable system instructions
+can be cached. The changing advisory ID list and ledger declarations are late
+request-only DATA, outside the cache breakpoints. See [the layout and limits](#findings-uses-a-stable-prefix).
 
 ## Which providers, and how
 
@@ -92,7 +92,11 @@ from the provider's name:
 |---|---|---|
 | `anthropic()`, `browserAnthropic()` | `mode: 'breakpoints'` — up to 4 markers, placed for you | reported |
 | `openai()`, Azure OpenAI, Foundry | `mode: 'automatic'` — the provider caches on its own | not reported |
-| `bedrock()`, `ollama()`, `gemini()`, `mock()` | nothing — no-op | — |
+| `bedrock()` | model-aware `mode: 'breakpoints'` for supported model IDs; unknown models do not cache | reported when present |
+| `ollama()`, `gemini()`, `mock()` | nothing — no-op | — |
+
+Bedrock support comes from the adapter's model table. A cache point below the
+model's minimum size does not cache.
 
 A wrapper keeps caching when it forwards the field (`withRetry`,
 `withCircuitBreaker` and `withFallback` do):
@@ -128,3 +132,38 @@ tokens for one task):
 
 Gating still uses fewer tokens and has a faster first call (no large cache
 write), but stuffing is now a matter of taste rather than cost.
+
+## Findings uses a stable prefix
+
+With `.findings()`, library-owned `_findings` tool definitions stay fixed as
+result IDs and standings change. The fixed findings instruction can be cached;
+mutable declarations and the current advisory IDs are served in a final
+request-only DATA frame, after the last cache breakpoint. This frame is quoted
+model/record data, not a new human request or verified facts. Judge and argument
+rows are not added to it.
+
+<CodeFile path="examples/features/105-findings-stable-cache-layout.ts" region="layout" />
+
+`maxContextBytes` is a host-owned UTF-8 ceiling: default 16,384, a positive whole
+number between 1,024 and 262,144. Whole rows or IDs that do not fit are omitted,
+with per-bucket counts; IDs are never shortened. A source that cannot be read as
+bounded plain JSON is unknown as a whole, including its row count. Missing
+entries must not be interpreted as a healthy result or proof of absence.
+
+The advisory list is **not a citation grant**. The existing admission check
+still uses the actual unique executed results shown in the request producing
+the accepted answer. IDs found only in DATA or in the model's own statements
+cannot authorize a tool. Providers and wrappers must still report any private
+request rewrite through the existing hooks.
+
+Global `caching: 'off'`, host cache restrictions and unsupported models remain
+authoritative. Tool activation, window changes and collapsing judged historical
+results can still change a prefix and miss the cache. Vendor minimum sizes and
+pricing still apply. The offline example verifies placement and bytes only;
+it reports no cache-hit or money-saving measurement.
+
+`servedAt` rebuilds DATA from the call's recorded layout and byte limit, even
+when a checkpoint is resumed by an agent with a different limit. Records without
+a layout discriminator use the legacy layout; unknown or masked layout evidence
+produces a `findings-layout` gap. Redaction can therefore withhold reconstruction
+rather than silently rebuilding private model data.
