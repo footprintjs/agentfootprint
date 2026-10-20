@@ -180,8 +180,7 @@ export async function runArm({ api, arm, scenarioId, budget, transport, partitio
     recordedIdentifiedStandingRows: standing.filter((r) => r.unknownId !== true).length,
     recordedUnknownStandingRows: standing.filter((r) => r.unknownId === true).length,
     extraTurns: Math.max(0, frames.length - (scenario.reads + 1)),
-    answer: answer ?? null,
-    frames,
+    // Bodies stay in memory for fidelity/stability checks, never in the report.
     requestHashes: frames.map((f) => sha256(JSON.stringify(f.request))),
     toolsStable: frames.every(
       (f) => JSON.stringify(f.request.tools) === JSON.stringify(frames[0]?.request.tools),

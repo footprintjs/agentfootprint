@@ -60,7 +60,7 @@
     "cacheRead": 100
   },
   "kit": {
-    "bench/cache/pilot/arms.mjs": "1b562eca47d4954fe54f76c864710d3d98b2251b6e8bed9bc83ffa3ec380bcab",
+    "bench/cache/pilot/arms.mjs": "3a7030e63fae266fbd6c4eecc67c18a8cb87361d35bb06fc8a6bebe4ec285c3d",
     "bench/cache/pilot/budget.mjs": "8197982b087de5141eb835822a82b367a964a3cca260fd06a57000212c4cf5b8",
     "bench/cache/pilot/fixture.mjs": "e7b36924eeea153d92012b709457dc2826bf867514f58018bd3ab21ed1165140",
     "bench/cache/pilot/identity.mjs": "7c4f35c4b11f261cdd8ace676af4d5f41f4f1b995f7c6efbed7bfc9599d07e10",

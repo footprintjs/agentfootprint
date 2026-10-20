@@ -1,4 +1,4 @@
-# Findings cache pilot: setup for review, no paid run yet
+# Findings cache pilot
 
 This kit compares the public Phase A package with the reviewed Phase B package.
 Both have the same citation enforcement. It is not a comparison against the old
@@ -106,24 +106,42 @@ is scripted with **zero cache reads**; money/cache-hit measurements are `null`,
 and no saving is claimed. Cap reservations in a rehearsal are synthetic, not
 dollars spent. Both actual packages and the real wire adapter are still used.
 
-## Paid path, held for review
+## Paid path
 
 After final external review, use only the already approved environment-file
 loading method from the owner’s handoff. Never read, copy or print that file or
 its values. The CLI additionally requires `--execute` and
 `--approve-manifest <exact SHA256 of manifest.json>` with the same consumer and
-a new private output file. This PR does not run that command or enable CI to do
-so. It does not schedule a future call. The live journal’s identity is fixed at
+a new private output file. From the repository root, use this exact loader (replace
+only the consumer and output paths with the admitted install and a new private file):
+
+```sh
+node --env-file=/Users/sanjay/github/footprintjs/neo-seo-local/.env bench/cache/pilot/run.mjs \
+  --consumer /path/to/reviewed-pilot-consumer \
+  --out /path/to/new-private-summary.json \
+  --approve-manifest 5f60970741af04d77dbaffbab0b745d844a975463073e0b5827fb5310cb70490 \
+  --execute
+```
+
+Never inspect or print the environment file or its values. CI does not execute
+this command, and the kit does not schedule a future call. The live journal’s
+identity is fixed at
 `~/.local/state/agentfootprint/pilots/findings-cache-phase-c-20261020.ndjson`,
 irrespective of the checkout, manifest revision or report path. Do not delete
 that journal to repeat the pilot.
 
-The report keeps raw input/write/read/output categories, per-run costs, missing
-usage, fixed reservations, actual request hashes, synthetic request/response
-bodies and policy outcomes. It excludes headers, keys and SDK error text.
+Only the bounded summary is saved: raw input/write/read/output token counts,
+per-run costs, missing usage, fixed reservations, request hashes, stability checks
+and policy outcomes. Requests and answers stay in memory for the checks and are
+never written to the summary or durable journal. Headers, keys and SDK error text
+are excluded too. Record actual spending alongside the reservation; reservations
+are not bills and never get refunded.
 Unfinished pairs and unknown usage are not complete cost/savings evidence.
 Small sample size, timing, arm partitioning and any fidelity/refusal difference
-must accompany any later interpretation; no saving is promised by this setup.
+must accompany any later interpretation. At most four runs, one per arm and
+scenario, establish feasibility only: report cached tokens, cost per run and
+citation outcomes, never a general saving percentage or quality difference.
+A larger experiment needs its own approval.
 
 ## Free checks
 

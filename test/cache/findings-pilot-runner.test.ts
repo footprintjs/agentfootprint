@@ -100,7 +100,7 @@ describe('findings pilot free end-to-end setup', () => {
     expect(live).not.toHaveBeenCalled();
   });
   it.each(['lookup', 'conflict'])(
-    'the actual engine completes the scripted %s fixture and captures the final answer',
+    'the actual engine completes the scripted %s fixture with a summary only',
     async (scenario) => {
       const events = [];
       const budget = pilotBudget({
@@ -122,6 +122,25 @@ describe('findings pilot free end-to-end setup', () => {
       expect(result.systemStable).toBe(true);
       expect(result.recordedIdentifiedStandingRows).toBeGreaterThan(0);
       expect(result.calls).toBe(scenario === 'lookup' ? 2 : 3);
+      expect(Object.keys(result).sort()).toEqual(
+        [
+          'arm',
+          'scenario',
+          'ended',
+          'calls',
+          'reads',
+          'plantedFidelity',
+          'referenceRefusals',
+          'recordedIdentifiedStandingRows',
+          'recordedUnknownStandingRows',
+          'extraTurns',
+          'requestHashes',
+          'toolsStable',
+          'systemStable',
+        ].sort(),
+      );
+      expect(result).not.toHaveProperty('answer');
+      expect(result).not.toHaveProperty('frames');
       expect(budget.snapshot().reservedMicroUsd).toBe(result.calls * RESERVATION_MICRO_USD);
       expect(
         events
@@ -130,6 +149,36 @@ describe('findings pilot free end-to-end setup', () => {
       ).toBe(true);
     },
   );
+  it('does not retain a provider answer even when it is not valid fixture JSON', async () => {
+    const sentinel = 'PRIVATE_PROVIDER_ANSWER_MUST_NOT_BE_SAVED';
+    const result = await runArm({
+      api,
+      arm: 'candidate',
+      scenarioId: 'lookup',
+      partition: 'stable-lookup-frozen-v1',
+      budget: pilotBudget({ journal() {} }),
+      transport: async () => ({
+        id: 'msg_summary_fixture',
+        type: 'message',
+        role: 'assistant',
+        model: 'claude-haiku-4-5-20251001',
+        content: [{ type: 'text', text: sentinel }],
+        stop_reason: 'end_turn',
+        usage: {
+          input_tokens: 1,
+          output_tokens: 1,
+          cache_creation_input_tokens: 0,
+          cache_read_input_tokens: 0,
+        },
+      }),
+    });
+    expect(result.ended).toBe('complete');
+    expect(result.plantedFidelity).toBe(false);
+    expect(JSON.stringify(result)).not.toContain(sentinel);
+    expect(result).not.toHaveProperty('answer');
+    expect(result).not.toHaveProperty('frames');
+    expect(result.requestHashes).toHaveLength(1);
+  });
   it('the shared real-library canaries cover valid, unserved, ambiguous and same-batch IDs', async () => {
     expect(await canaries(api)).toEqual([
       { name: 'valid', executes: 2, refuses: 0 },
