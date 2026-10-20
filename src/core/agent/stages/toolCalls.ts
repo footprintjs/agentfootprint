@@ -1,3 +1,5 @@
+import { referenceRefusalRow } from '../findings/refusal.js';
+import { findingsReferenceRefusal } from '../findings/admission.js';
 /**
  * toolCalls — pausable handler for executing the LLM-requested tool
  * calls in the agent's ReAct loop.
@@ -3838,6 +3840,7 @@ export function buildToolCallsHandler(
         return { result: `credential error for '${need.credential}': ${reason}`, error: true };
       }
     }
+    let executed = false;
     try {
       // The time layer's dispatch moment — a resumed call is dispatched NOW,
       // so its `dispatchedAt` is the resume's, not the pause's.
@@ -3856,7 +3859,7 @@ export function buildToolCallsHandler(
       if (dispatched !== undefined) args = dispatched.args;
       // `let`, not `const`: the semantic projection below replaces the value
       // on the non-envelope path exactly as the batch loop does.
-      let result = await tool.execute(args, {
+      const executionContext = {
         toolCallId,
         iteration,
         ...(callTime !== undefined && { time: callTime }),
@@ -3873,7 +3876,9 @@ export function buildToolCallsHandler(
         ...toolProgress(scope, { toolName, toolCallId, iteration }),
         ...sessionContext(scope, toolName, toolCallId),
         ...toolDispatchCtx(scope, { toolName, toolCallId, iteration }, env.signal),
-      });
+      };
+      executed = true;
+      let result = await tool.execute(args, executionContext);
       await endCall(toolCallId);
       // The typed effects channel (9.19.0) — same unwrap as the batch loop,
       // at this path's own execute boundary, so a resumed call's envelope is
@@ -4015,7 +4020,7 @@ export function buildToolCallsHandler(
           result: `tool '${toolName}' requested a pause while resuming an approved check-in, which is not supported`,
           error: true,
           // It ran — a tool that asked to pause had already started work.
-          executed: true,
+          executed,
         };
       }
       // A tool that threw still RAN, and may have done half its work; the
@@ -4023,7 +4028,7 @@ export function buildToolCallsHandler(
       return {
         result: err instanceof Error ? err.message : String(err),
         error: true,
-        executed: true,
+        executed,
       };
     }
   };
@@ -4059,6 +4064,61 @@ export function buildToolCallsHandler(
         }[]),
       ];
       const iteration = scope.iteration as number;
+      // ── STANDINGS OF EARLIER RESULTS AND REFERENCE ADMISSION ───────
+      // Freeze admission before batch asks, kept-answer consumption or any
+      // policy/credential callback. A sibling result never enlarges it.
+      const findingsPeels = deps.findings === true ? toolCalls.map(peelCall) : [];
+      const findingsRefusals = findingsPeels.map((peeled) =>
+        findingsReferenceRefusal(
+          peeled.findings,
+          scope.findingsRequest?.[0],
+          iteration,
+          peeled.malformed,
+        ),
+      );
+      if (
+        deps.findings === true &&
+        findingsPeels.some((p) => p.findings !== undefined || p.malformed) &&
+        scope.findingsBatchRecordedAt !== iteration
+      ) {
+        const known = knownResults(
+          [...((scope.history as readonly LLMMessage[] | undefined) ?? [])],
+          [...((scope.toolResults ?? []) as readonly PreviousResult[])],
+        );
+        scope.findingsBatchRecordedAt = iteration;
+        recordFindings(
+          scope,
+          toolCalls.flatMap((tc, index) =>
+            findingsRefusals[index] === undefined
+              ? []
+              : [
+                  referenceRefusalRow(
+                    { toolCallId: tc.id },
+                    iteration,
+                    (findingsPeels[index]?.malformed ?? 0) > 0,
+                    findingsPeels[index]?.malformed ? tc.args._findings : undefined,
+                  ),
+                ],
+          ),
+          turnStampOf(scope),
+        );
+        recordFindings(
+          scope,
+          withUnsettledRows(
+            toolCalls.flatMap((tc, index) => {
+              const declared = findingsPeels[index]?.findings;
+              return declared?.previous !== undefined
+                ? standingRowsFrom(known, declared, { toolCallId: tc.id }, iteration, {
+                    witness: scope.findingsRequest?.[0],
+                  })
+                : [];
+            }),
+            known,
+            () => [...((scope.coverageDeclared ?? []) as readonly DeclaredCoverage[])],
+          ),
+          turnStampOf(scope),
+        );
+      }
       // THE INPUTS LAYER'S HALF OF DISPATCH (honesty layer 2) — loaded through
       // `import()` only under the arm, so an unarmed batch awaits nothing new.
       const inputs: InputsDispatch | undefined =
@@ -4066,6 +4126,12 @@ export function buildToolCallsHandler(
       // THE INPUTS LAYER'S RESOLUTIONS for this batch — read only under the
       // arm, and only the entries resolved for THIS iteration.
       let resolutions = inputs?.resolutionsFor(scope, iteration);
+      if (resolutions !== undefined && findingsRefusals.some((item) => item !== undefined)) {
+        const refusedIds = new Set(
+          toolCalls.filter((_, index) => findingsRefusals[index] !== undefined).map((tc) => tc.id),
+        );
+        resolutions = new Map([...resolutions].filter(([id]) => !refusedIds.has(id)));
+      }
       // A fill the layer took from an answer this turn KEPT (a call of the
       // batch that asked could not finish) is that answer's one use — dropped
       // before anything else (`arguments/dispatch.ts` · `dropUsedKept`).
@@ -4163,48 +4229,10 @@ export function buildToolCallsHandler(
         toolCallId: string;
         status?: ToolResultStatus;
       }[] = [];
-      // ── STANDINGS OF EARLIER RESULTS (9.101.0, `.findings()`) ─────────
-      // Every call in this batch may carry `_findings.previous`; ALL are
-      // recorded, in call order, by the judged result's id (a served fold
-      // takes the last). A named id is identified against the results the
-      // run can identify (`findings/offer.ts · knownResults`): the previous
-      // batch — `toolResults`, about to be reset one line down, so this is
-      // the last read of it — and every tool message on `history` as served
-      // to this call, the SAME list the offer was read from at the Tools
-      // mount, so an id copied from the offer resolves whichever batch it
-      // came from (9.102.0; before, only the last batch resolved and an
-      // offered older id filed as `unknownId`). Read through the same
-      // per-call peel the loop below applies (a tool that owns the name
-      // declares nothing). A ruled-out standing whose result THIS door
-      // recorded as an absence (`declareCoverage`'s rows on
-      // `coverageDeclared`, never a second reading of a return) AND the
-      // model was served as one (the served string — the door records the
-      // return before the after-tool chain, the ceiling and placement act,
-      // so a denied, refused or ticketed result files nothing) gets its
-      // `unsettled-by-absence` row immediately after it, in the same write,
-      // worded from what was served (9.113.0, `findings/unsettled.ts`; the
-      // key is read only for such a standing); the standing rows pass
-      // through untouched. Gated: unarmed, not one line runs.
-      if (deps.findings === true) {
-        const known = knownResults(
-          [...((scope.history as readonly LLMMessage[] | undefined) ?? [])],
-          [...((scope.toolResults ?? []) as readonly PreviousResult[])],
-        );
-        recordFindings(
-          scope,
-          withUnsettledRows(
-            toolCalls.flatMap((tc) => {
-              const declared = peelCall(tc).findings;
-              return declared?.previous !== undefined
-                ? standingRowsFrom(known, declared, { toolCallId: tc.id }, iteration)
-                : [];
-            }),
-            known,
-            () => [...((scope.coverageDeclared ?? []) as readonly DeclaredCoverage[])],
-          ),
-          turnStampOf(scope),
-        );
-      }
+      // Findings standings were preserved in the admission preflight, before
+      // the batch ask could pause. Their identity came from this response's
+      // immutable request witness, not this resetting result list. Absence
+      // interpretation still uses the existing known-results/coverage reader.
       scope.toolResults = [];
       // The results layer (honesty layer 3) judges each batch ONCE, at the
       // first loop-head visit after it ran — told apart from a re-entry by
@@ -4234,7 +4262,7 @@ export function buildToolCallsHandler(
         | undefined;
       const env = scope.$getEnv();
 
-      for (const tc of toolCalls) {
+      for (const [callIndex, tc] of toolCalls.entries()) {
         const emitSecurity = bindToolSecurityEvents(scope, { toolCallId: tc.id, iteration });
         const resolved = resolveTool(tc.name);
         const tool = resolved.tool;
@@ -4284,13 +4312,15 @@ export function buildToolCallsHandler(
           ...(toolCalls.length > 1 && { parallelCount: toolCalls.length }),
         });
         const startMs = Date.now();
-        let result: unknown;
-        let error: boolean | undefined;
+        const findingsRefusal = findingsRefusals[callIndex];
+        let result: unknown = findingsRefusal;
+        let error: boolean | undefined = findingsRefusal === undefined ? undefined : true;
         /** The typed effects channel (9.19.0) — set only when the tool
          *  returned a recognized result envelope; everything else keeps
          *  today's path byte for byte. */
         let toolEnvelope: ReadToolResultEnvelope | undefined;
-        let toolStatus: ToolResultStatus | undefined;
+        let toolStatus: ToolResultStatus | undefined =
+          findingsRefusal === undefined ? undefined : 'invalid';
         // Permission gate — when a checker is configured, evaluate BEFORE
         // executing the tool. Emits `permission.check` with the decision.
         //
@@ -4331,7 +4361,7 @@ export function buildToolCallsHandler(
          *  judged on. Same reference as `args` unless a link rewrote (or the
          *  inputs layer filled a value — then every filled key is named). */
         let chainedArgs: ToolArgs = runArgs;
-        let denied = false;
+        let denied = findingsRefusal !== undefined;
         /** True once `tool.execute` has been entered — see `afterMoment`. */
         let executed = false;
         /** The tool's own `resultCeiling` refused this call's result (9.20.0)
@@ -4345,7 +4375,7 @@ export function buildToolCallsHandler(
               checkerId?: string;
             }
           | undefined;
-        if (permissionChecker) {
+        if (!denied && permissionChecker) {
           try {
             // Sequence is derived from history at check time (not parallel
             // state) — single source of truth, survives resumeOnError.
@@ -4549,7 +4579,7 @@ export function buildToolCallsHandler(
         // the layer NOT mounted — any call whose tool declares rules (fail
         // closed). Neither applies to a tool that declares nothing — and
         // neither awaits for one (`unmountedRules` answers it synchronously).
-        const unmounted = argsRejected ? undefined : unmountedRules(tool, tc.name);
+        const unmounted = denied || argsRejected ? undefined : unmountedRules(tool, tc.name);
         warnUnmountedToolPeriod(tool, tc.name);
         const rulesRefusal = argsRejected
           ? undefined
@@ -5003,8 +5033,7 @@ export function buildToolCallsHandler(
               // Set BEFORE the await: a tool that throws has still run, and a
               // tool that does not exist has not. This flag is the entire
               // precondition of the after-tool moment below.
-              executed = true;
-              result = await tool.execute(callArgs, {
+              const executionContext = {
                 toolCallId: tc.id,
                 iteration,
                 ...(callTime !== undefined && { time: callTime }),
@@ -5025,7 +5054,9 @@ export function buildToolCallsHandler(
                   { toolName: tc.name, toolCallId: tc.id, iteration },
                   env.signal,
                 ),
-              });
+              };
+              executed = true;
+              result = await tool.execute(callArgs, executionContext);
               // A code-runner tool leaves the SHAPE of what it just ran, keyed by
               // this call. Taken and deleted here so the map cannot grow across
               // a long run, and emitted from the dispatch loop rather than from
@@ -5753,6 +5784,7 @@ export function buildToolCallsHandler(
           content: resultStr,
           toolCallId: tc.id,
           toolName: tc.name,
+          ...(deps.findings === true && !executed && { toolResultOrigin: 'not-entered' as const }),
           ...(layerNote !== '' && { toolChars: deliveredResult.length }),
           ...(tc.argumentsFailure !== undefined && {
             toolArgumentsFailure: { ...tc.argumentsFailure },
@@ -5913,6 +5945,37 @@ export function buildToolCallsHandler(
       // layer 3). A batch dispatched under the arm already carries its stamp.
       if (deps.resultsLayer === true && scope.toolResultsIteration === undefined) {
         scope.toolResultsIteration = scope.iteration as number;
+      }
+
+      if (deps.findings === true) {
+        const proposed = [...(scope.history as readonly LLMMessage[])]
+          .reverse()
+          .find(
+            (message) =>
+              message.role === 'assistant' &&
+              message.toolCalls?.some((call) => call.id === toolCallId),
+          )
+          ?.toolCalls?.filter((call) => call.id === toolCallId);
+        const declaration = proposed?.length === 1 ? peelCall(proposed[0]!) : undefined;
+        const refusal =
+          proposed?.length === 1
+            ? findingsReferenceRefusal(
+                declaration?.findings,
+                scope.findingsRequest?.[0],
+                scope.iteration,
+                declaration?.malformed,
+              )
+            : JSON.stringify({
+                refused: 'findings-reference',
+                reason: 'The original paused proposal is unavailable or ambiguous.',
+              });
+        if (refusal !== undefined) {
+          scope.messageDeniedReason = refusal;
+          scope.messageDeniedPhase = 'output';
+          scope.messageDeniedBy = 'findings-reference-admission';
+          scope.$break('findings reference refused the resumed proposal');
+          return;
+        }
       }
 
       // ── Middleware-ask decision path ─────────────────────────────────
@@ -6186,7 +6249,14 @@ export function buildToolCallsHandler(
         const askSettlement = settleBatch(
           [
             ...(scope.history as readonly LLMMessage[]),
-            { role: 'tool', content: askResultStr, toolCallId, toolName },
+            {
+              role: 'tool',
+              content: askResultStr,
+              toolCallId,
+              toolName,
+              ...(deps.findings === true &&
+                !toolRan && { toolResultOrigin: 'not-entered' as const }),
+            },
           ],
           { toolName, toolCallId },
         );
@@ -6373,7 +6443,14 @@ export function buildToolCallsHandler(
         const decisionSettlement = settleBatch(
           [
             ...(scope.history as readonly LLMMessage[]),
-            { role: 'tool', content: decisionResultStr, toolCallId, toolName },
+            {
+              role: 'tool',
+              content: decisionResultStr,
+              toolCallId,
+              toolName,
+              ...(deps.findings === true &&
+                !toolRan && { toolResultOrigin: 'not-entered' as const }),
+            },
           ],
           { toolName, toolCallId },
         );
@@ -6525,7 +6602,14 @@ export function buildToolCallsHandler(
         const consentSettlement = settleBatch(
           [
             ...(scope.history as readonly LLMMessage[]),
-            { role: 'tool', content: consentResultStr, toolCallId, toolName },
+            {
+              role: 'tool',
+              content: consentResultStr,
+              toolCallId,
+              toolName,
+              ...(deps.findings === true &&
+                dispatched.executed !== true && { toolResultOrigin: 'not-entered' as const }),
+            },
           ],
           { toolName, toolCallId },
         );

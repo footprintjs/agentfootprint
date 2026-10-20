@@ -130,10 +130,10 @@ describe('findings declarations — the run constant `findingsServe` (seed, arme
     expect(new Set(servedModeAtEveryEpoch(agent))).toEqual(new Set([undefined]));
   });
 
-  it('the arm adds exactly this one key when the model declares nothing (no ledger, no other key)', async () => {
+  it('the arm adds its serve constant and request-local identity witness, without a ledger', async () => {
     const off = await ran((b) => b);
     const on = await ran((b) => b.findings());
-    expect(keysOf(on)).toEqual([...keysOf(off), 'findingsServe'].sort());
+    expect(keysOf(on)).toEqual([...keysOf(off), 'findingsRequest', 'findingsServe'].sort());
     expect(keysOf(on)).not.toContain('findingsLedger');
   });
 });
@@ -178,7 +178,7 @@ describe('findings declarations — AgentOptions.findings.answerAsk and the run 
     const none = await ran((b) => b.findings({ answerAsk: 'none' }));
     expect(keysOf(absent)).not.toContain('findingsAnswerAsk');
     expect(keysOf(none)).toEqual(keysOf(absent));
-    expect(keysOf(absent)).toEqual([...keysOf(off), 'findingsServe'].sort());
+    expect(keysOf(absent)).toEqual([...keysOf(off), 'findingsRequest', 'findingsServe'].sort());
     expect(new Set(answerAskAtEveryEpoch(absent))).toEqual(new Set([undefined]));
     expect(new Set(answerAskAtEveryEpoch(none))).toEqual(new Set([undefined]));
   });
@@ -192,7 +192,9 @@ describe('findings declarations — AgentOptions.findings.answerAsk and the run 
   it('the dial adds exactly one key beside `findingsServe`, and only under the arm', async () => {
     const off = await ran((b) => b);
     const on = await ran((b) => b.findings({ answerAsk: 'quote-facts' }));
-    expect(keysOf(on)).toEqual([...keysOf(off), 'findingsAnswerAsk', 'findingsServe'].sort());
+    expect(keysOf(on)).toEqual(
+      [...keysOf(off), 'findingsAnswerAsk', 'findingsRequest', 'findingsServe'].sort(),
+    );
     expect(keysOf(on)).not.toContain('findingsLedger');
   });
 

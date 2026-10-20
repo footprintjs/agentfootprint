@@ -163,7 +163,12 @@ export async function executeWithReliability(
    *  not passed output admission, so its text — `rawOutput`, and the parser's
    *  message, which can quote it (`JSON.parse` does) — stays off the public
    *  event stream. Rules still read it on `validationError`. */
-  options?: { readonly withholdDraftContent?: true; readonly providerHooks?: LLMCallHooks },
+  options?: {
+    readonly withholdDraftContent?: true;
+    readonly providerHooks?: LLMCallHooks;
+    /** Observe a callback transport boundary before it runs; accept only after success. */
+    readonly prepareFallback?: (request: LLMRequest) => () => void;
+  },
 ): Promise<LLMResponse | undefined> {
   // v2.13 — mutable so feedbackForLLM can append ephemeral messages
   // before retry. The reliabilityScope() helper captures `request` by
@@ -578,8 +583,10 @@ export async function executeWithReliability(
         );
       }
       try {
+        const acceptFallback = options?.prepareFallback?.(attempts.request);
         const repaired = await fallbackFn(attempts.request, lastError);
         if (aborted()) throw signal?.reason;
+        acceptFallback?.();
         // Successful fallback IS a recovery — the failure that triggered
         // it counts toward priorFailures. Fire reliability.recovered then
         // commit and exit.

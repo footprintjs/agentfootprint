@@ -2156,6 +2156,12 @@ export interface AgentState {
    */
   claimFacts?: ReadonlyArray<import('../../integrity/unsupported-claim/check.js').ClaimLedgerRow>;
 
+  /** Accepted response's request-local identity evidence, independent of optional receipts.
+   * Singleton tuple so grouped output Replace is atomic, including nested result lists. */
+  findingsRequest?: readonly [import('./findings/admission.js').FindingsRequest];
+  /** Declarations have already been preserved before this batch's optional human ask. */
+  findingsBatchRecordedAt?: number;
+
   // ── The findings ledger (`.findings()`) ────────────────────────
   /**
    * The model's own standings on its tool results (9.101.0) — one flat

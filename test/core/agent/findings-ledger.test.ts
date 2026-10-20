@@ -359,14 +359,15 @@ describe('.findings() — dispatch peels, files a basis, files the previous batc
     const rows = await runCollecting(agent);
     const ledger = ledgerOf(agent)!;
     // c1 declared nothing → no basis row; c2 declared no basis → none either.
-    expect(ledger.map((r) => r.kind)).toEqual(['standing']);
-    expect(ledger[0]).toMatchObject({
+    expect(ledger.map((r) => r.kind)).toEqual(['reference-refusal', 'standing']);
+    expect(ledger[0]).toMatchObject({ reason: 'unidentified' });
+    expect(ledger[1]).toMatchObject({
       toolCallId: 'ghost',
       standing: 'noise',
       unknownId: true,
       assertions: [],
     });
-    expect(ledger[0]).not.toHaveProperty('toolName');
+    expect(ledger[1]).not.toHaveProperty('toolName');
     expect(rows.filter((r) => r.type === 'agentfootprint.findings.declared')).toEqual([]);
     expect(rows.find((r) => r.type === 'agentfootprint.findings.standing')?.payload).toMatchObject({
       toolCallId: 'ghost',
@@ -379,7 +380,7 @@ describe('.findings() — dispatch peels, files a basis, files the previous batc
 // ─── 3. the unarmed twin ────────────────────────────────────────────────
 
 describe('.findings() — the unarmed agent is the agent it always was', () => {
-  it('armed-but-silent: same committed keys as unarmed, no ledger, no events', async () => {
+  it('armed-but-silent: request witness and serve constant only, no ledger or events', async () => {
     const script: (string | Partial<LLMResponse>)[] = [
       { content: '', toolCalls: [{ id: 'c1', name: 'look', args: { q: 'a' } }] },
       'done',
@@ -410,7 +411,7 @@ describe('.findings() — the unarmed agent is the agent it always was', () => {
     // …plus the ONE run constant the arm seeds on every run (`findingsServe`,
     // step 3 — `seed.ts · seedFrom`): the serve mode the rebuild reads. No
     // ledger, because the model declared nothing.
-    expect(keysOf(on)).toEqual([...keysOf(off), 'findingsServe'].sort());
+    expect(keysOf(on)).toEqual([...keysOf(off), 'findingsRequest', 'findingsServe'].sort());
     expect(keysOf(on)).not.toContain('findingsLedger');
     expect(on.findings()).toBeUndefined();
     expect(rowsOn.filter((r) => r.type.startsWith('agentfootprint.findings.'))).toEqual([]);
@@ -1258,7 +1259,15 @@ describe('.findings() — the unarmed twin of a declaring model', () => {
     // The agent-wrap-up.test.ts pattern: the committed key set differs by
     // exactly the keys the feature owns — the ledger the model wrote, and the
     // serve-mode run constant seed writes on every armed run (step 3).
-    expect(keysOf(on)).toEqual([...keysOf(off), 'findingsLedger', 'findingsServe'].sort());
+    expect(keysOf(on)).toEqual(
+      [
+        ...keysOf(off),
+        'findingsBatchRecordedAt',
+        'findingsLedger',
+        'findingsRequest',
+        'findingsServe',
+      ].sort(),
+    );
     expect(keysOf(off)).not.toContain('findingsLedger');
     expect(off.findings()).toBeUndefined();
 

@@ -68,6 +68,7 @@ import {
 import type { MemoryIdentity } from '../memory/identity/types.js';
 import type { FoldedSpan } from './agent/window/types.js';
 import { argumentRowIsWellFormed } from './agent/arguments/rows.js';
+import { referenceRefusalRowIsWellFormed } from './agent/findings/refusal.js';
 import { periodRowIsWellFormed } from '../semantics/coverage/period.js';
 import { witnessRowIsWellFormed } from './agent/assessment/witness.js';
 import { isTimeRowKind, timeRowIsWellFormed } from '../time/rows.js';
@@ -673,6 +674,7 @@ function ledgerRowIsWellFormed(row: unknown): boolean {
   const kind = Object.getOwnPropertyDescriptor(row, 'kind');
   if (kind !== undefined && !('value' in kind)) return false;
   if (kind?.value === 'claim-verification') return isClaimVerificationRow(row);
+  if (kind?.value === 'reference-refusal') return referenceRefusalRowIsWellFormed(row);
   const r = row as Record<string, unknown>;
   const isIn = (value: unknown, vocabulary: readonly string[]) =>
     typeof value === 'string' && vocabulary.includes(value);
@@ -894,7 +896,7 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
         '[resumeOnError] checkpoint `findingsLedger` must be an array of ledger rows when ' +
           "present — each a plain object whose `kind` is 'basis' (with toolCallId, toolName, " +
           "iteration, basis), 'standing' (with toolCallId, standing, assertions[], declaredOn, " +
-          "iteration), 'conflict' (with key, witnesses[], iteration), 'judgment' (with " +
+          "iteration), 'reference-refusal' (with declaredOn, iteration, a refusal reason and optional bounded diagnostic), 'conflict' (with key, witnesses[], iteration), 'judgment' (with " +
           "toolCallId, standing, iteration), 'judgment-error' (with toolCallId, iteration) or " +
           "'contingent' (with declaredOn, value, at least one carrier { toolCallId, standing: " +
           "open | noise | ruled-out }, iteration) or 'unsettled-by-absence' (with toolCallId, " +

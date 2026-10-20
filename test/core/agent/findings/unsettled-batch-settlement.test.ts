@@ -192,10 +192,19 @@ async function settledRun(
   agent.on('agentfootprint.tools.absent', (e) => absentIds.push(e.payload.toolCallId));
   const paused = await agent.run({ message: 'is nas-cluster-06 slow?' });
   if (!isInputPause(paused)) throw new Error('expected an input pause');
-  await agent.resume(paused.checkpoint, {
-    requestId: paused.awaitingInput.requestId,
-    values: { year: 2026 },
-  });
+  let answerRefused = false;
+  try {
+    await agent.resume(paused.checkpoint, {
+      requestId: paused.awaitingInput.requestId,
+      values: { year: 2026 },
+    });
+  } catch (error) {
+    // Phase A refuses an answer citing a sibling that was explicitly not
+    // dispatched. The attempted declaration stays available for this test.
+    if (script !== AT_ANSWER || !(error instanceof Error) || error.name !== 'MessageDeniedError')
+      throw error;
+    answerRefused = true;
+  }
   const state = (agent.getSnapshot()?.sharedState ?? {}) as {
     history?: readonly LLMMessage[];
     coverageDeclared?: readonly { toolCallId?: unknown }[];
@@ -203,6 +212,7 @@ async function settledRun(
   return {
     requests,
     ran,
+    answerRefused,
     absentIds,
     history: state.history ?? [],
     doorIds: (state.coverageDeclared ?? []).map((row) => row.toolCallId),
@@ -230,6 +240,7 @@ describe('unsettled by absence × batch settlement — a settled sibling is no w
       `%s, ruled out on ${moment}: no coverage row, no tools.absent and no row for the settled call — the call that ran gets its row`,
       async (mode) => {
         const r = await settledRun(mode, script);
+        expect(r.answerRefused).toBe(script === AT_ANSWER);
 
         // The settled call never ran: its lookup was never called.
         expect(r.ran).not.toContain('nas-cluster-07');

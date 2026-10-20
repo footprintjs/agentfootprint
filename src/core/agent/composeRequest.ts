@@ -82,9 +82,10 @@ export function contributingPieces<T extends SystemPromptPiece>(
 /**
  * Drop the fields that exist for the library and never for the model.
  *
- * Today there are four: `injectedBy`, the delivery marker (7.21),
+ * These include: `injectedBy`, the delivery marker (7.21),
  * `notDispatched`, the batch settlement's marker (9.113.0 — the model reads the
  * settled call's sentence; the marker is that fact for the library's readers),
+ * `toolResultOrigin`, the findings-only producer notice origin,
  * and `toolChars`, the tool-bytes boundary on a result the inputs layer
  * annotated (honesty layer 2 — the model reads the whole content; the boundary
  * tells the library's readers where the tool's own words end), and
@@ -114,12 +115,14 @@ export function stripFrameworkFields(messages: readonly LLMMessage[]): readonly 
     const {
       injectedBy: _delivered,
       notDispatched: _settled,
+      toolResultOrigin: _resultOrigin,
       toolChars: _toolBytes,
       foldedExempt: _lineage,
       ...composed
     } = m;
     void _delivered;
     void _settled;
+    void _resultOrigin;
     void _toolBytes;
     void _lineage;
     return composed;
@@ -131,6 +134,7 @@ function carriesFrameworkFields(message: LLMMessage): boolean {
   return (
     message.injectedBy !== undefined ||
     message.notDispatched !== undefined ||
+    message.toolResultOrigin !== undefined ||
     message.toolChars !== undefined ||
     message.foldedExempt !== undefined
   );

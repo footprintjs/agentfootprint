@@ -36,6 +36,13 @@ const ROUTES = [
   },
 ];
 
+// RAISED 2026-10-19 (search gzip), for the findings reference-admission guide,
+// under the 2026-09-27 named-growth rule. The public 10.8.1 index round-trips
+// byte-identically through the same Fumadocs/Orama API: 2,321,884 B gzip,
+// 9,411,993 B raw, 1,148 records. Adding the guide's three records measures
+// 2,331,128 B gzip, 9,443,571 B raw, 1,151 records, matching CI's 2.33 MB
+// failure against 2,325,000 B. Keep the complete guide and every search field;
+// 2,380,000 B leaves about 2% over the measured index. Other limits stay put.
 // RAISED 2026-10-15 (search gzip), for the AG-UI adapter: its docs page
 // (infrastructure/ag-ui — the mapping, what reaches a browser, continuation,
 // sub-agents, ids, redaction), under the 2026-09-27 ruling. CI measured the
@@ -54,7 +61,7 @@ const ROUTES = [
 // 2.155 MB ceiling, so the package was tagged but not published. ~2% over the
 // measurement, the rule every raise here follows. Owner-approved raise;
 // docs-site cleanup planned.
-const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_325_000, records: 2_000 };
+const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_380_000, records: 2_000 };
 // Search gzip raised 2.11 -> 2.155 MB (2026-09-27) — growth this release can
 // name: the answer's standing (`assessAnswer()` / `agent.assessment()`), its
 // section on the recordings page and its Agent API entry. Measured with

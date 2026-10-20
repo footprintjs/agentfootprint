@@ -4,7 +4,7 @@ title: StagedCodeInput
 
 # Interface: StagedCodeInput
 
-Defined in: [src/provider-contract/types.ts:1146](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1146)
+Defined in: [src/provider-contract/types.ts:1155](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1155)
 
 Where one staged input actually landed.
 
@@ -14,7 +14,7 @@ Where one staged input actually landed.
 
 > `readonly` **bytes**: `number`
 
-Defined in: [src/provider-contract/types.ts:1154](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1154)
+Defined in: [src/provider-contract/types.ts:1163](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1163)
 
 How many bytes landed.
 
@@ -24,7 +24,7 @@ How many bytes landed.
 
 > `readonly` **name**: `string`
 
-Defined in: [src/provider-contract/types.ts:1148](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1148)
+Defined in: [src/provider-contract/types.ts:1157](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1157)
 
 The name it was asked for — the manifest key the code looks up.
 
@@ -34,7 +34,7 @@ The name it was asked for — the manifest key the code looks up.
 
 > `readonly` **path**: `string`
 
-Defined in: [src/provider-contract/types.ts:1152](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1152)
+Defined in: [src/provider-contract/types.ts:1161](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1161)
 
 The path the executing code opens. Absolute, or relative to the session's
  working directory: whichever it is, it is what the manifest carries and

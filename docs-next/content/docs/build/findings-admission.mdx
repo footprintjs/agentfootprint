@@ -1,0 +1,105 @@
+---
+title: Findings reference admission
+description: Refuse citations that the accepted model request did not serve, without using another model.
+---
+
+`.findings()` checks the identity of each library-owned
+`_findings.previous[].toolCallId` before invoking a proposed tool and before
+accepting a JSON answer. This is a deterministic structural check. An admitted
+ID does **not** prove the model's assertions or the source's conclusions.
+
+<CodeFile
+  path="examples/features/104-findings-reference-admission.ts"
+  region="reference-admission"
+/>
+
+See the mock-only [runnable example](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/104-findings-reference-admission.ts).
+
+## What changed
+
+Previously, the schema offered IDs as guidance and the ledger preserved unknown
+IDs, but the dispatch door could still invoke a tool carrying an unknown
+citation. Such proposals are now refused before argument-ask context,
+permission checks, credentials, before-tool middleware or `tool.execute`.
+An independent valid call in the same batch keeps its normal dispatch or ask.
+
+The check uses the request that produced the **accepted response**, after the
+library's retry/fallback boundary and any reported replay preparation. It does
+not borrow a failed attempt's request, a future sibling's result, another run,
+a receipt hash or an ID that exists only in broad history. Custom providers
+and wrappers must forward the library's hooks and accurately report their
+own replay preparation; the library cannot inspect an unreported private wire
+rewrite inside a custom provider.
+
+## Identity, execution and visibility
+
+Body visibility describes the recorded text actually sent, not the contents of
+an artifact behind it. Equal source bytes remain body data even when their JSON
+resembles a ticket; admission does not import authority or refs from that shape.
+
+- A unique executed result actually served to that response can be referenced.
+  The schema's advisory offer cap and retirement rules stay unchanged: a
+  uniquely served older ID outside the enum is still identifiable.
+- A ticket can identify an executed result while withholding its body. Identity
+  admission does not treat that body as visible or validate an assertion about it.
+  Other request rewrites have unknown body visibility unless their carrier is a known ticket.
+- A batch-settlement notice can have a known identity while explicitly saying
+  its call was **not dispatched**. It cannot authorize executed-result evidence.
+- Duplicate occurrences of an ID are ambiguous, even if their bodies match.
+- Missing or oversized capture is unknown, never promoted to complete evidence.
+  Capture is bounded to 4,096 distinct result IDs per message list and 65,536
+  ID characters across the original and sent lists; crossing either limit
+  refuses references rather than silently dropping evidence.
+
+Malformed attempted reserved metadata is refused too; it cannot erase its own
+citation by failing the lenient declaration parser. A ToolProvider tool whose
+author owns `_findings` retains that argument as application data under the
+existing ownership rule.
+
+## Refusal and correction
+
+A refused tool proposal receives a fixed teaching result. Its declared unknown
+standing and assertions stay on the findings ledger; a bounded
+`reference-refusal` diagnostic is stored beside them. These rows are diagnostic
+and model-declared evidence, not proof that a foreign ID exists or that an
+assertion is true. Malformed attempted frames are capped at 8,192 characters
+and explicitly marked when truncated. Conversation redaction covers the new
+request witness and the ledger through the existing conversation vocabulary.
+
+An invalid final JSON answer raises `MessageDeniedError`. If an output schema
+already configured retries, only that existing allowance and the remaining
+iteration budget can be spent correcting it. Plain findings adds no corrective
+model call or separate budget. Output middleware cannot erase an invalid raw
+citation to make it pass; middleware-introduced invalid citations are checked
+again before final settlement.
+
+Streaming tokens are drafts. Tokens already emitted before final parsing remain
+visible to the subscriber; final admission cannot retract them. Phase A does
+not buffer streams or claim that draft text was never shown.
+
+## Continued and paused runs
+
+A new model request that re-serves old history creates its own fresh witness;
+older saved records need no historical admission receipt for that new request.
+Resuming an already proposed paused call instead needs its original proposal
+and request witness. Missing evidence refuses that proposal before remaining
+callbacks; expanded future history cannot manufacture a grant. Refusal rows
+survive checkpoints and remain diagnostics on continuation or error resume.
+
+`recordReceipt: false` disables optional receipts, not live admission. A
+checkpoint or witness is trusted host state; this is not a signature or a
+sandbox against a host deliberately altering its own run.
+
+## Scope
+
+This phase leaves schema enums, tool and system layouts, instruction cache
+policies, `toolsVaryPerCall`, cache markers and normal request rendering as they
+were. Agents without findings do not capture the request witness or add producer markers.
+A shared entry-boundary correction also applies without findings: if dispatch
+context or time preparation fails before `execute` is entered, resumed calls no
+longer report entry or run after-tool middleware. The nominal reference and wire
+identity checks do not promise identity for that previously misclassified failure.
+
+It uses no model, network lookup or paid validation service. Cache layout work
+and any paid benchmark are separate work; no savings or hosted behavior has
+been measured by this feature's mock tests.

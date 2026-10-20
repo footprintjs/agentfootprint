@@ -4,7 +4,7 @@ title: LLMRequest
 
 # Interface: LLMRequest
 
-Defined in: [src/provider-contract/types.ts:255](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L255)
+Defined in: [src/provider-contract/types.ts:264](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L264)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/provider-contract/types.ts:255](https://github.com/footprintjs/
 
 > `readonly` `optional` **cacheMarkers?**: readonly `CacheMarker`[]
 
-Defined in: [src/provider-contract/types.ts:274](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L274)
+Defined in: [src/provider-contract/types.ts:283](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L283)
 
 Cache markers (v2.6+) — provider-agnostic prefix-cache hints
 populated by `CacheStrategy.prepareRequest` after the agent's
@@ -29,7 +29,7 @@ cache support (OpenAI auto-cache, Mock, NoOp) ignore it.
 
 > `readonly` `optional` **maxTokens?**: `number`
 
-Defined in: [src/provider-contract/types.ts:261](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L261)
+Defined in: [src/provider-contract/types.ts:270](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L270)
 
 ***
 
@@ -37,7 +37,7 @@ Defined in: [src/provider-contract/types.ts:261](https://github.com/footprintjs/
 
 > `readonly` **messages**: readonly [`LLMMessage`](/docs/api/interfaces/LLMMessage)[]
 
-Defined in: [src/provider-contract/types.ts:257](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L257)
+Defined in: [src/provider-contract/types.ts:266](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L266)
 
 ***
 
@@ -45,7 +45,7 @@ Defined in: [src/provider-contract/types.ts:257](https://github.com/footprintjs/
 
 > `readonly` **model**: `string`
 
-Defined in: [src/provider-contract/types.ts:259](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L259)
+Defined in: [src/provider-contract/types.ts:268](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L268)
 
 ***
 
@@ -53,7 +53,7 @@ Defined in: [src/provider-contract/types.ts:259](https://github.com/footprintjs/
 
 > `readonly` `optional` **outputFormat?**: `object`
 
-Defined in: [src/provider-contract/types.ts:341](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L341)
+Defined in: [src/provider-contract/types.ts:350](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L350)
 
 Constrain the model's TEXT answer to a JSON Schema with the provider's
 own structured output — `.outputSchema(parser, { strategy: 'native' })`.
@@ -80,7 +80,7 @@ The schema is the wire copy `nativeOutputFormat` built; send it as-is.
 
 > `readonly` `optional` **signal?**: `AbortSignal`
 
-Defined in: [src/provider-contract/types.ts:263](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L263)
+Defined in: [src/provider-contract/types.ts:272](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L272)
 
 ***
 
@@ -88,7 +88,7 @@ Defined in: [src/provider-contract/types.ts:263](https://github.com/footprintjs/
 
 > `readonly` `optional` **stop?**: readonly `string`[]
 
-Defined in: [src/provider-contract/types.ts:262](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L262)
+Defined in: [src/provider-contract/types.ts:271](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L271)
 
 ***
 
@@ -96,7 +96,7 @@ Defined in: [src/provider-contract/types.ts:262](https://github.com/footprintjs/
 
 > `readonly` `optional` **systemPrompt?**: `string`
 
-Defined in: [src/provider-contract/types.ts:256](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L256)
+Defined in: [src/provider-contract/types.ts:265](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L265)
 
 ***
 
@@ -104,7 +104,7 @@ Defined in: [src/provider-contract/types.ts:256](https://github.com/footprintjs/
 
 > `readonly` `optional` **temperature?**: `number`
 
-Defined in: [src/provider-contract/types.ts:260](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L260)
+Defined in: [src/provider-contract/types.ts:269](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L269)
 
 ***
 
@@ -112,7 +112,7 @@ Defined in: [src/provider-contract/types.ts:260](https://github.com/footprintjs/
 
 > `readonly` `optional` **thinking?**: `object`
 
-Defined in: [src/provider-contract/types.ts:302](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L302)
+Defined in: [src/provider-contract/types.ts:311](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L311)
 
 v2.14 — request the LLM emit reasoning/thinking content on this call.
 
@@ -150,7 +150,7 @@ LLM call the agent makes. Leave undefined to call without thinking
 
 > `readonly` `optional` **toolChoice?**: `object`
 
-Defined in: [src/provider-contract/types.ts:325](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L325)
+Defined in: [src/provider-contract/types.ts:334](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L334)
 
 v7.26 — force the model to answer through one named tool.
 
@@ -185,4 +185,4 @@ adapters before sending, with an `UnsupportedToolChoiceError`.
 
 > `readonly` `optional` **tools?**: readonly [`LLMToolSchema`](/docs/api/interfaces/LLMToolSchema)[]
 
-Defined in: [src/provider-contract/types.ts:258](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L258)
+Defined in: [src/provider-contract/types.ts:267](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L267)

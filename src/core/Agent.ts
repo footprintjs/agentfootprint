@@ -4469,7 +4469,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // Message-boundary refusal (7.18+) — a `messageMiddleware` returned
     // `deny`; a refusal must never be mistaken for an answer: at 'input' no
     // model was asked, and at 'output' the middleware declined to release it.
-    if (this.messageMiddleware.length > 0) {
+    if (this.messageMiddleware.length > 0 || this.findingsOptions !== undefined) {
       const denied = state as Pick<
         AgentState,
         'messageDeniedReason' | 'messageDeniedPhase' | 'messageDeniedBy'
@@ -5834,6 +5834,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // the chain's rewrites (a rewritten fill is not what the call ran with).
       ...(inputsArmed && {
         inputsLayer: {
+          ...(this.findingsOptions !== undefined && { findings: true as const }),
           toolOf: (toolName: string) => resolveForLayer(toolName).tool,
           ...(this.toolMiddleware.length > 0 && { rewrites: true as const }),
           // The time layer (step T5a): a tool whose period declares forms is filled from the

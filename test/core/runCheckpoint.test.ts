@@ -597,3 +597,58 @@ describe('runCheckpoint — P7 ROI', () => {
     expect(classifyFailurePhase(err)).toBe('unknown');
   });
 });
+
+describe('reference refusal checkpoint diagnostics', () => {
+  const tracker: RunCheckpointTracker = {
+    runId: 'fixture-checkpoint',
+    originalInput: { message: 'fixture' },
+    history: [],
+    lastCompletedIteration: 1,
+  };
+  const row = {
+    kind: 'reference-refusal',
+    declaredOn: 'answer',
+    iteration: 1,
+    reason: 'malformed',
+    attempted: '{"previous":123}',
+    truncated: true,
+    turn: 1,
+  };
+  it('round-trips the bounded diagnostic row without making it evidence authority', () => {
+    const checkpoint = { ...buildCheckpoint(tracker), findingsLedger: [row] };
+    expect(validateCheckpoint(JSON.parse(JSON.stringify(checkpoint))).findingsLedger).toEqual([
+      row,
+    ]);
+  });
+  it('rejects malformed diagnostic shapes and accessors without invoking them', () => {
+    for (const change of [
+      { reason: 'allow' },
+      { attempted: 1 },
+      { attempted: 'x'.repeat(8193) },
+      { truncated: false },
+      { iteration: -1 },
+      { iteration: Infinity },
+      { declaredOn: { toolCallId: 123 } },
+      { turn: 0 },
+      { surprise: 'field' },
+    ]) {
+      expect(() =>
+        validateCheckpoint({
+          ...buildCheckpoint(tracker),
+          findingsLedger: [{ ...row, ...change }],
+        }),
+      ).toThrow(/findingsLedger/);
+    }
+    let touched = false;
+    const hostile = Object.defineProperty({ ...row }, 'attempted', {
+      get: () => {
+        touched = true;
+        return 'x';
+      },
+    });
+    expect(() =>
+      validateCheckpoint({ ...buildCheckpoint(tracker), findingsLedger: [hostile] }),
+    ).toThrow(/findingsLedger/);
+    expect(touched).toBe(false);
+  });
+});

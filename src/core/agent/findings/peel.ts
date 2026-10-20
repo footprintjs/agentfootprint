@@ -23,6 +23,9 @@ export interface PeeledAnswer {
   readonly content: string;
   readonly findings?: FindingsDeclaration;
   readonly malformed?: number;
+  /** Opt-in bounded malformed-frame diagnostic, not a parsed declaration. */
+  readonly attemptedMalformed?: string;
+  readonly attemptedTruncated?: true;
 }
 
 /**
@@ -40,7 +43,10 @@ export interface PeeledAnswer {
  * joined. A value that is not JSON, or that a cut-off text left unfinished, is
  * dropped and counted (`malformed`), never guessed at.
  */
-export function peelAnswerFindings(raw: string): PeeledAnswer {
+export function peelAnswerFindings(
+  raw: string,
+  options?: { readonly captureMalformed?: true },
+): PeeledAnswer {
   if (typeof raw !== 'string') return { content: raw };
   const { text, removed } = withoutReservedMembers(raw, RESERVED_ANSWER_KEY);
   if (removed.length === 0) return { content: raw };
@@ -48,15 +54,24 @@ export function peelAnswerFindings(raw: string): PeeledAnswer {
   for (const member of removed) lastPerObject.set(member.object, member);
   let findings: FindingsDeclaration | undefined;
   let malformed = 0;
+  let attempted = '';
+  let attemptedTruncated = false;
   for (const member of lastPerObject.values()) {
     const read = readRemovedValue(member);
     malformed += read.malformed;
+    if (options?.captureMalformed === true && read.malformed > 0) {
+      const remaining = 8192 - attempted.length;
+      if (member.valueText.length > remaining) attemptedTruncated = true;
+      if (remaining > 0) attempted += member.valueText.slice(0, remaining);
+    }
     if (read.declaration !== undefined) findings = joinDeclarations(findings, read.declaration);
   }
   return {
     content: text,
     ...(findings !== undefined && { findings }),
     ...(malformed > 0 && { malformed }),
+    ...(attempted.length > 0 && { attemptedMalformed: attempted }),
+    ...(attemptedTruncated && { attemptedTruncated: true as const }),
   };
 }
 

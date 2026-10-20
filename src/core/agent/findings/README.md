@@ -1112,3 +1112,33 @@ measurement remain pending before any opt-in use or release.
 
 Design: `docs/design/2026-09-findings-ledger.md`; the spec of record is
 `docs/design/2026-09-findings-ledger-spec.md`.
+
+## Request-local admission: producer-owned notices (Phase A)
+
+The optional `LLMMessage.toolResultOrigin` records a fact the producer knows,
+only when findings admission is active. `not-entered` means a gate refused
+before `tool.execute` was entered; an error thrown inside the tool is still
+an entered result. A cache implemented inside `execute` is also a result;
+no fresh backend read or assertion truth is inferred. The host's
+`input-cancelled` notice is different: the paused tool may already have
+entered, but the cancellation message is not its completed result. Its
+identity is known, while execution remains unknown for admission purposes.
+
+The marker survives ordinary JSON history/checkpoints and is stripped before
+provider transport. Older history without it retains the existing trusted
+host-history contract; no English text, JSON payload or missing marker is
+interpreted as a refusal. The advisory ID offer and ledger presentation are
+unchanged in Phase A: the request-local admission gate, rather than enum
+membership, refuses known notices as executed-result authority.
+
+Pinned by `test/core/agent/findings-producer-origin.test.ts`: pre-dispatch
+findings/permission/argument/middleware refusals, entered success/error/cache
+controls, serialized continuation/error-resume, middleware/check-in resumes,
+pre-entry dispatch preparation, human result completion, hosted cancellation
+and off-findings absence. No paused-sibling identity is fabricated.
+
+The shared entry flag now flips after dispatch context is prepared, immediately
+before calling `execute`. A preparation failure therefore skips after-tool
+middleware on resumed calls even without findings: this is an intentional
+correction of a previously misclassified pre-entry failure, not a promise that
+all off-findings failure records are byte-identical. Entered throws stay entered.

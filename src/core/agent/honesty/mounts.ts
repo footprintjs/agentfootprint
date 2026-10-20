@@ -1,3 +1,5 @@
+import { findingsReferenceRefusal, type FindingsRequest } from '../findings/admission.js';
+import { ownsReservedArgument, splitFindings } from '../findings/reserved.js';
 /**
  * honesty/mounts — where the honesty layers' subflows mount, in ONE place both
  * chart builders call, so the twin builders cannot drift.
@@ -113,6 +115,8 @@ import type { AgentState } from '../types.js';
 
 /** What an armed agent hands the inputs layer's mount — closures, never scope. */
 export interface InputsMountDeps {
+  /** Filter refused references before input planning can consult host-supplied sources. */
+  readonly findings?: true;
   /** The implementation that will answer a name — the shared dispatch resolver's. */
   readonly toolOf: ToolOf;
   /**
@@ -335,7 +339,31 @@ export function mountInputsLayer<B extends FlowChartBuilder>(
         // The answers this turn kept for a call it could not finish — the key
         // exists only after such a refusal, so every other run hands nothing.
         const kept = keptThisTurn(parent.argumentAnswersKept, parent.turnNumber as number);
-        const calls = (parent.llmLatestToolCalls as readonly unknown[] | undefined) ?? [];
+        const proposed = (parent.llmLatestToolCalls as readonly BatchCall[] | undefined) ?? [];
+        const calls =
+          deps.findings === true
+            ? proposed.filter((call) => {
+                const schema = deps.toolOf(call.name)?.schema;
+                if (
+                  schema !== undefined &&
+                  ownsReservedArgument({
+                    name: schema.name,
+                    description: '',
+                    inputSchema: schema.inputSchema ?? {},
+                  })
+                )
+                  return true;
+                const declaration = splitFindings(call.args);
+                return (
+                  findingsReferenceRefusal(
+                    declaration.findings,
+                    (parent.findingsRequest as readonly [FindingsRequest] | undefined)?.[0],
+                    parent.iteration as number,
+                    declaration.malformed,
+                  ) === undefined
+                );
+              })
+            : proposed;
         // The time layer: this turn's clock and readings — only under the arm, for a batch with calls.
         const timeInputs =
           deps.time !== undefined && calls.length > 0 ? timeInputsOf(parent) : undefined;

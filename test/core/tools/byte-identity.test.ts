@@ -9,6 +9,19 @@
  * main verified every other value, including every commit log, is unchanged.
  * The assertions and volatile-field normalizer below remain unchanged.
  *
+ * PHASE A FINDINGS ADMISSION: regenerated ONLY `agent-findings`, its judge,
+ * window and contingent variants, and `agent-arguments-sources` (whose
+ * scenario enables the ledger). The other 25 JSON references stayed byte-
+ * identical; the separate normalizer control is the 26th unchanged test.
+ * Full structural comparison found 217 indexed-path deltas, all from 20 new
+ * `overwrite.findingsRequest` singleton witnesses, 15 new
+ * `overwrite.findingsBatchRecordedAt` writes, and their exact `set` trace
+ * rows shifting later indices. Removing only those added fields and rows
+ * from a transient audit copy gives the entire prior document exactly,
+ * preserving previous trace order. All served views, messages, system text,
+ * schemas, cache markers and receipt values remain identical. The running
+ * assertions retain every new fact; the normalizer is unchanged.
+ *
  * 9.92.0 changed how a tool call is RESOLVED (dispatch follows the offer) and
  * what the tools slot REPORTS (`tools.shadowed` re-subjected, `tools.claim_swallowed`
  * added). Neither may touch a run in which every tool name has one claimant:

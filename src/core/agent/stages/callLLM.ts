@@ -1,3 +1,5 @@
+import { captureFindingsRequest, type FindingsRequest } from '../findings/admission.js';
+import { observeRequests } from '../../../provider-contract/requestObserver.js';
 /**
  * callLLM — the LLM-invocation stage of the agent's chart.
  *
@@ -984,6 +986,7 @@ export function buildCallLLMStage(
       deps.onReplayPrepared,
     );
     let answeredBy = { provider: provider.name, model };
+    let acceptedFindingsRequest: FindingsRequest | undefined;
     // THE RUN'S SIGNAL REACHES THE WIRE. Every attempt carries it on its
     // request (`LLMRequest.signal`), so an aborted or timed-out run cancels the
     // provider's own HTTP request — the engine stopping the traversal leaves a
@@ -1003,6 +1006,25 @@ export function buildCallLLMStage(
         withRequestSignal(req, runSignal),
         hooks.providerHooks ?? providerHooks,
       );
+      let candidate =
+        deps.findings === true ? captureFindingsRequest(req, committed, iteration) : undefined;
+      const attemptHooks =
+        deps.findings === true
+          ? observeRequests(
+              {
+                ...attempts.hooks,
+                onReplayPrepared: (
+                  preparation: Parameters<NonNullable<LLMCallHooks['onReplayPrepared']>>[0],
+                ) => {
+                  attempts.hooks.onReplayPrepared?.(preparation);
+                  candidate = captureFindingsRequest(preparation.request, committed, iteration);
+                },
+              },
+              (request) => {
+                candidate = captureFindingsRequest(request, committed, iteration);
+              },
+            )
+          : attempts.hooks;
       let resp: LLMResponse | undefined;
       let firstChunkFired = false;
       // THE STREAM CARRIES WHAT STANDS (9.114.2, `.findings()`): each chunk
@@ -1018,7 +1040,7 @@ export function buildCallLLMStage(
       let lastTokenIndex = -1;
       if (selectedProvider.stream) {
         for await (const chunk of abortableIterable(
-          selectedProvider.stream(attempts.request, attempts.hooks),
+          selectedProvider.stream(attempts.request, attemptHooks),
           runSignal,
         )) {
           if (chunk.done) {
@@ -1082,8 +1104,10 @@ export function buildCallLLMStage(
         // those are two genuinely billed calls and collapsing them would
         // hide real double-billing. (That this branch can re-call at all
         // after a stream is a pre-existing quirk; see MENTAL_MODEL §14.)
+        if (deps.findings === true)
+          candidate = captureFindingsRequest(attempts.request, committed, iteration);
         resp = await untilAborted(
-          selectedProvider.complete(attempts.request, attempts.hooks),
+          selectedProvider.complete(attempts.request, attemptHooks),
           runSignal,
         );
       }
@@ -1114,6 +1138,7 @@ export function buildCallLLMStage(
           ? resp
           : tagThinkingResponse(resp, String(hooks.providerIndex));
       answeredBy = { provider: selectedProvider.name, model: req.model };
+      acceptedFindingsRequest = candidate;
       return attempts.response(answered);
     };
 
@@ -1186,6 +1211,14 @@ export function buildCallLLMStage(
         {
           ...(deps.withholdDraftContent === true && { withholdDraftContent: true }),
           providerHooks,
+          ...(deps.findings === true && {
+            prepareFallback: (request: LLMRequest) => {
+              const witness = captureFindingsRequest(request, committed, iteration);
+              return () => {
+                acceptedFindingsRequest = witness;
+              };
+            },
+          }),
         },
       );
       // `executeWithReliability` returns `undefined` when it took the
@@ -1225,6 +1258,9 @@ export function buildCallLLMStage(
           `it were.`,
       );
     }
+    if (deps.findings === true)
+      scope.findingsRequest =
+        acceptedFindingsRequest === undefined ? undefined : [acceptedFindingsRequest];
     scope.llmLatestContent = response.content;
     scope.llmLatestToolCalls = response.toolCalls;
     // `'native'` only, every call (so it is never stale): the stop reason the

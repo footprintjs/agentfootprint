@@ -31,6 +31,15 @@ export interface LLMMessage {
    */
   readonly toolArgumentsFailure?: LLMResponse['toolCalls'][number]['argumentsFailure'];
   /**
+   * Producer-owned notice origin, recorded only under findings admission.
+   * `not-entered` means the producer refused before tool.execute; an error
+   * thrown inside execute remains a result. `input-cancelled` is the host's
+   * notice, not a completed result, and says nothing about prior tool entry.
+   * Absent on old history: no missing origin is reconstructed from text.
+   * JSON/checkpoint safe; stripFrameworkFields removes it before transport.
+   */
+  readonly toolResultOrigin?: 'not-entered' | 'input-cancelled';
+  /**
    * For `role: 'assistant'` only — the tool calls the LLM requested in this
    * turn. Required for providers (Anthropic, OpenAI) that need to round-trip
    * tool_use blocks across iterations: when the next `complete()` includes

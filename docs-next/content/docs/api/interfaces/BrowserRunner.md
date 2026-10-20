@@ -4,7 +4,7 @@ title: BrowserRunner
 
 # Interface: BrowserRunner
 
-Defined in: [src/provider-contract/types.ts:1025](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1025)
+Defined in: [src/provider-contract/types.ts:1034](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1034)
 
 A browser an agent can drive — the PORT (9.68.0).
 
@@ -22,7 +22,7 @@ the one that matters — hand the controls to a person and take them back.
 
 > `readonly` **id**: `string`
 
-Defined in: [src/provider-contract/types.ts:1027](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1027)
+Defined in: [src/provider-contract/types.ts:1036](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1036)
 
 Stable id — reported on every tool-session event, so a row names its backend.
 
@@ -32,7 +32,7 @@ Stable id — reported on every tool-session event, so a row names its backend.
 
 > **start**(`req`): `Promise`\<[`BrowserSession`](/docs/api/interfaces/BrowserSession)\>
 
-Defined in: [src/provider-contract/types.ts:1034](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1034)
+Defined in: [src/provider-contract/types.ts:1043](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1043)
 
 Open a session.
 

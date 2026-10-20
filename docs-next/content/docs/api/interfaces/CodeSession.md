@@ -4,7 +4,7 @@ title: CodeSession
 
 # Interface: CodeSession
 
-Defined in: [src/provider-contract/types.ts:1158](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1158)
+Defined in: [src/provider-contract/types.ts:1167](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1167)
 
 One live session. `stop()` is idempotent and tolerates "already gone".
 
@@ -14,7 +14,7 @@ One live session. `stop()` is idempotent and tolerates "already gone".
 
 > `readonly` **id**: `string`
 
-Defined in: [src/provider-contract/types.ts:1160](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1160)
+Defined in: [src/provider-contract/types.ts:1169](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1169)
 
 The backend's own id for this session, when it has one.
 
@@ -24,7 +24,7 @@ The backend's own id for this session, when it has one.
 
 > **execute**(`req`): `Promise`\<[`CodeResult`](/docs/api/interfaces/CodeResult)\>
 
-Defined in: [src/provider-contract/types.ts:1161](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1161)
+Defined in: [src/provider-contract/types.ts:1170](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1170)
 
 #### Parameters
 
@@ -56,7 +56,7 @@ Defined in: [src/provider-contract/types.ts:1161](https://github.com/footprintjs
 
 > `optional` **stageInputs**(`inputs`): `Promise`\<readonly [`StagedCodeInput`](/docs/api/interfaces/StagedCodeInput)[]\>
 
-Defined in: [src/provider-contract/types.ts:1195](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1195)
+Defined in: [src/provider-contract/types.ts:1204](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1204)
 
 OPTIONAL (9.26.0) — put payloads INTO the session, so code can read data
 that never travelled through the context window.
@@ -101,7 +101,7 @@ readonly [`CodeInput`](/docs/api/interfaces/CodeInput)[]
 
 > **stop**(): `Promise`\<`void`\>
 
-Defined in: [src/provider-contract/types.ts:1203](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1203)
+Defined in: [src/provider-contract/types.ts:1212](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1212)
 
 Release the session.
 
