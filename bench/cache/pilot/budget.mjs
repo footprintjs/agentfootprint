@@ -5,6 +5,7 @@
  * Tariff/context sources and assumptions are frozen in README + manifest.json.
  */
 import { copyJson } from '../../../dist/lib/boundedJson.js';
+import { usageEvidence } from './usageEvidence.mjs';
 export const MODEL = 'claude-haiku-4-5-20251001';
 export const RESERVATION_MICRO_USD = 405120;
 const CEILINGS = Object.freeze({
@@ -86,6 +87,7 @@ export function measuredUsage(value) {
     'inference_geo',
     'server_tool_use',
     'output_tokens_details',
+    'speed',
   ]);
   if (
     !u ||
@@ -111,7 +113,13 @@ export function measuredUsage(value) {
   // Unknown/new charge categories stop measurement, never silently price as zero.
   if (
     (u.service_tier != null && u.service_tier !== 'standard') ||
-    (u.inference_geo != null && u.inference_geo !== 'global') ||
+    // Frozen Haiku4.5 does not support geographic routing premiums. Preserve the
+    // documented older-model label verbatim; never rewrite it as a measured geo.
+    // Verified2026-10-20: https://platform.claude.com/docs/en/manage-claude/data-residency
+    (u.inference_geo != null && !['global', 'not_available'].includes(u.inference_geo)) ||
+    // This label is documented on usage. Fast/unknown speeds remain unpriced.
+    // https://platform.claude.com/docs/en/api/messages/create
+    (u.speed != null && u.speed !== 'standard') ||
     (u.server_tool_use != null &&
       (Object.keys(u.server_tool_use).some(
         (k) => !['web_fetch_requests', 'web_search_requests'].includes(k),
@@ -242,6 +250,7 @@ export function pilotBudget(options) {
           usage = measuredUsage(response.usage);
         } catch {
           reason = 'usage';
+          append({ kind: 'usage-refused', id, arm, run, evidence: usageEvidence(response.usage) });
           throw new Error('pilot usage unknown');
         }
         reason = 'journal';

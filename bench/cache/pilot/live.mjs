@@ -46,9 +46,13 @@ export function liveTransport(consumer, apiKey, network = globalThis.fetch) {
       logLevel: 'off',
       logger: { debug() {}, info() {}, warn() {}, error() {} },
     });
+    const timeout = Math.floor(Math.min(options.timeout ?? 45000, 45000));
+    // Remaining budgets use performance.now() fractions; SDK timeouts require
+    // integers. Round down only, and refuse less than1ms before any dispatch.
+    if (!Number.isSafeInteger(timeout) || timeout < 1) throw new Error('pilot deadline');
     return client.messages.create(body, {
       signal: options.signal,
-      timeout: Math.min(options.timeout ?? 45000, 45000),
+      timeout,
       maxRetries: 0,
     });
   };
