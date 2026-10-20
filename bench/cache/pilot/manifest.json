@@ -1,0 +1,76 @@
+{
+  "schema": 1,
+  "model": "claude-haiku-4-5-20251001",
+  "verifiedAt": "2026-10-20",
+  "reviewRequiredBeforePaidCall": true,
+  "maximumMicroUsd": 10000000,
+  "maximumCalls": 16,
+  "maximumOutputTokens": 1024,
+  "modelContextTokens": 200000,
+  "maximumWireBytes": 96000,
+  "maximumDurationMs": 600000,
+  "callTimeoutMs": 45000,
+  "reservationPerCallMicroUsd": 405120,
+  "reservationNeverRefunded": true,
+  "baselinePublicTarballSha256": "f9d9966c8972617eacbf37ad3cc17bd2d94a76e69848b0b7c63aa2cc7c208598",
+  "candidateTarballSha256": "963c04f2a1dd572db534753a9cdf1c24cffb06d9e6b654a0baff8a9fc72ef5fb",
+  "candidateCommit": "201b07aef540ca8184768ae34ee135d631e9e18c",
+  "candidatePublished": false,
+  "consumerClosureSha256": "efc1017d90911279ca167540c917d346ed5272ac8c870d30067434b2f106dfff",
+  "phaseAPolicy": {
+    "dist/core/agent/findings/admission.js": "23d7418127516a12f82584307bb68c095fc42f9d5bcf8b329fa32bcb122577db",
+    "dist/core/agent/findings/answerAdmission.js": "a1bb03ba8912652737f686c804be749999195f9810b7a4e622391458964b70cf",
+    "dist/core/agent/findings/refusal.js": "50bfd6d7222c91b5b1d913ac667e819662cb4cb27ebf21b7c1d5a7ab22278b12",
+    "dist/core/agent/stages/toolCalls.js": "618f298b1a9c1e3fc4d0e838bdfda282594a089cda9e3ee13337b8152597a53a",
+    "dist/core/agent/stages/route.js": "eea9014f8d8707352d421061330d4da7f71428273958c08c6eb24be2dc4a06b5"
+  },
+  "order": [
+    {
+      "arm": "baseline",
+      "scenario": "lookup",
+      "partition": "legacy-lookup-frozen-v1"
+    },
+    {
+      "arm": "candidate",
+      "scenario": "lookup",
+      "partition": "stable-lookup-frozen-v1"
+    },
+    {
+      "arm": "candidate",
+      "scenario": "conflict",
+      "partition": "stable-conflict-frozen-v1"
+    },
+    {
+      "arm": "baseline",
+      "scenario": "conflict",
+      "partition": "legacy-conflict-frozen-v1"
+    }
+  ],
+  "sources": [
+    "https://platform.claude.com/docs/en/models/haiku-4-5/overview",
+    "https://platform.claude.com/docs/en/about-claude/pricing",
+    "https://platform.claude.com/docs/en/api/messages/create",
+    "https://platform.claude.com/docs/en/build-with-claude/token-counting"
+  ],
+  "pricingNanoUsdPerToken": {
+    "input": 1000,
+    "output": 5000,
+    "cacheWrite5m": 1250,
+    "cacheWrite1h": 2000,
+    "cacheRead": 100
+  },
+  "kit": {
+    "bench/cache/pilot/arms.mjs": "3a7030e63fae266fbd6c4eecc67c18a8cb87361d35bb06fc8a6bebe4ec285c3d",
+    "bench/cache/pilot/budget.mjs": "8197982b087de5141eb835822a82b367a964a3cca260fd06a57000212c4cf5b8",
+    "bench/cache/pilot/fixture.mjs": "e7b36924eeea153d92012b709457dc2826bf867514f58018bd3ab21ed1165140",
+    "bench/cache/pilot/identity.mjs": "7c4f35c4b11f261cdd8ace676af4d5f41f4f1b995f7c6efbed7bfc9599d07e10",
+    "bench/cache/pilot/inspect.mjs": "3f377689f5efbb1a129bb144be867f419cff02d0df69002d7e55bdbad57e2f09",
+    "bench/cache/pilot/journal.mjs": "d3bbc4d304aca97f4c1b592bad1b7ebcadde9cfefd708e248482ed45c8636cda",
+    "bench/cache/pilot/live.mjs": "b6360c4cbe760a15f013e17a49de8c81ab888e4672e44a3d8d06056d92ed6fbb",
+    "bench/cache/pilot/run.mjs": "1c1e32ce08a71854eb2ebd12313d3df8c193f2bf8c0697d9ed5c80561a27b267",
+    "bench/cache/verify-fixture.mjs": "85de6d1da3147a5dedd061e7c2db50ae9cd36dddf6ae72d5dba67f6e7631d7da",
+    "dist/lib/boundedJson.js": "13fb65eb7c5029481c7521b58273c59988a74dfa816cad5b4108fd4bdde9e61f",
+    "src/lib/boundedJson.ts": "08e5411b199a8387d67ff4b5fb264d6eb7c55d17295925a40db66258ee6117a3"
+  },
+  "payloadSha256": "1610973aedc36324535126c359f4fb07f5a660c86bca8556b46eae62ff2fb3a3"
+}
