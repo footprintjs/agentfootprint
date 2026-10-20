@@ -14,6 +14,13 @@ function renderedGroup(
   writeFileSync(join(folder, 'index.html'), body);
 }
 
+// This reads the one intentional redirect script; it is not an HTML sanitizer.
+function redirectScript(text: string) {
+  expect(text.match(/<script\b/gi)).toHaveLength(1);
+  expect(text.match(/<\/script\s*>/gi)).toHaveLength(1);
+  return text.match(/<script>([\s\S]*?)<\/script>/i)![1];
+}
+
 const alias = {
   from: '/docs/api/interfaces/ReadEvent',
   to: '/docs/api/interfaces/scope-events',
@@ -28,7 +35,7 @@ describe('lightweight static API aliases', () => {
     'keeps %s within the fixed canonical destination',
     (hash) => {
       const text = redirectHtml(alias, '/reference');
-      const script = text.match(/<script>([\s\S]*?)<\/script>/)![1];
+      const script = redirectScript(text);
       let target = '';
       runInNewContext(script, {
         location: {
@@ -48,6 +55,29 @@ describe('lightweight static API aliases', () => {
         'href="/reference/docs/api/interfaces/scope-events#interface-readevent"',
       );
       expect(text.length).toBeLessThan(1500);
+    },
+  );
+
+  it.each(['SCRIPT', 'ScRiPt'])('reads the intended redirect with %s tag casing', (tag) => {
+    const text = redirectHtml(alias)
+      .replace('<script>', `<${tag}>`)
+      .replace('</script>', `</${tag}>`);
+    expect(redirectScript(text)).toBe(redirectScript(redirectHtml(alias)));
+  });
+
+  it.each(['SCRIPT', 'ScRiPt'])('detects an extra %s script rather than ignoring it', (tag) => {
+    expect(() => redirectScript(`${redirectHtml(alias)}<${tag}>unexpected</${tag}>`)).toThrow();
+  });
+
+  it.each(['</title><SCRIPT>alert(1)</SCRIPT>', '" onload="alert(1)', '&<script>'])(
+    'refuses HTML-bearing names and destinations: %s',
+    (payload) => {
+      for (const field of ['from', 'to', 'anchor', 'target']) {
+        expect(() => redirectHtml({ ...alias, [field]: payload })).toThrow();
+      }
+      expect(() => redirectHtml({ ...alias, fragments: { value: payload } })).toThrow();
+      expect(() => redirectHtml({ ...alias, fragments: { [payload]: 'value-6' } })).toThrow();
+      expect(() => redirectHtml(alias, payload)).toThrow();
     },
   );
 
