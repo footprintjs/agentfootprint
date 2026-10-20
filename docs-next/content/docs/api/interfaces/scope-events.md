@@ -6,7 +6,7 @@ description: Related recorder payloads, with a section for each interface.
 
 ## Interface: CommitEvent
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:31
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:37
 
 ### Extends
 
@@ -14,11 +14,26 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:31
 
 ### Properties
 
+#### correlation?
+
+> `readonly` `optional` **correlation?**: `RunCorrelation`
+
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:22
+
+The run's correlation (10.1) — the same frozen object as `TraversalContext.correlation` on the flow events
+and `getSnapshot().correlation`. Absent — no key — when the run's env gave none.
+
+##### Inherited from
+
+`RecorderContext.correlation`
+
+***
+
 #### mutations
 
 > **mutations**: `object`[]
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:32
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:38
 
 ##### key
 
@@ -38,7 +53,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:32
 
 > **pipelineId**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:15
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:16
 
 ##### Inherited from
 
@@ -50,7 +65,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:15
 
 > **runtimeStageId**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:14
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:15
 
 Unique per-execution-step identifier. Format: [subflowPath/]stageId#executionIndex
 
@@ -64,7 +79,7 @@ Unique per-execution-step identifier. Format: [subflowPath/]stageId#executionInd
 
 > **stageId**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:12
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:13
 
 Stable stage identifier (matches spec node id).
 
@@ -78,7 +93,7 @@ Stable stage identifier (matches spec node id).
 
 > **stageName**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:10
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:11
 
 ##### Inherited from
 
@@ -90,7 +105,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:10
 
 > **timestamp**: `number`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:16
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:17
 
 ##### Inherited from
 
@@ -102,7 +117,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:16
 
 ## Interface: EmitEvent
 
-Defined in: node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:70
+Defined in: node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:71
 
 Event delivered to `EmitRecorder.onEmit`.
 
@@ -112,11 +127,21 @@ stage's execution context.
 
 ### Properties
 
+#### correlation?
+
+> `readonly` `optional` **correlation?**: `RunCorrelation`
+
+Defined in: node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:114
+
+The run's correlation (10.1) — as on every scope event (`RecorderContext.correlation`). Absent when none.
+
+***
+
 #### name
 
 > `readonly` **name**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:77
+Defined in: node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:78
 
 Consumer-supplied event name. Convention: hierarchical dotted namespace
 (e.g. `'agentfootprint.llm.tokens'`, `'myapp.billing.spend'`). Keeps
@@ -129,7 +154,7 @@ central registry.
 
 > `readonly` **payload**: `unknown`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:85
+Defined in: node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:86
 
 Consumer-supplied payload. Shape is up to the consumer and their
 convention; library treats it as opaque and passes through unchanged
@@ -143,7 +168,7 @@ When redacted, replaced with the string `'[REDACTED]'`.
 
 > `readonly` **pipelineId**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:101
+Defined in: node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:102
 
 Pipeline/run identifier (matches `RecorderContext.pipelineId`).
 
@@ -153,7 +178,7 @@ Pipeline/run identifier (matches `RecorderContext.pipelineId`).
 
 > `readonly` **runtimeStageId**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:92
+Defined in: node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:93
 
 Unique per-execution-step identifier — the same value recorder events
 and commit-log entries carry. See `runtimeStageId.ts` for format.
@@ -164,7 +189,7 @@ and commit-log entries carry. See `runtimeStageId.ts` for format.
 
 > `readonly` `optional` **sourcePosition?**: `EmitSourcePosition`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:111
+Defined in: node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:112
 
 Source-time committed prefix in this stage's own log, captured before
 observer dispatch. Not this stage's future commit or uncommitted state.
@@ -178,7 +203,7 @@ Absent on old/manual events and scopes without a bound engine log.
 
 > `readonly` **stageName**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:87
+Defined in: node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:88
 
 Name of the stage that emitted this event.
 
@@ -188,7 +213,7 @@ Name of the stage that emitted this event.
 
 > `readonly` **subflowPath**: readonly `string`[]
 
-Defined in: node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:99
+Defined in: node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:100
 
 Subflow path from the outermost parent down to the subflow that emitted
 this event. Empty array when the emit came from the root flowchart.
@@ -201,7 +226,7 @@ Matches the convention used by `FlowPauseEvent.subflowPath`,
 
 > `readonly` **timestamp**: `number`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:103
+Defined in: node\_modules/footprintjs/dist/types/lib/recorder/EmitRecorder.d.ts:104
 
 Emission timestamp in milliseconds since epoch (`Date.now()`).
 
@@ -211,7 +236,7 @@ Emission timestamp in milliseconds since epoch (`Date.now()`).
 
 ## Interface: ErrorEvent
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:44
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:50
 
 A recorder threw in a scope-channel hook (`operation` says which kind:
 a read, a write, or a commit hook). Delivered to every recorder on the
@@ -228,7 +253,7 @@ recorderFailureEvent`).
 
 > `optional` **channel?**: `"scope"`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:60
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:66
 
 Explicit channel discriminant — `'scope'` on every engine-dispatched
 event. `isFlowEvent()` checks it first (backlog B3); optional so
@@ -237,11 +262,26 @@ back to the legacy pipelineId-presence heuristic.
 
 ***
 
+#### correlation?
+
+> `readonly` `optional` **correlation?**: `RunCorrelation`
+
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:22
+
+The run's correlation (10.1) — the same frozen object as `TraversalContext.correlation` on the flow events
+and `getSnapshot().correlation`. Absent — no key — when the run's env gave none.
+
+##### Inherited from
+
+`RecorderContext.correlation`
+
+***
+
 #### error
 
 > **error**: `StructuredErrorInfo`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:51
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:57
 
 What the recorder threw, in the structured form (9.39.0): `message` and
 `name` read as before; `raw` is the thrown value itself (an `Error`, a
@@ -254,7 +294,7 @@ paths passed the raw thrown value and the deferred tier a `new Error(...)`.
 
 > `optional` **key?**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:53
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:59
 
 ***
 
@@ -262,7 +302,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:53
 
 > **operation**: `"read"` \| `"write"` \| `"commit"`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:52
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:58
 
 ***
 
@@ -270,7 +310,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:52
 
 > **pipelineId**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:15
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:16
 
 ##### Inherited from
 
@@ -282,7 +322,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:15
 
 > **runtimeStageId**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:14
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:15
 
 Unique per-execution-step identifier. Format: [subflowPath/]stageId#executionIndex
 
@@ -296,7 +336,7 @@ Unique per-execution-step identifier. Format: [subflowPath/]stageId#executionInd
 
 > **stageId**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:12
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:13
 
 Stable stage identifier (matches spec node id).
 
@@ -310,7 +350,7 @@ Stable stage identifier (matches spec node id).
 
 > **stageName**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:10
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:11
 
 ##### Inherited from
 
@@ -322,7 +362,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:10
 
 > **timestamp**: `number`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:16
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:17
 
 ##### Inherited from
 
@@ -334,108 +374,6 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:16
 
 ## Interface: ReadEvent
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:18
-
-### Extends
-
-- `RecorderContext`
-
-### Properties
-
-#### key?
-
-> `optional` **key?**: `string`
-
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:19
-
-***
-
-#### pipelineId
-
-> **pipelineId**: `string`
-
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:15
-
-##### Inherited from
-
-`RecorderContext.pipelineId`
-
-***
-
-#### redacted?
-
-> `optional` **redacted?**: `boolean`
-
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:22
-
-True when the value has been redacted for PII protection.
-
-***
-
-#### runtimeStageId
-
-> **runtimeStageId**: `string`
-
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:14
-
-Unique per-execution-step identifier. Format: [subflowPath/]stageId#executionIndex
-
-##### Inherited from
-
-`RecorderContext.runtimeStageId`
-
-***
-
-#### stageId
-
-> **stageId**: `string`
-
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:12
-
-Stable stage identifier (matches spec node id).
-
-##### Inherited from
-
-`RecorderContext.stageId`
-
-***
-
-#### stageName
-
-> **stageName**: `string`
-
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:10
-
-##### Inherited from
-
-`RecorderContext.stageName`
-
-***
-
-#### timestamp
-
-> **timestamp**: `number`
-
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:16
-
-##### Inherited from
-
-`RecorderContext.timestamp`
-
-***
-
-#### value
-
-> **value**: `unknown`
-
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:20
-
-
----
-
-
-## Interface: WriteEvent
-
 Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:24
 
 ### Extends
@@ -444,19 +382,26 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:24
 
 ### Properties
 
-#### key
+#### correlation?
 
-> **key**: `string`
+> `readonly` `optional` **correlation?**: `RunCorrelation`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:25
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:22
+
+The run's correlation (10.1) — the same frozen object as `TraversalContext.correlation` on the flow events
+and `getSnapshot().correlation`. Absent — no key — when the run's env gave none.
+
+##### Inherited from
+
+`RecorderContext.correlation`
 
 ***
 
-#### operation
+#### key?
 
-> **operation**: `"set"` \| `"update"` \| `"delete"`
+> `optional` **key?**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:27
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:25
 
 ***
 
@@ -464,7 +409,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:27
 
 > **pipelineId**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:15
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:16
 
 ##### Inherited from
 
@@ -476,7 +421,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:15
 
 > `optional` **redacted?**: `boolean`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:29
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:28
 
 True when the value has been redacted for PII protection.
 
@@ -486,7 +431,7 @@ True when the value has been redacted for PII protection.
 
 > **runtimeStageId**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:14
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:15
 
 Unique per-execution-step identifier. Format: [subflowPath/]stageId#executionIndex
 
@@ -500,7 +445,7 @@ Unique per-execution-step identifier. Format: [subflowPath/]stageId#executionInd
 
 > **stageId**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:12
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:13
 
 Stable stage identifier (matches spec node id).
 
@@ -514,7 +459,7 @@ Stable stage identifier (matches spec node id).
 
 > **stageName**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:10
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:11
 
 ##### Inherited from
 
@@ -526,7 +471,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:10
 
 > **timestamp**: `number`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:16
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:17
 
 ##### Inherited from
 
@@ -539,3 +484,128 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:16
 > **value**: `unknown`
 
 Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:26
+
+
+---
+
+
+## Interface: WriteEvent
+
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:30
+
+### Extends
+
+- `RecorderContext`
+
+### Properties
+
+#### correlation?
+
+> `readonly` `optional` **correlation?**: `RunCorrelation`
+
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:22
+
+The run's correlation (10.1) — the same frozen object as `TraversalContext.correlation` on the flow events
+and `getSnapshot().correlation`. Absent — no key — when the run's env gave none.
+
+##### Inherited from
+
+`RecorderContext.correlation`
+
+***
+
+#### key
+
+> **key**: `string`
+
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:31
+
+***
+
+#### operation
+
+> **operation**: `"set"` \| `"update"` \| `"delete"`
+
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:33
+
+***
+
+#### pipelineId
+
+> **pipelineId**: `string`
+
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:16
+
+##### Inherited from
+
+`RecorderContext.pipelineId`
+
+***
+
+#### redacted?
+
+> `optional` **redacted?**: `boolean`
+
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:35
+
+True when the value has been redacted for PII protection.
+
+***
+
+#### runtimeStageId
+
+> **runtimeStageId**: `string`
+
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:15
+
+Unique per-execution-step identifier. Format: [subflowPath/]stageId#executionIndex
+
+##### Inherited from
+
+`RecorderContext.runtimeStageId`
+
+***
+
+#### stageId
+
+> **stageId**: `string`
+
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:13
+
+Stable stage identifier (matches spec node id).
+
+##### Inherited from
+
+`RecorderContext.stageId`
+
+***
+
+#### stageName
+
+> **stageName**: `string`
+
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:11
+
+##### Inherited from
+
+`RecorderContext.stageName`
+
+***
+
+#### timestamp
+
+> **timestamp**: `number`
+
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:17
+
+##### Inherited from
+
+`RecorderContext.timestamp`
+
+***
+
+#### value
+
+> **value**: `unknown`
+
+Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:32
