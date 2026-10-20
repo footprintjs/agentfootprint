@@ -52,8 +52,8 @@ function fixture(vendor: 'anthropic' | 'bedrock') {
           } as never,
         })
       : bedrock({
-          _commands: { Converse: Command as never, ConverseStream: Command as never },
-          _client: {
+          sdk: { ConverseCommand: Command as never, ConverseStreamCommand: Command as never },
+          client: {
             send: async (command) => {
               const turn = reply((command as Command).input);
               return {

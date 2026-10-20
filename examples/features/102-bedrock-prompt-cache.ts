@@ -27,8 +27,8 @@ class StreamCommand {
 function scriptedBedrock(): LLMProvider {
   let calls = 0;
   return bedrock({
-    _commands: { Converse: Command, ConverseStream: StreamCommand },
-    _client: {
+    sdk: { ConverseCommand: Command, ConverseStreamCommand: StreamCommand },
+    client: {
       send: async (command) => {
         const first = calls++ === 0;
         const usage = {

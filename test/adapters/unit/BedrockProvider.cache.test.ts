@@ -41,7 +41,10 @@ function fixture(
       };
     return response;
   });
-  const options = { _client: { send }, _commands: { Converse, ConverseStream } };
+  const options = {
+    client: { send },
+    sdk: { ConverseCommand: Converse, ConverseStreamCommand: ConverseStream },
+  };
   return {
     options,
     send,

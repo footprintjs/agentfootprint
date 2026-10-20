@@ -64,9 +64,12 @@ describe('the declared capability matches the wire', () => {
     // Each of these drops `role: 'system'` in its own message serializer,
     // because system rides a separate top-level field.
     expect(anthropic({ _client: {} as never }).carriesInMessages).toEqual(FLOOR);
-    expect(bedrock({ _client: {} as never, _commands: {} as never }).carriesInMessages).toEqual(
-      FLOOR,
-    );
+    expect(
+      bedrock({
+        client: {} as never,
+        sdk: { ConverseCommand: class {}, ConverseStreamCommand: class {} },
+      }).carriesInMessages,
+    ).toEqual(FLOOR);
     expect(browserAnthropic({ apiKey: 'k' }).carriesInMessages).toEqual(FLOOR);
   });
 

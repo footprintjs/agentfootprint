@@ -161,7 +161,10 @@ describe('an adapter that does not carry the format', () => {
   });
 
   it('Bedrock and OpenAI do not declare it; anthropic, browserAnthropic and the mock do', () => {
-    const bedrockProvider = bedrock({ _client: {} as never, _commands: {} as never });
+    const bedrockProvider = bedrock({
+      client: {} as never,
+      sdk: { ConverseCommand: class {}, ConverseStreamCommand: class {} },
+    });
     expect(nativeOutputSchemaFor(bedrockProvider, 'anthropic.claude-haiku-4-5-20251001-v1:0')).toBe(
       false,
     );

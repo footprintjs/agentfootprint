@@ -377,9 +377,13 @@ describe('_findings survives the Bedrock mapping (toolSpec.inputSchema.json)', (
   it('BedrockProvider · toBedrockTool → toolConfig.tools[].toolSpec.inputSchema.json', async () => {
     const inputs: unknown[] = [];
     const fake = bedrockDouble(inputs);
-    await bedrock({ _client: fake.client as never, _commands: fake.Commands as never }).complete(
-      REQUEST,
-    );
+    await bedrock({
+      client: fake.client as never,
+      sdk: {
+        ConverseCommand: fake.Commands.Converse,
+        ConverseStreamCommand: fake.Commands.ConverseStream,
+      },
+    }).complete(REQUEST);
     expectSurvived(
       at(inputs[0], 'toolConfig', 'tools', 0, 'toolSpec', 'inputSchema', 'json'),
       'bedrock',
@@ -490,9 +494,13 @@ const DRIVERS: readonly Driver[] = [
     drive: async (request) => {
       const inputs: unknown[] = [];
       const fake = bedrockDouble(inputs);
-      await bedrock({ _client: fake.client as never, _commands: fake.Commands as never }).complete(
-        request,
-      );
+      await bedrock({
+        client: fake.client as never,
+        sdk: {
+          ConverseCommand: fake.Commands.Converse,
+          ConverseStreamCommand: fake.Commands.ConverseStream,
+        },
+      }).complete(request);
       return at(inputs[0], 'toolConfig', 'tools', 0, 'toolSpec', 'inputSchema', 'json');
     },
   },

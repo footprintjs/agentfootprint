@@ -33,6 +33,40 @@ const agent = Agent.create({
 
 The model id is Bedrock's, not the upstream provider's. Cross-region inference profiles work as-is — just pass the profile id.
 
+## Bundled SDK and prebuilt client
+
+Use public `sdk` when your bundler cannot follow the optional peer's lazy load:
+
+```ts
+import * as sdk from '@aws-sdk/client-bedrock-runtime';
+import { bedrock } from 'agentfootprint/providers';
+
+const provider = bedrock({ sdk, region: 'us-east-1' });
+```
+
+You can pass `client: new sdk.BedrockRuntimeClient(yourConfiguration)` as well.
+The adapter uses that exact client; its region, endpoint, credentials, retry
+configuration and lifecycle remain yours. The adapter never destroys it.
+Commands still come from `sdk`, or from the installed optional peer when `sdk`
+is absent. In a bundled host, pass both the module and your prebuilt client.
+This changes dependency loading, not the `LLMProvider` interface or the
+model-specific caching strategy.
+
+`BedrockClient` and `BedrockConverseSdkModule` are structural types exported
+from `agentfootprint/providers`. A supplied module needs `ConverseCommand` and
+`ConverseStreamCommand`; it needs `BedrockRuntimeClient` only when no client is
+provided. Missing constructors are refused by name when the provider is built.
+`new BedrockProvider(options)` accepts the same options as the factory.
+
+<CodeFile path="examples/features/106-bedrock-sdk-injection.ts" region="injection" title="Public injection with a local SDK fixture, no AWS calls" />
+
+The internal `_sdk`, `_client` and `_commands` spellings are removed and
+refused before loading the SDK. Migrate to `sdk` and `client`. An old command
+map `{ Converse, ConverseStream }` becomes
+`sdk: { ConverseCommand: Converse, ConverseStreamCommand: ConverseStream }`.
+No compatibility alias remains. This migration applies to Bedrock's Converse
+adapter; other AWS adapters' injection options are being tracked separately.
+
 ## Tools (Converse tool_use blocks)
 
 Converse API's tool_use / tool_result blocks map cleanly to agentfootprint's `Tool[]` + `LLMMessage.toolCalls`. ReAct correctness preserved.

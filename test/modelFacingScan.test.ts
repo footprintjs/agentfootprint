@@ -379,6 +379,13 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
   ],
 
   // ── the host, the operator or the developer reads these; no model does ──
+  'src/adapters/llm/BedrockProvider.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: 'the removed-internal-option migration refusal thrown to the host while constructing the provider; no model request or trusted tool result is created',
+    },
+  ],
   'src/adapters/code/local.ts': [
     {
       kind: 'not-model-facing',
@@ -1193,12 +1200,14 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // AgentCore pages: one constructor-time host configuration refusal,
         // not a model instruction. One new file and one host-facing literal;
         // the registry, ephemeral and unrepaired counts are unchanged.
-        files: 101,
-        total: 197,
+        // Public Bedrock injection: one constructor-time migration refusal,
+        // delivered only to the host. No model-facing classification changes.
+        files: 102,
+        total: 198,
         registry: 8,
         ephemeral: 24,
         unrepaired: 33,
-        notModelFacing: 132,
+        notModelFacing: 133,
         unrepairedEntries: 13,
       });
       // And the ledger's own total is the number of literals the scan flagged —

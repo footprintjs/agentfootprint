@@ -43,8 +43,8 @@ function fixture(form: 'factory' | 'class', defaultModel?: string) {
   });
   const options = {
     defaultModel,
-    _client: { send },
-    _sdk: { ConverseCommand, ConverseStreamCommand },
+    client: { send },
+    sdk: { ConverseCommand, ConverseStreamCommand },
   };
   const provider = form === 'factory' ? bedrock(options) : new BedrockProvider(options);
   return { provider, inputs, send };

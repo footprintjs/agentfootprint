@@ -80,7 +80,10 @@ function converse() {
   };
   return {
     inputs,
-    provider: bedrock({ _client: client, _commands: { Converse, ConverseStream: Converse } }),
+    provider: bedrock({
+      client: client,
+      sdk: { ConverseCommand: Converse, ConverseStreamCommand: Converse },
+    }),
   };
 }
 

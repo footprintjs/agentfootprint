@@ -1,6 +1,6 @@
 /**
  * BedrockProvider — 7-pattern tests.
- * Uses injected fake `_client` + `_commands` instead of AWS SDK.
+ * Uses injected public `client` + `sdk` instead of AWS SDK.
  */
 
 import { describe, expect, it, vi } from 'vitest';
@@ -84,12 +84,26 @@ const baseRequest: LLMRequest = {
 describe('BedrockProvider — unit', () => {
   it('provider name is "bedrock"', () => {
     const fx = makeFakeFixtures(baseResponse);
-    expect(bedrock({ _client: fx.client, _commands: fx.Commands }).name).toBe('bedrock');
+    expect(
+      bedrock({
+        client: fx.client,
+        sdk: {
+          ConverseCommand: fx.Commands.Converse,
+          ConverseStreamCommand: fx.Commands.ConverseStream,
+        },
+      }).name,
+    ).toBe('bedrock');
   });
 
   it('complete() normalizes inputTokens/outputTokens → input/output', async () => {
     const fx = makeFakeFixtures(baseResponse);
-    const p = bedrock({ _client: fx.client, _commands: fx.Commands });
+    const p = bedrock({
+      client: fx.client,
+      sdk: {
+        ConverseCommand: fx.Commands.Converse,
+        ConverseStreamCommand: fx.Commands.ConverseStream,
+      },
+    });
     const res = await p.complete(baseRequest);
     expect(res.content).toBe('hello');
     expect(res.usage).toEqual({ input: 10, output: 2 });
@@ -102,8 +116,11 @@ describe('BedrockProvider — unit', () => {
     const fx = makeFakeFixtures(baseResponse, recorder);
     const p = bedrock({
       defaultModel: 'anthropic.claude-haiku-4-5-v1:0',
-      _client: fx.client,
-      _commands: fx.Commands,
+      client: fx.client,
+      sdk: {
+        ConverseCommand: fx.Commands.Converse,
+        ConverseStreamCommand: fx.Commands.ConverseStream,
+      },
     });
     await p.complete(baseRequest);
     const cmd = recorder.commands[0] as { input: { modelId: string } };
@@ -112,7 +129,13 @@ describe('BedrockProvider — unit', () => {
 
   it('class form behaves identically to factory', async () => {
     const fx = makeFakeFixtures(baseResponse);
-    const provider = new BedrockProvider({ _client: fx.client, _commands: fx.Commands });
+    const provider = new BedrockProvider({
+      client: fx.client,
+      sdk: {
+        ConverseCommand: fx.Commands.Converse,
+        ConverseStreamCommand: fx.Commands.ConverseStream,
+      },
+    });
     const res = await provider.complete(baseRequest);
     expect(res.content).toBe('hello');
   });
@@ -124,7 +147,13 @@ describe('BedrockProvider — scenario (tool round-trip)', () => {
   it('builds toolUse blocks from LLMMessage.toolCalls; tool messages map to toolResult', async () => {
     const recorder = { commands: [] as unknown[] };
     const fx = makeFakeFixtures(baseResponse, recorder);
-    const p = bedrock({ _client: fx.client, _commands: fx.Commands });
+    const p = bedrock({
+      client: fx.client,
+      sdk: {
+        ConverseCommand: fx.Commands.Converse,
+        ConverseStreamCommand: fx.Commands.ConverseStream,
+      },
+    });
 
     const history: LLMMessage[] = [
       { role: 'user', content: 'q' },
@@ -156,7 +185,13 @@ describe('BedrockProvider — scenario (tool round-trip)', () => {
   it('drops an assistant turn with no text and no tool calls — Converse refuses a blank text block', async () => {
     const recorder = { commands: [] as unknown[] };
     const fx = makeFakeFixtures(baseResponse, recorder);
-    const p = bedrock({ _client: fx.client, _commands: fx.Commands });
+    const p = bedrock({
+      client: fx.client,
+      sdk: {
+        ConverseCommand: fx.Commands.Converse,
+        ConverseStreamCommand: fx.Commands.ConverseStream,
+      },
+    });
 
     const history: LLMMessage[] = [
       { role: 'user', content: 'a' },
@@ -181,7 +216,13 @@ describe('BedrockProvider — scenario (tool round-trip)', () => {
 describe('BedrockProvider — integration (stream)', () => {
   it('yields per-character text deltas then a terminal chunk with usage', async () => {
     const fx = makeFakeFixtures(baseResponse);
-    const p = bedrock({ _client: fx.client, _commands: fx.Commands });
+    const p = bedrock({
+      client: fx.client,
+      sdk: {
+        ConverseCommand: fx.Commands.Converse,
+        ConverseStreamCommand: fx.Commands.ConverseStream,
+      },
+    });
     const chunks: { content: string; done: boolean }[] = [];
     let final: { usage: { input: number; output: number }; stopReason: string } | undefined;
     for await (const c of p.stream!(baseRequest)) {
@@ -201,7 +242,13 @@ describe('BedrockProvider — property', () => {
   it('systemPrompt always lives in `system` field, never in messages', async () => {
     const recorder = { commands: [] as unknown[] };
     const fx = makeFakeFixtures(baseResponse, recorder);
-    const p = bedrock({ _client: fx.client, _commands: fx.Commands });
+    const p = bedrock({
+      client: fx.client,
+      sdk: {
+        ConverseCommand: fx.Commands.Converse,
+        ConverseStreamCommand: fx.Commands.ConverseStream,
+      },
+    });
     await p.complete({ ...baseRequest, systemPrompt: 'You are concise.' });
     const cmd = recorder.commands[0] as {
       input: { system?: Array<{ text: string }>; messages: Array<{ role: string }> };
@@ -213,7 +260,13 @@ describe('BedrockProvider — property', () => {
   it('toolCalls.args round-trip preserves nested structure exactly', async () => {
     const recorder = { commands: [] as unknown[] };
     const fx = makeFakeFixtures(baseResponse, recorder);
-    const p = bedrock({ _client: fx.client, _commands: fx.Commands });
+    const p = bedrock({
+      client: fx.client,
+      sdk: {
+        ConverseCommand: fx.Commands.Converse,
+        ConverseStreamCommand: fx.Commands.ConverseStream,
+      },
+    });
     const args = { nested: { deep: [1, { k: 'v' }] }, str: 'x' };
     await p.complete({
       ...baseRequest,
@@ -251,8 +304,11 @@ describe('BedrockProvider — security', () => {
       ConverseStream: class {
         constructor(public input: unknown) {}
       },
-    } as never;
-    const p = bedrock({ _client: broken as never, _commands: Commands });
+    };
+    const p = bedrock({
+      client: broken as never,
+      sdk: { ConverseCommand: Commands.Converse, ConverseStreamCommand: Commands.ConverseStream },
+    });
     let caught: Error | undefined;
     try {
       await p.complete(baseRequest);
@@ -267,7 +323,13 @@ describe('BedrockProvider — security', () => {
   it('content_filtered stop reason normalizes to content_filter', async () => {
     const filtered: FakeResponse = { ...baseResponse, stopReason: 'content_filtered' };
     const fx = makeFakeFixtures(filtered);
-    const p = bedrock({ _client: fx.client, _commands: fx.Commands });
+    const p = bedrock({
+      client: fx.client,
+      sdk: {
+        ConverseCommand: fx.Commands.Converse,
+        ConverseStreamCommand: fx.Commands.ConverseStream,
+      },
+    });
     const res = await p.complete(baseRequest);
     expect(res.stopReason).toBe('content_filter');
   });
@@ -283,7 +345,13 @@ describe('BedrockProvider — performance', () => {
       // Same claim as the other adapters: per-call cost is flat, so ten times
       // the calls costs ten times the work and nothing accumulates.
       const fx = makeFakeFixtures(baseResponse);
-      const p = bedrock({ _client: fx.client, _commands: fx.Commands });
+      const p = bedrock({
+        client: fx.client,
+        sdk: {
+          ConverseCommand: fx.Commands.Converse,
+          ConverseStreamCommand: fx.Commands.ConverseStream,
+        },
+      });
       const callTimes = async (n: number): Promise<void> => {
         for (let i = 0; i < n; i++) await p.complete(baseRequest);
       };
@@ -308,7 +376,13 @@ describe('BedrockProvider — ROI (any Bedrock-hosted model)', () => {
   ])('passes model id "%s" through unchanged', async (modelId) => {
     const recorder = { commands: [] as unknown[] };
     const fx = makeFakeFixtures(baseResponse, recorder);
-    const p = bedrock({ _client: fx.client, _commands: fx.Commands });
+    const p = bedrock({
+      client: fx.client,
+      sdk: {
+        ConverseCommand: fx.Commands.Converse,
+        ConverseStreamCommand: fx.Commands.ConverseStream,
+      },
+    });
     await p.complete({ ...baseRequest, model: modelId });
     expect((recorder.commands[0] as { input: { modelId: string } }).input.modelId).toBe(modelId);
   });
