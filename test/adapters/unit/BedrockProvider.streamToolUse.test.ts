@@ -10,7 +10,7 @@
  * correct.
  *
  * These tests drive the exact ConverseStream event lists AWS emits through
- * an injected fake `_client` + `_commands` — zero AWS credentials, zero
+ * an injected public `client` + `sdk` — zero AWS credentials, zero
  * network. Test types (Convention 3): unit / scenario / integration /
  * property / security / performance / ROI.
  */
@@ -101,7 +101,13 @@ const metadata = (inputTokens: number, outputTokens: number): BedrockStreamEvent
 
 function provider(events: readonly BedrockStreamEvent[], nonStream?: FakeResponse): LLMProvider {
   const fx = makeStreamFixtures(events, nonStream);
-  return bedrock({ _client: fx.client, _commands: fx.Commands });
+  return bedrock({
+    client: fx.client,
+    sdk: {
+      ConverseCommand: fx.Commands.Converse,
+      ConverseStreamCommand: fx.Commands.ConverseStream,
+    },
+  });
 }
 
 async function collect(p: LLMProvider, req: LLMRequest = baseRequest): Promise<LLMChunk[]> {

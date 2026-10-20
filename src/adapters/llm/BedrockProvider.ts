@@ -61,7 +61,8 @@ import {
 
 // ─── Bedrock Converse SDK shape (duck-typed) ───────────────────────
 
-interface BedrockClient {
+/** Prebuilt Converse transport. Its configuration and credentials remain host-owned. */
+export interface BedrockClient {
   send(command: unknown, options?: BedrockSendOptions): Promise<unknown>;
 }
 
@@ -182,39 +183,32 @@ export interface BedrockProviderOptions {
   readonly defaultModel?: string;
   /** Default max tokens when not in the request. Default 4096. */
   readonly defaultMaxTokens?: number;
-  /** @internal Pre-built client for testing. */
-  readonly _client?: BedrockClient;
   /**
-   * @internal Test override for the SDK's command constructors. Real
-   * use goes through the dynamic `require('@aws-sdk/client-bedrock-runtime')`.
+   * Prebuilt SDK client. Region, endpoint, credentials and lifecycle stay yours.
+   * Commands still come from `sdk`, or the normal optional peer when omitted.
    */
-  readonly _commands?: {
-    readonly Converse: new (input: BedrockConverseCommand) => unknown;
-    readonly ConverseStream: new (input: BedrockConverseCommand) => unknown;
-  };
+  readonly client?: BedrockClient;
   /**
-   * @internal Test injection (9.4.0) — the AWS SDK MODULE, keyed by the
-   * constructor names the package really exports.
-   *
-   * `_commands` above is keyed `Converse` / `ConverseStream`, which is
-   * convenient and hides the one fact worth pinning: which exported command
-   * this adapter reaches for. Two adapters in this package have shipped
-   * dispatching operations that do not exist, so the shared pin
-   * (test/adapters/aws/) drives every AWS adapter through an `_sdk` double and
-   * asserts the names. Takes precedence over `_commands` when both are given.
+   * Statically imported `@aws-sdk/client-bedrock-runtime` module, for bundled
+   * hosts or an SDK version you own. Supplying it bypasses the default loader.
+   * Named command constructors are required; BedrockRuntimeClient is needed
+   * only when `client` is absent. Exported from `agentfootprint/providers`.
    */
-  readonly _sdk?: BedrockConverseSdkModule;
+  readonly sdk?: BedrockConverseSdkModule;
 }
 
 /**
  * The slice of `@aws-sdk/client-bedrock-runtime` this provider touches, named
  * as the package names it. (The embedder door declares its own slice for
  * `InvokeModel` — same package, different operation.)
+ * Command inputs are SDK-owned: `never` accepts their narrower constructor
+ * signatures without importing optional peer types. Only this adapter supplies
+ * its wire input at the private construction boundary, as AgentCoreStore does.
  */
 export interface BedrockConverseSdkModule {
   readonly BedrockRuntimeClient?: new (config: { region?: string }) => BedrockClient;
-  readonly ConverseCommand?: new (input: BedrockConverseCommand) => unknown;
-  readonly ConverseStreamCommand?: new (input: BedrockConverseCommand) => unknown;
+  readonly ConverseCommand?: new (input: never) => unknown;
+  readonly ConverseStreamCommand?: new (input: never) => unknown;
 }
 
 /**
@@ -411,11 +405,17 @@ function resolveClient(options: BedrockProviderOptions): {
     ConverseStream: new (input: BedrockConverseCommand) => unknown;
   };
 } {
+  for (const name of ['_sdk', '_client', '_commands'] as const) {
+    if (name in options) {
+      throw new Error(
+        `BedrockProvider: ${name} was removed. Use sdk and client; ` +
+          'sdk supplies ConverseCommand and ConverseStreamCommand, with no separate command map.',
+      );
+    }
+  }
   let mod: BedrockConverseSdkModule;
-  if (options._sdk) {
-    mod = options._sdk;
-  } else if (options._client && options._commands) {
-    return { client: options._client, Commands: options._commands };
+  if (options.sdk !== undefined) {
+    mod = options.sdk;
   } else {
     try {
       mod = lazyRequire<BedrockConverseSdkModule>('@aws-sdk/client-bedrock-runtime');
@@ -423,7 +423,8 @@ function resolveClient(options: BedrockProviderOptions): {
       throw new Error(
         'BedrockProvider requires `@aws-sdk/client-bedrock-runtime`.\n' +
           '  Install:  npm install @aws-sdk/client-bedrock-runtime\n' +
-          '  Or pass `_client` + `_commands` for test injection.',
+          '  Bundled host: import the SDK yourself and pass it as sdk.\n' +
+          '  A prebuilt client uses client; command constructors still come from sdk or the peer.',
       );
     }
   }
@@ -431,15 +432,15 @@ function resolveClient(options: BedrockProviderOptions): {
   // `ConverseStream` are the two operations this provider has; an SDK missing
   // either is a different problem to an SDK that is not installed.
   for (const name of ['ConverseCommand', 'ConverseStreamCommand'] as const) {
-    if (typeof mod[name] !== 'function') {
+    if (!mod || typeof mod[name] !== 'function') {
       throw new Error(
         `BedrockProvider: \`@aws-sdk/client-bedrock-runtime\` is missing ${name}. ` +
-          'Upgrade the SDK, or pass `_client` + `_commands` with your own mapping.',
+          'Upgrade the SDK, or pass a module with these named constructors as sdk.',
       );
     }
   }
   const client =
-    options._client ??
+    options.client ??
     (() => {
       if (typeof mod.BedrockRuntimeClient !== 'function') {
         throw new Error(
@@ -451,10 +452,12 @@ function resolveClient(options: BedrockProviderOptions): {
     })();
   return {
     client,
-    // Both checked by name directly above.
-    /* eslint-disable @typescript-eslint/no-non-null-assertion */
-    Commands: { Converse: mod.ConverseCommand!, ConverseStream: mod.ConverseStreamCommand! },
-    /* eslint-enable @typescript-eslint/no-non-null-assertion */
+    // Both checked by name above. The SDK owns its input types; this private
+    // boundary supplies only the Converse wire shape built by this adapter.
+    Commands: {
+      Converse: mod.ConverseCommand as new (input: BedrockConverseCommand) => unknown,
+      ConverseStream: mod.ConverseStreamCommand as new (input: BedrockConverseCommand) => unknown,
+    },
   };
 }
 

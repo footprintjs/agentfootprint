@@ -114,6 +114,8 @@ export {
   bedrock,
   BedrockProvider,
   type BedrockProviderOptions,
+  type BedrockClient,
+  type BedrockConverseSdkModule,
 } from './adapters/llm/BedrockProvider.js';
 
 export {

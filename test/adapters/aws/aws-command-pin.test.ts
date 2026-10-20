@@ -501,7 +501,7 @@ describe('AWS adapters dispatch exactly the commands they are pinned to', () => 
         })(),
       },
     });
-    const provider = bedrock({ region: 'us-east-1', _sdk: sdk.module });
+    const provider = bedrock({ region: 'us-east-1', sdk: sdk.module });
     const request = { model: 'bedrock', messages: [{ role: 'user' as const, content: 'hey' }] };
     await provider.complete(request);
     for await (const _chunk of provider.stream!(request)) {

@@ -103,8 +103,8 @@ describe('requested caching without a matching capability', () => {
       constructor(readonly input: unknown) {}
     }
     const leaf = bedrock({
-      _commands: { Converse: Command, ConverseStream: Command },
-      _client: {
+      sdk: { ConverseCommand: Command, ConverseStreamCommand: Command },
+      client: {
         send: async () => ({
           output: { message: { content: [{ text: 'ok' }] } },
           usage: { inputTokens: 1, outputTokens: 1 },

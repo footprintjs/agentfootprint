@@ -151,9 +151,13 @@ describe('Bedrock — forced tool choice on the wire', () => {
   it('sends toolConfig.toolChoice = { tool: { name } }', async () => {
     const recorder = { input: [] as unknown[] };
     const fake = fakeBedrock(recorder);
-    await bedrock({ _client: fake.client as never, _commands: fake.Commands as never }).complete(
-      FORCED,
-    );
+    await bedrock({
+      client: fake.client as never,
+      sdk: {
+        ConverseCommand: fake.Commands.Converse,
+        ConverseStreamCommand: fake.Commands.ConverseStream,
+      },
+    }).complete(FORCED);
     expect((recorder.input[0] as { toolConfig: unknown }).toolConfig).toMatchObject({
       toolChoice: { tool: { name: 'respond_with_schema' } },
     });
@@ -162,8 +166,13 @@ describe('Bedrock — forced tool choice on the wire', () => {
   it('declares the capability', () => {
     const fake = fakeBedrock({ input: [] });
     expect(
-      bedrock({ _client: fake.client as never, _commands: fake.Commands as never })
-        .carriesForcedToolChoice,
+      bedrock({
+        client: fake.client as never,
+        sdk: {
+          ConverseCommand: fake.Commands.Converse,
+          ConverseStreamCommand: fake.Commands.ConverseStream,
+        },
+      }).carriesForcedToolChoice,
     ).toBe(true);
   });
 });

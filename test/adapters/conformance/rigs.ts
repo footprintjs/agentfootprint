@@ -287,7 +287,13 @@ function bedrockRig(build: Build, options?: RigOptions): AbortRig {
       });
     },
   };
-  return rigOf(build({ _client: client, _commands: { Converse, ConverseStream } } as never), s);
+  return rigOf(
+    build({
+      client: client,
+      sdk: { ConverseCommand: Converse, ConverseStreamCommand: ConverseStream },
+    } as never),
+    s,
+  );
 }
 
 function geminiRig(build: Build, options?: RigOptions): AbortRig {

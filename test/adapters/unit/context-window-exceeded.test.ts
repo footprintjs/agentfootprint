@@ -302,8 +302,8 @@ describe('adapters translate their own vendor', () => {
     };
     const provider = bedrock({
       region: 'us-east-1',
-      _client: client as never,
-      _commands: { Converse, ConverseStream } as never,
+      client: client as never,
+      sdk: { ConverseCommand: Converse, ConverseStreamCommand: ConverseStream },
     });
 
     await expect(provider.complete(REQUEST)).rejects.toMatchObject({

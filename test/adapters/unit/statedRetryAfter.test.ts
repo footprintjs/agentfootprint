@@ -108,12 +108,12 @@ class Cmd {
 }
 const failingBedrock = (err: Error) =>
   bedrock({
-    _client: {
+    client: {
       send: async () => {
         throw err;
       },
     } as never,
-    _commands: { Converse: Cmd, ConverseStream: Cmd } as never,
+    sdk: { ConverseCommand: Cmd, ConverseStreamCommand: Cmd },
   });
 
 describe('the adapters declare retryAfterMs on the errors they raise', () => {
