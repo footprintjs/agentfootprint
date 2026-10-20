@@ -181,6 +181,8 @@
           }
         ],
         "finalContent": "",
+        "findingsContextBytes": 16384,
+        "findingsLayout": "late-v1",
         "findingsServe": "ledger-and-facts",
         "history": [
           {
@@ -337,6 +339,14 @@
           "verb": "set"
         },
         {
+          "path": "findingsLayout",
+          "verb": "set"
+        },
+        {
+          "path": "findingsContextBytes",
+          "verb": "set"
+        },
+        {
           "path": "findingsServe",
           "verb": "set"
         },
@@ -403,11 +413,11 @@
         },
         "activeInjections": [
           {
-            "cache": "never",
+            "cache": "always",
             "flavor": "instructions",
             "id": "findings-ledger",
             "inject": {
-              "systemPrompt": "Findings v1. Tool schemas carry an optional `_findings` argument; declare it on your tool calls.\n`_findings.basis` on each call: 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking; add `expect` ('low' | 'medium' | 'high') for how useful you expect it to be.\nBefore an exploratory call, add `proposition` (what the call tests) and `predicts` (what the result should show if it holds) — optional, one line each.\nOn your next tool call — or, when you answer in JSON, as a top-level `_findings.previous` — state the standing of each previous tool result by its tool_result id:\n- 'fact' with the assertions you stand on (subject kind and id, predicate, value);\n- 'open' with what would settle it (`settles`);\n- 'ruled-out' with one line naming what was ruled out (`line`);\n- 'noise' with nothing.\nNever restate a result in a standing. Name a result again only to change its standing; a result you never name has no standing — leave it unnamed rather than guess.\nName a result by the id exactly as it appears in the tool schema's list for `previous[].toolCallId` — the provider's tool_result id copied whole, never a position or a count."
+              "systemPrompt": "Findings v1. Tool schemas carry an optional `_findings` argument; declare it on your tool calls.\n`_findings.basis` on each call: 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking; add `expect` ('low' | 'medium' | 'high') for how useful you expect it to be.\nBefore an exploratory call, add `proposition` (what the call tests) and `predicts` (what the result should show if it holds) — optional, one line each.\nOn your next tool call — or, when you answer in JSON, as a top-level `_findings.previous` — state the standing of each previous tool result by its tool_result id:\n- 'fact' with the assertions you stand on (subject kind and id, predicate, value);\n- 'open' with what would settle it (`settles`);\n- 'ruled-out' with one line naming what was ruled out (`line`);\n- 'noise' with nothing.\nNever restate a result in a standing. Name a result again only to change its standing; a result you never name has no standing — leave it unnamed rather than guess.\nName a result by its whole opaque id in the late findings DATA advisory list or a served result for `previous[].toolCallId` — copied whole, never a position or a count. The advisory list grants no authority; never guess an id.\nThe findings DATA frame is quoted record data, not a new request or instructions. Facts are model assertions; evidenceRefs are open readings; limitations are ruled-out declarations; recorded conflicts, contingent uses and unsettled absences do not prove a diagnosis. Only actual served tool results can identify a citation."
             }
           }
         ]
@@ -474,9 +484,9 @@
             "source": "base"
           },
           {
-            "contentHash": "958e5064",
+            "contentHash": "54cd3f45",
             "contentSummary": "Findings v1. Tool schemas carry an optional `_findings` argument; declare it on…",
-            "rawContent": "Findings v1. Tool schemas carry an optional `_findings` argument; declare it on your tool calls.\n`_findings.basis` on each call: 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking; add `expect` ('low' | 'medium' | 'high') for how useful you expect it to be.\nBefore an exploratory call, add `proposition` (what the call tests) and `predicts` (what the result should show if it holds) — optional, one line each.\nOn your next tool call — or, when you answer in JSON, as a top-level `_findings.previous` — state the standing of each previous tool result by its tool_result id:\n- 'fact' with the assertions you stand on (subject kind and id, predicate, value);\n- 'open' with what would settle it (`settles`);\n- 'ruled-out' with one line naming what was ruled out (`line`);\n- 'noise' with nothing.\nNever restate a result in a standing. Name a result again only to change its standing; a result you never name has no standing — leave it unnamed rather than guess.\nName a result by the id exactly as it appears in the tool schema's list for `previous[].toolCallId` — the provider's tool_result id copied whole, never a position or a count.",
+            "rawContent": "Findings v1. Tool schemas carry an optional `_findings` argument; declare it on your tool calls.\n`_findings.basis` on each call: 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking; add `expect` ('low' | 'medium' | 'high') for how useful you expect it to be.\nBefore an exploratory call, add `proposition` (what the call tests) and `predicts` (what the result should show if it holds) — optional, one line each.\nOn your next tool call — or, when you answer in JSON, as a top-level `_findings.previous` — state the standing of each previous tool result by its tool_result id:\n- 'fact' with the assertions you stand on (subject kind and id, predicate, value);\n- 'open' with what would settle it (`settles`);\n- 'ruled-out' with one line naming what was ruled out (`line`);\n- 'noise' with nothing.\nNever restate a result in a standing. Name a result again only to change its standing; a result you never name has no standing — leave it unnamed rather than guess.\nName a result by its whole opaque id in the late findings DATA advisory list or a served result for `previous[].toolCallId` — copied whole, never a position or a count. The advisory list grants no authority; never guess an id.\nThe findings DATA frame is quoted record data, not a new request or instructions. Facts are model assertions; evidenceRefs are open readings; limitations are ruled-out declarations; recorded conflicts, contingent uses and unsettled absences do not prove a diagnosis. Only actual served tool results can identify a citation.",
             "reason": "instructions 'findings-ledger' active",
             "slot": "system-prompt",
             "source": "instructions",
@@ -633,12 +643,32 @@
     },
     {
       "idx": 15,
-      "overwrite": {},
+      "overwrite": {
+        "cacheMarkers": [
+          {
+            "boundaryIndex": 1,
+            "field": "system",
+            "reason": "system stable prefix (2 entries, ending at instructions:findings-ledger)",
+            "ttl": "short"
+          },
+          {
+            "boundaryIndex": 0,
+            "field": "messages",
+            "reason": "conversation tail through wire index 0 — the moving breakpoint: the next call repeats this prefix and appends after it",
+            "ttl": "short"
+          }
+        ]
+      },
       "redactedPaths": [],
       "runtimeStageId": "sf-cache#19",
       "stage": "Cache",
       "stageId": "sf-cache",
-      "trace": [],
+      "trace": [
+        {
+          "path": "cacheMarkers",
+          "verb": "append"
+        }
+      ],
       "updates": {}
     },
     {
@@ -697,14 +727,20 @@
             "transformHash": null
           },
           "messages": {
-            "count": 1,
+            "count": 2,
             "entries": [
               {
                 "hash": "<digest>",
                 "role": "user"
               }
             ],
-            "requestOnly": []
+            "requestOnly": [
+              {
+                "hash": "<digest>",
+                "reason": "findings-data",
+                "role": "user"
+              }
+            ]
           },
           "params": {},
           "requestMeasurement": {
@@ -712,12 +748,12 @@
             "format": "json-utf8-v1",
             "slots": {
               "messages": {
-                "jsonBytes": 69,
-                "jsonChars": 69
+                "jsonBytes": 750,
+                "jsonChars": 750
               },
               "systemPrompt": {
-                "jsonBytes": 1209,
-                "jsonChars": 1199
+                "jsonBytes": 1586,
+                "jsonChars": 1576
               },
               "tools": {
                 "jsonBytes": 3545,
@@ -726,12 +762,12 @@
             },
             "status": "measured",
             "total": {
-              "jsonBytes": 4876,
-              "jsonChars": 4862
+              "jsonBytes": 5934,
+              "jsonChars": 5920
             }
           },
           "system": {
-            "chars": 1186,
+            "chars": 1562,
             "hash": "<digest>",
             "pieces": [
               {
@@ -1152,178 +1188,7 @@
     },
     {
       "idx": 33,
-      "overwrite": {
-        "dynamicToolSchemas": [
-          {
-            "description": "Error lines for one service over a look-back period.",
-            "inputSchema": {
-              "properties": {
-                "_findings": {
-                  "description": "Findings v1 (reserved by the agent runtime). basis: why you make the call — 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking. expect: how useful you expect the result to be. proposition and predicts (optional, one line each): what the call tests, and what the result should show if that holds. previous: the standing of each earlier tool result, by its tool_result id — 'fact' with the assertions you stand on (subject kind and id, predicate, value), 'open' with what would settle it, 'ruled-out' with one line naming what was ruled out, 'noise' with nothing. On the record a fact's assertions are asserted, an open or ruled-out result's are quoted, and noise carries none.",
-                  "properties": {
-                    "basis": {
-                      "description": "'direct': you expect this result to answer what you are after; 'exploratory': you are looking.",
-                      "enum": [
-                        "direct",
-                        "exploratory"
-                      ],
-                      "type": "string"
-                    },
-                    "expect": {
-                      "description": "How useful you expect the result to be.",
-                      "enum": [
-                        "low",
-                        "medium",
-                        "high"
-                      ],
-                      "type": "string"
-                    },
-                    "from": {
-                      "description": "Where each argument value the call sends came from, one entry per value, recorded with the library's check of it; a value with no entry has no declared source on the record.",
-                      "items": {
-                        "properties": {
-                          "argument": {
-                            "type": "string"
-                          },
-                          "id": {
-                            "type": "string"
-                          },
-                          "quote": {
-                            "description": "Copied exactly from the person's messages.",
-                            "type": "string"
-                          },
-                          "source": {
-                            "description": "'user': the person's words (quote); 'result': a tool result (id); 'turn': their answer when the run asked them; 'app': your instructions; 'assumed': your own choice.",
-                            "enum": [
-                              "user",
-                              "result",
-                              "turn",
-                              "app",
-                              "assumed"
-                            ],
-                            "type": "string"
-                          }
-                        },
-                        "required": [
-                          "argument",
-                          "source"
-                        ],
-                        "type": "object"
-                      },
-                      "type": "array"
-                    },
-                    "predicts": {
-                      "description": "Optional, with proposition: one line naming what the result should show if the proposition holds.",
-                      "type": "string"
-                    },
-                    "previous": {
-                      "description": "The standing of each earlier tool result, by its tool_result id. Name only what you can stand on; leave a result unnamed rather than guess.",
-                      "items": {
-                        "properties": {
-                          "assertions": {
-                            "description": "What you stand on (fact) or quote (open, ruled-out). Never restate the result.",
-                            "items": {
-                              "properties": {
-                                "predicate": {
-                                  "type": "string"
-                                },
-                                "subject": {
-                                  "properties": {
-                                    "id": {
-                                      "type": "string"
-                                    },
-                                    "kind": {
-                                      "type": "string"
-                                    }
-                                  },
-                                  "required": [
-                                    "kind",
-                                    "id"
-                                  ],
-                                  "type": "object"
-                                },
-                                "value": {}
-                              },
-                              "required": [
-                                "subject",
-                                "predicate",
-                                "value"
-                              ],
-                              "type": "object"
-                            },
-                            "type": "array"
-                          },
-                          "line": {
-                            "description": "ruled-out: one line naming what was ruled out.",
-                            "type": "string"
-                          },
-                          "settles": {
-                            "description": "open: what would settle it.",
-                            "type": "string"
-                          },
-                          "sought": {
-                            "description": "Whether the result was what the call was after.",
-                            "type": "boolean"
-                          },
-                          "standing": {
-                            "enum": [
-                              "fact",
-                              "open",
-                              "noise",
-                              "ruled-out"
-                            ],
-                            "type": "string"
-                          },
-                          "toolCallId": {
-                            "description": "The tool_result id being judged — one of the ids listed; a result not listed cannot be named here.",
-                            "enum": [
-                              "c1"
-                            ],
-                            "type": "string"
-                          }
-                        },
-                        "required": [
-                          "toolCallId",
-                          "standing"
-                        ],
-                        "type": "object"
-                      },
-                      "type": "array"
-                    },
-                    "proposition": {
-                      "description": "Optional, recommended when basis is 'exploratory': one line naming what the call tests.",
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "basis",
-                    "from"
-                  ],
-                  "type": "object"
-                },
-                "service": {
-                  "description": "Service name.",
-                  "type": "string"
-                },
-                "window": {
-                  "description": "Look-back period. The tool's rule asks the person for this value; leave it out unless the person gave it, and then quote their words for it in `_findings.from`.",
-                  "enum": [
-                    "1h",
-                    "2h",
-                    "24h"
-                  ],
-                  "type": "string"
-                }
-              },
-              "required": [
-                "service"
-              ],
-              "type": "object"
-            },
-            "name": "search_logs"
-          }
-        ]
-      },
+      "overwrite": {},
       "redactedPaths": [],
       "runtimeStageId": "sf-tools#46",
       "stage": "Tools",
@@ -1332,12 +1197,7 @@
         "milestone:slot",
         "milestone-label:Tools"
       ],
-      "trace": [
-        {
-          "path": "dynamicToolSchemas",
-          "verb": "set"
-        }
-      ],
+      "trace": [],
       "updates": {}
     },
     {
@@ -1364,12 +1224,32 @@
     },
     {
       "idx": 36,
-      "overwrite": {},
+      "overwrite": {
+        "cacheMarkers": [
+          {
+            "boundaryIndex": 1,
+            "field": "system",
+            "reason": "system stable prefix (2 entries, ending at instructions:findings-ledger)",
+            "ttl": "short"
+          },
+          {
+            "boundaryIndex": 2,
+            "field": "messages",
+            "reason": "conversation tail through wire index 2 — the moving breakpoint: the next call repeats this prefix and appends after it",
+            "ttl": "short"
+          }
+        ]
+      },
       "redactedPaths": [],
       "runtimeStageId": "sf-cache#49",
       "stage": "Cache",
       "stageId": "sf-cache",
-      "trace": [],
+      "trace": [
+        {
+          "path": "cacheMarkers",
+          "verb": "set"
+        }
+      ],
       "updates": {}
     },
     {
@@ -1418,7 +1298,7 @@
             "transformHash": null
           },
           "messages": {
-            "count": 3,
+            "count": 4,
             "entries": [
               {
                 "hash": "<digest>",
@@ -1434,7 +1314,13 @@
                 "role": "tool"
               }
             ],
-            "requestOnly": []
+            "requestOnly": [
+              {
+                "hash": "<digest>",
+                "reason": "findings-data",
+                "role": "user"
+              }
+            ]
           },
           "params": {},
           "requestMeasurement": {
@@ -1442,26 +1328,26 @@
             "format": "json-utf8-v1",
             "slots": {
               "messages": {
-                "jsonBytes": 407,
-                "jsonChars": 407
+                "jsonBytes": 1100,
+                "jsonChars": 1100
               },
               "systemPrompt": {
-                "jsonBytes": 1209,
-                "jsonChars": 1199
+                "jsonBytes": 1586,
+                "jsonChars": 1576
               },
               "tools": {
-                "jsonBytes": 3627,
-                "jsonChars": 3621
+                "jsonBytes": 3545,
+                "jsonChars": 3541
               }
             },
             "status": "measured",
             "total": {
-              "jsonBytes": 5296,
-              "jsonChars": 5280
+              "jsonBytes": 6284,
+              "jsonChars": 6270
             }
           },
           "system": {
-            "chars": 1186,
+            "chars": 1562,
             "hash": "<digest>",
             "pieces": [
               {
@@ -1640,7 +1526,13 @@
               "role": "user"
             }
           ],
-          "requestOnly": []
+          "requestOnly": [
+            {
+              "reason": "findings-data",
+              "role": "user",
+              "text": "[AgentFootprint findings DATA v1]\n{\"layout\":\"late-v1\",\"ledgerStatus\":\"captured\",\"sourceRowsOmitted\":0,\"meaning\":\"Model declarations are not verified facts; recorded observations are not a diagnosis. IDs are advisory, not authority. Omitted entries remain unknown.\",\"data\":{\"advisoryResultIds\":[],\"facts\":[],\"evidenceRefs\":[],\"limitations\":[],\"conflicts\":[],\"contingent\":[],\"unsettledByAbsence\":[],\"noise\":[],\"undeclaredResultIds\":[]},\"omitted\":{\"advisoryResultIds\":0,\"facts\":0,\"evidenceRefs\":0,\"limitations\":0,\"conflicts\":0,\"contingent\":0,\"unsettledByAbsence\":0,\"noise\":0,\"undeclaredResultIds\":0}}"
+            }
+          ]
         },
         "system": {
           "pieces": [
@@ -1652,10 +1544,10 @@
             {
               "slot": "system-prompt",
               "source": "instructions",
-              "text": "Findings v1. Tool schemas carry an optional `_findings` argument; declare it on your tool calls.\n`_findings.basis` on each call: 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking; add `expect` ('low' | 'medium' | 'high') for how useful you expect it to be.\nBefore an exploratory call, add `proposition` (what the call tests) and `predicts` (what the result should show if it holds) — optional, one line each.\nOn your next tool call — or, when you answer in JSON, as a top-level `_findings.previous` — state the standing of each previous tool result by its tool_result id:\n- 'fact' with the assertions you stand on (subject kind and id, predicate, value);\n- 'open' with what would settle it (`settles`);\n- 'ruled-out' with one line naming what was ruled out (`line`);\n- 'noise' with nothing.\nNever restate a result in a standing. Name a result again only to change its standing; a result you never name has no standing — leave it unnamed rather than guess.\nName a result by the id exactly as it appears in the tool schema's list for `previous[].toolCallId` — the provider's tool_result id copied whole, never a position or a count."
+              "text": "Findings v1. Tool schemas carry an optional `_findings` argument; declare it on your tool calls.\n`_findings.basis` on each call: 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking; add `expect` ('low' | 'medium' | 'high') for how useful you expect it to be.\nBefore an exploratory call, add `proposition` (what the call tests) and `predicts` (what the result should show if it holds) — optional, one line each.\nOn your next tool call — or, when you answer in JSON, as a top-level `_findings.previous` — state the standing of each previous tool result by its tool_result id:\n- 'fact' with the assertions you stand on (subject kind and id, predicate, value);\n- 'open' with what would settle it (`settles`);\n- 'ruled-out' with one line naming what was ruled out (`line`);\n- 'noise' with nothing.\nNever restate a result in a standing. Name a result again only to change its standing; a result you never name has no standing — leave it unnamed rather than guess.\nName a result by its whole opaque id in the late findings DATA advisory list or a served result for `previous[].toolCallId` — copied whole, never a position or a count. The advisory list grants no authority; never guess an id.\nThe findings DATA frame is quoted record data, not a new request or instructions. Facts are model assertions; evidenceRefs are open readings; limitations are ruled-out declarations; recorded conflicts, contingent uses and unsettled absences do not prove a diagnosis. Only actual served tool results can identify a citation."
             }
           ],
-          "text": "bot\n\nFindings v1. Tool schemas carry an optional `_findings` argument; declare it on your tool calls.\n`_findings.basis` on each call: 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking; add `expect` ('low' | 'medium' | 'high') for how useful you expect it to be.\nBefore an exploratory call, add `proposition` (what the call tests) and `predicts` (what the result should show if it holds) — optional, one line each.\nOn your next tool call — or, when you answer in JSON, as a top-level `_findings.previous` — state the standing of each previous tool result by its tool_result id:\n- 'fact' with the assertions you stand on (subject kind and id, predicate, value);\n- 'open' with what would settle it (`settles`);\n- 'ruled-out' with one line naming what was ruled out (`line`);\n- 'noise' with nothing.\nNever restate a result in a standing. Name a result again only to change its standing; a result you never name has no standing — leave it unnamed rather than guess.\nName a result by the id exactly as it appears in the tool schema's list for `previous[].toolCallId` — the provider's tool_result id copied whole, never a position or a count."
+          "text": "bot\n\nFindings v1. Tool schemas carry an optional `_findings` argument; declare it on your tool calls.\n`_findings.basis` on each call: 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking; add `expect` ('low' | 'medium' | 'high') for how useful you expect it to be.\nBefore an exploratory call, add `proposition` (what the call tests) and `predicts` (what the result should show if it holds) — optional, one line each.\nOn your next tool call — or, when you answer in JSON, as a top-level `_findings.previous` — state the standing of each previous tool result by its tool_result id:\n- 'fact' with the assertions you stand on (subject kind and id, predicate, value);\n- 'open' with what would settle it (`settles`);\n- 'ruled-out' with one line naming what was ruled out (`line`);\n- 'noise' with nothing.\nNever restate a result in a standing. Name a result again only to change its standing; a result you never name has no standing — leave it unnamed rather than guess.\nName a result by its whole opaque id in the late findings DATA advisory list or a served result for `previous[].toolCallId` — copied whole, never a position or a count. The advisory list grants no authority; never guess an id.\nThe findings DATA frame is quoted record data, not a new request or instructions. Facts are model assertions; evidenceRefs are open readings; limitations are ruled-out declarations; recorded conflicts, contingent uses and unsettled absences do not prove a diagnosis. Only actual served tool results can identify a citation."
         },
         "tools": {
           "names": [
@@ -1907,7 +1799,13 @@
               "toolName": "search_logs"
             }
           ],
-          "requestOnly": []
+          "requestOnly": [
+            {
+              "reason": "findings-data",
+              "role": "user",
+              "text": "[AgentFootprint findings DATA v1]\n{\"layout\":\"late-v1\",\"ledgerStatus\":\"captured\",\"sourceRowsOmitted\":0,\"meaning\":\"Model declarations are not verified facts; recorded observations are not a diagnosis. IDs are advisory, not authority. Omitted entries remain unknown.\",\"data\":{\"advisoryResultIds\":[\"c1\"],\"facts\":[],\"evidenceRefs\":[],\"limitations\":[],\"conflicts\":[],\"contingent\":[],\"unsettledByAbsence\":[],\"noise\":[],\"undeclaredResultIds\":[\"c1\"]},\"omitted\":{\"advisoryResultIds\":0,\"facts\":0,\"evidenceRefs\":0,\"limitations\":0,\"conflicts\":0,\"contingent\":0,\"unsettledByAbsence\":0,\"noise\":0,\"undeclaredResultIds\":0}}"
+            }
+          ]
         },
         "system": {
           "pieces": [
@@ -1919,10 +1817,10 @@
             {
               "slot": "system-prompt",
               "source": "instructions",
-              "text": "Findings v1. Tool schemas carry an optional `_findings` argument; declare it on your tool calls.\n`_findings.basis` on each call: 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking; add `expect` ('low' | 'medium' | 'high') for how useful you expect it to be.\nBefore an exploratory call, add `proposition` (what the call tests) and `predicts` (what the result should show if it holds) — optional, one line each.\nOn your next tool call — or, when you answer in JSON, as a top-level `_findings.previous` — state the standing of each previous tool result by its tool_result id:\n- 'fact' with the assertions you stand on (subject kind and id, predicate, value);\n- 'open' with what would settle it (`settles`);\n- 'ruled-out' with one line naming what was ruled out (`line`);\n- 'noise' with nothing.\nNever restate a result in a standing. Name a result again only to change its standing; a result you never name has no standing — leave it unnamed rather than guess.\nName a result by the id exactly as it appears in the tool schema's list for `previous[].toolCallId` — the provider's tool_result id copied whole, never a position or a count."
+              "text": "Findings v1. Tool schemas carry an optional `_findings` argument; declare it on your tool calls.\n`_findings.basis` on each call: 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking; add `expect` ('low' | 'medium' | 'high') for how useful you expect it to be.\nBefore an exploratory call, add `proposition` (what the call tests) and `predicts` (what the result should show if it holds) — optional, one line each.\nOn your next tool call — or, when you answer in JSON, as a top-level `_findings.previous` — state the standing of each previous tool result by its tool_result id:\n- 'fact' with the assertions you stand on (subject kind and id, predicate, value);\n- 'open' with what would settle it (`settles`);\n- 'ruled-out' with one line naming what was ruled out (`line`);\n- 'noise' with nothing.\nNever restate a result in a standing. Name a result again only to change its standing; a result you never name has no standing — leave it unnamed rather than guess.\nName a result by its whole opaque id in the late findings DATA advisory list or a served result for `previous[].toolCallId` — copied whole, never a position or a count. The advisory list grants no authority; never guess an id.\nThe findings DATA frame is quoted record data, not a new request or instructions. Facts are model assertions; evidenceRefs are open readings; limitations are ruled-out declarations; recorded conflicts, contingent uses and unsettled absences do not prove a diagnosis. Only actual served tool results can identify a citation."
             }
           ],
-          "text": "bot\n\nFindings v1. Tool schemas carry an optional `_findings` argument; declare it on your tool calls.\n`_findings.basis` on each call: 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking; add `expect` ('low' | 'medium' | 'high') for how useful you expect it to be.\nBefore an exploratory call, add `proposition` (what the call tests) and `predicts` (what the result should show if it holds) — optional, one line each.\nOn your next tool call — or, when you answer in JSON, as a top-level `_findings.previous` — state the standing of each previous tool result by its tool_result id:\n- 'fact' with the assertions you stand on (subject kind and id, predicate, value);\n- 'open' with what would settle it (`settles`);\n- 'ruled-out' with one line naming what was ruled out (`line`);\n- 'noise' with nothing.\nNever restate a result in a standing. Name a result again only to change its standing; a result you never name has no standing — leave it unnamed rather than guess.\nName a result by the id exactly as it appears in the tool schema's list for `previous[].toolCallId` — the provider's tool_result id copied whole, never a position or a count."
+          "text": "bot\n\nFindings v1. Tool schemas carry an optional `_findings` argument; declare it on your tool calls.\n`_findings.basis` on each call: 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking; add `expect` ('low' | 'medium' | 'high') for how useful you expect it to be.\nBefore an exploratory call, add `proposition` (what the call tests) and `predicts` (what the result should show if it holds) — optional, one line each.\nOn your next tool call — or, when you answer in JSON, as a top-level `_findings.previous` — state the standing of each previous tool result by its tool_result id:\n- 'fact' with the assertions you stand on (subject kind and id, predicate, value);\n- 'open' with what would settle it (`settles`);\n- 'ruled-out' with one line naming what was ruled out (`line`);\n- 'noise' with nothing.\nNever restate a result in a standing. Name a result again only to change its standing; a result you never name has no standing — leave it unnamed rather than guess.\nName a result by its whole opaque id in the late findings DATA advisory list or a served result for `previous[].toolCallId` — copied whole, never a position or a count. The advisory list grants no authority; never guess an id.\nThe findings DATA frame is quoted record data, not a new request or instructions. Facts are model assertions; evidenceRefs are open readings; limitations are ruled-out declarations; recorded conflicts, contingent uses and unsettled absences do not prove a diagnosis. Only actual served tool results can identify a citation."
         },
         "tools": {
           "names": [
@@ -2050,10 +1948,7 @@
                               "type": "string"
                             },
                             "toolCallId": {
-                              "description": "The tool_result id being judged — one of the ids listed; a result not listed cannot be named here.",
-                              "enum": [
-                                "c1"
-                              ],
+                              "description": "The tool_result id being judged.",
                               "type": "string"
                             }
                           },

@@ -1,3 +1,5 @@
+import { FINDINGS_DATA_FRAME_PREFIX } from '../../../lib/saidByPerson.js';
+import { FINDINGS_LAYOUT, findingsContext, findingsContextBytes } from '../findings/context.js';
 import { captureFindingsRequest, type FindingsRequest } from '../findings/admission.js';
 import { observeRequests } from '../../../provider-contract/requestObserver.js';
 /**
@@ -83,8 +85,6 @@ import {
 } from '../findings/reserved.js';
 import {
   collapseJudged,
-  findingsLedgerPiece,
-  servedToolCallIds,
   type FindingsAnswerAsk,
   type FindingsServeMode,
 } from '../findings/serve.js';
@@ -201,6 +201,7 @@ export interface CallLLMStageDeps {
    * is how the rebuild collapses the way the wire did.
    */
   readonly findingsServe?: FindingsServeMode;
+  readonly findingsContextBytes?: number;
   /**
    * The answer-turn ask (9.103.0) — `AgentOptions.findings.answerAsk`,
    * threaded under the same gate and ONLY when it is `'quote-facts'`; absent
@@ -471,7 +472,11 @@ export interface CallLLMStageDeps {
 function groundedTextOf(frame: readonly LLMMessage[], committed: readonly LLMMessage[]): string[] {
   const grounds: string[] = [];
   frame.forEach((message, i) => {
-    if (message.role === 'assistant') return;
+    if (
+      message.role === 'assistant' ||
+      (message.role === 'user' && message.content.startsWith(FINDINGS_DATA_FRAME_PREFIX))
+    )
+      return;
     const twin = committed[i];
     grounds.push(
       twin !== undefined && twin.role === 'tool' && twin.content === message.content
@@ -486,7 +491,7 @@ function groundedTextOf(frame: readonly LLMMessage[], committed: readonly LLMMes
 // reads: systemPrompt ← scope.systemPromptInjections, joined by `systemPrompt` below (the system-prompt slot's output)
 //        messages ← scope.history (`history`; `messages` is its wire-only collapse of judged tool results under `.findings()` — `collapseJudged`); tools ← scope.dynamicToolSchemas (`registeredToolSchemas`), EMPTIED to EMPTY_TOOL_SCHEMAS under scope.wrapUpAsked
 //        ontology piece ← scope.ontology (`ontologyPieceRecord`, under `deps.ontology` only), joined after the recovery piece
-//        findings piece ← scope.findingsLedger (`ledgerPiece`, under `deps.hasFindingsLedger` only), joined after the ontology piece
+//        findings DATA ← scope.findingsLedger (under `deps.hasFindingsLedger` only), appended after committed history
 //        brain ← deps.brainFor(nextSkillCursor ?? currentSkillId)
 // THIS is the wire, and it is assembled inside `buildCallLLMStage` — cite THAT, not this header,
 // when another file points at the assembly. The three slots feed it; they are not it. The staged-refs
@@ -597,23 +602,11 @@ export function buildCallLLMStage(
     // conversation the model reads and the receipt hashes what was sent.
     // Count, order, `toolCallId` and `toolName` are unchanged, so
     // `messages[i]` is still the message the cache marker's index names and
-    // the tool_use/tool_result pair stays wire-valid; when nothing collapses
-    // it IS `history`, the same instance. `scope.history` is never written:
-    // the window stage stays its only writer. The PIECE quotes the ledger's
-    // current standings under the context contract's own field meanings and
-    // names every served result no standing covers as undeclared — the ids
-    // come from the SAME list the rebuild derives them from, before or after
-    // the collapse (an id is never rewritten). The piece carries no per-call
-    // byte — it is a function of the ledger and those ids alone — because it
-    // joins the ONE system block the cache marker covers: a re-ask that
-    // serves the same ledger over the same ids reuses the cached prefix, and
-    // a call after the ledger moved does not (`findings/serve.ts` · "The cache"). An
-    // unarmed agent reads no key and serves the bytes it always did.
-    // Both read the COMMITTED conversation, then the wire is stripped
-    // (9.113.0): a message the batch settlement wrote is no result
-    // (`findings/offer.ts` · `isResultMessage`) and only its marker says so —
-    // the marker `stripFrameworkFields` takes off. Same ids, same order, same
-    // wire; `time-travel/servedView.ts` rebuilds it the same way.
+    // The tool_use/tool_result pair remains valid. Collapse changes only the
+    // wire copy, never committed history. Current declarations and advisory
+    // IDs are composed later as request-only DATA, outside the cached prefix.
+    // Both DATA and collapse read the committed twin, whose notDispatched
+    // marker distinguishes a settlement notice from an actual result.
     const ledger =
       deps.hasFindingsLedger === true
         ? (scope.findingsLedger as FindingsLedger | undefined)
@@ -623,14 +616,6 @@ export function buildCallLLMStage(
         ? collapseJudged(committed, ledger, deps.findingsServe ?? 'ledger-and-facts')
         : committed;
     const messages = collapsed === committed ? history : stripFrameworkFields(collapsed);
-    const ledgerPiece =
-      deps.hasFindingsLedger === true
-        ? findingsLedgerPiece(
-            ledger,
-            servedToolCallIds(committed),
-            deps.findingsAnswerAsk ?? 'none',
-          )
-        : undefined;
     // ── the declared ontology, served (9.106.0) ──────────────────────────
     // ONE gated read of the run constant seed wrote; the piece is a pure
     // function of the spec and nothing else (no call number, no clock — the
@@ -671,13 +656,12 @@ export function buildCallLLMStage(
     // indexes every injection's rawContent), and the ledger quotes the
     // model's own words.
     const systemPieces =
-      recoveryPiece === undefined && ontologyPieceRecord === undefined && ledgerPiece === undefined
+      recoveryPiece === undefined && ontologyPieceRecord === undefined
         ? systemPromptInjections
         : [
             ...systemPromptInjections,
             ...(recoveryPiece === undefined ? [] : [recoveryPiece]),
             ...(ontologyPieceRecord === undefined ? [] : [ontologyPieceRecord]),
-            ...(ledgerPiece === undefined ? [] : [ledgerPiece]),
           ];
     const systemPrompt = joinSystemPrompt(systemPieces);
 
@@ -768,6 +752,19 @@ export function buildCallLLMStage(
     if (conclusion !== undefined) {
       const line: LLMMessage = { role: 'user', content: conclusion };
       requestOnly.push({ message: line, reason: 'evidence-conclusion' });
+      wireMessages = [...wireMessages, line];
+    }
+
+    if (deps.hasFindingsLedger === true) {
+      // A resumed leg can have a different host configuration from its checkpoint.
+      // Record the layout actually used by THIS call; replay reads its commit.
+      scope.findingsLayout = FINDINGS_LAYOUT;
+      scope.findingsContextBytes = findingsContextBytes(deps.findingsContextBytes);
+      const line: LLMMessage = {
+        role: 'user',
+        content: findingsContext(committed, ledger, deps.findingsContextBytes),
+      };
+      requestOnly.push({ message: line, reason: 'findings-data' });
       wireMessages = [...wireMessages, line];
     }
 
@@ -1406,7 +1403,7 @@ export function buildCallLLMStage(
               // so a value that exists only there must not excuse an
               // argument. Either request-only piece narrows the credited
               // system text to the trusted injections.
-              ...(recoveryPiece === undefined && ledgerPiece === undefined
+              ...(recoveryPiece === undefined
                 ? llmRequest.systemPrompt === undefined
                   ? []
                   : [llmRequest.systemPrompt]

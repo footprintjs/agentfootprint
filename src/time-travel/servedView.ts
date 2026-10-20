@@ -1,3 +1,8 @@
+import {
+  FINDINGS_LAYOUT,
+  findingsContext,
+  findingsContextBytes,
+} from '../core/agent/findings/context.js';
 /**
  * servedView — the request an epoch was SERVED, rebuilt from what was
  * committed, plus an honest list of what the log cannot rebuild.
@@ -238,6 +243,7 @@ export interface ServedRequestOnly {
 
 /** The kinds of thing this view cannot prove. */
 export type ServedGapKind =
+  | 'findings-layout'
   | 'cache-transform'
   | 'thinking-replay'
   | 'forced-tool-schema'
@@ -671,6 +677,16 @@ export const SERVED_GAPS: Readonly<Record<ServedGapKind, Omit<ServedGap, 'gap'>>
       'Nothing on this view has been checked against what went out. Every field below is ' +
       'missing as a whole, and an absence among them says nothing about the call — not even ' +
       'that a dial was left unset.',
+  }),
+  'findings-layout': Object.freeze({
+    fields: Object.freeze([
+      'system.pieces',
+      'system.chars',
+      'messages.requestOnly',
+      'messages.count',
+      'messages.entries',
+    ]),
+    why: 'The findings context is unproven here. Its absence does not show that none was served.',
   }),
   'no-run-log': Object.freeze({
     // MECHANISM (not printed). Raised on `!location.hasRunLog` — a SUBTREE
@@ -1147,11 +1163,28 @@ function viewOf(location: EpochLocation, served: boolean): ServedView {
   // out. No `.findings()` ⇒ no key ⇒ all three are no-ops and the rebuild is
   // the bytes it always was; no new gap kind, `withheld` untouched.
   const ledger = readAtCall(location, 'findingsLedger', served) as FindingsLedger | undefined;
-  const findings = findingsLedgerPiece(
-    ledger,
-    servedToolCallIds(committed),
-    answerAskOf(readRunConstant(location, 'findingsAnswerAsk', served)),
-  );
+  const recordedLayout = readAfterCall(location, 'findingsLayout');
+  const recordedBound = readAfterCall(location, 'findingsContextBytes');
+  let layoutUnknown = recordedLayout !== undefined && recordedLayout !== FINDINGS_LAYOUT;
+  let lateLayout = recordedLayout === FINDINGS_LAYOUT;
+  if (lateLayout) {
+    try {
+      if (typeof recordedBound !== 'number') throw new Error('Missing bound');
+      findingsContextBytes(recordedBound);
+    } catch {
+      lateLayout = false;
+      layoutUnknown = true;
+    }
+  }
+  // No discriminator means the original saved layout, never the installed version.
+  const findings =
+    lateLayout || layoutUnknown
+      ? undefined
+      : findingsLedgerPiece(
+          ledger,
+          servedToolCallIds(committed),
+          answerAskOf(readRunConstant(location, 'findingsAnswerAsk', served)),
+        );
   const collapsed = collapseJudged(
     committed,
     ledger,
@@ -1262,10 +1295,27 @@ function viewOf(location: EpochLocation, served: boolean): ServedView {
     requestOnly.push({ role: 'user', text: conclusion, reason: 'evidence-conclusion' });
   }
 
+  if (lateLayout) {
+    try {
+      requestOnly.push({
+        role: 'user',
+        text: findingsContext(
+          committed,
+          foldAtCall(location, 'findingsLedger') as FindingsLedger | undefined,
+          recordedBound as number,
+        ),
+        reason: 'findings-data',
+      });
+    } catch {
+      layoutUnknown = true;
+    }
+  }
+
   // ── what this view cannot prove ────────────────────────────────────────
   // Order is deliberate: the two that make the WHOLE view suspect come first,
   // so a renderer that shows one gap shows the one that matters most.
   const gaps: ServedGap[] = [];
+  if (layoutUnknown) gaps.push(gapOf('findings-layout'));
   // BOTH bases, because there are two folds above and either can be baseless.
   // Under 'dynamic-grouped' the epoch's pieces come from the turn's own inner
   // log (`location.basis`) and every run constant — the forced tool's name, the

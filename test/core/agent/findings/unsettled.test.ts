@@ -1,3 +1,4 @@
+import { findingsFrame } from '../../../helpers/findingsData.js';
 /**
  * Integration — a ruled-out standing whose only witness is an absence gets a
  * row BESIDE it (9.113.0); the model's own row is never rewritten.
@@ -458,17 +459,19 @@ describe('unsettled by absence — F3: a ruled-out standing whose only witness i
     const r = await run('dynamic', RULED_OUT_AT_DISPATCH('nas-cluster-06'), armed);
     // Filed on call 2, so call 2 was served before it existed; call 3 reads it.
     expect(r.wire[1]!.systemPrompt).not.toContain('unsettled by absence (read off the record):');
-    const system = r.wire[2]!.systemPrompt!;
-    expect(system).toContain(`\n${F3_RULED_OUT_LINE}\n`);
-    expect(system).toContain(`\n\n${F3_SECTION}\n\n`);
-    // The section follows the buckets and precedes the count lines.
-    const at = system.indexOf('\nunsettled by absence (read off the record):\n');
-    expect(at).toBeGreaterThan(system.indexOf('limitations (declared by the model):'));
-    expect(at).toBeLessThan(system.indexOf('undeclared: 1 result'));
+    const frame = findingsFrame(r.wire[2]!.messages);
+    expect(frame.data.limitations).toMatchObject([
+      {
+        toolCallId: 'c1',
+        line: 'the HBA path is not what is slow',
+        proposition: 'nas-cluster-06 is a hypervisor host whose HBA path is slow',
+      },
+    ]);
+    const { kind: _kind, iteration: _iteration, ...row } = F3_ROW;
+    expect(frame.data.unsettledByAbsence).toEqual([row]);
     const view = servedAt(r.snapshot, 3)!;
-    expect(view.system.text).toBe(system);
-    const piece = view.system.pieces.find((p) => p.source === 'findings')!;
-    expect(piece.text).toContain(F3_SECTION);
+    expect(view.system.text).toBe(r.wire[2]!.systemPrompt);
+    expect(findingsFrame(view.messages.requestOnly).text).toBe(frame.text);
   });
 
   it('both chart shapes serve byte-equal system text at every epoch, and the receipt law holds', async () => {
@@ -609,13 +612,14 @@ describe('unsettled by absence — the dispatch door says whether it was an abse
       }),
     ).build();
     await next.run({ message: 'and the cluster?', continueFrom: restored });
-    expect(wire[0]!.systemPrompt).toContain(
-      [
-        'unsettled by absence (read off the record):',
-        'ruled out (host_hbas, tool:c1) on an absence',
-        'tool:c1 not_checked: whether nas-cluster-10 is a hypervisor host at all — HBA rows only',
-      ].join('\n'),
-    );
+    expect(findingsFrame(wire[0]!.messages).data.unsettledByAbsence).toEqual([
+      {
+        toolCallId: 'c1',
+        notChecked: [
+          { what: 'whether nas-cluster-10 is a hypervisor host at all', why: 'HBA rows only' },
+        ],
+      },
+    ]);
   });
 
   it('a ruling-out filed on an EARLIER turn’s result files nothing — its door rows are that turn’s record, never guessed from the wire', async () => {
@@ -777,14 +781,8 @@ describe('unsettled by absence — the model must have been SERVED the absence: 
       expect(atDispatch.ledger[2]).toEqual(SCRUBBED_ROW);
       expect(atAnswer.ledger[2]).toEqual(SCRUBBED_ROW);
       // Call 3 is served the section — the served envelope's parts only.
-      expect(atDispatch.wire[2]!.systemPrompt).toContain(
-        [
-          'unsettled by absence (read off the record):',
-          'ruled out (host_hbas, tool:c1) on an absence',
-          'tool:c1 cannot_cover: HBAs on hosts outside the collected inventory — the collector exports only the hosts it was pointed at',
-          'tool:c1 try_instead: Look nas-cluster-06 up in cluster_inventory; a storage cluster has no host HBAs.',
-        ].join('\n') + '\n\n',
-      );
+      const { kind: _kind, iteration: _iteration, ...row } = SCRUBBED_ROW;
+      expect(findingsFrame(atDispatch.wire[2]!.messages).data.unsettledByAbsence).toEqual([row]);
     });
 
     it(`${reactMode}: prose served in place of the envelope, a tool's own ceiling, a placed ticket — no absence was served, so nothing is filed`, async () => {
@@ -876,7 +874,8 @@ describe('unsettled by absence — the row survives the checkpoint and is served
       }),
     ).build();
     await next.run({ message: 'and the cluster?', continueFrom: restored });
-    expect(wire[0]!.systemPrompt).toContain(`\n\n${F3_SECTION}\n\n`);
+    const { kind: _kind, iteration: _iteration, ...row } = F3_ROW;
+    expect(findingsFrame(wire[0]!.messages).data.unsettledByAbsence).toEqual([row]);
   });
 });
 

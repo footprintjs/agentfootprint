@@ -83,6 +83,7 @@ import {
   LIBRARY_AUTHORED_PREFIXES,
   LIBRARY_NOTE_OPENING,
   STAGED_DATA_FRAME_PREFIX,
+  FINDINGS_DATA_FRAME_PREFIX,
 } from '../../src/lib/saidByPerson.js';
 import { timeLine } from '../../src/core/agent/arguments/serve.js';
 import { figuresConclusionLine } from '../../src/core/agent/evidence/figures.js';
@@ -238,6 +239,11 @@ const SITES: Readonly<Record<string, readonly Site[]>> = {
         'revision instruction, never to `scope.history`. Opens with LIBRARY_NOTE_OPENING (G17).',
       opening: LIBRARY_NOTE_OPENING,
     },
+    {
+      cls: 'never-in-history',
+      why: 'The bounded findings DATA packet: request-only model declarations, never human words or argument grounds.',
+      opening: FINDINGS_DATA_FRAME_PREFIX,
+    },
   ],
   'src/time-travel/servedView.ts': [
     {
@@ -259,6 +265,10 @@ const SITES: Readonly<Record<string, readonly Site[]>> = {
       why:
         "not a producer either: the REBUILD of the evidence gate's late line, read from the " +
         'committed `evidenceRecovery` carrier onto a `ServedView` — a reading of a finished run.',
+    },
+    {
+      cls: 'never-in-history',
+      why: 'Replay of the recorded findings DATA layout, never a conversation turn.',
     },
   ],
   'src/core/agent/stages/reliabilityExecution.ts': [
@@ -454,7 +464,7 @@ describe("every `role: 'user'` producer in src/ is classified", () => {
     // marker below instead.
     expect(framed.length + requestOnly.size).toBe(LIBRARY_AUTHORED_PREFIXES.length);
     for (const opening of requestOnly) expect(LIBRARY_AUTHORED_PREFIXES).toContain(opening);
-    expect(LIBRARY_AUTHORED_PREFIXES).toHaveLength(8);
+    expect(LIBRARY_AUTHORED_PREFIXES).toHaveLength(9);
   });
 
   it('the registry cannot be extended at runtime by a consumer', () => {
@@ -462,7 +472,7 @@ describe("every `role: 'user'` producer in src/ is classified", () => {
     // array every reader in this library holds.
     expect(Object.isFrozen(LIBRARY_AUTHORED_PREFIXES)).toBe(true);
     expect(() => (LIBRARY_AUTHORED_PREFIXES as string[]).push('[mine')).toThrow();
-    expect(LIBRARY_AUTHORED_PREFIXES).toHaveLength(8);
+    expect(LIBRARY_AUTHORED_PREFIXES).toHaveLength(9);
   });
 });
 

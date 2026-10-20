@@ -9,6 +9,12 @@
  * main verified every other value, including every commit log, is unchanged.
  * The assertions and volatile-field normalizer below remain unchanged.
  *
+ * PHASE B LATE FINDINGS DATA: only the same five ledger-enabled references
+ * are recaptured for the intentional schema/system/DATA/cache layout change.
+ * The other 25 JSON references remain byte-identical, and the projection,
+ * normalizer and strict equality law below are unchanged. A saved public
+ * baseline record independently checks legacy replay without normalization.
+ *
  * PHASE A FINDINGS ADMISSION: regenerated ONLY `agent-findings`, its judge,
  * window and contingent variants, and `agent-arguments-sources` (whose
  * scenario enables the ledger). The other 25 JSON references stayed byte-

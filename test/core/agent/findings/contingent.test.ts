@@ -1,3 +1,4 @@
+import { findingsFrame } from '../../../helpers/findingsData.js';
 /**
  * Integration — no towers on unverified lemmas (9.110.0): a value the model
  * USED that came only from results it had itself declared open, noise or
@@ -322,19 +323,21 @@ describe('contingent — the dispatch moment', () => {
       ]);
       // The line, in the ledger's own vocabulary, on the call AFTER the one
       // that filed it — on the wire, and byte-equal on the rebuild.
-      const line =
-        '\ncontingent (read off the record):\ntool:c2 used fc1/7 from tool:c1 (ruled-out)';
-      expect(r.wire[1]!.systemPrompt).not.toContain('\ncontingent (read off the record):\n');
-      expect(r.wire[2]!.systemPrompt).toContain(line);
+      expect(findingsFrame(r.wire[1]!.messages).data.contingent).toEqual([]);
+      const expected = [
+        {
+          declaredOn: { toolCallId: 'c2' },
+          value: 'fc1/7',
+          carriers: [{ toolCallId: 'c1', standing: 'ruled-out' }],
+        },
+      ];
+      expect(findingsFrame(r.wire[2]!.messages).data.contingent).toEqual(expected);
       const view = servedAt(r.snapshot, 3)!;
       expect(view.system.text).toBe(r.wire[2]!.systemPrompt);
-      expect(view.system.text).toContain(line);
-      const piece = view.system.pieces.find((p) => p.source === 'findings')!;
-      expect(piece.text).toContain(line);
-      // The section sits after the buckets and before the count lines.
-      const at = piece.text.indexOf('\ncontingent (read off the record):\n');
-      expect(at).toBeGreaterThan(piece.text.indexOf('limitations (declared by the model):'));
-      expect(at).toBeLessThan(piece.text.indexOf('undeclared:'));
+      expect(findingsFrame(view.messages.requestOnly).text).toBe(
+        findingsFrame(r.wire[2]!.messages).text,
+      );
+      expect(findingsFrame(view.messages.requestOnly).data.contingent).toEqual(expected);
     });
   }
 

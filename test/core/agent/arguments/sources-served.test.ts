@@ -224,7 +224,7 @@ describe('UNIT — `from` is explained once, positively, in its own property', (
       description: 'Error lines.',
       inputSchema: { type: 'object', properties: { window: { type: 'string' } } },
     };
-    const planted = (withFindingsArgument(schema, [], { from: true }).inputSchema.properties as any)
+    const planted = (withFindingsArgument(schema, { from: true }).inputSchema.properties as any)
       ._findings as Schema;
     expect(Object.keys(planted.properties)).toEqual([
       'from',
@@ -233,12 +233,12 @@ describe('UNIT — `from` is explained once, positively, in its own property', (
     expect(planted.required).toEqual(['basis', 'from']);
     expect(planted.description).toBe(FINDINGS_ARGUMENT_SCHEMA.description);
     // …with an offer too — the offer's enum still rides `previous[].toolCallId`.
-    const offered = (
-      withFindingsArgument(schema, ['t1'], { from: true }).inputSchema.properties as any
-    )._findings as Schema;
+    const offered = (withFindingsArgument(schema, { from: true }).inputSchema.properties as any)
+      ._findings as Schema;
     expect(Object.keys(offered.properties)[0]).toBe('from');
     expect(offered.required).toEqual(['basis', 'from']);
-    expect((offered.properties.previous as any).items.properties.toolCallId.enum).toEqual(['t1']);
+    expect((offered.properties.previous as any).items.properties.toolCallId.enum).toBeUndefined();
+    expect(offered).toEqual(planted);
     // A tool with no `from` keeps the frozen base BY REFERENCE (the `.findings()`-only bytes).
     expect((withFindingsArgument(schema).inputSchema.properties as any)._findings).toBe(
       FINDINGS_ARGUMENT_SCHEMA,
@@ -297,8 +297,8 @@ describe('UNIT — the sources-only decoration (declared sources without the fin
   it('every library decoration is recognised — also through a committed clone — and taken off for the enum fence', () => {
     const variants = [
       withFindingsArgument(ruled),
-      withFindingsArgument(ruled, ['t1']),
-      withFindingsArgument(ruled, [], { from: true }),
+      withFindingsArgument(ruled),
+      withFindingsArgument(ruled, { from: true }),
       withSourcesArgument(ruled),
     ].map((s) => structuredClone(s).inputSchema);
     for (const input of variants) {

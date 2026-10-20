@@ -13,6 +13,7 @@ ruler measures any release.
 $ npm run build && node bench/cache/run.mjs --arms off,full,assume,ask,full-b
 ```
 
+**Historical baseline, before the findings late-DATA layout.** These are not measurements of the current layout.
 Measured on the release before and after the provider-declared strategy and the moving breakpoint
 (58 runs, 129 calls per row; shares are of request bytes):
 
@@ -28,10 +29,11 @@ Measured on the release before and after the provider-declared strategy and the 
   renamed provider fell through to the no-op — no markers, full price on every call.
 - **The moving breakpoint** adds the conversation itself, so the repeat-call share climbs with
   every turn; these scripted cases are two calls long, so this is its floor.
-- **`.findings()`** writes the offer into every tool schema on every call, and tools render
+- **The historical `.findings()` layout** wrote the offer into every tool schema on every call, and tools render
   first, so nothing repeats. Before, its markers paid the cache-write premium (1.25× input) on
-  97% of the bytes to read back 5%; now it places none. What would make it cacheable is moving
-  the offer out of the tool schemas — a change to what the model reads, not to caching.
+  97% of the bytes to read back 5%; that release placed none. The new layout moves
+  the offer into late request-only DATA; its real cache-read and model-quality
+  effects still need a separately approved bounded pilot.
 
 Not modelled: the per-model minimum (Claude Haiku 4.5 caches nothing under 4,096 tokens — these
 scripted prompts are below it, so a live run of them would read nothing either way), the TTL, and

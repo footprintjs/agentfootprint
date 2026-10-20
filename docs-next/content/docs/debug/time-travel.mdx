@@ -557,6 +557,12 @@ person reading the two together sees the difference.
   absence *inside* `params` — `{}` on an agent that set no dials — really is a
   call made without one. It now claims nothing about what is inside a field it
   cannot see.
+- **`findings-layout`** → fields: `system.pieces`, `system.chars`, `messages.requestOnly`, `messages.count`, `messages.entries`
+  An unknown or masked findings layout or bound withholds its context. An absent
+  discriminator on an older record retains the legacy layout. The request that
+  actually went out may still have contained findings data; absence in this view
+  is not evidence that nothing was served.
+
 - **`no-run-log`** → fields: `tools.names`, `tools.forced`, `tools.schemaHashes`, `messages.requestOnly`
   A subtree was handed in on its own, and run constants live in the run log and
   only there — the forced output tool's *name*, and the tool `wants` the

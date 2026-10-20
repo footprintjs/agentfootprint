@@ -1,0 +1,11 @@
+{
+  "fixture": "layout-legacy-10.9.0.json.gz",
+  "sourcePackage": "agentfootprint@10.9.0",
+  "sourceArchiveSha256": "f9d9966c8972617eacbf37ad3cc17bd2d94a76e69848b0b7c63aa2cc7c208598",
+  "synthetic": true,
+  "modelCalls": 0,
+  "uncompressedBytes": 718517,
+  "uncompressedSha256": "75ef431714057b28d7e19042cd28baf74a520bb4c312c7f2fdafb5396d990718",
+  "gzipSha256": "bbdb05c33c15cf63fed64180c8a887400d32a874c6364ca0fe51b3f2e6395a1b",
+  "capturedViews": 3
+}

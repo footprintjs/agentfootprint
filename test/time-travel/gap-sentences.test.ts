@@ -666,6 +666,15 @@ async function everyIntactView(): Promise<
   );
 }
 
+const findingsLayoutRun = once(async () => {
+  const { provider, wire } = scripted([answer('done')]);
+  const agent = Agent.create({ provider: provider as never, model: 'mock' })
+    .findings()
+    .build();
+  await agent.run({ message: 'synthetic fixture' });
+  return { snapshot: agent.getSnapshot()!, wire };
+});
+
 // ─── the account: one entry per sentence, one clause per claim ───────────
 
 /** One claim a printed sentence makes, and the run that checks it. */
@@ -712,6 +721,40 @@ interface Entry {
 const gapSentence = (kind: ServedGapKind): string => SERVED_GAPS[kind].why;
 
 const ACCOUNT: readonly Entry[] = [
+  {
+    site: 'findings-layout',
+    sentence: gapSentence('findings-layout'),
+    clauses: [
+      {
+        quote: 'The findings context is unproven here',
+        claim: 'an unknown layout withholds the reading and marks it unproven',
+        fields: ['view:messages.requestOnly'],
+        assert: async () => {
+          const run = await findingsLayoutRun();
+          const view = servedAt(rewriteKey(run.snapshot, 'findingsLayout', 'future-v2'), 1)!;
+          expect(kindsOf(view)).toContain('findings-layout');
+          expect(view.messages.requestOnly).toEqual([]);
+        },
+      },
+      {
+        quote: 'Its absence does not show that none was served',
+        claim: 'the real request carried DATA even when the unknown layout cannot replay it',
+        fields: ['view:messages.requestOnly'],
+        assert: async () => {
+          const run = await findingsLayoutRun();
+          expect(run.wire[0]!.messages.at(-1)!.content).toContain(
+            '[AgentFootprint findings DATA v1]',
+          );
+          const intact = servedAt(run.snapshot, 1)!;
+          const unknown = servedAt(rewriteKey(run.snapshot, 'findingsLayout', 'future-v2'), 1)!;
+          expect(intact.messages.requestOnly).toHaveLength(1);
+          expect(unknown.messages.requestOnly).toEqual([]);
+          expect(kindsOf(unknown)).toContain('findings-layout');
+        },
+      },
+    ],
+  },
+
   {
     site: 'thinking-replay',
     sentence: gapSentence('thinking-replay'),

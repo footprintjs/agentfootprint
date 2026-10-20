@@ -2,12 +2,12 @@
 call, a standing on each previous result after.
 Map: `types.ts` (the reserved name, the vocabularies, the row shapes).
 Walker: `reserved.ts` — the decorator that adds `_findings` to a served
-schema (with the OFFER of ids the model may name) and the two peels that
+schema (stable across result changes) and the two peels that
 take it back off before anything else reads the model's words; `offer.ts` —
 the one owner of the offer (served results the model can still read: no
 standing, `fact` or `open`), of the piece's `undeclared:` set, and of the
-identity source a standing resolves against; `serve.ts` — the piece and the
-collapse the wire serves from the record.
+identity source a standing resolves against; `context.ts` — bounded late DATA shared with replay; `serve.ts` — the
+legacy piece and the current wire-only collapse.
 Trace: `ledger.ts` — one writer for one committed key
 (`AgentState.findingsLedger`), plus the fold that reads it; `judge.ts` — the
 second source (a calibrated classifier from `agentfootprint/classify`) whose
@@ -19,6 +19,32 @@ row BESIDE a `ruled-out` standing whose only witness is an absence, through
 the same writer at the same two moments.
 
 # `findings/` — ride-along findings
+
+## Current wire layout
+
+`withFindingsArgument(schema, { from? })` plants a stable schema. Result IDs
+no longer appear in its enum. `context.ts` alone composes the current canonical
+offer and folded ledger into a request-only `[AgentFootprint findings DATA v1]`
+user-role frame, after committed history and the cache breakpoints. It is
+framework data, never a person's words, trusted argument grounds, or a citation
+grant. The Phase A admission gate still checks the accepted request's actual
+unique executed tool results.
+
+The immutable instruction is cacheable by default, subject to the host's cache
+policy and the provider's support. Host `findings.maxContextBytes` defaults to
+16,384 UTF-8 bytes (1,024–262,144); whole entries are omitted with bucket counts.
+Unadmitted ledger data has an unknown row count, never a guessed zero. Judge and
+argument rows are not projected into model DATA. `findingsLayout` and
+`findingsContextBytes` are committed with the actual call, including resumed
+legs with a new host configuration. Replay reads these call facts, uses the
+same composer, reads absent-discriminator old records with the legacy formatter,
+and reports an unknown/masked layout or bound as `findings-layout`.
+
+The historical sections below describe the earlier ledger/system-piece and
+schema-offer design where labelled. Live code no longer calls that enum path;
+`serve.ts`'s textual formatter remains for older recordings and its pure tests.
+For current usage see [the cache guide](https://agentfootprint.dev/docs/build/caching).
+No cache savings or model citation quality is claimed from the free tests.
 
 ## Which "findings"
 
@@ -1025,7 +1051,7 @@ reserved argument carries one more part, on the calls of a RULED tool:
   "from": [{ "argument": "window", "source": "user", "quote": "over the last week" }] }
 ```
 
-- **Served** only there: `withFindingsArgument(schema, offer, { from: true })` plants
+- **Served** only there: `withFindingsArgument(schema, { from: true })` plants
   `FINDINGS_FROM_PROPERTY` FIRST and adds it to the property's `required` (`['basis',
   'from']`), on a tool that carries argument rules (`tools/declare.ts` · `carriesRules`);
   every other tool keeps the base by reference. `from` is explained ONCE, in its own property
