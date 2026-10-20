@@ -1,4 +1,4 @@
-import { expect } from 'vitest';
+import { expect, vi } from 'vitest';
 import type { MemoryStore } from '../../../src/memory/store/types.js';
 import { PAGINATION_IDENTITY, type PaginationHarness } from './listPagination.js';
 
@@ -56,6 +56,8 @@ export async function verifyInvalidRequestLimit(
 
 export async function verifyDefaultRequestLimits(harness: PaginationHarness): Promise<void> {
   const opened = await harness.create();
+  // Equivalent requests must observe the same access time, not the host clock's speed.
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.now());
   try {
     const omitted = await opened.store.list(PAGINATION_IDENTITY);
     const explicitUndefined = await opened.store.list(PAGINATION_IDENTITY, { limit: undefined });
@@ -75,7 +77,11 @@ export async function verifyDefaultRequestLimits(harness: PaginationHarness): Pr
       ).toEqual(defaultSearch);
     }
   } finally {
-    opened.close?.();
+    try {
+      opened.close?.();
+    } finally {
+      clock.mockRestore();
+    }
   }
 }
 
