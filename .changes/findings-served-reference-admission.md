@@ -21,3 +21,7 @@ resume path and no longer invokes after-tool middleware. This correction also
 applies when findings is off; entered tool errors and cached returns stay results.
 Nominal off-findings reference records and request bytes are unchanged, rather
 than a promise of byte identity for this previously misclassified failure.
+
+Custom AI-provider wrappers that change a request must forward its hooks and report
+the transformed request before delegation; the custom-provider guide includes a
+copy-in `assertProviderRequestForwarding` test helper for normal and streaming calls.
