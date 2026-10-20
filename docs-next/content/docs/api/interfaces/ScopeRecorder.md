@@ -47,7 +47,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:95
 
 ##### event
 
-[`CommitEvent`](/docs/api/interfaces/CommitEvent)
+[`CommitEvent`](/docs/api/interfaces/scope-events#interface-commitevent)
 
 #### Returns
 
@@ -70,7 +70,7 @@ structured events. See `EmitRecorder` for the focused interface
 
 ##### event
 
-[`EmitEvent`](/docs/api/interfaces/EmitEvent)
+[`EmitEvent`](/docs/api/interfaces/scope-events#interface-emitevent)
 
 #### Returns
 
@@ -92,7 +92,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:96
 
 ##### event
 
-[`ErrorEvent`](/docs/api/interfaces/ErrorEvent)
+[`ErrorEvent`](/docs/api/interfaces/scope-events#interface-errorevent)
 
 #### Returns
 
@@ -128,7 +128,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:93
 
 ##### event
 
-[`ReadEvent`](/docs/api/interfaces/ReadEvent)
+[`ReadEvent`](/docs/api/interfaces/scope-events#interface-readevent)
 
 #### Returns
 
@@ -164,7 +164,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:98
 
 ##### event
 
-[`StageEvent`](/docs/api/interfaces/StageEvent)
+[`StageEvent`](/docs/api/interfaces/flow-events#interface-stageevent)
 
 #### Returns
 
@@ -182,7 +182,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:97
 
 ##### event
 
-[`StageEvent`](/docs/api/interfaces/StageEvent)
+[`StageEvent`](/docs/api/interfaces/flow-events#interface-stageevent)
 
 #### Returns
 
@@ -200,7 +200,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:94
 
 ##### event
 
-[`WriteEvent`](/docs/api/interfaces/WriteEvent)
+[`WriteEvent`](/docs/api/interfaces/scope-events#interface-writeevent)
 
 #### Returns
 

@@ -20,7 +20,7 @@
     "dev": "next dev",
     "prebuild": "npm run check:page-tree && npm run check:export-prune && npm run check:search-index && npm run check:browser-demos && node ../scripts/gen-fumadocs-api.mjs && node scripts/gen-agent-flowchart.mjs && node scripts/gen-replay-trace.mjs && node scripts/gen-context-walkthrough.mjs",
     "build": "next build --webpack",
-    "postbuild": "npm run prune:export",
+    "postbuild": "npm run prune:export && node scripts/api-redirects.mjs out",
     "start": "next start",
     "postinstall": "fumadocs-mdx",
     "check:browser-demos": "tsx --test scripts/test/browser-highlighter.test.mts scripts/test/skill-graph-projection.test.mts scripts/test/browser-library-aliases.test.mjs"
