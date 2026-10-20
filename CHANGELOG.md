@@ -28,6 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Nominal off-findings reference records and request bytes are unchanged, rather
   than a promise of byte identity for this previously misclassified failure.
 
+  Custom AI-provider wrappers that change a request must forward its hooks and report
+  the transformed request before delegation; the custom-provider guide includes a
+  copy-in `assertProviderRequestForwarding` test helper for normal and streaming calls.
+
 ## [10.8.1] - 2026-10-19
 
 ### Fixed
