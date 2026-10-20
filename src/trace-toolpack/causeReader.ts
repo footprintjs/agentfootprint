@@ -16,15 +16,18 @@ export async function readCause(
   deadline: number,
   signal?: AbortSignal,
 ): Promise<string> {
-  const snapshotOnly = artifacts.cause === undefined;
+  const snapshotOnly = artifacts.cause === undefined ? true : undefined;
   if (signal?.aborted) return causeGap(operation, 'cancelled', snapshotOnly);
   if (performance.now() >= deadline) return causeGap(operation, 'timeout', snapshotOnly);
-  const source = artifacts.cause ?? snapshotCauseArtifacts(artifacts, nodes);
+  const projection =
+    artifacts.cause === undefined ? snapshotCauseArtifacts(artifacts, nodes) : undefined;
+  const source = artifacts.cause ?? projection;
   if (source === 'truncated') return causeGap(operation, 'truncated', snapshotOnly);
   if (source === undefined) return causeGap(operation, 'not-collected', snapshotOnly);
+  const capture = projection && projection !== 'truncated' ? projection.capture : undefined;
   const remaining = Math.floor(deadline - performance.now());
-  if (signal?.aborted) return causeGap(operation, 'cancelled', snapshotOnly);
-  if (remaining < 1) return causeGap(operation, 'timeout', snapshotOnly);
+  if (signal?.aborted) return causeGap(operation, 'cancelled', capture);
+  if (remaining < 1) return causeGap(operation, 'timeout', capture);
   const { maxChars, backward, impact, maxNodes, maxDepth, maxEdges, maxCalls } = limits;
   const options = { maxNodes, maxDepth, maxEdges, maxCalls, timeoutMs: remaining, signal };
   if (operation === 'attention_list') {
@@ -34,7 +37,7 @@ export async function readCause(
     });
     // An empty legacy log has no node on which the reader could discover its missing capture.
     const finding =
-      artifacts.cause === undefined && !result.gaps.some((gap) => gap.code === 'not-collected')
+      capture?.status === 'incomplete' && !result.gaps.some((gap) => gap.code === 'not-collected')
         ? {
             ...result,
             confidence: 'incomplete' as const,
@@ -48,11 +51,11 @@ export async function readCause(
         ? 'Not sure, because coverage is incomplete. An absent mark is not proof of a healthy or reached step.'
         : 'Recorded attention within this query only. Cite the returned node and evidence IDs.',
       maxChars,
-      snapshotOnly,
+      capture,
     );
   }
   // Each invocation projects one bounded query. Separate root/impact calls do not share a result yet.
-  if (question.nodeId === undefined) return causeGap(operation, 'invalid-data', snapshotOnly);
+  if (question.nodeId === undefined) return causeGap(operation, 'invalid-data', capture);
   const finding = await explain(source.graph, question.nodeId, { ...options, backward, impact });
   if (operation === 'impact') {
     return causeResponse(
@@ -62,7 +65,7 @@ export async function readCause(
         ? 'Not sure of the full impact, because the returned gaps limit the recorded forward slice.'
         : 'Recorded reachable impact only; this does not prove effects in unrecorded services or unreached branches.',
       maxChars,
-      snapshotOnly,
+      capture,
     );
   }
   return causeResponse(
@@ -74,6 +77,6 @@ export async function readCause(
       ? 'Not sure, because the returned gaps prevent a unique supported root. Alternatives are not confirmed causes.'
       : 'No unique marked root in the checked graph. Cite alternatives without selecting one as fact.',
     maxChars,
-    snapshotOnly,
+    capture,
   );
 }

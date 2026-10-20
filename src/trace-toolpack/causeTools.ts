@@ -55,7 +55,7 @@ export function buildCauseTools(
       name: operation,
       ...CAUSE_OPERATIONS[operation],
       execute: async (question, context) => {
-        const snapshotOnly = artifacts.cause === undefined;
+        const snapshotOnly = artifacts.cause === undefined ? true : undefined;
         if (context.signal?.aborted) return causeGap(operation, 'cancelled', snapshotOnly);
         let limits: CauseLimits;
         try {

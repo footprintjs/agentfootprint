@@ -511,7 +511,7 @@
     "eslint": "^8.57.1",
     "eslint-config-prettier": "^6.15.0",
     "eslint-plugin-import": "^2.32.0",
-    "footprintjs": "^10.0.0",
+    "footprintjs": "^10.3.0",
     "github-slugger": "^2.0.0",
     "google-auth-library": "^11.0.1",
     "jose": "^6.2.7",

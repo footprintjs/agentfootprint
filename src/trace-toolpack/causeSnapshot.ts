@@ -2,19 +2,24 @@ import { createRecordGraph, type RecordScope } from 'foottrace/cause';
 import type { StageSnapshot } from 'footprintjs/advanced';
 import type { TraceToolpackArtifacts } from './types.js';
 import type { TraceCauseArtifacts } from './causeTypes.js';
+import {
+  assessCapture,
+  captureAddress,
+  captureAssessment,
+  captureOwn as own,
+  type SnapshotCapture,
+} from './causeCapture.js';
+import { capturedControl } from './causeControl.js';
 
-function own(object: object, key: string): unknown {
-  const field = Object.getOwnPropertyDescriptor(object, key);
-  if (field === undefined) return undefined;
-  if (!('value' in field)) throw new TypeError('cause tools: invalid snapshot metadata');
-  return field.value;
+interface SnapshotCauseArtifacts extends TraceCauseArtifacts {
+  readonly capture: SnapshotCapture;
 }
 
 /** A snapshot projection, not another dependence walker. The public reader owns all graph reasoning. */
 export function snapshotCauseArtifacts(
   artifacts: TraceToolpackArtifacts,
   nodes: ReadonlyMap<string, StageSnapshot>,
-): TraceCauseArtifacts | 'truncated' | undefined {
+): SnapshotCauseArtifacts | 'truncated' | undefined {
   const snapshot = artifacts.snapshot;
   // A snapshot-local namespace is not a storage address or a service-correlation claim.
   const recordedAddress = own(snapshot, 'logAddress') as RecordScope['address'] | undefined;
@@ -26,6 +31,10 @@ export function snapshotCauseArtifacts(
   const log = own(snapshot, 'commitLog') as RecordScope['commitLog'];
   if (!Array.isArray(log)) return undefined;
   if (log.length > 4096) return 'truncated';
+  let capture = assessCapture(snapshot, log.length);
+  const nativeControl = capture.status === 'admitted' ? capturedControl(snapshot) : undefined;
+  if (capture.status === 'admitted' && nativeControl === undefined)
+    capture = captureAssessment('control-not-retained');
   const reads: Record<string, readonly string[]> = Object.create(null);
   const marks: Record<string, unknown> = Object.create(null);
   const control: Record<string, { deciderId: string }> = Object.create(null);
@@ -35,21 +44,35 @@ export function snapshotCauseArtifacts(
     const capturedReads = own(stage, 'stageReads');
     if (capturedReads !== null && typeof capturedReads === 'object')
       reads[id] = Object.keys(capturedReads);
+    else if (capture.status === 'admitted') reads[id] = [];
     const attention = own(stage, 'attention');
     if (attention !== undefined) marks[id] = attention;
-    const parent = artifacts.controlDeps?.(id);
+    const parent = nativeControl === undefined ? artifacts.controlDeps?.(id) : nativeControl[id];
     if (parent !== undefined) control[id] = { deciderId: parent.deciderId };
   }
+  if (
+    capture.status === 'admitted' &&
+    log.some((bundle) => !nodes.has(own(bundle, 'runtimeStageId') as string))
+  )
+    capture = captureAssessment('projection-incomplete');
+  const complete = capture.status === 'admitted';
+  const scopeAddress = (complete && captureAddress(own(snapshot, 'logAddress'))) || address;
   const scope: RecordScope = {
-    address,
+    address: scopeAddress,
     commitLog: log,
     reads,
-    ...(Object.keys(marks).length ? { attention: marks as RecordScope['attention'] } : {}),
-    ...(artifacts.controlDeps === undefined ? {} : { controlDeps: control }),
-    // The artifact bag has no capture/end-marker attestation. Sparse marks do not attest healthy steps.
-    complete: false,
+    ...(complete || Object.keys(marks).length
+      ? { attention: marks as RecordScope['attention'] }
+      : {}),
+    ...(nativeControl === undefined && artifacts.controlDeps === undefined
+      ? {}
+      : { controlDeps: control }),
+    complete,
   };
   const graph = createRecordGraph([scope], { maxCommits: 4096 });
   // The public scope reader admits untrusted commits and creates its own official IDs.
-  return { graph: { ...graph, roots: (context) => graph.openScope(address, context) } };
+  return {
+    graph: { ...graph, roots: (context) => graph.openScope(scopeAddress, context) },
+    capture,
+  };
 }
