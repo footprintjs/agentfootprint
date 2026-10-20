@@ -8,7 +8,7 @@ description: Implement the LLMProvider interface to wrap any LLM API. Two method
 ## The contract
 
 ```ts
-import type { LLMProvider, LLMRequest, LLMResponse, LLMChunk } from 'agentfootprint';
+import type { LLMProvider, LLMRequest, LLMResponse, LLMChunk, LLMCallHooks } from 'agentfootprint';
 
 interface LLMProvider {
   readonly name: string;
@@ -16,14 +16,50 @@ interface LLMProvider {
   /** Which roles your wire carries INSIDE the messages array. Optional. */
   readonly carriesInMessages?: readonly ('system' | 'user' | 'assistant')[];
 
-  complete(req: LLMRequest): Promise<LLMResponse>;
+  complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse>;
 
-  stream?(req: LLMRequest): AsyncIterable<LLMChunk>;
+  stream?(req: LLMRequest, hooks?: LLMCallHooks): AsyncIterable<LLMChunk>;
 }
 ```
 
 That's the whole interface. `complete` is required; `stream` and `carriesInMessages` are
 optional (the library falls back to `complete` if `stream` is absent).
+
+### Wrappers must preserve the request witness
+
+Pass the optional `hooks` argument to the inner provider in **both** `complete`
+and `stream`. Forward the whole object, or spread it with `{ ...hooks }` when
+adding a callback. Rebuilding only its named properties loses the library's
+private symbol channel. Do not depend on that channel's name or invoke it yourself.
+
+With findings enabled, admission uses the request that produced the accepted
+answer. A leaf that sends its input unchanged needs no extra preparation report.
+But a wrapper that trims history, rewrites results or otherwise changes the
+request **must report the actual changed request before delegating** through
+`hooks?.onReplayPrepared?.({ provider: name, model: actual.model, request: actual,
+omissions: [] })`, then forward all hooks to the inner provider. Empty `omissions`
+means no thinking-retirement claim; never invent omission metadata. If the inner
+provider prepares the request again, its report must reach the caller too.
+
+Without that report the caller can only inspect the pre-transform request. It
+could admit a citation to a result your wrapper removed, which the model never
+saw. Hook forwarding alone does not describe a wrapper's own transformation.
+Reports belong to the live attempt and must precede transport; do not retain or
+reuse callbacks after that attempt settles. The built-in retry and fallback
+decorators implement these boundaries.
+
+Copy the Node-only [provider-wrapper conformance helper](https://github.com/footprintjs/agentfootprint/blob/main/examples/helpers/provider-wrapper-conformance.ts)
+into your tests and call `await assertProviderRequestForwarding(inner => myWrapper(inner))`.
+It is example source, **not an npm export**. The factory must use only the supplied
+scripted leaf, without keys, environment files or a live transport. It checks an
+unchanged or reported transformed request before transport, symbol-hook and replay
+forwarding, and the wrapper's separate complete/stream paths. Its returned list
+names only the methods exercised; a complete-only wrapper does not pass a stream
+test. Disable cache shortcuts for this fixture so the supplied leaf is reached.
+
+This is one synthetic request, not a proof for every transformation, retry,
+fallback, cancellation or concurrency path. Add your own fixtures for those
+branches; an identity check never proves the cited assertion true.
 
 ### `carriesInMessages` — declare what your wire can carry
 
