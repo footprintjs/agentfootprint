@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.10.0] - 2026-10-20
+
+### Added
+
+- **Native capture notes unlock recorded cause queries without a custom graph.** The read-only cause tools can admit an engine-attested completed root-log segment when its identity, full extent, recording modes, retained channels and same-run control recorder data match. Captured-empty evidence is distinct from missing capture. Incomplete, legacy, resumed, child, redacted and unsupported records keep fixed, explicit uncertainty reasons. Capture admission does not remove dependency gaps or prove exact read versions, semantic derivation, provider-internal causes or durable delivery. Host-supplied graphs and host-only query ceilings are unchanged.
+
+### Changed
+
+- **Related API event pages are grouped, with old links preserved.** Sixteen small event-interface pages now live in two topic pages. Generated redirects retain the old bookmarks, and the documentation export stays below the unchanged 226 MB size limit.
+
+- **Findings keeps tool definitions and system instructions stable for prompt caching.** Current result IDs and model-declared standings now travel in a bounded, request-only DATA frame after the cached history, instead of per-call schema enums and system text. Citation admission still checks the accepted request's actual unique executed results. Host `findings.maxContextBytes` defaults to 16,384 UTF-8 bytes (accepted range: 1,024–262,144). Entries that do not fit the frame budget are omitted whole and counted by bucket; IDs are never shortened, and omitted or unreadable data remains explicitly unknown. Call-scoped layout evidence keeps saved and resumed requests reproducible; older records retain their recorded layout. Global cache-off and provider/host restrictions still apply, and collapse, tool changes or window rewrites can still miss cache. No live cache saving or model-quality result has been measured by this change's offline tests.
+
 ## [10.9.0] - 2026-10-20
 
 ### Changed
