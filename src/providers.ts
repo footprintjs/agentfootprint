@@ -115,6 +115,10 @@ export {
   BedrockProvider,
   type BedrockProviderOptions,
 } from './adapters/llm/BedrockProvider.js';
+export {
+  BedrockStreamTimeoutError,
+  type BedrockStreamWait,
+} from './adapters/llm/bedrockStreamDeadline.js';
 
 export {
   gemini,

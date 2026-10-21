@@ -51,6 +51,8 @@ const HELPER_FILES: Readonly<Record<string, string>> = {
     'synchronous cache-marker projection, usage reading and capability lookup; no client, I/O or provider construction',
   'bedrockModels.ts':
     'frozen model facts and synchronous exact-ID lookup; no client, I/O or provider construction',
+  'bedrockStreamDeadline.ts':
+    'typed timeout and iterator cleanup helpers; constructs no client or provider; Bedrock remains covered by its existing rig',
   'googleGenAI.ts': 'the Google client resolver both Gemini doors share',
   'retryAfter.ts': 'Retry-After parsing',
   'wireManifest.ts': 'the manifest read back from a serialized body',

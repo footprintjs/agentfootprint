@@ -39,6 +39,36 @@ Converse API's tool_use / tool_result blocks map cleanly to agentfootprint's `To
 
 The mapping holds on **both** paths — `complete()` and `stream()` produce the same `toolCalls` for the same logical response, and a parity test pins them together so they cannot drift apart.
 
+## Stream wait limits
+
+Use `bedrock({ timeoutMs: 30_000 })` to bound a silent stream. The same cap
+applies separately to the SDK response, each event read, an early close and
+any non-stream fallback. It is an idle limit, not a total generation budget:
+a stream that keeps making progress may run longer. Time while your code is
+holding a yielded chunk does not count as provider silence.
+
+<CodeFile path="examples/features/107-bedrock-stream-deadline.ts" region="timeout" title="Scripted timeout and recovery, no AWS calls" />
+
+A miss raises `BedrockStreamTimeoutError` from `agentfootprint/providers`,
+with `code: 'BEDROCK_STREAM_TIMEOUT'`, `phase` (`response`, `chunk`, `close` or
+`fallback`), `timeoutMs` and `retryable: true`. `withRetry` retries only before
+its first public chunk. Once a chunk reaches your code, a timeout surfaces
+without replaying partial text. Mid-stream buffering/retry is not enabled by
+this option.
+
+Your request's `signal` still wins and keeps its cancellation reason. The
+adapter passes the linked signal through the SDK's documented
+[`abortSignal` option](https://aws.amazon.com/blogs/developer/abortcontroller-in-modular-aws-sdk-for-javascript/),
+requests iterator cleanup and refuses late results. Cancellation is best
+effort: a timeout does not prove remote work stopped or tell you the bill.
+Missing provider usage stays unknown.
+
+Omitting `timeoutMs` keeps the existing uncapped stream behavior. A supplied
+value must be positive, finite milliseconds, at most 2,147,483,647. It does
+not add a timeout to direct `complete()` calls; use the caller's abort signal
+or your run's time budget for those. The gateway and Bedrock implementations
+use the same internal wait-deadline helper.
+
 ## Prompt caching
 
 `bedrock()` declares caching **per model**. Pass the model to

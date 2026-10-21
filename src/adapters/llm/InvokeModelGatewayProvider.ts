@@ -86,6 +86,7 @@ import type { ThinkingMode } from '../../thinking/types.js';
 import { retryAfterMsFromHeaders } from './retryAfter.js';
 import { isSlash, trimTrailing } from '../../lib/linearText.js';
 import { abortErrorOf, throwIfAborted, untilAborted } from '../../lib/abort.js';
+import { waitDeadline, type WaitDeadline as Deadline } from '../../lib/waitDeadline.js';
 
 /** The literal this wire requires in the body in place of a version header. */
 export const INVOKE_MODEL_ANTHROPIC_VERSION = 'bedrock-2023-05-31';
@@ -836,81 +837,24 @@ function networkError(err: unknown, modelId: string, signal?: AbortSignal): Erro
  * caller's reason, as fetch would. With no `timeoutMs` there is no timer: the
  * fetch gets the caller's signal, and every wait is raced against it.
  */
-interface Deadline {
-  /** What the fetch listens to: the caller's signal, or one linked to it and the timer. */
-  readonly signal: AbortSignal | undefined;
-  within<T>(pending: Promise<T>, what: string): Promise<T>;
-  dispose(): void;
-}
-
 function deadlineFor(
   timeoutMs: number | undefined,
   callerSignal: AbortSignal | undefined,
   modelId: string,
 ): Deadline {
-  if (timeoutMs === undefined) {
-    // No deadline, but still the caller's abort: every wait is raced against
-    // it, so a transport that ignores its signal cannot hold a cancelled call
-    // open (lib/abort.ts).
-    return {
-      signal: callerSignal,
-      within: (pending) => untilAborted(pending, callerSignal),
-      dispose: () => undefined,
-    };
-  }
-  const controller = new AbortController();
-  const onCallerAbort = (): void => controller.abort(callerSignal?.reason);
-  if (callerSignal?.aborted) onCallerAbort();
-  else callerSignal?.addEventListener('abort', onCallerAbort, { once: true });
-  return {
-    signal: controller.signal,
-    within<T>(pending: Promise<T>, what: string): Promise<T> {
-      return new Promise<T>((resolve, reject) => {
-        const settle = (): void => {
-          clearTimeout(timer);
-          controller.signal.removeEventListener('abort', onAbort);
-        };
-        const onAbort = (): void => {
-          settle();
-          reject(controller.signal.reason);
-        };
-        const timer = setTimeout(() => {
-          controller.abort(
-            new InvokeModelGatewayError({
-              reason: 'timeout',
-              modelId,
-              message:
-                `no answer from model ${modelId} within ${timeoutMs} ms, waiting for ${what}. ` +
-                `The request was aborted. Transient — withRetry asks again while no chunk ` +
-                `has reached the caller; raise timeoutMs if the model needs longer.`,
-            }),
-          );
-        }, timeoutMs);
-        // Handlers go on `pending` FIRST, before any early return: the wait
-        // was already started (fetch, body or stream read), and a promise
-        // left without a handler rejects later as an unhandled rejection —
-        // which kills a Node process on default settings. Once the race is
-        // decided the later settle is a no-op on this promise.
-        pending.then(
-          (value) => {
-            settle();
-            resolve(value);
-          },
-          (err: unknown) => {
-            settle();
-            // A transport that honoured the abort rejects with its reason —
-            // already the typed error (or the caller's abort).
-            reject(controller.signal.aborted ? controller.signal.reason : err);
-          },
-        );
-        if (controller.signal.aborted) return onAbort();
-        controller.signal.addEventListener('abort', onAbort, { once: true });
-      });
-    },
-    dispose(): void {
-      callerSignal?.removeEventListener('abort', onCallerAbort);
-    },
-  };
+  return waitDeadline(
+    timeoutMs,
+    callerSignal,
+    (what) =>
+      new InvokeModelGatewayError({
+        reason: 'timeout',
+        modelId,
+        message:
+          `no answer from model ${modelId} within ${timeoutMs} ms, waiting for ${what}. ` +
+          `The request was aborted. Transient — withRetry asks again while no chunk ` +
+          `has reached the caller; raise timeoutMs if the model needs longer.`,
+      }),
+  );
 }
 
 // ─── Option checks ──────────────────────────────────────────────────
