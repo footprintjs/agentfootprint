@@ -51,7 +51,8 @@ holding a yielded chunk does not count as provider silence.
 
 A miss raises `BedrockStreamTimeoutError` from `agentfootprint/providers`,
 with `code: 'BEDROCK_STREAM_TIMEOUT'`, `phase` (`response`, `chunk`, `close` or
-`fallback`), `timeoutMs` and `retryable: true`. `withRetry` retries only before
+`fallback`, typed as `BedrockStreamWait`), `timeoutMs` and `retryable: true`.
+`withRetry` retries only before
 its first public chunk. Once a chunk reaches your code, a timeout surfaces
 without replaying partial text. Mid-stream buffering/retry is not enabled by
 this option.
