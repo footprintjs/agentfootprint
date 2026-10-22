@@ -43,14 +43,15 @@ describe('unit: the names-and-numbers row', () => {
   const id = 'agent:names-and-numbers';
   it('a value no tool result carried fails the row, and says whether the repair turn ran', () => {
     expect(
-      evidenceCheckOf({ lookedUp: 3, unsupported: 2, truncated: false, revised: false }),
+      evidenceCheckOf({ lookedUp: 3, unsupported: 2, truncated: false, unread: 0, revised: false }),
     ).toEqual({
       id,
       disposition: 'checked-fail',
       reason: '2 value(s) the answer states appear in no tool result the run read',
     });
     expect(
-      evidenceCheckOf({ lookedUp: 3, unsupported: 1, truncated: false, revised: true }).reason,
+      evidenceCheckOf({ lookedUp: 3, unsupported: 1, truncated: false, unread: 0, revised: true })
+        .reason,
     ).toBe(
       '1 value(s) the answer states appear in no tool result the run read, after the one repair turn',
     );
@@ -58,13 +59,13 @@ describe('unit: the names-and-numbers row', () => {
 
   it('an index past its ceiling cannot accuse: unreachable, never a failure or a pass', () => {
     expect(
-      evidenceCheckOf({ lookedUp: 4, unsupported: 2, truncated: true, revised: false }),
+      evidenceCheckOf({ lookedUp: 4, unsupported: 2, truncated: true, unread: 0, revised: false }),
     ).toMatchObject({ id, disposition: 'unreachable' });
   });
 
   it('a clean pass clears the answer and never verifies it: not-applicable', () => {
     expect(
-      evidenceCheckOf({ lookedUp: 5, unsupported: 0, truncated: false, revised: false }),
+      evidenceCheckOf({ lookedUp: 5, unsupported: 0, truncated: false, unread: 0, revised: false }),
     ).toEqual({
       id,
       disposition: 'not-applicable',
@@ -73,11 +74,41 @@ describe('unit: the names-and-numbers row', () => {
     });
     // A truncated index can still CLEAR: membership in a prefix is membership.
     expect(
-      evidenceCheckOf({ lookedUp: 5, unsupported: 0, truncated: true, revised: false }).disposition,
+      evidenceCheckOf({ lookedUp: 5, unsupported: 0, truncated: true, unread: 0, revised: false })
+        .disposition,
     ).toBe('not-applicable');
     expect(
-      evidenceCheckOf({ lookedUp: 0, unsupported: 0, truncated: false, revised: false }).reason,
+      evidenceCheckOf({ lookedUp: 0, unsupported: 0, truncated: false, unread: 0, revised: false })
+        .reason,
     ).toBe('the answer states no name or number to look up');
+  });
+
+  it('an answer longer than the gate reads is unreachable, naming how much went unread', () => {
+    expect(
+      evidenceCheckOf({
+        lookedUp: 2,
+        unsupported: 0,
+        truncated: false,
+        unread: 105,
+        revised: false,
+      }),
+    ).toEqual({
+      id,
+      disposition: 'unreachable',
+      reason:
+        'the answer is longer than the evidence gate reads: 105 more word(s) and number(s) ' +
+        'were never looked up',
+    });
+    // A value found unsupported in what WAS read still fails the row.
+    expect(
+      evidenceCheckOf({
+        lookedUp: 2,
+        unsupported: 1,
+        truncated: false,
+        unread: 105,
+        revised: false,
+      }).disposition,
+    ).toBe('checked-fail');
   });
 
   it('a gate that never judged the answer is unreachable, not clean', () => {
@@ -417,7 +448,7 @@ describe('security: rows carry declared names and counts, never conversation val
         { durationMs: SECRET_ANSWER },
         1,
       ),
-      evidenceCheckOf({ lookedUp: 2, unsupported: 2, truncated: false, revised: true }),
+      evidenceCheckOf({ lookedUp: 2, unsupported: 2, truncated: false, unread: 0, revised: true }),
     ];
     const text = JSON.stringify(rows);
     expect(text).not.toContain(SECRET_ANSWER);

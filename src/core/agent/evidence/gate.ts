@@ -65,7 +65,7 @@ import type { StagedRefsMatch } from '../stagedRefs.js';
 import { stagedRefsTeachingClause } from '../stagedRefs.js';
 import type { EvidenceCorpus } from './evidenceIndex.js';
 import { EVIDENCE_CHECK_FRAME_PREFIX } from './frames.js';
-import { candidateForms, extractCandidates } from './extract.js';
+import { candidateForms, readAnswer } from './extract.js';
 import type { FigureCheck } from './figures.js';
 import { lookupForms, normalizeToken } from '../../../tools/normalize.js';
 import type {
@@ -257,12 +257,8 @@ export function checkAnswer(
     readonly figures?: FigureCheck;
   },
 ): EvidenceVerdict {
-  const candidates = extractCandidates(
-    answer,
-    args.gate,
-    args.figures?.numbers,
-    args.evidence.values,
-  );
+  const reading = readAnswer(answer, args.gate, args.figures?.numbers, args.evidence.values);
+  const candidates = reading.candidates;
   const unsupported: UnsupportedValue[] = [];
   const derived: UnsupportedValue[] = [];
   const computed: ComputedFigure[] = [];
@@ -330,6 +326,9 @@ export function checkAnswer(
     ...(args.derived !== undefined && { derived }),
     ...(args.figures !== undefined && { computed }),
     evidenceTruncated: args.evidence.truncated,
+    // Present only when the answer ran past the reading ceiling: every other
+    // verdict keeps its bytes.
+    ...(reading.unread > 0 && { unread: reading.unread }),
     grounding: {
       fromThisTurn,
       fromPriorTurns,

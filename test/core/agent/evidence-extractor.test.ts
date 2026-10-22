@@ -19,6 +19,7 @@ import {
   candidateForms,
   classifyToken,
   extractCandidates,
+  readAnswer,
 } from '../../../src/core/agent/evidence/extract.js';
 import {
   countDigits,
@@ -706,5 +707,50 @@ describe('regression: a JSON answer keeps each number as it was WRITTEN', () => 
     expect(judge('{"reading":5.20}').unsupported.map((u) => u.value)).toEqual(['5.2']);
     // One place: 5.2 is 5.249 honestly rounded.
     expect(judge('{"reading":5.2}').unsupported).toEqual([]);
+  });
+});
+
+describe('regression: an answer longer than the gate reads says how much it never read', () => {
+  // The gate reads at most 20,000 words and numbers of one answer. It used to
+  // stop there silently: a clean verdict on the part it read looked exactly
+  // like a clean verdict on the whole answer, and an invented value past the
+  // line was never looked up. The reading now counts what it left unread.
+  const CEILING = 20_000;
+  const history = [
+    { role: 'tool', toolCallId: 'c1', content: JSON.stringify({ order: 'ORD-44710' }) },
+  ] as unknown as readonly LLMMessage[];
+
+  it('a short answer is read whole: nothing unread, and the verdict carries no count', () => {
+    expect(readAnswer('Order ORD-44710 totals 41,200.', GATE).unread).toBe(0);
+    expect('unread' in check('Order ORD-44710.', { history })).toBe(false);
+  });
+
+  it('prose past the ceiling: the value after it is unread, and counted', () => {
+    const answer = `${'word '.repeat(CEILING)}ORD-99812`;
+    const reading = readAnswer(answer, GATE);
+    expect(reading.candidates.map((c) => c.value)).not.toContain('ord-99812');
+    expect(reading.unread).toBe(1);
+    const verdict = check(answer, { history });
+    expect(verdict.unsupported).toEqual([]);
+    expect(verdict.unread).toBe(1);
+  });
+
+  it('a JSON answer past the ceiling counts every value it never read', () => {
+    const answer = JSON.stringify(Array.from({ length: CEILING + 5_000 }, (_, i) => i % 10));
+    expect(readAnswer(answer, GATE).unread).toBe(5_000);
+  });
+
+  it('values the old cap on JSON texts skipped are read when the words allow it', () => {
+    // 30,000 empty strings hold no word to read, so the invented id after
+    // them is within the ceiling — and is looked up.
+    const answer = JSON.stringify([...Array.from({ length: 30_000 }, () => ''), 'ORD-99812']);
+    const reading = readAnswer(answer, GATE);
+    expect(reading.unread).toBe(0);
+    expect(reading.candidates.map((c) => c.value)).toContain('ord-99812');
+  });
+
+  it('extractCandidates is the reading without its count, byte for byte', () => {
+    const answer = `${'word '.repeat(CEILING)}ORD-99812 41200`;
+    expect(extractCandidates(answer, GATE)).toEqual(readAnswer(answer, GATE).candidates);
   });
 });

@@ -740,6 +740,36 @@ describe('functional: a value the schema adds is judged too — declare it exemp
   });
 });
 
+describe('security: an answer longer than the gate reads is never cleared', () => {
+  // The gate reads the first 20,000 words and numbers of an answer. What lies
+  // past that line was never looked up, so the row cannot call it clean: it
+  // is unreachable, and an enforcing validation withholds the answer.
+  const longLines = (a: { order: string; total: number }) => ({
+    ...a,
+    lines: Array.from({ length: 20_100 }, (_, i) => i % 100),
+  });
+
+  it('withheld as unverified, the row naming how much it never read', async () => {
+    const { agent, seen } = transformingAgent('dynamic', 'names-and-numbers', longLines);
+    const outcome = await agent
+      .run({ message: 'Which order totals 1200?' })
+      .catch((e: unknown) => e);
+    expect(outcome).toBeInstanceOf(AnswerValidationError);
+    expect((outcome as AnswerValidationError).report).toMatchObject({
+      status: 'unverified',
+      reason: 'unreachable-checks',
+    });
+    expect((outcome as AnswerValidationError).report.checks[1]).toMatchObject({
+      id: 'agent:names-and-numbers',
+      disposition: 'unreachable',
+      reason: expect.stringMatching(
+        /^the answer is longer than the evidence gate reads: \d+ more word\(s\) and number\(s\) were never looked up$/,
+      ),
+    });
+    expect(seen.tokens).toEqual([]);
+  });
+});
+
 // ── Agreement on doubt: the tool established no value, the answer gives none ──
 
 interface StatusAnswer {

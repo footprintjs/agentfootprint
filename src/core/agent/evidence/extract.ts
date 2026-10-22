@@ -92,7 +92,10 @@ const BARE_NUMBER = /^[-+]?\d+(?:\.\d+)?$/;
 const PROSE_RATIO = /^\d{1,2}\/\d{1,2}$/;
 
 /** Ceiling on how many tokens one answer contributes. A model that pastes a
- *  10 MB table into its answer must not turn the gate into the run's cost. */
+ *  10 MB table into its answer must not turn the gate into the run's cost.
+ *  Past it nothing is classified or looked up — only COUNTED
+ *  (`AnswerReading.unread`), so a reader never mistakes a partial reading for
+ *  a clean one. */
 const MAX_ANSWER_TOKENS = 20_000;
 
 /** True when the caller declared this token exempt. */
@@ -178,17 +181,22 @@ const JSON_NUMBER = /-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/y;
  * left to right: string literals decoded, number literals kept as written.
  *
  * One pass, no recursion (an answer is model output: its nesting is not a
- * call depth), no further than `MAX_ANSWER_TOKENS` texts.
+ * call depth), yielded lazily: the reader decides how far it classifies and
+ * counts the rest (`MAX_ANSWER_TOKENS`).
  */
-function answerTexts(answer: string): readonly string[] {
+function* answerTexts(answer: string): Generator<string> {
   const opening = answer.trimStart()[0];
-  if (opening !== '{' && opening !== '[') return [answer];
+  if (opening !== '{' && opening !== '[') {
+    yield answer;
+    return;
+  }
   try {
     JSON.parse(answer); // the grammar check — the values are read from the text below
-    return jsonLiterals(answer);
   } catch {
-    return [answer]; // not one JSON value: prose, as it always was
+    yield answer; // not one JSON value: prose, as it always was
+    return;
   }
+  yield* jsonLiterals(answer);
 }
 
 /**
@@ -196,10 +204,9 @@ function answerTexts(answer: string): readonly string[] {
  * `JSON.parse` accepted, left to right. Total on any input — bounded by the
  * text's length — though only ever handed valid JSON.
  */
-function jsonLiterals(json: string): readonly string[] {
-  const texts: string[] = [];
+function* jsonLiterals(json: string): Generator<string> {
   let at = 0;
-  while (at < json.length && texts.length < MAX_ANSWER_TOKENS) {
+  while (at < json.length) {
     const ch = json.charCodeAt(at);
     if (ch === 0x22 /* " */) {
       // The literal ends at the first quote no backslash escapes.
@@ -207,19 +214,19 @@ function jsonLiterals(json: string): readonly string[] {
       while (end < json.length && json.charCodeAt(end) !== 0x22) {
         end += json.charCodeAt(end) === 0x5c /* \ */ ? 2 : 1;
       }
-      texts.push(JSON.parse(json.slice(at, end + 1)) as string);
+      const literal = json.slice(at, end + 1);
       at = end + 1;
+      yield JSON.parse(literal) as string;
     } else if (ch === 0x2d /* - */ || (ch >= 0x30 && ch <= 0x39)) {
       // Outside a string, a digit or a minus only ever starts a number.
       JSON_NUMBER.lastIndex = at;
       const literal = JSON_NUMBER.exec(json)?.[0] ?? json.charAt(at);
-      texts.push(literal);
       at += literal.length;
+      yield literal;
     } else {
       at += 1; // structure, whitespace, true / false / null
     }
   }
-  return texts;
 }
 
 /**
@@ -241,6 +248,18 @@ export function candidateForms(candidate: Candidate): readonly string[] {
   return forms;
 }
 
+/** One reading of an answer: the values it asserts, and how much of it was never read. */
+export interface AnswerReading {
+  /** Every distinct value the answer asserts, in first-appearance order. */
+  readonly candidates: readonly Candidate[];
+  /**
+   * Words and numbers past `MAX_ANSWER_TOKENS` that were never classified or
+   * looked up — 0 when the whole answer was read. A value among them could be
+   * invented and would go unfound, so a reading with any is not a clean one.
+   */
+  readonly unread: number;
+}
+
 /**
  * Every distinct value the answer asserts, in first-appearance order.
  *
@@ -259,9 +278,24 @@ export function extractCandidates(
    *  carried values win before a numeric range is interpreted as endpoints. */
   exactTokens?: { readonly has: (value: string) => boolean },
 ): readonly Candidate[] {
+  return readAnswer(answer, gate, figures, exactTokens).candidates;
+}
+
+/**
+ * Read one answer: the values it asserts (`extractCandidates`), and how many
+ * of its words and numbers lay past the ceiling, never read. The reading
+ * stops CLASSIFYING at `MAX_ANSWER_TOKENS`; it never stops counting.
+ */
+export function readAnswer(
+  answer: string,
+  gate: ResolvedEvidenceGate,
+  figures?: ReadonlySet<string>,
+  exactTokens?: { readonly has: (value: string) => boolean },
+): AnswerReading {
   const seen = new Map<string, number>();
   const out: Candidate[] = [];
   let budget = MAX_ANSWER_TOKENS;
+  let unread = 0;
   const record = (candidate: Candidate | undefined): void => {
     if (candidate === undefined) return;
     const prior = seen.get(candidate.value);
@@ -280,7 +314,11 @@ export function extractCandidates(
     out.push(candidate);
   };
   const add = (spelling: string, rangeToken?: string): void => {
-    if (budget-- <= 0) return;
+    if (budget <= 0) {
+      unread += 1; // a range's second endpoint, past the line
+      return;
+    }
+    budget -= 1;
     const token = normalizeToken(spelling);
     let candidate = classifyToken(token, gate, figures);
     // Declared shapes and exemptions win, including over precision promotion.
@@ -299,10 +337,16 @@ export function extractCandidates(
     );
   };
   for (const text of answerTexts(answer)) {
-    if (budget <= 0) break;
     const spellings = answerTokenSpellings(text);
+    if (budget <= 0) {
+      unread += spellings.length; // past the line: counted, never classified
+      continue;
+    }
     for (let index = 0; index < spellings.length; index += 1) {
-      if (budget <= 0) break;
+      if (budget <= 0) {
+        unread += spellings.length - index;
+        break;
+      }
       const spelling = spellings[index] ?? '';
       const token = normalizeToken(spelling);
       // Test app-owned ID declarations on the intact token before heuristics.
@@ -326,5 +370,5 @@ export function extractCandidates(
       for (const piece of spelling.includes('–') ? tokenize(spelling) : [spelling]) add(piece);
     }
   }
-  return out;
+  return { candidates: out, unread };
 }

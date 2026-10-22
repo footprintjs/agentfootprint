@@ -59,6 +59,8 @@ export interface EvidenceCheckInput {
   readonly unsupported: number;
   /** The evidence index hit its ceiling: an unfound value may sit past the cut. */
   readonly truncated: boolean;
+  /** The answer's words and numbers past the gate's reading ceiling, never looked up. */
+  readonly unread: number;
   /** The gate's one repair turn ran before this verdict. */
   readonly revised: boolean;
 }
@@ -92,6 +94,14 @@ export function evidenceCheckOf(verdict: EvidenceCheckInput | undefined): Answer
           `${verdict.unsupported} value(s) the answer states appear in no tool result the run ` +
             `read${verdict.revised ? ', after the one repair turn' : ''}`,
         );
+  }
+  // What the gate never read it cannot clear: an invented value may sit there.
+  if (verdict.unread > 0) {
+    return row(
+      'unreachable',
+      `the answer is longer than the evidence gate reads: ${verdict.unread} more word(s) and ` +
+        `number(s) were never looked up`,
+    );
   }
   return row(
     'not-applicable',

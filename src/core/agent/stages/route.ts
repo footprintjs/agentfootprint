@@ -880,6 +880,7 @@ function judgeEvidence(
       lookedUp: judged.lookedUp,
       unsupported: judged.unsupported.length,
       truncated: judged.evidenceTruncated,
+      unread: judged.unread ?? 0,
       revised: afterRevision,
     };
   });

@@ -473,7 +473,7 @@ needs its builder call, or `build()` refuses. Their rows come after yours in
 | Row | `checked-pass` | `checked-fail` | `unreachable` | `not-applicable` |
 |---|---|---|---|---|
 | `agent:claims:<field>`, one per `.claims()` field, judged on the JSON this validation delivers | never: agreeing with a fact is not verifying the answer | the field contradicts the fact a tool settled | the field states a value no tool result settled, one settled as unknown or only as `null` / `'unknown'`, or one this run's tool results settled two different ways; or gives no value where the tool settled only `null` or `'unknown'` | the field agrees with the fact a tool settled; or the answer leaves the field out, or declines it (`null`, `'unknown'`) where the run settled a value |
-| `agent:names-and-numbers`, the gate asked of the JSON this validation delivers | never: finding a value clears an answer, it does not verify it | a value no tool result the run read carried | a value was not found and the evidence index had hit its ceiling | no value is unsupported, or the answer states none |
+| `agent:names-and-numbers`, the gate asked of the JSON this validation delivers | never: finding a value clears an answer, it does not verify it | a value no tool result the run read carried | a value was not found and the evidence index had hit its ceiling; or the answer is longer than the gate reads (its first 20,000 words and numbers), so the rest was never looked up | no value is unsupported, or the answer states none |
 
 - **Every row judges what is delivered.** Rows are judged on the exact JSON
   this validation delivers, after your schema's transform, never on the

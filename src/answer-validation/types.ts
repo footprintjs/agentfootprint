@@ -161,7 +161,9 @@ export interface AnswerValidationOptions<T = unknown> {
    *   asked of the exact candidate this validation delivers, after any output
    *   transform (its one repair turn under `posture: 'guard'` runs earlier, on
    *   the model's draft). A value no tool result carried: `checked-fail`.
-   *   A value not found while the index was past its ceiling: `unreachable`.
+   *   A value not found while the index was past its ceiling, or an answer
+   *   longer than the gate reads (20,000 words and numbers; the reason says
+   *   how many more were never looked up): `unreachable`.
    *   A clean pass is `not-applicable`: finding a value clears it, and never
    *   verifies the answer.
    *

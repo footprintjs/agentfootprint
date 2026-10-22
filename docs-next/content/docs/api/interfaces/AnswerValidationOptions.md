@@ -20,7 +20,7 @@ Opt-in contract. The callback cannot replace the accepted answer.
 
 > `readonly` `optional` **agentChecks?**: readonly [`AgentCheckName`](/docs/api/type-aliases/AgentCheckName)[]
 
-Defined in: [src/answer-validation/types.ts:197](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L197)
+Defined in: [src/answer-validation/types.ts:199](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L199)
 
 The agent's own answer checks that take part in this validation. Opt-in:
 omitted, the report holds your checks alone, exactly as before.
@@ -56,7 +56,9 @@ way. `mode: 'observe'` records the rows and delivers.
   asked of the exact candidate this validation delivers, after any output
   transform (its one repair turn under `posture: 'guard'` runs earlier, on
   the model's draft). A value no tool result carried: `checked-fail`.
-  A value not found while the index was past its ceiling: `unreachable`.
+  A value not found while the index was past its ceiling, or an answer
+  longer than the gate reads (20,000 words and numbers; the reason says
+  how many more were never looked up): `unreachable`.
   A clean pass is `not-applicable`: finding a value clears it, and never
   verifies the answer.
 
@@ -130,7 +132,7 @@ Defined in: [src/answer-validation/types.ts:125](https://github.com/footprintjs/
 
 > **validate**(`candidate`, `context`): `AnswerValidationResult` \| `Promise`\<`AnswerValidationResult`\>
 
-Defined in: [src/answer-validation/types.ts:198](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L198)
+Defined in: [src/answer-validation/types.ts:200](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L200)
 
 #### Parameters
 

@@ -93,6 +93,15 @@ the repair turn (on the draft); a value the delivered candidate carries that no
 result did fails the row, and the answer is withheld. A clean pass is `not-applicable` there: a found value clears an
 answer, it never verifies one.
 
+**An answer longer than the gate reads.** `extract.ts` · `readAnswer` classifies
+at most `MAX_ANSWER_TOKENS` (20,000) words and numbers of one answer — a model
+that pastes a 10 MB table must not turn the gate into the run's cost — and
+COUNTS the rest instead of stopping silently. The verdict carries the count as
+`EvidenceVerdict.unread` (absent when the whole answer was read, so every
+other verdict keeps its bytes). The gate's own postures still act only on
+what it found; answer validation's `'names-and-numbers'` row reads a count
+as `unreachable`, never as a clean pass.
+
 ## Recovery guidance (9.96.0)
 
 An unsupported draft under `guard` or `rails` gets the existing single revision.

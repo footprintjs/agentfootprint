@@ -291,6 +291,14 @@ export interface EvidenceVerdict {
    */
   readonly evidenceTruncated: boolean;
   /**
+   * The answer's words and numbers past the reading ceiling
+   * (`extract.ts` · `MAX_ANSWER_TOKENS`, 20,000): never classified, never
+   * looked up. ABSENT when the whole answer was read. A clean verdict that
+   * carries it cleared only the part it read — answer validation's
+   * `'names-and-numbers'` row is `unreachable` on it.
+   */
+  readonly unread?: number;
+  /**
    * WHEN the answer's grounded values were read (9.83.0) — the same pass,
    * one time axis.
    *

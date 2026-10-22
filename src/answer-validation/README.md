@@ -123,7 +123,10 @@ with this door and with `rails` (`docs/design/honesty/README.md` § 8).
   state, read only when that Route stage answers `'final'`), and asked of the
   canonical JSON. Never the verdict on the model's draft: an output schema can
   transform the draft (1200 read, 9750 delivered).
-  No verdict (the gate never judged it) → `unreachable`. A clean pass →
+  No verdict (the gate never judged it) → `unreachable`; so is an answer
+  longer than the gate reads — the gate classifies its first 20,000 words and
+  numbers and only COUNTS the rest (`EvidenceVerdict.unread`), and the row's
+  reason names that count. A clean pass →
   `not-applicable`: a membership pass never supports (the standing fold's
   law), so the gate can withhold an answer and never make a report pass.
 

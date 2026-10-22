@@ -302,7 +302,9 @@ test) can recognise it without matching on prose.
   asked again of the exact JSON that validation delivers, after any output
   transform, and its verdict becomes a row of that report. A value no tool
   result carried fails it; a clean pass is `not-applicable`, because finding a
-  value clears an answer without verifying it.
+  value clears an answer without verifying it. The gate reads the first 20,000
+  words and numbers of an answer; an answer longer than that makes the row
+  `unreachable`, with the reason naming how many more were never looked up.
 * With [`.reliability()`](doc:reliability): no collision. Reliability governs
   what one *call* does before a response is committed; this governs an answer
   that **was** committed.
