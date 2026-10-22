@@ -41,34 +41,43 @@ The mapping holds on **both** paths — `complete()` and `stream()` produce the 
 
 ## Stream wait limits
 
-Use `bedrock({ timeoutMs: 30_000 })` to bound a silent stream. The same cap
-applies separately to the SDK response, each event read, an early close and
-any non-stream fallback. It is an idle limit, not a total generation budget:
-a stream that keeps making progress may run longer. Time while your code is
+Use `bedrock({ timeoutMs: 30_000, firstEventTimeoutMs: 120_000 })` to bound
+silent calls. `timeoutMs` covers a direct `complete()` response, each later
+stream read, early close and the existing non-stream fallback. For streaming,
+`firstEventTimeoutMs` covers the SDK response and the first event separately;
+it defaults to `timeoutMs`. Set it above the slowest expected prompt-prefill
+latency. Each wait gets its own cap; this is not a total run budget. Time spent
 holding a yielded chunk does not count as provider silence.
 
 <CodeFile path="examples/features/107-bedrock-stream-deadline.ts" region="timeout" title="Scripted timeout and recovery, no AWS calls" />
 
-A miss raises `BedrockStreamTimeoutError` from `agentfootprint/providers`,
-with `code: 'BEDROCK_STREAM_TIMEOUT'`, `phase` (`response`, `chunk`, `close` or
-`fallback`, typed as `BedrockStreamWait`), `timeoutMs` and `retryable: true`.
-`withRetry` retries only before
-its first public chunk. Once a chunk reaches your code, a timeout surfaces
-without replaying partial text. Mid-stream buffering/retry is not enabled by
-this option.
+The root and `agentfootprint/providers` doors export `ProviderTimeoutError`, `isProviderTimeout`,
+`ERR_PROVIDER_TIMEOUT` and the `ProviderTimeoutWait` type. These describe the
+shared timeout contract: `provider`, `waitingFor`, `timeoutMs`, `afterOutput`
+and `retryable`. Check `isProviderTimeout(error)` across CommonJS and ESM,
+rather than relying on one copy's class identity. Bedrock throws this error;
+the gateway keeps its existing `reason: 'timeout'` error and composes the same
+fields and cause.
 
-Your request's `signal` still wins and keeps its cancellation reason. The
-adapter passes the linked signal through the SDK's documented
-[`abortSignal` option](https://aws.amazon.com/blogs/developer/abortcontroller-in-modular-aws-sdk-for-javascript/),
-requests iterator cleanup and refuses late results. Cancellation is best
-effort: a timeout does not prove remote work stopped or tell you the bill.
-Missing provider usage stays unknown.
+`afterOutput` includes tool blocks and argument fragments, even before the
+adapter yields public text. Once output starts, the timeout is **not retryable**.
+`withRetry` can recover before output starts, but a retry may still bill the
+prompt again: no output observed is not proof that the provider did no work.
+There is no replay of partial text and this option enables no buffering.
+A parse/read failure remains the primary error if cleanup subsequently stalls.
 
-Omitting `timeoutMs` keeps the existing uncapped stream behavior. A supplied
-value must be positive, finite milliseconds, at most 2,147,483,647. It does
-not add a timeout to direct `complete()` calls; use the caller's abort signal
-or your run's time budget for those. The gateway and Bedrock implementations
-use the same internal wait-deadline helper.
+Your request's `signal` keeps its cancellation reason. The adapter passes it
+through the SDK's documented
+[`abortSignal` option](https://aws.amazon.com/blogs/developer/abortcontroller-in-modular-aws-sdk-for-javascript/).
+The supported SDK owns closing its transport after abort. A late SDK response
+is discarded without starting a new iterator; calling `return()` on a fresh
+SDK generator is not evidence that the body closed. Remote settlement and
+charges without usage remain **unknown**.
+
+Timeouts are opt-in: leaving both options out installs no timer, including for
+`complete()`. The hosting app must choose its explicit model-specific limits
+or supply a caller deadline with `signal`. Positive finite milliseconds up to
+2,147,483,647 are accepted; invalid settings fail before loading the SDK.
 
 ## Prompt caching
 

@@ -1,13 +1,16 @@
 ---
 type: added
 ---
-**Bound silent Bedrock streams with `bedrock({ timeoutMs })`.** Each SDK response,
-event read, early close and non-stream fallback has its own wait cap. A miss
-aborts the request and raises `BedrockStreamTimeoutError`, with fixed
-`code: 'BEDROCK_STREAM_TIMEOUT'`, `phase`, `timeoutMs` and `retryable: true`.
-`withRetry` can recover before the first public chunk; after any chunk it
-surfaces the failure without replaying text. Omitted means no new cap; direct
-`complete()` calls keep their existing cancellation contract. The gateway and
-Bedrock adapters share one internal deadline helper, using the existing
-platform-safe timer and cancellation owner. A timeout requests cancellation;
-it does not prove remote execution stopped or establish missing usage as zero.
+**Bound Bedrock calls with `bedrock({ timeoutMs, firstEventTimeoutMs })`.**
+The opt-in limit covers direct `complete()` calls as well as streaming.
+The separate first-event allowance (defaulting to `timeoutMs`) covers stream
+opening and the first event; idle/close/fallback waits use `timeoutMs`.
+Consumer backpressure is excluded, and no total-duration limit is implied.
+Both options omitted preserves the timer-free default; hosts choose limits.
+
+Provider timeouts share `ProviderTimeoutError`, `isProviderTimeout`,
+`ERR_PROVIDER_TIMEOUT` and `ProviderTimeoutWait` on the root and providers doors.
+The facts include provider, wait, duration, whether output started and retry
+advice. Output includes tool arguments not publicly yielded. A pre-output retry
+may still bill input tokens; missing usage or remote settlement stays unknown.
+The gateway and Bedrock reuse one internal timer/cancellation owner.

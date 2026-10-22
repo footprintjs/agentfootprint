@@ -41,14 +41,11 @@ import type {
   WireRole,
 } from '../../provider-contract/types.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
-import { abortableIterable, abortErrorOf, throwIfAborted, untilAborted } from '../../lib/abort.js';
-import { waitDeadline } from '../../lib/waitDeadline.js';
-import {
-  BedrockStreamTimeoutError,
-  closeLateBedrockStream,
-  timedBedrockEvents,
-  type BedrockStreamWait,
-} from './bedrockStreamDeadline.js';
+import { abortErrorOf, throwIfAborted } from '../../lib/abort.js';
+import { checkedWaitMs } from '../../lib/waitDeadline.js';
+import { bedrockDeadline, sendBedrock, timedBedrockEvents } from './bedrockStreamDeadline.js';
+import { foldBedrockEvents } from './bedrockStreamAssembler.js';
+import { ensureHonestToolUse, normalizeStopReason } from './bedrockOutput.js';
 import { asContextWindowExceeded } from '../../provider-contract/contextWindow.js';
 import { retryAfterMsFromError } from './retryAfter.js';
 import { anthropicTakesForcedToolChoice } from './anthropicModels.js';
@@ -190,13 +187,16 @@ export interface BedrockProviderOptions {
   /** Default max tokens when not in the request. Default 4096. */
   readonly defaultMaxTokens?: number;
   /**
-   * Opt-in cap for each stream wait: SDK response, first/next event, early
-   * close and non-stream fallback. Omitted: no cap. Does not bound complete()
-   * used directly or consumer backpressure. A miss aborts the SDK request and
-   * raises BedrockStreamTimeoutError (retryable before the first public chunk).
-   * Caller cancellation wins. Positive finite milliseconds, at most 2^31-1.
+   * Opt-in cap for complete() and each stream idle/close/fallback wait.
+   * Omitted: no cap. Consumer backpressure is excluded. A miss aborts the SDK
+   * request and raises ProviderTimeoutError. Retry is advised only before any
+   * output was observed, including tool arguments. Remote usage remains unknown.
+   * Positive finite milliseconds, at most 2^31-1.
    */
   readonly timeoutMs?: number;
+  /** Stream opening and first-event cap. Defaults to timeoutMs; tune above the
+   * slowest expected prompt-prefill latency. Each wait has its own allowance. */
+  readonly firstEventTimeoutMs?: number;
   /** @internal Pre-built client for testing. */
   readonly _client?: BedrockClient;
   /**
@@ -244,18 +244,9 @@ export interface BedrockConverseSdkModule {
 const CARRIES_IN_MESSAGES: readonly WireRole[] = Object.freeze(['user', 'assistant']);
 
 export function bedrock(options: BedrockProviderOptions = {}): LLMProvider {
-  const timeoutMs = options.timeoutMs;
-  if (
-    timeoutMs !== undefined &&
-    (typeof timeoutMs !== 'number' ||
-      !Number.isFinite(timeoutMs) ||
-      timeoutMs <= 0 ||
-      timeoutMs > 2 ** 31 - 1)
-  ) {
-    throw new TypeError(
-      'bedrock: timeoutMs must be positive finite milliseconds at most 2147483647.',
-    );
-  }
+  const timeoutMs = checkedWaitMs(options.timeoutMs);
+  const firstEventTimeoutMs =
+    checkedWaitMs(options.firstEventTimeoutMs, 'firstEventTimeoutMs') ?? timeoutMs;
   const { client, Commands } = resolveClient(options);
   const defaultModel = options.defaultModel ?? 'anthropic.claude-sonnet-4-5-20250929-v1:0';
   const defaultMaxTokens = options.defaultMaxTokens ?? 4096;
@@ -271,154 +262,53 @@ export function bedrock(options: BedrockProviderOptions = {}): LLMProvider {
     supportsForcedToolChoice: (model) => anthropicTakesForcedToolChoice(modelOf(model)),
     thinkingMode: () => 'none',
     async complete(req: LLMRequest): Promise<LLMResponse> {
-      // A cancelled call sends nothing (lib/abort.ts, law 1).
       throwIfAborted(req.signal);
-      const input = buildInput(req, modelOf(req.model), defaultMaxTokens);
+      const deadline = bedrockDeadline(timeoutMs, timeoutMs, req.signal, () => false);
       try {
-        const cmd = new Commands.Converse(input);
-        // The signal rides the SDK's HTTP options, so an abort cancels the
-        // request itself; the race refuses an answer that lands after it.
-        const response = (await untilAborted(
-          sendUnder(client, cmd, req.signal),
-          req.signal,
-        )) as BedrockConverseResponse;
+        const input = buildInput(req, modelOf(req.model), defaultMaxTokens);
+        const response = await sendBedrock<BedrockConverseResponse>(
+          () => sendUnder(client, new Commands.Converse(input), deadline.signal),
+          deadline,
+          wrapError,
+        );
         return fromBedrockResponse(response);
-      } catch (err) {
-        throw wrapError(err, req.signal);
+      } finally {
+        deadline.dispose();
       }
     },
     async *stream(req: LLMRequest): AsyncIterable<LLMChunk> {
       throwIfAborted(req.signal);
-      const input = buildInput(req, modelOf(req.model), defaultMaxTokens);
-      const deadline = waitDeadline<BedrockStreamWait>(
+      let afterOutput = false;
+      const deadline = bedrockDeadline(
         timeoutMs,
+        firstEventTimeoutMs,
         req.signal,
-        (phase) => new BedrockStreamTimeoutError(phase, timeoutMs!),
+        () => afterOutput,
       );
+      const input = buildInput(req, modelOf(req.model), defaultMaxTokens);
       try {
-        let response: BedrockStreamResponse;
-        try {
-          const cmd = new Commands.ConverseStream(input);
-          const pending = sendUnder(client, cmd, deadline.signal) as Promise<BedrockStreamResponse>;
-          try {
-            response = await deadline.within(pending, 'response');
-          } catch (error) {
-            if (timeoutMs !== undefined && deadline.signal?.aborted) {
-              void pending.then(closeLateBedrockStream, () => undefined);
-            }
-            throw error;
-          }
-        } catch (err) {
-          throw wrapError(err, deadline.signal);
-        }
-        const stream = response.stream;
-        if (!stream) {
-          // Some Bedrock models / regions don't support streaming —
-          // fall back to a synthesized terminal chunk via complete().
-          const final =
-            timeoutMs === undefined
-              ? await provider.complete(req)
-              : await deadline.within(
-                  provider.complete({ ...req, signal: deadline.signal }),
-                  'fallback',
-                );
+        const response = await sendBedrock<BedrockStreamResponse>(
+          () => sendUnder(client, new Commands.ConverseStream(input), deadline.signal),
+          deadline,
+          wrapError,
+        );
+        if (!response.stream) {
+          const final = fromBedrockResponse(
+            await sendBedrock<BedrockConverseResponse>(
+              () => sendUnder(client, new Commands.Converse(input), deadline.signal),
+              deadline,
+              wrapError,
+              'fallback',
+            ),
+          );
           yield { tokenIndex: 0, content: '', done: true, response: final };
           return;
         }
-
-        const textParts: string[] = [];
-        let stopReason = 'stop';
-        let usage: LLMResponse['usage'] = { input: 0, output: 0 };
-        let tokenIndex = 0;
-
-        // Tool-use blocks under construction, keyed by `contentBlockIndex`.
-        // Keying by index (not arrival order) is what makes PARALLEL tool
-        // calls work: Bedrock interleaves their argument fragments.
-        const toolUseByIndex = new Map<number, { id: string; name: string; fragments: string[] }>();
-        const completedToolCalls: Array<{
-          id: string;
-          name: string;
-          args: Record<string, unknown>;
-        }> = [];
-
-        try {
-          // An abort ends this loop at once, even when a read is still pending,
-          // and closes the event stream (lib/abort.ts, laws 2–3).
-          for await (const event of timeoutMs === undefined
-            ? abortableIterable(stream, req.signal)
-            : timedBedrockEvents(stream, deadline)) {
-            // ── Block start: id + name arrive here; arguments follow as
-            //    JSON string fragments on deltas at the same index. ──
-            const startIndex = event.contentBlockStart?.contentBlockIndex;
-            const startToolUse = event.contentBlockStart?.start?.toolUse;
-            if (startToolUse && typeof startIndex === 'number') {
-              toolUseByIndex.set(startIndex, {
-                id: startToolUse.toolUseId ?? '',
-                name: startToolUse.name ?? '',
-                fragments: [],
-              });
-            }
-
-            if (event.contentBlockDelta?.delta?.text) {
-              const text = event.contentBlockDelta.delta.text;
-              textParts.push(text);
-              yield { tokenIndex, content: text, done: false };
-              tokenIndex++;
-            }
-
-            // ── Argument fragment. `LLMChunk` has no tool-delta field, so
-            //    these are NOT yielded as chunks (same as both Browser
-            //    providers) — they surface on the terminal `response`. ──
-            const inputFragment = event.contentBlockDelta?.delta?.toolUse?.input;
-            if (typeof inputFragment === 'string') {
-              const deltaIndex = event.contentBlockDelta?.contentBlockIndex;
-              const open =
-                typeof deltaIndex === 'number' ? toolUseByIndex.get(deltaIndex) : undefined;
-              // Bedrock sends `input: ''` fragments for no-arg tools; push
-              // them anyway — the join below collapses them to ''.
-              if (open) open.fragments.push(inputFragment);
-            }
-
-            // ── Block complete: join the fragments and parse. ──
-            const stopIndex = event.contentBlockStop?.contentBlockIndex;
-            if (typeof stopIndex === 'number') {
-              const tu = toolUseByIndex.get(stopIndex);
-              if (tu) {
-                toolUseByIndex.delete(stopIndex);
-                completedToolCalls.push({
-                  id: tu.id,
-                  name: tu.name,
-                  args: parseToolArgs(tu.fragments.join(''), tu.name, tu.id, stopIndex),
-                });
-              }
-            }
-
-            if (event.messageStop?.stopReason) {
-              stopReason = normalizeStopReason(event.messageStop.stopReason);
-            }
-            if (event.metadata?.usage) {
-              usage = {
-                input: event.metadata.usage.inputTokens,
-                output: event.metadata.usage.outputTokens,
-                ...readCacheUsage(event.metadata.usage),
-              };
-            }
-          }
-
-          // A block still open here never received its `contentBlockStop` —
-          // truncated wire data. Emitting a half-parsed call would run a
-          // tool with incomplete arguments, so we drop it and let the
-          // honesty invariant below catch the resulting contradiction.
-          const finalResponse: LLMResponse = ensureHonestToolUse({
-            content: textParts.join(''),
-            toolCalls: completedToolCalls,
-            usage,
-            stopReason,
-          });
-          yield { tokenIndex, content: '', done: true, response: finalResponse };
-        } catch (err) {
-          throw wrapError(err, deadline.signal);
-        }
+        yield* foldBedrockEvents(
+          timedBedrockEvents(response.stream, deadline, wrapError, () => {
+            afterOutput = true;
+          }),
+        );
       } finally {
         deadline.dispose();
       }
@@ -652,91 +542,6 @@ function fromBedrockResponse(response: BedrockConverseResponse): LLMResponse {
     stopReason: normalizeStopReason(response.stopReason ?? 'end_turn'),
     providerRef: response.ResponseMetadata?.RequestId,
   });
-}
-
-/**
- * Honesty invariant: a response claiming `tool_use` with zero parsed tool
- * calls is self-contradictory — the model asked for tools and the adapter
- * lost them. Never return it quietly; throw so a configured `reliability`
- * rule (retry / fallback / fail-fast) can act instead of the agent
- * silently answering without running its tools.
- *
- * Post-7.6.1 this cannot happen on today's wire shapes — it is a tripwire
- * for future ConverseStream shape drift. Applied on BOTH the streaming and
- * non-streaming exits so the two paths can never drift apart again.
- */
-function ensureHonestToolUse(response: LLMResponse): LLMResponse {
-  if (response.stopReason === 'tool_use' && response.toolCalls.length === 0) {
-    throw Object.assign(
-      new Error(
-        "[bedrock] stopReason 'tool_use' with zero parsed tool calls — " +
-          'tool-use blocks were lost (stream-shape drift?). ' +
-          'Refusing to return a self-contradictory response.',
-      ),
-      { name: 'BedrockProviderError', code: 'BEDROCK_STREAM_TOOLUSE_LOST' },
-    );
-  }
-  return response;
-}
-
-/**
- * Parse the joined JSON fragments of one streamed tool-use block.
- *
- * Empty (no-arg tools stream zero fragments, or a single `''`) → `{}`.
- * Malformed → a TYPED throw, never a silent `{}`: swallowing the failure
- * would execute a side-effecting tool with its arguments dropped, which is
- * the worst failure mode available. A thrown provider error reaches the
- * `reliability` / `withRetry` machinery, and a retry usually streams clean
- * JSON.
- *
- * The raw fragment bytes are deliberately NOT put in the message — tool
- * arguments can carry user data and provider error messages land in audit
- * logs unredacted. `rawLength` is reported instead.
- */
-function parseToolArgs(
-  joined: string,
-  toolName: string,
-  toolUseId: string,
-  contentBlockIndex: number,
-): Record<string, unknown> {
-  if (joined.trim().length === 0) return {};
-  try {
-    return JSON.parse(joined) as Record<string, unknown>;
-  } catch (parseErr) {
-    throw Object.assign(
-      new Error(
-        `[bedrock] malformed tool-use JSON for tool '${toolName}' (toolUseId ${toolUseId}): ` +
-          `${(parseErr as Error).message}. Refusing to run the tool with dropped arguments.`,
-      ),
-      {
-        name: 'BedrockProviderError',
-        code: 'BEDROCK_MALFORMED_TOOL_ARGS',
-        toolName,
-        toolUseId,
-        contentBlockIndex,
-        rawLength: joined.length,
-        cause: parseErr,
-      },
-    );
-  }
-}
-
-function normalizeStopReason(raw: string): string {
-  switch (raw) {
-    case 'end_turn':
-      return 'stop';
-    case 'tool_use':
-      return 'tool_use';
-    case 'max_tokens':
-      return 'max_tokens';
-    case 'stop_sequence':
-      return 'stop_sequence';
-    case 'guardrail_intervened':
-    case 'content_filtered':
-      return 'content_filter';
-    default:
-      return raw;
-  }
 }
 
 function wrapError(err: unknown, signal?: AbortSignal): Error {

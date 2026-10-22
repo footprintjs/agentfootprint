@@ -43,6 +43,7 @@
  * vendor, with a real Retry-After and real latency, remains unexercised.
  */
 
+import { isProviderTimeout } from '../provider-contract/timeout.js';
 import type {
   LLMCallHooks,
   LLMChunk,
@@ -311,6 +312,7 @@ function reportRecovered(
  * signal.
  */
 function classifyRetryReason(err: unknown): string {
+  if (isProviderTimeout(err)) return 'timeout';
   const status =
     (err as { status?: number })?.status ?? (err as { statusCode?: number })?.statusCode;
   if (typeof status !== 'number') return 'no-status';

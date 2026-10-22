@@ -8,7 +8,9 @@ their first caller so that readers in folders that cannot import each other
 cannot answer the same question differently.
 Support: `canonicalJson.ts`, `fnv1a.ts`, `lazyRequire.ts`, `libraryVersion.ts`,
 `sqliteUnavailable.ts`, `embedderMismatch.ts`, `storedPreview.ts`, `sleep.ts`,
-`abort.ts`, `linearText.ts`.
+`abort.ts`, `waitDeadline.ts`, `preserveFailure.ts`, `linearText.ts`. `waitDeadline.ts` composes the
+abort owner for per-wait timers and one checked millisecond option law; adapters
+choose the phase allowances and construct their own errors.
 Moved down from beside their first callers, so that no layer imports upward for
 a name both sides use (the layer table, `scripts/layering.config.cjs`):
 Map: `conventions.ts` (the builder↔recorder protocol — subflow and stage ids,

@@ -13,9 +13,9 @@ export interface WaitDeadline<Phase extends string = string> {
  * A fresh cap applies to each wait, not to time spent yielding to a consumer.
  */
 export function waitDeadline<Phase extends string>(
-  timeoutMs: number | undefined,
+  timeoutMs: number | undefined | ((phase: Phase) => number | undefined),
   callerSignal: AbortSignal | undefined,
-  timeoutError: (phase: Phase) => Error,
+  timeoutError: (phase: Phase, milliseconds: number) => Error,
 ): WaitDeadline<Phase> {
   if (timeoutMs === undefined) {
     return {
@@ -29,6 +29,8 @@ export function waitDeadline<Phase extends string>(
   return {
     signal: controller.signal,
     within<T>(pending: Promise<T>, phase: Phase): Promise<T> {
+      const milliseconds = typeof timeoutMs === 'function' ? timeoutMs(phase) : timeoutMs;
+      if (milliseconds === undefined) return untilAborted(pending, controller.signal);
       return new Promise<T>((resolve, reject) => {
         const settle = (): void => {
           disarm();
@@ -39,7 +41,9 @@ export function waitDeadline<Phase extends string>(
           settle();
           reject(abortErrorOf(controller.signal));
         };
-        const disarm = armDeadline(controller, timeoutMs, () => timeoutError(phase));
+        const disarm = armDeadline(controller, milliseconds, () =>
+          timeoutError(phase, milliseconds),
+        );
         active.add(settle);
         // Attach both handlers before checking an already-aborted signal:
         // an abandoned transport may reject later and must stay handled.
@@ -63,4 +67,16 @@ export function waitDeadline<Phase extends string>(
       unlink();
     },
   };
+}
+
+/** One option law for every adapter using these waits. No caller value is echoed. */
+export function checkedWaitMs(
+  raw: number | undefined,
+  field: 'timeoutMs' | 'firstEventTimeoutMs' = 'timeoutMs',
+): number | undefined {
+  if (raw === undefined) return undefined;
+  if (typeof raw !== 'number' || !Number.isFinite(raw) || raw <= 0 || raw > 2 ** 31 - 1) {
+    throw new TypeError(`${field} must be positive finite milliseconds at most 2147483647.`);
+  }
+  return raw;
 }

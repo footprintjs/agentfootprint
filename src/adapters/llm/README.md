@@ -178,16 +178,21 @@ reads `retry-after-ms` / `Retry-After` for `anthropic()`, `openai()` and
 `bedrock()`; `invokeModelGateway()` also reads its gateway's "Try again in N
 seconds" body. `withRetry` waits at least that long (resilience/README.md).
 
-## `invokeModelGateway({ timeoutMs })` — a deadline per wait
-Bounds the response headers, a `complete()` body, and EACH stream read (first
-chunk, then every gap — a stream that keeps talking is never cut off). A miss
-aborts the request and raises `reason: 'timeout'`, `retryable: true`; the
-caller's `req.signal` still wins. Omitted: the fetch gets exactly `req.signal`,
-as before.
+## Deadlines
+`bedrock()` and `invokeModelGateway()` share `lib/waitDeadline.ts`.
+Explicit `timeoutMs` bounds complete responses/body reads, stream idle reads,
+and early close. A separate `firstEventTimeoutMs` (default `timeoutMs`) covers
+stream response opening and the first event. Neither caps total duration or
+consumer backpressure. With both omitted there is no timer; hosts must configure
+model-specific limits or provide a caller signal.
 
-```ts
-invokeModelGateway({ baseUrl, apiKeyHeader: 'api-key', apiKey, model, timeoutMs: 30_000 });
-```
+The port's `ProviderTimeoutError` facts (`provider`, `waitingFor`, `timeoutMs`,
+`afterOutput`, `retryable`) are shared. Bedrock throws it; the gateway composes
+it inside its existing timeout error, recognized by `isProviderTimeout`.
+Retry advice is false after output starts, including tool/thinking blocks
+before public text. Before output, a retry may still bill input again.
+`withRetry` reports a timeout as such, without a separate retry loop here.
+
 
 ## Files
 - `AnthropicProvider.ts`, `OpenAIProvider.ts`, `BedrockProvider.ts`,

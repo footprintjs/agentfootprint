@@ -1,5 +1,5 @@
 /** Scripted stream timeout and retry. No AWS account, credentials or calls. */
-import { bedrock, BedrockStreamTimeoutError } from '../../src/doors/providers.js';
+import { bedrock, ProviderTimeoutError } from '../../src/doors/providers.js';
 import { withRetry } from '../../src/resilience/index.js';
 import type { LLMResponse } from '../../src/provider-contract/types.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
@@ -22,10 +22,11 @@ export async function run(input = meta.defaultInput ?? 'Next step'): Promise<unk
   let attempts = 0;
   let observedTimeout = false;
   // #region timeout
-  // In an application: bedrock({ region: 'us-east-1', timeoutMs: 30_000 }).
+  // In an application: bedrock({ region: 'us-east-1', timeoutMs: 30_000, firstEventTimeoutMs: 120_000 }).
   // This example supplies an entirely local SDK double instead.
   const provider = bedrock({
     timeoutMs: 20,
+    firstEventTimeoutMs: 20,
     _commands: { Converse: Command, ConverseStream: Command },
     _client: {
       send: async () => {
@@ -43,7 +44,7 @@ export async function run(input = meta.defaultInput ?? 'Next step'): Promise<unk
     maxAttempts: 2,
     initialDelayMs: 0,
     onRetry: (error) => {
-      observedTimeout = error instanceof BedrockStreamTimeoutError;
+      observedTimeout = error instanceof ProviderTimeoutError;
     },
   });
   let answer: LLMResponse | undefined;

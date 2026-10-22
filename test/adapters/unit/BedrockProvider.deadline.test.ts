@@ -98,10 +98,10 @@ describe('Bedrock stream deadlines — scripted SDK, no AWS calls', () => {
     expect(observed.result).toMatchObject({
       state: 'rejected',
       error: {
-        name: 'BedrockStreamTimeoutError',
-        code: 'BEDROCK_STREAM_TIMEOUT',
+        name: 'ProviderTimeoutError',
+        code: 'ERR_PROVIDER_TIMEOUT',
         retryable: true,
-        phase: 'response',
+        waitingFor: 'response',
       },
     });
     expect(signal?.aborted).toBe(true);
@@ -125,7 +125,12 @@ describe('Bedrock stream deadlines — scripted SDK, no AWS calls', () => {
       await vi.advanceTimersByTimeAsync(20);
       expect(observed.result).toMatchObject({
         state: 'rejected',
-        error: { code: 'BEDROCK_STREAM_TIMEOUT', phase: 'chunk' },
+        error: {
+          code: 'ERR_PROVIDER_TIMEOUT',
+          waitingFor: position === 'first' ? 'first-event' : 'chunk',
+          afterOutput: position === 'later',
+          retryable: position !== 'later',
+        },
       });
       expect(source.close).toHaveBeenCalledTimes(1);
       expect(vi.getTimerCount()).toBe(0);
@@ -145,7 +150,7 @@ describe('Bedrock stream deadlines — scripted SDK, no AWS calls', () => {
     await vi.advanceTimersByTimeAsync(20);
     expect(observed.result).toMatchObject({
       state: 'rejected',
-      error: { code: 'BEDROCK_STREAM_TIMEOUT', phase: 'close' },
+      error: { code: 'ERR_PROVIDER_TIMEOUT', waitingFor: 'close' },
     });
     expect(close).toHaveBeenCalledTimes(1);
   });
@@ -181,7 +186,7 @@ describe('Bedrock stream deadlines — scripted SDK, no AWS calls', () => {
     await vi.advanceTimersByTimeAsync(100);
     expect(observed.result).toMatchObject({
       state: 'rejected',
-      error: { code: 'BEDROCK_STREAM_TIMEOUT' },
+      error: { code: 'ERR_PROVIDER_TIMEOUT' },
     });
     expect(client.send).toHaveBeenCalledTimes(1);
   });
@@ -244,19 +249,17 @@ describe('Bedrock stream deadlines — scripted SDK, no AWS calls', () => {
     expect(client.send).not.toHaveBeenCalled();
   });
 
-  it('cleans up a late SDK stream without accepting its content or usage', async () => {
+  it('discards a late SDK stream without starting a fresh iterator or accepting usage', async () => {
     vi.useFakeTimers();
     const response = deferred<unknown>();
-    const source = ready();
-    const { provider } = setup(async () => response.promise, {
-      timeoutMs: 20,
-    });
+    const iteratorRequests = vi.fn(() => ready().stream[Symbol.asyncIterator]());
+    const { provider } = setup(async () => response.promise, { timeoutMs: 20 });
     const observed = watch(drain(provider.stream!(request)));
     await vi.advanceTimersByTimeAsync(20);
     expect(observed.result.state).toBe('rejected');
-    response.resolve(source);
+    response.resolve({ stream: { [Symbol.asyncIterator]: iteratorRequests } });
     await vi.advanceTimersByTimeAsync(0);
-    expect(source.close).toHaveBeenCalledTimes(1);
+    expect(iteratorRequests).not.toHaveBeenCalled();
     expect(observed.result).not.toHaveProperty('value');
   });
 
@@ -270,7 +273,7 @@ describe('Bedrock stream deadlines — scripted SDK, no AWS calls', () => {
     await vi.advanceTimersByTimeAsync(20);
     expect(observed.result).toMatchObject({
       state: 'rejected',
-      error: { code: 'BEDROCK_STREAM_TIMEOUT', phase: 'fallback' },
+      error: { code: 'ERR_PROVIDER_TIMEOUT', waitingFor: 'fallback' },
     });
     expect(client.send).toHaveBeenCalledTimes(2);
   });

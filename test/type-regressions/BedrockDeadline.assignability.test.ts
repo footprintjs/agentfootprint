@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  BedrockStreamTimeoutError,
+  ProviderTimeoutError,
   type BedrockProviderOptions,
-  type BedrockStreamWait,
+  type ProviderTimeoutWait,
 } from '../../src/doors/providers.js';
 
 const valid: BedrockProviderOptions = { timeoutMs: 1_000 };
@@ -13,12 +13,17 @@ void invalid;
 
 describe('public Bedrock deadline contract', () => {
   it('exports the typed error and each supported phase through providers', () => {
-    const phases: BedrockStreamWait[] = ['response', 'chunk', 'close', 'fallback'];
+    const phases: ProviderTimeoutWait[] = ['response', 'chunk', 'close', 'fallback'];
     expect(valid.timeoutMs).toBe(1_000);
     for (const phase of phases) {
-      const error = new BedrockStreamTimeoutError(phase, valid.timeoutMs!);
-      expect(error.code).toBe('BEDROCK_STREAM_TIMEOUT');
-      expect(error.phase).toBe(phase);
+      const error = new ProviderTimeoutError({
+        provider: 'bedrock',
+        waitingFor: phase,
+        timeoutMs: valid.timeoutMs!,
+        afterOutput: false,
+      });
+      expect(error.code).toBe('ERR_PROVIDER_TIMEOUT');
+      expect(error.waitingFor).toBe(phase);
       expect(error.retryable).toBe(true);
     }
   });

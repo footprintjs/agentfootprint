@@ -707,6 +707,12 @@ export {
   ERR_CONTEXT_WINDOW_EXCEEDED,
   isContextWindowExceeded,
 } from './provider-contract/contextWindow.js';
+export {
+  ProviderTimeoutError,
+  ERR_PROVIDER_TIMEOUT,
+  isProviderTimeout,
+  type ProviderTimeoutWait,
+} from './provider-contract/timeout.js';
 // The conversation refusals (9.2.0) — `instanceof`-able so a caller can tell
 // "you are already running" from "somebody is still waiting on an answer" from
 // "there is nothing to follow up on".

@@ -1,62 +1,91 @@
 import { abortableIterable } from '../../lib/abort.js';
-import type { WaitDeadline } from '../../lib/waitDeadline.js';
+import { waitDeadline, type WaitDeadline } from '../../lib/waitDeadline.js';
+import { ProviderTimeoutError, type ProviderTimeoutWait } from '../../provider-contract/timeout.js';
+import type { BedrockStreamEvent } from './BedrockProvider.js';
 
-/** The wait that exceeded a Bedrock stream's configured cap. */
-export type BedrockStreamWait = 'response' | 'chunk' | 'close' | 'fallback';
+/** The adapter chooses allowances; the shared leaf owns timers/cancellation. */
+export function bedrockDeadline(
+  timeoutMs: number | undefined,
+  firstEventTimeoutMs: number | undefined,
+  signal: AbortSignal | undefined,
+  afterOutput: () => boolean,
+): WaitDeadline<ProviderTimeoutWait> {
+  return waitDeadline<ProviderTimeoutWait>(
+    firstEventTimeoutMs === timeoutMs
+      ? timeoutMs
+      : (phase) =>
+          phase === 'response' || phase === 'first-event' ? firstEventTimeoutMs : timeoutMs,
+    signal,
+    (waitingFor, milliseconds) =>
+      new ProviderTimeoutError({
+        provider: 'bedrock',
+        waitingFor,
+        timeoutMs: milliseconds,
+        afterOutput: afterOutput(),
+      }),
+  );
+}
 
-/**
- * An opted-in Bedrock stream made no progress within timeoutMs.
- * `withRetry` retries only before its first public chunk; a later timeout
- * must surface rather than replaying text the caller may have displayed.
- * Contains no request, credentials, model identifier or transport error.
- */
-export class BedrockStreamTimeoutError extends Error {
-  override readonly name = 'BedrockStreamTimeoutError';
-  /** Stable discriminator for callers and stored error evidence. */
-  readonly code = 'BEDROCK_STREAM_TIMEOUT';
-  /** A retry advisory; never permission to replay already delivered chunks. */
-  readonly retryable = true;
-
-  constructor(
-    /** Which provider wait stopped making progress. */
-    readonly phase: BedrockStreamWait,
-    /** The configured cap for this wait, in milliseconds. */
-    readonly timeoutMs: number,
-  ) {
-    super(`[bedrock] no progress within ${timeoutMs} ms while waiting for stream ${phase}.`);
+/** One SDK send under its allowance. Never start/advance an abandoned stream:
+ * the SDK's abortSignal owns its socket; a new generator's return cannot close it. */
+export async function sendBedrock<T>(
+  send: () => Promise<unknown>,
+  deadline: WaitDeadline<ProviderTimeoutWait>,
+  wrapError: (error: unknown, signal?: AbortSignal) => Error,
+  waitingFor: ProviderTimeoutWait = 'response',
+): Promise<T> {
+  try {
+    return await deadline.within(send() as Promise<T>, waitingFor);
+  } catch (error) {
+    throw wrapError(error, deadline.signal);
   }
 }
 
-/** Race each actual read/close, never the time the caller holds a chunk. */
-export function timedBedrockEvents<T>(
-  source: AsyncIterable<T>,
-  deadline: WaitDeadline<BedrockStreamWait>,
-): AsyncIterable<T> {
-  const watched = abortableIterable(source, deadline.signal);
+/** Each real read/close is bounded. Observe generated output before yielding
+ * it to the assembler: tool-only output must not license a paid replay. */
+export function timedBedrockEvents(
+  source: AsyncIterable<BedrockStreamEvent>,
+  deadline: WaitDeadline<ProviderTimeoutWait>,
+  wrapError: (error: unknown, signal?: AbortSignal) => Error,
+  onOutput: () => void,
+): AsyncIterable<BedrockStreamEvent> {
   return {
-    [Symbol.asyncIterator](): AsyncIterator<T> {
-      const iterator = watched[Symbol.asyncIterator]();
+    [Symbol.asyncIterator](): AsyncIterator<BedrockStreamEvent> {
+      const iterator = abortableIterable(source, deadline.signal)[Symbol.asyncIterator]();
+      let first = true;
       return {
-        next: () => deadline.within(iterator.next(), 'chunk'),
-        return: (value?: unknown) =>
-          deadline.within(
-            Promise.resolve(iterator.return?.(value) ?? { done: true, value: value as T }),
-            'close',
-          ),
+        async next() {
+          try {
+            const result = await deadline.within(iterator.next(), first ? 'first-event' : 'chunk');
+            if (!result.done) {
+              first = false;
+              const event = result.value;
+              if (
+                event.contentBlockStart?.start?.toolUse ||
+                (event.contentBlockDelta?.delta &&
+                  Object.keys(event.contentBlockDelta.delta).length > 0) ||
+                (event.metadata?.usage?.outputTokens ?? 0) > 0
+              )
+                onOutput();
+            }
+            return result;
+          } catch (error) {
+            throw wrapError(error, deadline.signal);
+          }
+        },
+        async return(value?: unknown) {
+          try {
+            return await deadline.within(
+              Promise.resolve(
+                iterator.return?.(value) ?? { done: true, value: value as BedrockStreamEvent },
+              ),
+              'close',
+            );
+          } catch (error) {
+            throw wrapError(error, deadline.signal);
+          }
+        },
       };
     },
   };
-}
-
-/**
- * A transport that ignored abort may hand back a stream after its request
- * was abandoned. Request cleanup without reading it or awaiting its close.
- */
-export function closeLateBedrockStream(response: { stream?: AsyncIterable<unknown> }): void {
-  try {
-    const result = response.stream?.[Symbol.asyncIterator]().return?.();
-    Promise.resolve(result).catch(() => undefined);
-  } catch {
-    // Best effort: the timeout/cancellation is already the caller's result.
-  }
 }
