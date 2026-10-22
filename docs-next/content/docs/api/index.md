@@ -427,6 +427,7 @@ title: agentfootprint
 ## Type Aliases
 
 - [ActKey](/docs/api/type-aliases/ActKey)
+- [AgentCheckName](/docs/api/type-aliases/AgentCheckName)
 - [AgentOutput](/docs/api/type-aliases/AgentOutput)
 - [ArtifactDetailErrorCode](/docs/api/type-aliases/ArtifactDetailErrorCode)
 - [ArtifactDetailResult](/docs/api/type-aliases/ArtifactDetailResult)

@@ -89,6 +89,14 @@ cannot ground a value on its second try will not on its fifth.
 // evidence_checked { action: 'grounded', afterRevision: true }   ← it worked
 ```
 
+**To withhold rather than flag** a typed answer, list the gate in an enforcing
+answer validation: `.answerValidation({ …, agentChecks: ['names-and-numbers'] })`.
+The posture still decides whether the model gets its one repair turn. Whatever
+survives it fails the validation, so the answer is withheld and no draft token
+of it is streamed. See
+[Let the agent's own checks hold the answer](doc:output-schema) on the output
+schema page.
+
 ## What counts as evidence
 
 * **Tool results** — the `role: 'tool'` turns of the conversation. That is the
@@ -288,7 +296,11 @@ test) can recognise it without matching on prose.
   an answer with the wrong shape is about to be replaced wholesale, so grounding
   it would pay for the same turn twice. The evidence gate judges what the schema
   let stand, and an answer that exhausted its schema retries is not judged at
-  all.
+  all. A typed answer is read value by value: `{"total":1200}` checks `1200`.
+* With `.answerValidation({ agentChecks: ['names-and-numbers'] })`: the gate's
+  verdict on the answer that stands becomes a row of that report. A value no
+  tool result carried fails it; a clean pass is `not-applicable`, because
+  finding a value clears an answer without verifying it.
 * With [`.reliability()`](doc:reliability): no collision. Reliability governs
   what one *call* does before a response is committed; this governs an answer
   that **was** committed.

@@ -1543,7 +1543,9 @@ export class AgentBuilder {
    * does not guess that an answer field named `nav_count` is about
    * `nav(screen2)`; you say so, and the checker joins. Nothing is blocked:
    * a disagreement files one `agentfootprint.integrity.context_error` at
-   * seam `'claim'`, and the answer is returned exactly as it was.
+   * seam `'claim'`, and the answer is returned exactly as it was — unless an
+   * enforcing `.answerValidation({ agentChecks: ['claims'] })` lists the
+   * check, which then withholds a contradicted answer.
    *
    * Requires `.outputSchema()` — without a validated answer object there is
    * no typed stratum to read, and prose is never checked. Refused at
@@ -3231,6 +3233,11 @@ export class AgentBuilder {
    * the answer; the schema's JSON-safe output is serialized once for delivery.
    * `.outputFallback()` and `.limitsTravelWithTheAnswer()` are refused beside it
    * in this version.
+   *
+   * `agentChecks: ['claims', 'names-and-numbers']` makes the agent's own
+   * `.claims()` and `.namesAndNumbersFromEvidence()` verdicts rows of the same
+   * report, so a contradicted field or an invented value is withheld rather
+   * than only recorded (see {@link AnswerValidationOptions.agentChecks}).
    */
   answerValidation<T>(options: AnswerValidationOptions<T>): this {
     if (this.answerValidationConfig !== undefined) {
@@ -3341,6 +3348,22 @@ export class AgentBuilder {
       if (this.outputFallbackCfg !== undefined || this.limitsTravelValue) {
         throw new Error(
           'AgentBuilder.answerValidation does not support .outputFallback() or .limitsTravelWithTheAnswer(): a fallback can replace the checked answer after validation, and the validated delivery has no place for the declared limits.',
+        );
+      }
+      // A listed check with nothing to judge is refused, never left to pass.
+      const listed = this.answerValidationConfig.agentChecks;
+      if (listed.includes('claims') && this.claimsContract === undefined) {
+        throw new Error(
+          "AgentBuilder.answerValidation({ agentChecks: ['claims'] }) needs a .claims() contract: " +
+            'it names which answer field claims which fact, and without one the claim check has ' +
+            "nothing to judge. Declare the contract, or drop 'claims' from agentChecks.",
+        );
+      }
+      if (listed.includes('names-and-numbers') && this.evidenceGate === undefined) {
+        throw new Error(
+          "AgentBuilder.answerValidation({ agentChecks: ['names-and-numbers'] }) needs " +
+            '.namesAndNumbersFromEvidence(): its verdict is what the row reads. Add the gate, or ' +
+            "drop 'names-and-numbers' from agentChecks.",
         );
       }
     }

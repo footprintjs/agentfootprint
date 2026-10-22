@@ -1,6 +1,7 @@
 /** Explicit, bounded validation of schema-accepted JSON answers. */
 export {
   AnswerValidationError,
+  type AgentCheckName,
   type AnswerCheck,
   type AnswerEvidenceRefusal,
   type AnswerEvidenceResolution,
@@ -15,6 +16,12 @@ export {
   type ResolvedAnswerValidation,
 } from './types.js';
 export { resolveAnswerValidation, executeAnswerValidation } from './validate.js';
+export {
+  AGENT_CHECK_PREFIX,
+  claimChecksOf,
+  evidenceCheckOf,
+  type EvidenceCheckInput,
+} from './agentChecks.js';
 export {
   checkClaimRequirements,
   type ClaimRequirementPolicy,

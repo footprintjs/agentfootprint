@@ -5519,6 +5519,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
             artifactStore,
             () => this.consentOutstanding.size > 0,
             this.outputEnforcement?.outputFormat !== undefined,
+            // Read only when `agentChecks` lists 'claims' (the agent's own rows).
+            this.claimContract,
           );
     // `.limitsTravelWithTheAnswer()` on a TYPED answer — decided once, here.
     // An output schema makes the answer JSON, and the appended block would

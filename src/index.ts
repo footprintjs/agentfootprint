@@ -1353,6 +1353,7 @@ export {
   type AnswerValidationOptions,
   type AnswerValidationReport,
   type AnswerCheck,
+  type AgentCheckName,
   type AnswerEvidenceResolver,
   type AnswerToolCall,
   type AnswerToolCallsView,

@@ -1,21 +1,86 @@
 /**
- * The agent's own checks govern delivery — end to end, scripted provider, no I/O.
+ * The agent's own checks govern delivery — `answerValidation({ agentChecks })`,
+ * end to end. Scripted providers that really stream, synthetic build-job and
+ * order data, no I/O and no model calls.
  *
- * RED FIRST: an agent with an ENFORCING `.answerValidation()` and a `.claims()`
- * contract still hands back an answer whose typed field contradicts the fact a
- * tool settled — the claim check files its finding and the answer is delivered.
+ * The red this suite started from: an agent with an ENFORCING
+ * `.answerValidation()` and a `.claims()` contract handed back an answer whose
+ * typed field contradicted the fact its tool settled — the claim check filed
+ * its finding and the answer was delivered. The `contract:` block below pins
+ * that this is still exactly what happens when `agentChecks` is not set.
  */
 import { describe, expect, it } from 'vitest';
 import {
   Agent,
   AnswerValidationError,
+  UnsupportedValuesError,
   defineTool,
   describedResult,
+  type AnswerValidationOptions,
   type LLMProvider,
   type LLMRequest,
   type OutputSchemaParser,
 } from '../../src/index.js';
 import type { Payloads } from '../../src/events.js';
+
+type Turn = { readonly content?: string; readonly toolCalls?: readonly ToolCall[] };
+type ToolCall = {
+  readonly id: string;
+  readonly name: string;
+  readonly args: Record<string, unknown>;
+};
+
+/** A provider that streams each scripted turn in two chunks; `complete()` is never used. */
+function scripted(turns: readonly Turn[]) {
+  const requests: LLMRequest[] = [];
+  const provider: LLMProvider = {
+    name: 'agent-checks-fixture',
+    complete: async () => {
+      throw new Error('the stream path must be used');
+    },
+    stream: async function* (request) {
+      requests.push(JSON.parse(JSON.stringify(request)) as LLMRequest);
+      const turn = turns[requests.length - 1];
+      if (turn === undefined) throw new Error('unexpected provider call');
+      const content = turn.content ?? '';
+      const at = Math.ceil(content.length / 2);
+      if (content.length > 0) {
+        yield { tokenIndex: 0, content: content.slice(0, at), done: false };
+        yield { tokenIndex: 1, content: content.slice(at), done: false };
+      }
+      const toolCalls = [...(turn.toolCalls ?? [])];
+      yield {
+        tokenIndex: 2,
+        content: '',
+        done: true,
+        response: {
+          content,
+          toolCalls,
+          usage: { input: 1, output: 1 },
+          stopReason: toolCalls.length > 0 ? 'tool_use' : 'stop',
+        },
+      };
+    },
+  };
+  return { provider, requests };
+}
+
+/** What a person (or a page) could receive: stream tokens and the turn's final answer. */
+function delivered(agent: Agent) {
+  const tokens: string[] = [];
+  const ends: string[] = [];
+  const findings: Payloads.IntegrityContextErrorPayload[] = [];
+  const grounding: Payloads.AgentEvidenceCheckedPayload[] = [];
+  agent.on('agentfootprint.stream.token', (e) => tokens.push(e.payload.content));
+  agent.on('agentfootprint.agent.turn_end', (e) => ends.push(e.payload.finalContent));
+  agent.on('agentfootprint.integrity.context_error', (e) => findings.push(e.payload));
+  agent.on('agentfootprint.agent.evidence_checked', (e) => grounding.push(e.payload));
+  return { tokens, ends, findings, grounding };
+}
+
+const REACT_MODES = ['classic', 'dynamic', 'dynamic-grouped'] as const;
+
+// ── Build jobs: a typed claim against a settled fact ─────────────────────
 
 interface BuildAnswer {
   readonly job: string;
@@ -31,68 +96,447 @@ const buildAnswer: OutputSchemaParser<BuildAnswer> = {
   },
 };
 
-/** One tool call, then the scripted final answer. */
-function scripted(final: string): { provider: LLMProvider; requests: LLMRequest[] } {
-  const requests: LLMRequest[] = [];
-  const provider: LLMProvider = {
-    name: 'agent-checks-fixture',
-    async complete(request) {
-      requests.push(JSON.parse(JSON.stringify(request)) as LLMRequest);
-      const first = requests.length === 1;
-      if (requests.length > 2) throw new Error('unexpected provider call');
-      return {
-        content: first ? '' : final,
-        toolCalls: first ? [{ id: 'call-1', name: 'read_build', args: { job: 'build-job-72' } }] : [],
-        usage: { input: 1, output: 1 },
-        stopReason: first ? 'tool_use' : 'end_turn',
-      };
-    },
-  };
-  return { provider, requests };
+function readBuild(entity = 'build-job-72') {
+  return defineTool({
+    name: 'read_build',
+    description: 'Read one build job.',
+    inputSchema: { type: 'object', properties: { job: { type: 'string' } } },
+    execute: () =>
+      describedResult({
+        facts: [{ entity, durationMs: 1250 }],
+        provenance: { source: 'synthetic-ci', measuredAt: '2026-01-01T00:00:00Z' },
+      }),
+  });
 }
 
-const readBuild = defineTool({
-  name: 'read_build',
-  description: 'Read one build job.',
-  inputSchema: { type: 'object', properties: { job: { type: 'string' } } },
-  execute: () =>
-    describedResult({
-      facts: [{ entity: 'build-job-72', durationMs: 1250 }],
-      provenance: { source: 'synthetic-ci', measuredAt: '2026-01-01T00:00:00Z' },
-    }),
+/** The host's own check — something only the app knows: which job was asked about. */
+const buildReport = (
+  over: Partial<AnswerValidationOptions<BuildAnswer>> = {},
+): AnswerValidationOptions<BuildAnswer> => ({
+  id: 'build-report',
+  version: '1',
+  agentChecks: ['claims'],
+  validate: (answer) => ({
+    checks: [
+      {
+        id: 'asked-job',
+        disposition: answer.job === 'build-job-72' ? 'checked-pass' : 'checked-fail',
+      },
+    ],
+  }),
+  ...over,
 });
 
-describe('functional: a contradicted typed claim under an enforcing answer validation', () => {
-  it('is withheld, not delivered with a finding beside it', async () => {
-    const { provider } = scripted(JSON.stringify({ job: 'build-job-72', durationMs: 9750 }));
-    const agent = Agent.create({ provider, model: 'synthetic', maxIterations: 4 })
-      .tool(readBuild)
-      .outputSchema(buildAnswer)
-      .claims({ durationMs: { entity: 'build-job-72', field: 'durationMs' } })
-      .answerValidation<BuildAnswer>({
-        id: 'build-report',
-        version: '1',
-        mode: 'enforce',
-        validate: (answer) => ({
-          checks: [
-            {
-              id: 'asked-job',
-              disposition: answer.job === 'build-job-72' ? 'checked-pass' : 'checked-fail',
-            },
-          ],
+function buildAgent(
+  final: BuildAnswer,
+  options: {
+    reactMode?: (typeof REACT_MODES)[number];
+    validation?: AnswerValidationOptions<BuildAnswer>;
+    toolEntity?: string;
+  } = {},
+) {
+  const answer = JSON.stringify(final);
+  const source = scripted([
+    { toolCalls: [{ id: 'call-1', name: 'read_build', args: { job: 'build-job-72' } }] },
+    { content: answer },
+  ]);
+  const agent = Agent.create({
+    provider: source.provider,
+    model: 'synthetic',
+    maxIterations: 4,
+    ...(options.reactMode !== undefined && { reactMode: options.reactMode }),
+  })
+    .tool(readBuild(options.toolEntity))
+    .outputSchema(buildAnswer)
+    .claims({ durationMs: { entity: 'build-job-72', field: 'durationMs' } })
+    .answerValidation<BuildAnswer>(options.validation ?? buildReport())
+    .build();
+  return { agent, answer, source, seen: delivered(agent) };
+}
+
+const ASK = { message: 'How long did build-job-72 take?' };
+
+for (const reactMode of REACT_MODES) {
+  describe(`functional: a typed claim governs delivery — ${reactMode}`, () => {
+    it('a contradicted claim is withheld: no token, no turn_end, a failed report naming the field', async () => {
+      const { agent, seen } = buildAgent({ job: 'build-job-72', durationMs: 9750 }, { reactMode });
+
+      const outcome = await agent.run(ASK).catch((error: unknown) => error);
+
+      expect(outcome).toBeInstanceOf(AnswerValidationError);
+      const report = (outcome as AnswerValidationError).report;
+      expect(report).toMatchObject({ status: 'failed', checked: 2, failed: 1, mode: 'enforce' });
+      expect(report.checks).toEqual([
+        { id: 'asked-job', disposition: 'checked-pass' },
+        {
+          id: 'agent:claims:durationMs',
+          disposition: 'checked-fail',
+          path: 'durationMs',
+          reason: "the answer's 'durationMs' contradicts the fact 'durationMs' a tool settled",
+        },
+      ]);
+      // Detection is unchanged: the finding is still filed, with its witnesses.
+      expect(seen.findings.map((f) => f.kind)).toEqual(['unsupported-claim']);
+      // Nothing of the contradicted answer reached a consumer.
+      expect(seen.tokens).toEqual([]);
+      expect(seen.ends).toEqual([]);
+      expect(agent.answerValidation()).toEqual(report);
+    });
+
+    it('an agreeing claim is delivered unchanged, once, as the canonical JSON', async () => {
+      const { agent, answer, seen } = buildAgent(
+        { job: 'build-job-72', durationMs: 1250 },
+        { reactMode },
+      );
+
+      expect(await agent.run(ASK)).toBe(answer);
+
+      expect(seen.tokens).toEqual([answer]);
+      expect(seen.ends).toEqual([answer]);
+      expect(seen.findings).toEqual([]);
+      expect(agent.answerValidation()).toMatchObject({
+        status: 'passed',
+        checked: 2,
+        failed: 0,
+        checks: [
+          { id: 'asked-job', disposition: 'checked-pass' },
+          { id: 'agent:claims:durationMs', disposition: 'checked-pass', path: 'durationMs' },
+        ],
+      });
+    });
+  });
+}
+
+describe('contract: defaults are unchanged — without agentChecks the claim check only records', () => {
+  it('the same contradicted answer is delivered beside its finding, as before', async () => {
+    const { agent, answer, seen } = buildAgent(
+      { job: 'build-job-72', durationMs: 9750 },
+      { validation: buildReport({ agentChecks: undefined }) },
+    );
+
+    expect(await agent.run(ASK)).toBe(answer);
+
+    expect(seen.findings.map((f) => f.kind)).toEqual(['unsupported-claim']);
+    expect(seen.tokens).toEqual([answer]);
+    const report = agent.answerValidation();
+    expect(report).toMatchObject({ status: 'passed', checked: 1 });
+    expect(report?.checks.map((c) => c.id)).toEqual(['asked-job']);
+  });
+});
+
+describe('functional: observe mode records the agent rows and still delivers', () => {
+  it('a contradicted claim is delivered with a failed report to inspect', async () => {
+    const { agent, answer } = buildAgent(
+      { job: 'build-job-72', durationMs: 9750 },
+      { validation: buildReport({ mode: 'observe' }) },
+    );
+
+    expect(await agent.run(ASK)).toBe(answer);
+
+    expect(agent.answerValidation()).toMatchObject({
+      status: 'failed',
+      mode: 'observe',
+      failed: 1,
+    });
+  });
+});
+
+describe('security: an unsupported claim fails closed', () => {
+  it('a value for a fact no tool result settled is unverified, and withheld', async () => {
+    // The tool settled a DIFFERENT job: nothing backs the answer's durationMs.
+    const { agent, seen } = buildAgent(
+      { job: 'build-job-72', durationMs: 1250 },
+      { toolEntity: 'build-job-73' },
+    );
+
+    const outcome = await agent.run(ASK).catch((error: unknown) => error);
+
+    expect(outcome).toBeInstanceOf(AnswerValidationError);
+    expect((outcome as AnswerValidationError).report).toMatchObject({
+      status: 'unverified',
+      reason: 'unreachable-checks',
+    });
+    expect((outcome as AnswerValidationError).report.checks[1]).toMatchObject({
+      id: 'agent:claims:durationMs',
+      disposition: 'unreachable',
+    });
+    // The detector files nothing for an uncollected fact; the governed row
+    // still refuses to call the answer supported.
+    expect(seen.findings).toEqual([]);
+    expect(seen.tokens).toEqual([]);
+  });
+
+  it('report rows never carry the answer, the tool values or the declared entity', async () => {
+    const { agent } = buildAgent({ job: 'build-job-72', durationMs: 9750 });
+    const outcome = (await agent
+      .run(ASK)
+      .catch((error: unknown) => error)) as AnswerValidationError;
+    const rows = JSON.stringify(outcome.report.checks);
+    expect(rows).not.toContain('9750');
+    expect(rows).not.toContain('1250');
+    expect(rows).not.toContain('build-job-72'); // the entity a contract may declare per user
+  });
+
+  it("a host check cannot impersonate an agent row: an 'agent:' id is refused as invalid", async () => {
+    const { agent } = buildAgent(
+      { job: 'build-job-72', durationMs: 9750 },
+      {
+        validation: buildReport({
+          validate: () => ({
+            checks: [{ id: 'agent:claims:durationMs', disposition: 'checked-pass' }],
+          }),
         }),
-      })
-      .build();
-    const findings: Payloads.IntegrityContextErrorPayload[] = [];
-    agent.on('agentfootprint.integrity.context_error', (e) => findings.push(e.payload));
+      },
+    );
+    const outcome = await agent.run(ASK).catch((error: unknown) => error);
+    expect((outcome as AnswerValidationError).report).toMatchObject({
+      status: 'unverified',
+      reason: 'invalid-validator-result',
+    });
+  });
+});
+
+// ── Orders: names and numbers from evidence, and the repair turn ──────────
+
+interface OrderAnswer {
+  readonly order: string;
+  readonly total: number;
+}
+const orderAnswer: OutputSchemaParser<OrderAnswer> = {
+  parse(value) {
+    const candidate = value as Partial<OrderAnswer> | null;
+    if (typeof candidate?.order !== 'string' || typeof candidate.total !== 'number') {
+      throw new Error('order and total are required');
+    }
+    return { order: candidate.order, total: candidate.total };
+  },
+};
+const INVENTED = JSON.stringify({ order: 'ORD-99812', total: 1200 });
+const READ = JSON.stringify({ order: 'ORD-44710', total: 1200 });
+const FIND_ORDER: ToolCall = { id: 'find-1', name: 'find_order', args: {} };
+
+function orderAgent(
+  turns: readonly Turn[],
+  posture: 'assist' | 'guard' | 'rails',
+  reactMode: (typeof REACT_MODES)[number] = 'dynamic',
+) {
+  let lookups = 0;
+  const source = scripted(turns);
+  const agent = Agent.create({
+    provider: source.provider,
+    model: 'synthetic',
+    maxIterations: 6,
+    reactMode,
+  })
+    .tool(
+      defineTool({
+        name: 'find_order',
+        description: 'Find the order that matches the question.',
+        inputSchema: { type: 'object', properties: {} },
+        execute: () => {
+          lookups++;
+          return READ;
+        },
+      }),
+    )
+    .outputSchema(orderAnswer)
+    .namesAndNumbersFromEvidence({ posture })
+    .answerValidation<OrderAnswer>({
+      id: 'orders',
+      version: '1',
+      agentChecks: ['names-and-numbers'],
+      validate: (answer) => ({
+        checks: [
+          { id: 'total-positive', disposition: answer.total > 0 ? 'checked-pass' : 'checked-fail' },
+        ],
+      }),
+    })
+    .build();
+  return { agent, source, seen: delivered(agent), lookups: () => lookups };
+}
+
+describe('functional: an invented value is withheld (posture assist: no repair turn)', () => {
+  it('fails the report on the names-and-numbers row; the model is asked nothing more', async () => {
+    const { agent, source, seen } = orderAgent(
+      [{ toolCalls: [FIND_ORDER] }, { content: INVENTED }],
+      'assist',
+    );
 
     const outcome = await agent
-      .run({ message: 'How long did build-job-72 take?' })
-      .catch((error: unknown) => error);
+      .run({ message: 'Which order totals 1200?' })
+      .catch((e: unknown) => e);
 
-    // The claim check DID see the contradiction…
-    expect(findings.map((f) => f.kind)).toEqual(['unsupported-claim']);
-    // …and the enforcing boundary must therefore withhold the answer.
     expect(outcome).toBeInstanceOf(AnswerValidationError);
+    const report = (outcome as AnswerValidationError).report;
+    // Your check passed (1), the agent's row failed (1): two comparisons.
+    expect(report).toMatchObject({ status: 'failed', checked: 2, failed: 1 });
+    expect(report.checks[1]).toEqual({
+      id: 'agent:names-and-numbers',
+      disposition: 'checked-fail',
+      reason: '1 value(s) the answer states appear in no tool result the run read',
+    });
+    expect(seen.grounding.map((g) => g.action)).toEqual(['flagged']);
+    expect(source.requests).toHaveLength(2);
+    expect(seen.tokens).toEqual([]);
+    expect(seen.ends).toEqual([]);
+  });
+});
+
+for (const reactMode of REACT_MODES) {
+  describe(`functional: the repair turn comes first (posture guard) — ${reactMode}`, () => {
+    it('the model fetches during its one repair turn; the repaired answer is delivered unchanged', async () => {
+      const { agent, source, seen, lookups } = orderAgent(
+        [
+          { toolCalls: [FIND_ORDER] },
+          { content: INVENTED }, // flagged → one repair turn, tools still on the wire
+          { toolCalls: [{ ...FIND_ORDER, id: 'find-2' }] }, // the repair turn calls a tool
+          { content: READ },
+        ],
+        'guard',
+        reactMode,
+      );
+
+      expect(await agent.run({ message: 'Which order totals 1200?' })).toBe(READ);
+
+      expect(seen.grounding.map((g) => [g.action, g.afterRevision])).toEqual([
+        ['revision-asked', false],
+        ['grounded', true],
+      ]);
+      expect(source.requests).toHaveLength(4);
+      expect(source.requests[2]!.tools?.map((t) => t.name)).toContain('find_order');
+      expect(lookups()).toBe(2);
+      // Draft tokens were held throughout: only the delivered answer streamed.
+      expect(seen.tokens).toEqual([READ]);
+      expect(seen.ends).toEqual([READ]);
+      expect(agent.answerValidation()).toMatchObject({
+        status: 'passed',
+        checks: [
+          { id: 'total-positive', disposition: 'checked-pass' },
+          { id: 'agent:names-and-numbers', disposition: 'not-applicable' },
+        ],
+      });
+    });
+  });
+}
+
+describe('functional: a repair that keeps the invented value is withheld', () => {
+  it('the row says the repair turn ran', async () => {
+    const { agent, seen } = orderAgent(
+      [{ toolCalls: [FIND_ORDER] }, { content: INVENTED }, { content: INVENTED }],
+      'guard',
+    );
+    const outcome = await agent
+      .run({ message: 'Which order totals 1200?' })
+      .catch((e: unknown) => e);
+    expect((outcome as AnswerValidationError).report.checks[1]).toMatchObject({
+      id: 'agent:names-and-numbers',
+      disposition: 'checked-fail',
+      reason:
+        '1 value(s) the answer states appear in no tool result the run read, after the one repair turn',
+    });
+    expect(seen.tokens).toEqual([]);
+  });
+});
+
+describe('integration: both checks listed — the repair turn can save a contradicted claim', () => {
+  // `durationMs: 9750` is a contradicted claim AND a number no result carried,
+  // so under 'guard' the gate asks for its one repair before anything is
+  // judged for delivery. What comes back is what both rows judge.
+  function bothChecks(answer: BuildAnswer, repair: BuildAnswer) {
+    const source = scripted([
+      { toolCalls: [{ id: 'call-1', name: 'read_build', args: { job: 'build-job-72' } }] },
+      { content: JSON.stringify(answer) },
+      { content: JSON.stringify(repair) },
+    ]);
+    const agent = Agent.create({ provider: source.provider, model: 'synthetic', maxIterations: 6 })
+      .tool(readBuild())
+      .outputSchema(buildAnswer)
+      .claims({ durationMs: { entity: 'build-job-72', field: 'durationMs' } })
+      .namesAndNumbersFromEvidence({ posture: 'guard' })
+      .answerValidation<BuildAnswer>(buildReport({ agentChecks: ['names-and-numbers', 'claims'] }))
+      .build();
+    return { agent, source, seen: delivered(agent) };
+  }
+
+  it('repaired to the settled value: delivered, every row clear', async () => {
+    const read = { job: 'build-job-72', durationMs: 1250 };
+    const { agent, source, seen } = bothChecks({ ...read, durationMs: 9750 }, read);
+
+    expect(await agent.run(ASK)).toBe(JSON.stringify(read));
+
+    expect(source.requests).toHaveLength(3);
+    expect(seen.tokens).toEqual([JSON.stringify(read)]);
+    expect(agent.answerValidation()?.checks.map((c) => [c.id, c.disposition])).toEqual([
+      ['asked-job', 'checked-pass'],
+      ['agent:names-and-numbers', 'not-applicable'],
+      ['agent:claims:durationMs', 'checked-pass'],
+    ]);
+  });
+
+  it('kept after the repair: withheld, both rows failing', async () => {
+    const invented = { job: 'build-job-72', durationMs: 9750 };
+    const { agent, seen } = bothChecks(invented, invented);
+
+    const outcome = await agent.run(ASK).catch((error: unknown) => error);
+
+    expect(
+      (outcome as AnswerValidationError).report.checks.map((c) => [c.id, c.disposition]),
+    ).toEqual([
+      ['asked-job', 'checked-pass'],
+      ['agent:names-and-numbers', 'checked-fail'],
+      ['agent:claims:durationMs', 'checked-fail'],
+    ]);
+    expect(seen.tokens).toEqual([]);
+    expect(seen.ends).toEqual([]);
+  });
+});
+
+describe("contract: posture 'rails' keeps its own refusal", () => {
+  it('UnsupportedValuesError, as without agentChecks', async () => {
+    const { agent, seen } = orderAgent(
+      [{ toolCalls: [FIND_ORDER] }, { content: INVENTED }, { content: INVENTED }],
+      'rails',
+    );
+    const outcome = await agent
+      .run({ message: 'Which order totals 1200?' })
+      .catch((e: unknown) => e);
+    expect(outcome).toBeInstanceOf(UnsupportedValuesError);
+    expect(agent.answerValidation()).toMatchObject({
+      status: 'unverified',
+      reason: 'prior-refusal',
+    });
+    expect(seen.tokens).toEqual([]);
+  });
+});
+
+describe('contract: a listed check with nothing to judge is refused at build()', () => {
+  const provider = scripted([]).provider;
+  const validate = () => ({ checks: [] });
+
+  it("'claims' without a .claims() contract", () => {
+    const builder = Agent.create({ provider, model: 'synthetic' })
+      .outputSchema(buildAnswer)
+      .answerValidation({ id: 'v', version: '1', agentChecks: ['claims'], validate });
+    expect(() => builder.build()).toThrow(
+      /agentChecks: \['claims'\] }\) needs a \.claims\(\) contract/,
+    );
+  });
+
+  it("'names-and-numbers' without .namesAndNumbersFromEvidence()", () => {
+    const builder = Agent.create({ provider, model: 'synthetic' })
+      .outputSchema(buildAnswer)
+      .answerValidation({ id: 'v', version: '1', agentChecks: ['names-and-numbers'], validate });
+    expect(() => builder.build()).toThrow(/needs \.namesAndNumbersFromEvidence\(\)/);
+  });
+
+  it('an unknown name, at the .answerValidation() call', () => {
+    expect(() =>
+      Agent.create({ provider, model: 'synthetic' }).answerValidation({
+        id: 'v',
+        version: '1',
+        agentChecks: ['schema' as never],
+        validate,
+      }),
+    ).toThrow(/agentChecks must list 'claims' and\/or 'names-and-numbers'/);
   });
 });

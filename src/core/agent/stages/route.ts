@@ -49,6 +49,7 @@ import {
   type StepPlanFor,
 } from '../../../injection-engine/skillSteps.js';
 import { checkAnswer, evidenceRefusalSentence, MAX_REPORTED_VALUES } from '../evidence/gate.js';
+import { noteAnswerEvidence } from './answerEvidence.js';
 import { answerCarriersOf } from '../evidence/answerCarriers.js';
 import { derivedFormsOf, evidenceFromHistory, exemptFromRun } from '../evidence/evidenceIndex.js';
 import { timeDerivedRow } from '../../../time/rows.js';
@@ -864,6 +865,16 @@ function judgeEvidence(
   // an answer that ships; a draft about to be revised says nothing.
   const carriedBy = answerCarriersOf(verdict.grounded, evidence);
 
+  // For answer validation's `'names-and-numbers'` row (`answerEvidence.ts`):
+  // in memory, this stage only — not one byte of state. Read only when this
+  // stage answers `'final'`, so a draft sent back for repair is never read.
+  noteAnswerEvidence(scope, {
+    lookedUp: verdict.lookedUp,
+    unsupported: verdict.unsupported.length,
+    truncated: verdict.evidenceTruncated,
+    revised: afterRevision,
+  });
+
   if (verdict.unsupported.length === 0) {
     fileTimeDerived(scope, verdict.derived, iteration);
     typedEmit(scope, 'agentfootprint.agent.evidence_checked', {
@@ -1292,6 +1303,8 @@ function routeDeciderFor(
  * the claim rather than the run to change the facts. So this files a
  * finding and returns — detection converting a silent disagreement into an
  * attributable one, exactly as every other seam in this family does.
+ * Withholding is the validation's: under `agentChecks: ['claims']`,
+ * `answerValidation.ts` asks the same comparison of the delivered answer.
  */
 function judgeClaims(
   scope: TypedScope<AgentState>,

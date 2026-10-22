@@ -82,6 +82,15 @@ Every judgement lands on the emit channel as
 per-attempt facts belong. Only the terminal verdict is committed
 (`unsupportedValues`), because the boundary has to read it.
 
+**Governing delivery is not a fourth posture.** A typed answer under an
+enforcing `.answerValidation({ agentChecks: ['names-and-numbers'] })` hands the
+gate's terminal verdict (counts and flags, in memory —
+`../stages/answerEvidence.ts`) to that validation as one report row
+(`answer-validation/agentChecks.ts` · `evidenceCheckOf`). The posture still
+decides the repair turn; whatever survives it fails the row and the answer is
+withheld. A clean pass is `not-applicable` there: a found value clears an
+answer, it never verifies one.
+
 ## Recovery guidance (9.96.0)
 
 An unsupported draft under `guard` or `rails` gets the existing single revision.

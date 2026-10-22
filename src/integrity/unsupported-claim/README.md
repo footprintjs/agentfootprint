@@ -40,6 +40,14 @@ others can. Unlike the other three it **never re-routes**: a disagreement betwee
 ledger is a fact about a finished run, and re-asking the model would invite it to change the claim
 rather than the run to change the facts. It files one finding and returns the answer untouched.
 
+**When it governs delivery.** An enforcing `.answerValidation({ agentChecks: ['claims'] })` asks the
+same comparison — `check.ts` · `compareClaim`, which `unsupportedClaimsOf` is built on — once more,
+over the canonical answer that validation delivers, and files one report row per declared claim
+(`answer-validation/agentChecks.ts`). A conflict fails the report and the answer is withheld; a
+claim with no settled fact is `unreachable`, so it is withheld too. Still no re-route: the seam
+above is unchanged, and the detector's findings and dispositions are byte-identical (pinned against
+the ec32fad source by `test/integrity/claim-pair-evaluation.test.ts`).
+
 **Comparison ownership.** `check.ts` selects the latest `(entity, field)` row, constructs the
 asserted pair and preserves the answer-specific messages, witness order and dispositions.
 `evaluate.ts` owns the pair's doubt and numeric-leniency decisions and delegates structural

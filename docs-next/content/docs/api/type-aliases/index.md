@@ -2,9 +2,10 @@
 title: Type Aliases
 ---
 
-140 exported from `agentfootprint`.
+141 exported from `agentfootprint`.
 
 - [`ActKey`](/docs/api/type-aliases/ActKey)
+- [`AgentCheckName`](/docs/api/type-aliases/AgentCheckName)
 - [`AgentOutput`](/docs/api/type-aliases/AgentOutput)
 - [`ArtifactDetailErrorCode`](/docs/api/type-aliases/ArtifactDetailErrorCode)
 - [`ArtifactDetailResult`](/docs/api/type-aliases/ArtifactDetailResult)

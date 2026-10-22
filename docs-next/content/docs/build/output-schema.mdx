@@ -453,6 +453,53 @@ Served by `streamHandler` with `agUi()`, an enforced refusal sends no
 `TEXT_MESSAGE_CONTENT` and ends the run with `RUN_ERROR` in fixed words; the
 report stays on the server.
 
+### Let the agent's own checks hold the answer
+
+On their own, [`.claims()`](doc:context-integrity) and
+[`.namesAndNumbersFromEvidence()`](doc:evidence-gate) only record what they
+find. A typed field that contradicts the fact a tool settled, or a value no
+tool result carried, files a finding, and the answer is still handed back.
+List them in `agentChecks` and each finding becomes a failed row of this
+report, so an enforcing validation withholds that answer the same way it
+withholds one your own check failed. Draft tokens are held back the same way,
+so nobody sees an answer that was withheld.
+
+<CodeFile path="examples/features/107-agent-checks-govern-delivery.ts" region="agent-checks" title="examples/features/107-agent-checks-govern-delivery.ts (region: agent-checks)" />
+
+`agentChecks` lists checks the agent already runs (`AgentCheckName`). Each
+needs its builder call, or `build()` refuses. Their rows come after yours in
+`report.checks`:
+
+| Row | `checked-pass` | `checked-fail` | `unreachable` | `not-applicable` |
+|---|---|---|---|---|
+| `agent:claims:<field>`, one per `.claims()` field, judged on the JSON this validation delivers | the field equals the fact the latest tool result settled | the field contradicts that fact | the field states a value no tool result settled, or one settled as unknown | the answer leaves the field out, or declines it (`null`, `'unknown'`) |
+| `agent:names-and-numbers`, the gate's verdict on the answer that stands | never: finding a value clears an answer, it does not verify it | a value no tool result the run read carried | the evidence index hit its ceiling | every value was found, or the answer states none |
+
+- **The repair turn comes first.** Under `posture: 'guard'` the gate names the
+  unsupported values back to the model for one more ordinary turn, with the
+  tools still on the wire, before the validation runs. Only what survives it
+  fails the row. `'assist'` asks for no repair, and `'rails'` keeps its own
+  refusal, `UnsupportedValuesError`. A contradicted claim gets no repair turn of
+  its own: its answer is withheld.
+- **A report still needs a comparison.** Your `validate` runs as before, and a
+  report with nothing compared stays `unverified`. A passing claim row counts as
+  a comparison. The names-and-numbers row never does, so it can withhold an
+  answer but is never the reason one reads as verified.
+- **Rows carry names, not values.** A reason quotes the field names you
+  declared and a count, never the answer's or a tool's value, nor the entity a
+  `.claims()` contract names (you may declare one per user). Values stay on
+  `agent.unsupportedValues()` and the `integrity.context_error` event, under
+  your redaction policy. While `agentChecks` is set, ids starting with `agent:`
+  belong to these rows, and a check of yours using one makes the report
+  `unverified`.
+- **`mode: 'observe'`** records the same rows and still delivers. It shows what
+  enforcing would withhold before you turn it on.
+- **What it does not prove.** A passing claim row means the field equals the
+  latest value a tool settled for the fact you declared, not that the fact
+  answers the question that was asked. The gate catches invented values, not
+  false claims built from real ones. Prose answers are outside this door: it
+  checks typed answers only.
+
 ### Missing prerequisites block only the claims that need them
 
 `checkClaimRequirements(policy, results)` checks Foottrace requirement records
@@ -523,7 +570,7 @@ This version supports Agent's classic, dynamic and grouped execution paths.
 It rejects `.outputFallback()` at build time because a fallback can replace the
 checked answer, and `.limitsTravelWithTheAnswer()` because the validated
 delivery has no place for the declared limits. Automatic correction and the separate
-`buildAgentMessageApiChart` runner are outside this feature. Existing `.claims()`
-checks retain their advisory behavior. Arbitrary prose is not proved correct:
+`buildAgentMessageApiChart` runner are outside this feature. `.claims()` checks
+keep their advisory behavior unless `agentChecks` lists them. Arbitrary prose is not proved correct:
 a host can instead validate a structured finding and render its factual text
 from the validated result.
