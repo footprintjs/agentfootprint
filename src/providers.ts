@@ -115,6 +115,12 @@ export {
   BedrockProvider,
   type BedrockProviderOptions,
 } from './adapters/llm/BedrockProvider.js';
+export {
+  ProviderTimeoutError,
+  ERR_PROVIDER_TIMEOUT,
+  isProviderTimeout,
+  type ProviderTimeoutWait,
+} from './provider-contract/timeout.js';
 
 export {
   gemini,

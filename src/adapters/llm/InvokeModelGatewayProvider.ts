@@ -56,7 +56,8 @@
  *   complete() body, and for EACH stream read (the first chunk and every gap
  *   between chunks — a stream that is still talking is never cut off), and
  *   for the response body to close. A miss
- *   aborts the request and raises `reason: 'timeout'`, retryable; the
+ *   aborts the request and raises `reason: 'timeout'`; retry advice is false
+ *   after output starts, including tool/thinking output. The
  *   caller's `req.signal` still wins.
  */
 
@@ -85,7 +86,12 @@ import { anthropicThinkingHandler } from '../../thinking/AnthropicThinkingHandle
 import type { ThinkingMode } from '../../thinking/types.js';
 import { retryAfterMsFromHeaders } from './retryAfter.js';
 import { isSlash, trimTrailing } from '../../lib/linearText.js';
-import { abortErrorOf, throwIfAborted, untilAborted } from '../../lib/abort.js';
+import { abortErrorOf, throwIfAborted } from '../../lib/abort.js';
+import { checkedWaitMs, type WaitDeadline } from '../../lib/waitDeadline.js';
+import { closePreservingFailure } from '../../lib/preserveFailure.js';
+import { ProviderTimeoutError, type ProviderTimeoutWait } from '../../provider-contract/timeout.js';
+import { providerDeadline, type ProviderWaitLimits } from '../../provider-contract/deadline.js';
+type Deadline = WaitDeadline<ProviderTimeoutWait>;
 
 /** The literal this wire requires in the body in place of a version header. */
 export const INVOKE_MODEL_ANTHROPIC_VERSION = 'bedrock-2023-05-31';
@@ -162,18 +168,20 @@ export interface InvokeModelGatewayOptions {
   readonly thinkingMode?: (model: string) => ThinkingMode | undefined;
   /** Replace `fetch` — for an mTLS agent, a proxy, or a test. Default: global `fetch`. */
   readonly fetch?: InvokeModelGatewayFetch;
-  /**
-   * Per-request deadline in ms. Bounds the wait for the response headers, for
-   * a complete() body, and for each stream read — the first chunk and every
-   * gap between chunks (an idle deadline: a stream that keeps talking is never
-   * cut off), and the response body close. A miss aborts the request and raises an
-   * {@link InvokeModelGatewayError} with `reason: 'timeout'`, `retryable:
-   * true` — `withRetry` asks again only while no chunk has reached the caller.
-   * A wrapper of your own that re-sends on `retryable` alone must make the
-   * same check: a timeout BETWEEN chunks is also `retryable`, and re-sending
-   * then would deliver the start of the answer twice. The caller's `req.signal` still wins. Omitted: no deadline (the default).
-   */
+  /** Opt-in idle/close cap after meaningful stream output, and fallback for
+   * firstOutputTimeoutMs and responseTimeoutMs. All omitted: no timer and fetch
+   * receives exactly req.signal. Positive finite milliseconds, at most 2^31-1.
+   * Caller backpressure is excluded; the host chooses limits or req.signal. */
   readonly timeoutMs?: number;
+  /** Cumulative provider-wait allowance from stream opening to first meaningful
+   * text, tool or thinking output. Headers, empty text and keep-alives do not
+   * reset it. Defaults to timeoutMs. */
+  readonly firstOutputTimeoutMs?: number;
+  /** Prompt plus whole answer for complete(), cumulatively across headers and
+   * body. Defaults to firstOutputTimeoutMs, then timeoutMs. Opaque timeout
+   * outcomes are unknown and not advised for automatic retry. Key lookup has
+   * its own no-send wait under this limit, outside the answer allowance. */
+  readonly responseTimeoutMs?: number;
 }
 
 // ─── Errors ─────────────────────────────────────────────────────────
@@ -190,7 +198,7 @@ export type InvokeModelGatewayErrorReason =
   | 'http-status'
   /** The request never got an answer (DNS, TLS, connection reset). */
   | 'network'
-  /** No answer — headers, body, or the next stream chunk — within `timeoutMs`. */
+  /** A configured credential, whole-answer, first-output, idle or close wait expired. */
   | 'timeout'
   /** complete() answered 2xx with a body that is not a Messages response. */
   | 'unreadable-response'
@@ -200,10 +208,12 @@ export type InvokeModelGatewayErrorReason =
   | 'malformed-tool-args';
 
 /**
- * Every failure `invokeModelGateway()` raises, told in words that name the
- * model and the fix. `reason` is the discriminator.
+ * Every failure `invokeModelGateway()` raises. `reason` is the discriminator;
+ * timeout messages use fixed words without model or request details.
  *
- * `retryable` is `true` for a 429, a 5xx, a network failure and a timeout, and `false`
+ * `retryable` is `true` for a 429, a 5xx, a network failure and a streamed
+ * timeout before meaningful output. Opaque complete/body timeouts and timeouts
+ * after observed output are false, as is the advice
  * for every other reason, and `withRetry`'s default predicate honours the
  * `false` — so a refusal raised before any request (`no-key`, `no-model`,
  * `invalid-options`) is never repeated, and a 2xx answer it could not read
@@ -220,9 +230,16 @@ export class InvokeModelGatewayError extends Error {
   readonly status?: number;
   /**
    * Whether asking again can mend it: a 429, a 5xx, a network failure, or a
-   * timeout. `withRetry`'s default predicate reads the `false`.
+   * streamed timeout before meaningful output. Opaque whole-answer and
+   * observed-output timeouts refuse replay. The default retry predicate honours false.
    */
   readonly retryable: boolean;
+  /** Shared timeout contract, present only for reason timeout. */
+  declare readonly code?: typeof import('../../provider-contract/timeout.js').ERR_PROVIDER_TIMEOUT;
+  declare readonly provider?: string;
+  declare readonly waitingFor?: ProviderTimeoutWait;
+  declare readonly timeoutMs?: number;
+  declare readonly afterOutput?: boolean;
   /** The gateway's `Retry-After` header, in seconds, when it sent a number. */
   readonly retryAfterSeconds?: number;
   /**
@@ -246,12 +263,21 @@ export class InvokeModelGatewayError extends Error {
     bodyExcerpt?: string;
     toolName?: string;
     cause?: unknown;
+    timeout?: ProviderTimeoutError;
   }) {
     super(`[${PROVIDER_NAME}] ${init.message}`);
     this.reason = init.reason;
     if (init.modelId !== undefined) this.modelId = init.modelId;
     if (init.status !== undefined) this.status = init.status;
-    this.retryable = isTransient(init.reason, init.status);
+    this.retryable = init.timeout?.retryable ?? isTransient(init.reason, init.status);
+    if (init.timeout) {
+      this.code = init.timeout.code;
+      this.provider = init.timeout.provider;
+      this.waitingFor = init.timeout.waitingFor;
+      this.timeoutMs = init.timeout.timeoutMs;
+      this.afterOutput = init.timeout.afterOutput;
+      this.cause = init.timeout;
+    }
     if (init.retryAfterSeconds !== undefined) this.retryAfterSeconds = init.retryAfterSeconds;
     if (init.retryAfterMs !== undefined) this.retryAfterMs = init.retryAfterMs;
     if (init.bodyExcerpt !== undefined) this.bodyExcerpt = init.bodyExcerpt;
@@ -300,6 +326,11 @@ export function invokeModelGateway(options: InvokeModelGatewayOptions): LLMProvi
   const apiKeyHeader = checkedHeader(options.apiKeyHeader);
   checkKeySource(options.apiKey);
   const timeoutMs = checkedTimeout(options.timeoutMs);
+  const firstOutputTimeoutMs =
+    checkedTimeout(options.firstOutputTimeoutMs, 'firstOutputTimeoutMs') ?? timeoutMs;
+  const responseTimeoutMs =
+    checkedTimeout(options.responseTimeoutMs, 'responseTimeoutMs') ?? firstOutputTimeoutMs;
+  const limits = { timeoutMs, firstOutputTimeoutMs, responseTimeoutMs };
   const defaultMaxTokens = options.defaultMaxTokens ?? DEFAULT_MAX_TOKENS;
   const fetchImpl: InvokeModelGatewayFetch = options.fetch ?? ((input, init) => fetch(input, init));
   /** The ONE mode function: declared below and used for every body. */
@@ -335,8 +366,8 @@ export function invokeModelGateway(options: InvokeModelGatewayOptions): LLMProvi
     if (preparation.omissions.length > 0) hooks?.onReplayPrepared?.(preparation);
     // A key source can take a while; a call cancelled meanwhile sends nothing
     // (lib/abort.ts, law 1).
-    const key = await untilAborted(keyFor(options.apiKey, modelId), req.signal);
-    throwIfAborted(req.signal);
+    const key = await deadline.within(keyFor(options.apiKey, modelId), 'credentials');
+    throwIfAborted(deadline.signal);
     let response: Response;
     try {
       response = await deadline.within(
@@ -346,12 +377,12 @@ export function invokeModelGateway(options: InvokeModelGatewayOptions): LLMProvi
           body: serializedBody,
           ...(deadline.signal && { signal: deadline.signal }),
         }),
-        'the response',
+        'response',
       );
     } catch (err) {
       throw networkError(err, modelId, req.signal);
     }
-    if (!response.ok) throw await deadline.within(statusError(response, modelId), 'the response');
+    if (!response.ok) throw await deadline.within(statusError(response, modelId), 'response');
     return { response, body, bindingFactory, omissions: preparation.omissions };
   }
 
@@ -391,7 +422,7 @@ export function invokeModelGateway(options: InvokeModelGatewayOptions): LLMProvi
     async complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
       throwIfAborted(req.signal);
       const modelId = modelIdFor(req, options.model);
-      const deadline = deadlineFor(timeoutMs, req.signal, modelId);
+      const deadline = deadlineFor(limits, req.signal, modelId, () => false, true);
       try {
         const { response, body, bindingFactory, omissions } = await post(
           req,
@@ -399,7 +430,7 @@ export function invokeModelGateway(options: InvokeModelGatewayOptions): LLMProvi
           deadline,
           hooks,
         );
-        const message = await deadline.within(readMessage(response, modelId), 'the response body');
+        const message = await deadline.within(readMessage(response, modelId), 'body');
         return {
           ...fromAnthropicResponse(message, message.id ? bindingFactory(message.id) : undefined),
           wireManifest: toolManifestOf(body.tools),
@@ -413,7 +444,8 @@ export function invokeModelGateway(options: InvokeModelGatewayOptions): LLMProvi
     async *stream(req: LLMRequest, hooks?: LLMCallHooks): AsyncIterable<LLMChunk> {
       throwIfAborted(req.signal);
       const modelId = modelIdFor(req, options.model);
-      const deadline = deadlineFor(timeoutMs, req.signal, modelId);
+      let afterOutput = false;
+      const deadline = deadlineFor(limits, req.signal, modelId, () => afterOutput);
       try {
         const { response, body, bindingFactory, omissions } = await post(
           req,
@@ -428,22 +460,27 @@ export function invokeModelGateway(options: InvokeModelGatewayOptions): LLMProvi
             message: `the stream for model ${modelId} answered ${response.status} with no body.`,
           });
         }
-        yield* assembleAnthropicStream(readGatewayEvents(response.body, modelId, deadline), {
-          bindingFactory,
-          replayOmissions: omissions,
-          wireManifest: toolManifestOf(body.tools),
-          onMalformedToolArgs: (call) => {
-            throw new InvokeModelGatewayError({
-              reason: 'malformed-tool-args',
-              modelId,
-              toolName: call.name,
-              message:
-                `model ${modelId} streamed arguments for tool '${call.name}' that are not JSON ` +
-                `(${call.raw.length} chars). The call is refused rather than run with its ` +
-                `arguments dropped. Asking again usually recovers; nothing re-sends it for you.`,
-            });
+        yield* assembleAnthropicStream(
+          readGatewayEvents(response.body, modelId, deadline, () => {
+            afterOutput = true;
+          }),
+          {
+            bindingFactory,
+            replayOmissions: omissions,
+            wireManifest: toolManifestOf(body.tools),
+            onMalformedToolArgs: (call) => {
+              throw new InvokeModelGatewayError({
+                reason: 'malformed-tool-args',
+                modelId,
+                toolName: call.name,
+                message:
+                  `model ${modelId} streamed arguments for tool '${call.name}' that are not JSON ` +
+                  `(${call.raw.length} chars). The call is refused rather than run with its ` +
+                  `arguments dropped. Asking again usually recovers; nothing re-sends it for you.`,
+              });
+            },
           },
-        });
+        );
       } finally {
         deadline.dispose();
       }
@@ -576,10 +613,46 @@ async function readMessage(response: Response, modelId: string): Promise<Anthrop
  * event could be a dropped piece of the answer. An `error` event, or an AWS
  * exception object the gateway forwarded, ends the stream as a typed error.
  */
+function isGatewayOutput(name: string, data: unknown): boolean {
+  if (typeof data !== 'object' || data === null) return false;
+  const event = data as {
+    content_block?: {
+      type?: string;
+      text?: string;
+      id?: string;
+      name?: string;
+      thinking?: string;
+      data?: string;
+    };
+    delta?: Record<string, unknown>;
+    usage?: { output_tokens?: number };
+  };
+  const block = event.content_block;
+  if (
+    name === 'content_block_start' &&
+    block &&
+    ((block.type === 'tool_use' && (Boolean(block.id) || Boolean(block.name))) ||
+      Boolean(block.text) ||
+      Boolean(block.thinking) ||
+      (block.type === 'redacted_thinking' && Boolean(block.data)))
+  )
+    return true;
+  if (
+    name === 'content_block_delta' &&
+    event.delta &&
+    Object.entries(event.delta).some(
+      ([key, value]) => key !== 'type' && typeof value === 'string' && value.length > 0,
+    )
+  )
+    return true;
+  return (event.usage?.output_tokens ?? 0) > 0;
+}
+
 async function* readGatewayEvents(
   body: ReadableStream<Uint8Array>,
   modelId: string,
   deadline: Deadline,
+  onOutput: () => void,
 ): AsyncIterable<AnthropicStreamEvent> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
@@ -600,6 +673,10 @@ async function* readGatewayEvents(
     const name = eventName ?? typeOf(data) ?? 'message';
     eventName = undefined;
     throwIfErrorEvent(name, data, modelId);
+    if (isGatewayOutput(name, data)) {
+      outputSeen = true;
+      onOutput();
+    }
     yield { event: name, data };
   }
 
@@ -623,19 +700,19 @@ async function* readGatewayEvents(
     yield* flushPending(false);
   }
 
-  let chunks = 0;
+  let outputSeen = false;
+  let failed = false;
   try {
     for (;;) {
-      // Each read has its own deadline — the first chunk, then every gap.
+      // Before output, reads share one prefill allowance. Later gaps get fresh caps.
       const { value, done } = await deadline.within(
         reader.read(),
-        chunks === 0 ? 'the first stream chunk' : 'the next stream chunk',
+        outputSeen ? 'chunk' : 'first-output',
       );
       // A read that settled a moment before the abort is still refused
       // (lib/abort.ts, law 4).
       throwIfAborted(deadline.signal);
       if (done) break;
-      chunks++;
       buffered += decoder.decode(value, { stream: true });
       let newline: number;
       while ((newline = buffered.indexOf('\n')) >= 0) {
@@ -647,6 +724,9 @@ async function* readGatewayEvents(
     buffered += decoder.decode();
     if (buffered.length > 0) yield* onLine(buffered);
     yield* flushPending(true);
+  } catch (error) {
+    failed = true;
+    throw error;
   } finally {
     // CANCEL on every way out — the end (a no-op), a consumer that stops
     // early, an error event, the deadline, the caller's abort — so a stream
@@ -654,22 +734,21 @@ async function* readGatewayEvents(
     // transport that ignores the abort may never settle its cancel, and the
     // caller is owed the abort now — also when it fires DURING the wait
     // (lib/abort.ts · bodyChunks, the same rule).
-    const cancelled = reader.cancel().catch(() => undefined);
-    try {
-      // Only an abort that lands DURING the wait is thrown here: one that
-      // fired before it is already the error on its way out (or a consumer
-      // that broke after aborting, which exits cleanly, as abortableIterable).
-      if (!deadline.signal?.aborted) {
-        await deadline.within(cancelled, 'the stream close');
-        throwIfAborted(deadline.signal);
-      }
-    } finally {
+    await closePreservingFailure(async () => {
+      const cancelled = reader.cancel().catch(() => undefined);
       try {
-        reader.releaseLock();
-      } catch {
-        /* a read still pending, or a lock the runtime already dropped */
+        if (!deadline.signal?.aborted) {
+          await deadline.within(cancelled, 'close');
+          throwIfAborted(deadline.signal);
+        }
+      } finally {
+        try {
+          reader.releaseLock();
+        } catch {
+          /* a pending read, or a lock already released */
+        }
       }
-    }
+    }, failed);
   }
 }
 
@@ -826,104 +905,43 @@ function networkError(err: unknown, modelId: string, signal?: AbortSignal): Erro
 
 // ─── Deadline ───────────────────────────────────────────────────────
 
-/**
- * One request's deadline (`timeoutMs`), linked to the caller's signal.
- *
- * `within(p)` races ONE wait (the response, a body, a stream read) against a
- * fresh timer: a miss aborts the request — so a real fetch drops the
- * connection — and rejects with the typed 'timeout' error even when the
- * transport ignores the abort. The caller's abort wins: it rejects with the
- * caller's reason, as fetch would. With no `timeoutMs` there is no timer: the
- * fetch gets the caller's signal, and every wait is raced against it.
- */
-interface Deadline {
-  /** What the fetch listens to: the caller's signal, or one linked to it and the timer. */
-  readonly signal: AbortSignal | undefined;
-  within<T>(pending: Promise<T>, what: string): Promise<T>;
-  dispose(): void;
-}
-
+/** The shared typed policy owns all allowance selection. This adapter only
+ * composes its existing error shape; no prose string chooses a timer. */
 function deadlineFor(
-  timeoutMs: number | undefined,
+  limits: ProviderWaitLimits,
   callerSignal: AbortSignal | undefined,
   modelId: string,
+  afterOutput: () => boolean,
+  opaque = false,
 ): Deadline {
-  if (timeoutMs === undefined) {
-    // No deadline, but still the caller's abort: every wait is raced against
-    // it, so a transport that ignores its signal cannot hold a cancelled call
-    // open (lib/abort.ts).
-    return {
-      signal: callerSignal,
-      within: (pending) => untilAborted(pending, callerSignal),
-      dispose: () => undefined,
-    };
-  }
-  const controller = new AbortController();
-  const onCallerAbort = (): void => controller.abort(callerSignal?.reason);
-  if (callerSignal?.aborted) onCallerAbort();
-  else callerSignal?.addEventListener('abort', onCallerAbort, { once: true });
-  return {
-    signal: controller.signal,
-    within<T>(pending: Promise<T>, what: string): Promise<T> {
-      return new Promise<T>((resolve, reject) => {
-        const settle = (): void => {
-          clearTimeout(timer);
-          controller.signal.removeEventListener('abort', onAbort);
-        };
-        const onAbort = (): void => {
-          settle();
-          reject(controller.signal.reason);
-        };
-        const timer = setTimeout(() => {
-          controller.abort(
-            new InvokeModelGatewayError({
-              reason: 'timeout',
-              modelId,
-              message:
-                `no answer from model ${modelId} within ${timeoutMs} ms, waiting for ${what}. ` +
-                `The request was aborted. Transient — withRetry asks again while no chunk ` +
-                `has reached the caller; raise timeoutMs if the model needs longer.`,
-            }),
-          );
-        }, timeoutMs);
-        // Handlers go on `pending` FIRST, before any early return: the wait
-        // was already started (fetch, body or stream read), and a promise
-        // left without a handler rejects later as an unhandled rejection —
-        // which kills a Node process on default settings. Once the race is
-        // decided the later settle is a no-op on this promise.
-        pending.then(
-          (value) => {
-            settle();
-            resolve(value);
-          },
-          (err: unknown) => {
-            settle();
-            // A transport that honoured the abort rejects with its reason —
-            // already the typed error (or the caller's abort).
-            reject(controller.signal.aborted ? controller.signal.reason : err);
-          },
-        );
-        if (controller.signal.aborted) return onAbort();
-        controller.signal.addEventListener('abort', onAbort, { once: true });
-      });
-    },
-    dispose(): void {
-      callerSignal?.removeEventListener('abort', onCallerAbort);
-    },
-  };
+  return providerDeadline(
+    limits,
+    callerSignal,
+    { provider: PROVIDER_NAME, opaque, afterOutput },
+    (timeout) =>
+      new InvokeModelGatewayError({
+        reason: 'timeout',
+        modelId,
+        timeout,
+        message: timeout.message,
+      }),
+  );
 }
 
 // ─── Option checks ──────────────────────────────────────────────────
 
-function checkedTimeout(raw: number | undefined): number | undefined {
-  if (raw === undefined) return undefined;
-  if (typeof raw !== 'number' || !Number.isFinite(raw) || raw <= 0) {
+function checkedTimeout(
+  raw: number | undefined,
+  field: 'timeoutMs' | 'firstOutputTimeoutMs' | 'responseTimeoutMs' = 'timeoutMs',
+): number | undefined {
+  try {
+    return checkedWaitMs(raw, field);
+  } catch (error) {
     throw new InvokeModelGatewayError({
       reason: 'invalid-options',
-      message: `timeoutMs must be a positive number of milliseconds, got ${JSON.stringify(raw)}.`,
+      message: (error as Error).message,
     });
   }
-  return raw;
 }
 
 function checkedBaseUrl(raw: string): string {

@@ -178,16 +178,25 @@ reads `retry-after-ms` / `Retry-After` for `anthropic()`, `openai()` and
 `bedrock()`; `invokeModelGateway()` also reads its gateway's "Try again in N
 seconds" body. `withRetry` waits at least that long (resilience/README.md).
 
-## `invokeModelGateway({ timeoutMs })` — a deadline per wait
-Bounds the response headers, a `complete()` body, and EACH stream read (first
-chunk, then every gap — a stream that keeps talking is never cut off). A miss
-aborts the request and raises `reason: 'timeout'`, `retryable: true`; the
-caller's `req.signal` still wins. Omitted: the fetch gets exactly `req.signal`,
-as before.
+## Deadlines
+`bedrock()` and `invokeModelGateway()` share the typed allowance policy in
+`provider-contract/deadline.ts` and the timer/cancellation leaf
+`lib/waitDeadline.ts`. `timeoutMs` limits post-output idle and close waits.
+`firstOutputTimeoutMs` (default `timeoutMs`) covers cumulative provider waits
+from opening until meaningful output; empty/control events cannot renew it.
+`responseTimeoutMs` (default first-output, then idle) covers prompt plus whole
+opaque answer for complete/fallback, cumulatively across gateway headers/body.
+Credentials have a separate no-send allowance under the response cap. Consumer
+backpressure is excluded; all caps omitted preserves the exact caller signal
+and timer-free behavior. Hosts choose limits or provide a caller signal.
 
-```ts
-invokeModelGateway({ baseUrl, apiKeyHeader: 'api-key', apiKey, model, timeoutMs: 30_000 });
-```
+The shared timeout facts include provider, typed wait, cap, observed output and
+retry advice. Bedrock throws `ProviderTimeoutError`; gateway composes it inside
+its existing error, recognized by `isProviderTimeout`. Output is meaningful
+text/tool/thinking content, not a message-start or empty text block. Output
+started or opaque answer unknown means no automatic retry. Streamed pre-output
+retry may still bill input again; missing remote settlement remains unknown.
+`withRetry` reports `timeout`. Primary failures survive later cleanup errors.
 
 ## Files
 - `AnthropicProvider.ts`, `OpenAIProvider.ts`, `BedrockProvider.ts`,

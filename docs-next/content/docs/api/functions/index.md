@@ -2,7 +2,7 @@
 title: Functions
 ---
 
-152 exported from `agentfootprint`.
+153 exported from `agentfootprint`.
 
 - [`absenceSignalOf`](/docs/api/functions/absenceSignalOf)
 - [`absent`](/docs/api/functions/absent)
@@ -85,6 +85,7 @@ title: Functions
 - [`isPaused`](/docs/api/functions/isPaused)
 - [`isPauseRequest`](/docs/api/functions/isPauseRequest)
 - [`isPlacedToolResult`](/docs/api/functions/isPlacedToolResult)
+- [`isProviderTimeout`](/docs/api/functions/isProviderTimeout)
 - [`isReservedSubflowSegment`](/docs/api/functions/isReservedSubflowSegment)
 - [`isSaidByPerson`](/docs/api/functions/isSaidByPerson)
 - [`isSchemaCheckMessage`](/docs/api/functions/isSchemaCheckMessage)
