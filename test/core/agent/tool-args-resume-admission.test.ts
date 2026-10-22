@@ -5,6 +5,7 @@ import { mock } from '../../../src/providers.js';
 import { bearer } from '../../../src/identity.js';
 import type { CredentialProvider } from '../../../src/identity.js';
 import type { AgentfootprintEvent } from '../../../src/events/registry.js';
+import { pausedRequest } from '../../helpers/pausedRequest.js';
 
 const CALL_ID = 'paused-argument-call';
 const VALID = { text: 'requested item' };
@@ -83,7 +84,10 @@ describe.each(['same', 'fresh'] as const)(
         const resumed = kind === 'same' ? initial : setup(options);
         const checkpoint = JSON.parse(JSON.stringify(paused.checkpoint));
         await expect(
-          resumed.agent.resume(checkpoint, checkInApproved({ by: 'reviewer' })),
+          resumed.agent.resume(
+            checkpoint,
+            checkInApproved({ request: pausedRequest(paused), by: 'reviewer' }),
+          ),
         ).resolves.toBe('done');
 
         expect(resumed.execute).not.toHaveBeenCalled();
@@ -114,7 +118,10 @@ describe('resumed admission preserves declared openness and validation modes', (
     const state = setup({ open, ...(mode !== undefined && { mode }), transform: true });
     const paused = await state.agent.run('Read an item');
     if (!isPaused(paused)) throw new Error('Expected a real middleware pause');
-    await state.agent.resume(paused.checkpoint, checkInApproved({ by: 'reviewer' }));
+    await state.agent.resume(
+      paused.checkpoint,
+      checkInApproved({ request: pausedRequest(paused), by: 'reviewer' }),
+    );
     expect(state.execute).toHaveBeenCalledOnce();
     expect(state.execute.mock.calls[0]?.[0]).toEqual(EXTRA);
     expect(state.getCredential).toHaveBeenCalledOnce();

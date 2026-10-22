@@ -42,6 +42,7 @@ import type {
   LLMResponse,
   PermissionChecker,
 } from '../../src/provider-contract/types.js';
+import { pausedRequest } from '../helpers/pausedRequest.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────
 
@@ -301,7 +302,11 @@ describe('middleware — integration', () => {
     expect(isPaused(paused)).toBe(true);
     expect(isAskPause(paused)).toBe(true);
     if (!isAskPause(paused)) throw new Error('unreachable');
-    expect(paused.ask).toEqual({ question: 'approve $5000?', middleware: 'big-spend' });
+    expect(paused.ask).toEqual({
+      id: expect.stringMatching(/^[0-9a-f]{64}$/),
+      question: 'approve $5000?',
+      middleware: 'big-spend',
+    });
     expect(seen).toEqual([]); // consent comes BEFORE execute
     expect(JSON.parse(JSON.stringify(paused.checkpoint))).toBeTruthy(); // JSON-safe
   });
@@ -319,7 +324,10 @@ describe('middleware — integration', () => {
 
     const paused = await agent.run({ message: 'refund it' });
     if (!isAskPause(paused)) throw new Error('expected a pause');
-    const answer = await agent.resume(paused.checkpoint, checkInApproved({ by: 'alice' }));
+    const answer = await agent.resume(
+      paused.checkpoint,
+      checkInApproved({ request: pausedRequest(paused), by: 'alice' }),
+    );
 
     expect(answer).toBe('done');
     expect(seen).toEqual([{ amount: 5000 }]);
@@ -339,7 +347,7 @@ describe('middleware — integration', () => {
     if (!isAskPause(paused)) throw new Error('expected a pause');
     const answer = await agent.resume(
       paused.checkpoint,
-      checkInDeclined({ by: 'alice', note: 'not this one' }),
+      checkInDeclined({ request: pausedRequest(paused), by: 'alice', note: 'not this one' }),
     );
 
     expect(answer).toBe('done');
@@ -404,7 +412,10 @@ describe('middleware — integration', () => {
     if (!isAskPause(paused)) throw new Error('expected a pause');
     await expect(agent.resume(paused.checkpoint, undefined)).rejects.toThrow(DecisionRequiredError);
     // The SAME checkpoint, answered right.
-    const answer = await agent.resume(paused.checkpoint, checkInApproved({ by: 'alice' }));
+    const answer = await agent.resume(
+      paused.checkpoint,
+      checkInApproved({ request: pausedRequest(paused), by: 'alice' }),
+    );
 
     expect(answer).toBe('done');
     expect(seen).toHaveLength(1);
@@ -428,7 +439,10 @@ describe('middleware — integration', () => {
 
     const paused = await agent.run({ message: 'go' });
     if (!isAskPause(paused)) throw new Error('expected a pause');
-    await agent.resume(paused.checkpoint, checkInApproved({ by: 'alice' }));
+    await agent.resume(
+      paused.checkpoint,
+      checkInApproved({ request: pausedRequest(paused), by: 'alice' }),
+    );
 
     expect(seen).toEqual([{ amount: 1000 }]);
   });
@@ -458,7 +472,10 @@ describe('middleware — integration', () => {
 
     const paused = await agent.run({ message: 'go' });
     if (!isAskPause(paused)) throw new Error('expected a pause');
-    await agent.resume(paused.checkpoint, checkInApproved({ by: 'alice' }));
+    await agent.resume(
+      paused.checkpoint,
+      checkInApproved({ request: pausedRequest(paused), by: 'alice' }),
+    );
 
     expect(ran).toEqual(['gate', 'after']); // 'gate' asked once, not twice
     expect(seen).toEqual([{ tagged: true }]);
@@ -477,7 +494,10 @@ describe('middleware — integration', () => {
 
     const paused = await agent.run({ message: 'go' });
     if (!isAskPause(paused)) throw new Error('expected a pause');
-    await agent.resume(paused.checkpoint, checkInApproved({ by: 'alice' }));
+    await agent.resume(
+      paused.checkpoint,
+      checkInApproved({ request: pausedRequest(paused), by: 'alice' }),
+    );
 
     expect(seen).toEqual([]); // never executed ungoverned
     const toolResult = spy.requests[1]?.messages.find((m) => m.role === 'tool');
@@ -515,7 +535,10 @@ describe('middleware — integration', () => {
 
     const paused = await agent.run({ message: 'go' });
     if (!isAskPause(paused)) throw new Error('expected a pause');
-    await agent.resume(paused.checkpoint, checkInApproved({ by: 'alice' }));
+    await agent.resume(
+      paused.checkpoint,
+      checkInApproved({ request: pausedRequest(paused), by: 'alice' }),
+    );
 
     expect(seen).toEqual([]);
     const toolResult = spy.requests[1]?.messages.find((m) => m.role === 'tool');
@@ -551,7 +574,10 @@ describe('middleware — integration', () => {
 
     const paused = await agent.run({ message: 'go' });
     if (!isAskPause(paused)) throw new Error('expected a pause');
-    await agent.resume(paused.checkpoint, checkInApproved({ by: 'alice' }));
+    await agent.resume(
+      paused.checkpoint,
+      checkInApproved({ request: pausedRequest(paused), by: 'alice' }),
+    );
 
     expect(seen).toEqual([]);
     const toolResult = spy.requests[1]?.messages.find((m) => m.role === 'tool');
@@ -568,7 +594,10 @@ describe('middleware — integration', () => {
 
     const paused = await agent.run({ message: 'go' });
     if (!isAskPause(paused)) throw new Error('expected a pause');
-    await agent.resume(paused.checkpoint, checkInApproved({ by: 'alice' }));
+    await agent.resume(
+      paused.checkpoint,
+      checkInApproved({ request: pausedRequest(paused), by: 'alice' }),
+    );
 
     // The gate was never going to fire for £5. Before 8.13.0 the tool was
     // refused anyway, and the refusal claimed a consent gate would have run.
@@ -599,7 +628,10 @@ describe('middleware — integration', () => {
 
     const paused = await agent.run({ message: 'go' });
     if (!isAskPause(paused)) throw new Error('expected a pause');
-    await agent.resume(paused.checkpoint, checkInApproved({ by: 'alice' }));
+    await agent.resume(
+      paused.checkpoint,
+      checkInApproved({ request: pausedRequest(paused), by: 'alice' }),
+    );
 
     expect(seen).toEqual([]);
   });
@@ -1125,7 +1157,10 @@ describe('middleware — toolSource', () => {
     if (!isAskPause(paused)) throw new Error('expected a pause');
     expect(seen).toEqual([]); // the watcher sits AFTER the asking link
 
-    await agent.resume(paused.checkpoint, checkInApproved({ by: 'alice' }));
+    await agent.resume(
+      paused.checkpoint,
+      checkInApproved({ request: pausedRequest(paused), by: 'alice' }),
+    );
 
     expect(seen).toEqual([{ toolName: 'call_aws', toolSource: 'aws-prod', declared: true }]);
   });
@@ -1314,7 +1349,10 @@ describe('middleware — the after-tool moment', () => {
 
     const paused = await agent.run({ message: 'go' });
     if (!isAskPause(paused)) throw new Error('expected a pause');
-    await agent.resume(paused.checkpoint, checkInApproved({ by: 'dana@ops' }));
+    await agent.resume(
+      paused.checkpoint,
+      checkInApproved({ request: pausedRequest(paused), by: 'dana@ops' }),
+    );
 
     const row = ledger(agent).find((r) => r.moment === 'after-tool');
     expect(row).toMatchObject({ middleware: 'gate', outcome: 'allow', changed: true });

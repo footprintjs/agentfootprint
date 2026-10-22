@@ -83,8 +83,12 @@ export function agentCoreA2AErrorCode(code: string | undefined): number {
     case 'ERR_SESSION_NOT_FOUND':
     case 'ERR_ARTIFACT_NOT_FOUND':
       return -32051;
+    // ERR_RESUME_DECISION is a Validation, not -32054: a client retries a
+    // Conflict with backoff, and the same decision is refused the same way
+    // every time.
     case 'ERR_INVALID_WIRE_OP':
     case 'ERR_DECISION_REQUIRED':
+    case 'ERR_RESUME_DECISION':
     case 'ERR_ARTIFACT_SESSION_REQUIRED':
     case 'invalid_request':
     case 'invalid_params':

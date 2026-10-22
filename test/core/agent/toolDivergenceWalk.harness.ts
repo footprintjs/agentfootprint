@@ -32,6 +32,7 @@ import type {
   ToolsShadowedPayload,
 } from '../../../src/events/payloads.js';
 import type { Tool } from '../../../src/tools/tools.js';
+import { pausedRequest } from '../../helpers/pausedRequest.js';
 
 // ═════════════════════════════════════════════════════════════════════════
 // The stamp — how a contract and an implementation are told apart
@@ -216,7 +217,10 @@ export const drive = async (s: Scenario): Promise<Observation> => {
       ) as typeof outcome.checkpoint;
       const fresh = await build();
       listen(fresh);
-      await fresh.resume(checkpoint, checkInApproved({ by: 'walk' }));
+      await fresh.resume(
+        checkpoint,
+        checkInApproved({ request: pausedRequest(outcome), by: 'walk' }),
+      );
     }
   } catch (err) {
     runError = messageOf(err);

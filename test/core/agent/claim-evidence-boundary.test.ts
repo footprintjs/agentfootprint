@@ -37,6 +37,7 @@ import type {
   ReturnedEvidence,
   ScopeDeclaration,
 } from '../../../src/integrity/claim-binding/types.js';
+import { pausedRequest } from '../../helpers/pausedRequest.js';
 
 type Mode = 'classic' | 'dynamic' | 'dynamic-grouped';
 type Reply = {
@@ -265,7 +266,7 @@ describe('public-Agent seam: what executed, not what the model proposed', () => 
     });
     await next.agent.resume(
       JSON.parse(JSON.stringify(paused.checkpoint)),
-      checkInApproved({ by: 'synthetic reviewer' }),
+      checkInApproved({ request: pausedRequest(paused), by: 'synthetic reviewer' }),
     );
     expect(next.executions.map((execution) => execution.args)).toEqual([
       { region: 'east', currency: 'EUR' },
@@ -358,7 +359,10 @@ describe('public-Agent seam: what executed, not what the model proposed', () => 
     if (!isPaused(paused)) throw new Error('Expected check-in pause.');
     expect(captured).toBeUndefined();
     vi.setSystemTime(nowMs + 30 * 60000);
-    await agent.resume(paused.checkpoint, checkInApproved({ by: 'synthetic reviewer' }));
+    await agent.resume(
+      paused.checkpoint,
+      checkInApproved({ request: pausedRequest(paused), by: 'synthetic reviewer' }),
+    );
     expect(executed).toMatchObject({ start_time: Date.parse(window.from), end_time: nowMs });
     expect(executed).not.toHaveProperty('window');
     if (captured === undefined || returned === undefined || end === undefined)

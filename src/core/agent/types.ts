@@ -725,6 +725,20 @@ export interface AgentOptions {
    */
   readonly credentials?: CredentialProvider;
   /**
+   * Where this agent records the consent requests that have been answered, so
+   * one decision runs one call — a check-in's or a middleware ask's, approved
+   * or declined. A resume that presents a decision for a request already in
+   * the ledger is refused (`ResumeDecisionError`, `'already-answered'`) and the
+   * tool does not run.
+   *
+   * Default: `inMemoryDecisionLedger()`, one per agent, in this process. Pass
+   * one ledger to every agent that can resume the same paused run — a server
+   * that builds an agent per request, or one that resumes a stored checkpoint
+   * in another process — backed by a store all of them share. Its `spend` must
+   * be atomic per id.
+   */
+  readonly decisionLedger?: import('../consentRequest.js').DecisionLedger;
+  /**
    * The artifact store (9.21.0) — the claim-check seam. When set, every tool's
    * `ctx.artifacts` is this store bound to the RUN's scope (the same
    * tenant/principal/conversation tuple memory scopes on, composed by the
@@ -1580,6 +1594,15 @@ export interface AgentState {
   // structuredClone (checkpoint discipline). Absent for non-check-in pauses.
   pausedCheckIn?: boolean;
   pausedCheckInArgs?: Readonly<Record<string, unknown>>;
+  /**
+   * The request a consent-gate pause (a check-in or a middleware ask) put to
+   * a person: the id its decision must quote and the nonce that binds that id
+   * to the exact paused call (`core/consentRequest.ts`). Written at the pause,
+   * read and cleared by the resume that uses the decision. Absent for every
+   * other pause. Named with the arguments in the conversation redaction
+   * vocabulary: the nonce lets whoever holds it confirm a guess of them.
+   */
+  pausedRequest?: import('../consentRequest.js').PendingRequest;
   // Which REGISTERED screen component the outstanding ask nominated to collect
   // its decision (9.24.0) — the `componentId` of the check-in's / middleware
   // ask's `AskComponent`, written at pause time ONLY when one exists and read

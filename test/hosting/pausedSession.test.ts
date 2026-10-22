@@ -21,7 +21,7 @@ import { describe, expect, it } from 'vitest';
 import { Agent, ask, defineTool } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
 import { askHuman } from '../../src/core/pause.js';
-import { checkInApproved, checkInDeclined } from '../../src/core/checkin.js';
+import { checkInApproved } from '../../src/core/checkin.js';
 import {
   memorySessions,
   readEnvelope,
@@ -32,6 +32,8 @@ import {
 import type { CheckpointEnvelope, SessionLifecycle, WakeReason } from '../../src/hosting/index.js';
 import type { LLMProvider } from '../../src/provider-contract/types.js';
 import { inProcessHost } from './testHost.js';
+import { REFUSAL_STATUS } from '../../src/hosting/refusalStatus.js';
+import { pausedRequest } from '../helpers/pausedRequest.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────
 
@@ -128,7 +130,7 @@ describe('a paused session — the whole round trip', () => {
       const done = await host.deliver({
         input: '',
         sessionId: 'r-1',
-        decision: checkInApproved({ by: 'alice@ops' }),
+        decision: { approved: true, by: 'alice@ops' },
       });
       expect(done.error).toBeUndefined();
       expect(done.output).toBe('refund issued');
@@ -165,7 +167,7 @@ describe('a paused session — the whole round trip', () => {
       const done = await host.deliver({
         input: '',
         sessionId: 'no',
-        decision: checkInDeclined({ by: 'alice@ops', note: 'too high' }),
+        decision: { approved: false, by: 'alice@ops', note: 'too high' },
       });
       expect(done.output).toBe('I could not refund that.');
     } finally {
@@ -201,7 +203,7 @@ describe('a paused session — the whole round trip', () => {
     const handle = await standingAgent({ agent, sessions: memorySessions(), host });
     try {
       await host.deliver({ input: 'refund me', sessionId: 'c' });
-      await host.deliver({ input: '', sessionId: 'c', decision: checkInApproved({ by: 'a' }) });
+      await host.deliver({ input: '', sessionId: 'c', decision: { approved: true, by: 'a' } });
       const third = await host.deliver({ input: 'how much was it?', sessionId: 'c' });
       expect(third.output).toBe('It was ten dollars.');
       // Turn 3 saw the refund turn, its answer, and the new question.
@@ -320,7 +322,7 @@ describe('a paused session — what makes a request a resume', () => {
       const stray = await host.deliver({
         input: '',
         sessionId: 'calm',
-        decision: checkInApproved({ by: 'alice' }),
+        decision: { approved: true, by: 'alice' },
       });
       expect(stray.code).toBe('ERR_NO_PENDING_ASK');
       expect(stray.error).toContain("session 'calm'");
@@ -344,7 +346,7 @@ describe('a paused session — what makes a request a resume', () => {
     const handle = await standingAgent({ agent: pausingAgent(), sessions, host });
     try {
       await host.deliver({ input: 'refund me', sessionId: 'w' });
-      await host.deliver({ input: '', sessionId: 'w', decision: checkInApproved({ by: 'a' }) });
+      await host.deliver({ input: '', sessionId: 'w', decision: { approved: true, by: 'a' } });
       expect(reasons).toEqual(['invoke', 'resume']);
     } finally {
       await handle.close();
@@ -366,7 +368,7 @@ describe('a paused session — resuming is not a replay', () => {
     try {
       await host.deliver({ input: 'refund me', sessionId: 'once' });
       expect(ran).toEqual(['refund:10']);
-      await host.deliver({ input: '', sessionId: 'once', decision: checkInApproved({ by: 'a' }) });
+      await host.deliver({ input: '', sessionId: 'once', decision: { approved: true, by: 'a' } });
       // Still ONE. A pause resumes from the engine's own checkpoint, so the
       // conversation-replay caveat that applies to resumeOnError does not
       // apply here at all.
@@ -420,7 +422,7 @@ describe('a paused session — resuming is not a replay', () => {
       const done = await host.deliver({
         input: '',
         sessionId: 'ci',
-        decision: checkInApproved({ by: 'alice' }),
+        decision: checkInApproved({ request: pausedRequest(asked.awaiting), by: 'alice' }),
       });
       expect(done.output).toBe('supplier paid');
       expect(ran).toEqual(['paid:500']);
@@ -458,12 +460,16 @@ describe('a paused session — resuming is not a replay', () => {
     const handle = await standingAgent({ agent, sessions: memorySessions(), host });
     try {
       const asked = await host.deliver({ input: 'ship it', sessionId: 'm' });
-      expect(asked.awaiting?.ask).toEqual({ question: 'sure?', middleware: 'four-eyes' });
+      expect(asked.awaiting?.ask).toEqual({
+        id: expect.stringMatching(/^[0-9a-f]{64}$/),
+        question: 'sure?',
+        middleware: 'four-eyes',
+      });
       expect(ran).toEqual([]);
       const done = await host.deliver({
         input: '',
         sessionId: 'm',
-        decision: checkInApproved({ by: 'alice' }),
+        decision: checkInApproved({ request: pausedRequest(asked.awaiting), by: 'alice' }),
       });
       expect(done.output).toBe('shipped it');
       expect(ran).toEqual(['deployed']);
@@ -545,7 +551,7 @@ describe('a paused session — through a real serialize/parse cycle', () => {
       const done = await host.deliver({
         input: '',
         sessionId: 'wire',
-        decision: checkInApproved({ by: 'alice' }),
+        decision: { approved: true, by: 'alice' },
       });
       expect(done.output).toBe('refund issued');
     } finally {
@@ -620,7 +626,7 @@ describe('a paused session — over nodeHost, for real', () => {
       const done = await post({
         input: '',
         sessionId: 'http',
-        decision: checkInApproved({ by: 'alice' }),
+        decision: { approved: true, by: 'alice' },
       });
       expect(done.status).toBe(200);
       expect((await done.json()) as { output: string }).toEqual({ output: 'refund issued' });
@@ -716,7 +722,7 @@ describe('a consent gate over the wire — the wrong shape is a 400, not a 500',
       const done = await host.deliver({
         input: '',
         sessionId: 'gate-1',
-        decision: checkInApproved({ by: 'alice@ops' }),
+        decision: checkInApproved({ request: pausedRequest(asked.awaiting), by: 'alice@ops' }),
       });
       expect(done.output).toBe('refund issued');
       expect(ran).toEqual(['refund:10']);
@@ -740,7 +746,10 @@ describe('a consent gate over the wire — the wrong shape is a 400, not a 500',
           body: JSON.stringify(body),
         });
 
-      expect((await post({ input: 'refund me', sessionId: 'h-gate' })).status).toBe(202);
+      const asked = await post({ input: 'refund me', sessionId: 'h-gate' });
+      expect(asked.status).toBe(202);
+      // What the client is shown — the request its decision must name.
+      const { awaiting } = (await asked.json()) as { awaiting: unknown };
 
       const wrong = await post({ input: '', sessionId: 'h-gate', decision: 'yes' });
       expect(wrong.status).toBe(400);
@@ -751,9 +760,86 @@ describe('a consent gate over the wire — the wrong shape is a 400, not a 500',
       const done = await post({
         input: '',
         sessionId: 'h-gate',
-        decision: checkInApproved({ by: 'alice' }),
+        decision: checkInApproved({ request: pausedRequest(awaiting), by: 'alice' }),
       });
       expect(done.status).toBe(200);
+    } finally {
+      await handle.close();
+    }
+  });
+});
+
+// ─── a decision answers ONE pending request, once ──────────────────────
+
+describe('a consent gate over the wire — a decision answers the request it names', () => {
+  /** Two check-ins in a row: refund 5, then — after that answer — refund 9000. */
+  function twoRefunds(ran: number[]): Agent {
+    return Agent.create({
+      provider: mock({
+        replies: [
+          { toolCalls: [{ id: 't1', name: 'issue_refund', args: { amount: 5 } }] },
+          { toolCalls: [{ id: 't1', name: 'issue_refund', args: { amount: 9000 } }] },
+          { content: 'both refunds issued' },
+        ],
+      }),
+      model: 'test-model',
+      maxIterations: 4,
+    })
+      .system('terse')
+      .tool(
+        defineTool<{ amount: number }, string>({
+          name: 'issue_refund',
+          description: 'refund a customer',
+          inputSchema: {
+            type: 'object',
+            properties: { amount: { type: 'number' } },
+            required: ['amount'],
+          },
+          checkIn: 'always',
+          execute: ({ amount }) => {
+            ran.push(amount);
+            return `refunded ${amount}`;
+          },
+        }),
+      )
+      .build();
+  }
+
+  it('a duplicate "approve" that lands on the NEXT pause is refused (409), and that pause still waits', async () => {
+    const ran: number[] = [];
+    const host = inProcessHost();
+    const handle = await standingAgent({
+      agent: twoRefunds(ran),
+      sessions: memorySessions(),
+      host,
+    });
+    try {
+      const first = await host.deliver({ input: 'refund both', sessionId: 'dup' });
+      expect(first.awaiting?.checkIn?.args).toEqual({ amount: 5 });
+      const approveFirst = checkInApproved({
+        request: pausedRequest(first.awaiting),
+        by: 'alice@ops',
+      });
+
+      const second = await host.deliver({ input: '', sessionId: 'dup', decision: approveFirst });
+      expect(ran).toEqual([5]);
+      expect(second.awaiting?.checkIn?.args).toEqual({ amount: 9000 });
+
+      // The double click: the same decision arrives again. The session is now
+      // paused on a refund nobody was shown — it must not be the one answered.
+      const duplicate = await host.deliver({ input: '', sessionId: 'dup', decision: approveFirst });
+      expect(duplicate.code).toBe('ERR_RESUME_DECISION');
+      expect(REFUSAL_STATUS[duplicate.code!]).toBe(409);
+      expect(ran).toEqual([5]);
+
+      // The second refund is still the outstanding question, answerable as asked.
+      const done = await host.deliver({
+        input: '',
+        sessionId: 'dup',
+        decision: checkInApproved({ request: pausedRequest(second.awaiting), by: 'alice@ops' }),
+      });
+      expect(done.output).toBe('both refunds issued');
+      expect(ran).toEqual([5, 9000]);
     } finally {
       await handle.close();
     }

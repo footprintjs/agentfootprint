@@ -1248,14 +1248,15 @@ inference on purpose — reading approval out of prose ("yes, go ahead") is a
 guess, and a consent gate may not be built on a guess.
 
 ```ts
-// The run stopped and asked. Answer it on the same session:
+// The run stopped and asked; `awaiting` is the PendingAsk the host replied with.
+// Answer it on the same session — the decision names the request it answers:
 await fetch(`${url}/invoke`, {
   method: 'POST',
   headers: { 'content-type': 'application/json' },
   body: JSON.stringify({
     input: '',
     sessionId: 'c-1',
-    decision: checkInApproved({ by: 'alice@ops' }),
+    decision: checkInApproved({ request: awaiting.checkIn, by: 'alice@ops' }),
   }),
 });
 ```
@@ -1263,8 +1264,14 @@ await fetch(`${url}/invoke`, {
 The port never interprets `decision`. It is handed to
 `agent.resume(checkpoint, decision)` exactly as it arrived — the shipped
 `checkInApproved()` / `checkInDeclined()` vocabulary answers a `checkIn` or a
-middleware `ask`; a plain `askHuman` pause is answered with whatever that tool's
-author documented.
+middleware `ask`, built from `awaiting.checkIn` / `awaiting.ask` so it carries
+that request's `requestId`; a plain `askHuman` pause is answered with whatever
+that tool's author documented. A decision for any other request — a duplicate
+that arrives after the first one resumed the run and it paused again, say — is
+refused with `ResumeDecisionError` rather than answering a question nobody was
+shown ([Check-in](doc:checkin#a-decision-answers-one-request-once)). Over AG-UI
+the page never sees the request id and needs none: the interrupt it answers is
+matched to the kept pause, and the adapter names that pause's request.
 
 Two mismatches are refused by name rather than guessed at:
 

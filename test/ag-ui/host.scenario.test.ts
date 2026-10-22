@@ -221,6 +221,48 @@ describe('scenario — an AG-UI frontend runs an agentfootprint agent', () => {
     ]);
   });
 
+  it('a check-in: the page answers its interrupt with a decision, once — the server names the request', async () => {
+    const refunded: number[] = [];
+    const refund = defineTool<{ amount: number }, string>({
+      name: 'issue_refund',
+      description: 'Refund a customer.',
+      inputSchema: { type: 'object', properties: { amount: { type: 'number' } } },
+      checkIn: 'always',
+      execute: async ({ amount }) => {
+        refunded.push(amount);
+        return `refunded ${amount}`;
+      },
+    });
+    const { provider } = watched([
+      { content: '', toolCalls: [{ id: 'r1', name: 'issue_refund', args: { amount: 40 } }] },
+      'Refunded.',
+    ]);
+    const client = frontend({
+      agent: () => Agent.create({ provider, model: 'm' }).system('s').tool(refund).build(),
+      threads: signedIn,
+      sessions: memorySessions(),
+    });
+    client.addMessage({ id: 'u1', role: 'user', content: 'Refund 40' });
+    await client.runAgent();
+    const [interrupt] = client.pendingInterrupts;
+    expect(interrupt?.message).toContain('Refund a customer');
+    expect(refunded).toEqual([]);
+
+    // The page's decision names no request — it never saw one. The interrupt
+    // it answers is matched to the kept pause, and the adapter names its request.
+    const answer = { interruptId: interrupt!.id, status: 'resolved' as const };
+    const decision = { approved: true, by: 'alice', at: 1 };
+    const { result } = await client.runAgent({ resume: [{ ...answer, payload: decision }] });
+    expect(result).toBe('Refunded.');
+    expect(refunded).toEqual([40]);
+
+    // The same answer again finds no pause to answer: one decision, one call.
+    await expect(client.runAgent({ resume: [{ ...answer, payload: decision }] })).rejects.toThrow(
+      'ERR_NO_PENDING_ASK',
+    );
+    expect(refunded).toEqual([40]);
+  });
+
   it('what a page may not decide is refused by name, and the client surfaces it', async () => {
     const host = {
       agent: () =>

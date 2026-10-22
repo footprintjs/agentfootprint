@@ -68,6 +68,7 @@ import { notDispatchedResult, pausedBatchOf } from '../../../src/core/agent/stag
 import { stripFrameworkFields } from '../../../src/core/agent/composeRequest.js';
 import { extractSequence, SYNTHETIC_DENY_PREFIX } from '../../../src/security/extractSequence.js';
 import { PolicyHaltError } from '../../../src/security/index.js';
+import { pausedRequest } from '../../helpers/pausedRequest.js';
 
 // ─── The harness ─────────────────────────────────────────────────────
 
@@ -185,7 +186,10 @@ async function pauseAndResume(
     return { answer: await h.agent.resume(paused.checkpoint, undefined), resumedFrom };
   }
   return {
-    answer: await h.agent.resume(paused.checkpoint, checkInApproved({ by: 'alice' })),
+    answer: await h.agent.resume(
+      paused.checkpoint,
+      checkInApproved({ request: pausedRequest(paused), by: 'alice' }),
+    ),
     resumedFrom,
   };
 }
@@ -390,7 +394,10 @@ describe('batch settlement — a paused batch settles its un-dispatched siblings
         restored.vault.granted = true; // the person consented, out of band
         answer = await restored.agent.resume(checkpoint, undefined);
       } else {
-        answer = await restored.agent.resume(checkpoint, checkInApproved({ by: 'alice' }));
+        answer = await restored.agent.resume(
+          checkpoint,
+          checkInApproved({ request: pausedRequest(paused), by: 'alice' }),
+        );
       }
       expect(answer).toBe('done');
       expect(restored.ran).not.toContain('third');

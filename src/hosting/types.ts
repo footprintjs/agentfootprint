@@ -84,9 +84,12 @@ export interface HostRequest {
    * The port never interprets it. It is handed to `agent.resume(checkpoint,
    * decision)` exactly as it arrived — a {@link CheckInRequest} or a middleware
    * `ask` is answered with the shipped `checkInApproved()` / `checkInDeclined()`
-   * vocabulary; a plain `askHuman` pause is answered with whatever that tool's
-   * author documented. Typed `unknown` because the library does not get to
-   * decide what a tool asked for.
+   * vocabulary, built from the pending ask (`checkInApproved({ request:
+   * pending.checkIn, by })`) so it names the request it answers, and the resume
+   * refuses it for any other request or a second time (`ResumeDecisionError`);
+   * a plain `askHuman` pause is answered with whatever that tool's author
+   * documented. Typed `unknown` because the library does not get to decide what
+   * a tool asked for.
    */
   readonly decision?: unknown;
   /**
@@ -939,14 +942,16 @@ export interface PendingAsk {
   /**
    * Present ONLY when a tool declared `checkIn` — the typed ask plus its
    * evidence pack (what the tool will do, what context the run read, which
-   * context drove the choice, the run so far). Answer with `checkInApproved()`
-   * / `checkInDeclined()`.
+   * context drove the choice, the run so far). Answer with
+   * `checkInApproved({ request: pending.checkIn, by })` / `checkInDeclined(...)`
+   * — `checkIn.id` names the request, and the decision answers it once.
    */
   readonly checkIn?: CheckInRequest;
   /**
    * Present ONLY when a `toolMiddleware` answered `ask` — the question and the
    * middleware that put it. Answered with the same decision vocabulary a
-   * check-in uses, deliberately: a person approving is a person approving.
+   * check-in uses, deliberately: a person approving is a person approving —
+   * `checkInApproved({ request: pending.ask, by })`, naming `ask.id`.
    */
   readonly ask?: MiddlewareAsk;
   /**

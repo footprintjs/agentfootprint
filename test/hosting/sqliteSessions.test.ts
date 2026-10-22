@@ -35,7 +35,6 @@ import { join } from 'node:path';
 import { Agent, defineTool } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
 import { askHuman, isPaused } from '../../src/core/pause.js';
-import { checkInApproved } from '../../src/core/checkin.js';
 import {
   memorySessions,
   readEnvelope,
@@ -336,10 +335,11 @@ onSqlite('sqliteSessions — a run that stopped to ask a person', () => {
     expect(paused.pending.tool).toBe('approve_refund');
 
     const answering = answeringAgent(ran); // a NEW agent, as a new process has
-    const answer = await answering.resume(
-      paused.checkpoint,
-      checkInApproved({ by: 'alice@ops', note: 'verified with customer' }),
-    );
+    const answer = await answering.resume(paused.checkpoint, {
+      approved: true,
+      by: 'alice@ops',
+      note: 'verified with customer',
+    });
 
     expect(answer).toBe('refund issued');
     // The claim that makes this a resume rather than a replay: the tool that
@@ -372,7 +372,7 @@ onSqlite('sqliteSessions — a run that stopped to ask a person', () => {
       const done = await host2.deliver({
         input: '',
         sessionId: 'r-1',
-        decision: checkInApproved({ by: 'alice' }),
+        decision: { approved: true, by: 'alice' },
       });
       expect(done.output).toBe('refund issued');
       expect(ran).toEqual(['refund:40']); // once, across two processes

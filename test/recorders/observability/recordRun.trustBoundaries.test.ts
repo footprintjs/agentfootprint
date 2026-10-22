@@ -29,6 +29,7 @@ import {
   recordRunWhere,
   type RunRecorder,
 } from '../../../src/recorders/observability/recordRun.js';
+import { pausedRequest } from '../../helpers/pausedRequest.js';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -459,9 +460,12 @@ describe('recordRun observes reported policy facts without upgrading their meani
         expect(isPaused(result)).toBe(true);
         if (!isPaused(result)) throw new Error('Expected middleware pause');
         const before = trustHandle(recorder).toSnapshot();
-        expect(await agent.resume(result.checkpoint, checkInApproved({ by: 'reviewer' }))).toBe(
-          'done',
-        );
+        expect(
+          await agent.resume(
+            result.checkpoint,
+            checkInApproved({ request: pausedRequest(result), by: 'reviewer' }),
+          ),
+        ).toBe('done');
         expect(execute).toHaveBeenCalledOnce();
         expect(trustHandle(recorder).toSnapshot().data.captureId).toBe(before.data.captureId);
         expect(middlewareFacts(recorder)[0]).toEqual(before.data.facts[0]);

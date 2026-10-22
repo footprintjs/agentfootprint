@@ -63,9 +63,12 @@ import { checkInApproved, checkInDeclined, isAskPause } from 'agentfootprint';
 const out = await agent.run({ message });
 if (isAskPause(out)) {
   console.log(out.ask.middleware, out.ask.question);
-  await agent.resume(out.checkpoint, checkInApproved({ by: 'dana@ops' }));
+  // The decision names the ask it answers (`out.ask.id`).
+  await agent.resume(out.checkpoint, checkInApproved({ request: out.ask, by: 'dana@ops' }));
 }
 ```
+
+The decision answers that ask once, for exactly the call it was asked about — the arguments as the chain had them, and the link it resumes after. A duplicate, a decision for another ask, or a checkpoint whose call changed is refused with `ResumeDecisionError` ([Check-in](doc:checkin#a-decision-answers-one-request-once)).
 
 The checkpoint is JSON. It is the same pause machinery `askHuman` and `checkIn` ride — not a second one — which is why it already works everywhere they do, including [hosting](doc:hosting-and-runtime), where an outstanding question is refused as unfinished work rather than silently dropped.
 

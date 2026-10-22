@@ -300,13 +300,21 @@ agent.on('agentfootprint.agent.turn_end', (e) =>
 ## Human in the loop
 
 ```typescript
-import { askHuman, isPaused, checkInApproved } from 'agentfootprint';
+import { isCheckInPause, checkInApproved } from 'agentfootprint';
 
 const result = await agent.run({ message: 'Refund $500?' });
-if (isPaused(result)) {
-  const final = await agent.resume(result.checkpoint, checkInApproved({ by: 'maya' }));
+if (isCheckInPause(result)) {
+  // The decision names the request it answers: once, for exactly the call shown.
+  const final = await agent.resume(
+    result.checkpoint,
+    checkInApproved({ request: result.checkIn, by: 'maya' }),
+  );
 }
 ```
+
+A decision for another pause, for a checkpoint whose call changed, or a second
+resume with the same decision throws `ResumeDecisionError` — the tool never runs.
+Several agent instances resuming one paused run share `Agent.create({ decisionLedger })`.
 
 ## Resilience
 

@@ -17,13 +17,14 @@ want to reach into the checkpoint.
 
 > `readonly` `optional` **ask?**: [`MiddlewareAsk`](/docs/api/interfaces/MiddlewareAsk)
 
-Defined in: [src/core/pause.ts:63](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L63)
+Defined in: [src/core/pause.ts:65](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L65)
 
 Present ONLY when a `toolMiddleware` answered `ask` — the question it put
 to a person, plus the middleware that asked. Absent for every other pause,
 which is the discriminant.
 
-Resume with a `CheckInDecision` (`checkInApproved` / `checkInDeclined`).
+Resume with a `CheckInDecision` built from it
+(`checkInApproved({ request: outcome.ask, by })` / `checkInDeclined(...)`).
 That is deliberate rather than a second decision type: a person approving
 is a person approving, whether the gate was a tool's `checkIn` or a
 middleware's `ask`, and one word for one thing beats a synonym.
@@ -49,13 +50,14 @@ Typed data collection; answers are values, never approval decisions.
 
 > `readonly` `optional` **checkIn?**: [`CheckInRequest`](/docs/api/interfaces/CheckInRequest)
 
-Defined in: [src/core/pause.ts:47](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L47)
+Defined in: [src/core/pause.ts:48](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L48)
 
 Present ONLY when this pause is an evidence-carrying check-in (a tool
 declared `checkIn`). Carries the typed ask + evidence pack. Absent for
 plain `askHuman` / `pauseHere` pauses — that's the clean discriminant
-between the two pause kinds. Resume with a `CheckInDecision`
-(`checkInApproved` / `checkInDeclined`).
+between the two pause kinds. Resume with a `CheckInDecision` built from
+it (`checkInApproved({ request: outcome.checkIn, by })` /
+`checkInDeclined(...)`) — `checkIn.id` names the request it answers.
 
 ***
 

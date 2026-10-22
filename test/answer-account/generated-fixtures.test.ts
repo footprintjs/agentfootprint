@@ -42,6 +42,7 @@ import type {
 } from '../../src/answer-account/types.js';
 import type { Recording } from '../../src/recorders/observability/recordRun.js';
 import { assertP1, assertP7, dump, golden } from './helpers.js';
+import { pausedRequest } from '../helpers/pausedRequest.js';
 
 /** The account, with P1 (pointers resolve) and P7 (allow-listed, bounded) asserted on every fixture. */
 function explainChecked(
@@ -438,7 +439,7 @@ describe('E — the edge set (§2.10)', () => {
     if (!isAskPause(paused as never)) throw new Error('expected an ask pause');
     await agent.resume(
       (paused as { checkpoint: unknown }).checkpoint,
-      checkInDeclined({ by: 'alice', note: 'not this one' }),
+      checkInDeclined({ request: pausedRequest(paused), by: 'alice', note: 'not this one' }),
     );
     const legs = await read();
     expect(legs).toHaveLength(1); // a paused run mints nothing

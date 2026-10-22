@@ -61,11 +61,50 @@ It rides the `CheckInRequest` as `request.component` (and `PendingAsk.component`
 
 ## The decision is a record
 
-The human answers with `checkInApproved({ by, note? })` or `checkInDeclined({ by, note? })`, and you `agent.resume(checkpoint, decision)`. On **approve** the tool executes normally (same iteration semantics as any resume); on **decline** the model receives `"declined by human: <note>"` as the tool result and adapts in-loop.
+The human answers with `checkInApproved({ request, by, note? })` or `checkInDeclined({ request, by, note? })` — `request` is the check-in they were shown, `outcome.checkIn` — and you `agent.resume(checkpoint, decision)`. On **approve** the tool executes normally (same iteration semantics as any resume); on **decline** the model receives `"declined by human: <note>"` as the tool result and adapts in-loop.
 
 <CodeFile path="examples/features/33-checkin.ts" region="decide" title="examples/features/33-checkin.ts (region: decide)" />
 
 Both the ask and the decision fire typed events — `agentfootprint.checkin.request` and `agentfootprint.checkin.decision` — that any recorder can observe via the emit channel, and the built-in `CheckInRecorder` captures them as a queryable audit trail (`getRequests()` / `getDecisions()` / `getStats()`). When the ask carried a `checkInComponent`, the decision event and the recorder's record additionally carry the `componentId` that collected the answer — the trace says which surface asked, while the decision itself stays the same structured fact.
+
+### A decision answers one request, once
+
+A "yes" is about one thing: the call the person was shown. So every check-in (and every middleware `ask`) mints a **request id** when it pauses — `outcome.checkIn.id`, `outcome.ask.id` — and the decision quotes it. The id is unique to that pause and bound to the exact call that runs on approval: the tool, its arguments, the call id, the served party and, for an ask, where the middleware chain resumes.
+
+Why it matters: without it, an approval is a bearer token for whatever is paused next. A duplicate click on "Approve" arrives after the first one resumed the run — and the run has since paused on a *different* refund the person never saw. A stored checkpoint whose arguments were edited after the ask still finds the person's yes. The same decision resumed twice runs the tool twice. Each of these is now refused, before the tool runs:
+
+```ts
+const out = await agent.run({ message: 'refund order 42' });
+if (isCheckInPause(out)) {
+  const decision = checkInApproved({ request: out.checkIn, by: 'maya@ops' });
+  await agent.resume(out.checkpoint, decision);   // runs the refund
+  await agent.resume(out.checkpoint, decision);   // ResumeDecisionError: 'already-answered'
+}
+```
+
+`ResumeDecisionError` (`code: 'ERR_RESUME_DECISION'`) says which rule refused, in `reason` (a `ResumeDecisionRefusal`), and carries the `requestId` the decision named and the `pausedRequestId` the run is waiting on:
+
+| `reason` | The decision… |
+|---|---|
+| `'no-request'` | names no request — built by an older release, or by hand without `requestId` |
+| `'request-not-recorded'` | can't answer this pause at all: the checkpoint recorded no request (written before requests were named) |
+| `'other-request'` | names a different request — another conversation's, an earlier pause of this run, a parallel sibling's |
+| `'call-changed'` | names this request, but the checkpoint's call changed after the ask (arguments, tool, call id, party, chain position) |
+| `'already-answered'` | was already used by a resume — approved or declined; a decline spends the request too |
+
+All but `'already-answered'` are refused before anything moves, and the checkpoint stays answerable with the right decision. A request is spent where the decision is used, in the resumed run, still before the tool. A composition (`Sequence`, `Parallel`, …) resumes its nested agents directly, so there every refusal comes from that same place.
+
+Where answered requests are remembered is a `DecisionLedger`. The default is in memory, one per agent. When more than one agent instance can resume the same paused run — a server that builds an agent per request, or a stored checkpoint resumed in another process — give them one shared ledger whose `spend(requestId)` is atomic: `inMemoryDecisionLedger()` shared by every agent in one process, or your own store across processes:
+
+```ts
+const decisionLedger: DecisionLedger = {
+  // true the first time, false after — a unique-key insert does this in one step
+  spend: async (requestId) => (await db.insertIgnore('spent_requests', { requestId })) === 1,
+};
+const agent = Agent.create({ provider, model, decisionLedger }).tool(issueRefund).build();
+```
+
+`by` is recorded as given: a claim, not proof. The binding says WHICH request and WHAT call; WHO may decide is your host's to authenticate. And the checkpoint itself is not proof either — a host that lets checkpoints leave its trust boundary signs them or keeps them server-side.
 
 ### A consent gate takes a decision, not a value
 
@@ -79,13 +118,14 @@ Before 8.13.0 a mis-shaped resume declined silently and filed the decision again
 
 ## Process A → checkpoint → Process B
 
-Check-in rides the same JSON checkpoint machinery as [pause / resume](doc:pausable): the ask happens in one process, the human decides hours later, and a fresh agent resumes from the stored checkpoint. Build the agent fresh in Process B — only the checkpoint (and the decision) cross the boundary.
+Check-in rides the same JSON checkpoint machinery as [pause / resume](doc:pausable): the ask happens in one process, the human decides hours later, and a fresh agent resumes from the stored checkpoint. Build the agent fresh in Process B — only the checkpoint, the request the person was shown and their decision cross the boundary. If more than one process can resume it, share a `decisionLedger` so the decision still runs once.
 
 ## Anti-patterns
 
 - Don't reach into `outcome.pauseData` for a check-in — use `outcome.checkIn` (typed) and `isCheckInPause(outcome)`.
 - Don't use `checkIn` as a policy engine. Policy is `permissionChecker` (deny/halt, no human); check-in is consent (a person decides). They compose — permission runs first.
 - Don't resume a check-in pause with a bare string — pass a `CheckInDecision` (`checkInApproved` / `checkInDeclined`). Since 8.13.0 a malformed resume is refused with `DecisionRequiredError` rather than silently declined, so a consequential tool never runs by accident *and* you find out.
+- Don't build a decision from anything but the request the person saw. `checkInApproved({ request: outcome.checkIn, by })` names that request; a decision hand-built without `requestId`, or kept from an earlier pause, is refused (`ResumeDecisionError`).
 - Don't configure `.checkIn()` on an agent where no tool declares `checkIn` — that gate can never be consulted, and `build()` refuses it. `.checkIn()` decides HOW the ask is assembled; a tool's `checkIn: 'always'` (or a predicate) is what MAKES the ask.
 - Don't pair `evidence: 'minimal'` with a `scorer`. The scorer ranks `drivers`, which the minimal pack does not build — `build()` refuses the pairing rather than resolving a scorer nothing will call.
 - Don't put a `toolMiddleware` `ask` and a tool's own `checkIn` on the same call. They ask *different* questions — the rule's, and the tool's with the evidence pack attached — so approving one is not answering the other, and a resumed dispatch has no second checkpoint to ask on. Keep one gate per tool. (A *selective* `checkIn` whose predicate does not trip for those arguments is fine: since 8.13.0 the demand is evaluated, not merely noticed.)

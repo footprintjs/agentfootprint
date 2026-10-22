@@ -211,7 +211,7 @@ async function aPauseThatPersists(input: string): Promise<Record<string, unknown
     const asked = await invoke(handle.url, 'r-1', { input });
     const pending = asked.json.awaiting as {
       tool?: string;
-      checkIn?: { evidence: { willDo: string } };
+      checkIn?: { id: string; evidence: { willDo: string } };
     };
 
     // 2. It is STORED. An old runtime would refuse this format by name rather
@@ -223,10 +223,17 @@ async function aPauseThatPersists(input: string): Promise<Record<string, unknown
     const nudged = await invoke(handle.url, 'r-1', { input: 'hello? anyone there?' });
 
     // 4. A person decides, and the run finishes. The REAL tool runs now — the
-    //    human's answer is a decision, never the tool's result.
+    //    human's answer is a decision, never the tool's result. The decision
+    //    names the request it answers (`checkIn.id`), so it answers this ask
+    //    once and no other.
+    if (pending.checkIn === undefined) throw new Error('expected a check-in');
     const done = await invoke(handle.url, 'r-1', {
       input: '',
-      decision: checkInApproved({ by: 'alice@ops', note: 'verified with customer' }),
+      decision: checkInApproved({
+        request: pending.checkIn,
+        by: 'alice@ops',
+        note: 'verified with customer',
+      }),
     });
 
     return {

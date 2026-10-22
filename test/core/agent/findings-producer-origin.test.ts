@@ -17,6 +17,7 @@ import * as timeLayer from '../../../src/core/agent/stages/timeLayer.js';
 import { allow, deny } from '../../../src/core/agent/middleware/outcomes.js';
 import type { AgentState } from '../../../src/core/agent/types.js';
 import type { LLMRequest } from '../../../src/provider-contract/types.js';
+import { pausedRequest } from '../../helpers/pausedRequest.js';
 
 const previous = { previous: [{ toolCallId: 'c1', standing: 'fact' }] };
 const call = (id: string, args: Record<string, unknown> = { q: id }) => ({
@@ -171,7 +172,9 @@ describe('findings producer-owned execution origin', () => {
       if (!isPaused(paused)) throw Error('expected pause');
       await agent.resume(
         paused.checkpoint,
-        approved ? checkInApproved({ by: 'fixture' }) : checkInDeclined({ by: 'fixture' }),
+        approved
+          ? checkInApproved({ request: pausedRequest(paused), by: 'fixture' })
+          : checkInDeclined({ request: pausedRequest(paused), by: 'fixture' }),
       );
       expect(execute).toHaveBeenCalledTimes(approved ? 2 : 0);
       expect(witness(agent)).toMatchObject({ execution: approved ? 'result' : 'not-dispatched' });
@@ -286,7 +289,10 @@ for (const findings of [true, false]) {
       throw Error('synthetic pre-entry preparation failure');
     });
     try {
-      await agent.resume(paused.checkpoint, checkInApproved({ by: 'fixture' }));
+      await agent.resume(
+        paused.checkpoint,
+        checkInApproved({ request: pausedRequest(paused), by: 'fixture' }),
+      );
       expect(execute).toHaveBeenCalledTimes(findings ? 0 : 1);
       expect(after).toHaveBeenCalledTimes(findings ? 0 : 1);
       if (findings) expect(witness(agent)).toMatchObject({ execution: 'not-dispatched' });
@@ -326,7 +332,9 @@ for (const approved of [false, true]) {
     if (!isPaused(paused)) throw Error('expected pause');
     await agent.resume(
       paused.checkpoint,
-      approved ? checkInApproved({ by: 'fixture' }) : checkInDeclined({ by: 'fixture' }),
+      approved
+        ? checkInApproved({ request: pausedRequest(paused), by: 'fixture' })
+        : checkInDeclined({ request: pausedRequest(paused), by: 'fixture' }),
     );
     expect(execute).toHaveBeenCalledTimes(approved ? 2 : 0);
     expect(witness(agent)).toMatchObject({ execution: approved ? 'result' : 'not-dispatched' });

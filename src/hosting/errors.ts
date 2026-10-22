@@ -153,8 +153,9 @@ export class AwaitingDecisionError extends Error {
         `. This message was NOT run and the paused run was NOT discarded — answering a ` +
         `new message would step over the question, and dropping the question to answer ` +
         `the message would throw away work somebody was asked to approve. ` +
-        `Send this session a request carrying 'decision' (checkInApproved(...) / ` +
-        `checkInDeclined(...) for a check-in or a middleware ask) to continue the run.`,
+        `Send this session a request carrying 'decision' (checkInApproved({ request, by }) / ` +
+        `checkInDeclined(...) for a check-in or a middleware ask — \`request\` is the ` +
+        `pending ask's checkIn or ask) to continue the run.`,
     );
     this.name = 'AwaitingDecisionError';
     this.sessionId = sessionId;

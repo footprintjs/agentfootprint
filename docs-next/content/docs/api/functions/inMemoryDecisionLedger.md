@@ -1,0 +1,15 @@
+---
+title: inMemoryDecisionLedger
+---
+
+# Function: inMemoryDecisionLedger()
+
+> **inMemoryDecisionLedger**(): [`DecisionLedger`](/docs/api/interfaces/DecisionLedger)
+
+Defined in: src/core/consentRequest.ts:126
+
+A [DecisionLedger](/docs/api/interfaces/DecisionLedger) in this process's memory. Grows by one id per answered request.
+
+## Returns
+
+[`DecisionLedger`](/docs/api/interfaces/DecisionLedger)

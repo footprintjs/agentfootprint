@@ -893,6 +893,9 @@ export interface CheckInDecisionPayload {
   readonly toolName: string;
   readonly toolCallId: string;
   readonly iteration: number;
+  /** The request the decision answered — `CheckInRequest.id` of the ask it
+   *  closes, so the record joins each decision to the one request it was for. */
+  readonly requestId: string;
   readonly approved: boolean;
   readonly by: string;
   readonly note?: string;

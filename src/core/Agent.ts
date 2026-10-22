@@ -51,11 +51,13 @@ import { buildBrainFor, describeServingBrain } from './agent/skillBrains.js';
 import { SUBFLOW_IDS } from '../lib/conventions.js';
 import {
   DecisionRequiredError,
+  ResumeDecisionError,
   assertDecisionIsNotStale,
   isPaused,
   pauseDemandsDecision,
   type RunnerPauseOutcome,
 } from './pause.js';
+import { checkDecisionAgainst, type DecisionLedger } from './consentRequest.js';
 import type {
   LLMMessage,
   LLMProvider,
@@ -198,7 +200,6 @@ import type { FoldedSpan } from './agent/window/types.js';
 import type { FindingsLedger } from './agent/findings/types.js';
 import type { AnswerAssessment, AssessmentDeclarations } from './agent/assessment/types.js';
 import {
-  isCheckInDecision,
   resolveCheckInConfig,
   type CheckInBuilderOptions,
   type ResolvedCheckInConfig,
@@ -706,6 +707,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  present — defaults to `standard` evidence + the lexical scorer, so a tool
    *  that declares `checkIn` works even without a `.checkIn()` builder call. */
   private readonly checkInConfig: ResolvedCheckInConfig;
+  /** Where answered consent requests are spent (`AgentOptions.decisionLedger`).
+   *  Undefined → the tool-calls handler keeps this agent's own, in memory. */
+  private readonly decisionLedger?: DecisionLedger;
   /** Per-run config resolver from `.configure()`. Undefined for every agent
    *  that never called it — and the chart is then built exactly as before,
    *  with no scope writes and no scope reads added. */
@@ -1266,6 +1270,17 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // + lexical scorer) so a `checkIn`-declaring tool works even without a
     // `.checkIn()` call; the gate only fires for tools that declared `checkIn`.
     this.checkInConfig = resolveCheckInConfig(checkInOptions);
+    // Refused HERE, not at the first resume: a ledger that cannot spend would
+    // refuse every decision, and that is a configuration mistake.
+    if (opts.decisionLedger !== undefined) {
+      if (typeof (opts.decisionLedger as { spend?: unknown } | null)?.spend !== 'function') {
+        throw new TypeError(
+          'Agent: `decisionLedger` must have a `spend(requestId)` method — see ' +
+            "`DecisionLedger`, or omit it for this agent's own in-memory ledger.",
+        );
+      }
+      this.decisionLedger = opts.decisionLedger;
+    }
     if (runConfigFn !== undefined) this.runConfigFn = runConfigFn;
     // `.window()` / `.compaction()`: the meter is created ONCE per agent
     // (attached per run, cleared between runs like every other recorder)
@@ -2582,6 +2597,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *   paused run's caller identity — before anything runs.
    * @throws DecisionRequiredError when a consent gate is answered with
    *   something other than a decision.
+   * @throws ResumeDecisionError when the decision does not answer the request
+   *   this run is paused on: it names no request, another request, a call the
+   *   checkpoint no longer holds (refused before anything runs), or a request
+   *   a resume already answered (refused before the tool runs). The tool never
+   *   runs on a refusal.
    * @throws RunInFlightError when a run is already in flight.
    *
    * @example
@@ -2627,8 +2647,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // differing value is recorded by the ToolCalls resume door.
     const passedTime = this.passedTimeFor(options?.time, 'Agent.resume');
     options = withoutTime(options);
+    // …and the decision must be for THIS request and this exact call
+    // (`core/consentRequest.ts`): refused here, before anything moves, when it
+    // names no request, another request, or a call the checkpoint no longer
+    // holds. The dispatch loop asks again where the decision is used — and
+    // spends it there, once.
     const gate = pauseDemandsDecision(checkpoint.pauseData);
-    if (gate && !isCheckInDecision(input)) throw new DecisionRequiredError(gate, input);
+    if (gate) checkDecisionAgainst(checkpoint, gate, input);
     // One run, one identity — refused before anything moves. The paused run's
     // caller identity is read off the checkpoint (`callerIdentity.ts`); a call
     // naming a DIFFERENT one would give the run one person's memory namespace
@@ -2709,6 +2734,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // Settled the moment the answer is handed over, not when the resumed run
     // finishes: a resume that then FAILS must not leave the agent refusing
     // every later message on behalf of a question that has been answered.
+    // Kept to put back when the run refuses the answer itself (a replay of a
+    // request already answered): that resume answered nothing.
+    const questionBefore = this.pendingQuestion;
     this.pendingQuestion = undefined;
     // WHO this resumed run is for — set BEFORE the executor exists, because the
     // run context's principal (every event's `EventMeta.principal`), a tool's
@@ -2801,6 +2829,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       await this.fileRunRecording(recording, finalized);
       return finalized;
     } catch (cause) {
+      // An answer the run refused ran nothing and answered nothing: the
+      // question this agent was waiting on (if any) is still outstanding, and
+      // no tool session ended — a replayed decision must not tear down the
+      // sandbox a live pause is holding.
+      if (cause instanceof ResumeDecisionError || cause instanceof DecisionRequiredError) {
+        this.pendingQuestion = questionBefore;
+        throw cause;
+      }
       await this.endRunToolSessions(cause);
       throw cause;
     } finally {
@@ -5698,6 +5734,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // Check-in (evidence-carrying human consent). Always threaded (resolved
       // default); the gate fires only for tools that declared `checkIn`.
       checkIn: this.checkInConfig,
+      // Where a decision's request is spent, once (`core/consentRequest.ts`).
+      // Absent → the handler keeps this agent's own in-memory ledger.
+      ...(this.decisionLedger !== undefined && { decisionLedger: this.decisionLedger }),
       // The governance chain. Threaded only when non-empty so an agent without
       // one produces the same handler behaviour it always did.
       ...(this.toolMiddleware.length > 0 && { toolMiddleware: this.toolMiddleware }),
