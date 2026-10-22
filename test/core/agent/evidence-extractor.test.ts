@@ -579,3 +579,47 @@ describe('regression: measured false-positive rate on realistic answers', () => 
     }
   });
 });
+
+describe('regression: a typed answer in compact JSON is read value by value', () => {
+  // `{"total":1200}` — once the quotes are separators, compact JSON leaves the
+  // key's colon on the value. `:1200` read as an IDENTIFIER no result carries,
+  // so a typed answer that copied the tool's own number was flagged, and
+  // `rails` refused it. The colon is now stripped before a plain number, on
+  // both sides.
+  const RESULT = { order: 'ORD-44710', total: 1200, count: 123, delta: -1500, ratio: 0.4512 };
+  const history = [
+    { role: 'tool', toolCallId: 'c1', content: JSON.stringify(RESULT) },
+  ] as unknown as readonly LLMMessage[];
+  const rails = resolveEvidenceGate({ posture: 'rails' });
+
+  it('the colon of a key comes off a plain number, and only off a plain number', () => {
+    expect(normalizeToken(':1200')).toBe('1200');
+    expect(normalizeToken(':-1500')).toBe('-1500');
+    expect(normalizeToken(':41,200')).toBe('41200');
+    expect(normalizeToken(':0.4512')).toBe('0.4512');
+    expect(normalizeToken('::ffff:10.0.0.1')).toBe('::ffff:10.0.0.1');
+    expect(normalizeToken(':fc1/3')).toBe(':fc1/3');
+    expect(tokenize('{"total":1200,"count":123}')).toEqual(['total', '1200', 'count', '123']);
+  });
+
+  it('a compact typed answer copying the result is clean, under every posture', () => {
+    expect(check(JSON.stringify(RESULT), { history, gate: rails }).unsupported).toEqual([]);
+    expect(check(JSON.stringify(RESULT, null, 2), { history, gate: rails }).unsupported).toEqual(
+      [],
+    );
+  });
+
+  it('an invented number in compact JSON is still flagged, by its own spelling', () => {
+    const invented = JSON.stringify({ ...RESULT, total: 9750 });
+    expect(check(invented, { history, gate: rails }).unsupported).toEqual([
+      { value: '9750', shape: 'number' },
+    ]);
+  });
+
+  it('a text result carrying compact JSON grounds the same number', () => {
+    const text = [
+      { role: 'tool', toolCallId: 'c1', content: 'export ok: {"total":1200} (1 row)' },
+    ] as unknown as readonly LLMMessage[];
+    expect(check('The total is 1200.', { history: text, gate: rails }).unsupported).toEqual([]);
+  });
+});

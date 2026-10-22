@@ -62,6 +62,17 @@ const LEADING_DECORATION = /^[$#@+'"`([{<]+/;
 const TRAILING_DECORATION = anyOf('.,;:!?%\'"`)]}>');
 const ANSWER_TRAILING_DECORATION = anyOf('.,;:!?\'"`)]}>');
 
+/**
+ * `:1200` — a number still wearing the colon of the key before it. Compact
+ * JSON writes `"total":1200`: once the quotes become separators the colon
+ * stays on the value, and `:1200` read as an IDENTIFIER no result carries, so
+ * every number of three or more digits in a typed answer looked invented (and
+ * `rails` refused the answer that copied it). Stripped only before a plain
+ * number — `::ffff:10.0.0.1` keeps its colons — and on both sides, like every
+ * rule here.
+ */
+const KEY_COLON = /^:+(?=[-+]?\d+(?:,\d{3})*(?:\.\d+)?$)/;
+
 /** `1,234` / `12,345,678` / `1,234.56` — a number wearing thousands separators. */
 const THOUSANDS = /^-?\d{1,3}(,\d{3})+(\.\d+)?$/;
 
@@ -87,7 +98,7 @@ function tokenSpelling(raw: string, preservePercent = false): string {
   v = trimTrailing(
     v.replace(LEADING_DECORATION, ''),
     preservePercent ? ANSWER_TRAILING_DECORATION : TRAILING_DECORATION,
-  );
+  ).replace(KEY_COLON, '');
   if (v === '') return '';
   // Thousands separators are PRESENTATION. `41,200` in prose and `41200` in
   // JSON are one value, and this is the single most common way a correct
