@@ -73,8 +73,16 @@ zero, sign or exponent) compare by value, both ways — two decimal strings digi
 number at the double precision it has; a number with a unit only with the same unit; lists item by
 item in order, objects key by key. Kinds that cannot be compared safely — a list or an object
 against a scalar, a unit against a bare number, text against a number or `true`/`false` — are
-`incomparable` (the row says "could not compare"), never a contradiction. The pair-by-pair oracle
-is hand-written in `test/answer-validation/agentChecks.test.ts`.
+`incomparable` (the row says "could not compare"), never a contradiction. A Claim wrapper is read
+only where the contract puts one — at the TOP of a settled value or of a claimed field — and only a
+well-formed `known(…)` (`kind`, `value`, a text `evidence`); a wrapper carrying any other key is
+`incomparable`, and a wrapper-shaped object INSIDE a value is that value's data, compared as an
+object, so an answer cannot have a nested object read as the value it wraps. Whether a run read one
+fact two ways is decided by `claimValueKey`, an EXACT key per value (a JS number by the digits it
+prints), never by agreement with the first reading: agreement at double precision is not transitive
+(a double agrees with both `'9007199254740992'` and `'9007199254740993'`), and a pairwise scan over a
+long series would cost its square. The pair-by-pair oracle is hand-written in
+`test/answer-validation/agentChecks.test.ts`.
 
 The internal evaluator reports a reason, not a support badge: evidence unavailable, claim
 nonparticipating, doubt against a value, both doubt, numeric leniency, conflict or no conflict.

@@ -71,20 +71,46 @@ const PLAIN_DECIMAL = /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/;
 const WITH_UNIT = /^(-?(?:0|[1-9]\d*)(?:\.\d+)?)\s*([^\d\s][^\d]*)$/;
 /** Lists and objects nest; past this depth (or around a cycle) values are not compared. */
 const MAX_DEPTH = 64;
+/** The keys a well-formed `known(…)` wrapper has (`lib/claim/claim.ts` · `known`). */
+const KNOWN_WRAPPER_KEYS: ReadonlySet<string> = new Set(['kind', 'value', 'evidence']);
 
-/** One spelling per decimal value of a plain decimal: `42.50` and `42.5` share `425e2`. */
-function decimalKey(plain: string): string {
-  const negative = plain.startsWith('-');
-  const [whole = '', fraction = ''] = (negative ? plain.slice(1) : plain).split('.');
+/**
+ * One spelling per decimal value: `42.50` and `42.5` share `425e2`. Takes a
+ * plain decimal, or a JS number's own spelling with its exponent (`1e+21`).
+ */
+function decimalKey(spelling: string): string {
+  const [mantissa = '', exponent = '0'] = spelling.split(/e/i);
+  const negative = mantissa.startsWith('-');
+  const [whole = '', fraction = ''] = (negative ? mantissa.slice(1) : mantissa).split('.');
   const digits = whole + fraction;
   const first = digits.search(/[1-9]/);
   if (first === -1) return '0'; // every zero, -0 included
   const significant = digits.slice(first).replace(/0+$/, '');
-  return `${negative ? '-' : ''}${significant}e${whole.length - first}`;
+  const point = whole.length - first + Number(exponent);
+  return `${negative ? '-' : ''}${significant}e${point}`;
+}
+
+/**
+ * The comparable face of a value at the TOP of a claim — the one place the
+ * contract puts a Claim wrapper (a tool's `known(…)` fact, a claimed field).
+ * A well-formed `known(…)` is read as its value; anything else is the value
+ * itself. `undefined` — never compared — for an unknown Claim, or a wrapper
+ * carrying any other key (or an `evidence` that is not text). Inside a value
+ * a wrapper is never read: it is that value's data, compared as an object.
+ */
+function topFace(value: unknown): { readonly face: unknown } | undefined {
+  if (!participates(value)) return undefined;
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return { face: value };
+  const record = value as Readonly<Record<string, unknown>>;
+  if (record.kind !== 'known' || !Object.hasOwn(record, 'value')) return { face: value };
+  const wellFormed =
+    Object.keys(record).every((key) => KNOWN_WRAPPER_KEYS.has(key)) &&
+    (record.evidence === undefined || typeof record.evidence === 'string');
+  return wellFormed ? { face: record.value } : undefined;
 }
 
 type Reading =
-  /** A JS number — a double — or a plain decimal string (`written` keeps its digits). */
+  /** A JS number — a double — or a plain decimal string (`written`: its digits, keyed). */
   | { readonly kind: 'number'; readonly value: number; readonly written?: string }
   | { readonly kind: 'with-unit'; readonly written: string; readonly unit: string }
   | { readonly kind: 'text'; readonly text: string }
@@ -92,19 +118,18 @@ type Reading =
   | { readonly kind: 'null' }
   | { readonly kind: 'list'; readonly items: readonly unknown[] }
   | { readonly kind: 'object'; readonly value: Readonly<Record<string, unknown>> }
-  /** Not a JSON value, or an unknown `Claim`: never compared. */
+  /** Not a JSON value: never compared. */
   | { readonly kind: 'other' };
 
+/** What a value IS, as plain data — no wrapper is read here (see `topFace`). */
 function readingOf(value: unknown): Reading {
-  if (!participates(value)) return { kind: 'other' };
-  const face = comparableValueOf(value);
-  if (face === null) return { kind: 'null' };
-  if (typeof face === 'boolean') return { kind: 'boolean', value: face };
-  if (typeof face === 'number') {
-    return Number.isFinite(face) ? { kind: 'number', value: face } : { kind: 'other' };
+  if (value === null) return { kind: 'null' };
+  if (typeof value === 'boolean') return { kind: 'boolean', value };
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? { kind: 'number', value } : { kind: 'other' };
   }
-  if (typeof face === 'string') {
-    const text = face.trim();
+  if (typeof value === 'string') {
+    const text = value.trim();
     if (PLAIN_DECIMAL.test(text)) {
       return { kind: 'number', value: Number(text), written: decimalKey(text) };
     }
@@ -118,11 +143,11 @@ function readingOf(value: unknown): Reading {
     }
     return { kind: 'text', text: text.toLowerCase() };
   }
-  if (Array.isArray(face)) return { kind: 'list', items: face };
-  if (typeof face === 'object') {
-    const proto: unknown = Object.getPrototypeOf(face);
+  if (Array.isArray(value)) return { kind: 'list', items: value };
+  if (typeof value === 'object') {
+    const proto: unknown = Object.getPrototypeOf(value);
     if (proto === Object.prototype || proto === null) {
-      return { kind: 'object', value: face as Readonly<Record<string, unknown>> };
+      return { kind: 'object', value: value as Readonly<Record<string, unknown>> };
     }
   }
   return { kind: 'other' };
@@ -134,9 +159,11 @@ function combine(results: readonly ClaimValueComparison[]): ClaimValueComparison
   return results.includes('incomparable') ? 'incomparable' : 'agrees';
 }
 
-/** An object's keys JSON would write (a key holding `undefined` is not one). */
+/** An object's keys JSON would write (a key holding `undefined` is not one), sorted. */
 const keysOf = (value: Readonly<Record<string, unknown>>): string[] =>
-  Object.keys(value).filter((key) => value[key] !== undefined);
+  Object.keys(value)
+    .filter((key) => value[key] !== undefined)
+    .sort();
 
 function compareAt(settled: unknown, claimed: unknown, depth: number): ClaimValueComparison {
   if (depth > MAX_DEPTH) return 'incomparable';
@@ -168,14 +195,47 @@ function compareAt(settled: unknown, claimed: unknown, depth: number): ClaimValu
   }
   if (a.kind === 'object' && b.kind === 'object') {
     const keys = keysOf(a.value);
-    const other = new Set(keysOf(b.value));
-    if (keys.length !== other.size || keys.some((key) => !other.has(key))) return 'contradicts';
+    const other = keysOf(b.value);
+    if (keys.length !== other.length || keys.some((key, index) => key !== other[index])) {
+      return 'contradicts';
+    }
     return combine(keys.map((key) => compareAt(a.value[key], b.value[key], depth + 1)));
   }
   // A list or an object against a scalar, a unit against a bare number or
   // text, text against a number or `true`/`false`: kinds that cannot be
   // compared safely.
   return 'incomparable';
+}
+
+/** The exact key of a plain-data value; `undefined` when it cannot be compared. */
+function keyAt(value: unknown, depth: number): string | undefined {
+  if (depth > MAX_DEPTH) return undefined;
+  const reading = readingOf(value);
+  switch (reading.kind) {
+    case 'null':
+      return 'null';
+    case 'boolean':
+      return String(reading.value);
+    case 'number':
+      return `n:${reading.written ?? decimalKey(String(reading.value))}`;
+    case 'with-unit':
+      return `u:${JSON.stringify([reading.unit, reading.written])}`;
+    case 'text':
+      return `t:${JSON.stringify(reading.text)}`;
+    case 'list': {
+      const items = reading.items.map((item) => keyAt(item, depth + 1));
+      return items.includes(undefined) ? undefined : `[${items.join(',')}]`;
+    }
+    case 'object': {
+      const entries = keysOf(reading.value).map((key) => {
+        const inner = keyAt(reading.value[key], depth + 1);
+        return inner === undefined ? undefined : `${JSON.stringify(key)}:${inner}`;
+      });
+      return entries.includes(undefined) ? undefined : `{${entries.join(',')}}`;
+    }
+    case 'other':
+      return undefined;
+  }
 }
 
 /**
@@ -196,13 +256,36 @@ function compareAt(settled: unknown, claimed: unknown, depth: number): ClaimValu
  * - lists compare item by item in order, objects key by key, and a definite
  *   difference anywhere wins over a part that could not be compared;
  * - `null` against a value is a difference (a raw doubt is the caller's to
- *   classify first; only a DECLARED `known(null)` should reach here).
+ *   classify first; only a DECLARED `known(null)` should reach here);
+ * - a Claim wrapper is read only at the TOP of either value, and only when it
+ *   is a well-formed `known(…)` (`kind`, `value`, a text `evidence`). Inside a
+ *   value a wrapper-shaped object is that value's data, compared as an
+ *   object: an answer cannot have a nested object read as the value it wraps.
  *
  * Anything else — a list or an object against a scalar, a unit against a bare
  * number or another unit, text against a number or `true`/`false`, a value
- * that is not JSON, an unknown `Claim`, nesting past 64 levels — is
- * `incomparable`: never "contradicts", never "agrees". Pure and total.
+ * that is not JSON, an unknown `Claim` or a malformed wrapper at the top,
+ * nesting past 64 levels — is `incomparable`: never "contradicts", never
+ * "agrees". Pure and total.
  */
 export function compareClaimValues(settled: unknown, claimed: unknown): ClaimValueComparison {
-  return compareAt(settled, claimed, 0);
+  const a = topFace(settled);
+  const b = topFace(claimed);
+  if (a === undefined || b === undefined) return 'incomparable';
+  return compareAt(a.face, b.face, 0);
+}
+
+/**
+ * One EXACT key per value under the same normalization, for a reader of
+ * several values at once (`delivered.ts` asks whether a run read one fact two
+ * ways). Two values share a key only when they are the same value as written:
+ * a JS number by the digits it prints, so `'9007199254740993'` and the double
+ * `9007199254740992` — which `compareClaimValues` cannot tell apart — have
+ * different keys. Equal keys always compare `agrees`; key equality is
+ * transitive, agreement at double precision is not. `undefined` for a value
+ * that cannot be compared at all.
+ */
+export function claimValueKey(value: unknown): string | undefined {
+  const top = topFace(value);
+  return top === undefined ? undefined : keyAt(top.face, 0);
 }

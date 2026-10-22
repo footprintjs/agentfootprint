@@ -343,6 +343,19 @@ describe('oracle: a claim row compares values after the declared normalization',
     ],
     ['objects with another key', { a: 1 }, { b: 1 }, CONTRADICTS],
     ['objects with one value not comparable', { a: 1 }, { a: '1 ms' }, INCOMPARABLE],
+    // a Claim wrapper is read at the top of a value only, and only well formed
+    [
+      'a wrapper nested in the answer is its data',
+      { amount: 1 },
+      { amount: { kind: 'known', value: 1, evidence: 'the model' } },
+      INCOMPARABLE,
+    ],
+    [
+      'a wrapper with another key',
+      1250,
+      { kind: 'known', value: 1250, evidence: 'x', note: 'y' },
+      INCOMPARABLE,
+    ],
     // a declared absence (`known(null)`) is a settled value
     ['a value against a declared absence', known(null, 'no run'), 9750, CONTRADICTS],
     ['a list against a declared absence', known(null, 'no run'), [9750], CONTRADICTS],
@@ -362,6 +375,22 @@ describe('oracle: a claim row compares values after the declared normalization',
         'settled: they are different kinds of value (a list, an object, a number, text, or a ' +
         'number with a unit)',
     });
+  });
+
+  it('a dispute is read across every pair, never against the first reading alone', () => {
+    // A double agrees with each decimal string at double precision, but the
+    // two strings, written out, are different numbers: the run read the fact
+    // two ways, whichever value the answer repeats.
+    const ledger = [
+      settled(9007199254740992),
+      settled('9007199254740992', { toolCallId: 'call-2' }),
+      settled('9007199254740993', { toolCallId: 'call-3' }),
+    ];
+    for (const answered of [9007199254740992, '9007199254740992', '9007199254740993']) {
+      const [row] = claimChecksOf([DURATION], ledger, { durationMs: answered }, 1);
+      expect(row!.disposition).toBe(INCOMPARABLE);
+      expect(row!.reason).toMatch(/disagree about the fact 'durationMs'/);
+    }
   });
 
   it('two readings that agree after normalization are one fact, not a dispute', () => {

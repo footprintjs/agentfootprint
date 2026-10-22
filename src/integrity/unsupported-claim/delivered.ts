@@ -36,7 +36,7 @@
 
 import { participates } from '../assertion/types.js';
 import type { ClaimComparison, ClaimLedgerRow } from './check.js';
-import { compareClaimValues } from './evaluate.js';
+import { claimValueKey, compareClaimValues } from './evaluate.js';
 
 /** One delivered claim's verdict. Only `contradicts` accuses; nothing here verifies. */
 export type DeliveredClaim =
@@ -64,20 +64,26 @@ export type DeliveredClaim =
 /** A bare doubt a tool wrote: `null` or the literal `'unknown'` (a `known(...)` wrapper is a declared value). */
 const isBareDoubt = (value: unknown): boolean => value === null || value === 'unknown';
 
-/** True when a `known(...)` wrapper carries the value: the tool DECLARED it, `known(null)` included. */
+/** A `known(...)` wrapper: the tool DECLARED the value, `known(null)` included. */
 function declaredKnown(value: unknown): boolean {
   return (
     typeof value === 'object' && value !== null && (value as { kind?: unknown }).kind === 'known'
   );
 }
 
-/** Two of the run's readings of one fact that do not agree — or cannot be compared. */
+/**
+ * Two of the run's readings of one fact that are not the same value — or one
+ * that cannot be compared at all. Read by EXACT key, never by agreement with
+ * one reading: agreement at double precision is not transitive (a double can
+ * agree with two decimal strings that differ from each other), and a pairwise
+ * scan over a long series would cost the square of its length.
+ */
 function disputed(rows: readonly ClaimLedgerRow[]): boolean {
-  const readings = rows
-    .map((row) => row.value)
-    .filter((value) => participates(value) && !isBareDoubt(value));
-  const first = readings[0];
-  return readings.some((value) => compareClaimValues(first, value) !== 'agrees');
+  const keys = rows
+    .filter((row) => participates(row.value) && !isBareDoubt(row.value))
+    .map((row) => claimValueKey(row.value));
+  if (keys.length < 2) return false;
+  return keys.includes(undefined) || new Set(keys).size > 1;
 }
 
 /**
@@ -94,7 +100,10 @@ export function judgeDeliveredClaim(comparison: ClaimComparison): DeliveredClaim
   if (disputed(rows)) return 'disputed';
   if (evaluation === 'evidence-unavailable') return 'settled-unknown';
   if (evaluation === 'both-doubt') {
-    return declaredKnown(settledRow.value) ? 'agrees' : 'doubt-on-both-sides';
+    if (!declaredKnown(settledRow.value)) return 'doubt-on-both-sides';
+    // A declared absence agreeing with the answer's doubt — read only from a
+    // well-formed wrapper, like every other settled value.
+    return claimValueKey(settledRow.value) === undefined ? 'incomparable' : 'agrees';
   }
   // The answer states a value. Against a bare doubt it has nothing to agree
   // with, and that is not an accusation either.
