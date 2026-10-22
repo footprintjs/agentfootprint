@@ -161,43 +161,62 @@ export function classifyToken(
   return { value: token, shape: 'identifier' };
 }
 
+/** A JSON number literal, read where it stands (sticky). */
+const JSON_NUMBER = /-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/y;
+
 /**
  * The texts an answer states, each read on its own. Prose is one text. A
  * typed answer — the whole answer one JSON object or array, which is what
  * `.outputSchema()` accepts (`JSON.parse` of the answer) — is read value by
- * value, the way the evidence index reads a result (`evidenceIndex.ts` ·
- * `walk`): every key and every string as text, every number as its own
- * spelling. Read whole as text, compact JSON glues its punctuation onto the
- * values: `[5,100]` read as the thousands-separated `5100`, `[0.45,0.12]` as
- * one identifier no result carries, `[1200,9750]` as no value at all — a
- * correct answer accused, or an invented one never looked up.
+ * value: every key and every string as text, every number as the literal the
+ * answer WROTE. Read whole as text, compact JSON glues its punctuation onto
+ * the values (`[5,100]` read as the thousands-separated `5100`, `[0.45,0.12]`
+ * as one identifier, `[1200,9750]` as no value at all); read through the
+ * parsed value, a number is the double it parses to (`9007199254740993` is
+ * `9007199254740992`, `5.20` is `5.2` and loses the precision the rounding
+ * rule judges). So the text is checked with `JSON.parse` and then read ONCE,
+ * left to right: string literals decoded, number literals kept as written.
  *
- * Walked with an explicit stack (an answer is model output: its nesting is not
- * a call depth), and no further than `MAX_ANSWER_TOKENS` texts.
+ * One pass, no recursion (an answer is model output: its nesting is not a
+ * call depth), no further than `MAX_ANSWER_TOKENS` texts.
  */
 function answerTexts(answer: string): readonly string[] {
   const opening = answer.trimStart()[0];
   if (opening !== '{' && opening !== '[') return [answer];
-  let parsed: unknown;
   try {
-    parsed = JSON.parse(answer);
+    JSON.parse(answer); // the grammar check — the values are read from the text below
+    return jsonLiterals(answer);
   } catch {
-    return [answer];
+    return [answer]; // not one JSON value: prose, as it always was
   }
+}
+
+/**
+ * The keys, strings (decoded) and number literals (as written) of a text
+ * `JSON.parse` accepted, left to right. Total on any input — bounded by the
+ * text's length — though only ever handed valid JSON.
+ */
+function jsonLiterals(json: string): readonly string[] {
   const texts: string[] = [];
-  // Pushed in reverse so they pop in the order the answer wrote them.
-  const stack: unknown[] = [parsed];
-  while (stack.length > 0 && texts.length < MAX_ANSWER_TOKENS) {
-    const node = stack.pop();
-    if (typeof node === 'string') texts.push(node);
-    else if (typeof node === 'number') texts.push(String(node));
-    else if (Array.isArray(node)) for (let i = node.length - 1; i >= 0; i--) stack.push(node[i]);
-    else if (node !== null && typeof node === 'object') {
-      const entries = Object.entries(node);
-      for (let i = entries.length - 1; i >= 0; i--) {
-        const entry = entries[i];
-        if (entry !== undefined) stack.push(entry[1], entry[0]);
+  let at = 0;
+  while (at < json.length && texts.length < MAX_ANSWER_TOKENS) {
+    const ch = json.charCodeAt(at);
+    if (ch === 0x22 /* " */) {
+      // The literal ends at the first quote no backslash escapes.
+      let end = at + 1;
+      while (end < json.length && json.charCodeAt(end) !== 0x22) {
+        end += json.charCodeAt(end) === 0x5c /* \ */ ? 2 : 1;
       }
+      texts.push(JSON.parse(json.slice(at, end + 1)) as string);
+      at = end + 1;
+    } else if (ch === 0x2d /* - */ || (ch >= 0x30 && ch <= 0x39)) {
+      // Outside a string, a digit or a minus only ever starts a number.
+      JSON_NUMBER.lastIndex = at;
+      const literal = JSON_NUMBER.exec(json)?.[0] ?? json.charAt(at);
+      texts.push(literal);
+      at += literal.length;
+    } else {
+      at += 1; // structure, whitespace, true / false / null
     }
   }
   return texts;
