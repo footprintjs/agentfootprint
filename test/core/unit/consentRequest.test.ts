@@ -13,7 +13,7 @@ import {
   heldDecision,
   inMemoryDecisionLedger,
   mintConsentRequest,
-  sameBoundArgs,
+  runsAsAsked,
   spendDecision,
   type DecisionLedger,
   type GatedCall,
@@ -425,13 +425,21 @@ describe('heldDecision', () => {
   });
 });
 
-// ── the arguments that would run, against the approved copy ─────────────
+// ── the arguments that would run, held to the request ───────────────────
 
-describe('sameBoundArgs', () => {
+describe('runsAsAsked', () => {
+  /** An ask paused over `args`, as its state records it. */
+  const askedOver = (args: Record<string, unknown>) => {
+    const p = paused(askedCall({ args }));
+    const recorded = p.read('pausedRequest');
+    const recordedCall = gatedCallOf(p.read, 'ask');
+    return (wouldRun: unknown): boolean => runsAsAsked(recorded, recordedCall, wouldRun);
+  };
+
   it('the same arguments by JSON: key order and JSON’s own equivalences do not count', () => {
-    expect(sameBoundArgs({ a: 1, b: { c: 2 } }, { b: { c: 2 }, a: 1 })).toBe(true);
-    expect(sameBoundArgs({ a: 1 }, { a: 1, b: undefined })).toBe(true);
-    expect(sameBoundArgs({ a: 0 }, { a: -0 })).toBe(true);
+    expect(askedOver({ a: 1, b: { c: 2 } })({ b: { c: 2 }, a: 1 })).toBe(true);
+    expect(askedOver({ a: 1 })({ a: 1, b: undefined })).toBe(true);
+    expect(askedOver({ a: 0 })({ a: -0 })).toBe(true);
   });
 
   it.each([
@@ -445,8 +453,21 @@ describe('sameBoundArgs', () => {
     ],
     ['a value JSON cannot hold', { amount: 5 }, { amount: Infinity }],
     ['no object at all', { amount: 5 }, undefined],
-  ])('not the same: %s', (_label, bound, wouldRun) => {
-    expect(sameBoundArgs(bound, wouldRun)).toBe(false);
+  ])('not the arguments asked about: %s', (_label, asked, wouldRun) => {
+    expect(askedOver(asked)(wouldRun)).toBe(false);
+  });
+
+  it('is held to the request, not to a copy: editing the copy in place never makes it agree', () => {
+    // The shape a comparison against the copy handed to a link would miss.
+    const p = paused(askedCall({ args: { amount: 5 } }));
+    const handed = structuredClone(p.state.pausedAskArgs) as { amount: number };
+    handed.amount = 500;
+    expect(runsAsAsked(p.read('pausedRequest'), gatedCallOf(p.read, 'ask'), handed)).toBe(false);
+  });
+
+  it('a request it cannot read matches nothing', () => {
+    const p = paused(askedCall({ args: { amount: 5 } }));
+    expect(runsAsAsked(undefined, gatedCallOf(p.read, 'ask'), { amount: 5 })).toBe(false);
   });
 });
 

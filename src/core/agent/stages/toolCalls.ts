@@ -128,7 +128,7 @@ import {
   heldDecision,
   inMemoryDecisionLedger,
   mintConsentRequest,
-  sameBoundArgs,
+  runsAsAsked,
   spendDecision,
   type DecisionLedger,
   type GatedCall,
@@ -1711,18 +1711,31 @@ export function buildToolCallsHandler(
         : row,
     );
   /**
-   * What the model reads when a rule after an approved ask handed back other
-   * arguments than the ones the person approved: the call does not run. A past
-   * fact about that call, naming the rules that changed it.
+   * Who changed an approved ask's arguments after the approval, in words: the
+   * links whose rows declared a rewrite — or, when none did (an edit in place
+   * declares nothing), every link that ran after the ask, without claiming
+   * which of them it was.
    */
-  const rewrittenAfterApproval = (toolName: string, rewriters: readonly string[]): string =>
+  const changedAfterApproval = (rows: readonly MiddlewareDecision[]): string => {
+    const quoted = (picked: readonly MiddlewareDecision[]): string =>
+      [...new Set(picked.map((row) => `'${row.middleware}'`))].join(', ');
+    const declared = rows.filter((row) => row.changed);
+    if (declared.length > 0) {
+      return `the middleware ${quoted(declared)} changed those arguments after the approval`;
+    }
+    return rows.length > 0
+      ? `those arguments came back changed from the middleware after the ask (${quoted(rows)})`
+      : 'a middleware after the ask changed those arguments';
+  };
+  /**
+   * What the model reads when the rest of an approved ask's chain handed back
+   * other arguments than the ones the person approved: the call does not run.
+   * A past fact about that call.
+   */
+  const rewrittenAfterApproval = (toolName: string, changedBy: string): string =>
     `tool '${toolName}' was not run on that call: a person approved it with the arguments ` +
-    `they were shown, and ${
-      rewriters.length > 0
-        ? `the middleware ${rewriters.map((name) => `'${name}'`).join(', ')}`
-        : 'a middleware after the ask'
-    } changed those arguments after the approval, so the approval did not cover the call ` +
-    `that would have run.`;
+    `they were shown, and ${changedBy}, so the approval did not cover the call that would ` +
+    `have run.`;
   /**
    * One admission rule for initial and resumed dispatch. Judge against the
    * wire schema after middleware, before artifact resolution or credentials.
@@ -6172,7 +6185,10 @@ export function buildToolCallsHandler(
       // because a message was mis-shaped).
       if (consentGate === 'ask' && consentDecision !== undefined) {
         const iteration = scope.iteration as number;
-        // The copy the person approved, detached (`boundArgsOf`).
+        // What the rest of the chain is handed: a detached copy of the
+        // approved arguments (`boundArgsOf`). The arguments that come back are
+        // held to the REQUEST, never to this copy — a link that edits it in
+        // place edits the copy — and the tool runs on another fresh copy.
         const args = boundArgsOf(scope, 'pausedAskArgs');
         const askIndex = (scope.pausedAskIndex ?? 0) as number;
         const askedBy = (scope.pausedAskMiddleware ?? 'middleware') as string;
@@ -6277,19 +6293,22 @@ export function buildToolCallsHandler(
               askPolicy: 'refuse',
             });
             recordDecisions(scope, rest.decisions);
-            // The approval covers the arguments the person was shown — the
-            // bound copy. A rule after the ask that hands back OTHER arguments
-            // (by the request's own JSON) is not approved by it: the call does
-            // not run, and the record and the model are told why
-            // ('call-changed'). The links that rewrote it are named.
+            // The approval covers the arguments the person was shown. The ones
+            // the rest of the chain hands back must re-derive the paused
+            // request's id (`runsAsAsked`) — held to the request itself, never
+            // to the copy the links were handed. Any other arguments are not
+            // approved: the call does not run, and the record and the model
+            // are told why ('call-changed').
+            const read = (key: string): unknown => scope.$getValue(key);
             const rewrittenBy =
-              rest.kind === 'deny' || sameBoundArgs(args, rest.args)
+              rest.kind === 'deny' ||
+              runsAsAsked(read('pausedRequest'), gatedCallOf(read, 'ask'), rest.args)
                 ? undefined
-                : [
-                    ...new Set(
-                      rest.decisions.filter((row) => row.changed).map((row) => row.middleware),
-                    ),
-                  ];
+                : changedAfterApproval(rest.decisions);
+            // The arguments the call runs with: a fresh copy of the approved
+            // ones (equal, by the check above, to what the chain handed back),
+            // so nothing a link still holds can reach the tool.
+            const runArgs = boundArgsOf(scope, 'pausedAskArgs');
             // Would this tool's OWN consent gate have fired for this call? Asked by
             // EVALUATING the demand, not by noticing that one was declared (8.13.0).
             // Before that, any tool carrying a `checkIn` field was refused here even
@@ -6297,14 +6316,14 @@ export function buildToolCallsHandler(
             // the £5 refunds it was written to let through, and the refusal claimed a
             // consent gate would have run when it provably would not have.
             //
-            // Judged on `rest.args` (what the tool would actually run with) and on
+            // Judged on `runArgs` (what the tool would actually run with) and on
             // the same history shape the loop's gate uses, so the answer cannot
             // depend on which door the call arrived through.
             const demandTrips =
               rest.kind !== 'deny' &&
               rewrittenBy === undefined &&
               tool?.checkIn !== undefined &&
-              shouldCheckIn(tool.checkIn, rest.args, {
+              shouldCheckIn(tool.checkIn, runArgs, {
                 iteration,
                 toolCallId,
                 history: historyForCheckIn(scope, scope.history as readonly LLMMessage[]),
@@ -6324,11 +6343,9 @@ export function buildToolCallsHandler(
                   iteration,
                   outcome: 'deny',
                   changed: false,
-                  why: `the approval covers the arguments the person was shown; ${
-                    rewrittenBy.length > 0
-                      ? rewrittenBy.map((name) => `'${name}'`).join(', ')
-                      : 'a rule after the ask'
-                  } changed them after it, so the call was not run (call-changed)`,
+                  why:
+                    `the approval covers the arguments the person was shown; ${rewrittenBy}, ` +
+                    `so the call was not run (call-changed)`,
                 },
               ]);
             } else if (demandTrips) {
@@ -6365,7 +6382,7 @@ export function buildToolCallsHandler(
                 scope,
                 resolved,
                 toolName,
-                rest.args,
+                runArgs,
                 toolCallId,
                 iteration,
                 env,
@@ -6388,7 +6405,7 @@ export function buildToolCallsHandler(
               // sentence BEFORE the chain's last word, the execute loop's
               // composition kept.
               if (frameworkSkipStepAnswered(toolName, tool) && stepToolRan) {
-                result = applySkipStep(scope, { args: rest.args, toolCallId, iteration });
+                result = applySkipStep(scope, { args: runArgs, toolCallId, iteration });
               }
               // present behind a middleware ask, approved (9.22.0): same
               // overwrite the batch loop applies — the snapshot (or refusal)
@@ -6396,7 +6413,7 @@ export function buildToolCallsHandler(
               // is an errored call here too.
               if (deps.artifactStore && toolName === PRESENT_TOOL_NAME && stepToolRan) {
                 const presented = await applyPresent(scope, {
-                  args: rest.args,
+                  args: runArgs,
                   toolCallId,
                   iteration,
                 });
@@ -6415,7 +6432,7 @@ export function buildToolCallsHandler(
                   toolName,
                   toolCallId,
                   iteration,
-                  args: rest.args,
+                  args: runArgs,
                   result,
                   ...(error === true && { error: true }),
                   history: [...(scope.history as readonly LLMMessage[])],

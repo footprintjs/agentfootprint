@@ -242,19 +242,25 @@ export function heldDecision(
 }
 
 /**
- * Whether the arguments a call would run with are the copy a request was
- * minted over — compared as the request's own JSON, so key order and JSON's
- * equivalences do not count, and a value JSON cannot write down faithfully
- * never matches. What an approval covers is that copy: an ask's resume holds
- * the arguments the rest of the chain hands back to it before the tool runs.
+ * Whether `wouldRun` are the arguments the paused request was minted over —
+ * decided by re-deriving the request's id with them in place of the recorded
+ * ones: the call that runs must be the call the id the person was shown
+ * commits to. Key order and JSON's own equivalences do not count; a value
+ * JSON cannot write down faithfully never matches.
+ *
+ * Held to the REQUEST, never to a copy: an ask's resume hands the rest of the
+ * chain a copy of the approved arguments, and a link that edited that copy in
+ * place would make any comparison against it agree with itself.
+ *
+ * @param recorded the paused run's `pausedRequest`, as read.
+ * @param call     the paused call, as read ({@link gatedCallOf}); its own
+ *   `args` are replaced by `wouldRun`.
  */
-export function sameBoundArgs(bound: unknown, wouldRun: unknown): boolean {
-  if (!isJsonFaithful(bound) || !isJsonFaithful(wouldRun)) return false;
-  try {
-    return canonicalJson(bound) === canonicalJson(wouldRun);
-  } catch {
-    return false;
-  }
+export function runsAsAsked(recorded: unknown, call: GatedCall, wouldRun: unknown): boolean {
+  const pending = readPendingRequest(recorded);
+  return (
+    pending !== undefined && requestIdOf(pending.nonce, { ...call, args: wouldRun }) === pending.id
+  );
 }
 
 /**
