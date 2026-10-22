@@ -4,7 +4,7 @@ title: DecisionLedger
 
 # Interface: DecisionLedger
 
-Defined in: src/core/consentRequest.ts:114
+Defined in: [src/core/consentRequest.ts:114](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L114)
 
 Where an agent records the consent requests that have been answered, so one
 decision runs one call.
@@ -20,7 +20,7 @@ stored checkpoint in another process.
 
 > **spend**(`requestId`): `boolean` \| `Promise`\<`boolean`\>
 
-Defined in: src/core/consentRequest.ts:122
+Defined in: [src/core/consentRequest.ts:122](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L122)
 
 Record `requestId` as answered. Resolve `true` when THIS call recorded it
 and `false` when it was already recorded — atomically per id: of two
