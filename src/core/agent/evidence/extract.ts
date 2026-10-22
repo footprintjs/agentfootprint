@@ -171,8 +171,8 @@ const JSON_NUMBER = /-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/y;
  * The texts an answer states, each read on its own. Prose is one text. A
  * typed answer — the whole answer one JSON object or array, which is what
  * `.outputSchema()` accepts (`JSON.parse` of the answer) — is read value by
- * value: every key and every string as text, every number as the literal the
- * answer WROTE. Read whole as text, compact JSON glues its punctuation onto
+ * value: every string as text (and every key, unless `valuesOnly`), every
+ * number as the literal the answer WROTE. Read whole as text, compact JSON glues its punctuation onto
  * the values (`[5,100]` read as the thousands-separated `5100`, `[0.45,0.12]`
  * as one identifier, `[1200,9750]` as no value at all); read through the
  * parsed value, a number is the double it parses to (`9007199254740993` is
@@ -184,7 +184,7 @@ const JSON_NUMBER = /-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/y;
  * call depth), yielded lazily: the reader decides how far it classifies and
  * counts the rest (`MAX_ANSWER_TOKENS`).
  */
-function* answerTexts(answer: string): Generator<string> {
+function* answerTexts(answer: string, valuesOnly: boolean): Generator<string> {
   const opening = answer.trimStart()[0];
   if (opening !== '{' && opening !== '[') {
     yield answer;
@@ -196,15 +196,15 @@ function* answerTexts(answer: string): Generator<string> {
     yield answer; // not one JSON value: prose, as it always was
     return;
   }
-  yield* jsonLiterals(answer);
+  yield* jsonLiterals(answer, valuesOnly);
 }
 
 /**
- * The keys, strings (decoded) and number literals (as written) of a text
- * `JSON.parse` accepted, left to right. Total on any input — bounded by the
- * text's length — though only ever handed valid JSON.
+ * The keys (unless `valuesOnly`), strings (decoded) and number literals (as
+ * written) of a text `JSON.parse` accepted, left to right. Total on any input
+ * — bounded by the text's length — though only ever handed valid JSON.
  */
-function* jsonLiterals(json: string): Generator<string> {
+function* jsonLiterals(json: string, valuesOnly: boolean): Generator<string> {
   let at = 0;
   while (at < json.length) {
     const ch = json.charCodeAt(at);
@@ -216,6 +216,8 @@ function* jsonLiterals(json: string): Generator<string> {
       }
       const literal = json.slice(at, end + 1);
       at = end + 1;
+      // In JSON a string followed by `:` is a key, and only a key is.
+      if (valuesOnly && isKeyEnd(json, at)) continue;
       yield JSON.parse(literal) as string;
     } else if (ch === 0x2d /* - */ || (ch >= 0x30 && ch <= 0x39)) {
       // Outside a string, a digit or a minus only ever starts a number.
@@ -227,6 +229,18 @@ function* jsonLiterals(json: string): Generator<string> {
       at += 1; // structure, whitespace, true / false / null
     }
   }
+}
+
+/** The next character after `at` that is not JSON whitespace is `:`. */
+function isKeyEnd(json: string, at: number): boolean {
+  let next = at;
+  while (next < json.length) {
+    const ch = json.charCodeAt(next);
+    // JSON whitespace: space, tab, line feed, carriage return.
+    if (ch !== 0x20 && ch !== 0x09 && ch !== 0x0a && ch !== 0x0d) break;
+    next += 1;
+  }
+  return json.charCodeAt(next) === 0x3a /* : */;
 }
 
 /**
@@ -246,6 +260,26 @@ export function candidateForms(candidate: Candidate): readonly string[] {
     for (const form of lookupForms(token)) if (!forms.includes(form)) forms.push(form);
   }
   return forms;
+}
+
+/** How one answer is read. */
+export interface AnswerReadOptions {
+  /** Under the figures dial: the numbers the answer writes wearing a unit
+   *  (`figures.ts` · `figureNumbersOf`, computed by the caller that loaded
+   *  it — the module stays off a plain agent's graph). */
+  readonly figures?: ReadonlySet<string>;
+  /** A read-only exact-token view supplied by the caller's corpus. Whole
+   *  carried values win before a numeric range is interpreted as endpoints. */
+  readonly exactTokens?: { readonly has: (value: string) => boolean };
+  /**
+   * The answer is TYPED (`.outputSchema()`): one JSON object or array is read
+   * by its VALUES only. Its object keys are the schema's field names
+   * (`p95LatencyMs`, `sha256`, `ipv4`), not values the answer asserts — read
+   * as values, a digit-bearing name was an identifier no tool result
+   * carried. The price, stated: an answer keyed BY data (an id as a key) is
+   * not judged on its keys. Absent, keys are read too.
+   */
+  readonly typed?: boolean;
 }
 
 /** One reading of an answer: the values it asserts, and how much of it was never read. */
@@ -278,7 +312,7 @@ export function extractCandidates(
    *  carried values win before a numeric range is interpreted as endpoints. */
   exactTokens?: { readonly has: (value: string) => boolean },
 ): readonly Candidate[] {
-  return readAnswer(answer, gate, figures, exactTokens).candidates;
+  return readAnswer(answer, gate, { figures, exactTokens }).candidates;
 }
 
 /**
@@ -289,9 +323,9 @@ export function extractCandidates(
 export function readAnswer(
   answer: string,
   gate: ResolvedEvidenceGate,
-  figures?: ReadonlySet<string>,
-  exactTokens?: { readonly has: (value: string) => boolean },
+  options: AnswerReadOptions = {},
 ): AnswerReading {
+  const { figures, exactTokens, typed = false } = options;
   const seen = new Map<string, number>();
   const out: Candidate[] = [];
   let budget = MAX_ANSWER_TOKENS;
@@ -336,7 +370,7 @@ export function readAnswer(
         : candidate,
     );
   };
-  for (const text of answerTexts(answer)) {
+  for (const text of answerTexts(answer, typed)) {
     const spellings = answerTokenSpellings(text);
     if (budget <= 0) {
       unread += spellings.length; // past the line: counted, never classified

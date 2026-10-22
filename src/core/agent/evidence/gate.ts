@@ -255,9 +255,19 @@ export function checkAnswer(
      * Absent → the verdict it always was.
      */
     readonly figures?: FigureCheck;
+    /**
+     * The answer is TYPED (`.outputSchema()`): read by its values, its object
+     * keys — the schema's field names — never judged (`extract.ts` ·
+     * `AnswerReadOptions`). Absent → keys are read too.
+     */
+    readonly typed?: boolean;
   },
 ): EvidenceVerdict {
-  const reading = readAnswer(answer, args.gate, args.figures?.numbers, args.evidence.values);
+  const reading = readAnswer(answer, args.gate, {
+    figures: args.figures?.numbers,
+    exactTokens: args.evidence.values,
+    typed: args.typed === true,
+  });
   const candidates = reading.candidates;
   const unsupported: UnsupportedValue[] = [];
   const derived: UnsupportedValue[] = [];

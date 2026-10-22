@@ -771,6 +771,10 @@ function judgeEvidence(
   timeLineage?: TimeLineage,
   /** Under the figures dial: its loaded module (`loadFigures`). Absent → the gate as it was. */
   figures?: FiguresModule,
+  /** The answer is TYPED (`.outputSchema()`, the enforcing decider): judged by
+   *  its values, its keys — the schema's field names — never looked up.
+   *  Absent → a JSON-shaped answer is read keys and all, as it always was. */
+  typedAnswer?: true,
 ): 'evidence-recheck' | undefined {
   if (gate === undefined) return undefined;
   const answer = (scope.llmLatestContent as string | undefined) ?? '';
@@ -814,6 +818,7 @@ function judgeEvidence(
       // question (`evidence/figures.ts`). Off → not built, the verdict as it was.
       ...(figures !== undefined && { figures: figures.figureCheckOf(text, history, gate) }),
       exempt,
+      ...(typedAnswer === true && { typed: true }),
     });
   const verdict = judge(answer);
 
@@ -1612,7 +1617,7 @@ function buildEnforcingDecider(
       }
       // The evidence gate is last of the three judges: it grounds the answer
       // the schema accepted and the procedure finished — the one that is
-      // really about to be handed back.
+      // really about to be handed back. Typed: its keys are the schema's.
       if (
         judgeEvidence(
           scope,
@@ -1625,6 +1630,7 @@ function buildEnforcingDecider(
           answer,
           timeLineage,
           figures,
+          true,
         ) === 'evidence-recheck'
       ) {
         return reAsk('evidence-recheck', evidenceRecheckRationale(scope));

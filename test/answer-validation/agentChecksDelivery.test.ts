@@ -567,6 +567,81 @@ describe('integration: both checks listed — the repair turn can save a contrad
   });
 });
 
+describe("functional: a typed answer's field names are not values to look up", () => {
+  // The schema fixes the keys — the app's names, not values the model typed.
+  // A digit-bearing name the tool result never spells (`p95LatencyMs`,
+  // `sha256`, `ipv4`, `q3Revenue`) was read as an invented identifier: the
+  // gate spent its repair turn on it, and the validation withheld the answer.
+  interface MetricsAnswer {
+    readonly p95LatencyMs: number;
+    readonly sha256: string;
+    readonly ipv4: string;
+    readonly q3Revenue: number;
+  }
+  const metricsAnswer: OutputSchemaParser<MetricsAnswer> = {
+    parse(value) {
+      const c = value as Partial<MetricsAnswer> | null;
+      if (
+        typeof c?.p95LatencyMs !== 'number' ||
+        typeof c.sha256 !== 'string' ||
+        typeof c.ipv4 !== 'string' ||
+        typeof c.q3Revenue !== 'number'
+      ) {
+        throw new Error('p95LatencyMs, sha256, ipv4 and q3Revenue are required');
+      }
+      return {
+        p95LatencyMs: c.p95LatencyMs,
+        sha256: c.sha256,
+        ipv4: c.ipv4,
+        q3Revenue: c.q3Revenue,
+      };
+    },
+  };
+  const ANSWER = JSON.stringify({
+    p95LatencyMs: 1250,
+    sha256: '9f86d081884c7d65',
+    ipv4: '10.0.0.12',
+    q3Revenue: 41200,
+  });
+
+  it('every value read from the tool: delivered, with no repair turn spent on a field name', async () => {
+    const source = scripted([
+      { toolCalls: [{ id: 'call-1', name: 'read_metrics', args: {} }] },
+      { content: ANSWER },
+      { content: ANSWER }, // a repair turn, if one were asked for
+    ]);
+    const agent = Agent.create({ provider: source.provider, model: 'synthetic', maxIterations: 6 })
+      .tool(
+        defineTool({
+          name: 'read_metrics',
+          description: 'Read the service metrics.',
+          inputSchema: { type: 'object', properties: {} },
+          execute: () =>
+            'p95 latency 1250 ms; digest 9f86d081884c7d65; address 10.0.0.12; revenue 41200',
+        }),
+      )
+      .outputSchema(metricsAnswer)
+      .namesAndNumbersFromEvidence({ posture: 'guard' })
+      .answerValidation<MetricsAnswer>({
+        id: 'metrics',
+        version: '1',
+        agentChecks: ['names-and-numbers'],
+        validate: () => ({ checks: [{ id: 'shape', disposition: 'checked-pass' }] }),
+      })
+      .build();
+    const seen = delivered(agent);
+
+    expect(await agent.run({ message: 'How is the service doing?' })).toBe(ANSWER);
+
+    expect(source.requests).toHaveLength(2);
+    expect(seen.grounding.map((g) => g.action)).toEqual(['grounded']);
+    expect(agent.answerValidation()?.checks[1]).toMatchObject({
+      id: 'agent:names-and-numbers',
+      disposition: 'not-applicable',
+    });
+  });
+});
+
 describe('integration: the hand-off survives every Route wrapper', () => {
   it('with .findings() armed, an invented value still FAILS the row — never unreachable', async () => {
     const { agent, seen } = orderAgent(

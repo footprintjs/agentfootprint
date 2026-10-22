@@ -267,11 +267,22 @@ supplied (their message, the conversation, the system prompt and skill bodies)
 are exempt without being declared. Declared `shapes` are tested first and win.
 
 A typed answer — the whole answer one JSON object or array — is read value by
-value (`extract.ts` · `answerTexts`): keys and strings decoded, every number
-the literal the answer WROTE. Read whole as text, compact JSON glued its
-punctuation onto the values (`:1200`, `[5,100]` as `5100`); read through the
-parsed value, a number is the double it parses to (`9007199254740993` as
-`…992`, `5.20` as `5.2`, which loses the precision the rounding rule judges).
+value (`extract.ts` · `answerTexts`): strings decoded, every number the literal
+the answer WROTE. Read whole as text, compact JSON glued its punctuation onto
+the values (`:1200`, `[5,100]` as `5100`); read through the parsed value, a
+number is the double it parses to (`9007199254740993` as `…992`, `5.20` as
+`5.2`, which loses the precision the rounding rule judges).
+
+Its KEYS are read only when the agent has no `.outputSchema()`. Under a schema
+(the enforcing Route decider passes `typed`, and answer validation's judge is
+the same closure) a key is the schema's field name, not a value the model
+asserts: read as a value, a digit-bearing name — `p95LatencyMs`, `sha256`,
+`ipv4`, `q3Revenue` — was an identifier no tool result carried, so `'guard'`
+spent its repair turn on it and an enforcing validation withheld a correct
+answer. The price, stated and pinned by a `contract:` test: an answer keyed BY
+data (an order id as a key) is not judged on its keys; put such ids in values.
+Only a string followed by `:` is a key — a string in a list or after `,` is
+still a value.
 
 The bias is deliberate: a missed fabrication is a miss, a false accusation
 costs a real turn and can refuse a good answer. See `extract.ts` for the

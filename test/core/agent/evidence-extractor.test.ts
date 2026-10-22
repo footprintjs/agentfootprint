@@ -754,3 +754,70 @@ describe('regression: an answer longer than the gate reads says how much it neve
     expect(extractCandidates(answer, GATE)).toEqual(readAnswer(answer, GATE).candidates);
   });
 });
+
+describe('regression: a typed answer is judged on its values, never on its field names', () => {
+  // `.outputSchema()` fixes an answer's keys: they are the app's field names,
+  // not values the model asserts. Read as values, a digit-bearing name —
+  // `p95LatencyMs`, `sha256`, `ipv4`, `q3Revenue` — was an identifier no tool
+  // result carried, and an enforcing validation withheld a correct answer.
+  const result = 'p95 latency 1250 ms; digest 9f86d081884c7d65; address 10.0.0.12; revenue 41200';
+  const history = [
+    { role: 'tool', toolCallId: 'c1', content: result },
+  ] as unknown as readonly LLMMessage[];
+  const answer = JSON.stringify({
+    p95LatencyMs: 1250,
+    sha256: '9f86d081884c7d65',
+    ipv4: '10.0.0.12',
+    q3Revenue: 41200,
+  });
+  const typedCheck = (text: string, typed: boolean) =>
+    checkAnswer(text, {
+      gate: GATE,
+      evidence: evidenceFromHistory(history),
+      exempt: new Set<string>(),
+      ...(typed && { typed: true }),
+    });
+
+  it('typed: the keys are not read, the values are', () => {
+    const values = readAnswer(answer, GATE, { typed: true }).candidates.map((c) => c.value);
+    expect(values).toEqual(['1250', '9f86d081884c7d65', '10.0.0.12', '41200']);
+    expect(typedCheck(answer, true).unsupported).toEqual([]);
+  });
+
+  it('untyped, a JSON-shaped answer is read whole, keys included, as before', () => {
+    expect(typedCheck(answer, false).unsupported.map((u) => u.value)).toEqual([
+      'p95latencyms',
+      'sha256',
+      'ipv4',
+      'q3revenue',
+    ]);
+  });
+
+  it('an invented value is still flagged in a typed answer — in a string, a list or a nested object', () => {
+    const invented = JSON.stringify({
+      p95LatencyMs: 1250,
+      note: 'see ORD-99812',
+      ids: ['10.0.0.12', '10.0.0.99'],
+      deep: { q3Revenue: 9750 },
+    });
+    expect(typedCheck(invented, true).unsupported.map((u) => u.value)).toEqual([
+      'ord-99812',
+      '10.0.0.99',
+      '9750',
+    ]);
+  });
+
+  it('a string VALUE that looks like a key is still a value', () => {
+    // Only a string followed by `:` is a key; one followed by `,` or `]` is data.
+    const listed = JSON.stringify({ tags: ['ORD-99812', 'p95LatencyMs'], n: 1250 });
+    expect(typedCheck(listed, true).unsupported.map((u) => u.value)).toEqual([
+      'ord-99812',
+      'p95latencyms',
+    ]);
+  });
+
+  it('contract: a typed answer keyed BY data is not judged on its keys (stated limit)', () => {
+    // A map keyed by ids hides them from the gate; put such ids in values.
+    expect(typedCheck(JSON.stringify({ 'ORD-99812': 1250 }), true).unsupported).toEqual([]);
+  });
+});
