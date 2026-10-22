@@ -32,7 +32,9 @@ import {
   Parallel,
   ResumeIdentityConflictError,
   Sequence,
+  type MiddlewareDecision,
   type RunnerPauseOutcome,
+  type ToolMiddleware,
 } from '../../../src/index.js';
 import type { LLMProvider, LLMResponse } from '../../../src/provider-contract/types.js';
 
@@ -246,6 +248,23 @@ describe('decision binding — an approval binds to the exact paused call', () =
     expect(exec).not.toHaveBeenCalled();
   });
 
+  it('the approved tool runs with a detached copy of the arguments the person was shown', async () => {
+    // A live view of the run's state would go on changing after the call: the
+    // arguments a tool kept would read the NEXT pause's call, which nobody
+    // approved for it.
+    const kept: { amount: number }[] = [];
+    const agent = gatedAgent((args) => {
+      kept.push(args);
+      return `refunded ${args.amount}`;
+    });
+    const first = asCheckIn(await agent.run({ message: 'refund 5 9000' }));
+    const second = asCheckIn(
+      await agent.resume(first.checkpoint, checkInApproved({ request: first.checkIn, by: 'maya' })),
+    );
+    expect(second.checkIn.args).toEqual({ amount: 9000 });
+    expect(kept).toEqual([{ amount: 5 }]);
+  });
+
   it('refuses when the checkpoint names a different tool than the one asked about', async () => {
     const exec = vi.fn(() => 'refunded');
     const agent = gatedAgent(exec);
@@ -279,20 +298,86 @@ describe('decision binding — a decision that names no request', () => {
 // ── a middleware's ask is bound the same way ────────────────────────────
 
 describe('decision binding — a toolMiddleware ask', () => {
-  function askingAgent(exec: (args: { amount: number }) => string) {
+  const approval: ToolMiddleware = {
+    name: 'approval',
+    onToolCall: () => ask({ question: 'Issue this refund?' }),
+  };
+  const limit: ToolMiddleware = {
+    name: 'limit',
+    onToolCall: (call) =>
+      (call.args as { amount: number }).amount > 1000 ? deny('over the limit') : allow(),
+  };
+  const audit: ToolMiddleware = { name: 'audit', onToolCall: () => allow() };
+
+  function askingAgent(
+    exec: (args: { amount: number }) => string,
+    chain: readonly ToolMiddleware[] = [approval, limit],
+  ) {
     return Agent.create({ provider: refunds(), model: 'mock' })
       .system('You issue refunds.')
       .tool(refundTool(exec, false))
-      .toolMiddleware(
-        { name: 'approval', onToolCall: () => ask({ question: 'Issue this refund?' }) },
-        {
-          name: 'limit',
-          onToolCall: (call) =>
-            (call.args as { amount: number }).amount > 1000 ? deny('over the limit') : allow(),
-        },
-      )
+      .toolMiddleware(...chain)
       .build();
   }
+
+  it.each([
+    ['the later deny rule removed', [approval]],
+    ['the rules after the ask reordered', [limit, approval]],
+    ['a rule inserted before the ask', [audit, approval, limit]],
+    ['a rule added after the ask', [approval, limit, audit]],
+  ])(
+    "refuses an approval on an agent redeployed with %s ('chain-changed'), and runs nothing",
+    async (_label, redeployed) => {
+      const exec = vi.fn(() => 'refunded');
+      // Asked under approval → limit; 'limit' denies this 5000 refund.
+      const paused = asAsk(await askingAgent(exec).run({ message: 'refund 5000' }));
+      const decision = checkInApproved({ request: paused.ask, by: 'maya' });
+      const stored = JSON.parse(JSON.stringify(paused.checkpoint));
+      await expect(askingAgent(exec, redeployed).resume(stored, decision)).rejects.toMatchObject(
+        refusal('chain-changed'),
+      );
+      expect(exec).not.toHaveBeenCalled();
+      // The agent the person was asked under still answers it — and its own
+      // later rule still decides.
+      const tools: string[] = [];
+      const original = askingAgent(exec);
+      original.on('agentfootprint.stream.tool_end', (e) => tools.push(String(e.payload.result)));
+      await original.resume(stored, decision);
+      expect(exec).not.toHaveBeenCalled();
+      expect(tools).toEqual(['over the limit']);
+    },
+  );
+
+  it('a nested agent redeployed with other rules refuses the approval through the composition', async () => {
+    const exec = vi.fn(() => 'refunded');
+    const paused = asAsk(
+      await Sequence.create().step('refunds', askingAgent(exec)).build().run({
+        message: 'refund 5000',
+      }),
+    );
+    const redeployed = Sequence.create()
+      .step('refunds', askingAgent(exec, [approval]))
+      .build();
+    await expect(
+      redeployed.resume(paused.checkpoint, checkInApproved({ request: paused.ask, by: 'maya' })),
+    ).rejects.toMatchObject(refusal('chain-changed'));
+    expect(exec).not.toHaveBeenCalled();
+  });
+
+  it('refuses when the checkpoint’s record of the rules after the ask was altered', async () => {
+    const exec = vi.fn(() => 'refunded');
+    const agent = askingAgent(exec);
+    const paused = asAsk(await agent.run({ message: 'refund 5000' }));
+    const altered = structuredClone(paused.checkpoint);
+    (altered.sharedState as Record<string, unknown>).pausedAskChain = ['approval'];
+    await expect(
+      askingAgent(exec, [approval]).resume(
+        altered,
+        checkInApproved({ request: paused.ask, by: 'maya' }),
+      ),
+    ).rejects.toMatchObject(refusal('call-changed'));
+    expect(exec).not.toHaveBeenCalled();
+  });
 
   it('refuses an approval of one ask on another ask', async () => {
     const exec = vi.fn(() => 'refunded');
@@ -478,6 +563,37 @@ describe('decision binding — a call that cannot be bound is refused, never ask
     expect(exec).not.toHaveBeenCalled();
     expect(results[0]).toContain('was not run on that call');
     expect(results[0]).toContain('plain JSON');
+  });
+
+  it('an ask whose call cannot be bound is recorded as refused, never as asked', async () => {
+    const exec = vi.fn(() => 'refunded');
+    const agent = Agent.create({ provider: refunds(), model: 'mock' })
+      .system('You issue refunds.')
+      .tool(refundTool(exec, false))
+      .toolMiddleware(
+        {
+          name: 'stamp',
+          onToolCall: (call) => allow({ ...call.args, at: new Date(0) }, 'stamped'),
+        },
+        { name: 'approval', onToolCall: () => ask({ question: 'Issue this refund?' }) },
+      )
+      .build();
+    const out = await agent.run({ message: 'refund 5' });
+    expect(isPaused(out)).toBe(false);
+    expect(exec).not.toHaveBeenCalled();
+    const rows = (agent.getLastSnapshot()?.sharedState.middlewareDecisions ??
+      []) as readonly MiddlewareDecision[];
+    // Nobody was asked, so no row says a person was: the asking link's row is
+    // the refusal, naming why.
+    expect(rows.some((row) => row.outcome === 'ask')).toBe(false);
+    const refused = rows.find((row) => row.middleware === 'approval');
+    expect(refused).toMatchObject({
+      outcome: 'deny',
+      moment: 'before-tool',
+      toolName: 'issue_refund',
+    });
+    expect(refused?.why).toContain('plain JSON');
+    expect(refused?.why).toContain('Issue this refund?');
   });
 });
 

@@ -16,8 +16,11 @@
  * ── WHY THE ID IS A COMMITMENT, NOT ONLY A NAME ─────────────────────────────
  * `id = sha256(domain ‖ nonce ‖ canonicalJson(call))`, where the call is
  * everything that runs on approval: the gate, the tool, the call id, the
- * served party, the arguments and — for an ask — the middleware and where the
- * chain resumes. The nonce is 128 random bits kept in the paused run's state.
+ * served party, the arguments and — for an ask — the middleware, where the
+ * chain resumes and the names of the rules from the asking one on (a resume
+ * refuses an agent whose chain no longer runs those rules, and a rule after
+ * the ask that hands back other arguments than the ones approved — the tool
+ * does not run). The nonce is 128 random bits kept in the paused run's state.
  *
  *   - A random nonce makes every pause's id unique and unguessable, so a
  *     decision for one pause can never answer another — even two pauses of
@@ -80,6 +83,13 @@ export interface GatedCall {
   readonly middleware?: unknown;
   /** `'ask'` only — the asking link's index; the chain resumes after it. */
   readonly askIndex?: unknown;
+  /**
+   * `'ask'` only — the names of the asking link and of every link after it,
+   * in chain order: the rules the call still passes once the person answers.
+   * A position alone would let a redeploy that removed or moved a later rule
+   * resume past it; the names make that a refusal (`'chain-changed'`).
+   */
+  readonly chain?: unknown;
 }
 
 /** A consent gate's request as the paused run's state carries it (`AgentState.pausedRequest`). */
@@ -174,6 +184,7 @@ export function gatedCallOf(read: (key: string) => unknown, gate: ConsentGateKin
         args: read('pausedAskArgs'),
         middleware: read('pausedAskMiddleware'),
         askIndex: read('pausedAskIndex'),
+        chain: read('pausedAskChain'),
       }
     : {
         gate,
@@ -190,16 +201,20 @@ export function gatedCallOf(read: (key: string) => unknown, gate: ConsentGateKin
  *
  * @param recorded the paused run's `pausedRequest`, as read — never trusted.
  * @param call     the paused call, as read ({@link gatedCallOf}).
+ * @param rules    the resuming agent's own `toolMiddleware` chain, by link
+ *   name — an ask's approval holds only for the rules it was asked under.
  * @returns a detached copy of the decision.
  * @throws DecisionRequiredError when the input is not a decision at all.
  * @throws ResumeDecisionError (`'no-request'`, `'request-not-recorded'`,
- *   `'other-request'`, `'call-changed'`) when it cannot answer this request.
+ *   `'other-request'`, `'call-changed'`, `'chain-changed'`) when it cannot
+ *   answer this request.
  */
 export function heldDecision(
   input: unknown,
   gate: ConsentGate,
   recorded: unknown,
   call: GatedCall,
+  rules: readonly string[],
 ): CheckInDecision {
   const decision = decisionCopyOf(input);
   if (decision === undefined) throw new DecisionRequiredError(gate, input);
@@ -218,7 +233,28 @@ export function heldDecision(
   if (requestIdOf(pending.nonce, call) !== pending.id) {
     throw new ResumeDecisionError('call-changed', gate.kind);
   }
+  // The checkpoint is the one the person was asked over; the agent resuming it
+  // must still be one that runs the same rules from the asking link on.
+  if (call.gate === 'ask' && !sameChain(call.chain, rules, call.askIndex)) {
+    throw new ResumeDecisionError('chain-changed', gate.kind);
+  }
   return decision as CheckInDecision;
+}
+
+/**
+ * Whether the arguments a call would run with are the copy a request was
+ * minted over — compared as the request's own JSON, so key order and JSON's
+ * equivalences do not count, and a value JSON cannot write down faithfully
+ * never matches. What an approval covers is that copy: an ask's resume holds
+ * the arguments the rest of the chain hands back to it before the tool runs.
+ */
+export function sameBoundArgs(bound: unknown, wouldRun: unknown): boolean {
+  if (!isJsonFaithful(bound) || !isJsonFaithful(wouldRun)) return false;
+  try {
+    return canonicalJson(bound) === canonicalJson(wouldRun);
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -232,6 +268,7 @@ export function checkDecisionAgainst(
   checkpoint: FlowchartCheckpoint,
   gate: ConsentGate,
   input: unknown,
+  rules: readonly string[],
 ): void {
   const state = pausedStateOf(checkpoint);
   if (state === undefined) {
@@ -239,7 +276,7 @@ export function checkDecisionAgainst(
     return;
   }
   const read = (key: string): unknown => state[key];
-  heldDecision(input, gate, read('pausedRequest'), gatedCallOf(read, gate.kind));
+  heldDecision(input, gate, read('pausedRequest'), gatedCallOf(read, gate.kind), rules);
 }
 
 /**
@@ -266,9 +303,24 @@ function requestIdOf(nonce: string, call: GatedCall): string | undefined {
     args: call.args,
     middleware: call.middleware,
     askIndex: call.askIndex,
+    chain: call.chain,
   };
   if (!isJsonFaithful(body)) return undefined;
   return sha256Hex(`${DOMAIN}\u001f${nonce}\u001f${canonicalJson(body)}`);
+}
+
+/**
+ * Whether `rules` (an agent's whole chain, by link name) runs `recorded` (the
+ * names an ask bound, from its own link on) from `askIndex` — the same links,
+ * by name, in the same order, and no others after them.
+ */
+function sameChain(recorded: unknown, rules: readonly string[], askIndex: unknown): boolean {
+  if (!Array.isArray(recorded) || typeof askIndex !== 'number' || !Number.isInteger(askIndex)) {
+    return false;
+  }
+  if (askIndex < 0) return false;
+  const live = rules.slice(askIndex);
+  return live.length === recorded.length && live.every((name, at) => name === recorded[at]);
 }
 
 function readPendingRequest(recorded: unknown): PendingRequest | undefined {

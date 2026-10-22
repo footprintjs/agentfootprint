@@ -69,7 +69,7 @@ Both the ask and the decision fire typed events — `agentfootprint.checkin.requ
 
 ### A decision answers one request, once
 
-A "yes" is about one thing: the call the person was shown. So every check-in (and every middleware `ask`) mints a **request id** when it pauses — `outcome.checkIn.id`, `outcome.ask.id` — and the decision quotes it. The id is unique to that pause and bound to the exact call that runs on approval: the tool, its arguments, the call id, the served party and, for an ask, where the middleware chain resumes.
+A "yes" is about one thing: the call the person was shown. So every check-in (and every middleware `ask`) mints a **request id** when it pauses — `outcome.checkIn.id`, `outcome.ask.id` — and the decision quotes it. The id is unique to that pause and bound to the exact call that runs on approval: the tool, its arguments, the call id, the served party and, for an ask, where the middleware chain resumes and the names of the rules from there on. On approval the tool runs with a detached copy of exactly those arguments; for an ask, a later link that hands back different ones gets the call refused rather than run.
 
 Why it matters: without it, an approval is a bearer token for whatever is paused next. A duplicate click on "Approve" arrives after the first one resumed the run — and the run has since paused on a *different* refund the person never saw. A stored checkpoint whose arguments were edited after the ask still finds the person's yes. The same decision resumed twice runs the tool twice. Each of these is now refused, before the tool runs:
 
@@ -89,7 +89,8 @@ if (isCheckInPause(out)) {
 | `'no-request'` | names no request — built by an older release, or by hand without `requestId` |
 | `'request-not-recorded'` | can't answer this pause at all: the checkpoint recorded no request (written before requests were named) |
 | `'other-request'` | names a different request — another conversation's, an earlier pause of this run, a parallel sibling's |
-| `'call-changed'` | names this request, but the checkpoint's call changed after the ask (arguments, tool, call id, party, chain position) |
+| `'call-changed'` | names this request, but the checkpoint's call changed after the ask (arguments, tool, call id, party, chain position, the rules recorded after the ask) |
+| `'chain-changed'` | names this request (a middleware ask), but the agent resuming it runs other rules from the asking link on — one was removed, added, renamed or moved since (a redeploy) |
 | `'already-answered'` | was already used by a resume — approved or declined; a decline spends the request too |
 
 All but `'already-answered'` are refused before anything moves, and the checkpoint stays answerable with the right decision. A request is spent where the decision is used, in the resumed run, still before the tool. A composition (`Sequence`, `Parallel`, …) resumes its nested agents directly, so there every refusal comes from that same place.

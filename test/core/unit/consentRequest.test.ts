@@ -13,6 +13,7 @@ import {
   heldDecision,
   inMemoryDecisionLedger,
   mintConsentRequest,
+  sameBoundArgs,
   spendDecision,
   type DecisionLedger,
   type GatedCall,
@@ -29,8 +30,21 @@ const call = (over: Partial<GatedCall> = {}): GatedCall => ({
   ...over,
 });
 
-/** Mint, and lay the result out the way the paused run's state holds it. */
-function paused(over: Partial<GatedCall> = {}) {
+/** An ask over `call()`, made by the first link of the chain `approval → limit`. */
+const askedCall = (over: Partial<GatedCall> = {}): Partial<GatedCall> => ({
+  gate: 'ask',
+  middleware: 'approval',
+  askIndex: 0,
+  chain: ['approval', 'limit'],
+  ...over,
+});
+
+/**
+ * Mint, and lay the result out the way the paused run's state holds it. `live`
+ * is the agent's whole middleware chain at resume (an ask's rules); it
+ * defaults to the chain the ask was made under.
+ */
+function paused(over: Partial<GatedCall> = {}, live?: readonly string[]) {
   const minted = mintConsentRequest(call(over));
   if (minted === undefined) throw new Error('expected the call to bind');
   const state: Record<string, unknown> = {
@@ -43,17 +57,25 @@ function paused(over: Partial<GatedCall> = {}) {
           pausedAskArgs: minted.args,
           pausedAskMiddleware: call(over).middleware,
           pausedAskIndex: call(over).askIndex,
+          pausedAskChain: call(over).chain,
         }
       : { pausedCheckInArgs: minted.args }),
   };
   const gate = call(over).gate;
-  return { minted, state, read: (k: string) => state[k], gate };
+  const rules = live ?? (Array.isArray(call(over).chain) ? (call(over).chain as string[]) : []);
+  return { minted, state, read: (k: string) => state[k], gate, rules };
 }
 
 const gateOf = (kind: 'checkIn' | 'ask') => ({ kind, toolName: 'issue_refund' });
 
 const hold = (input: unknown, p: ReturnType<typeof paused>) =>
-  heldDecision(input, gateOf(p.gate), p.read('pausedRequest'), gatedCallOf(p.read, p.gate));
+  heldDecision(
+    input,
+    gateOf(p.gate),
+    p.read('pausedRequest'),
+    gatedCallOf(p.read, p.gate),
+    p.rules,
+  );
 
 function refusedWith(fn: () => unknown, reason: string): void {
   try {
@@ -162,6 +184,17 @@ describe('the request id — distinct calls never share an id; one call has one'
       { gate: 'ask' as const, middleware: 'a', askIndex: 0 },
       { gate: 'ask' as const, middleware: 'b', askIndex: 0 },
     ],
+    ['the rules after the ask', askedCall(), askedCall({ chain: ['approval'] })],
+    [
+      'the order of the rules after the ask',
+      askedCall({ chain: ['approval', 'limit', 'audit'] }),
+      askedCall({ chain: ['approval', 'audit', 'limit'] }),
+    ],
+    [
+      'a rule name holding a comma',
+      askedCall({ chain: ['approval', 'a,b'] }),
+      askedCall({ chain: ['approval', 'a', 'b'] }),
+    ],
     ['a tool name holding the separator', { tool: 'a\u001fb' }, { tool: 'a' }],
   ])('distinct calls: %s', (_label, left, right) => {
     expect(idUnder(nonce, call(left))).not.toBe(idUnder(nonce, call(right)));
@@ -247,7 +280,8 @@ describe('heldDecision', () => {
     const decision = checkInApproved({ request: p.minted.request, by: 'maya' });
     for (const recorded of [undefined, null, {}, { id: p.minted.request.id }, 'x']) {
       refusedWith(
-        () => heldDecision(decision, gateOf('checkIn'), recorded, gatedCallOf(p.read, 'checkIn')),
+        () =>
+          heldDecision(decision, gateOf('checkIn'), recorded, gatedCallOf(p.read, 'checkIn'), []),
         'request-not-recorded',
       );
     }
@@ -259,6 +293,7 @@ describe('heldDecision', () => {
           gateOf('checkIn'),
           { id: p.minted.request.id.toUpperCase(), nonce: p.minted.request.nonce },
           gatedCallOf(p.read, 'checkIn'),
+          [],
         ),
       'request-not-recorded',
     );
@@ -296,7 +331,7 @@ describe('heldDecision', () => {
     };
     collect(() => hold({ approved: true, by: 'maya', at: 1 }, p)); // no-request
     collect(() =>
-      heldDecision(forThis, gateOf('checkIn'), undefined, gatedCallOf(p.read, 'checkIn')),
+      heldDecision(forThis, gateOf('checkIn'), undefined, gatedCallOf(p.read, 'checkIn'), []),
     ); // request-not-recorded
     collect(() => hold(forOther, p)); // other-request
     collect(() => hold(forChanged, changed)); // call-changed
@@ -332,20 +367,53 @@ describe('heldDecision', () => {
     refusedWith(() => hold(decision, p), 'call-changed');
   });
 
-  it("an ask is bound to where its chain resumes and who asked: 'call-changed'", () => {
+  it("an ask is bound to where its chain resumes, who asked and the rules after: 'call-changed'", () => {
     for (const [key, value] of [
       ['pausedAskIndex', 3],
       ['pausedAskMiddleware', 'someone-else'],
+      ['pausedAskChain', ['approval']],
+      ['pausedAskChain', undefined],
     ] as const) {
-      const p = paused({ gate: 'ask', middleware: 'approval', askIndex: 0 });
+      const p = paused(askedCall());
       const decision = checkInApproved({ request: p.minted.request, by: 'maya' });
       p.state[key] = value;
       refusedWith(() => hold(decision, p), 'call-changed');
     }
   });
 
+  it("an ask refuses an agent whose rules from the asking one on are not the ones it asked under: 'chain-changed'", () => {
+    // Recorded under approval → limit (the ask at index 0). Each of these is a
+    // redeploy that would skip, add or move a rule the call has not yet passed.
+    for (const live of [
+      ['approval'], // the later deny rule removed
+      ['approval', 'limit', 'audit'], // a rule added after
+      ['limit', 'approval'], // moved: a different link at the ask's index
+      ['audit', 'approval', 'limit'], // a link inserted before the ask
+      ['approval', 'cap'], // renamed
+      [], // no chain at all
+    ]) {
+      const p = paused(askedCall(), live);
+      const decision = checkInApproved({ request: p.minted.request, by: 'maya' });
+      refusedWith(() => hold(decision, p), 'chain-changed');
+    }
+    // The same rules, from the ask on, is the same chain — whatever came before it.
+    const later = paused(askedCall({ askIndex: 1, chain: ['approval', 'limit'] }), [
+      'scrub',
+      'approval',
+      'limit',
+    ]);
+    expect(() =>
+      hold(checkInApproved({ request: later.minted.request, by: 'maya' }), later),
+    ).not.toThrow();
+  });
+
+  it('a check-in is not held to a middleware chain', () => {
+    const p = paused({}, ['approval', 'limit']);
+    expect(() => hold(checkInApproved({ request: p.minted.request, by: 'maya' }), p)).not.toThrow();
+  });
+
   it('a decision for a check-in does not answer an ask made over the same call', () => {
-    const asked = paused({ gate: 'ask', middleware: 'm', askIndex: 0 });
+    const asked = paused(askedCall({ middleware: 'm', chain: ['m'] }));
     // Same nonce and call, read as the other gate: the id derives differently.
     const asCheckIn = {
       ...asked,
@@ -354,6 +422,31 @@ describe('heldDecision', () => {
     };
     const decision = checkInApproved({ request: asked.minted.request, by: 'maya' });
     refusedWith(() => hold(decision, asCheckIn), 'call-changed');
+  });
+});
+
+// ── the arguments that would run, against the approved copy ─────────────
+
+describe('sameBoundArgs', () => {
+  it('the same arguments by JSON: key order and JSON’s own equivalences do not count', () => {
+    expect(sameBoundArgs({ a: 1, b: { c: 2 } }, { b: { c: 2 }, a: 1 })).toBe(true);
+    expect(sameBoundArgs({ a: 1 }, { a: 1, b: undefined })).toBe(true);
+    expect(sameBoundArgs({ a: 0 }, { a: -0 })).toBe(true);
+  });
+
+  it.each([
+    ['a changed value', { amount: 5 }, { amount: 5000 }],
+    ['an added key', { amount: 5 }, { amount: 5, to: 'acct-9' }],
+    ['a removed key', { amount: 5, to: 'acct-1' }, { amount: 5 }],
+    [
+      'a value JSON writes the same way (a Date for its string)',
+      { at: '1970-01-01T00:00:00.000Z' },
+      { at: new Date(0) },
+    ],
+    ['a value JSON cannot hold', { amount: 5 }, { amount: Infinity }],
+    ['no object at all', { amount: 5 }, undefined],
+  ])('not the same: %s', (_label, bound, wouldRun) => {
+    expect(sameBoundArgs(bound, wouldRun)).toBe(false);
   });
 });
 
@@ -374,8 +467,8 @@ describe('checkDecisionAgainst', () => {
     const other = checkInApproved({ request: paused().minted.request, by: 'maya' });
     for (const nested of [undefined, 'step-a']) {
       const cp = checkpointOf(p.state, nested);
-      expect(() => checkDecisionAgainst(cp, gateOf('checkIn'), good)).not.toThrow();
-      refusedWith(() => checkDecisionAgainst(cp, gateOf('checkIn'), other), 'other-request');
+      expect(() => checkDecisionAgainst(cp, gateOf('checkIn'), good, [])).not.toThrow();
+      refusedWith(() => checkDecisionAgainst(cp, gateOf('checkIn'), other, []), 'other-request');
     }
   });
 
@@ -386,9 +479,11 @@ describe('checkDecisionAgainst', () => {
       subflowStates: {},
     } as unknown as FlowchartCheckpoint;
     expect(() =>
-      checkDecisionAgainst(cp, gateOf('checkIn'), { approved: true, by: 'm', at: 1 }),
+      checkDecisionAgainst(cp, gateOf('checkIn'), { approved: true, by: 'm', at: 1 }, []),
     ).not.toThrow();
-    expect(() => checkDecisionAgainst(cp, gateOf('checkIn'), 'yes')).toThrow(DecisionRequiredError);
+    expect(() => checkDecisionAgainst(cp, gateOf('checkIn'), 'yes', [])).toThrow(
+      DecisionRequiredError,
+    );
   });
 });
 

@@ -450,7 +450,10 @@ describe('middleware — integration', () => {
   it('resume continues the chain from the link AFTER the one that asked', async () => {
     const ran: string[] = [];
     const { seen, tool } = recordingTool();
-    const agent = Agent.create({ provider: mock({ replies: callThen('act') }), model: 'm' })
+    const agent = Agent.create({
+      provider: mock({ replies: callThen('act', { amount: 5, lines: [{ sku: 'a' }] }) }),
+      model: 'm',
+    })
       .tools([tool])
       .toolMiddleware(
         {
@@ -462,9 +465,9 @@ describe('middleware — integration', () => {
         },
         {
           name: 'after',
-          onToolCall: (call) => {
+          onToolCall: () => {
             ran.push('after');
-            return allow({ ...call.args, tagged: true }, 'tagged post-approval');
+            return allow(undefined, 'looked, changed nothing');
           },
         },
       )
@@ -478,7 +481,71 @@ describe('middleware — integration', () => {
     );
 
     expect(ran).toEqual(['gate', 'after']); // 'gate' asked once, not twice
-    expect(seen).toEqual([{ tagged: true }]);
+    expect(seen).toEqual([{ amount: 5, lines: [{ sku: 'a' }] }]);
+  });
+
+  it('a link after the ask that REWRITES the approved arguments refuses the call — an approval covers the call it was shown', async () => {
+    const { seen, tool } = recordingTool();
+    const spy = spyProvider(callThen('act', { amount: 5 }));
+    const agent = Agent.create({ provider: spy.provider, model: 'm' })
+      .tools([tool])
+      .toolMiddleware(
+        { name: 'gate', onToolCall: () => ask({ question: 'approve?' }) },
+        {
+          name: 'after',
+          onToolCall: (call) => allow({ ...call.args, amount: 5000 }, 'raised post-approval'),
+        },
+      )
+      .build();
+
+    const paused = await agent.run({ message: 'go' });
+    if (!isAskPause(paused)) throw new Error('expected a pause');
+    await agent.resume(
+      paused.checkpoint,
+      checkInApproved({ request: pausedRequest(paused), by: 'alice' }),
+    );
+
+    expect(seen).toEqual([]); // never executed with arguments nobody approved
+    const toolResult = spy.requests[1]?.messages.find((m) => m.role === 'tool');
+    expect(toolResult?.content).toContain('was not run on that call');
+    expect(toolResult?.content).toContain("'after'");
+    // The record says what happened: the person approved, 'after' rewrote, and
+    // the approval did not cover the rewritten call.
+    const rows = ledger(agent).filter((row) => row.moment === 'before-tool');
+    expect(rows.map((row) => [row.middleware, row.outcome, row.changed])).toEqual([
+      ['gate', 'ask', false],
+      ['gate', 'allow', false],
+      ['after', 'allow', true],
+      ['gate', 'deny', false],
+    ]);
+    expect(rows[3]?.why).toContain("'after'");
+  });
+
+  it('a link after the ask that hands back the SAME arguments lets the approved call run', async () => {
+    const { seen, tool } = recordingTool();
+    const agent = Agent.create({
+      provider: mock({ replies: callThen('act', { amount: 5, lines: [{ sku: 'a' }] }) }),
+      model: 'm',
+    })
+      .tools([tool])
+      .toolMiddleware(
+        { name: 'gate', onToolCall: () => ask({ question: 'approve?' }) },
+        {
+          name: 'normalize',
+          // A copy in another key order is the same call.
+          onToolCall: (call) =>
+            allow({ lines: call.args.lines, amount: call.args.amount }, 'normalized'),
+        },
+      )
+      .build();
+
+    const paused = await agent.run({ message: 'go' });
+    if (!isAskPause(paused)) throw new Error('expected a pause');
+    await agent.resume(
+      paused.checkpoint,
+      checkInApproved({ request: pausedRequest(paused), by: 'alice' }),
+    );
+    expect(seen).toEqual([{ lines: [{ sku: 'a' }], amount: 5 }]);
   });
 
   it('a SECOND ask during a resume refuses by name — one human question per resume', async () => {

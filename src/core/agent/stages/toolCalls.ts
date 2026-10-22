@@ -128,6 +128,7 @@ import {
   heldDecision,
   inMemoryDecisionLedger,
   mintConsentRequest,
+  sameBoundArgs,
   spendDecision,
   type DecisionLedger,
   type GatedCall,
@@ -152,7 +153,7 @@ import type {
   ToolSessionTier,
 } from '../../../tools/toolSessions.js';
 import type { InjectionRecord } from '../../../recorders/core/types.js';
-import type { ToolMiddleware } from '../middleware/types.js';
+import type { MiddlewareDecision, ToolMiddleware } from '../middleware/types.js';
 import { runToolChain, runToolAfterChain, type ToolArgs } from '../../../tools/runChain.js';
 import { recordDecisions } from '../middleware/ledger.js';
 import { ownsReservedArgument, splitFindings, type SplitFindings } from '../findings/reserved.js';
@@ -1650,7 +1651,27 @@ export function buildToolCallsHandler(
       },
       read('pausedRequest'),
       gatedCallOf(read, gate),
+      // An ask's approval holds only for the rules it was asked under — this
+      // agent's chain, by link name.
+      (deps.toolMiddleware ?? []).map((link) => link.name),
     );
+  };
+  /**
+   * The copy of a paused call's arguments its request was bound to, detached
+   * from the run's state — what an approved call runs with, as at a fresh
+   * dispatch. A live view of the state goes on changing after the call (the
+   * resume clears it, a later pause rewrites it), so a tool or a rule that kept
+   * its arguments would read values nobody approved. `heldAnswer` already
+   * proved them faithful JSON, which is what makes the copy safe to take.
+   */
+  const boundArgsOf = (
+    scope: TypedScope<AgentState>,
+    key: 'pausedAskArgs' | 'pausedCheckInArgs',
+  ): Readonly<Record<string, unknown>> => {
+    const raw = scope.$getValue(key);
+    return typeof raw === 'object' && raw !== null
+      ? (structuredClone(raw) as Readonly<Record<string, unknown>>)
+      : {};
   };
   /**
    * What a consent gate refuses with when the call cannot be bound to a
@@ -1666,6 +1687,42 @@ export function buildToolCallsHandler(
     }, and an approval binds to the exact arguments it is shown — those arguments held a ` +
     `value plain JSON cannot write down (a date object, a map, a non-finite number, …), so no ` +
     `approval could be bound to them.`;
+  /**
+   * The chain's rows for an ask no approval could be bound to. Nobody was
+   * asked, so no row may say a person was: the asking link's `ask` row (the
+   * walk's last — it stops at the ask) becomes the refusal it turned into,
+   * naming why, the way `askPolicy: 'refuse'` files a refused ask.
+   */
+  const unboundAskRows = (
+    rows: readonly MiddlewareDecision[],
+    middleware: string,
+    question: string,
+  ): MiddlewareDecision[] =>
+    rows.map((row, at) =>
+      at === rows.length - 1 && row.outcome === 'ask'
+        ? {
+            ...row,
+            outcome: 'deny',
+            why:
+              `middleware '${middleware}' asked a person to decide, and the call could not be ` +
+              `bound to a request a decision names — its arguments held a value plain JSON ` +
+              `cannot write down — so nobody was asked: ${question}`,
+          }
+        : row,
+    );
+  /**
+   * What the model reads when a rule after an approved ask handed back other
+   * arguments than the ones the person approved: the call does not run. A past
+   * fact about that call, naming the rules that changed it.
+   */
+  const rewrittenAfterApproval = (toolName: string, rewriters: readonly string[]): string =>
+    `tool '${toolName}' was not run on that call: a person approved it with the arguments ` +
+    `they were shown, and ${
+      rewriters.length > 0
+        ? `the middleware ${rewriters.map((name) => `'${name}'`).join(', ')}`
+        : 'a middleware after the ask'
+    } changed those arguments after the approval, so the approval did not cover the call ` +
+    `that would have run.`;
   /**
    * One admission rule for initial and resumed dispatch. Judge against the
    * wire schema after middleware, before artifact resolution or credentials.
@@ -4676,22 +4733,17 @@ export function buildToolCallsHandler(
             // gets the chain's named refusal and the tool does not run.
             ...(oneQuestionAsked && { askPolicy: 'refuse' as const }),
           });
-          // Under the inputs layer, a rewrite of a RULED tool's arguments is
-          // filed with the NAMES of the keys it changed (honesty layer 2) —
-          // the answer's standing reads a rewritten ruled argument with no
-          // declared origin as assumed. Every other row: as it always was.
-          recordDecisions(
-            scope,
-            inputs !== undefined
-              ? inputs.decisionsToRecord(tool, chain.decisions)
-              : chain.decisions,
-          );
-          callArgs = chain.args;
-          chainedArgs = chain.args;
+          // The rules the asked call still has to pass once the person
+          // answers: the asking link and every link after it, by name.
+          const askChain =
+            chain.kind === 'ask'
+              ? deps.toolMiddleware.slice(chain.index).map((link) => link.name)
+              : undefined;
           // The request the person would be asked (`core/consentRequest.ts`):
           // an id their decision must quote, bound to a detached copy of this
-          // exact call — the args AS TRANSFORMED SO FAR, and where the chain
-          // resumes. Minted only for a call that is about to pause.
+          // exact call — the args AS TRANSFORMED SO FAR, where the chain
+          // resumes and the rules from there on. Minted only for a call that
+          // is about to pause.
           const bound =
             chain.kind === 'ask'
               ? mintConsentRequest({
@@ -4702,8 +4754,25 @@ export function buildToolCallsHandler(
                   args: chain.args,
                   middleware: chain.middleware,
                   askIndex: chain.index,
+                  chain: askChain,
                 } satisfies GatedCall)
               : undefined;
+          // An ask no approval could be bound to asked nobody, and its row
+          // says so (`unboundAskRows`).
+          const chainRows =
+            chain.kind === 'ask' && bound === undefined
+              ? unboundAskRows(chain.decisions, chain.middleware, chain.payload.question)
+              : chain.decisions;
+          // Under the inputs layer, a rewrite of a RULED tool's arguments is
+          // filed with the NAMES of the keys it changed (honesty layer 2) —
+          // the answer's standing reads a rewritten ruled argument with no
+          // declared origin as assumed. Every other row: as it always was.
+          recordDecisions(
+            scope,
+            inputs !== undefined ? inputs.decisionsToRecord(tool, chainRows) : chainRows,
+          );
+          callArgs = chain.args;
+          chainedArgs = chain.args;
           if (chain.kind === 'deny') {
             denied = true;
             // A link that ASKED, refused by the one-question law: the person's
@@ -4747,6 +4816,7 @@ export function buildToolCallsHandler(
             scope.pausedAskArgs = bound.args;
             scope.pausedAskIndex = chain.index;
             scope.pausedAskMiddleware = chain.middleware;
+            scope.pausedAskChain = askChain;
             scope.pausedRequest = bound.request;
             // The party this call was resolved against (9.92.0) — so a resume
             // in a FRESH instance dispatches to the same party, never to the
@@ -6102,7 +6172,8 @@ export function buildToolCallsHandler(
       // because a message was mis-shaped).
       if (consentGate === 'ask' && consentDecision !== undefined) {
         const iteration = scope.iteration as number;
-        const args = (scope.pausedAskArgs ?? {}) as Readonly<Record<string, unknown>>;
+        // The copy the person approved, detached (`boundArgsOf`).
+        const args = boundArgsOf(scope, 'pausedAskArgs');
         const askIndex = (scope.pausedAskIndex ?? 0) as number;
         const askedBy = (scope.pausedAskMiddleware ?? 'middleware') as string;
         // The registered component that COLLECTED this decision (9.24.0),
@@ -6206,6 +6277,19 @@ export function buildToolCallsHandler(
               askPolicy: 'refuse',
             });
             recordDecisions(scope, rest.decisions);
+            // The approval covers the arguments the person was shown — the
+            // bound copy. A rule after the ask that hands back OTHER arguments
+            // (by the request's own JSON) is not approved by it: the call does
+            // not run, and the record and the model are told why
+            // ('call-changed'). The links that rewrote it are named.
+            const rewrittenBy =
+              rest.kind === 'deny' || sameBoundArgs(args, rest.args)
+                ? undefined
+                : [
+                    ...new Set(
+                      rest.decisions.filter((row) => row.changed).map((row) => row.middleware),
+                    ),
+                  ];
             // Would this tool's OWN consent gate have fired for this call? Asked by
             // EVALUATING the demand, not by noticing that one was declared (8.13.0).
             // Before that, any tool carrying a `checkIn` field was refused here even
@@ -6218,6 +6302,7 @@ export function buildToolCallsHandler(
             // depend on which door the call arrived through.
             const demandTrips =
               rest.kind !== 'deny' &&
+              rewrittenBy === undefined &&
               tool?.checkIn !== undefined &&
               shouldCheckIn(tool.checkIn, rest.args, {
                 iteration,
@@ -6226,6 +6311,26 @@ export function buildToolCallsHandler(
               });
             if (rest.kind === 'deny') {
               result = rest.reason;
+            } else if (rewrittenBy !== undefined) {
+              error = true;
+              result = rewrittenAfterApproval(toolName, rewrittenBy);
+              recordDecisions(scope, [
+                {
+                  middleware: askedBy,
+                  moment: 'before-tool',
+                  at: 'tool',
+                  toolName,
+                  toolCallId,
+                  iteration,
+                  outcome: 'deny',
+                  changed: false,
+                  why: `the approval covers the arguments the person was shown; ${
+                    rewrittenBy.length > 0
+                      ? rewrittenBy.map((name) => `'${name}'`).join(', ')
+                      : 'a rule after the ask'
+                  } changed them after it, so the call was not run (call-changed)`,
+                },
+              ]);
             } else if (demandTrips) {
               // The one-question rule, from the other direction: this tool's own
               // consent gate really does demand a person for THESE arguments, and
@@ -6426,6 +6531,7 @@ export function buildToolCallsHandler(
         scope.pausedAskArgs = undefined;
         scope.pausedAskIndex = undefined;
         scope.pausedAskMiddleware = undefined;
+        scope.pausedAskChain = undefined;
         // The request was answered — and spent — by this resume.
         scope.pausedRequest = undefined;
         // Cleared ONLY when it was set: a later component-less pause in this
@@ -6448,9 +6554,10 @@ export function buildToolCallsHandler(
       // either way. Same iteration semantics as resume-after-askHuman.
       if (consentGate === 'checkIn' && consentDecision !== undefined) {
         const iteration = scope.iteration as number;
-        const args = (scope.pausedCheckInArgs ?? {}) as Readonly<Record<string, unknown>>;
+        // The copy the person approved, detached (`boundArgsOf`).
+        const args = boundArgsOf(scope, 'pausedCheckInArgs');
         // A check-in pause is resumed with a CheckInDecision for THIS request
-        // and this exact call, or not at all: `answerFor` refused anything else
+        // and this exact call, or not at all: `heldAnswer` refused anything else
         // at the top — a bare string, a decision for another request, a replay.
         // A consequential tool never EXECUTES from a malformed resume, and a
         // decline is never invented for one.

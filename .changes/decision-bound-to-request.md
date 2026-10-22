@@ -6,8 +6,11 @@ type: breaking
 - names no request (`'no-request'`) — built by an older release, or by hand;
 - answers a pause that recorded none (`'request-not-recorded'`) — a checkpoint written before this release;
 - names another request (`'other-request'`) — another conversation's, an earlier pause of the same run, a parallel sibling's;
-- names this request for a call the checkpoint no longer holds (`'call-changed'`) — its arguments, tool, call id, party or chain position were altered after the ask;
+- names this request for a call the checkpoint no longer holds (`'call-changed'`) — its arguments, tool, call id, party, chain position or the rules recorded after the ask were altered after the ask;
+- answers a middleware ask on an agent whose `toolMiddleware` chain, from the asking link on, is not the one the person was asked under (`'chain-changed'`) — a later rule removed, added, renamed or moved by a redeploy is never skipped;
 - was already used by a resume (`'already-answered'`) — approved or declined.
+
+On approval the tool runs with a detached copy of exactly the arguments the person was shown (before, a resumed tool was handed a live view of the run's state, which later read the next pause's call). For a middleware ask, the links after the asking one still run and may still deny, but a link that hands back **different arguments** no longer has them run: the call is refused, the model reads why, and the record keeps the rewrite and a deny row. An ask whose arguments cannot be bound is recorded as that refusal, never as an `ask` row nobody answered.
 
 Before this, any decision-shaped object answered any consent pause: a duplicate "approve" that arrived after the first had resumed the run approved the NEXT refund nobody was shown, a stored checkpoint whose arguments were edited after the ask still ran on the person's yes, and resuming the same checkpoint twice ran the tool twice. The tool never runs on a refusal. An agent's own `resume()` refuses all but `'already-answered'` before anything moves; a request is spent where its decision is used, still before the tool — which is also where a composition's nested agents (`Sequence`, `Parallel`, …) are held to the rule, since a composition resumes them directly. A nested agent's consent pause answered with something that is not a decision is no longer turned into an invented `by: 'unknown'` decline: it is refused (`DecisionRequiredError`), the same as on an agent's own `resume()`.
 

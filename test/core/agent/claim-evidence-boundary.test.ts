@@ -237,13 +237,12 @@ describe('public-Agent seam: what executed, not what the model proposed', () => 
         {
           name: 'before-ask',
           onToolCall: (call) =>
-            allow({ ...call.args, region: 'east' }, 'Select authorized region.'),
+            allow({ ...call.args, region: 'east', currency: 'EUR' }, 'Select authorized scope.'),
         },
         { name: 'approval', onToolCall: () => ask({ question: 'Read this source?' }) },
-        {
-          name: 'after-ask',
-          onToolCall: (call) => allow({ ...call.args, currency: 'EUR' }, 'Approved currency.'),
-        },
+        // Runs on resume and lets the approved call through unchanged — a link
+        // after the ask that rewrote it would not be covered by the approval.
+        { name: 'after-ask', onToolCall: () => allow() },
       ],
     });
     const paused = await first.agent.run({ message: 'Read the regional fixture.' });
@@ -255,13 +254,12 @@ describe('public-Agent seam: what executed, not what the model proposed', () => 
         {
           name: 'before-ask',
           onToolCall: (call) =>
-            allow({ ...call.args, region: 'east' }, 'Select authorized region.'),
+            allow({ ...call.args, region: 'east', currency: 'EUR' }, 'Select authorized scope.'),
         },
         { name: 'approval', onToolCall: () => ask({ question: 'Read this source?' }) },
-        {
-          name: 'after-ask',
-          onToolCall: (call) => allow({ ...call.args, currency: 'EUR' }, 'Approved currency.'),
-        },
+        // Runs on resume and lets the approved call through unchanged — a link
+        // after the ask that rewrote it would not be covered by the approval.
+        { name: 'after-ask', onToolCall: () => allow() },
       ],
     });
     await next.agent.resume(

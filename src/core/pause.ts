@@ -368,7 +368,14 @@ export class DecisionRequiredError extends Error {
  *     conversation's, an earlier pause of this run, a parallel sibling's.
  *   - `'call-changed'` — the decision names this request, but the paused call
  *     is no longer the one the person was asked about (the checkpoint's tool,
- *     arguments, call id, served party or middleware position changed).
+ *     arguments, call id, served party, or — for an ask — the middleware
+ *     position or the rules recorded after it changed).
+ *   - `'chain-changed'` — an ask only: the decision names this request and
+ *     the checkpoint is intact, but the agent resuming it would continue the
+ *     middleware chain under other rules than the ones the person was asked
+ *     under — the link that asked, or a link after it, was removed, added,
+ *     renamed or moved (a redeploy). An approval holds for the rules it was
+ *     given under, so a rule it was given under is never skipped.
  *   - `'already-answered'` — a resume already used a decision for this
  *     request, approved or declined.
  */
@@ -377,6 +384,7 @@ export type ResumeDecisionRefusal =
   | 'request-not-recorded'
   | 'other-request'
   | 'call-changed'
+  | 'chain-changed'
   | 'already-answered';
 
 /**
@@ -388,8 +396,9 @@ export type ResumeDecisionRefusal =
  * when it pauses (`CheckInRequest.id`, `MiddlewareAsk.id`). The id is unique to
  * that pause and bound to the exact call that runs on approval — the tool, its
  * arguments, the call id, the served party and, for an ask, where the chain
- * resumes. A decision names it (`checkInApproved({ request, by })`), and a
- * resume holds the decision to it: the same request, the same call, once.
+ * resumes and the names of the rules from there on. A decision names it
+ * (`checkInApproved({ request, by })`), and a resume holds the decision to it:
+ * the same request, the same call, once.
  *
  * Every refusal but `'already-answered'` is decided before anything moves on
  * an agent's own `resume()`; the checkpoint is unchanged and can be answered
@@ -449,6 +458,15 @@ function resumeDecisionMessage(reason: ResumeDecisionRefusal): string {
         `call the person was asked about: the checkpoint's tool, arguments, call id, served ` +
         `party or middleware position changed after the ask. An approval binds to the exact ` +
         `call it was shown. Nothing was executed; treat the checkpoint as altered.`
+      );
+    case 'chain-changed':
+      return (
+        `[resume] this decision names the paused request, but this agent's toolMiddleware ` +
+        `chain is not the one the request was asked under: the link that asked, or a link ` +
+        `after it, was removed, added, renamed or moved since (a redeploy). The rest of the ` +
+        `chain would not be the rules the approval was given under, so the approval is not ` +
+        `used. Nothing was executed; resume on an agent built with the same chain, or abandon ` +
+        `the pause and ask again in a new run.`
       );
     case 'already-answered':
       return (

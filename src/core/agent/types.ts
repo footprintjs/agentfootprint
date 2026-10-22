@@ -1622,6 +1622,16 @@ export interface AgentState {
   pausedAskArgs?: Readonly<Record<string, unknown>>;
   pausedAskIndex?: number;
   pausedAskMiddleware?: string;
+  /**
+   * The rules an asked call still had to pass when the person was asked: the
+   * NAME of the link that asked and of every link after it, in chain order.
+   * Bound into the request (`core/consentRequest.ts`), so a checkpoint whose
+   * record of it changed is refused (`'call-changed'`), and held against the
+   * resuming agent's own chain, so a redeploy that removed, added, renamed or
+   * moved one of those rules is refused (`'chain-changed'`) rather than skip a
+   * rule the approval was given under. Names only — never a value of the run.
+   */
+  pausedAskChain?: readonly string[];
   // Credential-consent checkpoint (8.6.0) — set when a tool's DECLARED
   // credential comes back `authorization-required` under the default
   // `onAuthorizationRequired: 'pause'`. Same wire as the check-in and ask

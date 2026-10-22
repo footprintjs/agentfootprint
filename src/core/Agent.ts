@@ -2676,11 +2676,19 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     }
     // …and the decision must be for THIS request and this exact call
     // (`core/consentRequest.ts`): refused here, before anything moves, when it
-    // names no request, another request, or a call the checkpoint no longer
-    // holds. The dispatch loop asks again where the decision is used — and
-    // spends it there, once.
+    // names no request, another request, a call the checkpoint no longer
+    // holds, or — for an ask — rules this agent's chain no longer runs. The
+    // dispatch loop asks again where the decision is used — and spends it
+    // there, once.
     const gate = pauseDemandsDecision(checkpoint.pauseData);
-    if (gate) checkDecisionAgainst(checkpoint, gate, input);
+    if (gate) {
+      checkDecisionAgainst(
+        checkpoint,
+        gate,
+        input,
+        this.toolMiddleware.map((link) => link.name),
+      );
+    }
     // Typed data collection is not consent. Validate before changing any run state.
     const awaitingInput = gate === undefined ? readAwaitingInput(checkpoint.pauseData) : undefined;
     let answeredAsk: AnsweredAsk | undefined;

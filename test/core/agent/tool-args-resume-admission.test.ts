@@ -72,40 +72,66 @@ function setup(
 describe.each(['same', 'fresh'] as const)(
   'argument admission on %s-agent middleware resume',
   (kind) => {
-    it.each(['proposed', 'transformed'] as const)(
-      'rejects %s extra arguments before credentials or execute, with a model-visible result',
-      async (origin) => {
-        const options = origin === 'proposed' ? { args: EXTRA } : { transform: true };
-        const initial = setup(options);
-        const paused = await initial.agent.run('Read an item');
-        if (!isPaused(paused)) throw new Error('Expected a real middleware pause');
-        expect(initial.execute).not.toHaveBeenCalled();
-        expect(initial.getCredential).not.toHaveBeenCalled();
-        const resumed = kind === 'same' ? initial : setup(options);
-        const checkpoint = JSON.parse(JSON.stringify(paused.checkpoint));
-        await expect(
-          resumed.agent.resume(
-            checkpoint,
-            checkInApproved({ request: pausedRequest(paused), by: 'reviewer' }),
-          ),
-        ).resolves.toBe('done');
+    it('rejects proposed extra arguments before credentials or execute, with a model-visible result', async () => {
+      const options = { args: EXTRA };
+      const initial = setup(options);
+      const paused = await initial.agent.run('Read an item');
+      if (!isPaused(paused)) throw new Error('Expected a real middleware pause');
+      expect(initial.execute).not.toHaveBeenCalled();
+      expect(initial.getCredential).not.toHaveBeenCalled();
+      const resumed = kind === 'same' ? initial : setup(options);
+      const checkpoint = JSON.parse(JSON.stringify(paused.checkpoint));
+      await expect(
+        resumed.agent.resume(
+          checkpoint,
+          checkInApproved({ request: pausedRequest(paused), by: 'reviewer' }),
+        ),
+      ).resolves.toBe('done');
 
-        expect(resumed.execute).not.toHaveBeenCalled();
-        expect(resumed.getCredential).not.toHaveBeenCalled();
-        expect(resumed.after).not.toHaveBeenCalled();
-        expect(resumed.results).toHaveLength(1);
-        expect(resumed.results[0]).toContain("Invalid arguments for tool 'lookup'");
-        expect(resumed.results[0]).toContain('unrecognizedFilter');
-        expect(
-          resumed.events.filter((event) => event.type === 'agentfootprint.validation.args_invalid'),
-        ).toMatchObject([
-          { payload: { toolName: 'lookup', toolCallId: CALL_ID, iteration: 1, enforced: true } },
-        ]);
-        expect(
-          resumed.events.some((event) => event.type === 'agentfootprint.credential.requested'),
-        ).toBe(false);
-      },
-    );
+      expect(resumed.execute).not.toHaveBeenCalled();
+      expect(resumed.getCredential).not.toHaveBeenCalled();
+      expect(resumed.after).not.toHaveBeenCalled();
+      expect(resumed.results).toHaveLength(1);
+      expect(resumed.results[0]).toContain("Invalid arguments for tool 'lookup'");
+      expect(resumed.results[0]).toContain('unrecognizedFilter');
+      expect(
+        resumed.events.filter((event) => event.type === 'agentfootprint.validation.args_invalid'),
+      ).toMatchObject([
+        { payload: { toolName: 'lookup', toolCallId: CALL_ID, iteration: 1, enforced: true } },
+      ]);
+      expect(
+        resumed.events.some((event) => event.type === 'agentfootprint.credential.requested'),
+      ).toBe(false);
+    });
+
+    it('refuses arguments a link adds AFTER the approval before admission, credentials or execute, with a model-visible result', async () => {
+      // The person approved VALID; 'remaining-link' hands back EXTRA. The
+      // approval does not cover that call, so it never reaches admission.
+      const initial = setup({ transform: true });
+      const paused = await initial.agent.run('Read an item');
+      if (!isPaused(paused)) throw new Error('Expected a real middleware pause');
+      const resumed = kind === 'same' ? initial : setup({ transform: true });
+      const checkpoint = JSON.parse(JSON.stringify(paused.checkpoint));
+      await expect(
+        resumed.agent.resume(
+          checkpoint,
+          checkInApproved({ request: pausedRequest(paused), by: 'reviewer' }),
+        ),
+      ).resolves.toBe('done');
+
+      expect(resumed.execute).not.toHaveBeenCalled();
+      expect(resumed.getCredential).not.toHaveBeenCalled();
+      expect(resumed.after).not.toHaveBeenCalled();
+      expect(resumed.results).toHaveLength(1);
+      expect(resumed.results[0]).toContain("tool 'lookup' was not run on that call");
+      expect(resumed.results[0]).toContain("'remaining-link'");
+      expect(
+        resumed.events.some((event) => event.type === 'agentfootprint.validation.args_invalid'),
+      ).toBe(false);
+      expect(
+        resumed.events.some((event) => event.type === 'agentfootprint.credential.requested'),
+      ).toBe(false);
+    });
   },
 );
 
@@ -115,7 +141,9 @@ describe('resumed admission preserves declared openness and validation modes', (
     { label: 'warn', open: false, mode: 'warn' as const, invalidEvents: 1 },
     { label: 'off', open: false, mode: 'off' as const, invalidEvents: 0 },
   ])('$label passes the complete arguments to execute', async ({ open, mode, invalidEvents }) => {
-    const state = setup({ open, ...(mode !== undefined && { mode }), transform: true });
+    // The complete arguments are the ones the person approved: proposed by the
+    // model, bound at the ask, admitted at resume.
+    const state = setup({ open, ...(mode !== undefined && { mode }), args: EXTRA });
     const paused = await state.agent.run('Read an item');
     if (!isPaused(paused)) throw new Error('Expected a real middleware pause');
     await state.agent.resume(

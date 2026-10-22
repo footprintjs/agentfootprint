@@ -4,7 +4,7 @@ title: ResumeDecisionError
 
 # Class: ResumeDecisionError
 
-Defined in: [src/core/pause.ts:407](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L407)
+Defined in: [src/core/pause.ts:416](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L416)
 
 Raised by a resume when the decision cannot answer the request the run is
 paused on. **The tool never runs**: the refusal comes before it, and a
@@ -14,8 +14,9 @@ A consent gate (a tool's `checkIn`, a middleware's `ask`) mints a request id
 when it pauses (`CheckInRequest.id`, `MiddlewareAsk.id`). The id is unique to
 that pause and bound to the exact call that runs on approval — the tool, its
 arguments, the call id, the served party and, for an ask, where the chain
-resumes. A decision names it (`checkInApproved({ request, by })`), and a
-resume holds the decision to it: the same request, the same call, once.
+resumes and the names of the rules from there on. A decision names it
+(`checkInApproved({ request, by })`), and a resume holds the decision to it:
+the same request, the same call, once.
 
 Every refusal but `'already-answered'` is decided before anything moves on
 an agent's own `resume()`; the checkpoint is unchanged and can be answered
@@ -40,7 +41,7 @@ pause (`PendingAsk.checkIn` / `.ask`), never in an error.
 
 > **new ResumeDecisionError**(`reason`, `gate`): `ResumeDecisionError`
 
-Defined in: [src/core/pause.ts:414](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L414)
+Defined in: [src/core/pause.ts:423](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L423)
 
 #### Parameters
 
@@ -78,7 +79,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_RESUME_DECISION"`
 
-Defined in: [src/core/pause.ts:408](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L408)
+Defined in: [src/core/pause.ts:417](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L417)
 
 ***
 
@@ -86,7 +87,7 @@ Defined in: [src/core/pause.ts:408](https://github.com/footprintjs/agentfootprin
 
 > `readonly` **gate**: [`ConsentGateKind`](/docs/api/type-aliases/ConsentGateKind)
 
-Defined in: [src/core/pause.ts:412](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L412)
+Defined in: [src/core/pause.ts:421](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L421)
 
 Which kind of consent gate the run is paused on.
 
@@ -120,7 +121,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1076
 
 > `readonly` **reason**: [`ResumeDecisionRefusal`](/docs/api/type-aliases/ResumeDecisionRefusal)
 
-Defined in: [src/core/pause.ts:410](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L410)
+Defined in: [src/core/pause.ts:419](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L419)
 
 Which rule refused the decision.
 
