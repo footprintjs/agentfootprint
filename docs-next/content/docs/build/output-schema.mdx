@@ -552,7 +552,10 @@ A report is available from `agent.answerValidation()` and the execution snapshot
 version, identify the exact candidate with a digest, and separate `checked-pass`,
 `checked-fail`, `not-applicable` and `unreachable` checks. Empty checks,
 all-unchecked results, missing evidence, callback errors and deadlines cannot
-produce a passing verdict. Enforce mode throws `AnswerValidationError` with the
+produce a passing verdict. A `checked-fail` row makes the report `failed` even
+when other rows are `unreachable`: a contradiction that was found is never
+reported as merely unverified, and the reason, `unreachable-checks`, still says
+that some checks could not reach a verdict. Enforce mode throws `AnswerValidationError` with the
 report before final capture or memory write. A report counts checked-pass plus
 checked-fail as checked; artifact reads and framework liveness checks do not count.
 

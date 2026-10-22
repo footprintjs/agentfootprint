@@ -69,7 +69,8 @@ export type AssessmentPointer =
  * - `answer-check-failed` — the app's answer checks (`.answerValidation()`)
  *   failed this answer;
  * - `check-unreachable` — an armed check could not reach a verdict (the
- *   answer checks reported `unverified`);
+ *   answer checks reported `unverified`, or a `failed` report also counts
+ *   `unreachable` checks);
  * - `argument-assumed` — a call of this turn ran on a value a tool's rule
  *   assumed (an `argument` row with `source: 'default'` — the library filled
  *   the declared default, or the model sent that same default), or a

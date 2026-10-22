@@ -1,0 +1,4 @@
+---
+type: fixed
+---
+**An answer check that found a contradiction is reported `failed`, even when other checks could not reach a verdict.** Before, one `unreachable` row made the whole `.answerValidation()` report `unverified`, so a contradiction the check had actually found read as "could not tell" — in the report and in the answer's standing. Now a `checked-fail` row makes the report `failed`, and its `reason` is still `unreachable-checks`, so the rows that could not be compared stay visible. The standing names both: `answer-check-failed` and `check-unreachable`. Enforce mode withholds the answer either way; only the label changes. Every other reason (a timeout, a validator error, an incomplete tool-call list) still makes the report `unverified`, because then nothing the check returned is a verdict.

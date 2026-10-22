@@ -210,12 +210,20 @@ export interface AnswerValidationReport {
   readonly validatorId: string;
   readonly validatorVersion: string;
   readonly mode: 'enforce' | 'observe';
+  /**
+   * `passed`: at least one comparison ran, and none failed or was unreachable.
+   * `failed`: a comparison found the answer wrong — even beside `unreachable`
+   * rows, which `reason` then still names (`unreachable-checks`).
+   * `unverified`: no verdict could be reached (nothing compared, a check that
+   * could not run or did not finish); `reason` says why.
+   */
   readonly status: 'passed' | 'failed' | 'unverified';
   readonly checked: number;
   readonly failed: number;
   readonly unreachable: number;
   readonly notApplicable: number;
   readonly checks: readonly AnswerCheck[];
+  /** Why the report is `unverified`, or that a `failed` one also has unreachable rows. */
   readonly reason?: string;
   /** SHA-256 of the exact canonical JSON content considered for delivery. */
   readonly candidateDigest?: string;

@@ -242,6 +242,73 @@ describe('functional: observe mode records the agent rows and still delivers', (
   });
 });
 
+describe('functional: a contradiction found beside an unreachable claim is reported failed', () => {
+  interface TimedAnswer {
+    readonly job: string;
+    readonly durationMs: number;
+    readonly queuedMs: number;
+  }
+  const timedAnswer: OutputSchemaParser<TimedAnswer> = {
+    parse(value) {
+      const c = value as Partial<TimedAnswer> | null;
+      if (
+        typeof c?.job !== 'string' ||
+        typeof c.durationMs !== 'number' ||
+        typeof c.queuedMs !== 'number'
+      ) {
+        throw new Error('job, durationMs and queuedMs are required');
+      }
+      return { job: c.job, durationMs: c.durationMs, queuedMs: c.queuedMs };
+    },
+  };
+  // The tool settles durationMs only: queuedMs has nothing to agree with.
+  function timedAgent(mode: 'enforce' | 'observe') {
+    const source = scripted([
+      { toolCalls: [{ id: 'call-1', name: 'read_build', args: { job: 'build-job-72' } }] },
+      { content: JSON.stringify({ job: 'build-job-72', durationMs: 9750, queuedMs: 30 }) },
+    ]);
+    return Agent.create({ provider: source.provider, model: 'synthetic', maxIterations: 4 })
+      .tool(readBuild())
+      .outputSchema(timedAnswer)
+      .claims({
+        durationMs: { entity: 'build-job-72', field: 'durationMs' },
+        queuedMs: { entity: 'build-job-72', field: 'queuedMs' },
+      })
+      .answerValidation<TimedAnswer>({
+        id: 'build-report',
+        version: '1',
+        mode,
+        agentChecks: ['claims'],
+        validate: () => ({ checks: [{ id: 'asked-job', disposition: 'checked-pass' }] }),
+      })
+      .build();
+  }
+
+  it('enforce: failed, not unverified, with the unreachable row still counted', async () => {
+    const outcome = await timedAgent('enforce')
+      .run(ASK)
+      .catch((error: unknown) => error);
+    expect(outcome).toBeInstanceOf(AnswerValidationError);
+    expect((outcome as AnswerValidationError).report).toMatchObject({
+      status: 'failed',
+      reason: 'unreachable-checks',
+      failed: 1,
+      unreachable: 1,
+    });
+  });
+
+  it('observe: the standing names the failure AND the check that could not be reached', async () => {
+    const agent = timedAgent('observe');
+    await agent.run(ASK);
+    const assessed = await agent.assessment();
+    expect(assessed?.reasons.map((r) => r.reason)).toEqual([
+      'answer-check-failed',
+      'check-unreachable',
+    ]);
+    expect(assessed?.standing).toBe('not-sure');
+  });
+});
+
 describe('security: an unsupported claim fails closed', () => {
   it('a value for a fact no tool result settled is unverified, and withheld', async () => {
     // The tool settled a DIFFERENT job: nothing backs the answer's durationMs.

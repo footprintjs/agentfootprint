@@ -302,7 +302,16 @@ export async function executeAnswerValidation(
   if (!reason && toolCallsRead && !calls.complete) reason = 'tool-calls-incomplete';
   if (!reason && checked === 0) reason = 'no-comparable-checks';
   if (!reason && unreachable > 0) reason = 'unreachable-checks';
-  const status = reason ? 'unverified' : failed > 0 ? 'failed' : 'passed';
+  // What could not be reached never hides what was found: a completed
+  // comparison that failed makes the report `failed` beside unreachable rows,
+  // and the reason still names them. Every other reason means the check
+  // itself did not complete, so nothing it returned is a verdict.
+  const status =
+    failed > 0 && (reason === undefined || reason === 'unreachable-checks')
+      ? 'failed'
+      : reason !== undefined
+      ? 'unverified'
+      : 'passed';
   const report: AnswerValidationReport = Object.freeze({
     validatorId: config.id,
     validatorVersion: config.version,

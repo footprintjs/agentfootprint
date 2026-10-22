@@ -129,7 +129,7 @@ grows as later honesty steps commit new rows.
 | `stopped-early` | 4 | `stoppedEarly` |
 | `steps-unfinished` | 4 | `findingsLedger`: a `steps-unfinished` witness row of this turn — the answer came before the active skill's declared steps finished (filed while the answer layer is armed) |
 | `answer-check-failed` | 4 | `answerValidation`: `status: 'failed'` |
-| `check-unreachable` | every | `answerValidation`: `status: 'unverified'` — an armed check that could not reach a verdict |
+| `check-unreachable` | every | `answerValidation`: `status: 'unverified'` — an armed check that could not reach a verdict — or a `failed` report that also counts `unreachable` checks (a contradiction found beside them; both reasons fire) |
 
 The inputs layer's rows (honesty layer 2, `core/agent/arguments/README.md`) are
 read for THIS turn only — the ledger crosses turns, and every `argument` row

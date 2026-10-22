@@ -410,6 +410,46 @@ describe('functional: the report merges your checks and the agent rows under one
     expect(result.content).toBe('{"durationMs":9750}');
   });
 
+  it('a failed row outranks an unreachable one: failed, and the reason still names the unreachable rows', async () => {
+    const unreachableRow: AnswerCheck = { id: 'agent:claims:queuedMs', disposition: 'unreachable' };
+    const result = await run([hostPass], () => [failRow, unreachableRow]);
+    expect(result.report).toMatchObject({
+      status: 'failed',
+      reason: 'unreachable-checks',
+      checked: 2,
+      failed: 1,
+      unreachable: 1,
+    });
+    expect(result.content).toBeUndefined();
+  });
+
+  it('…your own checks too: a contradiction you found is failed, never "unverified"', async () => {
+    const config = resolveAnswerValidation({
+      id: 'build-report',
+      version: '1',
+      validate: () => ({
+        checks: [
+          { id: 'asked-job', disposition: 'checked-fail' },
+          { id: 'region', disposition: 'unreachable' },
+        ],
+      }),
+    });
+    const result = await executeAnswerValidation('{}', parser, config, undefined, scope);
+    expect(result.report).toMatchObject({
+      status: 'failed',
+      reason: 'unreachable-checks',
+      failed: 1,
+      unreachable: 1,
+    });
+    expect(result.content).toBeUndefined();
+  });
+
+  it('unreachable rows with no failure stay unverified', async () => {
+    const unreachableRow: AnswerCheck = { id: 'agent:claims:queuedMs', disposition: 'unreachable' };
+    const result = await run([hostPass], () => [unreachableRow]);
+    expect(result.report).toMatchObject({ status: 'unverified', reason: 'unreachable-checks' });
+  });
+
   it('a row builder that throws makes the report unverified, never a pass', async () => {
     const result = await run([hostPass], () => {
       throw new Error('a ledger value JSON cannot render');
