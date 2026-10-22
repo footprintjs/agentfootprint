@@ -142,6 +142,12 @@ function claimRowOf(claim: DeclaredClaim, verdict: DeliveredClaim): AnswerCheck 
       );
     case 'contradicts':
       return row('checked-fail', `the answer's ${field} contradicts ${fact} a tool settled`);
+    case 'incomparable':
+      return row(
+        'unreachable',
+        `could not compare the answer's ${field} with ${fact} a tool settled: they are ` +
+          `different kinds of value (a list, an object, a number, text, or a number with a unit)`,
+      );
     case 'uncollected':
       return row(
         'unreachable',

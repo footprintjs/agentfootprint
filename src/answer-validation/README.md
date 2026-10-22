@@ -100,6 +100,10 @@ with this door and with `rails` (`docs/design/honesty/README.md` § 8).
   delivery verdict (`integrity/unsupported-claim/delivered.ts` ·
   `judgeDeliveredClaim`), so a row never accuses where the detector does not
   (a matrix property in `test/answer-validation/agentChecks.test.ts` pins it).
+  Values are compared after one declared normalization
+  (`integrity/unsupported-claim/evaluate.ts` · `compareClaimValues`: text
+  trimmed and case-folded, a number and a plain decimal string by value, a
+  unit only against the same unit).
   Contradiction → `checked-fail`. Agreement → `not-applicable`: the contract is
   unscoped — the latest `(entity, field)` row from ANY tool, with no scope or
   age check, and any result carrying the semantics marker settles a fact — so
@@ -107,7 +111,9 @@ with this door and with `rails` (`docs/design/honesty/README.md` § 8).
   declared (`known(null)`). `unreachable` (withheld, fail closed): no settled
   fact; one settled unknown; a value against a tool's bare `null` /
   `'unknown'`; doubt on both sides; a fact this run's rows settled two ways
-  (which one is right cannot be told). Omitted or declined (`null`,
+  (which one is right cannot be told); values of kinds that cannot be
+  compared safely, such as a unit against a bare number ("could not
+  compare", never a contradiction). Omitted or declined (`null`,
   `'unknown'`, an unknown `Claim`) where the run settled a value →
   `not-applicable`. The detector's legacy ledger maps agreement and doubt to
   `checked-pass`; the row maps neither to a pass.

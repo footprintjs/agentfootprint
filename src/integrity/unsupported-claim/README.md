@@ -52,7 +52,10 @@ or age check, and any result carrying the semantics marker settles a fact:
 - **a fact read two ways is disputed** — when this run's rows for one fact disagree, the claim is
   not compared with the latest (`unreachable`); a row that settled nothing disputes nothing;
 - **a bare doubt settles nothing** — a value against a tool's bare `null` / `'unknown'`, and doubt on
-  both sides, are `unreachable`; an absence a tool declared with `known(null)` is a settled value.
+  both sides, are `unreachable`; an absence a tool declared with `known(null)` is a settled value;
+- **values compare after a declared normalization** (`evaluate.ts` · `compareClaimValues`, below) —
+  `'Settled '` agrees with `'settled'` and `42.5` with `'42.50'`; values that cannot be compared
+  safely are `unreachable`, never a contradiction.
 A claim with no settled fact is `unreachable` too, so it is withheld. Still no re-route: the seam
 above is unchanged, and the detector's findings and dispositions are byte-identical (pinned against
 the ec32fad source by `test/integrity/claim-pair-evaluation.test.ts`).
@@ -61,7 +64,17 @@ the ec32fad source by `test/integrity/claim-pair-evaluation.test.ts`).
 asserted pair and preserves the answer-specific messages, witness order and dispositions.
 `evaluate.ts` owns the pair's doubt and numeric-leniency decisions and delegates structural
 comparison to the existing ContextFootprint algebra. It does not select evidence, infer scope,
-judge coverage or write records. There is no second equality implementation.
+judge coverage or write records. The detector compares by that exact equality, and its findings
+are pinned to it. `evaluate.ts` · `compareClaimValues` is the one other value comparison, and only
+the delivery verdict (`delivered.ts`) reads it, because a verdict that can withhold an answer must
+not accuse it over a representational difference. Its normalization is declared and closed: text
+is trimmed and case-folded; a number and a plain decimal string (`-?digits[.digits]`, no leading
+zero, sign or exponent) compare by value, both ways — two decimal strings digit for digit, a JS
+number at the double precision it has; a number with a unit only with the same unit; lists item by
+item in order, objects key by key. Kinds that cannot be compared safely — a list or an object
+against a scalar, a unit against a bare number, text against a number or `true`/`false` — are
+`incomparable` (the row says "could not compare"), never a contradiction. The pair-by-pair oracle
+is hand-written in `test/answer-validation/agentChecks.test.ts`.
 
 The internal evaluator reports a reason, not a support badge: evidence unavailable, claim
 nonparticipating, doubt against a value, both doubt, numeric leniency, conflict or no conflict.

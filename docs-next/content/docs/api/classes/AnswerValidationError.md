@@ -4,7 +4,7 @@ title: AnswerValidationError
 
 # Class: AnswerValidationError
 
-Defined in: [src/answer-validation/types.ts:242](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L242)
+Defined in: [src/answer-validation/types.ts:247](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L247)
 
 An enforcing host refused delivery; diagnostic metadata only, never content.
 
@@ -18,7 +18,7 @@ An enforcing host refused delivery; diagnostic metadata only, never content.
 
 > **new AnswerValidationError**(`report`): `AnswerValidationError`
 
-Defined in: [src/answer-validation/types.ts:246](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L246)
+Defined in: [src/answer-validation/types.ts:251](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L251)
 
 #### Parameters
 
@@ -52,7 +52,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_ANSWER_VALIDATION"`
 
-Defined in: [src/answer-validation/types.ts:243](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L243)
+Defined in: [src/answer-validation/types.ts:248](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L248)
 
 ***
 
@@ -84,7 +84,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1076
 
 > `readonly` **report**: [`AnswerValidationReport`](/docs/api/interfaces/AnswerValidationReport)
 
-Defined in: [src/answer-validation/types.ts:244](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L244)
+Defined in: [src/answer-validation/types.ts:249](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L249)
 
 ***
 

@@ -497,6 +497,15 @@ needs its builder call, or `build()` refuses. Their rows come after yours in
 - **A fact read two ways is not compared.** When this run's tool results
   settled one fact with different values, the row is `unreachable`: the
   library cannot tell which one is right.
+- **A different spelling is not a contradiction.** A claim is compared after
+  one declared normalization: text is trimmed and case-folded (`'Settled '`
+  agrees with `'settled'`); a number and a string written as a plain decimal
+  compare by value, both ways (`42.5` agrees with `'42.50'`, `1250` with
+  `'1250'`); a number with a unit compares only with the same unit. Values that
+  cannot be compared safely — a list or an object against a single value, a
+  unit against a bare number (`'1250 ms'` against `1250`), text against a
+  number — are `unreachable`, with the reason "could not compare", never
+  `checked-fail`.
 - **Agreement on doubt verifies nothing.** When the tool settled a field only
   as `null` or `'unknown'` and the answer gives no value either, the row is
   `unreachable`: enforce withholds the answer, and observe delivers it with

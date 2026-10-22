@@ -27,11 +27,16 @@
  *   doubt on both sides verifies nothing (`doubt-on-both-sides`). An absence
  *   a tool DECLARED (`known(null)`) is a settled value: agreeing with it is
  *   `agrees`, a value against it is `contradicts`.
+ * - VALUES COMPARE UNDER THE DECLARED NORMALIZATION (`evaluate.ts` ·
+ *   `compareClaimValues`), never by exact JSON: `'Settled '` agrees with
+ *   `'settled'`, `42.5` with `'42.50'`. Kinds that cannot be compared safely
+ *   (a list against a scalar, a unit against a bare number) are
+ *   `incomparable`, never `contradicts`.
  */
 
-import { participates, type Assertion } from '../assertion/types.js';
-import { conflictsOf } from '../assertion/conflicts.js';
+import { participates } from '../assertion/types.js';
 import type { ClaimComparison, ClaimLedgerRow } from './check.js';
+import { compareClaimValues } from './evaluate.js';
 
 /** One delivered claim's verdict. Only `contradicts` accuses; nothing here verifies. */
 export type DeliveredClaim =
@@ -52,7 +57,9 @@ export type DeliveredClaim =
   /** The answer's value agrees with the settled value — agreement, not support. */
   | 'agrees'
   /** The answer's value contradicts the settled value. */
-  | 'contradicts';
+  | 'contradicts'
+  /** The two values are of kinds that cannot be compared safely. */
+  | 'incomparable';
 
 /** A bare doubt a tool wrote: `null` or the literal `'unknown'` (a `known(...)` wrapper is a declared value). */
 const isBareDoubt = (value: unknown): boolean => value === null || value === 'unknown';
@@ -64,18 +71,13 @@ function declaredKnown(value: unknown): boolean {
   );
 }
 
-/** Two of the run's readings of one fact that cannot both be true (the algebra's own test). */
+/** Two of the run's readings of one fact that do not agree — or cannot be compared. */
 function disputed(rows: readonly ClaimLedgerRow[]): boolean {
-  const readings: Assertion[] = rows
-    .filter((row) => participates(row.value) && !isBareDoubt(row.value))
-    .map((row) => ({
-      subject: { kind: 'entity', id: row.entity },
-      predicate: row.field,
-      value: row.value,
-      stratum: 'asserted',
-      provenance: row.toolCallId,
-    }));
-  return conflictsOf(readings).length > 0;
+  const readings = rows
+    .map((row) => row.value)
+    .filter((value) => participates(value) && !isBareDoubt(value));
+  const first = readings[0];
+  return readings.some((value) => compareClaimValues(first, value) !== 'agrees');
 }
 
 /**
@@ -85,7 +87,7 @@ function disputed(rows: readonly ClaimLedgerRow[]): boolean {
 export function judgeDeliveredClaim(comparison: ClaimComparison): DeliveredClaim {
   if (comparison.kind === 'omitted') return 'omitted';
   if (comparison.kind === 'uncollected') return 'uncollected';
-  const { evaluation, settledRow, rows } = comparison;
+  const { evaluation, settledRow, rows, claimed } = comparison;
   // The answer states nothing to check, whatever the rows say.
   if (evaluation === 'doubt-against-value' || evaluation === 'claim-nonparticipating')
     return 'declined';
@@ -97,5 +99,5 @@ export function judgeDeliveredClaim(comparison: ClaimComparison): DeliveredClaim
   // The answer states a value. Against a bare doubt it has nothing to agree
   // with, and that is not an accusation either.
   if (isBareDoubt(settledRow.value)) return 'settled-doubt';
-  return evaluation === 'conflict' ? 'contradicts' : 'agrees';
+  return compareClaimValues(settledRow.value, claimed);
 }

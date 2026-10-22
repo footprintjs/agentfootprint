@@ -242,6 +242,114 @@ describe('unit: the claims rows', () => {
   });
 });
 
+describe('oracle: a claim row compares values after the declared normalization', () => {
+  // Written out by hand, pair by pair — never derived from the comparator it
+  // checks. Text is trimmed and case-folded; a number and a string written as
+  // a plain decimal compare by value, both ways, digit for digit; a number
+  // with a unit compares only with the same unit; lists item by item, objects
+  // key by key. Values of kinds that cannot be compared safely are
+  // `unreachable` ("could not compare"), never "contradicts". Agreement is
+  // `not-applicable`: it never verifies.
+  const AGREES = 'not-applicable';
+  const CONTRADICTS = 'checked-fail';
+  const INCOMPARABLE = 'unreachable';
+  const PAIRS: readonly (readonly [string, unknown, unknown, string])[] = [
+    // text: trim and case-fold
+    ['same text', 'settled', 'settled', AGREES],
+    ['case differs', 'settled', 'Settled', AGREES],
+    ['trailing space', 'settled', 'settled ', AGREES],
+    ['both trimmed and folded', ' SETTLED', 'settled\n', AGREES],
+    ['different text', 'settled', 'pending', CONTRADICTS],
+    ['inner spacing is not folded', 'in progress', 'in  progress', CONTRADICTS],
+    ['an id with digits', 'ORD-44710', 'ord-44710', AGREES],
+    ['another id', 'ORD-44710', 'ORD-44711', CONTRADICTS],
+    // numbers and decimal strings, both ways
+    ['same number', 1250, 1250, AGREES],
+    ['different number', 1250, 9750, CONTRADICTS],
+    ['decimal string → number', '42.50', 42.5, AGREES],
+    ['number → decimal string', 42.5, '42.50', AGREES],
+    ['integer string → number', 1250, '1250', AGREES],
+    ['number → integer string', '1250', 1250, AGREES],
+    ['two decimal strings', '42.50', '42.5', AGREES],
+    ['trailing zeros on the integer side', '1200.0', 1200, AGREES],
+    ['padded decimal string', 1250, ' 1250 ', AGREES],
+    ['a different decimal', '42.50', 42.51, CONTRADICTS],
+    ['negative and positive', -5, '5', CONTRADICTS],
+    ['zero and negative zero', 0, '-0', AGREES],
+    // A JS number is a double: a decimal against it compares at double precision.
+    ['a double cannot tell …993 from …992', '9007199254740993', 9007199254740992, AGREES],
+    ['two decimal strings compare as written', '9007199254740993', '9007199254740992', CONTRADICTS],
+    ['an exponent the number prints', 1e21, '1000000000000000000000', AGREES],
+    // what is not a plain decimal stays text
+    ['a leading zero is an id', '02139', 2139, INCOMPARABLE],
+    ['a thousands separator', 1250, '1,250', INCOMPARABLE],
+    ['a word against a number', 1250, 'fast', INCOMPARABLE],
+    ['true against its spelling', true, 'true', INCOMPARABLE],
+    ['true against one', true, 1, INCOMPARABLE],
+    ['booleans that agree', false, false, AGREES],
+    ['booleans that differ', true, false, CONTRADICTS],
+    // units
+    ['a unit against a bare number', 1250, '1250 ms', INCOMPARABLE],
+    ['a bare decimal against a unit', '1250', '1250ms', INCOMPARABLE],
+    ['two different units', '1250 ms', '1.25 s', INCOMPARABLE],
+    ['the same unit, spaced and cased differently', '1250 ms', '1250MS', AGREES],
+    ['the same unit, decimal spelling', '42.50 USD', '42.5 usd', AGREES],
+    ['the same unit, another number', '1250 ms', '1300 ms', CONTRADICTS],
+    // lists and objects
+    ['a list against a scalar', [1250], 1250, INCOMPARABLE],
+    ['an object against a scalar', { ms: 1250 }, 1250, INCOMPARABLE],
+    ['a list against an object', [1250], { 0: 1250 }, INCOMPARABLE],
+    ['lists that agree after normalization', ['Settled', '42.50'], ['settled', 42.5], AGREES],
+    ['lists in another order', [1, 2], [2, 1], CONTRADICTS],
+    ['lists of another length', [1, 2], [1, 2, 3], CONTRADICTS],
+    ['a list with one item not comparable', [1, 'x'], [1, ['x']], INCOMPARABLE],
+    ['a definite difference wins over one not comparable', [1, 'x'], [2, ['x']], CONTRADICTS],
+    [
+      'objects that agree after normalization',
+      { s: 'Settled ', n: '7' },
+      { n: 7, s: 'settled' },
+      AGREES,
+    ],
+    ['objects with another key', { a: 1 }, { b: 1 }, CONTRADICTS],
+    ['objects with one value not comparable', { a: 1 }, { a: '1 ms' }, INCOMPARABLE],
+    // a declared absence (`known(null)`) is a settled value
+    ['a value against a declared absence', known(null, 'no run'), 9750, CONTRADICTS],
+    ['a list against a declared absence', known(null, 'no run'), [9750], CONTRADICTS],
+  ];
+
+  it.each(PAIRS)('%s: settled %j, answered %j → %s', (_case, settledValue, answered, expected) => {
+    const [row] = claimChecksOf([DURATION], [settled(settledValue)], { durationMs: answered }, 1);
+    expect(row!.disposition).toBe(expected);
+  });
+
+  it('a pair that cannot be compared says so, and never "contradicts"', () => {
+    const [row] = claimChecksOf([DURATION], [settled(1250)], { durationMs: '1250 ms' }, 1);
+    expect(row).toMatchObject({
+      disposition: 'unreachable',
+      reason:
+        "could not compare the answer's 'durationMs' with the fact 'durationMs' a tool " +
+        'settled: they are different kinds of value (a list, an object, a number, text, or a ' +
+        'number with a unit)',
+    });
+  });
+
+  it('two readings that agree after normalization are one fact, not a dispute', () => {
+    const ledger = [settled('42.50'), settled(42.5, { toolCallId: 'call-2' })];
+    const [agreeing] = claimChecksOf([DURATION], ledger, { durationMs: '42.5' }, 1);
+    const [contradicting] = claimChecksOf([DURATION], ledger, { durationMs: 43 }, 1);
+    expect(agreeing!.disposition).toBe(AGREES);
+    expect(contradicting!.disposition).toBe(CONTRADICTS);
+    // …and readings that cannot be compared are a dispute.
+    const [disputed] = claimChecksOf(
+      [DURATION],
+      [settled(1250), settled('1250 ms', { toolCallId: 'call-2' })],
+      { durationMs: 1250 },
+      1,
+    );
+    expect(disputed!.disposition).toBe(INCOMPARABLE);
+  });
+});
+
 describe('property: a claim row never says more than the claim detector', () => {
   // The detector (`unsupportedClaimsOf`) and the row both start from
   // `compareClaim`. Over a value matrix, the row is the stricter reader: it

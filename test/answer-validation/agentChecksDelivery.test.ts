@@ -847,6 +847,104 @@ describe('security: agreement on doubt is never verified support', () => {
   });
 });
 
+// ── A representational difference is not a contradiction ─────────────────
+
+interface RefundAnswer {
+  readonly status: string;
+  readonly amount: number | string;
+}
+const refundAnswer: OutputSchemaParser<RefundAnswer> = {
+  parse(value) {
+    const c = value as Partial<RefundAnswer> | null;
+    if (
+      typeof c?.status !== 'string' ||
+      (typeof c.amount !== 'number' && typeof c.amount !== 'string')
+    ) {
+      throw new Error('status and amount are required');
+    }
+    return { status: c.status, amount: c.amount };
+  },
+};
+
+/** The tool writes the amount as a decimal string and the status in lower case. */
+function refundAgent(answer: RefundAnswer) {
+  const source = scripted([
+    { toolCalls: [{ id: 'call-1', name: 'get_refund', args: {} }] },
+    { content: JSON.stringify(answer) },
+  ]);
+  const agent = Agent.create({ provider: source.provider, model: 'synthetic', maxIterations: 4 })
+    .tool(
+      defineTool({
+        name: 'get_refund',
+        description: 'Read one refund.',
+        inputSchema: { type: 'object', properties: {} },
+        execute: () =>
+          describedResult({
+            facts: [{ entity: 'refund-1', status: 'settled', amount: '42.50' }],
+            provenance: { source: 'synthetic-payments', measuredAt: '2026-01-01T00:00:00Z' },
+          }),
+      }),
+    )
+    .outputSchema(refundAnswer)
+    .claims({
+      status: { entity: 'refund-1', field: 'status' },
+      amount: { entity: 'refund-1', field: 'amount' },
+    })
+    .answerValidation<RefundAnswer>({
+      id: 'refund-report',
+      version: '1',
+      agentChecks: ['claims'],
+      validate: () => ({ checks: [{ id: 'asked-refund', disposition: 'checked-pass' }] }),
+    })
+    .build();
+  return { agent, seen: delivered(agent) };
+}
+
+describe('functional: a representational difference is never a contradiction', () => {
+  const ASK_REFUND = { message: 'Has my refund settled?' };
+
+  it("'Settled ' and 42.5 against 'settled' and '42.50': delivered, both rows agreeing", async () => {
+    const answer = { status: 'Settled ', amount: 42.5 };
+    const { agent, seen } = refundAgent(answer);
+    expect(await agent.run(ASK_REFUND)).toBe(JSON.stringify(answer));
+    expect(seen.tokens).toEqual([JSON.stringify(answer)]);
+    expect(agent.answerValidation()?.checks.map((c) => [c.id, c.disposition])).toEqual([
+      ['asked-refund', 'checked-pass'],
+      ['agent:claims:status', 'not-applicable'],
+      ['agent:claims:amount', 'not-applicable'],
+    ]);
+  });
+
+  it('a unit the tool never wrote cannot be compared: withheld as unverified, never "contradicts"', async () => {
+    const { agent, seen } = refundAgent({ status: 'settled', amount: '42.50 USD' });
+    const outcome = await agent.run(ASK_REFUND).catch((e: unknown) => e);
+    expect((outcome as AnswerValidationError).report).toMatchObject({
+      status: 'unverified',
+      reason: 'unreachable-checks',
+      failed: 0,
+    });
+    expect((outcome as AnswerValidationError).report.checks[2]).toMatchObject({
+      id: 'agent:claims:amount',
+      disposition: 'unreachable',
+      reason: expect.stringMatching(/^could not compare the answer's 'amount'/),
+    });
+    expect(seen.tokens).toEqual([]);
+  });
+
+  it('a real difference still fails the row', async () => {
+    const { agent } = refundAgent({ status: 'pending', amount: 42.5 });
+    const outcome = await agent.run(ASK_REFUND).catch((e: unknown) => e);
+    expect((outcome as AnswerValidationError).report).toMatchObject({
+      status: 'failed',
+      failed: 1,
+    });
+    expect((outcome as AnswerValidationError).report.checks[1]).toMatchObject({
+      id: 'agent:claims:status',
+      disposition: 'checked-fail',
+    });
+  });
+});
+
 // ── Unscoped facts: any tool result can settle one ───────────────────────
 
 /**

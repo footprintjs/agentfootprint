@@ -140,7 +140,12 @@ export interface AnswerValidationOptions<T = unknown> {
    *
    * - `'claims'`: one row per declared `.claims()` field, id
    *   `agent:claims:<field>`, judged on the candidate this validation delivers.
-   *   Contradicts the fact a tool settled: `checked-fail`. Agrees with it:
+   *   Values compare after one declared normalization: text trimmed and
+   *   case-folded, a number and a plain decimal string by value (`42.5` and
+   *   `'42.50'` agree), a number with a unit only with the same unit; values
+   *   of kinds that cannot be compared safely (a list or an object against a
+   *   scalar, a unit against a bare number) are `unreachable`, never
+   *   `checked-fail`. Contradicts the fact a tool settled: `checked-fail`. Agrees with it:
    *   `not-applicable` — the contract is unscoped (the latest row for the
    *   fact from any tool, with no scope or age check), so agreement is not
    *   verification. States a value for a fact no tool result settled, one
