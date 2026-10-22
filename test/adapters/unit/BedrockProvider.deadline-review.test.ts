@@ -259,6 +259,21 @@ describe('Bedrock review regressions — scripted transport only', () => {
       expect(send).not.toHaveBeenCalled();
     },
   );
+  it('unlinks the caller when request preparation refuses before any SDK send', async () => {
+    const caller = new AbortController();
+    const add = vi.spyOn(caller.signal, 'addEventListener');
+    const remove = vi.spyOn(caller.signal, 'removeEventListener');
+    const { provider, client } = fixture(async () => never());
+    await expect(
+      provider.stream!({ ...req, signal: caller.signal, thinking: { budget: 1024 } })
+        [Symbol.asyncIterator]()
+        .next(),
+    ).rejects.toMatchObject({ name: 'UnsupportedThinkingError' });
+    const listener = add.mock.calls.find(([name]) => name === 'abort')?.[1];
+    expect(listener).toBeDefined();
+    expect(remove).toHaveBeenCalledWith('abort', listener);
+    expect(client.send).not.toHaveBeenCalled();
+  });
   it('records timeout as the retry reason before output', async () => {
     vi.useFakeTimers();
     const reports: unknown[] = [];

@@ -285,8 +285,8 @@ export function bedrock(options: BedrockProviderOptions = {}): LLMProvider {
         req.signal,
         () => afterOutput,
       );
-      const input = buildInput(req, modelOf(req.model), defaultMaxTokens);
       try {
+        const input = buildInput(req, modelOf(req.model), defaultMaxTokens);
         const response = await sendBedrock<BedrockStreamResponse>(
           () => sendUnder(client, new Commands.ConverseStream(input), deadline.signal),
           deadline,
