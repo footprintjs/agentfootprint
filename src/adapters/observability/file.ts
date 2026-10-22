@@ -213,7 +213,7 @@ export function fileObservability(opts: FileObservabilityOptions): Observability
     if (timer || flushIntervalMs <= 0 || stopped) return;
     timer = setTimeout(() => {
       timer = undefined;
-      void doFlush();
+      lastFlushPromise = lastFlushPromise.then(doFlush, doFlush);
     }, flushIntervalMs);
     // Never hold the process open for telemetry. `unref` exists on Node's
     // Timeout and not on the browser's number — feature-detected, so a
