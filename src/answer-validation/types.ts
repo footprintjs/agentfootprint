@@ -142,8 +142,12 @@ export interface AnswerValidationOptions<T = unknown> {
    *   `agent:claims:<field>`, judged on the candidate this validation delivers.
    *   Agrees with the fact a tool settled: `checked-pass`. Contradicts it:
    *   `checked-fail`. States a value for a fact no tool result settled, or one
-   *   settled as unknown: `unreachable`. Leaves the field out, or declines it
-   *   (`null`, `'unknown'`) where the run settled a value: `not-applicable`.
+   *   settled as unknown — or gives no value where the tool settled only
+   *   `null` or `'unknown'` (agreement on doubt verifies nothing; enforce
+   *   withholds, observe delivers "not sure"): `unreachable`. Leaves the field
+   *   out, or declines it (`null`, `'unknown'`) where the run settled a value:
+   *   `not-applicable`. An absence a tool declared with `known(null)` is an
+   *   established value: `null` agreeing with it passes.
    * - `'names-and-numbers'`: one row, id `agent:names-and-numbers`: the gate
    *   asked of the exact candidate this validation delivers, after any output
    *   transform (its one repair turn under `posture: 'guard'` runs earlier, on

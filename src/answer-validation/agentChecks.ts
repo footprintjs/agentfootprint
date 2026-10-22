@@ -16,10 +16,15 @@
  *   - A membership pass never verifies. The gate's clean verdict is
  *     `not-applicable`, so the gate can withhold an answer and can never be
  *     what makes a report `passed` (which the fold reads as "known").
- *   - Declining is not claiming. A field the answer leaves out, or states as
- *     `null` / `'unknown'` where the run settled a value, is `not-applicable`
- *     (null against a settled null is agreement, a pass); the detector's legacy
- *     ledger maps doubt to `checked-pass`, which is no certificate.
+ *   - Doubt is never support. A field the answer leaves out, or declines
+ *     (`null` / `'unknown'`) where the run settled a value, is
+ *     `not-applicable`. Doubt on BOTH sides — the tool settled only `null` or
+ *     `'unknown'` and the answer gives no value — is `unreachable`: agreement
+ *     on doubt verifies nothing, so enforce withholds the answer and observe
+ *     delivers it with the standing "not sure". Only an absence a tool
+ *     DECLARED (`known(null)`) is an established value, and agreeing with it
+ *     passes. (The detector's legacy ledger maps both kinds of doubt to
+ *     `checked-pass`, which is no certificate.)
  *
  * And one from the redaction law: a row carries counts and the FIELD names the
  * app declared (the answer field, the fact's field), never a value from the
@@ -135,9 +140,23 @@ function claimRowOf(claim: DeclaredClaim, comparison: ClaimComparison): AnswerCh
     case 'doubt-against-value':
     case 'claim-nonparticipating':
       return row('not-applicable', `the answer declines to state ${field}`);
+    case 'both-doubt':
+      return declaredKnown(comparison.settledRow.value)
+        ? row('checked-pass')
+        : row(
+            'unreachable',
+            `${fact} was settled only as null or 'unknown', and the answer's ${field} gives no ` +
+              `value either: agreement on doubt verifies nothing`,
+          );
     case 'no-conflict':
     case 'numeric-leniency':
-    case 'both-doubt':
       return row('checked-pass');
   }
+}
+
+/** A value a tool DECLARED established (`known(…)`, `lib/claim/claim.ts`) — `known(null)` included. */
+function declaredKnown(value: unknown): boolean {
+  return (
+    typeof value === 'object' && value !== null && (value as { kind?: unknown }).kind === 'known'
+  );
 }

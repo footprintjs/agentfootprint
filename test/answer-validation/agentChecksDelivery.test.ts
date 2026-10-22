@@ -22,6 +22,7 @@ import {
   type OutputSchemaParser,
 } from '../../src/index.js';
 import type { Payloads } from '../../src/events.js';
+import { known } from '../../src/doors/maps.js';
 
 type Turn = { readonly content?: string; readonly toolCalls?: readonly ToolCall[] };
 type ToolCall = {
@@ -662,8 +663,8 @@ const statusAnswer: OutputSchemaParser<StatusAnswer> = {
   },
 };
 
-/** A tool whose run could not establish the status: it reports the literal 'unknown'. */
-function statusAgent(mode: 'enforce' | 'observe') {
+/** A tool that settles `status` — by default the literal 'unknown': it could not establish it. */
+function statusAgent(mode: 'enforce' | 'observe', status: unknown = 'unknown') {
   const source = scripted([
     { toolCalls: [{ id: 'call-1', name: 'read_status', args: {} }] },
     { content: JSON.stringify({ job: 'build-job-72', status: null }) },
@@ -676,7 +677,7 @@ function statusAgent(mode: 'enforce' | 'observe') {
         inputSchema: { type: 'object', properties: {} },
         execute: () =>
           describedResult({
-            facts: [{ entity: 'build-job-72', status: 'unknown' }],
+            facts: [{ entity: 'build-job-72', status: status as never }],
             provenance: { source: 'synthetic-ci', measuredAt: '2026-01-01T00:00:00Z' },
           }),
       }),
@@ -708,6 +709,16 @@ describe('security: agreement on doubt is never verified support', () => {
       expect.objectContaining({ id: 'agent:claims:status', disposition: 'unreachable' }),
     ]);
     expect(seen.tokens).toEqual([]);
+  });
+
+  it('an absence the tool DECLARED (known(null)) is established: null agreeing with it is delivered', async () => {
+    const { agent } = statusAgent('enforce', known(null, 'the job never ran'));
+    expect(await agent.run({ message: 'Did build-job-72 pass?' })).toBe(
+      JSON.stringify({ job: 'build-job-72', status: null }),
+    );
+    expect(agent.answerValidation()?.checks).toEqual([
+      expect.objectContaining({ id: 'agent:claims:status', disposition: 'checked-pass' }),
+    ]);
   });
 
   it('observe delivers it, and the answer reads "not sure" — never "known"', async () => {

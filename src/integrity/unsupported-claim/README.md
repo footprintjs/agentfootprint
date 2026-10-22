@@ -44,7 +44,9 @@ rather than the run to change the facts. It files one finding and returns the an
 same comparison — `check.ts` · `compareClaim`, which `unsupportedClaimsOf` is built on — once more,
 over the canonical answer that validation delivers, and files one report row per declared claim
 (`answer-validation/agentChecks.ts`). A conflict fails the report and the answer is withheld; a
-claim with no settled fact is `unreachable`, so it is withheld too. Still no re-route: the seam
+claim with no settled fact — or a doubt agreeing with a tool's doubt (`null` / `'unknown'` on both
+sides, which verifies nothing) — is `unreachable`, so it is withheld too; an absence a tool declared
+with `known(null)` is established, and agreeing with it passes. Still no re-route: the seam
 above is unchanged, and the detector's findings and dispositions are byte-identical (pinned against
 the ec32fad source by `test/integrity/claim-pair-evaluation.test.ts`).
 

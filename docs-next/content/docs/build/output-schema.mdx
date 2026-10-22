@@ -472,7 +472,7 @@ needs its builder call, or `build()` refuses. Their rows come after yours in
 
 | Row | `checked-pass` | `checked-fail` | `unreachable` | `not-applicable` |
 |---|---|---|---|---|
-| `agent:claims:<field>`, one per `.claims()` field, judged on the JSON this validation delivers | the field equals the fact the latest tool result settled | the field contradicts that fact | the field states a value no tool result settled, or one settled as unknown | the answer leaves the field out, or declines it (`null`, `'unknown'`) where the run settled a value |
+| `agent:claims:<field>`, one per `.claims()` field, judged on the JSON this validation delivers | the field equals the fact the latest tool result settled | the field contradicts that fact | the field states a value no tool result settled, or one settled as unknown; or gives no value where the tool settled only `null` or `'unknown'` | the answer leaves the field out, or declines it (`null`, `'unknown'`) where the run settled a value |
 | `agent:names-and-numbers`, the gate asked of the JSON this validation delivers | never: finding a value clears an answer, it does not verify it | a value no tool result the run read carried | a value was not found and the evidence index had hit its ceiling | no value is unsupported, or the answer states none |
 
 - **Every row judges what is delivered.** Rows are judged on the exact JSON
@@ -484,6 +484,11 @@ needs its builder call, or `build()` refuses. Their rows come after yours in
   fails the row. `'assist'` asks for no repair, and `'rails'` keeps its own
   refusal, `UnsupportedValuesError`. A contradicted claim gets no repair turn of
   its own: its answer is withheld.
+- **Agreement on doubt verifies nothing.** When the tool settled a field only
+  as `null` or `'unknown'` and the answer gives no value either, the row is
+  `unreachable`: enforce withholds the answer, and observe delivers it with
+  the standing "not sure", never "known". An absence a tool declares with
+  `known(null)` is an established value, so `null` agreeing with it passes.
 - **A report still needs a comparison.** Your `validate` runs as before, and a
   report with nothing compared stays `unverified`. A passing claim row counts as
   a comparison. The names-and-numbers row never does, so it can withhold an

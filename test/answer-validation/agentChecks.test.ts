@@ -196,9 +196,10 @@ describe('unit: the claims rows', () => {
 describe('property: a claim row and the claim detector never compare differently', () => {
   // The detector (`unsupportedClaimsOf`) and the row both derive from
   // `compareClaim`. Over a value matrix: the row FAILS exactly when the
-  // detector files a non-advisory finding, and is UNREACHABLE exactly when the
-  // detector says unreachable — a row can neither hide a contradiction the
-  // detector reports nor invent one it does not.
+  // detector files a non-advisory finding (a row can neither hide a
+  // contradiction the detector reports nor invent one), whatever the detector
+  // could not reach the row cannot either, and a row PASSES only on agreement
+  // with an established value — never on doubt the tool did not declare.
   const values: readonly unknown[] = [
     undefined,
     null,
@@ -225,6 +226,7 @@ describe('property: a claim row and the claim detector never compare differently
     unknown('absent'),
     notApplicable('n/a'),
   ];
+  const isDoubt = (value: unknown) => value === null || value === 'unknown';
   it('agrees across every evidence × claim pair', () => {
     let cases = 0;
     for (const evidence of values) {
@@ -235,11 +237,20 @@ describe('property: a claim row and the claim detector never compare differently
           const { findings, dispositions } = unsupportedClaimsOf([DURATION], ledger, answer, 0);
           const contradiction = findings.some((f) => f.advisory !== true);
           expect(row!.disposition === 'checked-fail').toBe(contradiction);
-          expect(row!.disposition === 'unreachable').toBe(
-            dispositions[0]!.disposition === 'unreachable',
-          );
-          // A pass is never filed where the detector found a contradiction.
-          if (row!.disposition === 'checked-pass') expect(contradiction).toBe(false);
+          if (dispositions[0]!.disposition === 'unreachable') {
+            expect(row!.disposition).toBe('unreachable');
+          }
+          if (row!.disposition === 'checked-pass') {
+            // Never where the detector found a contradiction…
+            expect(contradiction).toBe(false);
+            // …and never on doubt, unless the tool DECLARED the value (`known`).
+            const latest = ledger.at(-1)?.value;
+            const declared =
+              typeof latest === 'object' &&
+              latest !== null &&
+              (latest as { kind?: unknown }).kind === 'known';
+            if (isDoubt(claim)) expect(declared).toBe(true);
+          }
           cases++;
         }
       }

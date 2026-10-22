@@ -101,8 +101,11 @@ with this door and with `rails` (`docs/design/honesty/README.md` § 8).
   matrix property in `test/answer-validation/agentChecks.test.ts` pins it).
   Conflict → `checked-fail`; agreement → `checked-pass`; no settled fact, or one
   settled unknown → `unreachable` (an unsupported claim is withheld, fail
-  closed); omitted or declined (`null`, `'unknown'`, an unknown `Claim`) where
-  the run settled a value → `not-applicable` (both `null` is agreement). The
+  closed); doubt on both sides (the tool settled only `null` / `'unknown'`, the
+  answer gives no value) → `unreachable` too — agreement on doubt verifies
+  nothing — unless the tool DECLARED the absence (`known(null)`), which passes;
+  omitted or declined (`null`, `'unknown'`, an unknown `Claim`) where the run
+  settled a value → `not-applicable`. The
   detector's legacy ledger maps doubt to `checked-pass`; the row does not.
 - `evidenceCheckOf` reads the gate's verdict on the SAME delivered candidate:
   the gate is handed over as an `EvidenceJudge` bound to the evidence the run
