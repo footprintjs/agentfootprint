@@ -109,6 +109,8 @@ A ledger of an agent's own — even a fresh `inMemoryDecisionLedger()` — makes
 
 `by` is recorded as given: a claim, not proof. The binding says WHICH request and WHAT call; WHO may decide is your host's to authenticate. And the checkpoint itself is not proof either — a host that lets checkpoints leave its trust boundary signs them or keeps them server-side.
 
+**What the binding detects, and what it does not.** It detects drift and replay: a checkpoint changed after the ask, a decision presented twice, to another pause, or to an agent whose rules after the ask changed. It does not defend against a hostile writer of the checkpoint store. Whoever can write the stored pause can rewrite the arguments together with the nonce and the request shown *before* the person decides — the person then approves what they were shown, and the binding holds — or switch the pause into a kind whose resume takes no decision at all (a credential-consent pause, which re-asks the identity provider and ignores the answer). Keep checkpoints server-side, or sign them, when the store is not trusted.
+
 ### A consent gate takes a decision, not a value
 
 Resuming a check-in with anything that is not a `CheckInDecision` — a bare string, an object of your own shape, nothing at all — raises `DecisionRequiredError` (`code: 'ERR_DECISION_REQUIRED'`). **Nothing executes and the checkpoint is unchanged**, so you answer the same one properly and resume again. Over `standingAgent` it is a **400**: the session is fine, the request was not.

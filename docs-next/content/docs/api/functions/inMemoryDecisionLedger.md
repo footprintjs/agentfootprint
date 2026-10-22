@@ -6,7 +6,7 @@ title: inMemoryDecisionLedger
 
 > **inMemoryDecisionLedger**(): [`DecisionLedger`](/docs/api/interfaces/DecisionLedger)
 
-Defined in: [src/core/consentRequest.ts:152](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L152)
+Defined in: [src/core/consentRequest.ts:159](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L159)
 
 A NEW [DecisionLedger](/docs/api/interfaces/DecisionLedger) in this process's memory. Grows by one id per
 answered request.

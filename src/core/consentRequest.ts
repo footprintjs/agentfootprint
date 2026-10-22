@@ -30,8 +30,15 @@
  *     exact call: a checkpoint whose arguments, tool, call id, party or chain
  *     position changed after the person was asked derives a different id, and
  *     no nonce makes it derive the old one (that would be a SHA-256 preimage).
- *     The person's decision quotes the id they were shown, so it is the anchor
- *     the checkpoint cannot forge.
+ *     The person's decision quotes the id they were shown, so a checkpoint
+ *     changed after the ask cannot be made to match it.
+ *   - What it does NOT stop is a hostile writer of the checkpoint store: one
+ *     who rewrites the call, the nonce and the request shown together BEFORE
+ *     the person decides (they then approve what they were shown), or who
+ *     switches the pause into a kind whose resume takes no decision (a
+ *     credential-consent pause). The binding detects drift and replay, not
+ *     that writer; a host that does not trust its store signs checkpoints or
+ *     keeps them server-side.
  *   - The id carries no run value. The nonce does unlock it — whoever holds
  *     the nonce can confirm a guess of the arguments — so the state key that
  *     carries it (`pausedRequest`) is named with the arguments in the
