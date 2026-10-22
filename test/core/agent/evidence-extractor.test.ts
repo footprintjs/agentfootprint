@@ -39,6 +39,7 @@ import {
   resolveEvidenceGate,
 } from '../../../src/core/agent/evidence/gate.js';
 import type { LLMMessage } from '../../../src/provider-contract/types.js';
+import { figureCheckOf } from '../../../src/core/agent/evidence/figures.js';
 import { CORRECT_ANSWERS, FABRICATED_ANSWERS, toolMessages } from './fixtures/sanEvidence.js';
 
 const GATE = resolveEvidenceGate();
@@ -659,5 +660,51 @@ describe('regression: a typed answer is read value by value, arrays included', (
     const deep = `${'['.repeat(20_000)}9999${']'.repeat(20_000)}`;
     // Either JSON.parse refuses the depth (text) or the walk reads it: no throw.
     expect(() => flaggedIn(deep)).not.toThrow();
+  });
+});
+
+describe('regression: a JSON answer keeps each number as it was WRITTEN', () => {
+  // Reading a typed answer through JSON.parse changed the numbers being
+  // checked: 9007199254740993 became 9007199254740992 (and matched a result
+  // that carried that), a 20-digit serial became 12345678901234567000 (and
+  // matched nothing), and 5.20 lost the precision the rounding rule judges by.
+  const historyOf = (content: string) =>
+    [{ role: 'tool', toolCallId: 'c1', content }] as unknown as readonly LLMMessage[];
+  const rails = resolveEvidenceGate({ posture: 'rails' });
+
+  it('a large integer is compared digit for digit — no false pass past double precision', () => {
+    const history = historyOf('{"id":9007199254740992}');
+    expect(
+      check('{"id":9007199254740993}', { history, gate: rails }).unsupported.map((u) => u.value),
+    ).toEqual(['9007199254740993']);
+    expect(check('{"id":9007199254740992}', { history, gate: rails }).unsupported).toEqual([]);
+  });
+
+  it('a large integer the tool carried as text is found — no false flag from rounding', () => {
+    const history = historyOf('{"serial":"12345678901234567890"}');
+    expect(check('{"serial":12345678901234567890}', { history, gate: rails }).unsupported).toEqual(
+      [],
+    );
+  });
+
+  it('trailing zeros are a spelling, not a different number', () => {
+    const history = historyOf('{"total":1200}');
+    expect(check('{"total":1200.0}', { history, gate: rails }).unsupported).toEqual([]);
+  });
+
+  it('under decimal rounding, 5.20 keeps its written precision against 5.249', () => {
+    const history = historyOf('{"reading":5.249}');
+    const gate = resolveEvidenceGate({ posture: 'rails', decimalRounding: true });
+    const judge = (answer: string) =>
+      checkAnswer(answer, {
+        gate,
+        evidence: evidenceFromHistory(history),
+        exempt: new Set<string>(),
+        figures: figureCheckOf(answer, history, gate),
+      });
+    // 5.249 rounds to 5.25 at two places, so a two-place 5.20 was never read.
+    expect(judge('{"reading":5.20}').unsupported.map((u) => u.value)).toEqual(['5.2']);
+    // One place: 5.2 is 5.249 honestly rounded.
+    expect(judge('{"reading":5.2}').unsupported).toEqual([]);
   });
 });

@@ -548,6 +548,181 @@ describe('functional: observe under guard repairs first, then records and delive
   });
 });
 
+// ── The delivered candidate, not the draft, is what every row judges ────
+
+/**
+ * An output schema whose parse CHANGES a value: the draft the Route decider
+ * judged says what the tool said, the answer delivered says something else.
+ */
+function transformingAgent(
+  reactMode: (typeof REACT_MODES)[number],
+  check: 'names-and-numbers' | 'claims',
+  transform: (answer: { order: string; total: number }) => Record<string, unknown>,
+) {
+  const parser: OutputSchemaParser<Record<string, unknown>> = {
+    parse(value) {
+      const candidate = value as Partial<OrderAnswer> | null;
+      if (typeof candidate?.order !== 'string' || typeof candidate.total !== 'number') {
+        throw new Error('order and total are required');
+      }
+      return transform({ order: candidate.order, total: candidate.total });
+    },
+  };
+  const source = scripted([{ toolCalls: [FIND_ORDER] }, { content: READ }]);
+  const builder = Agent.create({
+    provider: source.provider,
+    model: 'synthetic',
+    maxIterations: 4,
+    reactMode,
+  })
+    .tool(
+      defineTool({
+        name: 'find_order',
+        description: 'Find the order that matches the question.',
+        inputSchema: { type: 'object', properties: {} },
+        execute: () =>
+          check === 'claims'
+            ? describedResult({
+                facts: [{ entity: 'ORD-44710', total: 1200 }],
+                provenance: { source: 'synthetic-orders', measuredAt: '2026-01-01T00:00:00Z' },
+              })
+            : READ,
+      }),
+    )
+    .outputSchema(parser);
+  if (check === 'claims') builder.claims({ total: { entity: 'ORD-44710', field: 'total' } });
+  else builder.namesAndNumbersFromEvidence();
+  const agent = builder
+    .answerValidation<Record<string, unknown>>({
+      id: 'orders',
+      version: '1',
+      agentChecks: [check],
+      validate: () => ({ checks: [{ id: 'shape', disposition: 'checked-pass' }] }),
+    })
+    .build();
+  return { agent, seen: delivered(agent) };
+}
+
+for (const reactMode of REACT_MODES) {
+  describe(`security: rows judge the delivered candidate, never the draft — ${reactMode}`, () => {
+    const inflate = (a: { order: string; total: number }) => ({ ...a, total: a.total * 8 + 150 });
+
+    it('names-and-numbers: a draft that read 1200, delivered as 9750 by the schema, is withheld', async () => {
+      const { agent, seen } = transformingAgent(reactMode, 'names-and-numbers', inflate);
+      const outcome = await agent
+        .run({ message: 'Which order totals 1200?' })
+        .catch((e: unknown) => e);
+      expect(outcome).toBeInstanceOf(AnswerValidationError);
+      expect((outcome as AnswerValidationError).report.checks[1]).toMatchObject({
+        id: 'agent:names-and-numbers',
+        disposition: 'checked-fail',
+      });
+      // The draft itself was grounded: only the delivered candidate carries 9750.
+      expect(seen.grounding.map((g) => g.action)).toEqual(['grounded']);
+      expect(seen.tokens).toEqual([]);
+    });
+
+    it('claims: a draft that agreed, delivered contradicting by the schema, is withheld', async () => {
+      const { agent, seen } = transformingAgent(reactMode, 'claims', inflate);
+      const outcome = await agent
+        .run({ message: 'Which order totals 1200?' })
+        .catch((e: unknown) => e);
+      expect((outcome as AnswerValidationError).report.checks[1]).toMatchObject({
+        id: 'agent:claims:total',
+        disposition: 'checked-fail',
+      });
+      expect(seen.tokens).toEqual([]);
+    });
+
+    it('a transform that adds no value is judged as delivered, and delivered', async () => {
+      const label = (a: { order: string; total: number }) => ({ ...a, currency: 'USD' });
+      for (const check of ['names-and-numbers', 'claims'] as const) {
+        const { agent } = transformingAgent(reactMode, check, label);
+        expect(await agent.run({ message: 'Which order totals 1200?' })).toBe(
+          JSON.stringify({ order: 'ORD-44710', total: 1200, currency: 'USD' }),
+        );
+      }
+    });
+  });
+}
+
+// ── Agreement on doubt: the tool established no value, the answer gives none ──
+
+interface StatusAnswer {
+  readonly job: string;
+  readonly status: string | null;
+}
+const statusAnswer: OutputSchemaParser<StatusAnswer> = {
+  parse(value) {
+    const candidate = value as Partial<StatusAnswer> | null;
+    if (typeof candidate?.job !== 'string' || candidate.status === undefined) {
+      throw new Error('job and status are required');
+    }
+    return { job: candidate.job, status: candidate.status };
+  },
+};
+
+/** A tool whose run could not establish the status: it reports the literal 'unknown'. */
+function statusAgent(mode: 'enforce' | 'observe') {
+  const source = scripted([
+    { toolCalls: [{ id: 'call-1', name: 'read_status', args: {} }] },
+    { content: JSON.stringify({ job: 'build-job-72', status: null }) },
+  ]);
+  const agent = Agent.create({ provider: source.provider, model: 'synthetic', maxIterations: 4 })
+    .tool(
+      defineTool({
+        name: 'read_status',
+        description: 'Read the build status.',
+        inputSchema: { type: 'object', properties: {} },
+        execute: () =>
+          describedResult({
+            facts: [{ entity: 'build-job-72', status: 'unknown' }],
+            provenance: { source: 'synthetic-ci', measuredAt: '2026-01-01T00:00:00Z' },
+          }),
+      }),
+    )
+    .outputSchema(statusAnswer)
+    .claims({ status: { entity: 'build-job-72', field: 'status' } })
+    // No host check at all: the claim row is the only thing that could pass.
+    .answerValidation<StatusAnswer>({
+      id: 'status-report',
+      version: '1',
+      mode,
+      agentChecks: ['claims'],
+      validate: () => ({ checks: [] }),
+    })
+    .build();
+  return { agent, seen: delivered(agent) };
+}
+
+describe('security: agreement on doubt is never verified support', () => {
+  it("enforce withholds a null answer about a status the tool reported as 'unknown'", async () => {
+    const { agent, seen } = statusAgent('enforce');
+    const outcome = await agent.run({ message: 'Did build-job-72 pass?' }).catch((e: unknown) => e);
+    expect(outcome).toBeInstanceOf(AnswerValidationError);
+    expect((outcome as AnswerValidationError).report).toMatchObject({
+      status: 'unverified',
+      checked: 0,
+    });
+    expect((outcome as AnswerValidationError).report.checks).toEqual([
+      expect.objectContaining({ id: 'agent:claims:status', disposition: 'unreachable' }),
+    ]);
+    expect(seen.tokens).toEqual([]);
+  });
+
+  it('observe delivers it, and the answer reads "not sure" — never "known"', async () => {
+    const { agent } = statusAgent('observe');
+    expect(await agent.run({ message: 'Did build-job-72 pass?' })).toBe(
+      JSON.stringify({ job: 'build-job-72', status: null }),
+    );
+    expect(agent.answerValidation()).toMatchObject({ status: 'unverified' });
+    const assessed = await agent.assessment();
+    expect(assessed?.assessment).not.toBe('known');
+    expect(assessed?.standing).toBe('not-sure');
+    expect(assessed?.support).toBeUndefined();
+  });
+});
+
 describe("contract: posture 'rails' keeps its own refusal", () => {
   it('UnsupportedValuesError, as without agentChecks', async () => {
     const { agent, seen } = orderAgent(

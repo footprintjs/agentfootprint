@@ -103,7 +103,22 @@ describe('unit: the claims rows', () => {
   it.each([
     ['agrees', { durationMs: 1250 }, [settled(1250)], 'checked-pass'],
     ['numeric string toward its number', { durationMs: '1250' }, [settled(1250)], 'checked-pass'],
-    ['both settle on null', { durationMs: null }, [settled(null)], 'checked-pass'],
+    // Agreement on doubt verifies nothing: the tool established no value.
+    ['null against a settled null', { durationMs: null }, [settled(null)], 'unreachable'],
+    ["null against a settled 'unknown'", { durationMs: null }, [settled('unknown')], 'unreachable'],
+    [
+      "'unknown' against a settled 'unknown'",
+      { durationMs: 'unknown' },
+      [settled('unknown')],
+      'unreachable',
+    ],
+    // …but an absence the tool DECLARED (`known(null)`) is established.
+    [
+      'null against a declared known(null)',
+      { durationMs: null },
+      [settled(known(null, 'no run recorded'))],
+      'checked-pass',
+    ],
     ['contradicts', { durationMs: 9750 }, [settled(1250)], 'checked-fail'],
     [
       'contradicts the LATEST row',
