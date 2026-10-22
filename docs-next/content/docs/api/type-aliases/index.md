@@ -2,7 +2,7 @@
 title: Type Aliases
 ---
 
-140 exported from `agentfootprint`.
+141 exported from `agentfootprint`.
 
 - [`ActKey`](/docs/api/type-aliases/ActKey)
 - [`AgentOutput`](/docs/api/type-aliases/AgentOutput)
@@ -91,6 +91,7 @@ title: Type Aliases
 - [`Predicate`](/docs/api/type-aliases/Predicate)
 - [`ProposedEffect`](/docs/api/type-aliases/ProposedEffect)
 - [`ProviderKind`](/docs/api/type-aliases/ProviderKind)
+- [`ProviderTimeoutWait`](/docs/api/type-aliases/ProviderTimeoutWait)
 - [`RagDocument`](/docs/api/type-aliases/RagDocument)
 - [`ReadingChoice`](/docs/api/type-aliases/ReadingChoice)
 - [`ReadTrackingMode`](/docs/api/type-aliases/ReadTrackingMode)
