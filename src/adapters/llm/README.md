@@ -179,20 +179,24 @@ reads `retry-after-ms` / `Retry-After` for `anthropic()`, `openai()` and
 seconds" body. `withRetry` waits at least that long (resilience/README.md).
 
 ## Deadlines
-`bedrock()` and `invokeModelGateway()` share `lib/waitDeadline.ts`.
-Explicit `timeoutMs` bounds complete responses/body reads, stream idle reads,
-and early close. A separate `firstEventTimeoutMs` (default `timeoutMs`) covers
-stream response opening and the first event. Neither caps total duration or
-consumer backpressure. With both omitted there is no timer; hosts must configure
-model-specific limits or provide a caller signal.
+`bedrock()` and `invokeModelGateway()` share the typed allowance policy in
+`provider-contract/deadline.ts` and the timer/cancellation leaf
+`lib/waitDeadline.ts`. `timeoutMs` limits post-output idle and close waits.
+`firstOutputTimeoutMs` (default `timeoutMs`) covers cumulative provider waits
+from opening until meaningful output; empty/control events cannot renew it.
+`responseTimeoutMs` (default first-output, then idle) covers prompt plus whole
+opaque answer for complete/fallback, cumulatively across gateway headers/body.
+Credentials have a separate no-send allowance under the response cap. Consumer
+backpressure is excluded; all caps omitted preserves the exact caller signal
+and timer-free behavior. Hosts choose limits or provide a caller signal.
 
-The port's `ProviderTimeoutError` facts (`provider`, `waitingFor`, `timeoutMs`,
-`afterOutput`, `retryable`) are shared. Bedrock throws it; the gateway composes
-it inside its existing timeout error, recognized by `isProviderTimeout`.
-Retry advice is false after output starts, including tool/thinking blocks
-before public text. Before output, a retry may still bill input again.
-`withRetry` reports a timeout as such, without a separate retry loop here.
-
+The shared timeout facts include provider, typed wait, cap, observed output and
+retry advice. Bedrock throws `ProviderTimeoutError`; gateway composes it inside
+its existing error, recognized by `isProviderTimeout`. Output is meaningful
+text/tool/thinking content, not a message-start or empty text block. Output
+started or opaque answer unknown means no automatic retry. Streamed pre-output
+retry may still bill input again; missing remote settlement remains unknown.
+`withRetry` reports `timeout`. Primary failures survive later cleanup errors.
 
 ## Files
 - `AnthropicProvider.ts`, `OpenAIProvider.ts`, `BedrockProvider.ts`,

@@ -4,11 +4,12 @@ title: ProviderTimeoutError
 
 # Class: ProviderTimeoutError
 
-Defined in: [src/provider-contract/timeout.ts:15](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/timeout.ts#L15)
+Defined in: [src/provider-contract/timeout.ts:24](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/timeout.ts#L24)
 
 A provider wait exceeded the host's explicit limit. afterOutput includes
 generated tool arguments/thinking, even when no public chunk was delivered.
-A pre-output retry is only an advisory: a timed-out request may still have
+Opaque complete/fallback waits refuse automatic replay. A streamed pre-output
+retry is only an advisory: a timed-out request may still have
 consumed input tokens. Missing usage and remote settlement remain unknown.
 
 ## Extends
@@ -21,7 +22,7 @@ consumed input tokens. Missing usage and remote settlement remain unknown.
 
 > **new ProviderTimeoutError**(`details`): `ProviderTimeoutError`
 
-Defined in: [src/provider-contract/timeout.ts:29](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/timeout.ts#L29)
+Defined in: [src/provider-contract/timeout.ts:39](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/timeout.ts#L39)
 
 #### Parameters
 
@@ -35,13 +36,19 @@ Defined in: [src/provider-contract/timeout.ts:29](https://github.com/footprintjs
 
 `string`
 
+###### retryable?
+
+`boolean`
+
+An opaque whole-answer wait can refuse retry even before output is visible.
+
 ###### timeoutMs
 
 `number`
 
 ###### waitingFor
 
-`"response"` \| `"first-event"` \| `"chunk"` \| `"body"` \| `"close"` \| `"fallback"`
+`"response"` \| `"credentials"` \| `"first-output"` \| `"chunk"` \| `"body"` \| `"close"` \| `"fallback"`
 
 #### Returns
 
@@ -57,7 +64,7 @@ Defined in: [src/provider-contract/timeout.ts:29](https://github.com/footprintjs
 
 > `readonly` **afterOutput**: `boolean`
 
-Defined in: [src/provider-contract/timeout.ts:25](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/timeout.ts#L25)
+Defined in: [src/provider-contract/timeout.ts:34](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/timeout.ts#L34)
 
 Output has started, including tool blocks not yet exposed as text.
 
@@ -79,7 +86,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_PROVIDER_TIMEOUT"` = `ERR_PROVIDER_TIMEOUT`
 
-Defined in: [src/provider-contract/timeout.ts:17](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/timeout.ts#L17)
+Defined in: [src/provider-contract/timeout.ts:26](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/timeout.ts#L26)
 
 ***
 
@@ -99,7 +106,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1077
 
 > `readonly` **name**: `string` = `'ProviderTimeoutError'`
 
-Defined in: [src/provider-contract/timeout.ts:16](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/timeout.ts#L16)
+Defined in: [src/provider-contract/timeout.ts:25](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/timeout.ts#L25)
 
 #### Overrides
 
@@ -111,7 +118,7 @@ Defined in: [src/provider-contract/timeout.ts:16](https://github.com/footprintjs
 
 > `readonly` **provider**: `string`
 
-Defined in: [src/provider-contract/timeout.ts:19](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/timeout.ts#L19)
+Defined in: [src/provider-contract/timeout.ts:28](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/timeout.ts#L28)
 
 The adapter, never the model or a request identifier.
 
@@ -121,9 +128,10 @@ The adapter, never the model or a request identifier.
 
 > `readonly` **retryable**: `boolean`
 
-Defined in: [src/provider-contract/timeout.ts:27](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/timeout.ts#L27)
+Defined in: [src/provider-contract/timeout.ts:37](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/timeout.ts#L37)
 
-False after output starts. True before output is not a zero-cost guarantee.
+False after output starts or when an opaque answer cannot be observed.
+True before visible output is not a zero-cost guarantee.
 
 ***
 
@@ -165,7 +173,7 @@ not capture any frames.
 
 > `readonly` **timeoutMs**: `number`
 
-Defined in: [src/provider-contract/timeout.ts:23](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/timeout.ts#L23)
+Defined in: [src/provider-contract/timeout.ts:32](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/timeout.ts#L32)
 
 The host-selected cap on that wait, in milliseconds.
 
@@ -173,9 +181,9 @@ The host-selected cap on that wait, in milliseconds.
 
 ### waitingFor
 
-> `readonly` **waitingFor**: `"response"` \| `"first-event"` \| `"chunk"` \| `"body"` \| `"close"` \| `"fallback"`
+> `readonly` **waitingFor**: `"response"` \| `"credentials"` \| `"first-output"` \| `"chunk"` \| `"body"` \| `"close"` \| `"fallback"`
 
-Defined in: [src/provider-contract/timeout.ts:21](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/timeout.ts#L21)
+Defined in: [src/provider-contract/timeout.ts:30](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/timeout.ts#L30)
 
 The wait whose allowance expired.
 

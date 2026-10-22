@@ -20,7 +20,7 @@ describe('shared provider timeout facts', () => {
   });
   it.each([
     'response',
-    'first-event',
+    'first-output',
     'chunk',
     'body',
     'close',

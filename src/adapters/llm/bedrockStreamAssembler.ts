@@ -1,5 +1,5 @@
 import type { LLMChunk, LLMResponse } from '../../provider-contract/types.js';
-import type { BedrockStreamEvent } from './BedrockProvider.js';
+import type { BedrockStreamEvent } from './bedrockWireTypes.js';
 import { readCacheUsage } from './bedrockCacheWire.js';
 import { ensureHonestToolUse, normalizeStopReason, parseToolArgs } from './bedrockOutput.js';
 import { closePreservingFailure } from '../../lib/preserveFailure.js';

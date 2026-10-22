@@ -22,11 +22,12 @@ export async function run(input = meta.defaultInput ?? 'Next step'): Promise<unk
   let attempts = 0;
   let observedTimeout = false;
   // #region timeout
-  // In an application: bedrock({ region: 'us-east-1', timeoutMs: 30_000, firstEventTimeoutMs: 120_000 }).
+  // In an application: bedrock({ region: 'us-east-1', timeoutMs: 30_000, firstOutputTimeoutMs: 120_000, responseTimeoutMs: 180_000 }).
   // This example supplies an entirely local SDK double instead.
   const provider = bedrock({
     timeoutMs: 20,
-    firstEventTimeoutMs: 20,
+    firstOutputTimeoutMs: 20,
+    responseTimeoutMs: 100,
     _commands: { Converse: Command, ConverseStream: Command },
     _client: {
       send: async () => {

@@ -1,3 +1,4 @@
+import type { BedrockStreamEvent } from './bedrockWireTypes.js';
 import type { LLMResponse } from '../../provider-contract/types.js';
 
 /**
@@ -83,4 +84,28 @@ export function normalizeStopReason(raw: string): string {
     default:
       return raw;
   }
+}
+
+/** AWS examples include messageStart and an empty text delta. Neither is
+ * evidence of generated content. Checked 2026-10-22:
+ * https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference.html */
+export function isBedrockOutputEvent(event: BedrockStreamEvent): boolean {
+  const tool = event.contentBlockStart?.start?.toolUse;
+  if (tool && (Boolean(tool.toolUseId) || Boolean(tool.name))) return true;
+  const delta = event.contentBlockDelta?.delta;
+  return Boolean(
+    (delta &&
+      Object.values(delta).some((value) =>
+        typeof value === 'string'
+          ? value.length > 0
+          : typeof value === 'object' &&
+            value !== null &&
+            Object.values(value).some(
+              (part) =>
+                (typeof part === 'string' && part.length > 0) ||
+                (part instanceof Uint8Array && part.byteLength > 0),
+            ),
+      )) ||
+      (event.metadata?.usage?.outputTokens ?? 0) > 0,
+  );
 }

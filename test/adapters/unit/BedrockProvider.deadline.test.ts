@@ -127,7 +127,7 @@ describe('Bedrock stream deadlines — scripted SDK, no AWS calls', () => {
         state: 'rejected',
         error: {
           code: 'ERR_PROVIDER_TIMEOUT',
-          waitingFor: position === 'first' ? 'first-event' : 'chunk',
+          waitingFor: position === 'first' ? 'first-output' : 'chunk',
           afterOutput: position === 'later',
           retryable: position !== 'later',
         },

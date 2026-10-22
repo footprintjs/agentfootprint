@@ -31,6 +31,14 @@ export function waitDeadline<Phase extends string>(
     within<T>(pending: Promise<T>, phase: Phase): Promise<T> {
       const milliseconds = typeof timeoutMs === 'function' ? timeoutMs(phase) : timeoutMs;
       if (milliseconds === undefined) return untilAborted(pending, controller.signal);
+      // An exhausted cumulative allowance is already expired. A zero-ms timer
+      // would lose to an immediately resolved promise and admit unlimited work.
+      // Keep the abandoned transport handled, even when it rejects later.
+      if (milliseconds <= 0) {
+        void pending.catch(() => undefined);
+        if (!controller.signal.aborted) controller.abort(timeoutError(phase, milliseconds));
+        return Promise.reject(abortErrorOf(controller.signal));
+      }
       return new Promise<T>((resolve, reject) => {
         const settle = (): void => {
           disarm();
@@ -72,7 +80,7 @@ export function waitDeadline<Phase extends string>(
 /** One option law for every adapter using these waits. No caller value is echoed. */
 export function checkedWaitMs(
   raw: number | undefined,
-  field: 'timeoutMs' | 'firstEventTimeoutMs' = 'timeoutMs',
+  field: 'timeoutMs' | 'firstOutputTimeoutMs' | 'responseTimeoutMs' = 'timeoutMs',
 ): number | undefined {
   if (raw === undefined) return undefined;
   if (typeof raw !== 'number' || !Number.isFinite(raw) || raw <= 0 || raw > 2 ** 31 - 1) {

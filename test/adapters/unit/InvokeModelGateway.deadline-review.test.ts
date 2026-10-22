@@ -54,7 +54,7 @@ describe('gateway shared timeout contract — fake HTTP only', () => {
       waitingFor: 'response',
       timeoutMs: 20,
       afterOutput: false,
-      retryable: true,
+      retryable: false,
       cause: { name: 'ProviderTimeoutError' },
     });
     expect(isProviderTimeout(result.error)).toBe(true);
@@ -88,7 +88,7 @@ describe('gateway shared timeout contract — fake HTTP only', () => {
   });
   it('allows a longer response/start wait than later stream gaps', async () => {
     vi.useFakeTimers();
-    const provider = gateway(async () => never(), { timeoutMs: 10, firstEventTimeoutMs: 60 });
+    const provider = gateway(async () => never(), { timeoutMs: 10, firstOutputTimeoutMs: 60 });
     const result = observe(drain(provider.stream!(req)));
     await vi.advanceTimersByTimeAsync(10);
     expect(result.done).toBe(false);
@@ -142,7 +142,7 @@ describe('gateway shared timeout contract — fake HTTP only', () => {
     (value) => {
       const fetch = vi.fn();
       expect(() => gateway(fetch, { timeoutMs: value })).toThrow(/timeoutMs/);
-      expect(() => gateway(fetch, { firstEventTimeoutMs: value })).toThrow(/firstEventTimeoutMs/);
+      expect(() => gateway(fetch, { firstOutputTimeoutMs: value })).toThrow(/firstOutputTimeoutMs/);
       expect(fetch).not.toHaveBeenCalled();
     },
   );

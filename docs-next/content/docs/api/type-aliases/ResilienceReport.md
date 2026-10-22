@@ -92,7 +92,7 @@ predicate is in force the decorator cannot know *why* it said yes;
 this field reports what the error looked like instead, derived
 from the same `status`/`statusCode` fields `defaultShouldRetry`
 inspects. One of: `'http-429'` | `'http-5xx'` | `'http-4xx'` |
-`` `http-${code}` `` | `'no-status'`.
+`` `http-${code}` `` | `'timeout'` | `'no-status'`.
 
 #### statedWaitMs?
 

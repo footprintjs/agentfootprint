@@ -62,7 +62,8 @@ if (built)
           expect(error).toMatchObject({
             code: 'ERR_PROVIDER_TIMEOUT',
             waitingFor: 'response',
-            retryable: true,
+            // A whole-answer timeout cannot observe remote output.
+            retryable: door === 'stream',
           });
           expect(signal?.aborted).toBe(true);
           expect(vi.getTimerCount()).toBe(0);

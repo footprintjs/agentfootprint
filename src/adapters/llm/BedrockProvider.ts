@@ -43,7 +43,10 @@ import type {
 import { lazyRequire } from '../../lib/lazyRequire.js';
 import { abortErrorOf, throwIfAborted } from '../../lib/abort.js';
 import { checkedWaitMs } from '../../lib/waitDeadline.js';
-import { bedrockDeadline, sendBedrock, timedBedrockEvents } from './bedrockStreamDeadline.js';
+import { sendBedrock, timedBedrockEvents } from './bedrockStreamDeadline.js';
+import type { BedrockStreamEvent } from './bedrockWireTypes.js';
+export type { BedrockStreamEvent } from './bedrockWireTypes.js';
+import { providerDeadline } from '../../provider-contract/deadline.js';
 import { foldBedrockEvents } from './bedrockStreamAssembler.js';
 import { ensureHonestToolUse, normalizeStopReason } from './bedrockOutput.js';
 import { asContextWindowExceeded } from '../../provider-contract/contextWindow.js';
@@ -146,30 +149,6 @@ interface BedrockConverseResponse {
   ResponseMetadata?: { RequestId?: string };
 }
 
-/**
- * ConverseStream event shapes we consume.
- *
- * Note the asymmetry with the non-streaming API: `toolUse.input` is a
- * fully-formed OBJECT on a Converse response, but a JSON **string
- * fragment** on a ConverseStream delta. Fragments arrive across many
- * events and must be joined before parsing, and blocks are addressed by
- * `contentBlockIndex` because parallel tool calls interleave.
- */
-export interface BedrockStreamEvent {
-  contentBlockStart?: {
-    contentBlockIndex?: number;
-    start?: { toolUse?: { toolUseId?: string; name?: string } };
-  };
-  contentBlockDelta?: {
-    contentBlockIndex?: number;
-    delta?: { text?: string; toolUse?: { input?: string } };
-  };
-  contentBlockStop?: { contentBlockIndex?: number };
-  messageStop?: { stopReason?: string };
-  metadata?: { usage?: BedrockCacheUsage };
-  // Many other event shapes exist; we ignore the ones not needed here.
-}
-
 interface BedrockStreamResponse {
   stream?: AsyncIterable<BedrockStreamEvent>;
 }
@@ -186,17 +165,19 @@ export interface BedrockProviderOptions {
   readonly defaultModel?: string;
   /** Default max tokens when not in the request. Default 4096. */
   readonly defaultMaxTokens?: number;
-  /**
-   * Opt-in cap for complete() and each stream idle/close/fallback wait.
-   * Omitted: no cap. Consumer backpressure is excluded. A miss aborts the SDK
-   * request and raises ProviderTimeoutError. Retry is advised only before any
-   * output was observed, including tool arguments. Remote usage remains unknown.
-   * Positive finite milliseconds, at most 2^31-1.
-   */
+  /** Opt-in idle/close cap once meaningful output starts. Also the fallback
+   * for firstOutputTimeoutMs and responseTimeoutMs. Consumer backpressure is
+   * excluded. All omitted: no timer, exact caller signal. Positive finite
+   * milliseconds, at most 2^31-1; misses abort the SDK request. */
   readonly timeoutMs?: number;
-  /** Stream opening and first-event cap. Defaults to timeoutMs; tune above the
-   * slowest expected prompt-prefill latency. Each wait has its own allowance. */
-  readonly firstEventTimeoutMs?: number;
+  /** Cumulative provider-wait allowance from stream opening to first meaningful
+   * text, tool or thinking output. Empty/control events do not reset it.
+   * Defaults to timeoutMs; choose above the slowest prompt-prefill latency. */
+  readonly firstOutputTimeoutMs?: number;
+  /** Whole-answer cap for complete() and the no-stream fallback: prompt plus
+   * generated answer. Defaults to firstOutputTimeoutMs, then timeoutMs. Opaque
+   * timeout outcomes are unknown and not advised for automatic retry. */
+  readonly responseTimeoutMs?: number;
   /** @internal Pre-built client for testing. */
   readonly _client?: BedrockClient;
   /**
@@ -245,8 +226,11 @@ const CARRIES_IN_MESSAGES: readonly WireRole[] = Object.freeze(['user', 'assista
 
 export function bedrock(options: BedrockProviderOptions = {}): LLMProvider {
   const timeoutMs = checkedWaitMs(options.timeoutMs);
-  const firstEventTimeoutMs =
-    checkedWaitMs(options.firstEventTimeoutMs, 'firstEventTimeoutMs') ?? timeoutMs;
+  const firstOutputTimeoutMs =
+    checkedWaitMs(options.firstOutputTimeoutMs, 'firstOutputTimeoutMs') ?? timeoutMs;
+  const responseTimeoutMs =
+    checkedWaitMs(options.responseTimeoutMs, 'responseTimeoutMs') ?? firstOutputTimeoutMs;
+  const limits = { timeoutMs, firstOutputTimeoutMs, responseTimeoutMs };
   const { client, Commands } = resolveClient(options);
   const defaultModel = options.defaultModel ?? 'anthropic.claude-sonnet-4-5-20250929-v1:0';
   const defaultMaxTokens = options.defaultMaxTokens ?? 4096;
@@ -263,7 +247,11 @@ export function bedrock(options: BedrockProviderOptions = {}): LLMProvider {
     thinkingMode: () => 'none',
     async complete(req: LLMRequest): Promise<LLMResponse> {
       throwIfAborted(req.signal);
-      const deadline = bedrockDeadline(timeoutMs, timeoutMs, req.signal, () => false);
+      const deadline = providerDeadline(limits, req.signal, {
+        provider: 'bedrock',
+        opaque: true,
+        afterOutput: () => false,
+      });
       try {
         const input = buildInput(req, modelOf(req.model), defaultMaxTokens);
         const response = await sendBedrock<BedrockConverseResponse>(
@@ -279,12 +267,10 @@ export function bedrock(options: BedrockProviderOptions = {}): LLMProvider {
     async *stream(req: LLMRequest): AsyncIterable<LLMChunk> {
       throwIfAborted(req.signal);
       let afterOutput = false;
-      const deadline = bedrockDeadline(
-        timeoutMs,
-        firstEventTimeoutMs,
-        req.signal,
-        () => afterOutput,
-      );
+      const deadline = providerDeadline(limits, req.signal, {
+        provider: 'bedrock',
+        afterOutput: () => afterOutput,
+      });
       try {
         const input = buildInput(req, modelOf(req.model), defaultMaxTokens);
         const response = await sendBedrock<BedrockStreamResponse>(
@@ -305,9 +291,15 @@ export function bedrock(options: BedrockProviderOptions = {}): LLMProvider {
           return;
         }
         yield* foldBedrockEvents(
-          timedBedrockEvents(response.stream, deadline, wrapError, () => {
-            afterOutput = true;
-          }),
+          timedBedrockEvents(
+            response.stream,
+            deadline,
+            wrapError,
+            () => afterOutput,
+            () => {
+              afterOutput = true;
+            },
+          ),
         );
       } finally {
         deadline.dispose();

@@ -69,7 +69,7 @@ describe('Bedrock review regressions — scripted transport only', () => {
         provider: 'bedrock',
         waitingFor: 'response',
         afterOutput: false,
-        retryable: true,
+        retryable: false,
       },
     });
     expect(signal?.aborted).toBe(true);
@@ -87,7 +87,7 @@ describe('Bedrock review regressions — scripted transport only', () => {
               )
             : never(),
         ),
-      { timeoutMs: 10, firstEventTimeoutMs: 100 },
+      { timeoutMs: 10, firstOutputTimeoutMs: 100 },
     );
     const iterator = provider.stream!(req)[Symbol.asyncIterator]();
     const first = watch(iterator.next());
@@ -106,9 +106,9 @@ describe('Bedrock review regressions — scripted transport only', () => {
     });
     expect(vi.getTimerCount()).toBe(0);
   });
-  it('uses the first-event allowance while opening the SDK response', async () => {
+  it('uses the first-output allowance while opening the SDK response', async () => {
     vi.useFakeTimers();
-    const { provider } = fixture(async () => never(), { timeoutMs: 10, firstEventTimeoutMs: 60 });
+    const { provider } = fixture(async () => never(), { timeoutMs: 10, firstOutputTimeoutMs: 60 });
     const pending = watch(provider.stream!(req)[Symbol.asyncIterator]().next());
     await vi.advanceTimersByTimeAsync(10);
     expect(pending.state).toBe('pending');
@@ -252,10 +252,10 @@ describe('Bedrock review regressions — scripted transport only', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
   it.each([0, -1, NaN, Infinity, 2 ** 31])(
-    'rejects invalid first-event allowance %s before SDK access',
+    'rejects invalid first-output allowance %s before SDK access',
     (value) => {
       const send = vi.fn();
-      expect(() => fixture(send, { firstEventTimeoutMs: value })).toThrow(/firstEventTimeoutMs/);
+      expect(() => fixture(send, { firstOutputTimeoutMs: value })).toThrow(/firstOutputTimeoutMs/);
       expect(send).not.toHaveBeenCalled();
     },
   );

@@ -13,7 +13,7 @@
  * Test types (Convention 3): unit (the declared wait, each deadline phase) ·
  * boundary (header beats body, the caller's signal beats the deadline, a stream
  * that keeps talking is never cut off) · contract (no timeoutMs = the fetch gets
- * exactly the caller's signal; a timeout is retryable and withRetry re-opens a
+ * exactly the caller's signal; a streamed pre-output timeout is retryable and withRetry re-opens a
  * stream that timed out before its first chunk) · scenario (withRetry waits
  * what the body said).
  */
@@ -168,7 +168,7 @@ describe('the stated wait is declared as retryAfterMs', () => {
 // ─── The deadline ───────────────────────────────────────────────────
 
 describe('timeoutMs — a per-request deadline', () => {
-  it('complete(): a gateway that never answers raises a typed, retryable timeout', async () => {
+  it('complete(): an opaque timeout is typed and does not advise blind replay', async () => {
     vi.useFakeTimers();
     let signal: AbortSignal | undefined;
     const provider = gateway(
@@ -183,9 +183,9 @@ describe('timeoutMs — a per-request deadline', () => {
     const err = await settled;
     expect(err).toBeInstanceOf(InvokeModelGatewayError);
     expect(err.reason).toBe('timeout');
-    expect(err.retryable).toBe(true);
+    expect(err.retryable).toBe(false);
     expect(err.modelId).toBe('m1');
-    expect(err.message).toContain('within 1000 ms');
+    expect(err.timeoutMs).toBe(1000);
     // The request was aborted, so a real fetch drops the connection.
     expect(signal?.aborted).toBe(true);
   });
@@ -205,7 +205,7 @@ describe('timeoutMs — a per-request deadline', () => {
     await vi.advanceTimersByTimeAsync(800);
     const err = await settled;
     expect(err.reason).toBe('timeout');
-    expect(err.message).toContain('the first stream chunk');
+    expect(err.waitingFor).toBe('first-output');
   });
 
   it('stream(): a stall BETWEEN chunks times out after the chunks already delivered', async () => {
@@ -221,7 +221,7 @@ describe('timeoutMs — a per-request deadline', () => {
     const err = await settled;
     expect(got).toEqual(['Hel']);
     expect(err.reason).toBe('timeout');
-    expect(err.message).toContain('the next stream chunk');
+    expect(err.waitingFor).toBe('chunk');
   });
 
   it('stream(): a stream that keeps talking is never cut off (the deadline is per read)', async () => {
@@ -238,6 +238,7 @@ describe('timeoutMs — a per-request deadline', () => {
     });
     const provider = gateway(async () => new Response(body, { status: 200 }), {
       timeoutMs: 1000,
+      firstOutputTimeoutMs: 2000, // the control prelude and first text share this allowance
     });
     const done = drain(provider.stream!(REQ));
     await vi.advanceTimersByTimeAsync(600 * 8);
