@@ -41,12 +41,19 @@ ledger is a fact about a finished run, and re-asking the model would invite it t
 rather than the run to change the facts. It files one finding and returns the answer untouched.
 
 **When it governs delivery.** An enforcing `.answerValidation({ agentChecks: ['claims'] })` asks the
-same comparison — `check.ts` · `compareClaim`, which `unsupportedClaimsOf` is built on — once more,
-over the canonical answer that validation delivers, and files one report row per declared claim
-(`answer-validation/agentChecks.ts`). A conflict fails the report and the answer is withheld; a
-claim with no settled fact — or a doubt agreeing with a tool's doubt (`null` / `'unknown'` on both
-sides, which verifies nothing) — is `unreachable`, so it is withheld too; an absence a tool declared
-with `known(null)` is established, and agreeing with it passes. Still no re-route: the seam
+same selection — `check.ts` · `compareClaim`, which `unsupportedClaimsOf` is built on — once more,
+over the canonical answer that validation delivers, and `delivered.ts` · `judgeDeliveredClaim` turns
+it into one verdict per declared claim, which `answer-validation/agentChecks.ts` files as a report
+row. A verdict that can withhold an answer reads the unscoped contract more strictly than the
+detector, because the contract takes the latest `(entity, field)` row from ANY tool, with no scope
+or age check, and any result carrying the semantics marker settles a fact:
+- **agreement is never support** — `agrees` is `not-applicable`, so only the app's own checks pass
+  a report; a contradiction still fails it and the answer is withheld;
+- **a fact read two ways is disputed** — when this run's rows for one fact disagree, the claim is
+  not compared with the latest (`unreachable`); a row that settled nothing disputes nothing;
+- **a bare doubt settles nothing** — a value against a tool's bare `null` / `'unknown'`, and doubt on
+  both sides, are `unreachable`; an absence a tool declared with `known(null)` is a settled value.
+A claim with no settled fact is `unreachable` too, so it is withheld. Still no re-route: the seam
 above is unchanged, and the detector's findings and dispositions are byte-identical (pinned against
 the ec32fad source by `test/integrity/claim-pair-evaluation.test.ts`).
 
@@ -61,7 +68,8 @@ nonparticipating, doubt against a value, both doubt, numeric leniency, conflict 
 `no-conflict` alone proves no positive agreement. The existing answer adapter still maps both
 doubt and a nonparticipating claimed value to `checked-pass`; that diagnostic contract is
 preserved, not relabeled as verification. A future scoped check must establish its own eligibility
-before interpreting the pair result. This refactor adds no public opt-in or recorded row.
+before interpreting the pair result. The delivery verdict (`delivered.ts`) is the one reader that
+can withhold an answer, and it never turns a pair result into support.
 
 **The fences.**
 

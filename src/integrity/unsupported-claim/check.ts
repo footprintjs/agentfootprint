@@ -76,9 +76,9 @@ function readPath(answer: unknown, path: string): unknown {
 
 /**
  * One declared claim, compared — the selection and the evaluation every
- * reader of a claim derives from (`unsupportedClaimsOf` here, the answer
- * checks' rows in `answer-validation/agentChecks.ts`), so the two can never
- * compare differently.
+ * reader of a claim derives from (`unsupportedClaimsOf` here; the delivery
+ * verdict in `delivered.ts`, which answer validation's rows read), so a row
+ * can never accuse where the detector does not.
  *
  * - `omitted` — the answer does not state the field (the schema allowed it).
  * - `uncollected` — no ledger row settled the declared fact.

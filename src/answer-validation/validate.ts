@@ -175,8 +175,9 @@ export async function executeAnswerValidation(
    * Builds the rows of the agent's own checks that `config.agentChecks` lists
    * (`agentChecks.ts`) from the candidate this validation delivers: the same
    * frozen value the validator receives, and its canonical JSON — the exact
-   * text that would be delivered. Synchronous library code: a throw, or a
-   * listed check with no builder, makes the report `unverified` — never a pass.
+   * text that would be delivered. Synchronous library code: a throw, a
+   * listed check with no builder, or a row that claims `checked-pass` (an
+   * agent row never verifies) makes the report `unverified` — never a pass.
    */
   buildAgentRows?: (candidate: unknown, canonical: string) => readonly AnswerCheck[],
 ): Promise<{ report: AnswerValidationReport; content?: string }> {
@@ -245,7 +246,12 @@ export async function executeAnswerValidation(
       if (config.agentChecks.length > 0) {
         try {
           if (buildAgentRows === undefined) throw new Error('No builder for the listed checks.');
-          agentRows = Object.freeze([...buildAgentRows(candidate, canonical)]);
+          const rows = Object.freeze([...buildAgentRows(candidate, canonical)]);
+          // An agent row can withhold an answer and never verify one: only
+          // your checks make a report pass. A row claiming to is refused.
+          if (rows.some((row) => row.disposition === 'checked-pass'))
+            throw new Error('An agent check never passes an answer.');
+          agentRows = rows;
         } catch {
           reason = 'agent-check-error';
           return;

@@ -101,8 +101,9 @@ describe('unit: the claims rows', () => {
   };
 
   it.each([
-    ['agrees', { durationMs: 1250 }, [settled(1250)], 'checked-pass'],
-    ['numeric string toward its number', { durationMs: '1250' }, [settled(1250)], 'checked-pass'],
+    // Agreement with an unscoped fact is not verification: never a pass.
+    ['agrees', { durationMs: 1250 }, [settled(1250)], 'not-applicable'],
+    ['numeric string toward its number', { durationMs: '1250' }, [settled(1250)], 'not-applicable'],
     // Agreement on doubt verifies nothing: the tool established no value.
     ['null against a settled null', { durationMs: null }, [settled(null)], 'unreachable'],
     ["null against a settled 'unknown'", { durationMs: null }, [settled('unknown')], 'unreachable'],
@@ -112,25 +113,38 @@ describe('unit: the claims rows', () => {
       [settled('unknown')],
       'unreachable',
     ],
-    // …but an absence the tool DECLARED (`known(null)`) is established.
+    // …and agreeing with an absence the tool DECLARED is agreement, no more.
     [
       'null against a declared known(null)',
       { durationMs: null },
       [settled(known(null, 'no run recorded'))],
-      'checked-pass',
+      'not-applicable',
     ],
     ['contradicts', { durationMs: 9750 }, [settled(1250)], 'checked-fail'],
+    // Two readings of one fact that disagree: which one is right cannot be told.
     [
-      'contradicts the LATEST row',
+      'the run read the fact two ways',
       { durationMs: 900 },
       [settled(900), settled(1250)],
+      'unreachable',
+    ],
+    [
+      'the run read it two ways, the answer agreeing with the latest',
+      { durationMs: 1250 },
+      [settled(900), settled(1250)],
+      'unreachable',
+    ],
+    [
+      'two readings that agree are one fact',
+      { durationMs: 9750 },
+      [settled(1250), settled(1250, { toolName: 'read_build_again', toolCallId: 'call-2' })],
       'checked-fail',
     ],
     [
-      'agrees with the latest, not an earlier row',
-      { durationMs: 1250 },
-      [settled(900), settled(1250)],
-      'checked-pass',
+      'an unknown reading beside a value disputes nothing',
+      { durationMs: 9750 },
+      [settled(unknown('clock unavailable')), settled(1250)],
+      'checked-fail',
     ],
     ['no tool settled the fact', { durationMs: 9750 }, [], 'unreachable'],
     [
@@ -151,9 +165,30 @@ describe('unit: the claims rows', () => {
       [settled(notApplicable('not timed'))],
       'unreachable',
     ],
+    // A value against a tool's bare doubt has nothing to agree with.
+    [
+      "a value against a settled 'unknown'",
+      { durationMs: 9750 },
+      [settled('unknown')],
+      'unreachable',
+    ],
+    ['a value against a settled null', { durationMs: 9750 }, [settled(null)], 'unreachable'],
+    // A value against an absence the tool DECLARED contradicts it.
+    [
+      'a value against a declared known(null)',
+      { durationMs: 9750 },
+      [settled(known(null, 'no run recorded'))],
+      'checked-fail',
+    ],
     ['field left out', {}, [settled(1250)], 'not-applicable'],
     ['declined with null', { durationMs: null }, [settled(1250)], 'not-applicable'],
     ["declined with 'unknown'", { durationMs: 'unknown' }, [settled(1250)], 'not-applicable'],
+    [
+      'declined while the run read the fact two ways',
+      { durationMs: null },
+      [settled(900), settled(1250)],
+      'not-applicable',
+    ],
     [
       'stated as an unknown value',
       { durationMs: unknown('declined') },
@@ -164,7 +199,7 @@ describe('unit: the claims rows', () => {
       'a known wrapper of the settled value',
       { durationMs: known(1250, 'answer') },
       [settled(1250)],
-      'checked-pass',
+      'not-applicable',
     ],
   ] as const)('%s → %s', (_case, answer, ledger, disposition) => {
     const row = rowFor(answer, ledger);
@@ -172,6 +207,20 @@ describe('unit: the claims rows', () => {
     expect(row.id).toBe('agent:claims:durationMs');
     expect(row.path).toBe('durationMs');
     expect(Object.isFrozen(row)).toBe(true);
+  });
+
+  it('agreement says why it is not a pass', () => {
+    expect(rowFor({ durationMs: 1250 }, [settled(1250)]).reason).toBe(
+      "the answer's 'durationMs' agrees with the fact 'durationMs' a tool settled, " +
+        'but agreement with a fact the contract does not scope is not verification',
+    );
+  });
+
+  it('a disputed fact says the run read it two ways', () => {
+    expect(rowFor({ durationMs: 1250 }, [settled(900), settled(1250)]).reason).toBe(
+      "the tool results the run read disagree about the fact 'durationMs', so the answer's " +
+        "'durationMs' cannot be checked against one of them",
+    );
   });
 
   it('one row per declared claim, in declaration order, each its own id', () => {
@@ -186,20 +235,19 @@ describe('unit: the claims rows', () => {
       1,
     );
     expect(rows.map((r) => [r.id, r.disposition])).toEqual([
-      ['agent:claims:durationMs', 'checked-pass'],
+      ['agent:claims:durationMs', 'not-applicable'],
       ['agent:claims:report.outcome', 'checked-fail'],
       ['agent:claims:queuedMs', 'not-applicable'],
     ]);
   });
 });
 
-describe('property: a claim row and the claim detector never compare differently', () => {
-  // The detector (`unsupportedClaimsOf`) and the row both derive from
-  // `compareClaim`. Over a value matrix: the row FAILS exactly when the
-  // detector files a non-advisory finding (a row can neither hide a
-  // contradiction the detector reports nor invent one), whatever the detector
-  // could not reach the row cannot either, and a row PASSES only on agreement
-  // with an established value — never on doubt the tool did not declare.
+describe('property: a claim row never says more than the claim detector', () => {
+  // The detector (`unsupportedClaimsOf`) and the row both start from
+  // `compareClaim`. Over a value matrix, the row is the stricter reader: it
+  // never PASSES (agreement with an unscoped fact is not verification), it
+  // FAILS only where the detector files a contradiction (a row never invents
+  // one), and whatever the detector could not reach the row cannot either.
   const values: readonly unknown[] = [
     undefined,
     null,
@@ -226,8 +274,7 @@ describe('property: a claim row and the claim detector never compare differently
     unknown('absent'),
     notApplicable('n/a'),
   ];
-  const isDoubt = (value: unknown) => value === null || value === 'unknown';
-  it('agrees across every evidence × claim pair', () => {
+  it('holds across every evidence × claim pair', () => {
     let cases = 0;
     for (const evidence of values) {
       for (const claim of values) {
@@ -236,20 +283,10 @@ describe('property: a claim row and the claim detector never compare differently
           const [row] = claimChecksOf([DURATION], ledger, answer, 0);
           const { findings, dispositions } = unsupportedClaimsOf([DURATION], ledger, answer, 0);
           const contradiction = findings.some((f) => f.advisory !== true);
-          expect(row!.disposition === 'checked-fail').toBe(contradiction);
+          expect(row!.disposition).not.toBe('checked-pass');
+          if (row!.disposition === 'checked-fail') expect(contradiction).toBe(true);
           if (dispositions[0]!.disposition === 'unreachable') {
             expect(row!.disposition).toBe('unreachable');
-          }
-          if (row!.disposition === 'checked-pass') {
-            // Never where the detector found a contradiction…
-            expect(contradiction).toBe(false);
-            // …and never on doubt, unless the tool DECLARED the value (`known`).
-            const latest = ledger.at(-1)?.value;
-            const declared =
-              typeof latest === 'object' &&
-              latest !== null &&
-              (latest as { kind?: unknown }).kind === 'known';
-            if (isDoubt(claim)) expect(declared).toBe(true);
           }
           cases++;
         }
@@ -362,7 +399,7 @@ describe('functional: the report merges your checks and the agent rows under one
     let seen: unknown;
     await run([hostPass], (candidate) => {
       seen = candidate;
-      return [passRow];
+      return [clearRow];
     });
     expect(seen).toEqual({ durationMs: 9750 });
     expect(Object.isFrozen(seen)).toBe(true);
@@ -404,10 +441,27 @@ describe('functional: the report merges your checks and the agent rows under one
     expect(result.content).toBeUndefined();
   });
 
-  it('a passing claim row is a comparison: it can carry a report your checks left empty', async () => {
-    const result = await run([], () => [passRow]);
-    expect(result.report).toMatchObject({ status: 'passed', checked: 1 });
-    expect(result.content).toBe('{"durationMs":9750}');
+  it('an agreeing claim row never carries a report your checks left empty', async () => {
+    // The real row for an answer that agrees with the fact a tool settled:
+    // agreement is not verification, so only YOUR checks can pass a report.
+    const result = await run([], (candidate) =>
+      claimChecksOf([DURATION], [settled(9750)], candidate, 1),
+    );
+    expect(result.report.checks).toEqual([
+      expect.objectContaining({ id: 'agent:claims:durationMs', disposition: 'not-applicable' }),
+    ]);
+    expect(result.report).toMatchObject({
+      status: 'unverified',
+      reason: 'no-comparable-checks',
+      checked: 0,
+    });
+    expect(result.content).toBeUndefined();
+  });
+
+  it('an agent row that claims to pass is refused: unverified, never a pass', async () => {
+    const result = await run([hostPass], () => [passRow]);
+    expect(result.report).toMatchObject({ status: 'unverified', reason: 'agent-check-error' });
+    expect(result.content).toBeUndefined();
   });
 
   it('a failed row outranks an unreachable one: failed, and the reason still names the unreachable rows', async () => {

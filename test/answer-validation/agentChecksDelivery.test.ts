@@ -16,6 +16,7 @@ import {
   UnsupportedValuesError,
   defineTool,
   describedResult,
+  type AnswerCheck,
   type AnswerValidationOptions,
   type LLMProvider,
   type LLMRequest,
@@ -195,13 +196,15 @@ for (const reactMode of REACT_MODES) {
       expect(seen.tokens).toEqual([answer]);
       expect(seen.ends).toEqual([answer]);
       expect(seen.findings).toEqual([]);
+      // Your check is the one comparison: agreement with the fact is no pass.
       expect(agent.answerValidation()).toMatchObject({
         status: 'passed',
-        checked: 2,
+        checked: 1,
         failed: 0,
+        notApplicable: 1,
         checks: [
           { id: 'asked-job', disposition: 'checked-pass' },
-          { id: 'agent:claims:durationMs', disposition: 'checked-pass', path: 'durationMs' },
+          { id: 'agent:claims:durationMs', disposition: 'not-applicable', path: 'durationMs' },
         ],
       });
     });
@@ -542,7 +545,7 @@ describe('integration: both checks listed — the repair turn can save a contrad
     expect(agent.answerValidation()?.checks.map((c) => [c.id, c.disposition])).toEqual([
       ['asked-job', 'checked-pass'],
       ['agent:names-and-numbers', 'not-applicable'],
-      ['agent:claims:durationMs', 'checked-pass'],
+      ['agent:claims:durationMs', 'not-applicable'],
     ]);
   });
 
@@ -753,8 +756,15 @@ const statusAnswer: OutputSchemaParser<StatusAnswer> = {
   },
 };
 
-/** A tool that settles `status` — by default the literal 'unknown': it could not establish it. */
-function statusAgent(mode: 'enforce' | 'observe', status: unknown = 'unknown') {
+/**
+ * A tool that settles `status` — by default the literal 'unknown': it could
+ * not establish it. No host check unless `hostChecks` names some.
+ */
+function statusAgent(
+  mode: 'enforce' | 'observe',
+  status: unknown = 'unknown',
+  hostChecks: readonly AnswerCheck[] = [],
+) {
   const source = scripted([
     { toolCalls: [{ id: 'call-1', name: 'read_status', args: {} }] },
     { content: JSON.stringify({ job: 'build-job-72', status: null }) },
@@ -774,13 +784,12 @@ function statusAgent(mode: 'enforce' | 'observe', status: unknown = 'unknown') {
     )
     .outputSchema(statusAnswer)
     .claims({ status: { entity: 'build-job-72', field: 'status' } })
-    // No host check at all: the claim row is the only thing that could pass.
     .answerValidation<StatusAnswer>({
       id: 'status-report',
       version: '1',
       mode,
       agentChecks: ['claims'],
-      validate: () => ({ checks: [] }),
+      validate: () => ({ checks: hostChecks }),
     })
     .build();
   return { agent, seen: delivered(agent) };
@@ -801,14 +810,28 @@ describe('security: agreement on doubt is never verified support', () => {
     expect(seen.tokens).toEqual([]);
   });
 
-  it('an absence the tool DECLARED (known(null)) is established: null agreeing with it is delivered', async () => {
-    const { agent } = statusAgent('enforce', known(null, 'the job never ran'));
+  it('agreeing with an absence the tool DECLARED (known(null)) is agreement, never a pass', async () => {
+    // With no check of your own, nothing compared the answer: withheld.
+    const alone = statusAgent('enforce', known(null, 'the job never ran'));
+    const outcome = await alone.agent
+      .run({ message: 'Did build-job-72 pass?' })
+      .catch((e: unknown) => e);
+    expect(outcome).toBeInstanceOf(AnswerValidationError);
+    expect((outcome as AnswerValidationError).report).toMatchObject({
+      status: 'unverified',
+      reason: 'no-comparable-checks',
+      checks: [
+        expect.objectContaining({ id: 'agent:claims:status', disposition: 'not-applicable' }),
+      ],
+    });
+    // With your check passing, the claim row stands aside and the answer is delivered.
+    const { agent } = statusAgent('enforce', known(null, 'the job never ran'), [
+      { id: 'asked-job', disposition: 'checked-pass' },
+    ]);
     expect(await agent.run({ message: 'Did build-job-72 pass?' })).toBe(
       JSON.stringify({ job: 'build-job-72', status: null }),
     );
-    expect(agent.answerValidation()?.checks).toEqual([
-      expect.objectContaining({ id: 'agent:claims:status', disposition: 'checked-pass' }),
-    ]);
+    expect(agent.answerValidation()).toMatchObject({ status: 'passed', checked: 1 });
   });
 
   it('observe delivers it, and the answer reads "not sure" — never "known"', async () => {
@@ -821,6 +844,126 @@ describe('security: agreement on doubt is never verified support', () => {
     expect(assessed?.assessment).not.toBe('known');
     expect(assessed?.standing).toBe('not-sure');
     expect(assessed?.support).toBeUndefined();
+  });
+});
+
+// ── Unscoped facts: any tool result can settle one ───────────────────────
+
+/**
+ * `.claims()` reads the latest `(entity, field)` row a run settled, from ANY
+ * tool, with no scope or age check — and any plain object carrying the
+ * semantics marker settles a fact. So a row can agree with the answer for the
+ * wrong reason: a page that happens to carry the marker, another customer's
+ * record, a stale read. Agreement is therefore never what delivers an answer
+ * or makes it read "known"; a contradiction still withholds it.
+ */
+function unscopedAgent(
+  mode: 'enforce' | 'observe',
+  pages: readonly unknown[],
+  answer: BuildAnswer,
+  hostChecks: readonly AnswerCheck[] = [],
+) {
+  const source = scripted([
+    ...pages.map((_page, index) => ({
+      toolCalls: [{ id: `page-${index + 1}`, name: 'fetch_page', args: {} }],
+    })),
+    { content: JSON.stringify(answer) },
+  ]);
+  let served = 0;
+  const agent = Agent.create({ provider: source.provider, model: 'synthetic', maxIterations: 6 })
+    .tool(
+      defineTool({
+        name: 'fetch_page',
+        description: 'Fetch a page the person linked.',
+        inputSchema: { type: 'object', properties: {} },
+        execute: () => pages[served++] as never,
+      }),
+    )
+    .outputSchema(buildAnswer)
+    .claims({ durationMs: { entity: 'build-job-72', field: 'durationMs' } })
+    .answerValidation<BuildAnswer>({
+      id: 'build-report',
+      version: '1',
+      mode,
+      agentChecks: ['claims'],
+      validate: () => ({ checks: hostChecks }),
+    })
+    .build();
+  return { agent, seen: delivered(agent) };
+}
+
+/** A page's JSON that carries the marker — no `describedResult`, and a provenance anyone can write. */
+const page = (durationMs: number) => ({
+  af_semantics: true,
+  facts: [{ entity: 'build-job-72', durationMs }],
+  provenance: { source: 'a page', measured_at: '2026-01-01T00:00:00Z' },
+});
+
+describe('security: agreeing with an unscoped fact never verifies an answer', () => {
+  const INVENTED_ANSWER = { job: 'build-job-72', durationMs: 9750 };
+
+  it('enforce: a page agreeing with the answer is not a comparison — withheld', async () => {
+    const { agent, seen } = unscopedAgent('enforce', [page(9750)], INVENTED_ANSWER);
+    const outcome = await agent.run(ASK).catch((e: unknown) => e);
+    expect(outcome).toBeInstanceOf(AnswerValidationError);
+    expect((outcome as AnswerValidationError).report).toMatchObject({
+      status: 'unverified',
+      reason: 'no-comparable-checks',
+      checked: 0,
+      checks: [
+        expect.objectContaining({ id: 'agent:claims:durationMs', disposition: 'not-applicable' }),
+      ],
+    });
+    expect(seen.tokens).toEqual([]);
+  });
+
+  it('observe: delivered, and the standing is never "known"', async () => {
+    const { agent } = unscopedAgent('observe', [page(9750)], INVENTED_ANSWER);
+    expect(await agent.run(ASK)).toBe(JSON.stringify(INVENTED_ANSWER));
+    expect(agent.answerValidation()).toMatchObject({
+      status: 'unverified',
+      reason: 'no-comparable-checks',
+    });
+    const assessed = await agent.assessment();
+    expect(assessed?.assessment).not.toBe('known');
+    expect(assessed?.support).toBeUndefined();
+  });
+
+  it('a contradiction from the same kind of row still withholds the answer', async () => {
+    const { agent } = unscopedAgent('enforce', [page(1250)], INVENTED_ANSWER, [
+      { id: 'asked-job', disposition: 'checked-pass' },
+    ]);
+    const outcome = await agent.run(ASK).catch((e: unknown) => e);
+    expect((outcome as AnswerValidationError).report).toMatchObject({
+      status: 'failed',
+      checks: [
+        { id: 'asked-job', disposition: 'checked-pass' },
+        expect.objectContaining({ id: 'agent:claims:durationMs', disposition: 'checked-fail' }),
+      ],
+    });
+  });
+
+  it('two reads of the fact that disagree: unreachable, whichever one the answer repeats', async () => {
+    for (const durationMs of [1250, 9750]) {
+      const { agent } = unscopedAgent(
+        'enforce',
+        [page(1250), page(9750)],
+        { job: 'build-job-72', durationMs },
+        [{ id: 'asked-job', disposition: 'checked-pass' }],
+      );
+      const outcome = await agent.run(ASK).catch((e: unknown) => e);
+      expect((outcome as AnswerValidationError).report).toMatchObject({
+        status: 'unverified',
+        reason: 'unreachable-checks',
+      });
+      expect((outcome as AnswerValidationError).report.checks[1]).toMatchObject({
+        id: 'agent:claims:durationMs',
+        disposition: 'unreachable',
+        reason:
+          "the tool results the run read disagree about the fact 'durationMs', so the " +
+          "answer's 'durationMs' cannot be checked against one of them",
+      });
+    }
   });
 });
 

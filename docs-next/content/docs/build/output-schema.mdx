@@ -472,7 +472,7 @@ needs its builder call, or `build()` refuses. Their rows come after yours in
 
 | Row | `checked-pass` | `checked-fail` | `unreachable` | `not-applicable` |
 |---|---|---|---|---|
-| `agent:claims:<field>`, one per `.claims()` field, judged on the JSON this validation delivers | the field equals the fact the latest tool result settled | the field contradicts that fact | the field states a value no tool result settled, or one settled as unknown; or gives no value where the tool settled only `null` or `'unknown'` | the answer leaves the field out, or declines it (`null`, `'unknown'`) where the run settled a value |
+| `agent:claims:<field>`, one per `.claims()` field, judged on the JSON this validation delivers | never: agreeing with a fact is not verifying the answer | the field contradicts the fact a tool settled | the field states a value no tool result settled, one settled as unknown or only as `null` / `'unknown'`, or one this run's tool results settled two different ways; or gives no value where the tool settled only `null` or `'unknown'` | the field agrees with the fact a tool settled; or the answer leaves the field out, or declines it (`null`, `'unknown'`) where the run settled a value |
 | `agent:names-and-numbers`, the gate asked of the JSON this validation delivers | never: finding a value clears an answer, it does not verify it | a value no tool result the run read carried | a value was not found and the evidence index had hit its ceiling | no value is unsupported, or the answer states none |
 
 - **Every row judges what is delivered.** Rows are judged on the exact JSON
@@ -486,15 +486,23 @@ needs its builder call, or `build()` refuses. Their rows come after yours in
   fails the row. `'assist'` asks for no repair, and `'rails'` keeps its own
   refusal, `UnsupportedValuesError`. A contradicted claim gets no repair turn of
   its own: its answer is withheld.
+- **Only your checks can pass a report.** The agent's rows can withhold an
+  answer and never verify one, so `validate` stays required: a report with no
+  comparison of yours stays `unverified`. A claim that agrees with the fact is
+  `not-applicable`, because a `.claims()` contract is unscoped — it reads the
+  latest value any tool result settled for that entity and field, with no
+  scope or age check, and any result shaped as a typed envelope can settle
+  one. Agreement with such a fact may be agreement with another customer's
+  record or a stale read. A contradiction still withholds the answer.
+- **A fact read two ways is not compared.** When this run's tool results
+  settled one fact with different values, the row is `unreachable`: the
+  library cannot tell which one is right.
 - **Agreement on doubt verifies nothing.** When the tool settled a field only
   as `null` or `'unknown'` and the answer gives no value either, the row is
   `unreachable`: enforce withholds the answer, and observe delivers it with
-  the standing "not sure", never "known". An absence a tool declares with
-  `known(null)` is an established value, so `null` agreeing with it passes.
-- **A report still needs a comparison.** Your `validate` runs as before, and a
-  report with nothing compared stays `unverified`. A passing claim row counts as
-  a comparison. The names-and-numbers row never does, so it can withhold an
-  answer but is never the reason one reads as verified.
+  the standing "not sure", never "known". The same holds for a value stated
+  against a tool's bare `null` or `'unknown'`. An absence a tool declares with
+  `known(null)` is a settled value: a value stated against it fails the row.
 - **Rows carry names, not values.** A reason quotes the field names you
   declared and a count, never the answer's or a tool's value, nor the entity a
   `.claims()` contract names (you may declare one per user). Values stay on
@@ -504,11 +512,12 @@ needs its builder call, or `build()` refuses. Their rows come after yours in
   `unverified`.
 - **`mode: 'observe'`** records the same rows and still delivers. It shows what
   enforcing would withhold before you turn it on.
-- **What it does not prove.** A passing claim row means the field equals the
-  latest value a tool settled for the fact you declared, not that the fact
-  answers the question that was asked. The gate catches invented values, not
-  false claims built from real ones. Prose answers are outside this door: it
-  checks typed answers only.
+- **What it does not prove.** No agent row proves an answer right. A claim
+  row catches a field that contradicts the latest value a tool settled for the
+  fact you declared; it cannot tell whether that fact answers the question
+  that was asked. The gate catches invented values, not false claims built
+  from real ones. Prose answers are outside this door: it checks typed
+  answers only.
 
 ### Missing prerequisites block only the claims that need them
 

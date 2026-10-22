@@ -96,17 +96,21 @@ with this door and with `rails` (`docs/design/honesty/README.md` § 8).
 
 - `claimChecksOf` judges the CANONICAL candidate this validation delivers, so a
   transforming schema is judged as delivered. It asks the claim seam's own
-  `integrity/unsupported-claim/check.ts` · `compareClaim`, the selection and
-  evaluation the detector uses, so the two cannot compare differently (a
-  matrix property in `test/answer-validation/agentChecks.test.ts` pins it).
-  Conflict → `checked-fail`; agreement → `checked-pass`; no settled fact, or one
-  settled unknown → `unreachable` (an unsupported claim is withheld, fail
-  closed); doubt on both sides (the tool settled only `null` / `'unknown'`, the
-  answer gives no value) → `unreachable` too — agreement on doubt verifies
-  nothing — unless the tool DECLARED the absence (`known(null)`), which passes;
-  omitted or declined (`null`, `'unknown'`, an unknown `Claim`) where the run
-  settled a value → `not-applicable`. The
-  detector's legacy ledger maps doubt to `checked-pass`; the row does not.
+  selection (`integrity/unsupported-claim/check.ts` · `compareClaim`) and its
+  delivery verdict (`integrity/unsupported-claim/delivered.ts` ·
+  `judgeDeliveredClaim`), so a row never accuses where the detector does not
+  (a matrix property in `test/answer-validation/agentChecks.test.ts` pins it).
+  Contradiction → `checked-fail`. Agreement → `not-applicable`: the contract is
+  unscoped — the latest `(entity, field)` row from ANY tool, with no scope or
+  age check, and any result carrying the semantics marker settles a fact — so
+  agreement verifies nothing; that includes agreeing with an absence a tool
+  declared (`known(null)`). `unreachable` (withheld, fail closed): no settled
+  fact; one settled unknown; a value against a tool's bare `null` /
+  `'unknown'`; doubt on both sides; a fact this run's rows settled two ways
+  (which one is right cannot be told). Omitted or declined (`null`,
+  `'unknown'`, an unknown `Claim`) where the run settled a value →
+  `not-applicable`. The detector's legacy ledger maps agreement and doubt to
+  `checked-pass`; the row maps neither to a pass.
 - `evidenceCheckOf` reads the gate's verdict on the SAME delivered candidate:
   the gate is handed over as an `EvidenceJudge` bound to the evidence the run
   read (`core/agent/stages/answerEvidence.ts`, a per-scope `WeakMap`, never
@@ -117,12 +121,17 @@ with this door and with `rails` (`docs/design/honesty/README.md` § 8).
   `not-applicable`: a membership pass never supports (the standing fold's
   law), so the gate can withhold an answer and never make a report pass.
 
+**No agent row is ever `checked-pass`.** The agent's checks can withhold an
+answer and never verify one, so only the host's own checks make a report
+`passed` — which the standing fold reads as "known". `validate.ts` enforces it:
+a row that claims to pass is refused as `agent-check-error`, like a throw.
+
 Rows never carry a value from the answer or a tool result — counts and the
 field names the app declared only, never the contract's `entity` (which an app
 may build per user) — because `answerValidation` is not a name the redaction
 vocabulary keeps out. `validate.ts` runs the row builder on the same
-frozen candidate as the callback, before it; a throw, or a listed check with
-no builder, is `agent-check-error` (unverified). Host check ids starting
+frozen candidate as the callback, before it; a throw, a listed check with
+no builder, or a row claiming `checked-pass` is `agent-check-error` (unverified). Host check ids starting
 `agent:` are refused while rows are on (refuse-by-domain: the two id sets
 cannot collide). `core/agent/AgentBuilder.ts` · `build` refuses a listed check
 whose builder call is missing.

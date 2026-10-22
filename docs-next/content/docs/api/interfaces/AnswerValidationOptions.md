@@ -20,7 +20,7 @@ Opt-in contract. The callback cannot replace the accepted answer.
 
 > `readonly` `optional` **agentChecks?**: readonly [`AgentCheckName`](/docs/api/type-aliases/AgentCheckName)[]
 
-Defined in: [src/answer-validation/types.ts:187](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L187)
+Defined in: [src/answer-validation/types.ts:192](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L192)
 
 The agent's own answer checks that take part in this validation. Opt-in:
 omitted, the report holds your checks alone, exactly as before.
@@ -35,14 +35,18 @@ way. `mode: 'observe'` records the rows and delivers.
 
 - `'claims'`: one row per declared `.claims()` field, id
   `agent:claims:<field>`, judged on the candidate this validation delivers.
-  Agrees with the fact a tool settled: `checked-pass`. Contradicts it:
-  `checked-fail`. States a value for a fact no tool result settled, or one
-  settled as unknown — or gives no value where the tool settled only
-  `null` or `'unknown'` (agreement on doubt verifies nothing; enforce
-  withholds, observe delivers "not sure"): `unreachable`. Leaves the field
-  out, or declines it (`null`, `'unknown'`) where the run settled a value:
-  `not-applicable`. An absence a tool declared with `known(null)` is an
-  established value: `null` agreeing with it passes.
+  Contradicts the fact a tool settled: `checked-fail`. Agrees with it:
+  `not-applicable` — the contract is unscoped (the latest row for the
+  fact from any tool, with no scope or age check), so agreement is not
+  verification. States a value for a fact no tool result settled, one
+  settled as unknown or only as `null` / `'unknown'`, or one this run's
+  tool results settled two ways — or gives no value where the tool
+  settled only `null` or `'unknown'` (agreement on doubt verifies
+  nothing): `unreachable`, so enforce withholds and observe delivers "not
+  sure". Leaves the field out, or declines it (`null`, `'unknown'`) where
+  the run settled a value: `not-applicable`. Facts are this run's reads
+  only: a follow-up turn that answers from an earlier run's read is
+  `unreachable`.
 - `'names-and-numbers'`: one row, id `agent:names-and-numbers`: the gate
   asked of the exact candidate this validation delivers, after any output
   transform (its one repair turn under `posture: 'guard'` runs earlier, on
@@ -51,12 +55,13 @@ way. `mode: 'observe'` records the rows and delivers.
   A clean pass is `not-applicable`: finding a value clears it, and never
   verifies the answer.
 
-Each listed check needs its builder call, or `build()` refuses. `validate`
-still runs, and a report with no comparison stays `unverified`: the
-evidence row never counts as one. Rows carry counts and the field names you
-declared, never a value from the answer or a tool, nor the entity a
-contract names. Check ids that start with `agent:` are reserved while this
-is set.
+No agent row is ever `checked-pass`: these checks can withhold an answer
+and never verify one. `validate` stays required, and only your checks can
+make the report `passed` — a report with no comparison of yours stays
+`unverified`. Each listed check needs its builder call, or `build()`
+refuses. Rows carry counts and the field names you declared, never a value
+from the answer or a tool, nor the entity a contract names. Check ids that
+start with `agent:` are reserved while this is set.
 
 #### Example
 
@@ -120,7 +125,7 @@ Defined in: [src/answer-validation/types.ts:125](https://github.com/footprintjs/
 
 > **validate**(`candidate`, `context`): `AnswerValidationResult` \| `Promise`\<`AnswerValidationResult`\>
 
-Defined in: [src/answer-validation/types.ts:188](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L188)
+Defined in: [src/answer-validation/types.ts:193](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L193)
 
 #### Parameters
 

@@ -109,8 +109,16 @@ const INVENTED = { job: 'build-job-72', durationMs: 9750 };
 
 export async function run(input: string): Promise<string> {
   // 1. The answer agrees with the fact the tool settled: delivered unchanged.
-  const agreeing = await agentAnswering(READ).run({ message: input });
+  //    Your check is what passed the report — the agent's rows withhold an
+  //    answer, they never verify one (agreement is `not-applicable`).
+  const agreeingAgent = agentAnswering(READ);
+  const agreeing = await agreeingAgent.run({ message: input });
   check(agreeing === JSON.stringify(READ), 'the agreeing answer to be delivered');
+  const passedBy = agreeingAgent
+    .answerValidation()
+    ?.checks.filter((c) => c.disposition === 'checked-pass')
+    .map((c) => c.id);
+  check(passedBy?.join() === 'asked-job', 'only your check to pass the report');
 
   // 2. The answer invents 9750; its repair turn reads 1250 back: delivered.
   const repaired = await agentAnswering(INVENTED, READ).run({ message: input });

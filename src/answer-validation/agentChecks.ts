@@ -5,26 +5,29 @@
  * Pattern: pure adapters, one verdict in, `AnswerCheck` rows out.
  * Role:    the one place the library's own checks speak the report's
  *          vocabulary. `claimChecksOf` judges the candidate this validation
- *          delivers through the claim seam's own comparison
- *          (`integrity/unsupported-claim/check.ts` · `compareClaim`), so the
- *          seam and its row can never compare differently. `evidenceCheckOf`
- *          reads the evidence gate's verdict on that same candidate — asked of
- *          it through an `EvidenceJudge`, never the verdict on the model's
- *          draft, which an output transform may have changed.
+ *          delivers through the claim seam's own selection
+ *          (`integrity/unsupported-claim/check.ts` · `compareClaim`) and its
+ *          delivery verdict (`integrity/unsupported-claim/delivered.ts` ·
+ *          `judgeDeliveredClaim`), so a row can never accuse where the
+ *          detector does not. `evidenceCheckOf` reads the evidence gate's
+ *          verdict on that same candidate — asked of it through an
+ *          `EvidenceJudge`, never the verdict on the model's draft, which an
+ *          output transform may have changed.
  *
- * Two laws, both from the standing fold (`core/agent/assessment/assess.ts`):
- *   - A membership pass never verifies. The gate's clean verdict is
- *     `not-applicable`, so the gate can withhold an answer and can never be
- *     what makes a report `passed` (which the fold reads as "known").
+ * One law above all, from the standing fold (`core/agent/assessment/assess.ts`):
+ * an agent row can WITHHOLD an answer and never VERIFY one. No row here is
+ * ever `checked-pass` (`validate.ts` refuses one), so only the app's own
+ * checks can make a report `passed`, which the fold reads as "known":
+ *   - The gate's clean verdict is a membership pass: `not-applicable`.
+ *   - A claim that agrees with the settled fact is `not-applicable` too. The
+ *     contract is unscoped — the latest row for `(entity, field)` from any
+ *     tool, with no scope or age check — so agreement verifies nothing. A
+ *     contradiction still fails the row.
  *   - Doubt is never support. A field the answer leaves out, or declines
  *     (`null` / `'unknown'`) where the run settled a value, is
- *     `not-applicable`. Doubt on BOTH sides — the tool settled only `null` or
- *     `'unknown'` and the answer gives no value — is `unreachable`: agreement
- *     on doubt verifies nothing, so enforce withholds the answer and observe
- *     delivers it with the standing "not sure". Only an absence a tool
- *     DECLARED (`known(null)`) is an established value, and agreeing with it
- *     passes. (The detector's legacy ledger maps both kinds of doubt to
- *     `checked-pass`, which is no certificate.)
+ *     `not-applicable`. A value against a tool's bare doubt, doubt on both
+ *     sides, a fact the run read two ways, and a fact no row settled are
+ *     `unreachable`: enforce withholds, observe delivers "not sure".
  *
  * And one from the redaction law: a row carries counts and the FIELD names the
  * app declared (the answer field, the fact's field), never a value from the
@@ -35,10 +38,13 @@
  */
 import {
   compareClaim,
-  type ClaimComparison,
   type ClaimLedgerRow,
   type DeclaredClaim,
 } from '../integrity/unsupported-claim/check.js';
+import {
+  judgeDeliveredClaim,
+  type DeliveredClaim,
+} from '../integrity/unsupported-claim/delivered.js';
 import type { Disposition } from '../integrity/disposition/types.js';
 import type { AnswerCheck } from './types.js';
 
@@ -98,7 +104,7 @@ export function evidenceCheckOf(verdict: EvidenceCheckInput | undefined): Answer
 
 /**
  * The `'claims'` rows: one per declared claim, in declaration order, judged
- * on `candidate` against the ledger's latest row for each declared fact.
+ * on `candidate` against this run's ledger rows for each declared fact.
  * Throws what the claim comparison throws (a ledger value JSON cannot render).
  */
 export function claimChecksOf(
@@ -107,56 +113,62 @@ export function claimChecksOf(
   candidate: unknown,
   epoch: number,
 ): AnswerCheck[] {
-  return declared.map((claim) => claimRowOf(claim, compareClaim(claim, ledger, candidate, epoch)));
+  return declared.map((claim) =>
+    claimRowOf(claim, judgeDeliveredClaim(compareClaim(claim, ledger, candidate, epoch))),
+  );
 }
 
-function claimRowOf(claim: DeclaredClaim, comparison: ClaimComparison): AnswerCheck {
+function claimRowOf(claim: DeclaredClaim, verdict: DeliveredClaim): AnswerCheck {
   const field = `'${claim.answerField}'`;
   // The fact by its FIELD only: an app may declare the entity per user.
   const fact = `the fact '${claim.field}'`;
-  const row = (disposition: Disposition, reason?: string): AnswerCheck =>
+  const row = (disposition: Disposition, reason: string): AnswerCheck =>
     Object.freeze({
       id: `${AGENT_CHECK_PREFIX}claims:${claim.answerField}`,
       disposition,
       path: claim.answerField,
-      ...(reason !== undefined && { reason }),
+      reason,
     });
-  if (comparison.kind === 'omitted')
-    return row('not-applicable', `the answer does not state ${field}`);
-  if (comparison.kind === 'uncollected') {
-    return row(
-      'unreachable',
-      `no tool result the run read settled ${fact}, so the answer's ${field} has nothing to agree with`,
-    );
-  }
-  switch (comparison.evaluation) {
-    case 'conflict':
+  switch (verdict) {
+    case 'omitted':
+      return row('not-applicable', `the answer does not state ${field}`);
+    case 'declined':
+      return row('not-applicable', `the answer declines to state ${field}`);
+    case 'agrees':
+      return row(
+        'not-applicable',
+        `the answer's ${field} agrees with ${fact} a tool settled, but agreement with a fact ` +
+          `the contract does not scope is not verification`,
+      );
+    case 'contradicts':
       return row('checked-fail', `the answer's ${field} contradicts ${fact} a tool settled`);
-    case 'evidence-unavailable':
+    case 'uncollected':
+      return row(
+        'unreachable',
+        `no tool result the run read settled ${fact}, so the answer's ${field} has nothing to agree with`,
+      );
+    case 'disputed':
+      return row(
+        'unreachable',
+        `the tool results the run read disagree about ${fact}, so the answer's ${field} cannot ` +
+          `be checked against one of them`,
+      );
+    case 'settled-unknown':
       return row(
         'unreachable',
         `the run settled ${fact} as unknown, so the answer's ${field} cannot be compared`,
       );
-    case 'doubt-against-value':
-    case 'claim-nonparticipating':
-      return row('not-applicable', `the answer declines to state ${field}`);
-    case 'both-doubt':
-      return declaredKnown(comparison.settledRow.value)
-        ? row('checked-pass')
-        : row(
-            'unreachable',
-            `${fact} was settled only as null or 'unknown', and the answer's ${field} gives no ` +
-              `value either: agreement on doubt verifies nothing`,
-          );
-    case 'no-conflict':
-    case 'numeric-leniency':
-      return row('checked-pass');
+    case 'settled-doubt':
+      return row(
+        'unreachable',
+        `the run settled ${fact} only as null or 'unknown', so the answer's ${field} has ` +
+          `nothing to agree with`,
+      );
+    case 'doubt-on-both-sides':
+      return row(
+        'unreachable',
+        `${fact} was settled only as null or 'unknown', and the answer's ${field} gives no ` +
+          `value either: agreement on doubt verifies nothing`,
+      );
   }
-}
-
-/** A value a tool DECLARED established (`known(…)`, `lib/claim/claim.ts`) — `known(null)` included. */
-function declaredKnown(value: unknown): boolean {
-  return (
-    typeof value === 'object' && value !== null && (value as { kind?: unknown }).kind === 'known'
-  );
 }
