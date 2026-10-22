@@ -451,7 +451,15 @@ answered on `resume()` is listed, with the calls before the pause.
 
 Served by `streamHandler` with `agUi()`, an enforced refusal sends no
 `TEXT_MESSAGE_CONTENT` and ends the run with `RUN_ERROR` in fixed words; the
-report stays on the server.
+report stays on the server. Over `nodeHost` or `httpHost` (for example behind
+`standingAgent`), a withheld answer is a refusal, not a server error: HTTP 422
+with code `ERR_ANSWER_VALIDATION`, and on a stream the closing `error` frame
+carries the same code. No draft text reaches either.
+
+A refusal withholds the answer only. Tools the turn already called have run,
+and nothing undoes them: a tool that changes something (a cancellation, a
+payment) needs its own gate before it runs — a permission policy or a person's
+approval — not answer validation after it.
 
 ### Let the agent's own checks hold the answer
 

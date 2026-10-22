@@ -82,4 +82,10 @@ export const REFUSAL_STATUS: Readonly<Record<string, number>> = Object.freeze({
   // (a header missing or unreadable) — the request is what is wrong, and the
   // same caller can send it again with the credential.
   ERR_REQUEST_NOT_SEALED: 400,
+  // An enforcing `.answerValidation()` withheld the answer
+  // (`AnswerValidationError`). 422: the request was understood and the agent
+  // ran, but the ANSWER it produced did not pass the app's checks, so there is
+  // nothing to deliver. Nothing broke, so never a 5xx. The refusal withholds
+  // the answer only: tools the turn already called have run, and are not undone.
+  ERR_ANSWER_VALIDATION: 422,
 });

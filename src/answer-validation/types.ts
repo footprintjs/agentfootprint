@@ -247,13 +247,22 @@ export interface AnswerValidationReport {
   readonly schemaAccepted: boolean;
 }
 
-/** An enforcing host refused delivery; diagnostic metadata only, never content. */
+/**
+ * An enforcing validation refused delivery; diagnostic metadata only, never
+ * content. Served by a hosting door, it is a refusal, not a failure: HTTP 422
+ * with code `ERR_ANSWER_VALIDATION` (on a stream, the closing error frame
+ * carries the same code). It withholds the answer only — tools the turn
+ * already called have run, and nothing undoes them.
+ */
 export class AnswerValidationError extends Error {
   readonly code = 'ERR_ANSWER_VALIDATION' as const;
   readonly report: AnswerValidationReport;
 
   constructor(report: AnswerValidationReport) {
-    super(`Answer validation '${report.validatorId}' did not pass (${report.status}).`);
+    super(
+      `The answer was withheld: answer validation '${report.validatorId}' did not pass ` +
+        `(${report.status}).`,
+    );
     this.name = 'AnswerValidationError';
     this.report = Object.freeze({
       ...report,
