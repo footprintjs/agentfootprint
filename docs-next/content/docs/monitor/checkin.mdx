@@ -82,7 +82,7 @@ if (isCheckInPause(out)) {
 }
 ```
 
-`ResumeDecisionError` (`code: 'ERR_RESUME_DECISION'`) says which rule refused, in `reason` (a `ResumeDecisionRefusal`), and carries the `requestId` the decision named and the `pausedRequestId` the run is waiting on:
+`ResumeDecisionError` (`code: 'ERR_RESUME_DECISION'`) says which rule refused, in `reason` (a `ResumeDecisionRefusal`). It never names a request id — not in its message (which a host sends as the refusal's body), not on a field — because a refusal that named the paused request would hand a retrying client the one id it must not guess: the request to show the person is in the pending ask, never in an error.
 
 | `reason` | The decision… |
 |---|---|

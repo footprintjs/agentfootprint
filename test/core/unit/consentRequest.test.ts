@@ -267,17 +267,56 @@ describe('heldDecision', () => {
   it("refuses a decision for another request: 'other-request'", () => {
     const p = paused();
     const other = paused();
-    const err = (() => {
+    refusedWith(
+      () => hold(checkInApproved({ request: other.minted.request, by: 'maya' }), p),
+      'other-request',
+    );
+  });
+
+  it('a refusal names no request id — not in its message, not on its fields', async () => {
+    // The double click: a client that read the paused request's id out of a
+    // refusal and retried with it would approve a request nobody was shown. So
+    // a refusal says WHY, never WHICH — for every reason it can give.
+    const p = paused();
+    const other = paused();
+    const forOther = checkInApproved({ request: other.minted.request, by: 'maya' });
+    const forThis = checkInApproved({ request: p.minted.request, by: 'maya' });
+    const ledger = inMemoryDecisionLedger();
+    await spendDecision(ledger, forThis, 'checkIn');
+    const changed = paused();
+    const forChanged = checkInApproved({ request: changed.minted.request, by: 'maya' });
+    changed.state.pausedCheckInArgs = { amount: 1 };
+    const refusals: unknown[] = [];
+    const collect = (fn: () => unknown): void => {
       try {
-        hold(checkInApproved({ request: other.minted.request, by: 'maya' }), p);
-      } catch (e) {
-        return e as ResumeDecisionError;
+        fn();
+      } catch (err) {
+        refusals.push(err);
       }
-      return undefined;
-    })();
-    expect(err?.reason).toBe('other-request');
-    expect(err?.requestId).toBe(other.minted.request.id);
-    expect(err?.pausedRequestId).toBe(p.minted.request.id);
+    };
+    collect(() => hold({ approved: true, by: 'maya', at: 1 }, p)); // no-request
+    collect(() =>
+      heldDecision(forThis, gateOf('checkIn'), undefined, gatedCallOf(p.read, 'checkIn')),
+    ); // request-not-recorded
+    collect(() => hold(forOther, p)); // other-request
+    collect(() => hold(forChanged, changed)); // call-changed
+    await spendDecision(ledger, forThis, 'checkIn').catch((err) => refusals.push(err)); // already-answered
+    expect(refusals.map((err) => (err as ResumeDecisionError).reason)).toEqual([
+      'no-request',
+      'request-not-recorded',
+      'other-request',
+      'call-changed',
+      'already-answered',
+    ]);
+    const ids = [p.minted.request.id, other.minted.request.id, changed.minted.request.id];
+    for (const err of refusals) {
+      const seen = `${(err as Error).message} ${JSON.stringify(err)} ${JSON.stringify(
+        Object.values(err as object),
+      )}`;
+      for (const id of ids) expect(seen).not.toContain(id);
+      expect(err).not.toHaveProperty('requestId');
+      expect(err).not.toHaveProperty('pausedRequestId');
+    }
   });
 
   it.each([
@@ -364,7 +403,7 @@ describe('spendDecision and the ledger', () => {
     await expect(spendDecision(ledger, decision, 'checkIn')).resolves.toBeUndefined();
     await expect(spendDecision(ledger, decision, 'checkIn')).rejects.toMatchObject({
       reason: 'already-answered',
-      requestId: decision.requestId,
+      gate: 'checkIn',
     });
   });
 

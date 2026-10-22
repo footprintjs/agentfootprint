@@ -2647,14 +2647,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // differing value is recorded by the ToolCalls resume door.
     const passedTime = this.passedTimeFor(options?.time, 'Agent.resume');
     options = withoutTime(options);
-    // …and the decision must be for THIS request and this exact call
-    // (`core/consentRequest.ts`): refused here, before anything moves, when it
-    // names no request, another request, or a call the checkpoint no longer
-    // holds. The dispatch loop asks again where the decision is used — and
-    // spends it there, once.
-    const gate = pauseDemandsDecision(checkpoint.pauseData);
-    if (gate) checkDecisionAgainst(checkpoint, gate, input);
-    // One run, one identity — refused before anything moves. The paused run's
+    // One run, one identity — refused before anything moves, and before the
+    // answer is read at all: a caller this run is not for learns nothing about
+    // what it is waiting on (its gate, its tool, its request). The paused run's
     // caller identity is read off the checkpoint (`callerIdentity.ts`); a call
     // naming a DIFFERENT one would give the run one person's memory namespace
     // and credentials (restored, never re-seeded) and another's `ctx.identity`,
@@ -2679,6 +2674,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     ) {
       throw new ResumeIdentityConflictError();
     }
+    // …and the decision must be for THIS request and this exact call
+    // (`core/consentRequest.ts`): refused here, before anything moves, when it
+    // names no request, another request, or a call the checkpoint no longer
+    // holds. The dispatch loop asks again where the decision is used — and
+    // spends it there, once.
+    const gate = pauseDemandsDecision(checkpoint.pauseData);
+    if (gate) checkDecisionAgainst(checkpoint, gate, input);
     // Typed data collection is not consent. Validate before changing any run state.
     const awaitingInput = gate === undefined ? readAwaitingInput(checkpoint.pauseData) : undefined;
     let answeredAsk: AnsweredAsk | undefined;

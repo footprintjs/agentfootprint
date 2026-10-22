@@ -208,20 +208,15 @@ export function heldDecision(
       ? decision.requestId
       : undefined;
   // A pause that recorded no request can be answered by nothing — said first,
-  // because no decision, however it is built, would change that.
+  // because no decision, however it is built, would change that. No refusal
+  // carries an id (`ResumeDecisionError`): it would hand out the one it
+  // requires.
   const pending = readPendingRequest(recorded);
-  if (pending === undefined) {
-    throw new ResumeDecisionError('request-not-recorded', gate.kind, {
-      ...(requestId !== undefined && { requestId }),
-    });
-  }
-  if (requestId === undefined) {
-    throw new ResumeDecisionError('no-request', gate.kind, { pausedRequestId: pending.id });
-  }
-  const ids = { requestId, pausedRequestId: pending.id };
-  if (requestId !== pending.id) throw new ResumeDecisionError('other-request', gate.kind, ids);
+  if (pending === undefined) throw new ResumeDecisionError('request-not-recorded', gate.kind);
+  if (requestId === undefined) throw new ResumeDecisionError('no-request', gate.kind);
+  if (requestId !== pending.id) throw new ResumeDecisionError('other-request', gate.kind);
   if (requestIdOf(pending.nonce, call) !== pending.id) {
-    throw new ResumeDecisionError('call-changed', gate.kind, ids);
+    throw new ResumeDecisionError('call-changed', gate.kind);
   }
   return decision as CheckInDecision;
 }
@@ -258,12 +253,7 @@ export async function spendDecision(
   gate: ConsentGateKind,
 ): Promise<void> {
   const fresh = await ledger.spend(decision.requestId);
-  if (fresh !== true) {
-    throw new ResumeDecisionError('already-answered', gate, {
-      requestId: decision.requestId,
-      pausedRequestId: decision.requestId,
-    });
-  }
+  if (fresh !== true) throw new ResumeDecisionError('already-answered', gate);
 }
 
 /** The request's id for `call` under `nonce`, or `undefined` when the call is not faithful JSON. */

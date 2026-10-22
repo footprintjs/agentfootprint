@@ -844,4 +844,52 @@ describe('a consent gate over the wire — a decision answers the request it nam
       await handle.close();
     }
   });
+
+  it('over a real socket, the 409 for a duplicate never carries the pending request id', async () => {
+    // The refusal must not hand out the id it exists to require: a client that
+    // retried a 409 with an id read from its body would approve the refund
+    // nobody was shown.
+    const { nodeHost } = await import('../../src/hosting/index.js');
+    const ran: number[] = [];
+    const handle = await standingAgent({
+      agent: twoRefunds(ran),
+      sessions: memorySessions(),
+      host: nodeHost({ port: 0, hostname: '127.0.0.1' }),
+    });
+    try {
+      const post = (body: unknown): Promise<Response> =>
+        fetch(`${handle.url}/invoke`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+      const first = (await (await post({ input: 'refund both', sessionId: 'w409' })).json()) as {
+        awaiting: unknown;
+      };
+      const approveFirst = checkInApproved({ request: pausedRequest(first.awaiting), by: 'alice' });
+      const resumed = await post({ input: '', sessionId: 'w409', decision: approveFirst });
+      expect(resumed.status).toBe(202);
+      const second = (await resumed.json()) as { awaiting: unknown };
+      const pendingId = pausedRequest(second.awaiting).id;
+
+      const duplicate = await post({ input: '', sessionId: 'w409', decision: approveFirst });
+      expect(duplicate.status).toBe(409);
+      const body = await duplicate.text();
+      expect(JSON.parse(body)).toMatchObject({ code: 'ERR_RESUME_DECISION' });
+      expect(body).not.toContain(pendingId);
+      expect(body).not.toContain(approveFirst.requestId);
+
+      // A decision that names no request is refused the same way, without the id.
+      const unnamed = await post({
+        input: '',
+        sessionId: 'w409',
+        decision: { approved: true, by: 'alice', at: 1 },
+      });
+      expect(unnamed.status).toBe(409);
+      expect(await unnamed.text()).not.toContain(pendingId);
+      expect(ran).toEqual([5]);
+    } finally {
+      await handle.close();
+    }
+  });
 });

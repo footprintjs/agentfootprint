@@ -397,8 +397,12 @@ export type ResumeDecisionRefusal =
  * composition's nested agent — is decided where the decision is used, inside
  * the resumed run and still before the tool. See {@link ResumeDecisionRefusal}.
  *
- * The request ids in the message and on the error are opaque fingerprints that
- * carry no run value.
+ * **It names no request id** — not in its message, not on a field — and a
+ * host sends its message as the refusal's body. A refusal that named the
+ * request the run is paused on would hand out the very id it exists to
+ * require: a client that retried with it would approve a request nobody was
+ * shown. The paused request is the server's to show; it is in the stored
+ * pause (`PendingAsk.checkIn` / `.ask`), never in an error.
  */
 export class ResumeDecisionError extends Error {
   readonly code = 'ERR_RESUME_DECISION' as const;
@@ -406,31 +410,16 @@ export class ResumeDecisionError extends Error {
   readonly reason: ResumeDecisionRefusal;
   /** Which kind of consent gate the run is paused on. */
   readonly gate: ConsentGateKind;
-  /** The request the decision named, when it named one. */
-  readonly requestId?: string;
-  /** The request the run is paused on, when the pause recorded one. */
-  readonly pausedRequestId?: string;
 
-  constructor(
-    reason: ResumeDecisionRefusal,
-    gate: ConsentGateKind,
-    ids: { readonly requestId?: string; readonly pausedRequestId?: string } = {},
-  ) {
-    super(resumeDecisionMessage(reason, ids));
+  constructor(reason: ResumeDecisionRefusal, gate: ConsentGateKind) {
+    super(resumeDecisionMessage(reason));
     this.name = 'ResumeDecisionError';
     this.reason = reason;
     this.gate = gate;
-    if (ids.requestId !== undefined) this.requestId = ids.requestId;
-    if (ids.pausedRequestId !== undefined) this.pausedRequestId = ids.pausedRequestId;
   }
 }
 
-function resumeDecisionMessage(
-  reason: ResumeDecisionRefusal,
-  ids: { readonly requestId?: string; readonly pausedRequestId?: string },
-): string {
-  const named = ids.requestId !== undefined ? `'${ids.requestId}'` : 'the one it names';
-  const paused = ids.pausedRequestId !== undefined ? `'${ids.pausedRequestId}'` : 'its own';
+function resumeDecisionMessage(reason: ResumeDecisionRefusal): string {
   switch (reason) {
     case 'no-request':
       return (
@@ -449,23 +438,23 @@ function resumeDecisionMessage(
       );
     case 'other-request':
       return (
-        `[resume] this decision answers request ${named}, and this run is paused on request ` +
-        `${paused}. A decision answers only the request it names — not a later pause of the ` +
-        `same run, not a parallel sibling's, not another conversation's. Nothing was executed; ` +
-        `answer the paused request with a decision built from it.`
+        `[resume] this decision answers a different request than the one this run is paused ` +
+        `on. A decision answers only the request it names — not a later pause of the same run, ` +
+        `not a parallel sibling's, not another conversation's. Nothing was executed; show the ` +
+        `person the paused request and build the decision from what they were shown.`
       );
     case 'call-changed':
       return (
-        `[resume] this decision answers request ${named}, but the paused call is no longer the ` +
+        `[resume] this decision names the paused request, but the paused call is no longer the ` +
         `call the person was asked about: the checkpoint's tool, arguments, call id, served ` +
         `party or middleware position changed after the ask. An approval binds to the exact ` +
         `call it was shown. Nothing was executed; treat the checkpoint as altered.`
       );
     case 'already-answered':
       return (
-        `[resume] request ${named} was already answered by an earlier resume. One decision ` +
-        `runs one call: a request is spent the moment a resume uses its decision, approved or ` +
-        `declined. Nothing was executed this time.`
+        `[resume] the request this decision names was already answered by an earlier resume. ` +
+        `One decision runs one call: a request is spent the moment a resume uses its ` +
+        `decision, approved or declined. Nothing was executed this time.`
       );
   }
 }

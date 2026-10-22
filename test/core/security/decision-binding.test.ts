@@ -30,6 +30,7 @@ import {
   isCheckInPause,
   isPaused,
   Parallel,
+  ResumeIdentityConflictError,
   Sequence,
   type RunnerPauseOutcome,
 } from '../../../src/index.js';
@@ -167,6 +168,38 @@ describe('decision binding — a decision for request A never answers request B'
     await expect(second.resume(b.checkpoint, declineA)).rejects.toMatchObject(
       refusal('other-request'),
     );
+  });
+});
+
+describe('decision binding — who may answer is asked before what the answer names', () => {
+  it('a caller whose identity is refused learns nothing about the paused request', async () => {
+    const exec = vi.fn(() => 'refunded');
+    const agent = gatedAgent(exec);
+    const maya = { principal: 'maya', conversationId: 'c-maya' };
+    const eve = { principal: 'eve', conversationId: 'c-maya' };
+    const paused = asCheckIn(await agent.run({ message: 'refund 5', identity: maya }));
+    const elsewhere = asCheckIn(await gatedAgent(exec).run({ message: 'refund 9' }));
+    // Each of these would be refused for what it names — a decision for
+    // another request, an old-format decision, a value — but the caller is
+    // not the paused run's, so the refusal says that and nothing about the
+    // request, its gate or its tool.
+    for (const input of [
+      checkInApproved({ request: elsewhere.checkIn, by: 'eve' }),
+      { approved: true, by: 'eve', at: 1 },
+      'yes',
+    ]) {
+      await expect(
+        agent.resume(paused.checkpoint, input, { identity: eve }),
+      ).rejects.toBeInstanceOf(ResumeIdentityConflictError);
+    }
+    expect(exec).not.toHaveBeenCalled();
+    // The paused run's own caller is still answered as asked.
+    await agent.resume(
+      paused.checkpoint,
+      checkInApproved({ request: paused.checkIn, by: 'maya' }),
+      { identity: maya },
+    );
+    expect(exec).toHaveBeenCalledTimes(1);
   });
 });
 
