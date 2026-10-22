@@ -21,6 +21,7 @@ export {
   claimChecksOf,
   evidenceCheckOf,
   type EvidenceCheckInput,
+  type EvidenceJudge,
 } from './agentChecks.js';
 export {
   checkClaimRequirements,

@@ -298,10 +298,11 @@ test) can recognise it without matching on prose.
   let stand, and an answer that exhausted its schema retries is not judged at
   all. A typed answer is read value by value, the way a JSON tool result is:
   `{"counts":[1200,9750]}` checks `1200` and `9750`, never the text `1200,9750`.
-* With `.answerValidation({ agentChecks: ['names-and-numbers'] })`: the gate's
-  verdict on the answer that stands becomes a row of that report. A value no
-  tool result carried fails it; a clean pass is `not-applicable`, because
-  finding a value clears an answer without verifying it.
+* With `.answerValidation({ agentChecks: ['names-and-numbers'] })`: the gate is
+  asked again of the exact JSON that validation delivers, after any output
+  transform, and its verdict becomes a row of that report. A value no tool
+  result carried fails it; a clean pass is `not-applicable`, because finding a
+  value clears an answer without verifying it.
 * With [`.reliability()`](doc:reliability): no collision. Reliability governs
   what one *call* does before a response is committed; this governs an answer
   that **was** committed.

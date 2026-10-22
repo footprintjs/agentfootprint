@@ -173,11 +173,12 @@ export async function executeAnswerValidation(
   toolCalls?: AnswerToolCallsView,
   /**
    * Builds the rows of the agent's own checks that `config.agentChecks` lists
-   * (`agentChecks.ts`) from the same frozen candidate the validator receives.
-   * Synchronous library code: a throw, or a listed check with no builder,
-   * makes the report `unverified` — never a pass.
+   * (`agentChecks.ts`) from the candidate this validation delivers: the same
+   * frozen value the validator receives, and its canonical JSON — the exact
+   * text that would be delivered. Synchronous library code: a throw, or a
+   * listed check with no builder, makes the report `unverified` — never a pass.
    */
-  buildAgentRows?: (candidate: unknown) => readonly AnswerCheck[],
+  buildAgentRows?: (candidate: unknown, canonical: string) => readonly AnswerCheck[],
 ): Promise<{ report: AnswerValidationReport; content?: string }> {
   const controller = new AbortController();
   // Detached and frozen before the callback exists: the check reads a copy of
@@ -244,7 +245,7 @@ export async function executeAnswerValidation(
       if (config.agentChecks.length > 0) {
         try {
           if (buildAgentRows === undefined) throw new Error('No builder for the listed checks.');
-          agentRows = Object.freeze([...buildAgentRows(candidate)]);
+          agentRows = Object.freeze([...buildAgentRows(candidate, canonical)]);
         } catch {
           reason = 'agent-check-error';
           return;

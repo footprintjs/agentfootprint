@@ -84,11 +84,13 @@ per-attempt facts belong. Only the terminal verdict is committed
 
 **Governing delivery is not a fourth posture.** A typed answer under an
 enforcing `.answerValidation({ agentChecks: ['names-and-numbers'] })` hands the
-gate's terminal verdict (counts and flags, in memory —
-`../stages/answerEvidence.ts`) to that validation as one report row
-(`answer-validation/agentChecks.ts` · `evidenceCheckOf`). The posture still
-decides the repair turn; whatever survives it fails the row and the answer is
-withheld. A clean pass is `not-applicable` there: a found value clears an
+gate itself — a judge bound to the run's evidence, in memory
+(`../stages/answerEvidence.ts`) — to that validation, which asks it of the
+exact candidate it delivers and files one report row
+(`answer-validation/agentChecks.ts` · `evidenceCheckOf`). Never the draft's
+verdict: an output schema may transform the draft. The posture still decides
+the repair turn (on the draft); a value the delivered candidate carries that no
+result did fails the row, and the answer is withheld. A clean pass is `not-applicable` there: a found value clears an
 answer, it never verifies one.
 
 ## Recovery guidance (9.96.0)

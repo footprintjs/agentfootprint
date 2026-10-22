@@ -110,25 +110,28 @@ export function withAnswerValidation(
 }
 
 /**
- * The rows of the agent's own checks this validation lists, built from the
- * candidate it delivers (`answer-validation/agentChecks.ts`). Reads state only
- * for a listed check: the gate's verdict from this Route stage, the claim
+ * The rows of the agent's own checks this validation lists, every one judged
+ * on the candidate it DELIVERS (`answer-validation/agentChecks.ts`) — after
+ * every output transform, never the draft the Route decider judged. Reads
+ * state only for a listed check: this Route stage's evidence judge, the claim
  * ledger for `'claims'`. `undefined` when nothing is listed.
  */
 function agentRowsFor(
   scope: TypedScope<AgentState>,
   config: ResolvedAnswerValidation,
   claims: readonly DeclaredClaim[],
-): ((candidate: unknown) => readonly AnswerCheck[]) | undefined {
+): ((candidate: unknown, canonical: string) => readonly AnswerCheck[]) | undefined {
   if (config.agentChecks.length === 0) return undefined;
+  const listsEvidence = config.agentChecks.includes('names-and-numbers');
+  const listsClaims = config.agentChecks.includes('claims');
+  const judge = listsEvidence ? answerEvidenceOf(scope) : undefined;
+  const ledger = listsClaims ? [...(scope.claimFacts ?? [])] : [];
+  const epoch = listsClaims ? (scope.iteration as number | undefined) ?? 0 : 0;
   // Fixed order — the Route decider's own: the evidence gate, then the claims.
-  const evidence = config.agentChecks.includes('names-and-numbers')
-    ? [evidenceCheckOf(answerEvidenceOf(scope))]
-    : [];
-  if (!config.agentChecks.includes('claims')) return () => evidence;
-  const ledger = [...(scope.claimFacts ?? [])];
-  const epoch = (scope.iteration as number | undefined) ?? 0;
-  return (candidate) => [...evidence, ...claimChecksOf(claims, ledger, candidate, epoch)];
+  return (candidate, canonical) => [
+    ...(listsEvidence ? [evidenceCheckOf(judge?.(canonical))] : []),
+    ...(listsClaims ? claimChecksOf(claims, ledger, candidate, epoch) : []),
+  ];
 }
 
 /** Calls the model asked for that the terminal branch will never dispatch:

@@ -144,9 +144,10 @@ export interface AnswerValidationOptions<T = unknown> {
    *   `checked-fail`. States a value for a fact no tool result settled, or one
    *   settled as unknown: `unreachable`. Leaves the field out, or declines it
    *   (`null`, `'unknown'`) where the run settled a value: `not-applicable`.
-   * - `'names-and-numbers'`: one row, id `agent:names-and-numbers`, from the
-   *   gate's verdict on the answer that stands, so after its one repair turn
-   *   under `posture: 'guard'`. A value no tool result carried: `checked-fail`.
+   * - `'names-and-numbers'`: one row, id `agent:names-and-numbers`: the gate
+   *   asked of the exact candidate this validation delivers, after any output
+   *   transform (its one repair turn under `posture: 'guard'` runs earlier, on
+   *   the model's draft). A value no tool result carried: `checked-fail`.
    *   A value not found while the index was past its ceiling: `unreachable`.
    *   A clean pass is `not-applicable`: finding a value clears it, and never
    *   verifies the answer.

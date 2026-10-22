@@ -473,8 +473,11 @@ needs its builder call, or `build()` refuses. Their rows come after yours in
 | Row | `checked-pass` | `checked-fail` | `unreachable` | `not-applicable` |
 |---|---|---|---|---|
 | `agent:claims:<field>`, one per `.claims()` field, judged on the JSON this validation delivers | the field equals the fact the latest tool result settled | the field contradicts that fact | the field states a value no tool result settled, or one settled as unknown | the answer leaves the field out, or declines it (`null`, `'unknown'`) where the run settled a value |
-| `agent:names-and-numbers`, the gate's verdict on the answer that stands | never: finding a value clears an answer, it does not verify it | a value no tool result the run read carried | a value was not found and the evidence index had hit its ceiling | no value is unsupported, or the answer states none |
+| `agent:names-and-numbers`, the gate asked of the JSON this validation delivers | never: finding a value clears an answer, it does not verify it | a value no tool result the run read carried | a value was not found and the evidence index had hit its ceiling | no value is unsupported, or the answer states none |
 
+- **Every row judges what is delivered.** Rows are judged on the exact JSON
+  this validation delivers, after your schema's transform, never on the
+  model's draft: a draft that read 1200 but is delivered as 9750 fails.
 - **The repair turn comes first.** Under `posture: 'guard'` the gate names the
   unsupported values back to the model for one more ordinary turn, with the
   tools still on the wire, before the validation runs. Only what survives it

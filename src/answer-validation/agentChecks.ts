@@ -8,7 +8,9 @@
  *          delivers through the claim seam's own comparison
  *          (`integrity/unsupported-claim/check.ts` · `compareClaim`), so the
  *          seam and its row can never compare differently. `evidenceCheckOf`
- *          reads the evidence gate's verdict on the answer that stands.
+ *          reads the evidence gate's verdict on that same candidate — asked of
+ *          it through an `EvidenceJudge`, never the verdict on the model's
+ *          draft, which an output transform may have changed.
  *
  * Two laws, both from the standing fold (`core/agent/assessment/assess.ts`):
  *   - A membership pass never verifies. The gate's clean verdict is
@@ -38,7 +40,7 @@ import type { AnswerCheck } from './types.js';
 /** Every agent row's id starts with this; a host check id may not while rows are on. */
 export const AGENT_CHECK_PREFIX = 'agent:';
 
-/** The evidence gate's verdict on the answer that stands: counts and flags only. */
+/** The evidence gate's verdict on the delivered candidate: counts and flags only. */
 export interface EvidenceCheckInput {
   /** Values the gate looked up in the tool results (exempt values excluded). */
   readonly lookedUp: number;
@@ -51,9 +53,15 @@ export interface EvidenceCheckInput {
 }
 
 /**
- * The `'names-and-numbers'` row. `undefined` (the gate never judged the
- * answer that stands) is `unreachable`: a listed check that did not run never
- * reads as clean.
+ * The evidence gate bound to the evidence a run read: judges ONE text, the
+ * canonical candidate a validation is about to deliver.
+ */
+export type EvidenceJudge = (text: string) => EvidenceCheckInput;
+
+/**
+ * The `'names-and-numbers'` row. `undefined` (the gate never ran on the
+ * run's final answer, so no judge was filed) is `unreachable`: a listed check
+ * that did not run never reads as clean.
  */
 export function evidenceCheckOf(verdict: EvidenceCheckInput | undefined): AnswerCheck {
   const row = (disposition: Disposition, reason: string): AnswerCheck =>

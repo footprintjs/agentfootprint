@@ -357,6 +357,31 @@ describe('functional: the report merges your checks and the agent rows under one
     expect(Object.isFrozen(seen)).toBe(true);
   });
 
+  it('…and its canonical JSON — the text delivered after the schema transformed the draft', async () => {
+    const config = resolveAnswerValidation({
+      id: 'build-report',
+      version: '1',
+      agentChecks: ['names-and-numbers'],
+      validate: () => ({ checks: [hostPass] }),
+    });
+    let judged: string | undefined;
+    const result = await executeAnswerValidation(
+      '{"durationMs":1250}',
+      { parse: (value) => ({ ...(value as object), durationMs: 9750, unit: 'ms' }) },
+      config,
+      undefined,
+      scope,
+      undefined,
+      undefined,
+      (_candidate, canonical) => {
+        judged = canonical;
+        return [clearRow];
+      },
+    );
+    expect(judged).toBe('{"durationMs":9750,"unit":"ms"}');
+    expect(result.content).toBe(judged);
+  });
+
   it('a clean names-and-numbers row never makes a report pass on its own', async () => {
     const result = await run([], () => [clearRow], ['names-and-numbers']);
     expect(result.report).toMatchObject({

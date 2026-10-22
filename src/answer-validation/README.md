@@ -104,10 +104,12 @@ with this door and with `rails` (`docs/design/honesty/README.md` § 8).
   closed); omitted or declined (`null`, `'unknown'`, an unknown `Claim`) where
   the run settled a value → `not-applicable` (both `null` is agreement). The
   detector's legacy ledger maps doubt to `checked-pass`; the row does not.
-- `evidenceCheckOf` reads the gate's verdict on the answer that STANDS, after
-  its repair turn — handed within the one Route stage by
-  `core/agent/stages/answerEvidence.ts` (a per-scope `WeakMap`, never state,
-  read only when that stage answers `'final'`).
+- `evidenceCheckOf` reads the gate's verdict on the SAME delivered candidate:
+  the gate is handed over as an `EvidenceJudge` bound to the evidence the run
+  read (`core/agent/stages/answerEvidence.ts`, a per-scope `WeakMap`, never
+  state, read only when that Route stage answers `'final'`), and asked of the
+  canonical JSON. Never the verdict on the model's draft: an output schema can
+  transform the draft (1200 read, 9750 delivered).
   No verdict (the gate never judged it) → `unreachable`. A clean pass →
   `not-applicable`: a membership pass never supports (the standing fold's
   law), so the gate can withhold an answer and never make a report pass.

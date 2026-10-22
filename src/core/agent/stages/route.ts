@@ -789,28 +789,33 @@ function judgeEvidence(
   const evidence = evidenceFromHistory(history);
   // Under `.time()` (step T7): the turn's time spellings by lineage.
   const time = timeLineage?.(scope);
-  const verdict = checkAnswer(answer, {
-    gate,
-    evidence,
-    ...(time !== undefined && { derived: derivedFormsOf(time.derived) }),
-    // The figures dial: the results' numbers, folded for the derivation
-    // question (`evidence/figures.ts`). Off → not built, the verdict as it was.
-    ...(figures !== undefined && { figures: figures.figureCheckOf(answer, history, gate) }),
-    exempt: exemptFromRun({
-      userMessage: scope.userMessage as string | undefined,
-      history,
-      systemPromptInjections: scope.systemPromptInjections as
-        | readonly InjectionRecord[]
-        | undefined,
-      ...(inputs?.declaredDefaults !== undefined && {
-        declaredDefaults: inputs.declaredDefaults(scope),
-      }),
-      ...(inputs?.answeredValues !== undefined && {
-        answeredValues: inputs.answeredValues(scope),
-      }),
-      ...(time !== undefined && { timeSaid: time.said }),
+  const derived = time !== undefined ? derivedFormsOf(time.derived) : undefined;
+  const exempt = exemptFromRun({
+    userMessage: scope.userMessage as string | undefined,
+    history,
+    systemPromptInjections: scope.systemPromptInjections as readonly InjectionRecord[] | undefined,
+    ...(inputs?.declaredDefaults !== undefined && {
+      declaredDefaults: inputs.declaredDefaults(scope),
     }),
+    ...(inputs?.answeredValues !== undefined && {
+      answeredValues: inputs.answeredValues(scope),
+    }),
+    ...(time !== undefined && { timeSaid: time.said }),
   });
+  // THE ONE JUDGE of this run's evidence, bound to what the run read: asked
+  // here of the draft, and by answer validation of the exact candidate it
+  // delivers (`answerEvidence.ts`) — never a verdict carried across forms.
+  const judge = (text: string): EvidenceVerdict =>
+    checkAnswer(text, {
+      gate,
+      evidence,
+      ...(derived !== undefined && { derived }),
+      // The figures dial: the results' numbers, folded for the derivation
+      // question (`evidence/figures.ts`). Off → not built, the verdict as it was.
+      ...(figures !== undefined && { figures: figures.figureCheckOf(text, history, gate) }),
+      exempt,
+    });
+  const verdict = judge(answer);
 
   // ── THE CLAIM SEAM'S RECENCY READ (9.83.0) — `prior-turn-evidence` ──
   // Judged on EVERY outcome, clean or flagged, and before the branch below
@@ -866,13 +871,17 @@ function judgeEvidence(
   const carriedBy = answerCarriersOf(verdict.grounded, evidence);
 
   // For answer validation's `'names-and-numbers'` row (`answerEvidence.ts`):
-  // in memory, this stage only — not one byte of state. Read only when this
-  // stage answers `'final'`, so a draft sent back for repair is never read.
-  noteAnswerEvidence(scope, {
-    lookedUp: verdict.lookedUp,
-    unsupported: verdict.unsupported.length,
-    truncated: verdict.evidenceTruncated,
-    revised: afterRevision,
+  // the JUDGE, not this verdict — the validation asks it of the candidate it
+  // delivers, which an output transform may have changed. In memory, this
+  // stage only — not one byte of state; read only when it answers `'final'`.
+  noteAnswerEvidence(scope, (text) => {
+    const judged = judge(text);
+    return {
+      lookedUp: judged.lookedUp,
+      unsupported: judged.unsupported.length,
+      truncated: judged.evidenceTruncated,
+      revised: afterRevision,
+    };
   });
 
   if (verdict.unsupported.length === 0) {
