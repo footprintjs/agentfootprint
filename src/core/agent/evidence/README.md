@@ -255,6 +255,12 @@ are judged on their number alone, and `24/7` is a ratio. Values the user
 supplied (their message, the conversation, the system prompt and skill bodies)
 are exempt without being declared. Declared `shapes` are tested first and win.
 
+A typed answer — the whole answer one JSON object or array — is read value by
+value, the way the index reads a JSON result (`extract.ts` · `answerTexts`):
+read whole as text, compact JSON glued its punctuation onto the values
+(`:1200`, `[5,100]` as `5100`), accusing correct answers and hiding invented
+ones.
+
 The bias is deliberate: a missed fabrication is a miss, a false accusation
 costs a real turn and can refuse a good answer. See `extract.ts` for the
 justification of each clause, and

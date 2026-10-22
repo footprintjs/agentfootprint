@@ -162,11 +162,47 @@ export function classifyToken(
 }
 
 /**
- * Every distinct value the answer asserts, in first-appearance order.
+ * The texts an answer states, each read on its own. Prose is one text. A
+ * typed answer — the whole answer one JSON object or array, which is what
+ * `.outputSchema()` accepts (`JSON.parse` of the answer) — is read value by
+ * value, the way the evidence index reads a result (`evidenceIndex.ts` ·
+ * `walk`): every key and every string as text, every number as its own
+ * spelling. Read whole as text, compact JSON glues its punctuation onto the
+ * values: `[5,100]` read as the thousands-separated `5100`, `[0.45,0.12]` as
+ * one identifier no result carries, `[1200,9750]` as no value at all — a
+ * correct answer accused, or an invented one never looked up.
  *
- * De-duplicated by value: a port named six times is one claim to ground, and
- * a correction that lists it six times reads like noise.
+ * Walked with an explicit stack (an answer is model output: its nesting is not
+ * a call depth), and no further than `MAX_ANSWER_TOKENS` texts.
  */
+function answerTexts(answer: string): readonly string[] {
+  const opening = answer.trimStart()[0];
+  if (opening !== '{' && opening !== '[') return [answer];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(answer);
+  } catch {
+    return [answer];
+  }
+  const texts: string[] = [];
+  // Pushed in reverse so they pop in the order the answer wrote them.
+  const stack: unknown[] = [parsed];
+  while (stack.length > 0 && texts.length < MAX_ANSWER_TOKENS) {
+    const node = stack.pop();
+    if (typeof node === 'string') texts.push(node);
+    else if (typeof node === 'number') texts.push(String(node));
+    else if (Array.isArray(node)) for (let i = node.length - 1; i >= 0; i--) stack.push(node[i]);
+    else if (node !== null && typeof node === 'object') {
+      const entries = Object.entries(node);
+      for (let i = entries.length - 1; i >= 0; i--) {
+        const entry = entries[i];
+        if (entry !== undefined) stack.push(entry[1], entry[0]);
+      }
+    }
+  }
+  return texts;
+}
+
 /**
  * The spellings a candidate is looked up under: its value's forms
  * (`lookupForms` — the `0x` rule), plus the glued-unit token's when the
@@ -186,6 +222,13 @@ export function candidateForms(candidate: Candidate): readonly string[] {
   return forms;
 }
 
+/**
+ * Every distinct value the answer asserts, in first-appearance order.
+ *
+ * De-duplicated by value: a port named six times is one claim to ground, and
+ * a correction that lists it six times reads like noise. A typed answer is
+ * read value by value (`answerTexts`).
+ */
 export function extractCandidates(
   answer: string,
   gate: ResolvedEvidenceGate,
@@ -200,7 +243,6 @@ export function extractCandidates(
   const seen = new Map<string, number>();
   const out: Candidate[] = [];
   let budget = MAX_ANSWER_TOKENS;
-  const spellings = answerTokenSpellings(answer);
   const record = (candidate: Candidate | undefined): void => {
     if (candidate === undefined) return;
     const prior = seen.get(candidate.value);
@@ -237,29 +279,33 @@ export function extractCandidates(
         : candidate,
     );
   };
-  for (let index = 0; index < spellings.length; index += 1) {
+  for (const text of answerTexts(answer)) {
     if (budget <= 0) break;
-    const spelling = spellings[index] ?? '';
-    const token = normalizeToken(spelling);
-    // Test app-owned ID declarations on the intact token before heuristics.
-    if (isDeclaredExempt(token, gate) || gate.shapes.some((shape) => shape.match.test(token))) {
-      add(spelling);
-      continue;
+    const spellings = answerTokenSpellings(text);
+    for (let index = 0; index < spellings.length; index += 1) {
+      if (budget <= 0) break;
+      const spelling = spellings[index] ?? '';
+      const token = normalizeToken(spelling);
+      // Test app-owned ID declarations on the intact token before heuristics.
+      if (isDeclaredExempt(token, gate) || gate.shapes.some((shape) => shape.match.test(token))) {
+        add(spelling);
+        continue;
+      }
+      const range = splitNumericRange(spelling, spellings[index + 1]);
+      if (range !== undefined && exactTokens?.has(token) === true) {
+        budget -= 1;
+        record({ value: token, shape: 'identifier' });
+        continue;
+      }
+      if (range !== undefined) {
+        const suffix = range.unit ?? '';
+        add(`${range.first}${suffix}`, token);
+        add(`${range.last}${suffix}`, token);
+        continue;
+      }
+      // An en dash outside our narrow grammar retains the tokenizer's old meaning.
+      for (const piece of spelling.includes('–') ? tokenize(spelling) : [spelling]) add(piece);
     }
-    const range = splitNumericRange(spelling, spellings[index + 1]);
-    if (range !== undefined && exactTokens?.has(token) === true) {
-      budget -= 1;
-      record({ value: token, shape: 'identifier' });
-      continue;
-    }
-    if (range !== undefined) {
-      const suffix = range.unit ?? '';
-      add(`${range.first}${suffix}`, token);
-      add(`${range.last}${suffix}`, token);
-      continue;
-    }
-    // An en dash outside our narrow grammar retains the tokenizer's old meaning.
-    for (const piece of spelling.includes('–') ? tokenize(spelling) : [spelling]) add(piece);
   }
   return out;
 }

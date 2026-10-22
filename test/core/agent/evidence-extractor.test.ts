@@ -623,3 +623,41 @@ describe('regression: a typed answer in compact JSON is read value by value', ()
     expect(check('The total is 1200.', { history: text, gate: rails }).unsupported).toEqual([]);
   });
 });
+
+describe('regression: a typed answer is read value by value, arrays included', () => {
+  // Read whole as text, compact JSON arrays glue their commas onto the values:
+  // `[5,100]` read as the thousands-separated 5100 (a correct answer accused),
+  // `[0.45,0.12]` as one identifier no result carries, and `[1200,9750]` as no
+  // value at all (an invented 9750 never looked up). A JSON answer is now read
+  // the way the evidence index reads a JSON result: key by key, leaf by leaf.
+  const RESULT = { counts: [1200, 9750], ratios: [0.4512, 0.1201], small: [5, 100, 250] };
+  const history = [
+    { role: 'tool', toolCallId: 'c1', content: JSON.stringify(RESULT) },
+  ] as unknown as readonly LLMMessage[];
+  const rails = resolveEvidenceGate({ posture: 'rails' });
+  const flaggedIn = (answer: string) =>
+    check(answer, { history, gate: rails }).unsupported.map((u) => u.value);
+
+  it('a compact answer copying the arrays is clean — no merged thousands, no joined identifier', () => {
+    expect(flaggedIn(JSON.stringify(RESULT))).toEqual([]);
+    expect(flaggedIn(JSON.stringify({ small: [5, 100] }))).toEqual([]);
+  });
+
+  it('an invented number inside an array is looked up and flagged', () => {
+    expect(flaggedIn(JSON.stringify({ counts: [1200, 9999] }))).toEqual(['9999']);
+    expect(flaggedIn(JSON.stringify({ deep: [{ id: 'ORD-99812', n: [1200] }] }))).toEqual([
+      'ord-99812',
+    ]);
+  });
+
+  it('keys are read too: an invented id used as a key is still flagged', () => {
+    expect(flaggedIn(JSON.stringify({ 'ORD-99812': 1200 }))).toEqual(['ord-99812']);
+  });
+
+  it('text that only opens like JSON is read as text, and nesting is not a call depth', () => {
+    expect(flaggedIn('{ not json } total 9999')).toEqual(['9999']);
+    const deep = `${'['.repeat(20_000)}9999${']'.repeat(20_000)}`;
+    // Either JSON.parse refuses the depth (text) or the walk reads it: no throw.
+    expect(() => flaggedIn(deep)).not.toThrow();
+  });
+});

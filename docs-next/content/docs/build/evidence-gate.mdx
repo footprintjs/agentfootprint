@@ -296,7 +296,8 @@ test) can recognise it without matching on prose.
   an answer with the wrong shape is about to be replaced wholesale, so grounding
   it would pay for the same turn twice. The evidence gate judges what the schema
   let stand, and an answer that exhausted its schema retries is not judged at
-  all. A typed answer is read value by value: `{"total":1200}` checks `1200`.
+  all. A typed answer is read value by value, the way a JSON tool result is:
+  `{"counts":[1200,9750]}` checks `1200` and `9750`, never the text `1200,9750`.
 * With `.answerValidation({ agentChecks: ['names-and-numbers'] })`: the gate's
   verdict on the answer that stands becomes a row of that report. A value no
   tool result carried fails it; a clean pass is `not-applicable`, because
