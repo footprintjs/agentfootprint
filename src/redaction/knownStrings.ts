@@ -495,6 +495,7 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   open: true,
   openai: true,
   operation: true,
+  'outcome-unknown': true,
   'outcomes-fn': true,
   output: true,
   'output-retry': true,

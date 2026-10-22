@@ -107,7 +107,8 @@ import {
 import type { ArtifactScope, ArtifactStore } from '../artifacts/types.js';
 import type { ArtifactHandOverFailedPayload } from '../events/payloads.js';
 import { applyInputResponse, readAwaitingInput } from '../tools/inputRequest.js';
-import { isPaused, pauseDemandsDecision } from '../core/pause.js';
+import { isPaused, pauseDemandsDecision, ResumeDecisionError } from '../core/pause.js';
+import { requestUsedBy } from '../core/consentRequest.js';
 import type { AgentRunCheckpoint } from '../core/runCheckpoint.js';
 import {
   ANSWER_ACCOUNT_OP,
@@ -122,6 +123,7 @@ import { RECORDING_ARTIFACT_KIND } from '../artifacts/recordingArtifact.js';
 import { refuseUnknownWireOp } from './wireOps.js';
 import { durableWriter, type DurableWriter } from './durability.js';
 import { describePause } from './pendingAsk.js';
+import { markAnswered, openToolCalls } from './answeredPause.js';
 import {
   envelopeOwner,
   envelopeTranscript,
@@ -1597,6 +1599,15 @@ export async function standingAgent<TH extends HostHandle>(
           throw err instanceof UnreadableEnvelopeError ? err.withSession(sessionId) : err;
         }
       }
+      // A pause whose decision a resume already used, and did not finish
+      // (`answeredPause.ts`): no decision answers it again, and the next
+      // message continues the conversation that resume left.
+      let answered: PausedRun | undefined;
+      if (paused?.answered !== undefined) {
+        answered = paused;
+        prior = paused.conversation;
+        paused = undefined;
+      }
 
       // The signal reaches tool execution, tool discovery and skill-entry
       // scoring. It does NOT currently reach the LLM call, so a caller who
@@ -1680,6 +1691,16 @@ export async function standingAgent<TH extends HostHandle>(
       // approval out of prose is a guess, and a consent gate may not be built
       // on a guess.
       if (request.decision !== undefined) {
+        if (answered !== undefined) {
+          // One decision runs one call, and this request's decision was used.
+          reply.fail(
+            new ResumeDecisionError(
+              'already-answered',
+              answered.pending.ask !== undefined ? 'ask' : 'checkIn',
+            ),
+          );
+          return;
+        }
         if (!paused) {
           reply.fail(new NoPendingAskError(sessionId ?? '(anonymous)'));
           return;
@@ -1694,15 +1715,7 @@ export async function standingAgent<TH extends HostHandle>(
             // Data collection, never permission: settle unanswered calls
             // without executing their handlers or consulting the model.
             const history = [...paused.conversation.history];
-            const outstanding = new Map<string, { id: string; name: string }>();
-            for (const message of paused.conversation.history) {
-              if (message.role === 'tool' && message.toolCallId !== undefined)
-                outstanding.delete(message.toolCallId);
-              if (message.role === 'assistant') {
-                for (const call of message.toolCalls ?? []) outstanding.set(call.id, call);
-              }
-            }
-            for (const call of outstanding.values())
+            for (const call of openToolCalls(paused.conversation.history))
               history.push({
                 role: 'tool',
                 toolName: call.name,
@@ -1736,15 +1749,14 @@ export async function standingAgent<TH extends HostHandle>(
           }
         }
         const resumeOptions = await withSealedRequest();
-        await deliver(
-          lane,
-          await runner.resume(paused.checkpoint, request.decision, resumeOptions),
-          store,
-          reply,
-          sessionId,
-          offer,
-          paused,
-        );
+        let resumed: Awaited<ReturnType<Agent['resume']>>;
+        try {
+          resumed = await runner.resume(paused.checkpoint, request.decision, resumeOptions);
+        } catch (err) {
+          await markAnsweredIfUsed(lane, store, sessionId, paused);
+          throw err;
+        }
+        await deliver(lane, resumed, store, reply, sessionId, offer, paused);
         return;
       }
       if (paused && sessionId !== undefined) {
@@ -1773,6 +1785,43 @@ export async function standingAgent<TH extends HostHandle>(
       lane.activeOwner = undefined;
       lane.activeSpendKey = undefined;
     }
+  }
+
+  /**
+   * After a resume that FAILED: when it had already taken its decision to the
+   * ledger (`requestUsedBy` — the call may have run), mark the stored pause
+   * answered before the failure is reported, so no later request answers it
+   * again — a retry, this session's next instance after an eviction, a
+   * restart, or another host on the same store (`answeredPause.ts`). Asked of
+   * the request THIS pause recorded, so a resume refused before its ledger —
+   * or a stale answer from another session's resume on a shared instance —
+   * leaves the pause answerable.
+   *
+   * The conversation it goes on from is the failed run's own (what `deliver`
+   * would have stored), with every call it left open settled as unknown. A
+   * store that refuses the mark is the run's second failure: the first is the
+   * one reported, and the ledger still refuses the decision in this process.
+   */
+  async function markAnsweredIfUsed(
+    lane: Lane,
+    store: SessionLifecycle,
+    sessionId: string | undefined,
+    paused: PausedRun,
+  ): Promise<void> {
+    const asked = paused.pending.checkIn?.id ?? paused.pending.ask?.id;
+    if (sessionId === undefined || asked === undefined) return;
+    if (requestUsedBy(lane.agent) !== asked) return;
+    // Mid-run writes first, or a late one would land on top of the mark.
+    await lane.writer?.settle().catch(() => undefined);
+    let progressed: AgentRunCheckpoint | undefined;
+    try {
+      progressed = lane.agent.checkpoint();
+    } catch {
+      progressed = undefined;
+    }
+    await store
+      .persist(sessionId, toPausedEnvelope(markAnswered(paused, progressed)))
+      .catch(() => undefined);
   }
 
   /** Store what the run left behind, then end the reply with the right terminal. */

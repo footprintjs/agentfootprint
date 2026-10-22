@@ -13,6 +13,7 @@ import {
   heldDecision,
   inMemoryDecisionLedger,
   mintConsentRequest,
+  processDecisionLedger,
   runsAsAsked,
   spendDecision,
   type DecisionLedger,
@@ -521,6 +522,22 @@ describe('spendDecision and the ledger', () => {
       reason: 'already-answered',
       gate: 'checkIn',
     });
+  });
+
+  it('the second spend says what it knows: this resume ran nothing, and the first one’s outcome is not known here', async () => {
+    // The earlier resume may have run the call and failed after it — "nothing
+    // was executed" would be a claim this refusal cannot make.
+    const ledger = inMemoryDecisionLedger();
+    const decision = decisionFor();
+    await spendDecision(ledger, decision, 'checkIn');
+    const refused = await spendDecision(ledger, decision, 'checkIn').catch((err: Error) => err);
+    expect((refused as Error).message).toContain('This resume ran nothing');
+    expect((refused as Error).message).toContain('is not known here');
+    expect((refused as Error).message).not.toContain('Nothing was executed');
+  });
+
+  it('the default ledger is the process’s: one instance, whichever agent asks', () => {
+    expect(processDecisionLedger()).toBe(processDecisionLedger());
   });
 
   it('two in-memory ledgers are two ledgers; one shared ledger is one', async () => {

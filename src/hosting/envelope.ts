@@ -326,6 +326,18 @@ function validatePausedRun(value: unknown): PausedRun {
     );
   }
   validateCheckpoint(run.conversation);
+  // A mark a reader cannot read is refused, never taken as "still waiting":
+  // that would offer an answered request for an answer again.
+  const answered = run.answered as { at?: unknown } | null | undefined;
+  if (
+    answered !== undefined &&
+    (answered === null || typeof answered !== 'object' || typeof answered.at !== 'number')
+  ) {
+    throw new TypeError(
+      `[hosting] paused run's \`answered\` must be { at: <epoch ms> } when present — the ` +
+        `mark that a resume used its decision and did not finish.`,
+    );
+  }
   const wire = run.wire as { protocol?: unknown } | undefined;
   if (
     wire !== undefined &&

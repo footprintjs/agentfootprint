@@ -314,7 +314,9 @@ if (isCheckInPause(result)) {
 
 A decision for another pause, for a checkpoint whose call changed, or a second
 resume with the same decision throws `ResumeDecisionError` — the tool never runs.
-Several agent instances resuming one paused run share `Agent.create({ decisionLedger })`.
+"Once" holds per ledger: agents in one process share one by default; when more
+than one process can resume a paused run, give them one shared store via
+`Agent.create({ decisionLedger })`.
 
 ## Resilience
 

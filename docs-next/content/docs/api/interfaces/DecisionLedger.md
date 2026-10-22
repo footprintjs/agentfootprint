@@ -4,15 +4,18 @@ title: DecisionLedger
 
 # Interface: DecisionLedger
 
-Defined in: [src/core/consentRequest.ts:124](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L124)
+Defined in: [src/core/consentRequest.ts:133](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L133)
 
-Where an agent records the consent requests that have been answered, so one
-decision runs one call.
+Where the consent requests that have been answered are recorded, so one
+decision runs one call — once per LEDGER.
 
-The default ([inMemoryDecisionLedger](/docs/api/functions/inMemoryDecisionLedger)) is per agent and per process.
-Pass one shared store when a paused run can be resumed by more than one
-agent instance — a server that builds an agent per request, or resumes a
-stored checkpoint in another process.
+By default every agent that names none spends in one ledger in this
+process's memory: "once" holds across this process's agents — a pool that
+rebuilds an evicted instance, a server that builds an agent per request —
+and only there. A restart forgets it, and another process never saw it.
+When more than one process can resume the same paused run, or a restart
+must not forget, give every agent that can resume it one ledger backed by a
+store they all reach (`Agent.create({ decisionLedger })`).
 
 ## Methods
 
@@ -20,7 +23,7 @@ stored checkpoint in another process.
 
 > **spend**(`requestId`): `boolean` \| `Promise`\<`boolean`\>
 
-Defined in: [src/core/consentRequest.ts:132](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L132)
+Defined in: [src/core/consentRequest.ts:141](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L141)
 
 Record `requestId` as answered. Resolve `true` when THIS call recorded it
 and `false` when it was already recorded — atomically per id: of two

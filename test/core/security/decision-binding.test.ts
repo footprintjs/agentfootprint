@@ -512,12 +512,30 @@ describe('decision binding — the record and the ledger', () => {
     expect(exec).toHaveBeenCalledTimes(1);
   });
 
-  it('without a shared ledger, each agent keeps its own — the limit a host closes with one', async () => {
+  it('agents that name no ledger share the process’s: a FRESH agent refuses the replay too', async () => {
+    // A pool that evicts an instance and builds another, a host that builds a
+    // runner per request: "once" does not reset with the instance.
     const exec = vi.fn(() => 'refunded');
     const paused = asCheckIn(await gatedAgent(exec).run({ message: 'refund 500' }));
     const decision = checkInApproved({ request: paused.checkIn, by: 'maya' });
     await gatedAgent(exec).resume(paused.checkpoint, decision);
-    await gatedAgent(exec).resume(paused.checkpoint, decision);
+    await expect(gatedAgent(exec).resume(paused.checkpoint, decision)).rejects.toMatchObject(
+      refusal('already-answered'),
+    );
+    expect(exec).toHaveBeenCalledTimes(1);
+  });
+
+  it('"once" holds per ledger: agents given separate ledgers spend separately (the limit a shared store closes)', async () => {
+    const exec = vi.fn(() => 'refunded');
+    const own = () =>
+      Agent.create({ provider: refunds(), model: 'mock', decisionLedger: inMemoryDecisionLedger() })
+        .system('You issue refunds.')
+        .tool(refundTool(exec))
+        .build();
+    const paused = asCheckIn(await own().run({ message: 'refund 500' }));
+    const decision = checkInApproved({ request: paused.checkIn, by: 'maya' });
+    await own().resume(paused.checkpoint, decision);
+    await own().resume(paused.checkpoint, decision);
     expect(exec).toHaveBeenCalledTimes(2);
   });
 

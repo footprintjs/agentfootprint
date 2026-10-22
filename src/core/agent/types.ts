@@ -731,11 +731,15 @@ export interface AgentOptions {
    * the ledger is refused (`ResumeDecisionError`, `'already-answered'`) and the
    * tool does not run.
    *
-   * Default: `inMemoryDecisionLedger()`, one per agent, in this process. Pass
-   * one ledger to every agent that can resume the same paused run — a server
-   * that builds an agent per request, or one that resumes a stored checkpoint
-   * in another process — backed by a store all of them share. Its `spend` must
-   * be atomic per id.
+   * "Once" holds per ledger. Default: one in-memory ledger per process, shared
+   * by every agent that names none — a server that builds an agent per
+   * request, or a pool that rebuilds an evicted instance, still answers each
+   * request once. It does not outlive the process or reach another one: when
+   * more than one process (or a restart) can resume the same paused run, pass
+   * every agent that can resume it one ledger backed by a store they all
+   * share, whose `spend` is atomic per id. A ledger of the agent's own — even
+   * a fresh `inMemoryDecisionLedger()` — makes "once" hold for that ledger
+   * alone.
    */
   readonly decisionLedger?: import('../consentRequest.js').DecisionLedger;
   /**

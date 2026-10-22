@@ -910,6 +910,16 @@ export interface PausedRun {
    * remember stored, and opaque to the store and to every other door.
    */
   readonly wire?: PausedWire;
+  /**
+   * Set when a resume USED this pause's decision and did not finish — it
+   * failed after the request was spent, so the call may have run. The pause
+   * is answered: a decision for it is refused (`ResumeDecisionError`,
+   * `'already-answered'`), whether its call ran is not known to the host, and
+   * the next message continues the conversation in `conversation` — the
+   * failed run's own history, every call it left open settled as unknown.
+   * `at` is when the host marked it. Absent on every pause still waiting.
+   */
+  readonly answered?: { readonly at: number };
 }
 
 /** One wire protocol's own record of a pause it served — see {@link PausedRun.wire}. */

@@ -377,7 +377,8 @@ export class DecisionRequiredError extends Error {
  *     renamed or moved (a redeploy). An approval holds for the rules it was
  *     given under, so a rule it was given under is never skipped.
  *   - `'already-answered'` — a resume already used a decision for this
- *     request, approved or declined.
+ *     request, approved or declined. Whether that resume finished — and so
+ *     whether the call ran — is not known to the one refused.
  */
 export type ResumeDecisionRefusal =
   | 'no-request'
@@ -470,9 +471,11 @@ function resumeDecisionMessage(reason: ResumeDecisionRefusal): string {
       );
     case 'already-answered':
       return (
-        `[resume] the request this decision names was already answered by an earlier resume. ` +
-        `One decision runs one call: a request is spent the moment a resume uses its ` +
-        `decision, approved or declined. Nothing was executed this time.`
+        `[resume] the request this decision names was already answered by an earlier resume — ` +
+        `one decision runs one call, and a request is spent the moment a resume uses its ` +
+        `decision, approved or declined. This resume ran nothing. Whether the earlier resume ` +
+        `finished, and so whether the call ran, is not known here: check the call's own ` +
+        `record (its system, the conversation) before the person is asked again.`
       );
   }
 }

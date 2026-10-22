@@ -47,9 +47,15 @@
  *
  * ── ONCE ───────────────────────────────────────────────────────────────────
  * A request is spent the moment a resume uses a decision for it, approved or
- * declined (`DecisionLedger`). The default ledger is in memory and belongs to
- * one agent; a host that resumes one conversation in several processes passes
- * one ledger they share (`Agent.create({ decisionLedger })`).
+ * declined (`DecisionLedger`), and "once" holds PER LEDGER. The default is one
+ * ledger in this process's memory, shared by every agent that names none — a
+ * pool that rebuilds an evicted instance, a host that builds a runner per
+ * request, a composition's nested agents all spend in it. It is gone after a
+ * restart and no other process sees it: where more than one process (or a
+ * restart) can resume the same paused run, every agent that can resume it is
+ * given one ledger in a store they all reach (`Agent.create({ decisionLedger })`).
+ * A host that keeps the pause also learns when a resume used its decision and
+ * then failed (`requestUsedBy`), so it can stop offering that pause.
  */
 
 import type { FlowchartCheckpoint } from 'footprintjs';
@@ -113,13 +119,16 @@ export interface BoundRequest {
 }
 
 /**
- * Where an agent records the consent requests that have been answered, so one
- * decision runs one call.
+ * Where the consent requests that have been answered are recorded, so one
+ * decision runs one call — once per LEDGER.
  *
- * The default ({@link inMemoryDecisionLedger}) is per agent and per process.
- * Pass one shared store when a paused run can be resumed by more than one
- * agent instance — a server that builds an agent per request, or resumes a
- * stored checkpoint in another process.
+ * By default every agent that names none spends in one ledger in this
+ * process's memory: "once" holds across this process's agents — a pool that
+ * rebuilds an evicted instance, a server that builds an agent per request —
+ * and only there. A restart forgets it, and another process never saw it.
+ * When more than one process can resume the same paused run, or a restart
+ * must not forget, give every agent that can resume it one ledger backed by a
+ * store they all reach (`Agent.create({ decisionLedger })`).
  */
 export interface DecisionLedger {
   /**
@@ -132,7 +141,14 @@ export interface DecisionLedger {
   spend(requestId: string): boolean | Promise<boolean>;
 }
 
-/** A {@link DecisionLedger} in this process's memory. Grows by one id per answered request. */
+/**
+ * A NEW {@link DecisionLedger} in this process's memory. Grows by one id per
+ * answered request.
+ *
+ * Agents that name no ledger already share one of these per process, so this
+ * is for a ledger of their own: agents given different ledgers spend
+ * separately, and a decision spent in one is not known to the others.
+ */
 export function inMemoryDecisionLedger(): DecisionLedger {
   const spent = new Set<string>();
   return {
@@ -142,6 +158,43 @@ export function inMemoryDecisionLedger(): DecisionLedger {
       return true;
     },
   };
+}
+
+/**
+ * The ledger every agent that names none spends in — one per process, so a
+ * decision runs once across every agent instance this process builds, not
+ * once per instance. It lives as long as the process (one id per answered
+ * request); request ids are unique per pause, so sharing it never makes one
+ * agent's answer collide with another's.
+ */
+const PROCESS_LEDGER: DecisionLedger = inMemoryDecisionLedger();
+
+/** This process's ledger — where an agent that names no `decisionLedger` spends. */
+export function processDecisionLedger(): DecisionLedger {
+  return PROCESS_LEDGER;
+}
+
+/** How each agent reports the request its latest resume took to its ledger. */
+const decisionUse = new WeakMap<object, () => string | undefined>();
+
+/**
+ * Register how `runner` reports the consent request its latest resume took to
+ * its ledger ({@link requestUsedBy}). An agent does, once, when it is built.
+ * Internal: no barrel exports it.
+ */
+export function trackDecisionUse(runner: object, read: () => string | undefined): void {
+  decisionUse.set(runner, read);
+}
+
+/**
+ * The consent request `runner`'s latest resume took to its ledger — spent
+ * there, found already spent, or lost to a ledger that failed — or `undefined`
+ * when that resume reached no ledger. Past that point the call may have run,
+ * so a host that keeps the pause stops offering it for an answer
+ * (`hosting/standingAgent.ts`). Internal: no barrel exports it.
+ */
+export function requestUsedBy(runner: object): string | undefined {
+  return decisionUse.get(runner)?.();
 }
 
 const DOMAIN = 'agentfootprint/consent-request/v1';

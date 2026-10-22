@@ -126,8 +126,8 @@ import {
 import {
   gatedCallOf,
   heldDecision,
-  inMemoryDecisionLedger,
   mintConsentRequest,
+  processDecisionLedger,
   runsAsAsked,
   spendDecision,
   type DecisionLedger,
@@ -714,8 +714,8 @@ export interface ToolCallsHandlerDeps {
   readonly answeredAsk?: () => AnsweredAsk | undefined;
   /**
    * Where answered consent requests are spent (`AgentOptions.decisionLedger`),
-   * so one decision runs one call. Undefined → a ledger of this handler's own,
-   * in memory: the chart is built once per agent, so that is one per agent.
+   * so one decision runs one call. Undefined → this process's ledger, shared by
+   * every agent that names none (`processDecisionLedger`).
    */
   readonly decisionLedger?: DecisionLedger;
   /**
@@ -1619,8 +1619,8 @@ export function buildToolCallsHandler(
     permissionChecker,
   } = deps;
   const toolArgValidation = deps.toolArgValidation ?? 'enforce';
-  /** Where answered consent requests are spent — this agent's, unless it shares one. */
-  const decisionLedger = deps.decisionLedger ?? inMemoryDecisionLedger();
+  /** Where answered consent requests are spent — the agent's, else this process's. */
+  const decisionLedger = deps.decisionLedger ?? processDecisionLedger();
   /**
    * The decision a consent-gate resume carries, held to the request this run
    * paused on and to the exact call it was bound to (`core/consentRequest.ts`)

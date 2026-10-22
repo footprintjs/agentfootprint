@@ -1285,6 +1285,29 @@ Two mismatches are refused by name rather than guessed at:
   ordinary message would put a raw approval into the conversation as if a
   person had typed it.
 
+A refusal never names a request id — not in its body, not on the error — so a
+client that retries a `409` learns nothing it could answer a different request
+with. The request to show the person is the pending ask the host replied with.
+
+**Once, across what a host does to a session.** A decision is spent in a
+`DecisionLedger`, and "once" holds per ledger. Every agent `standingAgent`
+serves that names no ledger shares this process's, so an instance the pool
+evicted and rebuilt still refuses a decision already used. When a resume fails
+*after* it used the decision — the approved tool ran, then the next model call
+failed — the stored pause is **marked answered** before the failure is
+reported: a retry, a rebuilt instance, a restart or another host on the same
+store is refused (`ERR_RESUME_DECISION`, `'already-answered'`, whose message
+says the call's outcome is not known there), and the session's next message
+continues the conversation from that run's own history, with any call it left
+open settled as unknown (`PausedRun.answered`). Two limits are stated, not
+closed: the session store has no compare-and-set, so two processes that receive
+the same decision at the same moment both read the unmarked pause; and a process
+that dies mid-resume marks nothing. More than one process therefore needs one
+shared `decisionLedger` (a store whose `spend` is atomic) — that is what makes
+"once" hold across them. `streamHandler` builds a runner per request; its agents
+share the process's ledger, but a failed resume there does not mark the stored
+pause, so across processes or a restart only a shared ledger keeps "once".
+
 ### A pause the wire could not describe
 
 `PauseNotCarriedError` (`code: 'ERR_PAUSE_NOT_CARRIED'`) is worth reading even if

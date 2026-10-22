@@ -57,7 +57,12 @@ import {
   pauseDemandsDecision,
   type RunnerPauseOutcome,
 } from './pause.js';
-import { checkDecisionAgainst, type DecisionLedger } from './consentRequest.js';
+import {
+  checkDecisionAgainst,
+  processDecisionLedger,
+  trackDecisionUse,
+  type DecisionLedger,
+} from './consentRequest.js';
 import type {
   LLMMessage,
   LLMProvider,
@@ -708,8 +713,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  that declares `checkIn` works even without a `.checkIn()` builder call. */
   private readonly checkInConfig: ResolvedCheckInConfig;
   /** Where answered consent requests are spent (`AgentOptions.decisionLedger`).
-   *  Undefined → the tool-calls handler keeps this agent's own, in memory. */
+   *  Undefined → this process's ledger, shared by every agent that names none. */
   private readonly decisionLedger?: DecisionLedger;
+  /** The consent request this agent's latest resume took to its ledger, or
+   *  undefined when it reached none — read by a host after a resume that
+   *  failed (`consentRequest.ts` · `requestUsedBy`), since past that point the
+   *  call may have run. Reset by each resume. */
+  private resumeUsedRequest?: string;
   /** Per-run config resolver from `.configure()`. Undefined for every agent
    *  that never called it — and the chart is then built exactly as before,
    *  with no scope writes and no scope reads added. */
@@ -1276,11 +1286,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       if (typeof (opts.decisionLedger as { spend?: unknown } | null)?.spend !== 'function') {
         throw new TypeError(
           'Agent: `decisionLedger` must have a `spend(requestId)` method — see ' +
-            "`DecisionLedger`, or omit it for this agent's own in-memory ledger.",
+            "`DecisionLedger`, or omit it for this process's in-memory ledger.",
         );
       }
       this.decisionLedger = opts.decisionLedger;
     }
+    // How a host learns that a resume of this agent used its decision before
+    // it failed (`requestUsedBy`) — so the pause it keeps is not offered again.
+    trackDecisionUse(this, () => this.resumeUsedRequest);
     if (runConfigFn !== undefined) this.runConfigFn = runConfigFn;
     // `.window()` / `.compaction()`: the meter is created ONCE per agent
     // (attached per run, cleared between runs like every other recorder)
@@ -2741,6 +2754,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // same per-instance state a run does. Answering the question is what this
     // door is FOR, so it never checks `pendingQuestion` — it clears it.
     this.assertNotRunning('Agent.resume');
+    // Which request this resume takes to its ledger, if it gets that far.
+    this.resumeUsedRequest = undefined;
     // Settled the moment the answer is handed over, not when the resumed run
     // finishes: a resume that then FAILS must not leave the agent refusing
     // every later message on behalf of a question that has been answered.
@@ -5744,9 +5759,16 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // Check-in (evidence-carrying human consent). Always threaded (resolved
       // default); the gate fires only for tools that declared `checkIn`.
       checkIn: this.checkInConfig,
-      // Where a decision's request is spent, once (`core/consentRequest.ts`).
-      // Absent → the handler keeps this agent's own in-memory ledger.
-      ...(this.decisionLedger !== undefined && { decisionLedger: this.decisionLedger }),
+      // Where a decision's request is spent, once (`core/consentRequest.ts`):
+      // this agent's own ledger when it named one, else this process's. The
+      // request is noted before the ledger answers, so a host learns that a
+      // resume which then failed had already used its decision.
+      decisionLedger: {
+        spend: (requestId: string) => {
+          this.resumeUsedRequest = requestId;
+          return (this.decisionLedger ?? processDecisionLedger()).spend(requestId);
+        },
+      },
       // The governance chain. Threaded only when non-empty so an agent without
       // one produces the same handler behaviour it always did.
       ...(this.toolMiddleware.length > 0 && { toolMiddleware: this.toolMiddleware }),

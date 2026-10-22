@@ -18,7 +18,13 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { Agent, ask, defineTool } from '../../src/index.js';
+import {
+  Agent,
+  ask,
+  defineTool,
+  inMemoryDecisionLedger,
+  type DecisionLedger,
+} from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
 import { askHuman } from '../../src/core/pause.js';
 import { checkInApproved } from '../../src/core/checkin.js';
@@ -30,7 +36,7 @@ import {
   toEnvelope,
 } from '../../src/hosting/index.js';
 import type { CheckpointEnvelope, SessionLifecycle, WakeReason } from '../../src/hosting/index.js';
-import type { LLMProvider } from '../../src/provider-contract/types.js';
+import type { LLMMessage, LLMProvider } from '../../src/provider-contract/types.js';
 import { inProcessHost } from './testHost.js';
 import { REFUSAL_STATUS } from '../../src/hosting/refusalStatus.js';
 import { pausedRequest } from '../helpers/pausedRequest.js';
@@ -888,6 +894,224 @@ describe('a consent gate over the wire — a decision answers the request it nam
       expect(unnamed.status).toBe(409);
       expect(await unnamed.text()).not.toContain(pendingId);
       expect(ran).toEqual([5]);
+    } finally {
+      await handle.close();
+    }
+  });
+});
+
+// ─── once, when the resume that used the decision then failed ──────────
+
+describe('a consent gate over the wire — a decision whose resume failed after using it', () => {
+  /**
+   * A check-in on `issue_refund`. While `failing.on` is set, the model call
+   * AFTER the refund ran fails — "approve → the tool runs → the next model
+   * call fails". Every request the model is sent is recorded in `sent`.
+   */
+  function flakyRefunds(
+    ran: number[],
+    failing: { on: boolean },
+    sent: (readonly LLMMessage[])[] = [],
+    decisionLedger?: DecisionLedger,
+  ): Agent {
+    const usage = { input: 1, output: 1 };
+    const provider: LLMProvider = {
+      name: 'mock',
+      complete: async (request) => {
+        sent.push([...request.messages]);
+        const last = request.messages[request.messages.length - 1];
+        if (last?.role === 'tool') {
+          if (failing.on) throw new Error('model unavailable');
+          return { content: 'refund issued', toolCalls: [], usage, stopReason: 'stop' };
+        }
+        return String(last?.content ?? '').includes('refund')
+          ? {
+              content: '',
+              toolCalls: [{ id: 't1', name: 'issue_refund', args: { amount: 10 } }],
+              usage,
+              stopReason: 'tool_use',
+            }
+          : {
+              content: `noted: ${String(last?.content)}`,
+              toolCalls: [],
+              usage,
+              stopReason: 'stop',
+            };
+      },
+    };
+    return Agent.create({
+      provider,
+      model: 'test-model',
+      maxIterations: 3,
+      ...(decisionLedger !== undefined && { decisionLedger }),
+    })
+      .system('terse')
+      .tool(
+        defineTool<{ amount: number }, string>({
+          name: 'issue_refund',
+          description: 'refund a customer',
+          inputSchema: {
+            type: 'object',
+            properties: { amount: { type: 'number' } },
+            required: ['amount'],
+          },
+          checkIn: 'always',
+          execute: ({ amount }) => {
+            ran.push(amount);
+            return `refunded ${amount}`;
+          },
+        }),
+      )
+      .build();
+  }
+
+  /** Every assistant tool call in `messages` has a tool message answering it. */
+  function everyCallAnswered(messages: readonly LLMMessage[]): boolean {
+    const answered = new Set(messages.filter((m) => m.role === 'tool').map((m) => m.toolCallId));
+    return messages
+      .filter((m) => m.role === 'assistant')
+      .every((m) => (m.toolCalls ?? []).every((call) => answered.has(call.id)));
+  }
+
+  it('a retry is refused as already answered — the outcome is not known here — and the tool ran once', async () => {
+    const ran: number[] = [];
+    const failing = { on: true };
+    const sessions = memorySessions();
+    const host = inProcessHost();
+    const handle = await standingAgent({ agent: flakyRefunds(ran, failing), sessions, host });
+    try {
+      const asked = await host.deliver({ input: 'refund me', sessionId: 'flaky' });
+      const decision = checkInApproved({ request: pausedRequest(asked.awaiting), by: 'alice' });
+      const failed = await host.deliver({ input: '', sessionId: 'flaky', decision });
+      expect(failed.output).toBeUndefined();
+      expect(failed.error).toBeDefined();
+      expect(ran).toEqual([10]);
+
+      // The stored pause no longer offers the request for an answer.
+      expect(readPausedRun(await sessions.hydrate('flaky')).answered).toEqual({
+        at: expect.any(Number),
+      });
+
+      failing.on = false;
+      const retry = await host.deliver({ input: '', sessionId: 'flaky', decision });
+      expect(retry.code).toBe('ERR_RESUME_DECISION');
+      expect(REFUSAL_STATUS[retry.code!]).toBe(409);
+      expect(retry.error).toContain('is not known here');
+      expect(retry.error).not.toContain('Nothing was executed');
+      expect(ran).toEqual([10]);
+    } finally {
+      await handle.close();
+    }
+  });
+
+  it('another process on the same store refuses it too, and the conversation goes on', async () => {
+    const ran: number[] = [];
+    const sessions = memorySessions();
+    const first = inProcessHost();
+    const firstHandle = await standingAgent({
+      agent: flakyRefunds(ran, { on: true }),
+      sessions,
+      host: first,
+    });
+    let decision: unknown;
+    try {
+      const asked = await first.deliver({ input: 'refund me', sessionId: 'moved' });
+      decision = checkInApproved({ request: pausedRequest(asked.awaiting), by: 'alice' });
+      await first.deliver({ input: '', sessionId: 'moved', decision });
+      expect(ran).toEqual([10]);
+    } finally {
+      await firstHandle.close();
+    }
+
+    // A restart, or a second host: an agent whose memory never saw the first
+    // spend (its own fresh ledger) — only the stored pause says it was used.
+    const sent: (readonly LLMMessage[])[] = [];
+    const second = inProcessHost();
+    const secondHandle = await standingAgent({
+      agent: flakyRefunds(ran, { on: false }, sent, inMemoryDecisionLedger()),
+      sessions,
+      host: second,
+    });
+    try {
+      const retry = await second.deliver({ input: '', sessionId: 'moved', decision });
+      expect(retry.code).toBe('ERR_RESUME_DECISION');
+      expect(ran).toEqual([10]);
+
+      // A new message continues the conversation, from what the run recorded.
+      const next = await second.deliver({ input: 'is it done?', sessionId: 'moved' });
+      expect(next.output).toBe('noted: is it done?');
+      const request = sent[sent.length - 1]!;
+      expect(everyCallAnswered(request)).toBe(true);
+      expect(request.find((m) => m.role === 'tool' && m.toolCallId === 't1')?.content).toBe(
+        'refunded 10',
+      );
+      expect(ran).toEqual([10]);
+    } finally {
+      await secondHandle.close();
+    }
+  });
+
+  it('an evicted lane with the default factory does not answer it again', async () => {
+    const ran: number[] = [];
+    const failing = { on: true };
+    const host = inProcessHost();
+    const handle = await standingAgent({
+      agentFactory: () => flakyRefunds(ran, failing),
+      sessions: memorySessions(),
+      host,
+      maxActiveSessions: 1,
+    });
+    try {
+      const asked = await host.deliver({ input: 'refund me', sessionId: 'evicted' });
+      const decision = checkInApproved({ request: pausedRequest(asked.awaiting), by: 'alice' });
+      await host.deliver({ input: '', sessionId: 'evicted', decision });
+      expect(ran).toEqual([10]);
+      failing.on = false;
+      // Another session takes the only lane: the first session's agent is gone.
+      expect((await host.deliver({ input: 'hello', sessionId: 'other' })).output).toBe(
+        'noted: hello',
+      );
+      const retry = await host.deliver({ input: '', sessionId: 'evicted', decision });
+      expect(retry.code).toBe('ERR_RESUME_DECISION');
+      expect(ran).toEqual([10]);
+    } finally {
+      await handle.close();
+    }
+  });
+
+  it('when the store cannot take the mark, the process’s ledger still refuses on a rebuilt agent', async () => {
+    const ran: number[] = [];
+    const failing = { on: true };
+    const inner = memorySessions();
+    // A store that refuses exactly the write that marks the pause answered.
+    const sessions: SessionLifecycle = {
+      hydrate: (id) => inner.hydrate(id),
+      async persist(id, envelope) {
+        if ((envelope.data as { answered?: unknown }).answered !== undefined) {
+          throw new Error('store unavailable');
+        }
+        return inner.persist(id, envelope);
+      },
+    };
+    const host = inProcessHost();
+    const handle = await standingAgent({
+      agentFactory: () => flakyRefunds(ran, failing),
+      sessions,
+      host,
+      maxActiveSessions: 1,
+    });
+    try {
+      const asked = await host.deliver({ input: 'refund me', sessionId: 'unmarked' });
+      const decision = checkInApproved({ request: pausedRequest(asked.awaiting), by: 'alice' });
+      const failed = await host.deliver({ input: '', sessionId: 'unmarked', decision });
+      // The run's own failure is what the caller hears, not the store's.
+      expect(failed.error).toContain('model unavailable');
+      expect(readPausedRun(await sessions.hydrate('unmarked')).answered).toBeUndefined();
+      failing.on = false;
+      await host.deliver({ input: 'hello', sessionId: 'other' }); // evicts the first lane
+      const retry = await host.deliver({ input: '', sessionId: 'unmarked', decision });
+      expect(retry.code).toBe('ERR_RESUME_DECISION');
+      expect(ran).toEqual([10]);
     } finally {
       await handle.close();
     }

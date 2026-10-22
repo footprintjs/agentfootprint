@@ -6,7 +6,7 @@ title: ResumeDecisionRefusal
 
 > **ResumeDecisionRefusal** = `"no-request"` \| `"request-not-recorded"` \| `"other-request"` \| `"call-changed"` \| `"chain-changed"` \| `"already-answered"`
 
-Defined in: [src/core/pause.ts:382](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L382)
+Defined in: [src/core/pause.ts:383](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L383)
 
 Why a decision could not answer the request a run is paused on — the
 [ResumeDecisionError](/docs/api/classes/ResumeDecisionError) `reason`:
@@ -29,4 +29,5 @@ Why a decision could not answer the request a run is paused on — the
     renamed or moved (a redeploy). An approval holds for the rules it was
     given under, so a rule it was given under is never skipped.
   - `'already-answered'` — a resume already used a decision for this
-    request, approved or declined.
+    request, approved or declined. Whether that resume finished — and so
+    whether the call ran — is not known to the one refused.
