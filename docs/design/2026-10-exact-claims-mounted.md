@@ -1,7 +1,8 @@
 # Exact claims, mounted — checking a delivered answer against the tools' typed results
 
-**Status: design only (2026-10-22).** It builds on the unmounted exact-claim helpers and on an
-outside review's plan (§ 8). Paths are under `src/`; code is cited as `file · symbol`.
+**Status: design only (2026-10-22), revised after review the same day.** It builds on the
+unmounted exact-claim helpers and on an outside review's plan (§ 8). Paths are under `src/`; code
+is cited as `file · symbol`.
 
 **Position.** The app declares which answer fields are claims and which tool may settle each. The
 **runtime** binds each claim to a recorded result through that rule and the run's trusted scope.
@@ -45,7 +46,7 @@ declares a claim shape), derived figures and non-existence rules come later.
 
 ```ts
 agent
-  .outputSchema(RefundAnswer) // { order, refund_status, amount }
+  .outputSchema(RefundAnswer) // { refund_status, amount }: the draft shows nothing else
   .claims(
     {
       refund_status: { tool: 'get_refund', fact: 'status', required: true },
@@ -54,30 +55,43 @@ agent
     { scope: { customer: ['customerId'], order: ['orderId'] }, entity: 'order', maxAgeSeconds: 300 },
   );
 await agent.run({ message, claimScope: { customer: session.customerId, order: page.orderId } });
+// The app's template prints the order number from claimScope.order, never from the draft.
 ```
 
 Claims are the typed fields named here, never prose. Names are not final; this compiles to
-`ClaimBindingRule` (`integrity/claim-binding/admit.ts · bindingRuleOf`). `claimScope` comes from the app's session,
-never from the model. A rule names one tool, so a successful `issue_refund` can never settle "your
-refund has settled"; only a `get_refund` record can.
+`ClaimBindingRule` (`integrity/claim-binding/admit.ts · bindingRuleOf`). `claimScope` comes from the
+app's session, never from the model. A rule names one tool, so a successful `issue_refund` can never
+settle "your refund has settled"; only a `get_refund` record can.
+
+**No unverified displayed fact.** Every field the person sees is either printed by the app from
+`claimScope` or is a checked claim. A draft field that is neither is `not-checked`
+(`unchecked-field`), so enforce withholds the draft. If the app wants the draft to repeat a scope
+key, that echo is a claim checked for equality with `claimScope`: a draft naming order B-2002
+under scope A-1001 is `contradicted`.
 
 ### 3.2 Capture at real execution
 
-For a ruled tool, the runtime reserves an occurrence id before awaiting
-(`verificationState.ts · reserveResultIdentity`); provider call ids never select a result. Where
-`core/agent/stages/toolCalls.ts · declareCoverage` runs, it captures the arguments `execute`
-received and the returned envelope. Where results are finalized (the batch loop and the four resume
-paths), it ties them to the payload actually served, under the app's grant. Receipts ride the
-checkpoint carrier. Without a contract, nothing new is written.
+At the execute boundary in `core/agent/stages/toolCalls.ts` (where `declareCoverage` runs), once
+the arguments `execute` will receive are final and before it is awaited, the runtime reserves an
+occurrence id for a ruled tool (`verificationState.ts · reserveResultIdentity`) and commits an
+**attempt**: that id, the tool, the turn, the dispatch time and the executed scope read from those
+arguments (`captureDispatch`). The attempt is trusted metadata kept apart from the evidence;
+nothing later edits it. Where the result is finalized (the batch loop and the four resume paths),
+the runtime writes that id's **receipt**: facts, coverage and period tied to the payload actually
+served, under the app's grant, or an unavailable reason, which keeps no scope (`finalizeEvidence`).
+Provider call ids never select. Both ride the checkpoint carrier; without a contract, nothing new
+is written.
 
 ### 3.3 Binding at the delivered bytes
 
 Inside answer validation, on the candidate named by `candidateDigest`, for each claim: read the
 field (absent, `null` or `"unknown"` is `missing-claim`); take the scope from `claimScope` (a
-missing key is `scope-missing`); collect this turn's receipts from the rule's tool whose executed
-scope matches exactly (`integrity/claim-binding/scope.ts · scopesMatch`); take the latest, and if
-it is unavailable, stop rather than fall back; then run `bindClaim`, the `measured_at` age check
-and `evaluateClaimPair`. A reference the model cites is at most a recorded hint.
+missing key is `scope-missing`); find this turn's latest **attempt** of the rule's tool whose
+executed scope matches exactly (`integrity/claim-binding/scope.ts · scopesMatch`). If that
+attempt's receipt is failed, withheld, unfinished or otherwise unavailable, or a later attempt of
+the tool had no readable scope, the claim is `not-checked`: an older success is never reused.
+Otherwise run `bindClaim`, the `measured_at` age check and `evaluateClaimPair`. A reference the
+model cites is at most a recorded hint.
 
 ### 3.4 Verdicts
 
@@ -85,17 +99,24 @@ and `evaluateClaimPair`. A reference the model cites is at most a recorded hint.
 |---|---|---|
 | `supported` | bound, no conflict | `checked-pass` |
 | `contradicted` | bound, conflict: the draft says `settled`; `get_refund` (call 2, 09:14) says `pending` | `checked-fail` |
-| `not-checked` | no in-scope read, another scope, stale, incomplete coverage, withheld, a missing claim, a limit or an error | `unreachable` |
+| `not-checked` | no in-scope attempt, an unavailable latest attempt, stale, incomplete coverage, a missing claim, an unchecked field, a limit or an error | `unreachable` |
 
-Each verdict is one committed `findingsLedger` row through the one writer (turn, digest, rule
-version, receipt, reason), plus one `AnswerCheck` in the validation report.
+Each verdict is one committed `findingsLedger` row through the one writer (turn, candidate digest,
+rule version, attempt id, reason), plus one `AnswerCheck` in the validation report.
 
 ### 3.5 Standing
 
-`assess.ts · readAnswerRows` reads this turn's rows for the delivered digest. `contradicted` fires
-`claim-contradicted` (planned in `docs/design/honesty/README.md` § 4.2), `not-checked` fires
-`check-unreachable`, and every required claim `supported` is the tie check behind "known". An
-abstention never reads "known": the draft's rows still fire.
+When delivery is decided, the answer-validation step
+(`core/agent/stages/answerValidation.ts · withAnswerValidation`, which already commits the report)
+commits one **delivery row**: the digest of the last checked candidate; how it reached the person,
+`as-checked` (its own bytes) or `fallback` (an ask, "I don't know" or "can't verify", built from its
+reason codes); and, when a correction ran, the first draft's digest (`correctedFrom`, for audit).
+`assess.ts · readAnswerRows` reads the rows of exactly the named candidate, never another draft's.
+`contradicted` fires `claim-contradicted` (planned in `docs/design/honesty/README.md` § 4.2),
+`not-checked` fires `check-unreachable`, and every required claim `supported` on an `as-checked`
+delivery is the tie check behind "known". So a fallback keeps its reasons although its bytes
+differ, and never reads "known" (an ask reads `ask`); a corrected answer is not stained by its first
+draft. A contract with no delivery row reads `check-unreachable`.
 
 ### 3.6 Enforce
 
@@ -122,8 +143,8 @@ The text comes from the app's templates, keyed by decision and reason code, neve
 draft (which was never streamed). Without a template, enforce raises `AnswerValidationError` as
 today.
 
-- **Delivered:** "Your refund of $42.50 for order A-1001 has settled." Standing: known (two claims
-  checked against `get_refund`, read 09:14).
+- **Delivered:** "Your refund of $42.50 for order A-1001 has settled." The order number comes from
+  `claimScope`. Standing: known (two claims checked against `get_refund`, read 09:14).
 - **Not checked:** "I can't confirm the refund for order A-1001 right now: the payment record I
   could read is over five minutes old."
 - **Corrected:** only the corrected answer; the record keeps both drafts.
@@ -133,8 +154,9 @@ today.
 
 | Input | Trust | It cannot |
 |---|---|---|
-| The model's draft and its `_findings` | untrusted | choose evidence, rule or scope; pass by omitting a required claim; smuggle oversized JSON (`lib/boundedJson.ts · copyJson`) |
+| The model's draft and its `_findings` | untrusted | choose evidence, rule or scope; show an unchecked fact; pass by omitting a required claim; smuggle oversized JSON (`lib/boundedJson.ts · copyJson`) |
 | Tool text | untrusted | add a fact: only a recognized envelope matching the served payload counts (`semantics/envelope.ts · readSemantics`). Injected text may sway the draft, which is then checked against facts |
+| A newer failed or withheld read | — | hide behind an older success: the latest attempt for the scope decides |
 | Another customer's result | none | bind: its scope must equal the trusted scope |
 | A saved checkpoint | shape-checked only | be trusted off-server; history-only continuations carry no receipts |
 | App contract, `claimScope`, tool envelopes | the trusted base | — |
@@ -143,17 +165,23 @@ today.
 truth: a misreported status makes a false claim "supported", and overstated coverage can flip
 either verdict. So verdicts name their source, scope declarations carry versions, and completeness
 is the app rule's call. **Fail closed:** any error, limit, timeout, missing carrier, withheld grant
-or ambiguity is `not-checked`, never `supported`, and enforce delivers only the checked bytes.
+or ambiguity is `not-checked`, never `supported`; enforce delivers only checked bytes or a fallback
+built from the named candidate's reason codes.
 
 ## 6. Tests and measurement
 
 **Scripted tests (mock provider):** every verdict and not-checked reason; `issue_refund` success
-and other customers' receipts never support; reused provider call ids; a later failed read blocks
-an older one; middleware edits are what gets checked; corrections call no tool; every boundary
-captures; receipts survive pause and resume, not `continueFrom` or `resumeOnError`; no withheld
-token streams (`test/ag-ui/answer-validation-guard.test.ts`); the fold reads each verdict; unarmed
-agents stay byte-identical (`test/core/tools/reference/`). Planted errors prove detection; the paid
-run measures real drafts.
+and other customers' receipts never support; reused provider call ids; a success followed by a
+failed, withheld or unfinished read of the same scope is not checked, and so is one followed by a
+read with no readable scope; a draft naming order B-2002 under scope A-1001 fails, as an undeclared
+field and as a scope echo; middleware edits are what gets checked; corrections call no tool; every
+boundary captures; receipts survive pause and resume, not `continueFrom` or `resumeOnError`; no
+withheld token streams (`test/ag-ui/answer-validation-guard.test.ts`); the standing reads only the
+delivery row's candidate (a passing correction reads "known" despite its first draft's
+contradiction, a fallback after one or two drafts keeps that candidate's reasons, an ask reads
+`ask`, a contract without a delivery row reads `check-unreachable`); unarmed agents stay
+byte-identical (`test/core/tools/reference/`). Planted errors prove detection; the paid run measures
+real drafts.
 
 **Registered rule `claims-rule-m1`** (`bench/claims/RULE.md`, written before any paid call; run only
 on the owner's budget go):
@@ -180,7 +208,7 @@ on the owner's budget go):
    report-only: unscoped, it never withholds and never supports "known".
 2. **Reuse `ClaimVerificationRow`?** No: a sibling kind sharing its `resolved` shape, because that
    row records a model declaration.
-3. **Conflicting reads?** The latest settles; a later unavailable read blocks; disagreeing reads in
+3. **Conflicting reads?** The latest attempt for the scope settles (§ 3.3); disagreeing reads in
    one parallel batch are not checked.
 4. **Correction on by default?** No, abstain, until the bench shows it adds no false claim.
 5. **A clarifying question claims nothing.** Allow a declared claim-free ask variant; any other
