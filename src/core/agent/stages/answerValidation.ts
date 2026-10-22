@@ -12,7 +12,7 @@ import type { ArtifactStore } from '../../../artifacts/types.js';
 import type { OutputSchemaParser } from '../../../answer-validation/outputSchema.js';
 import type { DeclaredClaim } from '../../../integrity/unsupported-claim/check.js';
 import type { AgentState } from '../types.js';
-import { answerEvidenceOf } from './answerEvidence.js';
+import { takeAnswerEvidence } from './answerEvidence.js';
 import type { RouteBranch } from './route.js';
 
 /** Wrap only the configured agent's terminal decision, in the outer scope.
@@ -124,7 +124,7 @@ function agentRowsFor(
   if (config.agentChecks.length === 0) return undefined;
   const listsEvidence = config.agentChecks.includes('names-and-numbers');
   const listsClaims = config.agentChecks.includes('claims');
-  const judge = listsEvidence ? answerEvidenceOf(scope) : undefined;
+  const judge = listsEvidence ? takeAnswerEvidence(scope) : undefined;
   const ledger = listsClaims ? [...(scope.claimFacts ?? [])] : [];
   const epoch = listsClaims ? (scope.iteration as number | undefined) ?? 0 : 0;
   // Fixed order — the Route decider's own: the evidence gate, then the claims.

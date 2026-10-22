@@ -477,7 +477,9 @@ needs its builder call, or `build()` refuses. Their rows come after yours in
 
 - **Every row judges what is delivered.** Rows are judged on the exact JSON
   this validation delivers, after your schema's transform, never on the
-  model's draft: a draft that read 1200 but is delivered as 9750 fails.
+  model's draft: a draft that read 1200 but is delivered as 9750 fails. A
+  value your schema adds itself (a version tag, a source id) is checked like
+  any other; declare it in the gate's `exempt` list.
 - **The repair turn comes first.** Under `posture: 'guard'` the gate names the
   unsupported values back to the model for one more ordinary turn, with the
   tools still on the wire, before the validation runs. Only what survives it

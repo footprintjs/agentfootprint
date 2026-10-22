@@ -20,7 +20,7 @@ Opt-in contract. The callback cannot replace the accepted answer.
 
 > `readonly` `optional` **agentChecks?**: readonly [`AgentCheckName`](/docs/api/type-aliases/AgentCheckName)[]
 
-Defined in: [src/answer-validation/types.ts:182](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L182)
+Defined in: [src/answer-validation/types.ts:187](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L187)
 
 The agent's own answer checks that take part in this validation. Opt-in:
 omitted, the report holds your checks alone, exactly as before.
@@ -37,11 +37,16 @@ way. `mode: 'observe'` records the rows and delivers.
   `agent:claims:<field>`, judged on the candidate this validation delivers.
   Agrees with the fact a tool settled: `checked-pass`. Contradicts it:
   `checked-fail`. States a value for a fact no tool result settled, or one
-  settled as unknown: `unreachable`. Leaves the field out, or declines it
-  (`null`, `'unknown'`) where the run settled a value: `not-applicable`.
-- `'names-and-numbers'`: one row, id `agent:names-and-numbers`, from the
-  gate's verdict on the answer that stands, so after its one repair turn
-  under `posture: 'guard'`. A value no tool result carried: `checked-fail`.
+  settled as unknown — or gives no value where the tool settled only
+  `null` or `'unknown'` (agreement on doubt verifies nothing; enforce
+  withholds, observe delivers "not sure"): `unreachable`. Leaves the field
+  out, or declines it (`null`, `'unknown'`) where the run settled a value:
+  `not-applicable`. An absence a tool declared with `known(null)` is an
+  established value: `null` agreeing with it passes.
+- `'names-and-numbers'`: one row, id `agent:names-and-numbers`: the gate
+  asked of the exact candidate this validation delivers, after any output
+  transform (its one repair turn under `posture: 'guard'` runs earlier, on
+  the model's draft). A value no tool result carried: `checked-fail`.
   A value not found while the index was past its ceiling: `unreachable`.
   A clean pass is `not-applicable`: finding a value clears it, and never
   verifies the answer.
@@ -115,7 +120,7 @@ Defined in: [src/answer-validation/types.ts:125](https://github.com/footprintjs/
 
 > **validate**(`candidate`, `context`): `AnswerValidationResult` \| `Promise`\<`AnswerValidationResult`\>
 
-Defined in: [src/answer-validation/types.ts:183](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L183)
+Defined in: [src/answer-validation/types.ts:188](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L188)
 
 #### Parameters
 

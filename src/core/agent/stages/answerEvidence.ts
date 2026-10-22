@@ -26,7 +26,13 @@ export function noteAnswerEvidence(scope: object, judge: EvidenceJudge): void {
   STANDING.set(scope, judge);
 }
 
-/** The judge this Route stage's gate filed, or `undefined` when it judged nothing. */
-export function answerEvidenceOf(scope: object): EvidenceJudge | undefined {
-  return STANDING.get(scope);
+/**
+ * The judge this Route stage's gate filed, or `undefined` when it judged
+ * nothing — taken ONCE: the entry is dropped as it is read, so the evidence
+ * corpus the judge holds is released as soon as the validation has asked.
+ */
+export function takeAnswerEvidence(scope: object): EvidenceJudge | undefined {
+  const judge = STANDING.get(scope);
+  STANDING.delete(scope);
+  return judge;
 }

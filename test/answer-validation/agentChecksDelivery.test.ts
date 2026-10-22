@@ -559,6 +559,7 @@ function transformingAgent(
   reactMode: (typeof REACT_MODES)[number],
   check: 'names-and-numbers' | 'claims',
   transform: (answer: { order: string; total: number }) => Record<string, unknown>,
+  exempt?: readonly string[],
 ) {
   const parser: OutputSchemaParser<Record<string, unknown>> = {
     parse(value) {
@@ -592,7 +593,7 @@ function transformingAgent(
     )
     .outputSchema(parser);
   if (check === 'claims') builder.claims({ total: { entity: 'ORD-44710', field: 'total' } });
-  else builder.namesAndNumbersFromEvidence();
+  else builder.namesAndNumbersFromEvidence(exempt !== undefined ? { exempt } : undefined);
   const agent = builder
     .answerValidation<Record<string, unknown>>({
       id: 'orders',
@@ -646,6 +647,28 @@ for (const reactMode of REACT_MODES) {
     });
   });
 }
+
+describe('functional: a value the schema adds is judged too — declare it exempt', () => {
+  const tag = (a: { order: string; total: number }) => ({ ...a, source: 'crm-2024' });
+
+  it('withheld while undeclared: no tool result and no person said crm-2024', async () => {
+    const { agent } = transformingAgent('dynamic', 'names-and-numbers', tag);
+    const outcome = await agent
+      .run({ message: 'Which order totals 1200?' })
+      .catch((e: unknown) => e);
+    expect((outcome as AnswerValidationError).report.checks[1]).toMatchObject({
+      id: 'agent:names-and-numbers',
+      disposition: 'checked-fail',
+    });
+  });
+
+  it('delivered once the app declares its own constant exempt', async () => {
+    const { agent } = transformingAgent('dynamic', 'names-and-numbers', tag, ['crm-2024']);
+    expect(await agent.run({ message: 'Which order totals 1200?' })).toBe(
+      JSON.stringify({ order: 'ORD-44710', total: 1200, source: 'crm-2024' }),
+    );
+  });
+});
 
 // ── Agreement on doubt: the tool established no value, the answer gives none ──
 
