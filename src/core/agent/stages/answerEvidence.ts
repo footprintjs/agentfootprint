@@ -19,11 +19,11 @@
  */
 import type { EvidenceJudge } from '../../../answer-validation/index.js';
 
-const STANDING = new WeakMap<object, EvidenceJudge>();
+const JUDGES = new WeakMap<object, EvidenceJudge>();
 
 /** File the gate, bound to this Route stage's evidence, for the validation to ask. */
 export function noteAnswerEvidence(scope: object, judge: EvidenceJudge): void {
-  STANDING.set(scope, judge);
+  JUDGES.set(scope, judge);
 }
 
 /**
@@ -32,7 +32,7 @@ export function noteAnswerEvidence(scope: object, judge: EvidenceJudge): void {
  * corpus the judge holds is released as soon as the validation has asked.
  */
 export function takeAnswerEvidence(scope: object): EvidenceJudge | undefined {
-  const judge = STANDING.get(scope);
-  STANDING.delete(scope);
+  const judge = JUDGES.get(scope);
+  JUDGES.delete(scope);
   return judge;
 }
