@@ -15,7 +15,8 @@
  *     `not-applicable`, so the gate can withhold an answer and can never be
  *     what makes a report `passed` (which the fold reads as "known").
  *   - Declining is not claiming. A field the answer leaves out, or states as
- *     `null` / `'unknown'`, is `not-applicable`; the detector's own legacy
+ *     `null` / `'unknown'` where the run settled a value, is `not-applicable`
+ *     (null against a settled null is agreement, a pass); the detector's legacy
  *     ledger maps doubt to `checked-pass`, which is no certificate.
  *
  * And one from the redaction law: a row carries counts and the FIELD names the
@@ -77,8 +78,8 @@ export function evidenceCheckOf(verdict: EvidenceCheckInput | undefined): Answer
     'not-applicable',
     verdict.lookedUp === 0
       ? 'the answer states no name or number to look up'
-      : `all ${verdict.lookedUp} value(s) looked up were found in tool results; ` +
-          `a found value clears the answer, it does not verify it`,
+      : `none of the ${verdict.lookedUp} value(s) looked up is unsupported; ` +
+          `clearing the gate does not verify the answer`,
   );
 }
 

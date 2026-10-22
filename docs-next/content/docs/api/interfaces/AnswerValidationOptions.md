@@ -20,7 +20,7 @@ Opt-in contract. The callback cannot replace the accepted answer.
 
 > `readonly` `optional` **agentChecks?**: readonly [`AgentCheckName`](/docs/api/type-aliases/AgentCheckName)[]
 
-Defined in: [src/answer-validation/types.ts:181](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L181)
+Defined in: [src/answer-validation/types.ts:182](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L182)
 
 The agent's own answer checks that take part in this validation. Opt-in:
 omitted, the report holds your checks alone, exactly as before.
@@ -38,12 +38,13 @@ way. `mode: 'observe'` records the rows and delivers.
   Agrees with the fact a tool settled: `checked-pass`. Contradicts it:
   `checked-fail`. States a value for a fact no tool result settled, or one
   settled as unknown: `unreachable`. Leaves the field out, or declines it
-  (`null`, `'unknown'`): `not-applicable`.
+  (`null`, `'unknown'`) where the run settled a value: `not-applicable`.
 - `'names-and-numbers'`: one row, id `agent:names-and-numbers`, from the
   gate's verdict on the answer that stands, so after its one repair turn
   under `posture: 'guard'`. A value no tool result carried: `checked-fail`.
-  An evidence index past its ceiling: `unreachable`. A clean pass is
-  `not-applicable`: finding a value clears it, and never verifies the answer.
+  A value not found while the index was past its ceiling: `unreachable`.
+  A clean pass is `not-applicable`: finding a value clears it, and never
+  verifies the answer.
 
 Each listed check needs its builder call, or `build()` refuses. `validate`
 still runs, and a report with no comparison stays `unverified`: the
@@ -114,7 +115,7 @@ Defined in: [src/answer-validation/types.ts:125](https://github.com/footprintjs/
 
 > **validate**(`candidate`, `context`): `AnswerValidationResult` \| `Promise`\<`AnswerValidationResult`\>
 
-Defined in: [src/answer-validation/types.ts:182](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L182)
+Defined in: [src/answer-validation/types.ts:183](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L183)
 
 #### Parameters
 

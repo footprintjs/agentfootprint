@@ -143,12 +143,13 @@ export interface AnswerValidationOptions<T = unknown> {
    *   Agrees with the fact a tool settled: `checked-pass`. Contradicts it:
    *   `checked-fail`. States a value for a fact no tool result settled, or one
    *   settled as unknown: `unreachable`. Leaves the field out, or declines it
-   *   (`null`, `'unknown'`): `not-applicable`.
+   *   (`null`, `'unknown'`) where the run settled a value: `not-applicable`.
    * - `'names-and-numbers'`: one row, id `agent:names-and-numbers`, from the
    *   gate's verdict on the answer that stands, so after its one repair turn
    *   under `posture: 'guard'`. A value no tool result carried: `checked-fail`.
-   *   An evidence index past its ceiling: `unreachable`. A clean pass is
-   *   `not-applicable`: finding a value clears it, and never verifies the answer.
+   *   A value not found while the index was past its ceiling: `unreachable`.
+   *   A clean pass is `not-applicable`: finding a value clears it, and never
+   *   verifies the answer.
    *
    * Each listed check needs its builder call, or `build()` refuses. `validate`
    * still runs, and a report with no comparison stays `unverified`: the

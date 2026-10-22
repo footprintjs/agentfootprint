@@ -319,10 +319,11 @@ function orderAgent(
   turns: readonly Turn[],
   posture: 'assist' | 'guard' | 'rails',
   reactMode: (typeof REACT_MODES)[number] = 'dynamic',
+  extra: { readonly mode?: 'enforce' | 'observe'; readonly findings?: true } = {},
 ) {
   let lookups = 0;
   const source = scripted(turns);
-  const agent = Agent.create({
+  const builder = Agent.create({
     provider: source.provider,
     model: 'synthetic',
     maxIterations: 6,
@@ -344,14 +345,18 @@ function orderAgent(
     .answerValidation<OrderAnswer>({
       id: 'orders',
       version: '1',
+      ...(extra.mode !== undefined && { mode: extra.mode }),
       agentChecks: ['names-and-numbers'],
       validate: (answer) => ({
         checks: [
           { id: 'total-positive', disposition: answer.total > 0 ? 'checked-pass' : 'checked-fail' },
         ],
       }),
-    })
-    .build();
+    });
+  // The findings ledger wraps the Route decider (withFindingsAdmission): the
+  // gate's verdict must still reach the validation through that wrapper.
+  if (extra.findings === true) builder.findings();
+  const agent = builder.build();
   return { agent, source, seen: delivered(agent), lookups: () => lookups };
 }
 
@@ -488,6 +493,58 @@ describe('integration: both checks listed — the repair turn can save a contrad
     ]);
     expect(seen.tokens).toEqual([]);
     expect(seen.ends).toEqual([]);
+  });
+});
+
+describe('integration: the hand-off survives every Route wrapper', () => {
+  it('with .findings() armed, an invented value still FAILS the row — never unreachable', async () => {
+    const { agent, seen } = orderAgent(
+      [{ toolCalls: [FIND_ORDER] }, { content: INVENTED }],
+      'assist',
+      'dynamic',
+      { findings: true },
+    );
+    const outcome = await agent
+      .run({ message: 'Which order totals 1200?' })
+      .catch((e: unknown) => e);
+    expect((outcome as AnswerValidationError).report).toMatchObject({ status: 'failed' });
+    expect((outcome as AnswerValidationError).report.checks[1]).toMatchObject({
+      id: 'agent:names-and-numbers',
+      disposition: 'checked-fail',
+    });
+    expect(seen.tokens).toEqual([]);
+  });
+
+  it('with .findings() armed, a grounded answer is delivered', async () => {
+    const { agent } = orderAgent(
+      [{ toolCalls: [FIND_ORDER] }, { content: READ }],
+      'assist',
+      'dynamic',
+      {
+        findings: true,
+      },
+    );
+    expect(await agent.run({ message: 'Which order totals 1200?' })).toBe(READ);
+    expect(agent.answerValidation()?.checks[1]).toMatchObject({
+      id: 'agent:names-and-numbers',
+      disposition: 'not-applicable',
+    });
+  });
+});
+
+describe('functional: observe under guard repairs first, then records and delivers', () => {
+  it('the kept value is delivered with a failed row naming the repair turn', async () => {
+    const { agent, source, seen } = orderAgent(
+      [{ toolCalls: [FIND_ORDER] }, { content: INVENTED }, { content: INVENTED }],
+      'guard',
+      'dynamic',
+      { mode: 'observe' },
+    );
+    expect(await agent.run({ message: 'Which order totals 1200?' })).toBe(INVENTED);
+    expect(source.requests).toHaveLength(3);
+    expect(seen.tokens).toEqual([INVENTED]);
+    expect(agent.answerValidation()).toMatchObject({ mode: 'observe', status: 'failed' });
+    expect(agent.answerValidation()?.checks[1]?.reason).toMatch(/after the one repair turn$/);
   });
 });
 

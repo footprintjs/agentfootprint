@@ -69,7 +69,7 @@ describe('unit: the names-and-numbers row', () => {
       id,
       disposition: 'not-applicable',
       reason:
-        'all 5 value(s) looked up were found in tool results; a found value clears the answer, it does not verify it',
+        'none of the 5 value(s) looked up is unsupported; clearing the gate does not verify the answer',
     });
     // A truncated index can still CLEAR: membership in a prefix is membership.
     expect(
