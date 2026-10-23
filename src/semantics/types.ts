@@ -38,6 +38,7 @@
 
 import type { CoverageDeclaration, CoverageItem } from './coverage/types.js';
 import type { DeclaredPeriod, PeriodOnWire } from './coverage/period.js';
+import type { PagingDeclaration, ResolvedDeclaration } from './coverage/search/resultFacts.js';
 
 /**
  * The reserved key that makes a semantic envelope recognizable. Reserved
@@ -273,6 +274,14 @@ export type DescribedResultDeclaration = {
    * the results layer files its verdict.
    */
   readonly period?: DeclaredPeriod;
+  /**
+   * The entity each population value RESOLVED to — `[{ argument, id, name?,
+   * aliases? }]` — the tool's own claim. Read by a tool that declares its
+   * `search`: it binds the value the call was SENT for, and no other entity.
+   */
+  readonly resolved?: readonly ResolvedDeclaration[];
+  /** Whether there is a next page — `{ next: null }` says there is none. */
+  readonly paging?: PagingDeclaration;
   /** The coverage()-vocabulary declaration this result absorbs. */
   readonly coverage?: CoverageDeclaration;
   /** A question the result hands back instead of picking silently. `null`
@@ -302,6 +311,10 @@ export interface ToolSemantics {
   /** What the read behind the data covered in time — honesty step 7b; minted
    *  only by `describedResult()`. The model reads it as declared. */
   readonly period?: PeriodOnWire;
+  /** The entity each population value resolved to, as declared. */
+  readonly resolved?: readonly ResolvedDeclaration[];
+  /** Whether there is a next page, as declared. */
+  readonly paging?: PagingDeclaration;
   readonly coverage?: SemanticCoverage;
   /** DERIVED from `coverage` (not checked + cannot cover), one prose line
    *  per item — never author-set, so the list and the lists cannot drift. */

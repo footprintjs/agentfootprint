@@ -62,6 +62,14 @@ import {
   servedPeriod,
   type DeclaredPeriod,
 } from './coverage/period.js';
+import {
+  mintPaging,
+  mintResolved,
+  pagingProblem,
+  readPaging,
+  readResolved,
+  resolvedProblem,
+} from './coverage/search/resultFacts.js';
 import { refusal, refuseUnknownKeys } from './coverage/refusal.js';
 import type { Coverage, CoverageDeclaration, CoverageItem } from './coverage/types.js';
 import {
@@ -118,6 +126,10 @@ const ENVELOPE_KEYS = new Set([
   // reader refuses a whole envelope that carries it (this set is its law), so
   // the changelog names the floor.
   'period',
+  // A search tool's two result facts (`coverage/search/resultFacts.ts`). An
+  // OLDER reader refuses a whole envelope that carries either, as for `period`.
+  'resolved',
+  'paging',
   'coverage',
   'not_covered',
   'clarify',
@@ -409,8 +421,8 @@ function issuesIn(value: unknown, s: Spelling): SemanticIssue[] {
         malformed(
           key,
           `this result carries '${key}', which is not a field this vocabulary has. The ` +
-            `fields are: series, facts, edges, grain, provenance, period, coverage, clarify, ` +
-            `render (not_covered and note are derived).`,
+            `fields are: series, facts, edges, grain, provenance, period, resolved, paging, ` +
+            `coverage, clarify, render (not_covered and note are derived).`,
         ),
       );
     }
@@ -609,6 +621,16 @@ function issuesIn(value: unknown, s: Spelling): SemanticIssue[] {
   if (value.period !== undefined) {
     const problem = periodProblem(value.period, 'wire');
     if (problem !== undefined) issues.push(malformed(problem.field, problem.message));
+  }
+
+  // ── resolved / paging ── (the ONE rule set `absent()` mints by).
+  if (value.resolved !== undefined) {
+    const problem = resolvedProblem(value.resolved);
+    if (problem !== undefined) issues.push(malformed('resolved', problem));
+  }
+  if (value.paging !== undefined) {
+    const problem = pagingProblem(value.paging);
+    if (problem !== undefined) issues.push(malformed('paging', problem));
   }
 
   // ── series ⇒ grain ──
@@ -877,6 +899,9 @@ export function mintSemantics(
   // Honesty step 7b: a top-level `period`, minted by the ONE period rule set
   // (refused in the author's own camelCase words).
   const period = 'period' in decl ? mintPeriod((decl as { period?: unknown }).period) : undefined;
+  // A search tool's result facts, by the rule set `absent()` mints with.
+  const resolved = mintResolved(decl.resolved);
+  const paging = mintPaging(decl.paging);
   const candidate: Record<string, unknown> = {
     [SEMANTICS_MARKER]: true,
     ...(decl.series !== undefined && { series: copyDataList(decl.series) }),
@@ -887,6 +912,8 @@ export function mintSemantics(
       provenance: door.toWire('provenance', decl.provenance),
     }),
     ...(period !== undefined && { period }),
+    ...(resolved !== undefined && { resolved }),
+    ...(paging !== undefined && { paging }),
     ...(coverage !== undefined && { coverage }),
     ...(notCovered.length > 0 && { not_covered: notCovered }),
     ...('clarify' in decl &&
@@ -970,6 +997,9 @@ export function semanticsForModel(sem: ToolSemantics): Record<string, unknown> {
     ...(sem.period !== undefined && {
       period: served?.period ?? periodOnWireCopy(sem.period),
     }),
+    // A search tool's result facts — its own claims, served as declared.
+    ...(sem.resolved !== undefined && { resolved: readResolved(sem.resolved) }),
+    ...(sem.paging !== undefined && { paging: readPaging(sem.paging) }),
     ...(sem.not_covered !== undefined &&
       sem.not_covered.length > 0 && { not_covered: [...sem.not_covered] }),
     ...(sem.clarify !== undefined &&
