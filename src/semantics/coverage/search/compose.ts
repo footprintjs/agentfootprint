@@ -6,7 +6,7 @@
  *          door (what came back) → inEffect (each argument) → facets
  *          (`checked`) → gaps → complete → the reading the funnel files.
  * Role:    semantics/ layer, pure. Called by the dispatch funnel
- *          (`../../../core/agent/stages/toolCalls.ts` · `composeSearch`) at
+ *          (`../../../core/agent/stages/searchCoverage.ts` · `buildSearchCoverage`) at
  *          every execute boundary, before `declareCoverage`.
  * Emits:   N/A (the funnel emits, from the reading).
  *
