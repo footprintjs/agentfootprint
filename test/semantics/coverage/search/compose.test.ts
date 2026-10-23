@@ -562,7 +562,7 @@ describe('contract — host-filled arguments', () => {
 });
 
 describe('functional — what the model is served', () => {
-  it('the composed absence: typed items without said words, the gaps as prose, complete', () => {
+  it('the composed absence: typed items without said words, the gaps as prose', () => {
     const { served } = compose(call({ service: 'payments', severity: 'critical' }), NONE);
     const env = served as Record<string, unknown>;
     expect(env.af_absent).toBe(true);
@@ -579,8 +579,7 @@ describe('functional — what the model is served', () => {
     expect(env.cannot_cover).toEqual([
       { what: 'incidents filed by email', why: 'they never enter the store', kind: 'scope' },
     ]);
-    expect(env.complete).toBe(true);
-    expect(env.note).toBe(NONE.note);
+    expect('complete' in env).toBe(false); // the record's, never the model's
   });
 
   it('a hand-written notChecked beside declared is a prose gap: served, and never complete', () => {
@@ -631,7 +630,7 @@ describe("functional — coverage(rows, { checked: 'declared' })", () => {
     expect((env.af_coverage.checked as { what: string }[]).map((i) => i.what)).toContain(
       'service: p',
     );
-    expect(env.af_coverage.complete).toBe(true);
+    expect('complete' in env.af_coverage).toBe(false);
     expect(complete).toBe(true);
     expect(facts.kind).toBe('ledger');
   });
@@ -740,5 +739,44 @@ describe('contract — S1: an empty list names nothing, and is a gap', () => {
       bears,
     });
     expect(complete).toBe(false);
+  });
+});
+
+describe('functional — S2/S3: what the model is served stays small and claims no completeness', () => {
+  it('complete rides the record only; the composed absence has its own note', async () => {
+    const { ABSENCE_NOTE_COMPOSED } = await import('../../../../src/semantics/coverage/absent.js');
+    const { served, complete } = compose(call({ service: 'p' }), NONE);
+    const env = served as Record<string, unknown>;
+    expect(complete).toBe(true);
+    expect('complete' in env).toBe(false);
+    expect(env.note).toBe(ABSENCE_NOTE_COMPOSED);
+    expect(String(env.note)).not.toMatch(/nothing was substituted/);
+    expect(String(env.note)).toMatch(/default/);
+  });
+
+  it('a 500-value population is served as a count and the first few, quoted; the row keeps all', () => {
+    const ids = Array.from({ length: 500 }, (_, i) => `svc-${String(i).padStart(4, '0')}`);
+    const { served, checked } = compose(call({ service: ids }), NONE);
+    expect(item(checked, 'service')).toHaveLength(500);
+    const servedItems = (served as { checked: Record<string, unknown>[] }).checked.filter(
+      (i) => i.argument === 'service',
+    );
+    expect(servedItems).toHaveLength(1);
+    expect(servedItems[0]).toMatchObject({ facet: 'population', from: 'call', count: 500 });
+    expect(String(servedItems[0]?.what)).toMatch(
+      /^service: 500 values, first 3: `svc-0000`, `svc-0001`, `svc-0002`$/,
+    );
+    expect(JSON.stringify(served).length).toBeLessThan(2_500);
+  });
+
+  it('a long list value of a filter is collapsed the same way', () => {
+    const levels = Array.from({ length: 40 }, (_, i) => `level-${i}`);
+    const { served } = compose(call({ service: 'p', severity: levels }), NONE);
+    const sev = (served as { checked: Record<string, unknown>[] }).checked.find(
+      (i) => i.argument === 'severity',
+    );
+    expect(sev).toMatchObject({ count: 40 });
+    expect(Array.isArray(sev?.value)).toBe(false);
+    expect(String(sev?.what)).toMatch(/^severity: 40 values, first 3: /);
   });
 });

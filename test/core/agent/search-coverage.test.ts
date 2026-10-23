@@ -177,7 +177,7 @@ describe('integration — the committed row, the served absence, the events', ()
     ]);
   });
 
-  it('the model reads the composed absence — typed items, complete, no said words', async () => {
+  it('the model reads the composed absence — typed items, no complete, no said words', async () => {
     const r = await run(
       (b) => b.tool(listIncidents()),
       [{ name: 'list_incidents', args: { service: 'payments' } }],
@@ -187,7 +187,7 @@ describe('integration — the committed row, the served absence, the events', ()
     const turn = r.toolTurns[0] ?? '{}';
     const served = JSON.parse(turn.slice(0, turn.lastIndexOf('}') + 1)) as Record<string, unknown>;
     expect(served.af_absent).toBe(true);
-    expect(served.complete).toBe(true);
+    expect('complete' in served).toBe(false);
     expect(JSON.stringify(served.checked)).toContain('"facet":"population"');
     expect(JSON.stringify(served)).not.toContain('"said"');
     expect(JSON.stringify(served)).not.toContain('"quote"');

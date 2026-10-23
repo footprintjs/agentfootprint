@@ -95,6 +95,19 @@ export const ABSENCE_NOTE =
   'The search ran and matched nothing. This is an ANSWER, not an error: nothing failed, nothing was substituted for what was asked, and calling this tool again with the same arguments returns this same result. `checked` is the ground this answer covers; anything under `not_checked` or `cannot_cover` is ground it does NOT cover, and reaching that needs a different question, not a retry.';
 
 /**
+ * The note a COMPOSED absence is served (`Tool.search`): `checked` there is
+ * what the library composed from the call's arguments and the tool's declared
+ * defaults, so the note cannot say "nothing was substituted for what was
+ * asked" — a declared default, or an argument the call left out, may have
+ * narrowed the search. It keeps what stays true (the call ran, a retry
+ * returns the same) and points at the gaps. Static, never interpolated.
+ */
+// One literal on purpose, as `ABSENCE_NOTE`: its TYPE is the sentence, so a
+// redacted record keeps it as the library's own words.
+export const ABSENCE_NOTE_COMPOSED =
+  "The search ran and matched nothing — the call did not fail, and calling this tool again with the same arguments returns this same result. `checked` is the ground this answer covers, as the call's arguments and the tool's declared defaults set it: where an argument was not sent, a default the tool applies may have narrowed the search. Anything under `not_checked` or `cannot_cover` is ground it does NOT cover, and reaching that needs a different question, not a retry.";
+
+/**
  * The note the MODEL is served in place of {@link ABSENCE_NOTE} when the
  * absence's own period is `partly-held` or `not-held` (honesty step 7b, bench
  * round 1) — `coverage/read.ts` · `strip` swaps it in and appends the period's

@@ -137,9 +137,9 @@ export function composeSearchCoverage(
   const lists = { notChecked, cannotCover };
   const value =
     facts.absence !== undefined
-      ? servedAbsence(facts.absence, checked, lists, complete)
+      ? servedAbsence(facts.absence, checked, lists)
       : facts.ledger !== undefined
-      ? servedLedger(facts.ledger, checked, lists, complete)
+      ? servedLedger(facts.ledger, checked, lists)
       : result;
   const base = baseFacts(value, facts, call.toolName);
   const composedFacts: CoverageFacts = {
