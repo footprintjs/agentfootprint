@@ -75,7 +75,7 @@
 import { stringLeaves } from '../../../integrity/argumentLeaves.js';
 import type { EvidenceCorpus } from '../evidence/evidenceIndex.js';
 import { candidateForms, extractCandidates } from '../evidence/extract.js';
-import { canonicalForm } from '../../../tools/normalize.js';
+import { canonicalForm } from '../../../lib/normalize.js';
 import type { GroundedValue, ResolvedEvidenceGate } from '../evidence/types.js';
 import {
   CONTINGENT_VALUE_CHARS,

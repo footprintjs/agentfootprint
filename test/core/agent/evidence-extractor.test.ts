@@ -25,7 +25,7 @@ import {
   lookupForms,
   normalizeToken,
   tokenize,
-} from '../../../src/tools/normalize.js';
+} from '../../../src/lib/normalize.js';
 import {
   evidenceFromHistory,
   exemptFromRun,
