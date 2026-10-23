@@ -1,13 +1,14 @@
 /**
  * prose — the prose door (design § 5.2): every negative claim the grammar finds in a text,
  * resolved to the reads it names and NOTED against them. Observe-only: a note never withholds,
- * whatever the validation mode; a claim with no note is noted established.
+ * whatever the validation mode; a claim may carry no note.
  *
  * Pattern: detect (`detect.ts`) → resolve (`resolve.ts`) → containment notes
  *          (`containment.ts`), one row per claim and one per unit the grammar could not judge
  *          (`in-code-block`, `language-unsupported`), in text order. A record that may be missing
  *          a call, or keeps one out by redaction, notes every claim `record-incomplete` and
- *          nothing else: nothing can be said around a hole.
+ *          nothing else: nothing can be said around a hole. More than MAX_NEGATIVE_CLAIMS
+ *          returns one `too-many-claims` note for the whole text, before reading the record.
  * Role:    integrity/ layer (L3). Not wired: PR 5 files these rows from the Route decider
  *          behind `.negativeClaims({ prose })`.
  *
@@ -17,6 +18,8 @@
 
 import { claimWordsOf, entityNotes } from './containment.js';
 import { detectNegativeClaims, type DetectedClaim } from './detect.js';
+import { MAX_NEGATIVE_CLAIMS } from './limits.js';
+import { NEGATIVE_CLAIM_PHRASES_VERSION } from './phrases.js';
 import { isCurrent, resolveProseClaim } from './resolve.js';
 import type {
   ProseClaimRow,
@@ -126,10 +129,21 @@ function judgeClaim(
   return claimRow(field, claim, notes, inOrder, staleSince === undefined ? {} : { staleSince });
 }
 
-/** Every negative claim of a text, noted. */
+/** Note each claim, or one whole-text overflow note without judging any claim. */
 export function judgeProseNegatives(input: ProseCheckInput): ProseRow[] {
   const { field, text, record } = input;
   const detection = detectNegativeClaims(text);
+  if (detection.claims.length > MAX_NEGATIVE_CLAIMS) {
+    return [
+      {
+        kind: 'negative-claim-note',
+        field,
+        code: 'too-many-claims',
+        span: { start: 0, end: text.length },
+        packVersion: NEGATIVE_CLAIM_PHRASES_VERSION,
+      },
+    ];
+  }
   const peers = record.calls.filter((call) => isCurrent(call, record));
   const rows: ProseRow[] = [
     ...detection.notes.map((note) => ({

@@ -17,13 +17,12 @@
 import { stableJson } from '../../lib/stableJson.js';
 import type { Disposition } from '../disposition/types.js';
 import { judgeCitation, MAX_CITED_READS, type CitationVerdict } from './citation.js';
+import { MAX_NEGATIVE_CLAIMS } from './limits.js';
 import { composeStatement } from './statement.js';
 import type { TurnRecord, TypedJudgement, TypedVerdict } from './types.js';
 
 export { MAX_CITED_READS };
-
-/** At most this many claims in one field; beyond it every claim of the field is `too-many-claims`. */
-export const MAX_NEGATIVE_CLAIMS = 32;
+export { MAX_NEGATIVE_CLAIMS };
 
 const TOO_MANY: CitationVerdict = Object.freeze({
   kind: 'unknown',

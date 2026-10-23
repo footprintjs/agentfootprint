@@ -187,11 +187,11 @@ export interface ProseClaimRow {
   readonly staleSince?: StaleSince;
 }
 
-/** A unit the grammar could not judge, said out loud. */
+/** An unjudged unit, or a whole-text note when the claim count exceeds the field limit. */
 export interface ProseNoteRow {
   readonly kind: 'negative-claim-note';
   readonly field: string;
-  readonly code: 'in-code-block' | 'language-unsupported';
+  readonly code: 'in-code-block' | 'language-unsupported' | 'too-many-claims';
   readonly span: TextSpan;
   readonly packVersion: string;
   readonly phraseId?: string;

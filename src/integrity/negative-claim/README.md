@@ -44,6 +44,11 @@ population-less search's `source.said` words); then note what a citation would h
 no note; the others then note only what they BEAR on it. Nothing here throws on model text
 (`test/integrity/negative-claim/fuzz.test.ts`).
 
+The prose door shares the typed door's 32-claim field limit (`limits.ts`). Above it, one
+`too-many-claims` note covers the entire text; no record is read and no claim is judged. It
+does not return a checked prefix. Detection still scans the supplied text; this bounds record
+checking, not input length. Code and unsupported-language notes do not count as claims.
+
 **Same search** (`readings.ts`) means the same COMPOSED executed scope — filters in effect,
 defaults as if sent, fixed qualifiers, host-filled identities by reference, a relative window by
 its spelling within the turn, the page — never the model-visible arguments alone. Whether a call

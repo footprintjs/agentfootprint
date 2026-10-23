@@ -50,7 +50,7 @@ const FALLBACK_CLOCK = '2026-01-01T00:00:00Z';
  * The record the prose check reads for a recorded reply. The study's tools declare no `search`,
  * so no recorded call carries a composed row (§ 3.2) — until the per-case tool rewrites exist
  * (RULE.md § Record), the record is the empty one and every detected claim is noted
- * `entity-unresolved`.
+ * `entity-unresolved`, or the field is noted `too-many-claims` when it exceeds the claim limit.
  */
 const recordFor = (reply) => ({
   leg: { namespace: 'replay', runId: 'replay' },
@@ -77,7 +77,7 @@ export function readReply(reply, lib) {
   return {
     ...reply,
     detected: detection.claims.length > 0,
-    noted: claimRows.some((r) => r.notes.length > 0),
+    noted: claimRows.some((r) => r.notes.length > 0) || (notes['too-many-claims'] ?? 0) > 0,
     notes,
   };
 }

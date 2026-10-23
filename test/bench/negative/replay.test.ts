@@ -18,6 +18,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { detectNegativeClaims } from '../../../src/integrity/negative-claim/detect.js';
+import { MAX_NEGATIVE_CLAIMS } from '../../../src/integrity/negative-claim/judge.js';
 import {
   NEGATIVE_CLAIM_PHRASES_HASH,
   NEGATIVE_CLAIM_PHRASES_VERSION,
@@ -33,7 +34,7 @@ import {
   TUNE_QUOTA,
 } from '../../../bench/negative/measure.mjs';
 // @ts-expect-error — a plain .mjs bench module, no types
-import { print, replay } from '../../../bench/negative/replay.mjs';
+import { print, readReply, replay } from '../../../bench/negative/replay.mjs';
 // @ts-expect-error — a plain .mjs bench module, no types
 import { loadStudy, rebuildSheetKey } from '../../../bench/negative/study.mjs';
 
@@ -73,6 +74,28 @@ const jsonl = (rows: unknown[]) => rows.map((r) => JSON.stringify(r)).join('\n')
 
 const FLAT = 'There are no open incidents on the synthetic service.';
 const SCOPED = 'The synthetic lookup returned two rows for the service.';
+
+describe('the replay preserves the prose overflow concern', () => {
+  it('counts one too-many-claims note as noted, never as an unflagged reply', () => {
+    const reply = Array.from({ length: MAX_NEGATIVE_CLAIMS + 1 }, () => FLAT).join(' ');
+    expect(readReply({ reply }, LIB)).toMatchObject({
+      detected: true,
+      noted: true,
+      notes: { 'too-many-claims': 1 },
+    });
+  });
+
+  it.each([
+    ['```\nthere are no incidents\n```', 'in-code-block'],
+    ['No hay incidentes abiertos en payments.', 'language-unsupported'],
+  ])('still keeps a grammar-only note separate: %s', (reply, code) => {
+    expect(readReply({ reply }, LIB)).toMatchObject({
+      detected: false,
+      noted: false,
+      notes: { [code]: 1 },
+    });
+  });
+});
 
 /** A synthetic study folder: 21 cases, one Haiku run with a key, one later run without a label key. */
 /**

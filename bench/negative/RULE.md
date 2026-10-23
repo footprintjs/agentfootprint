@@ -91,3 +91,12 @@ dry rehearsal — and only their ANALYSED rows (`status: 'done'`, no `exclusion`
 registered amendment), as the study's `CONTRACT.md` defines them. A sheet that names anything else
 is refused. Re-run on the study's data: every one of the 891 labelled replies was already an
 analysed row of a registered run, so no number changed.
+
+## Amendment 3 — 2026-10-23, claim-limit notes remain concerns
+
+The prose checker now shares the typed door's 32-claim field limit. An overflowing field
+returns one `too-many-claims` note and no individual judgments. The replay counts this note as
+`noted`, so skipped record checking is never scored as an unflagged reply. Code and language
+notes alone still do not set `noted`. Detection, labels, split and gates are unchanged; the
+empty-record replay still flags every reply with a detected claim. Per-code note counts may
+change when an overflowing reply has one limit note instead of many `entity-unresolved` notes.
