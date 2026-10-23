@@ -13,6 +13,7 @@
  *           readStoredSession   the one reading of a stored session: an
  *                               answered pause is a conversation to
  *                               continue, never a pause to answer
+ *           listedFormatOf      the same reading for a session listing
  *           answeredRefusal     what an answer to it is refused with
  *           watchAnswer         opened before a door hands an answer over
  *           afterFailedAnswer   the one step after that answer's resume failed
@@ -94,6 +95,47 @@ export function readStoredSession(stored: CheckpointEnvelope): StoredSession {
   return paused.answered === undefined
     ? { waiting: paused }
     : { prior: paused.conversation, answered: paused };
+}
+
+/**
+ * The format a session LISTING reports for a stored envelope
+ * (`SessionSummary.format`): `'flowchart-v1'` only for a pause still waiting
+ * on somebody's answer — the one a door would offer for an answer — and
+ * `'conversation-v1'` for a conversation, an answered pause
+ * (`PausedRun.answered`) and a pause no answer can reach any more
+ * ({@link unanswerablePause}, as far as the stored checkpoint can tell).
+ *
+ * The one reading for every store that lists, so a sidebar never badges a
+ * pause the doors would not offer for an answer as "awaiting you". A store
+ * that keeps the format in a column or a field writes this when it persists;
+ * one that reads its envelopes at list time calls it there. The envelope
+ * itself is unchanged: `hydrate` hands back what was stored.
+ *
+ * Lenient, as a listing must be — it never throws. A value that is not an
+ * envelope lists as `'unknown'`, and a pause the readers would refuse lists
+ * as stored, so `hydrate` refuses it by name. An ask whose later rules a
+ * redeploy changed is told by the serving agent, not by the stored pause: it
+ * lists as waiting until a door closes it.
+ *
+ * @example
+ *   // A store's listByUser — or its persist, when the format is a column:
+ *   const format = listedFormatOf(envelope);
+ */
+export function listedFormatOf(envelope: unknown): string {
+  const format =
+    typeof envelope === 'object' && envelope !== null
+      ? (envelope as { format?: unknown }).format
+      : undefined;
+  if (typeof format !== 'string') return 'unknown';
+  if (format !== 'flowchart-v1') return format;
+  try {
+    const { waiting } = readStoredSession(envelope as CheckpointEnvelope);
+    return waiting !== undefined && unanswerablePause(waiting) === undefined
+      ? format
+      : 'conversation-v1';
+  } catch {
+    return format;
+  }
 }
 
 /**

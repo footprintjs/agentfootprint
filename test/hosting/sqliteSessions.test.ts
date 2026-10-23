@@ -630,15 +630,17 @@ onSqlite('sqliteSessions — what it buys', () => {
     // can ask "which sessions are waiting on a person?" without this library.
     const file = await tempFile();
     const store = open(file);
+    const paused = {
+      checkpoint: { pausedStageId: 's#1', subflowPath: [], sharedState: {} } as never,
+      conversation: conversation('asked'),
+      pending: { pauseData: 'approve?' },
+    };
     await store.persist('a', toEnvelope(conversation('answered')));
-    await store.persist(
-      'b',
-      toPausedEnvelope({
-        checkpoint: { pausedStageId: 's#1', subflowPath: [], sharedState: {} } as never,
-        conversation: conversation('asked'),
-        pending: { pauseData: 'approve?' },
-      }),
-    );
+    await store.persist('b', toPausedEnvelope(paused));
+    // A pause whose decision a resume already used: stored, then marked. Its
+    // envelope is still a paused run; nobody is waiting on it any more.
+    await store.persist('c', toPausedEnvelope(paused));
+    await store.persist('c', toPausedEnvelope({ ...paused, answered: { at: 3 } }));
     closeAll();
 
     const raw = await rawDatabase(file);
@@ -647,5 +649,6 @@ onSqlite('sqliteSessions — what it buys', () => {
       .all() as { session_id?: unknown }[];
     raw.close();
     expect(waiting.map((r) => String(r.session_id))).toEqual(['b']);
+    expect(readPausedRun(await open(file).hydrate('c')).answered).toEqual({ at: 3 });
   });
 });

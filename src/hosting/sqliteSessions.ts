@@ -53,6 +53,7 @@
  * never gets written in the first place.
  */
 
+import { listedFormatOf } from './answeredPause.js';
 import { checkEnvelope, envelopeOwner, envelopeTranscript } from './envelope.js';
 import { UnreadableEnvelopeError } from './errors.js';
 import { resolveSessionOwner } from './sessionOwnership.js';
@@ -247,6 +248,12 @@ const META_TABLE = 'agent_store_meta';
  * an incident, without a JSON parser and without this library. A store you
  * cannot inspect with the tools already on the box is a store you debug by
  * guessing.
+ *
+ * So the `format` column holds the LISTED format (`answeredPause.ts` ·
+ * `listedFormatOf`), the one a listing reports: `'flowchart-v1'` only while a
+ * pause still waits on a person. A pause whose decision a resume already used
+ * is stored as a paused run inside the JSON and reads `'conversation-v1'`
+ * here, because nobody is waiting on it. `hydrate` reads only the JSON.
  */
 const SESSIONS_COLUMNS = ['session_id', 'format', 'saved_at', 'envelope'] as const;
 
@@ -451,7 +458,8 @@ export function sqliteSessions(options: SqliteSessionsOptions): SqliteSessions {
         );
         insert.run(
           sessionId,
-          checked.format,
+          // The LISTED format, not the envelope's own: see SESSIONS_COLUMNS.
+          listedFormatOf(checked),
           checked.savedAt,
           JSON.stringify(checked),
           owner ?? null,

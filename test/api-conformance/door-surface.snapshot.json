@@ -1193,6 +1193,7 @@
       "isWireOp",
       "jsonWire",
       "jsonWireWith",
+      "listedFormatOf",
       "memorySessions",
       "memorySignIns",
       "nodeHost",

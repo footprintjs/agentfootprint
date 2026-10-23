@@ -71,9 +71,14 @@ export interface SessionSummary {
   readonly sessionId: string;
   /** Unix ms of the last write, straight off the stored envelope. */
   readonly savedAt: number;
-  /** The stored format — `'conversation-v1'` for a finished turn,
-   *  `'flowchart-v1'` for a session waiting on somebody's answer. A sidebar
-   *  that wants to badge "awaiting you" reads this and needs nothing else. */
+  /** What the session IS for a listing (`listedFormatOf`): `'flowchart-v1'`
+   *  only for a session still waiting on somebody's answer, `'conversation-v1'`
+   *  for one that is not — a finished turn, a pause whose decision a resume
+   *  already used (`PausedRun.answered`), or a pause no answer can reach any
+   *  more. A sidebar that wants to badge "awaiting you" reads this and needs
+   *  nothing else. It is not always the stored envelope's own `format`: an
+   *  answered pause is still stored as a paused run, and `hydrate` hands it
+   *  back as stored. */
   readonly format: string;
   /** How many messages the transcript would carry. A count is safe in a
    *  listing; content is not, so none rides here. */

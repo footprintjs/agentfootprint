@@ -14,6 +14,7 @@ import {
   afterFailedAnswer,
   answeredRefusal,
   closedConversation,
+  listedFormatOf,
   markAnswered,
   openToolCalls,
   readStoredSession,
@@ -30,6 +31,7 @@ import {
 import type { CheckpointEnvelope, PausedRun } from '../../src/hosting/index.js';
 import {
   inMemoryDecisionLedger,
+  mintConsentRequest,
   noteDecisionTakenUp,
   spendDecision,
 } from '../../src/core/consentRequest.js';
@@ -202,6 +204,69 @@ describe('readStoredSession — the one reading of a stored session every door u
     });
     const asked = { ...marked, pending: { ask: { id: 'x', question: 'q', middleware: 'm' } } };
     expect(answeredRefusal(asked as PausedRun)).toMatchObject({ gate: 'ask' });
+  });
+});
+
+describe('listedFormatOf — what a session listing says a stored session is', () => {
+  /** A check-in pause over a real minted request; `state` changes what the paused run holds. */
+  function checkInPause(state: Record<string, unknown> = {}): PausedRun {
+    const minted = mintConsentRequest({
+      gate: 'checkIn',
+      tool: 'refund',
+      toolCallId: 'b',
+      args: { order: 2 },
+    });
+    if (minted === undefined) throw new Error('expected the call to bind');
+    const base = pausedOver(halfAnswered, {
+      pausedToolName: 'refund',
+      pausedToolCallId: 'b',
+      pausedRequest: minted.request,
+      pausedCheckInArgs: minted.args,
+      ...state,
+    });
+    return {
+      ...base,
+      checkpoint: {
+        ...base.checkpoint,
+        pauseData: { checkIn: {}, toolName: 'refund' },
+      } as FlowchartCheckpoint,
+      pending: { tool: 'refund', checkIn: { id: minted.request.id } as never, pauseData: {} },
+    };
+  }
+
+  it("a pause still waiting on a person — and only that — lists as 'flowchart-v1'", () => {
+    expect(listedFormatOf(toPausedEnvelope(checkInPause()))).toBe('flowchart-v1');
+    expect(listedFormatOf(toPausedEnvelope(pausedOver(halfAnswered)))).toBe('flowchart-v1');
+    expect(listedFormatOf(toEnvelope(pausedOver(halfAnswered).conversation))).toBe(
+      'conversation-v1',
+    );
+  });
+
+  it("an answered pause lists as 'conversation-v1' — no door offers it for an answer", () => {
+    const marked = toPausedEnvelope(markAnswered(checkInPause(), undefined, 3));
+    expect(listedFormatOf(marked)).toBe('conversation-v1');
+    expect(listedFormatOf(JSON.parse(JSON.stringify(marked)))).toBe('conversation-v1');
+    // The envelope itself is unchanged: hydrate hands back the paused run.
+    expect(marked.format).toBe('flowchart-v1');
+  });
+
+  it("a pause no answer can reach lists as 'conversation-v1', as the stored checkpoint tells it", () => {
+    const notRecorded = toPausedEnvelope(checkInPause({ pausedRequest: undefined }));
+    const changed = toPausedEnvelope(checkInPause({ pausedCheckInArgs: { order: 3 } }));
+    expect(listedFormatOf(notRecorded)).toBe('conversation-v1');
+    expect(listedFormatOf(changed)).toBe('conversation-v1');
+  });
+
+  it("never throws: what is not an envelope lists as 'unknown', what the readers refuse lists as stored", () => {
+    for (const value of [undefined, null, 'flowchart-v1', 42, {}, { format: 7 }]) {
+      expect(listedFormatOf(value)).toBe('unknown');
+    }
+    expect(listedFormatOf({ format: 'flowchart-v2', data: {} })).toBe('flowchart-v2');
+    // A pause a reader refuses by name (no checkpoint; an unreadable mark).
+    expect(listedFormatOf({ format: 'flowchart-v1', data: {}, savedAt: 1 })).toBe('flowchart-v1');
+    const badMark = { ...toPausedEnvelope(pausedOver(halfAnswered)) };
+    (badMark.data as { answered?: unknown }).answered = 'yes';
+    expect(listedFormatOf(badMark)).toBe('flowchart-v1');
   });
 });
 

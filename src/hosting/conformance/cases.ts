@@ -7,7 +7,7 @@
  * one convention every runner in every language already agrees on.
  */
 
-import { envelopeOwner } from '../envelope.js';
+import { envelopeOwner, readPausedRun } from '../envelope.js';
 import type { CheckpointEnvelope, SessionLifecycle, SessionListPage } from '../types.js';
 import type { ConformanceKit, SessionLifecycleCase } from './types.js';
 
@@ -44,6 +44,37 @@ function textOf(envelope: CheckpointEnvelope | undefined): string | undefined {
   const first = history[0] as { content?: unknown } | undefined;
   return typeof first?.content === 'string' ? first.content : undefined;
 }
+
+/**
+ * A stored PAUSE around one of the kit's conversations: still waiting on a
+ * person, or — with `answeredAt` — marked answered, which is what a door
+ * writes when a resume may have used the pause's decision
+ * (`PausedRun.answered`). Its `savedAt` is the conversation's.
+ *
+ * The checkpoint carries only what a reader validates (`checkEnvelope`): the
+ * engine's other halves are not a store's business, which is why the shape is
+ * asserted rather than typed.
+ */
+function pausedEnvelope(conversation: CheckpointEnvelope, answeredAt?: number): CheckpointEnvelope {
+  return {
+    format: 'flowchart-v1',
+    savedAt: conversation.savedAt,
+    data: {
+      checkpoint: { pausedStageId: 'ask-a-person', sharedState: {}, subflowPath: [] },
+      conversation: conversation.data,
+      pending: { question: 'Go ahead?', pauseData: { question: 'Go ahead?' } },
+      ...(answeredAt !== undefined && { answered: { at: answeredAt } }),
+    },
+  } as unknown as CheckpointEnvelope;
+}
+
+/** The `answered` mark a stored pause carries, read the way a door reads it. */
+function answeredMarkOf(envelope: CheckpointEnvelope | undefined): number | undefined {
+  return envelope === undefined ? undefined : readPausedRun(envelope).answered?.at;
+}
+
+/** When the conformance cases mark a pause answered. */
+const MARKED_AT = 1_700_000_500_000;
 
 /** Read every page of a listing, so a paging bug shows up as a wrong SET. */
 async function allPages(
@@ -121,6 +152,36 @@ const roundTrip: SessionLifecycleCase = {
       'a second persist did not replace the stored conversation. Every turn after the ' +
         'first is a second persist, so a store that keeps the first one stops the ' +
         'conversation at one exchange.',
+    );
+  },
+};
+
+const answeredPauseRoundTrip: SessionLifecycleCase = {
+  name: 'answered-pause-round-trips',
+  law: 'A stored pause comes back as it went in — still waiting, or with the `answered` mark a door wrote over it.',
+  async run(store, kit) {
+    const id = kit.id('answered');
+    const conversation = kit.envelope('approve the refund?', 'alice');
+
+    // The door's own sequence: the pause is stored, and later marked.
+    await store.persist(id, pausedEnvelope(conversation));
+    const waiting = await store.hydrate(id);
+    check(
+      waiting?.format === 'flowchart-v1' && answeredMarkOf(waiting) === undefined,
+      `a stored pause came back as format='${String(waiting?.format)}' with answered mark ` +
+        `${JSON.stringify(answeredMarkOf(waiting))}. A pause still waiting on a person has to ` +
+        `come back as one, and with no mark nobody wrote — a mark there hides the question.`,
+    );
+
+    await store.persist(id, pausedEnvelope(conversation, MARKED_AT));
+    const marked = await store.hydrate(id);
+    check(
+      marked?.format === 'flowchart-v1' && answeredMarkOf(marked) === MARKED_AT,
+      `the \`answered\` mark did not survive the round trip (came back as ` +
+        `${JSON.stringify(answeredMarkOf(marked))}). A door marks a pause answered when a ` +
+        `resume may have used its decision, so the call may have run. A store that drops the ` +
+        `mark offers that request for an answer again — a retry, a restart or another host ` +
+        `would answer it twice.`,
     );
   },
 };
@@ -517,6 +578,51 @@ const listNewestFirst: SessionLifecycleCase = {
   },
 };
 
+const listAnsweredAsConversation: SessionLifecycleCase = {
+  name: 'list-by-user-shows-an-answered-pause-as-a-conversation',
+  law: 'A listing reports `flowchart-v1` only for a pause still waiting on an answer; an answered pause lists as `conversation-v1`, like a finished turn.',
+  members: ['listByUser'],
+  async run(store, kit) {
+    const at = 1_700_000_000_000;
+    const waiting = kit.id('still-waiting');
+    const answered = kit.id('answered');
+    const finished = kit.id('finished');
+    await store.persist(waiting, pausedEnvelope(kit.envelope('still waiting', 'alice', at)));
+    // Stored as a pause first, then marked — so a store that writes the
+    // listed format when it persists has to write it again.
+    await store.persist(answered, pausedEnvelope(kit.envelope('answered', 'alice', at + 1)));
+    await store.persist(
+      answered,
+      pausedEnvelope(kit.envelope('answered', 'alice', at + 2), MARKED_AT),
+    );
+    await store.persist(finished, kit.envelope('finished', 'alice', at + 3));
+
+    const { pages } = await allPages(store, 'alice', 10);
+    const listed = new Map(
+      pages.flatMap((page) => page.sessions).map((row) => [row.sessionId, row.format]),
+    );
+    check(
+      listed.get(waiting) === 'flowchart-v1',
+      `a pause still waiting on a person was listed as ` +
+        `${JSON.stringify(listed.get(waiting))}. 'flowchart-v1' is what a sidebar badges ` +
+        `"awaiting you" — the one row it must not miss.`,
+    );
+    check(
+      listed.get(answered) === 'conversation-v1',
+      `an ANSWERED pause was listed as ${JSON.stringify(listed.get(answered))}. A resume ` +
+        `already used its decision and no door offers it for an answer again, so a sidebar ` +
+        `that badges it "awaiting you" shows a question nobody can answer. List it as ` +
+        `'conversation-v1' — \`listedFormatOf(envelope)\` from 'agentfootprint/hosting' is the ` +
+        `one reading, at persist for a store that keeps the format in a column, else at list ` +
+        `time.`,
+    );
+    check(
+      listed.get(finished) === 'conversation-v1',
+      `a finished conversation was listed as ${JSON.stringify(listed.get(finished))}.`,
+    );
+  },
+};
+
 /**
  * Two session ids a store must keep apart, and the normalisation that folds
  * them together.
@@ -887,6 +993,7 @@ const featureDetected: SessionLifecycleCase = {
 export const sessionLifecycleConformance: readonly SessionLifecycleCase[] = [
   absentHydratesUndefined,
   roundTrip,
+  answeredPauseRoundTrip,
   unreadableIsNotAbsent,
   forgetRemoves,
   ownershipDerived,
@@ -897,6 +1004,7 @@ export const sessionLifecycleConformance: readonly SessionLifecycleCase[] = [
   ownerOfAmbiguity,
   listPages,
   listNewestFirst,
+  listAnsweredAsConversation,
   handedBackIdIsNotASecondAddress,
   awkwardIds,
   retentionHonesty,

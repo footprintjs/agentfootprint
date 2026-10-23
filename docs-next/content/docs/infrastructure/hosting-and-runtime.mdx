@@ -2578,7 +2578,12 @@ answer the sidebar everyone actually builds:
 // → { "transcript": { "sessionId": "…", "messages": [ { "role": "user", "content": "…" } ] } }
 ```
 
-`SessionSummary` is a listing row; `TranscriptMessage` is one projected
+`SessionSummary` is a listing row. Its `format` is `'flowchart-v1'` only for a
+session still waiting on somebody's answer — what a sidebar badges "awaiting
+you" — and `'conversation-v1'` otherwise, including a pause whose decision a
+resume already used and a pause no answer can reach any more: every store that
+lists reports `listedFormatOf(envelope)`, so a row never offers a question no
+door would take an answer to. `TranscriptMessage` is one projected
 message; `SessionWireRequest` and `SessionWireResult` are the port-side shapes
 behind them. `HostRequest.session` carries the operation and `HostReply.sessions`
 is the terminal it ends through — a host without that terminal answers
@@ -2803,7 +2808,7 @@ evidence that means anything about a claim like this. A third test greps the
 hosting sources for vendor names, file by file, including every new port file.
 
 **The store contract** is the third suite, and the only one that is also
-*exported*: `runSessionLifecycleConformance` runs 14 cases against any
+*exported*: `runSessionLifecycleConformance` runs 18 cases against any
 `SessionLifecycle`, in this repository or yours — six in-tree harnesses every
 build. It exists because a split-brain ownership defect was live in four stores
 at once and no adapter's own tests could see it. See
@@ -2866,7 +2871,7 @@ its own.
 | Session ownership (`envelopeOwner`, write-once) + `session-list` / `session-transcript` | `agentfootprint/hosting` | — | **Contract field-validated 2026-08-13** — an independent field trial exercised write-once ownership, the cross-user 404, feature detection and `mayOpenSession` on the ordinary turn. **The store underneath was the trial's own Firestore adapter**, so the CONTRACT earned this rung and no shipped adapter borrows it |
 | `resolveSessionOwner` + `SessionOwnershipConflictError` — the one owner-transition rule | `agentfootprint/hosting` | — | Shipped (9.37.0). A turn signed by a **different** person is refused whole; a leaner turn is still accepted. Behaviour change — see [Writing a session store](doc:session-stores) |
 | `retention()` + `sessionRetention()` — how long a conversation is kept | `agentfootprint/hosting` | — | Shipped (9.42.0). OPTIONAL and feature-detected, additive: a store that does not implement it is byte-identical to 9.41, and a caller that needs it gets `ERR_SESSION_RETENTION_UNAVAILABLE` rather than a sweep that silently deletes nothing. Five of six in-tree stores implement it. **Tested, not field-validated** — nothing in this repository has watched a policy expire a real conversation |
-| `runSessionLifecycleConformance` — the store conformance battery | `agentfootprint/hosting` | — | Shipped (9.37.0). 14 cases, run against **six** in-tree harnesses every build and exported for stores nobody here has written. `agentCoreSessions` was enrolled in 9.42.0, in both modes, after an audit found the fifth shipped store had appeared zero times and its absence was not declared anywhere |
+| `runSessionLifecycleConformance` — the store conformance battery | `agentfootprint/hosting` | — | Shipped (9.37.0). 18 cases, run against **six** in-tree harnesses every build and exported for stores nobody here has written. `agentCoreSessions` was enrolled in 9.42.0, in both modes, after an audit found the fifth shipped store had appeared zero times and its absence was not declared anywhere |
 | `onIngressDecision` — the ingress record | `agentfootprint/hosting` | — | Shipped (9.32.0). A stream you chain into your own sink; explicitly **not** part of `auditExport()`'s hash chain |
 | `firestoreSessions` | `agentfootprint/hosting` | `@google-cloud/firestore` | **Shipped 9.33.0; field-validated except the ownership refusal (2026-08).** An indexed `orderBy` + document cursor and a write-once owner inside a transaction. An independent trial ran it against a real Firestore and exercised seven of its eight areas live; the eighth — refusing a turn signed by somebody else — was added afterwards and is held by tests here and by nothing in the field. **The TTL policy this row used to promise did NOT ship in 9.33.0** and does now, as 9.42.0's `retention()`: every write stamps `expiresAt` (a timestamp, beside `savedAt`, which is a number and stays one) when the store is built with `expireAfterMs`, and one `gcloud` line an operator runs once arms the native policy — `store.retention().enableWith` prints it with your collection and database filled in. See [Google Cloud](doc:google-cloud#retention-a-native-ttl-policy-on-expiresat) |
 | Agent Runtime host (`agentRuntimeHost`) — the second route | — | — | **Tracked ticket, deliberately unbuilt** — a Node service really does run on Vertex Agent Runtime through the custom-container door (proven by an independent field trial, 2026-08-14; the recipe is on [the Google page](doc:google-cloud)). What is missing is not the runtime but the CONTRACT: `httpHost` serves ONE invoke path and frames streams as SSE, while that runtime wants a SECOND route at its own path framed as NDJSON. That is a port-shape change, so it is its own release, gated on real demand |

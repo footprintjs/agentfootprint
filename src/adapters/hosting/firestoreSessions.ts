@@ -222,6 +222,7 @@
 
 import { createHash } from 'node:crypto';
 
+import { listedFormatOf } from '../../hosting/answeredPause.js';
 import { checkEnvelope, envelopeOwner, envelopeTranscript } from '../../hosting/envelope.js';
 import { SessionOwnershipConflictError, UnreadableEnvelopeError } from '../../hosting/errors.js';
 import { resolveSessionOwner } from '../../hosting/sessionOwnership.js';
@@ -832,7 +833,10 @@ export function firestoreSessions(options: FirestoreSessionsOptions = {}): Fires
       const ref = docFor(sessionId);
       const row = {
         sessionId,
-        format: checked.format,
+        // The LISTED format (`listedFormatOf`), what `listByUser` reports: a
+        // pause whose decision a resume already used reads as a conversation
+        // here, though `envelope` still holds the paused run.
+        format: listedFormatOf(checked),
         savedAt: checked.savedAt,
         envelope: json,
         messageCount: envelopeTranscript(checked).length,
