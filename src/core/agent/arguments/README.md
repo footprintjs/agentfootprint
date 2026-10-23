@@ -590,7 +590,7 @@ the PERFORMANCE block), and the resume adds no model call.
   read as time only through a reader the app arms — `src/time/`).
 - **Unicode folding.** A character outside the token alphabet (full-width `２４ｈ`) vanishes on
   both sides; a value or quote left with no token is `uncheckable`. Folding, if wanted, belongs
-  in `tools/normalize.ts` for the evidence gate and this layer together.
+  in `lib/normalize.ts` for the evidence gate and this layer together.
 - **Words the window evicted**, and a compaction frame (never the person's words): the checks
   read the SERVED window, like the evidence index. The person's answers survive on the ledger.
 - **A result that echoes the argument it was called with** (other than an absence's

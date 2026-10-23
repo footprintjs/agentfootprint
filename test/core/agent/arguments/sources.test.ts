@@ -63,7 +63,7 @@ import {
   evidenceFromHistory,
 } from '../../../../src/core/agent/evidence/evidenceIndex.js';
 import { resultCarries } from '../../../../src/core/agent/evidence/resultCarries.js';
-import { lookupForms, normalizeToken } from '../../../../src/tools/normalize.js';
+import { lookupForms, normalizeToken } from '../../../../src/lib/normalize.js';
 import { readDeclaration, splitFindings } from '../../../../src/core/agent/findings/reserved.js';
 import { absent } from '../../../../src/semantics/coverage/index.js';
 import { defineTool, type Tool } from '../../../../src/index.js';

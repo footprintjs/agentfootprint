@@ -218,6 +218,115 @@ export interface AbsenceDeclaration {
 }
 
 /**
+ * The list a missed name was looked up in — `absent({ what, among })`.
+ *
+ * A lookup that checks a name against a known list IS a search, and its miss
+ * says only that the name is not on THAT list. `among` declares the list, and
+ * the mint composes the rest: the names facet the tool searched, the gap the
+ * author cannot remove ("names outside <source>" — and, for a `partial` read,
+ * "not every name in <source> was read"), and the absence's `provenance` from
+ * `source` and `measuredAt`. The gap holds where `among` is declared; a plain
+ * `absent({ what })` or a thrown refusal never passes through it.
+ *
+ * @example a name lookup that found nothing in the inventory export
+ *   if (!array) return absent({
+ *     what: array_id,
+ *     among: { argument: 'array_id', source: inventory.source, measuredAt: inventory.readAt,
+ *              count: inventory.names.length, names: inventory.names },
+ *   });
+ */
+export interface AmongDeclaration {
+  /** The input argument whose value was looked up ('array_id'). */
+  readonly argument: string;
+  /** The list the names were read from, in the author's words ('the PowerStore inventory export'). One line. */
+  readonly source: string;
+  /**
+   * When that list was read — the tool's own words (the `provenance` rule).
+   * When it is an ISO 8601 instant this library can read, the names facet
+   * also carries a dated note, "names as of <measuredAt>" — no judgement of
+   * whether that is old.
+   */
+  readonly measuredAt: string;
+  /** How many names the list holds — a whole number. The tool's claim; served on the facet. */
+  readonly count: number;
+  /**
+   * The names the list holds, read ONLY to check `count`: when given,
+   * `names.length` must equal it (`names-count-mismatch`). No name is served
+   * to the model or written to an event or a record.
+   */
+  readonly names?: readonly string[];
+  /**
+   * `true` when the read did not see every name in the source — a truncated
+   * or paged inventory. The mint then composes a completeness gap, "not every
+   * name in <source> was read" (`bears: 'completeness'`), beside "names
+   * outside <source>", and `authoritative` never removes it.
+   */
+  readonly partial?: boolean;
+  /**
+   * The ONE opt-out of the "names outside <source>" gap: the author says the
+   * source is every name there is, and why — the tool's claim, not verified.
+   * Every use is listed for review by `check:semantics` (`authoritative-names`).
+   */
+  readonly authoritative?: { readonly why: string };
+}
+
+/**
+ * `absent()` given an {@link AmongDeclaration}: `checked` becomes optional (the
+ * mint composes the names facet first) and `provenance` is refused — `among`
+ * composes it from its own `source` and `measuredAt`.
+ */
+export interface AbsenceAmongDeclaration
+  extends Omit<AbsenceDeclaration, 'checked' | 'provenance'> {
+  /** The list the missed name was looked up in. */
+  readonly among: AmongDeclaration;
+  /** Further ground the search covered, after the composed names facet. */
+  readonly checked?: readonly CoverageInput[];
+}
+
+/**
+ * The names facet an `among` miss composes — the first `checked` item. A
+ * {@link CoverageItem} whose `what` the library writes from the declaration
+ * (never from the looked-for value).
+ */
+export interface NamesFacetItem extends CoverageItem {
+  readonly facet: 'names';
+  /** The input argument whose value was looked up. */
+  readonly argument: string;
+  /** How many names the list holds. */
+  readonly count: number;
+  /** The list, as declared. */
+  readonly source: string;
+  /** The names came from the tool's own read. */
+  readonly from: 'result';
+  /** Present only when the author declared the list authoritative. */
+  readonly authoritative?: { readonly why: string };
+}
+
+/**
+ * The gap an `among` miss adds and its author cannot remove except by
+ * `authoritative` — the first `not_checked` item: names outside the source
+ * the tool read. It bears on the source facet: a claim that leaves the source
+ * open (a flat "X does not exist") rests on ground this search never covered.
+ * `kind` is record-only, like every item's.
+ */
+export interface SourceGapItem extends CoverageItem {
+  readonly kind: 'scope';
+  readonly relevance: 'bears';
+  readonly bears: 'source';
+}
+
+/**
+ * The gap a `partial` among read adds, which nothing removes: the names in
+ * the source the read did not see. It bears on completeness — a claim that
+ * the name is not in the source rests on a read that did not see all of it.
+ */
+export interface CompletenessGapItem extends CoverageItem {
+  readonly kind: 'scope';
+  readonly relevance: 'bears';
+  readonly bears: 'completeness';
+}
+
+/**
  * What a tool author passes to {@link import('./ledger.js').coverage}: the
  * three lists, and the period the verdict's read covered (honesty step 7b).
  * `coverage()` takes no `provenance` — a value that comes as rows from a

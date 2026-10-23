@@ -880,6 +880,12 @@ export type { InstructionLease, PendingToolTransition } from './injection-engine
 // Both are RECOGNIZED by the framework (status, events, evidence corpus), not
 // conventions: a shape the framework does not understand cannot stop a retry
 // loop or keep a value out of the evidence index.
+//
+// `absent({ what, among })` — a name looked up in a known list that resolves
+// to nothing is a named miss over the names the tool read: the mint composes
+// the names facet and an irremovable "names outside <source>" gap (for a
+// partial read, "not every name in <source> was read"). The names are read
+// only to check the count; none is served.
 export {
   ABSENCE_MARKER,
   ABSENCE_NOTE,
@@ -891,7 +897,9 @@ export {
   readAbsence,
   readCoverageLedger,
   readCoverageResult,
+  type AbsenceAmongDeclaration,
   type AbsenceDeclaration,
+  type AmongDeclaration,
   // A typed answer's limits as data (`agent.answerCoverage()`): the three
   // lists, and the values a tool's rule assumed (the inputs layer).
   type AnswerCoverage,

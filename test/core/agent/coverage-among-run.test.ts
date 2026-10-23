@@ -1,0 +1,189 @@
+/**
+ * `absent({ among })` through the real loop.
+ *
+ * What a run does with a named miss: a WELL-FORMED unknown value reaches the
+ * tool and comes back an absence (status `'absent'`), never a refusal; a
+ * SCHEMA-MALFORMED value is still refused before dispatch
+ * (`tools/toolArgsValidation.ts`). The model reads the names facet and the
+ * gap; the names the list holds are read only to check the count, so no name
+ * reaches the model, an event, the snapshot, the narrative or a log line.
+ *
+ * Sections (Convention 3): Integration (batch door, a resumed door) ·
+ * Security (no name the list holds is served or recorded) · Scenario
+ * (malformed vs unknown).
+ */
+
+import { describe, expect, it, vi } from 'vitest';
+
+import { absent, Agent, ask, checkInApproved, defineTool, isPaused } from '../../../src/index.js';
+import { mock } from '../../../src/llm-providers.js';
+import { pausedRequest } from '../../helpers/pausedRequest.js';
+import type { LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
+
+const SOURCE = 'the PowerStore inventory export';
+const INVENTORY = Array.from(
+  { length: 25 },
+  (_, i) => `PS-ARRAY-${String(i + 1).padStart(2, '0')}`,
+);
+
+interface Run {
+  readonly agent: Agent;
+  readonly requests: LLMRequest[];
+  readonly events: { type: string; payload: Record<string, unknown> }[];
+  readonly executed: unknown[];
+}
+
+function build(args: readonly unknown[], gate = false): Run {
+  const requests: LLMRequest[] = [];
+  const events: { type: string; payload: Record<string, unknown> }[] = [];
+  const executed: unknown[] = [];
+  const inner = mock({
+    replies: [
+      {
+        toolCalls: args.map((value, i) => ({
+          id: `c${i + 1}`,
+          name: 'array_detail',
+          args: { array_id: value },
+        })),
+      },
+      { content: 'That name is not among the arrays in the inventory export read at 09:14.' },
+    ],
+  });
+  const provider = {
+    name: inner.name,
+    complete: async (req: LLMRequest): Promise<LLMResponse> => {
+      requests.push(JSON.parse(JSON.stringify(req)) as LLMRequest);
+      return inner.complete(req);
+    },
+  };
+  const tool = defineTool({
+    name: 'array_detail',
+    description: 'Details of one PowerStore array, by name.',
+    inputSchema: {
+      type: 'object',
+      properties: { array_id: { type: 'string', pattern: '^PS-' } },
+      required: ['array_id'],
+    },
+    execute: ({ array_id }: { array_id: string }) => {
+      executed.push(array_id);
+      if (INVENTORY.includes(array_id)) return { array_id, model: 'PowerStore 1200T' };
+      return absent({
+        what: array_id,
+        among: {
+          argument: 'array_id',
+          source: SOURCE,
+          measuredAt: '2026-10-22T09:14:00Z',
+          count: INVENTORY.length,
+          names: INVENTORY,
+        },
+      });
+    },
+  });
+  let builder = Agent.create({ provider, model: 'mock' }).tool(tool);
+  if (gate) {
+    builder = builder.toolMiddleware({ name: 'gate', onToolCall: () => ask({ question: 'ok?' }) });
+  }
+  const agent = builder.build();
+  agent.on('*', (e) =>
+    events.push({ type: e.type, payload: e.payload as unknown as Record<string, unknown> }),
+  );
+  return { agent, requests, events, executed };
+}
+
+const toolMessages = (r: Run): string[] =>
+  (r.requests[r.requests.length - 1]?.messages ?? [])
+    .filter((m) => m.role === 'tool')
+    .map((m) => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)));
+
+const payloadsOf = (r: Run, type: string) =>
+  r.events.filter((e) => e.type === type).map((e) => e.payload);
+
+/** Run, capturing every console line. */
+async function runLogged(r: Run, message: string): Promise<string[]> {
+  const logged: string[] = [];
+  const spies = (['log', 'warn', 'error', 'info', 'debug'] as const).map((level) =>
+    vi.spyOn(console, level).mockImplementation((...parts: unknown[]) => {
+      logged.push(parts.map((p) => (typeof p === 'string' ? p : JSON.stringify(p))).join(' '));
+    }),
+  );
+  try {
+    await r.agent.run({ message });
+  } finally {
+    for (const spy of spies) spy.mockRestore();
+  }
+  return logged;
+}
+
+describe('integration — a well-formed unknown name is an absence, never a refusal', () => {
+  it('reaches the tool, delivers status absent, and the model reads the facet and the gap', async () => {
+    const r = build(['PS-ARRAY-99']);
+    await r.agent.run({ message: 'details of PS-ARRAY-99?' });
+    expect(r.executed).toEqual(['PS-ARRAY-99']);
+    const [end] = payloadsOf(r, 'agentfootprint.stream.tool_end');
+    expect(end?.status).toBe('absent');
+    expect(end?.error).toBeUndefined();
+    const read = JSON.parse(toolMessages(r)[0]!) as Record<string, unknown>;
+    expect(read.checked).toEqual([
+      expect.objectContaining({ facet: 'names', count: 25, source: SOURCE }),
+    ]);
+    expect(read.not_checked).toEqual([
+      { what: `names outside ${SOURCE}`, relevance: 'bears', bears: 'source' },
+    ]);
+    expect(read).not.toHaveProperty('known_names');
+  });
+
+  it('the coverageDeclared row carries the facet and the gap', async () => {
+    const r = build(['PS-ARRAY-99']);
+    await r.agent.run({ message: 'details of PS-ARRAY-99?' });
+    const state = r.agent.getSnapshot()?.sharedState as {
+      coverageDeclared: Record<string, unknown>[];
+    };
+    expect(state.coverageDeclared[0]).toMatchObject({
+      kind: 'absence',
+      toolName: 'array_detail',
+      checked: [{ what: `the 25 array_id names listed in ${SOURCE}` }],
+      notChecked: [{ what: `names outside ${SOURCE}`, kind: 'scope' }],
+    });
+  });
+
+  it('a resumed door delivers the same absence (an approved middleware ask)', async () => {
+    const r = build(['PS-ARRAY-99'], true);
+    const first = await r.agent.run({ message: 'details of PS-ARRAY-99?' });
+    expect(isPaused(first)).toBe(true);
+    if (!isPaused(first)) return;
+    await r.agent.resume(
+      first.checkpoint,
+      checkInApproved({ request: pausedRequest(first), by: 'alice' }),
+    );
+    expect(payloadsOf(r, 'agentfootprint.stream.tool_end')[0]?.status).toBe('absent');
+  });
+});
+
+describe('security — no name the list holds is served or recorded', () => {
+  it('not in the model request, an event, the snapshot, the narrative or a log line', async () => {
+    const r = build(['PS-ARRAY-99']);
+    const logged = await runLogged(r, 'details of PS-ARRAY-99?');
+    const seen = [
+      JSON.stringify(r.requests),
+      JSON.stringify(r.events),
+      JSON.stringify(r.agent.getLastSnapshot()),
+      JSON.stringify(r.agent.getLastNarrativeEntries()),
+      ...logged,
+    ];
+    for (const name of INVENTORY) {
+      for (const record of seen) expect(record).not.toContain(name);
+    }
+  });
+});
+
+describe('scenario — a schema-malformed value still refuses before dispatch', () => {
+  it('the malformed call never runs; its refusal names no absence', async () => {
+    const r = build([42, 'PS-ARRAY-99']);
+    await r.agent.run({ message: 'details of 42 and PS-ARRAY-99?' });
+    expect(r.executed).toEqual(['PS-ARRAY-99']);
+    const [refused, absence] = toolMessages(r);
+    expect(refused).toContain('the call was not executed');
+    expect(refused).not.toContain('af_absent');
+    expect(absence).toContain('"af_absent":true');
+  });
+});

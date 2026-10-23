@@ -69,7 +69,7 @@ import {
 } from '../time/periodForm.js';
 import { isDuration, LOOKBACK_UNITS, type DurationText } from '../time/duration.js';
 import { splitRange } from '../time/range.js';
-import { canonicalForm, tokenize } from './normalize.js';
+import { canonicalForm, tokenize } from '../lib/normalize.js';
 import { validatePropertyValue } from './toolArgsValidation.js';
 
 // ─── The declaration ────────────────────────────────────────────────────
@@ -207,7 +207,7 @@ function canonicalTokens(value: InputValue): readonly string[] {
 /**
  * Whether two argument values are the same value: same JavaScript type, and
  * the same token sequence under the evidence module's normaliser
- * (`tools/normalize.ts` · `tokenize`, `canonicalForm` — one owner of "the
+ * (`lib/normalize.ts` · `tokenize`, `canonicalForm` — one owner of "the
  * same value", so `41,200` ≡ `41200` here exactly as at the evidence gate). A
  * value with no token after normalisation equals nothing, not even itself: it
  * cannot be checked, and "cannot be checked" is never "equal".

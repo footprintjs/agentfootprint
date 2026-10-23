@@ -60,6 +60,7 @@ title: agentfootprint
 
 ## Interfaces
 
+- [AbsenceAmongDeclaration](/docs/api/interfaces/AbsenceAmongDeclaration)
 - [AbsenceDeclaration](/docs/api/interfaces/AbsenceDeclaration)
 - [ActOptions](/docs/api/interfaces/ActOptions)
 - [AgentArtifactsOptions](/docs/api/interfaces/AgentArtifactsOptions)
@@ -69,6 +70,7 @@ title: agentfootprint
 - [AgentRecordingsOptions](/docs/api/interfaces/AgentRecordingsOptions)
 - [AgentRunCheckpoint](/docs/api/interfaces/AgentRunCheckpoint)
 - [AllowOutcome](/docs/api/interfaces/AllowOutcome)
+- [AmongDeclaration](/docs/api/interfaces/AmongDeclaration)
 - [AnswerCheck](/docs/api/interfaces/AnswerCheck)
 - [AnswerCoverage](/docs/api/interfaces/AnswerCoverage)
 - [AnswerEvidenceResolver](/docs/api/interfaces/AnswerEvidenceResolver)

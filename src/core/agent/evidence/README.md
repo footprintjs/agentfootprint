@@ -2,7 +2,7 @@
 the verdict back.
 Fold: `evidenceIndex.ts` (the corpus, the exempt corpus, the turn stamp, the
 carriers), `extract.ts`, `types.ts`, and the spelling they share,
-`../../../tools/normalize.ts` (in the tools layer, below the agent: the inputs layer reads it too). One fold, asked at two
+`../../../lib/normalize.ts` (a leaf, below every layer: the inputs layer reads it too). One fold, asked at two
 moments and never stored: `../stages/route.ts` · `judgeEvidence` at the
 answer (handed to `gate.ts` as a parameter), and since 9.110.0
 `../stages/toolCalls.ts` · `towersFor` at dispatch, under `.findings()`
@@ -46,7 +46,7 @@ looks the way it does, and it is stated again at the top of `gate.ts`.
 | file | one job |
 |---|---|
 | `types.ts` | the public vocabulary: posture, shape, options, verdict |
-| `../../../tools/normalize.ts` | one spelling per value, on BOTH sides (`41,200` ≡ `41200`). The other spellings of a date or clock time are NOT here: since time step T7 they are asked of `time/forms.ts` · `timeFormsOf` (its `said` list, by the exempt corpus only) |
+| `../../../lib/normalize.ts` | one spelling per value, on BOTH sides (`41,200` ≡ `41200`). The other spellings of a date or clock time are NOT here: since time step T7 they are asked of `time/forms.ts` · `timeFormsOf` (its `said` list, by the exempt corpus only) |
 | `numericRanges.ts` | pure recognition of exactly two numeric endpoints, after app-owned identifier shapes |
 | `numberPrecision.ts` | the single precision and half-unit rounding rule used by both numeric dials |
 | `figureUnits.ts` | the one measurement-unit vocabulary, shared by figures and ranges |

@@ -1,11 +1,14 @@
 /**
  * normalize — one spelling for one value, on BOTH sides of the comparison.
  *
- * Pattern: a pure leaf module (its one import, `lib/linearText.ts`, is a leaf
+ * Pattern: a pure leaf module (its one import, `linearText.ts`, is a leaf
  *          too), shared by the extractor and the evidence index so the two can
  *          never disagree about what "the same value" means.
- * Role:    tools/ layer: the evidence gate (`namesAndNumbersFromEvidence`) and the
- *          inputs layer (`tools/declare.ts`) read it.
+ * Role:    lib/ layer (L0): the evidence gate (`namesAndNumbersFromEvidence`)
+ *          and the inputs layer (`tools/declare.ts`) read it. It moved down
+ *          from `tools/` so a reader in a layer below the tools can spell a
+ *          value the way the gate does — one spelling, never a second one
+ *          beside it.
  * Emits:   N/A.
  *
  * ## Why this file exists at all
@@ -21,7 +24,7 @@
  * on the answer side AND on the evidence side. The rules are deliberately few
  * and each is here because a real spelling difference needed it.
  */
-import { anyOf, isRegExpWhitespace, trimTrailing } from '../lib/linearText.js';
+import { anyOf, isRegExpWhitespace, trimTrailing } from './linearText.js';
 
 /**
  * Characters that may live INSIDE one token.

@@ -1,5 +1,5 @@
 /** Pure answer-side recognition: exactly two plain numeric endpoints. */
-import { answerTokenSpellings } from '../../../tools/normalize.js';
+import { answerTokenSpellings } from '../../../lib/normalize.js';
 import { FIGURE_UNITS } from './figureUnits.js';
 
 export interface NumericRange {
