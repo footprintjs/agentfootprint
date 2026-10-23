@@ -235,9 +235,17 @@ names, so neither may say what does not exist or that the input is wrong. In
 a registered study, a refusal that said "a wrong identifier, not missing data"
 led models to tell users the thing did not exist. `overclaim.ts` checks a
 catalog's samples for that: `refusal-asserts-absence` over the new `refusals`
-samples (what a tool throws or returns when it refuses a call),
-`absence-asserts-wrongness` over absences, and `authoritative-names` for every
-`among.authoritative`. The laws:
+samples (what a tool throws or returns when it refuses a call, or a described
+sample `{ text, argument?, value? }`), `absence-asserts-wrongness` over
+absences, and `authoritative-names` for every `among.authoritative`. The laws:
+
+- **Only a sentence about what was looked up.** A rule fires on a sentence that
+  names the looked-up argument or its value — declared on the sample, or an
+  absence's `looked_for` and facet argument; with neither, a quoted span stands
+  for the value. A FORMAT, RANGE, PERMISSION or TRANSPORT message never fires,
+  whatever it names ("start_date is not a valid ISO-8601 date", "window is not
+  in the allowed range", "You have no permission…", "Upstream returned 404 Not
+  Found").
 
 - **Warnings until a later major, and only for the new fields.** A sample
   that uses neither `refusals` nor `among` gets no new finding, so no
@@ -251,6 +259,6 @@ samples (what a tool throws or returns when it refuses a call),
   after NFC, case and apostrophe folding. A phrasing they miss is a missed
   finding, never a pass.
 - **The library's own refusal sentences are pinned** to carry no absence, no
-  `known_names` and no non-existence claim beside the value asked for
+  non-existence claim beside the value asked for
   (`test/semantics/refusal-sentences.test.ts`).
 

@@ -2,7 +2,7 @@
 the verdict back.
 Fold: `evidenceIndex.ts` (the corpus, the exempt corpus, the turn stamp, the
 carriers), `extract.ts`, `types.ts`, and the spelling they share,
-`../../../lib/normalize.ts` (a leaf, below every layer: the inputs layer and the `absent({ among })` mint read it too). One fold, asked at two
+`../../../lib/normalize.ts` (a leaf, below every layer: the inputs layer reads it too). One fold, asked at two
 moments and never stored: `../stages/route.ts` · `judgeEvidence` at the
 answer (handed to `gate.ts` as a parameter), and since 9.110.0
 `../stages/toolCalls.ts` · `towersFor` at dispatch, under `.findings()`

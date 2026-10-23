@@ -9,15 +9,15 @@
  * So the tool declares the list it searched, and the library composes the rest:
  *
  *   absent({ what: array_id,
- *            among: { argument, source, measuredAt, count, names, visible: 'caller' } })
+ *            among: { argument, source, measuredAt, count, names } })
  *
- *   - `checked` gains the names facet: the 25 names listed in the export;
+ *   - `checked` gains the names facet: the 25 names listed in the export, as
+ *     of the time it was read;
  *   - `not_checked` gains a gap the author cannot remove: names outside that
- *     export (only `authoritative: { why }` drops it, and the gate lists it);
- *   - the model reads the count and, because the tool read the list under the
- *     caller's own identity, the 20 names nearest the one asked for;
- *   - the names are never part of the result: no rule, event or row sees them —
- *     the library attaches them to the model's message alone.
+ *     export (only `authoritative: { why }` drops it, and the gate lists it;
+ *     a `partial` read gets "not every name in the export was read" instead);
+ *   - the names are read only to check the count — none is served, so the
+ *     model, the events and the record never see them.
  *
  * Then the build gate: `check:semantics` warns about a refusal that says what
  * does not exist (`refusal-asserts-absence`).
@@ -36,9 +36,9 @@ export const meta: ExampleMeta = {
   group: 'features',
   description:
     'An array lookup finds nothing in one inventory export. absent({ what, among }) composes the ' +
-    'names facet and an irremovable "names outside the export" gap; the model reads the count and ' +
-    'the 20 nearest names (caller-visible only); no event field carries them; check:semantics ' +
-    'warns about a refusal that says what does not exist.',
+    'names facet and an irremovable "names outside the export" gap; the names are read only to ' +
+    'check the count and never served; check:semantics warns about a refusal that says what does ' +
+    'not exist.',
   defaultInput: 'Show me array PS-ARRAY-99.',
   // Scripted on purpose: the inventory and the miss are the tool's data.
   providerSlots: [],
@@ -75,8 +75,7 @@ const arrayDetail = defineTool({
         source: inventory.source,
         measuredAt: inventory.readAt,
         count: inventory.names.length,
-        names: inventory.names,
-        visible: 'caller', // read under the caller's own identity
+        names: inventory.names, // read to check the count, never served
       },
     });
   },
@@ -91,7 +90,7 @@ function build() {
         {
           content:
             'PS-ARRAY-99 is not among the 25 arrays in the PowerStore inventory export read at ' +
-            '09:14. The nearest name there is PS-ARRAY-09.',
+            '09:14.',
         },
       ],
     }),
@@ -119,11 +118,11 @@ export async function run(input: string): Promise<string> {
   console.log('\nthe coverageDeclared row:', JSON.stringify(row?.notChecked));
   check(row?.notChecked[0]?.kind === 'scope', 'the gap to be recorded as a scope gap');
 
-  // The names reached the model's message alone — never the result an event carries.
+  // No name the inventory holds reached the event — or anything else.
   const ended = JSON.stringify(toolEnds[0]?.result);
   check(
-    ended.includes('names outside') && !ended.includes('known_names'),
-    'tool_end without names',
+    ended.includes('names outside') && !ended.includes('PS-ARRAY-01'),
+    'tool_end with the gap and without the inventory',
   );
 
   // #region overclaim-gate

@@ -21,13 +21,19 @@
  *
  *   • `refusal-asserts-absence` — a not-read result (a refusal a tool throws
  *     or returns; an effects envelope whose status is `invalid`, `denied` or
- *     `failure`) carries an absence (`af_absent`), `known_names`, or a
- *     sentence from {@link NON_EXISTENCE} or {@link WRONGNESS}.
- *   • `absence-asserts-wrongness` — an absence's `looked_for`, an item's
- *     `what`/`why`, `try_instead`, the typed tool's `why`, or an extra key's
- *     text calls the input wrong ({@link WRONGNESS}).
+ *     `failure`) carries an absence (`af_absent`), or a sentence about what
+ *     was looked up from {@link NON_EXISTENCE} or {@link WRONGNESS}.
+ *   • `absence-asserts-wrongness` — an item's `what`/`why`, `try_instead`,
+ *     the typed tool's `why`, or an extra key's text has a sentence about
+ *     what was looked up that calls it wrong ({@link WRONGNESS}).
  *   • `authoritative-names` — every `among.authoritative` use, listed for
  *     review: it removes the gap "names outside <source>".
+ *
+ * A sentence is ABOUT what was looked up when it names the looked-up argument
+ * or its value (`LookupSubject` — a described refusal sample's, or an
+ * absence's `looked_for` and facet argument; with neither, a quoted span
+ * stands for the value). A format, range, permission or transport message is
+ * never that claim, whatever it names.
  *
  * ## The phrase packs — closed, versioned, small
  *

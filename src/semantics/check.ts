@@ -75,8 +75,10 @@ export interface SemanticsCatalogEntry {
   readonly projections?: readonly { readonly before: unknown; readonly after: unknown }[];
   /**
    * Optional samples of what the tool says when it REFUSES a call — the
-   * message it throws, or the value it returns. A refused call read nothing,
-   * so each is judged by `refusal-asserts-absence`.
+   * message it throws, the value it returns, or `{ text, argument?, value? }`
+   * naming what the refused call looked up. A refused call read nothing, so
+   * each is judged by `refusal-asserts-absence`, on its sentences about what
+   * was looked up.
    */
   readonly refusals?: readonly unknown[];
 }

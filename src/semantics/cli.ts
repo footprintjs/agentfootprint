@@ -48,7 +48,8 @@ const USAGE = `usage: agentfootprint-check-semantics <semantics-catalog.json> [o
                             declared on defineTool({ resultClass }); omit for tools
                             with no class rules (envelope rules still apply).
                             refusals: [...] (optional) — what the tool throws or
-                            returns when it refuses a call; judged by the
+                            returns when it refuses a call, or { text, argument,
+                            value } naming what it looked up; judged by the
                             overclaim rules.
 
   --strict                  warnings also fail the gate; the overclaim rules
