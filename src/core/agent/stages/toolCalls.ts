@@ -229,9 +229,13 @@ import {
   readAbsence,
   readCoverageResult,
   type CoverageFacts,
+  type CoverageReading,
   type DeclaredCoverage,
   type ToolAbsence,
 } from '../../../semantics/coverage/index.js';
+import type { ComposedCoverage } from '../../../semantics/coverage/composedCoverage.js';
+import { composedEventFields } from '../../../semantics/coverage/search/events.js';
+import { buildSearchCoverage } from './searchCoverage.js';
 import { readItemExtras, type CoverageSection } from '../../../semantics/coverage/items.js';
 import { copyInProgressItem } from '../../../semantics/coverage/inProgress.js';
 import { copyPeriod } from '../../../semantics/coverage/period.js';
@@ -328,6 +332,15 @@ export interface ToolCallsHandlerDeps {
    * dev warning says, once per tool, that no verdict will be filed for it.
    */
   readonly resultsLayer?: true;
+  /**
+   * `.negativeClaims()` is armed (a later release wires the builder): a
+   * composed absence's `tools.absent` carries `lookedForRef` in place of
+   * `lookedFor`. Composed values ride no event in any mode; unarmed,
+   * `lookedFor` is today's bytes. Absent → unarmed.
+   *
+   * @internal
+   */
+  readonly negativeClaimsArmed?: boolean;
   /**
    * THE ANSWER LAYER IS ARMED (honesty layer 4, `.answerLayer()`) — the ONE
    * thing it changes here is the turn stamp: while any honesty layer is armed
@@ -1967,11 +1980,19 @@ export function buildToolCallsHandler(
     scope: TypedScope<AgentState>,
     call: { readonly toolName: string; readonly toolCallId: string; readonly iteration: number },
     value: unknown,
+    /** What the search funnel composed (`./searchCoverage.ts`) — read in place of the value. */
+    composed?: CoverageReading,
   ): ToolResultStatus | undefined => {
-    const reading = readCoverageResult(value, call.toolName);
+    const reading = composed ?? readCoverageResult(value, call.toolName);
     if (reading === undefined) return undefined;
     const rows: DeclaredCoverage[] = [];
     for (const facts of reading.declared) {
+      // A statement the LIBRARY composed from the tool's `search`: the row
+      // carries the typed items and gaps, the events carry no composed value.
+      if (facts.composed !== undefined) {
+        rows.push(declareComposed(scope, call, facts));
+        continue;
+      }
       // Honesty step 7b: a declared period rides the event and the tracked row
       // (read by the ONE period rule — a malformed one never reaches here), as
       // a copy. Filed whatever the agent armed: it is the tool's declaration.
@@ -2047,6 +2068,74 @@ export function buildToolCallsHandler(
     }
     scope.coverageDeclared = [...(scope.coverageDeclared ?? []), ...rows];
     return reading.status;
+  };
+
+  /**
+   * One COMPOSED statement (`Tool.search`) — its event and its row. The row is
+   * the committed record: every value, under the run's redaction policy, at
+   * the address the funnel reserved (`resultId`). The event carries the
+   * declaration's constants, the gaps and each other facet as a reference —
+   * never a composed value, armed or not (`search/events.ts`).
+   */
+  const declareComposed = (
+    scope: TypedScope<AgentState>,
+    call: { readonly toolName: string; readonly toolCallId: string; readonly iteration: number },
+    facts: CoverageFacts,
+  ): DeclaredCoverage => {
+    const composed = facts.composed as NonNullable<CoverageFacts['composed']>;
+    const period = facts.period !== undefined ? copyPeriod(facts.period) : undefined;
+    if (period !== undefined && deps.resultsLayer !== true) warnPeriodUnjudged(call.toolName);
+    const event = composedEventFields(facts, { armed: deps.negativeClaimsArmed === true });
+    const base = {
+      toolName: call.toolName,
+      toolCallId: call.toolCallId,
+      iteration: call.iteration,
+    };
+    if (facts.kind === 'absence') {
+      typedEmit(scope, 'agentfootprint.tools.absent', {
+        ...base,
+        ...(event.lookedFor !== undefined && { lookedFor: event.lookedFor }),
+        ...(event.lookedForRef !== undefined && { lookedForRef: event.lookedForRef }),
+        checked: event.checked,
+        ...(event.notChecked.length > 0 && { notChecked: event.notChecked }),
+        ...(event.cannotCover.length > 0 && { cannotCover: event.cannotCover }),
+        ...(facts.tryInstead !== undefined && { tryInstead: facts.tryInstead }),
+        ...(facts.tryInsteadTool !== undefined && { tryInsteadTool: facts.tryInsteadTool }),
+        ...(facts.provenance !== undefined && { provenance: { ...facts.provenance } }),
+        ...(period !== undefined && { period: copyPeriod(period) }),
+        composition: event.composition,
+      });
+    } else {
+      typedEmit(scope, 'agentfootprint.tools.coverage_declared', {
+        ...base,
+        ...(event.checked.length > 0 && { checked: event.checked }),
+        ...(event.notChecked.length > 0 && { notChecked: event.notChecked }),
+        ...(event.cannotCover.length > 0 && { cannotCover: event.cannotCover }),
+        ...(facts.inProgress !== undefined && {
+          inProgress: facts.inProgress.map(copyInProgressItem),
+        }),
+        ...(period !== undefined && { period: copyPeriod(period) }),
+        composition: event.composition,
+      });
+    }
+    // Detached plain data: the row must not share a reference with a value
+    // the tool still holds (a sent argument object, the declaration's lists).
+    const row: ComposedCoverage = structuredClone({
+      kind: facts.kind,
+      ...base,
+      composed: composed.origin,
+      resultId: composed.resultId,
+      ...(facts.lookedFor !== undefined && { lookedFor: facts.lookedFor }),
+      subject: composed.subject,
+      checked: facts.coverage.checked as ComposedCoverage['checked'],
+      notChecked: facts.coverage.notChecked,
+      cannotCover: facts.coverage.cannotCover,
+      complete: composed.complete,
+      gaps: composed.gaps,
+      ...(period !== undefined && { period }),
+      ...(facts.inProgress !== undefined && { inProgress: facts.inProgress }),
+    });
+    return row;
   };
 
   /**
@@ -2748,6 +2837,13 @@ export function buildToolCallsHandler(
    * instance's own (`deps.currentRun`) describe some other run — its last
    * standalone caller, or none — and must never reach this run's tools.
    */
+  /**
+   * `Tool.search` — the call's result identity reserved before dispatch, its
+   * coverage composed after (`./searchCoverage.ts`). Inert for every tool
+   * that declares no search.
+   */
+  const searchFunnel = buildSearchCoverage((scope) => runFactsOf(scope)?.runId);
+
   const runFactsOf = (
     scope: TypedScope<AgentState>,
   ): ReturnType<NonNullable<ToolCallsHandlerDeps['currentRun']>> | undefined => {
@@ -4023,9 +4119,19 @@ export function buildToolCallsHandler(
       // the catch below — the run ended, the tool did not fail.
       ended = runEndedBy(env.signal);
       if (ended !== undefined) throw ended;
+      // `Tool.search`: reserved before the call runs, as in the batch loop.
+      const searchResultId = searchFunnel.reserve(scope, tool);
       executed = true;
       let result = await tool.execute(args, executionContext);
       await endCall(toolCallId);
+      const searchBoundary = (status: ToolResultStatus | undefined) => ({
+        call: { toolName, toolCallId, iteration },
+        tool,
+        ...(resolved.party !== undefined && { party: resolved.party }),
+        args,
+        ...(searchResultId !== undefined && { resultId: searchResultId }),
+        ...(status !== undefined && { status }),
+      });
       // The typed effects channel (9.19.0) — same unwrap as the batch loop,
       // at this path's own execute boundary, so a resumed call's envelope is
       // judged exactly as an inline one's.
@@ -4037,10 +4143,17 @@ export function buildToolCallsHandler(
         // that died with an oversized result would be the silence this
         // primitive exists to break. An absence's status is the tool's own
         // and wins over the envelope's only when the envelope declared none.
+        const searched = searchFunnel.compose(
+          scope,
+          searchBoundary(envelope.status),
+          envelope.content,
+        );
+        const declaredContent = searched !== undefined ? searched.value : envelope.content;
         const coverageStatus = declareCoverage(
           scope,
           { toolName, toolCallId, iteration },
-          envelope.content,
+          declaredContent,
+          searched?.reading,
         );
         const declaredStatus = envelope.status ?? coverageStatus;
         // The semantic envelope (9.53.0), on the unwrapped content — the
@@ -4050,9 +4163,9 @@ export function buildToolCallsHandler(
         const semanticView = declareSemantics(
           scope,
           { toolName, toolCallId, iteration },
-          envelope.content,
+          declaredContent,
         );
-        const content = semanticView ?? envelope.content;
+        const content = semanticView ?? declaredContent;
         // The tool's own ceiling (9.20.0) measures the CONTENT — the channel
         // that can overflow a context window. The DECLARED effects are small
         // validated data and are still judged by the caller: a tool that
@@ -4095,7 +4208,7 @@ export function buildToolCallsHandler(
           result: content,
           executed: true,
           envelope:
-            declaredStatus === envelope.status && semanticView === undefined
+            declaredStatus === envelope.status && content === envelope.content
               ? envelope
               : {
                   ...envelope,
@@ -4104,7 +4217,14 @@ export function buildToolCallsHandler(
                 },
         };
       }
-      const coverageStatus = declareCoverage(scope, { toolName, toolCallId, iteration }, result);
+      const searched = searchFunnel.compose(scope, searchBoundary(undefined), result);
+      if (searched !== undefined) result = searched.value;
+      const coverageStatus = declareCoverage(
+        scope,
+        { toolName, toolCallId, iteration },
+        result,
+        searched?.reading,
+      );
       // The semantic envelope (9.53.0) on this path's own execute boundary —
       // a resumed call's envelope is judged exactly as an inline one's.
       const semanticView = declareSemantics(scope, { toolName, toolCallId, iteration }, result);
@@ -5261,6 +5381,9 @@ export function buildToolCallsHandler(
                   env.signal,
                 ),
               };
+              // `Tool.search`: the result identity is reserved BEFORE the
+              // call runs (the row's address; never the provider's call id).
+              const searchResultId = searchFunnel.reserve(scope, tool);
               executed = true;
               result = await tool.execute(callArgs, executionContext);
               // A code-runner tool leaves the SHAPE of what it just ran, keyed by
@@ -5306,10 +5429,27 @@ export function buildToolCallsHandler(
               // it; otherwise an absence names the delivered outcome, so an
               // `onToolStatus` edge can route "we looked and there was
               // nothing" somewhere other than "the call broke".
+              // `Tool.search` — the coverage composed from the declaration and
+              // the arguments the call ran with, BEFORE everything that reads
+              // the value: the composed absence is what the model is served.
+              const searched = searchFunnel.compose(
+                scope,
+                {
+                  call: { toolName: tc.name, toolCallId: tc.id, iteration },
+                  tool,
+                  ...(resolved.party !== undefined && { party: resolved.party }),
+                  args: callArgs as Readonly<Record<string, unknown>>,
+                  ...(searchResultId !== undefined && { resultId: searchResultId }),
+                  ...(toolStatus !== undefined && { status: toolStatus }),
+                },
+                result,
+              );
+              if (searched !== undefined) result = searched.value;
               const coverageStatus = declareCoverage(
                 scope,
                 { toolName: tc.name, toolCallId: tc.id, iteration },
                 result,
+                searched?.reading,
               );
               if (toolStatus === undefined) toolStatus = coverageStatus;
               // The semantic envelope (9.53.0), on the unwrapped content and
