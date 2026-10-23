@@ -23,7 +23,7 @@ store they all reach (`Agent.create({ decisionLedger })`).
 
 > `readonly` `optional` **storeId?**: `string`
 
-Defined in: [src/core/consentRequest.ts:188](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L188)
+Defined in: [src/core/consentRequest.ts:190](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L190)
 
 OPTIONAL — the identity of the store this ledger records into. A host that
 closes a pause no answer can reach asks the ledger the pause was minted
@@ -39,6 +39,8 @@ The contract this library cannot check, and that the proof rests on:
  - permanent: the same for the life of that store;
  - changed on any migration to a new store — a request spent in the old
    store is not in the new one, and must not be read as never spent there.
+   Pending approvals are then asked again: a decision is spent only in the
+   ledger its request was asked under (`'ledger-changed'`).
 
 Spends in it are permanent too (no expiry) — see `spend`.
 
@@ -48,7 +50,7 @@ Spends in it are permanent too (no expiry) — see `spend`.
 
 > `optional` **isSpent**(`requestId`): `boolean` \| `Promise`\<`boolean`\>
 
-Defined in: [src/core/consentRequest.ts:217](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L217)
+Defined in: [src/core/consentRequest.ts:219](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L219)
 
 OPTIONAL — whether `requestId` is recorded as answered, without recording
 it. Asked only after a [DecisionLedger.spend](/docs/api/interfaces/DecisionLedger#spend) for it failed, so a
@@ -78,7 +80,7 @@ elsewhere; only `spend` proves.
 
 > **spend**(`requestId`): `boolean` \| `Promise`\<`boolean`\>
 
-Defined in: [src/core/consentRequest.ts:203](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L203)
+Defined in: [src/core/consentRequest.ts:205](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L205)
 
 Record `requestId` as answered. Resolve `true` when THIS call recorded it
 and `false` when it was already recorded — atomically per id: of two

@@ -4,9 +4,9 @@ title: ResumeDecisionRefusal
 
 # Type Alias: ResumeDecisionRefusal
 
-> **ResumeDecisionRefusal** = `"no-request"` \| `"request-not-recorded"` \| `"other-request"` \| `"call-changed"` \| `"chain-changed"` \| `"already-answered"` \| `"closed-by-host"`
+> **ResumeDecisionRefusal** = `"no-request"` \| `"request-not-recorded"` \| `"other-request"` \| `"call-changed"` \| `"chain-changed"` \| `"already-answered"` \| `"ledger-changed"` \| `"closed-by-host"`
 
-Defined in: [src/core/pause.ts:387](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L387)
+Defined in: [src/core/pause.ts:394](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L394)
 
 Why a decision could not answer the request a run is paused on — the
 [ResumeDecisionError](/docs/api/classes/ResumeDecisionError) `reason`:
@@ -31,6 +31,13 @@ Why a decision could not answer the request a run is paused on — the
   - `'already-answered'` — a resume already used a decision for this
     request, approved or declined. Whether that resume finished — and so
     whether the call ran — is not known to the one refused.
+  - `'ledger-changed'` — the decision names this request and the call is
+    intact, but the agent resuming it spends decisions in another ledger
+    than the one the request was asked under, while that one can prove
+    whether the call ran (a shared ledger with a `storeId`, or this
+    process's own default) — a redeploy or a ledger migration. Spent
+    elsewhere, the call could run where that ledger never saw it; the
+    person is asked again instead.
   - `'closed-by-host'` — a host that kept the pause closed it, because no
     answer could reach it any more, and proved its call never ran: it spent
     the request in the ledger the request was minted under, so no decision
