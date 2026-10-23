@@ -144,8 +144,17 @@ export class AwaitingDecisionError extends Error {
   readonly code = 'ERR_AWAITING_DECISION' as const;
   /** The session that is waiting. */
   readonly sessionId: string;
-  /** What it is waiting on — the same payload `reply.awaiting()` delivered. */
-  readonly pending: PendingAsk;
+  /**
+   * What it is waiting on — the same payload `reply.awaiting()` delivered.
+   *
+   * NOT enumerable. It names the pending request's id (`checkIn.id` /
+   * `ask.id`), the one value a decision must quote, and an own enumerable
+   * field is serialized whole by `JSON.stringify(err)` — what a logger or a
+   * crash reporter does to an error. So it reads as a property for the code
+   * that caught the error and is left out of every copy made by enumeration,
+   * like the refusals that name no id at all (`ResumeDecisionError`).
+   */
+  declare readonly pending: PendingAsk;
 
   constructor(sessionId: string, pending: PendingAsk) {
     const asked =
@@ -162,7 +171,12 @@ export class AwaitingDecisionError extends Error {
     );
     this.name = 'AwaitingDecisionError';
     this.sessionId = sessionId;
-    this.pending = pending;
+    Object.defineProperty(this, 'pending', {
+      value: pending,
+      enumerable: false,
+      writable: false,
+      configurable: false,
+    });
   }
 }
 

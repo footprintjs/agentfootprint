@@ -31,6 +31,7 @@ What breaks for code that builds or reads these values:
 - A paused ask resumes only on an agent whose chain, from the asking link on, has the same link names in the same order (`'chain-changed'`).
 - The default ledger is one per process (it was one per agent): a decision already used is refused on a fresh agent in the same process too. Give an agent its own `inMemoryDecisionLedger()` only when it must not share.
 - A nested agent's consent pause answered with something that is not a decision is refused (`DecisionRequiredError`) instead of becoming a `by: 'unknown'` decline.
+- `AwaitingDecisionError.pending` is no longer enumerable: it names the pending request's id, so `JSON.stringify(err)` and `{ ...err }` leave it out. `err.pending` still reads.
 - `LLMMessage.toolResultOrigin` gains `'outcome-unknown'`. `PausedRun` gains an optional `answered`: code that reads stored pauses itself (`readPausedRun`) must not offer a pause that has it for an answer — continue its `conversation` with the next message instead.
 
 Migration: build every decision from the request the person was shown — `checkInApproved({ request: outcome.checkIn, by })` for a check-in, `checkInApproved({ request: outcome.ask, by })` for a middleware ask; on a hosted door, `request: pending.checkIn` / `pending.ask` from the `PendingAsk` the host replied with, sent as `decision`. A client that builds the decision JSON by hand adds `requestId: pending.checkIn.id` (or `pending.ask.id`). A plain `askHuman()` / `pauseHere()` pause is unchanged — its answer is a value.

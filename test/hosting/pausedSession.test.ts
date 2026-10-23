@@ -37,8 +37,14 @@ import {
   toEnvelope,
   toPausedEnvelope,
 } from '../../src/hosting/index.js';
+import { AwaitingDecisionError } from '../../src/hosting/index.js';
 import type {
+  AgentHost,
   CheckpointEnvelope,
+  HostHandle,
+  HostHandler,
+  HostReply,
+  HostRequest,
   PausedRun,
   PendingAsk,
   SessionLifecycle,
@@ -1744,6 +1750,161 @@ describe('a paused session — a pause no answer can ever reach does not hold th
       const held = await host.deliver({ input: 'hello?', sessionId: 'plain' });
       expect(held.code).toBe('ERR_AWAITING_DECISION');
       expect(ran).toEqual([]);
+    } finally {
+      await handle.close();
+    }
+  });
+});
+
+describe('a paused session — no refusal carries the live request id, even serialized whole', () => {
+  const usage = { input: 1, output: 1 };
+
+  /**
+   * A host that hands back the refusal OBJECT a request ended with — what a
+   * logger, a crash reporter or `JSON.stringify(err)` reads, not only its
+   * message.
+   */
+  function refusalHost(): {
+    readonly host: AgentHost;
+    deliver(request: HostRequest): Promise<{ awaiting?: PendingAsk; failed?: Error }>;
+  } {
+    let handler: HostHandler | undefined;
+    return {
+      host: {
+        name: 'refusalHost',
+        capabilities: [],
+        serve(incoming: HostHandler): Promise<HostHandle> {
+          handler = incoming;
+          return Promise.resolve({ close: () => Promise.resolve() });
+        },
+      },
+      async deliver(request) {
+        const seen: { awaiting?: PendingAsk; failed?: Error } = {};
+        const reply: HostReply = {
+          complete: () => undefined,
+          awaiting: (pending) => void (seen.awaiting = pending),
+          fail: (err) => void (seen.failed = err),
+        };
+        try {
+          await handler!(request, reply);
+        } catch (err) {
+          seen.failed = err as Error;
+        }
+        return seen;
+      },
+    };
+  }
+
+  /** Asks before every refund; after a tool result it fails once when told to. */
+  function refundsModel(failAfterTool: { next: boolean }): LLMProvider {
+    return {
+      name: 'mock',
+      complete: async (request) => {
+        const last = request.messages[request.messages.length - 1];
+        if (last?.role === 'tool' && failAfterTool.next) {
+          failAfterTool.next = false;
+          throw new Error('model unavailable');
+        }
+        return last?.role === 'user' && String(last.content).includes('refund')
+          ? {
+              content: '',
+              toolCalls: [{ id: 't1', name: 'issue_refund', args: { amount: 10 } }],
+              usage,
+              stopReason: 'tool_use',
+            }
+          : { content: 'noted', toolCalls: [], usage, stopReason: 'stop' };
+      },
+    };
+  }
+
+  it('JSON.stringify of every refusal a client can provoke names no live id — the pending ask still reads', async () => {
+    const ran: number[] = [];
+    const failAfterTool = { next: false };
+    const refund = defineTool<{ amount: number }, string>({
+      name: 'issue_refund',
+      description: 'refund a customer',
+      inputSchema: { type: 'object', properties: { amount: { type: 'number' } } },
+      checkIn: 'always',
+      execute: ({ amount }) => {
+        ran.push(amount);
+        return `refunded ${amount}`;
+      },
+    });
+    const { host, deliver } = refusalHost();
+    const handle = await standingAgent({
+      agent: Agent.create({ provider: refundsModel(failAfterTool), model: 'm', maxIterations: 4 })
+        .system('terse')
+        .tool(refund)
+        .build(),
+      sessions: memorySessions(),
+      host,
+    });
+    const refusals: [string, Error | undefined][] = [];
+    try {
+      const asked = await deliver({ input: 'refund me', sessionId: 'leak' });
+      const id = asked.awaiting?.checkIn?.id;
+      expect(id).toMatch(/^[0-9a-f]{64}$/);
+      const decision = checkInApproved({ request: asked.awaiting!.checkIn!, by: 'maya' });
+
+      const waiting = await deliver({ input: 'hello?', sessionId: 'leak' });
+      refusals.push(['a message while a question waits', waiting.failed]);
+      refusals.push([
+        'an old-format decision',
+        (
+          await deliver({
+            input: '',
+            sessionId: 'leak',
+            decision: { approved: true, by: 'x', at: 1 },
+          })
+        ).failed,
+      ]);
+      refusals.push([
+        'a decision for another request',
+        (
+          await deliver({
+            input: '',
+            sessionId: 'leak',
+            decision: { requestId: 'f'.repeat(64), approved: true, by: 'x', at: 1 },
+          })
+        ).failed,
+      ]);
+      refusals.push([
+        'a value that is not a decision',
+        (await deliver({ input: '', sessionId: 'leak', decision: 'yes' })).failed,
+      ]);
+      // A resume that used the decision and then failed: the pause is answered.
+      failAfterTool.next = true;
+      expect((await deliver({ input: '', sessionId: 'leak', decision })).failed?.message).toBe(
+        'model unavailable',
+      );
+      refusals.push([
+        'the same decision again',
+        (await deliver({ input: '', sessionId: 'leak', decision })).failed,
+      ]);
+      expect((await deliver({ input: 'thanks', sessionId: 'leak' })).failed).toBeUndefined();
+      refusals.push([
+        'a decision with nothing pending',
+        (await deliver({ input: '', sessionId: 'leak', decision })).failed,
+      ]);
+
+      expect(refusals.map(([, err]) => (err as { code?: string } | undefined)?.code)).toEqual([
+        'ERR_AWAITING_DECISION',
+        'ERR_RESUME_DECISION',
+        'ERR_RESUME_DECISION',
+        'ERR_DECISION_REQUIRED',
+        'ERR_RESUME_DECISION',
+        'ERR_NO_PENDING_ASK',
+      ]);
+      for (const [what, err] of refusals) {
+        expect(JSON.stringify(err), what).not.toContain(id);
+        expect(`${String(err)} ${err!.message}`, what).not.toContain(id);
+      }
+      // Kept off the serialized error, not off the error: the code that caught
+      // it still reads the pending ask it names.
+      expect(waiting.failed).toBeInstanceOf(AwaitingDecisionError);
+      expect((waiting.failed as AwaitingDecisionError).pending.checkIn?.id).toBe(id);
+      expect(Object.keys(waiting.failed!)).not.toContain('pending');
+      expect(ran).toEqual([10]);
     } finally {
       await handle.close();
     }
