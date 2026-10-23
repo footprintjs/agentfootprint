@@ -687,6 +687,53 @@ describe('streamHandler — the stream', () => {
     expect(await frames(await handle(post({ message: 'hi' })))).toEqual([{ kind: 'failed' }]);
   });
 
+  it('a withheld answer settles as failed WITH its refusal code — read from the error class, never its words', async () => {
+    // An adapter that frames the whole settlement, so the code is visible.
+    const telling = stubAdapter({
+      open: () => ({
+        event: () => [],
+        settle: (s: RunSettlement): readonly Out[] => [
+          {
+            kind: s.kind,
+            ...(s.kind === 'failed' && s.refusal !== undefined && { text: s.refusal }),
+          },
+        ],
+      }),
+    });
+    const parser = { parse: (value: unknown) => value as { reply: string } };
+    const refusing = () =>
+      Agent.create({
+        provider: mock({ chunkDelayMs: 0, reply: '{"reply":"draft"}' }),
+        model: 'm',
+      })
+        .system('s')
+        .outputSchema(parser)
+        .answerValidation({
+          id: 'house-rules',
+          version: '1',
+          validate: () => ({ checks: [{ id: 'rule', disposition: 'checked-fail' }] }),
+        })
+        .build();
+    const handle = streamHandler({ agent: refusing, adapter: telling, heartbeatMs: 0 });
+    expect(await frames(await handle(post({ message: 'hi' })))).toEqual([
+      { kind: 'failed', text: 'ERR_ANSWER_VALIDATION' },
+    ]);
+
+    // A thrown value that only CLAIMS the code is not a refusal: no code is served.
+    const spoof = () =>
+      ({
+        on: () => () => undefined,
+        run: async () => {
+          throw Object.assign(new Error('mine'), { code: 'ERR_ANSWER_VALIDATION' });
+        },
+        resume: async () => {
+          throw new Error('not paused');
+        },
+      } as never);
+    const spoofed = streamHandler({ agent: spoof, adapter: telling, heartbeatMs: 0 });
+    expect(await frames(await spoofed(post({ message: 'hi' })))).toEqual([{ kind: 'failed' }]);
+  });
+
   it('a caller that hangs up mid-run cuts it; one gone before it starts never runs it', async () => {
     let started = 0;
     const slow = {

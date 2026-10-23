@@ -20,7 +20,7 @@ import { Agent, defineTool, type OutputSchemaParser } from '../../src/index.js';
 import type { LLMProvider, LLMResponse } from '../../src/provider-contract/types.js';
 import { streamHandler } from '../../src/hosting/streamHandler.js';
 import { agUi } from '../../src/ag-ui/adapter.js';
-import { AG_UI_RUN_FAILED } from '../../src/ag-ui/serializer.js';
+import { AG_UI_ANSWER_WITHHELD } from '../../src/ag-ui/serializer.js';
 import type { AgUiEvent } from '../../src/ag-ui/types.js';
 
 interface Reply {
@@ -190,8 +190,13 @@ describe('scenario — the output guard holds the reply over streamHandler + agU
     expect(events.filter((e) => e.type === 'TEXT_MESSAGE_CONTENT')).toEqual([]);
     expect(wire).not.toContain(DRAFT_CANARY);
     expect(wire).not.toContain('```');
-    // Fixed words: the refusal's report (check ids, reasons) stays server-side.
-    expect(events.at(-1)).toEqual({ type: 'RUN_ERROR', message: AG_UI_RUN_FAILED });
+    // Fixed words and the refusal's code — a refusal, not a crash; the
+    // report itself (check ids, reasons) stays server-side.
+    expect(events.at(-1)).toEqual({
+      type: 'RUN_ERROR',
+      message: AG_UI_ANSWER_WITHHELD,
+      code: 'ERR_ANSWER_VALIDATION',
+    });
     expect(events.some((e) => e.type === 'RUN_FINISHED')).toBe(false);
     // The guard ran before the run ended.
     expect(order.indexOf('guard')).toBeLessThan(order.indexOf('RUN_ERROR'));

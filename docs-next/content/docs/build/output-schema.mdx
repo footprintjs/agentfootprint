@@ -450,7 +450,8 @@ counts as a read). A call a person
 answered on `resume()` is listed, with the calls before the pause.
 
 Served by `streamHandler` with `agUi()`, an enforced refusal sends no
-`TEXT_MESSAGE_CONTENT` and ends the run with `RUN_ERROR` in fixed words; the
+`TEXT_MESSAGE_CONTENT` and ends the run with `RUN_ERROR` in fixed words, with
+`code: 'ERR_ANSWER_VALIDATION'` so a client can tell a refusal from a crash; the
 report stays on the server. Over `nodeHost` or `httpHost` (for example behind
 `standingAgent`), a withheld answer is a refusal, not a server error: HTTP 422
 with code `ERR_ANSWER_VALIDATION`, and on a stream the closing `error` frame

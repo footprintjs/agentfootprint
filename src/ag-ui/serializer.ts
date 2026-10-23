@@ -203,6 +203,13 @@ export const AG_UI_TOOL_FAILED = 'The tool failed.';
 /** Said by `RUN_ERROR` when the run's `error.fatal` is not one of the record's fixed sentences. */
 export const AG_UI_RUN_FAILED = 'The run failed.';
 
+/**
+ * Said by `RUN_ERROR` (with `code: 'ERR_ANSWER_VALIDATION'`) when an enforcing
+ * `.answerValidation()` withheld the answer: a refusal, not a crash.
+ */
+export const AG_UI_ANSWER_WITHHELD =
+  "The answer was withheld: it did not pass the app's answer checks.";
+
 /** Is `said` one of the record's fixed failure sentences — the only `error.fatal` words a `RUN_ERROR` repeats? */
 const isFixedFailure = (said: string): boolean =>
   (Object.values(LLM_ERROR_SENTENCES) as readonly string[]).includes(said);
@@ -996,11 +1003,13 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
       start(out);
       switch (settlement.kind) {
         case 'failed':
-          // The record's own words for the failure, never the thrown value.
-          out.push({
-            type: 'RUN_ERROR',
-            message: fatal ?? AG_UI_RUN_FAILED,
-          });
+          // A refusal by its code, in fixed words; otherwise the record's own
+          // words for the failure — never the thrown value.
+          out.push(
+            settlement.refusal === 'ERR_ANSWER_VALIDATION'
+              ? { type: 'RUN_ERROR', message: AG_UI_ANSWER_WITHHELD, code: settlement.refusal }
+              : { type: 'RUN_ERROR', message: fatal ?? AG_UI_RUN_FAILED },
+          );
           return out;
         case 'paused': {
           const { record, clientCall } = pausedRecord(settlement.awaiting);

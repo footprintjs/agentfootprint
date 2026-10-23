@@ -85,6 +85,7 @@ import type {
   ThreadBinding,
 } from './protocolAdapter.js';
 import { REFUSAL_STATUS } from './refusalStatus.js';
+import { AnswerValidationError } from '../answer-validation/types.js';
 import { requestSealing, type RequestSealer } from './requestSealing.js';
 import type { PausedRun, SessionLifecycle } from './types.js';
 import type { RequestContext } from '../identity/requestContext.js';
@@ -404,8 +405,8 @@ export function streamHandler<TRequest, TEvent>(
               runOptions as never,
             );
       settlement = await keep(turn, out, runId);
-    } catch {
-      settlement = { kind: signal.aborted ? 'cancelled' : 'failed' };
+    } catch (err) {
+      settlement = signal.aborted ? { kind: 'cancelled' } : failedSettlement(err);
     } finally {
       // The conversation is free BEFORE the caller hears the end — and before
       // anything else that could throw: a client that answers on RUN_FINISHED
@@ -600,6 +601,17 @@ function noConversation(
     checkpointedAt: Date.now(),
     ...(identity !== undefined && { identity }),
   };
+}
+
+/**
+ * How a rejected run settles: failed — naming a library refusal by its code
+ * when the error's CLASS is one (never its words; a thrown value that only
+ * claims the code is a failure like any other).
+ */
+function failedSettlement(err: unknown): RunSettlement {
+  return err instanceof AnswerValidationError
+    ? { kind: 'failed', refusal: 'ERR_ANSWER_VALIDATION' }
+    : { kind: 'failed' };
 }
 
 /** The refusal an error means — its own status and code, or a 500 that quotes nothing. */

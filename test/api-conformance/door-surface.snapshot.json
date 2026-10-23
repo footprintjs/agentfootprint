@@ -1338,6 +1338,7 @@
       "RequestSealFacts",
       "RequestSealer",
       "ResponsesWireOptions",
+      "RunRefusal",
       "RunSettlement",
       "RunTranslation",
       "SealKey",

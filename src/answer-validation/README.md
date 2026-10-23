@@ -79,8 +79,9 @@ const presentedCodeWasExecuted: AnswerValidationOptions<{ text: string }> = {
 ```
 
 Runnable: `examples/features/99-guard-presented-code.ts`. Over `streamHandler` +
-`agUi()` a refusal sends no `TEXT_MESSAGE_CONTENT` and ends in `RUN_ERROR`
-(`test/ag-ui/answer-validation-guard.test.ts`).
+`agUi()` a refusal sends no `TEXT_MESSAGE_CONTENT` and ends in `RUN_ERROR` with
+`code: 'ERR_ANSWER_VALIDATION'` (`test/ag-ui/answer-validation-guard.test.ts`);
+over `nodeHost` / `httpHost` it is a 422 with the same code.
 
 ## The agent's own checks — `agentChecks`
 
