@@ -1333,6 +1333,7 @@ describe('security: a case difference the rule does not accept is withheld, even
     ['G4 Busse and Buße', 'Busse', 'buße'],
     ['capitals with ss against ß', 'Maße', 'MASSE'],
     ['a dot-grouped number', '1.250', 1.25],
+    ['an accent dropped in capitals', 'Αθήνα', 'ΑΘΗΝΑ'],
   ] as const)('%s: withheld as unverified', async (_case, settledValue, stated) => {
     const { outcome, report } = await oneFactRun(settledValue, stated);
     expect(outcome).toBeInstanceOf(AnswerValidationError);

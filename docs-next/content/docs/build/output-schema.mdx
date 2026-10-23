@@ -533,7 +533,11 @@ needs its builder call, or `build()` refuses. Their rows come after yours in
   its white space collapsed. A number and a string written as a plain decimal
   compare by value, both ways (`42.5` agrees with `'42.50'`, `1250` with
   `'1250'`). A number with a unit compares only with the same unit, written
-  exactly: `'5 MW'` is not `'5 mW'`.
+  exactly: `'5 MW'` is not `'5 mW'`. Text that differs in no letter — only in
+  a case difference the rule below does not accept, an accent or another mark
+  (`'café'` and `'cafe'`; Greek capitals drop the accent, so `'ΑΘΗΝΑ'` against
+  `'Αθήνα'`), or a compatibility form such as a full-width letter — is "could
+  not compare", never a contradiction.
 - **Case agrees only between the same letters, in words of more than three.**
   Two texts that differ only in case agree when every word that differs is
   made of letters only, more than three of them, is written all lower case,

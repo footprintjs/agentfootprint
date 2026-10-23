@@ -86,11 +86,15 @@ upper or with a capital first letter, with the same letters, letter for letter, 
 (`Settled`/`settled`, `STRAẞE`/`Straße`: `ẞ` is the capital of `ß`). The rule cannot know where case
 carries meaning, so it merges such words too (`Polish`/`polish`, `AIDS`/`aids`). Any other case
 difference is not compared: a short word or unit (`MW`/`mW`, `Co`/`CO`), a mixed-case word, text
-with a digit, ß against ss in any casing (`Masse`/`maße`, `MASSE`/`Maße` — letters are compared
-before any fold; the full case fold WITHOUT the Turkic mappings only tells texts it cannot compare
-from a contradiction), and a dotted against a dotless i (`ılık`/`ilik`); a number and a plain
-decimal string (`-?digits[.digits]`, no leading zero, sign or exponent) compare by value, both ways — two decimal
-strings digit for digit, a JS number at the double precision it has; a number with a unit only with
+with a digit, ß against ss in any casing (`Masse`/`maße`, `MASSE`/`Maße`: letters are compared
+before any fold), and a dotted against a dotless i (`ılık`/`ilik`). Text that differs in no letter
+— in such a case difference, in marks (`café`/`cafe`; Greek capitals drop the accent,
+`ΑΘΗΝΑ`/`Αθήνα`) or in compatibility forms (a full-width letter) — is never compared, so never a
+contradiction: a full case fold WITHOUT the Turkic mappings and the text's bare letters (NFKC, no
+marks, `ı` as `i`) only tell such texts from a contradiction, and never decide agreement. A number
+and a plain decimal string (`-?digits[.digits]`, no leading zero, sign or exponent) compare by
+value, both ways — two decimal strings digit for digit, a JS number at the double precision it
+has; a number with a unit only with
 the same unit, written exactly (`MW` is not `mW`); lists item by item in order (a hole in a list —
 `structuredClone` keeps one — is no value and is never compared), objects key by key.
 A value written in a format — a currency symbol, digit separators, a dot-grouped number (`1.250`

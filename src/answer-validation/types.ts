@@ -153,9 +153,11 @@ export interface AnswerValidationOptions<T = unknown> {
    *   scalar, a unit against a bare number, a list with a hole in it, any
    *   other case difference (a short word or unit such as `'MW'`/`'mW'`, a
    *   mixed-case word, text with a digit, `ß` against `ss` in any casing such
-   *   as `'Masse'`/`'maße'`, `'ılık'`/`'ilik'`), and a value written with a
-   *   currency symbol, digit separators, a dot-grouped number (`'1.250'`), a
-   *   date or a time unless written the same.
+   *   as `'Masse'`/`'maße'`, `'ılık'`/`'ilik'`), text that differs only in
+   *   its marks or compatibility forms (`'café'`/`'cafe'`; Greek capitals
+   *   drop the accent), and a value written with a currency symbol, digit
+   *   separators, a dot-grouped number (`'1.250'`), a date or a time unless
+   *   written the same.
    *   The row can only WITHHOLD: it reads every reading of the fact this run
    *   made (from any tool, with no scope or age check, so any reading may be
    *   forged or stale), and one more reading never makes it more permissive.

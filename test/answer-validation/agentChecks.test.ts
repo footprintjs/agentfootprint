@@ -451,6 +451,10 @@ describe('oracle: a claim row compares values after the declared normalization',
     // Letters are compared before any fold: ı is not i, and ß is never ss —
     // ẞ is its capital.
     ['dotless and dotted i', 'ılık', 'ilik', INCOMPARABLE],
+    // A text that differs in no letter is never a contradiction.
+    ['an accent dropped in capitals', 'Αθήνα', 'ΑΘΗΝΑ', INCOMPARABLE],
+    ['an accent dropped', 'café', 'cafe', INCOMPARABLE],
+    ['full-width letters', 'Ａｃｍｅ', 'Acme', INCOMPARABLE],
     ['a Turkish capital I', 'ISPARTA', 'ısparta', INCOMPARABLE],
     ['the capital sharp s', 'STRAẞE', 'Straße', AGREES],
     ['ß in capitals and in lower case', 'MAẞE', 'maße', AGREES],

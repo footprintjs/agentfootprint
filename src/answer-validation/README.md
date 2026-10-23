@@ -108,7 +108,9 @@ with this door and with `rails` (`docs/design/honesty/README.md` § 8).
   a rule that cannot know where case carries meaning (`Polish`/`polish`
   agree); a number and a plain decimal string by value; a unit only against
   the same unit, written exactly; a currency, separators, a dot-grouped
-  number, a date or a time only as written; a list with a hole never).
+  number, a date or a time only as written; a list with a hole never; text
+  that differs in no letter — case, marks, compatibility forms — never
+  contradicts).
   The contract is unscoped — `(entity, field)` rows from ANY tool, with no
   scope or age check, and any result carrying the semantics marker settles a
   fact — so any reading may be forged or stale, and the row obeys ONE law: a

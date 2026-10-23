@@ -107,6 +107,25 @@ describe('UNIT — the declared normalization', () => {
     expect(compareClaimValues('ORD-44710', ' ORD-44710 ')).toBe('agrees');
   });
 
+  it('texts that differ in no letter — only marks, compatibility forms or the dot of an i — are not compared', () => {
+    for (const [a, b] of [
+      ['Αθήνα', 'ΑΘΗΝΑ'], // Greek capitals drop the accent
+      ['École', 'ECOLE'],
+      ['café', 'cafe'],
+      ['Müller', 'Muller'],
+      ['Ａｃｍｅ', 'Acme'], // full-width letters
+      ['x²', 'x2'], // a superscript digit
+      ['ılık', 'ilik'],
+    ]) {
+      expect(compareClaimValues(a, b)).toBe('incomparable');
+      expect(compareClaimValues(b, a)).toBe('incomparable');
+    }
+    // A different letter still contradicts, accents or not.
+    expect(compareClaimValues('café', 'cafés')).toBe('contradicts');
+    expect(compareClaimValues('Αθήνα', 'Σπάρτη')).toBe('contradicts');
+    expect(compareClaimValues('Müller', 'Mueller')).toBe('contradicts');
+  });
+
   it('formatted values — a currency symbol, thousands separators, a date or a time — agree only as written', () => {
     for (const [a, b] of [
       ['$1,250.00', '$1,250'],

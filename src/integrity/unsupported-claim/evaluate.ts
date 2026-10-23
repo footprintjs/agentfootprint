@@ -105,9 +105,15 @@ const foldCase = (text: string): string =>
     .join('')
     .replace(/ß/g, 'ss')
     .normalize('NFC');
-/** Dotted and dotless i as one letter — only to tell an i/ı difference apart. */
-const dotlessAsDotted = (folded: string): string =>
-  folded.replace(/ı/g, 'i').replace(/i\u0307/g, 'i');
+/**
+ * A text's bare letters: compatibility forms unified (NFKC: a ligature, the
+ * long s, a full-width letter, a superscript digit), case folded, every mark
+ * dropped (an accent, the Greek tonos, the dot over `İ`) and the dotless
+ * `ı` read as `i`. Only to tell texts that differ in no letter from a
+ * contradiction: two texts alike here are never compared.
+ */
+const bareLetters = (text: string): string =>
+  foldCase(text.normalize('NFKC')).normalize('NFD').replace(/\p{M}/gu, '').replace(/ı/g, 'i');
 const hasDigit = (text: string): boolean => /\p{Nd}/u.test(text);
 
 /** How a word is cased: all lower, all upper, a capital first letter, or mixed. */
@@ -160,25 +166,26 @@ const masked = (text: string): string =>
 /**
  * Two texts (each `textOf`). Equal: they agree. Otherwise a formatted one is
  * never compared. Texts with no digit agree when they differ in case alone
- * (`caseOnly`: foldable words, the same letters in another case). Any other
- * case difference is not compared — a short word, a mixed-case one, a digit,
- * ß against ss in any casing, a long s or a ligature against its letters —
- * and neither are texts that differ only by a dotted or dotless i (`ılık`,
- * `ilik`), or only in how a number inside them is spelled (`USD 42.50`,
+ * (`caseOnly`: foldable words, the same letters in another case). Texts that
+ * differ in no letter are not compared, never a contradiction: any other case
+ * difference (a short word, a mixed-case one, a digit, ß against ss in any
+ * casing, a long s or a ligature against its letters), a mark (an accent:
+ * Greek capitals drop theirs, `Αθήνα` and `ΑΘΗΝΑ`), a compatibility form (a
+ * full-width letter) or the dot of an i (`ılık`, `ilik`) — and neither are
+ * texts that differ only in how a number inside them is spelled (`USD 42.50`,
  * `v1.20`). Anything else contradicts.
  */
 function compareText(a: string, b: string): ClaimValueComparison {
   if (a === b) return 'agrees';
   if (isFormatted(a) || isFormatted(b)) return 'incomparable';
   if (!hasDigit(a) && !hasDigit(b) && caseOnly(a, b)) return 'agrees';
-  const foldedA = foldCase(a);
-  const foldedB = foldCase(b);
-  // Alike under the fold, or but for the dot of an i: a case difference the
-  // rule above does not accept — never a contradiction, never agreement.
-  if (foldedA === foldedB || dotlessAsDotted(foldedA) === dotlessAsDotted(foldedB)) {
-    return 'incomparable';
-  }
-  return masked(foldedA) === masked(foldedB) ? 'incomparable' : 'contradicts';
+  // The same letters but for case, marks, compatibility forms or the dot of
+  // an i: a difference the rule above does not accept — never a
+  // contradiction, never agreement.
+  const bareA = bareLetters(a);
+  const bareB = bareLetters(b);
+  if (foldCase(a) === foldCase(b) || bareA === bareB) return 'incomparable';
+  return masked(bareA) === masked(bareB) ? 'incomparable' : 'contradicts';
 }
 
 /**
@@ -476,9 +483,10 @@ function keyAt(value: unknown, depth: number): string | undefined {
  *   `'AIDS'` and `'aids'`). Any other case difference is not compared — a
  *   short word or a unit (`'MW'`, `'Co'`), a mixed-case word, anything with a
  *   digit, `ß` against `ss` in any casing (`'Masse'`, `'maße'`, `'MASSE'`
- *   against `'Maße'`), a dotted against a dotless i (`'ılık'`): what a full
- *   case fold without the Turkic mappings would call alike is never
- *   agreement, and never a contradiction;
+ *   against `'Maße'`), a dotted against a dotless i (`'ılık'`). Texts that
+ *   differ in no letter — in such a case difference, in marks (Greek
+ *   capitals drop the accent: `'Αθήνα'`, `'ΑΘΗΝΑ'`), in compatibility forms
+ *   (a full-width letter) — are never agreement, and never a contradiction;
  * - a value written in a format — a currency symbol, digit separators, a
  *   dot-grouped number (`'1.250'`: 1.25 or 1250), a date or a time — agrees
  *   only as written and is otherwise not compared, and so is text that

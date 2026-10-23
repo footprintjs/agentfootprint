@@ -20,7 +20,7 @@ Opt-in contract. The callback cannot replace the accepted answer.
 
 > `readonly` `optional` **agentChecks?**: readonly [`AgentCheckName`](/docs/api/type-aliases/AgentCheckName)[]
 
-Defined in: [src/answer-validation/types.ts:221](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L221)
+Defined in: [src/answer-validation/types.ts:223](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L223)
 
 The agent's own answer checks that take part in this validation. Opt-in:
 omitted, the report holds your checks alone, exactly as before.
@@ -48,9 +48,11 @@ way. `mode: 'observe'` records the rows and delivers.
   scalar, a unit against a bare number, a list with a hole in it, any
   other case difference (a short word or unit such as `'MW'`/`'mW'`, a
   mixed-case word, text with a digit, `ß` against `ss` in any casing such
-  as `'Masse'`/`'maße'`, `'ılık'`/`'ilik'`), and a value written with a
-  currency symbol, digit separators, a dot-grouped number (`'1.250'`), a
-  date or a time unless written the same.
+  as `'Masse'`/`'maße'`, `'ılık'`/`'ilik'`), text that differs only in
+  its marks or compatibility forms (`'café'`/`'cafe'`; Greek capitals
+  drop the accent), and a value written with a currency symbol, digit
+  separators, a dot-grouped number (`'1.250'`), a date or a time unless
+  written the same.
   The row can only WITHHOLD: it reads every reading of the fact this run
   made (from any tool, with no scope or age check, so any reading may be
   forged or stale), and one more reading never makes it more permissive.
@@ -154,7 +156,7 @@ Defined in: [src/answer-validation/types.ts:125](https://github.com/footprintjs/
 
 > **validate**(`candidate`, `context`): `AnswerValidationResult` \| `Promise`\<`AnswerValidationResult`\>
 
-Defined in: [src/answer-validation/types.ts:222](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L222)
+Defined in: [src/answer-validation/types.ts:224](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L224)
 
 #### Parameters
 
