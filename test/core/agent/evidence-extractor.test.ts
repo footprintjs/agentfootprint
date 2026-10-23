@@ -19,6 +19,7 @@ import {
   candidateForms,
   classifyToken,
   extractCandidates,
+  readAnswer,
 } from '../../../src/core/agent/evidence/extract.js';
 import { countDigits, lookupForms, normalizeToken, tokenize } from '../../../src/lib/normalize.js';
 import {
@@ -34,6 +35,7 @@ import {
   resolveEvidenceGate,
 } from '../../../src/core/agent/evidence/gate.js';
 import type { LLMMessage } from '../../../src/provider-contract/types.js';
+import { figureCheckOf } from '../../../src/core/agent/evidence/figures.js';
 import { CORRECT_ANSWERS, FABRICATED_ANSWERS, toolMessages } from './fixtures/sanEvidence.js';
 
 const GATE = resolveEvidenceGate();
@@ -572,5 +574,287 @@ describe('regression: measured false-positive rate on realistic answers', () => 
       const values = flagged(answer);
       for (const expected of mustFlag) expect(values).toContain(expected);
     }
+  });
+});
+
+describe('regression: a typed answer in compact JSON is read value by value', () => {
+  // `{"total":1200}` — once the quotes are separators, compact JSON leaves the
+  // key's colon on the value. `:1200` read as an IDENTIFIER no result carries,
+  // so a typed answer that copied the tool's own number was flagged, and
+  // `rails` refused it. A key's colon — the one right after a key's closing
+  // quote — is now a separator in text, on both sides; every other colon is
+  // part of its value.
+  const RESULT = { order: 'ORD-44710', total: 1200, count: 123, delta: -1500, ratio: 0.4512 };
+  const history = [
+    { role: 'tool', toolCallId: 'c1', content: JSON.stringify(RESULT) },
+  ] as unknown as readonly LLMMessage[];
+  const rails = resolveEvidenceGate({ posture: 'rails' });
+
+  it("a key's colon is a separator in text; every other colon is part of its value", () => {
+    expect(tokenize('{"total":1200,"count":123}')).toEqual(['total', '1200', 'count', '123']);
+    expect(tokenize('{"delta":-1500,"rows":"41,200"}')).toEqual([
+      'delta',
+      '-1500',
+      'rows',
+      '41200',
+    ]);
+    expect(tokenize('"total" : 1200')).toEqual(['total', '1200']);
+    // A colon INSIDE a value stays, quoted or not, as a key's value or in prose.
+    expect(tokenize('{"addr":"::1234","port":":8080"}')).toEqual([
+      'addr',
+      '::1234',
+      'port',
+      ':8080',
+    ]);
+    expect(tokenize('The address is "::1234".')).toEqual(['the', 'address', 'is', '::1234']);
+    expect(tokenize('{"note":"say \\":1200\\" twice"}')).toContain(':1200');
+    for (const value of ['::1234', '::1', 'fe80::1', '2001:db8::1234', '::ffff:192.0.2.1']) {
+      expect(normalizeToken(value)).toBe(value);
+      expect(tokenize(`The address is ${value}`)).toContain(value);
+    }
+    expect(normalizeToken(':1200')).toBe(':1200');
+    expect(normalizeToken(':fc1/3')).toBe(':fc1/3');
+  });
+
+  it('an IPv6 address never matches the number after its colons — either way round', () => {
+    const counted = [
+      { role: 'tool', toolCallId: 'c1', content: JSON.stringify({ count: 1234, n: 1 }) },
+    ] as unknown as readonly LLMMessage[];
+    for (const address of ['::1234', '2001:db8::1234', '::ffff:192.0.2.1', 'fe80::1']) {
+      const flaggedValues = check(`The address is ${address}.`, {
+        history: counted,
+        gate: rails,
+      }).unsupported.map((u) => u.value);
+      expect(flaggedValues).toContain(address);
+    }
+    // …and a tool's address never grounds the bare number.
+    const addressed = [
+      { role: 'tool', toolCallId: 'c1', content: JSON.stringify({ addr: '::1234' }) },
+    ] as unknown as readonly LLMMessage[];
+    expect(
+      check('The count is 1234.', { history: addressed, gate: rails }).unsupported.map(
+        (u) => u.value,
+      ),
+    ).toEqual(['1234']);
+    expect(
+      check('The address is ::1234.', { history: addressed, gate: rails }).unsupported,
+    ).toEqual([]);
+  });
+
+  it('a compact typed answer copying the result is clean, under every posture', () => {
+    expect(check(JSON.stringify(RESULT), { history, gate: rails }).unsupported).toEqual([]);
+    expect(check(JSON.stringify(RESULT, null, 2), { history, gate: rails }).unsupported).toEqual(
+      [],
+    );
+  });
+
+  it('an invented number in compact JSON is still flagged, by its own spelling', () => {
+    const invented = JSON.stringify({ ...RESULT, total: 9750 });
+    expect(check(invented, { history, gate: rails }).unsupported).toEqual([
+      { value: '9750', shape: 'number' },
+    ]);
+  });
+
+  it('a text result carrying compact JSON grounds the same number', () => {
+    const text = [
+      { role: 'tool', toolCallId: 'c1', content: 'export ok: {"total":1200} (1 row)' },
+    ] as unknown as readonly LLMMessage[];
+    expect(check('The total is 1200.', { history: text, gate: rails }).unsupported).toEqual([]);
+  });
+});
+
+describe('regression: a typed answer is read value by value, arrays included', () => {
+  // Read whole as text, compact JSON arrays glue their commas onto the values:
+  // `[5,100]` read as the thousands-separated 5100 (a correct answer accused),
+  // `[0.45,0.12]` as one identifier no result carries, and `[1200,9750]` as no
+  // value at all (an invented 9750 never looked up). A JSON answer is now read
+  // the way the evidence index reads a JSON result: key by key, leaf by leaf.
+  const RESULT = { counts: [1200, 9750], ratios: [0.4512, 0.1201], small: [5, 100, 250] };
+  const history = [
+    { role: 'tool', toolCallId: 'c1', content: JSON.stringify(RESULT) },
+  ] as unknown as readonly LLMMessage[];
+  const rails = resolveEvidenceGate({ posture: 'rails' });
+  const flaggedIn = (answer: string) =>
+    check(answer, { history, gate: rails }).unsupported.map((u) => u.value);
+
+  it('a compact answer copying the arrays is clean — no merged thousands, no joined identifier', () => {
+    expect(flaggedIn(JSON.stringify(RESULT))).toEqual([]);
+    expect(flaggedIn(JSON.stringify({ small: [5, 100] }))).toEqual([]);
+  });
+
+  it('an invented number inside an array is looked up and flagged', () => {
+    expect(flaggedIn(JSON.stringify({ counts: [1200, 9999] }))).toEqual(['9999']);
+    expect(flaggedIn(JSON.stringify({ deep: [{ id: 'ORD-99812', n: [1200] }] }))).toEqual([
+      'ord-99812',
+    ]);
+  });
+
+  it('keys are read too: an invented id used as a key is still flagged', () => {
+    expect(flaggedIn(JSON.stringify({ 'ORD-99812': 1200 }))).toEqual(['ord-99812']);
+  });
+
+  it('text that only opens like JSON is read as text, and nesting is not a call depth', () => {
+    expect(flaggedIn('{ not json } total 9999')).toEqual(['9999']);
+    const deep = `${'['.repeat(20_000)}9999${']'.repeat(20_000)}`;
+    // Either JSON.parse refuses the depth (text) or the walk reads it: no throw.
+    expect(() => flaggedIn(deep)).not.toThrow();
+  });
+});
+
+describe('regression: a JSON answer keeps each number as it was WRITTEN', () => {
+  // Reading a typed answer through JSON.parse changed the numbers being
+  // checked: 9007199254740993 became 9007199254740992 (and matched a result
+  // that carried that), a 20-digit serial became 12345678901234567000 (and
+  // matched nothing), and 5.20 lost the precision the rounding rule judges by.
+  const historyOf = (content: string) =>
+    [{ role: 'tool', toolCallId: 'c1', content }] as unknown as readonly LLMMessage[];
+  const rails = resolveEvidenceGate({ posture: 'rails' });
+
+  it('a large integer is compared digit for digit — no false pass past double precision', () => {
+    const history = historyOf('{"id":9007199254740992}');
+    expect(
+      check('{"id":9007199254740993}', { history, gate: rails }).unsupported.map((u) => u.value),
+    ).toEqual(['9007199254740993']);
+    expect(check('{"id":9007199254740992}', { history, gate: rails }).unsupported).toEqual([]);
+  });
+
+  it('a large integer the tool carried as text is found — no false flag from rounding', () => {
+    const history = historyOf('{"serial":"12345678901234567890"}');
+    expect(check('{"serial":12345678901234567890}', { history, gate: rails }).unsupported).toEqual(
+      [],
+    );
+  });
+
+  it('trailing zeros are a spelling, not a different number', () => {
+    const history = historyOf('{"total":1200}');
+    expect(check('{"total":1200.0}', { history, gate: rails }).unsupported).toEqual([]);
+  });
+
+  it('under decimal rounding, 5.20 keeps its written precision against 5.249', () => {
+    const history = historyOf('{"reading":5.249}');
+    const gate = resolveEvidenceGate({ posture: 'rails', decimalRounding: true });
+    const judge = (answer: string) =>
+      checkAnswer(answer, {
+        gate,
+        evidence: evidenceFromHistory(history),
+        exempt: new Set<string>(),
+        figures: figureCheckOf(answer, history, gate),
+      });
+    // 5.249 rounds to 5.25 at two places, so a two-place 5.20 was never read.
+    expect(judge('{"reading":5.20}').unsupported.map((u) => u.value)).toEqual(['5.2']);
+    // One place: 5.2 is 5.249 honestly rounded.
+    expect(judge('{"reading":5.2}').unsupported).toEqual([]);
+  });
+});
+
+describe('regression: an answer longer than the gate reads says how much it never read', () => {
+  // The gate reads at most 20,000 words and numbers of one answer. It used to
+  // stop there silently: a clean verdict on the part it read looked exactly
+  // like a clean verdict on the whole answer, and an invented value past the
+  // line was never looked up. The reading now counts what it left unread.
+  const CEILING = 20_000;
+  const history = [
+    { role: 'tool', toolCallId: 'c1', content: JSON.stringify({ order: 'ORD-44710' }) },
+  ] as unknown as readonly LLMMessage[];
+
+  it('a short answer is read whole: nothing unread, and the verdict carries no count', () => {
+    expect(readAnswer('Order ORD-44710 totals 41,200.', GATE).unread).toBe(0);
+    expect('unread' in check('Order ORD-44710.', { history })).toBe(false);
+  });
+
+  it('prose past the ceiling: the value after it is unread, and counted', () => {
+    const answer = `${'word '.repeat(CEILING)}ORD-99812`;
+    const reading = readAnswer(answer, GATE);
+    expect(reading.candidates.map((c) => c.value)).not.toContain('ord-99812');
+    expect(reading.unread).toBe(1);
+    const verdict = check(answer, { history });
+    expect(verdict.unsupported).toEqual([]);
+    expect(verdict.unread).toBe(1);
+  });
+
+  it('a JSON answer past the ceiling counts every value it never read', () => {
+    const answer = JSON.stringify(Array.from({ length: CEILING + 5_000 }, (_, i) => i % 10));
+    expect(readAnswer(answer, GATE).unread).toBe(5_000);
+  });
+
+  it('values the old cap on JSON texts skipped are read when the words allow it', () => {
+    // 30,000 empty strings hold no word to read, so the invented id after
+    // them is within the ceiling — and is looked up.
+    const answer = JSON.stringify([...Array.from({ length: 30_000 }, () => ''), 'ORD-99812']);
+    const reading = readAnswer(answer, GATE);
+    expect(reading.unread).toBe(0);
+    expect(reading.candidates.map((c) => c.value)).toContain('ord-99812');
+  });
+
+  it('extractCandidates is the reading without its count, byte for byte', () => {
+    const answer = `${'word '.repeat(CEILING)}ORD-99812 41200`;
+    expect(extractCandidates(answer, GATE)).toEqual(readAnswer(answer, GATE).candidates);
+  });
+});
+
+describe('regression: a typed answer is judged on its values, never on its field names', () => {
+  // `.outputSchema()` fixes an answer's keys: they are the app's field names,
+  // not values the model asserts. Read as values, a digit-bearing name —
+  // `p95LatencyMs`, `sha256`, `ipv4`, `q3Revenue` — was an identifier no tool
+  // result carried, and an enforcing validation withheld a correct answer.
+  const result = 'p95 latency 1250 ms; digest 9f86d081884c7d65; address 10.0.0.12; revenue 41200';
+  const history = [
+    { role: 'tool', toolCallId: 'c1', content: result },
+  ] as unknown as readonly LLMMessage[];
+  const answer = JSON.stringify({
+    p95LatencyMs: 1250,
+    sha256: '9f86d081884c7d65',
+    ipv4: '10.0.0.12',
+    q3Revenue: 41200,
+  });
+  const typedCheck = (text: string, typed: boolean) =>
+    checkAnswer(text, {
+      gate: GATE,
+      evidence: evidenceFromHistory(history),
+      exempt: new Set<string>(),
+      ...(typed && { typed: true }),
+    });
+
+  it('typed: the keys are not read, the values are', () => {
+    const values = readAnswer(answer, GATE, { typed: true }).candidates.map((c) => c.value);
+    expect(values).toEqual(['1250', '9f86d081884c7d65', '10.0.0.12', '41200']);
+    expect(typedCheck(answer, true).unsupported).toEqual([]);
+  });
+
+  it('untyped, a JSON-shaped answer is read whole, keys included, as before', () => {
+    expect(typedCheck(answer, false).unsupported.map((u) => u.value)).toEqual([
+      'p95latencyms',
+      'sha256',
+      'ipv4',
+      'q3revenue',
+    ]);
+  });
+
+  it('an invented value is still flagged in a typed answer — in a string, a list or a nested object', () => {
+    const invented = JSON.stringify({
+      p95LatencyMs: 1250,
+      note: 'see ORD-99812',
+      ids: ['10.0.0.12', '10.0.0.99'],
+      deep: { q3Revenue: 9750 },
+    });
+    expect(typedCheck(invented, true).unsupported.map((u) => u.value)).toEqual([
+      'ord-99812',
+      '10.0.0.99',
+      '9750',
+    ]);
+  });
+
+  it('a string VALUE that looks like a key is still a value', () => {
+    // Only a string followed by `:` is a key; one followed by `,` or `]` is data.
+    const listed = JSON.stringify({ tags: ['ORD-99812', 'p95LatencyMs'], n: 1250 });
+    expect(typedCheck(listed, true).unsupported.map((u) => u.value)).toEqual([
+      'ord-99812',
+      'p95latencyms',
+    ]);
+  });
+
+  it('contract: a typed answer keyed BY data is not judged on its keys (stated limit)', () => {
+    // A map keyed by ids hides them from the gate; put such ids in values.
+    expect(typedCheck(JSON.stringify({ 'ORD-99812': 1250 }), true).unsupported).toEqual([]);
   });
 });

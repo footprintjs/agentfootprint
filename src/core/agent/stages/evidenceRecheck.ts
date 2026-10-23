@@ -10,7 +10,12 @@
  * / `llm_start` / `llm_end` bracket and its own `cost.tick` against
  * `costBudget`. The model can spend that turn calling the tool that would
  * actually produce the value, because it is a real turn and the tools are
- * still on the wire.
+ * still on the wire — EXCEPT under an enforcing answer validation
+ * (`gate.toolsOffAfterRevision`): there the answer may yet be withheld, so a revision must
+ * not run a tool that writes or sends again (a second refund). The library
+ * cannot tell a tool that only reads, so the rest of the run calls none
+ * (`AgentState.toolsOffAfterRevision`): the revision answers from what was
+ * already read.
  *
  * Recovery is one request-scoped system instruction. The rejected draft stays
  * on the actual call record and in the quoted recovery carrier, never as a
@@ -55,6 +60,9 @@ export function buildEvidenceRecheckStage(
   gate: ResolvedEvidenceGate,
   stagedRefs?: EvidenceStagedRefsDeps,
 ): (scope: TypedScope<AgentState>) => void {
+  // An enforcing answer validation governs delivery: the revision and every
+  // later call of the run are served no tools, and none is dispatched.
+  const withholdTools = gate.toolsOffAfterRevision === true;
   return (scope) => {
     const pending = scope.evidenceUnsupported;
     if (pending === undefined || pending.values.length === 0) {
@@ -73,8 +81,9 @@ export function buildEvidenceRecheckStage(
     // CURRENTLY call (the slot's per-iteration surface when it has run, the
     // static catalog before it) — a spender the model cannot reach must not
     // be named as the way out.
+    // With the tools off there is no spender to name: nothing can be called.
     const match =
-      stagedRefs === undefined
+      stagedRefs === undefined || withholdTools
         ? undefined
         : findStagedRefs(
             (scope.history as readonly LLMMessage[] | undefined) ?? [],
@@ -93,6 +102,7 @@ export function buildEvidenceRecheckStage(
         originalRequest: scope.userMessage as string,
         rejectedDraft: flaggedAnswer,
         unsupported: values,
+        ...(withholdTools && { toolsOff: true as const }),
       },
       gate.recoveryInstruction,
       match,
@@ -104,6 +114,9 @@ export function buildEvidenceRecheckStage(
     // The one-per-turn latch, spent BEFORE the loop turns: a second flagged
     // answer is recorded and (under `rails`) refused, never re-asked.
     scope.evidenceRevisionSpent = true;
+    // Under an enforcing answer validation, the tools come off for the rest
+    // of the run: read by request assembly, Route and the inputs layer.
+    if (withholdTools) scope.toolsOffAfterRevision = true;
 
     // The event fires HERE, where the work is — the `steps_unfinished
     // { action: 'nudged' }` precedent. The decider files every other outcome

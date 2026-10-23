@@ -274,7 +274,10 @@ The rules for the verifiers themselves are in `src/adapters/identity/README.md`.
   with the door's identity options (never a header read as a name), the thread
   keyed by the verified person, an unverified caller refused.
 - `refusalStatus.ts` — the ONE status table every HTTP door answers refusals
-  with; `pendingAsk.ts` — the one projection of what a paused run waits on.
+  with (an answer an enforcing `.answerValidation()` withheld is 422
+  `ERR_ANSWER_VALIDATION`: the request was fine, the answer did not pass; the
+  tools that turn already ran are not undone); `pendingAsk.ts` — the one
+  projection of what a paused run waits on.
 - `answeredPause.ts` — a stored pause whose decision a resume may have used and
   did not finish. The ONE reading of a stored session every door uses
   (`readStoredSession`: an answered pause is a conversation to continue, never a

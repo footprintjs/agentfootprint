@@ -186,6 +186,8 @@ export function narrowServed(input: {
   /** The rows already on the record — the immediately-prior iteration's outcome is read for `after-miss`. */
   readonly prior: readonly ToolChoiceEntry[];
   readonly wrapUpAsked: boolean;
+  /** The run's tools are off after the evidence revision (an enforcing answer validation). */
+  readonly toolsOff?: boolean;
 }): Narrowing {
   const { wire, doors, pick, top, iteration, prior, wrapUpAsked } = input;
   if (top === undefined) return { served: wire, narrowed: false };
@@ -195,6 +197,7 @@ export function narrowServed(input: {
     narrowedSkipped: reason,
   });
   if (wrapUpAsked) return skip('wrap-up');
+  if (input.toolsOff === true) return skip('evidence-revision');
   if (outcomeAt(prior, iteration - 1)?.miss !== undefined) return skip('after-miss');
   const candidates = wire.filter((name) => !doors.has(name));
   if (candidates.length < top + 1) return skip('too-few');

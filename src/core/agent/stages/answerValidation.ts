@@ -1,13 +1,18 @@
 import type { TypedScope } from 'footprintjs';
 import {
+  claimChecksOf,
+  evidenceCheckOf,
   executeAnswerValidation,
+  type AnswerCheck,
   type ResolvedAnswerValidation,
   type AnswerValidationReport,
 } from '../../../answer-validation/index.js';
 import { ledgerAtCheck } from '../../../answer-validation/toolLedger.js';
 import type { ArtifactStore } from '../../../artifacts/types.js';
 import type { OutputSchemaParser } from '../../../answer-validation/outputSchema.js';
+import type { DeclaredClaim } from '../../../integrity/unsupported-claim/check.js';
 import type { AgentState } from '../types.js';
+import { takeAnswerEvidence } from './answerEvidence.js';
 import type { RouteBranch } from './route.js';
 
 /** Wrap only the configured agent's terminal decision, in the outer scope.
@@ -17,7 +22,11 @@ import type { RouteBranch } from './route.js';
  * by a break here: a decider that breaks ends the chart with the branch name
  * as its result, and a composition mounting the chart took `'final'` for the
  * agent's answer. Routed on, the chart ends with no answer and the verdict in
- * its state (`core/terminalVerdict.ts`). */
+ * its state (`core/terminalVerdict.ts`).
+ *
+ * `claims` is the agent's `.claims()` contract, read only when
+ * `config.agentChecks` lists `'claims'` (refused here without one, so a listed
+ * check can never silently judge nothing). */
 export function withAnswerValidation(
   decide: (scope: TypedScope<AgentState>) => RouteBranch | Promise<RouteBranch>,
   config: ResolvedAnswerValidation,
@@ -25,9 +34,14 @@ export function withAnswerValidation(
   store: ArtifactStore | undefined,
   hasOutstandingConsent: () => boolean,
   nativeOutput = false,
+  claims?: readonly DeclaredClaim[],
 ): (scope: TypedScope<AgentState>) => Promise<RouteBranch> {
   if (parser === undefined) {
     throw new Error('Agent.answerValidation requires .outputSchema(parser).');
+  }
+  const declaredClaims = claims ?? [];
+  if (config.agentChecks.includes('claims') && declaredClaims.length === 0) {
+    throw new Error("Agent.answerValidation({ agentChecks: ['claims'] }) requires .claims().");
   }
   return async (scope) => {
     const branch = await decide(scope);
@@ -83,6 +97,7 @@ export function withAnswerValidation(
       // terminal branch, so they never will). `executeAnswerValidation`
       // detaches and freezes it before the check runs.
       ledgerAtCheck(scope.toolCallLedger, undispatchedCalls(scope)),
+      agentRowsFor(scope, config, declaredClaims),
     );
     scope.answerValidation = result.report;
     if (config.mode === 'enforce' && result.report.status !== 'passed') {
@@ -92,6 +107,31 @@ export function withAnswerValidation(
     }
     return 'final';
   };
+}
+
+/**
+ * The rows of the agent's own checks this validation lists, every one judged
+ * on the candidate it DELIVERS (`answer-validation/agentChecks.ts`) — after
+ * every output transform, never the draft the Route decider judged. Reads
+ * state only for a listed check: this Route stage's evidence judge, the claim
+ * ledger for `'claims'`. `undefined` when nothing is listed.
+ */
+function agentRowsFor(
+  scope: TypedScope<AgentState>,
+  config: ResolvedAnswerValidation,
+  claims: readonly DeclaredClaim[],
+): ((candidate: unknown, canonical: string) => readonly AnswerCheck[]) | undefined {
+  if (config.agentChecks.length === 0) return undefined;
+  const listsEvidence = config.agentChecks.includes('names-and-numbers');
+  const listsClaims = config.agentChecks.includes('claims');
+  const judge = listsEvidence ? takeAnswerEvidence(scope) : undefined;
+  const ledger = listsClaims ? [...(scope.claimFacts ?? [])] : [];
+  const epoch = listsClaims ? (scope.iteration as number | undefined) ?? 0 : 0;
+  // Fixed order — the Route decider's own: the evidence gate, then the claims.
+  return (candidate, canonical) => [
+    ...(listsEvidence ? [evidenceCheckOf(judge?.(canonical))] : []),
+    ...(listsClaims ? claimChecksOf(claims, ledger, candidate, epoch) : []),
+  ];
 }
 
 /** Calls the model asked for that the terminal branch will never dispatch:

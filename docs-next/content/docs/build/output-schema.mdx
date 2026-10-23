@@ -450,8 +450,160 @@ counts as a read). A call a person
 answered on `resume()` is listed, with the calls before the pause.
 
 Served by `streamHandler` with `agUi()`, an enforced refusal sends no
-`TEXT_MESSAGE_CONTENT` and ends the run with `RUN_ERROR` in fixed words; the
-report stays on the server.
+`TEXT_MESSAGE_CONTENT` and ends the run with `RUN_ERROR` in fixed words, with
+`code: 'ERR_ANSWER_VALIDATION'` so a client can tell a refusal from a crash; the
+report stays on the server. Over `nodeHost` or `httpHost` (for example behind
+`standingAgent`), a withheld answer is a refusal, not a server error: HTTP 422
+with code `ERR_ANSWER_VALIDATION`, and on a stream the closing `error` frame
+carries the same code. No draft text reaches either.
+
+A refusal withholds the answer only. Tools the turn already called have run,
+and nothing undoes them: a tool that changes something (a cancellation, a
+payment) needs its own gate before it runs — a permission policy or a person's
+approval — not answer validation after it.
+
+### Let the agent's own checks hold the answer
+
+On their own, [`.claims()`](doc:context-integrity) and
+[`.namesAndNumbersFromEvidence()`](doc:evidence-gate) only record what they
+find. A typed field that contradicts the fact a tool settled, or a value no
+tool result carried, files a finding, and the answer is still handed back.
+List them in `agentChecks` and each finding becomes a failed row of this
+report, so an enforcing validation withholds that answer the same way it
+withholds one your own check failed. Draft tokens are held back the same way,
+so nobody sees an answer that was withheld.
+
+<CodeFile path="examples/features/107-agent-checks-govern-delivery.ts" region="agent-checks" title="examples/features/107-agent-checks-govern-delivery.ts (region: agent-checks)" />
+
+`agentChecks` lists checks the agent already runs (`AgentCheckName`). Each
+needs its builder call, or `build()` refuses. Their rows come after yours in
+`report.checks`:
+
+| Row | `checked-pass` | `checked-fail` | `unreachable` | `not-applicable` |
+|---|---|---|---|---|
+| `agent:claims:<field>`, one per `.claims()` field, judged on the JSON this validation delivers | never: agreeing with a fact is not verifying the answer | the field contradicts a value this run read for the fact — whatever else it read | this run's readings of the fact differ and the field contradicts none of them, or the run read it only as unknown, `null` or `'unknown'` beside a stated value; doubt on both sides; values that cannot be compared safely; or a value that is not a well-formed `Claim` | the field agrees with the fact; no tool result settled the fact (the claim is not checked); or the answer leaves the field out, or declines it (`null`, `'unknown'`) |
+| `agent:names-and-numbers`, the gate asked of the JSON this validation delivers | never: finding a value clears an answer, it does not verify it | a value no tool result the run read carried | a value was not found and the evidence index had hit its ceiling; or the answer is longer than the gate reads (its first 20,000 words and numbers), so the rest was never looked up | no value is unsupported, or the answer states none |
+
+- **Every row judges what is delivered.** Rows are judged on the exact JSON
+  this validation delivers, after your schema's transform, never on the
+  model's draft: a draft that read 1200 but is delivered as 9750 fails. A
+  value your schema adds itself (a version tag, a source id) is checked like
+  any other; declare it in the gate's `exempt` list. The gate judges values,
+  never your field names: a key like `p95LatencyMs` or `sha256` is not looked
+  up (so an answer keyed by data, an order id as a key, is not checked on its
+  keys).
+- **The repair turn comes first, and calls no tools.** Under `posture: 'guard'`
+  the gate names the unsupported values back to the model for one more ordinary
+  turn before the validation runs. Because the validation enforces, the answer
+  may yet be withheld, so that turn — and every call after it in the run — is
+  served no tools, and a tool call the model returns anyway is not run: a tool
+  that writes or sends (`issue_refund`) can never run a second time before the
+  answer is withheld. The library cannot tell a tool that only reads, so none
+  is offered; the model revises from what it already read, and the receipt
+  says why the list is empty (`tools.withheld: 'evidence-revision'`). Under
+  `mode: 'observe'` the repair turn keeps its tools, as without validation.
+  Only what survives the repair
+  fails the row. `'assist'` asks for no repair, and `'rails'` keeps its own
+  refusal, `UnsupportedValuesError`. A contradicted claim gets no repair turn of
+  its own: its answer is withheld.
+- **Only your checks can pass a report.** The agent's rows can withhold an
+  answer and never verify one, so `validate` stays required: a report with no
+  comparison of yours stays `unverified`. A claim that agrees with the fact is
+  `not-applicable`, because a `.claims()` contract is unscoped — it reads what
+  any tool result settled for that entity and field, with no scope or age
+  check, and any result shaped as a typed envelope can settle one. Agreement
+  with such a fact may be agreement with another customer's record or a stale
+  read. A contradiction still withholds the answer.
+- **A fact whose value changes during the run is withheld.** Every reading
+  counts, so a status polled from `'unknown'` or `'queued'` to `'done'`, or a
+  balance read before and after a write tool (100, then 150), is a fact the
+  run read two ways: the answer is withheld whichever value it states. Choose
+  one of these for such a fact:
+  - settle it once — leave the field (or the whole typed envelope) out of the
+    tool's result until the value is final, or poll inside one tool call and
+    return only the last reading;
+  - model before and after as separate fields or entities (`balanceBefore`,
+    `balanceAfter`), each declared in `.claims()` on its own;
+  - leave that fact out of `.claims()` and check it in your own `validate`.
+- **A reading can only withhold.** The claim row is never more permissive with
+  a reading than without it, so a forged or stale reading can at most withhold
+  an answer, never deliver one. When no tool result settled the fact, the row
+  is `not-applicable`: the claim is not checked, and your own checks decide.
+  Every reading counts, never the latest alone. A contradiction found is
+  reported as one: if the field contradicts any value the run read, the row
+  fails, whatever else was read — readings 900 and 1250 with the answer 1250
+  fail it. Readings that differ where the field contradicts none of them
+  (`900` and `'900 ms'` with the answer 900), or one that settled the fact
+  only as unknown, `null` or `'unknown'` beside the answer's value, make the
+  row `unreachable`: the library cannot tell which one is right.
+- **A different spelling is not a contradiction.** A claim is compared after
+  one declared normalization. Text is compared in Unicode NFC, trimmed, with
+  its white space collapsed. A number and a string written as a plain decimal
+  compare by value, both ways (`42.5` agrees with `'42.50'`, `1250` with
+  `'1250'`). A number with a unit compares only with the same unit, written
+  exactly: `'5 MW'` is not `'5 mW'`. Text that differs in no letter — only in
+  a case difference the rule below does not accept, an accent or another mark
+  (`'café'` and `'cafe'`; Greek capitals drop the accent, so `'ΑΘΗΝΑ'` against
+  `'Αθήνα'`), or a compatibility form such as a full-width letter — is "could
+  not compare", never a contradiction.
+- **Case agrees only between the same letters, in words of more than three.**
+  Two texts that differ only in case agree when every word that differs is
+  made of letters only, more than three of them, is written all lower case,
+  all capitals or with a capital first letter, and has the same letters,
+  letter for letter, as the other word: `'Settled '` agrees with `'settled'`,
+  `'TRUE'` with `'true'`, `'STRAẞE'` with `'Straße'` (`ẞ` is the capital of
+  `ß`). The rule cannot know where case carries meaning, so it also merges
+  words whose case does: `'Polish'` agrees with `'polish'`, `'AIDS'` with
+  `'aids'`, `'March'` with `'march'`. If case matters for a field, leave it
+  out of `.claims()` and compare it exactly in your own `validate`. Any other
+  case difference is "could not compare" — `unreachable`, never agreement: a
+  word of three letters or fewer, or a unit (`'MW'` and `'mW'`, `'Co'` and
+  `'CO'`), a mixed-case word (`'iPhone'`), anything with a digit
+  (`'ORD-44710'`), `ß` against `ss` in any casing (`'Masse'`, `'maße'` or
+  `'MASSE'` against `'Maße'`: letters are compared before any case folding),
+  and a dotted against a dotless i (`'ılık'` and `'ilik'`).
+- **What cannot be compared safely is `unreachable`**, with the reason "could
+  not compare", never `checked-fail`: a list or an object against a single
+  value, a unit against a bare number (`'1250 ms'` against `1250`), text
+  against a number, a list with a hole in it (a sparse array: the run keeps a
+  tool result's holes, where JSON would write `null`), and a value written
+  with a currency symbol, digit separators, a dot-grouped number (`'1.250'`
+  is 1.25 or 1250, by locale), a date or a time (`'$1,250.00'`,
+  `'2026-01-01T00:00:00Z'`) unless both are written the same.
+- **Agreement on doubt verifies nothing.** When the tool settled a field only
+  as `null` or `'unknown'` and the answer gives no value either, the row is
+  `unreachable`: enforce withholds the answer, and observe delivers it with
+  the standing "not sure", never "known". Doubt words are read after the same
+  normalization as everything else: `'Unknown'` and `' UNKNOWN '` are doubt.
+  An absence a tool declares with `known(null)` is a settled value: a value
+  stated against it fails the row. A `Claim` that is not well formed — a
+  `known(…)` without its `evidence`, an `unknown(…)` that carries a `value` —
+  is never read: the row is `unreachable`.
+- **Facts are this run's reads.** A claim is checked against the tool results
+  this run read. A follow-up turn that answers from an earlier turn's read,
+  without reading again, has nothing to compare with: its claim rows are
+  `not-applicable` — not checked — so your own checks decide, and nothing
+  catches a field that contradicts what was read in an earlier turn. The tool
+  stays on the wire, so the model can read again.
+- **Short numbers are not looked up.** The gate reads a bare number with fewer
+  than `minDigits` digits (default 4) as prose — "3 issues" — so an invented
+  `999` passes it. If short numbers in your answers are data, lower `minDigits`
+  (`1` looks every number up) or declare their `shapes`.
+- **Rows carry names, not values.** A reason quotes the field names you
+  declared and a count, never the answer's or a tool's value, nor the entity a
+  `.claims()` contract names (you may declare one per user). Values stay on
+  `agent.unsupportedValues()` and the `integrity.context_error` event, under
+  your redaction policy. While `agentChecks` is set, ids starting with `agent:`
+  belong to these rows: a check of yours using one is refused, your checks are
+  dropped (`invalid-validator-result`), and the report cannot pass.
+- **`mode: 'observe'`** records the same rows and still delivers. It shows what
+  enforcing would withhold before you turn it on.
+- **What it does not prove.** No agent row proves an answer right. A claim
+  row catches a field that contradicts what this run's tools settled for the
+  fact you declared; it cannot tell whether that fact answers the question
+  that was asked. The gate catches invented values, not false claims built
+  from real ones. Prose answers are outside this door: it checks typed
+  answers only.
 
 ### Missing prerequisites block only the claims that need them
 
@@ -495,7 +647,13 @@ A report is available from `agent.answerValidation()` and the execution snapshot
 version, identify the exact candidate with a digest, and separate `checked-pass`,
 `checked-fail`, `not-applicable` and `unreachable` checks. Empty checks,
 all-unchecked results, missing evidence, callback errors and deadlines cannot
-produce a passing verdict. Enforce mode throws `AnswerValidationError` with the
+produce a passing verdict. A `checked-fail` row makes the report `failed` even
+when other rows are `unreachable`: a contradiction that was found is never
+reported as merely unverified, and the reason, `unreachable-checks`, still says
+that some checks could not reach a verdict. An agent row's contradiction
+(`agentChecks`) does not depend on your validator either: it makes the report
+`failed` even when your validator throws, times out or returns something
+invalid, and the reason (`validator-error`, …) says what else happened. Enforce mode throws `AnswerValidationError` with the
 report before final capture or memory write. A report counts checked-pass plus
 checked-fail as checked; artifact reads and framework liveness checks do not count.
 
@@ -523,7 +681,7 @@ This version supports Agent's classic, dynamic and grouped execution paths.
 It rejects `.outputFallback()` at build time because a fallback can replace the
 checked answer, and `.limitsTravelWithTheAnswer()` because the validated
 delivery has no place for the declared limits. Automatic correction and the separate
-`buildAgentMessageApiChart` runner are outside this feature. Existing `.claims()`
-checks retain their advisory behavior. Arbitrary prose is not proved correct:
+`buildAgentMessageApiChart` runner are outside this feature. `.claims()` checks
+keep their advisory behavior unless `agentChecks` lists them. Arbitrary prose is not proved correct:
 a host can instead validate a structured finding and render its factual text
 from the validated result.

@@ -165,6 +165,7 @@ import {
   joinSystemPrompt,
   messagesFromInjections,
   stripFrameworkFields,
+  toolsWithheld,
 } from '../core/agent/composeRequest.js';
 import { findStagedRefs, stagedRefsNudgeLine } from '../core/agent/stagedRefs.js';
 import { evidenceConclusionLine, evidenceRecoveryPiece } from '../core/agent/evidence/recovery.js';
@@ -899,7 +900,7 @@ export interface ServedView {
     /** The tool the model was forced to answer through. */
     readonly forced?: string;
     /** Why the tool list is empty when it would not otherwise be. */
-    readonly withheld?: 'wrap-up';
+    readonly withheld?: 'wrap-up' | 'evidence-revision';
   };
   /** What this rebuild could NOT recover, each naming the receipt field it
    *  explains. Never empty — see {@link SERVED_GAPS}. */
@@ -1233,7 +1234,9 @@ function viewOf(location: EpochLocation, served: boolean): ServedView {
 
   // ── the tools ──────────────────────────────────────────────────────────
   // `dynamicToolSchemas` is the PRE-assembly list. Two rules run after it and
-  // both are on the record: the wrap-up call withholds every tool, and a
+  // both are on the record: a withheld call (the wrap-up, or any call after
+  // the evidence revision under an enforcing answer validation —
+  // `composeRequest.ts` · `toolsWithheld`) is served no tool, and a
   // 'tool-forced' strategy adds one.
   //
   // TWO committed sources, for the same reason the conversation above has two
@@ -1244,12 +1247,15 @@ function viewOf(location: EpochLocation, served: boolean): ServedView {
   // Lens DENYING, about a fact the log holds perfectly well. The agent key is
   // read first and the fallback is reached only when it holds no array, so no
   // agent recording changes.
-  const withheld = readAtCall(location, 'wrapUpAsked', served) === true;
+  const withheld = toolsWithheld(
+    readAtCall(location, 'wrapUpAsked', served),
+    readAtCall(location, 'toolsOffAfterRevision', served),
+  );
   const dynamic =
     toolListOf(readAtCall(location, 'dynamicToolSchemas', served)) ??
     toolListOf(readAtCall(location, 'toolSchemas', served)) ??
     [];
-  const registered = withheld ? [] : dynamic;
+  const registered = withheld !== null ? [] : dynamic;
   const forcedRaw = readRunConstant(location, FORCED_OUTPUT_TOOL_KEY, served);
   const forced = typeof forcedRaw === 'string' && forcedRaw.length > 0 ? forcedRaw : undefined;
 
@@ -1275,7 +1281,7 @@ function viewOf(location: EpochLocation, served: boolean): ServedView {
     | { readonly iteration?: unknown; readonly text?: unknown }
     | undefined;
   if (
-    !withheld &&
+    withheld === null &&
     typeof timeLine?.text === 'string' &&
     timeLine.text.length > 0 &&
     timeLine.iteration === readAtCall(location, 'iteration', served)
@@ -1368,7 +1374,7 @@ function viewOf(location: EpochLocation, served: boolean): ServedView {
       names: [...registered.map((t) => t.name), ...(forced !== undefined ? [forced] : [])],
       schemas: detachedList(registered),
       ...(forced !== undefined && { forced }),
-      ...(withheld && { withheld: 'wrap-up' as const }),
+      ...(withheld !== null && { withheld }),
     },
     gaps,
   });

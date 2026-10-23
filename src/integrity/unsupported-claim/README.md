@@ -40,18 +40,86 @@ others can. Unlike the other three it **never re-routes**: a disagreement betwee
 ledger is a fact about a finished run, and re-asking the model would invite it to change the claim
 rather than the run to change the facts. It files one finding and returns the answer untouched.
 
+**When it governs delivery.** An enforcing `.answerValidation({ agentChecks: ['claims'] })` asks the
+same selection — `check.ts` · `compareClaim`, which `unsupportedClaimsOf` is built on — once more,
+over the canonical answer that validation delivers, and `delivered.ts` · `judgeDeliveredClaim` turns
+it into one verdict per declared claim, which `answer-validation/agentChecks.ts` files as a report
+row. A verdict that can withhold an answer reads the unscoped contract more strictly than the
+detector, because the contract takes `(entity, field)` rows from ANY tool, with no scope or age
+check, and any result carrying the semantics marker settles a fact — so any row may be forged or
+stale. Its one law: **a reading can only withhold.** With no reading the claim is not checked
+(`not-applicable`), and one more reading — first or last, forged, stale, doubtful or malformed —
+never makes the verdict more permissive (pinned by a monotonicity property over a value matrix in
+`test/answer-validation/agentChecks.test.ts`). So:
+- **agreement is never support** — `agrees` is `not-applicable`, exactly as silent as no reading, so
+  only the app's own checks pass a report; a contradiction still fails it and the answer is withheld;
+- **every reading counts, never the latest alone** — readings that differ, where the answer
+  contradicts none of them, are `disputed`; a
+  reading that settled nothing (an `unknown(…)` Claim, a bare `null` or doubt word) beside the
+  answer's value withholds;
+- **a contradiction found is reported as one** — if the answer contradicts ANY value read, the
+  verdict is `contradicts` (every value) or `contradicts-a-reading` (the values read differ),
+  whatever else was read: a forged `null` beside a real reading cannot relabel it "unverified";
+- **doubt is never agreement** — doubt on both sides is `unreachable` (doubt words are read after
+  the comparison's own normalization, so `'Unknown'` is doubt); only an absence a tool declared with
+  `known(null)` agrees with the answer's doubt;
+- **only a well-formed `Claim` is read** (`evaluate.ts` · `claimShapeOf`): a `known(…)` without its
+  `evidence`, an `unknown(…)` or `notApplicable(…)` carrying a `value`, or any other key, makes the
+  verdict `incomparable`;
+- **values compare after a declared normalization** (`evaluate.ts` · `compareClaimValues`, below) —
+  `'Settled '` agrees with `'settled'` and `42.5` with `'42.50'`; values that cannot be compared
+  safely are `unreachable`, never a contradiction.
+Still no re-route: the seam above is unchanged, and the detector's findings and dispositions are
+byte-identical (pinned against the ec32fad source by `test/integrity/claim-pair-evaluation.test.ts`).
+
 **Comparison ownership.** `check.ts` selects the latest `(entity, field)` row, constructs the
 asserted pair and preserves the answer-specific messages, witness order and dispositions.
 `evaluate.ts` owns the pair's doubt and numeric-leniency decisions and delegates structural
 comparison to the existing ContextFootprint algebra. It does not select evidence, infer scope,
-judge coverage or write records. There is no second equality implementation.
+judge coverage or write records. The detector compares by that exact equality, and its findings
+are pinned to it. `evaluate.ts` · `compareClaimValues` is the one other value comparison, and only
+the delivery verdict (`delivered.ts`) reads it, because a verdict that can withhold an answer must
+not accuse it over a representational difference. Its normalization is declared and closed: text
+is Unicode NFC, trimmed, its white space collapsed; case agrees ONLY where two texts differ in case
+alone — every word that differs is a word of letters, more than three of them, cased all lower, all
+upper or with a capital first letter, with the same letters, letter for letter, in another case
+(`Settled`/`settled`, `STRAẞE`/`Straße`: `ẞ` is the capital of `ß`). The rule cannot know where case
+carries meaning, so it merges such words too (`Polish`/`polish`, `AIDS`/`aids`). Any other case
+difference is not compared: a short word or unit (`MW`/`mW`, `Co`/`CO`), a mixed-case word, text
+with a digit, ß against ss in any casing (`Masse`/`maße`, `MASSE`/`Maße`: letters are compared
+before any fold), and a dotted against a dotless i (`ılık`/`ilik`). Text that differs in no letter
+— in such a case difference, in marks (`café`/`cafe`; Greek capitals drop the accent,
+`ΑΘΗΝΑ`/`Αθήνα`) or in compatibility forms (a full-width letter) — is never compared, so never a
+contradiction: a full case fold WITHOUT the Turkic mappings and the text's bare letters (NFKC, no
+marks, `ı` as `i`) only tell such texts from a contradiction, and never decide agreement. A number
+and a plain decimal string (`-?digits[.digits]`, no leading zero, sign or exponent) compare by
+value, both ways — two decimal strings digit for digit, a JS number at the double precision it
+has; a number with a unit only with
+the same unit, written exactly (`MW` is not `mW`); lists item by item in order (a hole in a list —
+`structuredClone` keeps one — is no value and is never compared), objects key by key.
+A value written in a format — a currency symbol, digit separators, a dot-grouped number (`1.250`
+is 1.25 or 1250, by locale), a date or a time — agrees only as written, and text that differs only
+in how a number inside it is spelled (`USD 42.50`, `USD 42.5`) is not compared. Kinds that cannot be compared safely — a list or an object against a
+scalar, a unit against a bare number, text against a number or `true`/`false` — are `incomparable`
+(the row says "could not compare"), never a contradiction. A Claim wrapper is read
+only where the contract puts one — at the TOP of a settled value or of a claimed field — and only a
+well-formed `known(…)` (`kind`, `value`, a text `evidence`); a wrapper carrying any other key is
+`incomparable`, and a wrapper-shaped object INSIDE a value is that value's data, compared as an
+object, so an answer cannot have a nested object read as the value it wraps. Whether a run read one
+fact two ways is decided by `claimValueKey`, an EXACT key per value (a JS number by the digits it
+prints; equal keys always compare as agreement, while agreeing values may have two keys), never by
+agreement with the first reading: agreement at double precision is not transitive
+(a double agrees with both `'9007199254740992'` and `'9007199254740993'`), and a pairwise scan over a
+long series would cost its square. The pair-by-pair oracle is hand-written in
+`test/answer-validation/agentChecks.test.ts`.
 
 The internal evaluator reports a reason, not a support badge: evidence unavailable, claim
 nonparticipating, doubt against a value, both doubt, numeric leniency, conflict or no conflict.
 `no-conflict` alone proves no positive agreement. The existing answer adapter still maps both
 doubt and a nonparticipating claimed value to `checked-pass`; that diagnostic contract is
 preserved, not relabeled as verification. A future scoped check must establish its own eligibility
-before interpreting the pair result. This refactor adds no public opt-in or recorded row.
+before interpreting the pair result. The delivery verdict (`delivered.ts`) is the one reader that
+can withhold an answer, and it never turns a pair result into support.
 
 **The fences.**
 

@@ -4,7 +4,7 @@ title: NarrowSkipReason
 
 # Type Alias: NarrowSkipReason
 
-> **NarrowSkipReason** = `"unavailable"` \| `"too-few"` \| `"after-miss"` \| `"wrap-up"`
+> **NarrowSkipReason** = `"unavailable"` \| `"too-few"` \| `"after-miss"` \| `"wrap-up"` \| `"evidence-revision"`
 
 Defined in: [src/core/agent/toolChoice/types.ts:47](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/toolChoice/types.ts#L47)
 

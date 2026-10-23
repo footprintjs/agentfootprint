@@ -5,7 +5,9 @@ import type { ArtifactScope, ArtifactStore } from '../artifacts/types.js';
 import { computeArtifactDigest } from '../artifacts/payload.js';
 import { createAnswerEvidenceResolver } from './evidence.js';
 import { toolCallsView } from './toolLedger.js';
+import { AGENT_CHECK_PREFIX } from './agentChecks.js';
 import type {
+  AgentCheckName,
   AnswerToolCallsView,
   AnswerCheck,
   AnswerValidationContext,
@@ -26,6 +28,10 @@ const DEFAULT_LIMITS = Object.freeze({
 const MAX_TOOL_CALLS = 10_000;
 const encoder = new TextEncoder();
 const dispositions = new Set(['checked-pass', 'checked-fail', 'not-applicable', 'unreachable']);
+const AGENT_CHECK_NAMES: ReadonlySet<string> = new Set<AgentCheckName>([
+  'claims',
+  'names-and-numbers',
+]);
 
 function text(value: unknown, max: number): string {
   if (typeof value !== 'string' || value.trim() === '' || value.length > max)
@@ -33,11 +39,36 @@ function text(value: unknown, max: number): string {
   return value;
 }
 
+/**
+ * `agentChecks`: a plain, non-empty list of known names, each once, every slot
+ * a data property (no hole, no getter) — or absent, which is the empty list.
+ */
+function readAgentChecks(value: unknown): readonly AgentCheckName[] {
+  if (value === undefined) return Object.freeze([]);
+  const refuse = (): never => {
+    throw new Error(
+      "answerValidation.agentChecks must list 'claims' and/or 'names-and-numbers', each once " +
+        '(omit it to validate with your checks alone).',
+    );
+  };
+  if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype) return refuse();
+  if (value.length === 0 || value.length > AGENT_CHECK_NAMES.size) return refuse();
+  const names: AgentCheckName[] = [];
+  for (let index = 0; index < value.length; index++) {
+    const slot = Object.getOwnPropertyDescriptor(value, index);
+    const name: unknown = slot !== undefined && 'value' in slot ? slot.value : undefined;
+    if (typeof name !== 'string' || !AGENT_CHECK_NAMES.has(name)) return refuse();
+    if (names.includes(name as AgentCheckName)) return refuse();
+    names.push(name as AgentCheckName);
+  }
+  return Object.freeze(names);
+}
+
 /** Validate and snapshot an authored contract once, before running an agent. */
 export function resolveAnswerValidation<T = unknown>(
   options: AnswerValidationOptions<T>,
 ): ResolvedAnswerValidation {
-  const source = ownData(options, ['id', 'version', 'mode', 'limits', 'validate']);
+  const source = ownData(options, ['id', 'version', 'mode', 'limits', 'agentChecks', 'validate']);
   const id = text(source.id, 128);
   const version = text(source.version, 128);
   const mode = source.mode === undefined ? 'enforce' : source.mode;
@@ -46,6 +77,7 @@ export function resolveAnswerValidation<T = unknown>(
   if (typeof source.validate !== 'function')
     throw new Error('answerValidation.validate must be a function.');
   const validate = source.validate as AnswerValidationOptions<T>['validate'];
+  const agentChecks = readAgentChecks(source.agentChecks);
   const supplied =
     source.limits === undefined ? {} : ownData(source.limits, Object.keys(DEFAULT_LIMITS));
   const limits: { -readonly [K in keyof typeof DEFAULT_LIMITS]: number } = { ...DEFAULT_LIMITS };
@@ -69,6 +101,7 @@ export function resolveAnswerValidation<T = unknown>(
     version,
     mode,
     limits: Object.freeze(limits),
+    agentChecks,
     validate: (candidate: unknown, context: AnswerValidationContext) =>
       validate(candidate as Readonly<T>, context),
   });
@@ -92,6 +125,8 @@ function readChecks(
     const id = text(check.id, 128);
     if (
       ids.has(id) ||
+      // Refused by domain, never renamed: an agent row owns this prefix.
+      (config.agentChecks.length > 0 && id.startsWith(AGENT_CHECK_PREFIX)) ||
       typeof check.disposition !== 'string' ||
       !dispositions.has(check.disposition)
     )
@@ -136,6 +171,15 @@ export async function executeAnswerValidation(
   scope: ArtifactScope,
   signal?: AbortSignal,
   toolCalls?: AnswerToolCallsView,
+  /**
+   * Builds the rows of the agent's own checks that `config.agentChecks` lists
+   * (`agentChecks.ts`) from the candidate this validation delivers: the same
+   * frozen value the validator receives, and its canonical JSON — the exact
+   * text that would be delivered. Synchronous library code: a throw, a
+   * listed check with no builder, or a row that claims `checked-pass` (an
+   * agent row never verifies) makes the report `unverified` — never a pass.
+   */
+  buildAgentRows?: (candidate: unknown, canonical: string) => readonly AnswerCheck[],
 ): Promise<{ report: AnswerValidationReport; content?: string }> {
   const controller = new AbortController();
   // Detached and frozen before the callback exists: the check reads a copy of
@@ -151,6 +195,7 @@ export async function executeAnswerValidation(
   let canonical: string | undefined;
   let candidateDigest: string | undefined;
   let checks: AnswerCheck[] = [];
+  let agentRows: readonly AnswerCheck[] = [];
   let active = true;
   let stop: (() => void) | undefined;
   const abort = () => {
@@ -196,6 +241,22 @@ export async function executeAnswerValidation(
         reason = 'non-json-candidate';
         return;
       }
+      // The agent's own rows judge the very candidate delivered — and fail
+      // closed: a listed check that cannot produce its rows passes nothing.
+      if (config.agentChecks.length > 0) {
+        try {
+          if (buildAgentRows === undefined) throw new Error('No builder for the listed checks.');
+          const rows = Object.freeze([...buildAgentRows(candidate, canonical)]);
+          // An agent row can withhold an answer and never verify one: only
+          // your checks make a report pass. A row claiming to is refused.
+          if (rows.some((row) => row.disposition === 'checked-pass'))
+            throw new Error('An agent check never passes an answer.');
+          agentRows = rows;
+        } catch {
+          reason = 'agent-check-error';
+          return;
+        }
+      }
       if (Date.now() >= deadline) {
         timedOut();
         return;
@@ -237,6 +298,8 @@ export async function executeAnswerValidation(
     evidence.close();
     controller.abort();
   }
+  // Your checks first, then the agent's: one list, one count, one status rule.
+  checks = [...checks, ...agentRows];
   const failed = checks.filter((check) => check.disposition === 'checked-fail').length;
   const checked = failed + checks.filter((check) => check.disposition === 'checked-pass').length;
   const unreachable = checks.filter((check) => check.disposition === 'unreachable').length;
@@ -245,7 +308,20 @@ export async function executeAnswerValidation(
   if (!reason && toolCallsRead && !calls.complete) reason = 'tool-calls-incomplete';
   if (!reason && checked === 0) reason = 'no-comparable-checks';
   if (!reason && unreachable > 0) reason = 'unreachable-checks';
-  const status = reason ? 'unverified' : failed > 0 ? 'failed' : 'passed';
+  // What could not be reached never hides what was found. An agent row is
+  // computed by the library on the delivered candidate, before and apart from
+  // your validator, so its contradiction makes the report `failed` whatever
+  // the validator did — the reason still says that (`validator-error`, a
+  // timeout, …). Your own failed check is a verdict beside unreachable rows;
+  // under any other reason your check did not complete, so nothing it
+  // returned is one.
+  const agentFailed = agentRows.some((row) => row.disposition === 'checked-fail');
+  const status =
+    agentFailed || (failed > 0 && (reason === undefined || reason === 'unreachable-checks'))
+      ? 'failed'
+      : reason !== undefined
+      ? 'unverified'
+      : 'passed';
   const report: AnswerValidationReport = Object.freeze({
     validatorId: config.id,
     validatorVersion: config.version,

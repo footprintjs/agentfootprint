@@ -136,7 +136,7 @@ Wire it beside your other gates (the `check:tools` convention) — dump `[{ name
 
 **The overclaim rules** check a declaration like a claim: a refused call read nothing, and an absence read only what its `checked` names, so neither may say what does not exist, or that the input is wrong. Give the catalog what your tool says when it refuses a call — `refusals: ["array_id must start with 'PS-'"]`, the message it throws or the value it returns — beside its `results`. The rules warn, and only for samples that use the new fields (a `refusals` entry, an absence minted with `among`), so a catalog that uses neither sees no new finding. `--strict` reports them as errors; `--rules=overclaim` (in process, `checkSemantics(entries, { rules: ['overclaim'] })`) makes them errors and judges every sample — any absence, and any result whose `status` says it read nothing (`invalid`, `denied`, `failure`). The phrase lists are small, closed and English: a phrasing they miss is a missed finding, not a pass. The options are typed `CheckSemanticsOptions` (`strict`, `rules`), the opt-in set names `SemanticsRuleSet`, and the three codes `OverclaimCode`.
 
-<CodeFile path="examples/features/107-absent-among.ts" region="overclaim-gate" title="examples/features/107-absent-among.ts (region: overclaim-gate)" />
+<CodeFile path="examples/features/108-absent-among.ts" region="overclaim-gate" title="examples/features/108-absent-among.ts (region: overclaim-gate)" />
 
 Exit codes: `0` ok, `1` findings failed the gate (`--strict` gates warnings too), `2` input error. The same core is callable in-process:
 

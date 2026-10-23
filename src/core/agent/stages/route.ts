@@ -49,6 +49,7 @@ import {
   type StepPlanFor,
 } from '../../../injection-engine/skillSteps.js';
 import { checkAnswer, evidenceRefusalSentence, MAX_REPORTED_VALUES } from '../evidence/gate.js';
+import { noteAnswerEvidence } from './answerEvidence.js';
 import { answerCarriersOf } from '../evidence/answerCarriers.js';
 import { derivedFormsOf, evidenceFromHistory, exemptFromRun } from '../evidence/evidenceIndex.js';
 import { timeDerivedRow } from '../../../time/rows.js';
@@ -77,7 +78,7 @@ export type RouteBranch =
   | 'evidence-recheck'
   | 'wrap-up';
 
-/** The five values Route's dispatch test reads — nothing else decides it. */
+/** The six values Route's dispatch test reads — nothing else decides it. */
 export interface DispatchValues {
   /** How many tool calls the model asked for in this batch. */
   readonly callCount: number;
@@ -85,6 +86,12 @@ export interface DispatchValues {
   readonly maxIterations: number;
   readonly costBudgetHit?: boolean;
   readonly costBudgetOnExceed?: 'warn' | 'halt';
+  /**
+   * The run's tools are off: the evidence gate asked for its revision under
+   * an enforcing answer validation (`AgentState.toolsOffAfterRevision`). The
+   * call was served no tools, so a tool call it returns anyway never runs.
+   */
+  readonly toolsOff?: boolean;
 }
 
 /**
@@ -108,7 +115,7 @@ export function willDispatch(v: DispatchValues): boolean {
   // decides that there will not be another one.
   const costHalt = v.costBudgetHit === true && v.costBudgetOnExceed === 'halt';
   const outOfIterations = v.iteration >= v.maxIterations;
-  return v.callCount > 0 && !outOfIterations && !costHalt;
+  return v.callCount > 0 && !outOfIterations && !costHalt && v.toolsOff !== true;
 }
 
 /**
@@ -273,12 +280,19 @@ export function declaredDefaultsFrom(
 const NO_TOOL_CALLS: FixedRouteRationale = 'LLM produced no tool calls — final answer';
 const FORCED_BY_ITERATIONS: FixedRouteRationale = 'maxIterations reached — forcing final';
 const FORCED_BY_COST: FixedRouteRationale = 'costBudget reached (onExceed: halt) — forcing final';
+const FORCED_BY_TOOLS_OFF: FixedRouteRationale =
+  'tools are off after the evidence revision (answer validation enforces) — forcing final';
 
 /** The base decision, with the sentence that explains it. Split out so the
  *  enforcement-enabled path can decide, then judge, then announce ONCE — an
  *  agent whose answer is about to be re-asked should not have a route event
  *  saying it finished. */
-function decideBranch(scope: TypedScope<AgentState>): {
+function decideBranch(
+  scope: TypedScope<AgentState>,
+  /** The gate's revision turns the tools off (`ResolvedEvidenceGate.toolsOffAfterRevision`);
+   *  only then is `toolsOffAfterRevision` read. */
+  toolsOffArmed = false,
+): {
   chosen: 'tool-calls' | 'final';
   rationale: string;
   /** Set when a LIMIT forced `'final'` while tool calls were still pending. */
@@ -293,12 +307,14 @@ function decideBranch(scope: TypedScope<AgentState>): {
   const costHalt = costBudgetHit === true && costBudgetOnExceed === 'halt';
   const maxIterations = scope.maxIterations;
   const outOfIterations = iteration >= maxIterations;
+  const toolsOff = toolsOffArmed && scope.toolsOffAfterRevision === true;
   const chosen = willDispatch({
     callCount: toolCalls.length,
     iteration,
     maxIterations,
     ...(costBudgetHit !== undefined && { costBudgetHit }),
     ...(costBudgetOnExceed !== undefined && { costBudgetOnExceed }),
+    ...(toolsOff && { toolsOff }),
   })
     ? 'tool-calls'
     : 'final';
@@ -330,6 +346,8 @@ function decideBranch(scope: TypedScope<AgentState>): {
         ? FORCED_BY_ITERATIONS
         : costHalt
         ? FORCED_BY_COST
+        : toolsOff && toolCalls.length > 0
+        ? FORCED_BY_TOOLS_OFF
         : NO_TOOL_CALLS,
     ...(earlyStop !== undefined && { earlyStop }),
   };
@@ -770,6 +788,10 @@ function judgeEvidence(
   timeLineage?: TimeLineage,
   /** Under the figures dial: its loaded module (`loadFigures`). Absent → the gate as it was. */
   figures?: FiguresModule,
+  /** The answer is TYPED (`.outputSchema()`, the enforcing decider): judged by
+   *  its values, its keys — the schema's field names — never looked up.
+   *  Absent → a JSON-shaped answer is read keys and all, as it always was. */
+  typedAnswer?: true,
 ): 'evidence-recheck' | undefined {
   if (gate === undefined) return undefined;
   const answer = (scope.llmLatestContent as string | undefined) ?? '';
@@ -788,28 +810,34 @@ function judgeEvidence(
   const evidence = evidenceFromHistory(history);
   // Under `.time()` (step T7): the turn's time spellings by lineage.
   const time = timeLineage?.(scope);
-  const verdict = checkAnswer(answer, {
-    gate,
-    evidence,
-    ...(time !== undefined && { derived: derivedFormsOf(time.derived) }),
-    // The figures dial: the results' numbers, folded for the derivation
-    // question (`evidence/figures.ts`). Off → not built, the verdict as it was.
-    ...(figures !== undefined && { figures: figures.figureCheckOf(answer, history, gate) }),
-    exempt: exemptFromRun({
-      userMessage: scope.userMessage as string | undefined,
-      history,
-      systemPromptInjections: scope.systemPromptInjections as
-        | readonly InjectionRecord[]
-        | undefined,
-      ...(inputs?.declaredDefaults !== undefined && {
-        declaredDefaults: inputs.declaredDefaults(scope),
-      }),
-      ...(inputs?.answeredValues !== undefined && {
-        answeredValues: inputs.answeredValues(scope),
-      }),
-      ...(time !== undefined && { timeSaid: time.said }),
+  const derived = time !== undefined ? derivedFormsOf(time.derived) : undefined;
+  const exempt = exemptFromRun({
+    userMessage: scope.userMessage as string | undefined,
+    history,
+    systemPromptInjections: scope.systemPromptInjections as readonly InjectionRecord[] | undefined,
+    ...(inputs?.declaredDefaults !== undefined && {
+      declaredDefaults: inputs.declaredDefaults(scope),
     }),
+    ...(inputs?.answeredValues !== undefined && {
+      answeredValues: inputs.answeredValues(scope),
+    }),
+    ...(time !== undefined && { timeSaid: time.said }),
   });
+  // THE ONE JUDGE of this run's evidence, bound to what the run read: asked
+  // here of the draft, and by answer validation of the exact candidate it
+  // delivers (`answerEvidence.ts`) — never a verdict carried across forms.
+  const judge = (text: string): EvidenceVerdict =>
+    checkAnswer(text, {
+      gate,
+      evidence,
+      ...(derived !== undefined && { derived }),
+      // The figures dial: the results' numbers, folded for the derivation
+      // question (`evidence/figures.ts`). Off → not built, the verdict as it was.
+      ...(figures !== undefined && { figures: figures.figureCheckOf(text, history, gate) }),
+      exempt,
+      ...(typedAnswer === true && { typed: true }),
+    });
+  const verdict = judge(answer);
 
   // ── THE CLAIM SEAM'S RECENCY READ (9.83.0) — `prior-turn-evidence` ──
   // Judged on EVERY outcome, clean or flagged, and before the branch below
@@ -863,6 +891,21 @@ function judgeEvidence(
   // whole list or none (`evidence/answerCarriers.ts`). Rides the verdicts of
   // an answer that ships; a draft about to be revised says nothing.
   const carriedBy = answerCarriersOf(verdict.grounded, evidence);
+
+  // For answer validation's `'names-and-numbers'` row (`answerEvidence.ts`):
+  // the JUDGE, not this verdict — the validation asks it of the candidate it
+  // delivers, which an output transform may have changed. In memory, this
+  // stage only — not one byte of state; read only when it answers `'final'`.
+  noteAnswerEvidence(scope, (text) => {
+    const judged = judge(text);
+    return {
+      lookedUp: judged.lookedUp,
+      unsupported: judged.unsupported.length,
+      truncated: judged.evidenceTruncated,
+      unread: judged.unread ?? 0,
+      revised: afterRevision,
+    };
+  });
 
   if (verdict.unsupported.length === 0) {
     fileTimeDerived(scope, verdict.derived, iteration);
@@ -1292,6 +1335,8 @@ function routeDeciderFor(
  * the claim rather than the run to change the facts. So this files a
  * finding and returns — detection converting a silent disagreement into an
  * attributable one, exactly as every other seam in this family does.
+ * Withholding is the validation's: under `agentChecks: ['claims']`,
+ * `answerValidation.ts` asks the same comparison of the delivered answer.
  */
 function judgeClaims(
   scope: TypedScope<AgentState>,
@@ -1391,7 +1436,10 @@ function buildJudgingDecider(
   answer?: AnswerRouteArm,
 ): (scope: TypedScope<AgentState>) => Promise<RouteBranch> {
   return async (scope) => {
-    const { chosen, rationale, earlyStop } = decideBranch(scope);
+    const { chosen, rationale, earlyStop } = decideBranch(
+      scope,
+      evidence?.toolsOffAfterRevision === true,
+    );
     if (chosen !== 'final') {
       emitRouteDecided(scope, chosen, rationale);
       return chosen;
@@ -1489,7 +1537,7 @@ function buildEnforcingDecider(
   answer?: AnswerRouteArm,
 ): (scope: TypedScope<AgentState>) => Promise<RouteBranch> {
   return async (scope) => {
-    const base = decideBranch(scope);
+    const base = decideBranch(scope, evidence?.toolsOffAfterRevision === true);
     if (base.chosen !== 'final') {
       emitRouteDecided(scope, base.chosen, base.rationale);
       return base.chosen;
@@ -1589,7 +1637,7 @@ function buildEnforcingDecider(
       }
       // The evidence gate is last of the three judges: it grounds the answer
       // the schema accepted and the procedure finished — the one that is
-      // really about to be handed back.
+      // really about to be handed back. Typed: its keys are the schema's.
       if (
         judgeEvidence(
           scope,
@@ -1602,6 +1650,7 @@ function buildEnforcingDecider(
           answer,
           timeLineage,
           figures,
+          true,
         ) === 'evidence-recheck'
       ) {
         return reAsk('evidence-recheck', evidenceRecheckRationale(scope));
@@ -1820,7 +1869,7 @@ export function buildRouteDeciderStage(
     (scope) => peelAnswerStandings(scope, true, args[9], args[10]),
     emitRouteDecided,
     (scope) => {
-      const base = decideBranch(scope);
+      const base = decideBranch(scope, args[3]?.toolsOffAfterRevision === true);
       return base.chosen === 'final' && !wantsWrapUp(scope, base.earlyStop, args[4] ?? false);
     },
   );

@@ -1,5 +1,5 @@
 /**
- * 107 — a name that resolves to nothing is a named miss over the names read.
+ * 108 — a name that resolves to nothing is a named miss over the names read.
  *
  * A lookup checks a name against one inventory export and finds nothing. That
  * is a search over one list, not a fact about the estate. A study of two
@@ -21,7 +21,7 @@
  * Then the build gate: `check:semantics` warns about a refusal that says what
  * does not exist (`refusal-asserts-absence`).
  *
- * Run:  npm run example examples/features/107-absent-among.ts
+ * Run:  npm run example examples/features/108-absent-among.ts
  */
 
 import { absent, Agent, defineTool, type DeclaredCoverage } from '../../src/index.js';
@@ -30,7 +30,7 @@ import { checkSemantics } from '../../src/doors/observe.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {
-  id: 'features/107-absent-among',
+  id: 'features/108-absent-among',
   title: 'A missed name is a named miss over the names read — absent({ among })',
   group: 'features',
   description:

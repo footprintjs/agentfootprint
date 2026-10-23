@@ -1179,7 +1179,15 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.skillGraphIsTree = skillGraphIsTree ?? false;
     this.skillGraphCascade = skillGraphCascade;
     this.skillBrains = skillBrains;
-    this.evidenceGate = evidenceGate;
+    // Under an enforcing answer validation the gate's revision calls no tools
+    // (`ResolvedEvidenceGate.toolsOffAfterRevision`): one fact on the one gate
+    // every reader is already handed.
+    this.evidenceGate =
+      evidenceGate !== undefined &&
+      evidenceGate.posture !== 'assist' &&
+      answerValidationConfig?.mode === 'enforce'
+        ? { ...evidenceGate, toolsOffAfterRevision: true }
+        : evidenceGate;
     this.limitsTravelWithTheAnswerValue = limitsTravelWithTheAnswer === true;
     this.appliedRecipes = recipes;
     this.skillGraphDeclared = skillGraphDeclared;
@@ -3021,6 +3029,16 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     }
   }
 
+  /**
+   * Whether the evidence gate's revision calls no tools: a posture that can
+   * revise (`'guard'`, `'rails'`) under an ENFORCING answer validation. There
+   * the answer may yet be withheld, so a revision must not run a tool that
+   * writes or sends again — and the library cannot tell one that only reads.
+   */
+  private revisionWithholdsTools(): boolean {
+    return this.evidenceGate?.toolsOffAfterRevision === true;
+  }
+
   /** Whether input middleware refused the last run's message — the one reading both doors ask. */
   private lastInputRefused(): boolean {
     const state = this.liveSnapshot()?.sharedState as Partial<AgentState> | undefined;
@@ -4842,6 +4860,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // reset here. Only a posture that can revise writes the key.
       ...(this.evidenceGate !== undefined &&
         this.evidenceGate.posture !== 'assist' && { hasEvidenceRevision: true }),
+      // Under an enforcing answer validation the tools stay off for a run
+      // resumed after its revision was asked (`toolsOffAfterRevision`).
+      ...(this.revisionWithholdsTools() && { toolsOffAfterRevision: true as const }),
       getCurrentRunId: () => this.currentRunContext?.runId,
       // WHO this run is for, when the caller named nobody (9.10.0). Seed uses
       // it for exactly one rung of the identity ladder — see `seedFrom` — and
@@ -5333,6 +5354,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         this.evidenceGate.posture !== 'assist' && {
           hasEvidenceRecovery: true,
         }),
+      // The revision calls no tools under an enforcing answer validation: only
+      // then does request assembly read `toolsOffAfterRevision`.
+      ...(this.revisionWithholdsTools() && { toolsOffAfterRevision: true as const }),
       // The findings ledger (9.101.0): the choice seam and `postValidate`
       // read peeled args / content under `findings`; the SERVING (step 3) —
       // the ledger piece after the recovery piece, the wire-only collapse of
@@ -5579,6 +5603,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
             artifactStore,
             () => this.consentOutstanding.size > 0,
             this.outputEnforcement?.outputFormat !== undefined,
+            // Read only when `agentChecks` lists 'claims' (the agent's own rows).
+            this.claimContract,
           );
     // `.limitsTravelWithTheAnswer()` on a TYPED answer — decided once, here.
     // An output schema makes the answer JSON, and the appended block would
@@ -5895,6 +5921,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(inputsArmed && {
         inputsLayer: {
           ...(this.findingsOptions !== undefined && { findings: true as const }),
+          // Route's sixth dispatch value, read only by an agent whose revision
+          // turns the tools off (an enforcing answer validation).
+          ...(this.revisionWithholdsTools() && { toolsOffAfterRevision: true as const }),
           toolOf: (toolName: string) => resolveForLayer(toolName).tool,
           ...(this.toolMiddleware.length > 0 && { rewrites: true as const }),
           // The time layer (step T5a): a tool whose period declares forms is filled from the

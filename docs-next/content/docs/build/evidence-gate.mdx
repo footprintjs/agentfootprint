@@ -79,7 +79,10 @@ different decisions.
 more ordinary turn, with its own `iteration_start` / `llm_start` bracket and its
 own `cost.tick` — and the tools are still on the wire, so the model can go and
 *fetch* the value it guessed at. One revision per turn, latched: a model that
-cannot ground a value on its second try will not on its fifth.
+cannot ground a value on its second try will not on its fifth. The one
+exception is an ENFORCING answer validation (below): there the answer may yet
+be withheld, so the revision and every later call of the run are served no
+tools and dispatch none, and a tool that writes or sends never runs twice.
 
 ```ts
 // guard, in the run's own record:
@@ -88,6 +91,16 @@ cannot ground a value on its second try will not on its fifth.
 // route_decided { chosen: 'final' }
 // evidence_checked { action: 'grounded', afterRevision: true }   ← it worked
 ```
+
+**To withhold rather than flag** a typed answer, list the gate in an enforcing
+answer validation: `.answerValidation({ …, agentChecks: ['names-and-numbers'] })`.
+The posture still decides whether the model gets its one repair turn, which is
+served no tools while the validation enforces: the library cannot tell a tool
+that only reads from one that writes, so a repair can never repeat a refund or
+a send before the answer is withheld. Whatever survives it fails the
+validation, so the answer is withheld and no draft token of it is streamed. See
+[Let the agent's own checks hold the answer](doc:output-schema) on the output
+schema page.
 
 ## What counts as evidence
 
@@ -288,7 +301,19 @@ test) can recognise it without matching on prose.
   an answer with the wrong shape is about to be replaced wholesale, so grounding
   it would pay for the same turn twice. The evidence gate judges what the schema
   let stand, and an answer that exhausted its schema retries is not judged at
-  all.
+  all. A typed answer is read value by value, the way a JSON tool result is:
+  `{"counts":[1200,9750]}` checks `1200` and `9750`, never the text `1200,9750`.
+  Its keys are your schema's field names, not values the model asserts, so a
+  name like `p95LatencyMs` or `sha256` is never flagged. The price: an answer
+  keyed by data (an order id as a key) is not checked on its keys — keep such
+  ids in values.
+* With `.answerValidation({ agentChecks: ['names-and-numbers'] })`: the gate is
+  asked again of the exact JSON that validation delivers, after any output
+  transform, and its verdict becomes a row of that report. A value no tool
+  result carried fails it; a clean pass is `not-applicable`, because finding a
+  value clears an answer without verifying it. The gate reads the first 20,000
+  words and numbers of an answer; an answer longer than that makes the row
+  `unreachable`, with the reason naming how many more were never looked up.
 * With [`.reliability()`](doc:reliability): no collision. Reliability governs
   what one *call* does before a response is committed; this governs an answer
   that **was** committed.

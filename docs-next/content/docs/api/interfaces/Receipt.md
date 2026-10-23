@@ -228,6 +228,6 @@ The tool the model was forced to answer through, or `null`.
 
 #### withheld
 
-> `readonly` **withheld**: `"wrap-up"` \| `null`
+> `readonly` **withheld**: `"wrap-up"` \| `"evidence-revision"` \| `null`
 
 Why the tool list is empty when it would not otherwise be.

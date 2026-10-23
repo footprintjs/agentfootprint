@@ -4,7 +4,8 @@ Map: `types.ts` declares the authored checks, bounds and report vocabulary;
 port, its default instruction, and the parse every caller applies).
 Walker: `evidence.ts` resolves bounded parcels under the run's existing scope;
 `toolLedger.ts` hands the check this run's tool calls as one frozen parcel.
-Fold: `validate.ts` derives a verdict from explicit checks and evidence availability.
+Fold: `validate.ts` derives a verdict from explicit checks and evidence availability;
+`agentChecks.ts` turns the agent's own checks' verdicts into rows of that report.
 
 The host supplies the comparisons. This folder supplies no domain rules,
 query engine, model judge, artifact store, or repair loop. It reuses the
@@ -78,8 +79,93 @@ const presentedCodeWasExecuted: AnswerValidationOptions<{ text: string }> = {
 ```
 
 Runnable: `examples/features/99-guard-presented-code.ts`. Over `streamHandler` +
-`agUi()` a refusal sends no `TEXT_MESSAGE_CONTENT` and ends in `RUN_ERROR`
-(`test/ag-ui/answer-validation-guard.test.ts`).
+`agUi()` a refusal sends no `TEXT_MESSAGE_CONTENT` and ends in `RUN_ERROR` with
+`code: 'ERR_ANSWER_VALIDATION'` (`test/ag-ui/answer-validation-guard.test.ts`);
+over `nodeHost` / `httpHost` it is a 422 with the same code.
+
+## The agent's own checks — `agentChecks`
+
+**Why.** `.claims()` and `.namesAndNumbersFromEvidence()` only record: a
+contradicted typed field or an invented value files a finding, and the answer
+is delivered. `agentChecks: ['claims', 'names-and-numbers']` makes each of
+their verdicts a ROW of this report, so `enforce` withholds the answer and the
+existing delivery boundary (draft suppression, the final guard,
+`AnswerValidationError`) does the rest. No new blocking verb: refusing stays
+with this door and with `rails` (`docs/design/honesty/README.md` § 8).
+
+`agentChecks.ts` owns the mapping, and only the mapping:
+
+- `claimChecksOf` judges the CANONICAL candidate this validation delivers, so a
+  transforming schema is judged as delivered. It asks the claim seam's own
+  selection (`integrity/unsupported-claim/check.ts` · `compareClaim`) and its
+  delivery verdict (`integrity/unsupported-claim/delivered.ts` ·
+  `judgeDeliveredClaim`), so a row never accuses where the detector does not
+  (a matrix property in `test/answer-validation/agentChecks.test.ts` pins it).
+  Values are compared after one declared normalization
+  (`integrity/unsupported-claim/evaluate.ts` · `compareClaimValues`: text in
+  NFC, trimmed, white space collapsed — case agrees only for a word of more
+  than three letters with the same letters in another case, `ß` never `ss`,
+  a rule that cannot know where case carries meaning (`Polish`/`polish`
+  agree); a number and a plain decimal string by value; a unit only against
+  the same unit, written exactly; a currency, separators, a dot-grouped
+  number, a date or a time only as written; a list with a hole never; text
+  that differs in no letter — case, marks, compatibility forms — never
+  contradicts).
+  The contract is unscoped — `(entity, field)` rows from ANY tool, with no
+  scope or age check, and any result carrying the semantics marker settles a
+  fact — so any reading may be forged or stale, and the row obeys ONE law: a
+  reading can only withhold. With no reading the claim is not checked
+  (`not-applicable`), and one more reading, anywhere, never makes the row
+  more permissive (a monotonicity property pins it). Contradiction with ANY
+  value read → `checked-fail`, whatever else was read — a found contradiction
+  is never relabelled unverified, and stays one when readings are added. Agreement → `not-applicable`: agreement verifies
+  nothing, an absence a tool declared (`known(null)`) included.
+  `unreachable` (withheld, fail closed): readings that differ where the
+  answer contradicts none of them; a reading
+  that settled the fact only as unknown, `null` or `'unknown'` (doubt words
+  read after the same normalization) beside the answer's value; doubt on both
+  sides; values of kinds that cannot be compared safely ("could not
+  compare", never a contradiction); a value or reading that is not a
+  well-formed `Claim`. Omitted or declined (`null`, `'unknown'`, an unknown
+  `Claim`) → `not-applicable`. The detector's legacy ledger maps agreement
+  and doubt to `checked-pass`; the row maps neither to a pass.
+- `evidenceCheckOf` reads the gate's verdict on the SAME delivered candidate:
+  the gate is handed over as an `EvidenceJudge` bound to the evidence the run
+  read (`core/agent/stages/answerEvidence.ts`, a per-scope `WeakMap`, never
+  state, read only when that Route stage answers `'final'`), and asked of the
+  canonical JSON. Never the verdict on the model's draft: an output schema can
+  transform the draft (1200 read, 9750 delivered).
+  No verdict (the gate never judged it) → `unreachable`; so is an answer
+  longer than the gate reads — the gate classifies its first 20,000 words and
+  numbers and only COUNTS the rest (`EvidenceVerdict.unread`), and the row's
+  reason names that count. A clean pass →
+  `not-applicable`: a membership pass never supports (the standing fold's
+  law), so the gate can withhold an answer and never make a report pass.
+
+Three limits, stated in the user docs and pinned by `contract:` tests in
+`test/answer-validation/agentChecksDelivery.test.ts`: a fact whose value
+changes during the run (a polled status, a balance before and after a write)
+is withheld, because every reading counts — settle it once, split before and
+after into separate fields, or keep it out of `.claims()`; the claim ledger
+(`claimFacts`) is THIS run's reads, so a follow-up turn answering from an
+earlier run's read has a `not-applicable` claim row — not checked; the host's
+checks decide; and the gate's `minDigits` floor (default 4) means a short bare
+number is never looked up, so an invented `999` clears the evidence row.
+
+**No agent row is ever `checked-pass`.** The agent's checks can withhold an
+answer and never verify one, so only the host's own checks make a report
+`passed` — which the standing fold reads as "known". `validate.ts` enforces it:
+a row that claims to pass is refused as `agent-check-error`, like a throw.
+
+Rows never carry a value from the answer or a tool result — counts and the
+field names the app declared only, never the contract's `entity` (which an app
+may build per user) — because `answerValidation` is not a name the redaction
+vocabulary keeps out. `validate.ts` runs the row builder on the same
+frozen candidate as the callback, before it; a throw, a listed check with
+no builder, or a row claiming `checked-pass` is `agent-check-error` (unverified). Host check ids starting
+`agent:` are refused while rows are on (refuse-by-domain: the two id sets
+cannot collide). `core/agent/AgentBuilder.ts` · `build` refuses a listed check
+whose builder call is missing.
 
 ## Claim prerequisites — `checkClaimRequirements`
 

@@ -4,9 +4,13 @@ title: AnswerValidationError
 
 # Class: AnswerValidationError
 
-Defined in: [src/answer-validation/types.ts:161](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L161)
+Defined in: [src/answer-validation/types.ts:284](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L284)
 
-An enforcing host refused delivery; diagnostic metadata only, never content.
+An enforcing validation refused delivery; diagnostic metadata only, never
+content. Served by a hosting door, it is a refusal, not a failure: HTTP 422
+with code `ERR_ANSWER_VALIDATION` (on a stream, the closing error frame
+carries the same code). It withholds the answer only — tools the turn
+already called have run, and nothing undoes them.
 
 ## Extends
 
@@ -18,7 +22,7 @@ An enforcing host refused delivery; diagnostic metadata only, never content.
 
 > **new AnswerValidationError**(`report`): `AnswerValidationError`
 
-Defined in: [src/answer-validation/types.ts:165](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L165)
+Defined in: [src/answer-validation/types.ts:288](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L288)
 
 #### Parameters
 
@@ -52,7 +56,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_ANSWER_VALIDATION"`
 
-Defined in: [src/answer-validation/types.ts:162](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L162)
+Defined in: [src/answer-validation/types.ts:285](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L285)
 
 ***
 
@@ -84,7 +88,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1076
 
 > `readonly` **report**: [`AnswerValidationReport`](/docs/api/interfaces/AnswerValidationReport)
 
-Defined in: [src/answer-validation/types.ts:163](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L163)
+Defined in: [src/answer-validation/types.ts:286](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L286)
 
 ***
 

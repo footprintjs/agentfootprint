@@ -44,7 +44,12 @@ export const ALWAYS_SERVED_TOOLS: readonly string[] = Object.freeze([
 ]);
 
 /** Why a call that could have narrowed served the full set instead. */
-export type NarrowSkipReason = 'unavailable' | 'too-few' | 'after-miss' | 'wrap-up';
+export type NarrowSkipReason =
+  | 'unavailable'
+  | 'too-few'
+  | 'after-miss'
+  | 'wrap-up'
+  | 'evidence-revision';
 
 /** One offered name with the probability the provider gave it. */
 export interface ToolChoiceScore {

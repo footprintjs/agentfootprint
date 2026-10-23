@@ -1781,6 +1781,23 @@ export interface AgentState {
   /** Set only after the recovery-bearing provider call succeeds. Kept apart
    * from its carrier so the pre-call record reconstructs the exact request. */
   evidenceRecoveryUsed?: boolean;
+  /**
+   * The evidence gate asked for its revision while an ENFORCING answer
+   * validation governs delivery, so the rest of this run calls no tools.
+   * Written by the EvidenceRecheck branch, read in three places and no others:
+   *
+   *   • `callLLM`, at request assembly — every later call is served no tools;
+   *   • the Route decider and the inputs layer (`willDispatch`) — a tool call
+   *     the model returns anyway is never dispatched;
+   *   • `servedView`, which rebuilds the withheld list from this key.
+   *
+   * Why: the revision turn used to keep every tool on the wire, so a revision
+   * could run a tool that writes or sends again (a second refund) before the
+   * answer was withheld. The library cannot tell a tool that only reads, so
+   * none is offered. Deliberately NOT seeded: written only by an armed agent
+   * on the run whose answer was flagged (the `wrapUpAsked` grammar).
+   */
+  toolsOffAfterRevision?: boolean;
 
   // ── The out-of-budget wrap-up (`wrapUpAtMaxIterations`, 9.56.0) ─────────
   /**
