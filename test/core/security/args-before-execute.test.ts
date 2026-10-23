@@ -1,0 +1,167 @@
+/**
+ * Security — every pre-execute callback and event sees ONE frozen copy of a
+ * call's arguments, and a callback that writes into it is told why it failed.
+ *
+ *   - `tool_start` used to carry the live arguments: a listener that set
+ *     `amount = 9000` refunded 9000. It now carries the frozen copy.
+ *   - One copy is shared by every pre-execute callback and event of a call
+ *     (`tool_start`, the permission checker, the `checkIn` predicate): it is
+ *     frozen, so sharing is safe, and a large argument is copied once instead
+ *     of once per callback.
+ *   - A callback that writes into its copy fails (strict code throws): a
+ *     permission checker that normalised its `context` in place denied every
+ *     call, silently. In dev mode one warning names the cause.
+ */
+
+import { disableDevMode, enableDevMode } from 'footprintjs';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { Agent, defineTool } from '../../../src/index.js';
+import { mock } from '../../../src/llm-providers.js';
+import type { PermissionChecker } from '../../../src/provider-contract/types.js';
+
+function refundAgent(
+  ran: unknown[],
+  options: {
+    readonly checker?: PermissionChecker;
+    readonly checkIn?: (args: Readonly<Record<string, unknown>>) => boolean;
+  } = {},
+) {
+  return Agent.create({
+    provider: mock({
+      replies: [
+        { toolCalls: [{ id: 'r1', name: 'issue_refund', args: { amount: 5, lines: [1, 2] } }] },
+        { toolCalls: [{ id: 'r2', name: 'issue_refund', args: { amount: 6, lines: [3] } }] },
+        'done',
+      ],
+    }),
+    model: 'm',
+    ...(options.checker !== undefined && { permissionChecker: options.checker }),
+  })
+    .system('You issue refunds.')
+    .tool(
+      defineTool<{ amount: number }, string>({
+        name: 'issue_refund',
+        description: 'Issue a refund',
+        inputSchema: { type: 'object', properties: { amount: { type: 'number' } } },
+        ...(options.checkIn !== undefined && { checkIn: options.checkIn as never }),
+        execute: (args) => {
+          ran.push(args.amount);
+          return 'refunded';
+        },
+      }),
+    )
+    .build();
+}
+
+afterEach(() => {
+  disableDevMode();
+  vi.restoreAllMocks();
+});
+
+describe('tool_start carries the frozen copy, not the arguments the tool runs with', () => {
+  it('a listener that sets amount = 9000 on tool_start does not change the refund', async () => {
+    const ran: unknown[] = [];
+    const agent = refundAgent(ran);
+    agent.on('agentfootprint.stream.tool_start', (event) => {
+      try {
+        (event.payload.args as { amount: number }).amount = 9000;
+      } catch {
+        // the copy is frozen
+      }
+    });
+    await agent.run({ message: 'refund me' });
+    expect(ran).toEqual([5, 6]);
+  });
+
+  it('the payload is frozen, and carries the proposal as it was', async () => {
+    const seen: unknown[] = [];
+    const agent = refundAgent([]);
+    agent.on('agentfootprint.stream.tool_start', (event) => void seen.push(event.payload.args));
+    await agent.run({ message: 'refund me' });
+    expect(seen[0]).toEqual({ amount: 5, lines: [1, 2] });
+    expect(Object.isFrozen(seen[0])).toBe(true);
+    expect(Object.isFrozen((seen[0] as { lines: number[] }).lines)).toBe(true);
+  });
+});
+
+describe('one frozen copy per call, shared by every pre-execute callback and event', () => {
+  it('tool_start, the permission checker and the checkIn predicate are handed the same frozen object', async () => {
+    const handed: { start: unknown[]; checker: unknown[]; predicate: unknown[] } = {
+      start: [],
+      checker: [],
+      predicate: [],
+    };
+    const agent = refundAgent([], {
+      checker: {
+        name: 'reader',
+        check: (request) => {
+          handed.checker.push(request.context);
+          return { result: 'allow' };
+        },
+      },
+      checkIn: (args) => {
+        handed.predicate.push(args);
+        return false;
+      },
+    });
+    agent.on('agentfootprint.stream.tool_start', (e) => void handed.start.push(e.payload.args));
+    await agent.run({ message: 'refund me' });
+    expect(handed.start).toHaveLength(2);
+    for (let call = 0; call < 2; call++) {
+      expect(handed.checker[call]).toBe(handed.start[call]);
+      expect(handed.predicate[call]).toBe(handed.start[call]);
+      expect(Object.isFrozen(handed.start[call])).toBe(true);
+    }
+  });
+});
+
+describe('a callback that writes into its frozen copy — one dev-mode warning naming the cause', () => {
+  const normalises: PermissionChecker = {
+    name: 'normaliser',
+    check: (request) => {
+      // A checker that "normalises" its context in place. Strict code: throws.
+      (request.context as { amount: number }).amount = Math.round(
+        Number((request.context as { amount: number }).amount),
+      );
+      return { result: 'allow' };
+    },
+  };
+
+  it('a permission checker: denied, and the warning says the checker wrote into its frozen context — once', async () => {
+    enableDevMode();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const ran: unknown[] = [];
+    await refundAgent(ran, { checker: normalises }).run({ message: 'refund me' });
+    expect(ran).toEqual([]);
+    const said = warn.mock.calls.map((call) => String(call[0]));
+    const named = said.filter((line) => line.includes('permission checker'));
+    expect(named).toHaveLength(1);
+    expect(named[0]).toMatch(/frozen/);
+    expect(named[0]).toMatch(/denied/);
+  });
+
+  it('a checkIn predicate: the gate trips, and the warning says the predicate wrote into its frozen arguments', async () => {
+    enableDevMode();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await refundAgent([], {
+      checkIn: (args) => {
+        (args as { amount: number }).amount = 1;
+        return false;
+      },
+    }).run({ message: 'refund me' });
+    const named = warn.mock.calls
+      .map((call) => String(call[0]))
+      .filter((line) => line.includes('checkIn predicate'));
+    expect(named).toHaveLength(1);
+    expect(named[0]).toMatch(/frozen/);
+  });
+
+  it('outside dev mode nothing is printed', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await refundAgent([], { checker: normalises }).run({ message: 'refund me' });
+    expect(
+      warn.mock.calls.map((call) => String(call[0])).filter((l) => l.includes('frozen')),
+    ).toEqual([]);
+  });
+});
