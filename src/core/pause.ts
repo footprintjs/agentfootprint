@@ -379,6 +379,13 @@ export class DecisionRequiredError extends Error {
  *   - `'already-answered'` — a resume already used a decision for this
  *     request, approved or declined. Whether that resume finished — and so
  *     whether the call ran — is not known to the one refused.
+ *   - `'ledger-changed'` — the decision names this request and the call is
+ *     intact, but the agent resuming it spends decisions in another ledger
+ *     than the one the request was asked under, while that one can prove
+ *     whether the call ran (a shared ledger with a `storeId`, or this
+ *     process's own default) — a redeploy or a ledger migration. Spent
+ *     elsewhere, the call could run where that ledger never saw it; the
+ *     person is asked again instead.
  *   - `'closed-by-host'` — a host that kept the pause closed it, because no
  *     answer could reach it any more, and proved its call never ran: it spent
  *     the request in the ledger the request was minted under, so no decision
@@ -391,6 +398,7 @@ export type ResumeDecisionRefusal =
   | 'call-changed'
   | 'chain-changed'
   | 'already-answered'
+  | 'ledger-changed'
   | 'closed-by-host';
 
 /**
@@ -491,6 +499,14 @@ function resumeDecisionMessage(reason: ResumeDecisionRefusal): string {
         `decision, approved or declined. This resume ran nothing. Whether the earlier resume ` +
         `finished, and so whether the call ran, is not known here: check the call's own ` +
         `record (its system, the conversation) before the person is asked again.`
+      );
+    case 'ledger-changed':
+      return (
+        `[resume] this decision names the paused request, but the agent resuming it records ` +
+        `decisions in a different ledger than the one the request was asked under (a redeploy ` +
+        `or a ledger migration). An approval is spent only in the ledger its request was asked ` +
+        `under, so that ledger can say whether the call ran. Nothing was executed; the person ` +
+        `has to be asked again. ${CLOSED_BY_A_HOST}`
       );
     case 'closed-by-host':
       return (

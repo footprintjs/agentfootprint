@@ -146,7 +146,13 @@ import type {
 import type { ToolClaim } from '../buildToolRegistry.js';
 import { changedArgKeys, shownArgsOf } from '../../toolShownArgs.js';
 import { toolBytesOf } from '../../../lib/toolBytes.js';
-import { frozenCopyOf, frozenView, isSealed, warnFrozenWrite } from '../../../lib/frozenCopy.js';
+import {
+  frozenCopyOf,
+  frozenProjectionOf,
+  frozenView,
+  isSealed,
+  warnFrozenWrite,
+} from '../../../lib/frozenCopy.js';
 import { buildToolResolver, type ToolResolution } from './toolResolver.js';
 import type { Tool, ToolExecutionContext } from '../../../tools/tools.js';
 import { agentToolDispatch } from '../toolDispatch.js';
@@ -1659,6 +1665,9 @@ export function buildToolCallsHandler(
       // An ask's approval holds only for the rules it was asked under — this
       // agent's chain, by link name.
       (deps.toolMiddleware ?? []).map((link) => link.name),
+      // …and a request minted under a ledger that can prove is spent only
+      // there: never silently in this agent's ledger if it is another one.
+      decisionLedger,
     );
   };
   /**
@@ -2826,9 +2835,9 @@ export function buildToolCallsHandler(
     // A listener sees the call's frozen copy — the dispatch loop's shared one
     // when it hands that over — never the arguments the tool runs with: one
     // that set `amount = 9000` used to refund 9000. Arguments no copy can be
-    // made of are carried as a frozen shallow copy (their own keys).
-    const args =
-      frozenView(payload.args) ?? (Object.freeze({ ...payload.args }) as typeof payload.args);
+    // made of are carried as a frozen, detached projection — what JSON writes
+    // of them — never as their live objects.
+    const args = frozenView(payload.args) ?? frozenProjectionOf(payload.args);
     typedEmit(scope, 'agentfootprint.stream.tool_start', { ...payload, args });
     const ledger = deps.toolCallLedger;
     if (ledger === undefined) return;

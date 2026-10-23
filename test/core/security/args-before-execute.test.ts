@@ -19,7 +19,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Agent, defineTool } from '../../../src/index.js';
 import { mock } from '../../../src/llm-providers.js';
 import type { PermissionChecker } from '../../../src/provider-contract/types.js';
-import { frozenCopyOf, frozenView, isSealed } from '../../../src/lib/frozenCopy.js';
+import {
+  frozenCopyOf,
+  frozenProjectionOf,
+  frozenView,
+  isSealed,
+} from '../../../src/lib/frozenCopy.js';
 
 function refundAgent(
   ran: unknown[],
@@ -258,5 +263,92 @@ describe('UNIT — frozenCopyOf / isSealed / frozenView', () => {
     const view = frozenView(copy);
     expect(view).not.toBe(copy);
     expect(view).toEqual(copy);
+  });
+});
+
+describe('no callback shares memory with another, or with the tool', () => {
+  it('a SharedArrayBuffer is copied into a plain buffer for each callback — its bytes are nobody else’s', () => {
+    const shared = new SharedArrayBuffer(4);
+    const original = { bytes: new Uint8Array(shared), raw: shared };
+    const one = frozenCopyOf(original)!;
+    const two = frozenCopyOf(original)!;
+    expect(one.raw).toBeInstanceOf(ArrayBuffer);
+    expect(one.bytes.buffer).toBeInstanceOf(ArrayBuffer);
+    one.bytes[0] = 7;
+    new Uint8Array(one.raw)[1] = 9;
+    expect([...two.bytes]).toEqual([0, 0, 0, 0]);
+    expect([...new Uint8Array(shared)]).toEqual([0, 0, 0, 0]);
+    expect(isSealed(one)).toBe(false);
+  });
+
+  it('a tool_start listener that writes into a SharedArrayBuffer-backed argument changes nothing the checker, the predicate or the tool sees', async () => {
+    const usage = { input: 1, output: 1 };
+    const shared = new SharedArrayBuffer(1);
+    new Uint8Array(shared)[0] = 5;
+    let calls = 0;
+    const provider = {
+      name: 'app-provider',
+      complete: async () =>
+        calls++ === 0
+          ? {
+              content: '',
+              toolCalls: [
+                { id: 'r1', name: 'issue_refund', args: { amount: new Uint8Array(shared) } },
+              ],
+              usage,
+              stopReason: 'tool_use' as const,
+            }
+          : { content: 'done', toolCalls: [], usage, stopReason: 'stop' as const },
+    };
+    const seen: Record<string, number | undefined> = {};
+    const agent = Agent.create({
+      provider: provider as never,
+      model: 'm',
+      permissionChecker: {
+        name: 'reader',
+        check: (request) => {
+          seen.checker = (request.context as { amount: Uint8Array }).amount[0];
+          return { result: 'allow' };
+        },
+      },
+    })
+      .system('You issue refunds.')
+      .tool(
+        defineTool<{ amount: Uint8Array }, string>({
+          name: 'issue_refund',
+          description: 'Issue a refund',
+          inputSchema: { type: 'object', properties: {} },
+          checkIn: ((args: { amount: Uint8Array }) => {
+            seen.predicate = args.amount[0];
+            return false;
+          }) as never,
+          execute: (args) => {
+            seen.tool = args.amount[0];
+            return 'refunded';
+          },
+        }),
+      )
+      .build();
+    agent.on('agentfootprint.stream.tool_start', (event) => {
+      (event.payload.args as { amount: Uint8Array }).amount[0] = 90;
+    });
+    await agent.run({ message: 'refund me' });
+    expect(seen).toEqual({ checker: 5, predicate: 5, tool: 5 });
+  });
+
+  it('arguments no copy can be made of: the event fallback is a frozen, detached projection, never their live objects', () => {
+    // Unreachable through a provider — a run's state must survive
+    // structuredClone, so a function in a call fails at commit before dispatch —
+    // but the fallback itself must never hand a listener a live object.
+    const live = { amount: 5 };
+    const args = { order: live, notify: () => 'x' };
+    expect(frozenCopyOf(args)).toBeUndefined();
+    const projected = frozenProjectionOf(args) as unknown as { order: { amount: number } };
+    expect(projected).toEqual({ order: { amount: 5 } });
+    expect(projected.order).not.toBe(live);
+    expect(Object.isFrozen(projected.order)).toBe(true);
+    const cyclic: Record<string, unknown> = {};
+    cyclic.self = cyclic;
+    expect(frozenProjectionOf(cyclic)).toEqual({});
   });
 });

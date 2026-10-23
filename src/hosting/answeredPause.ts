@@ -73,6 +73,7 @@
 import { declinedResult } from '../core/checkin.js';
 import {
   closedByAHost,
+  consentLedgerOf,
   consentRulesOf,
   pausedCallIdOf,
   pausedRequestIdOf,
@@ -247,7 +248,8 @@ export type FailedAnswerOutcome = 'marked' | 'closed' | 'kept';
  * is settled as unknown, like any other.
  *
  * Unused, and refused for a reason no decision can change (`error` is a
- * `'request-not-recorded'`, `'call-changed'` or `'chain-changed'` refusal):
+ * `'request-not-recorded'`, `'call-changed'`, `'chain-changed'` or
+ * `'ledger-changed'` refusal):
  * the pause is CLOSED instead — it could only ever hold the session. Read
  * from the refusal's own code, which is safe only because THIS resume used
  * nothing. An earlier one may have — a resume that ran the call and then
@@ -351,7 +353,10 @@ function unanswerableRefusalOf(error: unknown): UnanswerableReason | undefined {
   if (typeof error !== 'object' || error === null) return undefined;
   const { code, reason } = error as { code?: unknown; reason?: unknown };
   return code === 'ERR_RESUME_DECISION' &&
-    (reason === 'request-not-recorded' || reason === 'call-changed' || reason === 'chain-changed')
+    (reason === 'request-not-recorded' ||
+      reason === 'call-changed' ||
+      reason === 'chain-changed' ||
+      reason === 'ledger-changed')
     ? reason
     : undefined;
 }
@@ -418,8 +423,9 @@ export const OUTCOME_UNKNOWN_UNANSWERABLE = `This call may have run; no result w
 /**
  * Why the stored pause can never be answered by `runner` — `undefined` when it
  * can, or when that cannot be told (`core/consentRequest.ts` ·
- * `unanswerableReason`). Without a runner, or with one whose rules a host
- * cannot see (a composition, an app's own), an ask's chain is not checked.
+ * `unanswerableReason`). Without a runner, or with one whose rules and
+ * ledger a host cannot see (a composition, an app's own), an ask's chain and
+ * the ledger binding (`'ledger-changed'`) are not checked.
  */
 export function unanswerablePause(
   paused: PausedRun,
@@ -432,7 +438,12 @@ export function unanswerablePause(
     return undefined;
   }
   if (gate === undefined) return undefined;
-  return unanswerableReason(paused.checkpoint, gate.kind, consentRulesOf(runner));
+  return unanswerableReason(
+    paused.checkpoint,
+    gate.kind,
+    consentRulesOf(runner),
+    consentLedgerOf(runner),
+  );
 }
 
 /** The door closing a pause: who serves the session, and where it keeps its pauses. */

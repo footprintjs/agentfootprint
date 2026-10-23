@@ -182,6 +182,8 @@ export interface DecisionLedger {
    *  - permanent: the same for the life of that store;
    *  - changed on any migration to a new store — a request spent in the old
    *    store is not in the new one, and must not be read as never spent there.
+   *    Pending approvals are then asked again: a decision is spent only in the
+   *    ledger its request was asked under (`'ledger-changed'`).
    *
    * Spends in it are permanent too (no expiry) — see `spend`.
    */
@@ -354,6 +356,15 @@ function proofState(): ProofState {
  */
 export function registerConsentLedger(agent: object, ledger: DecisionLedger | undefined): void {
   proofState().ledgers.set(agent, ledger ?? processDecisionLedger());
+}
+
+/**
+ * The ledger `runner` spends decisions in, when it is an agent this library
+ * built — `undefined` for any other runner (a composition, an app's own).
+ */
+export function consentLedgerOf(runner: unknown): DecisionLedger | undefined {
+  if (typeof runner !== 'object' || runner === null) return undefined;
+  return proofState().ledgers.get(runner);
 }
 
 /** The longest `DecisionLedger.storeId` a pause records. */
@@ -579,11 +590,13 @@ export function gatedCallOf(read: (key: string) => unknown, gate: ConsentGateKin
  * @param call     the paused call, as read ({@link gatedCallOf}).
  * @param rules    the resuming agent's own `toolMiddleware` chain, by link
  *   name — an ask's approval holds only for the rules it was asked under.
+ * @param ledger   the ledger the resuming agent spends decisions in — a
+ *   request minted under a ledger that can prove is spent only there.
  * @returns a detached copy of the decision.
  * @throws DecisionRequiredError when the input is not a decision at all.
  * @throws ResumeDecisionError (`'no-request'`, `'request-not-recorded'`,
- *   `'other-request'`, `'call-changed'`, `'chain-changed'`) when it cannot
- *   answer this request.
+ *   `'other-request'`, `'call-changed'`, `'chain-changed'`,
+ *   `'ledger-changed'`) when it cannot answer this request.
  */
 export function heldDecision(
   input: unknown,
@@ -591,6 +604,7 @@ export function heldDecision(
   recorded: unknown,
   call: GatedCall,
   rules: readonly string[],
+  ledger?: DecisionLedger,
 ): CheckInDecision {
   const decision = decisionCopyOf(input);
   if (decision === undefined) throw new DecisionRequiredError(gate, input);
@@ -606,7 +620,7 @@ export function heldDecision(
   if (pending === undefined) throw new ResumeDecisionError('request-not-recorded', gate.kind);
   if (requestId === undefined) throw new ResumeDecisionError('no-request', gate.kind);
   if (requestId !== pending.id) throw new ResumeDecisionError('other-request', gate.kind);
-  const refused = requestRefusal(recorded, call, rules);
+  const refused = requestRefusal(recorded, call, rules, ledger);
   if (refused !== undefined) throw new ResumeDecisionError(refused, gate.kind);
   return decision as CheckInDecision;
 }
@@ -615,7 +629,11 @@ export function heldDecision(
  * The refusals no decision can change — a paused request that can never be
  * answered by the agent whose rules are `rules`. See {@link unanswerableReason}.
  */
-export type UnanswerableReason = 'request-not-recorded' | 'call-changed' | 'chain-changed';
+export type UnanswerableReason =
+  | 'request-not-recorded'
+  | 'call-changed'
+  | 'chain-changed'
+  | 'ledger-changed';
 
 /**
  * The refusals about the paused request itself, whatever the decision says —
@@ -623,11 +641,14 @@ export type UnanswerableReason = 'request-not-recorded' | 'call-changed' | 'chai
  *
  * @param rules the resuming agent's chain by link name, or `undefined` when it
  *   is not known — an ask's chain is then not checked.
+ * @param ledger the resuming agent's ledger, or `undefined` when it is not
+ *   known — the ledger binding is then not checked.
  */
 function requestRefusal(
   recorded: unknown,
   call: GatedCall,
   rules: readonly string[] | undefined,
+  ledger?: DecisionLedger,
 ): UnanswerableReason | undefined {
   const pending = readPendingRequest(recorded);
   if (pending === undefined) return 'request-not-recorded';
@@ -637,7 +658,32 @@ function requestRefusal(
   if (call.gate === 'ask' && rules !== undefined && !sameChain(call.chain, rules, call.askIndex)) {
     return 'chain-changed';
   }
+  if (ledger !== undefined && spentElsewhere(recorded, ledger)) return 'ledger-changed';
   return undefined;
+}
+
+/**
+ * Whether a decision for `recorded` would be spent in a ledger other than the
+ * one it was minted under, while that one can PROVE — a shared ledger with a
+ * `storeId`, or this process's own default ledger. A host closes a pause by
+ * spending its request in the minting ledger ({@link proveNeverRan}); a
+ * decision spent anywhere else would run the call where that ledger never saw
+ * it, and the close would record "did not run" about a call that ran. So such
+ * a resume is refused before anything runs, and the person is asked again.
+ * A request minted under a ledger that cannot prove — no identity, or an
+ * earlier process's default ledger, gone with it — keeps being spent wherever
+ * the resuming agent spends: no close can ever prove it either way.
+ */
+function spentElsewhere(recorded: unknown, ledger: DecisionLedger): boolean {
+  const mintedUnder =
+    typeof recorded === 'object' && recorded !== null
+      ? (recorded as { ledger?: unknown }).ledger
+      : undefined;
+  if (typeof mintedUnder !== 'string' || mintedUnder.length === 0) return false;
+  if (mintedUnder.startsWith('process:') && mintedUnder !== proofState().processLedger) {
+    return false;
+  }
+  return ledgerIdentityOf(ledger) !== mintedUnder;
 }
 
 /**
@@ -648,13 +694,16 @@ function requestRefusal(
  * Read by a host that keeps the pause, so a session is not held by a question
  * nobody can answer any more: one paused before requests were named
  * (`'request-not-recorded'`), one whose call changed after the ask
- * (`'call-changed'`), or an ask made under rules the resuming agent no longer
- * runs (`'chain-changed'` — told only when `rules` are known).
+ * (`'call-changed'`), an ask made under rules the resuming agent no longer
+ * runs (`'chain-changed'` — told only when `rules` are known), or a request
+ * minted under a proving ledger the resuming agent no longer spends in
+ * (`'ledger-changed'` — told only when `ledger` is known).
  */
 export function unanswerableReason(
   checkpoint: FlowchartCheckpoint,
   gate: ConsentGateKind,
   rules: readonly string[] | undefined,
+  ledger?: DecisionLedger,
 ): UnanswerableReason | undefined {
   let state: Record<string, unknown> | undefined;
   try {
@@ -664,7 +713,7 @@ export function unanswerableReason(
   }
   if (state === undefined) return undefined;
   const read = (key: string): unknown => state?.[key];
-  return requestRefusal(read('pausedRequest'), gatedCallOf(read, gate), rules);
+  return requestRefusal(read('pausedRequest'), gatedCallOf(read, gate), rules, ledger);
 }
 
 /**
@@ -701,6 +750,7 @@ export function checkDecisionAgainst(
   gate: ConsentGate,
   input: unknown,
   rules: readonly string[],
+  ledger?: DecisionLedger,
 ): void {
   const state = pausedStateOf(checkpoint);
   if (state === undefined) {
@@ -708,7 +758,7 @@ export function checkDecisionAgainst(
     return;
   }
   const read = (key: string): unknown => state[key];
-  heldDecision(input, gate, read('pausedRequest'), gatedCallOf(read, gate.kind), rules);
+  heldDecision(input, gate, read('pausedRequest'), gatedCallOf(read, gate.kind), rules, ledger);
 }
 
 /**

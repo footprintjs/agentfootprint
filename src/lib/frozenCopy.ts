@@ -26,7 +26,9 @@
  * such a copy is never shared and each callback is handed its own. (Refusing
  * such arguments instead would break a tool an app hands a `Date` or a `Map`
  * through its own provider or middleware; a copy per callback costs only those
- * calls their extra copies.)
+ * calls their extra copies.) A `SharedArrayBuffer` is shared, not copied, by
+ * `structuredClone` — its bytes would be every copy's and the tool's — so each
+ * one (and every view over one) is copied into a plain buffer first.
  *
  * `undefined` when no copy can be made (a function, a symbol, a foreign proxy
  * — what `structuredClone` refuses). The caller decides what that means, and
@@ -50,9 +52,56 @@ export function frozenCopyOf<T>(value: T): T | undefined {
   } catch {
     return undefined;
   }
+  if (isSharedMemory(copy)) copy = plainCopyOf(copy) as T;
   const reached = new Set<object>();
   if (freezeDeep(copy, reached)) for (const object of reached) sealed.add(object);
   return copy;
+}
+
+/**
+ * A frozen, detached projection of `value` for an event that must carry
+ * SOMETHING when no copy can be made ({@link frozenCopyOf} gave `undefined`):
+ * what JSON writes down of it (a function is dropped), or a frozen empty
+ * object when JSON cannot write it either. Never a live object of `value`.
+ */
+export function frozenProjectionOf<T>(value: T): T {
+  let projected: unknown;
+  try {
+    projected = JSON.parse(JSON.stringify(value) ?? '{}');
+  } catch {
+    projected = {};
+  }
+  freezeDeep(projected, new Set<object>());
+  return projected as T;
+}
+
+const SHARED_MEMORY = typeof SharedArrayBuffer === 'function' ? SharedArrayBuffer : undefined;
+
+/** A `SharedArrayBuffer`, or a view over one: memory a clone shares rather than copies. */
+function isSharedMemory(value: unknown): value is SharedArrayBuffer | ArrayBufferView {
+  if (SHARED_MEMORY === undefined) return false;
+  return (
+    value instanceof SHARED_MEMORY ||
+    (ArrayBuffer.isView(value) && value.buffer instanceof SHARED_MEMORY)
+  );
+}
+
+/** The same bytes in a plain buffer (or a view of the same kind over one) no one else holds. */
+function plainCopyOf(value: SharedArrayBuffer | ArrayBufferView): ArrayBuffer | ArrayBufferView {
+  if (!ArrayBuffer.isView(value)) {
+    const copy = new ArrayBuffer(value.byteLength);
+    new Uint8Array(copy).set(new Uint8Array(value));
+    return copy;
+  }
+  const bytes = new Uint8Array(value.buffer, value.byteOffset, value.byteLength).slice();
+  if (value instanceof DataView) return new DataView(bytes.buffer);
+  const View = value.constructor as new (buffer: ArrayBuffer) => ArrayBufferView;
+  return new View(bytes.buffer);
+}
+
+/** `value`, or its plain copy when it is shared memory ({@link isSharedMemory}). */
+function unshared(value: unknown): unknown {
+  return isSharedMemory(value) ? plainCopyOf(value) : value;
 }
 
 /**
@@ -128,19 +177,30 @@ function freezeDeep(value: unknown, reached: Set<object>): boolean {
     value instanceof ArrayBuffer ||
     (typeof SharedArrayBuffer === 'function' && value instanceof SharedArrayBuffer)
   );
+  // Shared memory a clone kept is replaced by a plain copy BEFORE this
+  // container is frozen — the container is the fresh clone's own.
   if (value instanceof Map) {
-    for (const [key, entry] of value) {
+    const entries = [...value].map(([key, entry]) => [unshared(key), unshared(entry)] as const);
+    value.clear();
+    for (const [key, entry] of entries) {
+      value.set(key, entry);
       sealable = freezeDeep(key, reached) && sealable;
       sealable = freezeDeep(entry, reached) && sealable;
     }
   } else if (value instanceof Set) {
-    for (const entry of value) sealable = freezeDeep(entry, reached) && sealable;
+    const entries = [...value].map(unshared);
+    value.clear();
+    for (const entry of entries) {
+      value.add(entry);
+      sealable = freezeDeep(entry, reached) && sealable;
+    }
   }
   for (const key of Reflect.ownKeys(value)) {
     const field = Object.getOwnPropertyDescriptor(value, key);
-    if (field !== undefined && 'value' in field) {
-      sealable = freezeDeep(field.value, reached) && sealable;
-    }
+    if (field === undefined || !('value' in field)) continue;
+    const child = unshared(field.value);
+    if (child !== field.value) (value as Record<PropertyKey, unknown>)[key] = child;
+    sealable = freezeDeep(child, reached) && sealable;
   }
   Object.freeze(value);
   return sealable;

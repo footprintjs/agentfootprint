@@ -1391,9 +1391,18 @@ describe('a consent gate over the wire — a decision whose resume failed after 
   it('a decision delivered after the caller hung up runs nothing and leaves the pause answerable — another process answers it once', async () => {
     const ran: number[] = [];
     const sessions = memorySessions();
+    // Two processes share one ledger — two instances over one table, one
+    // `storeId` — so a decision is spent in the ledger its request was asked
+    // under wherever it is answered.
+    const table = new Set<string>();
+    const sharedLedger = (): DecisionLedger => ({
+      storeId: 'refunds-ledger',
+      spend: (key: string) => (table.has(key) ? false : (table.add(key), true)),
+      isSpent: (key: string) => table.has(key),
+    });
     const host = inProcessHost();
     const handle = await standingAgent({
-      agent: flakyRefunds(ran, { on: false }),
+      agent: flakyRefunds(ran, { on: false }, [], sharedLedger()),
       sessions,
       host,
     });
@@ -1417,7 +1426,7 @@ describe('a consent gate over the wire — a decision whose resume failed after 
     expect(readPausedRun(await sessions.hydrate('hung-up')).answered).toBeUndefined();
     const elsewhere = inProcessHost();
     const other = await standingAgent({
-      agent: flakyRefunds(ran, { on: false }, [], inMemoryDecisionLedger()),
+      agent: flakyRefunds(ran, { on: false }, [], sharedLedger()),
       sessions,
       host: elsewhere,
     });
