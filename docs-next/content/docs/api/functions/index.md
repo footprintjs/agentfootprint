@@ -2,7 +2,7 @@
 title: Functions
 ---
 
-153 exported from `agentfootprint`.
+154 exported from `agentfootprint`.
 
 - [`absenceSignalOf`](/docs/api/functions/absenceSignalOf)
 - [`absent`](/docs/api/functions/absent)
@@ -76,6 +76,7 @@ title: Functions
 - [`isCheckInDecision`](/docs/api/functions/isCheckInDecision)
 - [`isCheckInPause`](/docs/api/functions/isCheckInPause)
 - [`isCompactedSummary`](/docs/api/functions/isCompactedSummary)
+- [`isComposedCoverage`](/docs/api/functions/isComposedCoverage)
 - [`isContextWindowExceeded`](/docs/api/functions/isContextWindowExceeded)
 - [`isCounterLookingAggregation`](/docs/api/functions/isCounterLookingAggregation)
 - [`isDropNotice`](/docs/api/functions/isDropNotice)

@@ -2182,6 +2182,18 @@ export interface AgentState {
    */
   coverageDeclared?: ReadonlyArray<import('../../semantics/coverage/index.js').DeclaredCoverage>;
   /**
+   * The reservation counters behind every RESULT IDENTITY this run minted —
+   * `claim-result/<namespace>/<runId>/<ordinal>`, the address of a composed
+   * coverage row (`semantics/coverage/composedCoverage.ts`). Reserved BEFORE
+   * a call of a tool that declares its `search` is dispatched, by the one
+   * owner (`findings/verificationState.ts` · `reserveResultIdentity`), so an
+   * identity is never a provider's call id (those repeat across iterations,
+   * branches, resume legs and turns). Tracked state, so a paused run resumes
+   * with the same namespace and counters; written only when a `search` tool
+   * is called, so every other agent commits the key set it always did.
+   */
+  resultIdentities?: import('./findings/verificationState.js').ClaimVerificationState;
+  /**
    * The ANSWER's coverage, as data — `coverageDeclared` folded into the three
    * lists the limits block would have printed (merged in declaration order,
    * duplicates dropped, every entry kept: `coverage/answer.ts` ·

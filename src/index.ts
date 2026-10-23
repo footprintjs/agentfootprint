@@ -913,6 +913,13 @@ export {
   type DeclaredCoverage,
   type ToolAbsence,
   type TryInsteadTool,
+  // `Tool.search` — what one call searches, declared once; and the coverage
+  // row the library composes from it and the arguments the call ran with.
+  // Three names on purpose: an item, a gap or a role is reached through these
+  // (`ComposedCoverage['checked'][number]`), so the public surface stays small.
+  isComposedCoverage,
+  type ComposedCoverage,
+  type ToolSearch,
 } from './semantics/coverage/index.js';
 // The one period shape (honesty layer 3, step 7b): what a result's READ
 // covered in time — the instants it asked for, what the store holds (or

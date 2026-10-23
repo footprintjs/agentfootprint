@@ -1222,6 +1222,86 @@ may write: a string or an `InProgressItem`). The sentence the model is served is
 `IN_PROGRESS_CLAUSE`. The section heading a reader matches on is `IN_PROGRESS_SECTION_LABEL`.
 One declaring call's entry in a typed answer's limits is `AnswerInProgress`.
 
+## Coverage composed from the call — `search`
+
+A model turns "the tool found nothing" into "it does not exist". A `checked` list
+written by hand does not stop it: the author writes the list once, and a call that
+searched open incidents for two hours on one service still reads "the incident
+store". So a tool declares, once and as typed data, what one call searches, and the
+library composes each call's coverage from the arguments the call actually ran with:
+
+<CodeFile path="examples/features/109-tool-search.ts" region="tool-search" title="examples/features/109-tool-search.ts (region: tool-search)" />
+
+- **Every input property is classified** by `role`: `population` (which rows; a
+  list gives one facet per value), `filter`, `period` (the argument the tool's
+  `period` names), `source` (the call picks the store: a sent value replaces the
+  declared `source`), `query` / `match` (free text or a fuzzy value: the rows are
+  what MATCHED, by the tool's own rule), `cap`, `page`, `inert` (changes the bytes,
+  not the ground).
+- **`whenOmitted` has two forms.** A value is the default `execute` applies,
+  composed as if sent. `{ any: true }` says omission narrows nothing. Without
+  either, an unsent argument is a gap: its default may live inside `execute`. A
+  list sent empty names nothing, and is a gap too.
+- **`fixed`** names the qualifiers the tool always applies (`status: open`), with
+  the words a claim would use for them. **`gaps`** are the ground the tool never
+  reaches, each with a `why` and the facet it `bears` on (`source`, `population`,
+  `period`, `completeness`, or `{ filter, values? }`). **`limits`** declares a
+  server-side cap no argument carries (`cap`: a number, or `'unknown'`) and a read
+  that sees only what the caller's credential may see (`byCredential: true`).
+  **`ranking: 'approximate'`** marks a vector, top-k or fuzzy search: its rows are
+  the nearest, never every row that fits.
+- **`complete: 'within-arguments'`** lets a call stand for the whole population,
+  filters and period in effect, when nothing was left unsent, no cap was reached,
+  no page was open and the outcome was not `partial`. Omit it and no call is ever
+  complete; it is refused beside `ranking: 'approximate'`. A paged walk never
+  establishes it: each page past the first carries a gap.
+- **The result says `checked: 'declared'`** — `absent({ what, checked: 'declared' })`,
+  or `coverage(rows, { checked: 'declared' })`. A `describedResult()` from a search
+  tool composes too. Say which entity a population value resolved to with
+  `resolved: [{ argument, id, name?, aliases? }]`, and whether there is a next page
+  with `paging: { next: null }`.
+
+**What the model reads.** The composed absence: `checked` as typed items
+(`{ what: 'service: payments', facet: 'population', from: 'call', … }`; a list longer
+than five as one item, its count and the first three values), the gaps as
+`not_checked` / `cannot_cover`, and a note that a default the tool applies may have
+narrowed the search. Never `complete` — it rides the record. No new sentence.
+
+**What the record keeps.** The `coverageDeclared` row carries every value, the typed
+`gaps`, `complete`, `composed` (`'local'`, or `'remote'` for a declaration that
+arrived over MCP or from a ToolProvider — it establishes nothing), `resultId` (a
+library-minted address, `claim-result/…`, never the provider's call id) and the
+read's short `handle` (`r3`). A relative window (`window: '2h'`) is resolved to
+instants at the moment the call ran, beside its spelling. The `tools.absent` and
+`tools.coverage_declared` events carry the declaration's constants, the gaps and each
+other facet as a reference — never a composed value.
+
+**The law, said plainly.** Composition can only under-claim relative to a TRUE
+declaration. A declaration that misdescribes the query — an undeclared qualifier, a
+wrong `complete` — is the trusted base, and the row says what the tool said.
+
+**Gotchas.** `defineTool` refuses a declaration that leaves a property unclassified,
+names one the schema does not have, gives a gap no `why` or `bears`, or a fixed
+qualifier no words. Text that reaches a statement (`source.what`, `subject.what`, a
+fixed qualifier, a default, a gap) must be one plain line of at most 120 characters
+with no instruction in it. The agent judges every registered tool again at build, so
+a hand-built `Tool` cannot skip the rules; a provider's tool is judged when first met,
+and a refused declaration composes nothing. A tool with no `search` that returns
+`checked: 'declared'` has its call refused. A result that writes its own `checked`
+list beside a `search` is filed as written and composes nothing. An argument
+`hostFilled` fills from the run's identity composes as a filter by reference (`the
+caller's tenant`); one filled from a credential composes no value, only the
+credential-limited gap. `effects: 'read'` in `defineTool` records that a local tool
+changes nothing; a remote tool carrying it is refused.
+
+**The names.** The declaration is `ToolSearch`; the row is `ComposedCoverage`, recognized
+by `isComposedCoverage` — its items and gaps are `ComposedCoverage['checked'][number]` and
+`ComposedCoverage['gaps'][number]`. What `absent({ checked: 'declared' })` or
+`coverage(rows, { checked: 'declared' })` returns before the funnel composes it is not
+read by `readAbsence` or `readCoverageLedger`, so a reader that predates `search` sees
+data, never a half-read envelope. `check:semantics` lists each search's `source.said`
+words and any `said-overlap` as warnings.
+
 ## The result ceiling — refuse, never truncate (9.20.0)
 
 A tool once returned ~191,000 characters. The tempting fix — truncate it — is the

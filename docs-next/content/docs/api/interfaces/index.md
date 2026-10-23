@@ -2,7 +2,7 @@
 title: Interfaces
 ---
 
-367 exported from `agentfootprint`.
+369 exported from `agentfootprint`.
 
 [Scope event payloads](/docs/api/interfaces/scope-events) · [Flow event payloads](/docs/api/interfaces/flow-events)
 
@@ -96,6 +96,7 @@ title: Interfaces
 - [`CommitEvent`](/docs/api/interfaces/scope-events#interface-commitevent)
 - [`CompactionOptions`](/docs/api/interfaces/CompactionOptions)
 - [`CompactionRecord`](/docs/api/interfaces/CompactionRecord)
+- [`ComposedCoverage`](/docs/api/interfaces/ComposedCoverage)
 - [`ConditionalInput`](/docs/api/interfaces/ConditionalInput)
 - [`ConditionalOptions`](/docs/api/interfaces/ConditionalOptions)
 - [`ConflictRow`](/docs/api/interfaces/ConflictRow)
@@ -348,6 +349,7 @@ title: Interfaces
 - [`ToolResultContext`](/docs/api/interfaces/ToolResultContext)
 - [`ToolResultEnvelope`](/docs/api/interfaces/ToolResultEnvelope)
 - [`ToolResultMiddleware`](/docs/api/interfaces/ToolResultMiddleware)
+- [`ToolSearch`](/docs/api/interfaces/ToolSearch)
 - [`ToolSemantics`](/docs/api/interfaces/ToolSemantics)
 - [`TopKOptions`](/docs/api/interfaces/TopKOptions)
 - [`ToTOptions`](/docs/api/interfaces/ToTOptions)

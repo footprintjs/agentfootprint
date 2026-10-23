@@ -43,6 +43,9 @@
 
 import { namesFacetOf } from './coverage/among.js';
 import { readCoverageResult } from './coverage/read.js';
+import { readDeclaredAbsence, readDeclaredLedger } from './coverage/recognize.js';
+import { searchReviewItems } from './coverage/search/review.js';
+import type { ToolSearch } from './coverage/search/types.js';
 import { explainSemantics, readSemantics } from './envelope.js';
 import {
   absenceIssues,
@@ -71,6 +74,14 @@ export interface SemanticsCatalogEntry {
   readonly name: string;
   readonly resultClass?: ToolResultClass;
   readonly results: readonly unknown[];
+  /**
+   * The tool's `search` declaration (`defineTool({ search })`), when it has
+   * one — dumped with the catalog. The gate lists its review items
+   * (`source-said`, `said-overlap`) as warnings, and reads a sample
+   * `checked: 'declared'` as declared coverage. Structure was judged at
+   * `defineTool`; the gate does not re-judge it.
+   */
+  readonly search?: ToolSearch;
   /** Optional paired adapter fixtures. Exact preservation, not inference or factual validation. */
   readonly projections?: readonly { readonly before: unknown; readonly after: unknown }[];
   /**
@@ -106,6 +117,9 @@ export type SemanticsFindingCode =
   | 'inventory-without-coverage'
   | 'inventory-without-render'
   | 'unsampled-tool-class'
+  | 'source-said'
+  | 'said-overlap'
+  | 'declared-without-search'
   | OverclaimCode
   | ProjectionIssue['code'];
 
@@ -139,7 +153,11 @@ const isPlainObject = (v: unknown): v is Record<string, unknown> =>
  *  boundary in time, the same answer a `coverage()` carrying only a period
  *  gets), a `coverage()` ledger, or an `absent()` (whose `checked` IS its
  *  coverage). */
-function declaresCoverage(result: unknown): boolean {
+function declaresCoverage(result: unknown, search: ToolSearch | undefined): boolean {
+  // `checked: 'declared'` — the tool's search IS its coverage, when it has one.
+  if (readDeclaredAbsence(result) !== undefined || readDeclaredLedger(result) !== undefined) {
+    return search !== undefined;
+  }
   const sem = readSemantics(result);
   if (sem !== undefined) return sem.coverage !== undefined || sem.period !== undefined;
   return readCoverageResult(result) !== undefined;
@@ -205,6 +223,19 @@ export function checkSemantics(
         `checkSemantics: tool '${entry.name}' has no \`results\` array — the gate judges ` +
           `sample results; give it at least one (your mock tool's return is the natural sample).`,
       );
+    }
+
+    // A search's review items — warnings for a person, never a refusal.
+    if (entry.search !== undefined) {
+      for (const item of searchReviewItems(entry.search)) {
+        findings.push({
+          tool: entry.name,
+          code: item.code,
+          severity: 'warning',
+          field: item.field,
+          message: `tool '${entry.name}': ${item.field} — ${item.message}`,
+        });
+      }
     }
 
     if (cls !== undefined && results.length === 0) {
@@ -313,8 +344,27 @@ export function checkSemantics(
 
       const sem = readSemantics(result);
 
+      // The literal claims a declaration: without a search, the call is refused at run time.
+      if (
+        entry.search === undefined &&
+        (readDeclaredAbsence(result) !== undefined || readDeclaredLedger(result) !== undefined)
+      ) {
+        findings.push({
+          tool: entry.name,
+          code: 'declared-without-search',
+          severity: 'error',
+          field: 'checked',
+          resultIndex,
+          message:
+            `tool '${entry.name}', sample result ${resultIndex + 1}: checked: 'declared' says ` +
+            'the tool declared its search, and this tool declares no `search` — at run time the ' +
+            'call is refused. Add search: { source, subject, arguments, … } to its defineTool, ' +
+            'or write the checked list by hand.',
+        });
+      }
+
       // ── The class rules ──
-      if ((cls === 'triage' || cls === 'inventory') && !declaresCoverage(result)) {
+      if ((cls === 'triage' || cls === 'inventory') && !declaresCoverage(result, entry.search)) {
         findings.push(classCoverageFinding(entry, resultIndex));
       }
       if (

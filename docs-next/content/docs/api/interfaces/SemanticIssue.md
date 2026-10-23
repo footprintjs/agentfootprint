@@ -4,7 +4,7 @@ title: SemanticIssue
 
 # Interface: SemanticIssue
 
-Defined in: [src/semantics/envelope.ts:87](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/envelope.ts#L87)
+Defined in: [src/semantics/envelope.ts:95](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/envelope.ts#L95)
 
 One fault, naming the field so a refusal can teach and a gate can point.
 
@@ -14,7 +14,7 @@ One fault, naming the field so a refusal can teach and a gate can point.
 
 > `readonly` **code**: [`SemanticIssueCode`](/docs/api/type-aliases/SemanticIssueCode)
 
-Defined in: [src/semantics/envelope.ts:88](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/envelope.ts#L88)
+Defined in: [src/semantics/envelope.ts:96](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/envelope.ts#L96)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/semantics/envelope.ts:88](https://github.com/footprintjs/agentf
 
 > `readonly` **field**: `string`
 
-Defined in: [src/semantics/envelope.ts:90](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/envelope.ts#L90)
+Defined in: [src/semantics/envelope.ts:98](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/envelope.ts#L98)
 
 The offending / missing field, dot-pathed ('grain.is_counter').
 
@@ -32,4 +32,4 @@ The offending / missing field, dot-pathed ('grain.is_counter').
 
 > `readonly` **message**: `string`
 
-Defined in: [src/semantics/envelope.ts:91](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/envelope.ts#L91)
+Defined in: [src/semantics/envelope.ts:99](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/envelope.ts#L99)

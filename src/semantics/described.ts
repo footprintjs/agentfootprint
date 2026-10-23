@@ -106,7 +106,7 @@ const CAMEL_SPELLING = {
 } as const satisfies { readonly [W in SpelledField]: DeclaredNameOf<W> };
 
 /**
- * The nine top-level fields, tied to the type in both directions.
+ * The eleven top-level fields, tied to the type in both directions.
  */
 const DECLARATION_KEYS: readonly string[] = Object.keys({
   series: true,
@@ -115,6 +115,8 @@ const DECLARATION_KEYS: readonly string[] = Object.keys({
   grain: true,
   provenance: true,
   period: true,
+  resolved: true,
+  paging: true,
   coverage: true,
   clarify: true,
   render: true,

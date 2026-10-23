@@ -8,7 +8,7 @@ title: hostFilled
 
 > **hostFilled**\<`T`\>(`tool`, `fills`): [`Tool`](/docs/api/interfaces/Tool)
 
-Defined in: [src/tools/hostFilled.ts:137](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L137)
+Defined in: [src/tools/hostFilled.ts:174](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L174)
 
 Declare tool arguments as filled by the host.
 
@@ -49,7 +49,7 @@ TypeError at build — an unknown argument, a fill that is not one,
 
 > **hostFilled**(`tools`, `fills`): readonly [`Tool`](/docs/api/interfaces/Tool)\<`Record`\<`string`, `unknown`\>, `unknown`\>[]
 
-Defined in: [src/tools/hostFilled.ts:141](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L141)
+Defined in: [src/tools/hostFilled.ts:178](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L178)
 
 Declare tool arguments as filled by the host.
 

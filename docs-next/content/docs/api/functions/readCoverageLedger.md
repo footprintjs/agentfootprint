@@ -6,7 +6,7 @@ title: readCoverageLedger
 
 > **readCoverageLedger**(`value`): [`CoveredResult`](/docs/api/interfaces/CoveredResult)\<`unknown`\> \| `undefined`
 
-Defined in: [src/semantics/coverage/recognize.ts:48](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/recognize.ts#L48)
+Defined in: [src/semantics/coverage/recognize.ts:70](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/recognize.ts#L70)
 
 Recognize (or decline to recognize) a value as a covered result. STRICT for
 the same reason `readAbsence` is: only a plain object carrying a plain

@@ -66,6 +66,12 @@ import {
 } from '../tools/tools.js';
 import type { ToolResultClass } from '../semantics/types.js';
 import { assertAskOrAssume, type AskOrAssume, type ToolPeriod } from '../tools/declare.js';
+import {
+  assertToolSearch,
+  freezeSearch,
+  periodArgumentsOf,
+} from '../semantics/coverage/search/declaration.js';
+import type { ToolSearch } from '../semantics/coverage/search/types.js';
 import { readTimeContext, TIME_CONTEXT_META_KEY, type TimeContext } from '../time/wire.js';
 
 /**
@@ -145,6 +151,15 @@ export interface McpToolExtras {
    *  (every argument a form names must carry a kept rule). A host tool
    *  written in another language declares the same object, field for field. */
   readonly period?: ToolPeriod;
+  /**
+   * What one call of this tool searches — see {@link Tool.search}. It passes
+   * this file's bar: composition is a consumer-side reading of the call's
+   * arguments and governs nothing about how the server runs the tool. Judged
+   * against the listed tool's own `inputSchema` and the KEPT `period`. A kept
+   * remote declaration composes rows marked `composed: 'remote'`, which
+   * establish nothing: the server's words are untrusted.
+   */
+  readonly search?: ToolSearch;
 }
 
 // ─── A call's own metadata: the time layer's `ctx.time` ──────────────
@@ -191,6 +206,7 @@ export function toolExtrasOf(tool: Tool): McpToolExtras | undefined {
     ...(tool.gates !== undefined && { gates: tool.gates }),
     ...(tool.askOrAssume !== undefined && { askOrAssume: tool.askOrAssume }),
     ...(tool.period !== undefined && { period: tool.period }),
+    ...(tool.search !== undefined && { search: tool.search }),
   };
   return Object.keys(extras).length > 0 ? extras : undefined;
 }
@@ -270,6 +286,14 @@ export function readToolExtras(meta: unknown, origin: McpToolExtrasOrigin): McpT
   const period = kept('period', (v) => assertAskOrAssume(origin.tool, askOrAssume, v, schema)) as
     | ToolPeriod
     | undefined;
+  // The search, judged against the listed schema and the period that was KEPT.
+  const periodArguments = periodArgumentsOf(period);
+  const search = kept('search', (v) =>
+    assertToolSearch(origin.tool, v as ToolSearch, {
+      inputSchema: schema,
+      ...(periodArguments !== undefined && { periodArguments }),
+    }),
+  ) as ToolSearch | undefined;
 
   return {
     ...(argumentsFrom !== undefined && { argumentsFrom }),
@@ -282,6 +306,9 @@ export function readToolExtras(meta: unknown, origin: McpToolExtrasOrigin): McpT
     ...(gates !== undefined && { gates }),
     ...(askOrAssume !== undefined && { askOrAssume }),
     ...(period !== undefined && { period }),
+    // Stored frozen, its value words a null-prototype map — a remote server's
+    // words never index anything through an inherited key.
+    ...(search !== undefined && { search: freezeSearch(search) }),
   };
 }
 

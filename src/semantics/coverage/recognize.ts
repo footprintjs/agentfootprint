@@ -10,7 +10,12 @@
  * these names, so every existing import keeps working.
  */
 
-import type { CoveredResult, ToolAbsence } from './types.js';
+import type {
+  CoveredResult,
+  DeclaredCoveredResult,
+  DeclaredToolAbsence,
+  ToolAbsence,
+} from './types.js';
 
 /**
  * The reserved key that makes an absence recognizable. Exported because tests,
@@ -37,6 +42,23 @@ export function readAbsence(value: unknown): ToolAbsence | undefined {
   return value as ToolAbsence;
 }
 
+/** The literal `absent({ checked: 'declared' })` mints in place of a list. */
+export const DECLARED_CHECKED = 'declared';
+
+/**
+ * Recognize the envelope `absent({ checked: 'declared' })` mints — an absence
+ * whose coverage the tool's `search` declares, before the dispatch funnel
+ * composes it. STRICT like {@link readAbsence}: a plain object whose
+ * `af_absent` is exactly `true` and whose `checked` is exactly the literal.
+ * `readAbsence` never reads this shape, so a reader that predates it sees data.
+ */
+export function readDeclaredAbsence(value: unknown): DeclaredToolAbsence | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+  const rec = value as Record<string, unknown>;
+  if (rec[ABSENCE_MARKER] !== true || rec.checked !== DECLARED_CHECKED) return undefined;
+  return value as DeclaredToolAbsence;
+}
+
 /** The reserved key that makes a ledger recognizable. */
 export const COVERAGE_MARKER = 'af_coverage';
 
@@ -51,5 +73,24 @@ export function readCoverageLedger(value: unknown): CoveredResult | undefined {
   const marker = rec[COVERAGE_MARKER];
   if (typeof marker !== 'object' || marker === null || Array.isArray(marker)) return undefined;
   if (!('result' in rec)) return undefined;
+  // `coverage(rows, { checked: 'declared' })` before the funnel composes it:
+  // not a ledger a reader can read (its `checked` is not a list) — see
+  // `readDeclaredLedger`.
+  if ((marker as Record<string, unknown>).checked === DECLARED_CHECKED) return undefined;
   return value as CoveredResult;
+}
+
+/**
+ * Recognize the envelope `coverage(rows, { checked: 'declared' })` mints — a
+ * ledger whose coverage the tool's `search` declares, before the dispatch
+ * funnel composes it. STRICT like {@link readCoverageLedger}.
+ */
+export function readDeclaredLedger(value: unknown): DeclaredCoveredResult | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+  const rec = value as Record<string, unknown>;
+  const marker = rec[COVERAGE_MARKER];
+  if (typeof marker !== 'object' || marker === null || Array.isArray(marker)) return undefined;
+  if (!('result' in rec)) return undefined;
+  if ((marker as Record<string, unknown>).checked !== DECLARED_CHECKED) return undefined;
+  return value as DeclaredCoveredResult;
 }

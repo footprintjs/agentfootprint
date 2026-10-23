@@ -36,7 +36,14 @@ import { mintInProgress } from './inProgress.js';
 import { normalizeCoverageList } from './items.js';
 import { mintPeriod } from './period.js';
 import { refusal, refuseUnknownKeys } from './refusal.js';
-import type { Coverage, CoverageLedgerDeclaration, CoveredResult } from './types.js';
+import { DECLARED_CHECKED } from './recognize.js';
+import type {
+  Coverage,
+  CoverageLedgerDeclaration,
+  CoveredResult,
+  DeclaredCoveredResult,
+  DeclaredLedgerDeclaration,
+} from './types.js';
 
 /**
  * The keys `coverage()`'s declaration has — the three lists and, since honesty
@@ -125,7 +132,12 @@ export const COVERAGE_NOTE =
  *     },
  *   });
  */
-export function coverage<T>(content: T, decl: CoverageLedgerDeclaration): CoveredResult<T> {
+export function coverage<T>(content: T, decl: DeclaredLedgerDeclaration): DeclaredCoveredResult<T>;
+export function coverage<T>(content: T, decl: CoverageLedgerDeclaration): CoveredResult<T>;
+export function coverage<T>(
+  content: T,
+  decl: CoverageLedgerDeclaration | DeclaredLedgerDeclaration,
+): CoveredResult<T> | DeclaredCoveredResult<T> {
   const fn = 'coverage';
   if (typeof decl !== 'object' || decl === null) {
     throw refusal(
@@ -135,7 +147,13 @@ export function coverage<T>(content: T, decl: CoverageLedgerDeclaration): Covere
     );
   }
   refuseUnknownKeys(decl, LEDGER_DECLARATION_KEYS);
-  const checked = normalizeCoverageList('checked', decl.checked, false);
+  // `checked: 'declared'` — the tool's `search` declares the ground; the
+  // dispatch funnel composes it (the `absent()` twin). It is a boundary, so a
+  // ledger declaring only it is not the empty ledger refused below.
+  const declared = decl.checked === DECLARED_CHECKED;
+  const checked = declared
+    ? []
+    : normalizeCoverageList('checked', decl.checked as CoverageLedgerDeclaration['checked'], false);
   const notChecked = normalizeCoverageList('notChecked', decl.notChecked, false);
   const cannotCover = normalizeCoverageList('cannotCover', decl.cannotCover, true);
   // Honesty step 7b: the period the value's read covered, by the ONE period
@@ -148,13 +166,14 @@ export function coverage<T>(content: T, decl: CoverageLedgerDeclaration): Covere
   // fired only when something happened to be running would pass every test
   // and refuse on the first busy night in production (the 7a′ lesson).
   const inProgress = mintInProgress(decl.inProgress);
-  if (decl.inProgress != null && checked.length === 0) {
+  if (decl.inProgress != null && checked.length === 0 && !declared) {
     throw refusal(
       '`inProgress` needs `checked` beside it — an item still running is ground the call ' +
         'read, so say what the call read.',
     );
   }
   if (
+    !declared &&
     checked.length === 0 &&
     notChecked.length === 0 &&
     cannotCover.length === 0 &&
@@ -167,9 +186,10 @@ export function coverage<T>(content: T, decl: CoverageLedgerDeclaration): Covere
         `return the result bare.`,
     );
   }
-  return {
+  // Built untyped, then given the type its `checked` decides (the overloads).
+  const minted: Record<string, unknown> = {
     af_coverage: {
-      ...(checked.length > 0 && { checked }),
+      ...(declared ? { checked: DECLARED_CHECKED } : checked.length > 0 && { checked }),
       ...(notChecked.length > 0 && { not_checked: notChecked }),
       ...(cannotCover.length > 0 && { cannot_cover: cannotCover }),
       ...(inProgress.length > 0 && { in_progress: inProgress }),
@@ -179,6 +199,7 @@ export function coverage<T>(content: T, decl: CoverageLedgerDeclaration): Covere
     },
     result: content,
   };
+  return minted as unknown as CoveredResult<T> | DeclaredCoveredResult<T>;
 }
 
 /** The ledger's coverage, in the normalized three-list shape. */

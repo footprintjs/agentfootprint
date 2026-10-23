@@ -235,3 +235,98 @@ export function canonicalForm(normalized: string): string {
   const forms = lookupForms(normalized);
   return forms[forms.length - 1] ?? normalized;
 }
+
+// ─── Text and names: ONE case rule ──────────────────────────────────────────
+//
+// Moved here from `integrity/unsupported-claim/evaluate.ts` (the claim
+// comparator, which imports it back) so a name binding (`semantics/coverage/
+// search/binding.ts`) and a delivered claim's text compare by the same rule:
+// one spelling owner, at the bottom layer every reader can reach.
+
+/** Text as compared: Unicode NFC, trimmed, every run of white space one space. */
+export const textOf = (value: string): string => value.normalize('NFC').trim().replace(/\s+/g, ' ');
+/**
+ * A full Unicode case fold WITHOUT the Turkic mappings: each character
+ * upper- then lower-cased on its own (so `ß` and `ẞ` fold to `ss`, `ﬁ` to
+ * `fi`, a final `ς` to `σ`), except the dotless `ı`, which stays `ı`. It
+ * never decides agreement (`caseOnly` does, on the letters as written): two
+ * texts it folds alike are only texts the comparison cannot tell apart.
+ */
+export const foldCase = (text: string): string =>
+  Array.from(text, (ch) => (ch === 'ı' ? ch : ch.toUpperCase().toLowerCase()))
+    .join('')
+    .replace(/ß/g, 'ss')
+    .normalize('NFC');
+/**
+ * A text's bare letters: compatibility forms unified (NFKC: a ligature, the
+ * long s, a full-width letter, a superscript digit), case folded, every mark
+ * dropped (an accent, the Greek tonos, the dot over `İ`) and the dotless
+ * `ı` read as `i`. Only to tell texts that differ in no letter from a
+ * contradiction: two texts alike here are never compared.
+ */
+export const bareLetters = (text: string): string =>
+  foldCase(text.normalize('NFKC')).normalize('NFD').replace(/\p{M}/gu, '').replace(/ı/g, 'i');
+export const hasDigit = (text: string): boolean => /\p{Nd}/u.test(text);
+
+/** How a word is cased: all lower, all upper, a capital first letter, or mixed. */
+export function casing(word: string): 'lower' | 'upper' | 'capitalized' | 'mixed' {
+  if (word === word.toLowerCase()) return 'lower';
+  if (word === word.toUpperCase()) return 'upper';
+  const [first = '', ...rest] = Array.from(word);
+  const tail = rest.join('');
+  return first === first.toUpperCase() && tail === tail.toLowerCase() ? 'capitalized' : 'mixed';
+}
+
+/**
+ * A word the case rule compares across casings (`caseOnly`): letters only,
+ * more than three of them, cased all lower, all upper or with a capital first
+ * letter. The rule cannot tell where such a word's case carries meaning
+ * (`Polish`, `polish`). A short word (`MW`, `Co`), a mixed-case one
+ * (`aB3xZ9`, `iPhone`) and anything with a digit or another mark keeps its
+ * case as written.
+ */
+export const foldableWord = (word: string): boolean =>
+  /^\p{L}+$/u.test(word) && Array.from(word).length > 3 && casing(word) !== 'mixed';
+
+/**
+ * Two word texts that differ in case alone: as many words, and every word
+ * that differs is a foldable word with the same letters, letter for letter,
+ * in another case — its locale-free lower case (`toLowerCase`) is the
+ * other's: `Settled` and `SETTLED`, `STRAẞE` and `Straße` (`ẞ` is the capital
+ * of `ß`). Letters are compared as written, before any fold, so `ß` is never
+ * `ss`: `Masse`, `maße`, `MAẞE` and `MASSE` against `Maße` differ in letters.
+ */
+export function caseOnly(a: string, b: string): boolean {
+  const wordsA = a.split(' ');
+  const wordsB = b.split(' ');
+  return (
+    wordsA.length === wordsB.length &&
+    wordsA.every((word, index) => {
+      const other = wordsB[index] ?? '';
+      if (word === other) return true;
+      return (
+        foldableWord(word) && foldableWord(other) && word.toLowerCase() === other.toLowerCase()
+      );
+    })
+  );
+}
+
+/**
+ * Whether two names are ONE name: the same text (`textOf`), or texts with no
+ * digit that differ in the case of foldable words alone (`caseOnly`) — the
+ * claim comparator's `agrees`. `payments` / `PAYMENTS` are one name;
+ * `ARRAY-X9` / `array-x9` (a digit), `MW` / `mW` (a short word) and `iPhone` /
+ * `iphone` (mixed case) are not.
+ *
+ * @example
+ * ```ts
+ * sameName('Payments', 'payments'); // true
+ * sameName('MW', 'mW');             // false
+ * ```
+ */
+export function sameName(a: string, b: string): boolean {
+  const x = textOf(a);
+  const y = textOf(b);
+  if (x === y) return true;
+  return !hasDigit(x) && !hasDigit(y) && caseOnly(x, y);
+}
