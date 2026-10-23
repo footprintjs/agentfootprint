@@ -118,13 +118,26 @@ import {
   type AskComponent,
 } from '../../../tools/askComponent.js';
 import {
+  declinedResult,
   shouldCheckIn,
-  isCheckInDecision,
-  checkInDeclined,
   type ResolvedCheckInConfig,
   type CheckInRequest,
   type CheckInDecision,
 } from '../../checkin.js';
+import {
+  gatedCallOf,
+  heldDecision,
+  mintConsentRequest,
+  noteDecisionTakenUp,
+  processDecisionLedger,
+  recordedRequestId,
+  runEndedBy,
+  runsAsAsked,
+  spendDecision,
+  type DecisionLedger,
+  type GatedCall,
+} from '../../consentRequest.js';
+import type { ConsentGateKind } from '../../pause.js';
 import type {
   ProviderToolCache,
   ServedToolParties,
@@ -144,7 +157,7 @@ import type {
   ToolSessionTier,
 } from '../../../tools/toolSessions.js';
 import type { InjectionRecord } from '../../../recorders/core/types.js';
-import type { ToolMiddleware } from '../middleware/types.js';
+import type { MiddlewareDecision, ToolMiddleware } from '../middleware/types.js';
 import { runToolChain, runToolAfterChain, type ToolArgs } from '../../../tools/runChain.js';
 import { recordDecisions } from '../middleware/ledger.js';
 import { ownsReservedArgument, splitFindings, type SplitFindings } from '../findings/reserved.js';
@@ -704,6 +717,12 @@ export interface ToolCallsHandlerDeps {
    * @internal
    */
   readonly answeredAsk?: () => AnsweredAsk | undefined;
+  /**
+   * Where answered consent requests are spent (`AgentOptions.decisionLedger`),
+   * so one decision runs one call. Undefined → this process's ledger, shared by
+   * every agent that names none (`processDecisionLedger`).
+   */
+  readonly decisionLedger?: DecisionLedger;
   /**
    * THE TIME LAYER (`.time()`) — present only then. Each dispatched call files
    * one `call` row with `dispatchedAt` (the wall clock, just before the tool
@@ -1605,6 +1624,123 @@ export function buildToolCallsHandler(
     permissionChecker,
   } = deps;
   const toolArgValidation = deps.toolArgValidation ?? 'enforce';
+  /** Where answered consent requests are spent — the agent's, else this process's. */
+  const decisionLedger = deps.decisionLedger ?? processDecisionLedger();
+  /**
+   * The decision a consent-gate resume carries, held to the request this run
+   * paused on and to the exact call it was bound to (`core/consentRequest.ts`)
+   * — or a `ResumeDecisionError` / `DecisionRequiredError`, thrown before
+   * anything about the call runs. Pure: the decision is spent by the branch
+   * that USES it (`spendDecision`), so a resume stopped before that (a refused
+   * findings reference) leaves it unspent.
+   *
+   * THE door every resume of a consent gate passes through: an agent's own
+   * `resume()` asks the same pure question first, but a composition resumes a
+   * nested agent's chart directly, and only this handler sees every decision
+   * that is used. So this is where a request is held and spent, once.
+   */
+  const heldAnswer = (
+    scope: TypedScope<AgentState>,
+    input: unknown,
+    gate: ConsentGateKind,
+  ): CheckInDecision => {
+    const read = (key: string): unknown => scope.$getValue(key);
+    const toolName = read('pausedToolName');
+    const middleware = gate === 'ask' ? read('pausedAskMiddleware') : undefined;
+    return heldDecision(
+      input,
+      {
+        kind: gate,
+        ...(typeof toolName === 'string' && { toolName }),
+        ...(typeof middleware === 'string' && { middleware }),
+      },
+      read('pausedRequest'),
+      gatedCallOf(read, gate),
+      // An ask's approval holds only for the rules it was asked under — this
+      // agent's chain, by link name.
+      (deps.toolMiddleware ?? []).map((link) => link.name),
+    );
+  };
+  /**
+   * The copy of a paused call's arguments its request was bound to, detached
+   * from the run's state — what an approved call runs with, as at a fresh
+   * dispatch. A live view of the state goes on changing after the call (the
+   * resume clears it, a later pause rewrites it), so a tool or a rule that kept
+   * its arguments would read values nobody approved. `heldAnswer` already
+   * proved them faithful JSON, which is what makes the copy safe to take.
+   */
+  const boundArgsOf = (
+    scope: TypedScope<AgentState>,
+    key: 'pausedAskArgs' | 'pausedCheckInArgs',
+  ): Readonly<Record<string, unknown>> => {
+    const raw = scope.$getValue(key);
+    return typeof raw === 'object' && raw !== null
+      ? (structuredClone(raw) as Readonly<Record<string, unknown>>)
+      : {};
+  };
+  /**
+   * What a consent gate refuses with when the call cannot be bound to a
+   * request — its arguments are not values JSON writes down faithfully, so an
+   * approval could not be held to them. The call does not run and nobody is
+   * asked; the model reads why — as a past fact about that one call, never an
+   * order for the next one, because a tool result is re-read on every later
+   * call of the turn (`test/modelFacingScan.test.ts`).
+   */
+  const unboundCallRefusal = (toolName: string, gate: ConsentGateKind): string =>
+    `tool '${toolName}' was not run on that call: it needed a person's ${
+      gate === 'ask' ? 'answer to a middleware ask' : 'approval (checkIn)'
+    }, and an approval binds to the exact arguments it is shown — those arguments held a ` +
+    `value plain JSON cannot write down (a date object, a map, a non-finite number, …), so no ` +
+    `approval could be bound to them.`;
+  /**
+   * The chain's rows for an ask no approval could be bound to. Nobody was
+   * asked, so no row may say a person was: the asking link's `ask` row (the
+   * walk's last — it stops at the ask) becomes the refusal it turned into,
+   * naming why, the way `askPolicy: 'refuse'` files a refused ask.
+   */
+  const unboundAskRows = (
+    rows: readonly MiddlewareDecision[],
+    middleware: string,
+    question: string,
+  ): MiddlewareDecision[] =>
+    rows.map((row, at) =>
+      at === rows.length - 1 && row.outcome === 'ask'
+        ? {
+            ...row,
+            outcome: 'deny',
+            why:
+              `middleware '${middleware}' asked a person to decide, and the call could not be ` +
+              `bound to a request a decision names — its arguments held a value plain JSON ` +
+              `cannot write down — so nobody was asked: ${question}`,
+          }
+        : row,
+    );
+  /**
+   * Who changed an approved ask's arguments after the approval, in words: the
+   * links whose rows declared a rewrite — or, when none did (an edit in place
+   * declares nothing), every link that ran after the ask, without claiming
+   * which of them it was.
+   */
+  const changedAfterApproval = (rows: readonly MiddlewareDecision[]): string => {
+    const quoted = (picked: readonly MiddlewareDecision[]): string =>
+      [...new Set(picked.map((row) => `'${row.middleware}'`))].join(', ');
+    const declared = rows.filter((row) => row.changed);
+    if (declared.length > 0) {
+      return `the middleware ${quoted(declared)} changed those arguments after the approval`;
+    }
+    return rows.length > 0
+      ? `those arguments came back changed from the middleware after the ask (${quoted(rows)})`
+      : 'a middleware after the ask changed those arguments';
+  };
+  /**
+   * What the model reads when the rest of an approved ask's chain handed back
+   * other arguments than the ones the person approved: the call does not run.
+   * A past fact about that call.
+   */
+  const rewrittenAfterApproval = (toolName: string, changedBy: string): string =>
+    `tool '${toolName}' was not run on that call: a person approved it with the arguments ` +
+    `they were shown, and ${changedBy}, so the approval did not cover the call that would ` +
+    `have run.`;
   /**
    * One admission rule for initial and resumed dispatch. Judge against the
    * wire schema after middleware, before artifact resolution or credentials.
@@ -3870,6 +4006,8 @@ export function buildToolCallsHandler(
       }
     }
     let executed = false;
+    /** What the run ended with, when it ended before the call could run. */
+    let ended: Error | undefined;
     try {
       // The time layer's dispatch moment — a resumed call is dispatched NOW,
       // so its `dispatchedAt` is the resume's, not the pause's.
@@ -3906,6 +4044,14 @@ export function buildToolCallsHandler(
         ...sessionContext(scope, toolName, toolCallId),
         ...toolDispatchCtx(scope, { toolName, toolCallId, iteration }, env.signal),
       };
+      // The last moment before the call runs, after every await that prepared
+      // it — its artifacts (`wants`), its credential (`needs`), its clock, and
+      // on an ask the rest of the chain. The engine stops waiting on an
+      // aborted run's stage (a hang-up, a deadline), but the stage goes on:
+      // a call never runs for a caller already told the run ended. Thrown past
+      // the catch below — the run ended, the tool did not fail.
+      ended = runEndedBy(env.signal);
+      if (ended !== undefined) throw ended;
       executed = true;
       let result = await tool.execute(args, executionContext);
       await endCall(toolCallId);
@@ -4041,6 +4187,12 @@ export function buildToolCallsHandler(
       }
       return { result, executed: true };
     } catch (err) {
+      if (ended !== undefined && err === ended) {
+        // Nothing ran; the call's sessions are still released, and the run's
+        // end — not a tool failure — is what the stage ends with.
+        await endCall(toolCallId).catch(() => undefined);
+        throw err;
+      }
       // Settled by throwing is still settled — a tool that opened a session and
       // then failed must not keep it.
       await endCall(toolCallId);
@@ -4643,15 +4795,43 @@ export function buildToolCallsHandler(
             // gets the chain's named refusal and the tool does not run.
             ...(oneQuestionAsked && { askPolicy: 'refuse' as const }),
           });
+          // The rules the asked call still has to pass once the person
+          // answers: the asking link and every link after it, by name.
+          const askChain =
+            chain.kind === 'ask'
+              ? deps.toolMiddleware.slice(chain.index).map((link) => link.name)
+              : undefined;
+          // The request the person would be asked (`core/consentRequest.ts`):
+          // an id their decision must quote, bound to a detached copy of this
+          // exact call — the args AS TRANSFORMED SO FAR, where the chain
+          // resumes and the rules from there on. Minted only for a call that
+          // is about to pause.
+          const bound =
+            chain.kind === 'ask'
+              ? mintConsentRequest({
+                  gate: 'ask',
+                  tool: tc.name,
+                  toolCallId: tc.id,
+                  party: resolved.party,
+                  args: chain.args,
+                  middleware: chain.middleware,
+                  askIndex: chain.index,
+                  chain: askChain,
+                } satisfies GatedCall)
+              : undefined;
+          // An ask no approval could be bound to asked nobody, and its row
+          // says so (`unboundAskRows`).
+          const chainRows =
+            chain.kind === 'ask' && bound === undefined
+              ? unboundAskRows(chain.decisions, chain.middleware, chain.payload.question)
+              : chain.decisions;
           // Under the inputs layer, a rewrite of a RULED tool's arguments is
           // filed with the NAMES of the keys it changed (honesty layer 2) —
           // the answer's standing reads a rewritten ruled argument with no
           // declared origin as assumed. Every other row: as it always was.
           recordDecisions(
             scope,
-            inputs !== undefined
-              ? inputs.decisionsToRecord(tool, chain.decisions)
-              : chain.decisions,
+            inputs !== undefined ? inputs.decisionsToRecord(tool, chainRows) : chainRows,
           );
           callArgs = chain.args;
           chainedArgs = chain.args;
@@ -4663,7 +4843,12 @@ export function buildToolCallsHandler(
               chain.refusedAsk === true && askedLayer !== undefined
                 ? chain.reason + askedLayer.keptNote(scope, tc.name, resolution)
                 : chain.reason;
-          } else if (chain.kind === 'ask') {
+          } else if (chain.kind === 'ask' && bound === undefined) {
+            // A call no approval could be bound to is refused, never asked.
+            denied = true;
+            error = true;
+            result = unboundCallRefusal(tc.name, 'ask');
+          } else if (chain.kind === 'ask' && bound !== undefined) {
             // The typed half of the question (9.24.0), judged BEFORE anything
             // is committed: a component the screen could not render must
             // refuse here, at the source, not pause and be discovered. The
@@ -4683,16 +4868,18 @@ export function buildToolCallsHandler(
                 : undefined;
             // Commit partial state so resume() finds history intact (the
             // pauseHere / check-in path does the same). The TRANSFORMED args
-            // ride the checkpoint: a person approves what the chain produced,
-            // not what the model originally proposed.
+            // ride the checkpoint — the bound copy: a person approves what the
+            // chain produced, not what the model originally proposed.
             scope.history = newHistory;
             scope.pausedToolCallId = tc.id;
             scope.pausedToolName = tc.name;
             scope.pausedToolStartMs = startMs;
             scope.pausedAsk = true;
-            scope.pausedAskArgs = chain.args;
+            scope.pausedAskArgs = bound.args;
             scope.pausedAskIndex = chain.index;
             scope.pausedAskMiddleware = chain.middleware;
+            scope.pausedAskChain = askChain;
+            scope.pausedRequest = bound.request;
             // The party this call was resolved against (9.92.0) — so a resume
             // in a FRESH instance dispatches to the same party, never to the
             // build-time map's first holder. Pause-path-only.
@@ -4708,7 +4895,7 @@ export function buildToolCallsHandler(
             return {
               toolCallId: tc.id,
               toolName: tc.name,
-              ask: { ...chain.payload, middleware: chain.middleware },
+              ask: { ...chain.payload, middleware: chain.middleware, id: bound.request.id },
             };
           }
         }
@@ -4811,13 +4998,25 @@ export function buildToolCallsHandler(
           // Computed ONLY for a checkIn-declaring tool → zero cost otherwise.
           // Shape shared with the ask-resume gate; see `historyForCheckIn`.
           const historyForEvidence = historyForCheckIn(scope, newHistory);
-          if (
-            !shouldCheckIn(tool.checkIn, callArgs, {
-              iteration,
-              toolCallId: tc.id,
-              history: historyForEvidence,
-            })
-          ) {
+          const trips = shouldCheckIn(tool.checkIn, callArgs, {
+            iteration,
+            toolCallId: tc.id,
+            history: historyForEvidence,
+          });
+          // The request the person would be asked (`core/consentRequest.ts`):
+          // an id their decision must quote, bound to a detached copy of this
+          // exact call — minted only for a call that is about to pause.
+          const bound =
+            trips && askedLayer === undefined
+              ? mintConsentRequest({
+                  gate: 'checkIn',
+                  tool: tc.name,
+                  toolCallId: tc.id,
+                  party: resolved.party,
+                  args: callArgs,
+                } satisfies GatedCall)
+              : undefined;
+          if (!trips) {
             // Predicate said no — fall through to the normal credential+execute
             // path below (this `if` block is the ONLY thing the gate adds).
           } else if (askedLayer !== undefined) {
@@ -4832,6 +5031,11 @@ export function buildToolCallsHandler(
             result =
               askedLayer.secondPauseRefusal(tc.name, 'check-in') +
               askedLayer.keptNote(scope, tc.name, resolution);
+          } else if (bound === undefined) {
+            // A call no approval could be bound to is refused, never asked.
+            checkInRefused = true;
+            error = true;
+            result = unboundCallRefusal(tc.name, 'checkIn');
           } else {
             // The tool's declared decision component (9.24.0), judged BEFORE
             // the evidence pack is assembled — a gate that cannot be honored
@@ -4849,7 +5053,7 @@ export function buildToolCallsHandler(
             const intent = scope.llmLatestContent ? String(scope.llmLatestContent) : undefined;
             const evidence = await deps.checkIn.assembler({
               tool: { name: tc.name, description: tool.schema.description },
-              args: callArgs,
+              args: bound.args,
               ...(intent !== undefined && { intent }),
               iteration,
               history: historyForEvidence,
@@ -4857,8 +5061,9 @@ export function buildToolCallsHandler(
               ...(env.signal && { signal: env.signal }),
             });
             const request: CheckInRequest = {
+              id: bound.request.id,
               tool: tc.name,
-              args: callArgs,
+              args: bound.args,
               ...(intent !== undefined && { intent }),
               evidence,
               ...(gateComponent !== undefined && { component: gateComponent }),
@@ -4870,14 +5075,15 @@ export function buildToolCallsHandler(
               request: request as unknown as Readonly<Record<string, unknown>>,
             });
             // Commit partial state so resume() finds history intact (mirror the
-            // pauseHere path). The proposed args ride the checkpoint so an
-            // APPROVED tool can execute on resume.
+            // pauseHere path). The bound copy of the args rides the checkpoint,
+            // so an APPROVED tool executes exactly what was asked.
             scope.history = newHistory;
             scope.pausedToolCallId = tc.id;
             scope.pausedToolName = tc.name;
             scope.pausedToolStartMs = startMs;
             scope.pausedCheckIn = true;
-            scope.pausedCheckInArgs = callArgs;
+            scope.pausedCheckInArgs = bound.args;
+            scope.pausedRequest = bound.request;
             // Same carrier as the middleware-ask pause (9.92.0).
             if (resolved.party !== undefined) scope.pausedToolParty = resolved.party;
             // Which surface will collect the decision — read back on resume
@@ -5948,11 +6154,31 @@ export function buildToolCallsHandler(
       return undefined; // explicit: no pause, flow continues to loopTo
     },
     resume: async (scope, input) => {
+      // A consent gate's answer is a DECISION for ONE request: held to the
+      // request this run paused on and to the exact call it was bound to —
+      // refused (thrown) before anything below writes or runs. The two
+      // decision paths further down spend it as their first act, once.
+      const consentGate: ConsentGateKind | undefined =
+        scope.pausedAsk === true ? 'ask' : scope.pausedCheckIn === true ? 'checkIn' : undefined;
+      // Taken up here, too: a composition resumes this chart without an
+      // agent's own `resume()`, and a door watching the paused request must
+      // still know that every use of its decision passes through the spend
+      // below (`consentRequest.ts` · `watchDecisionUse`).
+      if (consentGate !== undefined) {
+        noteDecisionTakenUp(recordedRequestId(scope.$getValue('pausedRequest')));
+      }
+      // The run's signal, read while the stage is live: the engine stops
+      // waiting on this stage when the run is aborted, but the stage goes on,
+      // and a decision must not be spent — nor its call run — by a resume
+      // nobody is waiting for any more (`spendDecision`).
+      const runSignal = scope.$getEnv().signal;
       // Same barrier as `execute`, for the same reason: an approved check-in
       // runs the REAL tool here, and that side effect must not go out ahead of
       // the state the last write is still carrying.
       const durable = deps.awaitDurable?.();
       if (durable) await durable;
+      const consentDecision =
+        consentGate === undefined ? undefined : heldAnswer(scope, input, consentGate);
       // The time layer: the paused turn's clock is KEPT — its words were
       // resolved against it. A resume that passed a different `time` is
       // recorded here, first, and never applied (TQ21).
@@ -6015,21 +6241,26 @@ export function buildToolCallsHandler(
       // this call may proceed, and on approval the REAL tool runs — the person
       // never writes the tool's answer, and neither does the middleware.
       //
-      // A malformed resume DECLINES, for the same reason the check-in path
-      // does: a governed call must never execute because a message was
-      // mis-shaped.
-      if (scope.pausedAsk === true) {
+      // A malformed resume never reaches here: `heldAnswer` refused it at the
+      // top (a governed call never executes, and nobody's decline is invented,
+      // because a message was mis-shaped).
+      if (consentGate === 'ask' && consentDecision !== undefined) {
         const iteration = scope.iteration as number;
-        const args = (scope.pausedAskArgs ?? {}) as Readonly<Record<string, unknown>>;
+        // What the rest of the chain is handed: a detached copy of the
+        // approved arguments (`boundArgsOf`). The arguments that come back are
+        // held to the REQUEST, never to this copy — a link that edits it in
+        // place edits the copy — and the tool runs on another fresh copy.
+        const args = boundArgsOf(scope, 'pausedAskArgs');
         const askIndex = (scope.pausedAskIndex ?? 0) as number;
         const askedBy = (scope.pausedAskMiddleware ?? 'middleware') as string;
         // The registered component that COLLECTED this decision (9.24.0),
         // written at pause time only when the ask carried one — the ledger
         // rows below then say which surface the person answered through.
         const answeredVia = scope.pausedComponentId as string | undefined;
-        const decision: CheckInDecision = isCheckInDecision(input)
-          ? input
-          : checkInDeclined({ by: 'unknown', note: 'resume input was not a CheckInDecision' });
+        const decision: CheckInDecision = consentDecision;
+        // Used from here — so spent here, before any row or the tool: a second
+        // resume presenting it is refused ('already-answered').
+        await spendDecision(decisionLedger, decision, 'ask', runSignal);
 
         let result: unknown;
         /** What the model reads. Differs from `result` only when a rule at the
@@ -6044,7 +6275,7 @@ export function buildToolCallsHandler(
         /** The tool ran (any outcome) — the judge's gate (9.104.0). */
         let toolRan = false;
         if (!decision.approved) {
-          result = decision.note ? `declined by human: ${decision.note}` : 'declined by human';
+          result = declinedResult(decision.note);
           recordDecisions(scope, [
             {
               middleware: askedBy,
@@ -6123,6 +6354,22 @@ export function buildToolCallsHandler(
               askPolicy: 'refuse',
             });
             recordDecisions(scope, rest.decisions);
+            // The approval covers the arguments the person was shown. The ones
+            // the rest of the chain hands back must re-derive the paused
+            // request's id (`runsAsAsked`) — held to the request itself, never
+            // to the copy the links were handed. Any other arguments are not
+            // approved: the call does not run, and the record and the model
+            // are told why ('call-changed').
+            const read = (key: string): unknown => scope.$getValue(key);
+            const rewrittenBy =
+              rest.kind === 'deny' ||
+              runsAsAsked(read('pausedRequest'), gatedCallOf(read, 'ask'), rest.args)
+                ? undefined
+                : changedAfterApproval(rest.decisions);
+            // The arguments the call runs with: a fresh copy of the approved
+            // ones (equal, by the check above, to what the chain handed back),
+            // so nothing a link still holds can reach the tool.
+            const runArgs = boundArgsOf(scope, 'pausedAskArgs');
             // Would this tool's OWN consent gate have fired for this call? Asked by
             // EVALUATING the demand, not by noticing that one was declared (8.13.0).
             // Before that, any tool carrying a `checkIn` field was refused here even
@@ -6130,19 +6377,38 @@ export function buildToolCallsHandler(
             // the £5 refunds it was written to let through, and the refusal claimed a
             // consent gate would have run when it provably would not have.
             //
-            // Judged on `rest.args` (what the tool would actually run with) and on
+            // Judged on `runArgs` (what the tool would actually run with) and on
             // the same history shape the loop's gate uses, so the answer cannot
             // depend on which door the call arrived through.
             const demandTrips =
               rest.kind !== 'deny' &&
+              rewrittenBy === undefined &&
               tool?.checkIn !== undefined &&
-              shouldCheckIn(tool.checkIn, rest.args, {
+              shouldCheckIn(tool.checkIn, runArgs, {
                 iteration,
                 toolCallId,
                 history: historyForCheckIn(scope, scope.history as readonly LLMMessage[]),
               });
             if (rest.kind === 'deny') {
               result = rest.reason;
+            } else if (rewrittenBy !== undefined) {
+              error = true;
+              result = rewrittenAfterApproval(toolName, rewrittenBy);
+              recordDecisions(scope, [
+                {
+                  middleware: askedBy,
+                  moment: 'before-tool',
+                  at: 'tool',
+                  toolName,
+                  toolCallId,
+                  iteration,
+                  outcome: 'deny',
+                  changed: false,
+                  why:
+                    `the approval covers the arguments the person was shown; ${rewrittenBy}, ` +
+                    `so the call was not run (call-changed)`,
+                },
+              ]);
             } else if (demandTrips) {
               // The one-question rule, from the other direction: this tool's own
               // consent gate really does demand a person for THESE arguments, and
@@ -6177,7 +6443,7 @@ export function buildToolCallsHandler(
                 scope,
                 resolved,
                 toolName,
-                rest.args,
+                runArgs,
                 toolCallId,
                 iteration,
                 env,
@@ -6200,7 +6466,7 @@ export function buildToolCallsHandler(
               // sentence BEFORE the chain's last word, the execute loop's
               // composition kept.
               if (frameworkSkipStepAnswered(toolName, tool) && stepToolRan) {
-                result = applySkipStep(scope, { args: rest.args, toolCallId, iteration });
+                result = applySkipStep(scope, { args: runArgs, toolCallId, iteration });
               }
               // present behind a middleware ask, approved (9.22.0): same
               // overwrite the batch loop applies — the snapshot (or refusal)
@@ -6208,7 +6474,7 @@ export function buildToolCallsHandler(
               // is an errored call here too.
               if (deps.artifactStore && toolName === PRESENT_TOOL_NAME && stepToolRan) {
                 const presented = await applyPresent(scope, {
-                  args: rest.args,
+                  args: runArgs,
                   toolCallId,
                   iteration,
                 });
@@ -6227,7 +6493,7 @@ export function buildToolCallsHandler(
                   toolName,
                   toolCallId,
                   iteration,
-                  args: rest.args,
+                  args: runArgs,
                   result,
                   ...(error === true && { error: true }),
                   history: [...(scope.history as readonly LLMMessage[])],
@@ -6343,6 +6609,9 @@ export function buildToolCallsHandler(
         scope.pausedAskArgs = undefined;
         scope.pausedAskIndex = undefined;
         scope.pausedAskMiddleware = undefined;
+        scope.pausedAskChain = undefined;
+        // The request was answered — and spent — by this resume.
+        scope.pausedRequest = undefined;
         // Cleared ONLY when it was set: a later component-less pause in this
         // run must not inherit this ask's surface, and a run that never
         // carried one must not gain the key (byte-identical).
@@ -6361,15 +6630,19 @@ export function buildToolCallsHandler(
       // comes BEFORE execute); on DECLINE a model-visible tool_result lands so
       // the agent adapts in-loop. The typed `checkin.decision` event fires
       // either way. Same iteration semantics as resume-after-askHuman.
-      if (scope.pausedCheckIn === true) {
+      if (consentGate === 'checkIn' && consentDecision !== undefined) {
         const iteration = scope.iteration as number;
-        const args = (scope.pausedCheckInArgs ?? {}) as Readonly<Record<string, unknown>>;
-        // A check-in pause MUST be resumed with a CheckInDecision. A mis-wired
-        // resume (a bare string, say) declines by default — a consequential
-        // tool can never silently EXECUTE from a malformed resume.
-        const decision: CheckInDecision = isCheckInDecision(input)
-          ? input
-          : checkInDeclined({ by: 'unknown', note: 'resume input was not a CheckInDecision' });
+        // The copy the person approved, detached (`boundArgsOf`).
+        const args = boundArgsOf(scope, 'pausedCheckInArgs');
+        // A check-in pause is resumed with a CheckInDecision for THIS request
+        // and this exact call, or not at all: `heldAnswer` refused anything else
+        // at the top — a bare string, a decision for another request, a replay.
+        // A consequential tool never EXECUTES from a malformed resume, and a
+        // decline is never invented for one.
+        const decision: CheckInDecision = consentDecision;
+        // Used from here — so spent here, before the record or the tool: a
+        // second resume presenting it is refused ('already-answered').
+        await spendDecision(decisionLedger, decision, 'checkIn', runSignal);
 
         // The registered component that COLLECTED this decision (9.24.0),
         // written at pause time only when the ask carried one. The decision
@@ -6380,6 +6653,7 @@ export function buildToolCallsHandler(
           toolName,
           toolCallId,
           iteration,
+          requestId: decision.requestId,
           approved: decision.approved,
           by: decision.by,
           ...(decision.note !== undefined && { note: decision.note }),
@@ -6436,7 +6710,7 @@ export function buildToolCallsHandler(
             });
           }
         } else {
-          result = decision.note ? `declined by human: ${decision.note}` : 'declined by human';
+          result = declinedResult(decision.note);
         }
 
         if (modelResult === undefined) modelResult = result;
@@ -6535,6 +6809,8 @@ export function buildToolCallsHandler(
         scope.pausedToolStartMs = 0;
         scope.pausedCheckIn = false;
         scope.pausedCheckInArgs = undefined;
+        // The request was answered — and spent — by this resume.
+        scope.pausedRequest = undefined;
         // Cleared ONLY when it was set — see the ask path's twin note.
         if (answeredVia !== undefined) scope.pausedComponentId = undefined;
         // The served party the checkpoint carried is consumed with it (9.92.0);

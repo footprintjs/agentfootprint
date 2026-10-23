@@ -54,7 +54,7 @@ await agent.resume(checkpoint, '(no answer)');        // tell the model nobody a
 
 Those are different conversations, so the caller picks. Before 8.18.0 the library picked silently and the missing answer became a tool message with no content, which killed the run one turn later with a `TypeError` naming neither the tool nor the resume. Nothing executes before the refusal and the checkpoint is unchanged — answer it and resume the same one.
 
-A consent gate is different: a tool's `checkIn` or a middleware's `ask` is answered with a DECISION (`checkInApproved()` / `checkInDeclined()`), and raises `DecisionRequiredError` when it gets a value instead.
+A consent gate is different: a tool's `checkIn` or a middleware's `ask` is answered with a DECISION (`checkInApproved({ request, by })` / `checkInDeclined(...)`), and raises `DecisionRequiredError` when it gets a value instead. The decision names the request it answers (`outcome.checkIn` / `outcome.ask`), so it answers that pause once and no other — see [Check-in](doc:checkin#a-decision-answers-one-request-once).
 
 ## Typed asks — a registered component collects the answer
 
@@ -84,7 +84,7 @@ All three ask doors carry it the same way — `askHuman({ question, component })
 
 ### The answer's typed half — `DecisionValue`
 
-A yes is not always what the person gave you. When the ask was "pick one", the answer is a **value**, and `DecisionValue` is the shape it rides back in: `kind` (your vocabulary for what the value IS — `'row-choice'`, never a type name from this library), `value` (small, clone-safe inline JSON, because it lands in the run's history), `from` (the artifact the choice was made **against**, when there was one), and `coverage` (`seen` of `total`, plus the `filter` that narrowed it). It rides `checkInApproved({ by, value })` and `checkInDeclined({ by, value })` — see [Check-in](doc:checkin) — and is optional everywhere, so a screen that only approves or declines never sets it.
+A yes is not always what the person gave you. When the ask was "pick one", the answer is a **value**, and `DecisionValue` is the shape it rides back in: `kind` (your vocabulary for what the value IS — `'row-choice'`, never a type name from this library), `value` (small, clone-safe inline JSON, because it lands in the run's history), `from` (the artifact the choice was made **against**, when there was one), and `coverage` (`seen` of `total`, plus the `filter` that narrowed it). It rides `checkInApproved({ request, by, value })` and `checkInDeclined({ request, by, value })` — see [Check-in](doc:checkin) — and is optional everywhere, so a screen that only approves or declines never sets it.
 
 `coverage` is the field people skip and the one that carries the point: a person who filtered 5,000 rows to 3 and picked one **has not chosen from 5,000**. Without it that pick is indistinguishable from an informed choice over the whole set, and the difference is the whole value of having a human in the loop. It is the same distinction `coverage()` draws for a tool — what was checked, and what a clean answer does not rule out — applied to the person, because on this turn the person *is* the tool.
 

@@ -55,6 +55,7 @@ import { mock } from '../../../src/llm-providers.js';
 import type { LLMMessage, LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
 import { stampInputRequest, validateInputDeclaration } from '../../../src/tools/inputRequest.js';
 import { notDispatchedResult } from '../../../src/core/agent/stages/toolCalls.js';
+import { pausedRequest } from '../../helpers/pausedRequest.js';
 
 // ─── fixtures ────────────────────────────────────────────────────────
 
@@ -540,7 +541,10 @@ describe('integration: a raise that does not pause files nothing', () => {
     );
     const paused = await agent.run({ message: 'which port?' });
     if (!isPaused(paused)) throw new Error('expected the check-in pause');
-    const done = await agent.resume(paused.checkpoint, checkInApproved({ by: 'alice' }));
+    const done = await agent.resume(
+      paused.checkpoint,
+      checkInApproved({ request: pausedRequest(paused), by: 'alice' }),
+    );
     expect(done).toBe(answer.content);
     expect(absentIds).toEqual([]);
     expect(stateOf(agent).coverageDeclared).toBeUndefined();

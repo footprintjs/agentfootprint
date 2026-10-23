@@ -222,6 +222,7 @@
 
 import { createHash } from 'node:crypto';
 
+import { listedFormatOf, listedFormatOfRow } from '../../hosting/answeredPause.js';
 import { checkEnvelope, envelopeOwner, envelopeTranscript } from '../../hosting/envelope.js';
 import { SessionOwnershipConflictError, UnreadableEnvelopeError } from '../../hosting/errors.js';
 import { resolveSessionOwner } from '../../hosting/sessionOwnership.js';
@@ -832,7 +833,10 @@ export function firestoreSessions(options: FirestoreSessionsOptions = {}): Fires
       const ref = docFor(sessionId);
       const row = {
         sessionId,
-        format: checked.format,
+        // The LISTED format (`listedFormatOf`), what `listByUser` reports: a
+        // pause whose decision a resume already used reads as a conversation
+        // here, though `envelope` still holds the paused run.
+        format: listedFormatOf(checked),
         savedAt: checked.savedAt,
         envelope: json,
         messageCount: envelopeTranscript(checked).length,
@@ -986,7 +990,13 @@ export function firestoreSessions(options: FirestoreSessionsOptions = {}): Fires
           // hand a caller an id that opens nothing.
           sessionId: typeof row['sessionId'] === 'string' ? row['sessionId'] : '',
           savedAt: typeof row['savedAt'] === 'number' ? row['savedAt'] : 0,
-          format: typeof row['format'] === 'string' ? row['format'] : 'unknown',
+          // What the session IS now: a document written before the field
+          // held the listed format says 'flowchart-v1' for any pause, and is
+          // read again from the envelope the query already returned.
+          format: listedFormatOfRow(
+            typeof row['format'] === 'string' ? row['format'] : 'unknown',
+            row['envelope'],
+          ),
           // A listing hint, never the authority — the transcript op reads the
           // envelope itself and says the truth.
           messageCount: typeof row['messageCount'] === 'number' ? row['messageCount'] : 0,

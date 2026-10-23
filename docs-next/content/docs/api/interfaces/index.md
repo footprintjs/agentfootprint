@@ -2,11 +2,10 @@
 title: Interfaces
 ---
 
-369 exported from `agentfootprint`.
+365 exported from `agentfootprint`.
 
 [Scope event payloads](/docs/api/interfaces/scope-events) · [Flow event payloads](/docs/api/interfaces/flow-events)
 
-- [`AbsenceAmongDeclaration`](/docs/api/interfaces/AbsenceAmongDeclaration)
 - [`AbsenceDeclaration`](/docs/api/interfaces/AbsenceDeclaration)
 - [`ActOptions`](/docs/api/interfaces/ActOptions)
 - [`AgentArtifactsOptions`](/docs/api/interfaces/AgentArtifactsOptions)
@@ -16,7 +15,6 @@ title: Interfaces
 - [`AgentRecordingsOptions`](/docs/api/interfaces/AgentRecordingsOptions)
 - [`AgentRunCheckpoint`](/docs/api/interfaces/AgentRunCheckpoint)
 - [`AllowOutcome`](/docs/api/interfaces/AllowOutcome)
-- [`AmongDeclaration`](/docs/api/interfaces/AmongDeclaration)
 - [`AnswerCheck`](/docs/api/interfaces/AnswerCheck)
 - [`AnswerCoverage`](/docs/api/interfaces/AnswerCoverage)
 - [`AnswerEvidenceResolver`](/docs/api/interfaces/AnswerEvidenceResolver)
@@ -116,6 +114,7 @@ title: Interfaces
 - [`DatasetResultPlan`](/docs/api/interfaces/DatasetResultPlan)
 - [`DatasetTimeAxis`](/docs/api/interfaces/DatasetTimeAxis)
 - [`DebateOptions`](/docs/api/interfaces/DebateOptions)
+- [`DecisionLedger`](/docs/api/interfaces/DecisionLedger)
 - [`DecisionValue`](/docs/api/interfaces/DecisionValue)
 - [`DeclaredCoverage`](/docs/api/interfaces/DeclaredCoverage)
 - [`DeclaredPeriod`](/docs/api/interfaces/DeclaredPeriod)
@@ -182,7 +181,6 @@ title: Interfaces
 - [`JudgmentErrorRow`](/docs/api/interfaces/JudgmentErrorRow)
 - [`JudgmentRow`](/docs/api/interfaces/JudgmentRow)
 - [`KeyedFold`](/docs/api/interfaces/KeyedFold)
-- [`KnownNames`](/docs/api/interfaces/KnownNames)
 - [`LedgerFactPin`](/docs/api/interfaces/LedgerFactPin)
 - [`LLMCallHooks`](/docs/api/interfaces/LLMCallHooks)
 - [`LLMCallInput`](/docs/api/interfaces/LLMCallInput)
@@ -210,7 +208,6 @@ title: Interfaces
 - [`MiddlewareDecision`](/docs/api/interfaces/MiddlewareDecision)
 - [`Milestone`](/docs/api/interfaces/Milestone)
 - [`NamesAndNumbersOptions`](/docs/api/interfaces/NamesAndNumbersOptions)
-- [`NamesFacetItem`](/docs/api/interfaces/NamesFacetItem)
 - [`NormaliseOptions`](/docs/api/interfaces/NormaliseOptions)
 - [`ObserverStats`](/docs/api/interfaces/ObserverStats)
 - [`OutputAttempt`](/docs/api/interfaces/OutputAttempt)
@@ -300,7 +297,6 @@ title: Interfaces
 - [`SlidingWindowRecord`](/docs/api/interfaces/SlidingWindowRecord)
 - [`SlotComposition`](/docs/api/interfaces/SlotComposition)
 - [`SourceClockRow`](/docs/api/interfaces/SourceClockRow)
-- [`SourceGapItem`](/docs/api/interfaces/SourceGapItem)
 - [`SqliteArtifacts`](/docs/api/interfaces/SqliteArtifacts)
 - [`SqliteArtifactsOptions`](/docs/api/interfaces/SqliteArtifactsOptions)
 - [`StagedCodeInput`](/docs/api/interfaces/StagedCodeInput)

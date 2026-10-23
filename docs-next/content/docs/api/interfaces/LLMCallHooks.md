@@ -4,7 +4,7 @@ title: LLMCallHooks
 
 # Interface: LLMCallHooks
 
-Defined in: [src/provider-contract/types.ts:628](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L628)
+Defined in: [src/provider-contract/types.ts:631](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L631)
 
 v7.8 — optional per-call hooks the CALLER hands a provider.
 
@@ -42,7 +42,7 @@ resilience guide's "honest limits".
 
 > `readonly` `optional` **onReplayPrepared?**: (`preparation`) => `void`
 
-Defined in: [src/provider-contract/types.ts:634](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L634)
+Defined in: [src/provider-contract/types.ts:637](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L637)
 
 The actual leaf provider omitted eligible completed-turn thinking before
 transport. Wrappers forward this channel unchanged, like onResilience.
@@ -64,7 +64,7 @@ The run records metadata and keeps the permitted omission in its history.
 
 > `readonly` `optional` **onResilience?**: (`report`) => `void`
 
-Defined in: [src/provider-contract/types.ts:643](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L643)
+Defined in: [src/provider-contract/types.ts:646](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L646)
 
 Called once per resilience decision (a fallback, a retry, a
 recovery). Decorators forward this hook inward unchanged, so a

@@ -7,6 +7,7 @@ import { bearer } from '../../../src/identity.js';
 import type { McpSdkServer } from '../../../src/mcp/types.js';
 import { mock } from '../../../src/providers.js';
 import { mcpServe } from '../../../src/tool-providers/index.js';
+import { pausedRequest } from '../../helpers/pausedRequest.js';
 
 type Door = 'Agent' | 'same-agent resume' | 'fresh-agent resume' | 'ctx.tools.call' | 'MCP serve';
 const doors: Door[] = [
@@ -142,9 +143,12 @@ async function dispatch(
     const resumed = door === 'fresh-agent resume' ? build() : agent;
     // JSON-owned keys survive persistence; inherited properties are not a transport contract.
     const checkpoint = JSON.parse(JSON.stringify(initial.checkpoint));
-    await expect(resumed.resume(checkpoint, checkInApproved({ by: 'reviewer' }))).resolves.toBe(
-      'done',
-    );
+    await expect(
+      resumed.resume(
+        checkpoint,
+        checkInApproved({ request: pausedRequest(initial), by: 'reviewer' }),
+      ),
+    ).resolves.toBe('done');
   } else {
     expect(initial).toBe('done');
   }

@@ -12,6 +12,7 @@ import type { CredentialProvider, CredentialResult } from '../../src/identity.js
 import type { PermissionChecker } from '../../src/provider-contract/types.js';
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
 import { PolicyHaltError } from '../../src/security/index.js';
+import { pausedRequest } from '../helpers/pausedRequest.js';
 
 type VaultMode = 'consent' | 'issued' | 'failed';
 const FIRST = 'invoice-call-before-pause';
@@ -171,7 +172,10 @@ describe.each(['same', 'fresh'] as const)('security correlation on %s-agent resu
     const resumed = kind === 'same' ? initial : makeAgent(vault(state), { pull: true });
     resumed.events.length = 0;
     await expect(
-      resumed.agent.resume(paused.checkpoint, checkInApproved({ by: 'reviewer' })),
+      resumed.agent.resume(
+        paused.checkpoint,
+        checkInApproved({ request: pausedRequest(paused), by: 'reviewer' }),
+      ),
     ).resolves.toBe('done');
     expect(resumed.executed).toEqual([FIRST]);
     expect(payloads(resumed.events, 'agentfootprint.credential.failed')).toEqual([

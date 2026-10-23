@@ -4,7 +4,7 @@ title: ToolCallEntry
 
 # Interface: ToolCallEntry
 
-Defined in: [src/provider-contract/types.ts:779](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L779)
+Defined in: [src/provider-contract/types.ts:782](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L782)
 
 One entry in the in-flight tool-call sequence delivered to
 `PermissionChecker.check()` since v2.12. Lets sequence-aware
@@ -20,7 +20,7 @@ survives `agent.resumeOnError(checkpoint)` correctly.
 
 > `readonly` **args**: `Readonly`\<`Record`\<`string`, `unknown`\>\> \| `undefined`
 
-Defined in: [src/provider-contract/types.ts:783](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L783)
+Defined in: [src/provider-contract/types.ts:786](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L786)
 
 Tool args passed to `tool.execute(args, ctx)`.
 
@@ -30,7 +30,7 @@ Tool args passed to `tool.execute(args, ctx)`.
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/provider-contract/types.ts:785](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L785)
+Defined in: [src/provider-contract/types.ts:788](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L788)
 
 ReAct iteration the call was dispatched on.
 
@@ -40,7 +40,7 @@ ReAct iteration the call was dispatched on.
 
 > `readonly` **name**: `string`
 
-Defined in: [src/provider-contract/types.ts:781](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L781)
+Defined in: [src/provider-contract/types.ts:784](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L784)
 
 Tool name dispatched.
 
@@ -50,7 +50,7 @@ Tool name dispatched.
 
 > `readonly` `optional` **providerId?**: `string`
 
-Defined in: [src/provider-contract/types.ts:792](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L792)
+Defined in: [src/provider-contract/types.ts:795](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L795)
 
 Optional source identifier — `'local'` for tools registered via
 `.tool(...)` / `staticTools(...)`, or the `ToolProvider.id` for

@@ -63,6 +63,7 @@ import { notDispatchedResult } from '../../../src/core/agent/stages/toolCalls.js
 import { staticTools } from '../../../src/tool-providers/index.js';
 import { defineSkill } from '../../../src/injection-engine.js';
 import { TOOL_RESULTS } from './fixtures/sanEvidence.js';
+import { pausedRequest } from '../../helpers/pausedRequest.js';
 
 type Row = { type: string; payload: Record<string, unknown> };
 type Shot = {
@@ -1366,7 +1367,10 @@ describe('.findings() — an ask-human pause mid-batch keeps ONE basis row per c
     agent.on('*', (e) =>
       rows.push({ type: e.type, payload: e.payload as unknown as Record<string, unknown> }),
     );
-    await agent.resume(paused.checkpoint, checkInApproved({ by: 'alice' }));
+    await agent.resume(
+      paused.checkpoint,
+      checkInApproved({ request: pausedRequest(paused), by: 'alice' }),
+    );
 
     // Exactly ONE row per call that reached the loop head: c1 (ran before the
     // pause) and c2 (asked). The sibling AFTER the asked call, c3, is never

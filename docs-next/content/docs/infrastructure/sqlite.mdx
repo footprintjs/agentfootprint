@@ -126,9 +126,16 @@ finishes the run:
 const sessions = sqliteSessions({ file: './sessions.db' });
 const paused = readPausedRun(await sessions.hydrate(sessionId));
 
+// A pause whose resume failed and may have used its decision is marked
+// `answered`: it must not be answered again — continue its conversation
+// with the next message instead.
+if (paused.answered !== undefined) throw new Error('already answered');
+
+// A check-in: the decision names the request it answers, which the stored
+// pending ask carries. (An askHuman() pause takes its answer as a value.)
 const answer = await agent.resume(
   paused.checkpoint,
-  checkInApproved({ by: 'alice@ops' }),
+  checkInApproved({ request: paused.pending.checkIn!, by: 'alice@ops' }),
 );
 ```
 
@@ -150,6 +157,20 @@ command line, with no JSON parser and without this library:
 SELECT session_id, datetime(saved_at / 1000, 'unixepoch') AS since
 FROM agent_sessions WHERE format = 'flowchart-v1' ORDER BY saved_at;
 ```
+
+The `format` column holds what a session listing reports (`listedFormatOf`), not
+always the envelope's own format: `'flowchart-v1'` only while a pause still waits
+on a person. A pause whose decision a resume already used is still a paused run
+inside `envelope`, with its `answered` mark, and reads `'conversation-v1'` in the
+column, because nobody is waiting on it — so the query above leaves it out.
+
+A row written before the column held the listed format — by an earlier release,
+or an older replica still writing during an upgrade — holds the envelope's own
+format, so it can say `'flowchart-v1'` for a pause nobody can answer any more.
+`listByUser` (and the `session-list` op) never trusts that value: a row that
+says `'flowchart-v1'` is read again from its envelope, so a listing is right for
+every row, old ones included. The column itself — what the query above reads —
+is corrected the next time the session is written.
 
 A store you cannot inspect with the tools already on the box is a store you
 debug by guessing. `agent_store_meta` holds one row, `schema_version` — the hook

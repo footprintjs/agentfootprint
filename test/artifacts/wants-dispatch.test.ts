@@ -25,6 +25,7 @@ import {
   type RunnerPauseOutcome,
 } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
+import { pausedRequest } from '../helpers/pausedRequest.js';
 
 const call = (name: string, id: string, args: Record<string, unknown> = {}) => ({
   content: '',
@@ -415,7 +416,10 @@ describe('integration — every dispatch door judges the declaration the same wa
 
     const second = build([final('done')]);
     const ends = toolEndCapture(second);
-    await second.resume(out.checkpoint, checkInApproved({ by: 'ops' }));
+    await second.resume(
+      out.checkpoint,
+      checkInApproved({ request: pausedRequest(out), by: 'ops' }),
+    );
     expect(probe.args).toBeUndefined();
     expect(String(ends[0].result)).toContain("'dataset' is required");
     expect(ends[0].error).toBe(true);

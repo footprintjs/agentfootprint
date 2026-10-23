@@ -59,6 +59,7 @@ import { mockEmbedder } from '../../src/memory/embedding/index.js';
 import { indexDocuments } from '../../src/rag/retriever/index.js';
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
 import { locationsOf, withoutAnswerBoundary } from './fixture.js';
+import { pausedRequest } from '../helpers/pausedRequest.js';
 
 type BuiltAgent = ReturnType<ReturnType<typeof Agent.create>['build']>;
 
@@ -571,7 +572,11 @@ const CASES: readonly FeatureCase[] = [
       if (!isPaused(outcome)) throw new Error('the case must pause for the check-in');
       return agent.resume(
         outcome.checkpoint,
-        checkInApproved({ by: 'ops', note: 'ok per CANARY-CI-NOTE' }),
+        checkInApproved({
+          request: pausedRequest(outcome),
+          by: 'ops',
+          note: 'ok per CANARY-CI-NOTE',
+        }),
       );
     },
   },
@@ -968,7 +973,10 @@ describe('a field a tool names is kept out of every event under a name-only poli
     if (!isPaused(outcome)) throw new Error('the case must pause for the check-in');
     // The caller's own outcome carries the real pack — the person deciding needs it.
     expect(JSON.stringify(outcome)).toContain(SSN);
-    await agent.resume(outcome.checkpoint, checkInApproved({ by: 'ops' }));
+    await agent.resume(
+      outcome.checkpoint,
+      checkInApproved({ request: pausedRequest(outcome), by: 'ops' }),
+    );
     return { events, recordingEvents: recorder.toRecording().events };
   };
 

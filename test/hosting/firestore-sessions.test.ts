@@ -512,6 +512,46 @@ describe('firestoreSessions — listByUser', () => {
     }
   }
 
+  it('a document written before the field held the listed format lists by what the pause is NOW', async () => {
+    // Before this release the `format` field held the envelope's own format,
+    // so a pause stored then says 'flowchart-v1' whatever happened to it since.
+    const fake = fakeFirestore();
+    const before = firestoreSessions({ _sdk: fake.sdk });
+    const pause = (sharedState: Record<string, unknown>, pauseData: unknown) => ({
+      checkpoint: { pausedStageId: 's#1', subflowPath: [], sharedState, pauseData } as never,
+      conversation: checkpoint({ identity: { principal: 'alice' } } as never),
+      pending: { pauseData },
+    });
+    await before.persist('waiting', toPausedEnvelope(pause({}, 'approve?')));
+    await before.persist(
+      'answered',
+      toPausedEnvelope({ ...pause({}, 'approve?'), answered: { at: 3 } }),
+    );
+    // A consent pause from an earlier release: no request recorded, so no
+    // decision can answer it.
+    await before.persist(
+      'older',
+      toPausedEnvelope(
+        pause(
+          { pausedToolName: 'refund', pausedToolCallId: 't1', pausedCheckInArgs: { amount: 5 } },
+          { checkIn: {}, toolName: 'refund' },
+        ),
+      ),
+    );
+    for (const id of ['waiting', 'answered', 'older']) {
+      const doc = documentIdFor(id);
+      fake.store.set(doc, { ...fake.store.get(doc)!, format: 'flowchart-v1' });
+    }
+
+    const after = firestoreSessions({ _sdk: fake.sdk });
+    const listed = await after.listByUser('alice');
+    expect(Object.fromEntries(listed.sessions.map((row) => [row.sessionId, row.format]))).toEqual({
+      waiting: 'flowchart-v1',
+      answered: 'conversation-v1',
+      older: 'conversation-v1',
+    });
+  });
+
   it('asks the SERVER for the filter, the order and the page — not the client', async () => {
     const { sessions, fake } = storeWith();
     await seedOwned(sessions, 3);
