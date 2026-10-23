@@ -540,6 +540,24 @@ describe('functional: an invented value is withheld (posture assist: no repair t
   });
 });
 
+describe('security: a colon inside a value is part of it — an address is not the number after it', () => {
+  it("'::1200' is not the tool's total 1200: withheld, the row failing", async () => {
+    // The tool carried `total: 1200`. The spelling rule used to strip every
+    // leading colon, so the answer's `::1200` read as 1200 and was cleared.
+    const { agent, seen } = orderAgent(
+      [{ toolCalls: [FIND_ORDER] }, { content: JSON.stringify({ order: '::1200', total: 1200 }) }],
+      'assist',
+    );
+    const outcome = await agent.run({ message: 'Which order totals 1200?' }).catch((e) => e);
+    expect(outcome).toBeInstanceOf(AnswerValidationError);
+    expect((outcome as AnswerValidationError).report.checks[1]).toMatchObject({
+      id: 'agent:names-and-numbers',
+      disposition: 'checked-fail',
+    });
+    expect(seen.tokens).toEqual([]);
+  });
+});
+
 for (const reactMode of REACT_MODES) {
   describe(`functional: the repair turn comes first (posture guard) — ${reactMode}`, () => {
     it('the model fetches during its one repair turn; the repaired answer is delivered unchanged', async () => {

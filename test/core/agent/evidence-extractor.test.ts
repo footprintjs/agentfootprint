@@ -586,22 +586,64 @@ describe('regression: a typed answer in compact JSON is read value by value', ()
   // `{"total":1200}` — once the quotes are separators, compact JSON leaves the
   // key's colon on the value. `:1200` read as an IDENTIFIER no result carries,
   // so a typed answer that copied the tool's own number was flagged, and
-  // `rails` refused it. The colon is now stripped before a plain number, on
-  // both sides.
+  // `rails` refused it. A key's colon — the one right after a key's closing
+  // quote — is now a separator in text, on both sides; every other colon is
+  // part of its value.
   const RESULT = { order: 'ORD-44710', total: 1200, count: 123, delta: -1500, ratio: 0.4512 };
   const history = [
     { role: 'tool', toolCallId: 'c1', content: JSON.stringify(RESULT) },
   ] as unknown as readonly LLMMessage[];
   const rails = resolveEvidenceGate({ posture: 'rails' });
 
-  it('the colon of a key comes off a plain number, and only off a plain number', () => {
-    expect(normalizeToken(':1200')).toBe('1200');
-    expect(normalizeToken(':-1500')).toBe('-1500');
-    expect(normalizeToken(':41,200')).toBe('41200');
-    expect(normalizeToken(':0.4512')).toBe('0.4512');
-    expect(normalizeToken('::ffff:10.0.0.1')).toBe('::ffff:10.0.0.1');
-    expect(normalizeToken(':fc1/3')).toBe(':fc1/3');
+  it("a key's colon is a separator in text; every other colon is part of its value", () => {
     expect(tokenize('{"total":1200,"count":123}')).toEqual(['total', '1200', 'count', '123']);
+    expect(tokenize('{"delta":-1500,"rows":"41,200"}')).toEqual([
+      'delta',
+      '-1500',
+      'rows',
+      '41200',
+    ]);
+    expect(tokenize('"total" : 1200')).toEqual(['total', '1200']);
+    // A colon INSIDE a value stays, quoted or not, as a key's value or in prose.
+    expect(tokenize('{"addr":"::1234","port":":8080"}')).toEqual([
+      'addr',
+      '::1234',
+      'port',
+      ':8080',
+    ]);
+    expect(tokenize('The address is "::1234".')).toEqual(['the', 'address', 'is', '::1234']);
+    expect(tokenize('{"note":"say \\":1200\\" twice"}')).toContain(':1200');
+    for (const value of ['::1234', '::1', 'fe80::1', '2001:db8::1234', '::ffff:192.0.2.1']) {
+      expect(normalizeToken(value)).toBe(value);
+      expect(tokenize(`The address is ${value}`)).toContain(value);
+    }
+    expect(normalizeToken(':1200')).toBe(':1200');
+    expect(normalizeToken(':fc1/3')).toBe(':fc1/3');
+  });
+
+  it('an IPv6 address never matches the number after its colons — either way round', () => {
+    const counted = [
+      { role: 'tool', toolCallId: 'c1', content: JSON.stringify({ count: 1234, n: 1 }) },
+    ] as unknown as readonly LLMMessage[];
+    for (const address of ['::1234', '2001:db8::1234', '::ffff:192.0.2.1', 'fe80::1']) {
+      const flaggedValues = check(`The address is ${address}.`, {
+        history: counted,
+        gate: rails,
+      }).unsupported.map((u) => u.value);
+      expect(flaggedValues).toContain(address);
+    }
+    // …and a tool's address never grounds the bare number.
+    const addressed = [
+      { role: 'tool', toolCallId: 'c1', content: JSON.stringify({ addr: '::1234' }) },
+    ] as unknown as readonly LLMMessage[];
+    expect(
+      check('The count is 1234.', { history: addressed, gate: rails }).unsupported.map(
+        (u) => u.value,
+      ),
+    ).toEqual(['1234']);
+    expect(
+      check('The address is ::1234.', { history: addressed, gate: rails }).unsupported,
+    ).toEqual([]);
   });
 
   it('a compact typed answer copying the result is clean, under every posture', () => {

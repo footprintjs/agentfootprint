@@ -21,7 +21,7 @@
  * on the answer side AND on the evidence side. The rules are deliberately few
  * and each is here because a real spelling difference needed it.
  */
-import { anyOf, trimTrailing } from '../lib/linearText.js';
+import { anyOf, isRegExpWhitespace, trimTrailing } from '../lib/linearText.js';
 
 /**
  * Characters that may live INSIDE one token.
@@ -62,16 +62,50 @@ const LEADING_DECORATION = /^[$#@+'"`([{<]+/;
 const TRAILING_DECORATION = anyOf('.,;:!?%\'"`)]}>');
 const ANSWER_TRAILING_DECORATION = anyOf('.,;:!?\'"`)]}>');
 
+const QUOTE = 0x22;
+const COLON = 0x3a;
+const BACKSLASH = 0x5c;
+
 /**
- * `:1200` — a number still wearing the colon of the key before it. Compact
- * JSON writes `"total":1200`: once the quotes become separators the colon
- * stays on the value, and `:1200` read as an IDENTIFIER no result carries, so
- * every number of three or more digits in a typed answer looked invented (and
- * `rails` refused the answer that copied it). Stripped only before a plain
- * number — `::ffff:10.0.0.1` keeps its colons — and on both sides, like every
- * rule here.
+ * Text with each JSON key's colon made a space: `{"total":1200}` reads
+ * `{"total" 1200}`. Compact JSON writes no space after a key, so once the
+ * quotes become separators the key's colon stayed on the value, and `:1200`
+ * read as an IDENTIFIER no result carries — every number of three or more
+ * digits in a typed answer looked invented (and `rails` refused the answer
+ * that copied it).
+ *
+ * Only a KEY's colon: one right after a closing double quote (the second of a
+ * pair; an escaped `\"` is not counted), white space allowed between. Every
+ * other colon is part of the value it sits in and stays — an IPv6 address
+ * (`::1234`, `fe80::1`, `::ffff:192.0.2.1`) is never the number after its
+ * colons, and a quoted `":8080"` keeps its colon. One pass, on both sides,
+ * like every rule here.
  */
-const KEY_COLON = /^:+(?=[-+]?\d+(?:,\d{3})*(?:\.\d+)?$)/;
+function withoutKeyColons(text: string): string {
+  if (!text.includes('"')) return text;
+  let out = '';
+  let from = 0;
+  let open = false;
+  for (let i = 0; i < text.length; i++) {
+    if (text.charCodeAt(i) !== QUOTE || escaped(text, i)) continue;
+    open = !open;
+    if (open) continue;
+    let j = i + 1;
+    while (j < text.length && isRegExpWhitespace(text.charCodeAt(j))) j++;
+    if (text.charCodeAt(j) === COLON) {
+      out += `${text.slice(from, j)} `;
+      from = j + 1;
+    }
+  }
+  return from === 0 ? text : out + text.slice(from);
+}
+
+/** Whether the quote at `at` is escaped: an odd run of backslashes before it. */
+function escaped(text: string, at: number): boolean {
+  let run = 0;
+  for (let k = at - 1; k >= 0 && text.charCodeAt(k) === BACKSLASH; k--) run++;
+  return run % 2 === 1;
+}
 
 /** `1,234` / `12,345,678` / `1,234.56` — a number wearing thousands separators. */
 const THOUSANDS = /^-?\d{1,3}(,\d{3})+(\.\d+)?$/;
@@ -98,7 +132,7 @@ function tokenSpelling(raw: string, preservePercent = false): string {
   v = trimTrailing(
     v.replace(LEADING_DECORATION, ''),
     preservePercent ? ANSWER_TRAILING_DECORATION : TRAILING_DECORATION,
-  ).replace(KEY_COLON, '');
+  );
   if (v === '') return '';
   // Thousands separators are PRESENTATION. `41,200` in prose and `41200` in
   // JSON are one value, and this is the single most common way a correct
@@ -136,7 +170,7 @@ export function countDigits(v: string): number {
  */
 export function tokenize(text: string): string[] {
   const out: string[] = [];
-  for (const rough of text.replace(INTRA_TOKEN, ' ').split(/\s+/)) {
+  for (const rough of withoutKeyColons(text).replace(INTRA_TOKEN, ' ').split(/\s+/)) {
     if (rough === '') continue;
     // A comma inside a token is either a thousands separator (keep the token
     // whole) or a list separator that had no space after it (split).
@@ -156,7 +190,7 @@ export function tokenize(text: string): string[] {
  */
 export function answerTokenSpellings(text: string): string[] {
   const out: string[] = [];
-  for (const rough of text.replace(RANGE_TOKEN, ' ').split(/\s+/)) {
+  for (const rough of withoutKeyColons(text).replace(RANGE_TOKEN, ' ').split(/\s+/)) {
     for (const piece of rough.split(LIST_COMMA)) {
       const spelling = tokenSpelling(piece, true);
       if (spelling !== '') out.push(spelling);
