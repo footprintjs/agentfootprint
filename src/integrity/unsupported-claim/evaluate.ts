@@ -96,7 +96,9 @@ const textOf = (value: string): string => value.normalize('NFC').trim().replace(
 /**
  * A full Unicode case fold WITHOUT the Turkic mappings: each character
  * upper- then lower-cased on its own (so `ß` and `ẞ` fold to `ss`, `ﬁ` to
- * `fi`, a final `ς` to `σ`), except the dotless `ı`, which stays `ı`.
+ * `fi`, a final `ς` to `σ`), except the dotless `ı`, which stays `ı`. It
+ * never decides agreement (`caseOnly` does, on the letters as written): two
+ * texts it folds alike are only texts the comparison cannot tell apart.
  */
 const foldCase = (text: string): string =>
   Array.from(text, (ch) => (ch === 'ı' ? ch : ch.toUpperCase().toLowerCase()))
@@ -118,19 +120,23 @@ function casing(word: string): 'lower' | 'upper' | 'capitalized' | 'mixed' {
 }
 
 /**
- * A word whose case may differ without changing what it says: letters only,
+ * A word the case rule compares across casings (`caseOnly`): letters only,
  * more than three of them, cased all lower, all upper or with a capital first
- * letter. A short word (`MW`, `Co`), a mixed-case one (`aB3xZ9`, `iPhone`)
- * and anything with a digit or another mark keeps its case as written.
+ * letter. The rule cannot tell where such a word's case carries meaning
+ * (`Polish`, `polish`). A short word (`MW`, `Co`), a mixed-case one
+ * (`aB3xZ9`, `iPhone`) and anything with a digit or another mark keeps its
+ * case as written.
  */
 const foldableWord = (word: string): boolean =>
   /^\p{L}+$/u.test(word) && Array.from(word).length > 3 && casing(word) !== 'mixed';
 
 /**
- * Two word texts that fold alike: they agree only when every word that
- * differs is a foldable word that differs in its casing — a capital first
- * letter, or the whole word — not in its letters (`Masse` and `Maße` are both
- * capitalized: two words, not one in two cases).
+ * Two word texts that differ in case alone: as many words, and every word
+ * that differs is a foldable word with the same letters, letter for letter,
+ * in another case — its locale-free lower case (`toLowerCase`) is the
+ * other's: `Settled` and `SETTLED`, `STRAẞE` and `Straße` (`ẞ` is the capital
+ * of `ß`). Letters are compared as written, before any fold, so `ß` is never
+ * `ss`: `Masse`, `maße`, `MAẞE` and `MASSE` against `Maße` differ in letters.
  */
 function caseOnly(a: string, b: string): boolean {
   const wordsA = a.split(' ');
@@ -141,10 +147,7 @@ function caseOnly(a: string, b: string): boolean {
       const other = wordsB[index] ?? '';
       if (word === other) return true;
       return (
-        foldableWord(word) &&
-        foldableWord(other) &&
-        casing(word) !== casing(other) &&
-        foldCase(word) === foldCase(other)
+        foldableWord(word) && foldableWord(other) && word.toLowerCase() === other.toLowerCase()
       );
     })
   );
@@ -156,39 +159,45 @@ const masked = (text: string): string =>
 
 /**
  * Two texts (each `textOf`). Equal: they agree. Otherwise a formatted one is
- * never compared. Texts that fold alike agree only when they differ in the
- * casing of foldable words (`caseOnly`); any other case difference — a short
- * word, a mixed-case one, a digit, ß against ss in one casing — is not
- * compared, because case can carry meaning (`MW`, `Co`, `aB3xZ9`). Texts that
- * differ only by a dotted or dotless i (`ılık`, `ilik`), or only in how a
- * number inside them is spelled (`USD 42.50`, `v1.20`), are not compared.
- * Anything else contradicts.
+ * never compared. Texts with no digit agree when they differ in case alone
+ * (`caseOnly`: foldable words, the same letters in another case). Any other
+ * case difference is not compared — a short word, a mixed-case one, a digit,
+ * ß against ss in any casing, a long s or a ligature against its letters —
+ * and neither are texts that differ only by a dotted or dotless i (`ılık`,
+ * `ilik`), or only in how a number inside them is spelled (`USD 42.50`,
+ * `v1.20`). Anything else contradicts.
  */
 function compareText(a: string, b: string): ClaimValueComparison {
   if (a === b) return 'agrees';
   if (isFormatted(a) || isFormatted(b)) return 'incomparable';
+  if (!hasDigit(a) && !hasDigit(b) && caseOnly(a, b)) return 'agrees';
   const foldedA = foldCase(a);
   const foldedB = foldCase(b);
-  if (foldedA === foldedB) {
-    return !hasDigit(a) && !hasDigit(b) && caseOnly(a, b) ? 'agrees' : 'incomparable';
+  // Alike under the fold, or but for the dot of an i: a case difference the
+  // rule above does not accept — never a contradiction, never agreement.
+  if (foldedA === foldedB || dotlessAsDotted(foldedA) === dotlessAsDotted(foldedB)) {
+    return 'incomparable';
   }
-  if (dotlessAsDotted(foldedA) === dotlessAsDotted(foldedB)) return 'incomparable';
   return masked(foldedA) === masked(foldedB) ? 'incomparable' : 'contradicts';
 }
 
 /**
  * The exact key of a text: equal keys only where `compareText` agrees. A
- * foldable word in lower case or with a capital first letter keys lower-cased
- * (`Settled` as `settled`); every other word, and any text with a digit or a
- * format, keys exactly as written.
+ * foldable word in lower case or with a capital first letter keys by its
+ * lower case (`Settled` as `settled`), tagged so it never meets a word kept
+ * as written (`İstanbul` lowers to an `i` and a combining dot, which as
+ * written is not a word of letters); every other word, and any text with a
+ * digit or a format, keys exactly as written.
  */
 function textKey(text: string): string {
   if (isFormatted(text)) return `f:${JSON.stringify(text)}`;
   if (hasDigit(text)) return `t:${JSON.stringify(text)}`;
   const words = text
     .split(' ')
-    .map((word) => (foldableWord(word) && casing(word) !== 'upper' ? word.toLowerCase() : word));
-  return `w:${JSON.stringify(words.join(' '))}`;
+    .map((word) =>
+      foldableWord(word) && casing(word) !== 'upper' ? `l:${word.toLowerCase()}` : `w:${word}`,
+    );
+  return `w:${JSON.stringify(words)}`;
 }
 /**
  * The own keys a well-formed Claim of each kind may have, and the ones it must
@@ -384,7 +393,18 @@ function compareAt(settled: unknown, claimed: unknown, depth: number): ClaimValu
   }
   if (a.kind === 'list' && b.kind === 'list') {
     if (a.items.length !== b.items.length) return 'contradicts';
-    return combine(a.items.map((item, index) => compareAt(item, b.items[index], depth + 1)));
+    // Every slot, by index: `map` would skip a hole (`[, 1250]`, which
+    // `structuredClone` keeps), and a skipped slot would count as agreement.
+    // A hole is no value, so it is never compared.
+    const results: ClaimValueComparison[] = [];
+    for (let index = 0; index < a.items.length; index++) {
+      results.push(
+        Object.hasOwn(a.items, index) && Object.hasOwn(b.items, index)
+          ? compareAt(a.items[index], b.items[index], depth + 1)
+          : 'incomparable',
+      );
+    }
+    return combine(results);
   }
   if (a.kind === 'object' && b.kind === 'object') {
     const keys = keysOf(a.value);
@@ -416,8 +436,16 @@ function keyAt(value: unknown, depth: number): string | undefined {
     case 'text':
       return textKey(reading.text);
     case 'list': {
-      const items = reading.items.map((item) => keyAt(item, depth + 1));
-      return items.includes(undefined) ? undefined : `[${items.join(',')}]`;
+      // Every slot, by index: a hole has no key, so neither has its list.
+      const items: string[] = [];
+      for (let index = 0; index < reading.items.length; index++) {
+        const inner = Object.hasOwn(reading.items, index)
+          ? keyAt(reading.items[index], depth + 1)
+          : undefined;
+        if (inner === undefined) return undefined;
+        items.push(inner);
+      }
+      return `[${items.join(',')}]`;
     }
     case 'object': {
       const entries = keysOf(reading.value).map((key) => {
@@ -438,14 +466,19 @@ function keyAt(value: unknown, depth: number): string | undefined {
  * findings are pinned); this rule exists so a representational difference
  * never withholds a correct answer as a contradiction:
  *
- * - text is Unicode NFC, trimmed, its white space collapsed, and folded with
- *   a full case fold without the Turkic mappings (`ß` and `ẞ` are `ss`, `ı`
- *   stays `ı`). Case agrees only for a word of letters, more than three of
- *   them, whose first letter or whole word is cased differently (`'Settled'`
- *   and `'settled '`, `'Straße'` and `'STRASSE'`); any other case difference
- *   is not compared — a short word or a unit (`'MW'`, `'Co'`), a mixed-case
- *   word, anything with a digit, ß against ss in one casing (`'Masse'`,
- *   `'Maße'`) — and neither is a dotted against a dotless i (`'ılık'`);
+ * - text is Unicode NFC, trimmed and its white space collapsed. Case agrees
+ *   only where two texts differ in case alone: every word that differs is a
+ *   word of letters, more than three of them, cased all lower, all upper or
+ *   with a capital first letter, with the same letters, letter for letter, in
+ *   another case (`'Settled'` and `'settled '`, `'STRAẞE'` and `'Straße'` —
+ *   `ẞ` is the capital of `ß`). The rule cannot know where case carries
+ *   meaning, so it merges such words too (`'Polish'` and `'polish'`,
+ *   `'AIDS'` and `'aids'`). Any other case difference is not compared — a
+ *   short word or a unit (`'MW'`, `'Co'`), a mixed-case word, anything with a
+ *   digit, `ß` against `ss` in any casing (`'Masse'`, `'maße'`, `'MASSE'`
+ *   against `'Maße'`), a dotted against a dotless i (`'ılık'`): what a full
+ *   case fold without the Turkic mappings would call alike is never
+ *   agreement, and never a contradiction;
  * - a value written in a format — a currency symbol, digit separators, a
  *   dot-grouped number (`'1.250'`: 1.25 or 1250), a date or a time — agrees
  *   only as written and is otherwise not compared, and so is text that
@@ -457,7 +490,9 @@ function keyAt(value: unknown, depth: number): string | undefined {
  * - a plain decimal with a unit (`'1250 ms'`) compares only with the same
  *   unit, written exactly — case included (`MW` is not `mW`);
  * - lists compare item by item in order, objects key by key, and a definite
- *   difference anywhere wins over a part that could not be compared;
+ *   difference anywhere wins over a part that could not be compared; a hole
+ *   in a list (`[, 1250]`, which `structuredClone` keeps) is no value and is
+ *   never compared;
  * - `null` against a value is a difference (a raw doubt is the caller's to
  *   classify first; only a DECLARED `known(null)` should reach here);
  * - a Claim wrapper is read only at the TOP of either value, and only when it
@@ -481,12 +516,15 @@ export function compareClaimValues(settled: unknown, claimed: unknown): ClaimVal
 /**
  * One EXACT key per value under the same normalization, for a reader of
  * several values at once (`delivered.ts` asks whether a run read one fact two
- * ways). Two values share a key only when they are the same value as written:
- * a JS number by the digits it prints, so `'9007199254740993'` and the double
- * `9007199254740992` — which `compareClaimValues` cannot tell apart — have
- * different keys. Equal keys always compare `agrees`; key equality is
- * transitive, agreement at double precision is not. `undefined` for a value
- * that cannot be compared at all.
+ * ways). Equal keys always compare `agrees`: two values share a key only when
+ * they are the same value under the comparison's exact parts — text up to
+ * the case rule (a word keyed by its lower case never meets a word kept as
+ * written), a number by its digits — so `'9007199254740993'` and the double
+ * `9007199254740992`, which `compareClaimValues` cannot tell apart, have
+ * different keys. The converse does not hold: a key is stricter (`'SETTLED'`
+ * and `'settled'` agree under two keys), and key equality is transitive where
+ * agreement at double precision is not. `undefined` for a value that cannot
+ * be compared at all, a list with a hole included.
  */
 export function claimValueKey(value: unknown): string | undefined {
   const top = topFace(value);

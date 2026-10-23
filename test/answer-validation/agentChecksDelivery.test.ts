@@ -1282,51 +1282,59 @@ describe('functional: a representational difference is never a contradiction', (
   });
 });
 
-// ── Case that can carry meaning is never agreement ───────────────────────
+// ── Case: only the same letters in another case agree ───────────────────
 
-describe('security: a case-only difference that can carry meaning is withheld, even with your check passing', () => {
-  /** One fact, settled by the tool as `settled`; the answer states `stated`. */
-  async function caseRun(settledValue: unknown, stated: unknown) {
-    const source = scripted([
-      { toolCalls: [{ id: 'call-1', name: 'read_plant', args: {} }] },
-      { content: JSON.stringify({ value: stated }) },
-    ]);
-    const agent = Agent.create({ provider: source.provider, model: 'synthetic', maxIterations: 4 })
-      .tool(
-        defineTool({
-          name: 'read_plant',
-          description: 'Read the plant.',
-          inputSchema: { type: 'object', properties: {} },
-          execute: () =>
-            describedResult({
-              facts: [{ entity: 'plant-7', value: settledValue as never }],
-              provenance: { source: 'synthetic-grid', measuredAt: '2026-01-01T00:00:00Z' },
-            }),
-        }),
-      )
-      .outputSchema({ parse: (v: unknown) => v as { value: unknown } })
-      .claims({ value: { entity: 'plant-7', field: 'value' } })
-      .answerValidation<{ value: unknown }>({
-        id: 'plant',
-        version: '1',
-        agentChecks: ['claims'],
-        validate: () => ({ checks: [{ id: 'asked-plant', disposition: 'checked-pass' }] }),
-      })
-      .build();
-    const outcome = await agent
-      .run({ message: 'What is the plant rated at?' })
-      .catch((e: unknown) => e);
-    return { outcome, report: agent.answerValidation() };
-  }
+/**
+ * One fact, settled by the tool as `settledValue` — through `describedResult`,
+ * so the ledger keeps what `structuredClone` keeps, a list's hole included —
+ * and an answer that states `stated`, with your own check passing.
+ */
+async function oneFactRun(settledValue: unknown, stated: unknown) {
+  const source = scripted([
+    { toolCalls: [{ id: 'call-1', name: 'read_plant', args: {} }] },
+    { content: JSON.stringify({ value: stated }) },
+  ]);
+  const agent = Agent.create({ provider: source.provider, model: 'synthetic', maxIterations: 4 })
+    .tool(
+      defineTool({
+        name: 'read_plant',
+        description: 'Read the plant.',
+        inputSchema: { type: 'object', properties: {} },
+        execute: () =>
+          describedResult({
+            facts: [{ entity: 'plant-7', value: settledValue as never }],
+            provenance: { source: 'synthetic-grid', measuredAt: '2026-01-01T00:00:00Z' },
+          }),
+      }),
+    )
+    .outputSchema({ parse: (v: unknown) => v as { value: unknown } })
+    .claims({ value: { entity: 'plant-7', field: 'value' } })
+    .answerValidation<{ value: unknown }>({
+      id: 'plant',
+      version: '1',
+      agentChecks: ['claims'],
+      validate: () => ({ checks: [{ id: 'asked-plant', disposition: 'checked-pass' }] }),
+    })
+    .build();
+  const outcome = await agent
+    .run({ message: 'What is the plant rated at?' })
+    .catch((e: unknown) => e);
+  return { outcome, report: agent.answerValidation() };
+}
 
+describe('security: a case difference the rule does not accept is withheld, even with your check passing', () => {
   it.each([
     ['U1 a unit in an object', { amount: 5, unit: 'MW' }, { amount: 5, unit: 'mW' }],
     ['U2 a bare unit', 'MW', 'mW'],
     ['U4 dotless and dotted i', 'ılık', 'ilik'],
     ['ß and ss, one case', 'Masse', 'Maße'],
+    ['G1 ß and ss across casings', 'Masse', 'maße'],
+    ['G2 ss against a capital sharp s', 'Masse', 'MAẞE'],
+    ['G4 Busse and Buße', 'Busse', 'buße'],
+    ['capitals with ss against ß', 'Maße', 'MASSE'],
     ['a dot-grouped number', '1.250', 1.25],
   ] as const)('%s: withheld as unverified', async (_case, settledValue, stated) => {
-    const { outcome, report } = await caseRun(settledValue, stated);
+    const { outcome, report } = await oneFactRun(settledValue, stated);
     expect(outcome).toBeInstanceOf(AnswerValidationError);
     expect(report).toMatchObject({ status: 'unverified', reason: 'unreachable-checks' });
     expect(report?.checks[1]).toMatchObject({
@@ -1336,8 +1344,52 @@ describe('security: a case-only difference that can carry meaning is withheld, e
   });
 
   it("a plain word's capitals still agree: 'SETTLED' for 'settled' is delivered", async () => {
-    const { outcome, report } = await caseRun('settled', 'SETTLED');
+    const { outcome, report } = await oneFactRun('settled', 'SETTLED');
     expect(outcome).toBe(JSON.stringify({ value: 'SETTLED' }));
+    expect(report?.checks[1]).toMatchObject({ disposition: 'not-applicable' });
+  });
+
+  it("ẞ is the capital of ß: 'STRAẞE' for 'Straße' is delivered", async () => {
+    const { outcome, report } = await oneFactRun('Straße', 'STRAẞE');
+    expect(outcome).toBe(JSON.stringify({ value: 'STRAẞE' }));
+    expect(report?.checks[1]).toMatchObject({ disposition: 'not-applicable' });
+  });
+});
+
+// ── A hole in a list is no value ────────────────────────────────────────
+
+describe('security: a list with a hole is never agreement, even with your check passing', () => {
+  /** `[, 1250, 1300]`: a month the tool never reported, kept as a hole. */
+  const monthly = (): unknown[] => {
+    const list: unknown[] = new Array(3);
+    list[1] = 1250;
+    list[2] = 1300;
+    return list;
+  };
+
+  it('a sparse fact against a full answer: withheld as unverified, never delivered', async () => {
+    const { outcome, report } = await oneFactRun(monthly(), [9750, 1250, 1300]);
+    expect(outcome).toBeInstanceOf(AnswerValidationError);
+    expect(report).toMatchObject({ status: 'unverified', reason: 'unreachable-checks' });
+    expect(report?.checks[1]).toMatchObject({
+      id: 'agent:claims:value',
+      disposition: 'unreachable',
+    });
+  });
+
+  it('a difference beside the hole still fails the row', async () => {
+    const { outcome, report } = await oneFactRun(monthly(), [9750, 1250, 1999]);
+    expect(outcome).toBeInstanceOf(AnswerValidationError);
+    expect(report).toMatchObject({ status: 'failed' });
+    expect(report?.checks[1]).toMatchObject({
+      id: 'agent:claims:value',
+      disposition: 'checked-fail',
+    });
+  });
+
+  it('the same fact written in full agrees: delivered', async () => {
+    const { outcome, report } = await oneFactRun([9750, 1250, 1300], [9750, 1250, 1300]);
+    expect(outcome).toBe(JSON.stringify({ value: [9750, 1250, 1300] }));
     expect(report?.checks[1]).toMatchObject({ disposition: 'not-applicable' });
   });
 });

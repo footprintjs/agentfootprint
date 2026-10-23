@@ -20,7 +20,7 @@ Opt-in contract. The callback cannot replace the accepted answer.
 
 > `readonly` `optional` **agentChecks?**: readonly [`AgentCheckName`](/docs/api/type-aliases/AgentCheckName)[]
 
-Defined in: [src/answer-validation/types.ts:218](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L218)
+Defined in: [src/answer-validation/types.ts:221](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L221)
 
 The agent's own answer checks that take part in this validation. Opt-in:
 omitted, the report holds your checks alone, exactly as before.
@@ -36,19 +36,21 @@ way. `mode: 'observe'` records the rows and delivers.
 - `'claims'`: one row per declared `.claims()` field, id
   `agent:claims:<field>`, judged on the candidate this validation delivers.
   Values compare after one declared normalization: text in Unicode NFC,
-  trimmed, white space collapsed, under a full case fold without the
-  Turkic mappings; case agrees only for a word of more than three letters
-  whose first letter or whole word is cased differently (`'Settled'` and
-  `'settled '`, `'STRASSE'` and `'Straße'` agree); a number and a plain
-  decimal string by value (`42.5` and `'42.50'`); a number with a unit
-  only with the same unit, written exactly (`MW` is not `mW`). Values that
-  cannot be compared safely are `unreachable`, never `checked-fail`: a
-  list or an object against a scalar, a unit against a bare number, any
+  trimmed, white space collapsed; case agrees only for a word of letters,
+  more than three of them, cased all lower, all upper or with a capital
+  first letter, with the same letters in another case (`'Settled'` and
+  `'settled '`, `'STRAẞE'` and `'Straße'` agree) — a rule that cannot
+  know where case carries meaning, so `'Polish'` and `'polish'` agree
+  too; a number and a plain decimal string by value (`42.5` and
+  `'42.50'`); a number with a unit only with the same unit, written
+  exactly (`MW` is not `mW`). Values that cannot be compared safely are
+  `unreachable`, never `checked-fail`: a list or an object against a
+  scalar, a unit against a bare number, a list with a hole in it, any
   other case difference (a short word or unit such as `'MW'`/`'mW'`, a
-  mixed-case word, text with a digit, `'Masse'`/`'Maße'`, `'ılık'`/
-  `'ilik'`), and a value written with a currency symbol, digit
-  separators, a dot-grouped number (`'1.250'`), a date or a time unless
-  written the same.
+  mixed-case word, text with a digit, `ß` against `ss` in any casing such
+  as `'Masse'`/`'maße'`, `'ılık'`/`'ilik'`), and a value written with a
+  currency symbol, digit separators, a dot-grouped number (`'1.250'`), a
+  date or a time unless written the same.
   The row can only WITHHOLD: it reads every reading of the fact this run
   made (from any tool, with no scope or age check, so any reading may be
   forged or stale), and one more reading never makes it more permissive.
@@ -58,10 +60,11 @@ way. `mode: 'observe'` records the rows and delivers.
   `not-applicable` — agreement is not verification. No tool result
   settled the fact (a follow-up turn answering from an earlier run's read
   included): `not-applicable`, not checked. `unreachable`, so enforce
-  withholds and observe delivers "not sure": readings that disagree; a
-  reading that settled the fact only as unknown, `null` or `'unknown'` (in
-  any case) beside a stated value the answer does not contradict; doubt
-  on both sides; or a value or reading that is not a well-formed `Claim`. Leaves the field out, or
+  withholds and observe delivers "not sure": readings that differ where
+  the value contradicts none of them; a reading that settled the fact
+  only as unknown, `null` or `'unknown'` (in any case) beside a stated
+  value the answer does not contradict; doubt on both sides; or a value
+  or reading that is not a well-formed `Claim`. Leaves the field out, or
   declines it (`null`, `'unknown'`) where the run read values:
   `not-applicable`. So a fact whose value changes during the run (a
   status polled from `'queued'` to `'done'`, a balance read before and
@@ -151,7 +154,7 @@ Defined in: [src/answer-validation/types.ts:125](https://github.com/footprintjs/
 
 > **validate**(`candidate`, `context`): `AnswerValidationResult` \| `Promise`\<`AnswerValidationResult`\>
 
-Defined in: [src/answer-validation/types.ts:219](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L219)
+Defined in: [src/answer-validation/types.ts:222](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L222)
 
 #### Parameters
 

@@ -103,12 +103,12 @@ with this door and with `rails` (`docs/design/honesty/README.md` § 8).
   (a matrix property in `test/answer-validation/agentChecks.test.ts` pins it).
   Values are compared after one declared normalization
   (`integrity/unsupported-claim/evaluate.ts` · `compareClaimValues`: text in
-  NFC, trimmed, white space collapsed, under a full case fold without the
-  Turkic mappings — case agrees only for a word of more than three letters
-  cased differently in its first letter or as a whole; a number and a plain
-  decimal string by value; a unit only against the same unit, written
-  exactly; a currency, separators, a dot-grouped number, a date or a time
-  only as written).
+  NFC, trimmed, white space collapsed — case agrees only for a word of more
+  than three letters with the same letters in another case, `ß` never `ss`,
+  a rule that cannot know where case carries meaning (`Polish`/`polish`
+  agree); a number and a plain decimal string by value; a unit only against
+  the same unit, written exactly; a currency, separators, a dot-grouped
+  number, a date or a time only as written; a list with a hole never).
   The contract is unscoped — `(entity, field)` rows from ANY tool, with no
   scope or age check, and any result carrying the semantics marker settles a
   fact — so any reading may be forged or stale, and the row obeys ONE law: a
@@ -118,7 +118,8 @@ with this door and with `rails` (`docs/design/honesty/README.md` § 8).
   value read → `checked-fail`, whatever else was read — a found contradiction
   is never relabelled unverified, and stays one when readings are added. Agreement → `not-applicable`: agreement verifies
   nothing, an absence a tool declared (`known(null)`) included.
-  `unreachable` (withheld, fail closed): readings that disagree; a reading
+  `unreachable` (withheld, fail closed): readings that differ where the
+  answer contradicts none of them; a reading
   that settled the fact only as unknown, `null` or `'unknown'` (doubt words
   read after the same normalization) beside the answer's value; doubt on both
   sides; values of kinds that cannot be compared safely ("could not

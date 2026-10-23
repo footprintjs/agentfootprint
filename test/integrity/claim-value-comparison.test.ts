@@ -23,30 +23,36 @@ import {
 import { known, unknown } from '../../src/doors/maps.js';
 
 describe('UNIT — the declared normalization', () => {
-  it('text: Unicode NFC, trimmed, inner spaces collapsed, a word case-folded — and nothing else', () => {
+  it('text: Unicode NFC, trimmed, inner spaces collapsed, case by the case rule — and nothing else', () => {
     expect(compareClaimValues('Settled', ' settled\t')).toBe('agrees');
     expect(compareClaimValues('in progress', 'in  progress')).toBe('agrees');
     expect(compareClaimValues('in progress', 'in_progress')).toBe('contradicts');
     expect(compareClaimValues('caf\u00e9', 'cafe\u0301')).toBe('agrees'); // NFC and NFD
-    expect(compareClaimValues('Straße', 'STRASSE')).toBe('agrees'); // a real case fold
+    expect(compareClaimValues('Straße', 'STRASSE')).toBe('incomparable'); // ß is never ss
     expect(compareClaimValues('settled', 'pending')).toBe('contradicts');
   });
 
-  it('case agrees only where it cannot carry meaning — both directions', () => {
-    // Agrees: a plain word of more than three letters, first letter or whole word.
+  it('case agrees only for the same letters in another case — both directions', () => {
+    // Agrees: a word of letters only, more than three of them, cased all lower,
+    // all upper or with a capital first letter, letter for letter the same.
     for (const [a, b] of [
       ['settled', 'Settled'],
       ['settled', 'SETTLED'],
       ['Settled', 'SETTLED'],
       ['true', 'TRUE'],
       ['Settled Today', 'settled today'],
-      ['Straße', 'STRASSE'],
-      ['STRAẞE', 'Straße'],
+      ['STRAẞE', 'Straße'], // ẞ is the capital of ß
+      ['MAẞE', 'maße'],
+      ['MASSE', 'Masse'],
+      // The rule cannot know where case carries meaning: these agree too.
+      ['Polish', 'polish'],
+      ['AIDS', 'aids'],
     ]) {
       expect(compareClaimValues(a, b)).toBe('agrees');
       expect(compareClaimValues(b, a)).toBe('agrees');
     }
-    // Not compared: short words, mixed case, units, letters with other marks, ß/ss in one case.
+    // Not compared: short words, mixed case, units, letters with other marks,
+    // and ß against ss in ANY casing — the letters differ, whatever a fold says.
     for (const [a, b] of [
       ['MW', 'mW'],
       ['Mb', 'MB'],
@@ -59,10 +65,21 @@ describe('UNIT — the declared normalization', () => {
       ['N/A', 'n/a'],
       ['New York', 'new york'],
       ['Masse', 'Maße'],
+      ['Masse', 'maße'],
+      ['Masse', 'MAẞE'],
+      ['MASSE', 'Maße'],
+      ['Maße', 'masse'],
+      ['Busse', 'buße'],
+      ['Ijssel', 'ijßel'],
+      ['Straße', 'STRASSE'],
+      ['strasse', 'Straße'],
       ['STRAẞE', 'STRASSE'],
+      ['ſtop', 'STOP'], // the long s is not s in another case
+      ['ﬁnal', 'FINAL'], // nor is a ligature two letters
       ['ılık', 'ilik'],
       ['ISPARTA', 'ısparta'],
       ['İstanbul', 'istanbul'],
+      ['İstanbul', 'i\u{307}stanbul'], // a lower i with a combining dot is not a word of letters
     ]) {
       expect(compareClaimValues(a, b)).toBe('incomparable');
       expect(compareClaimValues(b, a)).toBe('incomparable');
@@ -173,6 +190,32 @@ describe('UNIT — the declared normalization', () => {
     expect(compareClaimValues({ a: 1 }, { a: 1, b: 2 })).toBe('contradicts');
   });
 
+  it('a hole in a list is no value: never agreement, on either side, at any depth', () => {
+    // `structuredClone` keeps a hole, so a tool's sparse list reaches the
+    // ledger as one; JSON would have written `null` there.
+    const monthly: unknown[] = new Array(3);
+    monthly[1] = 1250;
+    monthly[2] = 1300;
+    expect(Object.hasOwn(structuredClone(monthly), 0)).toBe(false);
+    for (const holed of [monthly, structuredClone(monthly)]) {
+      expect(compareClaimValues(holed, [9750, 1250, 1300])).toBe('incomparable');
+      expect(compareClaimValues([9750, 1250, 1300], holed)).toBe('incomparable');
+      expect(compareClaimValues(holed, [null, 1250, 1300])).toBe('incomparable');
+      expect(compareClaimValues(holed, holed)).toBe('incomparable');
+      expect(compareClaimValues({ monthly: holed }, { monthly: [9750, 1250, 1300] })).toBe(
+        'incomparable',
+      );
+      expect(compareClaimValues([holed], [[9750, 1250, 1300]])).toBe('incomparable');
+      expect(compareClaimValues(known(holed, 'src'), [9750, 1250, 1300])).toBe('incomparable');
+      // A definite difference elsewhere still contradicts, and so does another length.
+      expect(compareClaimValues(holed, [9750, 1250, 1999])).toBe('contradicts');
+      expect(compareClaimValues(holed, [1250, 1300])).toBe('contradicts');
+    }
+    // A list of holes only is no value either.
+    expect(compareClaimValues(new Array(2), [1, 2])).toBe('incomparable');
+    expect(compareClaimValues([1, 2], new Array(2))).toBe('incomparable');
+  });
+
   it('a known(…) wrapper is read where the contract puts one — at the top of a value only', () => {
     expect(compareClaimValues(known(1250, 'src'), '1250')).toBe('agrees');
     expect(compareClaimValues(1250, known('1250', 'answer'))).toBe('agrees');
@@ -195,7 +238,11 @@ describe('UNIT — one exact key per value, for reading several values at once',
     expect(claimValueKey('1250 ms')).not.toBe(claimValueKey(1250));
     // The text rules, exactly: a word folds, a unit and an identifier keep their case.
     expect(claimValueKey('Settled')).toBe(claimValueKey('settled'));
+    expect(claimValueKey('Maße')).toBe(claimValueKey('maße'));
     expect(claimValueKey('Masse')).not.toBe(claimValueKey('Maße'));
+    expect(claimValueKey('Masse')).not.toBe(claimValueKey('maße'));
+    // A word kept as written never meets a word keyed by its lower case.
+    expect(claimValueKey('İstanbul')).not.toBe(claimValueKey('i\u{307}stanbul'));
     expect(claimValueKey('MW')).not.toBe(claimValueKey('mW'));
     expect(claimValueKey('ılık')).not.toBe(claimValueKey('ilik'));
     expect(claimValueKey('caf\u00e9')).toBe(claimValueKey('cafe\u0301'));
@@ -242,6 +289,8 @@ describe('UNIT — one exact key per value, for reading several values at once',
   });
 
   it('no key for what cannot be compared', () => {
+    const holed: unknown[] = new Array(2);
+    holed[1] = 1250;
     for (const value of [
       undefined,
       Number.NaN,
@@ -249,6 +298,9 @@ describe('UNIT — one exact key per value, for reading several values at once',
       new Date(0),
       unknown('absent'),
       { kind: 'known', value: 1, evidence: 'x', note: 'y' },
+      holed,
+      { monthly: holed },
+      [holed],
     ]) {
       expect(claimValueKey(value)).toBeUndefined();
     }
@@ -382,6 +434,20 @@ describe('SECURITY — depth, cycles and unknowns', () => {
       'MASSE',
       'Masse',
       'Maße',
+      'maße',
+      'MAẞE',
+      'Busse',
+      'buße',
+      'İstanbul',
+      'İSTANBUL',
+      'istanbul',
+      'i\u{307}stanbul',
+      'Θeta',
+      'ϴeta',
+      'ΘETA',
+      'ϴETA',
+      'Polish',
+      'polish',
       'ılık',
       'ilik',
       'ILIK',

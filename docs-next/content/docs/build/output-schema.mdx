@@ -481,7 +481,7 @@ needs its builder call, or `build()` refuses. Their rows come after yours in
 
 | Row | `checked-pass` | `checked-fail` | `unreachable` | `not-applicable` |
 |---|---|---|---|---|
-| `agent:claims:<field>`, one per `.claims()` field, judged on the JSON this validation delivers | never: agreeing with a fact is not verifying the answer | the field contradicts a value this run read for the fact — whatever else it read | this run read the fact two different ways, or only as unknown, `null` or `'unknown'` beside a stated value; doubt on both sides; values that cannot be compared safely; or a value that is not a well-formed `Claim` | the field agrees with the fact; no tool result settled the fact (the claim is not checked); or the answer leaves the field out, or declines it (`null`, `'unknown'`) |
+| `agent:claims:<field>`, one per `.claims()` field, judged on the JSON this validation delivers | never: agreeing with a fact is not verifying the answer | the field contradicts a value this run read for the fact — whatever else it read | this run's readings of the fact differ and the field contradicts none of them, or the run read it only as unknown, `null` or `'unknown'` beside a stated value; doubt on both sides; values that cannot be compared safely; or a value that is not a well-formed `Claim` | the field agrees with the fact; no tool result settled the fact (the claim is not checked); or the answer leaves the field out, or declines it (`null`, `'unknown'`) |
 | `agent:names-and-numbers`, the gate asked of the JSON this validation delivers | never: finding a value clears an answer, it does not verify it | a value no tool result the run read carried | a value was not found and the evidence index had hit its ceiling; or the answer is longer than the gate reads (its first 20,000 words and numbers), so the rest was never looked up | no value is unsupported, or the answer states none |
 
 - **Every row judges what is delivered.** Rows are judged on the exact JSON
@@ -521,35 +521,43 @@ needs its builder call, or `build()` refuses. Their rows come after yours in
   a reading than without it, so a forged or stale reading can at most withhold
   an answer, never deliver one. When no tool result settled the fact, the row
   is `not-applicable`: the claim is not checked, and your own checks decide.
-  Every reading counts, never the latest alone: readings that disagree, or one
-  that settled the fact only as unknown, `null` or `'unknown'` beside the
-  answer's value, make the row `unreachable` — the library cannot tell which
-  one is right. A contradiction found is reported as one: if the field
-  contradicts any value the run read, the row fails, whatever else was read.
+  Every reading counts, never the latest alone. A contradiction found is
+  reported as one: if the field contradicts any value the run read, the row
+  fails, whatever else was read — readings 900 and 1250 with the answer 1250
+  fail it. Readings that differ where the field contradicts none of them
+  (`900` and `'900 ms'` with the answer 900), or one that settled the fact
+  only as unknown, `null` or `'unknown'` beside the answer's value, make the
+  row `unreachable`: the library cannot tell which one is right.
 - **A different spelling is not a contradiction.** A claim is compared after
   one declared normalization. Text is compared in Unicode NFC, trimmed, with
-  its white space collapsed, under a full case fold without the Turkic
-  mappings (`ß` and `ẞ` fold to `ss`; the dotless `ı` stays `ı`). A number and
-  a string written as a plain decimal compare by value, both ways (`42.5`
-  agrees with `'42.50'`, `1250` with `'1250'`). A number with a unit compares
-  only with the same unit, written exactly: `'5 MW'` is not `'5 mW'`.
-- **Case agrees only where it cannot carry meaning.** Two texts that differ
-  only in case agree when every word that differs is a word of letters, more
-  than three of them, whose first letter or whole word is cased differently:
-  `'Settled '` agrees with `'settled'`, `'TRUE'` with `'true'`, `'STRASSE'`
-  and `'STRAẞE'` with `'Straße'`. Any other case difference is "could not
-  compare" — `unreachable`, never agreement: a short word or a unit (`'MW'`
-  and `'mW'`, `'Co'` and `'CO'`), a mixed-case word (`'iPhone'`), anything
-  with a digit (`'ORD-44710'`), `ß` against `ss` in the same casing (`'Masse'`
-  and `'Maße'` are two German words), and a dotted against a dotless i
-  (`'ılık'` and `'ilik'`).
+  its white space collapsed. A number and a string written as a plain decimal
+  compare by value, both ways (`42.5` agrees with `'42.50'`, `1250` with
+  `'1250'`). A number with a unit compares only with the same unit, written
+  exactly: `'5 MW'` is not `'5 mW'`.
+- **Case agrees only between the same letters, in words of more than three.**
+  Two texts that differ only in case agree when every word that differs is
+  made of letters only, more than three of them, is written all lower case,
+  all capitals or with a capital first letter, and has the same letters,
+  letter for letter, as the other word: `'Settled '` agrees with `'settled'`,
+  `'TRUE'` with `'true'`, `'STRAẞE'` with `'Straße'` (`ẞ` is the capital of
+  `ß`). The rule cannot know where case carries meaning, so it also merges
+  words whose case does: `'Polish'` agrees with `'polish'`, `'AIDS'` with
+  `'aids'`, `'March'` with `'march'`. If case matters for a field, leave it
+  out of `.claims()` and compare it exactly in your own `validate`. Any other
+  case difference is "could not compare" — `unreachable`, never agreement: a
+  word of three letters or fewer, or a unit (`'MW'` and `'mW'`, `'Co'` and
+  `'CO'`), a mixed-case word (`'iPhone'`), anything with a digit
+  (`'ORD-44710'`), `ß` against `ss` in any casing (`'Masse'`, `'maße'` or
+  `'MASSE'` against `'Maße'`: letters are compared before any case folding),
+  and a dotted against a dotless i (`'ılık'` and `'ilik'`).
 - **What cannot be compared safely is `unreachable`**, with the reason "could
   not compare", never `checked-fail`: a list or an object against a single
   value, a unit against a bare number (`'1250 ms'` against `1250`), text
-  against a number, and a value written with a currency symbol, digit
-  separators, a dot-grouped number (`'1.250'` is 1.25 or 1250, by locale), a
-  date or a time (`'$1,250.00'`, `'2026-01-01T00:00:00Z'`) unless both are
-  written the same.
+  against a number, a list with a hole in it (a sparse array: the run keeps a
+  tool result's holes, where JSON would write `null`), and a value written
+  with a currency symbol, digit separators, a dot-grouped number (`'1.250'`
+  is 1.25 or 1250, by locale), a date or a time (`'$1,250.00'`,
+  `'2026-01-01T00:00:00Z'`) unless both are written the same.
 - **Agreement on doubt verifies nothing.** When the tool settled a field only
   as `null` or `'unknown'` and the answer gives no value either, the row is
   `unreachable`: enforce withholds the answer, and observe delivers it with

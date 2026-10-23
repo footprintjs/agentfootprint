@@ -39,6 +39,15 @@ const settled = (value: unknown, over: Partial<ClaimLedgerRow> = {}): ClaimLedge
   ...over,
 });
 
+/** A list whose first slot is a hole (`[, …items]`): `structuredClone` keeps it, JSON would not. */
+function holed(...items: readonly unknown[]): unknown[] {
+  const list: unknown[] = new Array(items.length + 1);
+  items.forEach((item, index) => {
+    list[index + 1] = item;
+  });
+  return list;
+}
+
 /** The matrix both properties read: values, doubts, kinds and wrappers of every shape. */
 const VALUES: readonly unknown[] = [
   undefined,
@@ -60,6 +69,7 @@ const VALUES: readonly unknown[] = [
   [],
   [0],
   [0, false],
+  holed(false),
   {},
   { a: 1, b: 2 },
   { b: 2, a: 1 },
@@ -402,10 +412,11 @@ describe('unit: the claims rows', () => {
 
 describe('oracle: a claim row compares values after the declared normalization', () => {
   // Written out by hand, pair by pair — never derived from the comparator it
-  // checks. Text is trimmed and case-folded; a number and a string written as
-  // a plain decimal compare by value, both ways, digit for digit; a number
-  // with a unit compares only with the same unit; lists item by item, objects
-  // key by key. Values of kinds that cannot be compared safely are
+  // checks. Text is trimmed, and case agrees only between the same letters in
+  // a word of more than three; a number and a string written as a plain
+  // decimal compare by value, both ways, digit for digit; a number with a unit
+  // compares only with the same unit; lists item by item (a hole is no value),
+  // objects key by key. Values of kinds that cannot be compared safely are
   // `unreachable` ("could not compare"), never "contradicts". Agreement is
   // `not-applicable`: it never verifies.
   const AGREES = 'not-applicable';
@@ -420,13 +431,15 @@ describe('oracle: a claim row compares values after the declared normalization',
     ['different text', 'settled', 'pending', CONTRADICTS],
     ['inner spacing collapses', 'in progress', 'in  progress', AGREES],
     ['NFC and NFD spellings of one word', 'caf\u00e9', 'cafe\u0301', AGREES],
-    ['a real case fold', 'Straße', 'STRASSE', AGREES],
+    ['ß is never ss', 'Straße', 'STRASSE', INCOMPARABLE],
     ["an id's case may matter", 'ORD-44710', 'ord-44710', INCOMPARABLE],
     ['a mixed-case token', 'aB3xZ9', 'Ab3Xz9', INCOMPARABLE],
-    // Case agrees only for a plain word of more than three letters whose first
-    // letter's case or whole-word case differs; any other case-only difference
-    // is not compared — case can carry meaning.
+    // Case agrees only for a plain word of more than three letters, cased all
+    // lower, all upper or with a capital first letter, whose letters are the
+    // same letter for letter in another case; any other case-only difference
+    // is not compared. The rule cannot know where case carries meaning.
     ['a whole word in capitals', 'true', 'TRUE', AGREES],
+    ['a word whose case can carry meaning', 'Polish', 'polish', AGREES],
     ['a bare unit', 'MW', 'mW', INCOMPARABLE],
     ['megabits and megabytes, bare', 'Mb', 'MB', INCOMPARABLE],
     ['cobalt and carbon monoxide', 'Co', 'CO', INCOMPARABLE],
@@ -435,12 +448,17 @@ describe('oracle: a claim row compares values after the declared normalization',
     ['letters and a slash', 'N/A', 'n/a', INCOMPARABLE],
     ['a unit inside an object', { amount: 5, unit: 'MW' }, { amount: 5, unit: 'mW' }, INCOMPARABLE],
     ['a unit inside a list', [5, 'MW'], [5, 'mW'], INCOMPARABLE],
-    // A full case fold without the Turkic mappings: ı stays ı, ẞ and ß are ss.
+    // Letters are compared before any fold: ı is not i, and ß is never ss —
+    // ẞ is its capital.
     ['dotless and dotted i', 'ılık', 'ilik', INCOMPARABLE],
     ['a Turkish capital I', 'ISPARTA', 'ısparta', INCOMPARABLE],
     ['the capital sharp s', 'STRAẞE', 'Straße', AGREES],
-    ['capitals of a word with ß', 'MASSE', 'Maße', AGREES],
+    ['ß in capitals and in lower case', 'MAẞE', 'maße', AGREES],
+    ['capitals with ss against ß', 'MASSE', 'Maße', INCOMPARABLE],
     ['ß and ss in one case: two words', 'Masse', 'Maße', INCOMPARABLE],
+    ['ß and ss across casings', 'Masse', 'maße', INCOMPARABLE],
+    ['ss against a capital sharp s', 'Masse', 'MAẞE', INCOMPARABLE],
+    ['Busse and Buße', 'Busse', 'buße', INCOMPARABLE],
     // A dot-grouped or comma decimal may be read either way round.
     ['a dot-grouped number', '1.250', 1.25, INCOMPARABLE],
     ['a dot-grouped number with a unit', '1.250 kg', '1.25 kg', INCOMPARABLE],
@@ -496,6 +514,10 @@ describe('oracle: a claim row compares values after the declared normalization',
     ['lists of another length', [1, 2], [1, 2, 3], CONTRADICTS],
     ['a list with one item not comparable', [1, 'x'], [1, ['x']], INCOMPARABLE],
     ['a definite difference wins over one not comparable', [1, 'x'], [2, ['x']], CONTRADICTS],
+    // A hole (a sparse list keeps it through structuredClone) is no value.
+    ['a hole in a settled list', holed(1250, 1300), [9750, 1250, 1300], INCOMPARABLE],
+    ['a hole in an answered list', [9750, 1250, 1300], holed(1250, 1300), INCOMPARABLE],
+    ['a hole beside a difference', holed(1250, 1300), [9750, 1250, 1999], CONTRADICTS],
     [
       'objects that agree after normalization',
       { s: 'Settled ', n: '7' },
