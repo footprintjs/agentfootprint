@@ -22,9 +22,8 @@ export type ReadEmptiness =
   | 'unknown';
 
 /**
- * One call of the record, in the order the calls were made. The checker classifies no tool
- * itself beyond the one rule of § 5.1: a call is a READ when its tool declares `search` or its
- * row is an `among` miss; every other call is not.
+ * One call of the record, in the order the calls were made. Whether a call READ is the caller's
+ * to say (`effect`); the checker classifies no tool itself.
  */
 export interface TurnCall {
   /** The library-minted result identity, `claim-result/<ns>/<runId>/<ordinal>`. */
@@ -34,6 +33,11 @@ export interface TurnCall {
   readonly toolName: string;
   /** The conversation turn the call ran in. */
   readonly turn: number;
+  /**
+   * The caller's effect class: `read` for a call that only reads (a `search` tool, the `among`
+   * path, a future read-only declaration). Undeclared = `not-read`: a call that may have written.
+   */
+  readonly effect?: 'read' | 'not-read';
   /** The batch (iteration) it was dispatched in; calls of one batch have no order. */
   readonly batch: number;
   /** Handed to `execute` — a call refused before dispatch (a schema refusal) never ran. */
@@ -59,12 +63,16 @@ export interface TurnCall {
   readonly readAt?: string;
 }
 
-/** The record one check reads: one run leg's calls and the declarations behind them. */
+/** The record one check reads: the turn's calls and the declarations behind them. */
 export interface TurnRecord {
-  /** The leg the answer belongs to — its recording namespace and its run id. */
+  /**
+   * The recording the answer belongs to (its namespace) and the leg it was written in. A read
+   * of an earlier leg of the SAME turn (a pause between) is this turn's read: currency is keyed
+   * on namespace and turn, never on the run id.
+   */
   readonly leg: { readonly namespace: string; readonly runId: string };
   readonly turn: number;
-  /** The leg's clock (the time layer's injected `now`) — no clock is ever read. */
+  /** The turn's clock (the time layer's injected `now`) — no clock is ever read. */
   readonly clock: string;
   /** Every call the record holds, in the order they were made. */
   readonly calls: readonly TurnCall[];
@@ -91,7 +99,8 @@ export type TypedVerdict =
   | 'kind-mismatch'
   | 'about-mismatch'
   | 'record-incomplete'
-  | 'stale-turn';
+  | 'stale-turn'
+  | 'too-many-claims';
 
 /** When a stale read was made. */
 export interface StaleSince {
@@ -153,7 +162,7 @@ export type ProseNote =
   | 'later-read-failed'
   | 'superseded-by-write';
 
-/** One prose claim, noted. No note = noted established. Observe-only: nothing withholds. */
+/** One prose claim, noted. Observe-only: nothing withholds; a claim may carry no note. */
 export interface ProseClaimRow {
   readonly kind: 'negative-claim';
   readonly field: string;

@@ -14,8 +14,18 @@
 
 import type { DeclaredPeriod } from '../../semantics/coverage/period.js';
 
-/** The facet a checked item stands for. `names` is `among`'s count of known names. */
-export type SearchFacet = 'source' | 'subject' | 'population' | 'filter' | 'period' | 'names';
+/**
+ * The facet a checked item stands for. `names` is `among`'s count of known names; `page` the page
+ * the call asked for.
+ */
+export type SearchFacet =
+  | 'source'
+  | 'subject'
+  | 'population'
+  | 'filter'
+  | 'period'
+  | 'names'
+  | 'page';
 
 /** Where a checked item came from (§ 3.2, § 3.4's five places plus the result). */
 export type SearchItemFrom = 'call' | 'default' | 'fixed' | 'host' | 'result' | 'tool';
@@ -44,13 +54,13 @@ export interface SearchCheckedItem {
   readonly measuredAt?: string;
 }
 
-/** What a gap bears on (§ 3.1, § 3.2). A filter gap names the VALUES it concerns. */
+/** What a gap bears on (§ 3.1, § 3.2). A filter gap names the VALUES it concerns; none = every value. */
 export type GapBears =
   | 'source'
   | 'population'
   | 'period'
   | 'completeness'
-  | { readonly filter: string; readonly values: readonly unknown[] };
+  | { readonly filter: string; readonly values?: readonly unknown[] };
 
 /** The typed gaps of § 3.2. */
 export type SearchGapKind =
@@ -120,6 +130,8 @@ export interface SearchDeclaration {
   }[];
   readonly arguments: readonly SearchArgument[];
   readonly complete?: 'within-arguments';
+  /** A server-side cap no input property carries. */
+  readonly limits?: { readonly cap: number | 'unknown' };
 }
 
 /** A tool as the checker sees it: its `search`, and `Tool.period`'s argument and spelling. */

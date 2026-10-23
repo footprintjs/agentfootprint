@@ -64,7 +64,9 @@ describe('established — the cited read itself, and the kind fits its row', () 
       tools: ['list_incidents'],
       results: [rid('c1')],
     });
-    expect(j?.statement?.text).toContain('`list_incidents` found none — as the tool names them:');
+    expect(j?.statement?.text).toContain(
+      '`list_incidents` found none — subject `incidents` (declared by the tool);',
+    );
   });
 
   it('`not-found` citing an `among` absence is established', () => {
@@ -161,7 +163,7 @@ describe('checked-fail — contradicted-by-rows and search-incomplete', () => {
     expect(codeOf(complete('c1'), [call])).toEqual(['search-incomplete']);
     const [j] = judge(none('c1'), [incidentCall({ gaps: [partial] })]);
     expect(j?.row.code).toBe('established');
-    expect(j?.statement?.text).toContain('not checked: `the rest of a partial result`');
+    expect(j?.statement?.text).toContain('not checked: what the partial result left out');
   });
 });
 

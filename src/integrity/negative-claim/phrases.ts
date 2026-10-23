@@ -5,9 +5,9 @@
  *          it, and the hash pins every number measured with it to the grammar it measured
  *          (`bench/negative/RULE.md`).
  * Role:    integrity/ layer (L3), read by `detect.ts` (claims, code and language notes) and
- *          `containment.ts` (source and window markers, unbounded words). The answer bench reads
- *          the hedge and source packs from the built package (`bench/answer/labels.mjs`), so the
- *          bench and the library match the same words.
+ *          `containment.ts` (source and window markers, unbounded words), and by the free
+ *          replay (`bench/negative/`). The answer bench keeps its own registered readers, frozen;
+ *          the hedge and source packs began as its lists.
  *
  * A phrase is a list of SLOTS matched against consecutive tokens of one unit, with only spaces
  * between them (so "No, the deploy…" is not "no the"):
@@ -27,8 +27,7 @@
  *     which scope a claim to the source, as a `source.said` word does;
  *   - `window` — the window a claim names ("in the last 2 hours");
  *   - `hedge` — words that voice doubt. They are NOT scope: a hedged claim is still a flat claim
- *     (design § 5.2). The pack exists so that law is data a test can walk, and so the answer
- *     bench reads the same list.
+ *     (design § 5.2). The pack exists so that law is data a test can walk.
  */
 
 import { sha256Hex } from '../../lib/sha256.js';
@@ -118,7 +117,7 @@ const UNBOUNDED: readonly ClaimPhrase[] = [
   ),
 ];
 
-/** The bench's attribution list, minus "according to" and "based on" — hedges, never scope. */
+/** The answer bench's attribution list, minus "according to" and "based on" — hedges, never scope. */
 const SOURCE: readonly ClaimPhrase[] = [
   'the lookup returned nothing',
   "couldn't find",
@@ -147,7 +146,7 @@ const WINDOW: readonly ClaimPhrase[] = [
   phrase('window.last-duration', 'in|over|during|for|within? the? last|past|previous <dur>'),
 ];
 
-/** The bench's hedge list, verbatim, plus the two § 5.2 names ("based on", "according to"). */
+/** The answer bench's hedge list, plus the two § 5.2 names ("based on", "according to"). */
 const HEDGE: readonly ClaimPhrase[] = [
   'not sure',
   'unsure',

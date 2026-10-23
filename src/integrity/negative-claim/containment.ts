@@ -83,7 +83,7 @@ function namedValue(
 const namesFixed = (words: ClaimWords, tool: DeclaredTool | undefined, name: string): boolean =>
   holdsAnySaid(words.claim.tokens, tool?.search?.fixed?.find((f) => f.name === name)?.said);
 
-/** The search's window: the declared `queried`, else the period value on the leg's clock. */
+/** The search's window: the declared `queried`, else the period value on the turn's clock. */
 function searchWindow(
   items: readonly SearchCheckedItem[],
   call: TurnCall,
@@ -109,7 +109,7 @@ function sourceScoped(
   return !sent && holdsAnySaid(words.claim.tokens, tool?.search?.source.said);
 }
 
-/** Whether a gap bears on a facet the claim leaves open. */
+/** Whether a gap bears on the claim: on a facet it leaves open, or on a value it names. */
 function bears(
   bearsOn: GapBears | undefined,
   words: ClaimWords,
@@ -118,8 +118,13 @@ function bears(
 ): boolean {
   if (bearsOn === undefined) return true;
   if (typeof bearsOn === 'object') {
+    // A filter gap concerns its `values` (none listed = every value). It bears when the claim
+    // names one of them, or leaves the filter open — an open claim covers every value; it does
+    // not bear only when the claim names a value the gap does not concern.
+    const values = bearsOn.values;
     const value = namedValue(words, tool, bearsOn.filter);
-    return value !== undefined && bearsOn.values.some((v) => sameValue(v, value));
+    if (value === undefined || values === undefined) return true;
+    return values.some((v) => sameValue(v, value));
   }
   if (bearsOn === 'source') return !sourceScoped(words, items, tool);
   if (bearsOn === 'completeness') return words.claim.kind === 'complete';
@@ -254,7 +259,7 @@ function sequenceNotes(
     const otherKey = readingKey(other, record.tools[other.toolName], record.clock);
     const same = otherKey === undefined ? other.toolName === reading.toolName : otherKey === key;
     if (same && other.outcome !== 'ok') notes.push('later-read-failed');
-    if (!isRead(other, record.tools)) notes.push('superseded-by-write');
+    if (!isRead(other)) notes.push('superseded-by-write');
   }
   return notes;
 }

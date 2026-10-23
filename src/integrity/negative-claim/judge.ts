@@ -14,10 +14,24 @@
  * statement travels beside it.
  */
 
+import { stableJson } from '../../lib/stableJson.js';
 import type { Disposition } from '../disposition/types.js';
-import { judgeCitation } from './citation.js';
+import { judgeCitation, MAX_CITED_READS, type CitationVerdict } from './citation.js';
 import { composeStatement } from './statement.js';
 import type { TurnRecord, TypedJudgement, TypedVerdict } from './types.js';
+
+export { MAX_CITED_READS };
+
+/** At most this many claims in one field; beyond it every claim of the field is `too-many-claims`. */
+export const MAX_NEGATIVE_CLAIMS = 32;
+
+const TOO_MANY: CitationVerdict = Object.freeze({
+  kind: 'unknown',
+  code: 'too-many-claims',
+  results: [],
+  tools: [],
+  reads: [],
+});
 
 const CHECKED_FAIL: ReadonlySet<TypedVerdict> = new Set([
   'contradicted-by-rows',
@@ -43,14 +57,42 @@ export interface TypedCheckInput {
   readonly citable?: readonly string[];
 }
 
-/** Judge every citation of the field. No field, or an empty list, is no claim. */
+/** A repeated claim is judged once (its stable JSON is the key); a key that cannot be made, every time. */
+function judgeOnce(
+  cache: Map<string, CitationVerdict>,
+  entry: unknown,
+  judge: (entry: unknown) => CitationVerdict,
+): CitationVerdict {
+  let key: string | undefined;
+  try {
+    key = stableJson(entry);
+  } catch {
+    key = undefined;
+  }
+  if (key === undefined) return judge(entry);
+  const known = cache.get(key);
+  if (known !== undefined) return known;
+  const verdict = judge(entry);
+  cache.set(key, verdict);
+  return verdict;
+}
+
+/**
+ * Judge every citation of the field. No field, or an empty list, is no claim. A field that is
+ * not a list is one unresolved citation; a field of more than {@link MAX_NEGATIVE_CLAIMS}
+ * claims withholds every one of them (`too-many-claims`).
+ */
 export function judgeTypedNegatives(input: TypedCheckInput): TypedJudgement[] {
   const { field, negatives, record, citable } = input;
   if (negatives === undefined || negatives === null) return [];
   const entries = Array.isArray(negatives) ? negatives : [negatives];
+  const tooMany = entries.length > MAX_NEGATIVE_CLAIMS;
+  const cache = new Map<string, CitationVerdict>();
   return entries.map((entry, index) => {
-    const verdict = Array.isArray(negatives)
-      ? judgeCitation(entry, record, citable)
+    const verdict = tooMany
+      ? TOO_MANY
+      : Array.isArray(negatives)
+      ? judgeOnce(cache, entry, (e) => judgeCitation(e, record, citable))
       : judgeCitation(undefined, record, citable);
     const row = {
       id: `agent:negative-claims:${field}#${index}`,
@@ -65,7 +107,7 @@ export function judgeTypedNegatives(input: TypedCheckInput): TypedJudgement[] {
     };
     if (verdict.code !== 'established' || verdict.kind === 'unknown') return { row };
     const reads = verdict.reads.flatMap((call) =>
-      call.row === undefined ? [] : [{ call, row: call.row }],
+      call.row === undefined ? [] : [{ call, row: call.row, tool: record.tools[call.toolName] }],
     );
     return { row, statement: composeStatement(verdict.kind, reads, record.clock) };
   });

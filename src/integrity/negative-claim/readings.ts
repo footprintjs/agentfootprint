@@ -21,10 +21,8 @@ import type { TurnCall } from './types.js';
 import { spellValue } from './words.js';
 import { periodValueSpan, type MsSpan } from './window.js';
 
-/** A call is a READ when its tool declares `search` or its row is an `among` miss (§ 5.1). */
-export function isRead(call: TurnCall, tools: Readonly<Record<string, DeclaredTool>>): boolean {
-  return tools[call.toolName]?.search !== undefined || isAmongRow(call);
-}
+/** A call is a READ only when the caller says so; undeclared = `not-read` (§ 5.1). */
+export const isRead = (call: TurnCall): boolean => call.effect === 'read';
 
 /** The call's row is an `among` miss: it counts the names its source holds. */
 export const isAmongRow = (call: TurnCall): boolean =>
@@ -41,35 +39,51 @@ export const returnedReading = (call: TurnCall): boolean =>
 export const scopeOf = (call: TurnCall): readonly SearchCheckedItem[] | undefined =>
   call.row?.checked ?? call.scope;
 
-const SCOPE_FACETS = new Set(['source', 'subject', 'population', 'filter', 'period']);
+const SCOPE_FACETS = new Set(['source', 'subject', 'population', 'filter', 'period', 'page']);
 
 const inScope = (item: SearchCheckedItem): boolean =>
   item.from !== 'result' && item.facet !== undefined && SCOPE_FACETS.has(item.facet);
 
-const spanText = (span: MsSpan): string => `span:${span.from}..${span.to}`;
-
-/** One item's value as the key spells it. */
-function valueOf(item: SearchCheckedItem, tool: DeclaredTool | undefined, clock: string): string {
+/**
+ * One item's value as the key spells it. A relative window keys by its SPELLING: two calls of one
+ * turn that sent `2h` asked for the same window, whatever leg each ran in.
+ */
+function valueOf(item: SearchCheckedItem): string {
   if (item.any === true) return '*any';
-  if (item.facet === 'period' && item.value !== undefined) {
-    const span = periodValueSpan(item.value, tool?.period?.spelling, clock);
-    if (span !== undefined) return spanText(span);
-  }
   if (item.value !== undefined) return spellValue(item.value);
   return `what:${spellValue(item.what)}`;
 }
 
-/** The page the call asked for, when its tool has a `page` argument. */
+/** A period item's span for comparing two searches: the relative window on the turn's clock. */
+function periodSpanOf(
+  item: SearchCheckedItem,
+  tool: DeclaredTool | undefined,
+  clock: string,
+): MsSpan | undefined {
+  return item.value === undefined
+    ? undefined
+    : periodValueSpan(item.value, tool?.period?.spelling, clock);
+}
+
+/**
+ * The page the call asked for: its `page` item, or — for a row that composed none — the value
+ * of the tool's `page` argument.
+ */
 function pageOf(call: TurnCall, tool: DeclaredTool | undefined): string | undefined {
+  if ((scopeOf(call) ?? []).some((item) => item.facet === 'page')) return undefined;
   const page = tool?.search?.arguments.find((a) => a.role === 'page');
   return page === undefined ? undefined : spellValue(call.arguments[page.name] ?? null);
 }
 
-/** The reading key — or undefined when the call has no composed scope. */
+/**
+ * The reading key — or undefined when the call has no composed scope. `clock` is accepted for
+ * the callers' symmetry and never read: a relative window keys by its spelling within the turn.
+ */
 export function readingKey(
   call: TurnCall,
   tool: DeclaredTool | undefined,
-  clock: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _clock?: string,
 ): string | undefined {
   const items = scopeOf(call);
   if (items === undefined) return undefined;
@@ -78,7 +92,7 @@ export function readingKey(
     .map((item) => [
       item.facet ?? '',
       item.argument ?? '',
-      valueOf(item, tool, clock),
+      valueOf(item),
       item.from === 'host' ? 'host' : '',
     ])
     .map((entry) => entry.join('\u{1F}'))
@@ -133,11 +147,7 @@ function compareGroup(
   const first = a[0] as SearchCheckedItem;
   const facet = first.facet;
   const spell = (items: readonly SearchCheckedItem[]) =>
-    new Set(
-      items.map(
-        (item) => `${valueOf(item, tool, clock)}\u{1F}${item.from === 'host' ? 'host' : ''}`,
-      ),
-    );
+    new Set(items.map((item) => `${valueOf(item)}\u{1F}${item.from === 'host' ? 'host' : ''}`));
   if (facet === 'population') {
     const sa = spell(a);
     const sb = spell(b);
@@ -170,9 +180,9 @@ function compareGroup(
     }
     if (ib.any === true) return 'narrower';
   }
-  if (facet === 'period' && ia.value !== undefined && ib.value !== undefined) {
-    const pa = periodValueSpan(ia.value, tool?.period?.spelling, clock);
-    const pb = periodValueSpan(ib.value, tool?.period?.spelling, clock);
+  if (facet === 'period') {
+    const pa = periodSpanOf(ia, tool, clock);
+    const pb = periodSpanOf(ib, tool, clock);
     if (pa !== undefined && pb !== undefined) {
       if (pa.from === pb.from && pa.to === pb.to) return 'equal';
       if (pa.from <= pb.from && pb.to <= pa.to) {
@@ -182,8 +192,7 @@ function compareGroup(
       return pb.from <= pa.from && pa.to <= pb.to ? 'narrower' : 'other';
     }
   }
-  return valueOf(ia, tool, clock) === valueOf(ib, tool, clock) &&
-    (ia.from === 'host') === (ib.from === 'host')
+  return valueOf(ia) === valueOf(ib) && (ia.from === 'host') === (ib.from === 'host')
     ? 'equal'
     : 'other';
 }

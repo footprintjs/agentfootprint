@@ -6,7 +6,7 @@
  * Pattern: mentions are token sequences of the unit; a mention joined to another word by "or",
  *          "and", "nor" or a comma is a second entity, and an entity no read resolves makes the
  *          whole claim `entity-unresolved` — "payments or checkout" with one searched cannot pass
- *          as checked. The reads a claim RESTS ON are this leg's and turn's reads of a resolved
+ *          as checked. The reads a claim RESTS ON are this turn's reads (any leg) of a resolved
  *          entity whose tool's `subject.said` word the unit names; a call on the same entity and
  *          another subject is never pulled in. A claim naming no entity is unresolved; the
  *          person's message and the single call of the turn only name a CANDIDATE.
@@ -31,15 +31,12 @@ export type ProseResolution =
   | { readonly status: 'groups'; readonly groups: readonly EntityGroup[] }
   | { readonly status: 'entity-unresolved'; readonly candidates: readonly string[] };
 
-/** The calls of the answer's leg and turn. */
+/** The calls of the answer's turn, in this recording. */
 export function isCurrent(call: TurnCall, record: TurnRecord): boolean {
   try {
     const identity = readResultIdentity(call.resultId);
-    return (
-      identity.namespace === record.leg.namespace &&
-      identity.runId === record.leg.runId &&
-      call.turn === record.turn
-    );
+    // Namespace and turn, never the run id: a pause between legs of one turn keeps a read current.
+    return identity.namespace === record.leg.namespace && call.turn === record.turn;
   } catch {
     return false;
   }
@@ -135,7 +132,7 @@ export function resolveProseClaim(
   personMessage?: string,
 ): ProseResolution {
   const tokens = claim.tokens;
-  const reads = record.calls.filter((call) => isRead(call, record.tools));
+  const reads = record.calls.filter((call) => isRead(call));
   const mentions: { entity: string; first: number; last: number }[] = [];
   for (const call of reads) {
     for (const { entity, words } of namesOf(call)) {
