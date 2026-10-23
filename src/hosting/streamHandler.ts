@@ -45,7 +45,9 @@
  * (several serverless instances, several workers) do not see each other's
  * turns: route a thread to one instance (sticky sessions), or a double-sent
  * answer can resume one paused run twice and a later persist can overwrite an
- * earlier one. The session store port has no compare-and-set yet.
+ * earlier one. The session store port has no compare-and-set yet. A consent
+ * decision itself is used once per LEDGER: the agents every instance builds
+ * share one only if they are given one (`decisionLedger`).
  *
  * The laws it keeps from `httpHost`:
  *   - The door guard runs first, on the headers alone (`doorGuard.ts`): a Host
@@ -64,14 +66,9 @@ import { isPaused, type RunnerPauseOutcome } from '../core/pause.js';
 import type { AgentRunCheckpoint } from '../core/runCheckpoint.js';
 import type { Runner } from '../core/runner.js';
 import { toWireJson } from '../lib/wireJson.js';
+import { answeredRefusal, markAnsweredIfUsed, readStoredSession } from './answeredPause.js';
 import { checkSessionId, doorGuard, type CrossSiteOptions } from './doorGuard.js';
-import {
-  envelopeOwner,
-  readEnvelope,
-  readPausedRun,
-  toEnvelope,
-  toPausedEnvelope,
-} from './envelope.js';
+import { envelopeOwner, toEnvelope, toPausedEnvelope } from './envelope.js';
 import { RequestTooLargeError, WireRequestRefusal } from './errors.js';
 import { describePause } from './pendingAsk.js';
 import type {
@@ -161,7 +158,10 @@ export type StreamHandler = (request: Request) => Promise<Response>;
 interface Held {
   readonly view: HeldConversation;
   readonly prior?: AgentRunCheckpoint;
+  /** The pause still waiting on a person — the only one an answer may continue. */
   readonly paused?: PausedRun;
+  /** A pause whose decision a resume already used (`answeredPause.ts`). */
+  readonly answered?: PausedRun;
 }
 
 /** Everything one accepted request runs with. */
@@ -267,12 +267,17 @@ export function streamHandler<TRequest, TEvent>(
     return stored;
   }
 
-  /** Read what the server holds for the bound conversation — under the turn's claim. */
+  /**
+   * Read what the server holds for the bound conversation — under the turn's
+   * claim. The one reading every door uses (`answeredPause.ts`): a pause still
+   * waiting is offered to the adapter as awaiting; a pause whose decision a
+   * resume already used is a conversation to continue, never offered again.
+   */
   async function hold(thread: ThreadBinding | undefined): Promise<Held> {
     const stored = await ownersOnly(thread);
     if (stored === undefined) return { view: { continues: false } };
-    if (stored.format === 'flowchart-v1') {
-      const paused = readPausedRun(stored);
+    const { waiting: paused, prior, answered } = readStoredSession(stored);
+    if (paused !== undefined) {
       const record = paused.wire?.protocol === adapter.name ? paused.wire.record : undefined;
       return {
         paused,
@@ -285,8 +290,11 @@ export function streamHandler<TRequest, TEvent>(
         },
       };
     }
-    const prior = readEnvelope(stored);
-    return { prior, view: { continues: true } };
+    return {
+      ...(prior !== undefined && { prior }),
+      ...(answered !== undefined && { answered }),
+      view: { continues: true },
+    };
   }
 
   /** A fresh runner for this request — never one the factory handed out before. */
@@ -405,6 +413,22 @@ export function streamHandler<TRequest, TEvent>(
             );
       settlement = await keep(turn, out, runId);
     } catch {
+      // An answer whose resume failed AFTER it used the decision: the stored
+      // pause is answered before the caller hears the end, so no later
+      // request answers it again (`answeredPause.ts`).
+      if (
+        plan.turn.kind === 'answer' &&
+        held.paused !== undefined &&
+        thread !== undefined &&
+        sessions !== undefined
+      ) {
+        await markAnsweredIfUsed({
+          store: sessions,
+          sessionId: thread.sessionId,
+          paused: held.paused,
+          progressed: () => runner.checkpoint?.(),
+        }).catch(() => undefined);
+      }
       settlement = { kind: signal.aborted ? 'cancelled' : 'failed' };
     } finally {
       // The conversation is free BEFORE the caller hears the end — and before
@@ -535,12 +559,23 @@ export function streamHandler<TRequest, TEvent>(
         claimed = thread.sessionId;
       }
       const held = await hold(thread);
-      const plan = adapter.plan(read, held.view, {
-        headers,
-        ...(thread !== undefined && { thread }),
-        keepsConversation: threads !== undefined,
-        keepsPauses: threads !== undefined && sessions !== undefined,
-      });
+      let plan: ProtocolPlan;
+      try {
+        plan = adapter.plan(read, held.view, {
+          headers,
+          ...(thread !== undefined && { thread }),
+          keepsConversation: threads !== undefined,
+          keepsPauses: threads !== undefined && sessions !== undefined,
+        });
+      } catch (err) {
+        // An answer with nothing pending, on a thread whose last pause a
+        // resume already answered: say which (`answeredPause.ts`) — the
+        // request was answered, and its outcome is not known here.
+        throw held.answered !== undefined &&
+          (err as { code?: unknown } | null)?.code === 'ERR_NO_PENDING_ASK'
+          ? answeredRefusal(held.answered)
+          : err;
+      }
       // Sealed only for a request that runs: every refusal is behind it.
       const sealed = await seal?.({ headers });
       const runner = build({

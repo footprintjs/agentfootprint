@@ -1116,4 +1116,46 @@ describe('a consent gate over the wire — a decision whose resume failed after 
       await handle.close();
     }
   });
+
+  it('over a real socket: the retry is a 409 without the request id, and no answered pause is offered as pending', async () => {
+    const { nodeHost } = await import('../../src/hosting/index.js');
+    const ran: number[] = [];
+    const failing = { on: true };
+    const handle = await standingAgent({
+      agent: flakyRefunds(ran, failing),
+      sessions: memorySessions(),
+      host: nodeHost({ port: 0, hostname: '127.0.0.1' }),
+    });
+    try {
+      const post = (body: unknown): Promise<Response> =>
+        fetch(`${handle.url}/invoke`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+      const asked = (await (await post({ input: 'refund me', sessionId: 'wire' })).json()) as {
+        awaiting: unknown;
+      };
+      const requestId = pausedRequest(asked.awaiting).id;
+      const decision = checkInApproved({ request: pausedRequest(asked.awaiting), by: 'alice' });
+      const failed = await post({ input: '', sessionId: 'wire', decision });
+      expect(failed.status).toBeGreaterThanOrEqual(500);
+      expect(ran).toEqual([10]);
+
+      // Reloading the question finds none: the answered pause is not offered.
+      const reload = await post({ op: 'session-pending', sessionId: 'wire' });
+      expect(reload.status).toBe(200);
+      expect(await reload.json()).toEqual({ pending: null });
+
+      failing.on = false;
+      const retry = await post({ input: '', sessionId: 'wire', decision });
+      expect(retry.status).toBe(409);
+      const body = await retry.text();
+      expect(JSON.parse(body)).toMatchObject({ code: 'ERR_RESUME_DECISION' });
+      expect(body).not.toContain(requestId);
+      expect(ran).toEqual([10]);
+    } finally {
+      await handle.close();
+    }
+  });
 });

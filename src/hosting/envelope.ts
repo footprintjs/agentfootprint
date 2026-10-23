@@ -118,6 +118,12 @@ export function readEnvelope(envelope: unknown): AgentRunCheckpoint {
 /**
  * Unpack a stored envelope back into a paused run.
  *
+ * It hands back the record as stored, MARK INCLUDED: a pause whose decision a
+ * resume already used carries `answered` (`PausedRun.answered`), and code that
+ * continues sessions must not resume one — continue its `conversation` with
+ * the next message instead. The library's own doors read stored sessions
+ * through one reader that does exactly that (`answeredPause.ts`).
+ *
  * @throws TypeError naming the format when it is one this runtime cannot read;
  *   pointing at {@link readEnvelope} when the envelope holds a plain
  *   conversation; and naming the missing field when the paused run inside is

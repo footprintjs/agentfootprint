@@ -62,7 +62,7 @@
  * restart) can resume the same paused run, every agent that can resume it is
  * given one ledger in a store they all reach (`Agent.create({ decisionLedger })`).
  * A host that keeps the pause also learns when a resume used its decision and
- * then failed (`requestUsedBy`), so it can stop offering that pause.
+ * then failed (`requestWasUsed`), so it can stop offering that pause.
  */
 
 import type { FlowchartCheckpoint } from 'footprintjs';
@@ -181,27 +181,35 @@ export function processDecisionLedger(): DecisionLedger {
   return PROCESS_LEDGER;
 }
 
-/** How each agent reports the request its latest resume took to its ledger. */
-const decisionUse = new WeakMap<object, () => string | undefined>();
-
 /**
- * Register how `runner` reports the consent request its latest resume took to
- * its ledger ({@link requestUsedBy}). An agent does, once, when it is built.
- * Internal: no barrel exports it.
+ * The requests a resume in this process took to a ledger, newest last — what
+ * a host asks after a resume fails ({@link requestWasUsed}). Bounded: the
+ * question is asked as the failure is handled, so only recent ids matter;
+ * "once" itself is the ledger's to keep, never this record's.
  */
-export function trackDecisionUse(runner: object, read: () => string | undefined): void {
-  decisionUse.set(runner, read);
+const usedRequests = new Set<string>();
+/** How many recent used requests {@link requestWasUsed} remembers. */
+const USED_REQUESTS_KEPT = 10_000;
+
+function noteRequestUsed(requestId: string): void {
+  usedRequests.delete(requestId);
+  usedRequests.add(requestId);
+  if (usedRequests.size > USED_REQUESTS_KEPT) {
+    const oldest = usedRequests.values().next();
+    if (oldest.done !== true) usedRequests.delete(oldest.value);
+  }
 }
 
 /**
- * The consent request `runner`'s latest resume took to its ledger — spent
- * there, found already spent, or lost to a ledger that failed — or `undefined`
- * when that resume reached no ledger. Past that point the call may have run,
- * so a host that keeps the pause stops offering it for an answer
- * (`hosting/standingAgent.ts`). Internal: no barrel exports it.
+ * Whether a resume in this process took `requestId` to its ledger — spent
+ * it, found it already spent, or lost it to a ledger that failed. Past that
+ * point the call may have run, so a host that keeps the pause stops offering
+ * it for an answer once that resume fails (`hosting/answeredPause.ts`). Keyed
+ * by the request, not by an agent, so it holds for a composition's nested
+ * agents and for any ledger. Internal: no barrel exports it.
  */
-export function requestUsedBy(runner: object): string | undefined {
-  return decisionUse.get(runner)?.();
+export function requestWasUsed(requestId: string): boolean {
+  return usedRequests.has(requestId);
 }
 
 const DOMAIN = 'agentfootprint/consent-request/v1';
@@ -355,6 +363,8 @@ export async function spendDecision(
   decision: CheckInDecision,
   gate: ConsentGateKind,
 ): Promise<void> {
+  // Noted before the ledger answers: from here the call may run.
+  noteRequestUsed(decision.requestId);
   const fresh = await ledger.spend(decision.requestId);
   if (fresh !== true) throw new ResumeDecisionError('already-answered', gate);
 }

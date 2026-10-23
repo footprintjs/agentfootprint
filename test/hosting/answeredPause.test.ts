@@ -9,11 +9,13 @@ import type { FlowchartCheckpoint } from 'footprintjs';
 
 import {
   OUTCOME_NOT_RECORDED,
+  answeredRefusal,
   markAnswered,
   openToolCalls,
+  readStoredSession,
   settleOpenCalls,
 } from '../../src/hosting/answeredPause.js';
-import { readPausedRun, toPausedEnvelope } from '../../src/hosting/index.js';
+import { readPausedRun, toEnvelope, toPausedEnvelope } from '../../src/hosting/index.js';
 import type { PausedRun } from '../../src/hosting/index.js';
 import type { LLMMessage } from '../../src/provider-contract/types.js';
 
@@ -130,5 +132,40 @@ describe('markAnswered', () => {
       const envelope = toPausedEnvelope({ ...marked, answered } as unknown as PausedRun);
       expect(() => readPausedRun(envelope)).toThrow(/answered/);
     }
+  });
+});
+
+describe('readStoredSession — the one reading of a stored session every door uses', () => {
+  it('a pause still waiting is offered for an answer, and nothing to continue', () => {
+    const paused = pausedOver(halfAnswered);
+    const held = readStoredSession(toPausedEnvelope(paused));
+    expect(held.waiting).toEqual(paused);
+    expect(held.answered).toBeUndefined();
+    expect(held.prior).toBeUndefined();
+  });
+
+  it('an answered pause is a conversation to continue — never a pause to answer', () => {
+    const marked = markAnswered(pausedOver(halfAnswered), undefined, 3);
+    const held = readStoredSession(JSON.parse(JSON.stringify(toPausedEnvelope(marked))));
+    expect(held.waiting).toBeUndefined();
+    expect(held.answered?.answered).toEqual({ at: 3 });
+    expect(held.prior).toEqual(marked.conversation);
+  });
+
+  it('a stored conversation is a conversation', () => {
+    const conversation = pausedOver(halfAnswered).conversation;
+    const held = readStoredSession(toEnvelope(conversation));
+    expect(held).toEqual({ prior: conversation });
+  });
+
+  it("an answer to an answered pause is refused 'already-answered', naming its gate", () => {
+    const marked = markAnswered(pausedOver(halfAnswered), undefined, 3);
+    expect(answeredRefusal(marked)).toMatchObject({
+      code: 'ERR_RESUME_DECISION',
+      reason: 'already-answered',
+      gate: 'checkIn',
+    });
+    const asked = { ...marked, pending: { ask: { id: 'x', question: 'q', middleware: 'm' } } };
+    expect(answeredRefusal(asked as PausedRun)).toMatchObject({ gate: 'ask' });
   });
 });

@@ -21,7 +21,7 @@
 import { HttpAgent } from '@ag-ui/client';
 import { describe, expect, it } from 'vitest';
 
-import { Agent, defineTool, Parallel, Sequence } from '../../src/index.js';
+import { Agent, defineTool, inMemoryDecisionLedger, Parallel, Sequence } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
 import type { LLMRequest } from '../../src/index.js';
 import { askHuman } from '../../src/core/pause.js';
@@ -260,6 +260,86 @@ describe('scenario — an AG-UI frontend runs an agentfootprint agent', () => {
     await expect(client.runAgent({ resume: [{ ...answer, payload: decision }] })).rejects.toThrow(
       'ERR_NO_PENDING_ASK',
     );
+    expect(refunded).toEqual([40]);
+  });
+
+  it('a check-in whose resume failed after the refund ran: the same answer again — on a server that never saw it spent — is refused, and the refund ran once', async () => {
+    const refunded: number[] = [];
+    const refund = defineTool<{ amount: number }, string>({
+      name: 'issue_refund',
+      description: 'Refund a customer.',
+      inputSchema: { type: 'object', properties: { amount: { type: 'number' } } },
+      checkIn: 'always',
+      execute: async ({ amount }) => {
+        refunded.push(amount);
+        return `refunded ${amount}`;
+      },
+    });
+    const usage = { input: 1, output: 1 };
+    const failing = { on: true };
+    const provider = {
+      name: 'flaky',
+      // The model call AFTER the refund ran fails while `failing.on` is set.
+      complete: async (req: LLMRequest) => {
+        const last = req.messages[req.messages.length - 1];
+        if (last?.role === 'tool') {
+          if (failing.on) throw new Error('model unavailable');
+          return { content: 'Refunded.', toolCalls: [], usage, stopReason: 'stop' };
+        }
+        return String(last?.content ?? '').includes('Refund')
+          ? {
+              content: '',
+              toolCalls: [{ id: 'r1', name: 'issue_refund', args: { amount: 40 } }],
+              usage,
+              stopReason: 'tool_use',
+            }
+          : {
+              content: `noted: ${String(last?.content)}`,
+              toolCalls: [],
+              usage,
+              stopReason: 'stop',
+            };
+      },
+    } as never;
+    const sessions = memorySessions();
+    const first = frontend({
+      agent: () => Agent.create({ provider, model: 'm' }).system('s').tool(refund).build(),
+      threads: signedIn,
+      sessions,
+    });
+    first.addMessage({ id: 'u1', role: 'user', content: 'Refund 40' });
+    await first.runAgent();
+    const [interrupt] = first.pendingInterrupts;
+    const answer = {
+      interruptId: interrupt!.id,
+      status: 'resolved' as const,
+      payload: { approved: true, by: 'alice', at: 1 },
+    };
+    const errors: string[] = [];
+    first.subscribe({ onRunErrorEvent: ({ event }) => void errors.push(event.message) });
+    await first.runAgent({ resume: [answer] });
+    expect(errors).toEqual([AG_UI_RUN_FAILED]);
+    expect(refunded).toEqual([40]);
+
+    // A restart: the same store, and agents whose memory never saw the spend
+    // (a ledger of their own). Only what the store says can refuse the answer.
+    failing.on = false;
+    const restarted = frontend({
+      agent: () =>
+        Agent.create({ provider, model: 'm', decisionLedger: inMemoryDecisionLedger() })
+          .system('s')
+          .tool(refund)
+          .build(),
+      threads: signedIn,
+      sessions,
+    });
+    await expect(restarted.runAgent({ resume: [answer] })).rejects.toThrow('ERR_RESUME_DECISION');
+    expect(refunded).toEqual([40]);
+
+    // The conversation goes on from what that run recorded.
+    restarted.addMessage({ id: 'u2', role: 'user', content: 'is it done?' });
+    const { result } = await restarted.runAgent();
+    expect(result).toBe('noted: is it done?');
     expect(refunded).toEqual([40]);
   });
 

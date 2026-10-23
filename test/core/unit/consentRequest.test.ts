@@ -14,6 +14,7 @@ import {
   inMemoryDecisionLedger,
   mintConsentRequest,
   processDecisionLedger,
+  requestWasUsed,
   runsAsAsked,
   spendDecision,
   type DecisionLedger,
@@ -538,6 +539,31 @@ describe('spendDecision and the ledger', () => {
 
   it('the default ledger is the process’s: one instance, whichever agent asks', () => {
     expect(processDecisionLedger()).toBe(processDecisionLedger());
+  });
+
+  it('a request taken to a ledger is remembered as used — whatever the ledger answered', async () => {
+    // What a host asks after a resume fails: did that decision reach a
+    // ledger (so the call may have run)? Spent, already spent, or a ledger
+    // that threw — each counts; a request no spend reached does not.
+    const spent = decisionFor();
+    const refused = decisionFor();
+    const lost = decisionFor();
+    const never = decisionFor();
+    await spendDecision(inMemoryDecisionLedger(), spent, 'checkIn');
+    await spendDecision({ spend: () => false }, refused, 'checkIn').catch(() => undefined);
+    await spendDecision(
+      {
+        spend: () => {
+          throw new Error('store down');
+        },
+      },
+      lost,
+      'checkIn',
+    ).catch(() => undefined);
+    expect(requestWasUsed(spent.requestId)).toBe(true);
+    expect(requestWasUsed(refused.requestId)).toBe(true);
+    expect(requestWasUsed(lost.requestId)).toBe(true);
+    expect(requestWasUsed(never.requestId)).toBe(false);
   });
 
   it('two in-memory ledgers are two ledgers; one shared ledger is one', async () => {

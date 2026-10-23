@@ -107,8 +107,7 @@ import {
 import type { ArtifactScope, ArtifactStore } from '../artifacts/types.js';
 import type { ArtifactHandOverFailedPayload } from '../events/payloads.js';
 import { applyInputResponse, readAwaitingInput } from '../tools/inputRequest.js';
-import { isPaused, pauseDemandsDecision, ResumeDecisionError } from '../core/pause.js';
-import { requestUsedBy } from '../core/consentRequest.js';
+import { isPaused, pauseDemandsDecision } from '../core/pause.js';
 import type { AgentRunCheckpoint } from '../core/runCheckpoint.js';
 import {
   ANSWER_ACCOUNT_OP,
@@ -123,15 +122,13 @@ import { RECORDING_ARTIFACT_KIND } from '../artifacts/recordingArtifact.js';
 import { refuseUnknownWireOp } from './wireOps.js';
 import { durableWriter, type DurableWriter } from './durability.js';
 import { describePause } from './pendingAsk.js';
-import { markAnswered, openToolCalls } from './answeredPause.js';
 import {
-  envelopeOwner,
-  envelopeTranscript,
-  readEnvelope,
-  readPausedRun,
-  toEnvelope,
-  toPausedEnvelope,
-} from './envelope.js';
+  answeredRefusal,
+  markAnsweredIfUsed,
+  openToolCalls,
+  readStoredSession,
+} from './answeredPause.js';
+import { envelopeOwner, envelopeTranscript, toEnvelope, toPausedEnvelope } from './envelope.js';
 import {
   AdmissionRefusedError,
   ArtifactNotCarriedError,
@@ -919,10 +916,12 @@ export async function standingAgent<TH extends HostHandle>(
         reply.fail(new SessionNotFoundError(op.sessionId));
         return;
       }
-      if (stored !== undefined && stored.format !== 'flowchart-v1') readEnvelope(stored);
+      // The one reading every door uses (`answeredPause.ts`): a pause whose
+      // decision a resume already used is not pending.
+      const held = stored === undefined ? undefined : readStoredSession(stored);
       deliverSessions(reply, 'session-pending', {
         op: 'pending',
-        pending: stored?.format === 'flowchart-v1' ? readPausedRun(stored).pending : null,
+        pending: held?.waiting?.pending ?? null,
       });
       return;
     }
@@ -1248,9 +1247,8 @@ export async function standingAgent<TH extends HostHandle>(
   ): MemoryIdentity | undefined {
     if (envelope === undefined) return undefined;
     try {
-      return envelope.format === 'flowchart-v1'
-        ? readPausedRun(envelope).conversation.identity
-        : readEnvelope(envelope).identity;
+      const held = readStoredSession(envelope);
+      return (held.waiting?.conversation ?? held.prior)?.identity;
     } catch (err) {
       throw err instanceof UnreadableEnvelopeError ? err.withSession(sessionId) : err;
     }
@@ -1563,6 +1561,10 @@ export async function standingAgent<TH extends HostHandle>(
     try {
       let prior: AgentRunCheckpoint | undefined;
       let paused: PausedRun | undefined;
+      // A pause whose decision a resume already used (`answeredPause.ts`): no
+      // decision answers it again, and the next message continues the
+      // conversation that resume left.
+      let answered: PausedRun | undefined;
       if (sessionId !== undefined) {
         // A request carrying a decision is waking this session to CONTINUE a
         // run, which is a different thing to ask a store to be ready for.
@@ -1585,8 +1587,12 @@ export async function standingAgent<TH extends HostHandle>(
             }
             // Both readers throw by name on a format this runtime cannot read —
             // better a loud refusal than an agent answering from half a session.
-            if (stored.format === 'flowchart-v1') paused = readPausedRun(stored);
-            else prior = readEnvelope(stored);
+            // The one reading every door uses: an answered pause is never
+            // offered for an answer (`answeredPause.ts`).
+            const held = readStoredSession(stored);
+            paused = held.waiting;
+            prior = held.prior;
+            answered = held.answered;
           }
         } catch (err) {
           // A stored conversation this runtime cannot read fails THIS REQUEST,
@@ -1598,15 +1604,6 @@ export async function standingAgent<TH extends HostHandle>(
           // store you chose.
           throw err instanceof UnreadableEnvelopeError ? err.withSession(sessionId) : err;
         }
-      }
-      // A pause whose decision a resume already used, and did not finish
-      // (`answeredPause.ts`): no decision answers it again, and the next
-      // message continues the conversation that resume left.
-      let answered: PausedRun | undefined;
-      if (paused?.answered !== undefined) {
-        answered = paused;
-        prior = paused.conversation;
-        paused = undefined;
       }
 
       // The signal reaches tool execution, tool discovery and skill-entry
@@ -1693,12 +1690,7 @@ export async function standingAgent<TH extends HostHandle>(
       if (request.decision !== undefined) {
         if (answered !== undefined) {
           // One decision runs one call, and this request's decision was used.
-          reply.fail(
-            new ResumeDecisionError(
-              'already-answered',
-              answered.pending.ask !== undefined ? 'ask' : 'checkIn',
-            ),
-          );
+          reply.fail(answeredRefusal(answered));
           return;
         }
         if (!paused) {
@@ -1753,7 +1745,17 @@ export async function standingAgent<TH extends HostHandle>(
         try {
           resumed = await runner.resume(paused.checkpoint, request.decision, resumeOptions);
         } catch (err) {
-          await markAnsweredIfUsed(lane, store, sessionId, paused);
+          // Failed after it used its decision? Then the stored pause is
+          // answered before anyone hears of the failure (`answeredPause.ts`).
+          if (sessionId !== undefined) {
+            await markAnsweredIfUsed({
+              store,
+              sessionId,
+              paused,
+              progressed: () => runner.checkpoint(),
+              settle: () => lane.writer?.settle(),
+            });
+          }
           throw err;
         }
         await deliver(lane, resumed, store, reply, sessionId, offer, paused);
@@ -1785,43 +1787,6 @@ export async function standingAgent<TH extends HostHandle>(
       lane.activeOwner = undefined;
       lane.activeSpendKey = undefined;
     }
-  }
-
-  /**
-   * After a resume that FAILED: when it had already taken its decision to the
-   * ledger (`requestUsedBy` — the call may have run), mark the stored pause
-   * answered before the failure is reported, so no later request answers it
-   * again — a retry, this session's next instance after an eviction, a
-   * restart, or another host on the same store (`answeredPause.ts`). Asked of
-   * the request THIS pause recorded, so a resume refused before its ledger —
-   * or a stale answer from another session's resume on a shared instance —
-   * leaves the pause answerable.
-   *
-   * The conversation it goes on from is the failed run's own (what `deliver`
-   * would have stored), with every call it left open settled as unknown. A
-   * store that refuses the mark is the run's second failure: the first is the
-   * one reported, and the ledger still refuses the decision in this process.
-   */
-  async function markAnsweredIfUsed(
-    lane: Lane,
-    store: SessionLifecycle,
-    sessionId: string | undefined,
-    paused: PausedRun,
-  ): Promise<void> {
-    const asked = paused.pending.checkIn?.id ?? paused.pending.ask?.id;
-    if (sessionId === undefined || asked === undefined) return;
-    if (requestUsedBy(lane.agent) !== asked) return;
-    // Mid-run writes first, or a late one would land on top of the mark.
-    await lane.writer?.settle().catch(() => undefined);
-    let progressed: AgentRunCheckpoint | undefined;
-    try {
-      progressed = lane.agent.checkpoint();
-    } catch {
-      progressed = undefined;
-    }
-    await store
-      .persist(sessionId, toPausedEnvelope(markAnswered(paused, progressed)))
-      .catch(() => undefined);
   }
 
   /** Store what the run left behind, then end the reply with the right terminal. */
