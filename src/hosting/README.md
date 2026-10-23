@@ -289,7 +289,9 @@ The rules for the verifiers themselves are in `src/adapters/identity/README.md`.
   left open (a declined one as declined, when the decline is what the ledger
   spent) so the next message can continue. A pause no answer can reach any
   more (`unanswerablePause`) is closed rather than held: the next message
-  continues `closedConversation`, every open call recorded as not run. `listedFormatOf` is the same reading for a session
+  continues `closedConversation`, every open call recorded as not run only when the serving agent's
+  ledger proves no decision for the request was spent (`consentRequest.ts` · `provenUnspent`),
+  else as not known (`OUTCOME_UNKNOWN_UNANSWERABLE`). `listedFormatOf` is the same reading for a session
   listing — `'flowchart-v1'` only for a pause still waiting — and every store
   that lists reports it (memory and Agent Engine at list time; SQLite and
   Firestore in the column they persist, a row that still says `'flowchart-v1'`
