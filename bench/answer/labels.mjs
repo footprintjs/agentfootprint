@@ -19,10 +19,19 @@
  * The readers can miss a phrase they do not list and can match one used otherwise, which is why
  * their agreement with blind hand labels is measured (`labelAgreement`) before any claim leans
  * on them (the inputs bench's precedent: at least 40 labelled answers and agreement ≥ 0.9).
+ *
+ * THE PHRASES LIVE IN THE LIBRARY. The hedge and attribution lists, and the non-existence and
+ * completeness grammar, are the negative-claim checker's closed, versioned and hashed packs
+ * (`src/integrity/negative-claim/phrases.ts`), read here from the BUILT package, so the bench
+ * measures exactly what the library ships (`npm run build` first). Only the SPAN reader (an
+ * answer claiming a week or a month it did not read) stays here: it is this bench's measure, not
+ * a negative claim.
  */
 
 import { containsTokens, tokens } from '../inputs/metrics.mjs';
 import { shuffled } from '../inputs/labels.mjs';
+import { detectNegativeClaims } from '../../dist/esm/integrity/negative-claim/detect.js';
+import { NEGATIVE_CLAIM_PHRASES } from '../../dist/esm/integrity/negative-claim/phrases.js';
 
 /** Lower case, curly quotes straightened, whitespace collapsed. */
 export function normalize(text) {
@@ -33,120 +42,24 @@ export function normalize(text) {
     .replace(/\s+/g, ' ');
 }
 
-/** A limit or an uncertainty, voiced. Matched as substrings of the normalized answer. */
-export const HEDGE_PHRASES = Object.freeze([
-  'not sure',
-  'unsure',
-  'uncertain',
-  'unclear',
-  "can't confirm",
-  'cannot confirm',
-  "couldn't confirm",
-  'could not confirm',
-  'unable to confirm',
-  'unable to verify',
-  "can't verify",
-  'cannot verify',
-  "can't tell",
-  'cannot tell',
-  "don't know",
-  'do not know',
-  'not able to',
-  'no way to',
-  'may not',
-  'might not',
-  'may be',
-  'might be',
-  'possibly',
-  "it's possible",
-  'it is possible',
-  'appears to',
-  'seems',
-  'not checked',
-  "wasn't checked",
-  "weren't checked",
-  'not covered',
-  "doesn't cover",
-  'does not cover',
-  "didn't cover",
-  'did not cover',
-  'only covers',
-  'only checked',
-  'only keeps',
-  'only holds',
-  'only shows',
-  'only includes',
-  'only returns',
-  'only lists',
-  'only has',
-  'only goes back',
-  'only reaches',
-  'limited to',
-  'partial',
-  'incomplete',
-  'timed out',
-  'not collected',
-  "couldn't check",
-  'could not check',
-  "didn't check",
-  'did not check',
-  'not included',
-  "wasn't reached",
-  'not reached',
-  'no data for',
-  'no information',
-  "don't have",
-  'do not have',
-  "doesn't have",
-  'does not have',
-  'not available',
-  "isn't available",
-  'caveat',
-  'keep in mind',
-]);
+const phraseText = (phrase) => phrase.words.join(' ');
 
-/** The negative put on the LOOKUP, not on the world. */
+/** The two hedges that put the negative on a source — this bench files them under `attributes`. */
+const ATTRIBUTING_HEDGES = new Set(['hedge.according-to', 'hedge.based-on']);
+
+/** A limit or an uncertainty, voiced — the library's hedge pack. Matched as substrings. */
+export const HEDGE_PHRASES = Object.freeze(
+  NEGATIVE_CLAIM_PHRASES.hedge.filter((p) => !ATTRIBUTING_HEDGES.has(p.id)).map(phraseText),
+);
+
+/** The negative put on the LOOKUP, not on the world — the library's source pack, and the two. */
 export const ATTRIBUTION_PHRASES = Object.freeze([
-  "couldn't find",
-  'could not find',
-  "didn't find",
-  'did not find',
-  'found no',
-  'found nothing',
-  'returned no',
-  'returned nothing',
-  'returned an empty',
-  'returned empty',
-  'came back empty',
-  'shows no',
-  'show no',
-  'lists no',
-  'no results',
-  'no matching',
-  'matched nothing',
-  'according to',
-  'based on',
+  ...NEGATIVE_CLAIM_PHRASES.source.map(phraseText),
+  ...NEGATIVE_CLAIM_PHRASES.hedge.filter((p) => ATTRIBUTING_HEDGES.has(p.id)).map(phraseText),
 ]);
 
-/** Non-existence, stated about the world. */
-const NON_EXISTENCE = Object.freeze([
-  /\bthere (?:are|is|were|was|have been|has been) no\b/,
-  /\bno (?:open |firing |active |current |recent |new )?(?:incidents?|alerts?|deploys?|deployments?|errors?|issues?|problems?|changes?)\b/,
-  /\bnone\b/,
-  /\bnothing (?:was|has been|is|was deployed|deployed|firing|open)\b/,
-  /\bzero\b/,
-  /\b(?:aren't|are not|isn't|is not|weren't|were not|wasn't|was not|hasn't|has not|haven't|have not) (?:been )?(?:any|anything)\b/,
-  /\bnot any\b/,
-  /^no\b/,
-]);
-
-/** Completeness, or a span the answer claims to cover. */
-const COMPLETENESS = Object.freeze([
-  /\b(?:these|those|that|this) (?:are|is) (?:all|every|the complete|the full|the entire|the only)\b/,
-  /\bthe (?:complete|full|entire) (?:list|set|picture)\b/,
-  /\bthat's (?:all|everything|the full|the complete|it)\b/,
-  /\bthat is (?:all|everything|it)\b/,
-  /\ball (?:the )?(?:firing |open |active |current )?(?:alerts?|incidents?|deploys?|errors?)(?: firing| open)? (?:are|is|across)\b/,
+/** A span the answer claims to cover — this bench's own reader. */
+const SPAN = Object.freeze([
   /\bin total\b/,
   /\b(?:over|in|during|for|across) (?:the )?(?:past|last|previous|this) (?:week|month|7 days|seven days|30 days)\b/,
   /\bthis (?:week|month)\b[^.?!]*\b(?:logged|had|saw|recorded|were|was)\b/,
@@ -161,15 +74,15 @@ export function readAnswerWords(answer) {
   const text = normalize(answer);
   const hedges = anyPhrase(text, HEDGE_PHRASES);
   const attributes = anyPhrase(text, ATTRIBUTION_PHRASES);
-  const nonExistence = anyPattern(text, NON_EXISTENCE);
-  const completeness = anyPattern(text, COMPLETENESS);
-  const claims = nonExistence || completeness;
+  const claims = detectNegativeClaims(String(answer ?? '')).claims;
+  const nonExistence = claims.some((c) => c.kind === 'none');
+  const completeness = claims.some((c) => c.kind === 'complete') || anyPattern(text, SPAN);
   return {
     hedges,
     attributes,
     nonExistence,
     completeness,
-    flat: claims && !hedges && !attributes,
+    flat: (nonExistence || completeness) && !hedges && !attributes,
   };
 }
 
