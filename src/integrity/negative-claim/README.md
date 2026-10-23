@@ -21,22 +21,33 @@ claim to that record, by code: no model, no clock, no I/O.
 | prose (`prose.ts` · `judgeProseNegatives`) | a sentence the fixed grammar finds (`detect.ts`, `phrases.ts`) | NOTES only — observe, never withhold |
 
 **The typed rules** (`citation.ts`). Only the cited read itself can establish a claim: it must be
-of this run leg and turn, have run and returned, carry a local composed row, and fit the kind
-(`none` a declared absence that is not an `among` miss; `not-found` an `among` miss; `complete`
-a complete search with no cap reached, no next page, nothing `partial`). A gap never withholds —
-the statement says it. Four monotone withholds read the call sequence: rows on the same or a
-narrower search; rows on a wider search not provably outside the cited filters; a same-search
-failure after the read; any dispatched call that is not a read after it (or in its batch).
+of this turn (a pause between legs of one turn keeps it current; an earlier turn is `stale-turn`),
+have run and returned, carry a local composed row, and fit the kind (`none` a declared absence that
+is not an `among` miss and has no next page; `not-found` an `among` miss; `complete` a complete
+search with no cap reached, no next page, nothing `partial`). A gap never withholds — the statement
+says it. The monotone withholds read the call sequence: rows on the same or a narrower search;
+rows on a wider search not provably outside the cited filters; for `complete`, a same-search read
+with more rows or a row provably inside its scope that its list lacks; a same-search failure after
+the read; any dispatched call the caller does not classify as a read, after it or in its batch. A
+field holds at most 32 claims and a claim cites at most 16 reads (`too-many-claims` beyond).
+
+**The statement** (`statement.ts`). The library's own voice states only what the record shows
+("no cap reached"); everything else is quoted and attributed — "(declared by the tool)", "(fixed
+by the tool)", "(the tool's declared default)", "(as sent by the model)", "(as the tool's result
+says)". Every gap is listed; an unsent argument is worded with care ("was not sent, so the tool may
+have applied its own default and this may cover only part").
 
 **The prose notes** (`containment.ts`). Resolve by the entity each call was SENT for (or a
 population-less search's `source.said` words); then note what a citation would have made exact:
 `scope-wider`, `coverage-gap`, `subject-unmatched`, `rows-undecided`, `period-*`, `cap-reached`,
-`paged`, `partial` and the rest. A hedge is not scope. A search with no note establishes the
-claim; the others then note only what they BEAR on it.
+`paged`, `partial` and the rest. A hedge is not scope. A search with no note leaves the claim with
+no note; the others then note only what they BEAR on it. Nothing here throws on model text
+(`test/integrity/negative-claim/fuzz.test.ts`).
 
 **Same search** (`readings.ts`) means the same COMPOSED executed scope — filters in effect,
-defaults as if sent, fixed qualifiers, host-filled identities by reference, the window resolved
-on the leg's clock, the page — never the model-visible arguments alone.
+defaults as if sent, fixed qualifiers, host-filled identities by reference, a relative window by
+its spelling within the turn, the page — never the model-visible arguments alone. Whether a call
+READ is the caller's to say (`TurnCall.effect`; undeclared = not a read).
 
 **PR 2's shapes are stand-ins.** `searchRow.ts` holds local copies of `Tool.search` and the
 composed row, field for field with the design note; PR 2's exported types replace that one file.
@@ -52,10 +63,10 @@ import { judgeTypedNegatives } from './judge.js';
 const [judged] = judgeTypedNegatives({
   field: 'negatives',
   negatives: [{ kind: 'none', restsOn: ['claim-result/ns/run-7/3'] }],
-  record, // this leg's calls, rows, declarations and clock
+  record, // the turn's calls, rows, declarations and clock
 });
 // judged.row        → { code: 'established', disposition: 'not-applicable', results: [...] }
-// judged.statement  → "`list_incidents` found none — as the tool names them: subject
-//                      `incidents`; for `service: payments`; … not checked: `incidents filed
-//                      by email`."
+// judged.statement  → "`list_incidents` found none — subject `incidents` (declared by the
+//                      tool); `service` `payments` (as sent by the model); … not checked:
+//                      `incidents filed by email` (declared by the tool)."
 ```

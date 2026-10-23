@@ -4,23 +4,26 @@
  * record-backed prose check over a study's recorded replies, measured against its labels. No
  * model, no network, no cost.
  *
- *   npm run build                                   # the replay reads the BUILT package
+ *   npm run build                                   # the command reads the BUILT package
  *   node bench/negative/replay.mjs <data-dir> [--json <out.json>]
  *
  * `<data-dir>` is the study's data folder (layout: `study.mjs`). It is read, never written, and
  * nothing of it is printed but aggregates: no reply, no case text, no identifier but a case's
  * short code inside the split line.
  *
+ * The checker is an ARGUMENT (`replay(study, lib)`): the command line loads it from the built
+ * package, the test suite hands it the sources, so no test needs a build.
+ *
  * What it prints, per split (tune / held-out cases), per model, per arm role (PLAIN and DECLARED
  * replies test, PROMPT replies tune), per label resolution (rater A, rater B, both agreeing):
- *   - the DETECTOR against "the reply states a flat negative or completeness claim":
- *     sensitivity, specificity, precision;
- *   - the ABLATION BASELINE ("withhold every detected flat claim") against "the reply states a
- *     claim the record cannot support" (flagged): missed overclaims, specificity, and how many
- *     correct true-zero replies it would hold;
- *   - DETECTOR + RECORD (the prose check over the calls' composed rows): the same three;
- *   - true-zero counts and the positive floor; then the § 7 gates on held-out test-arm replies.
- * Every ratio carries a case-clustered 95% bound (`measure.mjs` · `clusteredRatio`).
+ *   - the DETECTOR's recall of replies the raters call a flat negative claim, and how often it
+ *     fires on replies they call not flat (reported, not an error rate: it targets scoped
+ *     sentences the labels exclude);
+ *   - the ABLATION BASELINE ("withhold every detected claim") and DETECTOR + RECORD: missed
+ *     overclaims (replies the raters call a flat negative claim AND false) and the correct
+ *     true-zero replies a withhold would hold;
+ *   - the floors, then the § 7 gates on held-out test-arm replies.
+ * Every ratio carries an exact case-level 95% bound (`measure.mjs` · `casesRatio`).
  *
  * The rules are registered in `RULE.md`.
  */
@@ -29,15 +32,8 @@ import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { detectNegativeClaims } from '../../dist/esm/integrity/negative-claim/detect.js';
 import {
-  NEGATIVE_CLAIM_PHRASES_HASH,
-  NEGATIVE_CLAIM_PHRASES_VERSION,
-} from '../../dist/esm/integrity/negative-claim/phrases.js';
-import { judgeProseNegatives } from '../../dist/esm/integrity/negative-claim/prose.js';
-import { STATEMENT_VERSION } from '../../dist/esm/integrity/negative-claim/statement.js';
-import {
-  BOOTSTRAP,
+  FLOORS,
   RESOLUTIONS,
   armRole,
   fmt,
@@ -67,10 +63,10 @@ const recordFor = (reply) => ({
   tools: {},
 });
 
-/** Read one reply: what the grammar found, and what the record-backed check noted. */
-export function readReply(reply) {
-  const detection = detectNegativeClaims(reply.reply);
-  const rows = judgeProseNegatives({ field: 'reply', text: reply.reply, record: recordFor(reply) });
+/** Read one reply with the checker `lib`: what the grammar found, what the check noted. */
+export function readReply(reply, lib) {
+  const detection = lib.detectNegativeClaims(reply.reply);
+  const rows = lib.judgeProseNegatives({ field: 'reply', text: reply.reply, record: recordFor(reply) });
   const claimRows = rows.filter((r) => r.kind === 'negative-claim');
   const notes = {};
   for (const row of rows) {
@@ -86,15 +82,14 @@ export function readReply(reply) {
   };
 }
 
-/** Every cell's measures. */
-export function replay(study) {
+/** Every cell's measures. `lib` = `{ detectNegativeClaims, judgeProseNegatives }`. */
+export function replay(study, lib) {
   const split = splitCases(study.cases);
-  const read = study.replies.map(readReply);
+  const read = study.replies.map((reply) => readReply(reply, lib));
   const cells = [];
   const groups = new Map();
   for (const r of read) {
-    const parts = [split.get(r.code) ?? 'unsplit', modelFamily(r.model), armRole(r.arm)];
-    const key = parts.join(' · ');
+    const key = [split.get(r.code) ?? 'unsplit', modelFamily(r.model), armRole(r.arm)].join(' · ');
     groups.set(key, [...(groups.get(key) ?? []), r]);
   }
   for (const [key, replies] of [...groups.entries()].sort(([a], [b]) => a.localeCompare(b))) {
@@ -102,7 +97,9 @@ export function replay(study) {
       cells.push({ cell: key, resolution, ...measureCell(replies, resolution) });
     }
   }
-  const heldTest = read.filter((r) => split.get(r.code) === 'held-out' && armRole(r.arm) === 'test-arm');
+  const heldTest = read.filter(
+    (r) => split.get(r.code) === 'held-out' && armRole(r.arm) === 'test-arm',
+  );
   const gates = [];
   for (const model of ['haiku', 'sonnet']) {
     const replies = heldTest.filter((r) => modelFamily(r.model) === model);
@@ -111,62 +108,85 @@ export function replay(study) {
     }
   }
   const notes = {};
-  for (const r of read) for (const [code, n] of Object.entries(r.notes)) notes[code] = (notes[code] ?? 0) + n;
+  for (const r of read) {
+    for (const [code, n] of Object.entries(r.notes)) notes[code] = (notes[code] ?? 0) + n;
+  }
   const splitLine = {};
   for (const [code, side] of split) splitLine[side] = [...(splitLine[side] ?? []), code].sort();
   return { split: splitLine, cells, gates, notes, replies: read.length, rebuilt: study.rebuilt };
 }
 
-function print(result) {
+/** The report. `versions` = `{ phrases, phrasesHash, statement }`. */
+export function print(result, versions) {
   const out = [];
-  out.push('# Negative claims — the free replay (PRELIMINARY: model-rater labels, not yet checked by a person)');
+  out.push(
+    '# Negative claims — the free replay (PRELIMINARY: labels from two model-rater sessions, not yet checked by a person)',
+  );
   out.push('');
-  out.push(`grammar ${NEGATIVE_CLAIM_PHRASES_VERSION} · ${NEGATIVE_CLAIM_PHRASES_HASH}`);
-  out.push(`statement ${STATEMENT_VERSION} · bootstrap ${BOOTSTRAP.resamples} case resamples, seed ${BOOTSTRAP.seed}`);
+  out.push(`grammar ${versions.phrases} · ${versions.phrasesHash} · statement ${versions.statement}`);
+  out.push('bounds: exact (Clopper-Pearson) 95%, over cases');
+  out.push(
+    `floors: positives ≥ ${FLOORS.positives.replies} replies from ≥ ${FLOORS.positives.cases} cases; ` +
+      `negatives ≥ ${FLOORS.negatives.replies} from ≥ ${FLOORS.negatives.cases}`,
+  );
   out.push(`replies read: ${result.replies}`);
-  for (const r of result.rebuilt) out.push(`label key rebuilt by the sheet rule: ${r.items} items over ${r.runs} runs`);
-  out.push(`split — tune: ${(result.split.tune ?? []).join(' ')} · held-out: ${(result.split['held-out'] ?? []).join(' ')}`);
+  for (const r of result.rebuilt) {
+    out.push(`label key rebuilt by the sheet rule: ${r.items} items over ${r.runs} runs`);
+  }
+  out.push(
+    `split — tune: ${(result.split.tune ?? []).join(' ')} · held-out: ${(result.split['held-out'] ?? []).join(' ')}`,
+  );
   out.push(`notes filed: ${JSON.stringify(result.notes)}`);
   out.push('');
   for (const c of result.cells) {
-    out.push(`## ${c.cell} — labels ${c.resolution} (${c.replies} replies, ${c.disputed} disputed or unlabelled)`);
-    out.push(`  detector  sensitivity ${fmt(c.detector.sensitivity)}`);
-    out.push(`            specificity ${fmt(c.detector.specificity)}`);
-    out.push(`            precision   ${fmt(c.detector.precision)}`);
-    out.push(`  baseline  missed overclaims ${fmt(c.baseline.missedOverclaims)}`);
-    out.push(`            specificity       ${fmt(c.baseline.specificity)}`);
-    out.push(`            true zeros held   ${fmt(c.baseline.trueZeroHolds)}`);
-    out.push(`  +record   missed overclaims ${fmt(c.record.missedOverclaims)}`);
-    out.push(`            specificity       ${fmt(c.record.specificity)}`);
-    out.push(`            true zeros held   ${fmt(c.record.trueZeroHolds)}`);
+    out.push(
+      `## ${c.cell} — labels ${c.resolution} (${c.judged} judged; ${c.disputed} disputed or unlabelled, dropped)`,
+    );
+    out.push(`  detector  recall of flat claims        ${fmt(c.detector.sensitivity)}`);
+    out.push(`            fires on not-flat replies    ${fmt(c.detector.firesOnNotFlat)} (reported, not an error rate)`);
+    out.push(`  baseline  missed overclaims            ${fmt(c.baseline.missedOverclaims)}`);
+    out.push(`            true zeros held              ${fmt(c.baseline.trueZeroHolds)}`);
+    out.push(`  +record   missed overclaims            ${fmt(c.record.missedOverclaims)}`);
+    out.push(`            true zeros held              ${fmt(c.record.trueZeroHolds)}`);
     out.push(`            same as baseline: ${c.record.sameAsBaseline}`);
-    out.push(`  positives ${c.positives} replies from ${c.positiveCases} cases · true zeros ${c.trueZero.replies} replies from ${c.trueZero.cases} cases`);
+    out.push(
+      `  positives ${c.positives} replies from ${c.positiveCases} cases · true zeros ${c.trueZero.replies} replies from ${c.trueZero.cases} cases`,
+    );
   }
   out.push('');
   out.push('## Gates — held-out cases, PLAIN and DECLARED replies');
   for (const g of result.gates) {
-    const line = g.verdicts
-      .map((v) => `${v.name}: ${v.verdict}${v.lift === undefined ? '' : ` (lift ${(v.lift * 100).toFixed(1)} pts)`}`)
-      .join(' · ');
+    const line = g.verdicts.map((v) => `${v.name}: ${v.verdict}`).join(' · ');
     out.push(`  ${g.model} · labels ${g.resolution}: ${line}`);
   }
   return out.join('\n');
 }
 
-const isMain =
-  process.argv[1] !== undefined && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
-if (isMain) {
-  const [dataDir, ...rest] = process.argv.slice(2);
+/** The command line: the checker from the BUILT package. */
+async function main(argv) {
+  const [dataDir, ...rest] = argv;
   if (dataDir === undefined) {
     process.stderr.write('usage: node bench/negative/replay.mjs <data-dir> [--json <out.json>]\n');
     process.exit(2);
   }
-  const result = replay(loadStudy(dataDir));
-  process.stdout.write(`${print(result)}\n`);
+  const dist = '../../dist/esm/integrity/negative-claim';
+  const { detectNegativeClaims } = await import(`${dist}/detect.js`);
+  const { judgeProseNegatives } = await import(`${dist}/prose.js`);
+  const phrases = await import(`${dist}/phrases.js`);
+  const { STATEMENT_VERSION } = await import(`${dist}/statement.js`);
+  const result = replay(loadStudy(dataDir), { detectNegativeClaims, judgeProseNegatives });
+  const versions = {
+    phrases: phrases.NEGATIVE_CLAIM_PHRASES_VERSION,
+    phrasesHash: phrases.NEGATIVE_CLAIM_PHRASES_HASH,
+    statement: STATEMENT_VERSION,
+  };
+  process.stdout.write(`${print(result, versions)}\n`);
   const at = rest.indexOf('--json');
   if (at !== -1 && rest[at + 1] !== undefined) {
-    writeFileSync(rest[at + 1], `${JSON.stringify({ ...result }, null, 2)}\n`);
+    writeFileSync(rest[at + 1], `${JSON.stringify({ ...result, versions }, null, 2)}\n`);
   }
 }
 
-export { print };
+const isMain =
+  process.argv[1] !== undefined && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
+if (isMain) await main(process.argv.slice(2));

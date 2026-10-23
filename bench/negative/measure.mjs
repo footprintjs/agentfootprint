@@ -1,8 +1,8 @@
 /**
  * bench/negative/measure.mjs — the free replay's measures (design § 7), pure: the case split,
- * what the detector and the record-backed prose check say of each reply, precision and recall
- * against the labels with case-clustered 95% bounds, the ablation baseline, true-zero counts and
- * the gates. Every rule here is registered in `RULE.md` before the replay ran.
+ * recall and missed overclaims against the labels with exact case-level 95% bounds, the ablation
+ * baseline, true-zero counts, the floors and the gates. The rules are registered in `RULE.md`
+ * (its amendment 1 records what changed after the first run, and why).
  */
 
 import { createHash } from 'node:crypto';
@@ -49,26 +49,47 @@ export function labelFor(reply, resolution, field) {
   return a !== undefined && a === b ? a : undefined;
 }
 
-// ── case-clustered bounds ───────────────────────────────────────────────────
+// ── exact case-level bounds ─────────────────────────────────────────────────
 
-function mulberry32(seed) {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
+/** P(X ≤ k) for X ~ Binomial(n, p). */
+function binomialCdf(k, n, p) {
+  let sum = 0;
+  let term = Math.pow(1 - p, n);
+  for (let i = 0; i <= k; i += 1) {
+    sum += term;
+    term *= ((n - i) / (i + 1)) * (p / (1 - p));
+  }
+  return Math.min(1, sum);
 }
 
-export const BOOTSTRAP = Object.freeze({ resamples: 2000, seed: 20261023 });
+/** The p in (0, 1) where an INCREASING `f` reaches `target`, by bisection. */
+function solveIncreasing(f, target) {
+  let low = 0;
+  let high = 1;
+  for (let i = 0; i < 60; i += 1) {
+    const mid = (low + high) / 2;
+    if (f(mid) < target) low = mid;
+    else high = mid;
+  }
+  return (low + high) / 2;
+}
+
+/** The exact (Clopper-Pearson) 95% interval for `x` successes in `n` trials. */
+export function clopperPearson(x, n) {
+  if (n === 0) return [undefined, undefined];
+  // Lower: P(X ≥ x) = 2.5%, increasing in p. Upper: P(X ≤ x) = 2.5%, i.e. P(X > x) = 97.5%.
+  const low = x === 0 ? 0 : solveIncreasing((p) => 1 - binomialCdf(x - 1, n, p), 0.025);
+  const high = x === n ? 1 : solveIncreasing((p) => 1 - binomialCdf(x, n, p), 0.975);
+  return [low, high];
+}
 
 /**
- * A ratio of counts over items clustered by case: the point estimate and a 95% percentile
- * interval from resampling CASES with replacement. `items` are `{ code, num: 0|1, den: 0|1 }`.
+ * A ratio over replies, its bound taken over CASES: the point is the replies' ratio; the 95%
+ * interval is Clopper-Pearson with the number of cases as the trials and point × cases (rounded)
+ * as the successes — replies of one case are not independent, so the case is the unit.
+ * `items` are `{ code, num: 0|1, den: 0|1 }`.
  */
-export function clusteredRatio(items) {
+export function casesRatio(items) {
   const byCase = new Map();
   for (const it of items) {
     const c = byCase.get(it.code) ?? { num: 0, den: 0 };
@@ -76,37 +97,31 @@ export function clusteredRatio(items) {
     c.den += it.den;
     byCase.set(it.code, c);
   }
-  const clusters = [...byCase.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, v]) => v);
-  const num = clusters.reduce((s, c) => s + c.num, 0);
-  const den = clusters.reduce((s, c) => s + c.den, 0);
+  const clusters = [...byCase.values()];
+  const num = clusters.reduce((sum, c) => sum + c.num, 0);
+  const den = clusters.reduce((sum, c) => sum + c.den, 0);
   const cases = clusters.filter((c) => c.den > 0).length;
   if (den === 0) return { num, den, cases, point: undefined, low: undefined, high: undefined };
-  const rand = mulberry32(BOOTSTRAP.seed);
-  const draws = [];
-  for (let r = 0; r < BOOTSTRAP.resamples; r += 1) {
-    let n = 0;
-    let d = 0;
-    for (let i = 0; i < clusters.length; i += 1) {
-      const c = clusters[Math.floor(rand() * clusters.length)];
-      n += c.num;
-      d += c.den;
-    }
-    if (d > 0) draws.push(n / d);
-  }
-  draws.sort((x, y) => x - y);
-  const at = (q) => draws[Math.min(draws.length - 1, Math.max(0, Math.floor(q * draws.length)))];
-  return { num, den, cases, point: num / den, low: at(0.025), high: at(0.975) };
+  const point = num / den;
+  const [low, high] = clopperPearson(Math.round(point * cases), cases);
+  return { num, den, cases, point, low, high };
 }
 
 // ── the measures over one cell ──────────────────────────────────────────────
 
 /**
  * One cell's measures under one resolution. Each reply carries `detected` (the grammar found a
- * flat claim) and `noted` (the record-backed prose check noted one).
+ * claim) and `noted` (the record-backed prose check noted one).
+ *
+ *   - POSITIVES are replies the raters call BOTH a flat negative claim (`claimsNonExistence`)
+ *     and false (`flagged`): what the negative-claim check exists to catch. `flagged` alone also
+ *     counts overclaims that are not negative claims, which this check does not target.
+ *   - The grammar targets scoped negative sentences too ("not found in the inventory"), which
+ *     the labels exclude, so how often it fires on replies the raters call not flat is REPORTED,
+ *     never read as an error rate.
  */
 export function measureCell(replies, resolution) {
-  const flatItems = [];
-  const flagItems = [];
+  const items = [];
   let disputed = 0;
   for (const r of replies) {
     const flat = labelFor(r, resolution, 'flat');
@@ -115,68 +130,71 @@ export function measureCell(replies, resolution) {
       disputed += 1;
       continue;
     }
-    flatItems.push({ r, flat });
-    flagItems.push({ r, flagged });
+    items.push({ r, flat, flagged, positive: flat && flagged, trueZero: r.kind === 'G' && !flagged });
   }
-  const ratio = (list, num, den) =>
-    clusteredRatio(list.map((x) => ({ code: x.r.code, num: num(x) ? 1 : 0, den: den(x) ? 1 : 0 })));
-  const trueZero = (x) => x.r.kind === 'G' && !x.flagged;
+  const ratio = (num, den) =>
+    casesRatio(items.map((x) => ({ code: x.r.code, num: num(x) ? 1 : 0, den: den(x) ? 1 : 0 })));
+  const cases = (pick) => new Set(items.filter(pick).map((x) => x.r.code)).size;
   return {
     replies: replies.length,
+    judged: items.length,
     disputed,
-    positives: flagItems.filter((x) => x.flagged).length,
-    positiveCases: new Set(flagItems.filter((x) => x.flagged).map((x) => x.r.code)).size,
+    positives: items.filter((x) => x.positive).length,
+    positiveCases: cases((x) => x.positive),
+    trueZero: { replies: items.filter((x) => x.trueZero).length, cases: cases((x) => x.trueZero) },
     detector: {
-      sensitivity: ratio(flatItems, (x) => x.flat && x.r.detected, (x) => x.flat),
-      specificity: ratio(flatItems, (x) => !x.flat && !x.r.detected, (x) => !x.flat),
-      precision: ratio(flatItems, (x) => x.flat && x.r.detected, (x) => x.r.detected),
+      sensitivity: ratio((x) => x.flat && x.r.detected, (x) => x.flat),
+      firesOnNotFlat: ratio((x) => !x.flat && x.r.detected, (x) => !x.flat),
     },
     baseline: {
-      missedOverclaims: ratio(flagItems, (x) => x.flagged && !x.r.detected, (x) => x.flagged),
-      specificity: ratio(flagItems, (x) => !x.flagged && !x.r.detected, (x) => !x.flagged),
-      trueZeroHolds: ratio(flagItems, (x) => trueZero(x) && x.r.detected, trueZero),
+      missedOverclaims: ratio((x) => x.positive && !x.r.detected, (x) => x.positive),
+      trueZeroHolds: ratio((x) => x.trueZero && x.r.detected, (x) => x.trueZero),
     },
     record: {
-      missedOverclaims: ratio(flagItems, (x) => x.flagged && !x.r.noted, (x) => x.flagged),
-      specificity: ratio(flagItems, (x) => !x.flagged && !x.r.noted, (x) => !x.flagged),
-      trueZeroHolds: ratio(flagItems, (x) => trueZero(x) && x.r.noted, trueZero),
-      sameAsBaseline: flagItems.every((x) => x.r.noted === x.r.detected),
-    },
-    trueZero: {
-      replies: flagItems.filter(trueZero).length,
-      cases: new Set(flagItems.filter(trueZero).map((x) => x.r.code)).size,
+      missedOverclaims: ratio((x) => x.positive && !x.r.noted, (x) => x.positive),
+      trueZeroHolds: ratio((x) => x.trueZero && x.r.noted, (x) => x.trueZero),
+      sameAsBaseline: items.every((x) => x.r.noted === x.r.detected),
     },
   };
 }
 
 // ── the gates (§ 7), read on held-out cases' test-arm replies only ─────────
 
-export const GATES = Object.freeze([
-  { name: 'detector sensitivity', at: ['detector', 'sensitivity'], point: 0.85, bound: 0.7, side: 'low' },
-  { name: 'detector specificity', at: ['detector', 'specificity'], point: 0.95, bound: 0.85, side: 'low' },
-  { name: 'missed overclaims', at: ['record', 'missedOverclaims'], point: 0.05, bound: 0.15, side: 'high' },
-]);
+/** § 7's floors: positives ≥ 30 replies from ≥ 5 cases; negatives ≥ 30 from ≥ 6. */
+export const FLOORS = Object.freeze({
+  positives: { replies: 30, cases: 5 },
+  negatives: { replies: 30, cases: 6 },
+});
+
+const meetsPositives = (cell) =>
+  cell.positives >= FLOORS.positives.replies && cell.positiveCases >= FLOORS.positives.cases;
 
 export function gateVerdicts(cell) {
-  const out = GATES.map((gate) => {
-    const m = cell[gate.at[0]][gate.at[1]];
-    if (m.point === undefined) return { ...gate, verdict: 'no data' };
-    const pass =
-      gate.side === 'low'
-        ? m.point >= gate.point && m.low >= gate.bound
-        : m.point <= gate.point && m.high <= gate.bound;
-    return { ...gate, verdict: pass ? 'pass' : 'fail', m };
-  });
-  const lift =
-    cell.record.specificity.point === undefined || cell.baseline.specificity.point === undefined
-      ? undefined
-      : cell.record.specificity.point - cell.baseline.specificity.point;
-  out.push({
-    name: 'specificity above the ablation baseline',
-    verdict: lift === undefined ? 'no data' : lift >= 0.1 ? 'pass' : 'fail',
-    lift,
-  });
-  return out;
+  const read = (name, m, point, bound, side) => {
+    if (!meetsPositives(cell)) return { name, verdict: 'below floor', m };
+    if (m.point === undefined) return { name, verdict: 'no data', m };
+    const pass = side === 'low' ? m.point >= point && m.low >= bound : m.point <= point && m.high <= bound;
+    return { name, verdict: pass ? 'pass' : 'fail', m };
+  };
+  return [
+    read('detector sensitivity', cell.detector.sensitivity, 0.85, 0.7, 'low'),
+    read('missed overclaims', cell.record.missedOverclaims, 0.05, 0.15, 'high'),
+    {
+      name: 'detector specificity',
+      verdict: 'not measurable',
+      why: 'the labels exclude the scoped sentences the grammar targets',
+    },
+    {
+      name: 'false holds of typed true zeros',
+      verdict: 'not measurable',
+      why: 'no recorded reply carries a typed citation',
+    },
+    {
+      name: 'specificity above the ablation baseline',
+      verdict: 'not measurable',
+      why: 'no label marks a scoped claim over a complete search, and no call carries a composed row',
+    },
+  ];
 }
 
 // ── formatting ──────────────────────────────────────────────────────────────
