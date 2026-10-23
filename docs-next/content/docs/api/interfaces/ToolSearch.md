@@ -4,7 +4,7 @@ title: ToolSearch
 
 # Interface: ToolSearch
 
-Defined in: [src/semantics/coverage/search/types.ts:104](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/search/types.ts#L104)
+Defined in: [src/semantics/coverage/search/types.ts:121](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/search/types.ts#L121)
 
 WHAT ONE CALL OF THIS TOOL SEARCHES — declared once; the library composes
 each call's coverage from it and the arguments the call ran with.
@@ -30,7 +30,7 @@ search: {
 
 > `readonly` **arguments**: readonly `SearchArgument`[]
 
-Defined in: [src/semantics/coverage/search/types.ts:108](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/search/types.ts#L108)
+Defined in: [src/semantics/coverage/search/types.ts:125](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/search/types.ts#L125)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [src/semantics/coverage/search/types.ts:108](https://github.com/foot
 
 > `readonly` `optional` **complete?**: `"within-arguments"`
 
-Defined in: [src/semantics/coverage/search/types.ts:114](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/search/types.ts#L114)
+Defined in: [src/semantics/coverage/search/types.ts:131](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/search/types.ts#L131)
 
 The tool's statement that a call is complete for the population, filters
 and period in effect when no cap was reached and no page was open. Absent
@@ -50,7 +50,7 @@ and period in effect when no cap was reached and no page was open. Absent
 
 > `readonly` `optional` **fixed?**: readonly `SearchFixed`[]
 
-Defined in: [src/semantics/coverage/search/types.ts:107](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/search/types.ts#L107)
+Defined in: [src/semantics/coverage/search/types.ts:124](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/search/types.ts#L124)
 
 ***
 
@@ -58,7 +58,7 @@ Defined in: [src/semantics/coverage/search/types.ts:107](https://github.com/foot
 
 > `readonly` `optional` **gaps?**: readonly `SearchGap`[]
 
-Defined in: [src/semantics/coverage/search/types.ts:115](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/search/types.ts#L115)
+Defined in: [src/semantics/coverage/search/types.ts:132](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/search/types.ts#L132)
 
 ***
 
@@ -66,7 +66,19 @@ Defined in: [src/semantics/coverage/search/types.ts:115](https://github.com/foot
 
 > `readonly` `optional` **limits?**: `SearchLimits`
 
-Defined in: [src/semantics/coverage/search/types.ts:116](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/search/types.ts#L116)
+Defined in: [src/semantics/coverage/search/types.ts:133](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/search/types.ts#L133)
+
+***
+
+### ranking?
+
+> `readonly` `optional` **ranking?**: `"approximate"`
+
+Defined in: [src/semantics/coverage/search/types.ts:139](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/search/types.ts#L139)
+
+`'approximate'` — a vector, top-k or fuzzy ranking: the rows are the ones
+ranked nearest, never every row that fits, so every call carries a
+`ranking` gap on completeness and `complete` is refused beside it.
 
 ***
 
@@ -74,7 +86,7 @@ Defined in: [src/semantics/coverage/search/types.ts:116](https://github.com/foot
 
 > `readonly` **source**: `SearchWords`
 
-Defined in: [src/semantics/coverage/search/types.ts:105](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/search/types.ts#L105)
+Defined in: [src/semantics/coverage/search/types.ts:122](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/search/types.ts#L122)
 
 ***
 
@@ -82,4 +94,4 @@ Defined in: [src/semantics/coverage/search/types.ts:105](https://github.com/foot
 
 > `readonly` **subject**: `SearchWords`
 
-Defined in: [src/semantics/coverage/search/types.ts:106](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/search/types.ts#L106)
+Defined in: [src/semantics/coverage/search/types.ts:123](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/search/types.ts#L123)

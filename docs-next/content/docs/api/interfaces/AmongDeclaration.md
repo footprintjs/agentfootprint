@@ -4,7 +4,7 @@ title: AmongDeclaration
 
 # Interface: AmongDeclaration
 
-Defined in: [src/semantics/coverage/types.ts:236](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L236)
+Defined in: [src/semantics/coverage/types.ts:260](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L260)
 
 The list a missed name was looked up in — `absent({ what, among })`.
 
@@ -31,7 +31,7 @@ a name lookup that found nothing in the inventory export
 
 > `readonly` **argument**: `string`
 
-Defined in: [src/semantics/coverage/types.ts:238](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L238)
+Defined in: [src/semantics/coverage/types.ts:262](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L262)
 
 The input argument whose value was looked up ('array_id').
 
@@ -41,7 +41,7 @@ The input argument whose value was looked up ('array_id').
 
 > `readonly` `optional` **authoritative?**: `object`
 
-Defined in: [src/semantics/coverage/types.ts:264](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L264)
+Defined in: [src/semantics/coverage/types.ts:288](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L288)
 
 The ONE opt-out of the "names outside <source>" gap: the author says the
 source is every name there is, and why. Every use is listed for review by
@@ -57,7 +57,7 @@ source is every name there is, and why. Every use is listed for review by
 
 > `readonly` **count**: `number`
 
-Defined in: [src/semantics/coverage/types.ts:244](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L244)
+Defined in: [src/semantics/coverage/types.ts:268](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L268)
 
 How many names the list holds — a whole number. Always served.
 
@@ -67,7 +67,7 @@ How many names the list holds — a whole number. Always served.
 
 > `readonly` **measuredAt**: `string`
 
-Defined in: [src/semantics/coverage/types.ts:242](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L242)
+Defined in: [src/semantics/coverage/types.ts:266](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L266)
 
 When that list was read — the tool's own words, never parsed (the `provenance` rule).
 
@@ -77,7 +77,7 @@ When that list was read — the tool's own words, never parsed (the `provenance`
 
 > `readonly` `optional` **names?**: readonly `string`[]
 
-Defined in: [src/semantics/coverage/types.ts:251](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L251)
+Defined in: [src/semantics/coverage/types.ts:275](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L275)
 
 The names the list holds. When given, `names.length` must equal `count`
 (`names-count-mismatch`). Served only with [AmongDeclaration.visible](/docs/api/interfaces/AmongDeclaration#visible)
@@ -90,7 +90,7 @@ nearest the looked-for value.
 
 > `readonly` **source**: `string`
 
-Defined in: [src/semantics/coverage/types.ts:240](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L240)
+Defined in: [src/semantics/coverage/types.ts:264](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L264)
 
 The list the names were read from, in the author's words ('the PowerStore inventory export'). One line.
 
@@ -100,7 +100,7 @@ The list the names were read from, in the author's words ('the PowerStore invent
 
 > `readonly` `optional` **visible?**: `"caller"`
 
-Defined in: [src/semantics/coverage/types.ts:258](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L258)
+Defined in: [src/semantics/coverage/types.ts:282](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L282)
 
 `'caller'` — the tool read this list under the caller's OWN identity, so
 the caller may see names from it. Required for any name to be served:

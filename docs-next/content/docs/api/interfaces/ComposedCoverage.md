@@ -4,7 +4,7 @@ title: ComposedCoverage
 
 # Interface: ComposedCoverage
 
-Defined in: [src/semantics/coverage/composedCoverage.ts:196](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/composedCoverage.ts#L196)
+Defined in: [src/semantics/coverage/composedCoverage.ts:208](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/composedCoverage.ts#L208)
 
 What the funnel composes for one call of a `search` tool — revision 5's
 § 3.2 row, field for field, with the subject as a `checked` item.
@@ -35,7 +35,7 @@ Defined in: [src/semantics/coverage/types.ts:125](https://github.com/footprintjs
 
 > `readonly` **checked**: readonly `ComposedItem`[]
 
-Defined in: [src/semantics/coverage/composedCoverage.ts:206](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/composedCoverage.ts#L206)
+Defined in: [src/semantics/coverage/composedCoverage.ts:224](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/composedCoverage.ts#L224)
 
 #### Overrides
 
@@ -47,7 +47,7 @@ Defined in: [src/semantics/coverage/composedCoverage.ts:206](https://github.com/
 
 > `readonly` **complete**: `boolean`
 
-Defined in: [src/semantics/coverage/composedCoverage.ts:213](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/composedCoverage.ts#L213)
+Defined in: [src/semantics/coverage/composedCoverage.ts:231](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/composedCoverage.ts#L231)
 
 True only for a LOCAL row whose declaration says `complete:
 'within-arguments'` and that carries no `argument-unsent`, no
@@ -60,7 +60,7 @@ declaration = never complete.
 
 > `readonly` **composed**: `"local"` \| `"remote"`
 
-Defined in: [src/semantics/coverage/composedCoverage.ts:197](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/composedCoverage.ts#L197)
+Defined in: [src/semantics/coverage/composedCoverage.ts:209](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/composedCoverage.ts#L209)
 
 ***
 
@@ -68,7 +68,19 @@ Defined in: [src/semantics/coverage/composedCoverage.ts:197](https://github.com/
 
 > `readonly` **gaps**: readonly `CoverageGap`[]
 
-Defined in: [src/semantics/coverage/composedCoverage.ts:214](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/composedCoverage.ts#L214)
+Defined in: [src/semantics/coverage/composedCoverage.ts:232](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/composedCoverage.ts#L232)
+
+***
+
+### handle
+
+> `readonly` **handle**: `string`
+
+Defined in: [src/semantics/coverage/composedCoverage.ts:223](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/composedCoverage.ts#L223)
+
+The read's short HANDLE (`r3`) — the reservation's ordinal, the only thing
+a typed claim may cite once the arm serves it beside the result (design
+R5). Library-minted, like `resultId`; never the provider's call id.
 
 ***
 
@@ -76,7 +88,7 @@ Defined in: [src/semantics/coverage/composedCoverage.ts:214](https://github.com/
 
 > `readonly` `optional` **inProgress?**: readonly [`InProgressItem`](/docs/api/interfaces/InProgressItem)[]
 
-Defined in: [src/semantics/coverage/types.ts:390](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L390)
+Defined in: [src/semantics/coverage/types.ts:502](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L502)
 
 What the call found still running — its outcome not known yet — as the
 `coverage()` declared it (copied item by item; `short` and `count` when
@@ -93,7 +105,7 @@ well-formed, non-empty `in_progress`.
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/semantics/coverage/types.ts:374](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L374)
+Defined in: [src/semantics/coverage/types.ts:486](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L486)
 
 #### Inherited from
 
@@ -105,7 +117,7 @@ Defined in: [src/semantics/coverage/types.ts:374](https://github.com/footprintjs
 
 > `readonly` **kind**: `"absence"` \| `"ledger"`
 
-Defined in: [src/semantics/coverage/types.ts:371](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L371)
+Defined in: [src/semantics/coverage/types.ts:483](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L483)
 
 #### Inherited from
 
@@ -117,7 +129,7 @@ Defined in: [src/semantics/coverage/types.ts:371](https://github.com/footprintjs
 
 > `readonly` `optional` **lookedFor?**: `string`
 
-Defined in: [src/semantics/coverage/types.ts:376](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L376)
+Defined in: [src/semantics/coverage/types.ts:488](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L488)
 
 Present for `'absence'` only — what the search was for.
 
@@ -143,7 +155,7 @@ Defined in: [src/semantics/coverage/types.ts:124](https://github.com/footprintjs
 
 > `readonly` `optional` **overclaim?**: readonly `string`[]
 
-Defined in: [src/semantics/coverage/composedCoverage.ts:221](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/composedCoverage.ts#L221)
+Defined in: [src/semantics/coverage/composedCoverage.ts:239](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/composedCoverage.ts#L239)
 
 Codes the dispatch-time overclaim check marked on this row (design § 4) —
 written by that check, never by composition; absent when none.
@@ -154,7 +166,7 @@ written by that check, never by composition; absent when none.
 
 > `readonly` `optional` **period?**: [`DeclaredPeriod`](/docs/api/interfaces/DeclaredPeriod)
 
-Defined in: [src/semantics/coverage/composedCoverage.ts:216](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/composedCoverage.ts#L216)
+Defined in: [src/semantics/coverage/composedCoverage.ts:234](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/composedCoverage.ts#L234)
 
 As on every row — the period the result declared.
 
@@ -168,7 +180,7 @@ As on every row — the period the result declared.
 
 > `readonly` **resultId**: `string`
 
-Defined in: [src/semantics/coverage/composedCoverage.ts:205](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/composedCoverage.ts#L205)
+Defined in: [src/semantics/coverage/composedCoverage.ts:217](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/composedCoverage.ts#L217)
 
 The row's ADDRESS — the library-minted result identity
 (`claim-result/<namespace>/<runId>/<ordinal>`, minted by
@@ -182,7 +194,7 @@ and turns, and some providers mint none.
 
 > `readonly` `optional` **toolCallId?**: `string`
 
-Defined in: [src/semantics/coverage/types.ts:373](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L373)
+Defined in: [src/semantics/coverage/types.ts:485](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L485)
 
 #### Inherited from
 
@@ -194,7 +206,7 @@ Defined in: [src/semantics/coverage/types.ts:373](https://github.com/footprintjs
 
 > `readonly` **toolName**: `string`
 
-Defined in: [src/semantics/coverage/types.ts:372](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L372)
+Defined in: [src/semantics/coverage/types.ts:484](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L484)
 
 #### Inherited from
 

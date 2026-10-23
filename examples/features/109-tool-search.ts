@@ -1,5 +1,5 @@
 /**
- * 108 — a tool declares what its search is made of; the library composes each
+ * 109 — a tool declares what its search is made of; the library composes each
  * call's coverage from the arguments the call ran with.
  *
  * An incident tool finds nothing for `payments`. "No incidents" is not what it
@@ -26,7 +26,7 @@
  * and is not complete. A declaration that misdescribes its query is the
  * trusted base — composition cannot catch it.
  *
- * Run:  npm run example examples/features/108-tool-search.ts
+ * Run:  npm run example examples/features/109-tool-search.ts
  */
 
 import {
@@ -40,7 +40,7 @@ import { mock } from '../../src/doors/providers.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {
-  id: 'features/108-tool-search',
+  id: 'features/109-tool-search',
   title: 'Tool.search — coverage composed from the arguments the call ran with',
   group: 'features',
   description:
