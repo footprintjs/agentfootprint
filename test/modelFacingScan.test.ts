@@ -564,8 +564,8 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
   'src/core/pause.ts': [
     {
       kind: 'not-model-facing',
-      count: 4,
-      why: 'resume errors thrown to the host when a checkpoint is answered with the wrong shape, or with a decision that does not answer the paused request (ResumeDecisionError)',
+      count: 5,
+      why: 'resume errors thrown to the host when a checkpoint is answered with the wrong shape, or with a decision that does not answer the paused request (ResumeDecisionError, its `closed-by-host` sentence included — served as a 409 body, never on a model`s wire)',
     },
   ],
   'src/core/runCheckpoint.ts': [
@@ -1211,12 +1211,15 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // person to check — a persistent order, by design, anchored to the call
         // the message answers. One new file, one unrepaired literal:
         // files 101 → 102, total 199 → 200, unrepaired 33 → 34 (entries 13 → 14).
+        // …and the refusal a person gets for a request a host closed
+        // (`closed-by-host`), thrown to the caller of resume(): pause.ts 4 → 5,
+        // total 200 → 201, notModelFacing 134 → 135.
         files: 102,
-        total: 200,
+        total: 201,
         registry: 8,
         ephemeral: 24,
         unrepaired: 34,
-        notModelFacing: 134,
+        notModelFacing: 135,
         unrepairedEntries: 14,
       });
       // And the ledger's own total is the number of literals the scan flagged —
