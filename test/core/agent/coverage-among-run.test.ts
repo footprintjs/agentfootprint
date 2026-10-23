@@ -20,6 +20,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { absent, Agent, ask, checkInApproved, defineTool, isPaused } from '../../../src/index.js';
 import { mock } from '../../../src/llm-providers.js';
+import { pausedRequest } from '../../helpers/pausedRequest.js';
 import type { LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
 
 const SOURCE = 'the PowerStore inventory export';
@@ -186,7 +187,10 @@ describe('security — no event field carries a name the tool read', () => {
     const first = await r.agent.run({ message: 'details of PS-ARRAY-99?' });
     expect(isPaused(first)).toBe(true);
     if (!isPaused(first)) return;
-    await r.agent.resume(first.checkpoint, checkInApproved({ by: 'alice' }));
+    await r.agent.resume(
+      first.checkpoint,
+      checkInApproved({ request: pausedRequest(first), by: 'alice' }),
+    );
     const [end] = payloadsOf(r, 'agentfootprint.stream.tool_end');
     expect(end?.status).toBe('absent');
     expect(end?.result).not.toHaveProperty('known_names');
