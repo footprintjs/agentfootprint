@@ -154,7 +154,7 @@ function bears(
     return values.some((v: unknown) => sameValue(v, value));
   }
   if (bearsOn === 'source') return !sourceScoped(words, items, tool);
-  if (bearsOn === 'completeness') return words.claim.kind === 'complete';
+  // Missing coverage also limits absence: an unread part of the source may contain a match.
   return true;
 }
 
