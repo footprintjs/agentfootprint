@@ -88,7 +88,7 @@ R5). Library-minted, like `resultId`; never the provider's call id.
 
 > `readonly` `optional` **inProgress?**: readonly [`InProgressItem`](/docs/api/interfaces/InProgressItem)[]
 
-Defined in: [src/semantics/coverage/types.ts:502](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L502)
+Defined in: [src/semantics/coverage/types.ts:499](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L499)
 
 What the call found still running — its outcome not known yet — as the
 `coverage()` declared it (copied item by item; `short` and `count` when
@@ -105,7 +105,7 @@ well-formed, non-empty `in_progress`.
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/semantics/coverage/types.ts:486](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L486)
+Defined in: [src/semantics/coverage/types.ts:483](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L483)
 
 #### Inherited from
 
@@ -117,7 +117,7 @@ Defined in: [src/semantics/coverage/types.ts:486](https://github.com/footprintjs
 
 > `readonly` **kind**: `"absence"` \| `"ledger"`
 
-Defined in: [src/semantics/coverage/types.ts:483](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L483)
+Defined in: [src/semantics/coverage/types.ts:480](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L480)
 
 #### Inherited from
 
@@ -129,7 +129,7 @@ Defined in: [src/semantics/coverage/types.ts:483](https://github.com/footprintjs
 
 > `readonly` `optional` **lookedFor?**: `string`
 
-Defined in: [src/semantics/coverage/types.ts:488](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L488)
+Defined in: [src/semantics/coverage/types.ts:485](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L485)
 
 Present for `'absence'` only — what the search was for.
 
@@ -194,7 +194,7 @@ and turns, and some providers mint none.
 
 > `readonly` `optional` **toolCallId?**: `string`
 
-Defined in: [src/semantics/coverage/types.ts:485](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L485)
+Defined in: [src/semantics/coverage/types.ts:482](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L482)
 
 #### Inherited from
 
@@ -206,7 +206,7 @@ Defined in: [src/semantics/coverage/types.ts:485](https://github.com/footprintjs
 
 > `readonly` **toolName**: `string`
 
-Defined in: [src/semantics/coverage/types.ts:484](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L484)
+Defined in: [src/semantics/coverage/types.ts:481](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L481)
 
 #### Inherited from
 

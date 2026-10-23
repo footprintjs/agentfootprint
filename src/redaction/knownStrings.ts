@@ -145,7 +145,7 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   Loop: true,
   Parallel: true,
   Sequence: true,
-  "The search ran and matched nothing — the call did not fail, and calling this tool again with the same arguments returns this same result. `checked` is the ground this answer covers, as the call's arguments and the tool's declared defaults set it: where an argument was not sent, a default the tool applies may have narrowed the search. Anything under `not_checked` or `cannot_cover` is ground it does NOT cover, and reaching that needs a different question, not a retry.":
+  'The search ran and matched nothing — the call did not fail, and calling this tool again with the same arguments returns this same result. `checked` is the ground this answer covers, as the call\'s arguments and the tool\'s declared defaults set it: where an argument was not sent, a default the tool applies may have narrowed the search. Anything under `not_checked` or `cannot_cover` is ground it does NOT cover, and reaching that needs a different question, not a retry.':
     true,
   'The search ran and matched nothing. This is an ANSWER, not an error: nothing failed, nothing was substituted for what was asked, and calling this tool again with the same arguments returns this same result. `checked` is the ground this answer covers; anything under `not_checked` or `cannot_cover` is ground it does NOT cover, and reaching that needs a different question, not a retry.':
     true,

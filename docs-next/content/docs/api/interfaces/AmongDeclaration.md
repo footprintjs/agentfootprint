@@ -4,7 +4,7 @@ title: AmongDeclaration
 
 # Interface: AmongDeclaration
 
-Defined in: [src/semantics/coverage/types.ts:238](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L238)
+Defined in: [src/semantics/coverage/types.ts:262](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L262)
 
 The list a missed name was looked up in — `absent({ what, among })`.
 
@@ -33,7 +33,7 @@ a name lookup that found nothing in the inventory export
 
 > `readonly` **argument**: `string`
 
-Defined in: [src/semantics/coverage/types.ts:240](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L240)
+Defined in: [src/semantics/coverage/types.ts:264](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L264)
 
 The input argument whose value was looked up ('array_id').
 
@@ -43,7 +43,7 @@ The input argument whose value was looked up ('array_id').
 
 > `readonly` `optional` **authoritative?**: `object`
 
-Defined in: [src/semantics/coverage/types.ts:270](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L270)
+Defined in: [src/semantics/coverage/types.ts:294](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L294)
 
 The ONE opt-out of the "names outside <source>" gap: the author says the
 source is every name there is, and why — the tool's claim, not verified.
@@ -59,7 +59,7 @@ Every use is listed for review by `check:semantics` (`authoritative-names`).
 
 > `readonly` **count**: `number`
 
-Defined in: [src/semantics/coverage/types.ts:251](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L251)
+Defined in: [src/semantics/coverage/types.ts:275](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L275)
 
 How many names the list holds — a whole number. The tool's claim; served on the facet.
 
@@ -69,7 +69,7 @@ How many names the list holds — a whole number. The tool's claim; served on th
 
 > `readonly` **measuredAt**: `string`
 
-Defined in: [src/semantics/coverage/types.ts:249](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L249)
+Defined in: [src/semantics/coverage/types.ts:273](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L273)
 
 When that list was read — the tool's own words (the `provenance` rule).
 When it is an ISO 8601 instant this library can read, the names facet
@@ -82,7 +82,7 @@ whether that is old.
 
 > `readonly` `optional` **names?**: readonly `string`[]
 
-Defined in: [src/semantics/coverage/types.ts:257](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L257)
+Defined in: [src/semantics/coverage/types.ts:281](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L281)
 
 The names the list holds, read ONLY to check `count`: when given,
 `names.length` must equal it (`names-count-mismatch`). No name is served
@@ -94,7 +94,7 @@ to the model or written to an event or a record.
 
 > `readonly` `optional` **partial?**: `boolean`
 
-Defined in: [src/semantics/coverage/types.ts:264](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L264)
+Defined in: [src/semantics/coverage/types.ts:288](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L288)
 
 `true` when the read did not see every name in the source — a truncated
 or paged inventory. The mint then composes a completeness gap, "not every
@@ -107,6 +107,6 @@ outside <source>", and `authoritative` never removes it.
 
 > `readonly` **source**: `string`
 
-Defined in: [src/semantics/coverage/types.ts:242](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L242)
+Defined in: [src/semantics/coverage/types.ts:266](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L266)
 
 The list the names were read from, in the author's words ('the PowerStore inventory export'). One line.
