@@ -11,6 +11,7 @@ import type { FlowchartCheckpoint } from 'footprintjs';
 import {
   NOT_RUN_UNANSWERABLE,
   OUTCOME_NOT_RECORDED,
+  OUTCOME_UNKNOWN_UNANSWERABLE,
   afterFailedAnswer,
   answeredRefusal,
   closedConversation,
@@ -37,6 +38,8 @@ import {
   spendDecision,
 } from '../../src/core/consentRequest.js';
 import type { LLMMessage } from '../../src/provider-contract/types.js';
+import { Agent } from '../../src/index.js';
+import { mock } from '../../src/llm-providers.js';
 
 /** Two refunds asked in one turn; only the first has its result. */
 const halfAnswered: LLMMessage[] = [
@@ -109,15 +112,16 @@ describe('openToolCalls / settleOpenCalls', () => {
 });
 
 describe('closedConversation / unanswerablePause — a pause no answer can reach', () => {
-  it('settles every call the pause left open as not run, marked for findings admission', () => {
-    const closed = closedConversation(pausedOver(halfAnswered, { findingsServe: 'ids' }));
+  it('with nothing that proves its calls never ran, settles every one it left open as outcome unknown, marked for findings admission', async () => {
+    // "Did not run" needs proof from a ledger (test/hosting/closed-pause-outcome.test.ts).
+    const closed = await closedConversation(pausedOver(halfAnswered, { findingsServe: 'ids' }));
     expect(closed.history.slice(0, halfAnswered.length)).toEqual(halfAnswered);
     expect(closed.history[closed.history.length - 1]).toEqual({
       role: 'tool',
       toolName: 'refund',
       toolCallId: 'b',
-      toolResultOrigin: 'not-entered',
-      content: NOT_RUN_UNANSWERABLE,
+      toolResultOrigin: 'outcome-unknown',
+      content: OUTCOME_UNKNOWN_UNANSWERABLE,
     });
     expect(openToolCalls(closed.history)).toEqual([]);
   });
@@ -564,7 +568,7 @@ describe('afterFailedAnswer — marked when its decision may have been used', ()
       Object.assign(new Error('refused'), { code: 'ERR_RESUME_DECISION', reason });
 
     it.each(['request-not-recorded', 'call-changed', 'chain-changed'])(
-      "closed for '%s': the store holds the conversation it goes on from, every open call not run",
+      "closed for '%s': the store holds the conversation it goes on from — every open call not known, this resume's non-use being no proof that an earlier one used nothing",
       async (reason) => {
         const { paused, written, after } = setup();
         const watch = await watched(paused, 'taken-up');
@@ -583,9 +587,43 @@ describe('afterFailedAnswer — marked when its decision may have been used', ()
         ).toBe('closed');
         expect(written[0]?.format).toBe('conversation-v1');
         const history = readEnvelope(written[0]!).history;
-        expect(history[history.length - 1]?.content).toBe(NOT_RUN_UNANSWERABLE);
+        expect(history[history.length - 1]?.content).toBe(OUTCOME_UNKNOWN_UNANSWERABLE);
         watch?.release();
         void after;
+      },
+    );
+
+    it.each([
+      ['never spent', false, NOT_RUN_UNANSWERABLE],
+      ['spent by an earlier resume', true, OUTCOME_UNKNOWN_UNANSWERABLE],
+    ] as const)(
+      'closed with a runner whose shared ledger says the request was %s',
+      async (_label, spentEarlier, notice) => {
+        const { paused, written } = setup();
+        const spent = new Set<string>(spentEarlier ? [REQUEST] : []);
+        const runner = Agent.create({
+          provider: mock({ reply: 'x' }),
+          model: 'm',
+          decisionLedger: { spend: () => true, isSpent: async (id) => spent.has(id) },
+        }).build();
+        const watch = await watched(paused, 'taken-up');
+        expect(
+          await afterFailedAnswer({
+            store: {
+              hydrate: async () => toPausedEnvelope(paused),
+              persist: async (_id: string, envelope: CheckpointEnvelope) =>
+                void written.push(envelope),
+            },
+            sessionId: 's',
+            paused,
+            watch,
+            error: refusal('chain-changed'),
+            runner,
+          }),
+        ).toBe('closed');
+        const history = readEnvelope(written[0]!).history;
+        expect(history[history.length - 1]?.content).toBe(notice);
+        watch?.release();
       },
     );
 
