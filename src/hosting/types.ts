@@ -912,15 +912,17 @@ export interface PausedRun {
   readonly wire?: PausedWire;
   /**
    * Set when a resume of this pause failed — in the run, or in storing its
-   * result — and may have used its decision, so the call may have run (only a
-   * resume that refused before its decision could reach a ledger leaves the
-   * pause unmarked). The pause is answered: a decision for it is refused
-   * (`ResumeDecisionError`, `'already-answered'`), whether its call ran is not
-   * known to the host, and the next message continues the conversation in
-   * `conversation` — what this session stored (the run's own, kept mid-run
+   * result — after its decision may have been used: it reached a ledger, so
+   * the call may have run (a resume that never took the decision to a ledger
+   * leaves the pause unmarked). The pause is answered: a decision for it is
+   * refused (`ResumeDecisionError`, `'already-answered'`), whether its call ran
+   * is not known to the host, and the next message continues the conversation
+   * in `conversation` — what this session stored (the run's own, kept mid-run
    * under durable writes, else as of the pause), every call left open settled
-   * as unknown. `at` is when the host marked it. Absent on every pause still
-   * waiting.
+   * as unknown, and a call the person declined settled as declined. `at` is
+   * when the host marked it. Absent on every pause still waiting — and code
+   * that reads stored pauses itself (`readPausedRun`) must honour it: an
+   * answered pause is a conversation to continue, never a question to show.
    */
   readonly answered?: { readonly at: number };
 }

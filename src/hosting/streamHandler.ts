@@ -66,7 +66,13 @@ import { isPaused, type RunnerPauseOutcome } from '../core/pause.js';
 import type { AgentRunCheckpoint } from '../core/runCheckpoint.js';
 import type { Runner } from '../core/runner.js';
 import { toWireJson } from '../lib/wireJson.js';
-import { answeredRefusal, markAnsweredAfterFailure, readStoredSession } from './answeredPause.js';
+import {
+  afterFailedAnswer,
+  answeredRefusal,
+  readStoredSession,
+  watchAnswer,
+} from './answeredPause.js';
+import type { DecisionUseWatch } from '../core/consentRequest.js';
 import { checkSessionId, doorGuard, type CrossSiteOptions } from './doorGuard.js';
 import { envelopeOwner, toEnvelope, toPausedEnvelope } from './envelope.js';
 import { RequestTooLargeError, WireRequestRefusal } from './errors.js';
@@ -382,6 +388,8 @@ export function streamHandler<TRequest, TEvent>(
     let settlement: RunSettlement;
     /** The answer was handed to the runner: from here its decision may be used. */
     let answering = false;
+    /** Opened as the answer is handed over (`answeredPause.ts`). */
+    let watch: DecisionUseWatch | undefined;
     try {
       // The runner is this request's alone; the run filter still holds a fact a
       // shared resource stamped for another run or session out of the stream.
@@ -401,6 +409,7 @@ export function streamHandler<TRequest, TEvent>(
         ...(request !== undefined && { request }),
       };
       answering = plan.turn.kind === 'answer';
+      if (answering && held.paused !== undefined) watch = watchAnswer(held.paused);
       const out =
         plan.turn.kind === 'answer'
           ? await runner.resume(
@@ -415,23 +424,23 @@ export function streamHandler<TRequest, TEvent>(
               runOptions as never,
             );
       settlement = await keep(turn, out, runId);
-    } catch (err) {
+    } catch {
       // An answer handed to the runner that then failed — in the run, or in
-      // keeping its result: the stored pause is answered before the caller
-      // hears the end, unless the resume refused before its decision could
-      // reach a ledger (`answeredPause.ts`). A caller who left before the run
-      // started handed nothing over.
+      // keeping its result: when its decision may have been used, the stored
+      // pause is answered before the caller hears the end (`answeredPause.ts`).
+      // A caller who left before the run started handed nothing over.
       if (
         answering &&
         held.paused !== undefined &&
         thread !== undefined &&
         sessions !== undefined
       ) {
-        await markAnsweredAfterFailure({
+        await afterFailedAnswer({
           store: sessions,
           sessionId: thread.sessionId,
           paused: held.paused,
-          error: err,
+          watch,
+          answer: plan.turn.kind === 'answer' ? plan.turn.answer : undefined,
         }).catch(() => undefined);
       }
       settlement = { kind: signal.aborted ? 'cancelled' : 'failed' };
@@ -440,6 +449,7 @@ export function streamHandler<TRequest, TEvent>(
       // anything else that could throw: a client that answers on RUN_FINISHED
       // must not find its own turn still running, ever.
       release();
+      watch?.release();
       try {
         if (typeof off === 'function') off();
       } catch {

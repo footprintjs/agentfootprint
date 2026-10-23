@@ -27,7 +27,7 @@ import {
 } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
 import { askHuman } from '../../src/core/pause.js';
-import { checkInApproved } from '../../src/core/checkin.js';
+import { checkInApproved, checkInDeclined } from '../../src/core/checkin.js';
 import {
   memorySessions,
   readEnvelope,
@@ -1284,7 +1284,7 @@ describe('a consent gate over the wire — a decision whose resume failed after 
   it('a door that clones the decision before resuming still marks the pause — and a retry is refused', async () => {
     // A door is free to copy, re-parse or wrap a decision on its way to the
     // resume. Whether the pause gets marked must not depend on that.
-    const { markAnsweredAfterFailure } = await import('../../src/hosting/answeredPause.js');
+    const { afterFailedAnswer, watchAnswer } = await import('../../src/hosting/answeredPause.js');
     const { describePause } = await import('../../src/hosting/pendingAsk.js');
     const ran: number[] = [];
     const store = memorySessions();
@@ -1298,11 +1298,14 @@ describe('a consent gate over the wire — a decision whose resume failed after 
     };
     await store.persist('cloned', toPausedEnvelope(paused));
     const decision = checkInApproved({ request: out.checkIn, by: 'alice' });
+    const watch = watchAnswer(paused);
     try {
       await agent.resume(out.checkpoint, JSON.parse(JSON.stringify(decision)));
       throw new Error('expected the resume to fail');
-    } catch (err) {
-      await markAnsweredAfterFailure({ store, sessionId: 'cloned', paused, error: err });
+    } catch {
+      await afterFailedAnswer({ store, sessionId: 'cloned', paused, watch });
+    } finally {
+      watch?.release();
     }
     expect(ran).toEqual([10]);
     expect(readPausedRun(await store.hydrate('cloned')).answered).toEqual({
@@ -1369,6 +1372,78 @@ describe('a consent gate over the wire — a decision whose resume failed after 
       expect(ran).toEqual([10]);
     } finally {
       await other.close();
+    }
+  });
+
+  it('a decision delivered after the caller hung up runs nothing and leaves the pause answerable — another process answers it once', async () => {
+    const ran: number[] = [];
+    const sessions = memorySessions();
+    const host = inProcessHost();
+    const handle = await standingAgent({
+      agent: flakyRefunds(ran, { on: false }),
+      sessions,
+      host,
+    });
+    let decision: unknown;
+    try {
+      const asked = await host.deliver({ input: 'refund me', sessionId: 'hung-up' });
+      decision = checkInApproved({ request: pausedRequest(asked.awaiting), by: 'alice' });
+      const gone = await host.deliver({
+        input: '',
+        sessionId: 'hung-up',
+        decision,
+        signal: AbortSignal.abort(),
+      });
+      expect(gone.output).toBeUndefined();
+      await new Promise((done) => setTimeout(done, 20));
+      expect(ran).toEqual([]);
+    } finally {
+      await handle.close();
+    }
+    // The decision reached no ledger, so the pause is still the person's to answer.
+    expect(readPausedRun(await sessions.hydrate('hung-up')).answered).toBeUndefined();
+    const elsewhere = inProcessHost();
+    const other = await standingAgent({
+      agent: flakyRefunds(ran, { on: false }, [], inMemoryDecisionLedger()),
+      sessions,
+      host: elsewhere,
+    });
+    try {
+      const answered = await elsewhere.deliver({ input: '', sessionId: 'hung-up', decision });
+      expect(answered.output).toBe('refund issued');
+      expect(ran).toEqual([10]);
+    } finally {
+      await other.close();
+    }
+  });
+
+  it('a decline whose resume then fails is recorded as declined — the call did not run', async () => {
+    const ran: number[] = [];
+    const sessions = memorySessions();
+    const host = inProcessHost();
+    const sent: (readonly LLMMessage[])[] = [];
+    const handle = await standingAgent({
+      agent: flakyRefunds(ran, { on: true }, sent),
+      sessions,
+      host,
+    });
+    try {
+      const asked = await host.deliver({ input: 'refund me', sessionId: 'declined' });
+      const decision = checkInDeclined({
+        request: pausedRequest(asked.awaiting),
+        by: 'alice',
+        note: 'wrong account',
+      });
+      const failed = await host.deliver({ input: '', sessionId: 'declined', decision });
+      expect(failed.error).toBeDefined();
+      expect(ran).toEqual([]);
+      const stored = readPausedRun(await sessions.hydrate('declined'));
+      expect(stored.answered).toEqual({ at: expect.any(Number) });
+      const results = stored.conversation.history.filter((m) => m.role === 'tool');
+      expect(results.map((m) => m.content)).toEqual(['declined by human: wrong account']);
+      expect(results[0]?.content).not.toBe(OUTCOME_NOT_RECORDED);
+    } finally {
+      await handle.close();
     }
   });
 

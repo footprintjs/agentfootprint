@@ -6,7 +6,7 @@ title: standardEvidenceAssembler
 
 > `const` **standardEvidenceAssembler**: [`CheckInAssembler`](/docs/api/type-aliases/CheckInAssembler)
 
-Defined in: [src/core/checkin.ts:584](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L584)
+Defined in: [src/core/checkin.ts:595](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L595)
 
 The `'standard'` assembler — fills all four evidence fields. The `drivers`
 ranking runs the configured scorer over the run-so-far context units; the

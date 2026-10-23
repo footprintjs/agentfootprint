@@ -275,13 +275,15 @@ The rules for the verifiers themselves are in `src/adapters/identity/README.md`.
   keyed by the verified person, an unverified caller refused.
 - `refusalStatus.ts` — the ONE status table every HTTP door answers refusals
   with; `pendingAsk.ts` — the one projection of what a paused run waits on.
-- `answeredPause.ts` — a stored pause whose decision a resume used and did not
-  finish. The ONE reading of a stored session every door uses
+- `answeredPause.ts` — a stored pause whose decision a resume may have used and
+  did not finish. The ONE reading of a stored session every door uses
   (`readStoredSession`: an answered pause is a conversation to continue, never a
-  pause to answer) and the one marking step after a failed resume
-  (`markAnsweredAfterFailure` — marked unless the resume refused before its
-  decision could reach a ledger), shared by `standingAgent` and `streamHandler`;
-  it settles the calls that run left open so the next message can continue.
+  pause to answer), the watch a door opens before it hands an answer over
+  (`watchAnswer`), and the one step after that answer's resume failed
+  (`afterFailedAnswer` — marked when the watch says the decision reached a
+  ledger), shared by `standingAgent` and `streamHandler`; it settles the calls
+  that run left open (a declined one as declined) so the next message can
+  continue.
 
 ## A hosted agent under `redact` — the record served, the person answered
 

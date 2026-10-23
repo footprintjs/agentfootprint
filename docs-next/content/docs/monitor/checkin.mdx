@@ -95,17 +95,22 @@ if (isCheckInPause(out)) {
 
 All but `'already-answered'` are refused before anything moves, and the checkpoint stays answerable with the right decision. A request is spent where the decision is used, in the resumed run, still before the tool. A composition (`Sequence`, `Parallel`, …) resumes its nested agents directly, so there every refusal comes from that same place.
 
-Where answered requests are remembered is a `DecisionLedger`, and **"once" holds per ledger**. The default is one ledger in this process's memory, shared by every agent that names none — so a server that builds an agent per request, or a pool that rebuilds an evicted instance, still answers each request once. It does not survive a restart, and no other process sees it. When more than one process can resume the same paused run (replicas, a worker that picks up stored checkpoints, a process that restarts), give every agent that can resume it one ledger in a store they all reach, whose `spend(requestId)` is atomic:
+Where answered requests are remembered is a `DecisionLedger`, and **"once" holds per ledger**. The default is one ledger in this process's memory, shared by every agent that names none — one per process even when an app loads both the CommonJS and the ESM build — so a server that builds an agent per request, or a pool that rebuilds an evicted instance, still answers each request once. It grows by one id per answered request for as long as the process runs, it does not survive a restart, and no other process sees it. When more than one process can resume the same paused run (replicas, a worker that picks up stored checkpoints, a process that restarts), give every agent that can resume it one ledger in a store they all reach, whose `spend(requestId)` is atomic:
 
 ```ts
 const decisionLedger: DecisionLedger = {
   // true the first time, false after — a unique-key insert does this in one step
   spend: async (requestId) => (await db.insertIgnore('spent_requests', { requestId })) === 1,
+  // optional: after a spend that threw, tells a host whether it landed — a pause
+  // whose spend never landed stays answerable
+  isSpent: async (requestId) => db.exists('spent_requests', { requestId }),
 };
 const agent = Agent.create({ provider, model, decisionLedger }).tool(issueRefund).build();
 ```
 
 A ledger of an agent's own — even a fresh `inMemoryDecisionLedger()` — makes "once" hold for that ledger alone: agents given different ledgers spend separately. A refusal for an answered request (`'already-answered'`) says only what that resume knows: it ran nothing, and whether the earlier resume finished — so whether the call ran — is not known there.
+
+A resume whose run is aborted — its caller hung up, or a deadline passed — before the decision is spent never spends it afterwards, and one aborted while its ledger answers does not run the call: the engine stops waiting on an aborted stage, but the stage goes on, so the spend checks the run's signal on both sides.
 
 `by` is recorded as given: a claim, not proof. The binding says WHICH request and WHAT call; WHO may decide is your host's to authenticate. And the checkpoint itself is not proof either — a host that lets checkpoints leave its trust boundary signs them or keeps them server-side.
 

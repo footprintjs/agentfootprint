@@ -37,7 +37,8 @@ import {
   type ToolMiddleware,
 } from '../../../src/index.js';
 import type { LLMProvider, LLMResponse } from '../../../src/provider-contract/types.js';
-import { wasRefusedBeforeUse } from '../../../src/core/consentRequest.js';
+import { watchDecisionUse } from '../../../src/core/consentRequest.js';
+import { installDurabilityBarrier } from '../../../src/core/durabilityBarrier.js';
 import { ResumeDecisionError } from '../../../src/core/pause.js';
 
 // ── doubles ─────────────────────────────────────────────────────────────
@@ -470,10 +471,10 @@ describe('decision binding — inside compositions', () => {
     expect(exec).toHaveBeenCalledTimes(1);
   });
 
-  it('a nested agent’s refusal reaches the caller as what it threw, registered as refused before use', async () => {
-    // A door that keeps the pause leaves it answerable only on this sign
-    // (`hosting/answeredPause.ts`), so it must survive the composition: the
-    // refusal raised inside the step is the very object the caller catches.
+  it('a composition’s resume is watched like an agent’s: a refusal takes nothing to a ledger, a replay does', async () => {
+    // A door that keeps the pause marks it only when its watch says the
+    // decision may have been used (`hosting/answeredPause.ts`) — so the watch
+    // must see through a composition to the nested agent that spends.
     const exec = vi.fn(() => 'refunded');
     const seq = Sequence.create().step('refunds', gatedAgent(exec)).build();
     const paused = asCheckIn(await seq.run({ message: 'refund 40' }));
@@ -482,19 +483,52 @@ describe('decision binding — inside compositions', () => {
       { approved: true, by: 'maya', at: 1 },
       checkInApproved({ request: other.checkIn, by: 'maya' }),
     ]) {
+      const watch = watchDecisionUse(paused.checkIn.id);
       const refused = await seq.resume(paused.checkpoint, answer).catch((err: unknown) => err);
       expect(refused).toBeInstanceOf(ResumeDecisionError);
-      expect(wasRefusedBeforeUse(refused, paused.checkIn.id)).toBe(true);
-      expect(wasRefusedBeforeUse(refused, other.checkIn.id)).toBe(false);
+      expect(await watch.mayHaveBeenUsed()).toBe(false);
+      watch.release();
     }
-    // A replay is refused AT the spend — after the first resume used the
-    // decision — so it carries no such sign.
     const decision = checkInApproved({ request: paused.checkIn, by: 'maya' });
     await seq.resume(paused.checkpoint, decision);
+    const watch = watchDecisionUse(paused.checkIn.id);
     const replay = await seq.resume(paused.checkpoint, decision).catch((err: unknown) => err);
     expect(replay).toMatchObject(refusal('already-answered'));
-    expect(wasRefusedBeforeUse(replay, paused.checkIn.id)).toBe(false);
+    expect(await watch.mayHaveBeenUsed()).toBe(true);
+    watch.release();
     expect(exec).toHaveBeenCalledTimes(1);
+  });
+
+  it('a resume abandoned by an abort while it waits takes nothing to a ledger and runs no tool', async () => {
+    // The engine stops waiting on a stage when its run is aborted, but the
+    // stage goes on: before 11.0.0 it spent the decision and ran the tool
+    // AFTER the caller was told the run was aborted.
+    const exec = vi.fn(() => 'refunded');
+    const spends: string[] = [];
+    const agent = Agent.create({
+      provider: refunds(),
+      model: 'mock',
+      decisionLedger: { spend: (id) => (spends.push(id), true) },
+    })
+      .system('You issue refunds.')
+      .tool(refundTool(exec))
+      .build();
+    const paused = asCheckIn(await agent.run({ message: 'refund 40' }));
+    // A write still landing when the person answers: the resume waits on it.
+    installDurabilityBarrier(agent, () => new Promise<void>((done) => setTimeout(done, 30)));
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), 5);
+    const watch = watchDecisionUse(paused.checkIn.id);
+    await expect(
+      agent.resume(paused.checkpoint, checkInApproved({ request: paused.checkIn, by: 'maya' }), {
+        signal: controller.signal,
+      }),
+    ).rejects.toThrow();
+    await new Promise((done) => setTimeout(done, 80));
+    expect(spends).toEqual([]);
+    expect(exec).not.toHaveBeenCalled();
+    expect(await watch.mayHaveBeenUsed()).toBe(false);
+    watch.release();
   });
 
   it('a nested agent refuses a decision that names no request', async () => {

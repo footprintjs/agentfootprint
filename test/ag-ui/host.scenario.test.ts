@@ -25,6 +25,7 @@ import { Agent, defineTool, inMemoryDecisionLedger, Parallel, Sequence } from '.
 import { mock } from '../../src/llm-providers.js';
 import type { LLMRequest } from '../../src/index.js';
 import { askHuman } from '../../src/core/pause.js';
+import { installDurabilityBarrier } from '../../src/core/durabilityBarrier.js';
 import { memorySessions } from '../../src/hosting/memorySessions.js';
 import { readPausedRun } from '../../src/hosting/envelope.js';
 import { streamHandler, type StreamHandlerOptions } from '../../src/hosting/streamHandler.js';
@@ -466,6 +467,72 @@ describe('scenario — an AG-UI frontend runs an agentfootprint agent', () => {
     expect(readPausedRun(await sessions.hydrate('alice:thread-1')).answered).toBeUndefined();
 
     hangUp = false;
+    const { result } = await client.runAgent({ resume: [answer] });
+    expect(result).toBe('Refunded.');
+    expect(refunded).toEqual([40]);
+  });
+
+  it('an answer whose caller left while its run waited — before the decision reached a ledger — leaves the pause waiting, and nothing runs', async () => {
+    const refunded: number[] = [];
+    const refund = defineTool<{ amount: number }, string>({
+      name: 'issue_refund',
+      description: 'Refund a customer.',
+      inputSchema: { type: 'object', properties: { amount: { type: 'number' } } },
+      checkIn: 'always',
+      execute: async ({ amount }) => {
+        refunded.push(amount);
+        return `refunded ${amount}`;
+      },
+    });
+    const { provider } = watched([
+      { content: '', toolCalls: [{ id: 'r1', name: 'issue_refund', args: { amount: 40 } }] },
+      'Refunded.',
+    ]);
+    const sessions = memorySessions();
+    // A write still landing when the answer arrives: the resume waits on it.
+    let slowWrites = false;
+    const handle = streamHandler({
+      agent: () => {
+        const agent = Agent.create({ provider, model: 'm' }).system('s').tool(refund).build();
+        installDurabilityBarrier(agent, () =>
+          slowWrites ? new Promise<void>((done) => setTimeout(done, 40)) : undefined,
+        );
+        return agent;
+      },
+      adapter: agUi(),
+      threads: signedIn,
+      sessions,
+      heartbeatMs: 0,
+    });
+    let leave: AbortController | undefined;
+    const client = new HttpAgent({
+      url: 'http://localhost/api/agent',
+      threadId: 'thread-1',
+      headers: { 'x-user': 'alice' },
+      fetch: (url, init) => {
+        if (leave === undefined) return handle(new Request(url, init));
+        const gone = leave;
+        setTimeout(() => gone.abort(), 10);
+        return handle(new Request(url, { ...init, signal: gone.signal }));
+      },
+    });
+    client.addMessage({ id: 'u1', role: 'user', content: 'Refund 40' });
+    await client.runAgent();
+    const [interrupt] = client.pendingInterrupts;
+    const answer = {
+      interruptId: interrupt!.id,
+      status: 'resolved' as const,
+      payload: { approved: true, by: 'alice', at: 1 },
+    };
+    slowWrites = true;
+    leave = new AbortController();
+    await client.runAgent({ resume: [answer] }).catch(() => undefined);
+    await new Promise((done) => setTimeout(done, 80));
+    expect(refunded).toEqual([]);
+    expect(readPausedRun(await sessions.hydrate('alice:thread-1')).answered).toBeUndefined();
+
+    slowWrites = false;
+    leave = undefined;
     const { result } = await client.runAgent({ resume: [answer] });
     expect(result).toBe('Refunded.');
     expect(refunded).toEqual([40]);

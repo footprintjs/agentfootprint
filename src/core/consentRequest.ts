@@ -61,9 +61,18 @@
  * restart and no other process sees it: where more than one process (or a
  * restart) can resume the same paused run, every agent that can resume it is
  * given one ledger in a store they all reach (`Agent.create({ decisionLedger })`).
- * A host that keeps the pause stops offering it once a resume of it fails,
- * unless the resume refused before its decision could reach a ledger
- * (`wasRefusedBeforeUse`, `hosting/answeredPause.ts`).
+ * The process's ledger and everything below that is process-wide live on
+ * `globalThis` under one versioned key, so an app that loads both builds of
+ * this package (CJS and ESM) still has ONE (`processState`).
+ *
+ * ── WAS IT USED? ───────────────────────────────────────────────────────────
+ * A host that keeps the pause asks this after a resume of it failed: the call
+ * may have run only if the decision reached a ledger. `spendDecision` is the
+ * one place a decision does, so it reports every attempt to whoever watches
+ * that request (`watchDecisionUse`), and the ledger it went to is asked when
+ * the attempt's own answer was lost. A resume this library took up and never
+ * took to a ledger used nothing; one it never took up cannot be told apart
+ * from a use (`hosting/answeredPause.ts`).
  */
 
 import type { FlowchartCheckpoint } from 'footprintjs';
@@ -147,6 +156,15 @@ export interface DecisionLedger {
    * closed: the tool does not run.
    */
   spend(requestId: string): boolean | Promise<boolean>;
+  /**
+   * OPTIONAL — whether `requestId` is recorded as answered, without recording
+   * it. Asked only after a {@link DecisionLedger.spend} for it failed, so a
+   * host can tell a spend that never landed (the call did not run; the pause
+   * stays answerable) from one that did. A ledger without it, or one that
+   * throws or answers anything but `false`, counts as spent: the host stops
+   * offering the pause.
+   */
+  isSpent?(requestId: string): boolean | Promise<boolean>;
 }
 
 /**
@@ -165,21 +183,65 @@ export function inMemoryDecisionLedger(): DecisionLedger {
       spent.add(requestId);
       return true;
     },
+    isSpent(requestId: string): boolean {
+      return spent.has(requestId);
+    },
   };
 }
 
-/**
- * The ledger every agent that names none spends in — one per process, so a
- * decision runs once across every agent instance this process builds, not
- * once per instance. It lives as long as the process (one id per answered
- * request); request ids are unique per pause, so sharing it never makes one
- * agent's answer collide with another's.
- */
-const PROCESS_LEDGER: DecisionLedger = inMemoryDecisionLedger();
+/** One attempt to spend a watched request, as a door learns of it. */
+interface SpendAttempt {
+  readonly ledger: DecisionLedger;
+  outcome: 'unanswered' | 'spent' | 'refused' | 'failed';
+}
 
-/** This process's ledger — where an agent that names no `decisionLedger` spends. */
+/** What one door's watch has seen of its request ({@link watchDecisionUse}). */
+interface WatchedUse {
+  takenUp: boolean;
+  readonly attempts: SpendAttempt[];
+}
+
+/** Everything about consent requests that is one per PROCESS. */
+interface ProcessState {
+  /** The ledger every agent that names none spends in. */
+  readonly ledger: DecisionLedger;
+  /** The watches open now, by request id — one per door resume in flight. */
+  readonly watches: Map<string, Set<WatchedUse>>;
+}
+
+/**
+ * The key the process state is kept under on `globalThis`. `Symbol.for`, so
+ * every copy of this package in the process — its CJS and ESM builds, loaded
+ * side by side — finds the same state; versioned, so a later release that
+ * changes its shape keeps its own.
+ */
+const PROCESS_STATE = Symbol.for('agentfootprint.consentRequest.processState.v1');
+
+/**
+ * This process's consent state, made by whichever copy of this package asks
+ * first. Two copies with two ledgers would answer one decision twice (a
+ * replay across them), and a door watching through one copy would never see
+ * a spend made through the other.
+ */
+function processState(): ProcessState {
+  const holder = globalThis as { [PROCESS_STATE]?: ProcessState };
+  const existing = holder[PROCESS_STATE];
+  if (existing !== undefined) return existing;
+  const made: ProcessState = { ledger: inMemoryDecisionLedger(), watches: new Map() };
+  Object.defineProperty(globalThis, PROCESS_STATE, { value: made });
+  return made;
+}
+
+/**
+ * This process's ledger — where an agent that names no `decisionLedger`
+ * spends. One per process, so a decision runs once across every agent
+ * instance this process builds (and every copy of this package it loaded),
+ * not once per instance. It lives as long as the process and grows by one id
+ * per answered request; request ids are unique per pause, so sharing it never
+ * makes one agent's answer collide with another's.
+ */
 export function processDecisionLedger(): DecisionLedger {
-  return PROCESS_LEDGER;
+  return processState().ledger;
 }
 
 const DOMAIN = 'agentfootprint/consent-request/v1';
@@ -324,60 +386,141 @@ export function checkDecisionAgainst(
 }
 
 /**
- * Spend the decision's request in `ledger`.
+ * Spend the decision's request in `ledger` — the one place a decision reaches
+ * a ledger, so every attempt is reported to whoever watches the request
+ * ({@link watchDecisionUse}).
  *
+ * @param signal the resumed run's signal. The engine stops waiting on a stage
+ *   when its run is aborted, but the stage goes on running: a resume whose run
+ *   was aborted takes nothing to a ledger, and one aborted while its ledger
+ *   answered is refused after the spend — spent, and its call never run.
  * @throws ResumeDecisionError `'already-answered'` when a resume already spent it.
  */
 export async function spendDecision(
   ledger: DecisionLedger,
   decision: CheckInDecision,
   gate: ConsentGateKind,
+  signal?: AbortSignal,
 ): Promise<void> {
-  const fresh = await ledger.spend(decision.requestId);
+  refuseIfAborted(signal);
+  const attempts = attemptsOn(decision.requestId, ledger);
+  let fresh: unknown;
+  try {
+    fresh = await ledger.spend(decision.requestId);
+  } catch (err) {
+    for (const attempt of attempts) attempt.outcome = 'failed';
+    throw err;
+  }
+  for (const attempt of attempts) attempt.outcome = fresh === true ? 'spent' : 'refused';
   if (fresh !== true) throw new ResumeDecisionError('already-answered', gate);
+  refuseIfAborted(signal);
+}
+
+/** Throw the abort an aborted run ended with — the signal's own reason, as the engine reports it. */
+function refuseIfAborted(signal: AbortSignal | undefined): void {
+  if (signal === undefined || !signal.aborted) return;
+  const reason: unknown = signal.reason;
+  throw reason instanceof Error ? reason : new Error(String(reason ?? 'Aborted'));
+}
+
+/** Record an attempt to spend `requestId` in `ledger` on every watch open for it. */
+function attemptsOn(requestId: string, ledger: DecisionLedger): SpendAttempt[] {
+  const attempts: SpendAttempt[] = [];
+  for (const watch of processState().watches.get(requestId) ?? []) {
+    const attempt: SpendAttempt = { ledger, outcome: 'unanswered' };
+    watch.attempts.push(attempt);
+    attempts.push(attempt);
+  }
+  return attempts;
 }
 
 /**
- * What a resume threw BEFORE its decision could reach a ledger, and the paused
- * request it was refusing (`undefined` when the pause recorded none). Keyed by
- * the thrown object itself, which reaches the caller unchanged, through a
- * composition too — so an error raised anywhere else is not the sign, whatever
- * it calls itself, and nothing depends on the caller's decision object
- * surviving a copy. The library's own refusals are fresh objects. One object
- * an app throws both before a resume starts and, in a concurrent resume of the
- * same request, after its decision was used would be read as the sign for
- * both; that process's ledger still refuses the request.
+ * A resume of this library has taken up the request `requestId` names: from
+ * here every use of its decision passes through {@link spendDecision}, where a
+ * watch sees it. Called by every runner's resume (`RunnerBase` ·
+ * `emitPauseResume`, and `Agent.resume` before its first check) and by the
+ * dispatch loop where it takes the decision up.
  */
-const refusedBeforeUse = new WeakMap<object, string | undefined>();
+export function noteDecisionTakenUp(requestId: string | undefined): void {
+  if (requestId === undefined) return;
+  for (const watch of processState().watches.get(requestId) ?? []) watch.takenUp = true;
+}
 
-/**
- * Register `error` as thrown before the decision could reach a ledger —
- * called by `Agent.resume` for anything before its run starts, and by the
- * dispatch loop for anything before it spends. Internal.
- */
-export function noteRefusedBeforeUse(error: unknown, requestId: string | undefined): void {
-  if (typeof error === 'object' && error !== null) refusedBeforeUse.set(error, requestId);
+/** What a door that keeps a pause learns, for one resume, about its request ({@link watchDecisionUse}). */
+export interface DecisionUseWatch {
+  /**
+   * Whether the request's decision may have been used while watched — by
+   * this resume, or by any other in this process:
+   *
+   *  - taken to a ledger that spent it, refused it (an earlier resume had)
+   *    or has not answered yet → `true`;
+   *  - taken to a ledger whose spend failed → asked again of that ledger
+   *    (`DecisionLedger.isSpent`): `false` there means the spend never landed;
+   *    no answer, a throw, or a ledger that cannot be asked → `true`;
+   *  - never taken to a ledger, by a resume this library took up → `false`;
+   *  - never taken up by this library at all → `true`: that cannot be told
+   *    apart from a use.
+   */
+  mayHaveBeenUsed(): Promise<boolean>;
+  /** Stop watching. A door releases its watch once it has decided. */
+  release(): void;
 }
 
 /**
- * The one positive sign that a failed resume used nothing of its decision:
- * `error` is what this library threw, before the decision could reach a
- * ledger, while refusing `requestId`. Anything else — any other error, of any
- * code, a store's included — may have come after, and a door that keeps the
- * pause marks it answered (`hosting/answeredPause.ts`). Internal.
+ * Watch the request `requestId` names for the length of one resume — opened
+ * by a door that keeps the pause, before it hands the decision over, and
+ * released once it has decided what a failure means for the stored pause.
+ * Keyed by the request, never by the decision object a door may copy or wrap.
  */
-export function wasRefusedBeforeUse(error: unknown, requestId: string): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    refusedBeforeUse.has(error) &&
-    refusedBeforeUse.get(error) === requestId
-  );
+export function watchDecisionUse(requestId: string): DecisionUseWatch {
+  const watches = processState().watches;
+  const watched: WatchedUse = { takenUp: false, attempts: [] };
+  const open = watches.get(requestId) ?? new Set<WatchedUse>();
+  open.add(watched);
+  watches.set(requestId, open);
+  return {
+    async mayHaveBeenUsed(): Promise<boolean> {
+      if (watched.attempts.length === 0) return !watched.takenUp;
+      for (const attempt of [...watched.attempts]) {
+        if (attempt.outcome !== 'failed') return true;
+        if (!(await neverLanded(attempt.ledger, requestId))) return true;
+      }
+      return false;
+    },
+    release(): void {
+      open.delete(watched);
+      if (open.size === 0 && watches.get(requestId) === open) watches.delete(requestId);
+    },
+  };
+}
+
+/** Whether `ledger` says, when asked, that its failed spend of `requestId` never landed. */
+async function neverLanded(ledger: DecisionLedger, requestId: string): Promise<boolean> {
+  if (typeof ledger.isSpent !== 'function') return false;
+  try {
+    return (await ledger.isSpent(requestId)) === false;
+  } catch {
+    return false;
+  }
 }
 
 /** The id of the request a paused run's state records (`pausedRequest`), or `undefined`. */
 export function recordedRequestId(recorded: unknown): string | undefined {
   return readPendingRequest(recorded)?.id;
+}
+
+/**
+ * The id of the call a checkpoint's paused stage records as paused
+ * (`pausedToolCallId`), or `undefined` — never a throw, whatever the
+ * checkpoint holds.
+ */
+export function pausedCallIdOf(checkpoint: FlowchartCheckpoint): string | undefined {
+  try {
+    const id = pausedStateOf(checkpoint)?.pausedToolCallId;
+    return typeof id === 'string' ? id : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /**

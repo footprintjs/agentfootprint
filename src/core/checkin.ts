@@ -321,6 +321,17 @@ export function looksLikeDecision(x: unknown): x is Omit<CheckInDecision, 'reque
   );
 }
 
+/**
+ * What the model reads for a call a person declined: the result the dispatch
+ * loop records, and the host's notice for a declined call a failed run left
+ * open (`hosting/answeredPause.ts`). Either way the call did not run.
+ *
+ * @internal
+ */
+export function declinedResult(note?: string): string {
+  return note ? `declined by human: ${note}` : 'declined by human';
+}
+
 // ─── The declarative demand (per-tool) ─────────────────────────────────
 
 /**

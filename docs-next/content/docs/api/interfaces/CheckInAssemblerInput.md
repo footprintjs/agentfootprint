@@ -4,7 +4,7 @@ title: CheckInAssemblerInput
 
 # Interface: CheckInAssemblerInput
 
-Defined in: [src/core/checkin.ts:456](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L456)
+Defined in: [src/core/checkin.ts:467](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L467)
 
 Everything the assembler needs to build one evidence pack.
 
@@ -14,7 +14,7 @@ Everything the assembler needs to build one evidence pack.
 
 > `readonly` **args**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/core/checkin.ts:460](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L460)
+Defined in: [src/core/checkin.ts:471](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L471)
 
 The proposed arguments.
 
@@ -24,7 +24,7 @@ The proposed arguments.
 
 > `readonly` **history**: readonly [`LLMMessage`](/docs/api/interfaces/LLMMessage)[]
 
-Defined in: [src/core/checkin.ts:466](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L466)
+Defined in: [src/core/checkin.ts:477](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L477)
 
 The conversation so far — the raw material for `read`, `drivers`, `trail`.
 
@@ -34,7 +34,7 @@ The conversation so far — the raw material for `read`, `drivers`, `trail`.
 
 > `readonly` `optional` **intent?**: `string`
 
-Defined in: [src/core/checkin.ts:462](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L462)
+Defined in: [src/core/checkin.ts:473](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L473)
 
 The model's stated reasoning, if any (assistant-turn text).
 
@@ -44,7 +44,7 @@ The model's stated reasoning, if any (assistant-turn text).
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/core/checkin.ts:464](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L464)
+Defined in: [src/core/checkin.ts:475](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L475)
 
 The ReAct iteration this check-in fired on.
 
@@ -54,7 +54,7 @@ The ReAct iteration this check-in fired on.
 
 > `readonly` **scorer**: [`CheckInScorer`](/docs/api/type-aliases/CheckInScorer)
 
-Defined in: [src/core/checkin.ts:468](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L468)
+Defined in: [src/core/checkin.ts:479](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L479)
 
 The scorer to rank `drivers` with.
 
@@ -64,7 +64,7 @@ The scorer to rank `drivers` with.
 
 > `readonly` `optional` **signal?**: `AbortSignal`
 
-Defined in: [src/core/checkin.ts:470](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L470)
+Defined in: [src/core/checkin.ts:481](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L481)
 
 Abort signal threaded to the scorer.
 
@@ -74,7 +74,7 @@ Abort signal threaded to the scorer.
 
 > `readonly` **tool**: `object`
 
-Defined in: [src/core/checkin.ts:458](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L458)
+Defined in: [src/core/checkin.ts:469](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L469)
 
 The chosen tool — `name` for citations, `description` for `willDo`.
 

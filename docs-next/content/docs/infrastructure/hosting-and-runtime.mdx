@@ -1291,32 +1291,47 @@ with. The request to show the person is the pending ask the host replied with.
 
 **Once, across what a host does to a session.** A decision is spent in a
 `DecisionLedger`, and "once" holds per ledger. Every agent a door serves that
-names no ledger shares this process's, so an instance the pool evicted and
-rebuilt, or the runner `streamHandler` builds per request, still refuses a
-decision already used. When a resume of a consent gate fails — the next model
-call after the approved tool, say, or storing the finished run's result — the
-door that keeps the pause (`standingAgent`, `streamHandler`) **marks it
-answered** before the failure is reported, because the call may have run. The
-one exception is a resume that refused before its decision could reach a ledger
-(a decision for another request, a value that is not a decision, another
-caller): it used nothing, and the pause stays answerable. That is read from the
-resume itself — the library registers what it throws before the ledger — never
-from what an error calls itself, and never from the decision object, which a door
-may copy or wrap. A store that cannot be read while marking is marked anyway.
-Once marked,
-a retry, a rebuilt instance, a restart or another host on the same store is
-refused (`ERR_RESUME_DECISION`, `'already-answered'`, whose
-message says the call's outcome is not known there), the pending-question op
-reports nothing pending, and the session's next message continues the
-conversation this session stored — what the run kept while it ran under durable
-writes, else the conversation as of the pause, never the agent's own state —
-with any call left open settled as unknown (`PausedRun.answered`). Both doors read a stored session one way, so an
-answered pause is never offered for an answer at either. Two limits are stated,
-not closed: the session store has no compare-and-set, so two processes that
-receive the same decision at the same moment both read the unmarked pause; and a
-process that dies mid-resume marks nothing. More than one process therefore
-needs one shared `decisionLedger` (a store whose `spend` is atomic) — that is
-what makes "once" hold across them.
+names no ledger shares this process's — one per process, even when an app loads
+both the CommonJS and the ESM build of this package — so an instance the pool
+evicted and rebuilt, or the runner `streamHandler` builds per request, still
+refuses a decision already used. That ledger lives in memory: it grows by one id
+per answered request for as long as the process runs, and a restart forgets it.
+
+When a resume of a consent gate fails — the next model call after the approved
+tool, say, or storing the finished run's result — the door that keeps the pause
+(`standingAgent`, `streamHandler`) asks whether the decision may have been used.
+The call can have run only if the decision reached a ledger, and the library
+sees every spend. Spent, refused as spent already, or a spend that failed where
+the ledger cannot say it never landed (`DecisionLedger.isSpent`): the door
+**marks the pause answered** before the failure is reported. A resume that never
+took the decision to a ledger — refused (a decision for another request, a value
+that is not a decision, another caller) or abandoned because the caller hung up
+first — used nothing, and the pause stays answerable; a resume abandoned while it
+waited never spends afterwards. None of this is read from what an error calls
+itself, or from the decision object, which a door may copy or wrap. A store that
+cannot be read while marking is marked anyway; one that holds nothing — the
+session expired or was forgotten meanwhile — is left so.
+
+Once marked, a retry, a rebuilt instance, a restart or another host on the same
+store is refused (`ERR_RESUME_DECISION`, `'already-answered'`, whose message says
+the call's outcome is not known there), the pending-question op reports nothing
+pending, and the session's next message continues the conversation this session
+stored — what the run kept while it ran under durable writes, else the
+conversation as of the pause, never the agent's own state — with any call left
+open settled as unknown, and a call the person declined settled as declined: a
+decline never runs its call (`PausedRun.answered`). Both doors read a stored
+session one way, so an answered pause is never offered for an answer at either.
+Code that reads stored pauses itself with `readPausedRun` — a dashboard, a
+custom door — must do the same: a pause with `answered` is a conversation to
+continue, never a question to show.
+
+Three limits are stated, not closed: the session store has no compare-and-set,
+so two processes that receive the same decision at the same moment both read
+the unmarked pause; a process that dies mid-resume marks nothing; and a store
+that refuses the mark's write leaves only this process's ledger refusing the
+decision (the door prints a warning). More than one process therefore needs one
+shared `decisionLedger` (a store whose `spend` is atomic, and ideally an
+`isSpent`) — that is what makes "once" hold across them.
 
 ### A pause the wire could not describe
 

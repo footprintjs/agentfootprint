@@ -123,10 +123,11 @@ import { refuseUnknownWireOp } from './wireOps.js';
 import { durableWriter, type DurableWriter } from './durability.js';
 import { describePause } from './pendingAsk.js';
 import {
+  afterFailedAnswer,
   answeredRefusal,
-  markAnsweredAfterFailure,
   openToolCalls,
   readStoredSession,
+  watchAnswer,
 } from './answeredPause.js';
 import { envelopeOwner, envelopeTranscript, toEnvelope, toPausedEnvelope } from './envelope.js';
 import {
@@ -1741,6 +1742,9 @@ export async function standingAgent<TH extends HostHandle>(
           }
         }
         const resumeOptions = await withSealedRequest();
+        // Opened before the answer is handed over: what it sees says whether a
+        // failure below may have used the decision (`answeredPause.ts`).
+        const watch = watchAnswer(paused);
         try {
           await deliver(
             lane,
@@ -1752,20 +1756,22 @@ export async function standingAgent<TH extends HostHandle>(
             paused,
           );
         } catch (err) {
-          // A failure in the resume or in storing its result: the decision
-          // may have been used, so the stored pause is answered before anyone
-          // hears of it — unless the resume refused before its decision could
-          // reach a ledger (`answeredPause.ts`).
+          // A failure in the resume or in storing its result: when the
+          // decision may have been used, the stored pause is answered before
+          // anyone hears of it (`answeredPause.ts`).
           if (sessionId !== undefined) {
-            await markAnsweredAfterFailure({
+            await afterFailedAnswer({
               store,
               sessionId,
               paused,
-              error: err,
+              watch,
+              answer: request.decision,
               settle: () => lane.writer?.settle(),
             });
           }
           throw err;
+        } finally {
+          watch?.release();
         }
         return;
       }

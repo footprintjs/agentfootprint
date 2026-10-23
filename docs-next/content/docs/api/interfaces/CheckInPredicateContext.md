@@ -4,7 +4,7 @@ title: CheckInPredicateContext
 
 # Interface: CheckInPredicateContext
 
-Defined in: [src/core/checkin.ts:337](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L337)
+Defined in: [src/core/checkin.ts:348](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L348)
 
 Context handed to a [CheckInDemand](/docs/api/type-aliases/CheckInDemand) predicate.
 
@@ -14,7 +14,7 @@ Context handed to a [CheckInDemand](/docs/api/type-aliases/CheckInDemand) predic
 
 > `readonly` **history**: readonly [`LLMMessage`](/docs/api/interfaces/LLMMessage)[]
 
-Defined in: [src/core/checkin.ts:343](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L343)
+Defined in: [src/core/checkin.ts:354](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L354)
 
 The conversation so far (system, user, prior tool results).
 
@@ -24,7 +24,7 @@ The conversation so far (system, user, prior tool results).
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/core/checkin.ts:339](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L339)
+Defined in: [src/core/checkin.ts:350](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L350)
 
 The current ReAct iteration.
 
@@ -34,6 +34,6 @@ The current ReAct iteration.
 
 > `readonly` **toolCallId**: `string`
 
-Defined in: [src/core/checkin.ts:341](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L341)
+Defined in: [src/core/checkin.ts:352](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L352)
 
 This tool invocation's id.

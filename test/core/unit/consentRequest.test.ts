@@ -7,15 +7,18 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import type { FlowchartCheckpoint } from 'footprintjs';
+import * as consentRequest from '../../../src/core/consentRequest.js';
 import {
   checkDecisionAgainst,
   gatedCallOf,
   heldDecision,
   inMemoryDecisionLedger,
   mintConsentRequest,
+  noteDecisionTakenUp,
   processDecisionLedger,
   runsAsAsked,
   spendDecision,
+  watchDecisionUse,
   type DecisionLedger,
   type GatedCall,
 } from '../../../src/core/consentRequest.js';
@@ -580,6 +583,168 @@ describe('spendDecision and the ledger', () => {
       },
     };
     await expect(spendDecision(broken, decision, 'checkIn')).rejects.toThrow('store down');
+  });
+});
+
+describe('whether a decision was used — what a door that keeps the pause asks', () => {
+  const pending = () => paused().minted.request;
+  const decisionOn = (request: ReturnType<typeof pending>) =>
+    checkInApproved({ request, by: 'maya' });
+
+  it('nothing of this library took the request up and nothing was spent: that cannot be told apart from a use', async () => {
+    const watch = watchDecisionUse(pending().id);
+    expect(await watch.mayHaveBeenUsed()).toBe(true);
+    watch.release();
+  });
+
+  it('taken up by a resume of this library and never taken to a ledger: not used', async () => {
+    const request = pending();
+    const watch = watchDecisionUse(request.id);
+    noteDecisionTakenUp(request.id);
+    expect(await watch.mayHaveBeenUsed()).toBe(false);
+    watch.release();
+  });
+
+  it('spent while watched — by this resume or any other in the process — may have been used', async () => {
+    const request = pending();
+    const ledger = inMemoryDecisionLedger();
+    const watch = watchDecisionUse(request.id);
+    noteDecisionTakenUp(request.id);
+    await spendDecision(ledger, decisionOn(request), 'checkIn');
+    expect(await watch.mayHaveBeenUsed()).toBe(true);
+    watch.release();
+
+    // Refused by the ledger: an earlier resume spent it.
+    const again = watchDecisionUse(request.id);
+    noteDecisionTakenUp(request.id);
+    await expect(spendDecision(ledger, decisionOn(request), 'checkIn')).rejects.toMatchObject({
+      reason: 'already-answered',
+    });
+    expect(await again.mayHaveBeenUsed()).toBe(true);
+    again.release();
+  });
+
+  it('a spend still unanswered when the door asks may have landed: used', async () => {
+    const request = pending();
+    const watch = watchDecisionUse(request.id);
+    noteDecisionTakenUp(request.id);
+    const never: DecisionLedger = { spend: () => new Promise<boolean>(() => undefined) };
+    void spendDecision(never, decisionOn(request), 'checkIn');
+    expect(await watch.mayHaveBeenUsed()).toBe(true);
+    watch.release();
+  });
+
+  it('a spend that failed is asked of its ledger: unspent there is not used; spent, or a ledger that cannot say, may have been', async () => {
+    const failing = (isSpent?: DecisionLedger['isSpent']): DecisionLedger => ({
+      spend: () => {
+        throw new Error('store down');
+      },
+      ...(isSpent !== undefined && { isSpent }),
+    });
+    const cases: [DecisionLedger, boolean][] = [
+      [failing(() => false), false],
+      [failing(async () => false), false],
+      [failing(() => true), true],
+      [failing(() => 'yes' as unknown as boolean), true],
+      [
+        failing(() => {
+          throw new Error('still down');
+        }),
+        true,
+      ],
+      [failing(), true],
+    ];
+    for (const [ledger, used] of cases) {
+      const request = pending();
+      const watch = watchDecisionUse(request.id);
+      noteDecisionTakenUp(request.id);
+      await expect(spendDecision(ledger, decisionOn(request), 'checkIn')).rejects.toThrow(
+        'store down',
+      );
+      expect(await watch.mayHaveBeenUsed()).toBe(used);
+      watch.release();
+    }
+  });
+
+  it('a watch sees its own request only, and nothing once released', async () => {
+    const mine = pending();
+    const other = pending();
+    const watch = watchDecisionUse(mine.id);
+    noteDecisionTakenUp(mine.id);
+    await spendDecision(inMemoryDecisionLedger(), decisionOn(other), 'checkIn');
+    expect(await watch.mayHaveBeenUsed()).toBe(false);
+    watch.release();
+    watch.release();
+    const later = pending();
+    const released = watchDecisionUse(later.id);
+    released.release();
+    noteDecisionTakenUp(later.id);
+    await spendDecision(inMemoryDecisionLedger(), decisionOn(later), 'checkIn');
+    // Released before either note: it saw neither.
+    expect(await released.mayHaveBeenUsed()).toBe(true);
+  });
+
+  it('an aborted run takes nothing to a ledger', async () => {
+    const request = pending();
+    const spend = vi.fn(() => true);
+    const watch = watchDecisionUse(request.id);
+    noteDecisionTakenUp(request.id);
+    await expect(
+      spendDecision({ spend }, decisionOn(request), 'checkIn', AbortSignal.abort()),
+    ).rejects.toThrow();
+    expect(spend).not.toHaveBeenCalled();
+    expect(await watch.mayHaveBeenUsed()).toBe(false);
+    watch.release();
+  });
+
+  it('a run aborted while its ledger answered is refused after the spend: spent, and the call is not run', async () => {
+    const request = pending();
+    const controller = new AbortController();
+    const ledger: DecisionLedger = {
+      spend: async () => {
+        controller.abort();
+        return true;
+      },
+    };
+    const watch = watchDecisionUse(request.id);
+    noteDecisionTakenUp(request.id);
+    await expect(
+      spendDecision(ledger, decisionOn(request), 'checkIn', controller.signal),
+    ).rejects.toThrow();
+    expect(await watch.mayHaveBeenUsed()).toBe(true);
+    watch.release();
+  });
+
+  it('an in-memory ledger can say whether it spent a request', async () => {
+    const ledger = inMemoryDecisionLedger();
+    const request = pending();
+    expect(await ledger.isSpent?.(request.id)).toBe(false);
+    await spendDecision(ledger, decisionOn(request), 'checkIn');
+    expect(await ledger.isSpent?.(request.id)).toBe(true);
+  });
+});
+
+describe('one process, one ledger — however many copies of this package it loaded', () => {
+  it('a second copy of the module (a CJS and an ESM build side by side) shares the process ledger and the watches', async () => {
+    // The same file loaded twice is two module instances — what an app that
+    // loads both builds of this package gets.
+    const url = '../../../src/core/consentRequest.js' + '?second-copy';
+    const second = (await import(/* @vite-ignore */ url)) as typeof consentRequest;
+    expect(second).not.toBe(consentRequest);
+    expect(second.processDecisionLedger()).toBe(consentRequest.processDecisionLedger());
+
+    const request = paused().minted.request;
+    const decision = checkInApproved({ request, by: 'maya' });
+    const watch = consentRequest.watchDecisionUse(request.id);
+    second.noteDecisionTakenUp(request.id);
+    await second.spendDecision(second.processDecisionLedger(), decision, 'checkIn');
+    // Spent through the other copy: this copy's ledger refuses it, and this
+    // copy's watch saw it.
+    await expect(
+      consentRequest.spendDecision(consentRequest.processDecisionLedger(), decision, 'checkIn'),
+    ).rejects.toMatchObject({ reason: 'already-answered' });
+    expect(await watch.mayHaveBeenUsed()).toBe(true);
+    watch.release();
   });
 });
 
