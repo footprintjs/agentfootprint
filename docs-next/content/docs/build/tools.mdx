@@ -1214,13 +1214,13 @@ is filed as written and composes nothing. An argument `hostFilled` fills from th
 run's identity composes as a filter by reference (`the caller's tenant`); one filled
 from a credential composes nothing.
 
-**The names.** The declaration is `ToolSearch` (`SearchArgument`, `SearchRole`); the
-row is `ComposedCoverage` (`ComposedItem`, `CoverageGap`, `GapFacet`), recognized by
-`isComposedCoverage`. What `absent({ checked: 'declared' })` returns before the funnel
-composes it is a `DeclaredToolAbsence`, and `coverage(rows, { checked: 'declared' })` a
-`DeclaredCoveredResult`; `readAbsence` and `readCoverageLedger` do not read either, so a
-reader that predates `search` sees data, never a half-read envelope. `check:semantics` lists each search's `source.said` words and
-any `said-overlap` as warnings.
+**The names.** The declaration is `ToolSearch`; the row is `ComposedCoverage`, recognized
+by `isComposedCoverage` — its items and gaps are `ComposedCoverage['checked'][number]` and
+`ComposedCoverage['gaps'][number]`. What `absent({ checked: 'declared' })` or
+`coverage(rows, { checked: 'declared' })` returns before the funnel composes it is not
+read by `readAbsence` or `readCoverageLedger`, so a reader that predates `search` sees
+data, never a half-read envelope. `check:semantics` lists each search's `source.said`
+words and any `said-overlap` as warnings.
 
 ## The result ceiling — refuse, never truncate (9.20.0)
 

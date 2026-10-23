@@ -6,7 +6,7 @@ title: assertGates
 
 > **assertGates**(`toolName`, `gates`): `void`
 
-Defined in: [src/tools/tools.ts:689](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L689)
+Defined in: [src/tools/tools.ts:693](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L693)
 
 Refuse a `gates` declaration that is not a boolean, at definition time.
 Trivial for anyone the compiler vets; load-bearing at the MCP ingest

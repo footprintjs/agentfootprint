@@ -28,7 +28,7 @@ search: {
 
 ### arguments
 
-> `readonly` **arguments**: readonly [`SearchArgument`](/docs/api/interfaces/SearchArgument)[]
+> `readonly` **arguments**: readonly `SearchArgument`[]
 
 Defined in: [src/semantics/coverage/search/types.ts:108](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/search/types.ts#L108)
 

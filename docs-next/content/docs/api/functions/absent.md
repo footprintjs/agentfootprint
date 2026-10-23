@@ -6,7 +6,7 @@ title: absent
 
 ## Call Signature
 
-> **absent**(`decl`): [`DeclaredToolAbsence`](/docs/api/type-aliases/DeclaredToolAbsence)
+> **absent**(`decl`): `DeclaredToolAbsence`
 
 Defined in: [src/semantics/coverage/absent.ts:303](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/absent.ts#L303)
 
@@ -39,7 +39,7 @@ export — nothing" becomes data; the results layer judges the period.
 
 ### Returns
 
-[`DeclaredToolAbsence`](/docs/api/type-aliases/DeclaredToolAbsence)
+`DeclaredToolAbsence`
 
 ### Example
 

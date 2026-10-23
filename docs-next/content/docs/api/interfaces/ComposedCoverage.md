@@ -34,7 +34,7 @@ Defined in: [src/semantics/coverage/types.ts:125](https://github.com/footprintjs
 
 ### checked
 
-> `readonly` **checked**: readonly [`ComposedItem`](/docs/api/interfaces/ComposedItem)[]
+> `readonly` **checked**: readonly `ComposedItem`[]
 
 Defined in: [src/semantics/coverage/composedCoverage.ts:197](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/composedCoverage.ts#L197)
 
@@ -67,7 +67,7 @@ Defined in: [src/semantics/coverage/composedCoverage.ts:186](https://github.com/
 
 ### gaps
 
-> `readonly` **gaps**: readonly [`CoverageGap`](/docs/api/interfaces/CoverageGap)[]
+> `readonly` **gaps**: readonly `CoverageGap`[]
 
 Defined in: [src/semantics/coverage/composedCoverage.ts:205](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/composedCoverage.ts#L205)
 

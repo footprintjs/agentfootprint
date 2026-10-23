@@ -6,7 +6,7 @@ title: assertResultKind
 
 > **assertResultKind**(`toolName`, `resultKind`): `void`
 
-Defined in: [src/tools/tools.ts:556](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L556)
+Defined in: [src/tools/tools.ts:560](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L560)
 
 Refuse a `resultKind` that could never be redeemed, at definition time —
 naming the tool and the fix (the `assertResultCeiling` / `assertResultClass`

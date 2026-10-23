@@ -6,7 +6,7 @@ title: coverage
 
 ## Call Signature
 
-> **coverage**\<`T`\>(`content`, `decl`): [`DeclaredCoveredResult`](/docs/api/interfaces/DeclaredCoveredResult)\<`T`\>
+> **coverage**\<`T`\>(`content`, `decl`): `DeclaredCoveredResult`\<`T`\>
 
 Defined in: [src/semantics/coverage/ledger.ts:135](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/ledger.ts#L135)
 
@@ -56,7 +56,7 @@ it becomes the call's error result, which the model reads.
 
 ### Returns
 
-[`DeclaredCoveredResult`](/docs/api/interfaces/DeclaredCoveredResult)\<`T`\>
+`DeclaredCoveredResult`\<`T`\>
 
 ### Example
 
