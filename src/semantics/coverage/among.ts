@@ -31,7 +31,14 @@
  * characters is dropped and counted, the shown list is capped, and the whole
  * block is MODEL-ONLY: it rides the served value and so the conversation, and
  * {@link withoutKnownNames} takes it off `stream.tool_end` — no event field
- * carries it.
+ * carries it. The dispatch door strips it BEFORE `maxToolResultChars` caps the
+ * event's copy (`stages/toolCalls.ts` · `capResults`), because a truncated
+ * head is a string no strip can read.
+ *
+ * Ranking is bounded, because both inputs are untrusted: a looked-for value
+ * over {@link MAX_NAME_CHARS} code points, or a list over
+ * {@link MAX_NAMES_RANKED} names, ranks nothing and serves the count alone;
+ * otherwise one comparison is at most 128 × 128 cells.
  */
 
 import { normalizeToken } from '../../lib/normalize.js';
@@ -50,8 +57,14 @@ import type {
 /** The most names a model is shown from one list — the k nearest. */
 export const KNOWN_NAMES_SHOWN = 20;
 
-/** The longest name a model is shown, in characters (code points). */
+/** The longest name a model is shown, in characters (code points). A looked-for
+ *  value longer than this ranks nothing: the count is served alone. */
 export const MAX_NAME_CHARS = 128;
+
+/** The longest list whose names are ranked. A longer list is counted and
+ *  never ranked — the count is served alone — so a mint's cost is bounded
+ *  whatever the tool hands it. */
+export const MAX_NAMES_RANKED = 10_000;
 
 /** The code a count that disagrees with its names is refused under. */
 export const NAMES_COUNT_MISMATCH = 'names-count-mismatch';
@@ -209,28 +222,40 @@ function showable(raw: unknown): string | undefined {
   return name;
 }
 
+/** A spelling as code points, at most `MAX_NAME_CHARS` of them — or
+ *  `undefined` when it is longer (lowercasing can lengthen a spelling). */
+function codePointsOf(spelling: string): Int32Array | undefined {
+  // A code point is at most two UTF-16 units: past this length, it is longer.
+  if (spelling.length > 2 * MAX_NAME_CHARS) return undefined;
+  const points = Array.from(spelling, (ch) => ch.codePointAt(0) ?? 0);
+  return points.length > MAX_NAME_CHARS ? undefined : Int32Array.from(points);
+}
+
 /**
  * The edit distance between two spellings, or `Infinity` once it is past
- * `cutoff` — so ranking a long list stays linear in practice: a name that
- * cannot beat the k-th best is abandoned at the first row that proves it.
+ * `cutoff`: a name that cannot beat the k-th best is abandoned at the first
+ * row that proves it. Both sides are at most `MAX_NAME_CHARS` code points, so
+ * one call costs at most 128 × 128 cell updates.
  */
-function distanceWithin(a: readonly string[], b: readonly string[], cutoff: number): number {
+function distanceWithin(a: Int32Array, b: Int32Array, cutoff: number): number {
   if (Math.abs(a.length - b.length) > cutoff) return Infinity;
-  let previous = Array.from({ length: b.length + 1 }, (_, j) => j);
+  let previous = new Int32Array(b.length + 1).map((_, j) => j);
+  let current = new Int32Array(b.length + 1);
   for (let i = 1; i <= a.length; i++) {
-    const current = [i];
+    current[0] = i;
     let rowBest = i;
-    let left = i;
     for (let j = 1; j <= b.length; j++) {
       const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      const up = previous[j] ?? Infinity;
-      const diagonal = previous[j - 1] ?? Infinity;
-      left = Math.min(up + 1, left + 1, diagonal + cost);
-      current.push(left);
-      if (left < rowBest) rowBest = left;
+      const value = Math.min(
+        (previous[j] ?? 0) + 1,
+        (current[j - 1] ?? 0) + 1,
+        (previous[j - 1] ?? 0) + cost,
+      );
+      current[j] = value;
+      if (value < rowBest) rowBest = value;
     }
     if (rowBest > cutoff) return Infinity;
-    previous = current;
+    [previous, current] = [current, previous];
   }
   return previous[b.length] ?? Infinity;
 }
@@ -239,18 +264,29 @@ function distanceWithin(a: readonly string[], b: readonly string[], cutoff: numb
  * The {@link KNOWN_NAMES_SHOWN} names nearest `lookedFor` under the one
  * spelling, nearest first — ties in list order, each name once — and how many
  * were dropped as unshowable (`dropped` is omitted when none were).
+ *
+ * BOUNDED, because both inputs are untrusted: `lookedFor` is the model's
+ * argument and `names` is the tool's data. A looked-for spelling over
+ * {@link MAX_NAME_CHARS} code points, or a list over {@link MAX_NAMES_RANKED}
+ * names, ranks nothing — the count is served alone (`{}` here). Otherwise
+ * every comparison is at most 128 × 128 cells, so one mint costs at most
+ * `MAX_NAMES_RANKED` × 128² cell updates (≈ 164 million) — about 0.4 s measured
+ * on a laptop for 10,000 random 128-character names.
  */
 function nearestNames(
   lookedFor: string,
   names: readonly unknown[],
-): { readonly nearest: readonly string[]; readonly dropped?: number } {
-  const target = [...normalizeToken(lookedFor)];
+): { readonly nearest?: readonly string[]; readonly dropped?: number } {
+  if (names.length > MAX_NAMES_RANKED) return {};
+  const target = codePointsOf(normalizeToken(lookedFor));
+  if (target === undefined) return {};
   const best: { readonly name: string; readonly distance: number }[] = [];
   const seen = new Set<string>();
   let dropped = 0;
   for (const raw of names) {
     const name = showable(raw);
-    if (name === undefined) {
+    const spelling = name === undefined ? undefined : codePointsOf(normalizeToken(name));
+    if (name === undefined || spelling === undefined) {
       dropped += 1;
       continue;
     }
@@ -258,8 +294,8 @@ function nearestNames(
     seen.add(name);
     const worst = best.length === KNOWN_NAMES_SHOWN ? best[best.length - 1] : undefined;
     // Full: only a strictly nearer name gets in — an earlier name wins a tie.
-    const cutoff = worst === undefined ? Infinity : worst.distance - 1;
-    const distance = distanceWithin(target, [...normalizeToken(name)], cutoff);
+    const cutoff = worst === undefined ? MAX_NAME_CHARS : worst.distance - 1;
+    const distance = distanceWithin(target, spelling, cutoff);
     if (distance > cutoff) continue;
     // After every entry at the same distance: an earlier name wins a tie.
     const at = best.findIndex((entry) => entry.distance > distance);

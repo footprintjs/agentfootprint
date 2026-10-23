@@ -10,7 +10,13 @@
  */
 
 export { ABSENCE_MARKER, ABSENCE_NOTE, absent, coverageOfAbsence, readAbsence } from './absent.js';
-export { KNOWN_NAMES_SHOWN, MAX_NAME_CHARS, namesFacetOf, withoutKnownNames } from './among.js';
+export {
+  KNOWN_NAMES_SHOWN,
+  MAX_NAME_CHARS,
+  MAX_NAMES_RANKED,
+  namesFacetOf,
+  withoutKnownNames,
+} from './among.js';
 export {
   answerCoverageOf,
   composeAnswerWithCoverage,

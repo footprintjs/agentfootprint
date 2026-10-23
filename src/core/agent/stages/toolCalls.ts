@@ -1662,8 +1662,34 @@ export function buildToolCallsHandler(
    *
    * Absent cap → both values come back by reference, so an agent that did not
    * ask for a ceiling is byte-identical.
+   *
+   * `event` is the pair `stream.tool_end` carries. The model-only
+   * `known_names` of an `among` absence (`coverage/among.ts`) comes off it
+   * BEFORE the cap: a truncated head is a string no strip can read, so a strip
+   * after the cap would ship the names inside it. Every value with no such
+   * block keeps its references, so `event` IS the capped pair.
    */
   const capResults = (
+    toolName: string,
+    values: { readonly result: unknown; readonly modelResult: unknown },
+  ): {
+    readonly result: unknown;
+    readonly modelResult: unknown;
+    readonly event: { readonly result: unknown; readonly modelResult: unknown };
+  } => {
+    const capped = capPair(toolName, values);
+    const result = withoutKnownNames(values.result);
+    const modelResult =
+      values.modelResult === values.result ? result : withoutKnownNames(values.modelResult);
+    const event =
+      result === values.result && modelResult === values.modelResult
+        ? capped
+        : capPair(toolName, { result, modelResult });
+    return { ...capped, event };
+  };
+
+  /** Both channels against `maxToolResultChars` — see {@link capResults}. */
+  const capPair = (
     toolName: string,
     values: { readonly result: unknown; readonly modelResult: unknown },
   ): { readonly result: unknown; readonly modelResult: unknown } => {
@@ -2643,20 +2669,9 @@ export function buildToolCallsHandler(
     ran: boolean,
     declaredStatus: string | undefined = payload.status,
   ): void => {
-    // `known_names` is MODEL-ONLY (`coverage/among.ts`): the names an `among`
-    // miss read for the caller ride the served value, never an event field.
-    // The same references back for every other value, so a run with no
-    // `among` absence emits the payload it always did.
-    const result = withoutKnownNames(payload.result);
-    const modelResult =
-      payload.modelResult === undefined ? undefined : withoutKnownNames(payload.modelResult);
-    typedEmit(
-      scope,
-      'agentfootprint.stream.tool_end',
-      result === payload.result && modelResult === payload.modelResult
-        ? payload
-        : { ...payload, result, ...(modelResult !== undefined && { modelResult }) },
-    );
+    // A tool's result arrives here as `capResults`' `event` pair, which has
+    // already lost the model-only `known_names` (`coverage/among.ts`).
+    typedEmit(scope, 'agentfootprint.stream.tool_end', payload);
     const ledger = deps.toolCallLedger;
     if (ledger === undefined) return;
     const prior = scope.toolCallLedger;
@@ -5646,7 +5661,7 @@ export function buildToolCallsHandler(
           tc.name,
           {
             toolCallId: tc.id,
-            result: capped.result,
+            result: capped.event.result,
             durationMs,
             ...(error === true && { error: true }),
             // The tool's own declared outcome (9.19.0) — additive, envelope
@@ -5659,7 +5674,7 @@ export function buildToolCallsHandler(
             // always was: a call that failed to run on its own (an unknown name,
             // an args rejection, a credential block) keeps saying so with
             // `error: true` alone.
-            ...(modelResult !== capped.result && { modelResult }),
+            ...(modelResult !== capped.result && { modelResult: capped.event.modelResult }),
             ...(executed && changedKeys.length > 0 && { changedArgKeys: changedKeys }),
             ...(denied && { notExecuted: true as const }),
           },
@@ -6300,12 +6315,12 @@ export function buildToolCallsHandler(
           toolName,
           {
             toolCallId,
-            result: askCapped.result,
+            result: askCapped.event.result,
             durationMs: Date.now() - startMs,
             ...(error === true && { error: true }),
             ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
             ...(askCapped.modelResult !== askCapped.result && {
-              modelResult: askCapped.modelResult,
+              modelResult: askCapped.event.modelResult,
             }),
           },
           toolRan,
@@ -6495,12 +6510,12 @@ export function buildToolCallsHandler(
           toolName,
           {
             toolCallId,
-            result: decisionCapped.result,
+            result: decisionCapped.event.result,
             durationMs: Date.now() - startMs,
             ...(error === true && { error: true }),
             ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
             ...(decisionCapped.modelResult !== decisionCapped.result && {
-              modelResult: decisionCapped.modelResult,
+              modelResult: decisionCapped.event.modelResult,
             }),
           },
           toolRan,
@@ -6653,12 +6668,12 @@ export function buildToolCallsHandler(
           toolName,
           {
             toolCallId,
-            result: consentCapped.result,
+            result: consentCapped.event.result,
             durationMs: Date.now() - startMs,
             ...(error === true && { error: true }),
             ...(consentEnvelope?.status !== undefined && { status: consentEnvelope.status }),
             ...(consentCapped.modelResult !== consentCapped.result && {
-              modelResult: consentCapped.modelResult,
+              modelResult: consentCapped.event.modelResult,
             }),
           },
           dispatched.executed === true,
@@ -6794,10 +6809,10 @@ export function buildToolCallsHandler(
           // The REAL value the pause returned, not what a rule let the model read
           // — the same split the other four paths keep. Capped when a ceiling is
           // configured, because the marker IS the result on every channel.
-          result: pauseCapped.result,
+          result: pauseCapped.event.result,
           durationMs: Date.now() - startMs,
           ...(pauseCapped.modelResult !== pauseCapped.result && {
-            modelResult: pauseCapped.modelResult,
+            modelResult: pauseCapped.event.modelResult,
           }),
         },
         true,

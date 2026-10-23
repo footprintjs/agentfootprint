@@ -22,6 +22,7 @@ import { absenceEvidenceProjection } from '../../../src/semantics/coverage/index
 import {
   KNOWN_NAMES_SHOWN,
   MAX_NAME_CHARS,
+  MAX_NAMES_RANKED,
   namesFacetOf,
   withoutKnownNames,
 } from '../../../src/semantics/coverage/among.js';
@@ -68,6 +69,15 @@ const leavesOf = (value: unknown): string[] => {
   walk(value);
   return out;
 };
+
+/** A seeded generator — no fast-check in the tree. */
+function rng(seed: number): () => number {
+  let s = seed >>> 0;
+  return () => {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 2 ** 32;
+  };
+}
 
 const refusalOf = (fn: () => unknown): string => {
   try {
@@ -247,6 +257,87 @@ describe('security — known_names: the count always, names only for the caller'
   });
 });
 
+// ── Security — the ranking cost is bounded ──────────────────────────────
+
+describe('security — ranking costs at most a stated bound, whatever the inputs', () => {
+  const many = (n: number, length: number) =>
+    Array.from({ length: n }, (_, i) => `n${String(i).padStart(length - 1, '0')}`.slice(0, length));
+
+  it('a 1 MB looked-for value over 10,000 names serves the count only, inside 1 s', () => {
+    const names = many(10_000, 12);
+    const started = performance.now();
+    const v = absent({
+      what: `PS-${'x'.repeat(1024 * 1024)}`,
+      among: {
+        argument: 'array_id',
+        source: SOURCE,
+        measuredAt: READ_AT,
+        count: names.length,
+        names,
+        visible: 'caller',
+      },
+    }) as AmongAbsence;
+    expect(performance.now() - started).toBeLessThan(1000);
+    expect(v.known_names).toEqual({ count: 10_000 });
+  });
+
+  it('a looked-for value over 128 characters serves the count only', () => {
+    const v = absent({
+      what: 'a'.repeat(MAX_NAME_CHARS + 1),
+      among: {
+        argument: 'array_id',
+        source: SOURCE,
+        measuredAt: READ_AT,
+        count: 1,
+        names: ['a'],
+        visible: 'caller',
+      },
+    }) as AmongAbsence;
+    expect(v.known_names).toEqual({ count: 1 });
+  });
+
+  it(`a list over ${MAX_NAMES_RANKED} names is counted, never ranked`, () => {
+    expect(MAX_NAMES_RANKED).toBe(10_000);
+    const names = many(MAX_NAMES_RANKED + 1, 12);
+    const started = performance.now();
+    const v = absent({
+      what: ASKED,
+      among: {
+        argument: 'array_id',
+        source: SOURCE,
+        measuredAt: READ_AT,
+        count: names.length,
+        names,
+        visible: 'caller',
+      },
+    }) as AmongAbsence;
+    expect(performance.now() - started).toBeLessThan(1000);
+    expect(v.known_names).toEqual({ count: MAX_NAMES_RANKED + 1 });
+  });
+
+  it('the worst ranked case — 10,000 names of 128 characters — stays inside 5 s', () => {
+    const next = rng(9);
+    const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    const pick = () =>
+      Array.from({ length: 128 }, () => alphabet[Math.floor(next() * alphabet.length)]).join('');
+    const names = Array.from({ length: MAX_NAMES_RANKED }, pick);
+    const started = performance.now();
+    const v = absent({
+      what: pick(),
+      among: {
+        argument: 'name',
+        source: SOURCE,
+        measuredAt: READ_AT,
+        count: names.length,
+        names,
+        visible: 'caller',
+      },
+    }) as AmongAbsence;
+    expect(performance.now() - started).toBeLessThan(5000);
+    expect(v.known_names?.nearest).toHaveLength(KNOWN_NAMES_SHOWN);
+  });
+});
+
 // ── Functional — what the model is served, what the events may carry ────
 
 describe('functional — served to the model, and kept off the events', () => {
@@ -354,14 +445,6 @@ describe('edge — the mint refuses what it cannot honour', () => {
 });
 
 // ── Property — a seeded generator ────────────────────────────────────────
-
-function rng(seed: number): () => number {
-  let s = seed >>> 0;
-  return () => {
-    s = (s * 1664525 + 1013904223) >>> 0;
-    return s / 2 ** 32;
-  };
-}
 
 describe('property — the names a model is shown', () => {
   it('300 generated inventories: within the cap, within the list, filter counted, deterministic', () => {

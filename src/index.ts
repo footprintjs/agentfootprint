@@ -888,6 +888,7 @@ export {
   readCoverageResult,
   KNOWN_NAMES_SHOWN,
   MAX_NAME_CHARS,
+  MAX_NAMES_RANKED,
   type AbsenceAmongDeclaration,
   type AbsenceDeclaration,
   type AmongDeclaration,

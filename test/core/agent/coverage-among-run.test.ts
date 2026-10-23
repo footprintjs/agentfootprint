@@ -16,7 +16,7 @@
  * Security (no event field carries a name) · Scenario (malformed vs unknown).
  */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { absent, Agent, ask, checkInApproved, defineTool, isPaused } from '../../../src/index.js';
 import { mock } from '../../../src/llm-providers.js';
@@ -37,7 +37,7 @@ interface Run {
   readonly executed: unknown[];
 }
 
-function build(args: readonly unknown[], gate = false): Run {
+function build(args: readonly unknown[], gate = false, maxToolResultChars?: number): Run {
   const requests: LLMRequest[] = [];
   const events: { type: string; payload: Record<string, unknown> }[] = [];
   const executed: unknown[] = [];
@@ -84,7 +84,11 @@ function build(args: readonly unknown[], gate = false): Run {
       });
     },
   });
-  let builder = Agent.create({ provider, model: 'mock' }).tool(tool);
+  let builder = Agent.create({
+    provider,
+    model: 'mock',
+    ...(maxToolResultChars !== undefined && { maxToolResultChars }),
+  }).tool(tool);
   if (gate) {
     builder = builder.toolMiddleware({ name: 'gate', onToolCall: () => ask({ question: 'ok?' }) });
   }
@@ -187,6 +191,50 @@ describe('security — no event field carries a name the tool read', () => {
     expect(end?.status).toBe('absent');
     expect(end?.result).not.toHaveProperty('known_names');
     expect(toolMessages(r)[0]).toContain('known_names');
+  });
+});
+
+describe('security — a truncated result never carries the names to an event', () => {
+  // The absence serializes to about 1,230 characters with `known_names` at
+  // about 520, so a 900-character cap keeps the names inside the truncated
+  // head: a cap that truncated FIRST and stripped after would ship them in a
+  // string the strip cannot read.
+  const CAP = 900;
+
+  it('the event channel is stripped before it is capped; the model channel is capped as served', async () => {
+    const r = build(['PS-ARRAY-99'], false, CAP);
+    const logged: string[] = [];
+    const spies = (['log', 'warn', 'error', 'info', 'debug'] as const).map((level) =>
+      vi.spyOn(console, level).mockImplementation((...parts: unknown[]) => {
+        logged.push(parts.map((p) => (typeof p === 'string' ? p : JSON.stringify(p))).join(' '));
+      }),
+    );
+    try {
+      await r.agent.run({ message: 'details of PS-ARRAY-99?' });
+    } finally {
+      for (const spy of spies) spy.mockRestore();
+    }
+    // The model read a truncated head that still carries the names.
+    const [served] = toolMessages(r);
+    expect(JSON.parse(served!)).toMatchObject({ truncated: true });
+    expect(served).toContain(NEAREST);
+    // tool_end carries a truncated head too — of the STRIPPED envelope.
+    const [end] = payloadsOf(r, 'agentfootprint.stream.tool_end');
+    expect(end?.result).toMatchObject({ truncated: true });
+    expect(JSON.stringify(end?.result)).toContain('looked_for');
+    expect(JSON.stringify(end?.result)).not.toContain(NEAREST);
+    expect(JSON.stringify(end?.modelResult ?? null)).not.toContain(NEAREST);
+    // No event outside the conversation carries a name; no log line does.
+    for (const e of r.events.filter((x) => JSON.stringify(x.payload).includes(NEAREST))) {
+      expect(CONVERSATION_CARRIERS.has(e.type), e.type).toBe(true);
+    }
+    for (const line of logged) expect(line).not.toContain(NEAREST);
+    // The narrative SAYS no name the tool read. (An entry's `rawValue` is a
+    // live reference to the state it describes — the conversation: history,
+    // `lastToolResult`, `toolResults` — the one copy the names live in.)
+    const narrative = r.agent.getLastNarrativeEntries();
+    expect(narrative.length).toBeGreaterThan(0);
+    for (const entry of narrative) expect(entry.text).not.toContain(NEAREST);
   });
 });
 
