@@ -222,6 +222,7 @@ import {
 import { readItemExtras, type CoverageSection } from '../../../semantics/coverage/items.js';
 import { copyInProgressItem } from '../../../semantics/coverage/inProgress.js';
 import { copyPeriod } from '../../../semantics/coverage/period.js';
+import { withoutKnownNames } from '../../../semantics/coverage/among.js';
 import { servedToModel, strippedOnly } from '../../../semantics/coverage/read.js';
 import {
   pruneLeases,
@@ -2642,7 +2643,20 @@ export function buildToolCallsHandler(
     ran: boolean,
     declaredStatus: string | undefined = payload.status,
   ): void => {
-    typedEmit(scope, 'agentfootprint.stream.tool_end', payload);
+    // `known_names` is MODEL-ONLY (`coverage/among.ts`): the names an `among`
+    // miss read for the caller ride the served value, never an event field.
+    // The same references back for every other value, so a run with no
+    // `among` absence emits the payload it always did.
+    const result = withoutKnownNames(payload.result);
+    const modelResult =
+      payload.modelResult === undefined ? undefined : withoutKnownNames(payload.modelResult);
+    typedEmit(
+      scope,
+      'agentfootprint.stream.tool_end',
+      result === payload.result && modelResult === payload.modelResult
+        ? payload
+        : { ...payload, result, ...(modelResult !== undefined && { modelResult }) },
+    );
     const ledger = deps.toolCallLedger;
     if (ledger === undefined) return;
     const prior = scope.toolCallLedger;

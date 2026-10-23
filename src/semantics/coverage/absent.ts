@@ -63,10 +63,17 @@
 
 import { mintProvenance } from '../described.js';
 import { warnIfInvalidToolName } from '../../lib/toolName.js';
+import { mintAmong } from './among.js';
 import { normalizeCoverageList } from './items.js';
 import { mintPeriod } from './period.js';
 import { refusal, refuseUnknownKeys } from './refusal.js';
-import type { AbsenceDeclaration, Coverage, ToolAbsence, TryInsteadTool } from './types.js';
+import type {
+  AbsenceAmongDeclaration,
+  AbsenceDeclaration,
+  Coverage,
+  ToolAbsence,
+  TryInsteadTool,
+} from './types.js';
 
 // The recognizer lives in the leaf `recognize.ts` (a post-hoc reader asks it
 // without loading this mint); re-exported here so every import keeps working.
@@ -127,7 +134,8 @@ const ABSENCE_DECLARATION_KEYS: readonly string[] = Object.keys({
   tryInsteadTool: true,
   provenance: true,
   period: true,
-} satisfies Record<keyof AbsenceDeclaration, true>);
+  among: true,
+} satisfies Record<keyof AbsenceDeclaration | keyof AbsenceAmongDeclaration, true>);
 
 /**
  * What one suggestion field reads as. `value: undefined` with no `problem`
@@ -289,13 +297,19 @@ function readToolSuggestion(raw: unknown): Reading<TryInsteadTool> {
  *       });
  *     },
  *   });
+ *
+ * A name looked up in a known list is a search over that list: declare the
+ * list as `among` (see {@link AbsenceAmongDeclaration}) and the mint composes
+ * the names facet, the gap "names outside <source>" — which only
+ * `among.authoritative` removes — the `provenance`, and the model-only
+ * `known_names`.
  */
-export function absent(decl: AbsenceDeclaration): ToolAbsence {
+export function absent(decl: AbsenceDeclaration | AbsenceAmongDeclaration): ToolAbsence {
   const fn = 'absent';
   if (typeof decl !== 'object' || decl === null) {
     throw refusal(
       `${fn}() takes a declaration — { what, checked, notChecked?, cannotCover?, tryInstead?, ` +
-        `tryInsteadTool?, provenance?, period? }.`,
+        `tryInsteadTool?, provenance?, period? }, or { what, among, … }.`,
     );
   }
   refuseUnknownKeys(decl, ABSENCE_DECLARATION_KEYS);
@@ -307,7 +321,21 @@ export function absent(decl: AbsenceDeclaration): ToolAbsence {
         `returned nothing by accident.`,
     );
   }
-  const checked = normalizeCoverageList('checked', decl.checked, false);
+  // `among` (the c6 fix): the list a missed name was looked up in. `null`
+  // reads as omitted, as for every optional field. Its facet leads `checked`
+  // and its gap leads `notChecked`, so the author can add ground, never
+  // remove the gap.
+  const declared = decl as { readonly among?: unknown; readonly provenance?: unknown };
+  const among = declared.among == null ? undefined : mintAmong(declared.among, what);
+  if (among !== undefined && declared.provenance != null) {
+    throw refusal(
+      '`provenance` and `among` both name a source and a time — `among` composes the ' +
+        "absence's `provenance` from its own `source` and `measuredAt`, so give `provenance` " +
+        'only without `among`.',
+    );
+  }
+  const authored = normalizeCoverageList('checked', decl.checked, false);
+  const checked = among === undefined ? authored : [among.facet, ...authored];
   if (checked.length === 0) {
     throw refusal(
       `'${what}' — \`checked\` must name at least one source, window or population ` +
@@ -317,7 +345,9 @@ export function absent(decl: AbsenceDeclaration): ToolAbsence {
         `is an error — throw, or return a failure the model can retry.`,
     );
   }
-  const notChecked = normalizeCoverageList('notChecked', decl.notChecked, false);
+  const notCheckedAuthored = normalizeCoverageList('notChecked', decl.notChecked, false);
+  const notChecked =
+    among?.gap === undefined ? notCheckedAuthored : [among.gap, ...notCheckedAuthored];
   const cannotCover = normalizeCoverageList('cannotCover', decl.cannotCover, true);
   const sentence = readSentence(decl.tryInstead);
   if (sentence.problem !== undefined) throw refusal(`'${what}' — ${sentence.problem}`);
@@ -333,7 +363,12 @@ export function absent(decl: AbsenceDeclaration): ToolAbsence {
   // `mintProvenance`), and the period its read covered, by the ONE period rule
   // (`period.ts` · `mintPeriod`). Each refuses at this line, in camelCase.
   // `null` reads as omitted for either — a JSON producer's missing value.
-  const provenance = decl.provenance == null ? undefined : mintProvenance(decl.provenance);
+  const provenance =
+    among !== undefined
+      ? mintProvenance(among.provenance)
+      : declared.provenance == null
+      ? undefined
+      : mintProvenance(declared.provenance);
   const period = mintPeriod(decl.period);
 
   return {
@@ -348,6 +383,7 @@ export function absent(decl: AbsenceDeclaration): ToolAbsence {
     retry_returns_the_same: true,
     ...(tryInstead !== undefined && { try_instead: tryInstead }),
     ...(tryInsteadTool !== undefined && { try_instead_tool: tryInsteadTool }),
+    ...(among !== undefined && { known_names: among.knownNames }),
     note: ABSENCE_NOTE,
   };
 }

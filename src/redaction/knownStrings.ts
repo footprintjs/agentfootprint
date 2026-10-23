@@ -36,7 +36,12 @@
  */
 
 import type { ABSENCE_NOTE } from '../semantics/coverage/absent.js';
-import type { CoveredResult, ToolAbsence } from '../semantics/coverage/types.js';
+import type {
+  CoveredResult,
+  NamesFacetItem,
+  SourceGapItem,
+  ToolAbsence,
+} from '../semantics/coverage/types.js';
 import type { FigureDerivation } from '../core/agent/evidence/types.js';
 import type { AgentfootprintEventMap, AgentfootprintEventType } from '../events/registry.js';
 import type { CursorMoveCause, SkillEdgeKind } from '../injection-engine/skillGraph.js';
@@ -50,10 +55,12 @@ type Payloads = AgentfootprintEventMap[AgentfootprintEventType]['payload'];
 
 /**
  * The library's own envelopes a payload carries inside a field typed loosely
- * (a tool's `result`, what the model read): `absent()`'s and `coverage()`'s.
- * Their field names and words are the library's as much as a payload's.
+ * (a tool's `result`, what the model read): `absent()`'s and `coverage()`'s,
+ * and the two items an `among` miss composes into an absence's lists (typed
+ * apart from `CoverageItem`, which they extend). Their field names and words
+ * are the library's as much as a payload's.
  */
-type Envelopes = ToolAbsence | CoveredResult;
+type Envelopes = ToolAbsence | CoveredResult | NamesFacetItem | SourceGapItem;
 
 /** A depth counter for the type walks below (payload types nest a few levels). */
 type Next = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, never];
@@ -297,6 +304,7 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   autoActivate: true,
   avg: true,
   base: true,
+  bears: true,
   'before-tool': true,
   below: true,
   'below-threshold': true,
@@ -464,6 +472,7 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   mock: true,
   model: true,
   'model-pick': true,
+  names: true,
   'names-and-numbers': true,
   narrative: true,
   native: true,
@@ -580,6 +589,7 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   skill_inactive: true,
   skill_read: true,
   'sliding-window': true,
+  source: true,
   'sources-conflict': true,
   spelling: true,
   'stage requested pause': true,
@@ -703,10 +713,12 @@ const FIELDS: { readonly [F in FieldName]: true } = {
   at: true,
   attempt: true,
   attempts: true,
+  authoritative: true,
   availableIds: true,
   backoffMs: true,
   base: true,
   basis: true,
+  bears: true,
   big: true,
   binding: true,
   blink: true,
@@ -801,6 +813,7 @@ const FIELDS: { readonly [F in FieldName]: true } = {
   dispatchToId: true,
   docUri: true,
   draftWithheld: true,
+  dropped: true,
   droppedCount: true,
   droppedIds: true,
   droppedResume: true,
@@ -833,6 +846,7 @@ const FIELDS: { readonly [F in FieldName]: true } = {
   expiresAfter: true,
   expiresAt: true,
   explanation: true,
+  facet: true,
   fact: true,
   facts: true,
   failed: true,
@@ -899,6 +913,7 @@ const FIELDS: { readonly [F in FieldName]: true } = {
   keyHash: true,
   keyword: true,
   kind: true,
+  known_names: true,
   label: true,
   language: true,
   lastError: true,
@@ -954,6 +969,7 @@ const FIELDS: { readonly [F in FieldName]: true } = {
   narrowed: true,
   narrowedSkipped: true,
   nearTieMargin: true,
+  nearest: true,
   nodes: true,
   normalize: true,
   notApplicable: true,
