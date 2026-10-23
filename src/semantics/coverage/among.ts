@@ -19,9 +19,10 @@
  * remove: `{ kind: 'scope', what: 'names outside <source>', relevance:
  * 'bears', bears: 'source' }`. The only opt-out is `authoritative: { why }`,
  * and `check:semantics` lists every use of it. A read that did not see the
- * whole list (`partial: true` — a truncated or paged inventory) gets a
- * completeness gap instead, "not every name in <source> was read", which
- * `authoritative` does not remove.
+ * whole list (`partial: true` — a truncated or paged inventory) checked even
+ * less, so it ALSO gets a completeness gap, `{ kind: 'scope', what: 'not every
+ * name in <source> was read', relevance: 'bears', bears: 'completeness' }`,
+ * which `authoritative` never removes.
  *
  * The gap holds only where `among` is declared: a plain `absent({ what })`, or
  * a refusal the tool throws, never passes through here. `count`,
@@ -44,7 +45,13 @@ import { plainLineProblem } from '../../lib/plainLine.js';
 import { instantOf } from '../../time/instant.js';
 
 import { refusal, refuseUnknownKeys } from './refusal.js';
-import type { AmongDeclaration, NamesFacetItem, SourceGapItem, ToolAbsence } from './types.js';
+import type {
+  AmongDeclaration,
+  CompletenessGapItem,
+  NamesFacetItem,
+  SourceGapItem,
+  ToolAbsence,
+} from './types.js';
 
 /** The code a count that disagrees with its names is refused under. */
 export const NAMES_COUNT_MISMATCH = 'names-count-mismatch';
@@ -64,8 +71,12 @@ const AMONG_KEYS: readonly string[] = Object.keys({
 export interface MintedAmong {
   /** The first `checked` item. */
   readonly facet: NamesFacetItem;
-  /** The first `not_checked` item — absent only under `authoritative` on a whole read. */
-  readonly gap?: SourceGapItem;
+  /**
+   * The first `not_checked` items, in order: the source gap (unless
+   * `authoritative`), then the completeness gap (when `partial`). Empty only
+   * for an authoritative whole read.
+   */
+  readonly gaps: readonly (SourceGapItem | CompletenessGapItem)[];
   /** The absence's provenance, in the declaration's camelCase form. */
   readonly provenance: { readonly measuredAt: string; readonly source: string };
 }
@@ -154,21 +165,26 @@ export function mintAmong(raw: unknown): MintedAmong {
     from: 'result',
     ...(authoritative !== undefined && { authoritative }),
   };
-  const gap: SourceGapItem | undefined = partial
-    ? {
-        what: `not every name in ${source} was read`,
-        kind: 'scope',
-        relevance: 'bears',
-        bears: 'source',
-      }
-    : authoritative === undefined
-    ? { what: `names outside ${source}`, kind: 'scope', relevance: 'bears', bears: 'source' }
-    : undefined;
-  return {
-    facet,
-    ...(gap !== undefined && { gap }),
-    provenance: { measuredAt, source },
-  };
+  // `authoritative` speaks for the SOURCE (every name there is), so it drops
+  // only the source gap; it cannot vouch for a read that did not see it all.
+  const gaps: (SourceGapItem | CompletenessGapItem)[] = [];
+  if (authoritative === undefined) {
+    gaps.push({
+      what: `names outside ${source}`,
+      kind: 'scope',
+      relevance: 'bears',
+      bears: 'source',
+    });
+  }
+  if (partial) {
+    gaps.push({
+      what: `not every name in ${source} was read`,
+      kind: 'scope',
+      relevance: 'bears',
+      bears: 'completeness',
+    });
+  }
+  return { facet, gaps, provenance: { measuredAt, source } };
 }
 
 /** `names`, when given, must be the list `count` counts — read for that check only. */

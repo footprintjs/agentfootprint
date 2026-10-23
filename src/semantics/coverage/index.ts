@@ -51,6 +51,7 @@ export type {
   InProgressInput,
   InProgressItem,
   NamesFacetItem,
+  CompletenessGapItem,
   SourceGapItem,
   ToolAbsence,
   TryInsteadTool,

@@ -32,8 +32,9 @@
  * A sentence is ABOUT what was looked up when it names the looked-up argument
  * or its value (`LookupSubject` — a described refusal sample's, or an
  * absence's `looked_for` and facet argument; with neither, a quoted span
- * stands for the value). A format, range, permission or transport message is
- * never that claim, whatever it names.
+ * stands for the value). A format, range, permission or transport message
+ * exempts a WRONGNESS phrase only; a NON-EXISTENCE phrase about the lookup
+ * always fires.
  *
  * ## The phrase packs — closed, versioned, small
  *
@@ -144,10 +145,13 @@ export interface LookupSubject {
 }
 
 /**
- * Messages of a kind that says why a call was refused, never what exists:
- * a FORMAT the value broke, a RANGE it left, a PERMISSION it lacked, or a
- * TRANSPORT failure upstream. A sentence of any of these kinds is exempt even
- * when it names the lookup ("PS-ARRAY-99 is out of the allowed range").
+ * Messages of a kind that says why a call was refused: a FORMAT the value
+ * broke, a RANGE it left, a PERMISSION it lacked, or a TRANSPORT failure
+ * upstream. Such a sentence may call the value wrong in that sense ("array_id
+ * 'PS-ARRAY-99' is not a valid identifier format"), so it exempts a WRONGNESS
+ * phrase. It never exempts a NON-EXISTENCE phrase: "No array matches 'X'
+ * (expected one of …)" still says X does not exist, whatever else the
+ * sentence holds.
  */
 const EXEMPT_KINDS: readonly RegExp[] = [
   // format
@@ -251,8 +255,8 @@ const sentencesOf = (text: string): string[] =>
   text.split(/(?<=[.!?])\s+|\n+/).filter((part) => part.trim() !== '');
 
 /**
- * The first phrase of `pack` in a sentence of `text` that names the lookup
- * and is not an exempt kind of message, or `undefined`.
+ * The first phrase of `pack` in a sentence of `text` that names the lookup, or
+ * `undefined`. The pack decides what a sentence's kind exempts.
  */
 function claimAboutTheLookup(
   text: string,
@@ -260,16 +264,20 @@ function claimAboutTheLookup(
   pack: (sentence: string) => string | undefined,
 ): string | undefined {
   for (const sentence of sentencesOf(text)) {
-    if (isExemptMessage(sentence) || !namesTheLookup(sentence, subject)) continue;
+    if (!namesTheLookup(sentence, subject)) continue;
     const phrase = pack(sentence);
     if (phrase !== undefined) return phrase;
   }
   return undefined;
 }
 
-/** Either pack: a sentence that says a thing is not there, or that the input is wrong. */
+/** A wrongness phrase, unless the sentence is a format, range, permission or transport message. */
+const unexemptWrongness = (sentence: string): string | undefined =>
+  isExemptMessage(sentence) ? undefined : wrongnessPhrase(sentence);
+
+/** A non-existence phrase — never exempt — or else an unexempt wrongness phrase. */
 const absenceOrWrongness = (sentence: string): string | undefined =>
-  nonExistencePhrase(sentence) ?? wrongnessPhrase(sentence);
+  nonExistencePhrase(sentence) ?? unexemptWrongness(sentence);
 
 /**
  * A refusal sample a catalog describes: the text, and what the refused call
@@ -399,7 +407,7 @@ export function absenceIssues(absence: ToolAbsence): OverclaimIssue[] {
     ...(facet !== undefined && { argument: facet.argument }),
   };
   for (const [field, text] of absenceTexts(absence)) {
-    const phrase = claimAboutTheLookup(text, subject, wrongnessPhrase);
+    const phrase = claimAboutTheLookup(text, subject, unexemptWrongness);
     if (phrase === undefined) continue;
     issues.push({
       code: 'absence-asserts-wrongness',

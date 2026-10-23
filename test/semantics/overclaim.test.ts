@@ -212,7 +212,7 @@ describe('functional — the rules fire only on a sentence about what was looked
     }
   });
 
-  it('a format, range or permission message is exempt even when it names the lookup', () => {
+  it('a format, range or permission message exempts a WRONGNESS phrase that names the lookup', () => {
     const report = checkSemantics(
       [
         {
@@ -221,13 +221,26 @@ describe('functional — the rules fire only on a sentence about what was looked
           refusals: [
             sample("array_id 'PS-ARRAY-99' is not a valid identifier format"),
             sample('PS-ARRAY-99 is out of the allowed range'),
-            sample('You have no permission to read PS-ARRAY-99.'),
+            sample('Access to PS-ARRAY-99 is not a valid request for this role.'),
           ],
         },
       ],
       { rules: ['overclaim'] },
     );
     expect(overclaims(report.findings)).toEqual([]);
+  });
+
+  it.each([
+    "No array matches 'X' (expected one of PS-ARRAY-01, PS-ARRAY-02)",
+    'X does not exist in any array type',
+    "No array matches 'X'; check your access",
+    'X: no such array between the two sites',
+    "'X' is not in this tenant's token scope",
+  ])('a NON-EXISTENCE phrase that names the value is never exempt: %s', (text) => {
+    const report = checkSemantics([
+      { name: 'array_detail', results: [], refusals: [sample(text, 'X')] },
+    ]);
+    expect(overclaims(report.findings).map((f) => f.code)).toEqual(['refusal-asserts-absence']);
   });
 
   it('fires: "array X is the wrong identifier, not missing data"', () => {

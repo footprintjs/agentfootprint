@@ -79,7 +79,7 @@ const PARTIAL_GAP = {
   what: `not every name in ${SOURCE} was read`,
   kind: 'scope',
   relevance: 'bears',
-  bears: 'source',
+  bears: 'completeness',
 };
 
 // ── Unit — what the mint composes ────────────────────────────────────────
@@ -143,14 +143,14 @@ describe('unit — an among miss composes the names facet and the irremovable ga
   });
 });
 
-describe('unit — a partial read composes a completeness gap', () => {
-  it('partial: "not every name in <source> was read", in place of "names outside"', () => {
+describe('unit — a partial read adds a completeness gap beside the source gap', () => {
+  it('partial: BOTH gaps — a partial read checked even less', () => {
     const v = mint({ partial: true, count: 3, names: INVENTORY.slice(0, 3) });
-    expect(v.not_checked).toEqual([PARTIAL_GAP]);
+    expect(v.not_checked).toEqual([OUTSIDE_GAP, PARTIAL_GAP]);
     expect(v.checked[0]?.what).toBe(`the 3 array_id names read from ${SOURCE}`);
   });
 
-  it('authoritative does not remove the completeness gap', () => {
+  it('authoritative removes only the source gap, never the completeness gap', () => {
     const v = mint({ partial: true, authoritative: { why: 'the system of record' } });
     expect(v.not_checked).toEqual([PARTIAL_GAP]);
   });
@@ -321,10 +321,13 @@ describe('property — the gap always stands, and no name is ever served', () =>
       const wire = JSON.stringify(v);
       for (const name of names) expect(wire).not.toContain(name);
       expect(namesFacetOf(v)?.count).toBe(size);
-      const gap = v.not_checked?.[0];
-      if (partial) expect(gap).toEqual(PARTIAL_GAP);
-      else if (authoritative === undefined) expect(gap).toEqual(OUTSIDE_GAP);
-      else expect(v.not_checked).toBeUndefined();
+      // The source gap unless authoritative; the completeness gap whenever partial.
+      const expected = [
+        ...(authoritative === undefined ? [OUTSIDE_GAP] : []),
+        ...(partial ? [PARTIAL_GAP] : []),
+      ];
+      if (expected.length === 0) expect(v.not_checked).toBeUndefined();
+      else expect(v.not_checked).toEqual(expected);
     }
   });
 });

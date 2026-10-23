@@ -223,7 +223,7 @@ export interface AbsenceDeclaration {
  * A lookup that checks a name against a known list IS a search, and its miss
  * says only that the name is not on THAT list. `among` declares the list, and
  * the mint composes the rest: the names facet the tool searched, the gap the
- * author cannot remove ("names outside <source>" — or, for a `partial` read,
+ * author cannot remove ("names outside <source>" — and, for a `partial` read,
  * "not every name in <source> was read"), and the absence's `provenance` from
  * `source` and `measuredAt`. The gap holds where `among` is declared; a plain
  * `absent({ what })` or a thrown refusal never passes through it.
@@ -258,8 +258,8 @@ export interface AmongDeclaration {
   /**
    * `true` when the read did not see every name in the source — a truncated
    * or paged inventory. The mint then composes a completeness gap, "not every
-   * name in <source> was read", in place of "names outside <source>", and
-   * `authoritative` does not remove it.
+   * name in <source> was read" (`bears: 'completeness'`), beside "names
+   * outside <source>", and `authoritative` never removes it.
    */
   readonly partial?: boolean;
   /**
@@ -303,17 +303,27 @@ export interface NamesFacetItem extends CoverageItem {
 }
 
 /**
- * The gap an `among` miss adds and its author cannot remove — the first
- * `not_checked` item: names outside the source the tool read, or, for a
- * `partial` read, the names in it the read did not see. It bears on the
- * source facet: a claim that leaves the source open (a flat "X does not
- * exist") rests on ground this search never covered. `kind` is record-only,
- * like every item's.
+ * The gap an `among` miss adds and its author cannot remove except by
+ * `authoritative` — the first `not_checked` item: names outside the source
+ * the tool read. It bears on the source facet: a claim that leaves the source
+ * open (a flat "X does not exist") rests on ground this search never covered.
+ * `kind` is record-only, like every item's.
  */
 export interface SourceGapItem extends CoverageItem {
   readonly kind: 'scope';
   readonly relevance: 'bears';
   readonly bears: 'source';
+}
+
+/**
+ * The gap a `partial` among read adds, which nothing removes: the names in
+ * the source the read did not see. It bears on completeness — a claim that
+ * the name is not in the source rests on a read that did not see all of it.
+ */
+export interface CompletenessGapItem extends CoverageItem {
+  readonly kind: 'scope';
+  readonly relevance: 'bears';
+  readonly bears: 'completeness';
 }
 
 /**

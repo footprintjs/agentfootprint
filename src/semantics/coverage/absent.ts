@@ -278,8 +278,8 @@ function readToolSuggestion(raw: unknown): Reading<TryInsteadTool> {
  * A name looked up in a known list is a search over that list: declare the
  * list as `among` (see {@link AbsenceAmongDeclaration}) and the mint composes
  * the names facet, the gap "names outside <source>" — which only
- * `among.authoritative` removes; a `partial` read gets "not every name in
- * <source> was read" instead — and the `provenance`. The names are read only
+ * `among.authoritative` removes; a `partial` read also gets "not every name in
+ * <source> was read", which nothing removes — and the `provenance`. The names are read only
  * to check `count`; none is served.
  *
  * @example a port-lookup tool that found no matching FLOGI
@@ -348,7 +348,7 @@ export function absent(decl: AbsenceDeclaration | AbsenceAmongDeclaration): Tool
   }
   const notCheckedAuthored = normalizeCoverageList('notChecked', decl.notChecked, false);
   const notChecked =
-    among?.gap === undefined ? notCheckedAuthored : [among.gap, ...notCheckedAuthored];
+    among === undefined ? notCheckedAuthored : [...among.gaps, ...notCheckedAuthored];
   const cannotCover = normalizeCoverageList('cannotCover', decl.cannotCover, true);
   const sentence = readSentence(decl.tryInstead);
   if (sentence.problem !== undefined) throw refusal(`'${what}' — ${sentence.problem}`);

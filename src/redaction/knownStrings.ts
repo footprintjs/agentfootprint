@@ -37,6 +37,7 @@
 
 import type { ABSENCE_NOTE } from '../semantics/coverage/absent.js';
 import type {
+  CompletenessGapItem,
   CoveredResult,
   NamesFacetItem,
   SourceGapItem,
@@ -56,11 +57,11 @@ type Payloads = AgentfootprintEventMap[AgentfootprintEventType]['payload'];
 /**
  * The library's own envelopes a payload carries inside a field typed loosely
  * (a tool's `result`, what the model read): `absent()`'s and `coverage()`'s,
- * and the two items an `among` miss composes into an absence's lists (typed
+ * and the items an `among` miss composes into an absence's lists (typed
  * apart from `CoverageItem`, which they extend). Their field names and words
  * are the library's as much as a payload's.
  */
-type Envelopes = ToolAbsence | CoveredResult | NamesFacetItem | SourceGapItem;
+type Envelopes = ToolAbsence | CoveredResult | NamesFacetItem | SourceGapItem | CompletenessGapItem;
 
 /** A depth counter for the type walks below (payload types nest a few levels). */
 type Next = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, never];
@@ -329,6 +330,7 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   'column-sum': true,
   'column-type-mismatch': true,
   complement: true,
+  completeness: true,
   compose: true,
   'composed-message': true,
   configure: true,
