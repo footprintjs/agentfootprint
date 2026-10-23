@@ -61,6 +61,7 @@ import {
   checkDecisionAgainst,
   noteDecisionTakenUp,
   pausedRequestIdOf,
+  processDecisionLedger,
   registerConsentLedger,
   registerConsentRules,
   type DecisionLedger,
@@ -2713,6 +2714,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         gate,
         input,
         this.toolMiddleware.map((link) => link.name),
+        // A request minted under a ledger that can prove is spent only there.
+        this.decisionLedger ?? processDecisionLedger(),
       );
     }
     // Typed data collection is not consent. Validate before changing any run state.

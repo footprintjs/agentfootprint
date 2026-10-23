@@ -10,7 +10,7 @@
  */
 
 export { ABSENCE_MARKER, ABSENCE_NOTE, absent, coverageOfAbsence, readAbsence } from './absent.js';
-export { KNOWN_NAMES_SHOWN, MAX_NAME_CHARS, MAX_NAMES_RANKED, namesFacetOf } from './among.js';
+export { namesFacetOf } from './among.js';
 export {
   answerCoverageOf,
   composeAnswerWithCoverage,
@@ -60,8 +60,8 @@ export type {
   DeclaredToolAbsence,
   InProgressInput,
   InProgressItem,
-  KnownNames,
   NamesFacetItem,
+  CompletenessGapItem,
   SourceGapItem,
   ToolAbsence,
   TryInsteadTool,

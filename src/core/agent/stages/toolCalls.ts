@@ -146,7 +146,13 @@ import type {
 import type { ToolClaim } from '../buildToolRegistry.js';
 import { changedArgKeys, shownArgsOf } from '../../toolShownArgs.js';
 import { toolBytesOf } from '../../../lib/toolBytes.js';
-import { frozenCopyOf } from '../../../lib/frozenCopy.js';
+import {
+  frozenCopyOf,
+  frozenProjectionOf,
+  frozenView,
+  isSealed,
+  warnFrozenWrite,
+} from '../../../lib/frozenCopy.js';
 import { buildToolResolver, type ToolResolution } from './toolResolver.js';
 import type { Tool, ToolExecutionContext } from '../../../tools/tools.js';
 import { agentToolDispatch } from '../toolDispatch.js';
@@ -232,7 +238,6 @@ import {
   type CoverageFacts,
   type CoverageReading,
   type DeclaredCoverage,
-  type KnownNames,
   type ToolAbsence,
 } from '../../../semantics/coverage/index.js';
 import type { ComposedCoverage } from '../../../semantics/coverage/composedCoverage.js';
@@ -241,12 +246,6 @@ import { buildSearchCoverage } from './searchCoverage.js';
 import { readItemExtras, type CoverageSection } from '../../../semantics/coverage/items.js';
 import { copyInProgressItem } from '../../../semantics/coverage/inProgress.js';
 import { copyPeriod } from '../../../semantics/coverage/period.js';
-import {
-  fitKnownNames,
-  KNOWN_NAMES_LINE,
-  knownNamesFor,
-  withKnownNames,
-} from '../../../semantics/coverage/among.js';
 import { servedToModel, strippedOnly } from '../../../semantics/coverage/read.js';
 import {
   pruneLeases,
@@ -1679,6 +1678,9 @@ export function buildToolCallsHandler(
       // An ask's approval holds only for the rules it was asked under — this
       // agent's chain, by link name.
       (deps.toolMiddleware ?? []).map((link) => link.name),
+      // …and a request minted under a ledger that can prove is spent only
+      // there: never silently in this agent's ledger if it is another one.
+      decisionLedger,
     );
   };
   /**
@@ -1699,19 +1701,28 @@ export function buildToolCallsHandler(
       : {};
   };
   /**
-   * The permission checker's view of a call's arguments: its own frozen copy
-   * (`lib/frozenCopy.ts`), never the object the tool runs with — a checker
-   * that wrote into its `context` used to change the call. Arguments no copy
-   * can be made of are not handed over: the throw lands in the gate's
+   * The permission checker's view of a call's arguments: the call's shared
+   * frozen copy (`lib/frozenCopy.ts`), never the object the tool runs with — a
+   * checker that wrote into its `context` used to change the call. Arguments
+   * no copy can be made of are not handed over: the throw lands in the gate's
    * fail-closed catch, so the call is denied.
    */
-  const checkerContextOf = (args: ToolArgs): Readonly<Record<string, unknown>> => {
-    const own = frozenCopyOf(args);
-    if (own === undefined) {
+  const checkerContextOf = (view: ToolArgs | undefined): Readonly<Record<string, unknown>> => {
+    if (view === undefined) {
       throw new Error("the call's arguments could not be copied for the permission checker");
     }
-    return own;
+    return view;
   };
+  /**
+   * One frozen copy of a batch's assistant turn — every call's arguments in
+   * it — for the callbacks and events that see the batch before its calls run
+   * (`lib/frozenCopy.ts`). The turn holds the very objects the calls run
+   * with, so a history handed to a callback carries this copy in its place.
+   * A turn no copy can be made of is replaced by a frozen shell without its
+   * calls: nothing a callback holds may reach what runs.
+   */
+  const frozenTurnOf = (turn: LLMMessage): LLMMessage =>
+    frozenCopyOf(turn) ?? (Object.freeze({ role: turn.role, content: turn.content }) as LLMMessage);
   /**
    * What a consent gate refuses with when the call cannot be bound to a
    * request — its arguments are not values JSON writes down faithfully, so an
@@ -2917,7 +2928,13 @@ export function buildToolCallsHandler(
     scope: TypedScope<AgentState>,
     payload: AgentfootprintEventMap['agentfootprint.stream.tool_start']['payload'],
   ): void => {
-    typedEmit(scope, 'agentfootprint.stream.tool_start', payload);
+    // A listener sees the call's frozen copy — the dispatch loop's shared one
+    // when it hands that over — never the arguments the tool runs with: one
+    // that set `amount = 9000` used to refund 9000. Arguments no copy can be
+    // made of are carried as a frozen, detached projection — what JSON writes
+    // of them — never as their live objects.
+    const args = frozenView(payload.args) ?? frozenProjectionOf(payload.args);
+    typedEmit(scope, 'agentfootprint.stream.tool_start', { ...payload, args });
     const ledger = deps.toolCallLedger;
     if (ledger === undefined) return;
     const prior = scope.toolCallLedger;
@@ -3805,43 +3822,6 @@ export function buildToolCallsHandler(
    * returned while the history carries what the rules allowed through — and
    * the ledger row beside them says which is which.
    */
-  /**
-   * The names each call's after-tool moment let through to the model, by call
-   * id. `afterMoment` sets its own call's entry (or clears it) and
-   * `messageTextOf` takes it out, so the map holds a call only between those
-   * two lines.
-   */
-  const namesForMessage = new Map<string, KnownNames>();
-
-  /**
-   * THE ONE PLACE a call's model-bound message text is made from what the
-   * rules, the placement and the cap let through — and so the one place the
-   * names an `absent({ among })` read for the caller are attached
-   * (`coverage/among.ts`). They ride the library's channel, never the result,
-   * so no event, ledger or coverage row ever holds them; what is attached is
-   * what the after-tool rules let through (`afterMoment`), and it COUNTS
-   * against `maxToolResultChars`: the names list is trimmed to fit — never
-   * the result — and says how many it left out; with no room even for the
-   * count, nothing is attached. Every other call gets the text it always got.
-   */
-  const messageTextOf = (toolCallId: string, modelResult: unknown): string => {
-    const text = (value: unknown): string =>
-      typeof value === 'string' ? value : safeStringify(value);
-    const names = namesForMessage.get(toolCallId);
-    namesForMessage.delete(toolCallId);
-    if (names === undefined) return text(modelResult);
-    const withBlock = (block: KnownNames): string => {
-      const attached = withKnownNames(modelResult, block);
-      return attached !== modelResult
-        ? text(attached)
-        : `${text(modelResult)}${KNOWN_NAMES_LINE}${safeStringify(block)}`;
-    };
-    const max = deps.maxToolResultChars;
-    const fitted =
-      max === undefined ? names : fitKnownNames(names, (block) => withBlock(block).length <= max);
-    return fitted === undefined ? text(modelResult) : withBlock(fitted);
-  };
-
   const afterMoment = async (
     scope: TypedScope<AgentState>,
     call: {
@@ -3866,20 +3846,12 @@ export function buildToolCallsHandler(
     // declare neither serves the bytes it always did, and the callers'
     // reference-inequality stamp of `tool_end.modelResult` stays unstamped.
     const served = servedToModel(call.result);
-    // The names an among miss read for the caller: off the result, from the
-    // library's channel, keyed by what the TOOL returned (`coverage/among.ts`).
-    // The chain decides what of them the model reads.
-    namesForMessage.delete(call.toolCallId);
-    const names = knownNamesFor(call.result);
     const chain = deps.toolMiddleware ?? [];
     // No `onToolResult` hook anywhere in the chain → no walk, no rows, no await
     // beyond the ones this dispatch already made. An agent whose middleware
     // only governs calls is byte-identical to one built before this moment
     // existed.
-    if (!chain.some((mw) => typeof mw.onToolResult === 'function')) {
-      if (names !== undefined) namesForMessage.set(call.toolCallId, names);
-      return served;
-    }
+    if (!chain.some((mw) => typeof mw.onToolResult === 'function')) return served;
     const verdict = await runToolAfterChain(chain, {
       toolName: call.toolName,
       ...(call.tool?.source !== undefined && { toolSource: call.tool.source }),
@@ -3891,12 +3863,8 @@ export function buildToolCallsHandler(
       history: call.history,
       ...(call.identity && { identity: call.identity }),
       ...(call.signal && { signal: call.signal }),
-      ...(names !== undefined && { knownNames: names }),
     });
     recordDecisions(scope, verdict.decisions);
-    if (verdict.kind === 'allow' && verdict.knownNames !== undefined) {
-      namesForMessage.set(call.toolCallId, verdict.knownNames);
-    }
     return verdict.kind === 'deny' ? verdict.reason : verdict.result;
   };
 
@@ -4571,6 +4539,36 @@ export function buildToolCallsHandler(
           ...assistantReplayFields(scope),
         });
       }
+      // ── ONE FROZEN COPY OF THE BATCH, for every pre-execute callback ──
+      // The assistant turn just pushed holds every call's arguments — the
+      // objects the calls run with. A callback that reads the history (the
+      // permission checker, middleware, a check-in predicate, the evidence
+      // assembler) gets it with this turn as a frozen copy, and each call's
+      // `tool_start`, checker and predicate share that copy's arguments: one
+      // copy of the batch, and nothing a callback holds reaches what runs.
+      // Earlier turns are handed as they are: their calls already ran, and
+      // deep-copying the whole conversation for every call would cost
+      // O(conversation) per call.
+      const turnAt = newHistory.length - 1;
+      const pushedTurn = toolCalls.length > 0 ? newHistory[turnAt] : undefined;
+      const frozenTurn = pushedTurn === undefined ? undefined : frozenTurnOf(pushedTurn);
+      /**
+       * The history a pre-execute callback is handed — the batch's turn frozen.
+       * The one copy is shared only when freezing SEALED it (`isSealed`: every
+       * JSON turn); a turn holding a container freezing leaves writable (a
+       * `Map`, a `Date`, a typed array an app's provider put in a call) is
+       * copied again for each callback, so none can change what the next sees.
+       */
+      const callbackHistory = (): LLMMessage[] => {
+        if (pushedTurn === undefined || frozenTurn === undefined) return [...newHistory];
+        const turn = isSealed(frozenTurn) ? frozenTurn : frozenTurnOf(pushedTurn);
+        return newHistory.map((message, at) => (at === turnAt ? turn : message));
+      };
+      /** The batch's sealed copy of call `at`'s arguments, when there is one to share. */
+      const frozenArgsAt = (at: number): ToolArgs | undefined => {
+        const shared = frozenTurn?.toolCalls?.[at]?.args as ToolArgs | undefined;
+        return isSealed(shared) ? shared : undefined;
+      };
       // `lookupTool` is hoisted to the handler closure (shared with resume).
 
       // ── The model's `read_skill` pick: one-shot by construction ──────
@@ -4681,10 +4679,43 @@ export function buildToolCallsHandler(
             turnStampOf(scope),
           );
         }
+        // ── THIS CALL'S SHARED FROZEN COPY — `tool_start`, the permission
+        // checker, a capability check and the check-in predicate (and, on a
+        // pause, the request shown and its evidence assembler) all read ONE
+        // frozen copy of the arguments, never the arguments the tool runs
+        // with. The batch's copy when `args` is the call's own object;
+        // remade only when the arguments are replaced, and after the
+        // middleware chain (its links are handed the live arguments, by
+        // contract, and may have edited them in place). Shared only while
+        // freezing SEALED it (`isSealed` — every JSON value): arguments that
+        // hold a `Map`, a `Set`, a `Date` or a typed array get a new copy for
+        // each callback, so one cannot change what the next one judges.
+        let viewed: ToolArgs | undefined;
+        let view: ToolArgs | undefined;
+        /** The batch's copy still shows these arguments — until a link could have edited them. */
+        let batchCopyCurrent = true;
+        const viewOf = (source: ToolArgs): ToolArgs | undefined => {
+          if (source === viewed && view !== undefined) return view;
+          const batchCopy =
+            batchCopyCurrent && source === tc.args ? frozenArgsAt(callIndex) : undefined;
+          const copy = batchCopy ?? frozenView(source);
+          const shareable = copy !== undefined && isSealed(copy);
+          viewed = shareable ? source : undefined;
+          view = shareable ? copy : undefined;
+          return copy;
+        };
+        /** The history this call's callbacks are handed — made once per call when sealed. */
+        let callHistory: LLMMessage[] | undefined;
+        const historyForCallbacks = (): LLMMessage[] => {
+          if (callHistory !== undefined) return callHistory;
+          const made = callbackHistory();
+          if (frozenTurn === undefined || isSealed(frozenTurn)) callHistory = made;
+          return made;
+        };
         emitToolStart(scope, {
           toolName: tc.name,
           toolCallId: tc.id,
-          args,
+          args: viewOf(args) ?? args,
           ...(toolCalls.length > 1 && { parallelCount: toolCalls.length }),
         });
         const startMs = Date.now();
@@ -4755,15 +4786,15 @@ export function buildToolCallsHandler(
           try {
             // Sequence is derived from history at check time (not parallel
             // state) — single source of truth, survives resumeOnError.
-            const sequence = extractSequence(newHistory, iteration);
+            const sequence = extractSequence(historyForCallbacks(), iteration);
             const decision = await permissionChecker.check({
               capability: 'tool_call',
               actor: 'agent',
               target: tc.name,
-              // Its own frozen copy, never the arguments the tool runs with.
-              context: checkerContextOf(runArgs),
+              // The call's shared frozen copy, never the arguments it runs with.
+              context: checkerContextOf(viewOf(runArgs)),
               sequence,
-              history: newHistory,
+              history: historyForCallbacks(),
               iteration,
               ...(runIdentity && { identity: runIdentity }),
               ...(env.signal && { signal: env.signal }),
@@ -4807,6 +4838,10 @@ export function buildToolCallsHandler(
               };
             }
           } catch (permErr) {
+            // A checker that wrote into its frozen `context` lands here too —
+            // said once, in dev mode, so a checker that normalised in place
+            // does not deny every call in silence.
+            warnFrozenWrite('permission checker', permErr, 'the call was denied');
             // A checker that threw is treated as deny-by-default — fail closed:
             // something that did not answer did not say yes.
             //
@@ -4862,8 +4897,8 @@ export function buildToolCallsHandler(
               capability,
               actor: 'agent',
               target,
-              context: checkerContextOf(callArgs),
-              history: newHistory,
+              context: checkerContextOf(viewOf(callArgs)),
+              history: historyForCallbacks(),
               iteration,
               ...(runIdentity && { identity: runIdentity }),
               ...(env.signal && { signal: env.signal }),
@@ -4893,6 +4928,7 @@ export function buildToolCallsHandler(
               };
             }
           } catch (permErr) {
+            warnFrozenWrite('permission checker', permErr, 'the call was denied');
             // Fail closed, and say so terminally — the 9.4.0 lesson applies
             // whole: an operator's outage text reads as weather to a model.
             denied = true;
@@ -4983,7 +5019,7 @@ export function buildToolCallsHandler(
             toolCallId: tc.id,
             iteration,
             args: callArgs,
-            history: newHistory,
+            history: historyForCallbacks(),
             ...(runIdentity && { identity: runIdentity }),
             ...(env.signal && { signal: env.signal }),
             // One human question per resume: this batch already asked the
@@ -5004,16 +5040,19 @@ export function buildToolCallsHandler(
           // is about to pause.
           const bound =
             chain.kind === 'ask'
-              ? mintConsentRequest({
-                  gate: 'ask',
-                  tool: tc.name,
-                  toolCallId: tc.id,
-                  party: resolved.party,
-                  args: chain.args,
-                  middleware: chain.middleware,
-                  askIndex: chain.index,
-                  chain: askChain,
-                } satisfies GatedCall)
+              ? mintConsentRequest(
+                  {
+                    gate: 'ask',
+                    tool: tc.name,
+                    toolCallId: tc.id,
+                    party: resolved.party,
+                    args: chain.args,
+                    middleware: chain.middleware,
+                    askIndex: chain.index,
+                    chain: askChain,
+                  } satisfies GatedCall,
+                  decisionLedger,
+                )
               : undefined;
           // An ask no approval could be bound to asked nobody, and its row
           // says so (`unboundAskRows`).
@@ -5031,6 +5070,11 @@ export function buildToolCallsHandler(
           );
           callArgs = chain.args;
           chainedArgs = chain.args;
+          // The links were handed the live arguments (a link rewrites by what
+          // it hands back, and may have edited them in place): the shared
+          // frozen copy is made again from what the chain handed back.
+          viewed = undefined;
+          batchCopyCurrent = false;
           if (chain.kind === 'deny') {
             denied = true;
             // A link that ASKED, refused by the one-question law: the person's
@@ -5193,8 +5237,8 @@ export function buildToolCallsHandler(
         if (!denied && !argsRejected && tool && tool.checkIn !== undefined && deps.checkIn) {
           // Computed ONLY for a checkIn-declaring tool → zero cost otherwise.
           // Shape shared with the ask-resume gate; see `historyForCheckIn`.
-          const historyForEvidence = historyForCheckIn(scope, newHistory);
-          const trips = shouldCheckIn(tool.checkIn, callArgs, {
+          const historyForEvidence = historyForCheckIn(scope, historyForCallbacks());
+          const trips = shouldCheckIn(tool.checkIn, viewOf(callArgs) ?? callArgs, {
             iteration,
             toolCallId: tc.id,
             history: historyForEvidence,
@@ -5204,20 +5248,24 @@ export function buildToolCallsHandler(
           // exact call — minted only for a call that is about to pause.
           const bound =
             trips && askedLayer === undefined
-              ? mintConsentRequest({
-                  gate: 'checkIn',
-                  tool: tc.name,
-                  toolCallId: tc.id,
-                  party: resolved.party,
-                  args: callArgs,
-                } satisfies GatedCall)
+              ? mintConsentRequest(
+                  {
+                    gate: 'checkIn',
+                    tool: tc.name,
+                    toolCallId: tc.id,
+                    party: resolved.party,
+                    args: callArgs,
+                  } satisfies GatedCall,
+                  decisionLedger,
+                )
               : undefined;
           // What the person is shown — and the evidence assembler and every
-          // `checkin.request` listener handed: a frozen copy of their own
-          // (`lib/frozenCopy.ts`). The paused state keeps `bound.args`, the
-          // copy the request is bound to, so nothing that sees the question
-          // can change the call the answer runs.
-          const shown = bound === undefined ? undefined : frozenCopyOf(bound.args);
+          // `checkin.request` listener handed: the call's shared frozen copy
+          // (equal to `bound.args`, which was copied from the same arguments).
+          // The paused state keeps `bound.args`, the copy the request is bound
+          // to, so nothing that sees the question can change the call the
+          // answer runs.
+          const shown = bound === undefined ? undefined : viewOf(callArgs);
           if (!trips) {
             // Predicate said no — fall through to the normal credential+execute
             // path below (this `if` block is the ONLY thing the gate adds).
@@ -5253,15 +5301,23 @@ export function buildToolCallsHandler(
                   )
                 : undefined;
             const intent = scope.llmLatestContent ? String(scope.llmLatestContent) : undefined;
-            const evidence = await deps.checkIn.assembler({
-              tool: { name: tc.name, description: tool.schema.description },
-              args: shown,
-              ...(intent !== undefined && { intent }),
-              iteration,
-              history: historyForEvidence,
-              scorer: deps.checkIn.scorer,
-              ...(env.signal && { signal: env.signal }),
-            });
+            let evidence: CheckInRequest['evidence'];
+            try {
+              evidence = await deps.checkIn.assembler({
+                tool: { name: tc.name, description: tool.schema.description },
+                args: shown,
+                ...(intent !== undefined && { intent }),
+                iteration,
+                history: historyForEvidence,
+                scorer: deps.checkIn.scorer,
+                ...(env.signal && { signal: env.signal }),
+              });
+            } catch (err) {
+              // An assembler that wrote into its frozen arguments fails the
+              // check-in as any throw does — said once, in dev mode.
+              warnFrozenWrite('check-in evidence assembler', err, 'the check-in failed');
+              throw err;
+            }
             const request: CheckInRequest = {
               id: bound.request.id,
               tool: tc.name,
@@ -6110,7 +6166,7 @@ export function buildToolCallsHandler(
           executed,
           toolEnvelope?.status,
         );
-        let resultStr = messageTextOf(tc.id, modelResult);
+        let resultStr = typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
         // The tool's OWN answer, before any framework suffix joins it — what
         // the repeated-call ledger fingerprints. Fingerprinting the decorated
         // string instead would compare our own additions (a step that advanced
@@ -6765,7 +6821,8 @@ export function buildToolCallsHandler(
         );
         const askCapped = capResults(toolName, askPlaced);
         modelResult = askCapped.modelResult;
-        let askResultStr = messageTextOf(toolCallId, modelResult);
+        let askResultStr =
+          typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
         // Step boundary (9.18.0) — a result finalized HERE is as final as one
         // from the batch loop; the answered call advances the pointer before
         // the push, exactly as it would have inline.
@@ -6969,7 +7026,8 @@ export function buildToolCallsHandler(
         );
         const decisionCapped = capResults(toolName, decisionPlaced);
         modelResult = decisionCapped.modelResult;
-        let decisionResultStr = messageTextOf(toolCallId, modelResult);
+        let decisionResultStr =
+          typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
         // Step boundary (9.18.0) — an approved consequential step (a checkIn
         // tool CAN be a step's tool) advances on the resumed dispatch.
         if (deps.stepPlanFor && stepToolRan) {
@@ -7121,7 +7179,8 @@ export function buildToolCallsHandler(
         );
         const consentCapped = capResults(toolName, consentPlaced);
         modelResult = consentCapped.modelResult;
-        let consentResultStr = messageTextOf(toolCallId, modelResult);
+        let consentResultStr =
+          typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
         // Step boundary (9.18.0) — a step tool that waited on 3LO consent
         // advances the moment its resumed dispatch really ran, clean. A
         // ceiling-refused result is not clean (9.20.0): the model holds no
@@ -7281,7 +7340,7 @@ export function buildToolCallsHandler(
       );
       const pauseCapped = capResults(toolName, pausePlaced);
       const modelResult = pauseCapped.modelResult;
-      let resultStr = messageTextOf(toolCallId, modelResult);
+      let resultStr = typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
       // Step boundary (9.18.0) — THE HITL step ("ask a human, then export"):
       // the tool paused mid-step, the person's answer IS its result, and the
       // completed step advances here at the same boundary it would have

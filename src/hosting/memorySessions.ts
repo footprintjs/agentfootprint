@@ -30,6 +30,7 @@
  */
 
 import { listedFormatOf } from './answeredPause.js';
+import { markProcessLocalStore } from './processLocalStore.js';
 import { envelopeOwner } from './envelope.js';
 import { resolveSessionOwner } from './sessionOwnership.js';
 import { DEFAULT_SWEEP_LIMIT } from './types.js';
@@ -79,7 +80,7 @@ export function memorySessions(): SessionLifecycle {
     return count;
   };
 
-  return {
+  const store: SessionLifecycle = {
     hydrate: (sessionId) => Promise.resolve(stored.get(sessionId)),
     // `async` so the ownership refusal below arrives as a REJECTION. This
     // method returns a promise on the happy path, and one that threw
@@ -179,4 +180,8 @@ export function memorySessions(): SessionLifecycle {
       },
     }),
   };
+  // Kept in this process's memory: no other process can have answered a
+  // pause it holds (`processLocalStore.ts`).
+  markProcessLocalStore(store);
+  return store;
 }

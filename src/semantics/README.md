@@ -235,9 +235,27 @@ names, so neither may say what does not exist or that the input is wrong. In
 a registered study, a refusal that said "a wrong identifier, not missing data"
 led models to tell users the thing did not exist. `overclaim.ts` checks a
 catalog's samples for that: `refusal-asserts-absence` over the new `refusals`
-samples (what a tool throws or returns when it refuses a call),
-`absence-asserts-wrongness` over absences, and `authoritative-names` for every
-`among.authoritative`. The laws:
+samples (what a tool throws or returns when it refuses a call, or a described
+sample `{ text, argument?, value? }`), `absence-asserts-wrongness` over
+absences, and `authoritative-names` for every `among.authoritative`. The laws:
+
+- **Only a sentence about what was looked up.** A rule fires on a sentence that
+  names the looked-up argument or its value — declared on the sample, or an
+  absence's `looked_for` and facet argument; with neither, a quoted span stands
+  for the value.
+- **The exemptions cover wrongness only.** A FORMAT, RANGE, PERMISSION or
+  TRANSPORT sentence exempts a WRONGNESS phrase ("array_id 'PS-ARRAY-99' is
+  not a valid identifier format"). A NON-EXISTENCE phrase that names the value
+  always fires: "No array matches 'X' (expected one of …)", "'X' is not in
+  this tenant's token scope".
+- **Recall is not complete:**
+  - a sentence that names neither the argument nor the value (and quotes
+    nothing) is not judged;
+  - a wrongness phrase inside an exempt kind of sentence slips;
+  - anything outside the closed lists slips.
+
+  The accepted false positive: a permission sentence naming the value with a
+  non-existence phrase ("You have no permission to read PS-ARRAY-99") fires.
 
 - **Warnings until a later major, and only for the new fields.** A sample
   that uses neither `refusals` nor `among` gets no new finding, so no
@@ -251,6 +269,6 @@ samples (what a tool throws or returns when it refuses a call),
   after NFC, case and apostrophe folding. A phrasing they miss is a missed
   finding, never a pass.
 - **The library's own refusal sentences are pinned** to carry no absence, no
-  `known_names` and no non-existence claim beside the value asked for
+  non-existence claim beside the value asked for
   (`test/semantics/refusal-sentences.test.ts`).
 

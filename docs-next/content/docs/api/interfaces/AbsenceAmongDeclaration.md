@@ -4,7 +4,7 @@ title: AbsenceAmongDeclaration
 
 # Interface: AbsenceAmongDeclaration
 
-Defined in: [src/semantics/coverage/types.ts:296](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L296)
+Defined in: [src/semantics/coverage/types.ts:302](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L302)
 
 `absent()` given an [AmongDeclaration](/docs/api/interfaces/AmongDeclaration): `checked` becomes optional (the
 mint composes the names facet first) and `provenance` is refused — `among`
@@ -20,7 +20,7 @@ composes it from its own `source` and `measuredAt`.
 
 > `readonly` **among**: [`AmongDeclaration`](/docs/api/interfaces/AmongDeclaration)
 
-Defined in: [src/semantics/coverage/types.ts:299](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L299)
+Defined in: [src/semantics/coverage/types.ts:305](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L305)
 
 The list the missed name was looked up in.
 
@@ -44,7 +44,7 @@ Ground no search by this tool can reach. Each needs a `why`.
 
 > `readonly` `optional` **checked?**: readonly [`CoverageInput`](/docs/api/type-aliases/CoverageInput)[]
 
-Defined in: [src/semantics/coverage/types.ts:301](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L301)
+Defined in: [src/semantics/coverage/types.ts:307](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L307)
 
 Further ground the search covered, after the composed names facet.
 

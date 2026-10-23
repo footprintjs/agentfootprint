@@ -284,23 +284,17 @@ const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_380_000, records: 2_000 };
 // viewer's eight generated API pages. EXPORT=true measures 225.06 MB across
 // 5,689 files, duplicate RSC pairs 0. The total allowance is 226 MB; page,
 // runtime JS, search, file-count and duplicate budgets stay fixed.
-// RAISED 2026-10-23, bytes only, for absent({ among }) and the overclaim
-// gate (PR #198): one section each on the tools, middleware and
-// semantic-results pages and three generated API pages (AmongDeclaration,
-// AbsenceAmongDeclaration, AllowOptions). CI measured 226.57 MB across 5,692
-// files, duplicate RSC pairs 0, on that branch alone.
-// RAISED 2026-10-23, bytes only, for #199 (`Tool.search`), which carries #198
-// merged in: its three new public names (ToolSearch, ComposedCoverage,
-// isComposedCoverage — trimmed from ten) and one tools-page section. CI with
-// EXPORT=true: main 225.92 MB across 5,674 files, 0.08 MB under the old 226 MB
-// ceiling; #199 alone 226.75 MB across 5,692 files; #199 with #198 227.52 MB
-// across 5,710 files, duplicate RSC pairs 0 (a clean local EXPORT=true build
-// reads 224.88 MB, its API pages lacking the source links CI writes).
-// Owner-approved raise under the 2026-09-27 ruling, for both PRs; docs-site
-// cleanup planned. ~2% over the CI measurement, the rule every raise here
-// follows. Files (5,710 of 8,270), deferred demo (348.9 KB of 492 KB gzip), page,
-// runtime JS and duplicate budgets hold unchanged; search holds at its ceiling
-// (2.38 of 2.38 MB gzip), so the next docs page will need its own raise there.
+// RAISED 2026-10-23, bytes only, for #198 (absent({ among }) and the overclaim
+// gate: one section each on the tools, middleware and semantic-results pages,
+// three generated API pages) and #199 (`Tool.search`: three new public names —
+// ToolSearch, ComposedCoverage, isComposedCoverage, trimmed from ten — and one
+// tools-page section). CI with EXPORT=true: main before both 225.92 MB across
+// 5,674 files; #198 alone 226.57 MB across 5,692 files; #199 with #198 227.52 MB
+// across 5,710 files, duplicate RSC pairs 0. Owner-approved raise under the
+// 2026-09-27 ruling; docs-site cleanup planned. ~2% over the combined CI
+// measurement, the rule every raise here follows: 232.1 MB. Files, deferred
+// demo, page, runtime JS and duplicate budgets hold unchanged; search gzip holds
+// at its ceiling, so the next docs page will need its own raise there.
 const OUTPUT_LIMITS = { bytes: 232_100_000, files: 8_270, duplicateRscBytes: 0 };
 // Raised for 9.61.0: 394.1 KB → 400.3 KB. The skill-graph demo imports
 // `defineTool` from 'agentfootprint', so the library's MAIN ENTRY and its

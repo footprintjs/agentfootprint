@@ -4,8 +4,8 @@ the set was non-empty before the filter), `saidByPerson.ts` (which `role:'user'`
 turn a PERSON wrote), `iterationBudget.ts` (how many actions a turn has left —
 the number a model is told), `toolBytes.ts` (where a tool's OWN words end in a
 result message the library annotated), `normalize.ts` (one spelling per value
-— the evidence gate, the inputs layer and the `absent({ among })` mint compare
-by it). All five live here rather than beside their first caller so that
+— the evidence gate and the inputs layer compare by it, and a reader in any
+layer may). All five live here rather than beside their first caller so that
 readers in folders that cannot import each other cannot answer the same
 question differently.
 Support: `canonicalJson.ts`, `fnv1a.ts`, `lazyRequire.ts`, `libraryVersion.ts`,
@@ -170,7 +170,7 @@ each regex's worst case (`test/helpers/workCount.ts`, never a timer).
   `linkedController`, `armDeadline`.
 - `normalize.ts` — `normalizeToken`, `tokenize`, `canonicalForm`, `lookupForms`:
   one spelling per value, on both sides of every comparison. Moved down from
-  `tools/` so the coverage mint (L1) ranks names in the gate's spelling.
+  `tools/` so a layer below the tools can share the gate's spelling.
 - `linearText.ts` — `trimLeading` / `trimTrailing` / `trimBoth` over a
   `CharTest` (`isSlash`, `isHyphen`, `isRegExpWhitespace`, `anyOf`, `either`):
   the regex's answer in one pass.
