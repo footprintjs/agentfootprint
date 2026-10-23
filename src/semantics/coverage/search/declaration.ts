@@ -174,6 +174,46 @@ export function assertToolSearch(
   }
   checkGaps(search.gaps, roles, fixedNames, refuse);
   checkLimits(search.limits, refuse);
+  // Every text that can reach a statement, judged by ONE rule, as the text
+  // that lands there (a fixed qualifier as `name: value`) — no per-field drift.
+  for (const [field, text] of statementTextsOf(search)) checkStatementText(text, field, refuse);
+}
+
+/**
+ * EVERY declaration text that can reach a statement the library writes, as it
+ * lands there: the source's and the subject's `what`; each fixed qualifier and
+ * each declared default as `name: value` (one per value of a list); each
+ * classified argument's name (a sent value is the call's, quoted by the
+ * writer, never declaration text); each gap's `what` and `why`. A new field
+ * that reaches a statement joins THIS list, so it meets the one rule.
+ * Assumes a declaration whose shape `assertToolSearch` already accepted.
+ */
+export function statementTextsOf(search: ToolSearch): ReadonlyArray<readonly [string, string]> {
+  const out: [string, string][] = [
+    ['search.source.what', search.source.what],
+    ['search.subject.what', search.subject.what],
+  ];
+  (search.fixed ?? []).forEach((q, i) => {
+    out.push([`search.fixed[${i}]`, `${q.name}: ${String(q.value)}`]);
+  });
+  search.arguments.forEach((a, i) => {
+    if (a.role === 'inert') return;
+    const at = `search.arguments[${i}]`;
+    const omitted = a.whenOmitted;
+    if (omitted === undefined || isAnyValue(omitted)) {
+      out.push([at, isAnyValue(omitted) ? `${a.name}: any` : a.name]);
+      return;
+    }
+    const values: readonly SearchScalar[] = Array.isArray(omitted)
+      ? omitted
+      : [omitted as SearchScalar];
+    for (const v of values) out.push([`${at}.whenOmitted`, `${a.name}: ${String(v)}`]);
+  });
+  (search.gaps ?? []).forEach((g, i) => {
+    out.push([`search.gaps[${i}].what`, g.what]);
+    out.push([`search.gaps[${i}].why`, g.why]);
+  });
+  return out;
 }
 
 type Refuse = (field: string, message: string, code?: string) => never;
@@ -183,6 +223,12 @@ function refuseUnknown(value: Plain, known: readonly string[], field: string, re
   if (unknown !== undefined) {
     refuse(field, `has an unknown key '${unknown}' — the keys are ${known.join(', ')}.`);
   }
+}
+
+/** A non-empty string — its shape is the statement rule's (`statementTextsOf`). */
+function checkPresent(value: unknown, field: string, refuse: Refuse): string {
+  if (!isName(value)) return refuse(field, 'must be a non-empty string.');
+  return value;
 }
 
 /** One plain line, non-empty. */
@@ -224,7 +270,7 @@ function checkWords(value: unknown, field: string, refuse: Refuse): void {
       "must be { what, said } — e.g. { what: 'the incident store', said: ['the incident store'] }.",
     );
   refuseUnknown(value as Plain, WORDS_KEYS, field, refuse);
-  checkStatementText((value as Plain).what, `${field}.what`, refuse);
+  checkPresent((value as Plain).what, `${field}.what`, refuse);
   checkSaid((value as Plain).said, `${field}.said`, refuse);
 }
 
@@ -257,7 +303,6 @@ function checkFixed(fixed: unknown, properties: readonly string[], refuse: Refus
     if (!isSearchScalar(q.value)) {
       refuse(`${at}.value`, 'must be a string, a finite number or a boolean.');
     }
-    if (typeof q.value === 'string') checkStatementText(q.value, `${at}.value`, refuse);
     checkSaid(q.said, `${at}.said`, refuse, 'fixed-without-said');
   });
   return names;
@@ -420,7 +465,7 @@ function checkGaps(
     if (!isPlain(raw)) refuse(at, 'must be { what, why, bears }.');
     const gap = raw as Plain;
     refuseUnknown(gap, GAP_KEYS, at, refuse);
-    checkStatementText(gap.what, `${at}.what`, refuse);
+    checkPresent(gap.what, `${at}.what`, refuse);
     if (!isName(gap.why) || gap.bears === undefined) {
       refuse(
         at,
@@ -429,7 +474,6 @@ function checkGaps(
         'gaps-without-bears',
       );
     }
-    checkStatementText(gap.why, `${at}.why`, refuse);
     checkBears(gap.bears, `${at}.bears`, roles, fixedNames, refuse);
   });
 }

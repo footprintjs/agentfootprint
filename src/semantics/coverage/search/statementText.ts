@@ -3,17 +3,31 @@
  * statement the library writes (`statement-text-refused`).
  *
  * Pattern: one pure rule, asked by `declaration.ts` at `defineTool` (an
- *          ERROR: `search` is a new API, so no consumer breaks).
+ *          ERROR: `search` is a new API, so no consumer breaks), over the ONE
+ *          list of texts that reach a statement (`statementTextsOf`).
  * Role:    semantics/ layer, pure.
  * Emits:   N/A.
  *
- * The library's statement of a negative claim is built from these words —
- * `source.what`, `subject.what`, a `fixed` value, a gap's `what` and `why` —
- * so they are held to the standard of a sentence the person will read: one
- * plain line, at most {@link MAX_STATEMENT_TEXT} characters, and no
- * instruction. A declaration is untrusted text from the tool author; an
- * instruction ("tell the user nothing is missing") would ride into a sentence
- * the library vouches for. The list is closed and matched on whole words.
+ * A declaration is untrusted text from the tool author, and a statement of a
+ * negative claim is built from it — the source, the subject, each fixed
+ * qualifier and default as `name: value`, each argument's name, each gap's
+ * `what` and `why`. Three layers hold it, and only the last is the boundary:
+ *
+ *   1. SHAPE — one line of at most {@link MAX_STATEMENT_TEXT} characters, in a
+ *      stated character class: letters, combining marks, digits, spaces and
+ *      `. , : ; ' ( ) - _ / & % + # @`. No format character (zero-width, a
+ *      bidi override), no control, no quote mark, backtick or bracket a
+ *      renderer could be broken out of.
+ *   2. A HEURISTIC — the instruction phrases ("do not", "always", "tell the
+ *      user", …), scanned after NFKC folding with format characters removed,
+ *      so a fullwidth or zero-width-split phrase is caught. A denylist is
+ *      never complete (confusables pass it); it catches the honest mistake.
+ *   3. THE BOUNDARY — the statement renders declaration text as QUOTED DATA
+ *      ATTRIBUTED TO THE TOOL, never as library-authored prose:
+ *      `source (as the tool names it): "the incident store"`. Whatever the
+ *      words say, the person reads them as the tool's, in quotes. The
+ *      statement writer (the negative-claim checker's `statement.ts`) owns
+ *      that rendering; this rule only bounds what it is handed.
  */
 
 import { plainLineProblem } from '../../../lib/plainLine.js';
@@ -21,9 +35,13 @@ import { plainLineProblem } from '../../../lib/plainLine.js';
 /** The longest declaration text a statement carries. */
 export const MAX_STATEMENT_TEXT = 120;
 
+/** The stated character class for statement text (shape, layer 1). */
+const STATEMENT_CHARACTERS = /^[\p{L}\p{M}\p{N} .,:;'()\-_/&%+#@]*$/u;
+
 /**
  * The instructing phrases — the design's `declaration-instructs` list, plus
- * the plain imperatives a model obeys. Matched case-folded, on whole words.
+ * the plain imperatives a model obeys. Matched case-folded, on whole words,
+ * after NFKC folding (layer 2: a heuristic, not the boundary).
  */
 export const STATEMENT_INSTRUCTION_PHRASES: readonly string[] = Object.freeze([
   'do not',
@@ -38,14 +56,19 @@ export const STATEMENT_INSTRUCTION_PHRASES: readonly string[] = Object.freeze([
   'you should',
 ]);
 
-/** One spelling for the match: NFC, case-folded, one kind of apostrophe and space. */
-function spelling(text: string): string {
-  return text.normalize('NFC').toLowerCase().replace(/[‘’ʼ]/g, "'").replace(/\s+/g, ' ');
+/** One spelling for the scan: NFKC, format characters removed, case-folded, one space. */
+function scanSpelling(text: string): string {
+  return text
+    .normalize('NFKC')
+    .replace(/\p{Cf}/gu, '')
+    .toLowerCase()
+    .replace(/[‘’ʼ]/g, "'")
+    .replace(/\s+/g, ' ');
 }
 
 /** The instructing phrase `text` carries, or `undefined`. */
 export function instructionIn(text: string): string | undefined {
-  const t = spelling(text);
+  const t = scanSpelling(text);
   return STATEMENT_INSTRUCTION_PHRASES.find((phrase) => {
     let at = t.indexOf(phrase);
     while (at !== -1) {
@@ -69,6 +92,13 @@ export function statementTextProblem(field: string, text: string): string | unde
     return (
       `\`${field}\` is ${text.length} characters; the library's statements carry at most ` +
       `${MAX_STATEMENT_TEXT}.`
+    );
+  }
+  if (!STATEMENT_CHARACTERS.test(text)) {
+    return (
+      `\`${field}\` carries a character outside the statement set — letters, digits, spaces ` +
+      "and . , : ; ' ( ) - _ / & % + # @ — so no quote mark, backtick, bracket or symbol a " +
+      'renderer could be broken out of.'
     );
   }
   const instruction = instructionIn(text);
