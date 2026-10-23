@@ -118,6 +118,9 @@ The gate judges **sample results** (what your mock tools return — a build must
 | marker-bearing envelope with faults: `series-without-grain`, `data-without-provenance`, `counter-aggregation-unstated`, `malformed-semantics` | error |
 | `'inventory'` with `facts` but no `render` hint | warning |
 | a classed tool with zero sample results | warning |
+| `refusal-asserts-absence` — a refusal sample carries an absence, `known_names`, or a sentence saying what does not exist or that the input is wrong | warning (error under `--strict` or `--rules=overclaim`) |
+| `absence-asserts-wrongness` — an absence's words call the input wrong ("wrong identifier", "not a valid", "no such") | warning (error under `--strict` or `--rules=overclaim`) |
+| `authoritative-names` — an absence declared its names list authoritative (`among.authoritative`), listed for review | warning |
 
 Severity follows provability: only what the declarations prove wrong errors. Every finding names the **tool** and the **field**, and a missing coverage tells the author to return `describedResult({ …, coverage })`, `coverage(result, …)` or `absent({ … })`.
 
@@ -130,6 +133,10 @@ Wire it beside your other gates (the `check:tools` convention) — dump `[{ name
   }
 }
 ```
+
+**The overclaim rules** check a declaration like a claim: a refused call read nothing, and an absence read only what its `checked` names, so neither may say what does not exist, or that the input is wrong. Give the catalog what your tool says when it refuses a call — `refusals: ["array_id must start with 'PS-'"]`, the message it throws or the value it returns — beside its `results`. The rules warn, and only for samples that use the new fields (a `refusals` entry, an absence minted with `among`), so a catalog that uses neither sees no new finding. `--strict` reports them as errors; `--rules=overclaim` (in process, `checkSemantics(entries, { rules: ['overclaim'] })`) makes them errors and judges every sample — any absence, and any result whose `status` says it read nothing (`invalid`, `denied`, `failure`). The phrase lists are small, closed and English: a phrasing they miss is a missed finding, not a pass. The options are typed `CheckSemanticsOptions` (`strict`, `rules`), the opt-in set names `SemanticsRuleSet`, and the three codes `OverclaimCode`.
+
+<CodeFile path="examples/features/107-absent-among.ts" region="overclaim-gate" title="examples/features/107-absent-among.ts (region: overclaim-gate)" />
 
 Exit codes: `0` ok, `1` findings failed the gate (`--strict` gates warnings too), `2` input error. The same core is callable in-process:
 

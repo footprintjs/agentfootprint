@@ -1,6 +1,6 @@
 **Mixed** — the caveats that make a tool's numbers honest.
 Map: `types.ts` (the declared vocabulary), `envelope.ts` (mints and recognises
-it), plus the build-time gate `check.ts` / `format.ts` / `cli.ts`.
+it), plus the build-time gate `check.ts` / `overclaim.ts` / `format.ts` / `cli.ts`.
 Lens: `semanticsForModel()` in `envelope.ts` is the model's compact projection
 of the envelope, and `composeNotCovered` writes the absence prose — a served
 view that must not overclaim coverage.
@@ -32,6 +32,7 @@ forgot them.
 | `described.ts` | `describedResult()` — the camelCase door: it says how its author spells the declaration and respells `grain`/`provenance`/`render` to the wire; it judges nothing itself |
 | `check.ts` | `checkSemantics(entries)` — the gate core over sample results; severity follows provability (the skillGraph check-up law) |
 | `projection.ts` | bounded metadata preservation shared by `withDatasetArtifacts` and optional paired gate fixtures; no row scan or fact validation |
+| `overclaim.ts` | the overclaim rule pack the gate asks: a refusal or an absence never asserts more than was read (`refusal-asserts-absence`, `absence-asserts-wrongness`, `authoritative-names`); two closed, versioned English phrase lists |
 | `format.ts` | terminal rendering; every finding names its tool and its field |
 | `cli.ts` | the humble-shell CLI core behind `bin/agentfootprint-check-semantics.mjs` (exit codes 0/1/2, the tool-lint convention) |
 
@@ -226,3 +227,30 @@ coverage and ordinary success samples from the actual adapter. Capture the
 `before` fixture before executing a mutating adapter rather than keeping two
 aliases to the same object. `requestInput` is an exception-based pause and travels
 through the wrapper unchanged, before any result projection takes place.
+
+## A declaration is a claim — the overclaim rules
+
+A refused call read nothing, and an absence read only what its `checked`
+names, so neither may say what does not exist or that the input is wrong. In
+a registered study, a refusal that said "a wrong identifier, not missing data"
+led models to tell users the thing did not exist. `overclaim.ts` checks a
+catalog's samples for that: `refusal-asserts-absence` over the new `refusals`
+samples (what a tool throws or returns when it refuses a call),
+`absence-asserts-wrongness` over absences, and `authoritative-names` for every
+`among.authoritative`. The laws:
+
+- **Warnings until a later major, and only for the new fields.** A sample
+  that uses neither `refusals` nor `among` gets no new finding, so no
+  consumer's CI breaks on upgrade.
+- **`strict: true` (`--strict`) makes the first two errors; `rules:
+  ['overclaim']` (`--rules=overclaim`) makes them errors over every sample** —
+  any absence, and any effects envelope whose status says it read nothing
+  (`invalid`, `denied`, `failure`). `authoritative-names` is a review item and
+  stays a warning.
+- **Closed, versioned phrase lists** (`OVERCLAIM_PHRASES_VERSION`), matched
+  after NFC, case and apostrophe folding. A phrasing they miss is a missed
+  finding, never a pass.
+- **The library's own refusal sentences are pinned** to carry no absence, no
+  `known_names` and no non-existence claim beside the value asked for
+  (`test/semantics/refusal-sentences.test.ts`).
+

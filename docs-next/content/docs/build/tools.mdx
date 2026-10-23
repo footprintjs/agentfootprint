@@ -760,6 +760,78 @@ is read, never repaired — a bad `short` or `kind` is dropped with one dev-mode
 warning per tool per process, which a Python author never sees, so check both
 where you build the envelope.
 
+### A name that resolves to nothing — `among`
+
+A lookup that checks a name against a known list (an inventory export, a share
+table, a set of cluster names) and finds nothing has searched ONE list. That is
+all its miss can say. In a registered study, a lookup that refused an unknown
+name with "No array matches 'X'. Known arrays: … a wrong identifier, not
+missing data" made models tell users that X did not exist at all — when the
+tool had only failed to find X in one export.
+
+So declare the list instead of wording the miss. `among` names the list, and
+the library composes the rest:
+
+<CodeFile path="examples/features/107-absent-among.ts" region="absent-among" title="examples/features/107-absent-among.ts (region: absent-among)" />
+
+What the absence then carries:
+
+- **`checked`** starts with the names facet the tool searched —
+  `{ what: 'the 25 array_id names listed in the PowerStore inventory export',
+  facet: 'names', argument, count, source, from: 'result' }`. Its words come
+  from your declaration, never from the value asked for.
+- **`not_checked`** starts with a gap you cannot remove —
+  `{ what: 'names outside the PowerStore inventory export', kind: 'scope',
+  relevance: 'bears', bears: 'source' }`. Your own `notChecked` and
+  `cannotCover` entries follow it. The only opt-out is
+  `among.authoritative: { why }`, for a list that really is every name there
+  is; `check:semantics` lists every use of it for review.
+- **`provenance`** is composed from `source` and `measuredAt` (so `provenance`
+  beside `among` is refused).
+- **`known_names`** — what the model may know of the list: always the count,
+  and the 20 names nearest the value asked for (in the evidence gate's
+  spelling, nearest first) only with `visible: 'caller'`. Say `'caller'` only
+  when the tool read the list under the caller's own identity; there is no
+  default, because a list shown by default would show one person's names to
+  another.
+
+The laws, each pinned by a test:
+
+- **The names never ride an event field.** `known_names` reaches the model's
+  conversation and nothing else of its own: `stream.tool_end` loses it (before
+  `maxToolResultChars` caps the event's copy, so a truncated head cannot carry
+  it), and `tools.absent` and `sharedState.coverageDeclared` never carry it.
+  The conversation itself — the history `iteration_end` reports, the messages
+  slot's `context.injected`, a narrative entry's `rawValue` — is what the
+  model read, and holds them. A redaction policy covers it as it covers every
+  message.
+- **Untrusted names are filtered and capped.** The names are the tool's data
+  and may hold injection text or another person's names: a name outside one
+  plain printable line (no control, separator, invisible format, surrogate or
+  private-use character) or over 128 characters is dropped and counted
+  (`known_names.dropped`), and at most 20 are shown.
+- **The cost is bounded.** A looked-for value over 128 characters, or a list
+  over 10,000 names (`MAX_NAMES_RANKED`), ranks nothing — the count is served
+  alone.
+- **The count must agree with the names.** When `names` is given its length
+  must equal `count`, so the names shown can never outnumber it; anything else
+  is refused (`names-count-mismatch`).
+- **The value asked for stays off the evidence**, as `looked_for` always has:
+  the facet, the gap and the names ground an answer; the request does not.
+- **A well-formed unknown value is an absence, never a refusal.** A value your
+  `inputSchema` refuses (a number where a string belongs, a `pattern` it does
+  not match) is still refused before the call runs; a value that passes the
+  schema reaches the tool, and a miss comes back as this absence.
+- **Without `among`, nothing changes** — `absent()`, the events and the rows
+  are the bytes they always were.
+
+**The surface, named.** `absent()` takes an `AbsenceAmongDeclaration` — the
+usual declaration with `among: AmongDeclaration` and `checked` optional. The
+composed items are typed `NamesFacetItem` (the `checked` facet) and
+`SourceGapItem` (the gap); the model's block is `KnownNames`. The limits are
+exported as data: `KNOWN_NAMES_SHOWN` (20 names shown), `MAX_NAME_CHARS` (128
+characters) and `MAX_NAMES_RANKED` (10,000 names ranked).
+
 ## What a clean result does not rule out — `coverage()`
 
 "Everything looks fine" arrives with no way to tell whether *fine* means

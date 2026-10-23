@@ -20,12 +20,7 @@ import {
   classifyToken,
   extractCandidates,
 } from '../../../src/core/agent/evidence/extract.js';
-import {
-  countDigits,
-  lookupForms,
-  normalizeToken,
-  tokenize,
-} from '../../../src/lib/normalize.js';
+import { countDigits, lookupForms, normalizeToken, tokenize } from '../../../src/lib/normalize.js';
 import {
   evidenceFromHistory,
   exemptFromRun,
