@@ -204,8 +204,35 @@ function namesWord(haystack: string, needle: string): boolean {
   );
 }
 
-/** A span in quotes — how a message usually echoes the value it was given. */
-const QUOTED = /'[^']+'|"[^"]+"|`[^`]+`|\u2018[^\u2019]+\u2019|\u201C[^\u201D]+\u201D/;
+/** The quote pairs a message echoes a value in: straight, back and curly quotes. */
+const QUOTE_PAIRS: readonly (readonly [string, string])[] = [
+  ["'", "'"],
+  ['"', '"'],
+  ['`', '`'],
+  [String.fromCodePoint(0x2018), String.fromCodePoint(0x2019)],
+  [String.fromCodePoint(0x201c), String.fromCodePoint(0x201d)],
+];
+
+/**
+ * True when `text` holds a non-empty span in quotes — how a message usually
+ * echoes the value it was given. A scan, never a backtracking pattern: the
+ * text is a tool's, and a run of opening quotes with no closing one must cost
+ * linear time (CodeQL's polynomial-regex finding on the first cut).
+ */
+function hasQuotedSpan(text: string): boolean {
+  for (const [open, close] of QUOTE_PAIRS) {
+    let at = text.indexOf(open);
+    while (at !== -1) {
+      const end = text.indexOf(close, at + 1);
+      if (end === -1) break;
+      if (end > at + 1) return true;
+      // An empty pair: with one character for both ends, its close may open
+      // the next span; with two, look past it.
+      at = open === close ? end : text.indexOf(open, end + 1);
+    }
+  }
+  return false;
+}
 
 /**
  * True when `sentence` names what was looked up: the declared argument or
@@ -215,7 +242,7 @@ function namesTheLookup(sentence: string, subject: LookupSubject): boolean {
   const declared = [subject.argument, subject.value].filter(
     (part): part is string => typeof part === 'string' && part.trim() !== '',
   );
-  if (declared.length === 0) return QUOTED.test(sentence);
+  if (declared.length === 0) return hasQuotedSpan(sentence);
   return declared.some((part) => namesWord(sentence, part));
 }
 

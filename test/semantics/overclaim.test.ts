@@ -30,6 +30,7 @@ import {
   type SemanticsFinding,
 } from '../../src/semantics/index.js';
 import { nonExistencePhrase, wrongnessPhrase } from '../../src/semantics/overclaim.js';
+import { expectScalesLinearly } from '../helpers/perf.js';
 
 /** The refusal the study recorded, names generalised. */
 const C6_REFUSAL =
@@ -255,6 +256,37 @@ describe('functional — the rules fire only on a sentence about what was looked
       overclaims(checkSemantics([{ name: 'array_detail', results: [quiet] }]).findings),
     ).toEqual([]);
   });
+});
+
+describe('security — reading a refusal costs linear time, whatever it holds', () => {
+  // CodeQL: a quoted-span regex ran in quadratic time on a refusal holding many
+  // opening quotes and no closing one. The scan is linear now.
+  const judge = (n: number) => {
+    const open = String.fromCodePoint(0x2018);
+    const refusal = `No array matches ${open.repeat(n)}`;
+    return () => {
+      checkSemantics([{ name: 'array_detail', results: [], refusals: [refusal] }], {
+        rules: ['overclaim'],
+      });
+    };
+  };
+
+  it('still finds a quoted value after an empty pair', () => {
+    const report = checkSemantics(
+      [{ name: 'array_detail', results: [], refusals: ["''No array matches 'PS-ARRAY-99'."] }],
+      { rules: ['overclaim'] },
+    );
+    expect(overclaims(report.findings).map((f) => f.code)).toEqual(['refusal-asserts-absence']);
+  });
+
+  it('10x the unclosed quotes costs about 10x', async () => {
+    await expectScalesLinearly({
+      small: judge(4_000),
+      large: judge(40_000),
+      scale: 10,
+      why: 'a refusal of unclosed quotes must be judged in linear time',
+    });
+  }, 60_000);
 });
 
 describe('functional — strict and the opt-in rule set make them errors', () => {
