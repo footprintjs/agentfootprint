@@ -146,6 +146,20 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
   ],
 
   // ── model-facing, but composed for ONE request and never re-read ──
+  'src/core/agent/negativeClaims/config.ts': [
+    {
+      kind: 'ephemeral',
+      count: 1,
+      why: 'the typed-citation contract is mounted by AgentBuilder as an always-active system instruction, reassembled for each request; it teaches the declared field and handles, and is never a persistent tool-result claim',
+    },
+  ],
+  'src/core/agent/negativeClaims/recheck.ts': [
+    {
+      kind: 'ephemeral',
+      count: 1,
+      why: 'one citation-correction system frame through evidenceRecoveryPiece in callLLM; the repair budget is spent and tools withheld, and the instruction never enters conversation history or tool evidence',
+    },
+  ],
   'src/tools/artifactDetailTool.ts': [
     {
       kind: 'ephemeral',
@@ -1214,10 +1228,13 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // …and the refusal a person gets for a request a host closed
         // (`closed-by-host`), thrown to the caller of resume(): pause.ts 4 → 5,
         // total 200 → 201, notModelFacing 134 → 135.
-        files: 102,
-        total: 201,
+        // Typed negatives: the always-active citation schema and one-use correction
+        // are system frames, never persistent tool results. Two new files/literals;
+        // the persistent and unrepaired budgets are unchanged.
+        files: 104,
+        total: 203,
         registry: 8,
-        ephemeral: 24,
+        ephemeral: 26,
         unrepaired: 34,
         notModelFacing: 135,
         unrepairedEntries: 14,

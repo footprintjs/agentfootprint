@@ -31,6 +31,7 @@ const dispositions = new Set(['checked-pass', 'checked-fail', 'not-applicable', 
 const AGENT_CHECK_NAMES: ReadonlySet<string> = new Set<AgentCheckName>([
   'claims',
   'names-and-numbers',
+  'negative-claims',
 ]);
 
 function text(value: unknown, max: number): string {
@@ -47,7 +48,7 @@ function readAgentChecks(value: unknown): readonly AgentCheckName[] {
   if (value === undefined) return Object.freeze([]);
   const refuse = (): never => {
     throw new Error(
-      "answerValidation.agentChecks must list 'claims' and/or 'names-and-numbers', each once " +
+      "answerValidation.agentChecks must list 'claims', 'names-and-numbers' and/or 'negative-claims', each once " +
         '(omit it to validate with your checks alone).',
     );
   };

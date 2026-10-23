@@ -12,8 +12,9 @@
  * WHICH "FINDINGS". These are the MODEL'S findings — what it says it stands
  * on, keeps open, ruled out or found to be noise. They are not the Context
  * Integrity rail's (`core/agent/integrityFindings.ts` files `ContextError`s
- * the LIBRARY detected). Nothing here is detected; everything here is
- * declared, and the row says so by carrying the declaring call.
+ * the LIBRARY detected). Library checks also file distinct row kinds beside
+ * declarations: argument/period/answer witnesses, claim verification, and
+ * observe-only negative prose findings. Those never become model standings.
  *
  * VOCABULARY. The word is `standing`. `integrity/disposition/types.ts` owns
  * 'disposition' for the checker's own verdicts (`checked-pass` and friends),
@@ -447,8 +448,16 @@ export interface UnsettledByAbsenceRow {
   readonly turn?: number;
 }
 
+/** Observe-only grammar findings on original model strings. A row never confirms
+ * a fact; the runtime stamps the answer's iteration and conversation turn. */
+export type NegativeProseFinding = import('../../../integrity/negative-claim/types.js').ProseRow & {
+  readonly iteration: number;
+  readonly turn?: number;
+};
+
 export type FindingsRow =
   | import('./refusal.js').ReferenceRefusalRow
+  | NegativeProseFinding
   | BasisRow
   | StandingRow
   | ConflictRow

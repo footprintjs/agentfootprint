@@ -204,6 +204,8 @@ export interface AgentTurnEndPayload {
    * dispatcher carries the agent's `turn_end` but not the `answer.*` domain.
    */
   readonly answerAssessment?: AnswerAssessmentPayload;
+  /** Runtime-composed typed negatives, with verification and delivery kept separate. */
+  readonly answerNegatives?: AnswerNegativesPayload;
   /**
    * The answer was REFUSED — present ONLY then. Under the evidence gate's
    * `'rails'` posture (`.namesAndNumbersFromEvidence()`), an answer stating
@@ -325,6 +327,7 @@ export interface AgentRouteDecidedPayload {
     | 'output-retry'
     | 'step-nudge'
     | 'evidence-recheck'
+    | 'negative-recheck'
     | 'wrap-up';
   readonly rationale?: FixedRouteRationale | (string & Record<never, never>);
 }
@@ -3658,4 +3661,38 @@ export interface IntegrityExternalGroundUsedPayload {
   /** The app's label for where the verified value came from. */
   readonly source: string;
   readonly iteration: number;
+}
+
+/** One library-written negative statement, shared by delivery and its event. */
+export interface DeliveredNegative {
+  readonly kind: 'none' | 'not-found' | 'complete' | 'unknown';
+  /** Original model citation value. Quote only when rendering it as text; not an evidence identity. */
+  readonly about?: string | number;
+  readonly restsOn: readonly string[];
+  readonly statement: string;
+  readonly delivery: 'record-composed';
+  readonly version: string;
+}
+
+/** Served negative statements. Codes and identities are diagnostics; the statement is library-written. */
+export interface AnswerNegativesPayload {
+  readonly field: string;
+  readonly version: string;
+  readonly delivery: 'as-checked' | 'recorded' | 'fallback';
+  readonly claims: readonly DeliveredNegative[];
+  readonly checks: readonly {
+    readonly id: string;
+    readonly path: string;
+    readonly index: number;
+    readonly kind: 'none' | 'not-found' | 'complete' | 'unknown';
+    readonly code: string;
+    readonly disposition: 'checked-fail' | 'not-applicable' | 'unreachable';
+    readonly tools: readonly string[];
+    readonly results: readonly string[];
+  }[];
+  readonly coverage: readonly { readonly tool: string; readonly checked: number }[];
+  readonly actions: readonly {
+    readonly tool: string;
+    readonly outcome: 'ok' | 'error' | 'not-run';
+  }[];
 }

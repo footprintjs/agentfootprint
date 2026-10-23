@@ -1,3 +1,5 @@
+import { createNegativeRuntimeState } from '../negativeClaims/capture.js';
+import type { NegativeCheckpoint } from '../negativeClaims/checkpoint.js';
 import { FINDINGS_LAYOUT, findingsContextBytes } from '../findings/context.js';
 /**
  * seed — initial stage of the agent's chart. Initializes every mutable
@@ -74,9 +76,11 @@ export interface PendingResumeHistory {
    * history's count, and the restored ledger's stamps, are all it has.
    */
   readonly turn?: number;
+  readonly negatives?: NegativeCheckpoint;
 }
 
 export interface SeedStageDeps {
+  readonly negativeClaimsArmed?: boolean;
   /** Resolved `clampIterations(opts.maxIterations ?? 10)`. Frozen at
    *  chart-build time. */
   readonly maxIterations: number;
@@ -753,7 +757,24 @@ function seedFrom(
   // honesty layer is armed the count is raised to what the stored
   // conversation already stamped (`turnNumberFor`): a window strategy trims
   // the stored history, and the count alone repeats.
-  scope.turnNumber = turnNumberFor(history, resume, resumeLedger, deps.honestyLayers !== undefined);
+  scope.turnNumber = turnNumberFor(
+    history,
+    resume,
+    resumeLedger,
+    deps.honestyLayers !== undefined || deps.negativeClaimsArmed === true,
+  );
+  if (deps.negativeClaimsArmed === true) {
+    const prior = resume?.negatives;
+    scope.negativeClaimState = createNegativeRuntimeState(
+      scope.turnNumber,
+      scope.$getValue('runIdentity') as AgentState['runIdentity'],
+      prior?.negativeClaimState,
+      args.identity === undefined && sessionId === undefined && !mounted,
+    );
+    if (prior?.resultIdentities !== undefined) scope.resultIdentities = prior.resultIdentities;
+    if (resume !== undefined && !resume.appendsUserTurn && prior === undefined)
+      scope.negativeClaimState = { ...scope.negativeClaimState, complete: false };
+  }
   // Permissive default — explicit cap will land when PricingTable
   // gets a context-window field. Memory pickByBudget treats anything
   // ≥ minimumTokens as "fits", so this just enables the budget path.

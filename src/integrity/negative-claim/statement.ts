@@ -41,7 +41,7 @@ type DeclaredTool = SearchTool;
 const instantMs = (value: unknown): number | undefined => instantOf(value, 'lenient')?.ms;
 
 /** Bump with any change to a template or to how a value is rendered. */
-export const STATEMENT_VERSION = '2';
+export const STATEMENT_VERSION = '5';
 
 const VALUE_CHARS = 64;
 const GAP_CHARS = 120;
@@ -269,6 +269,23 @@ function identities(call: TurnCall): string[] {
   });
 }
 
+/** Display only unchanged native rows admitted at the final tool-result boundary.
+ * An arbitrary id/key field has no identity contract, so its row is quoted as
+ * data instead of guessing a business identity. Both values and row lists cap. */
+function returnedValues(call: TurnCall): string | undefined {
+  if (call.rowsMayDisplay !== true || !call.rowsRead?.length) return undefined;
+  const column = call.idColumn ?? 'entity';
+  const values = call.rowsRead.slice(0, LIST_ITEMS).map((row) => {
+    const id = Object.hasOwn(row, column) ? row[column] : undefined;
+    return quoteValue(typeof id === 'string' || typeof id === 'number' ? id : row);
+  });
+  const more = Math.max(0, (call.rows ?? call.rowsRead.length) - values.length);
+  return attributed(
+    `returned ${values.join(', ')}${more > 0 ? `, and ${more} more rows` : ''}`,
+    'result',
+  );
+}
+
 /** What the tool declares about a server cap — said only when the declaration is in hand. */
 function serverCapPart(tool: DeclaredTool | undefined): string[] {
   if (tool?.search === undefined) return [];
@@ -284,6 +301,7 @@ function clauseOf(
   kind: NegativeKind,
   read: { readonly call: TurnCall; readonly row: ComposedSearchRow; readonly tool?: DeclaredTool },
   clock: string,
+  recorded = false,
 ): string {
   const { call, row, tool } = read;
   const toolName = quoteValue(row.toolName);
@@ -294,7 +312,17 @@ function clauseOf(
     among && typeof names.count === 'number' && Number.isSafeInteger(names.count)
       ? String(names.count)
       : 'the';
-  const head = among
+  const head = recorded
+    ? call.outcome !== 'ok'
+      ? `${toolName} did not establish a completed read`
+      : call.emptiness === 'declared-absent'
+      ? `${toolName} returned no matching rows`
+      : call.rows !== undefined || call.rowsRead !== undefined
+      ? `${toolName} read ${rowsRead} ${rowsRead === 1 ? 'row' : 'rows'}`
+      : call.emptiness === 'non-empty'
+      ? `${toolName} returned matching rows whose count is undetermined`
+      : `${toolName} returned a result whose row count is undetermined`
+    : among
     ? `${toolName} did not find ${attributed(
         quoteValue(row.lookedFor ?? ''),
         'call',
@@ -304,10 +332,14 @@ function clauseOf(
     : `${toolName} found none`;
   const { window, unchecked } = periodParts(row);
   const parts = scopeParts(row, among);
+  if (recorded && call.emptiness === 'non-empty') {
+    const values = returnedValues(call);
+    if (values !== undefined) parts.push(values);
+  }
   if (window !== undefined) parts.push(window);
   const measured = among ? instantMs(names.measuredAt) : undefined;
   if (measured !== undefined) parts.push(`read ${formatInstant(measured, clock)}`);
-  if (!among && kind === 'complete') {
+  if (!recorded && !among && kind === 'complete') {
     const ids = identities(call);
     if (ids.length > 0) {
       const more = Math.max(0, rowsRead - Math.min(ids.length, LIST_ITEMS));
@@ -341,5 +373,67 @@ export function composeStatement(
 ): NegativeStatement {
   const ordered = [...reads].sort((a, b) => ordinalOf(a.call) - ordinalOf(b.call));
   const clauses = ordered.map((read) => clauseOf(kind, read, clock));
+  return { text: clauses.join('\n'), clauses, version: STATEMENT_VERSION };
+}
+
+/** State only the admitted read and all its limits, without asserting completeness. */
+export function composeRecordedStatement(
+  reads: readonly {
+    readonly call: TurnCall;
+    readonly row: ComposedSearchRow;
+    readonly tool?: DeclaredTool;
+  }[],
+  clock: string,
+  explanation?: {
+    /** Authored by the delivery boundary from the check's code, never model text. */
+    readonly refusal: string;
+    /** Only caller-scoped local observations admitted by the delivery boundary. */
+    readonly contraryReads: readonly {
+      readonly call: TurnCall;
+      readonly row?: ComposedSearchRow;
+      readonly tool?: DeclaredTool;
+    }[];
+  },
+): NegativeStatement {
+  const clauses = explanation === undefined ? [] : [explanation.refusal];
+  const contrary = explanation?.contraryReads ?? [];
+  for (const read of contrary.slice(0, LIST_ITEMS)) {
+    const handle = quoteValue(read.call.row?.handle ?? `r${ordinalOf(read.call)}`);
+    if (read.row !== undefined) {
+      clauses.push(
+        `Contrary recorded evidence (read ${handle}): ${clauseOf(
+          'complete',
+          { ...read, row: read.row },
+          clock,
+          true,
+        )}`,
+      );
+    } else {
+      const count = read.call.rows ?? read.call.rowsRead?.length;
+      const parts = [
+        `${quoteValue(read.call.toolName)} returned ${
+          count === undefined
+            ? 'matching rows with an undetermined count'
+            : `${count} ${count === 1 ? 'row' : 'rows'}`
+        }`,
+        returnedValues(read.call),
+        'coverage not declared for this result',
+      ].filter((part) => part !== undefined);
+      clauses.push(`Contrary recorded evidence (read ${handle}): ${parts.join('; ')}.`);
+    }
+  }
+  if (contrary.length > LIST_ITEMS)
+    clauses.push(
+      `The record contains ${
+        contrary.length - LIST_ITEMS
+      } additional positive reads for this subject.`,
+    );
+  clauses.push(
+    ...[...reads]
+      .sort((a, b) => ordinalOf(a.call) - ordinalOf(b.call))
+      .map((read) => clauseOf('complete', read, clock, true)),
+  );
+  if (explanation === undefined)
+    clauses.push('The requested negative claim is not established by these recorded searches.');
   return { text: clauses.join('\n'), clauses, version: STATEMENT_VERSION };
 }

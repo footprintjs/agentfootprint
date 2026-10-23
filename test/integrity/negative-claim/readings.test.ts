@@ -4,7 +4,7 @@
  *
  * The key is the COMPOSED executed scope of each row — the tool, every filter in effect
  * (`whenOmitted` defaults composed as if sent), the `fixed` qualifiers, host-filled identity
- * filters by reference, a relative window by its spelling within the turn, and the page asked
+ * filters by reference, a relative window by its executed dispatch span, and the page asked
  * for — never
  * the tool name or the model-visible arguments alone.
  *
@@ -61,17 +61,55 @@ describe('the key — the composed executed scope', () => {
     expect(key(incidentCall({ id: 'c1' }))).toBe(key(incidentCall({ id: 'c2', window: '2h' })));
   });
 
-  it('a relative window keys by its SPELLING within the turn: 2h and 120m are two searches', () => {
+  it('different relative spellings of the same executed span have one key', () => {
     const twoHours = incidentCall({ id: 'c1', window: '2h' });
     const minutes = withScope(incidentCall({ id: 'c2', window: '2h' }), (items) =>
       items.map((item) => (item.facet === 'period' ? { ...item, value: '120m' } : item)),
     );
-    expect(key(twoHours)).not.toBe(key(minutes));
+    expect(key(twoHours)).toBe(key(minutes));
   });
 
-  it('the same spelling on two legs of one turn is one search, whatever the clock', () => {
+  it('the checking clock does not reinterpret a recorded dispatch span', () => {
     const call = incidentCall({ id: 'c1' });
     expect(key(call, CLOCK)).toBe(key(call, '2026-10-22T11:00:00Z'));
+  });
+
+  it('the same relative spelling at different dispatch instants names different searches', () => {
+    const early = incidentCall({ id: 'c1', window: '2h', dispatchedAt: CLOCK });
+    const late = incidentCall({ id: 'c2', window: '2h', dispatchedAt: '2026-10-22T14:00:00Z' });
+    expect(key(early)).not.toBe(key(late));
+    expect(scopeRelation(early, late, LIST_INCIDENTS).relation).toBe('other');
+  });
+
+  it('equivalent instant offsets have the same key', () => {
+    const early = incidentCall({ id: 'c1' });
+    const same = withScope(incidentCall({ id: 'c2' }), (items) =>
+      items.map((item) =>
+        item.facet === 'period'
+          ? {
+              ...item,
+              span: { from: '2026-10-22T10:00:00+02:00', to: '2026-10-22T12:00:00.001+02:00' },
+            }
+          : item,
+      ),
+    );
+    expect(key(early)).toBe(key(same));
+    expect(scopeRelation(early, same, LIST_INCIDENTS).relation).toBe('same');
+  });
+
+  it('does not collapse sub-millisecond execution bounds', () => {
+    const first = incidentCall({ id: 'c1' });
+    const later = withScope(incidentCall({ id: 'c2' }), (items) =>
+      items.map((item) =>
+        item.facet === 'period'
+          ? {
+              ...item,
+              span: { from: '2026-10-22T08:00:00.000001Z', to: '2026-10-22T10:00:00.001Z' },
+            }
+          : item,
+      ),
+    );
+    expect(key(first)).not.toBe(key(later));
   });
 
   it('a different filter in effect is another search', () => {

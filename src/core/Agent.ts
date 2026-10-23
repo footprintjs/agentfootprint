@@ -319,6 +319,10 @@ import type {
   WriteProvenanceMode,
 } from './agent/types.js';
 import { buildRouteDeciderStage } from './agent/stages/route.js';
+import { negativeCheckpointOf } from './agent/negativeClaims/checkpoint.js';
+import type { ResolvedNegativeClaims } from './agent/negativeClaims/config.js';
+import { negativeRecheckStage } from './agent/negativeClaims/recheck.js';
+import type { AnswerNegatives } from './agent/negativeClaims/delivery.js';
 import { withAnswerValidation } from './agent/stages/answerValidation.js';
 import { hasOutputMiddleware } from './agent/middleware/messagePhase.js';
 import { withAnswerCoverage } from './agent/stages/answerCoverage.js';
@@ -327,6 +331,7 @@ import {
   AnswerValidationError,
   type AnswerValidationReport,
   type ResolvedAnswerValidation,
+  resolveAnswerValidation,
 } from '../answer-validation/index.js';
 import { buildSeedStage, type PendingResumeHistory } from './agent/stages/seed.js';
 import type { MessageMiddleware, ToolMiddleware } from './agent/middleware/types.js';
@@ -1077,6 +1082,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  rebinding itself to each run id (`core/agent/receipt/receiptDigests.ts`). */
   private readonly receiptDigests: ReceiptDigests = createReceiptDigests();
   private readonly answerValidationConfig?: ResolvedAnswerValidation;
+  private readonly negativeClaimsConfig?: ResolvedNegativeClaims;
+  private readonly applicationAnswerValidation: boolean;
 
   constructor(
     opts: AgentOptions,
@@ -1126,6 +1133,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     claimContract?: readonly import('../integrity/unsupported-claim/check.js').DeclaredClaim[],
     answerValidationConfig?: ResolvedAnswerValidation,
     systemPromptCacheExplicit = false,
+    negativeClaimsConfig?: ResolvedNegativeClaims,
   ) {
     super();
     // Which conversation this instance's self-explain evidence belongs to —
@@ -1136,7 +1144,18 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       runId: this.currentRunContext.runId,
       ...(this.servingConversation?.startsWith('hosted:') === true && { oneShot: true }),
     }));
-    this.answerValidationConfig = answerValidationConfig;
+    this.negativeClaimsConfig = negativeClaimsConfig;
+    this.applicationAnswerValidation = answerValidationConfig !== undefined;
+    this.answerValidationConfig =
+      answerValidationConfig ??
+      (negativeClaimsConfig === undefined
+        ? undefined
+        : resolveAnswerValidation({
+            id: 'negative-claims',
+            version: '1',
+            mode: 'observe',
+            validate: () => ({ checks: [] }),
+          }));
     this.provider = opts.provider;
     this.name = opts.name ?? 'Agent';
     this.id = opts.id ?? 'agent';
@@ -1187,7 +1206,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.evidenceGate =
       evidenceGate !== undefined &&
       evidenceGate.posture !== 'assist' &&
-      answerValidationConfig?.mode === 'enforce'
+      (answerValidationConfig?.mode === 'enforce' || negativeClaimsConfig !== undefined)
         ? { ...evidenceGate, toolsOffAfterRevision: true }
         : evidenceGate;
     this.limitsTravelWithTheAnswerValue = limitsTravelWithTheAnswer === true;
@@ -2254,6 +2273,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           // …and the turn the failing run was on (honesty layers), so the
           // retry is stamped the same turn — one reader, two carriers.
           this.turnNumberOf(this.liveSnapshot()?.sharedState as Partial<AgentState>),
+          undefined,
+          this.negativeClaimsConfig === undefined
+            ? undefined
+            : negativeCheckpointOf(this.liveSnapshot()?.sharedState ?? {}),
         );
         throw new RunCheckpointError(cause, checkpoint);
       }
@@ -2661,6 +2684,15 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // Native guard lands with the new checkpoint protocol, before its runtime
     // opt-in is mounted. Until then no Agent is armed to consume this carrier.
     requireVerificationOnResume(checkpoint.sharedState ?? {}, false);
+    if (this.negativeClaimsConfig !== undefined) {
+      const prior = negativeCheckpointOf(checkpoint.sharedState ?? {});
+      if (prior === undefined)
+        throw new TypeError(
+          'Negative-claims pause checkpoint is missing its private evidence carrier.',
+        );
+    } else if (negativeCheckpointOf(checkpoint.sharedState ?? {}) !== undefined) {
+      throw new TypeError('Resume requires the negative-claims setting used by the paused agent.');
+    }
     // The policy the paused run was covered by, carried in its own state
     // (`runRedaction`) — it covers this leg too, joined with any the caller
     // adds now. Read, or refused, before anything moves (`resumeRedactionOf`).
@@ -3026,6 +3058,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // The turn this history ends on (honesty layers) — absent unless a
       // layer is armed, so every other checkpoint keeps its byte shape.
       ...(turnNumber !== undefined && { turnNumber }),
+      ...(this.negativeClaimsConfig === undefined || state === undefined
+        ? {}
+        : negativeCheckpointOf(state)),
     };
   }
 
@@ -3043,7 +3078,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * writes or sends again — and the library cannot tell one that only reads.
    */
   private revisionWithholdsTools(): boolean {
-    return this.evidenceGate?.toolsOffAfterRevision === true;
+    return (
+      this.negativeClaimsConfig !== undefined || this.evidenceGate?.toolsOffAfterRevision === true
+    );
   }
 
   /** Whether input middleware refused the last run's message — the one reading both doors ask. */
@@ -3153,8 +3190,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * @internal
    */
   private turnNumberOf(state?: Partial<AgentState>): number | undefined {
-    if (state?.honestyLayers === undefined) return undefined;
-    const turn = state.turnNumber;
+    if (state?.honestyLayers === undefined && this.negativeClaimsConfig === undefined)
+      return undefined;
+    const turn = state?.turnNumber;
     return typeof turn === 'number' && Number.isSafeInteger(turn) && turn >= 1 ? turn : undefined;
   }
 
@@ -3203,12 +3241,17 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   private applyContinuation(cp: AgentRunCheckpoint, door: string, appendsUserTurn: boolean): void {
     assertContinuable(cp, this.explicitId, door);
     requireVerificationOnResume(cp, false);
+    if (this.negativeClaimsConfig === undefined && negativeCheckpointOf(cp) !== undefined)
+      throw new TypeError(
+        'Continuation requires the negative-claims setting used by the recording agent.',
+      );
     this.pendingResumeHistory = {
       history: cp.history as readonly LLMMessage[],
       appendsUserTurn,
       // The turn the stored history ends on (honesty layers) — seed continues
       // the turn stamp from it only while a layer is armed.
       ...(cp.turnNumber !== undefined && { turn: cp.turnNumber }),
+      ...(this.negativeClaimsConfig === undefined ? {} : { negatives: negativeCheckpointOf(cp) }),
     };
     // The folded spans beside it. A conversation stored before 8.2 has none,
     // and `undefined` is the right answer there — it means "this conversation
@@ -4373,6 +4416,15 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     return ledger === undefined ? undefined : structuredClone(ledger);
   }
 
+  /** The library-composed negative statements and their recorded limits.
+   * Detached, in-process data for the caller. Record redaction applies to the
+   * snapshots and emitted events, not this caller-owned value. */
+  answerNegatives(): AnswerNegatives | undefined {
+    const value = (this.liveSnapshot()?.sharedState as Partial<AgentState> | undefined)
+      ?.answerNegatives;
+    return value === undefined ? undefined : structuredClone(value);
+  }
+
   /** The last run's answer checks, detached from its execution record.
    * Undefined means no terminal validation ran, never an implicit pass. */
   answerValidation(): AnswerValidationReport | undefined {
@@ -4803,6 +4855,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // The answer check's tool-call ledger — value-conditional, so an agent
       // without `answerValidation` hands seed the deps it always did.
       ...(this.answerValidationConfig !== undefined && { toolCallLedger: true }),
+      ...(this.negativeClaimsConfig !== undefined && { negativeClaimsArmed: true }),
       get consumePendingResumeFindingsLedger() {
         return ledgerRestoreArmed ? consumeResumeLedger : undefined;
       },
@@ -4865,8 +4918,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(this.skillBrains?.escalation !== undefined && { hasEscalation: true }),
       // The evidence gate's one bounded revision (9.35.0) — a per-turn budget,
       // reset here. Only a posture that can revise writes the key.
-      ...(this.evidenceGate !== undefined &&
-        this.evidenceGate.posture !== 'assist' && { hasEvidenceRevision: true }),
+      ...((this.negativeClaimsConfig !== undefined ||
+        (this.evidenceGate !== undefined && this.evidenceGate.posture !== 'assist')) && {
+        hasEvidenceRevision: true,
+      }),
       // Under an enforcing answer validation the tools stay off for a run
       // resumed after its revision was asked (`toolsOffAfterRevision`).
       ...(this.revisionWithholdsTools() && { toolsOffAfterRevision: true as const }),
@@ -5357,10 +5412,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         )
           retainReplayRetirements(this.checkpointTracker, preparation);
       },
-      ...(this.evidenceGate !== undefined &&
-        this.evidenceGate.posture !== 'assist' && {
-          hasEvidenceRecovery: true,
-        }),
+      ...((this.negativeClaimsConfig !== undefined ||
+        (this.evidenceGate !== undefined && this.evidenceGate.posture !== 'assist')) && {
+        hasEvidenceRecovery: true,
+      }),
       // The revision calls no tools under an enforcing answer validation: only
       // then does request assembly read `toolsOffAfterRevision`.
       ...(this.revisionWithholdsTools() && { toolsOffAfterRevision: true as const }),
@@ -5612,6 +5667,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
             this.outputEnforcement?.outputFormat !== undefined,
             // Read only when `agentChecks` lists 'claims' (the agent's own rows).
             this.claimContract,
+            this.negativeClaimsConfig === undefined
+              ? undefined
+              : {
+                  config: this.negativeClaimsConfig,
+                  applicationValidation: this.applicationAnswerValidation,
+                  runId: () => this.currentRunContext.runId,
+                },
           );
     // `.limitsTravelWithTheAnswer()` on a TYPED answer — decided once, here.
     // An output schema makes the answer JSON, and the appended block would
@@ -5732,6 +5794,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(this.answerValidationConfig !== undefined && {
         toolCallLedger: { maxCalls: this.answerValidationConfig.limits.maxToolCalls },
       }),
+      ...(this.negativeClaimsConfig !== undefined && { negativeClaimsArmed: true }),
       // Skill-graph read_skill gate: bound the model's read_skill jumps to the
       // reachable set from the current cursor. Undefined → gate off (back-compat).
       ...(this.skillGraphReachable && {
@@ -6009,6 +6072,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(this.timeOptions !== undefined && { timeWindows: true as const }),
       ...(inputsArmed && this.timeOptions !== undefined && { timeLimits: true as const }),
       ...(this.answerValidationConfig !== undefined && { hasAnswerValidation: true }),
+      ...(this.negativeClaimsConfig !== undefined && {
+        negativeRecheckStage: negativeRecheckStage as (scope: never) => void,
+      }),
       ...(governsOutput && { releaseOutputTokens: true as const }),
       ...(this.evidenceGate?.posture === 'rails' && { evidenceRails: true as const }),
       // The out-of-budget wrap-up branch (9.56.0) — the conditional-mount law

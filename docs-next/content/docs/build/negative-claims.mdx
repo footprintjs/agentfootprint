@@ -1,0 +1,137 @@
+---
+title: Typed negative claims
+description: Deliver library-written statements for none, not-found and complete claims, with the search scope and gaps preserved.
+---
+
+`.negativeClaims()` makes the library write a typed negative statement from the
+searches the answer cites. The model chooses `kind`, `about` and `restsOn`; it does
+not write the scope, gaps or delivered statement.
+
+`NegativeClaimsOptions` configures the field, eligible tools and failure behavior.
+`NegativeClaimCitation` is the model-input shape; `DeliveredNegative` adds the
+library's statement and version. `agent.answerNegatives()` returns the
+`AnswerNegatives` metadata with per-source checked counts, diagnostics and
+dispatched action outcomes; an action outcome does not prove an external effect.
+
+The structured path is **unmeasured**. Typed enforcement is **available, not
+recommended** until its benchmark gates pass. Other fields remain unchecked model
+text. A bounded English grammar observes the model's original strings and files
+findings; it never blocks delivery or verifies prose. `prose`, `strictProse` and
+`enforceProse` options are refused: observation is automatic, enforcement unavailable.
+
+## Declare the search and bind the caller
+
+Use a local tool with a [search declaration](/docs/build/tools#coverage-composed-from-the-call--search).
+The declaration must describe the query the tool actually runs. Fill caller scope
+through `hostFilled` from the host's authenticated identity, rather than asking the
+model to supply it. A local `absent({ among })` result can also support a named miss.
+MCP and ToolProvider declarations cannot establish a typed negative.
+
+<CodeFile
+  path="examples/features/110-negative-claims.ts"
+  region="search"
+  title="A caller-scoped search with an explicit source gap"
+/>
+
+An empty result is different from an unread search: a completed search can find
+zero rows. Missing observations, skipped checks and missing caller scope remain
+unverified. A declaration that misdescribes the backend is outside this check's
+guarantee; declarations and the host's identity are the trusted inputs.
+
+## Give the model a citation field
+
+The field must be a required top-level array. Each entry requires `kind`, `about`
+and `restsOn`. Supply `jsonSchema` explicitly or use a parser that provides
+`toJsonSchema()`; the library does not infer a shape by executing a parser.
+
+<CodeFile
+  path="examples/features/110-negative-claims.ts"
+  region="schema"
+  title="The model supplies citations, without statement text"
+/>
+
+The library serves the short-handle pattern `^r[1-9][0-9]{0,3}$`, limits the field
+to 32 claims and each citation to 16 reads, and closes each entry to extra fields.
+The model receives handles such as `r1` beside admitted results. Provider call IDs
+never select evidence. `about` must match every cited population and each read must
+be within the admitted caller scope.
+
+| Kind        | What the cited reads must establish                                                                                                       |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `none`      | A declared absence within the composed search scope.                                                                                      |
+| `not-found` | A named miss from `absent({ among })`, with the inventory's limits.                                                                       |
+| `complete`  | Completeness for the executed arguments, without an open page, reached cap or partial result. The statement describes rows actually read. |
+
+## Deliver the statement and its marker together
+
+<CodeFile
+  path="examples/features/110-negative-claims.ts"
+  region="configure"
+  title="Deliver the library statement"
+/>
+
+An established entry gains `statement`, `delivery: 'record-composed'` and `version`.
+Display that marker beside the sentence. The delivered `about` keeps the original
+model string or number, so app comparisons still work. Only the library sentence
+quotes and sanitizes values; `about` is not an evidence identity. The answer-level delivery is
+`as-checked` only when its sole field consists of established library statements;
+any other field makes it `recorded`. That marker never verifies surrounding model
+text. The model-input parser describes only
+citations; `runTyped()` returns the enriched delivered object without running that
+parser over it again.
+
+Every execution mode delivers the library statement, including when an app's
+`.answerValidation()` uses observe mode. The final answer is buffered so a draft
+cannot escape through streaming. The person, `turn_end.answerNegatives`, conversation
+history and memory receive the same statements and gaps.
+
+`unestablished` chooses the failure behavior:
+
+| Setting              | Delivery                                                                                                                         |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `withhold` (default) | Withhold the whole answer; the caller receives `AnswerValidationError`, HTTP hosts return 422 and AG-UI reports `RUN_ERROR`.     |
+| `state-searched`     | Replace the entry with what the admitted record says was searched and any admitted contrary result. The failed or unverified standing stays failed or unverified. |
+
+A contrary read is named by its result handle and shows bounded, quoted native
+row values when they survived middleware, placement and truncation unchanged.
+Otherwise its count is reported without re-exposing hidden values. A positive
+result without a coverage declaration is explicitly labelled that way.
+
+A bad citation gets one correction request naming valid handles, with no tools
+available. If `.outputSchema()` enables retries, schema correction shares that
+same one-request budget with citation and evidence correction, even when `retries`
+is greater than one. Rejected drafts and correction instructions stay out of
+conversation history and memory. A correction cannot repeat a write to satisfy
+the checker. A later dispatched
+call that may write invalidates an earlier read even if the call fails; a local
+`effects: 'read'` declaration can identify a read-only tool. Remote read-only hints
+cannot. Reads retained through a pause remain eligible within the same turn;
+earlier-turn reads are stale and their refusal identifies the earlier turn and recorded date.
+
+This does not verify the rest of an answer. An empty citation array makes no typed
+claim. Every original free-form model string, including nested fields and `about`, is observed
+before the library writes its statements. Detected negatives file `negative-claim`
+findings; unread units file `negative-claim-note` findings. Both make the answer
+fold not-sure, without changing delivery. The grammar has known false positives and
+misses; prose remains unchecked even when it produces no finding.
+
+The whole answer is limited to 65,536 UTF-16 code units and 256 string values for
+observation, and 32 detected claims or unjudged units for observation. Exceeding a budget produces one
+whole-answer `input-limit` or `too-many-claims` note without checking evidence.
+The model is instructed to state negatives only through cited searches. These
+instructions do not guarantee compliance.
+
+The global answer-account `templateVersion` changes from 11 to 12, including for
+agents without `.negativeClaims()`. Consumers must tolerate the new version and
+`negative-prose-unverified` assessment reason.
+
+ The checker
+compares other observations only within its declared subject and scope rules.
+Independent host-authored answer checks continue to apply, and a library statement
+never turns an unverified answer into a verified one.
+
+The mock example runs without credentials or network access:
+
+```sh
+npm run example -- examples/features/110-negative-claims.ts
+```

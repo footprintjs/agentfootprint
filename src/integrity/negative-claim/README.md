@@ -50,8 +50,9 @@ does not return a checked prefix. Detection still scans the supplied text; this 
 checking, not input length. Code and unsupported-language notes do not count as claims.
 
 **Same search** (`readings.ts`) means the same COMPOSED executed scope — filters in effect,
-defaults as if sent, fixed qualifiers, host-filled identities by reference, a relative window by
-its spelling within the turn, the page — never the model-visible arguments alone. Whether a call
+defaults as if sent, fixed qualifiers, host-filled identities by reference, a period by its
+executed dispatch span, the page — never the model-visible arguments alone. Two spellings of
+one span share a key; the same relative window at different dispatch instants does not. Whether a call
 READ is the caller's to say (`TurnCall.effect`; undeclared = not a read).
 
 **One owner each.** The rows are #199's `ComposedCoverage` (`semantics/coverage/composedCoverage.ts`)

@@ -671,6 +671,8 @@ describe('silent success — reading a run', () => {
 const REFUSES_A_SECOND_CALL = [
   'act',
   'answerValidation',
+  // One negative-citation contract per agent; replacing it would silently change the guarantee.
+  'negativeClaims',
   'checkIn',
   // 9.61.0 — a claim contract is a policy, not a scalar: a second call would
   // silently replace which answer fields are checked against which facts.
@@ -830,6 +832,10 @@ describe('silent success — the doctrine sweep', () => {
         base()
           .answerValidation({ id: 'first', version: '1', validate: () => ({ checks: [] }) })
           .answerValidation({ id: 'second', version: '1', validate: () => ({ checks: [] }) }),
+      negativeClaims: () =>
+        base()
+          .negativeClaims({ field: 'negatives', tools: ['lookup'] })
+          .negativeClaims({ field: 'other', tools: ['lookup'] }),
       checkIn: () => base().tool(askTool).checkIn({}).checkIn({}),
       claims: () =>
         base()

@@ -1851,6 +1851,6 @@ describe('contract: a listed check with nothing to judge is refused at build()',
         agentChecks: ['schema' as never],
         validate,
       }),
-    ).toThrow(/agentChecks must list 'claims' and\/or 'names-and-numbers'/);
+    ).toThrow(/agentChecks must list 'claims', 'names-and-numbers' and\/or 'negative-claims'/);
   });
 });

@@ -449,6 +449,11 @@ export function readOnlyByDeclaration(tool: Tool): boolean {
   return tool.effects === 'read' && tool.source === undefined && DECLARED_READ_ONLY.has(tool);
 }
 
+/** Carry an app's read-only declaration through a library-owned, behavior-preserving wrapper. */
+export function inheritReadOnly(from: Tool, to: Tool): void {
+  if (readOnlyByDeclaration(from)) DECLARED_READ_ONLY.add(to);
+}
+
 /**
  * Refuse an `effects` this library cannot honour — any value but `'read'` at
  * `defineTool`, and any `effects` on a remote tool at registration

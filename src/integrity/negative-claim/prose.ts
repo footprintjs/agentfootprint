@@ -9,8 +9,8 @@
  *          a call, or keeps one out by redaction, notes every claim `record-incomplete` and
  *          nothing else: nothing can be said around a hole. More than MAX_NEGATIVE_CLAIMS
  *          returns one `too-many-claims` note for the whole text, before reading the record.
- * Role:    integrity/ layer (L3). Not wired: PR 5 files these rows from the Route decider
- *          behind `.negativeClaims({ prose })`.
+ * Role:    integrity/ layer (L3). The agent's negativeClaims arm observes every original
+ *          model string within a whole-answer budget and files these rows; no prose enforcement.
  *
  * Rows carry spans into the text, phrase ids, the pack version, note codes and result
  * identities — never a word of the text or a value of the record.
@@ -18,6 +18,7 @@
 
 import { claimWordsOf, entityNotes } from './containment.js';
 import { detectNegativeClaims, type DetectedClaim } from './detect.js';
+import { PROSE_NOTES } from './types.js';
 import { MAX_NEGATIVE_CLAIMS } from './limits.js';
 import { NEGATIVE_CLAIM_PHRASES_VERSION } from './phrases.js';
 import { isCurrent, resolveProseClaim } from './resolve.js';
@@ -40,38 +41,8 @@ export interface ProseCheckInput {
   readonly personMessage?: string;
 }
 
-/** The order notes are listed in on a row. */
-const NOTE_ORDER: readonly ProseNote[] = [
-  'record-incomplete',
-  'stale-turn',
-  'entity-unresolved',
-  'subject-unmatched',
-  'contradicted-by-rows',
-  'readings-disagree',
-  'call-not-read',
-  'coverage-unverified',
-  'declaration-overclaimed',
-  'empty-undeclared',
-  'clarify-open',
-  'rows-undecided',
-  'scope-wider',
-  'coverage-gap',
-  'gap-relevance-unknown',
-  'cap-reached',
-  'paged',
-  'partial',
-  'ranking',
-  'search-incomplete',
-  'period-not-held',
-  'period-partly-held',
-  'period-unknown',
-  'period-undeclared',
-  'later-read-failed',
-  'superseded-by-write',
-];
-
 const ordered = (notes: readonly ProseNote[]): ProseNote[] =>
-  NOTE_ORDER.filter((note) => notes.includes(note));
+  PROSE_NOTES.filter((note) => notes.includes(note));
 
 function claimRow(
   field: string,

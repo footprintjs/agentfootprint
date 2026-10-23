@@ -117,7 +117,7 @@ export interface AnswerValidationResult {
  * {@link AnswerValidationOptions.agentChecks}: `'claims'` is the `.claims()`
  * contract, `'names-and-numbers'` is the `.namesAndNumbersFromEvidence()` gate.
  */
-export type AgentCheckName = 'claims' | 'names-and-numbers';
+export type AgentCheckName = 'claims' | 'names-and-numbers' | 'negative-claims';
 
 /** Opt-in contract. The callback cannot replace the accepted answer. */
 export interface AnswerValidationOptions<T = unknown> {
@@ -272,6 +272,8 @@ export interface AnswerValidationReport {
   readonly resolvedRefs: readonly ArtifactRef[];
   /** The schema parser accepted and its output is a lossless canonical JSON value. */
   readonly schemaAccepted: boolean;
+  /** Runtime delivery authorization for a composed negative; never a verification verdict. */
+  readonly delivery?: 'as-checked' | 'recorded' | 'fallback';
 }
 
 /**

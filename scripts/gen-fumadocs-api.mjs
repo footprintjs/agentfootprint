@@ -25,6 +25,7 @@ import { join } from 'node:path';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { API_GROUPS, groupApiPages, resolveApiAlias } from '../docs-next/lib/api-groups.mjs';
+import { normalizeDependencySources } from './doc-source-links.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..'); // agentfootprint/
@@ -80,6 +81,7 @@ function walk(dir) {
     const base = entry.replace(/\.md$/, '');
     const title = deriveTitle(md, base);
     md = rewriteLinks(md);
+    md = normalizeDependencySources(md);
     const safeTitle = /[:#"'{}[\]]/.test(title) ? JSON.stringify(title) : title;
     md = `---\ntitle: ${safeTitle}\n---\n\n${md}`;
     writeFileSync(fp, md);

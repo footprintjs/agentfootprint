@@ -6,7 +6,7 @@ title: milestoneTag
 
 > **milestoneTag**(`kind`): `string`
 
-Defined in: [src/lib/conventions.ts:559](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/conventions.ts#L559)
+Defined in: [src/lib/conventions.ts:562](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/conventions.ts#L562)
 
 The kind tag for a [MilestoneKind](/docs/api/type-aliases/MilestoneKind) — `'milestone:' + kind`.
 

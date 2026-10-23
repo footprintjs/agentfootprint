@@ -40,6 +40,7 @@
     "strict-output",
     "grounding",
     "evidence-gate",
+    "negative-claims",
     "semantic-results",
     "time",
     "---[Database]Memory---",

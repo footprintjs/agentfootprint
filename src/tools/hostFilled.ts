@@ -43,7 +43,7 @@
 import type { Credential } from '../identity/types.js';
 import type { HostFilledArguments } from '../semantics/coverage/search/inEffect.js';
 import { inheritSearch } from './searchOf.js';
-import type { Tool, ToolExecutionContext } from './tools.js';
+import { inheritReadOnly, type Tool, type ToolExecutionContext } from './tools.js';
 
 /** Which identity field a {@link fromIdentity} fill reads. */
 export type HostFilledIdentityField = 'principal' | 'tenant' | 'conversationId';
@@ -343,6 +343,7 @@ function wrapTool(tool: Tool, fills: Readonly<Record<string, HostFill>>, strict:
   DECLARED_FILLS.set(wrapped, { ...DECLARED_FILLS.get(tool), ...fills });
   // The search was judged against the schema BEFORE the filled arguments left it.
   if (tool.search !== undefined) inheritSearch(tool, wrapped);
+  inheritReadOnly(tool, wrapped);
   return wrapped;
 }
 

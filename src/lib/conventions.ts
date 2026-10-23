@@ -184,6 +184,7 @@ export const STAGE_IDS = {
    *  more — the SchemaRetry mechanism verbatim (an ordinary iteration, not a
    *  mode). At most once per turn. */
   EVIDENCE_RECHECK: 'evidence-recheck',
+  NEGATIVE_RECHECK: 'negative-recheck',
   /** The Route decider's out-of-budget branch (9.56.0), mounted on any agent
    *  that can call tools unless `wrapUpAtMaxIterations: false` turned it off.
    *  When `maxIterations` runs out while the model is still asking for tools,
@@ -396,6 +397,7 @@ const BOUNDARY_LOCAL_IDS: ReadonlySet<string> = new Set([
   // And for the evidence recheck (9.35.0): the run telling the model it made
   // a value up is the single most interesting stop a reader can find.
   STAGE_IDS.EVIDENCE_RECHECK,
+  STAGE_IDS.NEGATIVE_RECHECK,
   // And for the wrap-up (9.56.0): the run telling the model its action budget
   // is gone is exactly why the answer that follows reads like a summary
   // instead of the next step. Muting it would hide the reason.
@@ -496,6 +498,7 @@ const MILESTONES: ReadonlyMap<string, Milestone> = new Map<string, Milestone>([
   // The answer stated values no tool result carried and the one revision
   // went back (9.35.0) — everything after it is the model's second try.
   [STAGE_IDS.EVIDENCE_RECHECK, milestone('decision', 'Evidence recheck')],
+  [STAGE_IDS.NEGATIVE_RECHECK, milestone('decision', 'Negative citation correction')],
   // The action budget ran out and the turn was wrapped up (9.56.0) —
   // everything after it is the model summarizing with no tools to call.
   [STAGE_IDS.WRAP_UP, milestone('decision', 'Wrap up')],

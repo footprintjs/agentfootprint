@@ -59,6 +59,9 @@ export interface TurnCall {
   readonly rows?: number;
   /** The rows it read, as plain records — only their identity and filtered fields are read. */
   readonly rowsRead?: readonly Readonly<Record<string, unknown>>[];
+  /** Row values survived the final model-result projection unchanged. Only permits display,
+   * never supplies evidence; absent on older checkpoints and transformed/hidden results. */
+  readonly rowsMayDisplay?: true;
   /** The column that names a row (`resultColumns`' id column); else a fact's `entity`. */
   readonly idColumn?: string;
   /** The composed row (#199's `ComposedCoverage`) — present when a `search` tool's call returned. */
@@ -143,33 +146,36 @@ export interface TypedJudgement {
 
 // ─── the prose door ──────────────────────────────────────────────────────
 
-export type ProseNote =
-  | 'record-incomplete'
-  | 'stale-turn'
-  | 'entity-unresolved'
-  | 'subject-unmatched'
-  | 'contradicted-by-rows'
-  | 'readings-disagree'
-  | 'call-not-read'
-  | 'coverage-unverified'
-  | 'declaration-overclaimed'
-  | 'empty-undeclared'
-  | 'clarify-open'
-  | 'rows-undecided'
-  | 'scope-wider'
-  | 'coverage-gap'
-  | 'gap-relevance-unknown'
-  | 'cap-reached'
-  | 'paged'
-  | 'partial'
-  | 'ranking'
-  | 'search-incomplete'
-  | 'period-not-held'
-  | 'period-partly-held'
-  | 'period-unknown'
-  | 'period-undeclared'
-  | 'later-read-failed'
-  | 'superseded-by-write';
+/** Closed vocabulary, in the stable order used by the prose judge and checkpoint admission. */
+export const PROSE_NOTES = [
+  'record-incomplete',
+  'stale-turn',
+  'entity-unresolved',
+  'subject-unmatched',
+  'contradicted-by-rows',
+  'readings-disagree',
+  'call-not-read',
+  'coverage-unverified',
+  'declaration-overclaimed',
+  'empty-undeclared',
+  'clarify-open',
+  'rows-undecided',
+  'scope-wider',
+  'coverage-gap',
+  'gap-relevance-unknown',
+  'cap-reached',
+  'paged',
+  'partial',
+  'ranking',
+  'search-incomplete',
+  'period-not-held',
+  'period-partly-held',
+  'period-unknown',
+  'period-undeclared',
+  'later-read-failed',
+  'superseded-by-write',
+] as const;
+export type ProseNote = (typeof PROSE_NOTES)[number];
 
 /** One prose claim, noted. Observe-only: nothing withholds; a claim may carry no note. */
 export interface ProseClaimRow {
@@ -191,7 +197,7 @@ export interface ProseClaimRow {
 export interface ProseNoteRow {
   readonly kind: 'negative-claim-note';
   readonly field: string;
-  readonly code: 'in-code-block' | 'language-unsupported' | 'too-many-claims';
+  readonly code: 'in-code-block' | 'language-unsupported' | 'too-many-claims' | 'input-limit';
   readonly span: TextSpan;
   readonly packVersion: string;
   readonly phraseId?: string;

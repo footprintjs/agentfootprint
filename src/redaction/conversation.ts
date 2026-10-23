@@ -96,6 +96,7 @@ const NAMES = {
     'finalContent',
     'answer',
     'response',
+    'answerNegatives',
     'assembledSystem',
     'assembledMessages',
   ],
@@ -139,6 +140,7 @@ const NAMES = {
     // The opt-in verifier's private evidence/selected executed scope. Resume
     // checkpoints remain private; exported records must not disclose this bag.
     'claimVerification',
+    'negativeClaimState',
     // The inputs layer's raw answers, held in working state until the calls run
     // (`core/agent/arguments/README.md`).
     'argumentAsk',

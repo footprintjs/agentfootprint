@@ -759,7 +759,7 @@ describe('contract: resolving agentChecks', () => {
     ['more names than exist', ['claims', 'names-and-numbers', 'claims']],
   ])('refuses %s, naming the rule', (_case, agentChecks) => {
     expect(() => resolveAnswerValidation({ ...base, agentChecks } as never)).toThrow(
-      /answerValidation\.agentChecks must list 'claims' and\/or 'names-and-numbers', each once/,
+      /answerValidation\.agentChecks must list 'claims', 'names-and-numbers' and\/or 'negative-claims', each once/,
     );
   });
 });

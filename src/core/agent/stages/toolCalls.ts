@@ -204,7 +204,20 @@ import {
   validateToolArgs,
   type ToolArgValidationMode,
 } from '../../../tools/toolArgsValidation.js';
+import { isJsonFaithful } from '../../../lib/jsonFaithful.js';
 import { safeStringify } from '../validators.js';
+import {
+  startNegativeCall,
+  captureNegativeResult,
+  captureNegativeCoverage,
+  settleNegativeCall,
+  serveNegativeHandle,
+  pauseNegativeCall,
+  pausedNegativeResultId,
+  captureNegativeRefusal,
+  keepNegativeResultOut,
+  type NegativeDispatch,
+} from '../negativeClaims/capture.js';
 import { capToolResult } from '../toolResultCap.js';
 import { applyResultCeiling } from '../resultCeiling.js';
 import {
@@ -340,7 +353,7 @@ export interface ToolCallsHandlerDeps {
    */
   readonly resultsLayer?: true;
   /**
-   * `.negativeClaims()` is armed (a later release wires the builder): a
+   * `.negativeClaims()` is armed: a
    * composed absence's `tools.absent` carries `lookedForRef` in place of
    * `lookedFor`. Composed values ride no event in any mode; unarmed,
    * `lookedFor` is today's bytes. Absent → unarmed.
@@ -2168,6 +2181,7 @@ export function buildToolCallsHandler(
       ...(period !== undefined && { period }),
       ...(facts.inProgress !== undefined && { inProgress: facts.inProgress }),
     });
+    if (deps.negativeClaimsArmed === true) captureNegativeCoverage(scope, row);
     return row;
   };
 
@@ -2906,7 +2920,21 @@ export function buildToolCallsHandler(
     payload: AgentfootprintEventMap['agentfootprint.stream.tool_end']['payload'],
     ran: boolean,
     declaredStatus: string | undefined = payload.status,
+    negativeResultId?: string,
+    refusalArgs?: Readonly<Record<string, unknown>>,
   ): void => {
+    if (deps.negativeClaimsArmed === true) {
+      settleNegativeCall(scope, negativeResultId, toolOutcomeOf(payload, ran));
+      if (
+        !ran ||
+        payload.error ||
+        ['invalid', 'denied', 'failure'].includes(declaredStatus ?? '')
+      ) {
+        captureNegativeRefusal(scope, toolName, payload.result, refusalArgs);
+        if (payload.modelResult !== undefined)
+          captureNegativeRefusal(scope, toolName, payload.modelResult, refusalArgs);
+      }
+    }
     typedEmit(scope, 'agentfootprint.stream.tool_end', payload);
     const ledger = deps.toolCallLedger;
     if (ledger === undefined) return;
@@ -3832,6 +3860,7 @@ export function buildToolCallsHandler(
       readonly args: ToolArgs;
       readonly result: unknown;
       readonly error?: boolean;
+      readonly negativeResultId?: string;
       readonly history: readonly LLMMessage[];
       readonly identity?: { tenant?: string; principal?: string; conversationId: string };
       readonly signal?: AbortSignal;
@@ -3845,6 +3874,8 @@ export function buildToolCallsHandler(
     // reference back when no item carried either key: a run whose tools
     // declare neither serves the bytes it always did, and the callers'
     // reference-inequality stamp of `tool_end.modelResult` stays unstamped.
+    if (deps.negativeClaimsArmed === true && call.error)
+      captureNegativeRefusal(scope, call.toolName, call.result, call.args);
     const served = servedToModel(call.result);
     const chain = deps.toolMiddleware ?? [];
     // No `onToolResult` hook anywhere in the chain → no walk, no rows, no await
@@ -3865,7 +3896,20 @@ export function buildToolCallsHandler(
       ...(call.signal && { signal: call.signal }),
     });
     recordDecisions(scope, verdict.decisions);
-    return verdict.kind === 'deny' ? verdict.reason : verdict.result;
+    const delivered = verdict.kind === 'deny' ? verdict.reason : verdict.result;
+    // An explicit policy denial withdraws access to the native observation.
+    // A guessed handle must not make the final composer disclose it again.
+    // Allowed summaries remain eligible: their native coverage and gaps, not
+    // the summary's claims, are what the final checker uses.
+    if (deps.negativeClaimsArmed === true) {
+      const transformedStatus = readToolResultEnvelope(delivered)?.status;
+      const notRead = ['invalid', 'denied', 'failure', 'pending'].includes(transformedStatus ?? '');
+      if (verdict.kind === 'deny' || notRead || !isJsonFaithful(delivered))
+        keepNegativeResultOut(scope, call.negativeResultId);
+      if (verdict.kind === 'deny' || notRead)
+        captureNegativeRefusal(scope, call.toolName, delivered, call.args);
+    }
+    return delivered;
   };
 
   // ── The batch settlement (9.113.0) — ONE implementation, four resume doors ──
@@ -4014,6 +4058,7 @@ export function buildToolCallsHandler(
     result: unknown;
     error?: boolean;
     executed?: boolean;
+    negativeResultId?: string;
     /** The recognized effects envelope, when the tool returned one (9.19.0)
      *  — `result` above is already its unwrapped `content`. When the ceiling
      *  fired this carries the refusal as `content` and status `'invalid'`
@@ -4126,6 +4171,7 @@ export function buildToolCallsHandler(
       }
     }
     let executed = false;
+    let negativeDispatch: NegativeDispatch | undefined;
     /** What the run ended with, when it ended before the call could run. */
     let ended: Error | undefined;
     try {
@@ -4193,14 +4239,29 @@ export function buildToolCallsHandler(
       // `Tool.search`: reserved, with the dispatch instant, just before the
       // call runs — as in the batch loop.
       const searchDispatch = searchFunnel.dispatch(scope, tool, callTime);
+      negativeDispatch =
+        deps.negativeClaimsArmed === true
+          ? startNegativeCall(scope, {
+              tool,
+              party: resolved.party,
+              args,
+              toolCallId,
+              iteration,
+              runId: runFactsOf(scope)?.runId,
+              dispatch: searchDispatch,
+              context: executionContext,
+            })
+          : undefined;
       executed = true;
       let result = await tool.execute(args, executionContext);
+      if (negativeDispatch !== undefined)
+        result = captureNegativeResult(scope, negativeDispatch, result, tool);
       await endCall(toolCallId);
       const searchBoundary = (status: ToolResultStatus | undefined) => ({
         call: { toolName, toolCallId, iteration },
         tool,
         ...(resolved.party !== undefined && { party: resolved.party }),
-        args,
+        args: negativeDispatch?.args ?? args,
         ...(searchDispatch !== undefined && { dispatch: searchDispatch }),
         ...(status !== undefined && { status }),
       });
@@ -4253,9 +4314,12 @@ export function buildToolCallsHandler(
           declaredStatus,
         );
         if (refusal !== undefined) {
+          if (negativeDispatch !== undefined)
+            keepNegativeResultOut(scope, negativeDispatch.resultId);
           return {
             result: refusal,
             executed: true,
+            negativeResultId: negativeDispatch?.resultId,
             ceilingRefused: true,
             envelope: { ...envelope, content: refusal, status: 'invalid' },
           };
@@ -4265,9 +4329,12 @@ export function buildToolCallsHandler(
         // path keeps every byte it had.
         const columnRefusal = judgeColumns(scope, { toolName, toolCallId, iteration }, content);
         if (columnRefusal !== undefined) {
+          if (negativeDispatch !== undefined)
+            keepNegativeResultOut(scope, negativeDispatch.resultId);
           return {
             result: columnRefusal,
             executed: true,
+            negativeResultId: negativeDispatch?.resultId,
             // The ceiling's flag, reused for the ceiling's reason: a refused
             // payload must not advance the step pointer on any path, and
             // there is exactly one fact here — the model did not get the
@@ -4279,6 +4346,7 @@ export function buildToolCallsHandler(
         return {
           result: content,
           executed: true,
+          negativeResultId: negativeDispatch?.resultId,
           envelope:
             declaredStatus === envelope.status && content === envelope.content
               ? envelope
@@ -4309,6 +4377,7 @@ export function buildToolCallsHandler(
         coverageStatus,
       );
       if (refusal !== undefined) {
+        if (negativeDispatch !== undefined) keepNegativeResultOut(scope, negativeDispatch.resultId);
         // Synthesized empty-effects envelope: the resume paths read the
         // routing status off `envelope.status`, and this is how a refused
         // NON-envelope result carries `'invalid'` there without every path
@@ -4316,6 +4385,7 @@ export function buildToolCallsHandler(
         return {
           result: refusal,
           executed: true,
+          negativeResultId: negativeDispatch?.resultId,
           ceilingRefused: true,
           envelope: { content: refusal, effects: [], status: 'invalid', malformed: [] },
         };
@@ -4324,9 +4394,11 @@ export function buildToolCallsHandler(
       // resumed call's rows are judged exactly as an inline one's.
       const columnRefusal = judgeColumns(scope, { toolName, toolCallId, iteration }, result);
       if (columnRefusal !== undefined) {
+        if (negativeDispatch !== undefined) keepNegativeResultOut(scope, negativeDispatch.resultId);
         return {
           result: columnRefusal,
           executed: true,
+          negativeResultId: negativeDispatch?.resultId,
           ceilingRefused: true,
           envelope: { content: columnRefusal, effects: [], status: 'invalid', malformed: [] },
         };
@@ -4345,10 +4417,11 @@ export function buildToolCallsHandler(
         return {
           result,
           executed: true,
+          negativeResultId: negativeDispatch?.resultId,
           envelope: { content: result, effects: [], status: coverageStatus, malformed: [] },
         };
       }
-      return { result, executed: true };
+      return { result, executed: true, negativeResultId: negativeDispatch?.resultId };
     } catch (err) {
       if (ended !== undefined && err === ended) {
         // Nothing ran; the call's sessions are still released, and the run's
@@ -4365,6 +4438,7 @@ export function buildToolCallsHandler(
           error: true,
           // It ran — a tool that asked to pause had already started work.
           executed,
+          negativeResultId: negativeDispatch?.resultId,
         };
       }
       // A tool that threw still RAN, and may have done half its work; the
@@ -4373,6 +4447,7 @@ export function buildToolCallsHandler(
         result: err instanceof Error ? err.message : String(err),
         error: true,
         executed,
+        negativeResultId: negativeDispatch?.resultId,
       };
     }
   };
@@ -4771,6 +4846,7 @@ export function buildToolCallsHandler(
         let denied = findingsRefusal !== undefined;
         /** True once `tool.execute` has been entered — see `afterMoment`. */
         let executed = false;
+        let negativeDispatch: NegativeDispatch | undefined;
         /** The tool's own `resultCeiling` refused this call's result (9.20.0)
          *  — the call ran, but it must not complete a procedure step: the
          *  refusal's own instruction is to call again. */
@@ -5552,8 +5628,23 @@ export function buildToolCallsHandler(
               // instant taken just BEFORE the call runs (the row's address,
               // never the provider's call id; a relative window's clock).
               const searchDispatch = searchFunnel.dispatch(scope, tool, callTime);
+              negativeDispatch =
+                deps.negativeClaimsArmed === true
+                  ? startNegativeCall(scope, {
+                      tool,
+                      party: resolved.party,
+                      args: callArgs,
+                      toolCallId: tc.id,
+                      iteration,
+                      runId: runFactsOf(scope)?.runId,
+                      dispatch: searchDispatch,
+                      context: executionContext,
+                    })
+                  : undefined;
               executed = true;
               result = await tool.execute(callArgs, executionContext);
+              if (negativeDispatch !== undefined)
+                result = captureNegativeResult(scope, negativeDispatch, result, tool);
               // A code-runner tool leaves the SHAPE of what it just ran, keyed by
               // this call. Taken and deleted here so the map cannot grow across
               // a long run, and emitted from the dispatch loop rather than from
@@ -5606,7 +5697,7 @@ export function buildToolCallsHandler(
                   call: { toolName: tc.name, toolCallId: tc.id, iteration },
                   tool,
                   ...(resolved.party !== undefined && { party: resolved.party }),
-                  args: callArgs as Readonly<Record<string, unknown>>,
+                  args: negativeDispatch?.args ?? (callArgs as Readonly<Record<string, unknown>>),
                   ...(searchDispatch !== undefined && { dispatch: searchDispatch }),
                   ...(toolStatus !== undefined && { status: toolStatus }),
                 },
@@ -5651,6 +5742,8 @@ export function buildToolCallsHandler(
                 toolStatus,
               );
               if (overflowRefusal !== undefined) {
+                if (negativeDispatch !== undefined)
+                  keepNegativeResultOut(scope, negativeDispatch.resultId);
                 ceilingRefused = true;
                 result = overflowRefusal;
                 toolStatus = 'invalid';
@@ -5665,6 +5758,8 @@ export function buildToolCallsHandler(
                   result,
                 );
                 if (columnRefusal !== undefined) {
+                  if (negativeDispatch !== undefined)
+                    keepNegativeResultOut(scope, negativeDispatch.resultId);
                   ceilingRefused = true;
                   result = columnRefusal;
                   toolStatus = 'invalid';
@@ -5722,6 +5817,8 @@ export function buildToolCallsHandler(
                 // The pause writes: partial state, so resume() can find the
                 // history intact.
                 const writePause = (): void => {
+                  if (negativeDispatch !== undefined)
+                    pauseNegativeCall(scope, negativeDispatch.resultId);
                   scope.history = newHistory;
                   scope.pausedToolCallId = tc.id;
                   scope.pausedToolName = tc.name;
@@ -6101,6 +6198,7 @@ export function buildToolCallsHandler(
               iteration,
               args: callArgs,
               result,
+              negativeResultId: negativeDispatch?.resultId,
               ...(error === true && { error: true }),
               history: newHistory,
               ...(runIdentity && { identity: runIdentity }),
@@ -6165,6 +6263,8 @@ export function buildToolCallsHandler(
           },
           executed,
           toolEnvelope?.status,
+          negativeDispatch?.resultId,
+          callArgs,
         );
         let resultStr = typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
         // The tool's OWN answer, before any framework suffix joins it — what
@@ -6172,6 +6272,9 @@ export function buildToolCallsHandler(
         // string instead would compare our own additions (a step that advanced
         // once, an effect note) and miss the repeat they decorate.
         const deliveredResult = resultStr;
+        if (deps.negativeClaimsArmed === true)
+          resultStr = serveNegativeHandle(scope, negativeDispatch?.resultId, resultStr);
+        const hasNegativeNote = resultStr !== deliveredResult;
 
         // ── Step boundary (9.18.0): advance decided, then decorate, THEN
         // push — the suffix must be part of the one past every reader sees
@@ -6299,7 +6402,7 @@ export function buildToolCallsHandler(
           toolCallId: tc.id,
           toolName: tc.name,
           ...(deps.findings === true && !executed && { toolResultOrigin: 'not-entered' as const }),
-          ...(layerNote !== '' && { toolChars: deliveredResult.length }),
+          ...((layerNote !== '' || hasNegativeNote) && { toolChars: deliveredResult.length }),
           ...(tc.argumentsFailure !== undefined && {
             toolArgumentsFailure: { ...tc.argumentsFailure },
           }),
@@ -6553,6 +6656,7 @@ export function buildToolCallsHandler(
         let resumeEnvelope: ReadToolResultEnvelope | undefined;
         /** The tool ran (any outcome) — the judge's gate (9.104.0). */
         let toolRan = false;
+        let negativeResultId: string | undefined;
         if (!decision.approved) {
           result = declinedResult(decision.note);
           recordDecisions(scope, [
@@ -6731,6 +6835,7 @@ export function buildToolCallsHandler(
                 env,
                 'ask',
               );
+              negativeResultId = dispatched.negativeResultId;
               result = dispatched.result;
               error = dispatched.error;
               toolRan = dispatched.executed === true;
@@ -6797,6 +6902,7 @@ export function buildToolCallsHandler(
                   iteration,
                   args: runArgs,
                   result,
+                  negativeResultId,
                   ...(error === true && { error: true }),
                   history: [...(scope.history as readonly LLMMessage[])],
                   ...(scope.runIdentity && { identity: scope.runIdentity }),
@@ -6823,6 +6929,9 @@ export function buildToolCallsHandler(
         modelResult = askCapped.modelResult;
         let askResultStr =
           typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
+        const askToolChars = askResultStr.length;
+        if (deps.negativeClaimsArmed === true)
+          askResultStr = serveNegativeHandle(scope, negativeResultId, askResultStr);
         // Step boundary (9.18.0) — a result finalized HERE is as final as one
         // from the batch loop; the answered call advances the pointer before
         // the push, exactly as it would have inline.
@@ -6849,6 +6958,7 @@ export function buildToolCallsHandler(
             {
               role: 'tool',
               content: askResultStr,
+              ...(deps.negativeClaimsArmed === true && { toolChars: askToolChars }),
               toolCallId,
               toolName,
               ...(deps.findings === true &&
@@ -6892,6 +7002,9 @@ export function buildToolCallsHandler(
             }),
           },
           toolRan,
+          undefined,
+          negativeResultId,
+          args,
         );
         bracketSettled(scope, askSettlement);
         typedEmit(scope, 'agentfootprint.agent.iteration_end', {
@@ -6972,6 +7085,7 @@ export function buildToolCallsHandler(
         let resumeEnvelope: ReadToolResultEnvelope | undefined;
         /** The tool ran (any outcome) — the judge's gate (9.104.0). */
         let toolRan = false;
+        let negativeResultId: string | undefined;
         if (decision.approved) {
           const env = scope.$getEnv();
           // Resolved against the party the checkpoint carries (9.92.0).
@@ -6987,6 +7101,7 @@ export function buildToolCallsHandler(
             env,
             'checkIn',
           );
+          negativeResultId = dispatched.negativeResultId;
           result = dispatched.result;
           error = dispatched.error;
           toolRan = dispatched.executed === true;
@@ -7006,6 +7121,7 @@ export function buildToolCallsHandler(
               iteration,
               args,
               result,
+              negativeResultId,
               ...(error === true && { error: true }),
               history: [...(scope.history as readonly LLMMessage[])],
               ...(scope.runIdentity && { identity: scope.runIdentity }),
@@ -7028,6 +7144,9 @@ export function buildToolCallsHandler(
         modelResult = decisionCapped.modelResult;
         let decisionResultStr =
           typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
+        const decisionToolChars = decisionResultStr.length;
+        if (deps.negativeClaimsArmed === true)
+          decisionResultStr = serveNegativeHandle(scope, negativeResultId, decisionResultStr);
         // Step boundary (9.18.0) — an approved consequential step (a checkIn
         // tool CAN be a step's tool) advances on the resumed dispatch.
         if (deps.stepPlanFor && stepToolRan) {
@@ -7052,6 +7171,7 @@ export function buildToolCallsHandler(
             {
               role: 'tool',
               content: decisionResultStr,
+              ...(deps.negativeClaimsArmed === true && { toolChars: decisionToolChars }),
               toolCallId,
               toolName,
               ...(deps.findings === true &&
@@ -7096,6 +7216,9 @@ export function buildToolCallsHandler(
             }),
           },
           toolRan,
+          undefined,
+          negativeResultId,
+          args,
         );
         bracketSettled(scope, decisionSettlement);
         typedEmit(scope, 'agentfootprint.agent.iteration_end', {
@@ -7163,6 +7286,7 @@ export function buildToolCallsHandler(
             iteration,
             args,
             result,
+            negativeResultId: dispatched.negativeResultId,
             ...(error === true && { error: true }),
             history: [...(scope.history as readonly LLMMessage[])],
             ...(scope.runIdentity && { identity: scope.runIdentity }),
@@ -7181,6 +7305,13 @@ export function buildToolCallsHandler(
         modelResult = consentCapped.modelResult;
         let consentResultStr =
           typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
+        const consentToolChars = consentResultStr.length;
+        if (deps.negativeClaimsArmed === true)
+          consentResultStr = serveNegativeHandle(
+            scope,
+            dispatched.negativeResultId,
+            consentResultStr,
+          );
         // Step boundary (9.18.0) — a step tool that waited on 3LO consent
         // advances the moment its resumed dispatch really ran, clean. A
         // ceiling-refused result is not clean (9.20.0): the model holds no
@@ -7213,6 +7344,7 @@ export function buildToolCallsHandler(
             {
               role: 'tool',
               content: consentResultStr,
+              ...(deps.negativeClaimsArmed === true && { toolChars: consentToolChars }),
               toolCallId,
               toolName,
               ...(deps.findings === true &&
@@ -7256,6 +7388,9 @@ export function buildToolCallsHandler(
             }),
           },
           dispatched.executed === true,
+          undefined,
+          dispatched.negativeResultId,
+          args,
         );
         bracketSettled(scope, consentSettlement);
         typedEmit(scope, 'agentfootprint.agent.iteration_end', {
@@ -7316,6 +7451,8 @@ export function buildToolCallsHandler(
         iteration,
         args,
         result: input,
+        negativeResultId:
+          deps.negativeClaimsArmed === true ? pausedNegativeResultId(scope) : undefined,
         history: [...(scope.history as readonly LLMMessage[])],
         ...(scope.runIdentity && {
           identity: scope.runIdentity as {
@@ -7395,6 +7532,8 @@ export function buildToolCallsHandler(
           }),
         },
         true,
+        undefined,
+        deps.negativeClaimsArmed === true ? pausedNegativeResultId(scope) : undefined,
       );
       bracketSettled(scope, pauseSettlement);
       typedEmit(scope, 'agentfootprint.agent.iteration_end', {
