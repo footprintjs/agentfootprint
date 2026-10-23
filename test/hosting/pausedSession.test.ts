@@ -20,6 +20,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   Agent,
+  allow,
   ask,
   defineTool,
   inMemoryDecisionLedger,
@@ -39,6 +40,7 @@ import {
 import type {
   CheckpointEnvelope,
   PausedRun,
+  PendingAsk,
   SessionLifecycle,
   WakeReason,
 } from '../../src/hosting/index.js';
@@ -46,7 +48,7 @@ import type { LLMMessage, LLMProvider } from '../../src/provider-contract/types.
 import { inProcessHost } from './testHost.js';
 import { REFUSAL_STATUS } from '../../src/hosting/refusalStatus.js';
 import { pausedRequest } from '../helpers/pausedRequest.js';
-import { OUTCOME_NOT_RECORDED } from '../../src/hosting/answeredPause.js';
+import { NOT_RUN_UNANSWERABLE, OUTCOME_NOT_RECORDED } from '../../src/hosting/answeredPause.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────
 
@@ -1522,6 +1524,226 @@ describe('a consent gate over the wire — a decision whose resume failed after 
       expect(JSON.parse(body)).toMatchObject({ code: 'ERR_RESUME_DECISION' });
       expect(body).not.toContain(requestId);
       expect(ran).toEqual([10]);
+    } finally {
+      await handle.close();
+    }
+  });
+});
+
+describe('a paused session — a pause no answer can ever reach does not hold the session', () => {
+  const usage = { input: 1, output: 1 };
+
+  /** Answers a refund request with one call; anything else is noted back. */
+  function refundsModel(sent: (readonly LLMMessage[])[]): LLMProvider {
+    return {
+      name: 'mock',
+      complete: async (request) => {
+        sent.push([...request.messages]);
+        const last = request.messages[request.messages.length - 1];
+        return last?.role === 'user' && String(last.content).includes('refund')
+          ? {
+              content: '',
+              toolCalls: [{ id: 't1', name: 'issue_refund', args: { amount: 10 } }],
+              usage,
+              stopReason: 'tool_use',
+            }
+          : {
+              content: `noted: ${String(last?.content)}`,
+              toolCalls: [],
+              usage,
+              stopReason: 'stop',
+            };
+      },
+    };
+  }
+
+  function refundTool(ran: number[], checkIn: boolean) {
+    return defineTool<{ amount: number }, string>({
+      name: 'issue_refund',
+      description: 'refund a customer',
+      inputSchema: {
+        type: 'object',
+        properties: { amount: { type: 'number' } },
+        required: ['amount'],
+      },
+      ...(checkIn && { checkIn: 'always' as const }),
+      execute: ({ amount }) => {
+        ran.push(amount);
+        return `refunded ${amount}`;
+      },
+    });
+  }
+
+  /** An agent whose `approval` link asks before every refund, and `later` runs after it. */
+  function asking(later: string, ran: number[], sent: (readonly LLMMessage[])[]): Agent {
+    return Agent.create({ provider: refundsModel(sent), model: 'test-model', maxIterations: 4 })
+      .system('terse')
+      .tool(refundTool(ran, false))
+      .toolMiddleware(
+        { name: 'approval', onToolCall: () => ask({ question: 'Issue this refund?' }) },
+        { name: later, onToolCall: () => allow() },
+      )
+      .build();
+  }
+
+  /** What the model was shown for every tool call, in the newest request it got. */
+  const toolResultsSeen = (sent: (readonly LLMMessage[])[]): unknown[] =>
+    (sent[sent.length - 1] ?? []).filter((m) => m.role === 'tool').map((m) => m.content);
+
+  /** Pause a session on `before`, then serve the same store with `after` (a redeploy). */
+  async function redeployed(
+    before: Agent,
+    after: Agent,
+    sessionId: string,
+  ): Promise<{
+    pending: PendingAsk;
+    host: ReturnType<typeof inProcessHost>;
+    close: () => Promise<void>;
+    sessions: ReturnType<typeof memorySessions>;
+  }> {
+    const sessions = memorySessions();
+    const first = inProcessHost();
+    const old = await standingAgent({ agent: before, sessions, host: first });
+    let pending: PendingAsk | undefined;
+    try {
+      pending = (await first.deliver({ input: 'refund me', sessionId })).awaiting;
+    } finally {
+      await old.close();
+    }
+    if (pending === undefined) throw new Error('expected a pause');
+    const host = inProcessHost();
+    const handle = await standingAgent({ agent: after, sessions, host });
+    return { pending, host, close: () => handle.close(), sessions };
+  }
+
+  it('after a redeploy renamed a rule after the ask, the next message continues — the model is told the call did not run', async () => {
+    const ran: number[] = [];
+    const sent: (readonly LLMMessage[])[] = [];
+    const { host, close, sessions } = await redeployed(
+      asking('limit', ran, sent),
+      asking('limit-v2', ran, sent),
+      'renamed',
+    );
+    try {
+      const next = await host.deliver({ input: 'forget it — my balance?', sessionId: 'renamed' });
+      expect(next.code).toBeUndefined();
+      expect(next.output).toBe('noted: forget it — my balance?');
+      expect(toolResultsSeen(sent)).toEqual([NOT_RUN_UNANSWERABLE]);
+      expect(ran).toEqual([]);
+      expect((await sessions.hydrate('renamed'))?.format).toBe('conversation-v1');
+    } finally {
+      await close();
+    }
+  });
+
+  it('an approval or a decline of it is refused by name — and closes it, so the next message continues', async () => {
+    const ran: number[] = [];
+    const sent: (readonly LLMMessage[])[] = [];
+    const { pending, host, close } = await redeployed(
+      asking('limit', ran, sent),
+      asking('limit-v2', ran, sent),
+      'refused',
+    );
+    try {
+      const approve = await host.deliver({
+        input: '',
+        sessionId: 'refused',
+        decision: checkInApproved({ request: pending.ask!, by: 'alice' }),
+      });
+      expect(approve.code).toBe('ERR_RESUME_DECISION');
+      expect(REFUSAL_STATUS[approve.code!]).toBe(409);
+      expect(approve.error).toContain('the next message continues the conversation');
+      const decline = await host.deliver({
+        input: '',
+        sessionId: 'refused',
+        decision: checkInDeclined({ request: pending.ask!, by: 'alice' }),
+      });
+      expect(decline.code).toBe('ERR_NO_PENDING_ASK');
+      const next = await host.deliver({ input: 'what else?', sessionId: 'refused' });
+      expect(next.output).toBe('noted: what else?');
+      expect(toolResultsSeen(sent)).toEqual([NOT_RUN_UNANSWERABLE]);
+      expect(ran).toEqual([]);
+    } finally {
+      await close();
+    }
+  });
+
+  it('a check-in stored by an earlier release (no request recorded) closes on the next message', async () => {
+    const ran: number[] = [];
+    const sent: (readonly LLMMessage[])[] = [];
+    const agent = () =>
+      Agent.create({ provider: refundsModel(sent), model: 'test-model', maxIterations: 4 })
+        .system('terse')
+        .tool(refundTool(ran, true))
+        .build();
+    const sessions = memorySessions();
+    const host = inProcessHost();
+    const handle = await standingAgent({ agent: agent(), sessions, host });
+    try {
+      await host.deliver({ input: 'refund me', sessionId: 'older' });
+      // What an earlier release stored: no request record, and no id to show.
+      const stored = readPausedRun(await sessions.hydrate('older'));
+      const { pausedRequest: _record, ...state } = stored.checkpoint.sharedState as Record<
+        string,
+        unknown
+      >;
+      void _record;
+      const { id: _id, ...checkIn } = stored.pending.checkIn as unknown as Record<string, unknown>;
+      void _id;
+      await sessions.persist(
+        'older',
+        toPausedEnvelope({
+          ...stored,
+          checkpoint: { ...stored.checkpoint, sharedState: state },
+          pending: { ...stored.pending, checkIn: checkIn as never },
+        }),
+      );
+      const refused = await host.deliver({
+        input: '',
+        sessionId: 'older',
+        decision: { approved: true, by: 'alice', at: 1 },
+      });
+      expect(refused.code).toBe('ERR_RESUME_DECISION');
+      const next = await host.deliver({ input: 'never mind', sessionId: 'older' });
+      expect(next.output).toBe('noted: never mind');
+      expect(toolResultsSeen(sent)).toEqual([NOT_RUN_UNANSWERABLE]);
+      expect(ran).toEqual([]);
+    } finally {
+      await handle.close();
+    }
+  });
+
+  it('a plain message is enough: no answer has to be tried first', async () => {
+    const ran: number[] = [];
+    const sent: (readonly LLMMessage[])[] = [];
+    const agent = () =>
+      Agent.create({ provider: refundsModel(sent), model: 'test-model', maxIterations: 4 })
+        .system('terse')
+        .tool(refundTool(ran, true))
+        .build();
+    const sessions = memorySessions();
+    const host = inProcessHost();
+    const handle = await standingAgent({ agent: agent(), sessions, host });
+    try {
+      await host.deliver({ input: 'refund me', sessionId: 'plain' });
+      const stored = readPausedRun(await sessions.hydrate('plain'));
+      const { pausedRequest: _record, ...state } = stored.checkpoint.sharedState as Record<
+        string,
+        unknown
+      >;
+      void _record;
+      await sessions.persist(
+        'plain',
+        toPausedEnvelope({ ...stored, checkpoint: { ...stored.checkpoint, sharedState: state } }),
+      );
+      const next = await host.deliver({ input: 'never mind', sessionId: 'plain' });
+      expect(next.output).toBe('noted: never mind');
+      expect(toolResultsSeen(sent)).toEqual([NOT_RUN_UNANSWERABLE]);
+      // A pause that CAN still be answered keeps holding the session.
+      await host.deliver({ input: 'refund me again', sessionId: 'plain' });
+      const held = await host.deliver({ input: 'hello?', sessionId: 'plain' });
+      expect(held.code).toBe('ERR_AWAITING_DECISION');
+      expect(ran).toEqual([]);
     } finally {
       await handle.close();
     }

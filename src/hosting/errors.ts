@@ -135,7 +135,10 @@ export class PauseNotCarriedError extends Error {
  * pending question is named, and the session sits exactly where it was.
  *
  * Answer it by sending the same session a request carrying
- * {@link HostRequest.decision}.
+ * {@link HostRequest.decision}. A pause NO answer can reach any more — stored
+ * before requests were named, its call changed after the ask, or an ask made
+ * under rules the agent no longer runs — is not held this way: the door closes
+ * it and runs the message (`answeredPause.ts`).
  */
 export class AwaitingDecisionError extends Error {
   readonly code = 'ERR_AWAITING_DECISION' as const;

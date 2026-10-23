@@ -18,6 +18,7 @@ import {
   processDecisionLedger,
   runsAsAsked,
   spendDecision,
+  unanswerableReason,
   watchDecisionUse,
   type DecisionLedger,
   type GatedCall,
@@ -513,6 +514,47 @@ describe('checkDecisionAgainst', () => {
 });
 
 // ── spending once ───────────────────────────────────────────────────────
+
+describe('unanswerableReason — a paused request no decision can ever answer', () => {
+  const checkpointOf = (state: Record<string, unknown>): FlowchartCheckpoint =>
+    ({ sharedState: state, subflowPath: [] } as unknown as FlowchartCheckpoint);
+
+  it('an intact request can be answered', () => {
+    const p = paused();
+    expect(unanswerableReason(checkpointOf(p.state), 'checkIn', [])).toBeUndefined();
+    const asked = paused(askedCall());
+    expect(unanswerableReason(checkpointOf(asked.state), 'ask', asked.rules)).toBeUndefined();
+  });
+
+  it("a pause that recorded no request: 'request-not-recorded'", () => {
+    const { pausedRequest: _dropped, ...state } = paused().state;
+    void _dropped;
+    expect(unanswerableReason(checkpointOf(state), 'checkIn', [])).toBe('request-not-recorded');
+  });
+
+  it("a call changed after the ask: 'call-changed'", () => {
+    const p = paused();
+    const state = { ...p.state, pausedCheckInArgs: { amount: 50_000, to: 'acct-1' } };
+    expect(unanswerableReason(checkpointOf(state), 'checkIn', [])).toBe('call-changed');
+  });
+
+  it("an ask under rules the resuming agent no longer runs: 'chain-changed' — told only when its rules are known", () => {
+    const asked = paused(askedCall());
+    const state = checkpointOf(asked.state);
+    expect(unanswerableReason(state, 'ask', ['approval', 'limit-v2'])).toBe('chain-changed');
+    expect(unanswerableReason(state, 'ask', undefined)).toBeUndefined();
+  });
+
+  it('a checkpoint whose paused state cannot be found is left to the resume', () => {
+    expect(
+      unanswerableReason(
+        { subflowPath: ['missing'] } as unknown as FlowchartCheckpoint,
+        'checkIn',
+        [],
+      ),
+    ).toBeUndefined();
+  });
+});
 
 describe('spendDecision and the ledger', () => {
   const decisionFor = () => checkInApproved({ request: paused().minted.request, by: 'maya' });

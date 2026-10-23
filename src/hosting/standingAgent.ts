@@ -125,8 +125,10 @@ import { describePause } from './pendingAsk.js';
 import {
   afterFailedAnswer,
   answeredRefusal,
+  closedConversation,
   openToolCalls,
   readStoredSession,
+  unanswerablePause,
   watchAnswer,
 } from './answeredPause.js';
 import { envelopeOwner, envelopeTranscript, toEnvelope, toPausedEnvelope } from './envelope.js';
@@ -918,11 +920,16 @@ export async function standingAgent<TH extends HostHandle>(
         return;
       }
       // The one reading every door uses (`answeredPause.ts`): a pause whose
-      // decision a resume already used is not pending.
+      // decision a resume already used is not pending, and neither is one no
+      // answer can reach any more — the next message closes it.
       const held = stored === undefined ? undefined : readStoredSession(stored);
+      const waiting =
+        held?.waiting !== undefined && unanswerablePause(held.waiting, sharedAgent) === undefined
+          ? held.waiting
+          : undefined;
       deliverSessions(reply, 'session-pending', {
         op: 'pending',
-        pending: held?.waiting?.pending ?? null,
+        pending: waiting?.pending ?? null,
       });
       return;
     }
@@ -1766,6 +1773,7 @@ export async function standingAgent<TH extends HostHandle>(
               paused,
               watch,
               answer: request.decision,
+              error: err,
               settle: () => lane.writer?.settle(),
             });
           }
@@ -1776,10 +1784,19 @@ export async function standingAgent<TH extends HostHandle>(
         return;
       }
       if (paused && sessionId !== undefined) {
-        // The message is not run and the pause is not discarded. Both of the
-        // other options lose something a person cared about.
-        reply.fail(new AwaitingDecisionError(sessionId, paused.pending));
-        return;
+        if (unanswerablePause(paused, runner) === undefined) {
+          // The message is not run and the pause is not discarded. Both of the
+          // other options lose something a person cared about.
+          reply.fail(new AwaitingDecisionError(sessionId, paused.pending));
+          return;
+        }
+        // …unless no answer can ever reach it: paused before requests were
+        // named, its call changed after the ask, or an ask made under rules
+        // this agent no longer runs. Held, it would hold the session for
+        // good — so it is closed, the message continues the conversation, and
+        // the calls it left open are recorded as not run (`answeredPause.ts`).
+        prior = closedConversation(paused);
+        paused = undefined;
       }
 
       const turnOptions = await withSealedRequest();

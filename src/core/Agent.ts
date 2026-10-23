@@ -61,6 +61,7 @@ import {
   checkDecisionAgainst,
   noteDecisionTakenUp,
   pausedRequestIdOf,
+  registerConsentRules,
   type DecisionLedger,
 } from './consentRequest.js';
 import type {
@@ -1307,6 +1308,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // The two governance chains. Empty arrays (not undefined) so every read
     // site is a plain `.length > 0` test rather than an optional dance.
     this.toolMiddleware = toolMiddleware ?? [];
+    // What an ask's approval holds to, for a host that keeps this agent's
+    // pauses and must tell one no answer can reach (`consentRequest.ts`).
+    registerConsentRules(this, () => this.toolMiddleware.map((link) => link.name));
     this.messageMiddleware = messageMiddleware ?? [];
     // Default 'summary' — measurement-gated (#18): stageReads values have
     // zero consumers across af/lens/eui, and 'full' clones ~18MB of unread

@@ -9,16 +9,24 @@ import { describe, expect, it, vi } from 'vitest';
 import type { FlowchartCheckpoint } from 'footprintjs';
 
 import {
+  NOT_RUN_UNANSWERABLE,
   OUTCOME_NOT_RECORDED,
   afterFailedAnswer,
   answeredRefusal,
+  closedConversation,
   markAnswered,
   openToolCalls,
   readStoredSession,
   settleOpenCalls,
+  unanswerablePause,
   watchAnswer,
 } from '../../src/hosting/answeredPause.js';
-import { readPausedRun, toEnvelope, toPausedEnvelope } from '../../src/hosting/index.js';
+import {
+  readEnvelope,
+  readPausedRun,
+  toEnvelope,
+  toPausedEnvelope,
+} from '../../src/hosting/index.js';
 import type { CheckpointEnvelope, PausedRun } from '../../src/hosting/index.js';
 import {
   inMemoryDecisionLedger,
@@ -94,6 +102,25 @@ describe('openToolCalls / settleOpenCalls', () => {
       toolCallId: 'b',
       toolResultOrigin: 'outcome-unknown',
     });
+  });
+});
+
+describe('closedConversation / unanswerablePause — a pause no answer can reach', () => {
+  it('settles every call the pause left open as not run, marked for findings admission', () => {
+    const closed = closedConversation(pausedOver(halfAnswered, { findingsServe: 'ids' }));
+    expect(closed.history.slice(0, halfAnswered.length)).toEqual(halfAnswered);
+    expect(closed.history[closed.history.length - 1]).toEqual({
+      role: 'tool',
+      toolName: 'refund',
+      toolCallId: 'b',
+      toolResultOrigin: 'not-entered',
+      content: NOT_RUN_UNANSWERABLE,
+    });
+    expect(openToolCalls(closed.history)).toEqual([]);
+  });
+
+  it('a pause that asks for no decision is never one', () => {
+    expect(unanswerablePause(pausedOver(halfAnswered))).toBeUndefined();
   });
 });
 
@@ -400,6 +427,94 @@ describe('afterFailedAnswer — marked when its decision may have been used', ()
     expect(watchAnswer(valuePause)).toBeUndefined();
     expect(await after(undefined, { paused: valuePause })).toBe('kept');
     expect(written).toEqual([]);
+  });
+
+  describe('a refusal no decision can change, having used nothing, closes the pause', () => {
+    const refusal = (reason: string) =>
+      Object.assign(new Error('refused'), { code: 'ERR_RESUME_DECISION', reason });
+
+    it.each(['request-not-recorded', 'call-changed', 'chain-changed'])(
+      "closed for '%s': the store holds the conversation it goes on from, every open call not run",
+      async (reason) => {
+        const { paused, written, after } = setup();
+        const watch = await watched(paused, 'taken-up');
+        expect(
+          await afterFailedAnswer({
+            store: {
+              hydrate: async () => toPausedEnvelope(paused),
+              persist: async (_id: string, envelope: CheckpointEnvelope) =>
+                void written.push(envelope),
+            },
+            sessionId: 's',
+            paused,
+            watch,
+            error: refusal(reason),
+          }),
+        ).toBe('closed');
+        expect(written[0]?.format).toBe('conversation-v1');
+        const history = readEnvelope(written[0]!).history;
+        expect(history[history.length - 1]?.content).toBe(NOT_RUN_UNANSWERABLE);
+        watch?.release();
+        void after;
+      },
+    );
+
+    it('any other refusal, or a decision that may have been used, never closes it', async () => {
+      for (const [happened, error, outcome] of [
+        ['taken-up', refusal('other-request'), 'kept'],
+        ['taken-up', new Error('model unavailable'), 'kept'],
+        ['spent', refusal('chain-changed'), 'marked'],
+      ] as const) {
+        const { paused, after } = setup();
+        const watch = await watched(paused, happened);
+        expect(
+          await afterFailedAnswer({
+            store: {
+              hydrate: async () => toPausedEnvelope(paused),
+              persist: async () => undefined,
+            },
+            sessionId: 's',
+            paused,
+            watch,
+            error,
+          }),
+        ).toBe(outcome);
+        watch?.release();
+        void after;
+      }
+    });
+
+    it('closes only the same pause, still waiting, read back from the store', async () => {
+      const reads: ((paused: PausedRun) => CheckpointEnvelope | undefined)[] = [
+        () => undefined,
+        (paused) => toPausedEnvelope(markAnswered(paused, undefined, 1)),
+        (paused) =>
+          toPausedEnvelope({ ...paused, pending: { checkIn: { id: 'c'.repeat(64) } as never } }),
+        (paused) => toEnvelope(paused.conversation),
+        () => {
+          throw new Error('read timed out');
+        },
+      ];
+      for (const read of reads) {
+        const { paused, written } = setup();
+        const watch = await watched(paused, 'taken-up');
+        expect(
+          await afterFailedAnswer({
+            store: {
+              hydrate: async () => read(paused),
+              persist: async (_id: string, envelope: CheckpointEnvelope) =>
+                void written.push(envelope),
+            },
+            sessionId: 's',
+            paused,
+            watch,
+            error: refusal('chain-changed'),
+          }),
+        ).toBe('kept');
+        expect(written).toEqual([]);
+        watch?.release();
+      }
+    });
   });
 
   it('a store that refuses the WRITE is swallowed — and said on the console, never silent', async () => {

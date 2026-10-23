@@ -6,7 +6,7 @@ title: isPauseRequest
 
 > **isPauseRequest**(`err`): `err is PauseRequest`
 
-Defined in: [src/core/pause.ts:564](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L564)
+Defined in: [src/core/pause.ts:573](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L573)
 
 Type guard for a thrown `PauseRequest`.
 

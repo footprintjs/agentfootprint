@@ -281,9 +281,12 @@ The rules for the verifiers themselves are in `src/adapters/identity/README.md`.
   pause to answer), the watch a door opens before it hands an answer over
   (`watchAnswer`), and the one step after that answer's resume failed
   (`afterFailedAnswer` — marked when the watch says the decision reached a
-  ledger), shared by `standingAgent` and `streamHandler`; it settles the calls
-  that run left open (a declined one as declined) so the next message can
-  continue.
+  ledger; closed when nothing was used and no decision could ever answer it),
+  shared by `standingAgent` and `streamHandler`; it settles the calls that run
+  left open (a declined one as declined) so the next message can continue. A
+  pause no answer can reach any more (`unanswerablePause`) is closed rather than
+  held: the next message continues `closedConversation`, every open call
+  recorded as not run.
 
 ## A hosted agent under `redact` — the record served, the person answered
 

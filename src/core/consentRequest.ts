@@ -207,6 +207,8 @@ interface ProcessState {
   readonly ledger: DecisionLedger;
   /** The watches open now, by request id — one per door resume in flight. */
   readonly watches: Map<string, Set<WatchedUse>>;
+  /** Each agent's chain by link name, read when asked ({@link consentRulesOf}). */
+  readonly rules: WeakMap<object, () => readonly string[]>;
 }
 
 /**
@@ -227,9 +229,32 @@ function processState(): ProcessState {
   const holder = globalThis as { [PROCESS_STATE]?: ProcessState };
   const existing = holder[PROCESS_STATE];
   if (existing !== undefined) return existing;
-  const made: ProcessState = { ledger: inMemoryDecisionLedger(), watches: new Map() };
+  const made: ProcessState = {
+    ledger: inMemoryDecisionLedger(),
+    watches: new Map(),
+    rules: new WeakMap(),
+  };
   Object.defineProperty(globalThis, PROCESS_STATE, { value: made });
   return made;
+}
+
+/**
+ * Register the rules `agent` holds an ask's approval to — its `toolMiddleware`
+ * chain by link name, read each time it is asked — for a host that keeps its
+ * pauses ({@link consentRulesOf}). Called by every `Agent` it builds.
+ */
+export function registerConsentRules(agent: object, rules: () => readonly string[]): void {
+  processState().rules.set(agent, rules);
+}
+
+/**
+ * The rules `runner` holds an ask's approval to, when it is an agent this
+ * library built — `undefined` for any other runner (a composition, an app's
+ * own), whose nested agents' rules a host cannot see.
+ */
+export function consentRulesOf(runner: unknown): readonly string[] | undefined {
+  if (typeof runner !== 'object' || runner === null) return undefined;
+  return processState().rules.get(runner)?.();
 }
 
 /**
@@ -330,15 +355,65 @@ export function heldDecision(
   if (pending === undefined) throw new ResumeDecisionError('request-not-recorded', gate.kind);
   if (requestId === undefined) throw new ResumeDecisionError('no-request', gate.kind);
   if (requestId !== pending.id) throw new ResumeDecisionError('other-request', gate.kind);
-  if (requestIdOf(pending.nonce, call) !== pending.id) {
-    throw new ResumeDecisionError('call-changed', gate.kind);
-  }
+  const refused = requestRefusal(recorded, call, rules);
+  if (refused !== undefined) throw new ResumeDecisionError(refused, gate.kind);
+  return decision as CheckInDecision;
+}
+
+/**
+ * The refusals no decision can change — a paused request that can never be
+ * answered by the agent whose rules are `rules`. See {@link unanswerableReason}.
+ */
+export type UnanswerableReason = 'request-not-recorded' | 'call-changed' | 'chain-changed';
+
+/**
+ * The refusals about the paused request itself, whatever the decision says —
+ * the one rule {@link heldDecision} and {@link unanswerableReason} share.
+ *
+ * @param rules the resuming agent's chain by link name, or `undefined` when it
+ *   is not known — an ask's chain is then not checked.
+ */
+function requestRefusal(
+  recorded: unknown,
+  call: GatedCall,
+  rules: readonly string[] | undefined,
+): UnanswerableReason | undefined {
+  const pending = readPendingRequest(recorded);
+  if (pending === undefined) return 'request-not-recorded';
+  if (requestIdOf(pending.nonce, call) !== pending.id) return 'call-changed';
   // The checkpoint is the one the person was asked over; the agent resuming it
   // must still be one that runs the same rules from the asking link on.
-  if (call.gate === 'ask' && !sameChain(call.chain, rules, call.askIndex)) {
-    throw new ResumeDecisionError('chain-changed', gate.kind);
+  if (call.gate === 'ask' && rules !== undefined && !sameChain(call.chain, rules, call.askIndex)) {
+    return 'chain-changed';
   }
-  return decision as CheckInDecision;
+  return undefined;
+}
+
+/**
+ * Why the request a checkpoint's paused stage records can never be answered —
+ * by any decision — or `undefined` when it can, or when that cannot be told
+ * from the checkpoint (its paused state is not where it should be).
+ *
+ * Read by a host that keeps the pause, so a session is not held by a question
+ * nobody can answer any more: one paused before requests were named
+ * (`'request-not-recorded'`), one whose call changed after the ask
+ * (`'call-changed'`), or an ask made under rules the resuming agent no longer
+ * runs (`'chain-changed'` — told only when `rules` are known).
+ */
+export function unanswerableReason(
+  checkpoint: FlowchartCheckpoint,
+  gate: ConsentGateKind,
+  rules: readonly string[] | undefined,
+): UnanswerableReason | undefined {
+  let state: Record<string, unknown> | undefined;
+  try {
+    state = pausedStateOf(checkpoint);
+  } catch {
+    return undefined;
+  }
+  if (state === undefined) return undefined;
+  const read = (key: string): unknown => state?.[key];
+  return requestRefusal(read('pausedRequest'), gatedCallOf(read, gate), rules);
 }
 
 /**

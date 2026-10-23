@@ -21,13 +21,22 @@
 import { HttpAgent } from '@ag-ui/client';
 import { describe, expect, it } from 'vitest';
 
-import { Agent, defineTool, inMemoryDecisionLedger, Parallel, Sequence } from '../../src/index.js';
+import {
+  Agent,
+  allow,
+  ask,
+  defineTool,
+  inMemoryDecisionLedger,
+  Parallel,
+  Sequence,
+} from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
 import type { LLMRequest } from '../../src/index.js';
 import { askHuman } from '../../src/core/pause.js';
 import { installDurabilityBarrier } from '../../src/core/durabilityBarrier.js';
 import { memorySessions } from '../../src/hosting/memorySessions.js';
-import { readPausedRun } from '../../src/hosting/envelope.js';
+import { readPausedRun, toPausedEnvelope } from '../../src/hosting/envelope.js';
+import { NOT_RUN_UNANSWERABLE } from '../../src/hosting/answeredPause.js';
 import { streamHandler, type StreamHandlerOptions } from '../../src/hosting/streamHandler.js';
 import type { ThreadBinder } from '../../src/hosting/protocolAdapter.js';
 import { agUi, type AgUiOptions } from '../../src/ag-ui/adapter.js';
@@ -536,6 +545,135 @@ describe('scenario — an AG-UI frontend runs an agentfootprint agent', () => {
     const { result } = await client.runAgent({ resume: [answer] });
     expect(result).toBe('Refunded.');
     expect(refunded).toEqual([40]);
+  });
+
+  it('a pause no answer can reach any more does not hold the thread: the next message continues it, the call recorded as not run', async () => {
+    const refunded: number[] = [];
+    const refund = defineTool<{ amount: number }, string>({
+      name: 'issue_refund',
+      description: 'Refund a customer.',
+      inputSchema: { type: 'object', properties: { amount: { type: 'number' } } },
+      checkIn: 'always',
+      execute: async ({ amount }) => {
+        refunded.push(amount);
+        return `refunded ${amount}`;
+      },
+    });
+    const { provider, seen } = watched([
+      { content: '', toolCalls: [{ id: 'r1', name: 'issue_refund', args: { amount: 40 } }] },
+      'Noted.',
+    ]);
+    const sessions = memorySessions();
+    // A request's credential is sealed only for a request that RUNS.
+    let sealed = 0;
+    const client = frontend({
+      agent: () => Agent.create({ provider, model: 'm' }).system('s').tool(refund).build(),
+      threads: signedIn,
+      sessions,
+      sealRequest: () => {
+        sealed += 1;
+        return undefined;
+      },
+    });
+    client.addMessage({ id: 'u1', role: 'user', content: 'Refund 40' });
+    await client.runAgent();
+    expect(client.pendingInterrupts).toHaveLength(1);
+    expect(sealed).toBe(1);
+    // What an earlier release stored: no record of the request it asked.
+    const stored = readPausedRun(await sessions.hydrate('alice:thread-1'));
+    const { pausedRequest: _record, ...state } = stored.checkpoint.sharedState as Record<
+      string,
+      unknown
+    >;
+    void _record;
+    await sessions.persist(
+      'alice:thread-1',
+      toPausedEnvelope({ ...stored, checkpoint: { ...stored.checkpoint, sharedState: state } }),
+    );
+
+    // The page answers the question it holds: nothing runs, the run ends
+    // cancelled, and the client lets the question go.
+    const [interrupt] = client.pendingInterrupts;
+    await client.runAgent({
+      resume: [
+        {
+          interruptId: interrupt!.id,
+          status: 'resolved',
+          payload: { approved: true, by: 'alice', at: 1 },
+        },
+      ],
+    });
+    expect(client.pendingInterrupts).toEqual([]);
+    expect(refunded).toEqual([]);
+    // Nothing ran, so nothing was sealed for it.
+    expect(sealed).toBe(1);
+
+    client.addMessage({ id: 'u2', role: 'user', content: 'never mind' });
+    const { result } = await client.runAgent();
+    expect(result).toBe('Noted.');
+    expect(sealed).toBe(2);
+    const told = seen[seen.length - 1]!.messages.filter((m) => m.role === 'tool');
+    expect(told.map((m) => m.content)).toEqual([NOT_RUN_UNANSWERABLE]);
+    expect(refunded).toEqual([]);
+    expect((await sessions.hydrate('alice:thread-1'))?.format).toBe('conversation-v1');
+  });
+
+  it('an ask whose rules a redeploy changed is refused when answered — and closed, so the next message continues', async () => {
+    const refunded: number[] = [];
+    const refund = defineTool<{ amount: number }, string>({
+      name: 'issue_refund',
+      description: 'Refund a customer.',
+      inputSchema: { type: 'object', properties: { amount: { type: 'number' } } },
+      execute: async ({ amount }) => {
+        refunded.push(amount);
+        return `refunded ${amount}`;
+      },
+    });
+    const { provider, seen } = watched([
+      { content: '', toolCalls: [{ id: 'r1', name: 'issue_refund', args: { amount: 40 } }] },
+      'Noted.',
+    ]);
+    let later = 'limit';
+    const sessions = memorySessions();
+    const client = frontend({
+      agent: () =>
+        Agent.create({ provider, model: 'm' })
+          .system('s')
+          .tool(refund)
+          .toolMiddleware(
+            { name: 'approval', onToolCall: () => ask({ question: 'Refund?' }) },
+            { name: later, onToolCall: () => allow() },
+          )
+          .build(),
+      threads: signedIn,
+      sessions,
+    });
+    client.addMessage({ id: 'u1', role: 'user', content: 'Refund 40' });
+    await client.runAgent();
+    const [interrupt] = client.pendingInterrupts;
+    later = 'limit-v2'; // the redeploy
+    await client
+      .runAgent({
+        resume: [
+          {
+            interruptId: interrupt!.id,
+            status: 'resolved',
+            payload: { approved: true, by: 'alice', at: 1 },
+          },
+        ],
+      })
+      .catch(() => undefined);
+    expect(refunded).toEqual([]);
+    expect((await sessions.hydrate('alice:thread-1'))?.format).toBe('conversation-v1');
+    // Refused, closed — and the run ended cancelled, so the client let it go.
+    expect(client.pendingInterrupts).toEqual([]);
+
+    client.addMessage({ id: 'u2', role: 'user', content: 'never mind' });
+    const { result } = await client.runAgent();
+    expect(result).toBe('Noted.');
+    const told = seen[seen.length - 1]!.messages.filter((m) => m.role === 'tool');
+    expect(told.map((m) => m.content)).toEqual([NOT_RUN_UNANSWERABLE]);
+    expect(refunded).toEqual([]);
   });
 
   it('what a page may not decide is refused by name, and the client surfaces it', async () => {

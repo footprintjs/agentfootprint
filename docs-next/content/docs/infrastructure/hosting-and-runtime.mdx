@@ -1279,7 +1279,8 @@ Two mismatches are refused by name rather than guessed at:
   (`ERR_AWAITING_DECISION`, `409`), naming the pending ask. The message is not
   run and the pause is not discarded — answering the message would step over an
   outstanding consent gate, and dropping the question to answer the message
-  would throw away work somebody was asked to approve.
+  would throw away work somebody was asked to approve. The one exception is a
+  question **no answer can reach any more** — see below.
 - **a decision when nothing is pending** → `NoPendingAskError`
   (`ERR_NO_PENDING_ASK`, `409`). Usually a duplicate delivery; running it as an
   ordinary message would put a raw approval into the conversation as if a
@@ -1288,6 +1289,25 @@ Two mismatches are refused by name rather than guessed at:
 A refusal never names a request id — not in its body, not on the error — so a
 client that retries a `409` learns nothing it could answer a different request
 with. The request to show the person is the pending ask the host replied with.
+
+**A question no answer can reach is closed, not held.** Some consent pauses can
+never be answered, whatever the decision: one stored by a release before
+requests were named (`'request-not-recorded'`), one whose call changed after the
+ask (`'call-changed'`), and a middleware ask made under rules the serving agent
+no longer runs — a redeploy renamed, moved or removed a link after the asking
+one (`'chain-changed'`). Held, such a pause would hold the session for good. So
+both doors close it: the next message continues the conversation, and every call
+the pause left open is recorded for the model as not run ("That call did not
+run: the question it waited on could no longer be answered."). A decision for
+it is refused by name (`ERR_RESUME_DECISION`, `409`, its `reason`), runs nothing
+and closes it too — except, on `standingAgent`, a pause stored by an earlier
+release, whose question names no request: the next message closes that one.
+Over AG-UI an answer to it ends the run cancelled — nothing runs — so the page's
+client lets the interrupt go and the next message goes through. `standingAgent`
+tells all three before a message runs, and its pending-question op reports
+nothing pending for one it can already tell is unanswerable (a redeployed chain
+only when it serves one shared agent); `streamHandler` tells the first two
+before anything runs, and a redeployed chain when an answer is refused.
 
 **Once, across what a host does to a session.** A decision is spent in a
 `DecisionLedger`, and "once" holds per ledger. Every agent a door serves that

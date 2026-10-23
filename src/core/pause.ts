@@ -429,6 +429,14 @@ export class ResumeDecisionError extends Error {
   }
 }
 
+/**
+ * What a host that keeps the pause does with one no decision can answer
+ * (`hosting/answeredPause.ts`): it closes it rather than hold the session.
+ */
+const CLOSED_BY_A_HOST =
+  'A host that keeps the pause (standingAgent, streamHandler) closes it: the next message ' +
+  'continues the conversation, the call recorded as not run.';
+
 function resumeDecisionMessage(reason: ResumeDecisionRefusal): string {
   switch (reason) {
     case 'no-request':
@@ -444,7 +452,7 @@ function resumeDecisionMessage(reason: ResumeDecisionRefusal): string {
         `[resume] this run paused on a consent gate without a record of the request it asked — ` +
         `a checkpoint written before requests were named, or one whose record was removed. No ` +
         `decision can answer it. Nothing was executed; abandon this pause and ask again in a ` +
-        `new run.`
+        `new run. ${CLOSED_BY_A_HOST}`
       );
     case 'other-request':
       return (
@@ -458,7 +466,8 @@ function resumeDecisionMessage(reason: ResumeDecisionRefusal): string {
         `[resume] this decision names the paused request, but the paused call is no longer the ` +
         `call the person was asked about: the checkpoint's tool, arguments, call id, served ` +
         `party or middleware position changed after the ask. An approval binds to the exact ` +
-        `call it was shown. Nothing was executed; treat the checkpoint as altered.`
+        `call it was shown. Nothing was executed; treat the checkpoint as altered — no ` +
+        `decision can answer it. ${CLOSED_BY_A_HOST}`
       );
     case 'chain-changed':
       return (
@@ -467,7 +476,7 @@ function resumeDecisionMessage(reason: ResumeDecisionRefusal): string {
         `after it, was removed, added, renamed or moved since (a redeploy). The rest of the ` +
         `chain would not be the rules the approval was given under, so the approval is not ` +
         `used. Nothing was executed; resume on an agent built with the same chain, or abandon ` +
-        `the pause and ask again in a new run.`
+        `the pause and ask again in a new run. ${CLOSED_BY_A_HOST}`
       );
     case 'already-answered':
       return (
