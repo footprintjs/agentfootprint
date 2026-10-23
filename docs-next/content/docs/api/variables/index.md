@@ -2,7 +2,7 @@
 title: Variables
 ---
 
-75 exported from `agentfootprint`.
+72 exported from `agentfootprint`.
 
 - [`ABSENCE_MARKER`](/docs/api/variables/ABSENCE_MARKER)
 - [`ABSENCE_NOTE`](/docs/api/variables/ABSENCE_NOTE)
@@ -41,13 +41,10 @@ title: Variables
 - [`IN_PROGRESS_SECTION_LABEL`](/docs/api/variables/IN_PROGRESS_SECTION_LABEL)
 - [`IN_PROGRESS_WIRE`](/docs/api/variables/IN_PROGRESS_WIRE)
 - [`INJECTION_KEYS`](/docs/api/variables/INJECTION_KEYS)
-- [`KNOWN_NAMES_SHOWN`](/docs/api/variables/KNOWN_NAMES_SHOWN)
 - [`lexicalDriverScorer`](/docs/api/variables/lexicalDriverScorer)
 - [`LIBRARY_AUTHORED_PREFIXES`](/docs/api/variables/LIBRARY_AUTHORED_PREFIXES)
 - [`LIBRARY_NOTE_OPENING`](/docs/api/variables/LIBRARY_NOTE_OPENING)
 - [`LOOP_MOMENTS`](/docs/api/variables/LOOP_MOMENTS)
-- [`MAX_NAME_CHARS`](/docs/api/variables/MAX_NAME_CHARS)
-- [`MAX_NAMES_RANKED`](/docs/api/variables/MAX_NAMES_RANKED)
 - [`MILESTONE_KINDS`](/docs/api/variables/MILESTONE_KINDS)
 - [`MILESTONE_LABEL_TAG_PREFIX`](/docs/api/variables/MILESTONE_LABEL_TAG_PREFIX)
 - [`MILESTONE_TAG_PREFIX`](/docs/api/variables/MILESTONE_TAG_PREFIX)

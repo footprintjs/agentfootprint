@@ -13,11 +13,6 @@ fleet ("the fcns database on shq-fab-a", "the last 24h", "all four
 arrays"). It is never composed from the model's arguments by this library,
 because the library does not know which of them are real.
 
-## Extended by
-
-- [`NamesFacetItem`](/docs/api/interfaces/NamesFacetItem)
-- [`SourceGapItem`](/docs/api/interfaces/SourceGapItem)
-
 ## Properties
 
 ### kind?
