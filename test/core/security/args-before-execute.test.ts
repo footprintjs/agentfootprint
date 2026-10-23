@@ -19,6 +19,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Agent, defineTool } from '../../../src/index.js';
 import { mock } from '../../../src/llm-providers.js';
 import type { PermissionChecker } from '../../../src/provider-contract/types.js';
+import { frozenCopyOf, frozenView, isSealed } from '../../../src/lib/frozenCopy.js';
 
 function refundAgent(
   ran: unknown[],
@@ -163,5 +164,99 @@ describe('a callback that writes into its frozen copy — one dev-mode warning n
     expect(
       warn.mock.calls.map((call) => String(call[0])).filter((l) => l.includes('frozen')),
     ).toEqual([]);
+  });
+});
+
+describe('arguments holding a container freezing cannot seal get one copy per callback', () => {
+  // A provider (app code) can hand a call a Map, a Set, a Date or a typed
+  // array; so can a middleware rewrite. `Object.freeze` leaves their contents
+  // writable, so a copy holding one is never shared: each callback gets its
+  // own, and none of them reaches the tool's arguments.
+  it('a tool_start listener that writes into a Map does not change what the checker and the predicate judge', async () => {
+    const usage = { input: 1, output: 1 };
+    let calls = 0;
+    const provider = {
+      name: 'app-provider',
+      complete: async () =>
+        calls++ === 0
+          ? {
+              content: '',
+              toolCalls: [
+                {
+                  id: 'r1',
+                  name: 'issue_refund',
+                  args: { amount: 5, limits: new Map([['cap', 10]]) },
+                },
+              ],
+              usage,
+              stopReason: 'tool_use' as const,
+            }
+          : { content: 'done', toolCalls: [], usage, stopReason: 'stop' as const },
+    };
+    const seen: { checker?: unknown; predicate?: unknown; tool?: unknown; objects: unknown[] } = {
+      objects: [],
+    };
+    const agent = Agent.create({
+      provider: provider as never,
+      model: 'm',
+      permissionChecker: {
+        name: 'reader',
+        check: (request) => {
+          seen.objects.push(request.context);
+          seen.checker = (request.context as { limits: Map<string, number> }).limits.get('cap');
+          return { result: 'allow' };
+        },
+      },
+    })
+      .system('You issue refunds.')
+      .tool(
+        defineTool<{ amount: number; limits: Map<string, number> }, string>({
+          name: 'issue_refund',
+          description: 'Issue a refund',
+          inputSchema: { type: 'object', properties: { amount: { type: 'number' } } },
+          checkIn: ((args: { limits: Map<string, number> }) => {
+            seen.objects.push(args);
+            seen.predicate = args.limits.get('cap');
+            return false;
+          }) as never,
+          execute: (args) => {
+            seen.tool = args.limits.get('cap');
+            return 'refunded';
+          },
+        }),
+      )
+      .build();
+    agent.on('agentfootprint.stream.tool_start', (event) => {
+      seen.objects.push(event.payload.args);
+      (event.payload.args as { limits: Map<string, number> }).limits.set('cap', 9000);
+    });
+    await agent.run({ message: 'refund me' });
+    expect(seen.checker).toBe(10);
+    expect(seen.predicate).toBe(10);
+    expect(seen.tool).toBe(10);
+    expect(new Set(seen.objects).size).toBe(3);
+  });
+});
+
+describe('UNIT — frozenCopyOf / isSealed / frozenView', () => {
+  it('JSON arguments are sealed: one copy, handed on as it is', () => {
+    const copy = frozenCopyOf({ amount: 5, lines: [{ sku: 'a' }] })!;
+    expect(isSealed(copy)).toBe(true);
+    expect(isSealed(copy.lines)).toBe(true);
+    expect(frozenView(copy)).toBe(copy);
+  });
+
+  it.each([
+    ['a Map', { m: new Map([['k', 1]]) }],
+    ['a Set', { s: new Set([1]) }],
+    ['a Date', { d: new Date(0) }],
+    ['a typed array', { t: new Uint8Array([1, 2]) }],
+    ['an ArrayBuffer', { b: new ArrayBuffer(4) }],
+  ])('a copy holding %s is not sealed: every view of it is a new copy', (_label, value) => {
+    const copy = frozenCopyOf(value)!;
+    expect(isSealed(copy)).toBe(false);
+    const view = frozenView(copy);
+    expect(view).not.toBe(copy);
+    expect(view).toEqual(copy);
   });
 });

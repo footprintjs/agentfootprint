@@ -133,7 +133,7 @@ export interface PendingRequest {
   readonly nonce: string;
   /**
    * The identity of the ledger the request was minted under — the agent's
-   * `decisionLedger` (`app:` + its `id`) or this process's default
+   * `decisionLedger` (`store:` + its `storeId`) or this process's default
    * (`process:` + a per-process random id). Only that ledger can prove the
    * paused call never ran ({@link proveNeverRan}). Absent when the ledger has
    * no stable identity, and on a pause stored before it was recorded: such a
@@ -168,14 +168,24 @@ export interface BoundRequest {
  */
 export interface DecisionLedger {
   /**
-   * OPTIONAL — a stable name for this ledger: the same in every process that
-   * shares it, and never given to another ledger (a table name, say). A host
-   * that closes a pause no answer can reach asks the ledger the pause was
-   * minted under — and only that one — whether its call can have run
-   * ({@link DecisionLedger.spend}); without an `id` a ledger is never asked,
-   * and the call's outcome is recorded as not known.
+   * OPTIONAL — the identity of the store this ledger records into. A host that
+   * closes a pause no answer can reach asks the ledger the pause was minted
+   * under — and only that one — to prove its call never ran
+   * ({@link DecisionLedger.spend}); a ledger without a `storeId` never proves,
+   * and the call is recorded as possibly run.
+   *
+   * The contract this library cannot check, and that the proof rests on:
+   *
+   *  - unique per BACKING STORE: one value for one table (or collection, or
+   *    key space) and every process that writes it — never copied from
+   *    staging to production, never shared by per-tenant tables;
+   *  - permanent: the same for the life of that store;
+   *  - changed on any migration to a new store — a request spent in the old
+   *    store is not in the new one, and must not be read as never spent there.
+   *
+   * Spends in it are permanent too (no expiry) — see `spend`.
    */
-  readonly id?: string;
+  readonly storeId?: string;
   /**
    * Record `requestId` as answered. Resolve `true` when THIS call recorded it
    * and `false` when it was already recorded — atomically per id: of two
@@ -184,10 +194,11 @@ export interface DecisionLedger {
    * closed: the tool does not run.
    *
    * A recorded id stays recorded: for a ledger that is to prove a paused call
-   * never ran (one with an {@link DecisionLedger.id}), the result is permanent
-   * — no expiry. A host closing a pause spends its request here as the proof
-   * (`true`: no decision had reached it, and none ever can); a key that
-   * expired would let a spent request read as never spent.
+   * never ran (one with a {@link DecisionLedger.storeId}), the result is
+   * permanent — no expiry. A host closing a pause spends its request here as
+   * the proof (`true`: no decision had reached it, and none ever can), then
+   * `closed-proven:<requestId>` to record that IT closed it; a key that expired
+   * would let a spent request read as never spent.
    */
   spend(requestId: string): boolean | Promise<boolean>;
   /**
@@ -196,8 +207,12 @@ export interface DecisionLedger {
    * host can tell a spend that never landed (the call did not run; the pause
    * stays answerable) from one that did. A ledger without it, or one that
    * throws or answers anything but `false`, counts as spent: the host stops
-   * offering the pause. Never asked for a proof that a call did not run —
-   * a read can be overtaken by a resume elsewhere; only `spend` proves.
+   * offering the pause. Asked, too, whether a host recorded closing a request
+   * (`closed-proven:<requestId>`) — so a retried close keeps the verdict the
+   * first one proved, and a person whose answer arrives after the close is
+   * told the host closed it. Never asked whether the REQUEST is unspent as a
+   * proof that its call did not run: a read can be overtaken by a resume
+   * elsewhere; only `spend` proves.
    */
   isSpent?(requestId: string): boolean | Promise<boolean>;
 }
@@ -341,7 +356,7 @@ export function registerConsentLedger(agent: object, ledger: DecisionLedger | un
   proofState().ledgers.set(agent, ledger ?? processDecisionLedger());
 }
 
-/** The longest `DecisionLedger.id` a pause records. */
+/** The longest `DecisionLedger.storeId` a pause records. */
 const MAX_LEDGER_ID = 200;
 
 /**
@@ -351,21 +366,21 @@ const MAX_LEDGER_ID = 200;
  *  - this process's default ledger: `process:` + an id drawn when the process
  *    first asked. A restart draws another, so it never answers for a pause an
  *    earlier process stored — that process took its ledger with it;
- *  - a ledger with a stable `id` (`DecisionLedger.id`): `app:` + that id;
- *  - any other — an app's own `inMemoryDecisionLedger()`, a ledger without an
- *    `id` — none: it may be one agent's alone, and nothing tells it apart
- *    from another.
+ *  - a ledger naming its store (`DecisionLedger.storeId`): `store:` + that id;
+ *  - any other — an app's own `inMemoryDecisionLedger()`, a ledger without a
+ *    `storeId` — none: it may be one agent's alone, and nothing tells it
+ *    apart from another.
  */
 export function ledgerIdentityOf(ledger: DecisionLedger): string | undefined {
   if (ledger === processState().ledger) return proofState().processLedger;
-  let id: unknown;
+  let storeId: unknown;
   try {
-    id = ledger.id;
+    storeId = ledger.storeId;
   } catch {
     return undefined;
   }
-  return typeof id === 'string' && id.length > 0 && id.length <= MAX_LEDGER_ID
-    ? `app:${id}`
+  return typeof storeId === 'string' && storeId.length > 0 && storeId.length <= MAX_LEDGER_ID
+    ? `store:${storeId}`
     : undefined;
 }
 
@@ -385,15 +400,57 @@ export interface NeverRanQuestion {
 }
 
 /**
+ * The key a closer spends, after it won a request, to record that IT closed it
+ * ({@link proveNeverRan}). Request ids are 64 hex characters, so no request id
+ * is ever one of these.
+ */
+export function closedProvenKey(requestId: string): string {
+  return `closed-proven:${requestId}`;
+}
+
+/**
+ * The ledger that may prove a closed pause's call never ran, or `undefined`
+ * when none can: the guards {@link proveNeverRan} and {@link closedByAHost}
+ * share.
+ */
+function provingLedger(question: NeverRanQuestion): DecisionLedger | undefined {
+  const { requestIds, mintedUnder, runner } = question;
+  if (requestIds.length === 0 || mintedUnder === undefined) return undefined;
+  if (typeof runner !== 'object' || runner === null) return undefined;
+  const proof = proofState();
+  const ledger = proof.ledgers.get(runner);
+  if (ledger === undefined || ledgerIdentityOf(ledger) !== mintedUnder) return undefined;
+  if (mintedUnder === proof.processLedger && !question.storeIsProcessLocal) return undefined;
+  return ledger;
+}
+
+/** Whether `ledger` says a host recorded closing `requestId` — `false` when it cannot say. */
+async function closeRecorded(ledger: DecisionLedger, requestId: string): Promise<boolean> {
+  if (typeof ledger.isSpent !== 'function') return false;
+  try {
+    return (await ledger.isSpent(closedProvenKey(requestId))) === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Prove that no decision for a paused request can ever run its call — or say
  * that it cannot be proven. Spending is the one way a decision reaches a call
  * (`spendDecision` runs before the tool, on every door), so the proof is the
  * ledger the request was MINTED under spending the request itself: `true`
  * there means no decision had reached it and — in the same atomic step — that
- * none ever can (a later resume is refused as `'already-answered'`). A read
- * (`isSpent`) would not do: a resume on another replica could spend and run
- * the call between the read and the close, and a ledger may expire what it
- * reads.
+ * none ever can (a later resume is refused). A read (`isSpent`) of the request
+ * would not do: a resume on another replica could spend and run the call
+ * between the read and the close, and a ledger may expire what it reads.
+ *
+ * IDEMPOTENT. Having won the request, the closer spends a second key,
+ * {@link closedProvenKey}, to record that it closed it. The closed pause is
+ * stored only afterwards, and that can fail (the store's write, the run that
+ * goes on from it); a retried close finds the request spent and reads the
+ * marker (`isSpent`) — present: the verdict the first close proved; absent
+ * (a crash between the two spends, a ledger without `isSpent`): not proven, the
+ * safe direction. A request a DECISION spent never has the marker.
  *
  * CONSUMES the request: asked only for a pause being closed.
  *
@@ -409,22 +466,46 @@ export interface NeverRanQuestion {
  *  - the request was minted under this process's default ledger and the
  *    door's session store is not this process's memory: another replica, on
  *    its own default ledger, may have spent it and run the call;
- *  - a spend answers anything but `true`, or throws.
+ *  - a spend throws, or answers anything but `true` with no close recorded.
  */
 export async function proveNeverRan(question: NeverRanQuestion): Promise<boolean> {
-  const { requestIds, mintedUnder, runner } = question;
-  if (requestIds.length === 0 || mintedUnder === undefined) return false;
-  if (typeof runner !== 'object' || runner === null) return false;
-  const proof = proofState();
-  const ledger = proof.ledgers.get(runner);
-  if (ledger === undefined || ledgerIdentityOf(ledger) !== mintedUnder) return false;
-  if (mintedUnder === proof.processLedger && !question.storeIsProcessLocal) return false;
-  for (const id of requestIds) {
+  const ledger = provingLedger(question);
+  if (ledger === undefined) return false;
+  for (const id of question.requestIds) {
+    let won: unknown;
     try {
-      if ((await ledger.spend(id)) !== true) return false;
+      won = await ledger.spend(id);
     } catch {
       return false;
     }
+    if (won === true) {
+      // Recorded for a retry and for a late answer; the proof is the win
+      // above, so a marker that does not land costs only that.
+      try {
+        await ledger.spend(closedProvenKey(id));
+      } catch {
+        // a retry will read "not proven" — the safe direction
+      }
+    } else if (!(await closeRecorded(ledger, id))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Whether a host already closed this paused request with the proof that its
+ * call never ran — read, never spent: the ledger it was minted under holds the
+ * close marker for every id ({@link closedProvenKey}). Asked by a door whose
+ * answer to the pause failed because the request was already spent, so a pause
+ * closed elsewhere (whose closed conversation was never stored) is closed as
+ * not run rather than marked as possibly run.
+ */
+export async function closedByAHost(question: NeverRanQuestion): Promise<boolean> {
+  const ledger = provingLedger(question);
+  if (ledger === undefined) return false;
+  for (const id of question.requestIds) {
+    if (!(await closeRecorded(ledger, id))) return false;
   }
   return true;
 }
@@ -639,7 +720,9 @@ export function checkDecisionAgainst(
  *   when its run is aborted, but the stage goes on running: a resume whose run
  *   was aborted takes nothing to a ledger, and one aborted while its ledger
  *   answered is refused after the spend — spent, and its call never run.
- * @throws ResumeDecisionError `'already-answered'` when a resume already spent it.
+ * @throws ResumeDecisionError `'already-answered'` when a resume already spent
+ *   it, or `'closed-by-host'` when a host closed it and recorded that its call
+ *   never ran (`closedProvenKey`).
  */
 export async function spendDecision(
   ledger: DecisionLedger,
@@ -657,7 +740,14 @@ export async function spendDecision(
     throw err;
   }
   for (const attempt of attempts) attempt.outcome = fresh === true ? 'spent' : 'refused';
-  if (fresh !== true) throw new ResumeDecisionError('already-answered', gate);
+  if (fresh !== true) {
+    // A host that closed the request recorded it (`proveNeverRan`): the
+    // person is told so — the call did not run — not "already answered".
+    throw new ResumeDecisionError(
+      (await closeRecorded(ledger, decision.requestId)) ? 'closed-by-host' : 'already-answered',
+      gate,
+    );
+  }
   refuseIfAborted(signal);
 }
 

@@ -110,7 +110,7 @@ function asking(later: string, world: World, decisionLedger?: DecisionLedger): A
 
 /**
  * A ledger in a store every process reaches — a unique-key table. Separate
- * INSTANCES over one `table` are two processes sharing it; `id` is the
+ * INSTANCES over one `table` are two processes sharing it; `storeId` is the
  * table's stable name. `isSpent` answers `isSpentSays` when given — a key it
  * expired, say — while `spend` keeps the truth.
  */
@@ -120,7 +120,7 @@ function tableLedger(
   isSpentSays?: boolean,
 ): DecisionLedger {
   return {
-    ...(id !== undefined && { id }),
+    ...(id !== undefined && { storeId: id }),
     spend: async (requestId) => {
       if (table.has(requestId)) return false;
       table.add(requestId);
@@ -233,9 +233,10 @@ describe('1 — proof by tombstone: the ledger’s own atomic spend, never a rea
     expect(lastTold(world.sent)?.content).toBe(NOT_RUN_UNANSWERABLE);
     // An older replica, still running the old rules, gets the person's approval late.
     const late = asking('limit', world, tableLedger(table, 'refunds-ledger'));
+    // Told the host closed it — the call did not run — not "already answered".
     await expect(late.resume(checkpoint, decision)).rejects.toMatchObject({
       code: 'ERR_RESUME_DECISION',
-      reason: 'already-answered',
+      reason: 'closed-by-host',
     });
     expect(world.ran).toEqual([]);
   });
@@ -249,15 +250,21 @@ describe('1 — proof by tombstone: the ledger’s own atomic spend, never a rea
       const world = newWorld();
       const table = new Set<string>();
       const held: (() => void)[] = [];
-      /** Every spend waits for the test to let it through, so the order is the test's. */
+      /**
+       * Every spend of a REQUEST waits for the test to let it through, so the
+       * order is the test's; a closer's own marker lands at once.
+       */
       const gated = (): DecisionLedger => ({
-        id: 'refunds-ledger',
-        spend: async (requestId: string) => {
-          await new Promise<void>((go) => held.push(go));
-          if (table.has(requestId)) return false;
-          table.add(requestId);
+        storeId: 'refunds-ledger',
+        spend: async (key: string) => {
+          if (!key.startsWith('closed-proven:')) {
+            await new Promise<void>((go) => held.push(go));
+          }
+          if (table.has(key)) return false;
+          table.add(key);
           return true;
         },
+        isSpent: async (key: string) => table.has(key),
       });
       const store = localStore(world.failing);
       const oldHost = inProcessHost();

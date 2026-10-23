@@ -379,6 +379,10 @@ export class DecisionRequiredError extends Error {
  *   - `'already-answered'` — a resume already used a decision for this
  *     request, approved or declined. Whether that resume finished — and so
  *     whether the call ran — is not known to the one refused.
+ *   - `'closed-by-host'` — a host that kept the pause closed it, because no
+ *     answer could reach it any more, and proved its call never ran: it spent
+ *     the request in the ledger the request was minted under, so no decision
+ *     can run it. The call did not run, and nothing ran now.
  */
 export type ResumeDecisionRefusal =
   | 'no-request'
@@ -386,7 +390,8 @@ export type ResumeDecisionRefusal =
   | 'other-request'
   | 'call-changed'
   | 'chain-changed'
-  | 'already-answered';
+  | 'already-answered'
+  | 'closed-by-host';
 
 /**
  * Raised by a resume when the decision cannot answer the request the run is
@@ -486,6 +491,13 @@ function resumeDecisionMessage(reason: ResumeDecisionRefusal): string {
         `decision, approved or declined. This resume ran nothing. Whether the earlier resume ` +
         `finished, and so whether the call ran, is not known here: check the call's own ` +
         `record (its system, the conversation) before the person is asked again.`
+      );
+    case 'closed-by-host':
+      return (
+        `[resume] the request this decision names was closed by the host that kept the ` +
+        `pause: no answer could reach it any more, so the host closed it and recorded that ` +
+        `its call did not run — and no decision can run it now. This resume ran nothing. The ` +
+        `next message continues the conversation.`
       );
   }
 }

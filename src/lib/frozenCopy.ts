@@ -1,5 +1,5 @@
 /**
- * frozenCopyOf — a callback's OWN copy of a value, frozen all the way down.
+ * frozenCopyOf — a callback's copy of a value, frozen all the way down.
  *
  * Role:  Support. A leaf: it reads its argument and nothing else.
  * Reads: its argument.
@@ -14,13 +14,19 @@
  * answered "no check-in needed". So the callback is handed a copy
  * (`structuredClone`) that the tool never runs with, frozen at every depth: a
  * write to it throws in strict code and is ignored in sloppy code, and either
- * way the arguments that run are untouched. (A `Map` or `Set` in the copy
- * still answers its own `set`/`add` — a tool's arguments are JSON values,
- * which hold neither.)
+ * way the arguments that run are untouched.
  *
- * A frozen copy cannot change, so ONE is shared by every callback and event
- * that sees a call before it runs ({@link frozenView}): a large argument is
- * copied once, not once per callback.
+ * A copy freezing SEALS ({@link isSealed}) cannot change, so ONE is shared by
+ * every callback and event that sees a call before it runs ({@link frozenView}):
+ * a large argument is copied once, not once per callback. That is every JSON
+ * value — all a model ever proposes. A copy holding a container `Object.freeze`
+ * cannot seal — a `Map` or `Set` (their own `set`/`add`/`delete`), a `Date`
+ * (its setters), an `ArrayBuffer` or a typed array or view (their bytes) — is
+ * NOT sealed: one callback could still change what the next one judges, so
+ * such a copy is never shared and each callback is handed its own. (Refusing
+ * such arguments instead would break a tool an app hands a `Date` or a `Map`
+ * through its own provider or middleware; a copy per callback costs only those
+ * calls their extra copies.)
  *
  * `undefined` when no copy can be made (a function, a symbol, a foreign proxy
  * — what `structuredClone` refuses). The caller decides what that means, and
@@ -31,8 +37,11 @@
 
 import { isDevMode } from 'footprintjs';
 
-/** Every object a copy {@link frozenCopyOf} made holds, at every depth — frozen, so safe to hand on again. */
-const made = new WeakSet<object>();
+/**
+ * Every object a SEALED copy {@link frozenCopyOf} made holds, at every depth —
+ * frozen, and holding nothing freezing leaves writable: safe to hand on.
+ */
+const sealed = new WeakSet<object>();
 
 export function frozenCopyOf<T>(value: T): T | undefined {
   let copy: T;
@@ -41,18 +50,29 @@ export function frozenCopyOf<T>(value: T): T | undefined {
   } catch {
     return undefined;
   }
-  freezeDeep(copy, new Set<object>());
+  const reached = new Set<object>();
+  if (freezeDeep(copy, reached)) for (const object of reached) sealed.add(object);
   return copy;
 }
 
 /**
- * `value` itself when it is already (part of) a copy {@link frozenCopyOf} made
- * — frozen at every depth, so sharing it is safe — else a new one.
+ * Whether `value` is (part of) a copy {@link frozenCopyOf} made that freezing
+ * sealed — nothing in it can change, so it may be shared between callbacks.
+ * `false` for a copy holding a container freezing cannot seal (a `Map`, a
+ * `Set`, a `Date`, an `ArrayBuffer`, a typed array or view), and for any value
+ * this module did not copy.
+ */
+export function isSealed(value: unknown): boolean {
+  return typeof value === 'object' && value !== null && sealed.has(value);
+}
+
+/**
+ * `value` itself when it is already (part of) a sealed copy ({@link isSealed}),
+ * so sharing it is safe — else a new copy, which is the caller's alone when it
+ * holds a container freezing cannot seal.
  */
 export function frozenView<T>(value: T): T | undefined {
-  return typeof value === 'object' && value !== null && made.has(value)
-    ? value
-    : frozenCopyOf(value);
+  return isSealed(value) ? value : frozenCopyOf(value);
 }
 
 /**
@@ -90,25 +110,38 @@ export function warnFrozenWrite(who: string, error: unknown, consequence: string
   );
 }
 
-/** Freeze `value` and everything it reaches. A fresh clone holds no foreign object. */
-function freezeDeep(value: unknown, seen: Set<object>): void {
-  if (typeof value !== 'object' || value === null || seen.has(value)) return;
-  seen.add(value);
-  // A typed array or view cannot be frozen while it has elements; its bytes
-  // are a copy no one else holds, so it is left as it is.
-  if (ArrayBuffer.isView(value)) return;
+/**
+ * Freeze `value` and everything it reaches (collected in `reached`), and say
+ * whether that SEALED it: `false` when it holds a container freezing leaves
+ * writable — a `Map` or `Set` (their methods still write), a `Date` (its
+ * setters), an `ArrayBuffer`, a typed array or a view (their bytes; a view
+ * cannot even be frozen while it has elements). Such a copy is never shared.
+ */
+function freezeDeep(value: unknown, reached: Set<object>): boolean {
+  if (typeof value !== 'object' || value === null || reached.has(value)) return true;
+  reached.add(value);
+  if (ArrayBuffer.isView(value)) return false;
+  let sealable = !(
+    value instanceof Map ||
+    value instanceof Set ||
+    value instanceof Date ||
+    value instanceof ArrayBuffer ||
+    (typeof SharedArrayBuffer === 'function' && value instanceof SharedArrayBuffer)
+  );
   if (value instanceof Map) {
     for (const [key, entry] of value) {
-      freezeDeep(key, seen);
-      freezeDeep(entry, seen);
+      sealable = freezeDeep(key, reached) && sealable;
+      sealable = freezeDeep(entry, reached) && sealable;
     }
   } else if (value instanceof Set) {
-    for (const entry of value) freezeDeep(entry, seen);
+    for (const entry of value) sealable = freezeDeep(entry, reached) && sealable;
   }
   for (const key of Reflect.ownKeys(value)) {
     const field = Object.getOwnPropertyDescriptor(value, key);
-    if (field !== undefined && 'value' in field) freezeDeep(field.value, seen);
+    if (field !== undefined && 'value' in field) {
+      sealable = freezeDeep(field.value, reached) && sealable;
+    }
   }
   Object.freeze(value);
-  made.add(value);
+  return sealable;
 }

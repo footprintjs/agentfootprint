@@ -602,7 +602,7 @@ describe('afterFailedAnswer — marked when its decision may have been used', ()
       async (_label, spentEarlier, notice) => {
         const spent = new Set<string>();
         const decisionLedger = {
-          id: 'refunds-ledger',
+          storeId: 'refunds-ledger',
           spend: (id: string) => (spent.has(id) ? false : (spent.add(id), true)),
         };
         const bound = mintConsentRequest(

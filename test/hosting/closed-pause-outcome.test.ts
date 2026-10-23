@@ -72,12 +72,12 @@ const halfAnswered: LLMMessage[] = [
 
 /**
  * A ledger in a store every process reaches — a stand-in for a unique-key
- * table, named by a stable `id`, its spends permanent.
+ * table, named by a stable `storeId`, its spends permanent.
  */
 function durableLedger(id = 'refunds-ledger'): DecisionLedger & { readonly spent: Set<string> } {
   const spent = new Set<string>();
   return {
-    id,
+    storeId: id,
     spent,
     spend: async (requestId) => {
       if (spent.has(requestId)) return false;
@@ -144,7 +144,7 @@ describe('closedConversation — "did not run" only when proven', () => {
   it('the ledger the request was minted under spends it: the call did not run — and now never can', async () => {
     const ledger = durableLedger();
     const request = requestUnder(ledger);
-    expect(request.ledger).toBe('app:refunds-ledger');
+    expect(request.ledger).toBe('store:refunds-ledger');
     const closed = await closedConversation(pausedOn(request), { runner: agentOn(ledger) });
     expect(lastNotice(closed.history)).toEqual({
       role: 'tool',
@@ -172,20 +172,20 @@ describe('closedConversation — "did not run" only when proven', () => {
     });
   });
 
-  it('fail closed: a spend that answers anything but true, or throws, proves nothing — isSpent is never asked', async () => {
-    const isSpent = vi.fn(() => false);
+  it('fail closed: a spend that answers anything but true, or throws, proves nothing — isSpent is asked only for a close marker', async () => {
+    const isSpent = vi.fn((_key: string) => false);
     const ledgers: DecisionLedger[] = [
-      { id: 'l', spend: () => false, isSpent },
-      { id: 'l', spend: () => 'yes' as never, isSpent },
-      { id: 'l', spend: () => undefined as never, isSpent },
+      { storeId: 'l', spend: () => false, isSpent },
+      { storeId: 'l', spend: () => 'yes' as never, isSpent },
+      { storeId: 'l', spend: () => undefined as never, isSpent },
       {
-        id: 'l',
+        storeId: 'l',
         spend: () => {
           throw new Error('ledger unavailable');
         },
         isSpent,
       },
-      { id: 'l', spend: async () => Promise.reject(new Error('timeout')), isSpent },
+      { storeId: 'l', spend: async () => Promise.reject(new Error('timeout')), isSpent },
     ];
     for (const ledger of ledgers) {
       const closed = await closedConversation(pausedOn(requestUnder(ledger)), {
@@ -193,7 +193,9 @@ describe('closedConversation — "did not run" only when proven', () => {
       });
       expect(lastNotice(closed.history)?.content).toBe(OUTCOME_UNKNOWN_UNANSWERABLE);
     }
-    expect(isSpent).not.toHaveBeenCalled();
+    // Never asked whether the REQUEST was spent — only whether a host's close
+    // of it was recorded (`closed-proven:<id>`), which here it never was.
+    expect(isSpent.mock.calls.every(([key]) => key.startsWith('closed-proven:'))).toBe(true);
   });
 
   it('no runner, or one whose ledger a host cannot see (a composition), proves nothing', async () => {

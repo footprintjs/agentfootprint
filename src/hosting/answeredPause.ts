@@ -72,6 +72,7 @@
 
 import { declinedResult } from '../core/checkin.js';
 import {
+  closedByAHost,
   consentRulesOf,
   pausedCallIdOf,
   pausedRequestIdOf,
@@ -80,6 +81,7 @@ import {
   unanswerableReason,
   watchDecisionUse,
   type DecisionUseWatch,
+  type NeverRanQuestion,
   type UnanswerableReason,
 } from '../core/consentRequest.js';
 import { pauseDemandsDecision, ResumeDecisionError } from '../core/pause.js';
@@ -284,6 +286,13 @@ export async function afterFailedAnswer(input: {
     const reason = unanswerableRefusalOf(input.error);
     return reason === undefined ? 'kept' : closeUnanswerable(store, sessionId, asked, input.runner);
   }
+  // A request a host already closed with the proof that its call never ran —
+  // its closed conversation stored nowhere (the write, or the run after it,
+  // failed): closed again here as not run, never marked as possibly run. Read
+  // from the ledger's close marker, never from what the error calls itself.
+  if (await closedByAHost(neverRanQuestion(paused, { runner: input.runner, store }))) {
+    return closeUnanswerable(store, sessionId, asked, input.runner);
+  }
   try {
     await input.settle?.();
   } catch {
@@ -454,12 +463,7 @@ export async function closedConversation(
   door: ClosingDoor = {},
 ): Promise<AgentRunCheckpoint> {
   const { history } = paused.conversation;
-  const neverRan = await proveNeverRan({
-    requestIds: requestIdsOf(paused),
-    mintedUnder: pausedRequestLedgerOf(paused.checkpoint),
-    runner: door.runner,
-    storeIsProcessLocal: isProcessLocalStore(door.store),
-  });
+  const neverRan = await proveNeverRan(neverRanQuestion(paused, door));
   return {
     ...paused.conversation,
     history: [
@@ -470,6 +474,16 @@ export async function closedConversation(
           : noticeFor(call, OUTCOME_UNKNOWN_UNANSWERABLE, 'outcome-unknown'),
       ),
     ],
+  };
+}
+
+/** What the proof asks about `paused`, closed by `door`. */
+function neverRanQuestion(paused: PausedRun, door: ClosingDoor): NeverRanQuestion {
+  return {
+    requestIds: requestIdsOf(paused),
+    mintedUnder: pausedRequestLedgerOf(paused.checkpoint),
+    runner: door.runner,
+    storeIsProcessLocal: isProcessLocalStore(door.store),
   };
 }
 

@@ -146,7 +146,7 @@ import type {
 import type { ToolClaim } from '../buildToolRegistry.js';
 import { changedArgKeys, shownArgsOf } from '../../toolShownArgs.js';
 import { toolBytesOf } from '../../../lib/toolBytes.js';
-import { frozenCopyOf, frozenView, warnFrozenWrite } from '../../../lib/frozenCopy.js';
+import { frozenCopyOf, frozenView, isSealed, warnFrozenWrite } from '../../../lib/frozenCopy.js';
 import { buildToolResolver, type ToolResolution } from './toolResolver.js';
 import type { Tool, ToolExecutionContext } from '../../../tools/tools.js';
 import { agentToolDispatch } from '../toolDispatch.js';
@@ -4422,14 +4422,23 @@ export function buildToolCallsHandler(
       const turnAt = newHistory.length - 1;
       const pushedTurn = toolCalls.length > 0 ? newHistory[turnAt] : undefined;
       const frozenTurn = pushedTurn === undefined ? undefined : frozenTurnOf(pushedTurn);
-      /** The history a pre-execute callback is handed — the batch's turn frozen. */
-      const callbackHistory = (): LLMMessage[] =>
-        frozenTurn === undefined
-          ? [...newHistory]
-          : newHistory.map((message, at) => (at === turnAt ? frozenTurn : message));
-      /** The batch's frozen copy of call `at`'s arguments, when the turn could be copied. */
-      const frozenArgsAt = (at: number): ToolArgs | undefined =>
-        (frozenTurn?.toolCalls?.[at]?.args as ToolArgs | undefined) ?? undefined;
+      /**
+       * The history a pre-execute callback is handed — the batch's turn frozen.
+       * The one copy is shared only when freezing SEALED it (`isSealed`: every
+       * JSON turn); a turn holding a container freezing leaves writable (a
+       * `Map`, a `Date`, a typed array an app's provider put in a call) is
+       * copied again for each callback, so none can change what the next sees.
+       */
+      const callbackHistory = (): LLMMessage[] => {
+        if (pushedTurn === undefined || frozenTurn === undefined) return [...newHistory];
+        const turn = isSealed(frozenTurn) ? frozenTurn : frozenTurnOf(pushedTurn);
+        return newHistory.map((message, at) => (at === turnAt ? turn : message));
+      };
+      /** The batch's sealed copy of call `at`'s arguments, when there is one to share. */
+      const frozenArgsAt = (at: number): ToolArgs | undefined => {
+        const shared = frozenTurn?.toolCalls?.[at]?.args as ToolArgs | undefined;
+        return isSealed(shared) ? shared : undefined;
+      };
       // `lookupTool` is hoisted to the handler closure (shared with resume).
 
       // ── The model's `read_skill` pick: one-shot by construction ──────
@@ -4547,20 +4556,32 @@ export function buildToolCallsHandler(
         // with. The batch's copy when `args` is the call's own object;
         // remade only when the arguments are replaced, and after the
         // middleware chain (its links are handed the live arguments, by
-        // contract, and may have edited them in place).
-        let viewed: ToolArgs | undefined = args;
-        let view: ToolArgs | undefined =
-          args === tc.args ? frozenArgsAt(callIndex) ?? frozenView(args) : frozenView(args);
+        // contract, and may have edited them in place). Shared only while
+        // freezing SEALED it (`isSealed` — every JSON value): arguments that
+        // hold a `Map`, a `Set`, a `Date` or a typed array get a new copy for
+        // each callback, so one cannot change what the next one judges.
+        let viewed: ToolArgs | undefined;
+        let view: ToolArgs | undefined;
+        /** The batch's copy still shows these arguments — until a link could have edited them. */
+        let batchCopyCurrent = true;
         const viewOf = (source: ToolArgs): ToolArgs | undefined => {
-          if (source !== viewed) {
-            viewed = source;
-            view = frozenView(source);
-          }
-          return view;
+          if (source === viewed && view !== undefined) return view;
+          const batchCopy =
+            batchCopyCurrent && source === tc.args ? frozenArgsAt(callIndex) : undefined;
+          const copy = batchCopy ?? frozenView(source);
+          const shareable = copy !== undefined && isSealed(copy);
+          viewed = shareable ? source : undefined;
+          view = shareable ? copy : undefined;
+          return copy;
         };
-        /** The history this call's callbacks are handed, made once per call. */
+        /** The history this call's callbacks are handed — made once per call when sealed. */
         let callHistory: LLMMessage[] | undefined;
-        const historyForCallbacks = (): LLMMessage[] => (callHistory ??= callbackHistory());
+        const historyForCallbacks = (): LLMMessage[] => {
+          if (callHistory !== undefined) return callHistory;
+          const made = callbackHistory();
+          if (frozenTurn === undefined || isSealed(frozenTurn)) callHistory = made;
+          return made;
+        };
         emitToolStart(scope, {
           toolName: tc.name,
           toolCallId: tc.id,
@@ -4923,6 +4944,7 @@ export function buildToolCallsHandler(
           // it hands back, and may have edited them in place): the shared
           // frozen copy is made again from what the chain handed back.
           viewed = undefined;
+          batchCopyCurrent = false;
           if (chain.kind === 'deny') {
             denied = true;
             // A link that ASKED, refused by the one-question law: the person's
