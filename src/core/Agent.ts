@@ -57,7 +57,12 @@ import {
   pauseDemandsDecision,
   type RunnerPauseOutcome,
 } from './pause.js';
-import { checkDecisionAgainst, type DecisionLedger } from './consentRequest.js';
+import {
+  checkDecisionAgainst,
+  noteRefusedBeforeUse,
+  pausedRequestIdOf,
+  type DecisionLedger,
+} from './consentRequest.js';
 import type {
   LLMMessage,
   LLMProvider,
@@ -2615,6 +2620,25 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     input?: unknown,
     options?: AgentRunOptions,
   ): Promise<AgentOutput | RunnerPauseOutcome> {
+    const progress = { started: false };
+    try {
+      return await this.resumeLeg(checkpoint, input, options, progress);
+    } catch (err) {
+      // Thrown before the resumed run started: nothing of the answer can have
+      // reached a ledger. Said on what is thrown, for a door that keeps the
+      // pause (`consentRequest.ts` · `noteRefusedBeforeUse`).
+      if (!progress.started) noteRefusedBeforeUse(err, pausedRequestIdOf(checkpoint));
+      throw err;
+    }
+  }
+
+  /** `resume`'s body; `progress.started` is set the moment the resumed run starts. */
+  private async resumeLeg(
+    checkpoint: FlowchartCheckpoint,
+    input: unknown,
+    options: AgentRunOptions | undefined,
+    progress: { started: boolean },
+  ): Promise<AgentOutput | RunnerPauseOutcome> {
     // ── A consent gate is answered with a DECISION (8.13.0) ─────────────
     // Refused HERE, before the engine is handed the checkpoint, so nothing
     // executes and the checkpoint is unchanged — the caller can answer the same
@@ -2827,6 +2851,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // the `finally` below.
     const runSignal = runSignalOf(resumeOptions);
     try {
+      progress.started = true;
       const result = await executor.resume(legCheckpoint, input, runSignal.options);
       const finalized = this.finalizeResult(executor, result);
       if (typeof finalized === 'string') this.lastRunAnswer = finalized;

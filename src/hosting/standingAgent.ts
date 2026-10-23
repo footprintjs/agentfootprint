@@ -1752,15 +1752,16 @@ export async function standingAgent<TH extends HostHandle>(
             paused,
           );
         } catch (err) {
-          // A failure in the resume or in storing its result: once the
-          // decision reached the ledger the call may have run, so the stored
-          // pause is answered before anyone hears of it (`answeredPause.ts`).
+          // A failure in the resume or in storing its result: the decision
+          // may have been used, so the stored pause is answered before anyone
+          // hears of it — unless the resume refused before its decision could
+          // reach a ledger (`answeredPause.ts`).
           if (sessionId !== undefined) {
             await markAnsweredAfterFailure({
               store,
               sessionId,
               paused,
-              decision: request.decision,
+              error: err,
               settle: () => lane.writer?.settle(),
             });
           }

@@ -34,6 +34,7 @@ import {
   readPausedRun,
   standingAgent,
   toEnvelope,
+  toPausedEnvelope,
 } from '../../src/hosting/index.js';
 import type {
   CheckpointEnvelope,
@@ -1279,6 +1280,97 @@ describe('a consent gate over the wire — a decision whose resume failed after 
       }
     },
   );
+
+  it('a door that clones the decision before resuming still marks the pause — and a retry is refused', async () => {
+    // A door is free to copy, re-parse or wrap a decision on its way to the
+    // resume. Whether the pause gets marked must not depend on that.
+    const { markAnsweredAfterFailure } = await import('../../src/hosting/answeredPause.js');
+    const { describePause } = await import('../../src/hosting/pendingAsk.js');
+    const ran: number[] = [];
+    const store = memorySessions();
+    const agent = flakyRefunds(ran, { on: true });
+    const out = await agent.run({ message: 'refund me' });
+    if (!('checkIn' in out) || out.checkIn === undefined) throw new Error('expected a check-in');
+    const paused: PausedRun = {
+      checkpoint: out.checkpoint,
+      conversation: agent.checkpoint()!,
+      pending: describePause(out, 'cloned'),
+    };
+    await store.persist('cloned', toPausedEnvelope(paused));
+    const decision = checkInApproved({ request: out.checkIn, by: 'alice' });
+    try {
+      await agent.resume(out.checkpoint, JSON.parse(JSON.stringify(decision)));
+      throw new Error('expected the resume to fail');
+    } catch (err) {
+      await markAnsweredAfterFailure({ store, sessionId: 'cloned', paused, error: err });
+    }
+    expect(ran).toEqual([10]);
+    expect(readPausedRun(await store.hydrate('cloned')).answered).toEqual({
+      at: expect.any(Number),
+    });
+    const elsewhere = inProcessHost();
+    const handle = await standingAgent({
+      agent: flakyRefunds(ran, { on: false }, [], inMemoryDecisionLedger()),
+      sessions: store,
+      host: elsewhere,
+    });
+    try {
+      const retry = await elsewhere.deliver({ input: '', sessionId: 'cloned', decision });
+      expect(retry.code).toBe('ERR_RESUME_DECISION');
+      expect(ran).toEqual([10]);
+    } finally {
+      await handle.close();
+    }
+  });
+
+  it('a store whose read fails while the pause is being marked still ends with it marked — and a retry refused', async () => {
+    const ran: number[] = [];
+    const inner = memorySessions();
+    let failReads = false;
+    const sessions: SessionLifecycle = {
+      async hydrate(id) {
+        if (failReads) throw new Error('read timed out');
+        return inner.hydrate(id);
+      },
+      persist: (id, envelope) => inner.persist(id, envelope),
+    };
+    const host = inProcessHost();
+    const handle = await standingAgent({
+      // The resume's own reads are done by the time the model call fails;
+      // from then on the store cannot be read.
+      agent: flakyRefunds(ran, { on: true }, [], undefined, async () => {
+        failReads = true;
+      }),
+      sessions,
+      host,
+    });
+    let decision: unknown;
+    try {
+      const asked = await host.deliver({ input: 'refund me', sessionId: 'unread' });
+      decision = checkInApproved({ request: pausedRequest(asked.awaiting), by: 'alice' });
+      await host.deliver({ input: '', sessionId: 'unread', decision });
+      expect(ran).toEqual([10]);
+    } finally {
+      failReads = false;
+      await handle.close();
+    }
+    expect(readPausedRun(await inner.hydrate('unread')).answered).toEqual({
+      at: expect.any(Number),
+    });
+    const elsewhere = inProcessHost();
+    const other = await standingAgent({
+      agent: flakyRefunds(ran, { on: false }, [], inMemoryDecisionLedger()),
+      sessions: inner,
+      host: elsewhere,
+    });
+    try {
+      const retry = await elsewhere.deliver({ input: '', sessionId: 'unread', decision });
+      expect(retry.code).toBe('ERR_RESUME_DECISION');
+      expect(ran).toEqual([10]);
+    } finally {
+      await other.close();
+    }
+  });
 
   it('when the store cannot take the mark, the process’s ledger still refuses on a rebuilt agent', async () => {
     const ran: number[] = [];

@@ -37,6 +37,8 @@ import {
   type ToolMiddleware,
 } from '../../../src/index.js';
 import type { LLMProvider, LLMResponse } from '../../../src/provider-contract/types.js';
+import { wasRefusedBeforeUse } from '../../../src/core/consentRequest.js';
+import { ResumeDecisionError } from '../../../src/core/pause.js';
 
 // ── doubles ─────────────────────────────────────────────────────────────
 
@@ -465,6 +467,33 @@ describe('decision binding — inside compositions', () => {
     await expect(seq.resume(paused.checkpoint, decision)).rejects.toMatchObject(
       refusal('already-answered'),
     );
+    expect(exec).toHaveBeenCalledTimes(1);
+  });
+
+  it('a nested agent’s refusal reaches the caller as what it threw, registered as refused before use', async () => {
+    // A door that keeps the pause leaves it answerable only on this sign
+    // (`hosting/answeredPause.ts`), so it must survive the composition: the
+    // refusal raised inside the step is the very object the caller catches.
+    const exec = vi.fn(() => 'refunded');
+    const seq = Sequence.create().step('refunds', gatedAgent(exec)).build();
+    const paused = asCheckIn(await seq.run({ message: 'refund 40' }));
+    const other = asCheckIn(await gatedAgent(exec).run({ message: 'refund 41' }));
+    for (const answer of [
+      { approved: true, by: 'maya', at: 1 },
+      checkInApproved({ request: other.checkIn, by: 'maya' }),
+    ]) {
+      const refused = await seq.resume(paused.checkpoint, answer).catch((err: unknown) => err);
+      expect(refused).toBeInstanceOf(ResumeDecisionError);
+      expect(wasRefusedBeforeUse(refused, paused.checkIn.id)).toBe(true);
+      expect(wasRefusedBeforeUse(refused, other.checkIn.id)).toBe(false);
+    }
+    // A replay is refused AT the spend — after the first resume used the
+    // decision — so it carries no such sign.
+    const decision = checkInApproved({ request: paused.checkIn, by: 'maya' });
+    await seq.resume(paused.checkpoint, decision);
+    const replay = await seq.resume(paused.checkpoint, decision).catch((err: unknown) => err);
+    expect(replay).toMatchObject(refusal('already-answered'));
+    expect(wasRefusedBeforeUse(replay, paused.checkIn.id)).toBe(false);
     expect(exec).toHaveBeenCalledTimes(1);
   });
 

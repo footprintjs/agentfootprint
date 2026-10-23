@@ -61,8 +61,9 @@
  * restart and no other process sees it: where more than one process (or a
  * restart) can resume the same paused run, every agent that can resume it is
  * given one ledger in a store they all reach (`Agent.create({ decisionLedger })`).
- * A host that keeps the pause stops offering it once a resume whose decision
- * reached the ledger fails (`decisionTakenToLedger`, `hosting/answeredPause.ts`).
+ * A host that keeps the pause stops offering it once a resume of it fails,
+ * unless the resume refused before its decision could reach a ledger
+ * (`wasRefusedBeforeUse`, `hosting/answeredPause.ts`).
  */
 
 import type { FlowchartCheckpoint } from 'footprintjs';
@@ -323,48 +324,73 @@ export function checkDecisionAgainst(
 }
 
 /**
- * Each decision object a caller handed to a resume, and the requests it was
- * taken to a ledger for ({@link decisionTakenToLedger}). Keyed by the object
- * itself — a resume's input reaches the paused stage by reference — so the
- * answer is about THAT resume's decision for THAT request: no global record
- * to bound, and nothing kept once the caller drops the object.
- */
-const takenToLedger = new WeakMap<object, Set<string>>();
-
-/**
  * Spend the decision's request in `ledger`.
  *
- * @param input the decision as the caller handed it to the resume — recorded
- *   as taken to a ledger BEFORE the ledger answers: from here the call may
- *   run, whatever happens next.
  * @throws ResumeDecisionError `'already-answered'` when a resume already spent it.
  */
 export async function spendDecision(
   ledger: DecisionLedger,
   decision: CheckInDecision,
   gate: ConsentGateKind,
-  input?: unknown,
 ): Promise<void> {
-  if (typeof input === 'object' && input !== null) {
-    const requests = takenToLedger.get(input) ?? new Set<string>();
-    requests.add(decision.requestId);
-    takenToLedger.set(input, requests);
-  }
   const fresh = await ledger.spend(decision.requestId);
   if (fresh !== true) throw new ResumeDecisionError('already-answered', gate);
 }
 
 /**
- * Whether the decision `input` — the very object a door handed to a resume —
- * was taken to a ledger for `requestId`. Past that point the call may have
- * run, so a door that keeps the pause stops offering it once that resume (or
- * anything after it, storing its result included) fails; before it, nothing
- * of that decision was used. Internal: no barrel exports it.
+ * What a resume threw BEFORE its decision could reach a ledger, and the paused
+ * request it was refusing (`undefined` when the pause recorded none). Keyed by
+ * the thrown object itself, which reaches the caller unchanged, through a
+ * composition too — so an error raised anywhere else is not the sign, whatever
+ * it calls itself, and nothing depends on the caller's decision object
+ * surviving a copy. The library's own refusals are fresh objects. One object
+ * an app throws both before a resume starts and, in a concurrent resume of the
+ * same request, after its decision was used would be read as the sign for
+ * both; that process's ledger still refuses the request.
  */
-export function decisionTakenToLedger(input: unknown, requestId: string): boolean {
+const refusedBeforeUse = new WeakMap<object, string | undefined>();
+
+/**
+ * Register `error` as thrown before the decision could reach a ledger —
+ * called by `Agent.resume` for anything before its run starts, and by the
+ * dispatch loop for anything before it spends. Internal.
+ */
+export function noteRefusedBeforeUse(error: unknown, requestId: string | undefined): void {
+  if (typeof error === 'object' && error !== null) refusedBeforeUse.set(error, requestId);
+}
+
+/**
+ * The one positive sign that a failed resume used nothing of its decision:
+ * `error` is what this library threw, before the decision could reach a
+ * ledger, while refusing `requestId`. Anything else — any other error, of any
+ * code, a store's included — may have come after, and a door that keeps the
+ * pause marks it answered (`hosting/answeredPause.ts`). Internal.
+ */
+export function wasRefusedBeforeUse(error: unknown, requestId: string): boolean {
   return (
-    typeof input === 'object' && input !== null && takenToLedger.get(input)?.has(requestId) === true
+    typeof error === 'object' &&
+    error !== null &&
+    refusedBeforeUse.has(error) &&
+    refusedBeforeUse.get(error) === requestId
   );
+}
+
+/** The id of the request a paused run's state records (`pausedRequest`), or `undefined`. */
+export function recordedRequestId(recorded: unknown): string | undefined {
+  return readPendingRequest(recorded)?.id;
+}
+
+/**
+ * The id of the request a checkpoint's paused stage records, or `undefined`
+ * — never a throw, whatever the checkpoint holds.
+ */
+export function pausedRequestIdOf(checkpoint: FlowchartCheckpoint): string | undefined {
+  try {
+    const state = pausedStateOf(checkpoint);
+    return state === undefined ? undefined : recordedRequestId(state.pausedRequest);
+  } catch {
+    return undefined;
+  }
 }
 
 /** The request's id for `call` under `nonce`, or `undefined` when the call is not faithful JSON. */

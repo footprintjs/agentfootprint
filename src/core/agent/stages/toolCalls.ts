@@ -127,7 +127,9 @@ import {
   gatedCallOf,
   heldDecision,
   mintConsentRequest,
+  noteRefusedBeforeUse,
   processDecisionLedger,
+  recordedRequestId,
   runsAsAsked,
   spendDecision,
   type DecisionLedger,
@@ -6105,24 +6107,36 @@ export function buildToolCallsHandler(
       return undefined; // explicit: no pause, flow continues to loopTo
     },
     resume: async (scope, input) => {
-      // Same barrier as `execute`, for the same reason: an approved check-in
-      // runs the REAL tool here, and that side effect must not go out ahead of
-      // the state the last write is still carrying.
-      const durable = deps.awaitDurable?.();
-      if (durable) await durable;
       // A consent gate's answer is a DECISION for ONE request: held to the
       // request this run paused on and to the exact call it was bound to —
       // refused (thrown) before anything below writes or runs. The two
       // decision paths further down spend it as their first act, once.
       const consentGate: ConsentGateKind | undefined =
         scope.pausedAsk === true ? 'ask' : scope.pausedCheckIn === true ? 'checkIn' : undefined;
-      const consentDecision =
-        consentGate === undefined ? undefined : heldAnswer(scope, input, consentGate);
-      // The time layer: the paused turn's clock is KEPT — its words were
-      // resolved against it. A resume that passed a different `time` is
-      // recorded here, first, and never applied (TQ21).
-      if (deps.time !== undefined) {
-        (await import('./timeLayer.js')).recordClockOnResume(scope, deps.time);
+      let consentDecision: CheckInDecision | undefined;
+      try {
+        // Same barrier as `execute`, for the same reason: an approved check-in
+        // runs the REAL tool here, and that side effect must not go out ahead
+        // of the state the last write is still carrying.
+        const durable = deps.awaitDurable?.();
+        if (durable) await durable;
+        consentDecision =
+          consentGate === undefined ? undefined : heldAnswer(scope, input, consentGate);
+        // The time layer: the paused turn's clock is KEPT — its words were
+        // resolved against it. A resume that passed a different `time` is
+        // recorded here, first, and never applied (TQ21).
+        if (deps.time !== undefined) {
+          (await import('./timeLayer.js')).recordClockOnResume(scope, deps.time);
+        }
+      } catch (err) {
+        // Thrown before the decision could reach a ledger: say so on what is
+        // thrown, so a door that keeps the pause leaves it answerable
+        // (`consentRequest.ts` · `noteRefusedBeforeUse`). From the spend on,
+        // nothing is noted — a failure there may follow a call that ran.
+        if (consentGate !== undefined) {
+          noteRefusedBeforeUse(err, recordedRequestId(scope.$getValue('pausedRequest')));
+        }
+        throw err;
       }
 
       // Consumer-supplied resume input becomes the paused tool's result.
@@ -6199,7 +6213,7 @@ export function buildToolCallsHandler(
         const decision: CheckInDecision = consentDecision;
         // Used from here — so spent here, before any row or the tool: a second
         // resume presenting it is refused ('already-answered').
-        await spendDecision(decisionLedger, decision, 'ask', input);
+        await spendDecision(decisionLedger, decision, 'ask');
 
         let result: unknown;
         /** What the model reads. Differs from `result` only when a rule at the
@@ -6581,7 +6595,7 @@ export function buildToolCallsHandler(
         const decision: CheckInDecision = consentDecision;
         // Used from here — so spent here, before the record or the tool: a
         // second resume presenting it is refused ('already-answered').
-        await spendDecision(decisionLedger, decision, 'checkIn', input);
+        await spendDecision(decisionLedger, decision, 'checkIn');
 
         // The registered component that COLLECTED this decision (9.24.0),
         // written at pause time only when the ask carried one. The decision
