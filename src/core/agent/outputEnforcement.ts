@@ -362,6 +362,8 @@ export interface ResolvedOutputEnforcement {
   readonly hasFallback: boolean;
   /** An additional delivery gate exists; do not promise raw output on failure. */
   readonly answerValidationEnforced?: boolean;
+  /** Typed negatives share one request-only, no-tools correction with evidence repair. */
+  readonly negativeClaimsEnforced?: true;
 }
 
 /**

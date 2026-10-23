@@ -76,6 +76,7 @@ export type RouteBranch =
   | 'output-retry'
   | 'step-nudge'
   | 'evidence-recheck'
+  | 'negative-recheck'
   | 'wrap-up';
 
 /** The six values Route's dispatch test reads — nothing else decides it. */
@@ -693,6 +694,8 @@ function judgeUnfinishedSteps(
    *  verdict also builds its witness row, for the caller to file if the
    *  answer stands. Absent → the event alone, as always. */
   answer?: AnswerRouteArm,
+  /** A terminal correction already spent the turn's remaining re-ask budget. */
+  reaskBlocked = false,
 ): 'step-nudge' | StepsUnfinishedRow | undefined {
   if (!stepPlanFor) return undefined;
   const ptr = pointerOf(scope.stepPointer);
@@ -701,7 +704,11 @@ function judgeUnfinishedSteps(
   if (!plan) return undefined;
   const iteration = scope.iteration as number;
   const action =
-    earlyStop !== undefined ? 'cut-short' : scope.stepNudgeSpent === true ? 'accepted' : undefined;
+    earlyStop !== undefined || reaskBlocked
+      ? 'cut-short'
+      : scope.stepNudgeSpent === true
+      ? 'accepted'
+      : undefined;
   if (action === undefined) return 'step-nudge';
   const remaining = remainingStepsOf(ptr, plan);
   typedEmit(scope, 'agentfootprint.skill.steps_unfinished', {
@@ -1537,6 +1544,8 @@ function buildEnforcingDecider(
   answer?: AnswerRouteArm,
 ): (scope: TypedScope<AgentState>) => Promise<RouteBranch> {
   return async (scope) => {
+    const negativeRepairSpent =
+      enforcement.negativeClaimsEnforced === true && scope.evidenceRevisionSpent === true;
     const base = decideBranch(scope, evidence?.toolsOffAfterRevision === true);
     if (base.chosen !== 'final') {
       emitRouteDecided(scope, base.chosen, base.rationale);
@@ -1547,7 +1556,7 @@ function buildEnforcingDecider(
     // about to replace is not the final answer, so it is not middlewared, not
     // schema-judged and not grounded — the step nudge's reasoning, one branch
     // over. `false` for hasWrapUp short-circuits here in one comparison.
-    if (wantsWrapUp(scope, base.earlyStop, hasWrapUp)) {
+    if (wantsWrapUp(scope, base.earlyStop, hasWrapUp && !negativeRepairSpent)) {
       emitRouteDecided(scope, 'wrap-up', wrapUpRationale(scope));
       settleWrapUp(scope, base.earlyStop, true);
       return 'wrap-up';
@@ -1631,7 +1640,13 @@ function buildEnforcingDecider(
       });
       // The schema verdict ran FIRST (an answer being re-asked is not a
       // stop); the step judge sees only an answer the schema let stand.
-      const steps = judgeUnfinishedSteps(scope, stepPlanFor, base.earlyStop, answer);
+      const steps = judgeUnfinishedSteps(
+        scope,
+        stepPlanFor,
+        base.earlyStop,
+        answer,
+        negativeRepairSpent,
+      );
       if (steps === 'step-nudge') {
         return reAsk('step-nudge', stepNudgeRationale(scope));
       }
@@ -1702,7 +1717,9 @@ function buildEnforcingDecider(
     if (
       attempt <= enforcement.retries &&
       brokenByChain === undefined &&
-      failure.stopReason !== 'refusal'
+      failure.stopReason !== 'refusal' &&
+      (enforcement.negativeClaimsEnforced !== true ||
+        (!negativeRepairSpent && base.earlyStop === undefined && scope.wrapUpAsked !== true))
     ) {
       // The retry stage writes the correction and files the row, because it
       // is the one that knows what it wrote. This is the hand-off.
@@ -1747,7 +1764,13 @@ function buildEnforcingDecider(
     const steps =
       failure.stopReason === 'refusal'
         ? undefined
-        : judgeUnfinishedSteps(scope, stepPlanFor, base.earlyStop, answer);
+        : judgeUnfinishedSteps(
+            scope,
+            stepPlanFor,
+            base.earlyStop,
+            answer,
+            enforcement.negativeClaimsEnforced === true,
+          );
     if (steps === 'step-nudge') {
       return reAsk('step-nudge', stepNudgeRationale(scope));
     }

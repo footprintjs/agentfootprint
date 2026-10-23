@@ -247,6 +247,8 @@ const REASON_WORDS: Readonly<Record<Exclude<AssessmentReason, 'argument-assumed'
     "a time in the answer is the library's own spelling of your words, not something you said or a tool returned",
   'stopped-early': 'the run stopped before the model finished',
   'steps-unfinished': "the answer came before the skill's declared steps finished",
+  'claim-exceeds-search': 'a negative claim exceeds the recorded search',
+  'declaration-overclaimed': 'a tool declaration overstates what was checked',
   'answer-check-failed': "the app's answer checks failed this answer",
   'check-unreachable': "the app's answer checks could not reach a verdict on this answer",
 };

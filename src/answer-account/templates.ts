@@ -42,7 +42,7 @@ export interface AccountTemplate {
 }
 
 /** Bumped whenever any template's words change (a pinned digest enforces it). */
-export const ANSWER_ACCOUNT_TEMPLATE_SET_VERSION = 11;
+export const ANSWER_ACCOUNT_TEMPLATE_SET_VERSION = 12;
 
 const t = (text: string, voucher: TemplateVoucher = 'library', version = 1): AccountTemplate =>
   Object.freeze({ version, text, voucher });
@@ -389,6 +389,8 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   'howSure.reason.stepsUnfinished': t(
     "The answer came before the active skill's declared steps finished.",
   ),
+  'howSure.reason.claimExceedsSearch': t('A negative claim exceeds the recorded search.'),
+  'howSure.reason.declarationOverclaimed': t('A tool declaration overstates what was checked.'),
   'howSure.reason.answerCheckFailed': t("The app's answer checks failed this answer."),
   'howSure.reason.checkUnreachable': t(
     "The app's answer checks could not reach a verdict on this answer.",

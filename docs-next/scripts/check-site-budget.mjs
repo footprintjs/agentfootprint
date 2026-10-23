@@ -36,6 +36,11 @@ const ROUTES = [
   },
 ];
 
+// RAISED 2026-10-23 (search gzip), for PR 4's typed-negative delivery guide,
+// example and four public API types, under the owner's 2026-09-27 named-growth
+// rule. EXPORT=true measured 9,656,244 B raw, 2,386,208 B gzip, 1,154 records:
+// 6,208 B over the former 2,380,000 B ceiling. The new 2,435,000 B limit leaves
+// about 2% over that measurement. Export, route and other search limits hold.
 // RAISED 2026-10-19 (search gzip), for the findings reference-admission guide,
 // under the 2026-09-27 named-growth rule. The public 10.8.1 index round-trips
 // byte-identically through the same Fumadocs/Orama API: 2,321,884 B gzip,
@@ -61,7 +66,7 @@ const ROUTES = [
 // 2.155 MB ceiling, so the package was tagged but not published. ~2% over the
 // measurement, the rule every raise here follows. Owner-approved raise;
 // docs-site cleanup planned.
-const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_380_000, records: 2_000 };
+const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_435_000, records: 2_000 };
 // Search gzip raised 2.11 -> 2.155 MB (2026-09-27) — growth this release can
 // name: the answer's standing (`assessAnswer()` / `agent.assessment()`), its
 // section on the recordings page and its Agent API entry. Measured with

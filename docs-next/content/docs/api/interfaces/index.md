@@ -2,7 +2,7 @@
 title: Interfaces
 ---
 
-369 exported from `agentfootprint`.
+372 exported from `agentfootprint`.
 
 [Scope event payloads](/docs/api/interfaces/scope-events) · [Flow event payloads](/docs/api/interfaces/flow-events)
 
@@ -123,6 +123,7 @@ title: Interfaces
 - [`DeclaredPeriod`](/docs/api/interfaces/DeclaredPeriod)
 - [`DefineRAGOptions`](/docs/api/interfaces/DefineRAGOptions)
 - [`DefineToolOptions`](/docs/api/interfaces/DefineToolOptions)
+- [`DeliveredNegative`](/docs/api/interfaces/DeliveredNegative)
 - [`DenyOutcome`](/docs/api/interfaces/DenyOutcome)
 - [`ElicitationRequest`](/docs/api/interfaces/ElicitationRequest)
 - [`EmitEvent`](/docs/api/interfaces/scope-events#interface-emitevent)
@@ -211,6 +212,8 @@ title: Interfaces
 - [`MiddlewareDecision`](/docs/api/interfaces/MiddlewareDecision)
 - [`Milestone`](/docs/api/interfaces/Milestone)
 - [`NamesAndNumbersOptions`](/docs/api/interfaces/NamesAndNumbersOptions)
+- [`NegativeClaimCitation`](/docs/api/interfaces/NegativeClaimCitation)
+- [`NegativeClaimsOptions`](/docs/api/interfaces/NegativeClaimsOptions)
 - [`NormaliseOptions`](/docs/api/interfaces/NormaliseOptions)
 - [`ObserverStats`](/docs/api/interfaces/ObserverStats)
 - [`OutputAttempt`](/docs/api/interfaces/OutputAttempt)

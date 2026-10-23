@@ -689,7 +689,8 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
         return {
           // Read-only working inputs (stages read, never write these).
           userMessage: p.userMessage,
-          ...(deps.evidenceRecheckStage !== undefined &&
+          ...((deps.evidenceRecheckStage !== undefined ||
+            deps.negativeRecheckStage !== undefined) &&
             p.evidenceRecovery !== undefined && {
               evidenceRecovery: p.evidenceRecovery,
               priorEvidenceRecoveryUsed: p.evidenceRecoveryUsed,
@@ -857,7 +858,8 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           // instead of a doubling concat.
           history: s.history,
           deliveredMessageKeys: s.deliveredMessageKeys,
-          ...(deps.evidenceRecheckStage !== undefined &&
+          ...((deps.evidenceRecheckStage !== undefined ||
+            deps.negativeRecheckStage !== undefined) &&
             s.evidenceRecoveryUsed !== undefined && {
               evidenceRecoveryUsed: s.evidenceRecoveryUsed,
             }),
@@ -1025,6 +1027,16 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
   // Byte-twin of the flat chart's mount: same loop target, same "one more
   // ordinary turn" mechanism, absent under `posture: 'assist'` and absent
   // entirely without the gate.
+  if (deps.negativeRecheckStage) {
+    decider = decider.addFunctionBranch(
+      STAGE_IDS.NEGATIVE_RECHECK,
+      'NegativeCitationCorrection',
+      deps.negativeRecheckStage as never,
+      'Correct a citation once with tools disabled',
+      { loopTo: loopTarget, tags: milestoneTagsFor(STAGE_IDS.NEGATIVE_RECHECK) },
+    );
+  }
+
   if (deps.evidenceRecheckStage) {
     decider = decider.addFunctionBranch(
       STAGE_IDS.EVIDENCE_RECHECK,

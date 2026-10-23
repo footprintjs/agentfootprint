@@ -178,6 +178,18 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
       "findingsLedger: a steps-unfinished witness row of this turn (the answer came before the active skill's declared steps finished — filed while the answer layer is armed)",
   },
   {
+    reason: 'claim-exceeds-search',
+    layer: 4,
+    class: 'not-sure',
+    reads: 'answerValidation.checks: a typed negative exceeded the admitted search',
+  },
+  {
+    reason: 'declaration-overclaimed',
+    layer: 3,
+    class: 'not-sure',
+    reads: 'answerValidation.checks: a tool refusal overstated the read',
+  },
+  {
     reason: 'answer-check-failed',
     layer: 4,
     class: 'not-sure',

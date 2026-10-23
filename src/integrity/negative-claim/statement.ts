@@ -41,7 +41,7 @@ type DeclaredTool = SearchTool;
 const instantMs = (value: unknown): number | undefined => instantOf(value, 'lenient')?.ms;
 
 /** Bump with any change to a template or to how a value is rendered. */
-export const STATEMENT_VERSION = '2';
+export const STATEMENT_VERSION = '3';
 
 const VALUE_CHARS = 64;
 const GAP_CHARS = 120;
@@ -284,6 +284,7 @@ function clauseOf(
   kind: NegativeKind,
   read: { readonly call: TurnCall; readonly row: ComposedSearchRow; readonly tool?: DeclaredTool },
   clock: string,
+  recorded = false,
 ): string {
   const { call, row, tool } = read;
   const toolName = quoteValue(row.toolName);
@@ -294,7 +295,15 @@ function clauseOf(
     among && typeof names.count === 'number' && Number.isSafeInteger(names.count)
       ? String(names.count)
       : 'the';
-  const head = among
+  const head = recorded
+    ? call.outcome !== 'ok'
+      ? `${toolName} did not establish a completed read`
+      : call.emptiness === 'declared-absent'
+      ? `${toolName} returned no matching rows`
+      : call.rows !== undefined || call.rowsRead !== undefined
+      ? `${toolName} read ${rowsRead} rows`
+      : `${toolName} returned a result whose row count is undetermined`
+    : among
     ? `${toolName} did not find ${attributed(
         quoteValue(row.lookedFor ?? ''),
         'call',
@@ -307,7 +316,7 @@ function clauseOf(
   if (window !== undefined) parts.push(window);
   const measured = among ? instantMs(names.measuredAt) : undefined;
   if (measured !== undefined) parts.push(`read ${formatInstant(measured, clock)}`);
-  if (!among && kind === 'complete') {
+  if (!recorded && !among && kind === 'complete') {
     const ids = identities(call);
     if (ids.length > 0) {
       const more = Math.max(0, rowsRead - Math.min(ids.length, LIST_ITEMS));
@@ -341,5 +350,21 @@ export function composeStatement(
 ): NegativeStatement {
   const ordered = [...reads].sort((a, b) => ordinalOf(a.call) - ordinalOf(b.call));
   const clauses = ordered.map((read) => clauseOf(kind, read, clock));
+  return { text: clauses.join('\n'), clauses, version: STATEMENT_VERSION };
+}
+
+/** State only the admitted read and all its limits, without asserting completeness. */
+export function composeRecordedStatement(
+  reads: readonly {
+    readonly call: TurnCall;
+    readonly row: ComposedSearchRow;
+    readonly tool?: DeclaredTool;
+  }[],
+  clock: string,
+): NegativeStatement {
+  const clauses = [...reads]
+    .sort((a, b) => ordinalOf(a.call) - ordinalOf(b.call))
+    .map((read) => clauseOf('complete', read, clock, true));
+  clauses.push('The requested negative claim is not established by these recorded searches.');
   return { text: clauses.join('\n'), clauses, version: STATEMENT_VERSION };
 }

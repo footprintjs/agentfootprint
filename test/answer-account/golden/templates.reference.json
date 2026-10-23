@@ -1864,6 +1864,24 @@
   ],
   "source": "library"
  },
+ "howSure.reason.claimExceedsSearch@1": {
+  "text": "A negative claim exceeds the recorded search.",
+  "parts": [
+   {
+    "text": "A negative claim exceeds the recorded search."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.declarationOverclaimed@1": {
+  "text": "A tool declaration overstates what was checked.",
+  "parts": [
+   {
+    "text": "A tool declaration overstates what was checked."
+   }
+  ],
+  "source": "library"
+ },
  "howSure.reason.answerCheckFailed@1": {
   "text": "The app's answer checks failed this answer.",
   "parts": [

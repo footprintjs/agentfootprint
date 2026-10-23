@@ -1373,6 +1373,11 @@ export {
 // existing v2.4 consumers find them at the top level.
 
 // Optional host-authored validation at the final answer delivery boundary.
+export type {
+  NegativeClaimsOptions,
+  NegativeClaimCitation,
+} from './core/agent/negativeClaims/config.js';
+export type { DeliveredNegative, AnswerNegatives } from './core/agent/negativeClaims/delivery.js';
 export {
   AnswerValidationError,
   type AnswerValidationOptions,

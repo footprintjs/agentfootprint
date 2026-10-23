@@ -238,6 +238,8 @@ const REASON_LINES: Readonly<Record<AssessmentReason, TemplateId>> = {
   'derived-from-reading': 'howSure.reason.derivedFromReading',
   'stopped-early': 'howSure.reason.stoppedEarly',
   'steps-unfinished': 'howSure.reason.stepsUnfinished',
+  'claim-exceeds-search': 'howSure.reason.claimExceedsSearch',
+  'declaration-overclaimed': 'howSure.reason.declarationOverclaimed',
   'answer-check-failed': 'howSure.reason.answerCheckFailed',
   'check-unreachable': 'howSure.reason.checkUnreachable',
 };

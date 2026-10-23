@@ -499,17 +499,17 @@ describe('#199 rows: handles, ranking, dispatch-time windows', () => {
     expect(codeOf(none('c1'), [call])).toEqual(['established']);
   });
 
-  it('one spelling in one turn is one search, whatever instant each call ran at', () => {
+  it('one spelling does not fuse disjoint windows executed during one turn', () => {
     const calls = [
       incidentCall({ id: 'c1', dispatchedAt: CLOCK }),
       incidentCall({
         id: 'c2',
-        dispatchedAt: '2026-10-22T10:30:00Z',
+        dispatchedAt: '2026-10-22T14:00:00Z',
         emptiness: 'non-empty',
         rows: 1,
       }),
     ];
-    expect(codeOf(none('c1'), calls)).toEqual(['contradicted-by-rows']);
+    expect(codeOf(none('c1'), calls)).toEqual(['established']);
   });
 });
 

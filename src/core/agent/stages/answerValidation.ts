@@ -9,9 +9,19 @@ import {
 } from '../../../answer-validation/index.js';
 import { ledgerAtCheck } from '../../../answer-validation/toolLedger.js';
 import type { ArtifactStore } from '../../../artifacts/types.js';
-import type { OutputSchemaParser } from '../../../answer-validation/outputSchema.js';
+import {
+  applyOutputSchema,
+  type OutputSchemaParser,
+} from '../../../answer-validation/outputSchema.js';
 import type { DeclaredClaim } from '../../../integrity/unsupported-claim/check.js';
 import type { AgentState } from '../types.js';
+import {
+  renderNegativeCandidate,
+  reportWithNegatives,
+  type NegativeDeliveryConfig,
+} from '../negativeClaims/delivery.js';
+import { negativeRecordOf } from '../negativeClaims/capture.js';
+import { prepareNegativeCorrection } from '../negativeClaims/recheck.js';
 import { takeAnswerEvidence } from './answerEvidence.js';
 import type { RouteBranch } from './route.js';
 
@@ -35,6 +45,11 @@ export function withAnswerValidation(
   hasOutstandingConsent: () => boolean,
   nativeOutput = false,
   claims?: readonly DeclaredClaim[],
+  negatives?: {
+    readonly config: NegativeDeliveryConfig;
+    readonly applicationValidation: boolean;
+    readonly runId: () => string;
+  },
 ): (scope: TypedScope<AgentState>) => Promise<RouteBranch> {
   if (parser === undefined) {
     throw new Error('Agent.answerValidation requires .outputSchema(parser).');
@@ -43,7 +58,16 @@ export function withAnswerValidation(
   if (config.agentChecks.includes('claims') && declaredClaims.length === 0) {
     throw new Error("Agent.answerValidation({ agentChecks: ['claims'] }) requires .claims().");
   }
+  // Reserve agent-owned row identities even when the app listed no checks.
+  // An app validator cannot mint the checker's own evidence verdicts.
+  const effectiveConfig: ResolvedAnswerValidation =
+    negatives === undefined || config.agentChecks.includes('negative-claims')
+      ? config
+      : { ...config, agentChecks: [...config.agentChecks, 'negative-claims'] };
   return async (scope) => {
+    // Even a provider that ignores the no-tools repair request cannot dispatch.
+    if (negatives !== undefined && scope.toolsOffAfterRevision === true)
+      scope.llmLatestToolCalls = [];
     const branch = await decide(scope);
     if (branch !== 'final') return branch;
     // `strategy: 'native'` only (read only then, so other agents keep their
@@ -79,11 +103,59 @@ export function withAnswerValidation(
       }
       return 'final';
     }
+    let raw = scope.llmLatestContent;
+    let candidateParser = parser;
+    let prepared: ReturnType<typeof renderNegativeCandidate> | undefined;
+    if (negatives !== undefined) {
+      const record = negativeRecordOf(scope, negatives.runId());
+      try {
+        const candidate = applyOutputSchema(raw, parser);
+        prepared = renderNegativeCandidate(
+          candidate,
+          negatives.config,
+          record,
+          (call) =>
+            scope.negativeClaimState?.calls.find((c) => c.resultId === call.resultId)
+              ?.trustedContext === true && record.ledgerComplete,
+        );
+        const overclaims =
+          scope.negativeClaimState?.overclaims.filter((row) => row.turn === record.turn) ?? [];
+        if (overclaims.length > 0)
+          prepared.answer = {
+            ...prepared.answer,
+            checks: [
+              ...prepared.answer.checks,
+              ...overclaims.map((row, index) => ({
+                id: `agent:negative-claims:declaration:${index}`,
+                path: '/',
+                index,
+                kind: 'unknown' as const,
+                code: 'declaration-overclaimed',
+                disposition: 'not-applicable' as const,
+                tools: [row.tool],
+                results: [],
+              })),
+            ],
+          };
+        if (prepared.correction && prepareNegativeCorrection(scope, record, negatives.config.field))
+          return 'negative-recheck';
+        raw = JSON.stringify(prepared.candidate);
+        candidateParser = { parse: (value: unknown) => value };
+        scope.answerNegatives = prepared.answer;
+      } catch {
+        // The app's parser was already invoked once; do not repeat a stateful parser.
+        candidateParser = {
+          parse: () => {
+            throw new Error('Negative candidate could not be admitted.');
+          },
+        };
+      }
+    }
     const identity = scope.runIdentity;
     const result = await executeAnswerValidation(
-      scope.llmLatestContent,
-      parser,
-      config,
+      raw,
+      candidateParser,
+      effectiveConfig,
       store,
       {
         conversationId: identity.conversationId,
@@ -97,8 +169,23 @@ export function withAnswerValidation(
       // terminal branch, so they never will). `executeAnswerValidation`
       // detaches and freezes it before the check runs.
       ledgerAtCheck(scope.toolCallLedger, undispatchedCalls(scope)),
-      agentRowsFor(scope, config, declaredClaims),
+      agentRowsFor(scope, effectiveConfig, declaredClaims),
     );
+    if (negatives !== undefined) {
+      const appAllows =
+        !negatives.applicationValidation ||
+        config.mode === 'observe' ||
+        result.report.status === 'passed';
+      const allowed =
+        prepared !== undefined && prepared.allowed && appAllows && result.report.schemaAccepted;
+      scope.answerValidation =
+        prepared === undefined
+          ? { ...result.report, delivery: 'fallback' }
+          : reportWithNegatives(result.report, prepared.answer, allowed);
+      if (!allowed) scope.answerValidationBlocked = true;
+      else scope.llmLatestContent = result.content ?? raw;
+      return 'final';
+    }
     scope.answerValidation = result.report;
     if (config.mode === 'enforce' && result.report.status !== 'passed') {
       scope.answerValidationBlocked = true;

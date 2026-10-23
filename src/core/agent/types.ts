@@ -2193,6 +2193,10 @@ export interface AgentState {
    * is called, so every other agent commits the key set it always did.
    */
   resultIdentities?: import('./findings/verificationState.js').ClaimVerificationState;
+  /** Private admitted tool attempts; only the negative-claim runtime writes this. */
+  negativeClaimState?: import('./negativeClaims/capture.js').NegativeRuntimeState;
+  /** Library-composed answer and diagnostic verdicts, never model evidence. */
+  answerNegatives?: import('./negativeClaims/delivery.js').AnswerNegatives;
   /**
    * The ANSWER's coverage, as data — `coverageDeclared` folded into the three
    * lists the limits block would have printed (merged in declaration order,

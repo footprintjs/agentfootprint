@@ -29,6 +29,14 @@ import {
   type ResolvedOutputEnforcement,
 } from './outputEnforcement.js';
 import { nativeOutputFormat } from './nativeOutputFormat.js';
+import {
+  resolveNegativeClaims,
+  assertNegativeClaimsTools,
+  negativeClaimsSchema,
+  negativeClaimsInstruction,
+  type NegativeClaimsOptions,
+  type ResolvedNegativeClaims,
+} from './negativeClaims/config.js';
 import { resolveEvidenceGate } from './evidence/gate.js';
 import { scopeToolsToActiveSkill } from './toolsFromActiveSkill.js';
 import type { NamesAndNumbersOptions, ResolvedEvidenceGate } from './evidence/types.js';
@@ -315,6 +323,7 @@ export class AgentBuilder {
    */
   private outputSchemaParser?: OutputSchemaParser<unknown>;
   private answerValidationConfig?: ResolvedAnswerValidation;
+  private negativeClaimsConfig?: ResolvedNegativeClaims;
   /** Corrective re-asks the loop may spend. `0` (the default) means the
    *  schema is judged once, at the caller's boundary, exactly as it always
    *  was — and no enforcement is mounted in the chart at all. */
@@ -3250,7 +3259,34 @@ export class AgentBuilder {
     return this;
   }
 
-  private resolveOutputEnforcement(): ResolvedOutputEnforcement | undefined {
+  /**
+   * Deliver typed negative claims as library-written statements of the searches
+   * they cite. `field` is a required top-level array in `.outputSchema()`'s JSON
+   * Schema; entries contain only `kind`, required `about`, and `restsOn` handles.
+   * The output adds `statement`, `delivery: 'record-composed'` and `version`.
+   *
+   * An unestablished citation withholds the answer by default. `state-searched`
+   * delivers what was searched while retaining its failed or unverified standing.
+   * Prose checking is deferred. Typed enforcement is available, not recommended
+   * until its benchmark gates pass. Declaration order with `.outputSchema()` does
+   * not matter; the complete contract is checked at build.
+   *
+   * @example
+   * ```ts
+   * builder.negativeClaims({ field: 'negatives', tools: ['list_incidents'] });
+   * ```
+   */
+  negativeClaims(options: NegativeClaimsOptions): this {
+    if (this.negativeClaimsConfig !== undefined) {
+      throw new Error('Agent.negativeClaims: already configured.');
+    }
+    this.negativeClaimsConfig = resolveNegativeClaims(options);
+    return this;
+  }
+
+  private resolveOutputEnforcement(
+    servedSchema?: Readonly<Record<string, unknown>>,
+  ): ResolvedOutputEnforcement | undefined {
     const parser = this.outputSchemaParser;
     if (!parser) return undefined;
 
@@ -3283,7 +3319,7 @@ export class AgentBuilder {
       }
 
       // Refusal 2 — a tool needs its shape, and the library will not invent one.
-      const jsonSchema = resolveJsonSchema(parser, this.outputSchemaJson);
+      const jsonSchema = resolveJsonSchema(parser, servedSchema ?? this.outputSchemaJson);
       if (jsonSchema === undefined) {
         throw new Error(
           `AgentBuilder.outputSchema: strategy 'tool-forced' puts the schema on the wire as ` +
@@ -3303,7 +3339,7 @@ export class AgentBuilder {
     // cannot express is refused by `nativeOutputFormat`, naming the node.
     let outputFormat;
     if (this.outputSchemaStrategy === 'native') {
-      const jsonSchema = resolveJsonSchema(parser, this.outputSchemaJson);
+      const jsonSchema = resolveJsonSchema(parser, servedSchema ?? this.outputSchemaJson);
       if (jsonSchema === undefined) {
         throw new Error(
           `AgentBuilder.outputSchema: strategy 'native' sends the schema to the provider as ` +
@@ -3333,17 +3369,40 @@ export class AgentBuilder {
     // no extra turn. It means judge, do not re-ask.
     return {
       parser,
-      retries: this.outputSchemaRetries,
+      retries:
+        this.negativeClaimsConfig === undefined
+          ? this.outputSchemaRetries
+          : Math.min(this.outputSchemaRetries, 1),
       ...(schemaTool !== undefined && { schemaTool }),
       ...(outputFormat !== undefined && { outputFormat }),
       hasFallback: this.outputFallbackCfg !== undefined,
-      ...(this.answerValidationConfig?.mode === 'enforce' && { answerValidationEnforced: true }),
+      ...(this.negativeClaimsConfig !== undefined && { negativeClaimsEnforced: true as const }),
+      ...((this.answerValidationConfig?.mode === 'enforce' ||
+        this.negativeClaimsConfig !== undefined) && {
+        answerValidationEnforced: true,
+      }),
     };
   }
 
   build(): Agent {
     // Settings that are only coherent (or not) once the whole agent exists.
     this.assertOutputFallbackCoherent();
+    const negativeClaims = this.negativeClaimsConfig;
+    let negativeSchema: Readonly<Record<string, unknown>> | undefined;
+    if (negativeClaims !== undefined) {
+      if (this.outputSchemaParser === undefined) {
+        throw new Error('Agent.negativeClaims requires .outputSchema(parser, { jsonSchema }).');
+      }
+      if (this.outputFallbackCfg !== undefined || this.limitsTravelValue) {
+        throw new Error(
+          'Agent.negativeClaims does not support .outputFallback() or .limitsTravelWithTheAnswer(): the library must own the exact delivered answer.',
+        );
+      }
+      negativeSchema = negativeClaimsSchema(
+        negativeClaims,
+        resolveJsonSchema(this.outputSchemaParser, this.outputSchemaJson),
+      );
+    }
     if (this.answerValidationConfig !== undefined) {
       if (this.outputSchemaParser === undefined) {
         throw new Error('AgentBuilder.answerValidation requires .outputSchema(parser).');
@@ -3355,6 +3414,11 @@ export class AgentBuilder {
       }
       // A listed check with nothing to judge is refused, never left to pass.
       const listed = this.answerValidationConfig.agentChecks;
+      if (listed.includes('negative-claims') && negativeClaims === undefined) {
+        throw new Error(
+          "AgentBuilder.answerValidation({ agentChecks: ['negative-claims'] }) requires .negativeClaims().",
+        );
+      }
       if (listed.includes('claims') && this.claimsContract === undefined) {
         throw new Error(
           "AgentBuilder.answerValidation({ agentChecks: ['claims'] }) needs a .claims() contract: " +
@@ -3511,6 +3575,16 @@ export class AgentBuilder {
       selfExplain && selfExplainBinding
         ? [...this.injectionList, selfExplain.skill(this.selfExplainConfig!)]
         : this.injectionList;
+    if (negativeClaims !== undefined && negativeSchema !== undefined) {
+      injections = [
+        ...injections,
+        defineInstruction({
+          id: 'negative-claims',
+          activeWhen: () => true,
+          prompt: negativeClaimsInstruction(negativeClaims, negativeSchema),
+        }),
+      ];
+    }
     // The tier-3 menu envelope's system-prompt half (SG-C): auto-registered
     // whenever the mounted graph can produce a MENU verdict — a menu with no
     // envelope would be a decision the model was never told about, the
@@ -3868,6 +3942,12 @@ export class AgentBuilder {
             entity: fact.entity,
             field: fact.field,
           }));
+    if (negativeClaims !== undefined) {
+      assertNegativeClaimsTools(negativeClaims, [
+        ...this.registry.map((entry) => entry.tool),
+        ...injections.flatMap((injection) => injection.inject?.tools ?? []),
+      ]);
+    }
     const agent = new Agent(
       opts,
       this.systemPromptValue,
@@ -3892,7 +3972,7 @@ export class AgentBuilder {
       this.windowStrategyValue,
       this.toolMiddlewareList,
       this.messageMiddlewareList,
-      this.resolveOutputEnforcement(),
+      this.resolveOutputEnforcement(negativeSchema),
       this.skillGraphEdgeTargets,
       this.skillGraphExplainNextSkill,
       this.skillGraphIsTree,
@@ -3912,6 +3992,7 @@ export class AgentBuilder {
       claimContract,
       this.answerValidationConfig,
       this.systemPromptCacheExplicit,
+      negativeClaims,
     );
     // Attach the observers collected by `.watch()` so they receive events
     // from the very first run. Mirrors what consumers would do post-build

@@ -838,6 +838,20 @@ function readAnswerRows(state: Readonly<Record<string, unknown>>, g: Gathered): 
   if (!isRecord(report) || typeof report.status !== 'string') return;
   const at = statePointer('answerValidation', 'status');
   g.checked.push({ layer: 4, check: 'answer-checks', ran: 1, of: 1, witness: [at] });
+  if (Array.isArray(report.checks)) {
+    for (const [index, check] of report.checks.entries()) {
+      if (
+        !isRecord(check) ||
+        typeof check.id !== 'string' ||
+        !check.id.startsWith('agent:negative-claims:')
+      )
+        continue;
+      if (check.disposition === 'checked-fail')
+        fire(g, 'claim-exceeds-search', statePointer('answerValidation', 'checks', index));
+      if (check.reason === 'declaration-overclaimed')
+        fire(g, 'declaration-overclaimed', statePointer('answerValidation', 'checks', index));
+    }
+  }
   if (report.status === 'failed') fire(g, 'answer-check-failed', at);
   if (report.status === 'unverified') fire(g, 'check-unreachable', at);
   // A failed report can also hold checks that could not reach a verdict — a

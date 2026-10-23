@@ -145,6 +145,9 @@ const captureTurnPayload = (
     // A typed answer's limits, beside it — the same value-conditional grammar:
     // a turn with nothing to carry emits the exact payload it always did.
     ...(answerCoverage !== undefined && { answerCoverage }),
+    ...(commitValidated &&
+      scope.answerValidation?.delivery !== undefined &&
+      scope.answerNegatives !== undefined && { answerNegatives: scope.answerNegatives }),
     // The answer layer's standing (honesty layer 4) — only on an agent that
     // armed it; every other turn emits the exact payload it always did.
     ...(answerAssessment !== undefined && { answerAssessment }),
@@ -185,7 +188,9 @@ export const prepareFinalWithValidationStage = (scope: TypedScope<AgentState>): 
 export function validatedAnswerMayDeliver(report: AgentState['answerValidation']): boolean {
   return (
     report !== undefined &&
-    (report.mode === 'observe' ||
+    (report.delivery === 'as-checked' ||
+      report.delivery === 'recorded' ||
+      report.mode === 'observe' ||
       (report.mode === 'enforce' && report.status === 'passed' && report.schemaAccepted === true))
   );
 }

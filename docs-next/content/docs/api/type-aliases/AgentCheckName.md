@@ -4,7 +4,7 @@ title: AgentCheckName
 
 # Type Alias: AgentCheckName
 
-> **AgentCheckName** = `"claims"` \| `"names-and-numbers"`
+> **AgentCheckName** = `"claims"` \| `"names-and-numbers"` \| `"negative-claims"`
 
 Defined in: [src/answer-validation/types.ts:120](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L120)
 

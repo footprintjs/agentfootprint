@@ -36,6 +36,16 @@ Defined in: [src/answer-validation/types.ts:266](https://github.com/footprintjs/
 
 ***
 
+### delivery?
+
+> `readonly` `optional` **delivery?**: `"as-checked"` \| `"recorded"` \| `"fallback"`
+
+Defined in: [src/answer-validation/types.ts:276](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L276)
+
+Runtime delivery authorization for a composed negative; never a verification verdict.
+
+***
+
 ### failed
 
 > `readonly` **failed**: `number`

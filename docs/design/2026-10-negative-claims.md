@@ -1,5 +1,27 @@
 # Negative claims, honest by construction — "not found", "none" and "the list is complete"
 
+**PR 4 implementation note (2026-10-23).** The handoff supersedes the sequencing
+below: #198–#200 are merged; this change connects typed delivery only. Prose
+observation is PR 5, followed by the paid benchmark in PR 6. No paid calls are
+part of PR 4 and publishing remains on hold. The handoff's approved budget
+remains reserved for the later benchmark.
+
+The typed arm automatically governs its field even without an app validator;
+an explicit app validator keeps its own veto. `strictProse`, `prose` and
+`enforceProse` are refused until that separate work lands. An established typed
+row is `not-applicable`, never `checked-pass`; zero typed entries report zero
+examined reads and cannot verify an answer. Failed delivery can state the
+admitted search, but cannot upgrade the verdict.
+
+Same-turn reads survive a pause or authenticated error checkpoint. Earlier-turn
+reads are stale in every mode. The private carrier validates native identities
+and caller binding; the host must authenticate saved checkpoints. A structurally
+consistent fabricated checkpoint is not authenticated by these checks. Actual
+dispatch spans identify relative windows, rather than the words of the duration.
+Schema and citation corrections share the existing one-extra-call budget and
+disable tools; rejected drafts stay out of conversation history and memory.
+Statement template version 3 adds the unestablished-search rendering.
+
 **Status: design, revision 6.2 (2026-10-23). Direction, the full bench plan (≈ $4.30, cap $4.50)
 and the raters' plan approved by the owner; § 9 records the decisions.** Revision 2 followed four lens reviews; revisions 3–5 closed verifiers' walks;
 revision 6 answers the four-lens review of PR #199/#200 — one blocker and the PR 4 requirements.

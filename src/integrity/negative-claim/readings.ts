@@ -5,8 +5,9 @@
  * Pattern: every answer is read off the COMPOSED executed scope of each call (#199's
  *          `ComposedCoverage` items) — the tool, every filter in effect (a `whenOmitted` default
  *          composed as if sent), the `fixed` qualifiers, a host-filled identity filter by its
- *          reference, a relative window by its SPELLING within the turn (its dispatch-time span
- *          compares two different spellings), and the page asked for. Never the tool name or
+ *          reference, a period by its span resolved at dispatch, and the page asked for.
+ *          Equivalent spellings of one executed span share a key; the same relative spelling
+ *          at two dispatch instants does not. Never the tool name or
  *          the model-visible arguments alone. An inert argument is not in the scope, so it never
  *          splits a key; nor does a cap.
  * Role:    integrity/ layer (L3), read by `citation.ts`, `containment.ts` and `statement.ts`.
@@ -136,10 +137,18 @@ const inScope = (item: SearchCheckedItem): boolean =>
   item.from !== 'result' && item.facet !== undefined && SCOPE_FACETS.has(item.facet);
 
 /**
- * One item's value as the key spells it. A relative window keys by its SPELLING: two calls of one
- * turn that sent `2h` asked for the same window, whatever leg each ran in.
+ * One item's value as the key spells it. A known period is its executed span,
+ * normalized to instants so zone-offset spellings do not split one search.
+ * A result's claimed queried period is never used to re-key the executed call.
  */
 function valueOf(item: SearchCheckedItem): string {
+  if (item.facet === 'period' && item.span !== undefined) {
+    const from = instantOf(item.span.from, 'lenient');
+    const to = instantOf(item.span.to, 'lenient');
+    return from !== undefined && to !== undefined
+      ? `span:${stableJson([from.ms, from.nanos, to.ms, to.nanos])}`
+      : `invalid-span:${stableJson(item.span)}`;
+  }
   if (item.any === true) return '*any';
   if (item.value !== undefined) return spellValue(item.value);
   return `what:${spellValue(item.what)}`;
@@ -157,7 +166,7 @@ function pageOf(call: TurnCall, tool: DeclaredTool | undefined): string | undefi
 
 /**
  * The reading key — or undefined when the call has no composed scope. `clock` is accepted for
- * the callers' symmetry and never read: a relative window keys by its spelling within the turn.
+ * the callers' symmetry and never read: the executed period was resolved at dispatch.
  */
 export function readingKey(
   call: TurnCall,
@@ -267,8 +276,6 @@ function compareGroup(
     if (ib.any === true) return 'narrower';
   }
   if (facet === 'period') {
-    // One spelling within the turn is one window, whatever instant each call ran at.
-    if (ia.value !== undefined && valueOf(ia) === valueOf(ib)) return 'equal';
     const pa = ia.span;
     const pb = ib.span;
     if (pa !== undefined && pb !== undefined) {
@@ -279,6 +286,9 @@ function compareGroup(
       }
       return holdsRange(pb, pa) ? 'narrower' : 'other';
     }
+    // One known window and one unresolved window are not proved to be the
+    // same search even when the arguments contain the same relative words.
+    if (pa !== undefined || pb !== undefined) return 'other';
   }
   return valueOf(ia) === valueOf(ib) && (ia.from === 'host') === (ib.from === 'host')
     ? 'equal'
@@ -287,7 +297,7 @@ function compareGroup(
 
 /**
  * How `a`'s composed scope relates to `b`'s. Different tools are always `other`. A period
- * compares by spelling first, then by the spans the calls ran with — so no clock is needed.
+ * compares the spans the calls ran with before any unresolved spelling — no clock is needed.
  */
 export function scopeRelation(
   a: TurnCall,

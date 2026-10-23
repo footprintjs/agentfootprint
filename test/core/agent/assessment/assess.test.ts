@@ -539,6 +539,8 @@ describe('UNIT — the reason table', () => {
       'steps-unfinished',
       'answer-check-failed',
       'check-unreachable',
+      'claim-exceeds-search',
+      'declaration-overclaimed',
     ];
     expect([...REASONS.map((r) => r.reason)].sort()).toEqual([...union].sort());
     expect(REASONS.filter((r) => r.class === 'ask').map((r) => r.reason)).toEqual([

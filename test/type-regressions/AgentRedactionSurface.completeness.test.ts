@@ -64,6 +64,7 @@ export const AGENT_PUBLIC_SURFACE: { readonly [K in keyof Agent]-?: SurfaceKind 
   findings: 'callers-own',
   answerCoverage: 'callers-own',
   answerValidation: 'callers-own',
+  answerNegatives: 'callers-own',
   stoppedEarly: 'callers-own',
   unsupportedValues: 'callers-own',
   outputContractUnmet: 'callers-own',

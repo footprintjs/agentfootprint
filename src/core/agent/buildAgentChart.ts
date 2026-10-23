@@ -240,6 +240,7 @@ export interface AgentChartDeps {
    * SchemaRetry mechanism verbatim). Absent → no branch, no stage, no event.
    */
   readonly evidenceRecheckStage?: (scope: never) => void;
+  readonly negativeRecheckStage?: (scope: never) => void;
 
   /**
    * The out-of-budget wrap-up branch (9.56.0). Present on any agent that can
@@ -1093,6 +1094,16 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
   // is one more ordinary turn" reasoning, same conditional mount. Absent for
   // `posture: 'assist'` (which records and never loops) and for every agent
   // that did not ask for the check at all.
+  if (deps.negativeRecheckStage) {
+    decider = decider.addFunctionBranch(
+      STAGE_IDS.NEGATIVE_RECHECK,
+      'NegativeCitationCorrection',
+      deps.negativeRecheckStage as never,
+      'Correct a citation once with tools disabled',
+      { loopTo: loopTarget, tags: milestoneTagsFor(STAGE_IDS.NEGATIVE_RECHECK) },
+    );
+  }
+
   if (deps.evidenceRecheckStage) {
     decider = decider.addFunctionBranch(
       STAGE_IDS.EVIDENCE_RECHECK,
