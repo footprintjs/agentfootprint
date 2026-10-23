@@ -26,10 +26,19 @@
 
 import { readResultIdentity } from '../claim-binding/capture.js';
 import { stableJson } from '../../lib/stableJson.js';
-import type { ComposedSearchRow, DeclaredTool, SearchCheckedItem } from './searchRow.js';
-import type { NegativeKind, NegativeStatement, TurnCall } from './types.js';
-import { instantMs, msSpan, unheldOf, type MsSpan } from './window.js';
+import type { ComposedCoverage, ComposedItem } from '../../semantics/coverage/composedCoverage.js';
 import { periodVerdict } from '../../semantics/coverage/period.js';
+import { resultSpan } from '../../semantics/coverage/search/span.js';
+import { instantOf } from '../../time/instant.js';
+import type { TimeRange } from '../../time/range.js';
+import { unheldRanges } from './readings.js';
+import type { NegativeKind, NegativeStatement, SearchTool, TurnCall } from './types.js';
+
+type ComposedSearchRow = ComposedCoverage;
+type SearchCheckedItem = ComposedItem;
+type DeclaredTool = SearchTool;
+
+const instantMs = (value: unknown): number | undefined => instantOf(value, 'lenient')?.ms;
 
 /** Bump with any change to a template or to how a value is rendered. */
 export const STATEMENT_VERSION = '2';
@@ -102,18 +111,24 @@ const pad = (n: number): string => String(n).padStart(2, '0');
 function clockOf(ms: number): string {
   const d = new Date(ms);
   const base = `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
-  return d.getUTCSeconds() === 0 && d.getUTCMilliseconds() === 0
-    ? base
-    : `${base}:${pad(d.getUTCSeconds())}`;
+  // Seconds when they are not zero; never milliseconds — a half-open span's end one
+  // millisecond past a minute is that minute.
+  return d.getUTCSeconds() === 0 ? base : `${base}:${pad(d.getUTCSeconds())}`;
 }
 
 const dayOf = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
 
-/** A span as the statement writes it: `08:00–10:00Z`, or with dates across days. */
-export function formatSpan(span: MsSpan): string {
-  return dayOf(span.from) === dayOf(span.to)
-    ? `${clockOf(span.from)}–${clockOf(span.to)}Z`
-    : `${dayOf(span.from)} ${clockOf(span.from)}Z–${dayOf(span.to)} ${clockOf(span.to)}Z`;
+/**
+ * A half-open span (`time/range.ts`) as the statement writes it: `08:00–10:00Z`, or with dates
+ * across days; undefined when it is not a pair of instants.
+ */
+export function formatSpan(span: TimeRange): string | undefined {
+  const from = instantMs(span.from);
+  const to = instantMs(span.to);
+  if (from === undefined || to === undefined) return undefined;
+  return dayOf(from) === dayOf(to)
+    ? `${clockOf(from)}–${clockOf(to)}Z`
+    : `${dayOf(from)} ${clockOf(from)}Z–${dayOf(to)} ${clockOf(to)}Z`;
 }
 
 /** An instant, with its date unless it falls on the leg clock's day. */
@@ -134,30 +149,38 @@ const HELD: Readonly<Record<string, string>> = {
 const items = (row: ComposedSearchRow, facet: SearchCheckedItem['facet']) =>
   row.checked.filter((item) => item.facet === facet);
 
-/** The period part, and what it adds to "not checked". */
+/**
+ * The period part — the span the call RAN with (its period item's dispatch-time span, else the
+ * result's `queried`) and how much of the read the store held — and what it adds to "not
+ * checked".
+ */
 function periodParts(row: ComposedSearchRow): { window?: string; unchecked: string[] } {
-  const period = row.period;
-  const queried = period === undefined ? undefined : msSpan(period.queried);
-  if (period !== undefined && queried !== undefined) {
-    let verdict: string;
-    try {
-      verdict = periodVerdict(period);
-    } catch {
-      verdict = 'unknown';
-    }
-    const unchecked =
-      verdict === 'unknown'
-        ? [`${formatSpan(queried)} (held: unknown)`]
-        : unheldOf(period).map((span) => `${formatSpan(span)} (not held)`);
-    return {
-      window: `window ${formatSpan(queried)} (${HELD[verdict] ?? 'held: unknown'})`,
-      unchecked,
-    };
-  }
   const declared = items(row, 'period')[0];
-  return declared === undefined
-    ? { unchecked: [] }
-    : { window: `window ${quoteValue(declared.what)} (held: undeclared)`, unchecked: [] };
+  const period = row.period;
+  const ran = declared?.span ?? (period === undefined ? undefined : resultSpan(period));
+  const shown = ran === undefined ? undefined : formatSpan(ran);
+  const windowText =
+    shown ?? (declared === undefined ? undefined : quoteValue(declared.value ?? declared.what));
+  if (windowText === undefined) return { unchecked: [] };
+  if (period === undefined)
+    return { window: `window ${windowText} (held: undeclared)`, unchecked: [] };
+  let verdict: string;
+  try {
+    verdict = periodVerdict(period);
+  } catch {
+    verdict = 'unknown';
+  }
+  const queried = resultSpan(period);
+  const unchecked =
+    verdict === 'unknown'
+      ? queried === undefined
+        ? []
+        : [`${formatSpan(queried) ?? quoteValue(period.queried.from)} (held: unknown)`]
+      : unheldRanges(period).flatMap((span) => {
+          const text = formatSpan(span);
+          return text === undefined ? [] : [`${text} (not held)`];
+        });
+  return { window: `window ${windowText} (${HELD[verdict] ?? 'held: unknown'})`, unchecked };
 }
 
 /** One scope item, quoted and attributed. */
@@ -168,8 +191,6 @@ function itemPart(item: SearchCheckedItem): string {
     const named = item.from === 'call' && item.value !== undefined ? item.value : item.what;
     return attributed(`source ${quoteValue(named)}`, item.from);
   }
-  if (item.facet === 'page')
-    return attributed(`page ${quoteValue(item.value ?? item.what)}`, item.from);
   if (item.facet === 'names') return attributed(`names ${quoteValue(item.what)}`, 'result');
   if (item.any === true && argument !== undefined) return attributed(`any ${argument}`, item.from);
   if (item.from === 'host' && argument !== undefined) return attributed(argument, 'host');
@@ -188,7 +209,6 @@ function scopeParts(row: ComposedSearchRow, among: boolean): string[] {
   const filters = [
     ...items(row, 'filter').filter((i) => i.from === 'fixed'),
     ...items(row, 'filter').filter((i) => i.from !== 'fixed'),
-    ...items(row, 'page'),
   ].map(itemPart);
   const names = items(row, 'names').map(itemPart);
   const source = items(row, 'source').map(itemPart);
@@ -214,6 +234,12 @@ function gapParts(row: ComposedSearchRow): string[] {
         ];
       case 'partial':
         return ['what the partial result left out'];
+      case 'credential-limited':
+        return ["what the caller's credential may not see"];
+      case 'match':
+        return [`${quoteGap(gap.what)} (by the tool's own match rule)`];
+      case 'ranking':
+        return ['the rows an approximate ranking may have left out'];
       case 'prose':
         return [`${quoteGap(gap.what)} (as the tool wrote it)`];
       case 'scope':

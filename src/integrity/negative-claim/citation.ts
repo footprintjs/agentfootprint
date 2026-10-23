@@ -30,7 +30,7 @@ import {
   type ScopeRelation,
 } from './readings.js';
 import type { NegativeKind, StaleSince, TurnCall, TurnRecord, TypedVerdict } from './types.js';
-import { sameValue } from './words.js';
+import { sameValue } from './readings.js';
 
 /** The verdict on one citation, with the reads it rests on when established. */
 export interface CitationVerdict {
@@ -64,7 +64,7 @@ const KINDS: readonly NegativeKind[] = ['none', 'not-found', 'complete'];
 
 /** At most this many distinct reads in one claim; beyond it the claim is `too-many-claims`. */
 export const MAX_CITED_READS = 16;
-const COMPLETENESS_GAPS = new Set(['cap-reached', 'paged', 'partial']);
+const COMPLETENESS_GAPS = new Set(['cap-reached', 'paged', 'partial', 'ranking']);
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -229,6 +229,26 @@ function sequenceVerdict(
   return PRECEDENCE.find((code) => codes.includes(code));
 }
 
+/** A handle the library serves beside a result: `r` and the reservation's ordinal. */
+const HANDLE = /^r[1-9][0-9]{0,8}$/;
+
+/**
+ * The one call a citation names — by its result identity (this recording's namespace), or by
+ * the read's handle when exactly one row of this recording carries it. Anything else, an unknown
+ * run id included, resolves nothing.
+ */
+function citedCall(raw: string, record: TurnRecord): TurnCall | undefined {
+  if (HANDLE.test(raw)) {
+    const named = record.calls.filter(
+      (c) => c.row?.handle === raw && identityOf(c.resultId)?.namespace === record.leg.namespace,
+    );
+    return named.length === 1 ? named[0] : undefined;
+  }
+  const identity = identityOf(raw);
+  if (identity === undefined || identity.namespace !== record.leg.namespace) return undefined;
+  return record.calls.find((c) => c.resultId === raw);
+}
+
 /** One cited read: resolve it, then its row, its kind and what ran around it. */
 function readVerdict(
   raw: string,
@@ -237,12 +257,7 @@ function readVerdict(
   peers: readonly TurnCall[],
   citable: readonly string[] | undefined,
 ): { code?: TypedVerdict; call?: TurnCall; staleSince?: StaleSince } {
-  const identity = identityOf(raw);
-  if (identity === undefined || identity.namespace !== record.leg.namespace) {
-    return { code: 'citation-unresolved' };
-  }
-  // Resolved by the identity alone; an unknown run id resolves nothing.
-  const call = record.calls.find((c) => c.resultId === raw);
+  const call = citedCall(raw, record);
   if (call === undefined || call.turn > record.turn) return { code: 'citation-unresolved' };
   if (call.turn < record.turn) {
     const staleSince = {
@@ -303,7 +318,15 @@ export function judgeCitation(
   const kind = KINDS.find((k) => k === entry.kind);
   const cited = Array.isArray(entry.restsOn) ? entry.restsOn : [];
   const raws = [...new Set(cited.filter((v): v is string => typeof v === 'string'))];
-  const results = raws.filter((raw) => identityOf(raw) !== undefined);
+  // The rows name the reads by the library's own identities — never by model text.
+  const results = [
+    ...new Set(
+      raws.flatMap((raw) => {
+        const call = citedCall(raw, record);
+        return call === undefined ? [] : [call.resultId];
+      }),
+    ),
+  ];
   if (raws.length === 0 || !cited.every((v) => typeof v === 'string')) {
     return { ...unresolved(kind ?? 'unknown'), results };
   }

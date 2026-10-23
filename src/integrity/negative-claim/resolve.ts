@@ -3,7 +3,9 @@
  * for (its `resolved` id, name and aliases — store data never binds another entity's name), or,
  * for a search with no population, by its `source.said` words.
  *
- * Pattern: mentions are token sequences of the unit; a mention joined to another word by "or",
+ * Pattern: mentions are token runs of the unit that hold a name by the library's one name rule
+ *          (`lib/normalize.ts` · `sameName`: `Payments` is `payments`, `ARRAY-X9` is not
+ *          `array-x9`); a mention joined to another word by "or",
  *          "and", "nor" or a comma is a second entity, and an entity no read resolves makes the
  *          whole claim `entity-unresolved` — "payments or checkout" with one searched cannot pass
  *          as checked. The reads a claim RESTS ON are this turn's reads (any leg) of a resolved
@@ -15,9 +17,9 @@
 
 import { readResultIdentity } from '../claim-binding/capture.js';
 import type { DetectedClaim } from './detect.js';
-import { isRead, scopeOf } from './readings.js';
+import { holdsAnySaid, nameAt, spell, tokensOf, type Token } from './matcher.js';
+import { isRead, scopeOf, spellValue } from './readings.js';
 import type { StaleSince, TurnCall, TurnRecord } from './types.js';
-import { findWords, holdsAnySaid, spell, spellValue, tokensOf, type Token } from './words.js';
 
 /** The reads of one entity a claim names. */
 export interface EntityGroup {
@@ -43,15 +45,15 @@ export function isCurrent(call: TurnCall, record: TurnRecord): boolean {
 }
 
 /** The names a read was sent for: each population value's resolved id, name and aliases. */
-function namesOf(call: TurnCall): { entity: string; words: string[] }[] {
-  const out: { entity: string; words: string[] }[] = [];
+function namesOf(call: TurnCall): { entity: string; name: string; words: string[] }[] {
+  const out: { entity: string; name: string; words: string[] }[] = [];
   for (const item of scopeOf(call) ?? []) {
     if (item.facet !== 'population' || item.resolved === undefined) continue;
     const entity = spellValue(item.resolved.id);
     for (const name of [item.resolved.id, item.resolved.name, ...(item.resolved.aliases ?? [])]) {
       if (typeof name !== 'string') continue;
       const words = spell(name);
-      if (words.length > 0) out.push({ entity, words });
+      if (words.length > 0) out.push({ entity, name, words });
     }
   }
   return out;
@@ -135,8 +137,13 @@ export function resolveProseClaim(
   const reads = record.calls.filter((call) => isRead(call));
   const mentions: { entity: string; first: number; last: number }[] = [];
   for (const call of reads) {
-    for (const { entity, words } of namesOf(call)) {
-      for (let at = findWords(tokens, words); at !== -1; at = findWords(tokens, words, at + 1)) {
+    // A name is mentioned only where the text holds it by the one name rule (`sameName`).
+    for (const { entity, name, words } of namesOf(call)) {
+      for (
+        let at = nameAt(text, tokens, name, 0);
+        at !== -1;
+        at = nameAt(text, tokens, name, at + 1)
+      ) {
         mentions.push({ entity, first: at, last: at + words.length - 1 });
       }
     }
@@ -205,7 +212,7 @@ function candidatesOf(
   if (personMessage !== undefined) {
     const said = tokensOf(personMessage);
     const named = current.filter((call) =>
-      namesOf(call).some((n) => findWords(said, n.words) !== -1),
+      namesOf(call).some((n) => nameAt(personMessage, said, n.name, 0) !== -1),
     );
     if (named.length > 0) return named.map((call) => call.resultId);
   }

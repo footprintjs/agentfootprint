@@ -1,19 +1,18 @@
 /**
- * words — the checker's ONE spelling: tokens, said-word matching, value equality and the
- * phrase matcher.
+ * matcher — the prose grammar's machinery: a reply's tokens with their offsets, and the phrase
+ * matcher over them. It owns NO spelling rule: every token is spelled by the library's one
+ * spelling leaf (`lib/normalize.ts` · `foldCase`), and names compare by its `sameName`.
  *
  * Pattern: pure functions, linear in the text. A token is a run of letters, digits and marks,
- *          with `- _ . / : @ #` kept INSIDE an identifier (`host-07.dc1.example.com`,
- *          `eth1/3`) and an apostrophe kept inside a word (`doesn't`); every step of the one
- *          tokenizer regex consumes a character, so no input backtracks.
- * Role:    integrity/ layer (L3). The library's other spelling (`tools/normalize.ts`) sits at
- *          L7, above this layer, and splits on case-sensitive rules for VALUES; this checker
- *          matches WORDS — NFC, case-folded, Unicode letters — so it owns its rule here, once.
- *
- * Spans are offsets into the text as given; only each token's own text is normalized.
+ *          with `- _ . / : @ #` kept INSIDE an identifier (`host-07.dc1.example.com`, `eth1/3`)
+ *          and an apostrophe kept inside a word (`doesn't`); every step of the one tokenizer
+ *          regex consumes a character, so no input backtracks. Spans are offsets into the text
+ *          as given; only each token's own text is spelled.
+ * Role:    integrity/ layer (L3), read by `units.ts`, `detect.ts`, `language.ts`,
+ *          `resolve.ts` and `containment.ts`.
  */
 
-import { stableJson } from '../../lib/stableJson.js';
+import { foldCase, sameName } from '../../lib/normalize.js';
 import type { ClaimPhrase } from './phrases.js';
 
 /** One token: its normalized text and where it sits in the text as given. */
@@ -26,12 +25,9 @@ export interface Token {
 const TOKEN =
   /[\p{L}\p{N}\p{M}](?:[\p{L}\p{N}\p{M}]|['\u{2019}](?=\p{L})|[-_./:@#](?=[\p{L}\p{N}]))*/gu;
 
-/** One token's spelling: NFC, lower case, a curly apostrophe straightened. */
+/** One token as the grammar compares it: the leaf's case fold, a curly apostrophe straightened. */
 export function spellToken(raw: string): string {
-  return raw
-    .normalize('NFC')
-    .toLowerCase()
-    .replace(/\u{2019}/gu, "'");
+  return foldCase(raw.normalize('NFC')).replace(/\u{2019}/gu, "'");
 }
 
 /** The tokens of `text[from, to)`, with offsets into `text`. */
@@ -75,17 +71,21 @@ export function holdsAnySaid(
   return (said ?? []).some((phrase) => holdsWords(tokens, spell(phrase)));
 }
 
-/**
- * The one value rule: two values are the same when their spellings are — a string NFC, trimmed
- * and case-folded; a number as written; anything else by stable JSON.
- */
-export function spellValue(value: unknown): string {
-  if (typeof value === 'string') return `s:${value.normalize('NFC').trim().toLowerCase()}`;
-  if (typeof value === 'number' || typeof value === 'boolean') return `v:${String(value)}`;
-  return `j:${stableJson(value) ?? 'undefined'}`;
+/** Whether the unit holds `name` as one of its token runs, by the leaf's name rule (`sameName`). */
+export function holdsName(text: string, tokens: readonly Token[], name: string): boolean {
+  return nameAt(text, tokens, name, 0) !== -1;
 }
 
-export const sameValue = (a: unknown, b: unknown): boolean => spellValue(a) === spellValue(b);
+/** The first token index at which the unit holds `name` (by `sameName`), from `from`; or -1. */
+export function nameAt(text: string, tokens: readonly Token[], name: string, from: number): number {
+  const words = spell(name);
+  for (let at = findWords(tokens, words, from); at !== -1; at = findWords(tokens, words, at + 1)) {
+    const first = tokens[at] as Token;
+    const last = tokens[at + words.length - 1] as Token;
+    if (sameName(text.slice(first.start, last.end), name)) return at;
+  }
+  return -1;
+}
 
 // ─── the phrase matcher ──────────────────────────────────────────────────
 

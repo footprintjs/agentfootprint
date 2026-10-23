@@ -3,7 +3,7 @@
  * phrases and nothing else (no model, no score).
  *
  * Pattern: units (`units.ts`) → language (`language.ts`) → the `none` and `complete` packs
- *          (`phrases.ts`, matched by `words.ts`). A hedge is not scope and changes nothing here:
+ *          (`phrases.ts`, matched by `matcher.ts`). A hedge is not scope and changes nothing here:
  *          "based on the logs, there are no incidents" is a claim. A unit in a fenced block, or a
  *          claim phrase entirely inside inline code, is NOTED (`in-code-block`, with the
  *          phrase's span), not judged; a unit the English grammar cannot read is NOTED
@@ -17,7 +17,7 @@
 import { isSupportedLanguage } from './language.js';
 import { NEGATIVE_CLAIM_PHRASES, NEGATIVE_CLAIM_PHRASES_VERSION } from './phrases.js';
 import { insideAny, unitsOf, type TextSpan } from './units.js';
-import { firstHit, tokensOf, type PhraseHit, type Token } from './words.js';
+import { firstHit, tokensOf, type PhraseHit, type Token } from './matcher.js';
 
 export type ProseClaimKind = 'none' | 'complete';
 

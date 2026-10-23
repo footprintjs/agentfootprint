@@ -57,6 +57,7 @@ const NOTE_ORDER: readonly ProseNote[] = [
   'cap-reached',
   'paged',
   'partial',
+  'ranking',
   'search-incomplete',
   'period-not-held',
   'period-partly-held',

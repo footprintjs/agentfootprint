@@ -13,7 +13,7 @@
  * as spans, so a claim entirely inside one is noted, not judged.
  */
 
-import { tokensOf } from './words.js';
+import { tokensOf } from './matcher.js';
 
 /** A span of the text as given: `[start, end)`. */
 export interface TextSpan {

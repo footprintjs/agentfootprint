@@ -49,8 +49,12 @@ defaults as if sent, fixed qualifiers, host-filled identities by reference, a re
 its spelling within the turn, the page — never the model-visible arguments alone. Whether a call
 READ is the caller's to say (`TurnCall.effect`; undeclared = not a read).
 
-**PR 2's shapes are stand-ins.** `searchRow.ts` holds local copies of `Tool.search` and the
-composed row, field for field with the design note; PR 2's exported types replace that one file.
+**One owner each.** The rows are #199's `ComposedCoverage` (`semantics/coverage/composedCoverage.ts`)
+and the declarations its `ToolSearch`. Words are spelled by the library's one spelling leaf
+(`lib/normalize.ts`: `foldCase` for the grammar's words, `sameName` for names and values);
+`matcher.ts` owns only the tokens' offsets and the phrase matcher. Time is the time layer's
+half-open ranges and #199's `span.ts`: a read's window is the span it ran with at dispatch.
+A claim may cite a read by its result identity or by the handle the library serves (`r3`).
 
 **Not wired.** Nothing in the agent calls this folder yet: PR 4 mounts the typed door, PR 5 the
 prose door. The free replay over recorded replies is `bench/negative/`.

@@ -2,24 +2,108 @@
  * readings — what makes two calls the SAME search, what makes one WIDER than another, and how
  * the reads of one search merge (design § 5.3).
  *
- * Pattern: every answer is read off the COMPOSED executed scope of each call — the tool, every
- *          filter in effect (a `whenOmitted` default composed as if sent), the `fixed`
- *          qualifiers, a host-filled identity filter by its reference, the window resolved on
- *          the LEG's clock (never the result's `period.queried`), and the page asked for. Never
- *          the tool name or the model-visible arguments alone: two calls with the same arguments
- *          and different host identities are two searches. An inert argument is not in the
- *          scope, so it never splits a key; nor does a cap.
- * Role:    integrity/ layer (L3), read by `citation.ts` and `containment.ts`.
+ * Pattern: every answer is read off the COMPOSED executed scope of each call (#199's
+ *          `ComposedCoverage` items) — the tool, every filter in effect (a `whenOmitted` default
+ *          composed as if sent), the `fixed` qualifiers, a host-filled identity filter by its
+ *          reference, a relative window by its SPELLING within the turn (its dispatch-time span
+ *          compares two different spellings), and the page asked for. Never the tool name or
+ *          the model-visible arguments alone. An inert argument is not in the scope, so it never
+ *          splits a key; nor does a cap.
+ * Role:    integrity/ layer (L3), read by `citation.ts`, `containment.ts` and `statement.ts`.
+ *          Values compare by the library's one name rule (`lib/normalize.ts` · `sameName`);
+ *          spans by the time layer's half-open ranges (`time/range.ts`).
  *
  * The merge: within one key a later read replaces only an UNREAD outcome; two reads that both
  * read and disagree — one empty, one with rows — are a disagreement, never settled by order.
  */
 
+import { foldableWord, hasDigit, sameName, textOf } from '../../lib/normalize.js';
 import { stableJson } from '../../lib/stableJson.js';
-import type { DeclaredTool, SearchCheckedItem } from './searchRow.js';
-import type { TurnCall } from './types.js';
-import { spellValue } from './words.js';
-import { periodValueSpan, type MsSpan } from './window.js';
+import type { ComposedItem, ComposedSpan } from '../../semantics/coverage/composedCoverage.js';
+import type { DeclaredPeriod } from '../../semantics/coverage/period.js';
+import { resultSpan } from '../../semantics/coverage/search/span.js';
+import { instantOf } from '../../time/instant.js';
+import { covers, fromInclusive, overlaps, sameRange, type TimeRange } from '../../time/range.js';
+import type { SearchTool, TurnCall } from './types.js';
+
+type SearchCheckedItem = ComposedItem;
+type DeclaredTool = SearchTool;
+
+// ─── values and spans ────────────────────────────────────────────────────
+
+/** The value rule: strings by the one name rule (`sameName`); anything else by stable JSON. */
+export function sameValue(a: unknown, b: unknown): boolean {
+  if (typeof a === 'string' && typeof b === 'string') return sameName(a, b);
+  return stableJson(a) === stableJson(b);
+}
+
+/**
+ * A value as a key spells it — one spelling for every value `sameValue` calls the same: a
+ * string's text (`textOf`), with a foldable word lower-cased unless the text has a digit.
+ */
+export function spellValue(value: unknown): string {
+  if (typeof value !== 'string') return `j:${stableJson(value) ?? 'undefined'}`;
+  const text = textOf(value);
+  if (hasDigit(text)) return `s:${text}`;
+  return `s:${text
+    .split(' ')
+    .map((word) => (foldableWord(word) ? word.toLowerCase() : word))
+    .join(' ')}`;
+}
+
+/** Whether `outer` holds all of `inner` (half-open). A malformed range holds nothing. */
+export function holdsRange(outer: TimeRange, inner: TimeRange): boolean {
+  try {
+    return covers(outer, inner);
+  } catch {
+    return false;
+  }
+}
+
+/** Whether two ranges share an instant. A malformed range is treated as overlapping. */
+export function meets(a: TimeRange, b: TimeRange): boolean {
+  try {
+    return overlaps(a, b);
+  } catch {
+    return true;
+  }
+}
+
+const msOf = (instant: string): number | undefined => instantOf(instant, 'lenient')?.ms;
+
+/**
+ * The parts of a read's `queried` time the store did not hold, half-open: all of it when `held`
+ * is unknown, the parts outside `held` otherwise (#199's `span.ts` · `resultSpan` makes the
+ * queried span half-open; the held one is made so the same way).
+ */
+export function unheldRanges(period: DeclaredPeriod): TimeRange[] {
+  const queried = resultSpan(period);
+  if (queried === undefined) return [];
+  if (period.held === 'unknown') return [queried];
+  let held: TimeRange;
+  try {
+    held = fromInclusive({ from: period.held.from, to: period.held.to });
+  } catch {
+    return [queried];
+  }
+  const [qf, qt, hf, ht] = [queried.from, queried.to, held.from, held.to].map(msOf);
+  if (qf === undefined || qt === undefined || hf === undefined || ht === undefined)
+    return [queried];
+  if (ht <= qf || hf >= qt) return [queried];
+  const out: TimeRange[] = [];
+  if (qf < hf) out.push({ from: queried.from, to: held.from });
+  if (ht < qt) out.push({ from: held.to, to: queried.to });
+  return out;
+}
+
+/** A read's window: the span its period item ran with (dispatch time), else the result's. */
+export function searchWindow(call: TurnCall): ComposedSpan | undefined {
+  const item = (scopeOf(call) ?? []).find((i) => i.facet === 'period');
+  if (item?.span !== undefined) return item.span;
+  return call.row?.period === undefined ? undefined : resultSpan(call.row.period);
+}
+
+// ─── reads ───────────────────────────────────────────────────────────────
 
 /** A call is a READ only when the caller says so; undeclared = `not-read` (§ 5.1). */
 export const isRead = (call: TurnCall): boolean => call.effect === 'read';
@@ -39,7 +123,14 @@ export const returnedReading = (call: TurnCall): boolean =>
 export const scopeOf = (call: TurnCall): readonly SearchCheckedItem[] | undefined =>
   call.row?.checked ?? call.scope;
 
-const SCOPE_FACETS = new Set(['source', 'subject', 'population', 'filter', 'period', 'page']);
+const SCOPE_FACETS = new Set<string>([
+  'source',
+  'subject',
+  'population',
+  'filter',
+  'period',
+  'page',
+]);
 
 const inScope = (item: SearchCheckedItem): boolean =>
   item.from !== 'result' && item.facet !== undefined && SCOPE_FACETS.has(item.facet);
@@ -54,23 +145,12 @@ function valueOf(item: SearchCheckedItem): string {
   return `what:${spellValue(item.what)}`;
 }
 
-/** A period item's span for comparing two searches: the relative window on the turn's clock. */
-function periodSpanOf(
-  item: SearchCheckedItem,
-  tool: DeclaredTool | undefined,
-  clock: string,
-): MsSpan | undefined {
-  return item.value === undefined
-    ? undefined
-    : periodValueSpan(item.value, tool?.period?.spelling, clock);
-}
-
 /**
  * The page the call asked for: its `page` item, or — for a row that composed none — the value
  * of the tool's `page` argument.
  */
 function pageOf(call: TurnCall, tool: DeclaredTool | undefined): string | undefined {
-  if ((scopeOf(call) ?? []).some((item) => item.facet === 'page')) return undefined;
+  if ((scopeOf(call) ?? []).some((item) => (item.facet as string) === 'page')) return undefined;
   const page = tool?.search?.arguments.find((a) => a.role === 'page');
   return page === undefined ? undefined : spellValue(call.arguments[page.name] ?? null);
 }
@@ -135,12 +215,18 @@ function grouped(items: readonly SearchCheckedItem[]): Map<string, SearchChecked
 
 type Step = 'equal' | 'wider' | 'narrower' | 'other';
 
+const sameRangeSafe = (a: TimeRange, b: TimeRange): boolean => {
+  try {
+    return sameRange(a, b);
+  } catch {
+    return false;
+  }
+};
+
 /** `a` against `b` for one group of items. */
 function compareGroup(
   a: readonly SearchCheckedItem[],
   b: readonly SearchCheckedItem[],
-  tool: DeclaredTool | undefined,
-  clock: string,
   narrowed: Narrowed[],
   window: { narrowed: boolean },
 ): Step {
@@ -181,15 +267,17 @@ function compareGroup(
     if (ib.any === true) return 'narrower';
   }
   if (facet === 'period') {
-    const pa = periodSpanOf(ia, tool, clock);
-    const pb = periodSpanOf(ib, tool, clock);
+    // One spelling within the turn is one window, whatever instant each call ran at.
+    if (ia.value !== undefined && valueOf(ia) === valueOf(ib)) return 'equal';
+    const pa = ia.span;
+    const pb = ib.span;
     if (pa !== undefined && pb !== undefined) {
-      if (pa.from === pb.from && pa.to === pb.to) return 'equal';
-      if (pa.from <= pb.from && pb.to <= pa.to) {
+      if (sameRangeSafe(pa, pb)) return 'equal';
+      if (holdsRange(pa, pb)) {
         window.narrowed = true;
         return 'wider';
       }
-      return pb.from <= pa.from && pa.to <= pb.to ? 'narrower' : 'other';
+      return holdsRange(pb, pa) ? 'narrower' : 'other';
     }
   }
   return valueOf(ia) === valueOf(ib) && (ia.from === 'host') === (ib.from === 'host')
@@ -197,12 +285,16 @@ function compareGroup(
     : 'other';
 }
 
-/** How `a`'s composed scope relates to `b`'s. Different tools are always `other`. */
+/**
+ * How `a`'s composed scope relates to `b`'s. Different tools are always `other`. A period
+ * compares by spelling first, then by the spans the calls ran with — so no clock is needed.
+ */
 export function scopeRelation(
   a: TurnCall,
   b: TurnCall,
   tool: DeclaredTool | undefined,
-  clock: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _clock?: string,
 ): ScopeRelation {
   const ia = scopeOf(a);
   const ib = scopeOf(b);
@@ -219,7 +311,7 @@ export function scopeRelation(
     const xa = ga.get(key);
     const xb = gb.get(key);
     if (xa === undefined || xb === undefined) return OTHER;
-    const step = compareGroup(xa, xb, tool, clock, narrowed, window);
+    const step = compareGroup(xa, xb, narrowed, window);
     if (step === 'other') return OTHER;
     if (step === 'wider') wider = true;
     if (step === 'narrower') narrower = true;

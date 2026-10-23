@@ -10,7 +10,7 @@
  * Role:    integrity/ layer (L3), read by `detect.ts`.
  */
 
-import type { Token } from './words.js';
+import type { Token } from './matcher.js';
 
 const ENGLISH = new Set(
   (

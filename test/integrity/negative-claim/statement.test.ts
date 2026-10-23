@@ -125,9 +125,9 @@ describe('each row shape', () => {
     expect(text).toContain('window 2026-10-15 10:00Z–2026-10-22 10:00Z (held in full)');
   });
 
-  it('a period facet with no declared period says so', () => {
+  it('a period the result did not declare: the span the call ran with, held undeclared', () => {
     const text = statementOf(cite('none', 'c1'), [incidentCall({ held: 'none', gaps: [] })]);
-    expect(text).toContain('; window `window: 2h` (held: undeclared).');
+    expect(text).toContain('; window 08:00–10:00Z (held: undeclared).');
   });
 
   it('a sent source replaces the declared one, labelled as sent', () => {

@@ -2,13 +2,21 @@
  * types — the negative-claim checker's vocabulary: what it is handed (one run leg's calls, in
  * order) and what it files (rows of identities and codes — never a value, never a sentence).
  *
- * Role: integrity/ layer (L3), types only. The record's shapes that PR 2 owns live apart in
- * `searchRow.ts`, so their swap on rebase is one edit there.
+ * Role: integrity/ layer (L3), types only. The record's shapes are #199's: the composed row
+ * (`semantics/coverage/composedCoverage.ts` · `ComposedCoverage`) and the declaration
+ * (`semantics/coverage/search/types.ts` · `ToolSearch`).
  */
 
 import type { Disposition } from '../disposition/types.js';
-import type { ComposedSearchRow, DeclaredTool, SearchCheckedItem } from './searchRow.js';
+import type { ComposedCoverage, ComposedItem } from '../../semantics/coverage/composedCoverage.js';
+import type { ToolSearch } from '../../semantics/coverage/search/types.js';
 import type { TextSpan } from './units.js';
+
+/** A registered tool as the checker reads it: its name, and its `search` when it declares one. */
+export interface SearchTool {
+  readonly name: string;
+  readonly search?: ToolSearch;
+}
 
 /** What the tool-call ledger says of a call (`answer-validation/types.ts · AnswerToolCall`). */
 export type LedgerOutcome = 'ok' | 'error' | 'not-run';
@@ -53,10 +61,10 @@ export interface TurnCall {
   readonly rowsRead?: readonly Readonly<Record<string, unknown>>[];
   /** The column that names a row (`resultColumns`' id column); else a fact's `entity`. */
   readonly idColumn?: string;
-  /** The composed row (§ 3.2) — present when the call returned through a `search` tool. */
-  readonly row?: ComposedSearchRow;
+  /** The composed row (#199's `ComposedCoverage`) — present when a `search` tool's call returned. */
+  readonly row?: ComposedCoverage;
   /** The composed executed scope of a call that has no row (it did not return). */
-  readonly scope?: readonly SearchCheckedItem[];
+  readonly scope?: readonly ComposedItem[];
   /** A redaction policy kept a key the check reads out of the record. */
   readonly keptOut?: true;
   /** When the read ran, for a dated stale-turn note. */
@@ -78,7 +86,7 @@ export interface TurnRecord {
   readonly calls: readonly TurnCall[];
   /** `toolCallLedger.complete` — false when a call may be missing. */
   readonly ledgerComplete: boolean;
-  readonly tools: Readonly<Record<string, DeclaredTool>>;
+  readonly tools: Readonly<Record<string, SearchTool>>;
 }
 
 // ─── the typed door ──────────────────────────────────────────────────────
@@ -154,6 +162,7 @@ export type ProseNote =
   | 'cap-reached'
   | 'paged'
   | 'partial'
+  | 'ranking'
   | 'search-incomplete'
   | 'period-not-held'
   | 'period-partly-held'

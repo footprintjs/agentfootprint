@@ -22,22 +22,29 @@
  * filter is the caller's own view and is never asked of a prose claim.
  */
 
+import type { ComposedItem, GapFacet } from '../../semantics/coverage/composedCoverage.js';
 import { periodVerdict } from '../../semantics/coverage/period.js';
+import { valueWords } from '../../semantics/coverage/search/valueWords.js';
+import { lookbackRange, type TimeRange } from '../../time/range.js';
 import type { DetectedClaim } from './detect.js';
+import { firstHit, holdsAnySaid, numberOf, type Token } from './matcher.js';
 import { NEGATIVE_CLAIM_PHRASES } from './phrases.js';
-import { isRead, mergeKeyReadings, readingKey, returnedReading, scopeOf } from './readings.js';
-import type { DeclaredTool, GapBears, SearchCheckedItem } from './searchRow.js';
-import type { ProseNote, TurnCall, TurnRecord } from './types.js';
-import { firstHit, holdsAnySaid, sameValue } from './words.js';
 import {
-  claimWindowOf,
-  inside,
-  overlaps,
-  periodValueSpan,
-  queriedOf,
-  unheldOf,
-  type MsSpan,
-} from './window.js';
+  holdsRange,
+  isRead,
+  meets,
+  mergeKeyReadings,
+  readingKey,
+  returnedReading,
+  sameValue,
+  scopeOf,
+  searchWindow,
+  unheldRanges,
+} from './readings.js';
+import type { ProseNote, SearchTool, TurnCall, TurnRecord } from './types.js';
+
+type SearchCheckedItem = ComposedItem;
+type DeclaredTool = SearchTool;
 
 /** The notes a sibling search BEARS on a claim another search established. */
 const BEARING: ReadonlySet<ProseNote> = new Set([
@@ -52,7 +59,7 @@ const BEARING: ReadonlySet<ProseNote> = new Set([
 interface ClaimWords {
   readonly claim: DetectedClaim;
   readonly text: string;
-  readonly window: MsSpan | undefined;
+  readonly window: TimeRange | undefined;
   readonly unbounded: boolean;
   readonly sourceMarker: boolean;
 }
@@ -67,36 +74,56 @@ export function claimWordsOf(claim: DetectedClaim, text: string, clock: string):
   };
 }
 
+const UNIT_LETTER: Readonly<Record<string, string>> = {
+  minute: 'm',
+  minutes: 'm',
+  hour: 'h',
+  hours: 'h',
+  day: 'd',
+  days: 'd',
+  week: 'w',
+  weeks: 'w',
+};
+
+/**
+ * The window a unit names ("in the last 2 hours") as the time layer's half-open look-back at the
+ * turn's clock (`time/range.ts` · `lookbackRange`), or undefined when it names none or it cannot
+ * be placed.
+ */
+function claimWindowOf(
+  text: string,
+  tokens: readonly Token[],
+  clock: string,
+): TimeRange | undefined {
+  const hit = firstHit(text, tokens, NEGATIVE_CLAIM_PHRASES.window);
+  if (hit === undefined) return undefined;
+  const words = tokens.slice(hit.first, hit.last + 1).map((t) => t.text);
+  const last = words[words.length - 1] ?? '';
+  const unit = UNIT_LETTER[last];
+  const spelled =
+    unit === undefined ? last : `${numberOf(words[words.length - 2] ?? '') ?? 1}${unit}`;
+  try {
+    return lookbackRange(clock, spelled, 'mhdw');
+  } catch {
+    return undefined;
+  }
+}
+
 /** The value of a filter the claim names through the filter's declared words. */
 function namedValue(
   words: ClaimWords,
   tool: DeclaredTool | undefined,
   argument: string,
 ): string | undefined {
-  const declared = tool?.search?.arguments.find((a) => a.name === argument);
-  for (const [value, said] of Object.entries(declared?.said ?? {})) {
-    if (holdsAnySaid(words.claim.tokens, said)) return value;
+  const said = tool?.search?.arguments.find((a) => a.name === argument)?.said;
+  for (const value of said === undefined ? [] : Object.keys(said)) {
+    if (holdsAnySaid(words.claim.tokens, valueWords(said, value))) return value;
   }
   return undefined;
 }
 
 const namesFixed = (words: ClaimWords, tool: DeclaredTool | undefined, name: string): boolean =>
   holdsAnySaid(words.claim.tokens, tool?.search?.fixed?.find((f) => f.name === name)?.said);
-
-/** The search's window: the declared `queried`, else the period value on the turn's clock. */
-function searchWindow(
-  items: readonly SearchCheckedItem[],
-  call: TurnCall,
-  tool: DeclaredTool | undefined,
-  clock: string,
-): MsSpan | undefined {
-  const queried = queriedOf(call.row?.period);
-  if (queried !== undefined) return queried;
-  const period = items.find((item) => item.facet === 'period');
-  return period === undefined
-    ? undefined
-    : periodValueSpan(period.value, tool?.period?.spelling, clock);
-}
 
 /** Whether the source is the declared one the claim names, or a marker puts it on the lookup. */
 function sourceScoped(
@@ -111,7 +138,7 @@ function sourceScoped(
 
 /** Whether a gap bears on the claim: on a facet it leaves open, or on a value it names. */
 function bears(
-  bearsOn: GapBears | undefined,
+  bearsOn: GapFacet | undefined,
   words: ClaimWords,
   items: readonly SearchCheckedItem[],
   tool: DeclaredTool | undefined,
@@ -124,7 +151,7 @@ function bears(
     const values = bearsOn.values;
     const value = namedValue(words, tool, bearsOn.filter);
     if (value === undefined || values === undefined) return true;
-    return values.some((v) => sameValue(v, value));
+    return values.some((v: unknown) => sameValue(v, value));
   }
   if (bearsOn === 'source') return !sourceScoped(words, items, tool);
   if (bearsOn === 'completeness') return words.claim.kind === 'complete';
@@ -135,7 +162,7 @@ function bears(
 function rowsContradict(
   words: ClaimWords,
   items: readonly SearchCheckedItem[],
-  window: MsSpan | undefined,
+  window: TimeRange | undefined,
   tool: DeclaredTool | undefined,
 ): boolean {
   for (const fixed of tool?.search?.fixed ?? []) {
@@ -153,7 +180,7 @@ function rowsContradict(
     if (applied === undefined || applied.any === true || !sameValue(applied.value, value))
       return false;
   }
-  if (words.window !== undefined) return window !== undefined && inside(window, words.window);
+  if (words.window !== undefined) return window !== undefined && holdsRange(words.window, window);
   return true;
 }
 
@@ -161,7 +188,7 @@ function rowsContradict(
 function scopeNotes(
   words: ClaimWords,
   items: readonly SearchCheckedItem[],
-  window: MsSpan | undefined,
+  window: TimeRange | undefined,
   tool: DeclaredTool | undefined,
 ): ProseNote[] {
   let wider = words.unbounded;
@@ -177,7 +204,7 @@ function scopeNotes(
   const hasPeriod = items.some((item) => item.facet === 'period');
   if (
     hasPeriod &&
-    (words.window === undefined || (window !== undefined && !inside(words.window, window)))
+    (words.window === undefined || window === undefined || !holdsRange(window, words.window))
   ) {
     wider = true;
   }
@@ -201,12 +228,12 @@ function periodNotes(
     verdict = 'unknown';
   }
   if (verdict === 'covered') return [];
-  const unheld = unheldOf(period);
-  const meets =
+  const unheld = unheldRanges(period);
+  const bearing =
     words.window === undefined
       ? unheld.length > 0
-      : unheld.some((s) => overlaps(s, words.window as MsSpan));
-  return meets ? [`period-${verdict}` as ProseNote] : [];
+      : unheld.some((s) => meets(s, words.window as TimeRange));
+  return bearing ? [`period-${verdict}` as ProseNote] : [];
 }
 
 /** One search's own notes, from its merged reading. */
@@ -216,7 +243,7 @@ function readingNotes(reading: TurnCall, words: ClaimWords, record: TurnRecord):
   const row = reading.row;
   if (reading.emptiness === 'clarify') return ['clarify-open'];
   if (!returnedReading(reading)) return ['call-not-read'];
-  const window = searchWindow(items, reading, tool, record.clock);
+  const window = searchWindow(reading);
   const notes: ProseNote[] = [];
   if (reading.emptiness === 'non-empty' && words.claim.kind === 'none') {
     notes.push(
@@ -234,7 +261,12 @@ function readingNotes(reading: TurnCall, words: ClaimWords, record: TurnRecord):
   if (reading.emptiness === 'undeclared-empty') notes.push('empty-undeclared');
   for (const gap of row.gaps) {
     if (gap.kind === 'prose') notes.push('gap-relevance-unknown');
-    else if (gap.kind === 'cap-reached' || gap.kind === 'paged' || gap.kind === 'partial')
+    else if (
+      gap.kind === 'cap-reached' ||
+      gap.kind === 'paged' ||
+      gap.kind === 'partial' ||
+      gap.kind === 'ranking'
+    )
       notes.push(gap.kind);
     else if (gap.kind !== 'period' && bears(gap.bears, words, items, tool))
       notes.push('coverage-gap');
