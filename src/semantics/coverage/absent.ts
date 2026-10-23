@@ -66,11 +66,19 @@ import { warnIfInvalidToolName } from '../../lib/toolName.js';
 import { normalizeCoverageList } from './items.js';
 import { mintPeriod } from './period.js';
 import { refusal, refuseUnknownKeys } from './refusal.js';
-import type { AbsenceDeclaration, Coverage, ToolAbsence, TryInsteadTool } from './types.js';
+import { mintPaging, mintResolved } from './search/resultFacts.js';
+import type {
+  AbsenceDeclaration,
+  Coverage,
+  DeclaredAbsenceDeclaration,
+  DeclaredToolAbsence,
+  ToolAbsence,
+  TryInsteadTool,
+} from './types.js';
 
 // The recognizer lives in the leaf `recognize.ts` (a post-hoc reader asks it
 // without loading this mint); re-exported here so every import keeps working.
-import { ABSENCE_MARKER, readAbsence } from './recognize.js';
+import { ABSENCE_MARKER, DECLARED_CHECKED, readAbsence } from './recognize.js';
 export { ABSENCE_MARKER, readAbsence };
 
 /**
@@ -127,6 +135,8 @@ const ABSENCE_DECLARATION_KEYS: readonly string[] = Object.keys({
   tryInsteadTool: true,
   provenance: true,
   period: true,
+  resolved: true,
+  paging: true,
 } satisfies Record<keyof AbsenceDeclaration, true>);
 
 /**
@@ -290,7 +300,11 @@ function readToolSuggestion(raw: unknown): Reading<TryInsteadTool> {
  *     },
  *   });
  */
-export function absent(decl: AbsenceDeclaration): ToolAbsence {
+export function absent(decl: DeclaredAbsenceDeclaration): DeclaredToolAbsence;
+export function absent(decl: AbsenceDeclaration): ToolAbsence;
+export function absent(
+  decl: AbsenceDeclaration | DeclaredAbsenceDeclaration,
+): ToolAbsence | DeclaredToolAbsence {
   const fn = 'absent';
   if (typeof decl !== 'object' || decl === null) {
     throw refusal(
@@ -307,8 +321,14 @@ export function absent(decl: AbsenceDeclaration): ToolAbsence {
         `returned nothing by accident.`,
     );
   }
-  const checked = normalizeCoverageList('checked', decl.checked, false);
-  if (checked.length === 0) {
+  // `checked: 'declared'` — the tool's `search` declares the ground, and the
+  // dispatch funnel composes it from the arguments the call ran with. The
+  // envelope carries the literal until then; `readAbsence` does not read it.
+  const declared = decl.checked === DECLARED_CHECKED;
+  const checked = declared
+    ? []
+    : normalizeCoverageList('checked', decl.checked as AbsenceDeclaration['checked'], false);
+  if (!declared && checked.length === 0) {
     throw refusal(
       `'${what}' — \`checked\` must name at least one source, window or population ` +
         `that WAS searched. An absence with no coverage is a null with extra steps: the reader ` +
@@ -335,16 +355,21 @@ export function absent(decl: AbsenceDeclaration): ToolAbsence {
   // `null` reads as omitted for either — a JSON producer's missing value.
   const provenance = decl.provenance == null ? undefined : mintProvenance(decl.provenance);
   const period = mintPeriod(decl.period);
+  // The two facts a search tool's result states (`search/resultFacts.ts`).
+  const resolved = mintResolved(decl.resolved);
+  const paging = mintPaging(decl.paging);
 
   return {
     af_absent: true,
     outcome: 'nothing_found',
     looked_for: what,
-    checked,
+    checked: declared ? DECLARED_CHECKED : checked,
     ...(notChecked.length > 0 && { not_checked: notChecked }),
     ...(cannotCover.length > 0 && { cannot_cover: cannotCover }),
     ...(provenance !== undefined && { provenance }),
     ...(period !== undefined && { period }),
+    ...(resolved !== undefined && { resolved }),
+    ...(paging !== undefined && { paging }),
     retry_returns_the_same: true,
     ...(tryInstead !== undefined && { try_instead: tryInstead }),
     ...(tryInsteadTool !== undefined && { try_instead_tool: tryInsteadTool }),

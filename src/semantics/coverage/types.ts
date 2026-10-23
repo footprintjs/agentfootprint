@@ -17,6 +17,7 @@
 
 import type { DescribedResultDeclaration, SemanticProvenance } from '../types.js';
 import type { DeclaredPeriod, PeriodOnWire } from './period.js';
+import type { PagingDeclaration, ResolvedDeclaration } from './search/resultFacts.js';
 
 /**
  * One piece of ground, and (optionally) why it is where it is.
@@ -215,7 +216,30 @@ export interface AbsenceDeclaration {
    * not held · unknown), and `.limitsTravelWithTheAnswer()` prints it.
    */
   readonly period?: DeclaredPeriod;
+  /**
+   * The entity each population value RESOLVED to — `[{ argument, id, name?,
+   * aliases? }]` — the tool's own claim, said out loud. Read by a tool that
+   * declares its `search`: it binds the value the call was SENT for and no
+   * other entity. Refused here when malformed.
+   */
+  readonly resolved?: readonly ResolvedDeclaration[];
+  /**
+   * Whether there is a next page — `{ next: null }` says there is none. A tool
+   * with a `page` argument whose result declares no `paging` is never complete.
+   */
+  readonly paging?: PagingDeclaration;
 }
+
+/**
+ * An absence whose coverage the tool's `search` DECLARES —
+ * `absent({ what, checked: 'declared' })`. The author writes the search once;
+ * the dispatch funnel composes `checked` (and the gaps) from the declaration
+ * and the arguments the call ran with. A tool with no `search` that returns
+ * one has its call refused, naming the field to add.
+ */
+export type DeclaredAbsenceDeclaration = Omit<AbsenceDeclaration, 'checked'> & {
+  readonly checked: 'declared';
+};
 
 /**
  * What a tool author passes to {@link import('./ledger.js').coverage}: the
@@ -279,9 +303,21 @@ export interface ToolAbsence {
   /** What the search's read covered in time — `queried`, `held` (or
    *  `'unknown'`), `read_at` — honesty step 7b. */
   readonly period?: PeriodOnWire;
+  /** The entity each population value resolved to, as declared. */
+  readonly resolved?: readonly ResolvedDeclaration[];
+  /** Whether there is a next page, as declared. */
+  readonly paging?: PagingDeclaration;
   /** The static sentence. Never interpolated — see `absent.ts`. */
   readonly note: string;
 }
+
+/**
+ * The envelope `absent({ checked: 'declared' })` mints, before the dispatch
+ * funnel composes its coverage. `readAbsence` does not read it (its `checked`
+ * is not a list), so every reader that predates it sees data;
+ * `recognize.ts` · `readDeclaredAbsence` is its one recognizer.
+ */
+export type DeclaredToolAbsence = Omit<ToolAbsence, 'checked'> & { readonly checked: 'declared' };
 
 /** The rendered coverage ledger, wrapped around the result it bounds. */
 export interface CoveredResult<T = unknown> {
