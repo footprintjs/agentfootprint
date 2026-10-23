@@ -1,7 +1,7 @@
 /**
  * phrases — the prose grammar's CLOSED phrase packs: data, versioned and hashed.
  *
- * Pattern: plain frozen data. The matcher (`words.ts · matchPhrase`) is the only code that reads
+ * Pattern: plain frozen data. The matcher (`matcher.ts · matchPhrase`) is the only code that reads
  *          it, and the hash pins every number measured with it to the grammar it measured
  *          (`bench/negative/RULE.md`).
  * Role:    integrity/ layer (L3), read by `detect.ts` (claims, code and language notes) and
