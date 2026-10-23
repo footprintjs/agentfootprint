@@ -152,7 +152,8 @@ describe('integration — the committed row, the served absence, the events', ()
       subject: { what: 'incidents', said: ['incident', 'incidents'] },
     });
     expect(row.resultId).toMatch(/^claim-result\/[^/]+\/[^/]+\/1$/);
-    expect(row.resultId).not.toContain('c1');
+    // Never the provider's call id: no segment of the address is `c1`.
+    expect(row.resultId.split('/')).not.toContain('c1');
     expect(row.checked.map((i) => [i.what, i.from])).toEqual([
       ['the incident store', 'tool'],
       ['status: open', 'fixed'],
