@@ -174,7 +174,8 @@ interface Held {
   readonly answered?: PausedRun;
   /**
    * A pause no answer can reach any more, closed by this request: `prior` is
-   * the conversation it goes on from (`answeredPause.ts`).
+   * the conversation it goes on from (`answeredPause.ts`), settled once the
+   * request's runner is built (`settleClosed`).
    */
   readonly closed?: { readonly paused: PausedRun; readonly reason: UnanswerableReason };
 }
@@ -300,13 +301,14 @@ export function streamHandler<TRequest, TEvent>(
     const { waiting: paused, prior, answered } = readStoredSession(stored);
     // A pause no answer can reach any more — paused before requests were
     // named, or its call changed after the ask — would hold the thread for
-    // good: closed instead, the conversation goes on, and the calls it left
-    // open are recorded as not run. (An ask's rules are the runner's, built
-    // later: a redeploy that changed them is found when an answer is refused.)
+    // good: closed instead, and the conversation goes on (`settleClosed`, once
+    // this request's runner is built: its ledger says whether the calls the
+    // pause left open are recorded as not run or as not known). (An ask's
+    // rules are the runner's, built later: a redeploy that changed them is
+    // found when an answer is refused.)
     const reason = paused === undefined ? undefined : unanswerablePause(paused);
     if (paused !== undefined && reason !== undefined) {
       return {
-        prior: closedConversation(paused),
         closed: { paused, reason },
         view: { continues: true },
       };
@@ -492,6 +494,7 @@ export function streamHandler<TRequest, TEvent>(
           watch,
           answer: plan.turn.kind === 'answer' ? plan.turn.answer : undefined,
           error: err,
+          runner,
         }).catch((): FailedAnswerOutcome => 'kept');
       }
       // A pause closed for good ends the run cancelled, as above: the client
@@ -656,6 +659,7 @@ export function streamHandler<TRequest, TEvent>(
         accepted: plan.accepted ?? {},
         ...(thread !== undefined && { thread }),
       });
+      const settled = await settleClosed(held, runner);
       const translation = adapter.open(
         read,
         plan.turn.kind === 'answer' ? held.view.awaiting?.suspension : undefined,
@@ -666,7 +670,7 @@ export function streamHandler<TRequest, TEvent>(
       return respond(
         {
           plan,
-          held,
+          held: settled,
           ...(thread !== undefined && { thread }),
           runner,
           translation,
@@ -684,6 +688,18 @@ export function streamHandler<TRequest, TEvent>(
       release();
     }
   };
+}
+
+/**
+ * A held thread whose pause no answer can reach, with the conversation it goes
+ * on from (`answeredPause.ts` · `closedConversation`) — settled against this
+ * request's runner, whose ledger says whether the calls the pause left open
+ * provably never ran. Any other held thread is handed back as it was.
+ */
+async function settleClosed(held: Held, runner: StreamRunner): Promise<Held> {
+  return held.closed === undefined
+    ? held
+    : { ...held, prior: await closedConversation(held.closed.paused, runner) };
 }
 
 /**

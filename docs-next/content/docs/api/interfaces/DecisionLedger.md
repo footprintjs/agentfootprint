@@ -4,7 +4,7 @@ title: DecisionLedger
 
 # Interface: DecisionLedger
 
-Defined in: [src/core/consentRequest.ts:150](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L150)
+Defined in: [src/core/consentRequest.ts:157](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L157)
 
 Where the consent requests that have been answered are recorded, so one
 decision runs one call — once per LEDGER.
@@ -23,7 +23,7 @@ store they all reach (`Agent.create({ decisionLedger })`).
 
 > `optional` **isSpent**(`requestId`): `boolean` \| `Promise`\<`boolean`\>
 
-Defined in: [src/core/consentRequest.ts:167](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L167)
+Defined in: [src/core/consentRequest.ts:174](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L174)
 
 OPTIONAL — whether `requestId` is recorded as answered, without recording
 it. Asked only after a [DecisionLedger.spend](/docs/api/interfaces/DecisionLedger#spend) for it failed, so a
@@ -48,7 +48,7 @@ offering the pause.
 
 > **spend**(`requestId`): `boolean` \| `Promise`\<`boolean`\>
 
-Defined in: [src/core/consentRequest.ts:158](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L158)
+Defined in: [src/core/consentRequest.ts:165](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L165)
 
 Record `requestId` as answered. Resolve `true` when THIS call recorded it
 and `false` when it was already recorded — atomically per id: of two

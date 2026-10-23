@@ -73,6 +73,13 @@
  * the attempt's own answer was lost. A resume this library took up and never
  * took to a ledger used nothing; one it never took up cannot be told apart
  * from a use (`hosting/answeredPause.ts`).
+ *
+ * ── DID IT NEVER RUN? ──────────────────────────────────────────────────────
+ * A watch sees one resume. A host closing a pause no answer can reach asks a
+ * stronger question — can ANY decision for it have been used, by any resume,
+ * before this process started included — and says "did not run" only on
+ * proof: the ledger the resuming agent spends in, asked by request id
+ * (`provenUnspent`). Anything it cannot read is not proof.
  */
 
 import type { FlowchartCheckpoint } from 'footprintjs';
@@ -177,7 +184,7 @@ export interface DecisionLedger {
  */
 export function inMemoryDecisionLedger(): DecisionLedger {
   const spent = new Set<string>();
-  return {
+  const ledger: DecisionLedger = {
     spend(requestId: string): boolean {
       if (spent.has(requestId)) return false;
       spent.add(requestId);
@@ -187,6 +194,9 @@ export function inMemoryDecisionLedger(): DecisionLedger {
       return spent.has(requestId);
     },
   };
+  // Its memory is this process's: a restart forgets it ({@link provenUnspent}).
+  proofState().inMemory.add(ledger);
+  return ledger;
 }
 
 /** One attempt to spend a watched request, as a door learns of it. */
@@ -271,6 +281,89 @@ export function processDecisionLedger(): DecisionLedger {
   return processState().ledger;
 }
 
+/**
+ * What a proof that a paused call never ran reads, one per PROCESS
+ * ({@link provenUnspent}). Kept under its own key, beside {@link ProcessState}
+ * rather than in it: a copy of this package from before the proof existed may
+ * have made that state, and its shape is not this one's to change.
+ */
+interface ProofState {
+  /** Every request id this process minted. */
+  readonly minted: Set<string>;
+  /** The ledgers whose memory is this process's (`inMemoryDecisionLedger`). */
+  readonly inMemory: WeakSet<object>;
+  /** The ledger each agent spends in, as it registered it. */
+  readonly ledgers: WeakMap<object, DecisionLedger>;
+}
+
+const PROOF_STATE = Symbol.for('agentfootprint.consentRequest.proofState.v1');
+
+function proofState(): ProofState {
+  const holder = globalThis as { [PROOF_STATE]?: ProofState };
+  const existing = holder[PROOF_STATE];
+  if (existing !== undefined) return existing;
+  const made: ProofState = { minted: new Set(), inMemory: new WeakSet(), ledgers: new WeakMap() };
+  Object.defineProperty(globalThis, PROOF_STATE, { value: made });
+  return made;
+}
+
+/**
+ * Register the ledger `agent` spends its decisions in — `undefined` for the
+ * process's ({@link processDecisionLedger}) — so a host that keeps its pauses
+ * can ask it whether a paused call can have run ({@link provenUnspent}).
+ * Called by every `Agent` it builds.
+ */
+export function registerConsentLedger(agent: object, ledger: DecisionLedger | undefined): void {
+  proofState().ledgers.set(agent, ledger ?? processDecisionLedger());
+}
+
+/**
+ * Whether NO decision for the paused request can have been handed over — the
+ * proof a host needs before it records a paused call as not run. Spending is
+ * the one way a decision reaches a call (`spendDecision` runs before the tool,
+ * on every door), so a ledger every resume of the request spends in, saying
+ * none of `requestIds` was spent, proves the call never ran on a decision.
+ *
+ * Fails closed — `false` — whenever that cannot be read:
+ *
+ *  - the pause names no request (one stored before requests were named);
+ *  - `runner` is not an agent this library built (a composition, an app's
+ *    own), so its ledger is unknown;
+ *  - the ledger cannot say (no `isSpent`, a throw, any answer but `false`);
+ *  - the ledger is this process's memory and the request was not minted by
+ *    this process: a pause stored before the process started may have been
+ *    spent by the one before it, which took its ledger with it;
+ *  - the ledger is an app's own `inMemoryDecisionLedger()`: it may be one
+ *    agent's alone (a rebuilt agent gets a fresh one), and a restart forgets
+ *    it.
+ *
+ * A ledger an app built over a store every process reaches answers for
+ * itself, as `DecisionLedger` asks of it. The process's ledger answers for a
+ * request this process minted on the condition "once" already rests on: no
+ * other process resumes it (several processes on one store need one shared
+ * `decisionLedger`, and then that ledger answers).
+ *
+ * @param requestIds every id the paused request is known by — the state's and
+ *   the question's; each must be proven.
+ */
+export async function provenUnspent(
+  requestIds: readonly string[],
+  runner: unknown,
+): Promise<boolean> {
+  if (requestIds.length === 0) return false;
+  if (typeof runner !== 'object' || runner === null) return false;
+  const proof = proofState();
+  const ledger = proof.ledgers.get(runner);
+  if (ledger === undefined) return false;
+  const processLocal = ledger === processState().ledger;
+  if (!processLocal && proof.inMemory.has(ledger)) return false;
+  for (const id of requestIds) {
+    if (processLocal && !proof.minted.has(id)) return false;
+    if (!(await neverLanded(ledger, id))) return false;
+  }
+  return true;
+}
+
 const DOMAIN = 'agentfootprint/consent-request/v1';
 const HEX_ID = /^[0-9a-f]{64}$/;
 const HEX_NONCE = /^[0-9a-f]{32}$/;
@@ -291,9 +384,11 @@ export function mintConsentRequest(call: GatedCall): BoundRequest | undefined {
   if (typeof args !== 'object' || args === null || Array.isArray(args)) return undefined;
   const nonce = randomHex(16);
   const id = requestIdOf(nonce, { ...call, args });
-  return id === undefined
-    ? undefined
-    : { request: { id, nonce }, args: args as Readonly<Record<string, unknown>> };
+  if (id === undefined) return undefined;
+  // Minted here: this process's ledger has seen every spend of it
+  // ({@link provenUnspent}).
+  proofState().minted.add(id);
+  return { request: { id, nonce }, args: args as Readonly<Record<string, unknown>> };
 }
 
 /**

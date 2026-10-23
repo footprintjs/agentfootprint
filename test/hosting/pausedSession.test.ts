@@ -55,7 +55,11 @@ import type { LLMMessage, LLMProvider } from '../../src/provider-contract/types.
 import { inProcessHost } from './testHost.js';
 import { REFUSAL_STATUS } from '../../src/hosting/refusalStatus.js';
 import { pausedRequest } from '../helpers/pausedRequest.js';
-import { NOT_RUN_UNANSWERABLE, OUTCOME_NOT_RECORDED } from '../../src/hosting/answeredPause.js';
+import {
+  NOT_RUN_UNANSWERABLE,
+  OUTCOME_NOT_RECORDED,
+  OUTCOME_UNKNOWN_UNANSWERABLE,
+} from '../../src/hosting/answeredPause.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────
 
@@ -1873,7 +1877,10 @@ describe('a paused session — a pause no answer can ever reach does not hold th
       expect(refused.code).toBe('ERR_RESUME_DECISION');
       const next = await host.deliver({ input: 'never mind', sessionId: 'older' });
       expect(next.output).toBe('noted: never mind');
-      expect(toolResultsSeen(sent)).toEqual([NOT_RUN_UNANSWERABLE]);
+      // It names no request, so no ledger can prove a decision for it was
+      // never used — an earlier release may have run the call and kept the
+      // pause: the outcome is recorded as not known, never as "did not run".
+      expect(toolResultsSeen(sent)).toEqual([OUTCOME_UNKNOWN_UNANSWERABLE]);
       expect(ran).toEqual([]);
     } finally {
       await handle.close();

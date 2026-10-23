@@ -6,7 +6,7 @@ title: checkInApproved
 
 > **checkInApproved**(`input`): [`CheckInDecision`](/docs/api/interfaces/CheckInDecision)
 
-Defined in: [src/core/checkin.ts:249](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L249)
+Defined in: [src/core/checkin.ts:251](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L251)
 
 Approve a pending check-in — the paused tool executes normally on resume.
 
