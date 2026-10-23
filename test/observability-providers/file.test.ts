@@ -95,6 +95,32 @@ function memoryFs(): {
   };
 }
 
+function holdFirstAppend(mem: ReturnType<typeof memoryFs>): {
+  release(): void;
+  started(): number;
+  peakInFlight(): number;
+} {
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const append = mem.fs.appendFile;
+  let started = 0,
+    inFlight = 0,
+    peak = 0;
+  mem.fs.appendFile = async (path, data) => {
+    const position = ++started;
+    peak = Math.max(peak, ++inFlight);
+    try {
+      if (position === 1) await held;
+      await append(path, data);
+    } finally {
+      inFlight--;
+    }
+  };
+  return { release, started: () => started, peakInFlight: () => peak };
+}
+
 afterEach(() => {
   vi.useRealTimers();
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
@@ -275,6 +301,64 @@ describe('fileObservability — P4 property', () => {
     await vi.advanceTimersByTimeAsync(60);
     expect(mem.appends()).toBe(1);
     strat.stop?.();
+  });
+
+  it('P4 a timed flush waits behind an in-flight size flush and preserves dispatch order', async () => {
+    vi.useFakeTimers();
+    const mem = memoryFs(),
+      held = holdFirstAppend(mem),
+      path = '/log/events.ndjson';
+    const strat = fileObservability({ path, flushIntervalMs: 50, maxBufferEvents: 2, _fs: mem.fs });
+    let startsWhileHeld = 0;
+    try {
+      strat.exportEvent(event('first'));
+      strat.exportEvent(event('second'));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(held.started()).toBe(1);
+      strat.exportEvent(event('third'));
+      await vi.advanceTimersByTimeAsync(50);
+      startsWhileHeld = held.started();
+    } finally {
+      held.release();
+      strat.stop?.();
+      await strat.flush?.();
+    }
+    expect(startsWhileHeld).toBe(1);
+    expect(held.peakInFlight()).toBe(1);
+    const types = (mem.files.get(path) ?? '')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line).type);
+    expect(types).toEqual(['first', 'second', 'third']);
+  });
+
+  it('P4 explicit flush waits for a timed append that has already started', async () => {
+    vi.useFakeTimers();
+    const mem = memoryFs(),
+      held = holdFirstAppend(mem);
+    const strat = fileObservability({
+      path: '/log/events.ndjson',
+      flushIntervalMs: 50,
+      _fs: mem.fs,
+    });
+    let settledWhileHeld = false;
+    let draining: Promise<void> | undefined;
+    try {
+      strat.exportEvent(event('timed'));
+      await vi.advanceTimersByTimeAsync(50);
+      expect(held.started()).toBe(1);
+      draining = Promise.resolve(strat.flush?.()).then(() => {
+        settledWhileHeld = true;
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(settledWhileHeld).toBe(false);
+    } finally {
+      held.release();
+      strat.stop?.();
+      await draining;
+      await strat.flush?.();
+    }
+    expect(mem.appends()).toBe(1);
   });
 
   it('P4 rotation is ONE generation and replaces a previous `.1`', async () => {
