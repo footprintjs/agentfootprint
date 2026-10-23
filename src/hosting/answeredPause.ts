@@ -38,10 +38,21 @@
  * resuming agent no longer runs (a redeploy) can never be answered — every
  * decision is refused. Held, it would hold the session for good. So a door
  * closes it: the next message continues the conversation with the calls it
- * left open settled as not run ({@link NOT_RUN_UNANSWERABLE}), and a decision
- * refused for one of those reasons — having used nothing — closes it too, when
- * its question names the request it asked (one stored before requests were
- * named names none: the next message closes that one).
+ * left open settled, and a decision refused for one of those reasons — having
+ * used nothing — closes it too, when its question names the request it asked
+ * (one stored before requests were named names none: the next message closes
+ * that one).
+ *
+ * ── "DID NOT RUN" ONLY ON PROOF ─────────────────────────────────────────────
+ * A pause that still says it is waiting is no proof its call never ran: a
+ * resume can spend the decision, run the call, fail, and fail again to mark
+ * the pause answered — and a redeploy can then make it a pause no answer can
+ * reach. So a closed pause's open calls are settled as not run
+ * ({@link NOT_RUN_UNANSWERABLE}) only when the serving agent's ledger proves
+ * no decision for the request was ever spent (`consentRequest.ts` ·
+ * `provenUnspent`); otherwise, and whenever that cannot be read, as not known
+ * ({@link OUTCOME_UNKNOWN_UNANSWERABLE}). A false "unknown" is the safe
+ * direction: a model told a refund did not run may issue it again.
  *
  * Reads:  the stored session — never the runner's own state, which on a
  *         shared agent may be another session's run, or a run that never
@@ -61,6 +72,8 @@ import { declinedResult } from '../core/checkin.js';
 import {
   consentRulesOf,
   pausedCallIdOf,
+  pausedRequestIdOf,
+  provenUnspent,
   unanswerableReason,
   watchDecisionUse,
   type DecisionUseWatch,
@@ -230,8 +243,11 @@ export type FailedAnswerOutcome = 'marked' | 'closed' | 'kept';
  * Unused, and refused for a reason no decision can change (`error` is a
  * `'request-not-recorded'`, `'call-changed'` or `'chain-changed'` refusal):
  * the pause is CLOSED instead — it could only ever hold the session. Read
- * from the refusal's own code, which is safe only because nothing was used:
- * whatever it claims, the calls it leaves open did not run.
+ * from the refusal's own code, which is safe only because THIS resume used
+ * nothing. An earlier one may have — a resume that ran the call and then
+ * could not mark the pause answered — so the calls it leaves open are
+ * recorded as not run only on proof ({@link closedConversation}, asked of
+ * `runner`'s ledger), else as not known.
  *
  * Only a failure of the WRITE itself is swallowed — the run's failure is the
  * one the caller is told, and the ledger still refuses the decision in this
@@ -242,6 +258,8 @@ export type FailedAnswerOutcome = 'marked' | 'closed' | 'kept';
  *   decline, and only from its own data properties.
  * @param settle writes still in flight for this session (a durable writer),
  *   drained first so none lands on top of the mark.
+ * @param runner the runner the answer was handed to — whose ledger can prove
+ *   that a closed pause's calls never ran.
  */
 export async function afterFailedAnswer(input: {
   readonly store: SessionLifecycle;
@@ -252,6 +270,7 @@ export async function afterFailedAnswer(input: {
   /** What the resume — or what followed it — threw. */
   readonly error?: unknown;
   readonly settle?: () => Promise<void> | undefined;
+  readonly runner?: unknown;
 }): Promise<FailedAnswerOutcome> {
   const { store, sessionId, paused, watch } = input;
   const asked = askedRequestOf(paused);
@@ -259,7 +278,7 @@ export async function afterFailedAnswer(input: {
   if (asked === undefined || watch === undefined) return 'kept';
   if (!(await watch.mayHaveBeenUsed())) {
     const reason = unanswerableRefusalOf(input.error);
-    return reason === undefined ? 'kept' : closeUnanswerable(store, sessionId, asked);
+    return reason === undefined ? 'kept' : closeUnanswerable(store, sessionId, asked, input.runner);
   }
   try {
     await input.settle?.();
@@ -334,6 +353,7 @@ async function closeUnanswerable(
   store: SessionLifecycle,
   sessionId: string,
   asked: string,
+  runner: unknown,
 ): Promise<FailedAnswerOutcome> {
   let stored: PausedRun;
   try {
@@ -345,7 +365,7 @@ async function closeUnanswerable(
   }
   if (stored.answered !== undefined || askedRequestOf(stored) !== asked) return 'kept';
   try {
-    await store.persist(sessionId, toEnvelope(closedConversation(stored)));
+    await store.persist(sessionId, toEnvelope(await closedConversation(stored, runner)));
     return 'closed';
   } catch (err) {
     // eslint-disable-next-line no-console
@@ -360,10 +380,22 @@ async function closeUnanswerable(
 
 /**
  * What the model reads for a call whose question no answer can reach any more
- * — its pause was closed, and the call did not run.
+ * — its pause was closed, and the call PROVABLY did not run: no decision for
+ * its request can have been handed over (`consentRequest.ts` · `provenUnspent`).
  */
 export const NOT_RUN_UNANSWERABLE =
   'That call did not run: the question it waited on could no longer be answered.';
+
+/**
+ * What the model reads for a call whose question no answer can reach any more
+ * when it cannot be proven that the call never ran: a decision for it may
+ * have been used — by a resume whose failure the host could not record — so
+ * the call may have run. Never "did not run" without proof: a model told that
+ * about a refund that ran may issue it again.
+ */
+export const OUTCOME_UNKNOWN_UNANSWERABLE =
+  "That call's outcome is not known: its approval may have been used, and whether the call " +
+  'finished could not be confirmed.';
 
 /**
  * Why the stored pause can never be answered by `runner` — `undefined` when it
@@ -387,21 +419,47 @@ export function unanswerablePause(
 
 /**
  * The conversation a pause no answer can reach goes on from: every call it
- * left open settled as not run ({@link NOT_RUN_UNANSWERABLE}) — none of them
- * ran, none of them can, and the model is told so.
+ * left open settled by the host's notice — none of them can run from here.
+ *
+ * "Did not run" ({@link NOT_RUN_UNANSWERABLE}) ONLY when non-execution is
+ * proven: the ledger `runner` spends in says no decision for the paused
+ * request was ever spent (`consentRequest.ts` · `provenUnspent`). The record
+ * alone cannot say it — a resume may have run the call and then failed to
+ * mark the stored pause answered, before a redeploy made the pause one no
+ * answer can reach. Otherwise, and whenever the proof cannot be read, the
+ * outcome is recorded as not known ({@link OUTCOME_UNKNOWN_UNANSWERABLE}).
+ *
+ * @param runner the runner serving the session — an agent this library built
+ *   names its ledger; any other proves nothing.
  */
-export function closedConversation(paused: PausedRun): AgentRunCheckpoint {
+export async function closedConversation(
+  paused: PausedRun,
+  runner?: unknown,
+): Promise<AgentRunCheckpoint> {
   const { history } = paused.conversation;
   const findings = servesFindings(paused);
+  const neverRan = await provenUnspent(requestIdsOf(paused), runner);
   return {
     ...paused.conversation,
     history: [
       ...history,
       ...openToolCalls(history).map((call) =>
-        noticeFor(call, NOT_RUN_UNANSWERABLE, findings ? 'not-entered' : undefined),
+        neverRan
+          ? noticeFor(call, NOT_RUN_UNANSWERABLE, findings ? 'not-entered' : undefined)
+          : noticeFor(call, OUTCOME_UNKNOWN_UNANSWERABLE, findings ? 'outcome-unknown' : undefined),
       ),
     ],
   };
+}
+
+/**
+ * Every id the stored pause knows its request by — the question's and the
+ * paused state's — once each. Empty for a pause that names none (one stored
+ * before requests were named), which no ledger can answer for.
+ */
+function requestIdsOf(paused: PausedRun): string[] {
+  const ids = [askedRequestOf(paused), pausedRequestIdOf(paused.checkpoint)];
+  return [...new Set(ids.filter((id): id is string => typeof id === 'string' && id.length > 0))];
 }
 
 /** The paused call a person declined — that call never ran. */

@@ -146,6 +146,7 @@ import type {
 import type { ToolClaim } from '../buildToolRegistry.js';
 import { changedArgKeys, shownArgsOf } from '../../toolShownArgs.js';
 import { toolBytesOf } from '../../../lib/toolBytes.js';
+import { frozenCopyOf } from '../../../lib/frozenCopy.js';
 import { buildToolResolver, type ToolResolution } from './toolResolver.js';
 import type { Tool, ToolExecutionContext } from '../../../tools/tools.js';
 import { agentToolDispatch } from '../toolDispatch.js';
@@ -1676,6 +1677,20 @@ export function buildToolCallsHandler(
     return typeof raw === 'object' && raw !== null
       ? (structuredClone(raw) as Readonly<Record<string, unknown>>)
       : {};
+  };
+  /**
+   * The permission checker's view of a call's arguments: its own frozen copy
+   * (`lib/frozenCopy.ts`), never the object the tool runs with — a checker
+   * that wrote into its `context` used to change the call. Arguments no copy
+   * can be made of are not handed over: the throw lands in the gate's
+   * fail-closed catch, so the call is denied.
+   */
+  const checkerContextOf = (args: ToolArgs): Readonly<Record<string, unknown>> => {
+    const own = frozenCopyOf(args);
+    if (own === undefined) {
+      throw new Error("the call's arguments could not be copied for the permission checker");
+    }
+    return own;
   };
   /**
    * What a consent gate refuses with when the call cannot be bound to a
@@ -3859,6 +3874,13 @@ export function buildToolCallsHandler(
   // runs now. Fail-closed: a blocked/failed credential surfaces to the model
   // and the tool does NOT run. A tool that pauses again during an approved
   // resume can't re-pause (resume returns void), so that is surfaced as an error.
+  //
+  // `heldTo` names the consent gate a person approved this call through (a
+  // check-in, an ask). Its arguments are then held to the request once more
+  // at the last moment before `execute` — defence in depth behind the frozen
+  // copies every app callback is handed (`lib/frozenCopy.ts`): arguments that
+  // no longer re-derive the request's id (`runsAsAsked`, the one rule that
+  // binds a decision to its call) do not run (`callChanged`).
   const resolveCredentialAndExecute = async (
     scope: TypedScope<AgentState>,
     resolved: Resolution,
@@ -3867,6 +3889,7 @@ export function buildToolCallsHandler(
     toolCallId: string,
     iteration: number,
     env: { readonly signal?: AbortSignal },
+    heldTo?: ConsentGateKind,
   ): Promise<{
     result: unknown;
     error?: boolean;
@@ -3882,8 +3905,14 @@ export function buildToolCallsHandler(
      *  — but it must not complete a procedure step (the model was told to
      *  call again). */
     ceilingRefused?: true;
+    /** An approved call's arguments no longer matched its request at the
+     *  last moment before `execute` (`heldTo`): the call did not run. */
+    callChanged?: true;
   }> => {
     const tool = resolved.tool;
+    /** What the approval covers — the arguments as handed in, before any
+     *  `wants` resolution or clock redraw derives the ones `execute` gets. */
+    const approved = args;
     const emitSecurity = bindToolSecurityEvents(scope, { toolCallId, iteration });
     // The two refusals share one door here too (9.92.0): a name nothing holds,
     // and a name whose offered party cannot answer on this resume.
@@ -4023,6 +4052,24 @@ export function buildToolCallsHandler(
       // the catch below — the run ended, the tool did not fail.
       ended = runEndedBy(env.signal);
       if (ended !== undefined) throw ended;
+      // An approved call runs with the arguments its request binds, or not
+      // at all — asked here, after every callback that saw them has returned.
+      if (heldTo !== undefined) {
+        const read = (key: string): unknown => scope.$getValue(key);
+        if (!runsAsAsked(read('pausedRequest'), gatedCallOf(read, heldTo), approved)) {
+          // Nothing ran; the call's sessions are still released, as for a
+          // run that ended here.
+          await endCall(toolCallId).catch(() => undefined);
+          return {
+            result: rewrittenAfterApproval(
+              toolName,
+              'those arguments changed before the call could run',
+            ),
+            error: true,
+            callChanged: true,
+          };
+        }
+      }
       executed = true;
       let result = await tool.execute(args, executionContext);
       await endCall(toolCallId);
@@ -4536,7 +4583,8 @@ export function buildToolCallsHandler(
               capability: 'tool_call',
               actor: 'agent',
               target: tc.name,
-              context: runArgs,
+              // Its own frozen copy, never the arguments the tool runs with.
+              context: checkerContextOf(runArgs),
               sequence,
               history: newHistory,
               iteration,
@@ -4637,7 +4685,7 @@ export function buildToolCallsHandler(
               capability,
               actor: 'agent',
               target,
-              context: callArgs,
+              context: checkerContextOf(callArgs),
               history: newHistory,
               iteration,
               ...(runIdentity && { identity: runIdentity }),
@@ -4987,6 +5035,12 @@ export function buildToolCallsHandler(
                   args: callArgs,
                 } satisfies GatedCall)
               : undefined;
+          // What the person is shown — and the evidence assembler and every
+          // `checkin.request` listener handed: a frozen copy of their own
+          // (`lib/frozenCopy.ts`). The paused state keeps `bound.args`, the
+          // copy the request is bound to, so nothing that sees the question
+          // can change the call the answer runs.
+          const shown = bound === undefined ? undefined : frozenCopyOf(bound.args);
           if (!trips) {
             // Predicate said no — fall through to the normal credential+execute
             // path below (this `if` block is the ONLY thing the gate adds).
@@ -5002,7 +5056,7 @@ export function buildToolCallsHandler(
             result =
               askedLayer.secondPauseRefusal(tc.name, 'check-in') +
               askedLayer.keptNote(scope, tc.name, resolution);
-          } else if (bound === undefined) {
+          } else if (bound === undefined || shown === undefined) {
             // A call no approval could be bound to is refused, never asked.
             checkInRefused = true;
             error = true;
@@ -5024,7 +5078,7 @@ export function buildToolCallsHandler(
             const intent = scope.llmLatestContent ? String(scope.llmLatestContent) : undefined;
             const evidence = await deps.checkIn.assembler({
               tool: { name: tc.name, description: tool.schema.description },
-              args: bound.args,
+              args: shown,
               ...(intent !== undefined && { intent }),
               iteration,
               history: historyForEvidence,
@@ -5034,7 +5088,7 @@ export function buildToolCallsHandler(
             const request: CheckInRequest = {
               id: bound.request.id,
               tool: tc.name,
-              args: bound.args,
+              args: shown,
               ...(intent !== undefined && { intent }),
               evidence,
               ...(gateComponent !== undefined && { component: gateComponent }),
@@ -6350,7 +6404,10 @@ export function buildToolCallsHandler(
             //
             // Judged on `runArgs` (what the tool would actually run with) and on
             // the same history shape the loop's gate uses, so the answer cannot
-            // depend on which door the call arrived through.
+            // depend on which door the call arrived through. The predicate is
+            // handed its own frozen copy of them (`shouldCheckIn`), never
+            // `runArgs` itself: a predicate that wrote into its argument used
+            // to change the call the person had approved.
             const demandTrips =
               rest.kind !== 'deny' &&
               rewrittenBy === undefined &&
@@ -6418,10 +6475,30 @@ export function buildToolCallsHandler(
                 toolCallId,
                 iteration,
                 env,
+                'ask',
               );
               result = dispatched.result;
               error = dispatched.error;
               toolRan = dispatched.executed === true;
+              // Held to the request at the last moment and found changed: the
+              // record says so, as for a rewrite the chain handed back.
+              if (dispatched.callChanged === true) {
+                recordDecisions(scope, [
+                  {
+                    middleware: askedBy,
+                    moment: 'before-tool',
+                    at: 'tool',
+                    toolName,
+                    toolCallId,
+                    iteration,
+                    outcome: 'deny',
+                    changed: false,
+                    why:
+                      'the approval covers the arguments the person was shown; they changed ' +
+                      'before the call could run, so the call was not run (call-changed)',
+                  },
+                ]);
+              }
               // A ceiling-refused call RAN but must not advance a step (9.20.0);
               // its envelope — status 'invalid' plus any surviving declared
               // effects — is still picked up and judged below.
@@ -6654,6 +6731,7 @@ export function buildToolCallsHandler(
             toolCallId,
             iteration,
             env,
+            'checkIn',
           );
           result = dispatched.result;
           error = dispatched.error;

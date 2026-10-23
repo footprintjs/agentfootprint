@@ -11,8 +11,9 @@
  * the {@link CheckInDecision} lands as a typed record.
  *
  * This is the LEAF that owns every check-in TYPE + the pure assembly logic.
- * It has zero runtime/engine imports (only type-only imports of the message
- * shape + the influence-core attribution unit), so it stays cheap to import
+ * It has zero engine imports (one runtime import, the `lib/frozenCopy.ts` leaf;
+ * the rest are type-only imports of the message shape + the influence-core
+ * attribution unit), so it stays cheap to import
  * and trivial to unit-test. The pause plumbing lives in
  * `core/agent/stages/toolCalls.ts`; the events in `events/`; the store in
  * `recorders/core/CheckInRecorder.ts`.
@@ -26,6 +27,7 @@
  *          (checkpoint discipline) — no functions, no class instances.
  */
 
+import { frozenCopyOf } from '../lib/frozenCopy.js';
 import type { ArtifactRef } from '../artifacts/types.js';
 import type { LLMMessage } from '../provider-contract/types.js';
 import type { AskComponent } from '../tools/askComponent.js';
@@ -358,6 +360,14 @@ export interface CheckInPredicateContext {
  * Decide whether a tool's declared demand trips for this call. Returns false
  * when the tool declared no `checkIn` (backward-compatible: byte-identical
  * behavior for tools without the field).
+ *
+ * The ONE place a predicate is asked, at every door (the loop's gate, an
+ * approved ask's resume). It is handed its OWN frozen copy of the arguments
+ * (`lib/frozenCopy.ts`), never the object the tool runs with: a predicate
+ * that writes into its argument — after a person approved the call, or after
+ * answering "no check-in needed" for it — must not change what runs. The
+ * write throws in strict code (and a predicate that throws trips) or is
+ * ignored in sloppy code. Arguments no copy can be made of trip the gate.
  */
 export function shouldCheckIn(
   demand: CheckInDemand<Readonly<Record<string, unknown>>> | undefined,
@@ -366,8 +376,10 @@ export function shouldCheckIn(
 ): boolean {
   if (demand === undefined) return false;
   if (demand === 'always') return true;
+  const own = frozenCopyOf(args);
+  if (own === undefined) return true;
   try {
-    return demand(args, ctx) === true;
+    return demand(own, ctx) === true;
   } catch {
     // A buggy predicate must not let a consequential action slip through
     // unreviewed — fail toward asking the human.

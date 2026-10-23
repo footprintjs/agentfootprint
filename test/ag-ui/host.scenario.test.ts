@@ -37,7 +37,10 @@ import { bearer } from '../../src/identity.js';
 import { installDurabilityBarrier } from '../../src/core/durabilityBarrier.js';
 import { memorySessions } from '../../src/hosting/memorySessions.js';
 import { readPausedRun, toPausedEnvelope } from '../../src/hosting/envelope.js';
-import { NOT_RUN_UNANSWERABLE } from '../../src/hosting/answeredPause.js';
+import {
+  NOT_RUN_UNANSWERABLE,
+  OUTCOME_UNKNOWN_UNANSWERABLE,
+} from '../../src/hosting/answeredPause.js';
 import { streamHandler, type StreamHandlerOptions } from '../../src/hosting/streamHandler.js';
 import type { ThreadBinder } from '../../src/hosting/protocolAdapter.js';
 import { agUi, type AgUiOptions } from '../../src/ag-ui/adapter.js';
@@ -751,6 +754,109 @@ describe('scenario — an AG-UI frontend runs an agentfootprint agent', () => {
     const told = seen[seen.length - 1]!.messages.filter((m) => m.role === 'tool');
     expect(told.map((m) => m.content)).toEqual([NOT_RUN_UNANSWERABLE]);
     expect(refunded).toEqual([]);
+  });
+
+  it('an approved refund that ran, then failed and could not be marked, is never told "did not run" after a redeploy closes its pause', async () => {
+    // approve → the refund runs (spent) → the model call fails → marking the
+    // pause answered fails → a redeploy renames the rule after the ask → the
+    // page answers again (refused: the rules changed) → closed → next message.
+    const refunded: number[] = [];
+    const refund = defineTool<{ amount: number }, string>({
+      name: 'issue_refund',
+      description: 'Refund a customer.',
+      inputSchema: { type: 'object', properties: { amount: { type: 'number' } } },
+      execute: async ({ amount }) => {
+        refunded.push(amount);
+        return `refunded ${amount}`;
+      },
+    });
+    const usage = { input: 1, output: 1 };
+    const failing = { model: true, persist: false };
+    const seen: LLMRequest[] = [];
+    const provider = {
+      name: 'flaky',
+      complete: async (req: LLMRequest) => {
+        seen.push(req);
+        const last = req.messages[req.messages.length - 1];
+        if (last?.role === 'tool') {
+          if (failing.model) throw new Error('model unavailable');
+          return { content: 'Refunded.', toolCalls: [], usage, stopReason: 'stop' };
+        }
+        return String(last?.content ?? '').includes('Refund')
+          ? {
+              content: '',
+              toolCalls: [{ id: 'r1', name: 'issue_refund', args: { amount: 40 } }],
+              usage,
+              stopReason: 'tool_use',
+            }
+          : {
+              content: `noted: ${String(last?.content)}`,
+              toolCalls: [],
+              usage,
+              stopReason: 'stop',
+            };
+      },
+    } as never;
+    const inner = memorySessions();
+    const sessions = new Proxy(inner, {
+      get(target, key) {
+        if (key === 'persist') {
+          return async (...args: Parameters<typeof inner.persist>) => {
+            if (failing.persist) throw new Error('store unavailable');
+            return target.persist(...args);
+          };
+        }
+        const value = Reflect.get(target, key, target) as unknown;
+        return typeof value === 'function'
+          ? (value as (...args: unknown[]) => unknown).bind(target)
+          : value;
+      },
+    });
+    const agentWith = (later: string) => () =>
+      Agent.create({ provider, model: 'm' })
+        .system('s')
+        .tool(refund)
+        .toolMiddleware(
+          { name: 'approval', onToolCall: () => ask({ question: 'Refund?' }) },
+          { name: later, onToolCall: () => allow() },
+        )
+        .build();
+    const warn = console.warn;
+    console.warn = () => undefined;
+    try {
+      const first = frontend({ agent: agentWith('limit'), threads: signedIn, sessions });
+      first.addMessage({ id: 'u1', role: 'user', content: 'Refund 40' });
+      await first.runAgent();
+      const [interrupt] = first.pendingInterrupts;
+      const answer = {
+        interruptId: interrupt!.id,
+        status: 'resolved' as const,
+        payload: { approved: true, by: 'alice', at: 1 },
+      };
+      failing.persist = true;
+      await first.runAgent({ resume: [answer] }).catch(() => undefined);
+      expect(refunded).toEqual([40]);
+      failing.model = false;
+      failing.persist = false;
+      // The mark could not be written: the store still says the pause waits.
+      expect(readPausedRun(await sessions.hydrate('alice:thread-1')).answered).toBeUndefined();
+
+      // The redeploy: the rule after the ask renamed.
+      const redeployed = frontend({ agent: agentWith('limit-v2'), threads: signedIn, sessions });
+      await redeployed.runAgent({ resume: [answer] }).catch(() => undefined);
+      expect(refunded).toEqual([40]);
+      expect((await sessions.hydrate('alice:thread-1'))?.format).toBe('conversation-v1');
+
+      redeployed.addMessage({ id: 'u2', role: 'user', content: 'is it done?' });
+      const { result } = await redeployed.runAgent();
+      expect(result).toBe('noted: is it done?');
+      const told = seen[seen.length - 1]!.messages.filter((m) => m.role === 'tool');
+      expect(told.map((m) => m.content)).not.toContain(NOT_RUN_UNANSWERABLE);
+      expect(told.map((m) => m.content)).toEqual([OUTCOME_UNKNOWN_UNANSWERABLE]);
+      expect(refunded).toEqual([40]);
+    } finally {
+      console.warn = warn;
+    }
   });
 
   it('what a page may not decide is refused by name, and the client surfaces it', async () => {
