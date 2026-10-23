@@ -4057,6 +4057,9 @@ export function buildToolCallsHandler(
       if (heldTo !== undefined) {
         const read = (key: string): unknown => scope.$getValue(key);
         if (!runsAsAsked(read('pausedRequest'), gatedCallOf(read, heldTo), approved)) {
+          // Nothing ran; the call's sessions are still released, as for a
+          // run that ended here.
+          await endCall(toolCallId).catch(() => undefined);
           return {
             result: rewrittenAfterApproval(
               toolName,
