@@ -55,7 +55,11 @@ const NONE = absent({ what: `open incidents on ${SECRET}`, checked: 'declared' }
 describe('composed events — unit', () => {
   it('checked holds the declaration’s constants; every other facet rides by reference', () => {
     const fields = composedEventFields(factsOf(NONE), { armed: false });
-    expect(fields.checked).toEqual([{ what: 'the incident store' }, { what: 'status: open' }]);
+    expect(fields.checked).toEqual([
+      { what: 'the incident store' },
+      { what: 'incidents' },
+      { what: 'status: open' },
+    ]);
     expect(fields.composition.facets).toEqual([
       { facet: 'population', from: 'call', ref: { resultId: RESULT_ID, argument: 'service' } },
       { facet: 'filter', from: 'call', ref: { resultId: RESULT_ID, argument: 'severity' } },

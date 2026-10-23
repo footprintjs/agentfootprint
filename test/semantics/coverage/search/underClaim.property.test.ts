@@ -211,6 +211,10 @@ describe('property — composition never claims what the call did not send or de
             );
             break;
           case 'tool': {
+            if (item.facet === 'subject') {
+              expect(item.what).toBe(search.subject.what);
+              break;
+            }
             expect(item.facet).toBe('source');
             expect(item.value).toBeUndefined();
             const src = args.find((x) => x.role === 'source');

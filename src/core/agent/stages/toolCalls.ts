@@ -2126,7 +2126,6 @@ export function buildToolCallsHandler(
       composed: composed.origin,
       resultId: composed.resultId,
       ...(facts.lookedFor !== undefined && { lookedFor: facts.lookedFor }),
-      subject: composed.subject,
       checked: facts.coverage.checked as ComposedCoverage['checked'],
       notChecked: facts.coverage.notChecked,
       cannotCover: facts.coverage.cannotCover,

@@ -144,7 +144,6 @@ export function composeSearchCoverage(
     composed: {
       origin: call.origin,
       resultId: call.resultId,
-      subject: { what: call.search.subject.what, said: [...call.search.subject.said] },
       complete,
       gaps,
     },

@@ -2257,7 +2257,7 @@ export interface CoverageFieldReference {
  * value lives there.
  */
 export interface CoverageFacetReferencePayload {
-  readonly facet: 'source' | 'population' | 'filter' | 'period';
+  readonly facet: 'source' | 'subject' | 'population' | 'filter' | 'period' | 'names';
   readonly from: 'call' | 'default' | 'host' | 'result';
   readonly ref: { readonly resultId: string; readonly argument?: string };
   /** Omission narrowed nothing (`whenOmitted: { any: true }`) — no value to keep out. */

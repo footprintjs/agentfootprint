@@ -7,6 +7,8 @@
  *
  * A facet enters `checked` from exactly these places, and nowhere else:
  *
+ *   • the declared subject (`from: 'tool'`, `facet: 'subject'`) — what the
+ *     search looked for;
  *   • the declared source (`from: 'tool'`) — or, when a `source` argument is
  *     in effect, that argument: a sent value REPLACES the declared source and
  *     keeps the declared words only when it equals the declared default;
@@ -170,13 +172,20 @@ function resultPeriodItem(input: FacetInput): ComposedItem | undefined {
 }
 
 /**
- * The `checked` items, in a fixed order: the source, the fixed qualifiers,
+ * The `checked` items, in a fixed order: the source, the subject, the fixed qualifiers,
  * then each argument in declaration order, then a result-declared period.
  */
 export function composeChecked(input: FacetInput): readonly ComposedItem[] {
   const items: ComposedItem[] = [];
   const source = sourceItem(input);
   if (source !== undefined) items.push(source);
+  // What the search looked for — the declaration's words; the statement names it.
+  items.push({
+    what: input.search.subject.what,
+    facet: 'subject',
+    from: 'tool',
+    said: [...input.search.subject.said],
+  });
   for (const q of input.search.fixed ?? []) {
     items.push({
       what: `${q.name}: ${valueText(q.value)}`,

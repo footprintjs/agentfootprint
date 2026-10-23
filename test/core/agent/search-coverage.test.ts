@@ -149,13 +149,19 @@ describe('integration — the committed row, the served absence, the events', ()
       composed: 'local',
       lookedFor: 'open incidents on payments',
       complete: true,
-      subject: { what: 'incidents', said: ['incident', 'incidents'] },
+    });
+    expect(row.checked.find((i) => i.facet === 'subject')).toEqual({
+      what: 'incidents',
+      facet: 'subject',
+      from: 'tool',
+      said: ['incident', 'incidents'],
     });
     expect(row.resultId).toMatch(/^claim-result\/[^/]+\/[^/]+\/1$/);
     // Never the provider's call id: no segment of the address is `c1`.
     expect(row.resultId.split('/')).not.toContain('c1');
     expect(row.checked.map((i) => [i.what, i.from])).toEqual([
       ['the incident store', 'tool'],
+      ['incidents', 'tool'],
       ['status: open', 'fixed'],
       ['service: payments', 'call'],
       ['severity: any', 'default'],
@@ -193,7 +199,11 @@ describe('integration — the committed row, the served absence, the events', ()
       [{ name: 'list_incidents', args: { service: 'pay-77ab', severity: 'sev1-9c' } }],
     );
     const [event] = absentEvents(r) as Record<string, unknown>[];
-    expect(event?.checked).toEqual([{ what: 'the incident store' }, { what: 'status: open' }]);
+    expect(event?.checked).toEqual([
+      { what: 'the incident store' },
+      { what: 'incidents' },
+      { what: 'status: open' },
+    ]);
     const { lookedFor, ...rest } = event ?? {};
     expect(lookedFor).toBe('open incidents on pay-77ab'); // unarmed: today's bytes
     const bytes = JSON.stringify(rest);

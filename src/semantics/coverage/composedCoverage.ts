@@ -17,16 +17,18 @@
  * model's replies WORSE. So the tool declares, once and as typed data, what a
  * search is made of, and the library composes each call's row from the
  * arguments the call actually ran with. Composition can only under-claim: a
- * facet enters `checked` from exactly four places — a value the call sent, a
- * declared default composed as if sent, a declared fixed qualifier, the
- * declared (or sent) source — and every classified argument none of those
- * covers is a bearing gap.
+ * facet enters `checked` from a value the call sent, a declared default composed
+ * as if sent, a declared fixed qualifier, the declared (or sent) source or a
+ * host-filled identity key — and every classified argument none of those
+ * covers is a bearing gap. The subject is an item too (`facet: 'subject'`):
+ * the statement a checker writes from the row alone names it.
  *
- * ## The fields, as revision 4 of the design names them (§ 3.2)
+ * ## The fields, as revision 5 of the design names them (§ 3.2)
  *
  * The row is a {@link DeclaredCoverage} — the same row `coverageDeclared`
- * holds for every tool — with five fields more: `composed`, `subject`, typed
- * `checked` items, `complete` and `gaps`. Its `notChecked` and `cannotCover`
+ * holds for every tool — with these fields more: `composed`, `resultId`, typed
+ * `checked` items, `complete` and `gaps` (and `overclaim`, written by the
+ * dispatch-time overclaim check of a later release). Its `notChecked` and `cannotCover`
  * lists stay the plain-prose view every older reader (the limits block, the
  * answer account) already prints: the gaps' `what` / `why`, with no facet.
  */
@@ -34,8 +36,12 @@
 import type { DeclaredPeriod } from './period.js';
 import type { CoverageItem, DeclaredCoverage } from './types.js';
 
-/** What one composed item is ABOUT — the dimension a claim's scope is measured on. */
-export type CoverageFacet = 'source' | 'population' | 'filter' | 'period';
+/**
+ * What one composed item is ABOUT — the dimension a claim's scope is measured
+ * on. `subject` is what the search looked for; `names` is an `among` miss's
+ * count of the known names (`absent({ among })`).
+ */
+export type CoverageFacet = 'source' | 'subject' | 'population' | 'filter' | 'period' | 'names';
 
 /**
  * Where a composed item came from — the four places of the under-claim proof,
@@ -114,6 +120,12 @@ export interface ComposedItem extends CoverageItem {
    * served to the model.
    */
   readonly said?: readonly string[];
+  /** `among` (a `names` facet): how many names the source holds. */
+  readonly count?: number;
+  /** `among` (a `names` facet): which source the names were read from. */
+  readonly source?: string;
+  /** `among` (a `names` facet): when that source was measured. */
+  readonly measuredAt?: string;
   /**
    * A period facet's span: a relative window (`'2h'`) resolved against the
    * TURN's clock, so the same spelling in one turn is the same span; or the
@@ -174,9 +186,8 @@ export interface CoverageGap {
 }
 
 /**
- * What the funnel composes for one call of a `search` tool — revision 4's
- * § 3.2 row, field for field, plus `subject` (the words a checker reading
- * committed rows only needs to match a claim's noun).
+ * What the funnel composes for one call of a `search` tool — revision 5's
+ * § 3.2 row, field for field, with the subject as a `checked` item.
  *
  * `composed: 'remote'` marks a row whose declaration arrived over MCP or from a
  * `ToolProvider`: it is composed the same way so a reader sees one shape, it
@@ -192,8 +203,6 @@ export interface ComposedCoverage extends DeclaredCoverage {
    * and turns, and some providers mint none.
    */
   readonly resultId: string;
-  /** What the search looked for, with the words a claim's noun is matched to. */
-  readonly subject: { readonly what: string; readonly said: readonly string[] };
   readonly checked: readonly ComposedItem[];
   /**
    * True only for a LOCAL row whose declaration says `complete:
@@ -205,6 +214,11 @@ export interface ComposedCoverage extends DeclaredCoverage {
   readonly gaps: readonly CoverageGap[];
   /** As on every row — the period the result declared. */
   readonly period?: DeclaredPeriod;
+  /**
+   * Codes the dispatch-time overclaim check marked on this row (design § 4) —
+   * written by that check, never by composition; absent when none.
+   */
+  readonly overclaim?: readonly string[];
 }
 
 /** Whether a `coverageDeclared` row was composed by the library from a `search`. */

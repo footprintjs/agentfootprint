@@ -105,6 +105,7 @@ describe('unit — the row of § 3.2', () => {
         from: 'tool',
         said: ['the incident store', 'the store'],
       },
+      { what: 'incidents', facet: 'subject', from: 'tool', said: ['incident', 'incidents'] },
       {
         what: 'status: open',
         facet: 'filter',
@@ -569,6 +570,7 @@ describe('functional — what the model is served', () => {
     expect(checked.every((i) => !('said' in i))).toBe(true);
     expect(checked.map((i) => i.what)).toEqual([
       'the incident store',
+      'incidents',
       'status: open',
       'service: payments',
       'severity: critical',
