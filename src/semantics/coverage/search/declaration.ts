@@ -8,7 +8,8 @@
  *          a remote `_meta` bag — must land on a message, never a TypeError.
  * Role:    semantics/ layer, pure. Throws `Error` naming the tool, the field
  *          and the code (`unclassified-argument`, `unknown-argument`,
- *          `gaps-without-bears`, `fixed-without-said`, `when-omitted-shape`).
+ *          `gaps-without-bears`, `fixed-without-said`, `when-omitted-shape`,
+ *          `statement-text-refused`).
  * Emits:   N/A.
  *
  * Why so strict: a declaration is untrusted text from the tool author, and the
@@ -21,6 +22,7 @@
 
 import { plainLineProblem } from '../../../lib/plainLine.js';
 import type { GapFacet } from '../composedCoverage.js';
+import { statementTextProblem } from './statementText.js';
 import type {
   SearchArgument,
   SearchFixed,
@@ -174,6 +176,17 @@ function checkLine(value: unknown, field: string, refuse: Refuse): string {
   return value;
 }
 
+/**
+ * Text that can reach a statement the library writes — one plain line, at
+ * most 120 characters, no instruction (`statementText.ts`).
+ */
+function checkStatementText(value: unknown, field: string, refuse: Refuse): string {
+  if (!isName(value)) return refuse(field, 'must be a non-empty string.');
+  const problem = statementTextProblem(field, value);
+  if (problem !== undefined) refuse(field, `is refused: ${problem}`, 'statement-text-refused');
+  return value;
+}
+
 /** A non-empty list of plain one-line words. */
 function checkSaid(value: unknown, field: string, refuse: Refuse, code?: string): void {
   if (!Array.isArray(value) || value.length === 0) {
@@ -194,7 +207,7 @@ function checkWords(value: unknown, field: string, refuse: Refuse): void {
       "must be { what, said } — e.g. { what: 'the incident store', said: ['the incident store'] }.",
     );
   refuseUnknown(value as Plain, WORDS_KEYS, field, refuse);
-  checkLine((value as Plain).what, `${field}.what`, refuse);
+  checkStatementText((value as Plain).what, `${field}.what`, refuse);
   checkSaid((value as Plain).said, `${field}.said`, refuse);
 }
 
@@ -227,6 +240,7 @@ function checkFixed(fixed: unknown, properties: readonly string[], refuse: Refus
     if (!isSearchScalar(q.value)) {
       refuse(`${at}.value`, 'must be a string, a finite number or a boolean.');
     }
+    if (typeof q.value === 'string') checkStatementText(q.value, `${at}.value`, refuse);
     checkSaid(q.said, `${at}.said`, refuse, 'fixed-without-said');
   });
   return names;
@@ -389,7 +403,7 @@ function checkGaps(
     if (!isPlain(raw)) refuse(at, 'must be { what, why, bears }.');
     const gap = raw as Plain;
     refuseUnknown(gap, GAP_KEYS, at, refuse);
-    checkLine(gap.what, `${at}.what`, refuse);
+    checkStatementText(gap.what, `${at}.what`, refuse);
     if (!isName(gap.why) || gap.bears === undefined) {
       refuse(
         at,
@@ -398,7 +412,7 @@ function checkGaps(
         'gaps-without-bears',
       );
     }
-    checkLine(gap.why, `${at}.why`, refuse);
+    checkStatementText(gap.why, `${at}.why`, refuse);
     checkBears(gap.bears, `${at}.bears`, roles, fixedNames, refuse);
   });
 }
