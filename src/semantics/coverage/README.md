@@ -797,9 +797,11 @@ if (!array) return absent({
   `checked`, `notChecked` and `cannotCover` follow the composed items; nothing
   removes the gap but `authoritative: { why }`, which `check:semantics` lists
   (`authoritative-names`).
-- **A partial read.** `partial: true` (a truncated or paged inventory)
-  composes "not every name in <source> was read" in place of "names outside
-  <source>", and `authoritative` does not remove it.
+- **A partial read.** `partial: true` (a truncated or paged inventory) checked
+  even less, so it composes BOTH gaps: the source gap, then
+  `CompletenessGapItem` (`{ what: 'not every name in <source> was read',
+  kind: 'scope', relevance: 'bears', bears: 'completeness' }`).
+  `authoritative` drops only the source gap, never the completeness gap.
 - **The tool's claims.** `count`, `partial` and `authoritative.why` are said
   out loud and not verified here. The gap holds only where `among` is
   declared: a plain `absent({ what })`, or a refusal the tool throws, never

@@ -242,10 +242,20 @@ absences, and `authoritative-names` for every `among.authoritative`. The laws:
 - **Only a sentence about what was looked up.** A rule fires on a sentence that
   names the looked-up argument or its value — declared on the sample, or an
   absence's `looked_for` and facet argument; with neither, a quoted span stands
-  for the value. A FORMAT, RANGE, PERMISSION or TRANSPORT message never fires,
-  whatever it names ("start_date is not a valid ISO-8601 date", "window is not
-  in the allowed range", "You have no permission…", "Upstream returned 404 Not
-  Found").
+  for the value.
+- **The exemptions cover wrongness only.** A FORMAT, RANGE, PERMISSION or
+  TRANSPORT sentence exempts a WRONGNESS phrase ("array_id 'PS-ARRAY-99' is
+  not a valid identifier format"). A NON-EXISTENCE phrase that names the value
+  always fires: "No array matches 'X' (expected one of …)", "'X' is not in
+  this tenant's token scope".
+- **Recall is not complete:**
+  - a sentence that names neither the argument nor the value (and quotes
+    nothing) is not judged;
+  - a wrongness phrase inside an exempt kind of sentence slips;
+  - anything outside the closed lists slips.
+
+  The accepted false positive: a permission sentence naming the value with a
+  non-existence phrase ("You have no permission to read PS-ARRAY-99") fires.
 
 - **Warnings until a later major, and only for the new fields.** A sample
   that uses neither `refusals` nor `among` gets no new finding, so no

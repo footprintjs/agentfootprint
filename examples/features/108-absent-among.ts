@@ -15,7 +15,7 @@
  *     of the time it was read;
  *   - `not_checked` gains a gap the author cannot remove: names outside that
  *     export (only `authoritative: { why }` drops it, and the gate lists it;
- *     a `partial` read gets "not every name in the export was read" instead);
+ *     a `partial` read also gets "not every name in the export was read");
  *   - the names are read only to check the count — none is served, so the
  *     model, the events and the record never see them.
  *

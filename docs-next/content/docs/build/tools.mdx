@@ -789,8 +789,9 @@ What the absence then carries:
   `among.authoritative: { why }`, for a list that really is every name there
   is; `check:semantics` lists every use of it for review.
 - **A partial read** — a truncated or paged inventory — says
-  `partial: true`, and the gap becomes `not every name in <source> was read`,
-  which `authoritative` does not remove.
+  `partial: true`. It checked even less, so it gets BOTH gaps: the source gap
+  above and `not every name in <source> was read` (`bears: 'completeness'`),
+  which nothing removes. `authoritative` drops only the source gap.
 - **`provenance`** is composed from `source` and `measuredAt` (so `provenance`
   beside `among` is refused).
 
