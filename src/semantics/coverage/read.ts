@@ -42,7 +42,22 @@ import {
   type DeclaredPeriod,
   type ServedPeriodVerdict,
 } from './period.js';
+import type { ComposedCoverage } from './composedCoverage.js';
 import type { Coverage, InProgressItem, ToolAbsence, TryInsteadTool } from './types.js';
+
+/**
+ * What the LIBRARY composed for a call of a tool that declares its `search`
+ * (`search/compose.ts`) — the fields a {@link ComposedCoverage} row adds. The
+ * typed items ride `CoverageFacts.coverage.checked`.
+ */
+export interface ComposedFacts {
+  /** `'local'` for a first-party tool; `'remote'` over MCP or from a ToolProvider. */
+  readonly origin: ComposedCoverage['composed'];
+  readonly resultId: string;
+  readonly subject: ComposedCoverage['subject'];
+  readonly complete: boolean;
+  readonly gaps: ComposedCoverage['gaps'];
+}
 
 /** One coverage statement found in a result, before the caller stamps it with
  *  the call it came from. */
@@ -80,6 +95,11 @@ export interface CoverageFacts {
    * and the model still reads what the tool wrote.
    */
   readonly inProgress?: readonly InProgressItem[];
+  /**
+   * Present only when the library composed this statement from the tool's
+   * `search` — never read off an envelope: a value cannot forge it.
+   */
+  readonly composed?: ComposedFacts;
 }
 
 /**

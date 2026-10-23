@@ -319,6 +319,28 @@ export interface ToolAbsence {
  */
 export type DeclaredToolAbsence = Omit<ToolAbsence, 'checked'> & { readonly checked: 'declared' };
 
+/**
+ * A ledger whose `checked` the tool's `search` DECLARES —
+ * `coverage(rows, { checked: 'declared', … })`, the twin of
+ * {@link DeclaredAbsenceDeclaration} for a value that came back with rows.
+ */
+export type DeclaredLedgerDeclaration = Omit<CoverageLedgerDeclaration, 'checked'> & {
+  readonly checked: 'declared';
+};
+
+/**
+ * The envelope `coverage(rows, { checked: 'declared' })` mints, before the
+ * dispatch funnel composes it. `readCoverageLedger` does not read it, so a
+ * reader that predates it sees data; `recognize.ts` · `readDeclaredLedger` is
+ * its one recognizer.
+ */
+export interface DeclaredCoveredResult<T = unknown> {
+  readonly af_coverage: Omit<CoveredResult['af_coverage'], 'checked'> & {
+    readonly checked: 'declared';
+  };
+  readonly result: T;
+}
+
 /** The rendered coverage ledger, wrapped around the result it bounds. */
 export interface CoveredResult<T = unknown> {
   readonly af_coverage: {

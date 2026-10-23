@@ -49,9 +49,18 @@ export type CoverageFacet = 'source' | 'population' | 'filter' | 'period';
  *   • `fixed`   — a qualifier the tool always applies (`search.fixed`);
  *   • `tool`    — the declared source;
  *   • `result`  — a fact the result declared (its `period.queried` when no
- *                 period argument was in effect).
+ *                 period argument was in effect);
+ *   • `host`    — an argument the host fills from the run's IDENTITY
+ *                 (`hostFilled(…, { tenantId: fromIdentity('tenant') })`): a
+ *                 filter in effect, its value by reference only. A
+ *                 credential-filled argument is never composed.
  */
-export type FacetOrigin = 'call' | 'default' | 'fixed' | 'tool' | 'result';
+export type FacetOrigin = 'call' | 'default' | 'fixed' | 'tool' | 'result' | 'host';
+
+/** The value of a host-filled facet — WHICH identity field, never the value itself. */
+export interface IdentityReference {
+  readonly identity: string;
+}
 
 /**
  * The entity a population value RESOLVED to, as the tool's result said
@@ -82,8 +91,17 @@ export interface ComposedItem extends CoverageItem {
   readonly facet: CoverageFacet;
   /** The input argument (or fixed qualifier) this facet is — absent for the declared source. */
   readonly argument?: string;
-  /** The value in effect. Absent when `any` is set and for the declared source. */
+  /**
+   * The value in effect, RAW. Absent when `any` is set and for the declared
+   * source; an {@link IdentityReference} for a host-filled facet.
+   */
   readonly value?: unknown;
+  /**
+   * The value (or `resolved`) came from outside the declaration — the call or
+   * the result — so a writer that puts it in a statement QUOTES it, strips it
+   * to one line and caps it. Stored raw here; marked, never rewritten.
+   */
+  readonly quote?: true;
   /** Omission narrows nothing (`whenOmitted: { any: true }`). */
   readonly any?: true;
   readonly from: FacetOrigin;
@@ -123,6 +141,7 @@ export type CoverageGapKind =
   | 'cap-reached'
   | 'paged'
   | 'period'
+  | 'partial'
   | 'scope'
   | 'prose';
 
@@ -137,6 +156,8 @@ export type CoverageGapKind =
  *   • `paged` — a page argument was sent, the result's `paging.next` is not
  *     null, or a tool with a `page` argument returned no `paging`.
  *   • `period` — the declared period's verdict is not `covered`.
+ *   • `partial` — the tool declared its outcome `partial` (or `pending`): the
+ *     result is never held in full.
  *   • `scope` — a declared constant (`search.gaps`).
  *   • `prose` — a hand-written `notChecked` / `cannotCover` item. It names no
  *     facet, so it bears on every claim, and a row with one is never complete.
@@ -163,6 +184,14 @@ export interface CoverageGap {
  */
 export interface ComposedCoverage extends DeclaredCoverage {
   readonly composed: 'local' | 'remote';
+  /**
+   * The row's ADDRESS — the library-minted result identity
+   * (`claim-result/<namespace>/<runId>/<ordinal>`, minted by
+   * `integrity/claim-binding/capture.ts` · `resultIdentityOf`). Never a
+   * provider's call id: those repeat across iterations, branches, resume legs
+   * and turns, and some providers mint none.
+   */
+  readonly resultId: string;
   /** What the search looked for, with the words a claim's noun is matched to. */
   readonly subject: { readonly what: string; readonly said: readonly string[] };
   readonly checked: readonly ComposedItem[];

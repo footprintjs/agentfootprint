@@ -10,7 +10,12 @@
  * these names, so every existing import keeps working.
  */
 
-import type { CoveredResult, DeclaredToolAbsence, ToolAbsence } from './types.js';
+import type {
+  CoveredResult,
+  DeclaredCoveredResult,
+  DeclaredToolAbsence,
+  ToolAbsence,
+} from './types.js';
 
 /**
  * The reserved key that makes an absence recognizable. Exported because tests,
@@ -68,5 +73,24 @@ export function readCoverageLedger(value: unknown): CoveredResult | undefined {
   const marker = rec[COVERAGE_MARKER];
   if (typeof marker !== 'object' || marker === null || Array.isArray(marker)) return undefined;
   if (!('result' in rec)) return undefined;
+  // `coverage(rows, { checked: 'declared' })` before the funnel composes it:
+  // not a ledger a reader can read (its `checked` is not a list) — see
+  // `readDeclaredLedger`.
+  if ((marker as Record<string, unknown>).checked === DECLARED_CHECKED) return undefined;
   return value as CoveredResult;
+}
+
+/**
+ * Recognize the envelope `coverage(rows, { checked: 'declared' })` mints — a
+ * ledger whose coverage the tool's `search` declares, before the dispatch
+ * funnel composes it. STRICT like {@link readCoverageLedger}.
+ */
+export function readDeclaredLedger(value: unknown): DeclaredCoveredResult | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+  const rec = value as Record<string, unknown>;
+  const marker = rec[COVERAGE_MARKER];
+  if (typeof marker !== 'object' || marker === null || Array.isArray(marker)) return undefined;
+  if (!('result' in rec)) return undefined;
+  if ((marker as Record<string, unknown>).checked !== DECLARED_CHECKED) return undefined;
+  return value as DeclaredCoveredResult;
 }
