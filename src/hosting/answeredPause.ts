@@ -48,10 +48,12 @@
  * resume can spend the decision, run the call, fail, and fail again to mark
  * the pause answered — and a redeploy can then make it a pause no answer can
  * reach. So a closed pause's open calls are settled as not run
- * ({@link NOT_RUN_UNANSWERABLE}) only when the serving agent's ledger proves
- * no decision for the request was ever spent (`consentRequest.ts` ·
- * `provenUnspent`); otherwise, and whenever that cannot be read, as not known
- * ({@link OUTCOME_UNKNOWN_UNANSWERABLE}). A false "unknown" is the safe
+ * ({@link NOT_RUN_UNANSWERABLE}) only when the ledger the request was minted
+ * under — the serving agent's, and only that one — spends the request itself
+ * (`consentRequest.ts` · `proveNeverRan`): atomic, and it consumes the request
+ * so no later resume can run the call. Otherwise, and whenever that proof
+ * cannot be had, as possibly run ({@link OUTCOME_UNKNOWN_UNANSWERABLE}: do not
+ * run it again, ask the person). A false "may have run" is the safe
  * direction: a model told a refund did not run may issue it again.
  *
  * Reads:  the stored session — never the runner's own state, which on a
@@ -73,7 +75,8 @@ import {
   consentRulesOf,
   pausedCallIdOf,
   pausedRequestIdOf,
-  provenUnspent,
+  pausedRequestLedgerOf,
+  proveNeverRan,
   unanswerableReason,
   watchDecisionUse,
   type DecisionUseWatch,
@@ -83,6 +86,7 @@ import { pauseDemandsDecision, ResumeDecisionError } from '../core/pause.js';
 import type { AgentRunCheckpoint } from '../core/runCheckpoint.js';
 import type { LLMMessage } from '../provider-contract/types.js';
 import { readEnvelope, readPausedRun, toEnvelope, toPausedEnvelope } from './envelope.js';
+import { isProcessLocalStore } from './processLocalStore.js';
 import type { CheckpointEnvelope, PausedRun, SessionLifecycle } from './types.js';
 
 /** What a stored session holds, for a door that continues it ({@link readStoredSession}). */
@@ -365,7 +369,7 @@ async function closeUnanswerable(
   }
   if (stored.answered !== undefined || askedRequestOf(stored) !== asked) return 'kept';
   try {
-    await store.persist(sessionId, toEnvelope(await closedConversation(stored, runner)));
+    await store.persist(sessionId, toEnvelope(await closedConversation(stored, { runner, store })));
     return 'closed';
   } catch (err) {
     // eslint-disable-next-line no-console
@@ -380,22 +384,27 @@ async function closeUnanswerable(
 
 /**
  * What the model reads for a call whose question no answer can reach any more
- * — its pause was closed, and the call PROVABLY did not run: no decision for
- * its request can have been handed over (`consentRequest.ts` · `provenUnspent`).
+ * — its pause was closed, and the call PROVABLY did not run: the ledger its
+ * request was minted under spent the request itself, so no decision for it
+ * had been handed over and none ever can be (`consentRequest.ts` ·
+ * `proveNeverRan`).
  */
 export const NOT_RUN_UNANSWERABLE =
   'That call did not run: the question it waited on could no longer be answered.';
 
+/** What every notice whose call may have run ends with: what to do about it. */
+const ASK_THE_PERSON = 'Tell the person it may already have happened and ask them to check.';
+
 /**
- * What the model reads for a call whose question no answer can reach any more
- * when it cannot be proven that the call never ran: a decision for it may
- * have been used — by a resume whose failure the host could not record — so
- * the call may have run. Never "did not run" without proof: a model told that
- * about a refund that ran may issue it again.
+ * What the model reads for each call a pause no answer can reach left open,
+ * when it cannot be proven that the call never ran: a decision for the pause
+ * may have been used — by a resume whose failure the host could not record —
+ * so the call may have run. Never "did not run" without proof, and never an
+ * invitation to try again: a model told a refund did not run may issue it
+ * again. The same words for every open call — the paused one and a sibling
+ * that never needed an approval alike — so none of them names an approval.
  */
-export const OUTCOME_UNKNOWN_UNANSWERABLE =
-  "That call's outcome is not known: its approval may have been used, and whether the call " +
-  'finished could not be confirmed.';
+export const OUTCOME_UNKNOWN_UNANSWERABLE = `This call may have run; no result was kept. Do not run it again. ${ASK_THE_PERSON}`;
 
 /**
  * Why the stored pause can never be answered by `runner` — `undefined` when it
@@ -417,36 +426,48 @@ export function unanswerablePause(
   return unanswerableReason(paused.checkpoint, gate.kind, consentRulesOf(runner));
 }
 
+/** The door closing a pause: who serves the session, and where it keeps its pauses. */
+export interface ClosingDoor {
+  /** The runner serving the session — an agent this library built names its ledger. */
+  readonly runner?: unknown;
+  /** The door's session store — this process's memory or not (`processLocalStore.ts`). */
+  readonly store?: unknown;
+}
+
 /**
  * The conversation a pause no answer can reach goes on from: every call it
  * left open settled by the host's notice — none of them can run from here.
  *
  * "Did not run" ({@link NOT_RUN_UNANSWERABLE}) ONLY when non-execution is
- * proven: the ledger `runner` spends in says no decision for the paused
- * request was ever spent (`consentRequest.ts` · `provenUnspent`). The record
- * alone cannot say it — a resume may have run the call and then failed to
- * mark the stored pause answered, before a redeploy made the pause one no
- * answer can reach. Otherwise, and whenever the proof cannot be read, the
- * outcome is recorded as not known ({@link OUTCOME_UNKNOWN_UNANSWERABLE}).
- *
- * @param runner the runner serving the session — an agent this library built
- *   names its ledger; any other proves nothing.
+ * proven: the ledger the request was minted under — the serving agent's,
+ * and only when it is the same one — spends the request itself, atomically
+ * (`consentRequest.ts` · `proveNeverRan`). That both proves no decision had
+ * reached it and makes sure none ever will: closing CONSUMES the request. The
+ * record alone cannot say it — a resume may have run the call and then failed
+ * to mark the stored pause answered, before a redeploy made the pause one no
+ * answer can reach. Otherwise, and whenever the proof cannot be had, every
+ * open call is recorded as possibly run ({@link OUTCOME_UNKNOWN_UNANSWERABLE}).
+ * Every notice is marked as the library's (`toolResultOrigin`).
  */
 export async function closedConversation(
   paused: PausedRun,
-  runner?: unknown,
+  door: ClosingDoor = {},
 ): Promise<AgentRunCheckpoint> {
   const { history } = paused.conversation;
-  const findings = servesFindings(paused);
-  const neverRan = await provenUnspent(requestIdsOf(paused), runner);
+  const neverRan = await proveNeverRan({
+    requestIds: requestIdsOf(paused),
+    mintedUnder: pausedRequestLedgerOf(paused.checkpoint),
+    runner: door.runner,
+    storeIsProcessLocal: isProcessLocalStore(door.store),
+  });
   return {
     ...paused.conversation,
     history: [
       ...history,
       ...openToolCalls(history).map((call) =>
         neverRan
-          ? noticeFor(call, NOT_RUN_UNANSWERABLE, findings ? 'not-entered' : undefined)
-          : noticeFor(call, OUTCOME_UNKNOWN_UNANSWERABLE, findings ? 'outcome-unknown' : undefined),
+          ? noticeFor(call, NOT_RUN_UNANSWERABLE, 'not-entered')
+          : noticeFor(call, OUTCOME_UNKNOWN_UNANSWERABLE, 'outcome-unknown'),
       ),
     ],
   };
@@ -498,7 +519,7 @@ function ownData(record: object, key: string): unknown {
  */
 export const OUTCOME_NOT_RECORDED =
   'No result was kept for that call: the run that took it up stopped before it finished, so ' +
-  'whether it ran is not known.';
+  `whether it ran is not known. ${ASK_THE_PERSON}`;
 
 /**
  * The stored pause, marked answered: a decision for it is refused from here
@@ -516,13 +537,11 @@ export function markAnswered(
   declined?: DeclinedCall,
 ): PausedRun {
   const conversation = progressed ?? paused.conversation;
-  // Under findings admission the notice says what it is — not a result.
-  const findings = servesFindings(paused);
   return {
     ...paused,
     conversation: {
       ...conversation,
-      history: settleOpenCalls(conversation.history, findings, declined),
+      history: settleOpenCalls(conversation.history, declined),
     },
     answered: { at: now },
   };
@@ -549,50 +568,43 @@ export function openToolCalls(
 
 /**
  * `history` with every open tool call settled by the host's notice — the same
- * history when none is open.
+ * history when none is open. Each notice is marked as the library's
+ * (`toolResultOrigin`: `'outcome-unknown'`, or `'not-entered'` for a declined
+ * call), whether or not the run served findings.
  *
- * @param findings mark each notice for findings admission
- *   (`toolResultOrigin`: `'outcome-unknown'`, or `'not-entered'` for a declined call).
  * @param declined the call a person declined, settled as declined — the
  *   result the dispatch loop records for a decline — instead of as unknown.
  */
 export function settleOpenCalls(
   history: readonly LLMMessage[],
-  findings = false,
   declined?: DeclinedCall,
 ): LLMMessage[] {
   return [
     ...history,
     ...openToolCalls(history).map((call) =>
       call.id === declined?.toolCallId
-        ? noticeFor(call, declinedResult(declined.note), findings ? 'not-entered' : undefined)
-        : noticeFor(call, OUTCOME_NOT_RECORDED, findings ? 'outcome-unknown' : undefined),
+        ? noticeFor(call, declinedResult(declined.note), 'not-entered')
+        : noticeFor(call, OUTCOME_NOT_RECORDED, 'outcome-unknown'),
     ),
   ];
 }
 
 /**
- * The host's notice for an open call — never its result — marked for findings
- * admission when `origin` is given.
+ * The host's notice for an open call — never its result — always marked as
+ * the library's (`toolResultOrigin`): a reader tells it from a result by the
+ * marker, never by its words. The marker never reaches a provider
+ * (`stripFrameworkFields`).
  */
 function noticeFor(
   call: { readonly id: string; readonly name: string },
   content: string,
-  origin: 'not-entered' | 'outcome-unknown' | undefined,
+  origin: 'not-entered' | 'outcome-unknown',
 ): LLMMessage {
   return {
     role: 'tool',
     toolName: call.name,
     toolCallId: call.id,
-    ...(origin !== undefined && { toolResultOrigin: origin }),
+    toolResultOrigin: origin,
     content,
   };
-}
-
-/** Whether the paused run served findings — its notices then say what they are. */
-function servesFindings(paused: PausedRun): boolean {
-  return (
-    (paused.checkpoint.sharedState as { findingsServe?: unknown } | undefined)?.findingsServe !==
-    undefined
-  );
 }

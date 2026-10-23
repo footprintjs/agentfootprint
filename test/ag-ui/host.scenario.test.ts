@@ -627,7 +627,7 @@ describe('scenario — an AG-UI frontend runs an agentfootprint agent', () => {
     });
   });
 
-  it('a pause no answer can reach any more does not hold the thread: the next message continues it, the call recorded as not run', async () => {
+  it('a pause no answer can reach any more does not hold the thread: the next message continues it, the call recorded as possibly run', async () => {
     const refunded: number[] = [];
     const refund = defineTool<{ amount: number }, string>({
       name: 'issue_refund',
@@ -693,7 +693,9 @@ describe('scenario — an AG-UI frontend runs an agentfootprint agent', () => {
     expect(result).toBe('Noted.');
     expect(sealed).toBe(2);
     const told = seen[seen.length - 1]!.messages.filter((m) => m.role === 'tool');
-    expect(told.map((m) => m.content)).toEqual([NOT_RUN_UNANSWERABLE]);
+    // What an earlier release stored names no ledger the request was minted
+    // under: nothing can prove the call never ran, so it may have run.
+    expect(told.map((m) => m.content)).toEqual([OUTCOME_UNKNOWN_UNANSWERABLE]);
     expect(refunded).toEqual([]);
     expect((await sessions.hydrate('alice:thread-1'))?.format).toBe('conversation-v1');
   });

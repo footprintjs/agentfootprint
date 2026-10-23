@@ -335,6 +335,13 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: 'an event payload `detail` and the InvalidAskComponentError thrown to the consumer that raised the ask',
     },
   ],
+  'src/hosting/answeredPause.ts': [
+    {
+      kind: 'unrepaired',
+      count: 1,
+      why: "OUTCOME_UNKNOWN_UNANSWERABLE, the host's notice for a call a closed pause left open that may have run ('This call may have run; no result was kept. Do not run it again. Tell the person …') — a tool message in `history`, so persistent. Both flagged clauses are deliberate: `This call` names the call the message answers (its toolCallId), and `Do not run it again` must hold on every later call, because the call may already have happened (a refund re-issued is the harm). Kept as the reviewed wording; a version that names the tool instead of the deictic is the open repair",
+    },
+  ],
   'src/core/agent/window/notice.ts': [
     {
       kind: 'unrepaired',
@@ -1199,13 +1206,18 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // bind is model-facing and written as a past fact about that call, so
         // it matches no persistent rule. total 197 → 199, notModelFacing
         // 132 → 134.
-        files: 101,
-        total: 199,
+        // The proof that a closed pause's call never ran: the notice for a call
+        // that may have run tells the model not to run it again and to send the
+        // person to check — a persistent order, by design, anchored to the call
+        // the message answers. One new file, one unrepaired literal:
+        // files 101 → 102, total 199 → 200, unrepaired 33 → 34 (entries 13 → 14).
+        files: 102,
+        total: 200,
         registry: 8,
         ephemeral: 24,
-        unrepaired: 33,
+        unrepaired: 34,
         notModelFacing: 134,
-        unrepairedEntries: 13,
+        unrepairedEntries: 14,
       });
       // And the ledger's own total is the number of literals the scan flagged —
       // the two halves of the same census, which is what makes the bucket a work

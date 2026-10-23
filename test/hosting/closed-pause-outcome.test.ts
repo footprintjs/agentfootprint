@@ -15,9 +15,11 @@
  *
  * The law: a door that closes a pause no answer can reach records its open
  * calls as not run ONLY when no decision for that paused request can have been
- * handed over — a ledger every resume of it must spend in says so. Otherwise,
- * and whenever that cannot be read, the outcome is recorded as not known.
- * A false "unknown" is the safe direction; a false "did not run" is not.
+ * handed over — the ledger it was minted under spends the request itself
+ * (atomic, and it consumes the request). Otherwise, and whenever that proof
+ * cannot be had, each open call is recorded as possibly run, with what to do.
+ * A false "may have run" is the safe direction; a false "did not run" is not.
+ * The proof's own rules are pinned in closed-pause-proof.test.ts.
  */
 
 import { describe, expect, it, vi } from 'vitest';
@@ -34,7 +36,7 @@ import {
 import { mock } from '../../src/llm-providers.js';
 import { defineTool } from '../../src/tools/tools.js';
 import { checkInApproved } from '../../src/core/checkin.js';
-import { mintConsentRequest } from '../../src/core/consentRequest.js';
+import { mintConsentRequest, processDecisionLedger } from '../../src/core/consentRequest.js';
 import { captureFindingsRequest } from '../../src/core/agent/findings/admission.js';
 import {
   NOT_RUN_UNANSWERABLE,
@@ -68,17 +70,21 @@ const halfAnswered: LLMMessage[] = [
   { role: 'tool', toolCallId: 'a', toolName: 'refund', content: 'refunded 1' },
 ];
 
-/** A ledger in a store every process reaches — a stand-in for a unique-key table. */
-function durableLedger(): DecisionLedger & { readonly spent: Set<string> } {
+/**
+ * A ledger in a store every process reaches — a stand-in for a unique-key
+ * table, named by a stable `id`, its spends permanent.
+ */
+function durableLedger(id = 'refunds-ledger'): DecisionLedger & { readonly spent: Set<string> } {
   const spent = new Set<string>();
   return {
+    id,
     spent,
-    spend: async (id) => {
-      if (spent.has(id)) return false;
-      spent.add(id);
+    spend: async (requestId) => {
+      if (spent.has(requestId)) return false;
+      spent.add(requestId);
       return true;
     },
-    isSpent: async (id) => spent.has(id),
+    isSpent: async (requestId) => spent.has(requestId),
   };
 }
 
@@ -91,18 +97,26 @@ function agentOn(decisionLedger?: DecisionLedger): Agent {
   }).build();
 }
 
-/** A check-in pause on call 'b', its request `id` named by the state and by the question. */
-function pausedOn(
-  request: { readonly id: string; readonly nonce: string } | undefined,
-  findings = false,
-): PausedRun {
+type Request = { readonly id: string; readonly nonce: string; readonly ledger?: string };
+
+/** A request minted as a pause under `ledger` would mint it — its identity on it. */
+function requestUnder(ledger: DecisionLedger): Request {
+  const bound = mintConsentRequest(
+    { gate: 'checkIn', tool: 'refund', toolCallId: 'b', args: { order: 2 } },
+    ledger,
+  );
+  if (bound === undefined) throw new Error('expected a request');
+  return bound.request;
+}
+
+/** A check-in pause on call 'b', its request named by the state and by the question. */
+function pausedOn(request: Request | undefined): PausedRun {
   return {
     checkpoint: {
       pausedStageId: 'tool-calls',
       sharedState: {
         pausedToolCallId: 'b',
         ...(request !== undefined && { pausedRequest: request }),
-        ...(findings && { findingsServe: 'ids' }),
       },
       subflowPath: [],
     } as unknown as FlowchartCheckpoint,
@@ -121,30 +135,17 @@ function pausedOn(
   };
 }
 
-/** A request this process minted, as a pause would. */
-function mintedHere(): { readonly id: string; readonly nonce: string } {
-  const bound = mintConsentRequest({
-    gate: 'checkIn',
-    tool: 'refund',
-    toolCallId: 'b',
-    args: { order: 2 },
-  });
-  if (bound === undefined) throw new Error('expected a request');
-  return bound.request;
-}
-
-/** A request minted somewhere else — by a process that is gone. */
-const fromElsewhere = { id: 'f'.repeat(64), nonce: '0'.repeat(32) };
-
 const lastNotice = (history: readonly LLMMessage[]): LLMMessage | undefined =>
   history[history.length - 1];
 
 // ── the rule, at the one owner ──────────────────────────────────────────
 
 describe('closedConversation — "did not run" only when proven', () => {
-  it('a ledger every resume spends in says the request was never spent: the call did not run', async () => {
+  it('the ledger the request was minted under spends it: the call did not run — and now never can', async () => {
     const ledger = durableLedger();
-    const closed = await closedConversation(pausedOn(mintedHere(), true), agentOn(ledger));
+    const request = requestUnder(ledger);
+    expect(request.ledger).toBe('app:refunds-ledger');
+    const closed = await closedConversation(pausedOn(request), { runner: agentOn(ledger) });
     expect(lastNotice(closed.history)).toEqual({
       role: 'tool',
       toolName: 'refund',
@@ -153,13 +154,15 @@ describe('closedConversation — "did not run" only when proven', () => {
       content: NOT_RUN_UNANSWERABLE,
     });
     expect(openToolCalls(closed.history)).toEqual([]);
+    // The proof is a tombstone: the request is spent, so no decision can run it.
+    expect(ledger.spent.has(request.id)).toBe(true);
   });
 
-  it('the same ledger says it WAS spent: the outcome is not known', async () => {
+  it('the same ledger had spent it: every open call may have run', async () => {
     const ledger = durableLedger();
-    const request = mintedHere();
+    const request = requestUnder(ledger);
     ledger.spent.add(request.id);
-    const closed = await closedConversation(pausedOn(request, true), agentOn(ledger));
+    const closed = await closedConversation(pausedOn(request), { runner: agentOn(ledger) });
     expect(lastNotice(closed.history)).toEqual({
       role: 'tool',
       toolName: 'refund',
@@ -169,81 +172,116 @@ describe('closedConversation — "did not run" only when proven', () => {
     });
   });
 
-  it('fail closed: a ledger that cannot say — no isSpent, a throw, an answer that is not false — proves nothing', async () => {
-    const request = mintedHere();
+  it('fail closed: a spend that answers anything but true, or throws, proves nothing — isSpent is never asked', async () => {
+    const isSpent = vi.fn(() => false);
     const ledgers: DecisionLedger[] = [
-      { spend: () => true },
+      { id: 'l', spend: () => false, isSpent },
+      { id: 'l', spend: () => 'yes' as never, isSpent },
+      { id: 'l', spend: () => undefined as never, isSpent },
       {
-        spend: () => true,
-        isSpent: () => {
+        id: 'l',
+        spend: () => {
           throw new Error('ledger unavailable');
         },
+        isSpent,
       },
-      { spend: () => true, isSpent: async () => Promise.reject(new Error('timeout')) },
-      { spend: () => true, isSpent: () => 'no' as never },
-      { spend: () => true, isSpent: () => undefined as never },
+      { id: 'l', spend: async () => Promise.reject(new Error('timeout')), isSpent },
     ];
     for (const ledger of ledgers) {
-      const closed = await closedConversation(pausedOn(request), agentOn(ledger));
+      const closed = await closedConversation(pausedOn(requestUnder(ledger)), {
+        runner: agentOn(ledger),
+      });
       expect(lastNotice(closed.history)?.content).toBe(OUTCOME_UNKNOWN_UNANSWERABLE);
     }
+    expect(isSpent).not.toHaveBeenCalled();
   });
 
   it('no runner, or one whose ledger a host cannot see (a composition), proves nothing', async () => {
-    const request = mintedHere();
-    for (const runner of [
-      undefined,
-      {},
-      Sequence.create().step('a', agentOn(durableLedger())).build(),
-    ]) {
-      const closed = await closedConversation(pausedOn(request), runner);
+    const ledger = durableLedger();
+    const request = requestUnder(ledger);
+    for (const runner of [undefined, {}, Sequence.create().step('a', agentOn(ledger)).build()]) {
+      const closed = await closedConversation(pausedOn(request), { runner });
       expect(lastNotice(closed.history)?.content).toBe(OUTCOME_UNKNOWN_UNANSWERABLE);
     }
+    expect(ledger.spent.size).toBe(0);
   });
 
-  it('the process ledger proves a request this process minted and never spent', async () => {
-    const closed = await closedConversation(pausedOn(mintedHere()), agentOn());
-    expect(lastNotice(closed.history)?.content).toBe(NOT_RUN_UNANSWERABLE);
+  it('only the minting ledger proves: one with another identity never saw the request', async () => {
+    const minting = durableLedger('ledger-a');
+    const other = durableLedger('ledger-b');
+    const closed = await closedConversation(pausedOn(requestUnder(minting)), {
+      runner: agentOn(other),
+    });
+    expect(lastNotice(closed.history)?.content).toBe(OUTCOME_UNKNOWN_UNANSWERABLE);
+    expect(other.spent.size).toBe(0);
   });
 
-  it('the process ledger proves nothing about a request stored before this process started', async () => {
-    const closed = await closedConversation(pausedOn(fromElsewhere), agentOn());
+  it('the process ledger proves a request it minted — only when the pause is kept in this process’s memory', async () => {
+    const request = requestUnder(processDecisionLedger());
+    expect(request.ledger).toMatch(/^process:[0-9a-f]{32}$/);
+    const elsewhere = await closedConversation(pausedOn(request), {
+      runner: agentOn(),
+      store: { hydrate: async () => undefined, persist: async () => undefined },
+    });
+    expect(lastNotice(elsewhere.history)?.content).toBe(OUTCOME_UNKNOWN_UNANSWERABLE);
+    const here = await closedConversation(pausedOn(request), {
+      runner: agentOn(),
+      store: memorySessions(),
+    });
+    expect(lastNotice(here.history)?.content).toBe(NOT_RUN_UNANSWERABLE);
+  });
+
+  it('the process ledger proves nothing about a request a previous process minted (a restart)', async () => {
+    const request = {
+      ...requestUnder(processDecisionLedger()),
+      ledger: `process:${'0'.repeat(32)}`,
+    };
+    const closed = await closedConversation(pausedOn(request), {
+      runner: agentOn(),
+      store: memorySessions(),
+    });
     expect(lastNotice(closed.history)?.content).toBe(OUTCOME_UNKNOWN_UNANSWERABLE);
   });
 
-  it('an app’s own in-memory ledger proves nothing — it may be one agent’s alone, and a restart forgets it', async () => {
-    const closed = await closedConversation(
-      pausedOn(mintedHere()),
-      agentOn(inMemoryDecisionLedger()),
-    );
+  it('an app’s own in-memory ledger has no identity, so it never proves — it may be one agent’s alone', async () => {
+    const ledger = inMemoryDecisionLedger();
+    const request = requestUnder(ledger);
+    expect(request.ledger).toBeUndefined();
+    const closed = await closedConversation(pausedOn(request), {
+      runner: agentOn(ledger),
+      store: memorySessions(),
+    });
     expect(lastNotice(closed.history)?.content).toBe(OUTCOME_UNKNOWN_UNANSWERABLE);
   });
 
-  it('an old stored row — a pause that names no request anywhere — reads as outcome unknown', async () => {
-    const closed = await closedConversation(pausedOn(undefined), agentOn(durableLedger()));
+  it('an old stored row — a pause that names no request anywhere — reads as possibly run', async () => {
+    const closed = await closedConversation(pausedOn(undefined), {
+      runner: agentOn(durableLedger()),
+    });
     expect(lastNotice(closed.history)?.content).toBe(OUTCOME_UNKNOWN_UNANSWERABLE);
   });
 
   it('every request the pause names must be proven: the question’s and the state’s', async () => {
     const ledger = durableLedger();
-    const state = mintedHere();
-    const shown = mintedHere();
+    const state = requestUnder(ledger);
+    const shown = requestUnder(ledger);
     ledger.spent.add(state.id);
     const paused = pausedOn(state);
     const both: PausedRun = { ...paused, pending: { tool: 'refund', checkIn: shown as never } };
-    const closed = await closedConversation(both, agentOn(ledger));
+    const closed = await closedConversation(both, { runner: agentOn(ledger) });
     expect(lastNotice(closed.history)?.content).toBe(OUTCOME_UNKNOWN_UNANSWERABLE);
   });
 
-  it('the assessment reader (findings admission) reads the unknown notice as unknown, the proven one as not dispatched', async () => {
-    const request = mintedHere();
+  it('the assessment reader (findings admission) reads the possibly-run notice as unknown, the proven one as not dispatched', async () => {
+    const proving = durableLedger();
     const spentLedger = durableLedger();
-    spentLedger.spent.add(request.id);
-    for (const [ledger, execution] of [
-      [durableLedger(), 'not-dispatched'],
-      [spentLedger, 'unknown'],
+    const spentRequest = requestUnder(spentLedger);
+    spentLedger.spent.add(spentRequest.id);
+    for (const [ledger, request, execution] of [
+      [proving, requestUnder(proving), 'not-dispatched'],
+      [spentLedger, spentRequest, 'unknown'],
     ] as const) {
-      const closed = await closedConversation(pausedOn(request, true), agentOn(ledger));
+      const closed = await closedConversation(pausedOn(request), { runner: agentOn(ledger) });
       const seen = captureFindingsRequest(
         { messages: closed.history, model: 'm' } as never,
         closed.history,
@@ -325,23 +363,19 @@ function asking(
     .build();
 }
 
-/** A session store whose writes fail while `failing.persist` is set. */
+/**
+ * This process's memory store (`memorySessions` — kept in this process, so
+ * the process's own ledger can prove), its writes failing while
+ * `failing.persist` is set.
+ */
 function flakyStore(failing: { persist: boolean }): SessionLifecycle {
-  const inner = memorySessions();
-  return new Proxy(inner, {
-    get(target, key) {
-      if (key === 'persist') {
-        return async (...args: Parameters<SessionLifecycle['persist']>) => {
-          if (failing.persist) throw new Error('store unavailable');
-          return target.persist(...args);
-        };
-      }
-      const value = Reflect.get(target, key, target) as unknown;
-      return typeof value === 'function'
-        ? (value as (...args: unknown[]) => unknown).bind(target)
-        : value;
-    },
-  });
+  const store = memorySessions();
+  const persist = store.persist.bind(store);
+  (store as { persist: SessionLifecycle['persist'] }).persist = async (id, envelope) => {
+    if (failing.persist) throw new Error('store unavailable');
+    return persist(id, envelope);
+  };
+  return store;
 }
 
 /** What the model was told for the paused call `t1`, in every request it was sent. */

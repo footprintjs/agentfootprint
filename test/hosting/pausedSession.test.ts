@@ -1912,7 +1912,9 @@ describe('a paused session — a pause no answer can ever reach does not hold th
       );
       const next = await host.deliver({ input: 'never mind', sessionId: 'plain' });
       expect(next.output).toBe('noted: never mind');
-      expect(toolResultsSeen(sent)).toEqual([NOT_RUN_UNANSWERABLE]);
+      // The record removed carried the ledger the request was minted under:
+      // nothing can prove the call never ran, so it may have run.
+      expect(toolResultsSeen(sent)).toEqual([OUTCOME_UNKNOWN_UNANSWERABLE]);
       // A pause that CAN still be answered keeps holding the session.
       await host.deliver({ input: 'refund me again', sessionId: 'plain' });
       const held = await host.deliver({ input: 'hello?', sessionId: 'plain' });

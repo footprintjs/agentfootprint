@@ -435,7 +435,8 @@ export class ResumeDecisionError extends Error {
  */
 const CLOSED_BY_A_HOST =
   'A host that keeps the pause (standingAgent, streamHandler) closes it: the next message ' +
-  'continues the conversation, the call recorded as not run.';
+  'continues the conversation, the call recorded as not run only when proven, otherwise as ' +
+  'not known.';
 
 function resumeDecisionMessage(reason: ResumeDecisionRefusal): string {
   switch (reason) {
