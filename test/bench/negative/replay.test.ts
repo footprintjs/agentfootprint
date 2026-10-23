@@ -75,7 +75,13 @@ const FLAT = 'There are no open incidents on the synthetic service.';
 const SCOPED = 'The synthetic lookup returned two rows for the service.';
 
 /** A synthetic study folder: 21 cases, one Haiku run with a key, one later run without a label key. */
-function syntheticStudy(): string {
+/**
+ * A synthetic study folder: 21 cases; a registered run with a key (and one excluded and one voided
+ * turn the sheet left out); a later run whose label set ships without its key (and a voided turn);
+ * and a PILOT run with a key, which the registration never counts. `labelUncounted` puts the
+ * voided and excluded turns on the sheet; `labelPilot` puts a pilot turn there.
+ */
+function syntheticStudy(options: { labelUncounted?: boolean; labelPilot?: boolean } = {}): string {
   const dir = mkdtempSync(join(tmpdir(), 'negative-replay-'));
   mkdirSync(join(dir, 'cases'));
   for (const [code, kind] of Object.entries(KINDS)) {
@@ -122,9 +128,59 @@ function syntheticStudy(): string {
       });
     }
   }
-  mkdirSync(join(dir, 'runs', 'run-20261001T000000Z'), { recursive: true });
-  writeFileSync(join(dir, 'runs', 'run-20261001T000000Z', 'turns.jsonl'), jsonl(turns));
-  writeFileSync(join(dir, 'runs', 'run-20261001T000000Z', 'key.jsonl'), jsonl(key));
+  // Two turns the registration does not count: one excluded, one voided by its sealed checks.
+  turns.push(
+    {
+      turnId: 'tx',
+      status: 'done',
+      exclusion: 'connection-error',
+      reply: FLAT,
+      model: 'claude-haiku-4-5',
+    },
+    { turnId: 'tv', status: 'done', reply: FLAT, model: 'claude-haiku-4-5' },
+  );
+  key.push(
+    { turnId: 'tx', arm: 'PLAIN', caseId: 'c4-synthetic' },
+    { turnId: 'tv', arm: 'PLAIN', caseId: 'c4-synthetic' },
+  );
+  if (options.labelUncounted === true) {
+    for (const [i, turnId] of ['tx', 'tv'].entries()) {
+      const sheetId = `S9${i}`;
+      sheet.push({ sheetId, turnId });
+      labelsA.push({ sheetId, claimsNonExistence: true, flagged: true });
+      labelsB.push({ sheetId, claimsNonExistence: true, flagged: true });
+    }
+  }
+  const main = join(dir, 'runs', 'run-20261001T000000Z');
+  mkdirSync(join(main, 'sealed'), { recursive: true });
+  writeFileSync(join(main, 'plan.json'), JSON.stringify({ runName: 'synthetic-full' }));
+  writeFileSync(join(main, 'turns.jsonl'), jsonl(turns));
+  writeFileSync(join(main, 'key.jsonl'), jsonl(key));
+  writeFileSync(join(main, 'sealed', 'checks.jsonl'), jsonl([{ turnId: 'tv', void: true }]));
+
+  // A pilot run with a key: registered for its own purpose, never counted here.
+  const pilot = join(dir, 'runs', 'run-20260930T000000Z');
+  mkdirSync(pilot, { recursive: true });
+  writeFileSync(join(pilot, 'plan.json'), JSON.stringify({ runName: 'synthetic-pilot' }));
+  writeFileSync(
+    join(pilot, 'turns.jsonl'),
+    jsonl([
+      { turnId: 'p1', status: 'done', reply: FLAT, model: 'claude-sonnet-4-6' },
+      { turnId: 'p2', status: 'done', reply: SCOPED, model: 'claude-sonnet-4-6' },
+    ]),
+  );
+  writeFileSync(
+    join(pilot, 'key.jsonl'),
+    jsonl([
+      { turnId: 'p1', arm: 'PLAIN', caseId: 'c3-synthetic' },
+      { turnId: 'p2', arm: 'PLAIN', caseId: 'c3-synthetic' },
+    ]),
+  );
+  if (options.labelPilot === true) {
+    sheet.push({ sheetId: 'S99', turnId: 'p1' });
+    labelsA.push({ sheetId: 'S99', claimsNonExistence: true, flagged: true });
+    labelsB.push({ sheetId: 'S99', claimsNonExistence: true, flagged: true });
+  }
   mkdirSync(join(dir, 'labels', 'set-a'), { recursive: true });
   writeFileSync(join(dir, 'labels', 'set-a', 'key.jsonl'), jsonl(sheet));
   writeFileSync(join(dir, 'labels', 'set-a', 'labels-a.jsonl'), jsonl(labelsA));
@@ -135,8 +191,17 @@ function syntheticStudy(): string {
     { turnId: 'u1', status: 'done', reply: FLAT, model: 'claude-sonnet-4-6' },
     { turnId: 'u2', status: 'done', reply: SCOPED, model: 'claude-sonnet-4-6' },
     { turnId: 'u3', status: 'not-run', reply: '', model: 'claude-sonnet-4-6' },
+    { turnId: 'u4', status: 'done', reply: FLAT, model: 'claude-sonnet-4-6' },
   ];
-  mkdirSync(join(dir, 'runs', 'run-20261002T000000Z'), { recursive: true });
+  mkdirSync(join(dir, 'runs', 'run-20261002T000000Z', 'sealed'), { recursive: true });
+  writeFileSync(
+    join(dir, 'runs', 'run-20261002T000000Z', 'plan.json'),
+    JSON.stringify({ runName: 'synthetic-second' }),
+  );
+  writeFileSync(
+    join(dir, 'runs', 'run-20261002T000000Z', 'sealed', 'checks-amended.jsonl'),
+    jsonl([{ turnId: 'u4', void: true }]),
+  );
   writeFileSync(join(dir, 'runs', 'run-20261002T000000Z', 'turns.jsonl'), jsonl(second));
   writeFileSync(
     join(dir, 'runs', 'run-20261002T000000Z', 'key.jsonl'),
@@ -226,6 +291,26 @@ describe('FUNCTIONAL — a synthetic folder, read and replayed', () => {
     expect(study.cases).toHaveLength(21);
     expect(study.replies).toHaveLength(63 + 2);
     expect(study.rebuilt).toEqual([{ set: 'set-b', runs: 1, items: 2 }]);
+  });
+
+  it('counts only the registered runs: a pilot is never swept into a rebuilt sheet', () => {
+    const study = loadStudy(dir);
+    expect(study.runs).toEqual(['run-20261001T000000Z', 'run-20261002T000000Z']);
+    expect(study.replies.map((r: { turnId: string }) => r.turnId)).not.toContain('p1');
+  });
+
+  it('a voided or an excluded turn is never counted, and a sheet naming one is refused', () => {
+    const ids = loadStudy(dir).replies.map((r: { turnId: string }) => r.turnId);
+    for (const id of ['tx', 'tv', 'u3', 'u4']) expect(ids).not.toContain(id);
+    expect(() => loadStudy(syntheticStudy({ labelUncounted: true }))).toThrow(
+      /2 labelled items are not analysed rows of a counted run/,
+    );
+  });
+
+  it('a sheet naming a turn of an uncounted (pilot) run is refused', () => {
+    expect(() => loadStudy(syntheticStudy({ labelPilot: true }))).toThrow(
+      /1 labelled items are not analysed rows of a counted run/,
+    );
   });
 
   it('the detector finds the flat claims the labels mark, and only those', () => {

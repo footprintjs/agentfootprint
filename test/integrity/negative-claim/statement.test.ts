@@ -51,7 +51,7 @@ describe('the three worked statements (§ 5.1), rule-derived and attributed', ()
   const SCOPE =
     'subject `incidents` (declared by the tool); `service` `payments` (as sent by the model); ' +
     "`status` `open` (fixed by the tool); any `severity` (the tool's declared default); source " +
-    '`the incident store` (declared by the tool); window 08:00–10:00Z (held in full)';
+    '`the incident store` (declared by the tool); window 2026-10-22 08:00–10:00Z (held in full)';
 
   it('none: the scope of the read and the email gap, said out loud', () => {
     expect(statementOf(cite('none', 'c1'), [incidentCall()])).toBe(
@@ -117,7 +117,9 @@ describe('each row shape', () => {
         gaps: [],
       }),
     ]);
-    expect(text).toContain('window 08:00–10:00Z (not held); not checked: 08:00–10:00Z (not held).');
+    expect(text).toContain(
+      'window 2026-10-22 08:00–10:00Z (not held); not checked: 2026-10-22 08:00–10:00Z (not held).',
+    );
   });
 
   it('a span over two days is written with its dates', () => {
@@ -127,7 +129,7 @@ describe('each row shape', () => {
 
   it('a period the result did not declare: the span the call ran with, held undeclared', () => {
     const text = statementOf(cite('none', 'c1'), [incidentCall({ held: 'none', gaps: [] })]);
-    expect(text).toContain('; window 08:00–10:00Z (held: undeclared).');
+    expect(text).toContain('; window 2026-10-22 08:00–10:00Z (held: undeclared).');
   });
 
   it('a sent source replaces the declared one, labelled as sent', () => {
@@ -202,7 +204,7 @@ describe('each row shape', () => {
 
   it('the window stated is the span the call ran with — a resumed call keeps its own', () => {
     const resumed = incidentCall({ dispatchedAt: '2026-10-22T11:00:00Z', gaps: [] });
-    expect(statementOf(cite('none', 'c1'), [resumed])).toContain('window 09:00–11:00Z');
+    expect(statementOf(cite('none', 'c1'), [resumed])).toContain('window 2026-10-22 09:00–11:00Z');
   });
 
   it('a credential-limited read, a match rule and an approximate ranking are said out loud', () => {
@@ -222,6 +224,32 @@ describe('each row shape', () => {
     expect(text).toContain("what the caller's credential may not see");
     expect(text).toContain("`q: what the tool matched` (by the tool's own match rule)");
     expect(text).toContain('the rows an approximate ranking may have left out');
+  });
+
+  it('a historical (absolute) window states its date, start and end', () => {
+    const range = '2026-10-01T08:00:00Z..2026-10-01T10:00:00Z';
+    const call = incidentCall({
+      window: range,
+      noSpan: true,
+      queried: { from: '2026-10-01T08:00:00Z', to: '2026-10-01T10:00:00Z' },
+      held: { from: '2026-09-01T00:00:00Z', to: CLOCK },
+      gaps: [],
+    });
+    expect(statementOf(cite('none', 'c1'), [call])).toContain(
+      'window 2026-10-01 08:00–10:00Z (held in full)',
+    );
+  });
+
+  it('an absolute window the result did not declare: the range sent, with both bounds', () => {
+    const call = incidentCall({
+      window: '2026-10-01T22:00:00Z..2026-10-02T02:00:00Z',
+      noSpan: true,
+      held: 'none',
+      gaps: [],
+    });
+    expect(statementOf(cite('none', 'c1'), [call])).toContain(
+      'window 2026-10-01 22:00Z–2026-10-02 02:00Z (held: undeclared)',
+    );
   });
 
   it('two cited reads give two lines, in ORDINAL order, not citation order', () => {
@@ -394,5 +422,40 @@ describe('PROPERTY — the statement is one line per clause, quotes every row va
     }
     // Never a word of a read it does not cite.
     for (const id of decoyIds) expect(text).not.toContain(id);
+  });
+});
+
+describe('PROPERTY — every cited read with a window names both of its bounds, with their dates', () => {
+  const SEEDS = Array.from({ length: 80 }, (_, i) => 51_000 + i);
+  const iso = (ms: number) => new Date(ms).toISOString().replace('.000Z', 'Z');
+  const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+  const hhmm = (ms: number) => new Date(ms).toISOString().slice(11, 16);
+
+  it.each(SEEDS)('seed %i', (seed) => {
+    const rand = mulberry32(seed);
+    const base = Date.parse('2026-09-01T00:00:00Z') + Math.floor(rand() * 50) * 86_400_000;
+    const from = base + Math.floor(rand() * 24) * 3_600_000;
+    const to = from + (1 + Math.floor(rand() * 72)) * 3_600_000;
+    const form = Math.floor(rand() * 3);
+    const call =
+      form === 0
+        ? incidentCall({
+            window: `${Math.round((to - from) / 3_600_000)}h`,
+            dispatchedAt: iso(to),
+            gaps: [],
+          })
+        : incidentCall({
+            window: `${iso(from)}..${iso(to)}`,
+            noSpan: true,
+            ...(form === 1
+              ? { queried: { from: iso(from), to: iso(to) } }
+              : { held: 'none' as const }),
+            gaps: [],
+          });
+    const text = statementOf(cite('none', 'c1'), [call]) ?? '';
+    const windowPart = /window ([^;(]+) \(/.exec(text)?.[1] ?? '';
+    expect(windowPart, text).toContain(`${day(from)} ${hhmm(from)}`);
+    expect(windowPart, text).toContain(hhmm(to));
+    if (day(from) !== day(to)) expect(windowPart, text).toContain(`${day(to)} ${hhmm(to)}`);
   });
 });

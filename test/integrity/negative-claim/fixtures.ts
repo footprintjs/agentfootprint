@@ -98,6 +98,10 @@ export interface IncidentRowOptions {
   readonly runId?: string;
   /** When the call ran — its window's span is resolved there. */
   readonly dispatchedAt?: string;
+  /** The result's declared `queried` (default: the window's at the turn's clock). */
+  readonly queried?: { from: string; to: string };
+  /** An absolute window: #199 composes no span for a spelling that is not a look-back. */
+  readonly noSpan?: boolean;
 }
 
 /** § 3.2's row for `list_incidents` (#199's `ComposedCoverage`), with the options a test varies. */
@@ -149,13 +153,16 @@ export function incidentRow(options: IncidentRowOptions = {}): ComposedCoverage 
       argument: 'window',
       value: window,
       from: options.window === undefined ? 'default' : 'call',
-      span: lookbackRange(options.dispatchedAt ?? CLOCK, window, 'mhdw'),
+      ...(options.noSpan === true
+        ? {}
+        : { span: lookbackRange(options.dispatchedAt ?? CLOCK, window, 'mhdw') }),
     },
   ];
   const queried =
-    window === '7d'
+    options.queried ??
+    (window === '7d'
       ? { from: '2026-10-15T10:00:00Z', to: CLOCK }
-      : { from: '2026-10-22T08:00:00Z', to: CLOCK };
+      : { from: '2026-10-22T08:00:00Z', to: CLOCK });
   const held =
     options.held === undefined ? { from: '2026-09-22T10:00:00Z', to: CLOCK } : options.held;
   return {
