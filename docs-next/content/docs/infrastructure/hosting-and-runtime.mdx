@@ -1315,18 +1315,33 @@ may issue it again.
 The proof is a **tombstone, not a read**: the door asks the ledger the request
 was minted under to `spend` the request itself. `true` means no decision had
 reached it, and — in the same atomic step — that none ever can: a resume that
-arrives later, on any replica, is refused as `'already-answered'`. (Reading
-`isSpent` and then writing the close would leave a window in which a resume
-elsewhere runs the refund, and a ledger may expire what it reads.) Rules:
+arrives later, on any replica, is refused as `'closed-by-host'` ("closed by the
+host … its call did not run"), never as `'already-answered'` ("not known").
+(Reading `isSpent` and then writing the close would leave a window in which a
+resume elsewhere runs the refund, and a ledger may expire what it reads.)
+
+**A close is idempotent.** Having won the request, the closer spends a second
+key, `closed-proven:<requestId>`, to record that it closed it — before the
+closed conversation is stored, which can fail (the store's write, or the run
+that goes on from it). A retried close finds the request spent and reads that
+marker (`isSpent`): present, it reaches the verdict the first close proved;
+absent — a crash between the two spends, or a ledger without `isSpent` — it
+records "may have run", the safe direction, never a false "did not run". A
+request a decision spent never has the marker. A person's answer to such a
+pause on a replica whose rules still match is refused as `'closed-by-host'`,
+and that door stores the closed conversation. Rules:
 
 - **Only the minting ledger proves.** A pause records the identity of the
   ledger its request was minted under. A redeploy that switched ledgers — from
   the default to a shared one, say — asks a ledger that never saw the spend,
   and proves nothing.
-- **A ledger proves only with a stable identity** (`DecisionLedger.id`, the
-  same in every process that shares it) and a permanent `spend` result (no
-  expiry). This process's default ledger has a per-process identity, so a
-  restart can never prove a pause an earlier process stored.
+- **A ledger proves only with a `storeId`** (`DecisionLedger.storeId`) and a
+  permanent `spend` result (no expiry). The library cannot check the contract
+  `storeId` stands for, so it is yours to keep: unique per BACKING STORE (never
+  copied from staging to production, never shared by per-tenant tables),
+  permanent for that store, and changed on any migration to a new store. This
+  process's default ledger has a per-process identity, so a restart can never
+  prove a pause an earlier process stored.
 - **The default ledger proves only when the pause is kept in this process's
   memory** (`memorySessions()`). With any store other processes reach, another
   replica on its own default ledger may have spent the request and run the call.
@@ -1396,7 +1411,7 @@ the unmarked pause; a process that dies mid-resume marks nothing; and a store
 that refuses the mark's write leaves only this process's ledger refusing the
 decision (the door prints a warning). More than one process therefore needs one
 shared `decisionLedger` (a store whose `spend` is atomic and permanent, an `id`
-that names it, and ideally an `isSpent`) — that is what makes "once" hold
+that names its store (`storeId`), and an `isSpent`) — that is what makes "once" hold
 across them, and what lets a door that closes a pause after a restart prove its
 call did not run. Both the proof and "once" hold per ledger: change the ledger
 agents spend in only once no pause stored under the old one can still be
