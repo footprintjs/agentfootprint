@@ -61,6 +61,8 @@ export interface SearchBoundary {
 export interface SearchDispatch {
   /** The call's result identity, reserved before it runs — the row's address. */
   readonly resultId: string;
+  /** The read's short handle — `r` and the reservation's ordinal. */
+  readonly handle: string;
   /**
    * When the call was dispatched — the clock the time layer hands the tool
    * (`ctx.time.dispatchedAt`), or the moment itself. A relative window resolves
@@ -132,18 +134,18 @@ const UNIDENTIFIED_RUN = 'unidentified-run';
  * ```
  */
 export function buildSearchCoverage(runIdOf: RunIdOf): SearchCoverageFunnel {
-  const reserve = (scope: TypedScope<AgentState>): string => {
+  const reserve = (scope: TypedScope<AgentState>): { resultId: string; handle: string } => {
     const runId = runIdOf(scope) || UNIDENTIFIED_RUN;
     const state = scope.resultIdentities ?? createVerificationState(runId);
     const reserved = reserveResultIdentity(state, runId);
     scope.resultIdentities = reserved.state;
-    return reserved.id;
+    return { resultId: reserved.id, handle: `r${reserved.identity.ordinal}` };
   };
   return {
     dispatch(scope, tool, callTime) {
       if (tool === undefined || searchOf(tool).search === undefined) return undefined;
       return {
-        resultId: reserve(scope),
+        ...reserve(scope),
         dispatchedAt: callTime?.dispatchedAt ?? new Date().toISOString(),
       };
     },
@@ -167,12 +169,13 @@ export function buildSearchCoverage(runIdOf: RunIdOf): SearchCoverageFunnel {
       // A boundary that took no dispatch (a door that predates it) still
       // addresses its row by a library-minted identity, at the moment it runs.
       const dispatched = boundary.dispatch ?? {
-        resultId: reserve(scope),
+        ...reserve(scope),
         dispatchedAt: new Date().toISOString(),
       };
       const searchCall: SearchCall = {
         ...call,
         resultId: dispatched.resultId,
+        handle: dispatched.handle,
         search,
         origin: isRemote(tool, boundary.party) ? 'remote' : 'local',
         args: boundary.args,

@@ -17,11 +17,23 @@ import type { GapFacet } from '../composedCoverage.js';
  *   • `filter`     — narrows the rows;
  *   • `period`     — the time read (the argument `Tool.period` names);
  *   • `source`     — picks the store: a sent value REPLACES the declared source;
+ *   • `query`      — free text: the population is what MATCHED it, by the
+ *                    tool's own rule — a `match` gap on every call;
+ *   • `match`      — a fuzzy value, read the same way as `query`;
  *   • `cap`        — at most this many rows;
  *   • `page`       — which page of the rows;
  *   • `inert`      — changes the bytes, not the ground (a format, a sort).
  */
-export type SearchRole = 'population' | 'filter' | 'period' | 'source' | 'cap' | 'page' | 'inert';
+export type SearchRole =
+  | 'population'
+  | 'filter'
+  | 'period'
+  | 'source'
+  | 'query'
+  | 'match'
+  | 'cap'
+  | 'page'
+  | 'inert';
 
 /** A value a declaration may name — a default, a fixed qualifier's value. */
 export type SearchScalar = string | number | boolean;
@@ -119,4 +131,10 @@ export interface ToolSearch {
   readonly complete?: 'within-arguments';
   readonly gaps?: readonly SearchGap[];
   readonly limits?: SearchLimits;
+  /**
+   * `'approximate'` — a vector, top-k or fuzzy ranking: the rows are the ones
+   * ranked nearest, never every row that fits, so every call carries a
+   * `ranking` gap on completeness and `complete` is refused beside it.
+   */
+  readonly ranking?: 'approximate';
 }

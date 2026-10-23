@@ -446,3 +446,29 @@ describe('Tool.search — limits.byCredential', () => {
     expect(check({ ...SEARCH, limits: {} })).toThrow(/limits/);
   });
 });
+
+describe('Tool.search — query / match roles and approximate ranking', () => {
+  it('accepts the query and match roles', () => {
+    expect(
+      check(
+        withArgs(SEARCH.arguments.map((a) => (a.name === 'format' ? { ...a, role: 'query' } : a))),
+      ),
+    ).not.toThrow();
+    expect(
+      check(
+        withArgs(SEARCH.arguments.map((a) => (a.name === 'format' ? { ...a, role: 'match' } : a))),
+      ),
+    ).not.toThrow();
+  });
+
+  it("refuses complete beside ranking: 'approximate' — such a search is never complete", () => {
+    expect(check({ ...SEARCH, ranking: 'approximate' })).toThrow(
+      /complete.*approximate|approximate.*complete/s,
+    );
+    expect(check({ ...SEARCH, complete: undefined, ranking: 'approximate' })).not.toThrow();
+  });
+
+  it('refuses a ranking other than approximate', () => {
+    expect(check({ ...SEARCH, complete: undefined, ranking: 'exact' })).toThrow(/ranking/);
+  });
+});

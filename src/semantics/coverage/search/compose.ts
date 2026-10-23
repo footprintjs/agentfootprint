@@ -46,6 +46,8 @@ export interface SearchCall {
   readonly iteration: number;
   /** The row's address — `claim-result/<namespace>/<runId>/<ordinal>`, minted by the funnel. */
   readonly resultId: string;
+  /** The read's short handle (`r3`), minted with the identity. */
+  readonly handle: string;
   readonly search: ToolSearch;
   /** `'remote'` for a declaration that arrived over MCP or from a `ToolProvider`. */
   readonly origin: 'local' | 'remote';
@@ -148,6 +150,7 @@ export function composeSearchCoverage(
     composed: {
       origin: call.origin,
       resultId: call.resultId,
+      handle: call.handle,
       complete,
       gaps,
     },

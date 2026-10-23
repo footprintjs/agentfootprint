@@ -51,6 +51,7 @@ const call = (args: Record<string, unknown>, over: Partial<SearchCall> = {}): Se
   toolCallId: 'c1',
   iteration: 1,
   resultId: RESULT_ID,
+  handle: 'r1',
   search: INCIDENTS,
   origin: 'local',
   args,
@@ -808,5 +809,59 @@ describe('contract — S4: a read limited by the caller’s credential says so',
     expect(item(checked, 'apiKey')).toEqual([]);
     expect(gaps.filter((g) => g.kind === 'credential-limited')).toEqual([GAP]);
     expect(JSON.stringify(gaps)).not.toContain('apiKey');
+  });
+});
+
+describe('contract — S6: free text and approximate ranking can never stand for a full list', () => {
+  const texty = (role: 'query' | 'match'): ToolSearch => ({
+    ...INCIDENTS,
+    arguments: [...INCIDENTS.arguments, { name: 'q', role }],
+  });
+
+  it.each(['query', 'match'] as const)(
+    'a %s argument composes what matched, and a match gap bearing on the population',
+    (role) => {
+      const { checked, gaps } = compose(
+        call({ service: 'p', q: 'disk full' }, { search: texty(role) }),
+        NONE,
+      );
+      expect(item(checked, 'q')).toEqual([
+        {
+          what: 'q: disk full',
+          facet: 'population',
+          argument: 'q',
+          value: 'disk full',
+          from: 'call',
+          quote: true,
+        },
+      ]);
+      expect(gaps).toContainEqual({
+        kind: 'match',
+        what: "q: matched by the tool's own rule",
+        argument: 'q',
+        bears: 'population',
+      });
+    },
+  );
+
+  it('an unsent query with no default bears on the population', () => {
+    const { gaps } = compose(call({ service: 'p' }, { search: texty('query') }), NONE);
+    expect(gaps).toContainEqual({
+      kind: 'argument-unsent',
+      what: 'q: not sent',
+      argument: 'q',
+      bears: 'population',
+    });
+  });
+
+  it("ranking: 'approximate' composes a completeness gap no declaration removes", () => {
+    const search: ToolSearch = { ...INCIDENTS, complete: undefined, ranking: 'approximate' };
+    const { gaps, complete } = compose(call({ service: 'p' }, { search }), NONE);
+    expect(gaps).toContainEqual({
+      kind: 'ranking',
+      what: 'rows ranked by approximate similarity',
+      bears: 'completeness',
+    });
+    expect(complete).toBe(false);
   });
 });

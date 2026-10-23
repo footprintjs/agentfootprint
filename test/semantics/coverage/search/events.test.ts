@@ -37,6 +37,7 @@ const factsOf = (result: unknown) => {
       toolCallId: 'c1',
       iteration: 1,
       resultId: RESULT_ID,
+      handle: 'r1',
       search: SEARCH,
       origin: 'local',
       args: { service: SECRET, severity: 'sev1-secret' },

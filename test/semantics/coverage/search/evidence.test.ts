@@ -34,6 +34,7 @@ const served = (result: unknown): unknown => {
       toolCallId: 'c1',
       iteration: 1,
       resultId: 'claim-result/ns/r/1',
+      handle: 'r1',
       search: SEARCH,
       origin: 'local',
       args: { service: INVENTED },

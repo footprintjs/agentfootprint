@@ -65,6 +65,8 @@ function unsentFacet(arg: SearchArgument): GapFacet | undefined {
     source: 'source',
     cap: 'completeness',
     page: 'completeness',
+    query: 'population',
+    match: 'population',
     inert: undefined,
   };
   return byRole[arg.role];
@@ -159,6 +161,32 @@ function credentialGaps(input: GapInput): CoverageGap[] {
   ];
 }
 
+/**
+ * A `query` or `match` argument in effect: the population is what matched, by
+ * a rule only the tool knows — a gap on the population, every call.
+ */
+function matchGaps(input: GapInput): CoverageGap[] {
+  return input.readings
+    .filter(
+      ([a, r]) =>
+        (a.role === 'query' || a.role === 'match') && (r.kind === 'sent' || r.kind === 'default'),
+    )
+    .map(([a]) => ({
+      kind: 'match' as const,
+      what: `${a.name}: matched by the tool's own rule`,
+      argument: a.name,
+      bears: 'population' as const,
+    }));
+}
+
+/** `ranking: 'approximate'` — the rows nearest, never every row that fits. */
+function rankingGaps(input: GapInput): CoverageGap[] {
+  if (input.search.ranking !== 'approximate') return [];
+  return [
+    { kind: 'ranking', what: 'rows ranked by approximate similarity', bears: 'completeness' },
+  ];
+}
+
 function statusGaps(input: GapInput): CoverageGap[] {
   if (input.status !== 'partial' && input.status !== 'pending') return [];
   return [
@@ -199,6 +227,8 @@ export function composeGaps(input: GapInput): ComposedGaps {
     ...pagingGaps(input),
     ...statusGaps(input),
     ...credentialGaps(input),
+    ...matchGaps(input),
+    ...rankingGaps(input),
   ];
   const gaps = [
     ...composed,

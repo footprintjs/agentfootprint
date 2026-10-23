@@ -54,6 +54,7 @@ export interface ComposedFacts {
   /** `'local'` for a first-party tool; `'remote'` over MCP or from a ToolProvider. */
   readonly origin: ComposedCoverage['composed'];
   readonly resultId: string;
+  readonly handle: string;
   readonly complete: boolean;
   readonly gaps: ComposedCoverage['gaps'];
 }

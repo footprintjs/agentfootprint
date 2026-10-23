@@ -17,6 +17,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Agent, absent, defineTool, fromIdentity, hostFilled, type Tool } from '../../src/index.js';
 import { mock } from '../../src/doors/providers.js';
+import { staticTools } from '../../src/tool-providers/index.js';
 import { searchOf, _resetSearchOfWarnings } from '../../src/tools/searchOf.js';
 import type { ToolSearch } from '../../src/semantics/coverage/search/types.js';
 
@@ -104,47 +105,68 @@ describe('searchOf — unit', () => {
   });
 });
 
-describe('searchOf — integration: the reviewer’s repro through .tool()', () => {
-  const runWith = async (tool: Tool) => {
+describe('searchOf — integration: the reviewer’s repro', () => {
+  const runWith = async (
+    register: (b: ReturnType<typeof Agent.create>) => ReturnType<typeof Agent.create>,
+  ) => {
     let n = 0;
     let lastTool = '';
-    const agent = Agent.create({
-      provider: mock({
-        respond: (req) => {
-          n += 1;
-          const turn = req.messages.filter((m) => m.role === 'tool').pop();
-          if (turn !== undefined) lastTool = String(turn.content);
-          return n === 1
-            ? {
-                toolCalls: [
-                  { id: 'c1', name: 'list_incidents', args: { service: 'p', severity: 'sev1' } },
-                ],
-              }
-            : { content: 'done' };
-        },
+    const agent = register(
+      Agent.create({
+        provider: mock({
+          respond: (req) => {
+            n += 1;
+            const turn = req.messages.filter((m) => m.role === 'tool').pop();
+            if (turn !== undefined) lastTool = String(turn.content);
+            return n === 1
+              ? {
+                  toolCalls: [
+                    { id: 'c1', name: 'list_incidents', args: { service: 'p', severity: 'sev1' } },
+                  ],
+                }
+              : { content: 'done' };
+          },
+        }),
+        model: 'mock',
+        maxIterations: 3,
       }),
-      model: 'mock',
-      maxIterations: 3,
-    })
-      .tool(tool)
-      .build();
+    ).build();
     await agent.run({ message: 'x' });
     const state = agent.getLastSnapshot()?.sharedState as { coverageDeclared?: unknown[] };
     return { rows: state.coverageDeclared ?? [], lastTool };
   };
 
-  it("a refused declaration composes no row, and its 'declared' literal is the call's error", async () => {
-    const out = await runWith(
-      handBuilt(BAD, () => absent({ what: 'incidents on p', checked: 'declared' })),
-    );
-    expect(out.rows).toEqual([]);
-    expect(out.lastTool).toMatch(/search.*refused|refused.*search/i);
+  it('a hand-built tool registered with .tool() is refused at build, by name and code', () => {
+    const tool = handBuilt(BAD, () => absent({ what: 'x', checked: 'declared' }));
+    expect(() =>
+      Agent.create({ provider: mock({ respond: () => ({ content: 'x' }) }), model: 'm' })
+        .tool(tool)
+        .build(),
+    ).toThrow(/registration: .*list_incidents.*(statement-text-refused|unclassified-argument)/s);
   });
 
-  it('a refused declaration never yields a complete local row', async () => {
-    const out = await runWith(
-      handBuilt(BAD, () => absent({ what: 'incidents on p', checked: ['the store'] })),
+  it("a ToolProvider's refused declaration composes no row; its 'declared' literal is the call's error", async () => {
+    const out = await runWith((b) =>
+      b.toolProvider(
+        staticTools([
+          handBuilt(BAD, () => absent({ what: 'incidents on p', checked: 'declared' })),
+        ]),
+      ),
     );
-    expect(JSON.stringify(out.rows)).not.toContain('"composed"');
+    expect(out.rows).toEqual([]);
+    expect(out.lastTool).toMatch(/refused/);
+  });
+
+  it('a remote tool carrying effects is refused at registration (effects-on-remote)', () => {
+    const remote = {
+      ...defineTool({ name: 'r', description: 'x', execute: () => [] }),
+      source: 'mcp-x',
+      effects: 'read' as const,
+    };
+    expect(() =>
+      Agent.create({ provider: mock({ respond: () => ({ content: 'x' }) }), model: 'm' })
+        .tool(remote)
+        .build(),
+    ).toThrow(/effects-on-remote/);
   });
 });

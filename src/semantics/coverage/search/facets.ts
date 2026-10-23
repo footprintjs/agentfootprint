@@ -70,7 +70,14 @@ function sameValue(a: unknown, b: unknown): boolean {
   return Object.is(a, b);
 }
 
-const ROLE_FACET = { population: 'population', filter: 'filter', period: 'period' } as const;
+/** The facet each ground-naming role composes — a query's population is what matched it. */
+const ROLE_FACET = {
+  population: 'population',
+  filter: 'filter',
+  period: 'period',
+  query: 'population',
+  match: 'population',
+} as const;
 
 /** The source item, or `undefined` when the source in effect is not known. */
 function sourceItem(input: FacetInput): ComposedItem | undefined {
@@ -126,8 +133,8 @@ function argumentItems(
   input: FacetInput,
 ): readonly ComposedItem[] {
   if (reading.kind === 'host') return [hostItem(arg.name, reading.identity)];
-  if (arg.role !== 'population' && arg.role !== 'filter' && arg.role !== 'period') return [];
-  const facet = ROLE_FACET[arg.role];
+  if (!Object.hasOwn(ROLE_FACET, arg.role)) return [];
+  const facet = ROLE_FACET[arg.role as keyof typeof ROLE_FACET];
   if (reading.kind === 'any') {
     return [{ what: `${arg.name}: any`, facet, argument: arg.name, any: true, from: 'default' }];
   }

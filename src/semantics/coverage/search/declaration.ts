@@ -40,6 +40,8 @@ export const SEARCH_ROLES: readonly SearchRole[] = Object.keys({
   filter: true,
   period: true,
   source: true,
+  query: true,
+  match: true,
   cap: true,
   page: true,
   inert: true,
@@ -54,6 +56,7 @@ const SEARCH_KEYS: readonly string[] = Object.keys({
   complete: true,
   gaps: true,
   limits: true,
+  ranking: true,
 } satisfies Record<keyof ToolSearch, true>);
 
 const ARGUMENT_KEYS: readonly string[] = Object.keys({
@@ -162,6 +165,7 @@ export function freezeSearch(search: ToolSearch): ToolSearch {
       ),
     ),
     ...(search.complete !== undefined && { complete: search.complete }),
+    ...(search.ranking !== undefined && { ranking: search.ranking }),
     ...(search.gaps !== undefined && {
       gaps: Object.freeze(
         search.gaps.map((g) => Object.freeze({ what: g.what, why: g.why, bears: bears(g.bears) })),
@@ -232,6 +236,21 @@ export function assertToolSearch(
       `is ${JSON.stringify(search.complete)} — the one statement is 'within-arguments' ` +
         '(complete for the population, filters and period in effect). Omit it and no call is ' +
         'ever complete.',
+    );
+  }
+  if (search.ranking !== undefined && search.ranking !== 'approximate') {
+    refuse(
+      'search.ranking',
+      `is ${JSON.stringify(search.ranking)} — the one value is 'approximate' (a vector, ` +
+        'top-k or fuzzy ranking). Omit it for a search that returns every row that fits.',
+    );
+  }
+  if (search.ranking === 'approximate' && search.complete !== undefined) {
+    refuse(
+      'search.complete',
+      "is declared beside ranking: 'approximate' — a ranked search returns the rows nearest, " +
+        'never every row that fits, so it is never complete. Drop `complete`.',
+      'complete-beside-approximate',
     );
   }
   checkGaps(search.gaps, roles, fixedNames, refuse);

@@ -161,6 +161,7 @@ describe('property — composition never claims what the call did not send or de
           toolCallId: `c${n}`,
           iteration: 1,
           resultId: `claim-result/ns/run/${n + 1}`,
+          handle: 'r1',
           search,
           origin,
           args: sent,

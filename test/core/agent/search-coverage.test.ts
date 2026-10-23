@@ -223,6 +223,8 @@ describe('integration — the committed row, the served absence, the events', ()
     const [first, second] = r.rows;
     expect(first?.resultId).not.toBe(second?.resultId);
     expect(second?.resultId).toMatch(/\/2$/);
+    // The read's HANDLE — what a typed claim cites under the arm (design R5).
+    expect([first?.handle, second?.handle]).toEqual(['r1', 'r2']);
     const windowOf = (row?: ComposedCoverage) => row?.checked.find((i) => i.facet === 'period');
     // The checker keys a relative window by its SPELLING within a run leg; the
     // span is when each call actually ran.

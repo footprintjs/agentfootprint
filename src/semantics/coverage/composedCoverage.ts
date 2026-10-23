@@ -155,6 +155,8 @@ export type CoverageGapKind =
   | 'period'
   | 'partial'
   | 'credential-limited'
+  | 'match'
+  | 'ranking'
   | 'scope'
   | 'prose';
 
@@ -171,6 +173,10 @@ export type CoverageGapKind =
  *   • `period` — the declared period's verdict is not `covered`.
  *   • `partial` — the tool declared its outcome `partial` (or `pending`): the
  *     result is never held in full.
+ *   • `match` — a `query` / `match` argument: the population is what matched,
+ *     by the tool's own rule. Bears on the population.
+ *   • `ranking` — `ranking: 'approximate'`: the rows nearest, never every row
+ *     that fits. Bears on completeness; no declaration removes it.
  *   • `credential-limited` — the read sees only what the caller's credential
  *     may see (`limits.byCredential`, or an argument `hostFilled` fills from a
  *     credential). Bears on the population; names no value and no credential.
@@ -207,6 +213,12 @@ export interface ComposedCoverage extends DeclaredCoverage {
    * and turns, and some providers mint none.
    */
   readonly resultId: string;
+  /**
+   * The read's short HANDLE (`r3`) — the reservation's ordinal, the only thing
+   * a typed claim may cite once the arm serves it beside the result (design
+   * R5). Library-minted, like `resultId`; never the provider's call id.
+   */
+  readonly handle: string;
   readonly checked: readonly ComposedItem[];
   /**
    * True only for a LOCAL row whose declaration says `complete:

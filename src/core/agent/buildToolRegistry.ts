@@ -201,6 +201,7 @@ import type { LLMToolSchema } from '../../provider-contract/types.js';
 import { PRESENT_TOOL_NAME } from '../../artifacts/present.js';
 import { buildPresentTool } from './presentTool.js';
 import { searchOf } from '../../tools/searchOf.js';
+import { assertToolEffects } from '../../tools/tools.js';
 import type { Tool, ToolRegistryEntry } from '../../tools/tools.js';
 import { warnIfInvalidToolName } from '../../lib/toolName.js';
 import type { ToolNameChannel } from '../../events/payloads.js';
@@ -530,10 +531,16 @@ export function buildToolRegistry(
       registryByName.set(name, tool);
     }
   }
-  // `Tool.search` — every registered tool's declaration judged HERE, once, by
-  // the `defineTool` rule (`tools/searchOf.ts`): a hand-built tool that skipped
-  // `defineTool` is refused at build, named, and composes nothing.
-  for (const tool of registryByName.values()) searchOf(tool);
+  // `Tool.search` and `effects` — every registered tool's declarations judged
+  // HERE, once, by the `defineTool` rule (`tools/searchOf.ts`): a hand-built
+  // tool that skipped `defineTool`, or a declaration built after it, is
+  // refused at build, by name — the second door of `statement-text-refused`
+  // and its siblings. A remote tool's `effects` is refused (`effects-on-remote`).
+  for (const tool of registryByName.values()) {
+    const { problem } = searchOf(tool);
+    if (problem !== undefined) throw new Error(`registration: ${problem}`);
+    assertToolEffects(tool.schema.name, tool.effects, tool.source !== undefined);
+  }
   // ── skip_step — the procedure-integrity tool (9.18.0) ───────────────
   // Auto-attached to the DISPATCH map when ≥1 registered skill declares
   // `steps` (the read_skill auto-attach seam) — always dispatchable, but
