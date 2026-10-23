@@ -94,6 +94,7 @@ if (isCheckInPause(out)) {
 | `'call-changed'` | names this request, but the checkpoint's call changed after the ask (arguments, tool, call id, party, chain position, the rules recorded after the ask) |
 | `'chain-changed'` | names this request (a middleware ask), but the agent resuming it runs other rules from the asking link on — one was removed, added, renamed or moved since (a redeploy) |
 | `'already-answered'` | was already used by a resume — approved or declined; a decline spends the request too |
+| `'ledger-changed'` | was asked under a ledger that can prove (`storeId`, or this process's default) other than the resuming agent's — ask the person again |
 | `'closed-by-host'` | was closed by a host that kept the pause, because no answer could reach it any more — it spent the request, so its call did not run and no decision can run it |
 
 All but `'already-answered'` and `'closed-by-host'` are refused before anything moves, and the checkpoint stays answerable with the right decision. A request is spent where the decision is used, in the resumed run, still before the tool. A composition (`Sequence`, `Parallel`, …) resumes its nested agents directly, so there every refusal comes from that same place.

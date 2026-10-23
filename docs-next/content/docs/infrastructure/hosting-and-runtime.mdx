@@ -1315,8 +1315,9 @@ retried close (the closed conversation failed to store) reads the marker with
 `isSpent` and keeps the verdict; without it (a crash between the two spends)
 the call reads "may have run", never "did not run". Rules:
 
-- **Only the minting ledger proves**: a redeploy that switched ledgers proves
-  nothing.
+- **Only the minting ledger proves**, so a decision is spent only there: an
+  agent on another ledger refuses it (`'ledger-changed'`) and the door closes
+  the pause. A ledger migration means pending approvals are asked again.
 - **It needs a `storeId`** (`DecisionLedger.storeId`) and permanent spends. The
   library cannot check the contract: unique per backing store (never copied
   across environments or shared by per-tenant tables), permanent, changed on
