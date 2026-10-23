@@ -16,7 +16,8 @@
  *     export (only `authoritative: { why }` drops it, and the gate lists it);
  *   - the model reads the count and, because the tool read the list under the
  *     caller's own identity, the 20 names nearest the one asked for;
- *   - no event field carries those names: `stream.tool_end` loses them.
+ *   - the names are never part of the result: no rule, event or row sees them —
+ *     the library attaches them to the model's message alone.
  *
  * Then the build gate: `check:semantics` warns about a refusal that says what
  * does not exist (`refusal-asserts-absence`).
@@ -118,7 +119,7 @@ export async function run(input: string): Promise<string> {
   console.log('\nthe coverageDeclared row:', JSON.stringify(row?.notChecked));
   check(row?.notChecked[0]?.kind === 'scope', 'the gap to be recorded as a scope gap');
 
-  // The names reached the model, and no event field.
+  // The names reached the model's message alone — never the result an event carries.
   const ended = JSON.stringify(toolEnds[0]?.result);
   check(
     ended.includes('names outside') && !ended.includes('known_names'),

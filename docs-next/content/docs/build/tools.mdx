@@ -788,31 +788,38 @@ What the absence then carries:
   is; `check:semantics` lists every use of it for review.
 - **`provenance`** is composed from `source` and `measuredAt` (so `provenance`
   beside `among` is refused).
-- **`known_names`** — what the model may know of the list: always the count,
-  and the 20 names nearest the value asked for (in the evidence gate's
-  spelling, nearest first) only with `visible: 'caller'`. Say `'caller'` only
-  when the tool read the list under the caller's own identity; there is no
+- **`known_names`** — what the model may know of the list, only with
+  `visible: 'caller'`: the count and the 20 names nearest the value asked for
+  (in the evidence gate's spelling, nearest first). Say `'caller'` only when
+  the tool read the list under the caller's own identity; there is no
   default, because a list shown by default would show one person's names to
-  another.
+  another. Without it, the model reads the count on the names facet.
 
 The laws, each pinned by a test:
 
-- **The names never ride an event field.** `known_names` reaches the model's
-  conversation and nothing else of its own: `stream.tool_end` loses it (before
-  `maxToolResultChars` caps the event's copy, so a truncated head cannot carry
-  it), and `tools.absent` and `sharedState.coverageDeclared` never carry it.
-  The conversation itself — the history `iteration_end` reports, the messages
-  slot's `context.injected`, a narrative entry's `rawValue` — is what the
-  model read, and holds them. A redaction policy covers it as it covers every
-  message.
+- **The names are never part of the result.** `absent()` does not put them in
+  the envelope it returns: it keeps them on a library-owned channel keyed by
+  that envelope, and the framework attaches them in one place — the message
+  the model reads, after every `onToolResult` rule, the result placement and
+  `maxToolResultChars`. So the rules, `stream.tool_end` (`result` and
+  `modelResult`), `tools.absent`, the tool-call ledger and
+  `sharedState.coverageDeclared` see a result that never held them, whatever
+  a rule does to it — turns it into text, wraps it, truncates it. A result an
+  `onToolResult` rule denies is served no names. The conversation itself — the
+  history `iteration_end` reports, the messages slot's `context.injected`, a
+  narrative entry's `rawValue` — is what the model read, and holds them; a
+  redaction policy covers it as it covers every message.
+- **Return the envelope `absent()` gave you.** A copy (`{ ...absent(…) }`, a
+  JSON round trip) carries no channel, so its names are not served — the safe
+  direction. A rule that turned the result into text gets the names as one
+  `known_names:` line after it; any object gets a `known_names` key.
 - **Untrusted names are filtered and capped.** The names are the tool's data
   and may hold injection text or another person's names: a name outside one
   plain printable line (no control, separator, invisible format, surrogate or
   private-use character) or over 128 characters is dropped and counted
   (`known_names.dropped`), and at most 20 are shown.
 - **The cost is bounded.** A looked-for value over 128 characters, or a list
-  over 10,000 names (`MAX_NAMES_RANKED`), ranks nothing — the count is served
-  alone.
+  over 10,000 names, ranks nothing — the count is served alone.
 - **The count must agree with the names.** When `names` is given its length
   must equal `count`, so the names shown can never outnumber it; anything else
   is refused (`names-count-mismatch`).
@@ -826,11 +833,7 @@ The laws, each pinned by a test:
   are the bytes they always were.
 
 **The surface, named.** `absent()` takes an `AbsenceAmongDeclaration` — the
-usual declaration with `among: AmongDeclaration` and `checked` optional. The
-composed items are typed `NamesFacetItem` (the `checked` facet) and
-`SourceGapItem` (the gap); the model's block is `KnownNames`. The limits are
-exported as data: `KNOWN_NAMES_SHOWN` (20 names shown), `MAX_NAME_CHARS` (128
-characters) and `MAX_NAMES_RANKED` (10,000 names ranked).
+usual declaration with `among: AmongDeclaration` and `checked` optional.
 
 ## What a clean result does not rule out — `coverage()`
 

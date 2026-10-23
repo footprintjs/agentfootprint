@@ -795,23 +795,30 @@ if (!array) return absent({
   author's own `checked`, `notChecked` and `cannotCover` follow the composed
   items; nothing removes the gap but `authoritative: { why }`, which
   `check:semantics` lists (`authoritative-names`).
-- **`known_names` — model-only.** The count always; the
+- **`known_names` — never part of the result.** Only with `visible: 'caller'`
+  — required, no default, because a default-visible list enumerates one
+  principal's names to another — the model sees the count and the
   `KNOWN_NAMES_SHOWN` (20) names nearest the looked-for value, under the one
   spelling (`../../lib/normalize.ts` · `normalizeToken`, moved down from
-  `tools/` for this), only with `visible: 'caller'` — required, no default,
-  because a default-visible list enumerates one principal's names to another.
-  A name outside one plain printable line (`lib/plainLine.ts` plus surrogates
-  and private use) or over `MAX_NAME_CHARS` (128) is dropped and counted.
-- **No event field carries the names.** `../../core/agent/stages/toolCalls.ts`
-  · `capResults` builds `stream.tool_end`'s pair from `among.ts` ·
-  `withoutKnownNames` BEFORE `maxToolResultChars` caps it (a truncated head is
-  a string no strip can read); `tools.absent` and the `coverageDeclared` row
-  copy items field by field and never had the block. The conversation the
-  model read — history, `iteration_end.history`, the messages slot's
-  `context.injected`, a narrative entry's `rawValue`, `lastToolResult` — holds
-  them, as it holds every tool result; the narrative's sentences do not. Only
-  an absence that carries the names facet loses the key, so a tool that hand-
-  attached its own `known_names` to a plain absence keeps its bytes.
+  `tools/` for this). A name outside one plain printable line
+  (`lib/plainLine.ts` plus surrogates and private use) or over
+  `MAX_NAME_CHARS` (128) is dropped and counted.
+- **One channel, one attach point.** A strip on the way to an event loses to
+  the first rule that reshapes the result (JSON text, a wrapper, a truncated
+  head — each found by review), so the names never enter the result:
+  `absent()` keeps them on a module-private `WeakMap` keyed by the envelope
+  object it returns (`among.ts` · `keepKnownNames`), and the dispatch door
+  attaches them in ONE place, the model-bound message, after every
+  `onToolResult` rule, the placement and the cap
+  (`../../core/agent/stages/toolCalls.ts` · `messageTextOf`, by `among.ts` ·
+  `withKnownNames`: beside an absence, inside a ledger, at an object's top,
+  or as one `known_names:` line after text). A result an after-tool rule
+  DENIED is served none. Every rule, `stream.tool_end`, `tools.absent`, the
+  ledger and the `coverageDeclared` row see a result that never held them; the
+  conversation (history, `iteration_end.history`, the messages slot's
+  `context.injected`, a narrative entry's `rawValue`, `lastToolResult`) is
+  where they live. A copy of the envelope carries no channel, so its names
+  are not served — the safe direction.
 - **Bounded cost.** A looked-for spelling over 128 code points, or a list over
   `MAX_NAMES_RANKED` (10,000) names, ranks nothing and serves the count alone;
   otherwise one comparison is at most 128 × 128 cells (≈ 0.4 s measured for the
@@ -829,9 +836,11 @@ if (!array) return absent({
   declaration carries them onto the row. Names from a third-party tool still
   ground, as any extra key does.
 
-Pinned by `test/core/agent/coverage-among.test.ts` (the mint, the bounds, a
-seeded property, byte identity) and `test/core/agent/coverage-among-run.test.ts`
-(the loop: the served value, the events, the cap, the schema-malformed value).
+Pinned by `test/core/agent/coverage-among.test.ts` (the mint, the channel,
+the bounds, a seeded property, byte identity) and
+`test/core/agent/coverage-among-run.test.ts` (the loop: rules that stringify,
+wrap or deny the result, the cap, a seeded property over JSON-ish rule chains,
+the schema-malformed value).
 
 ## What the framework does with them
 
@@ -980,7 +989,7 @@ armed: the final branch cannot write back, and one key has one writer.
 | `refusal.ts`    | how every helper refuses (§ 5): the one prefix, `refused: `, and the one unknown-key check, naming the spelling meant                                                                                                                                                                         |
 | `recognize.ts`  | the two recognizers (`readAbsence`, `readCoverageLedger`) and the two markers — a leaf, so a post-hoc reader loads them without the mints                                                                                                                                                     |
 | `absent.ts`     | `absent()`, the static note, and the ONE rule set for a suggestion (`tryInsteadOfAbsence` and `tryInsteadToolOfAbsence` read by it); re-exports its recognizer                                                                                                                                |
-| `among.ts`      | the `among` rule set (§ 9): `mintAmong` (the names facet, the irremovable gap, `known_names`), `namesFacetOf`, and `withoutKnownNames` — the strip that keeps the names off every event field |
+| `among.ts`      | the `among` rule set (§ 9): `mintAmong` (the names facet, the irremovable gap, the names), `namesFacetOf`, and the names channel — `keepKnownNames`, `knownNamesFor`, `withKnownNames` (the one attaching rule) |
 | `ledger.ts`     | `coverage()` and the static note; re-exports its recognizer                                                                                                                                                                                                                                   |
 | `emptiness.ts`  | the ONE reader of what came back (§ 6) — typed routes, the door the record holds, what a value's own envelope declares (`declaredByValue`), the `rowsAt` rule                                                                                                                                 |
 | `read.ts`       | the ONE reader both dispatch boundaries and the raise site (`../../core/agent/stages/toolCalls.ts` · `declareRaisedAbsence`) call — lifts the suggestion beside the coverage                                                                                                                                |
