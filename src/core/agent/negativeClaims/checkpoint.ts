@@ -56,6 +56,7 @@ export function negativeCheckpointOf(container: unknown): NegativeCheckpoint | u
       !Number.isSafeInteger(call.batch) ||
       typeof call.dispatched !== 'boolean' ||
       typeof call.trustedContext !== 'boolean' ||
+      (call.rowsMayDisplay !== undefined && call.rowsMayDisplay !== true) ||
       !['ok', 'error', 'not-run'].includes(call.outcome) ||
       typeof call.toolName !== 'string' ||
       call.arguments === null ||

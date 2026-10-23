@@ -71,8 +71,9 @@ be within the admitted caller scope.
 />
 
 An established entry gains `statement`, `delivery: 'record-composed'` and `version`.
-Display that marker beside the sentence. The delivered `about` is a quoted,
-sanitized model label, not an evidence identity. The answer-level delivery is
+Display that marker beside the sentence. The delivered `about` keeps the original
+model string or number, so app comparisons still work. Only the library sentence
+quotes and sanitizes values; `about` is not an evidence identity. The answer-level delivery is
 `as-checked` only when its sole field consists of established library statements;
 any other field makes it `recorded`. That marker never verifies surrounding model
 text. The model-input parser describes only
@@ -89,7 +90,12 @@ history and memory receive the same statements and gaps.
 | Setting              | Delivery                                                                                                                         |
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | `withhold` (default) | Withhold the whole answer; the caller receives `AnswerValidationError`, HTTP hosts return 422 and AG-UI reports `RUN_ERROR`.     |
-| `state-searched`     | Replace the entry with what the admitted record says was searched. The failed or unverified standing stays failed or unverified. |
+| `state-searched`     | Replace the entry with what the admitted record says was searched and any admitted contrary result. The failed or unverified standing stays failed or unverified. |
+
+A contrary read is named by its result handle and shows bounded, quoted native
+row values when they survived middleware, placement and truncation unchanged.
+Otherwise its count is reported without re-exposing hidden values. A positive
+result without a coverage declaration is explicitly labelled that way.
 
 A bad citation gets one correction request naming valid handles, with no tools
 available. If `.outputSchema()` enables retries, schema correction shares that

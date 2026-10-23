@@ -112,7 +112,7 @@ describe('delivered negative statements explain the actual failure', () => {
       ),
     ]);
     const text = result.answer.claims[0]?.statement ?? '';
-    expect(text.match(/Contrary recorded evidence:/g)).toHaveLength(12);
+    expect(text.match(/Contrary recorded evidence \(read /g)).toHaveLength(12);
     expect(text).toContain('2 additional positive reads');
     expect(result.answer.claims[0]?.restsOn).toHaveLength(15);
   });
@@ -179,18 +179,19 @@ describe('delivery markers describe the whole candidate', () => {
   }
 });
 
-describe('about is quoted model text, never a new evidence binding', () => {
-  it('quotes and sanitizes the delivered about display', () => {
+describe('about stays model data, never a new evidence binding', () => {
+  it('keeps the original about data and quotes only the statement', () => {
     const raw = 'pay\u202ements\n`admin`';
     const result = render([incidentCall({ service: raw })], { value: candidate(raw) });
     expect(result.answer.checks[0]?.code).toBe('established');
-    expect(result.answer.claims[0]?.about).toBe(quoteValue(raw));
-    expect(result.answer.claims[0]?.about).not.toMatch(/[\p{Cc}\p{Cf}]/u);
+    expect(result.answer.claims[0]?.about).toBe(raw);
+    expect(result.answer.claims[0]?.statement).toContain(quoteValue(raw));
+    expect(result.answer.claims[0]?.statement).not.toMatch(/[\p{Cc}\p{Cf}]/u);
   });
   it('binds the original about before display normalization', () => {
     const result = render([incidentCall()], { value: candidate('pay\u202ements') });
     expect(result.answer.checks[0]?.code).toBe('about-mismatch');
-    expect(result.answer.claims[0]?.about).toBe('`payments`');
+    expect(result.answer.claims[0]?.about).toBe('pay\u202ements');
     expect(result.answer.claims[0]?.statement).not.toContain('found none');
   });
 });

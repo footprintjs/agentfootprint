@@ -1,12 +1,12 @@
 /** Runtime admission and delivery for typed negative citations. The pure checker
  * compares reads; this boundary additionally binds every citation to this app's
  * admitted dispatches and trusted caller context. Model text is never evidence. */
+import { readResultIdentity } from '../../../integrity/claim-binding/capture.js';
 import { MAX_NEGATIVE_CLAIMS } from '../../../integrity/negative-claim/limits.js';
 import { judgeTypedNegatives } from '../../../integrity/negative-claim/judge.js';
 import { sameValue, scopeOf, returnedReading } from '../../../integrity/negative-claim/readings.js';
 import {
   composeRecordedStatement,
-  quoteValue,
   STATEMENT_VERSION,
 } from '../../../integrity/negative-claim/statement.js';
 import type {
@@ -210,7 +210,9 @@ export function renderNegativeCandidate(
             (other) =>
               other.turn === record.turn &&
               trusted(other) &&
-              other.row?.composed === 'local' &&
+              other.effect === 'read' &&
+              scopeOf(other) !== undefined &&
+              (other.row === undefined || other.row.composed === 'local') &&
               other.keptOut !== true &&
               config.tools.includes(other.toolName) &&
               !reads.some((read) => read.resultId === other.resultId) &&
@@ -235,11 +237,11 @@ export function renderNegativeCandidate(
           record.clock,
           {
             refusal,
-            contraryReads: contrary.flatMap((call) =>
-              call.row === undefined
-                ? []
-                : [{ call, row: call.row, tool: record.tools[call.toolName] }],
-            ),
+            contraryReads: contrary.map((call) => ({
+              call,
+              row: call.row,
+              tool: record.tools[call.toolName],
+            })),
           },
         ).text
       : refusal;
@@ -247,9 +249,13 @@ export function renderNegativeCandidate(
     correction ||= row.code === 'citation-unresolved' || row.code === 'stale-turn';
     claims.push({
       kind: row.kind,
-      ...(validAbout ? { about: quoteValue(about) } : {}),
+      ...(validAbout ? { about: about as string | number } : {}),
       restsOn:
-        canDescribe || established ? [...reads, ...contrary].map((call) => call.row!.handle) : [],
+        canDescribe || established
+          ? [...reads, ...contrary].map(
+              (call) => call.row?.handle ?? `r${readResultIdentity(call.resultId).ordinal}`,
+            )
+          : [],
       statement: statement ?? "I don't know. No admitted search supports this claim.",
       delivery: 'record-composed',
       version: STATEMENT_VERSION,
@@ -266,7 +272,8 @@ export function renderNegativeCandidate(
         call.toolName === tool &&
         call.turn === record.turn &&
         returnedReading(call) &&
-        call.row?.composed === 'local' &&
+        (call.row?.composed === 'local' ||
+          (call.row === undefined && call.effect === 'read' && call.scope !== undefined)) &&
         call.keptOut !== true &&
         trusted(call),
     ).length,

@@ -358,6 +358,18 @@ function amongRow(
   };
 }
 
+/** The same recognized row shapes at native capture and final display admission.
+ * Final model text is used only to check that native rows survived; never as evidence. */
+function rowsOf(value: unknown): readonly Readonly<Record<string, unknown>>[] | undefined {
+  const envelope = readToolResultEnvelope(value);
+  const raw = envelope === undefined ? value : envelope.content;
+  const sem = readSemantics(raw);
+  const ledger = readCoverageLedger(raw) ?? readDeclaredLedger(raw);
+  let rows: unknown = sem?.facts ?? sem?.series ?? sem?.edges ?? ledger?.result ?? raw;
+  if (!Array.isArray(rows) && record(rows) && Array.isArray(rows.rows)) rows = rows.rows;
+  return Array.isArray(rows) && rows.every(record) ? rows : undefined;
+}
+
 /** Snapshot immediately on native return, before teardown, observers and middleware. */
 export function captureNegativeResult(
   scope: TypedScope<AgentState>,
@@ -396,9 +408,7 @@ export function captureNegativeResult(
         ...(sem !== undefined && { described: sem }),
       },
     });
-    let rows: unknown = sem?.facts ?? sem?.series ?? sem?.edges ?? ledger?.result ?? raw;
-    if (!Array.isArray(rows) && record(rows) && Array.isArray(rows.rows)) rows = rows.rows;
-    const rowsRead = Array.isArray(rows) && rows.every(record) ? rows : undefined;
+    const rowsRead = rowsOf(raw);
     const notRead =
       envelope?.status !== undefined &&
       ['invalid', 'denied', 'failure', 'pending'].includes(envelope.status);
@@ -533,6 +543,39 @@ export function serveNegativeHandle(
   text: string,
 ): string {
   const call = stateOf(scope)?.calls.find((c) => c.resultId === resultId);
+  // This boundary receives the serialized result AFTER middleware, artifact
+  // placement and truncation. A projection may hide native row values; it cannot
+  // introduce display evidence. Older checkpoints carry no display permission.
+  if (call?.rowsRead !== undefined && !call.keptOut && call.outcome === 'ok') {
+    let rowsMayDisplay = false;
+    try {
+      if (text.length <= MAX_BYTES) {
+        const delivered: unknown = JSON.parse(text);
+        // semanticsForModel removes the private marker but retains these data
+        // slots. A slot can only permit display by matching the native rowset.
+        const candidates = [
+          rowsOf(delivered),
+          ...(record(delivered) ? [delivered.facts, delivered.series, delivered.edges] : []),
+        ];
+        const native = stableJson(call.rowsRead);
+        rowsMayDisplay =
+          native !== undefined &&
+          candidates.some(
+            (candidate) =>
+              Array.isArray(candidate) &&
+              candidate.every(record) &&
+              stableJson(candidate) === native,
+          );
+      }
+    } catch {
+      /* A summary or truncation marker is not an unchanged rowset. */
+    }
+    replace(scope, call.resultId, (current) => {
+      const next = { ...current };
+      delete (next as { rowsMayDisplay?: true }).rowsMayDisplay;
+      return { ...next, ...(rowsMayDisplay && { rowsMayDisplay: true as const }) };
+    });
+  }
   if (call?.row === undefined || call.keptOut || call.outcome !== 'ok') return text;
   const row = call.row;
   return `${text}\n${JSON.stringify({

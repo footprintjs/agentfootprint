@@ -59,6 +59,9 @@ export interface TurnCall {
   readonly rows?: number;
   /** The rows it read, as plain records — only their identity and filtered fields are read. */
   readonly rowsRead?: readonly Readonly<Record<string, unknown>>[];
+  /** Row values survived the final model-result projection unchanged. Only permits display,
+   * never supplies evidence; absent on older checkpoints and transformed/hidden results. */
+  readonly rowsMayDisplay?: true;
   /** The column that names a row (`resultColumns`' id column); else a fact's `entity`. */
   readonly idColumn?: string;
   /** The composed row (#199's `ComposedCoverage`) — present when a `search` tool's call returned. */

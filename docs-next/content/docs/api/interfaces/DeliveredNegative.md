@@ -12,11 +12,11 @@ One library-written negative statement, shared by delivery and its event.
 
 ### about?
 
-> `readonly` `optional` **about?**: `string`
+> `readonly` `optional` **about?**: `string` \| `number`
 
 Defined in: [src/events/payloads.ts:3670](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L3670)
 
-Quoted, sanitized model citation text for display, never an evidence identity.
+Original model citation value. Quote only when rendering it as text; not an evidence identity.
 
 ***
 

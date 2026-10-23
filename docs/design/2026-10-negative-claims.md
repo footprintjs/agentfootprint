@@ -21,8 +21,8 @@ consistent fabricated checkpoint is not authenticated by these checks. Actual
 dispatch spans identify relative windows, rather than the words of the duration.
 Schema and citation corrections share the existing one-extra-call budget and
 disable tools; rejected drafts stay out of conversation history and memory.
-Statement template version 4 distinguishes refusal reasons, includes contrary
-observations, and dates earlier-turn citations. Model labels are quoted. Every
+Statement template version 5 distinguishes refusal reasons, includes contrary
+observations (bounded native values, only when admitted for display), and dates earlier-turn citations. Model labels remain raw in data and are quoted only in sentences. Every
 original free-form string is observed within global 65,536-code-unit / 256-string / 32-claim
 budgets; skipped work files a note. Other fields remain unchecked model prose and
 make delivery `recorded`; prose findings make the fold not-sure without blocking.

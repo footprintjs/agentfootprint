@@ -41,7 +41,7 @@ type DeclaredTool = SearchTool;
 const instantMs = (value: unknown): number | undefined => instantOf(value, 'lenient')?.ms;
 
 /** Bump with any change to a template or to how a value is rendered. */
-export const STATEMENT_VERSION = '4';
+export const STATEMENT_VERSION = '5';
 
 const VALUE_CHARS = 64;
 const GAP_CHARS = 120;
@@ -269,6 +269,23 @@ function identities(call: TurnCall): string[] {
   });
 }
 
+/** Display only unchanged native rows admitted at the final tool-result boundary.
+ * An arbitrary id/key field has no identity contract, so its row is quoted as
+ * data instead of guessing a business identity. Both values and row lists cap. */
+function returnedValues(call: TurnCall): string | undefined {
+  if (call.rowsMayDisplay !== true || !call.rowsRead?.length) return undefined;
+  const column = call.idColumn ?? 'entity';
+  const values = call.rowsRead.slice(0, LIST_ITEMS).map((row) => {
+    const id = Object.hasOwn(row, column) ? row[column] : undefined;
+    return quoteValue(typeof id === 'string' || typeof id === 'number' ? id : row);
+  });
+  const more = Math.max(0, (call.rows ?? call.rowsRead.length) - values.length);
+  return attributed(
+    `returned ${values.join(', ')}${more > 0 ? `, and ${more} more rows` : ''}`,
+    'result',
+  );
+}
+
 /** What the tool declares about a server cap — said only when the declaration is in hand. */
 function serverCapPart(tool: DeclaredTool | undefined): string[] {
   if (tool?.search === undefined) return [];
@@ -315,6 +332,10 @@ function clauseOf(
     : `${toolName} found none`;
   const { window, unchecked } = periodParts(row);
   const parts = scopeParts(row, among);
+  if (recorded && call.emptiness === 'non-empty') {
+    const values = returnedValues(call);
+    if (values !== undefined) parts.push(values);
+  }
   if (window !== undefined) parts.push(window);
   const measured = among ? instantMs(names.measuredAt) : undefined;
   if (measured !== undefined) parts.push(`read ${formatInstant(measured, clock)}`);
@@ -369,7 +390,7 @@ export function composeRecordedStatement(
     /** Only caller-scoped local observations admitted by the delivery boundary. */
     readonly contraryReads: readonly {
       readonly call: TurnCall;
-      readonly row: ComposedSearchRow;
+      readonly row?: ComposedSearchRow;
       readonly tool?: DeclaredTool;
     }[];
   },
@@ -377,7 +398,29 @@ export function composeRecordedStatement(
   const clauses = explanation === undefined ? [] : [explanation.refusal];
   const contrary = explanation?.contraryReads ?? [];
   for (const read of contrary.slice(0, LIST_ITEMS)) {
-    clauses.push(`Contrary recorded evidence: ${clauseOf('complete', read, clock, true)}`);
+    const handle = quoteValue(read.call.row?.handle ?? `r${ordinalOf(read.call)}`);
+    if (read.row !== undefined) {
+      clauses.push(
+        `Contrary recorded evidence (read ${handle}): ${clauseOf(
+          'complete',
+          { ...read, row: read.row },
+          clock,
+          true,
+        )}`,
+      );
+    } else {
+      const count = read.call.rows ?? read.call.rowsRead?.length;
+      const parts = [
+        `${quoteValue(read.call.toolName)} returned ${
+          count === undefined
+            ? 'matching rows with an undetermined count'
+            : `${count} ${count === 1 ? 'row' : 'rows'}`
+        }`,
+        returnedValues(read.call),
+        'coverage not declared for this result',
+      ].filter((part) => part !== undefined);
+      clauses.push(`Contrary recorded evidence (read ${handle}): ${parts.join('; ')}.`);
+    }
   }
   if (contrary.length > LIST_ITEMS)
     clauses.push(
