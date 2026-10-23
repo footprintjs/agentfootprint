@@ -172,13 +172,14 @@ const JSON_NUMBER = /-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/y;
  * typed answer — the whole answer one JSON object or array, which is what
  * `.outputSchema()` accepts (`JSON.parse` of the answer) — is read value by
  * value: every string as text (and every key, unless `valuesOnly`), every
- * number as the literal the answer WROTE. Read whole as text, compact JSON glues its punctuation onto
- * the values (`[5,100]` read as the thousands-separated `5100`, `[0.45,0.12]`
- * as one identifier, `[1200,9750]` as no value at all); read through the
- * parsed value, a number is the double it parses to (`9007199254740993` is
- * `9007199254740992`, `5.20` is `5.2` and loses the precision the rounding
- * rule judges). So the text is checked with `JSON.parse` and then read ONCE,
- * left to right: string literals decoded, number literals kept as written.
+ * number as the literal the answer WROTE. Read whole as text, compact JSON
+ * glues its punctuation onto the values (`[5,100]` read as the
+ * thousands-separated `5100`, `[0.45,0.12]` as one identifier, `[1200,9750]`
+ * as no value at all); read through the parsed value, a number is the double
+ * it parses to (`9007199254740993` is `9007199254740992`, `5.20` is `5.2` and
+ * loses the precision the rounding rule judges). So the text is checked with
+ * `JSON.parse` and then read ONCE, left to right: string literals decoded,
+ * number literals kept as written.
  *
  * One pass, no recursion (an answer is model output: its nesting is not a
  * call depth), yielded lazily: the reader decides how far it classifies and
