@@ -492,9 +492,17 @@ needs its builder call, or `build()` refuses. Their rows come after yours in
   never your field names: a key like `p95LatencyMs` or `sha256` is not looked
   up (so an answer keyed by data, an order id as a key, is not checked on its
   keys).
-- **The repair turn comes first.** Under `posture: 'guard'` the gate names the
-  unsupported values back to the model for one more ordinary turn, with the
-  tools still on the wire, before the validation runs. Only what survives it
+- **The repair turn comes first, and calls no tools.** Under `posture: 'guard'`
+  the gate names the unsupported values back to the model for one more ordinary
+  turn before the validation runs. Because the validation enforces, the answer
+  may yet be withheld, so that turn — and every call after it in the run — is
+  served no tools, and a tool call the model returns anyway is not run: a tool
+  that writes or sends (`issue_refund`) can never run a second time before the
+  answer is withheld. The library cannot tell a tool that only reads, so none
+  is offered; the model revises from what it already read, and the receipt
+  says why the list is empty (`tools.withheld: 'evidence-revision'`). Under
+  `mode: 'observe'` the repair turn keeps its tools, as without validation.
+  Only what survives the repair
   fails the row. `'assist'` asks for no repair, and `'rails'` keeps its own
   refusal, `UnsupportedValuesError`. A contradicted claim gets no repair turn of
   its own: its answer is withheld.

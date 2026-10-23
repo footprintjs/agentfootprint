@@ -6,8 +6,10 @@
  * field that contradicts the fact a tool settled — or a value no tool result
  * carried — is a failed row of the enforcing validation: the answer is withheld
  * (no draft token streams) and `run()` throws `AnswerValidationError`. Under
- * `posture: 'guard'` the gate's one repair turn runs first, tools still on the
- * wire, and only what survives it is withheld.
+ * `posture: 'guard'` the gate's one repair turn runs first — served no tools,
+ * because the validation enforces: a tool that writes or sends never runs a
+ * second time before the answer is withheld — and only what survives it is
+ * withheld.
  *
  * Run:  npm run example examples/features/107-agent-checks-govern-delivery.ts
  */
@@ -96,7 +98,8 @@ function agentAnswering(answer: BuildReport, repair?: BuildReport) {
     .tool(readBuild)
     .outputSchema(buildReport)
     .claims({ durationMs: { entity: 'build-job-72', field: 'durationMs' } })
-    // 'guard': an invented value first gets ONE repair turn, tools on the wire.
+    // 'guard': an invented value first gets ONE repair turn — no tools on it,
+    // since the validation enforces: the model revises from what it read.
     .namesAndNumbersFromEvidence({ posture: 'guard' })
     .answerValidation(validation)
     .build();
@@ -120,7 +123,8 @@ export async function run(input: string): Promise<string> {
     .map((c) => c.id);
   check(passedBy?.join() === 'asked-job', 'only your check to pass the report');
 
-  // 2. The answer invents 9750; its repair turn reads 1250 back: delivered.
+  // 2. The answer invents 9750; its repair turn answers 1250, from the result
+  //    it already read: delivered.
   const repaired = await agentAnswering(INVENTED, READ).run({ message: input });
   check(repaired === JSON.stringify(READ), 'the repaired answer to be delivered');
 
@@ -135,7 +139,9 @@ export async function run(input: string): Promise<string> {
     'both agent rows to fail',
   );
 
-  return `agrees → delivered · repaired → delivered · kept → ${report.status} (${failed.join(', ')})`;
+  return `agrees → delivered · repaired → delivered · kept → ${report.status} (${failed.join(
+    ', ',
+  )})`;
 }
 
 if (isCliEntry(import.meta.url)) {

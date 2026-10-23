@@ -257,6 +257,15 @@ wire — the model can go and FETCH the value it guessed at. One revision per
 turn, latched, because a model that cannot ground a value on its second try
 will not ground it on its fifth.
 
+Under an ENFORCING answer validation the revision is served NO tools, and nor
+is any later call of the run (`AgentState.toolsOffAfterRevision`, written by
+`stages/evidenceRecheck.ts`): the answer may yet be withheld, so a tool that
+writes or sends must not run again first, and the library cannot tell a tool
+that only reads. One rule decides the withheld list (`composeRequest.ts` ·
+`toolsWithheld`, asked by `callLLM` and `servedView`), and Route's dispatch
+test (`willDispatch`, asked by Route and the inputs layer) refuses any call the
+model returns anyway. A run resumed after its revision keeps the tools off.
+
 ## The extractor, in one paragraph
 
 A token is data only if it contains a digit AND is distinctive: an identifier

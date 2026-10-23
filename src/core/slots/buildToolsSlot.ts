@@ -433,7 +433,8 @@ export interface ToolsSlotConfig {
    * narrowed list by construction. The pick is awaited: the stage returns a
    * promise under this gate and stays synchronous without it. Reads three
    * mount args under this gate only: `userMessage`, `priorToolChoices` (the
-   * parent's rows, a frozen input the slot never writes) and `wrapUpAsked`.
+   * parent's rows, a frozen input the slot never writes), `wrapUpAsked` and
+   * `toolsOffAfterRevision`.
    * The module that asks is loaded through `import()` — an unarmed agent
    * never loads it.
    */
@@ -625,6 +626,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       userMessage?: string;
       priorToolChoices?: readonly ToolChoiceEntry[];
       wrapUpAsked?: boolean;
+      toolsOffAfterRevision?: boolean;
     }>();
     const iteration = args.iteration ?? 1;
 
@@ -1182,6 +1184,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
         ...(args.currentSkillId !== undefined && { currentSkillId: args.currentSkillId }),
         prior: args.priorToolChoices ?? [],
         wrapUpAsked: args.wrapUpAsked === true,
+        toolsOff: args.toolsOffAfterRevision === true,
       }).then(({ served, servedInjections, narrowedTo }) =>
         loadingRules === undefined
           ? commitWire(served, servedInjections, narrowedTo, undefined)

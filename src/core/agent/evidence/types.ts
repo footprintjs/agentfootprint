@@ -234,6 +234,15 @@ export interface ResolvedEvidenceGate {
   /** Present only when true: an absent dial preserves resolved default bytes. */
   readonly decimalRounding?: true;
   readonly recoveryInstruction?: EvidenceRecoveryInstruction;
+  /**
+   * Set by the agent, never by `resolveEvidenceGate`: a posture that can
+   * revise under an ENFORCING answer validation. The revision and every later
+   * call of the run are then served no tools and dispatch none
+   * (`AgentState.toolsOffAfterRevision`). One fact, read by the recheck
+   * stage, request assembly, Route, the inputs layer and seed — each reads the
+   * state key only under it, so an unarmed agent reads nothing new.
+   */
+  readonly toolsOffAfterRevision?: true;
 }
 
 /** The gate's verdict on one answer. */

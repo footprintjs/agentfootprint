@@ -441,6 +441,10 @@ describe('route.ts · willDispatch — the one dispatch test', () => {
       },
       false,
     ],
+    // The run's tools are off after the evidence revision (an enforcing
+    // answer validation): a call the model returns anyway never runs.
+    [{ callCount: 1, iteration: 3, maxIterations: 10, toolsOff: true }, false],
+    [{ callCount: 1, iteration: 3, maxIterations: 10, toolsOff: false }, true],
   ] as const)('%j → %s', (values, dispatches) => {
     expect(willDispatch(values)).toBe(dispatches);
   });

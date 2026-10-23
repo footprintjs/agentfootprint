@@ -21,6 +21,8 @@ import {
   type LLMProvider,
   type LLMRequest,
   type OutputSchemaParser,
+  receiptAt,
+  servedAt,
 } from '../../src/index.js';
 import type { Payloads } from '../../src/events.js';
 import { known } from '../../src/doors/maps.js';
@@ -560,13 +562,12 @@ describe('security: a colon inside a value is part of it — an address is not t
 
 for (const reactMode of REACT_MODES) {
   describe(`functional: the repair turn comes first (posture guard) — ${reactMode}`, () => {
-    it('the model fetches during its one repair turn; the repaired answer is delivered unchanged', async () => {
+    it('the model answers from what it read during its one repair turn; the repaired answer is delivered unchanged', async () => {
       const { agent, source, seen, lookups } = orderAgent(
         [
           { toolCalls: [FIND_ORDER] },
-          { content: INVENTED }, // flagged → one repair turn, tools still on the wire
-          { toolCalls: [{ ...FIND_ORDER, id: 'find-2' }] }, // the repair turn calls a tool
-          { content: READ },
+          { content: INVENTED }, // flagged → one repair turn, served no tools (enforce)
+          { content: READ }, // the repair answers from the result already read
         ],
         'guard',
         reactMode,
@@ -578,9 +579,10 @@ for (const reactMode of REACT_MODES) {
         ['revision-asked', false],
         ['grounded', true],
       ]);
-      expect(source.requests).toHaveLength(4);
-      expect(source.requests[2]!.tools?.map((t) => t.name)).toContain('find_order');
-      expect(lookups()).toBe(2);
+      expect(source.requests).toHaveLength(3);
+      expect(source.requests[1]!.tools?.map((t) => t.name)).toContain('find_order');
+      expect(source.requests[2]!.tools ?? []).toEqual([]);
+      expect(lookups()).toBe(1);
       // Draft tokens were held throughout: only the delivered answer streamed.
       expect(seen.tokens).toEqual([READ]);
       expect(seen.ends).toEqual([READ]);
@@ -714,6 +716,215 @@ describe('functional: a repair that keeps the invented value is withheld', () =>
         '1 value(s) the answer states appear in no tool result the run read, after the one repair turn',
     });
     expect(seen.tokens).toEqual([]);
+  });
+});
+
+// ── The revision turn under an enforcing validation calls no tools ─────────
+
+/**
+ * A refund agent: the tool WRITES (it issues a refund), and the gate's one
+ * revision turn must not run it again before the answer is judged. The answer
+ * names an order no tool result carried, so the gate asks for its revision.
+ */
+function refundRepairAgent(
+  turns: readonly Turn[],
+  reactMode: (typeof REACT_MODES)[number],
+  mode: 'enforce' | 'observe' = 'enforce',
+) {
+  let refunds = 0;
+  const source = scripted(turns);
+  const agent = Agent.create({
+    provider: source.provider,
+    model: 'synthetic',
+    maxIterations: 6,
+    reactMode,
+  })
+    .tool(
+      defineTool({
+        name: 'issue_refund',
+        description: 'Issue the refund for the order in question.',
+        inputSchema: { type: 'object', properties: {} },
+        execute: () => {
+          refunds++;
+          return READ;
+        },
+      }),
+    )
+    .outputSchema(orderAnswer)
+    .namesAndNumbersFromEvidence({ posture: 'guard' })
+    .answerValidation<OrderAnswer>({
+      id: 'refunds',
+      version: '1',
+      mode,
+      agentChecks: ['names-and-numbers'],
+      validate: () => ({ checks: [{ id: 'asked-refund', disposition: 'checked-pass' }] }),
+    })
+    .build();
+  return { agent, source, refunds: () => refunds };
+}
+
+const REFUND: ToolCall = { id: 'refund-1', name: 'issue_refund', args: {} };
+
+for (const reactMode of REACT_MODES) {
+  describe(`security: under an enforcing validation the revision turn calls no tools — ${reactMode}`, () => {
+    it('a revision that asks for the refund again does not run it: the refund ran once', async () => {
+      const { agent, source, refunds } = refundRepairAgent(
+        [
+          { toolCalls: [REFUND] },
+          { content: INVENTED }, // an order no result carried → the one revision
+          { toolCalls: [{ ...REFUND, id: 'refund-2' }] }, // the revision asks to refund again
+          { content: INVENTED },
+          { content: INVENTED },
+        ],
+        reactMode,
+      );
+
+      const outcome = await agent.run({ message: 'Refund my order.' }).catch((e: unknown) => e);
+
+      expect(refunds()).toBe(1);
+      // The revision call was served no tools, and the call it returned was
+      // not run: the turn ended there, with nothing to deliver.
+      expect(source.requests).toHaveLength(3);
+      expect(source.requests[2]!.tools ?? []).toEqual([]);
+      expect(outcome).toBeInstanceOf(AnswerValidationError);
+      expect((outcome as AnswerValidationError).report.status).toBe('unverified');
+    });
+
+    it('a revision that answers AND asks for the refund: the answer is judged, the refund never runs', async () => {
+      const { agent, source, refunds } = refundRepairAgent(
+        [
+          { toolCalls: [REFUND] },
+          { content: INVENTED },
+          { content: READ, toolCalls: [{ ...REFUND, id: 'refund-2' }] },
+        ],
+        reactMode,
+      );
+      const rationales: string[] = [];
+      agent.on('agentfootprint.agent.route_decided', (e) => {
+        if (e.payload.rationale !== undefined) rationales.push(e.payload.rationale);
+      });
+
+      expect(await agent.run({ message: 'Refund my order.' })).toBe(READ);
+      expect(refunds()).toBe(1);
+      expect(source.requests).toHaveLength(3);
+      expect(rationales.at(-1)).toBe(
+        'tools are off after the evidence revision (answer validation enforces) — forcing final',
+      );
+    });
+
+    it('a revision that answers from what was read is delivered, with no tool on its call', async () => {
+      const { agent, source, refunds } = refundRepairAgent(
+        [{ toolCalls: [REFUND] }, { content: INVENTED }, { content: READ }],
+        reactMode,
+      );
+
+      expect(await agent.run({ message: 'Refund my order.' })).toBe(READ);
+      expect(refunds()).toBe(1);
+      expect(source.requests).toHaveLength(3);
+      expect(source.requests[1]!.tools?.map((t) => t.name)).toContain('issue_refund');
+      expect(source.requests[2]!.tools ?? []).toEqual([]);
+      // The revision says so, and the record says why the list is empty — the
+      // receipt as sent, and the view rebuilt from the commit log, alike.
+      expect(source.requests[2]!.systemPrompt).toContain('no tool can be called for this revision');
+      const snapshot = agent.getLastSnapshot()!;
+      expect(receiptAt(snapshot, 3)?.tools).toMatchObject({
+        names: [],
+        withheld: 'evidence-revision',
+      });
+      expect(servedAt(snapshot, 3)?.tools).toMatchObject({
+        names: [],
+        withheld: 'evidence-revision',
+      });
+      expect(receiptAt(snapshot, 2)?.tools.withheld).toBeNull();
+      expect(servedAt(snapshot, 2)?.tools.withheld).toBeUndefined();
+    });
+  });
+}
+
+describe('security: with the inputs layer armed, a refused call on the revision files no row', () => {
+  it('the layer judges only calls Route will run: no argument row, and no refund', async () => {
+    // `reason` is an ASK rule, so the inputs layer judges every refund call
+    // Route will dispatch. It must agree with Route about the revision's call,
+    // which never runs: a row for it would describe a call that did not happen.
+    let refunds = 0;
+    const source = scripted([
+      { toolCalls: [{ ...REFUND, args: { reason: 'damaged' } }] },
+      { content: INVENTED },
+      { toolCalls: [{ ...REFUND, id: 'refund-2', args: {} }] },
+    ]);
+    const agent = Agent.create({ provider: source.provider, model: 'synthetic', maxIterations: 6 })
+      .tool(
+        defineTool({
+          name: 'issue_refund',
+          description: 'Issue the refund for the order in question.',
+          inputSchema: { type: 'object', properties: { reason: { type: 'string' } } },
+          askOrAssume: { reason: { ask: 'Why is the order refunded?' } },
+          execute: () => {
+            refunds++;
+            return READ;
+          },
+        }),
+      )
+      .outputSchema(orderAnswer)
+      .namesAndNumbersFromEvidence({ posture: 'guard' })
+      .answerValidation<OrderAnswer>({
+        id: 'refunds',
+        version: '1',
+        agentChecks: ['names-and-numbers'],
+        validate: () => ({ checks: [{ id: 'asked-refund', disposition: 'checked-pass' }] }),
+      })
+      .build();
+
+    const outcome = await agent.run({ message: 'Refund my order.' }).catch((e: unknown) => e);
+
+    expect(outcome).toBeInstanceOf(AnswerValidationError);
+    expect(refunds).toBe(1);
+    expect(source.requests).toHaveLength(3);
+    // The layer filed rows for the call that ran, and none for the one Route
+    // refused to run.
+    const rowCalls = (agent.findings() ?? [])
+      .filter((r) => r.kind === 'argument')
+      .map((r) => (r as { toolCallId?: string }).toolCallId);
+    expect(rowCalls).toContain('refund-1');
+    expect(rowCalls).not.toContain('refund-2');
+  });
+});
+
+describe('security: a run resumed after its revision was asked keeps the tools off', () => {
+  it('the resumed revision call is served no tools and runs none', async () => {
+    // The provider fails on the revision call, so the run ends with a checkpoint.
+    const first = refundRepairAgent([{ toolCalls: [REFUND] }, { content: INVENTED }], 'dynamic');
+    const error = await first.agent.run({ message: 'Refund my order.' }).catch((e: unknown) => e);
+    const checkpoint = JSON.parse(JSON.stringify((error as { checkpoint: unknown }).checkpoint));
+    expect(checkpoint.evidenceRecovery).toMatchObject({ revisionSpent: true });
+
+    const resumed = refundRepairAgent([{ toolCalls: [{ ...REFUND, id: 'refund-2' }] }], 'dynamic');
+    const outcome = await resumed.agent.resumeOnError(checkpoint).catch((e: unknown) => e);
+
+    expect(resumed.source.requests).toHaveLength(1);
+    expect(resumed.source.requests[0]!.tools ?? []).toEqual([]);
+    expect(first.refunds() + resumed.refunds()).toBe(1);
+    expect(outcome).toBeInstanceOf(AnswerValidationError);
+  });
+});
+
+describe("contract: under mode: 'observe' the revision turn keeps its tools, as before", () => {
+  it('observe delivers either way, so the revision may still call a tool', async () => {
+    const { agent, source, refunds } = refundRepairAgent(
+      [
+        { toolCalls: [REFUND] },
+        { content: INVENTED },
+        { toolCalls: [{ ...REFUND, id: 'refund-2' }] },
+        { content: READ },
+      ],
+      'dynamic',
+      'observe',
+    );
+
+    expect(await agent.run({ message: 'Refund my order.' })).toBe(READ);
+    expect(source.requests[2]!.tools?.map((t) => t.name)).toContain('issue_refund');
+    expect(source.requests[2]!.systemPrompt).toContain('call an available tool when needed');
+    expect(refunds()).toBe(2);
   });
 });
 

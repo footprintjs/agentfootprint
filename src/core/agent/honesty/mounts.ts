@@ -117,6 +117,13 @@ import type { AgentState } from '../types.js';
 export interface InputsMountDeps {
   /** Filter refused references before input planning can consult host-supplied sources. */
   readonly findings?: true;
+  /**
+   * The evidence gate's revision turns the tools off (an enforcing answer
+   * validation) — present only then. The layer hands Route's dispatch test
+   * the run's `toolsOffAfterRevision`, so it never asks about a call Route
+   * will not run.
+   */
+  readonly toolsOffAfterRevision?: true;
   /** The implementation that will answer a name — the shared dispatch resolver's. */
   readonly toolOf: ToolOf;
   /**
@@ -247,6 +254,7 @@ export function buildInputsSubflow(deps: InputsMountDeps): FlowChart {
     willDispatch,
     emitRows,
     ...(deps.time !== undefined && { time: deps.time }),
+    ...(deps.toolsOffAfterRevision === true && { toolsOffAfterRevision: true as const }),
   };
   // Declared sources: the reader of each call's `from` and the corpora the checks
   // read live in `sourceCorpus.ts`, loaded on the first armed batch — so neither
@@ -373,6 +381,11 @@ export function mountInputsLayer<B extends FlowChartBuilder>(
           maxIterations: parent.maxIterations as number,
           ...(costBudgetHit !== undefined && { costBudgetHit }),
           ...(costBudgetOnExceed !== undefined && { costBudgetOnExceed }),
+          // Route's sixth dispatch value: the key exists only on a run whose
+          // tools went off after the evidence revision, so every other run
+          // hands nothing new.
+          ...(deps.toolsOffAfterRevision === true &&
+            parent.toolsOffAfterRevision === true && { toolsOff: true as const }),
           turnNumber: parent.turnNumber as number,
           ...(kept.length > 0 && { argumentAnswersKept: kept }),
           // Declared sources: the pieces the checks read — only under the arm,

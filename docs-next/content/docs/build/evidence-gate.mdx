@@ -79,7 +79,10 @@ different decisions.
 more ordinary turn, with its own `iteration_start` / `llm_start` bracket and its
 own `cost.tick` — and the tools are still on the wire, so the model can go and
 *fetch* the value it guessed at. One revision per turn, latched: a model that
-cannot ground a value on its second try will not on its fifth.
+cannot ground a value on its second try will not on its fifth. The one
+exception is an ENFORCING answer validation (below): there the answer may yet
+be withheld, so the revision and every later call of the run are served no
+tools and dispatch none, and a tool that writes or sends never runs twice.
 
 ```ts
 // guard, in the run's own record:
@@ -91,9 +94,11 @@ cannot ground a value on its second try will not on its fifth.
 
 **To withhold rather than flag** a typed answer, list the gate in an enforcing
 answer validation: `.answerValidation({ …, agentChecks: ['names-and-numbers'] })`.
-The posture still decides whether the model gets its one repair turn. Whatever
-survives it fails the validation, so the answer is withheld and no draft token
-of it is streamed. See
+The posture still decides whether the model gets its one repair turn, which is
+served no tools while the validation enforces: the library cannot tell a tool
+that only reads from one that writes, so a repair can never repeat a refund or
+a send before the answer is withheld. Whatever survives it fails the
+validation, so the answer is withheld and no draft token of it is streamed. See
 [Let the agent's own checks hold the answer](doc:output-schema) on the output
 schema page.
 

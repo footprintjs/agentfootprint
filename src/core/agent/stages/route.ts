@@ -78,7 +78,7 @@ export type RouteBranch =
   | 'evidence-recheck'
   | 'wrap-up';
 
-/** The five values Route's dispatch test reads — nothing else decides it. */
+/** The six values Route's dispatch test reads — nothing else decides it. */
 export interface DispatchValues {
   /** How many tool calls the model asked for in this batch. */
   readonly callCount: number;
@@ -86,6 +86,12 @@ export interface DispatchValues {
   readonly maxIterations: number;
   readonly costBudgetHit?: boolean;
   readonly costBudgetOnExceed?: 'warn' | 'halt';
+  /**
+   * The run's tools are off: the evidence gate asked for its revision under
+   * an enforcing answer validation (`AgentState.toolsOffAfterRevision`). The
+   * call was served no tools, so a tool call it returns anyway never runs.
+   */
+  readonly toolsOff?: boolean;
 }
 
 /**
@@ -109,7 +115,7 @@ export function willDispatch(v: DispatchValues): boolean {
   // decides that there will not be another one.
   const costHalt = v.costBudgetHit === true && v.costBudgetOnExceed === 'halt';
   const outOfIterations = v.iteration >= v.maxIterations;
-  return v.callCount > 0 && !outOfIterations && !costHalt;
+  return v.callCount > 0 && !outOfIterations && !costHalt && v.toolsOff !== true;
 }
 
 /**
@@ -274,12 +280,19 @@ export function declaredDefaultsFrom(
 const NO_TOOL_CALLS: FixedRouteRationale = 'LLM produced no tool calls — final answer';
 const FORCED_BY_ITERATIONS: FixedRouteRationale = 'maxIterations reached — forcing final';
 const FORCED_BY_COST: FixedRouteRationale = 'costBudget reached (onExceed: halt) — forcing final';
+const FORCED_BY_TOOLS_OFF: FixedRouteRationale =
+  'tools are off after the evidence revision (answer validation enforces) — forcing final';
 
 /** The base decision, with the sentence that explains it. Split out so the
  *  enforcement-enabled path can decide, then judge, then announce ONCE — an
  *  agent whose answer is about to be re-asked should not have a route event
  *  saying it finished. */
-function decideBranch(scope: TypedScope<AgentState>): {
+function decideBranch(
+  scope: TypedScope<AgentState>,
+  /** The gate's revision turns the tools off (`ResolvedEvidenceGate.toolsOffAfterRevision`);
+   *  only then is `toolsOffAfterRevision` read. */
+  toolsOffArmed = false,
+): {
   chosen: 'tool-calls' | 'final';
   rationale: string;
   /** Set when a LIMIT forced `'final'` while tool calls were still pending. */
@@ -294,12 +307,14 @@ function decideBranch(scope: TypedScope<AgentState>): {
   const costHalt = costBudgetHit === true && costBudgetOnExceed === 'halt';
   const maxIterations = scope.maxIterations;
   const outOfIterations = iteration >= maxIterations;
+  const toolsOff = toolsOffArmed && scope.toolsOffAfterRevision === true;
   const chosen = willDispatch({
     callCount: toolCalls.length,
     iteration,
     maxIterations,
     ...(costBudgetHit !== undefined && { costBudgetHit }),
     ...(costBudgetOnExceed !== undefined && { costBudgetOnExceed }),
+    ...(toolsOff && { toolsOff }),
   })
     ? 'tool-calls'
     : 'final';
@@ -331,6 +346,8 @@ function decideBranch(scope: TypedScope<AgentState>): {
         ? FORCED_BY_ITERATIONS
         : costHalt
         ? FORCED_BY_COST
+        : toolsOff && toolCalls.length > 0
+        ? FORCED_BY_TOOLS_OFF
         : NO_TOOL_CALLS,
     ...(earlyStop !== undefined && { earlyStop }),
   };
@@ -1419,7 +1436,10 @@ function buildJudgingDecider(
   answer?: AnswerRouteArm,
 ): (scope: TypedScope<AgentState>) => Promise<RouteBranch> {
   return async (scope) => {
-    const { chosen, rationale, earlyStop } = decideBranch(scope);
+    const { chosen, rationale, earlyStop } = decideBranch(
+      scope,
+      evidence?.toolsOffAfterRevision === true,
+    );
     if (chosen !== 'final') {
       emitRouteDecided(scope, chosen, rationale);
       return chosen;
@@ -1517,7 +1537,7 @@ function buildEnforcingDecider(
   answer?: AnswerRouteArm,
 ): (scope: TypedScope<AgentState>) => Promise<RouteBranch> {
   return async (scope) => {
-    const base = decideBranch(scope);
+    const base = decideBranch(scope, evidence?.toolsOffAfterRevision === true);
     if (base.chosen !== 'final') {
       emitRouteDecided(scope, base.chosen, base.rationale);
       return base.chosen;
@@ -1849,7 +1869,7 @@ export function buildRouteDeciderStage(
     (scope) => peelAnswerStandings(scope, true, args[9], args[10]),
     emitRouteDecided,
     (scope) => {
-      const base = decideBranch(scope);
+      const base = decideBranch(scope, args[3]?.toolsOffAfterRevision === true);
       return base.chosen === 'final' && !wantsWrapUp(scope, base.earlyStop, args[4] ?? false);
     },
   );

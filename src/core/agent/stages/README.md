@@ -29,7 +29,7 @@ One file per stage of the Agent chart, mounted by `buildAgentChart` /
 | outputRetry.ts | `.outputSchema()` re-ask branch |
 | outputAdmission.ts | pre-capture guard for an output-governed final branch. Consumes Route's refusal flag without walking the policy again; breaks before the selected composer, final events and memory writes. `prepareFinalFor` binds the declaration, and `captureTurnPayload` releases the captured answer once on acceptance. Raw audit state is not erased. |
 | stepNudge.ts | the unfinished-steps teaching re-ask (9.18.0): appends the premature answer + the nudge, once per turn, loops like SchemaRetry |
-| evidenceRecheck.ts | the evidence correction (9.35.0): names the values that appear in no tool result back to the model, once per turn, loops like SchemaRetry. Mounted only under `posture: 'guard' \| 'rails'`; the check itself lives in ../evidence/ |
+| evidenceRecheck.ts | the evidence correction (9.35.0): names the values that appear in no tool result back to the model, once per turn, loops like SchemaRetry. Mounted only under `posture: 'guard' \| 'rails'`; the check itself lives in ../evidence/. Under an enforcing answer validation it also writes `toolsOffAfterRevision`: the revision and every later call are served no tools and dispatch none |
 | reliabilityExecution.ts | in-loop reliability rules |
 | prepareFinal.ts / breakFinal.ts | final answer + `$break`. ONE body (`captureTurnPayload`), several entry points, all mounted in place of `prepareFinalStage` (same id, same position) and chosen in ONE place both builders call (`prepareFinalFor`): `prepareFinalWithLimitsStage` folds the run's declared coverage into the answer first, only under `.limitsTravelWithTheAnswer()` on a PROSE answer; `prepareFinalWithLimitsAsDataStage` is that option on a TYPED answer (`.outputSchema()`) — the answer is left as the model sent it and `turn_end.answerCoverage` projects the committed `answerCoverage` (JSON + prose is not JSON); `prepareFinalWithAnswerLayerStage` is every combination on an agent with the answer layer (honesty layer 4) — the same captures, plus `turn_end.answerAssessment` from the layer's stage one stage earlier and, under its line arm, the standing line appended to a prose answer (the line then owns the "Assumed" sentence). The answer is a PARAMETER because `llmLatestContent` is a read-only input to this branch subflow — the capture is the only place `finalContent`, `newMessages` and `turn_end` can be made to agree |
 | timeLayer.ts | the time layer's half of seed and ToolCalls (`.time()`): the clock stamp, the reading of the person's words, the dispatch moment (the `call` row, the drift redraw, `ctx.time`) and `clock-on-resume`. Loaded through `import()` ONLY when the agent armed `.time()` — seed's `fileTime`, ToolCalls' two dispatch sites and two resume entries — so the resolver and the conversions are not on the graph `import { Agent }` loads (the optional-family law of docs-next's site budget; pinned by `test/trace-toolpack/browserGraph.test.ts`). A plain seed returns before the import and stays synchronous |
@@ -351,7 +351,9 @@ export const WRAP_UP_INSTRUCTION =
 ```
 
 The tools are still withheld by `scope.wrapUpAsked` at request assembly in
-`callLLM` — a mechanism, never a sentence asking the model to abstain.
+`callLLM` — a mechanism, never a sentence asking the model to abstain. One rule
+decides it, beside the evidence revision's own (`toolsOffAfterRevision`):
+`composeRequest.ts` · `toolsWithheld`, asked by `callLLM` and `servedView`.
 
 `test/injection-engine/userTurnProducers.test.ts` walks `src/` for every
 `role: 'user'` construction site and fails on one that is neither a registered

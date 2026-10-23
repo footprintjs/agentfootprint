@@ -1784,8 +1784,11 @@ export class AgentBuilder {
    *     unchanged; you learn how often it happens before you act on it.
    *   • `'guard'` — the unsupported values are named back to the model, which
    *     gets ONE more ordinary turn (tools still on the wire, so it can go and
-   *     fetch what it guessed). Survivors ship flagged. **This is the
-   *     recommended posture for a weaker model.**
+   *     fetch what it guessed — except under an ENFORCING `.answerValidation()`,
+   *     where that turn and every later call of the run are served no tools,
+   *     so a tool that writes or sends never runs twice before the answer is
+   *     withheld). Survivors ship flagged. **This is the recommended posture
+   *     for a weaker model.**
    *   • `'rails'` — the same one revision, then `run()` raises
    *     `UnsupportedValuesError` rather than return an answer that still
    *     carries them.

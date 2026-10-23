@@ -35,6 +35,8 @@ export interface ComposeToolChoiceInput {
   /** The parent's rows — a frozen mount arg the slot never writes. */
   readonly prior: readonly ToolChoiceEntry[];
   readonly wrapUpAsked: boolean;
+  /** The run's tools are off after the evidence revision: nothing is served. */
+  readonly toolsOff?: boolean;
 }
 
 /** What the slot commits: the served list, its record, and the narrowed names when narrowed. */
@@ -76,6 +78,7 @@ export async function composeToolChoice(
     iteration,
     prior,
     wrapUpAsked: input.wrapUpAsked,
+    ...(input.toolsOff === true && { toolsOff: true }),
   });
   const servedNames = new Set(narrowing.served);
   const row: ToolChoiceEntry = pick.ok

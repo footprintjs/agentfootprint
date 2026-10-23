@@ -22,6 +22,33 @@
 import type { LLMMessage } from '../../provider-contract/types.js';
 import type { ContextRole } from '../../events/types.js';
 
+/**
+ * Why a call's tool list is withheld: the out-of-budget wrap-up, or the run's
+ * tools went off after the evidence revision under an enforcing answer
+ * validation.
+ */
+export type ToolsWithheld = 'wrap-up' | 'evidence-revision';
+
+/**
+ * THE TOOLS RULE — whether a call is served its tools, read from the two
+ * committed keys that decide it (`wrapUpAsked`, `toolsOffAfterRevision`).
+ * `callLLM` applies it on the way out and `servedView` on the way back, so the
+ * two cannot disagree about which call was served none.
+ *
+ * @example
+ * ```ts
+ * toolsWithheld(undefined, true); // 'evidence-revision'
+ * toolsWithheld(undefined, undefined); // null — the call is served its tools
+ * ```
+ */
+export function toolsWithheld(
+  wrapUpAsked: unknown,
+  toolsOffAfterRevision: unknown,
+): ToolsWithheld | null {
+  if (wrapUpAsked === true) return 'wrap-up';
+  return toolsOffAfterRevision === true ? 'evidence-revision' : null;
+}
+
 /** What the system-prompt join needs from an injection record. */
 export interface SystemPromptPiece {
   /** The piece's full text. Absent or empty ⇒ the piece contributes nothing. */
