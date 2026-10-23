@@ -284,6 +284,14 @@ const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_380_000, records: 2_000 };
 // viewer's eight generated API pages. EXPORT=true measures 225.06 MB across
 // 5,689 files, duplicate RSC pairs 0. The total allowance is 226 MB; page,
 // runtime JS, search, file-count and duplicate budgets stay fixed.
+// RAISED 2026-10-23, bytes only, for absent({ among }) and the overclaim
+// gate (PR #198) — REQUESTED there, pending the owner's approval at merge.
+// main measured 225.92 MB; the branch adds one section each on the tools,
+// middleware and semantic-results pages and three generated API pages
+// (AmongDeclaration, AbsenceAmongDeclaration, AllowOptions). CI measured
+// 226.57 MB across 5,692 files, duplicate RSC pairs 0. The total allowance
+// is 227 MB; page, runtime JS, search, file-count and duplicate budgets stay
+// fixed.
 // RAISED 2026-10-23, bytes only, for #199 (`Tool.search`): its three new public
 // names (ToolSearch, ComposedCoverage, isComposedCoverage — trimmed from ten) and
 // one tools-page section. CI with EXPORT=true: main 225.92 MB across 5,674 files,

@@ -231,6 +231,7 @@ import {
   type CoverageFacts,
   type CoverageReading,
   type DeclaredCoverage,
+  type KnownNames,
   type ToolAbsence,
 } from '../../../semantics/coverage/index.js';
 import type { ComposedCoverage } from '../../../semantics/coverage/composedCoverage.js';
@@ -239,6 +240,12 @@ import { buildSearchCoverage } from './searchCoverage.js';
 import { readItemExtras, type CoverageSection } from '../../../semantics/coverage/items.js';
 import { copyInProgressItem } from '../../../semantics/coverage/inProgress.js';
 import { copyPeriod } from '../../../semantics/coverage/period.js';
+import {
+  fitKnownNames,
+  KNOWN_NAMES_LINE,
+  knownNamesFor,
+  withKnownNames,
+} from '../../../semantics/coverage/among.js';
 import { servedToModel, strippedOnly } from '../../../semantics/coverage/read.js';
 import {
   pruneLeases,
@@ -3782,6 +3789,43 @@ export function buildToolCallsHandler(
    * returned while the history carries what the rules allowed through — and
    * the ledger row beside them says which is which.
    */
+  /**
+   * The names each call's after-tool moment let through to the model, by call
+   * id. `afterMoment` sets its own call's entry (or clears it) and
+   * `messageTextOf` takes it out, so the map holds a call only between those
+   * two lines.
+   */
+  const namesForMessage = new Map<string, KnownNames>();
+
+  /**
+   * THE ONE PLACE a call's model-bound message text is made from what the
+   * rules, the placement and the cap let through — and so the one place the
+   * names an `absent({ among })` read for the caller are attached
+   * (`coverage/among.ts`). They ride the library's channel, never the result,
+   * so no event, ledger or coverage row ever holds them; what is attached is
+   * what the after-tool rules let through (`afterMoment`), and it COUNTS
+   * against `maxToolResultChars`: the names list is trimmed to fit — never
+   * the result — and says how many it left out; with no room even for the
+   * count, nothing is attached. Every other call gets the text it always got.
+   */
+  const messageTextOf = (toolCallId: string, modelResult: unknown): string => {
+    const text = (value: unknown): string =>
+      typeof value === 'string' ? value : safeStringify(value);
+    const names = namesForMessage.get(toolCallId);
+    namesForMessage.delete(toolCallId);
+    if (names === undefined) return text(modelResult);
+    const withBlock = (block: KnownNames): string => {
+      const attached = withKnownNames(modelResult, block);
+      return attached !== modelResult
+        ? text(attached)
+        : `${text(modelResult)}${KNOWN_NAMES_LINE}${safeStringify(block)}`;
+    };
+    const max = deps.maxToolResultChars;
+    const fitted =
+      max === undefined ? names : fitKnownNames(names, (block) => withBlock(block).length <= max);
+    return fitted === undefined ? text(modelResult) : withBlock(fitted);
+  };
+
   const afterMoment = async (
     scope: TypedScope<AgentState>,
     call: {
@@ -3806,12 +3850,20 @@ export function buildToolCallsHandler(
     // declare neither serves the bytes it always did, and the callers'
     // reference-inequality stamp of `tool_end.modelResult` stays unstamped.
     const served = servedToModel(call.result);
+    // The names an among miss read for the caller: off the result, from the
+    // library's channel, keyed by what the TOOL returned (`coverage/among.ts`).
+    // The chain decides what of them the model reads.
+    namesForMessage.delete(call.toolCallId);
+    const names = knownNamesFor(call.result);
     const chain = deps.toolMiddleware ?? [];
     // No `onToolResult` hook anywhere in the chain → no walk, no rows, no await
     // beyond the ones this dispatch already made. An agent whose middleware
     // only governs calls is byte-identical to one built before this moment
     // existed.
-    if (!chain.some((mw) => typeof mw.onToolResult === 'function')) return served;
+    if (!chain.some((mw) => typeof mw.onToolResult === 'function')) {
+      if (names !== undefined) namesForMessage.set(call.toolCallId, names);
+      return served;
+    }
     const verdict = await runToolAfterChain(chain, {
       toolName: call.toolName,
       ...(call.tool?.source !== undefined && { toolSource: call.tool.source }),
@@ -3823,8 +3875,12 @@ export function buildToolCallsHandler(
       history: call.history,
       ...(call.identity && { identity: call.identity }),
       ...(call.signal && { signal: call.signal }),
+      ...(names !== undefined && { knownNames: names }),
     });
     recordDecisions(scope, verdict.decisions);
+    if (verdict.kind === 'allow' && verdict.knownNames !== undefined) {
+      namesForMessage.set(call.toolCallId, verdict.knownNames);
+    }
     return verdict.kind === 'deny' ? verdict.reason : verdict.result;
   };
 
@@ -5997,7 +6053,7 @@ export function buildToolCallsHandler(
           executed,
           toolEnvelope?.status,
         );
-        let resultStr = typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
+        let resultStr = messageTextOf(tc.id, modelResult);
         // The tool's OWN answer, before any framework suffix joins it — what
         // the repeated-call ledger fingerprints. Fingerprinting the decorated
         // string instead would compare our own additions (a step that advanced
@@ -6629,8 +6685,7 @@ export function buildToolCallsHandler(
         );
         const askCapped = capResults(toolName, askPlaced);
         modelResult = askCapped.modelResult;
-        let askResultStr =
-          typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
+        let askResultStr = messageTextOf(toolCallId, modelResult);
         // Step boundary (9.18.0) — a result finalized HERE is as final as one
         // from the batch loop; the answered call advances the pointer before
         // the push, exactly as it would have inline.
@@ -6833,8 +6888,7 @@ export function buildToolCallsHandler(
         );
         const decisionCapped = capResults(toolName, decisionPlaced);
         modelResult = decisionCapped.modelResult;
-        let decisionResultStr =
-          typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
+        let decisionResultStr = messageTextOf(toolCallId, modelResult);
         // Step boundary (9.18.0) — an approved consequential step (a checkIn
         // tool CAN be a step's tool) advances on the resumed dispatch.
         if (deps.stepPlanFor && stepToolRan) {
@@ -6986,8 +7040,7 @@ export function buildToolCallsHandler(
         );
         const consentCapped = capResults(toolName, consentPlaced);
         modelResult = consentCapped.modelResult;
-        let consentResultStr =
-          typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
+        let consentResultStr = messageTextOf(toolCallId, modelResult);
         // Step boundary (9.18.0) — a step tool that waited on 3LO consent
         // advances the moment its resumed dispatch really ran, clean. A
         // ceiling-refused result is not clean (9.20.0): the model holds no
@@ -7147,7 +7200,7 @@ export function buildToolCallsHandler(
       );
       const pauseCapped = capResults(toolName, pausePlaced);
       const modelResult = pauseCapped.modelResult;
-      let resultStr = typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
+      let resultStr = messageTextOf(toolCallId, modelResult);
       // Step boundary (9.18.0) — THE HITL step ("ask a human, then export"):
       // the tool paused mid-step, the person's answer IS its result, and the
       // completed step advances here at the same boundary it would have

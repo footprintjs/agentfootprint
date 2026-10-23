@@ -22,8 +22,14 @@
  * everywhere the check matters.
  */
 
-import { checkSemantics, type SemanticsCatalogEntry, type SemanticsReport } from './check.js';
+import {
+  checkSemantics,
+  type CheckSemanticsOptions,
+  type SemanticsCatalogEntry,
+  type SemanticsReport,
+} from './check.js';
 import { formatSemanticsReport } from './format.js';
+import { SEMANTICS_RULE_SETS, type SemanticsRuleSet } from './overclaim.js';
 import { RESULT_CLASSES } from './types.js';
 
 export interface SemanticsCliIO {
@@ -41,8 +47,14 @@ const USAGE = `usage: agentfootprint-check-semantics <semantics-catalog.json> [o
                             resultClass ∈ { ${RESULT_CLASSES.join(', ')} } — the class
                             declared on defineTool({ resultClass }); omit for tools
                             with no class rules (envelope rules still apply).
+                            refusals: [...] (optional) — what the tool throws or
+                            returns when it refuses a call; judged by the
+                            overclaim rules.
 
-  --strict                  warnings also fail the gate
+  --strict                  warnings also fail the gate; the overclaim rules
+                            report as errors
+  --rules=<set,...>         opt-in rule sets: ${SEMANTICS_RULE_SETS.join(', ')} — errors, judged
+                            over every sample
   --json                    print the full report as JSON instead of text
 
 exit codes: 0 ok · 1 findings failed the gate · 2 usage/input error`;
@@ -96,6 +108,9 @@ export function coerceSemanticsCatalog(json: unknown): readonly SemanticsCatalog
       ...(entry.projections !== undefined
         ? { projections: entry.projections as SemanticsCatalogEntry['projections'] }
         : {}),
+      ...(entry.refusals !== undefined
+        ? { refusals: entry.refusals as SemanticsCatalogEntry['refusals'] }
+        : {}),
     };
   });
 }
@@ -116,10 +131,26 @@ export async function runCheckSemanticsCli(
   let file: string | undefined;
   let strict = false;
   let json = false;
+  let rules: SemanticsRuleSet[] = [];
   for (const arg of argv) {
     if (arg === '--strict') strict = true;
     else if (arg === '--json') json = true;
-    else if (arg === '--help' || arg === '-h') {
+    else if (arg.startsWith('--rules=')) {
+      const asked = arg
+        .slice('--rules='.length)
+        .split(',')
+        .filter((r) => r !== '');
+      const known: readonly string[] = SEMANTICS_RULE_SETS;
+      const unknown = asked.find((r) => !known.includes(r));
+      if (asked.length === 0 || unknown !== undefined) {
+        io.stderr(
+          `unknown rule set '${unknown ?? ''}' — the opt-in rule sets are: ` +
+            `${SEMANTICS_RULE_SETS.join(', ')}\n\n${USAGE}`,
+        );
+        return 2;
+      }
+      rules = asked as SemanticsRuleSet[];
+    } else if (arg === '--help' || arg === '-h') {
       io.stderr(USAGE);
       return 2;
     } else if (arg.startsWith('-')) {
@@ -144,7 +175,11 @@ export async function runCheckSemanticsCli(
     // path is the only consumer that touches the filesystem.
     const { readFile } = await import('node:fs/promises');
     const catalog = coerceSemanticsCatalog(JSON.parse(await readFile(file, 'utf8')));
-    report = checkSemantics(catalog);
+    const options: CheckSemanticsOptions = {
+      ...(strict && { strict: true }),
+      ...(rules.length > 0 && { rules }),
+    };
+    report = checkSemantics(catalog, options);
   } catch (error) {
     io.stderr(`agentfootprint-check-semantics: ${file}: ${(error as Error).message}`);
     return 2;

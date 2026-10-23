@@ -51,7 +51,7 @@ import {
   lookupForms,
   normalizeToken,
   tokenize,
-} from '../../../tools/normalize.js';
+} from '../../../lib/normalize.js';
 import { splitNumericRange } from './numericRanges.js';
 import { decimalsOf } from './numberPrecision.js';
 import type { ResolvedEvidenceGate, UnsupportedValue } from './types.js';

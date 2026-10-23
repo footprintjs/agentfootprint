@@ -2,10 +2,11 @@
 title: Interfaces
 ---
 
-367 exported from `agentfootprint`.
+368 exported from `agentfootprint`.
 
 [Scope event payloads](/docs/api/interfaces/scope-events) · [Flow event payloads](/docs/api/interfaces/flow-events)
 
+- [`AbsenceAmongDeclaration`](/docs/api/interfaces/AbsenceAmongDeclaration)
 - [`AbsenceDeclaration`](/docs/api/interfaces/AbsenceDeclaration)
 - [`ActOptions`](/docs/api/interfaces/ActOptions)
 - [`AgentArtifactsOptions`](/docs/api/interfaces/AgentArtifactsOptions)
@@ -14,7 +15,9 @@ title: Interfaces
 - [`AgentOptions`](/docs/api/interfaces/AgentOptions)
 - [`AgentRecordingsOptions`](/docs/api/interfaces/AgentRecordingsOptions)
 - [`AgentRunCheckpoint`](/docs/api/interfaces/AgentRunCheckpoint)
+- [`AllowOptions`](/docs/api/interfaces/AllowOptions)
 - [`AllowOutcome`](/docs/api/interfaces/AllowOutcome)
+- [`AmongDeclaration`](/docs/api/interfaces/AmongDeclaration)
 - [`AnswerCheck`](/docs/api/interfaces/AnswerCheck)
 - [`AnswerCoverage`](/docs/api/interfaces/AnswerCoverage)
 - [`AnswerEvidenceResolver`](/docs/api/interfaces/AnswerEvidenceResolver)
@@ -94,7 +97,6 @@ title: Interfaces
 - [`CommitEvent`](/docs/api/interfaces/scope-events#interface-commitevent)
 - [`CompactionOptions`](/docs/api/interfaces/CompactionOptions)
 - [`CompactionRecord`](/docs/api/interfaces/CompactionRecord)
-- [`ComposedCoverage`](/docs/api/interfaces/ComposedCoverage)
 - [`ConditionalInput`](/docs/api/interfaces/ConditionalInput)
 - [`ConditionalOptions`](/docs/api/interfaces/ConditionalOptions)
 - [`ConflictRow`](/docs/api/interfaces/ConflictRow)
@@ -347,7 +349,6 @@ title: Interfaces
 - [`ToolResultContext`](/docs/api/interfaces/ToolResultContext)
 - [`ToolResultEnvelope`](/docs/api/interfaces/ToolResultEnvelope)
 - [`ToolResultMiddleware`](/docs/api/interfaces/ToolResultMiddleware)
-- [`ToolSearch`](/docs/api/interfaces/ToolSearch)
 - [`ToolSemantics`](/docs/api/interfaces/ToolSemantics)
 - [`TopKOptions`](/docs/api/interfaces/TopKOptions)
 - [`ToTOptions`](/docs/api/interfaces/ToTOptions)

@@ -37,7 +37,7 @@ import {
 } from '../../../../src/core/agent/evidence/evidenceIndex.js';
 import { checkAnswer, resolveEvidenceGate } from '../../../../src/core/agent/evidence/gate.js';
 import { EVIDENCE_CHECK_FRAME_PREFIX } from '../../../../src/core/agent/evidence/frames.js';
-import { lookupForms, normalizeToken } from '../../../../src/tools/normalize.js';
+import { lookupForms, normalizeToken } from '../../../../src/lib/normalize.js';
 import { buildSummaryMessage } from '../../../../src/core/agent/window/summarize.js';
 import { stripFrameworkFields } from '../../../../src/core/agent/composeRequest.js';
 import {

@@ -767,6 +767,89 @@ Pinned by `test/core/agent/coverage-in-progress.test.ts` (mint, recognition,
 serve, one agent run, a seeded property, byte identity). Worked example:
 `examples/features/79-result-in-progress.ts`.
 
+## 9. A name that resolves to nothing — `among` (the c6 fix)
+
+**The law: a lookup over a known list that finds nothing is a named miss over
+the names it read, with the names outside that list a gap the author cannot
+remove.** In a registered study (two models), a refusal that said "No array
+matches 'X'. Known arrays: … a wrong identifier, not missing data" made
+replies worse: the models told users "X is not in your estate" when the tool
+had only failed to find X in one inventory export. A pre-check over a known
+list IS a search, and a declaration is itself a claim.
+
+```ts
+if (!array) return absent({
+  what: array_id,
+  among: { argument: 'array_id', source: inventory.source, measuredAt: inventory.readAt,
+           count: inventory.names.length, names: inventory.names, visible: 'caller' },
+});
+```
+
+- **One rule set, `among.ts`.** `mintAmong` composes the names facet first in
+  `checked` (`NamesFacetItem`: `{ what, facet: 'names', argument, count,
+  source, from: 'result' }`, worded from the declaration, never from the
+  looked-for value), the gap first in `not_checked` (`SourceGapItem`:
+  `{ what: 'names outside <source>', kind: 'scope', relevance: 'bears', bears:
+  'source' }` — `kind` is record-only, as on every item), and `provenance` from
+  `source` and `measuredAt` (`provenance` beside `among` is refused). The
+  author's own `checked`, `notChecked` and `cannotCover` follow the composed
+  items; nothing removes the gap but `authoritative: { why }`, which
+  `check:semantics` lists (`authoritative-names`).
+- **`known_names` — never part of the result.** Only with `visible: 'caller'`
+  — required, no default, because a default-visible list enumerates one
+  principal's names to another — the model sees the count and the
+  `KNOWN_NAMES_SHOWN` (20) names nearest the looked-for value, under the one
+  spelling (`../../lib/normalize.ts` · `normalizeToken`, moved down from
+  `tools/` for this). A name outside one plain printable line
+  (`lib/plainLine.ts` plus surrogates and private use) or over
+  `MAX_NAME_CHARS` (128) is dropped and counted.
+- **One channel, under the app's rules, one attach point.** A strip on the way
+  to an event loses to the first rule that reshapes the result (JSON text, a
+  wrapper, a truncated head — each found by review), so the names never enter
+  the result: `absent()` keeps them on a module-private `WeakMap` keyed by the
+  envelope object it returns (`among.ts` · `keepKnownNames` /
+  `knownNamesFor`). The after-tool chain (`../../tools/runChain.ts` ·
+  `runToolAfterChain`) hands them to each rule BESIDE the result, as
+  `call.knownNames`, and the rule decides: a pass-through (or the same result
+  handed back) keeps them, `allow(value, why)` drops them unless it says
+  `{ knownNames }` (`AllowOptions`), a deny ends them; a block a rule hands
+  back is held to the mint's rules (`ruleKnownNames`). What the chain lets
+  through is attached in ONE place, the model-bound message
+  (`../../core/agent/stages/toolCalls.ts` · `messageTextOf`, by
+  `withKnownNames`: beside an absence, inside a ledger, at an object's top, or
+  as one `known_names:` line after text), and it counts against
+  `maxToolResultChars` — the list is trimmed, never the result
+  (`fitKnownNames`, `known_names.omitted`), and with no room even for the
+  count nothing is attached. Every event, the ledger, the decision rows and
+  the `coverageDeclared` row see a result that never held them; the
+  conversation (history, `iteration_end.history`, the messages slot's
+  `context.injected`, a narrative entry's `rawValue`, `lastToolResult`) is
+  where they live, under the same redaction policy as the result. A copy of
+  the envelope carries no channel, so its names are not served — the safe
+  direction.
+- **Bounded cost.** A looked-for spelling over 128 code points, or a list over
+  `MAX_NAMES_RANKED` (10,000) names, ranks nothing and serves the count alone;
+  otherwise one comparison is at most 128 × 128 cells (≈ 0.4 s measured for the
+  worst 10,000-name list).
+- **`names-count-mismatch`.** `names`, when given, must hold exactly `count`
+  names — so the shown names can never outnumber the count. Refused at the mint.
+- **A well-formed unknown value is never a refusal.** A value the input schema
+  refuses is still refused before dispatch (`../../tools/toolArgsValidation.ts`);
+  one that passes reaches the tool, and the miss is this absence.
+- **Evidence.** `looked_for` stays withheld as always; the facet, the gap and
+  the names ground (the `known_shares` precedent).
+- **Not yet, named.** The row and `tools.absent` carry the composed items'
+  `what` and `kind` only — the typed fields (`facet`, `count`, `relevance`,
+  `bears`, `authoritative`) ride the served envelope until the search
+  declaration carries them onto the row. Names from a third-party tool still
+  ground, as any extra key does.
+
+Pinned by `test/core/agent/coverage-among.test.ts` (the mint, the channel,
+the bounds, a seeded property, byte identity) and
+`test/core/agent/coverage-among-run.test.ts` (the loop: rules that keep,
+narrow, drop, stringify, wrap or deny; the cap; a redaction policy; a seeded
+property over JSON-ish rule chains; the schema-malformed value).
+
 ## What the framework does with them
 
 Recognition is STRICT (the effects-envelope law): only a plain object carrying
@@ -914,6 +997,7 @@ armed: the final branch cannot write back, and one key has one writer.
 | `refusal.ts`    | how every helper refuses (§ 5): the one prefix, `refused: `, and the one unknown-key check, naming the spelling meant                                                                                                                                                                         |
 | `recognize.ts`  | the two recognizers (`readAbsence`, `readCoverageLedger`) and the two markers — a leaf, so a post-hoc reader loads them without the mints                                                                                                                                                     |
 | `absent.ts`     | `absent()`, the static note, and the ONE rule set for a suggestion (`tryInsteadOfAbsence` and `tryInsteadToolOfAbsence` read by it); re-exports its recognizer                                                                                                                                |
+| `among.ts`      | the `among` rule set (§ 9): `mintAmong` (the names facet, the irremovable gap, the names), `namesFacetOf`, the names channel (`keepKnownNames`, `knownNamesFor`), what a rule may hand back (`knownNamesProblem`, `ruleKnownNames`), the one attaching rule (`withKnownNames`) and the cap (`fitKnownNames`) |
 | `ledger.ts`     | `coverage()` and the static note; re-exports its recognizer                                                                                                                                                                                                                                   |
 | `emptiness.ts`  | the ONE reader of what came back (§ 6) — typed routes, the door the record holds, what a value's own envelope declares (`declaredByValue`), the `rowsAt` rule                                                                                                                                 |
 | `read.ts`       | the ONE reader both dispatch boundaries and the raise site (`../../core/agent/stages/toolCalls.ts` · `declareRaisedAbsence`) call — lifts the suggestion beside the coverage                                                                                                                                |

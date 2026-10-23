@@ -24,6 +24,7 @@ export { describedResult } from './described.js';
 
 export {
   checkSemantics,
+  type CheckSemanticsOptions,
   type SemanticsCatalogEntry,
   type SemanticsFinding,
   type SemanticsFindingCode,
@@ -31,6 +32,8 @@ export {
 } from './check.js';
 
 export { formatSemanticsReport } from './format.js';
+
+export { type OverclaimCode, type SemanticsRuleSet } from './overclaim.js';
 
 export { coerceSemanticsCatalog, runCheckSemanticsCli, type SemanticsCliIO } from './cli.js';
 

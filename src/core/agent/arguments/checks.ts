@@ -16,7 +16,7 @@
  *
  * ## One claim, one corpus — and a pass is never support
  *
- * Every check is whole-token membership (`tools/normalize.ts` · `tokenize`
+ * Every check is whole-token membership (`lib/normalize.ts` · `tokenize`
  * and `canonicalForm`, the evidence gate's own "same value", through
  * `evidence/resultCarries.ts` · `canonicalTokens`) in the ONE place the
  * claimed source lives:

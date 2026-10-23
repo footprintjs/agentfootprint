@@ -4,7 +4,7 @@ title: AskPayload
 
 # Interface: AskPayload
 
-Defined in: [src/core/agent/middleware/types.ts:124](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L124)
+Defined in: [src/core/agent/middleware/types.ts:134](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L134)
 
 What a person is being asked. Carried verbatim to the checkpoint.
 
@@ -14,7 +14,7 @@ What a person is being asked. Carried verbatim to the checkpoint.
 
 > `readonly` `optional` **component?**: [`AskComponent`](/docs/api/interfaces/AskComponent)
 
-Defined in: [src/core/agent/middleware/types.ts:135](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L135)
+Defined in: [src/core/agent/middleware/types.ts:145](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L145)
 
 Which REGISTERED screen component collects the answer (9.24.0) — ids and
 props only, never markup. Small props inline; big props as an artifact
@@ -27,7 +27,7 @@ ref (`propsRef`), validated to resolve at raise time. Absent → the prose
 
 > `readonly` `optional` **detail?**: `unknown`
 
-Defined in: [src/core/agent/middleware/types.ts:128](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L128)
+Defined in: [src/core/agent/middleware/types.ts:138](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L138)
 
 Anything else the answering UI should render. Never interpreted here.
 
@@ -37,6 +37,6 @@ Anything else the answering UI should render. Never interpreted here.
 
 > `readonly` **question**: `string`
 
-Defined in: [src/core/agent/middleware/types.ts:126](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L126)
+Defined in: [src/core/agent/middleware/types.ts:136](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L136)
 
 The question, in your own words. Shown to whoever answers.

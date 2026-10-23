@@ -107,7 +107,7 @@ import { isTruncatedToolResult } from '../toolResultCap.js';
 import { isCompactedSummary } from '../../../lib/saidByPerson.js';
 import { isLibraryAuthoredTurn } from './frames.js';
 import { timeFormsOfText } from '../../../time/textForms.js';
-import { lookupForms, normalizeToken, tokenize } from '../../../tools/normalize.js';
+import { lookupForms, normalizeToken, tokenize } from '../../../lib/normalize.js';
 import { jsonPrefixOf, leadingJsonValues } from './servedJson.js';
 
 /**

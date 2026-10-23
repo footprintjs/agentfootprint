@@ -21,12 +21,7 @@ import {
   extractCandidates,
   readAnswer,
 } from '../../../src/core/agent/evidence/extract.js';
-import {
-  countDigits,
-  lookupForms,
-  normalizeToken,
-  tokenize,
-} from '../../../src/tools/normalize.js';
+import { countDigits, lookupForms, normalizeToken, tokenize } from '../../../src/lib/normalize.js';
 import {
   evidenceFromHistory,
   exemptFromRun,

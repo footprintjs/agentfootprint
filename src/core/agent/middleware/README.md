@@ -136,6 +136,21 @@ The user-facing version, with what to do about each, is the docs page
 `docs-next/content/docs/build/middleware.mdx` ("Read this before you scrub
 secrets").
 
+## The names a lookup read ride beside the result — `call.knownNames`
+
+The names an `absent({ among: { …, visible: 'caller' } })` read for the caller
+are never inside `call.result` (`../../../semantics/coverage/among.ts` keeps
+them on its own channel). `../../../tools/runChain.ts` · `runToolAfterChain`
+hands them to each `onToolResult` rule as `call.knownNames`, and the rule
+decides what goes on: a pass-through — or the same result handed back — keeps
+them; `allow(value, why)` drops them unless its `AllowOptions` say
+`{ knownNames }` (the block, a narrower one, or `null`); a deny drops them. A
+block a rule hands back is re-held to the mint's rules
+(`among.ts` · `ruleKnownNames`). The decision rows record the result's
+before/after, never the names. `../stages/toolCalls.ts` · `messageTextOf`
+attaches what the chain let through to the model's message alone, within
+`maxToolResultChars`.
+
 ## Files
 
 - `messagePhase.ts` — phase-bound wrappers and conservative output declaration.

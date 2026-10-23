@@ -36,7 +36,12 @@
  */
 
 import type { ABSENCE_NOTE } from '../semantics/coverage/absent.js';
-import type { CoveredResult, ToolAbsence } from '../semantics/coverage/types.js';
+import type {
+  CoveredResult,
+  NamesFacetItem,
+  SourceGapItem,
+  ToolAbsence,
+} from '../semantics/coverage/types.js';
 import type { FigureDerivation } from '../core/agent/evidence/types.js';
 import type { AgentfootprintEventMap, AgentfootprintEventType } from '../events/registry.js';
 import type { CursorMoveCause, SkillEdgeKind } from '../injection-engine/skillGraph.js';
@@ -50,10 +55,12 @@ type Payloads = AgentfootprintEventMap[AgentfootprintEventType]['payload'];
 
 /**
  * The library's own envelopes a payload carries inside a field typed loosely
- * (a tool's `result`, what the model read): `absent()`'s and `coverage()`'s.
- * Their field names and words are the library's as much as a payload's.
+ * (a tool's `result`, what the model read): `absent()`'s and `coverage()`'s,
+ * and the two items an `among` miss composes into an absence's lists (typed
+ * apart from `CoverageItem`, which they extend). Their field names and words
+ * are the library's as much as a payload's.
  */
-type Envelopes = ToolAbsence | CoveredResult;
+type Envelopes = ToolAbsence | CoveredResult | NamesFacetItem | SourceGapItem;
 
 /** A depth counter for the type walks below (payload types nest a few levels). */
 type Next = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, never];
@@ -298,6 +305,7 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   autoActivate: true,
   avg: true,
   base: true,
+  bears: true,
   'before-tool': true,
   below: true,
   'below-threshold': true,
@@ -722,6 +730,7 @@ const FIELDS: { readonly [F in FieldName]: true } = {
   at: true,
   attempt: true,
   attempts: true,
+  authoritative: true,
   availableIds: true,
   backoffMs: true,
   base: true,

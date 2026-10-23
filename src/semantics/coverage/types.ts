@@ -242,6 +242,118 @@ export type DeclaredAbsenceDeclaration = Omit<AbsenceDeclaration, 'checked'> & {
 };
 
 /**
+ * The list a missed name was looked up in — `absent({ what, among })`.
+ *
+ * A lookup that checks a name against a known list IS a search, and its miss
+ * says only that the name is not on THAT list. `among` declares the list, and
+ * the mint composes the rest: the names facet the tool searched, the gap the
+ * author cannot remove ("names outside <source>"), and the absence's
+ * `provenance` from `source` and `measuredAt`.
+ *
+ * @example a name lookup that found nothing in the inventory export
+ *   if (!array) return absent({
+ *     what: array_id,
+ *     among: { argument: 'array_id', source: inventory.source, measuredAt: inventory.readAt,
+ *              count: inventory.names.length, names: inventory.names, visible: 'caller' },
+ *   });
+ */
+export interface AmongDeclaration {
+  /** The input argument whose value was looked up ('array_id'). */
+  readonly argument: string;
+  /** The list the names were read from, in the author's words ('the PowerStore inventory export'). One line. */
+  readonly source: string;
+  /** When that list was read — the tool's own words, never parsed (the `provenance` rule). */
+  readonly measuredAt: string;
+  /** How many names the list holds — a whole number. Always served. */
+  readonly count: number;
+  /**
+   * The names the list holds. When given, `names.length` must equal `count`
+   * (`names-count-mismatch`). Served only with {@link AmongDeclaration.visible}
+   * `'caller'`, and then only the {@link import('./among.js').KNOWN_NAMES_SHOWN}
+   * nearest the looked-for value.
+   */
+  readonly names?: readonly string[];
+  /**
+   * `'caller'` — the tool read this list under the caller's OWN identity, so
+   * the caller may see names from it. Required for any name to be served:
+   * there is no default, because a list visible by default would enumerate one
+   * principal's names to another.
+   */
+  readonly visible?: 'caller';
+  /**
+   * The ONE opt-out of the "names outside <source>" gap: the author says the
+   * source is every name there is, and why. Every use is listed for review by
+   * `check:semantics` (`authoritative-names`).
+   */
+  readonly authoritative?: { readonly why: string };
+}
+
+/**
+ * `absent()` given an {@link AmongDeclaration}: `checked` becomes optional (the
+ * mint composes the names facet first) and `provenance` is refused — `among`
+ * composes it from its own `source` and `measuredAt`.
+ */
+export interface AbsenceAmongDeclaration
+  extends Omit<AbsenceDeclaration, 'checked' | 'provenance'> {
+  /** The list the missed name was looked up in. */
+  readonly among: AmongDeclaration;
+  /** Further ground the search covered, after the composed names facet. */
+  readonly checked?: readonly CoverageInput[];
+}
+
+/**
+ * The names facet an `among` miss composes — the first `checked` item. A
+ * {@link CoverageItem} whose `what` the library writes from the declaration
+ * (never from the looked-for value).
+ */
+export interface NamesFacetItem extends CoverageItem {
+  readonly facet: 'names';
+  /** The input argument whose value was looked up. */
+  readonly argument: string;
+  /** How many names the list holds. */
+  readonly count: number;
+  /** The list, as declared. */
+  readonly source: string;
+  /** The names came from the tool's own read. */
+  readonly from: 'result';
+  /** Present only when the author declared the list authoritative. */
+  readonly authoritative?: { readonly why: string };
+}
+
+/**
+ * The gap an `among` miss adds and its author cannot remove — the first
+ * `not_checked` item: names outside the source the tool read. It bears on the
+ * source facet: a claim that leaves the source open (a flat "X does not
+ * exist") rests on ground this search never covered. `kind` is record-only,
+ * like every item's.
+ */
+export interface SourceGapItem extends CoverageItem {
+  readonly kind: 'scope';
+  readonly relevance: 'bears';
+  readonly bears: 'source';
+}
+
+/**
+ * `known_names` — what the model may know of the list an `among` miss
+ * searched, served only when the declaration said `visible: 'caller'`. It is
+ * NEVER part of the result: `absent()` keeps it on the library's channel
+ * (`among.ts` · `knownNamesFor`), the after-tool rules are handed it as
+ * `call.knownNames` — theirs to keep, narrow or drop — and the dispatch door
+ * attaches what they let through to the model-bound message alone, within
+ * `maxToolResultChars`. No event, ledger or coverage row ever holds it.
+ */
+export interface KnownNames {
+  readonly count: number;
+  /** At most `KNOWN_NAMES_SHOWN` names, nearest the looked-for value first. */
+  readonly nearest?: readonly string[];
+  /** How many names were left out as unprintable or over `MAX_NAME_CHARS`. */
+  readonly dropped?: number;
+  /** How many of the nearest names were left out so the message fits
+   *  `maxToolResultChars` — the list is trimmed, never the result. */
+  readonly omitted?: number;
+}
+
+/**
  * What a tool author passes to {@link import('./ledger.js').coverage}: the
  * three lists, and the period the verdict's read covered (honesty step 7b).
  * `coverage()` takes no `provenance` — a value that comes as rows from a

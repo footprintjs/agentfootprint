@@ -233,6 +233,30 @@ const prodNeedsATicket: ToolMiddleware = {
 
 The same field appears on `mcpServe`'s serving-side chain, carrying the **served** tool's provenance (present when you are re-serving another server's tool, absent when the tool is yours) — never the calling client's, since a client does not get to declare where a tool came from.
 
+### The names a lookup read — `call.knownNames`
+
+When a tool returns `absent({ what, among: { …, visible: 'caller' } })`, the
+names its lookup read for the caller are never inside `call.result`: they are
+handed to `onToolResult` beside it, as `call.knownNames`. The rule decides what
+of them the model reads. `allow()` keeps them. `allow(value, why)` drops them,
+unless the rule says otherwise with the third argument, an `AllowOptions`:
+`allow(value, why, { knownNames: call.knownNames })` keeps them, a narrower
+block edits them, and `{ knownNames: null }` drops them on a pass-through too.
+`deny(reason)` drops them. A block a rule hands back is held to the same rules
+as the library's (printable names, at most 20, never more than the count).
+
+```ts
+const oneNameIsEnough: ToolMiddleware = {
+  name: 'one-name',
+  onToolResult: (call) =>
+    call.knownNames
+      ? allow(undefined, 'show one name', {
+          knownNames: { count: call.knownNames.count, nearest: call.knownNames.nearest?.slice(0, 1) },
+        })
+      : allow(),
+};
+```
+
 ### A middleware that throws is a denial
 
 The thrown message becomes the reason and the tool does not run. This is the same deny-by-default the permission gate has always applied to a checker that throws: a governance layer whose failure mode is "allow" is not a governance layer.
@@ -273,12 +297,13 @@ Everything below comes from the package root, `agentfootprint`:
 | export | what it is |
 | --- | --- |
 | `allow()` / `allow(value, why)` | Pass through, optionally transformed. The `why` is required when the value changes. |
+| `AllowOptions` | `allow`'s third argument: `from` (where rewritten arguments came from) and, after a tool ran, `knownNames` — the names the model may read, or `null`. |
 | `deny(reason)` | Refuse. For a tool, `reason` is what the model reads. |
 | `ask(payload)` | Suspend for a person. `{ question, detail? }`. The call moment only. |
 | `ToolMiddleware` | `{ name, onToolCall?(call), onToolResult?(call) }` — at least one hook, or it does not compile. |
 | `MessageMiddleware` | `{ name, onMessage(msg) }`. |
 | `ToolMiddlewareContext` | What a tool link is handed: `toolName`, `toolSource?`, `toolCallId`, `iteration`, `args`, `history`, `identity?`, `signal?`. |
-| `ToolResultContext` | The same, plus `result` and `error?` — what `onToolResult` is handed. `args` are what the tool actually ran with. |
+| `ToolResultContext` | The same, plus `result`, `error?` and `knownNames?` — what `onToolResult` is handed. `args` are what the tool actually ran with. |
 | `MessageMiddlewareContext` | What a message link is handed: `phase`, `content`, `history`, `identity?`, `signal?`. |
 | `ToolOutcome` | `allow \| deny \| ask`. No result arm. |
 | `ToolResultOutcome` | `allow \| deny`. No `ask` — the tool has already run. |

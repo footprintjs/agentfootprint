@@ -352,16 +352,21 @@ export {
 // defineTool({ resultClass }). A triage tool whose sample declares no
 // coverage fails the build NAMING the tool and the field. The authoring
 // half (describedResult(), readSemantics, the types) ships on the main barrel.
+// The overclaim rules — a refusal or an absence never asserts more than was
+// read — warn by default; `strict` or `rules: ['overclaim']` make them errors.
 export {
   checkSemantics,
   coerceSemanticsCatalog,
   formatSemanticsReport,
   runCheckSemanticsCli,
+  type CheckSemanticsOptions,
+  type OverclaimCode,
   type SemanticsCatalogEntry,
   type SemanticsCliIO,
   type SemanticsFinding,
   type SemanticsFindingCode,
   type SemanticsReport,
+  type SemanticsRuleSet,
 } from './semantics/index.js';
 // recorded-chat — the session-scoped turn recorder. Wraps a consumer agent
 // factory into a recorded conversation: send() freezes each turn's evidence,
