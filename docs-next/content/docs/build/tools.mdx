@@ -797,21 +797,31 @@ What the absence then carries:
 
 The laws, each pinned by a test:
 
-- **The names are never part of the result.** `absent()` does not put them in
-  the envelope it returns: it keeps them on a library-owned channel keyed by
-  that envelope, and the framework attaches them in one place — the message
-  the model reads, after every `onToolResult` rule, the result placement and
-  `maxToolResultChars`. So the rules, `stream.tool_end` (`result` and
-  `modelResult`), `tools.absent`, the tool-call ledger and
+- **The names are never part of the result, and they are your rules' to
+  decide.** `absent()` does not put them in the envelope it returns: it keeps
+  them on a library-owned channel keyed by that envelope. An `onToolResult`
+  rule is handed them beside the result, as `call.knownNames`, and decides
+  what the model reads: a pass-through keeps them; a rule that rewrites the
+  result drops them unless it hands them back
+  (`allow(value, why, { knownNames: call.knownNames })`), and may hand back a
+  narrower list or `null`; a denial drops them (see
+  [the names a lookup read](doc:middleware#the-names-a-lookup-read--callknownnames)).
+  What the rules let through is attached in one place — the message the model
+  reads — so `stream.tool_end` (`result` and `modelResult`), `tools.absent`,
+  the tool-call ledger, the middleware decision rows and
   `sharedState.coverageDeclared` see a result that never held them, whatever
-  a rule does to it — turns it into text, wraps it, truncates it. A result an
-  `onToolResult` rule denies is served no names. The conversation itself — the
-  history `iteration_end` reports, the messages slot's `context.injected`, a
-  narrative entry's `rawValue` — is what the model read, and holds them; a
-  redaction policy covers it as it covers every message.
+  a rule does to it. The conversation itself — the history `iteration_end`
+  reports, the messages slot's `context.injected`, a narrative entry's
+  `rawValue` — is what the model read and holds them, under the same
+  redaction policy as the result: `conversationRedaction()` keeps both out of
+  every record while the model still reads them.
+- **The names count against `maxToolResultChars`.** The list is trimmed —
+  never the result — until the message fits, and `known_names.omitted` says
+  how many were left out; with no room even for the count, nothing is
+  attached.
 - **Return the envelope `absent()` gave you.** A copy (`{ ...absent(…) }`, a
   JSON round trip) carries no channel, so its names are not served — the safe
-  direction. A rule that turned the result into text gets the names as one
+  direction. Text the rules let through gets the names as one
   `known_names:` line after it; any object gets a `known_names` key.
 - **Untrusted names are filtered and capped.** The names are the tool's data
   and may hold injection text or another person's names: a name outside one

@@ -803,22 +803,30 @@ if (!array) return absent({
   `tools/` for this). A name outside one plain printable line
   (`lib/plainLine.ts` plus surrogates and private use) or over
   `MAX_NAME_CHARS` (128) is dropped and counted.
-- **One channel, one attach point.** A strip on the way to an event loses to
-  the first rule that reshapes the result (JSON text, a wrapper, a truncated
-  head — each found by review), so the names never enter the result:
-  `absent()` keeps them on a module-private `WeakMap` keyed by the envelope
-  object it returns (`among.ts` · `keepKnownNames`), and the dispatch door
-  attaches them in ONE place, the model-bound message, after every
-  `onToolResult` rule, the placement and the cap
-  (`../../core/agent/stages/toolCalls.ts` · `messageTextOf`, by `among.ts` ·
-  `withKnownNames`: beside an absence, inside a ledger, at an object's top,
-  or as one `known_names:` line after text). A result an after-tool rule
-  DENIED is served none. Every rule, `stream.tool_end`, `tools.absent`, the
-  ledger and the `coverageDeclared` row see a result that never held them; the
+- **One channel, under the app's rules, one attach point.** A strip on the way
+  to an event loses to the first rule that reshapes the result (JSON text, a
+  wrapper, a truncated head — each found by review), so the names never enter
+  the result: `absent()` keeps them on a module-private `WeakMap` keyed by the
+  envelope object it returns (`among.ts` · `keepKnownNames` /
+  `knownNamesFor`). The after-tool chain (`../../tools/runChain.ts` ·
+  `runToolAfterChain`) hands them to each rule BESIDE the result, as
+  `call.knownNames`, and the rule decides: a pass-through (or the same result
+  handed back) keeps them, `allow(value, why)` drops them unless it says
+  `{ knownNames }` (`AllowOptions`), a deny ends them; a block a rule hands
+  back is held to the mint's rules (`ruleKnownNames`). What the chain lets
+  through is attached in ONE place, the model-bound message
+  (`../../core/agent/stages/toolCalls.ts` · `messageTextOf`, by
+  `withKnownNames`: beside an absence, inside a ledger, at an object's top, or
+  as one `known_names:` line after text), and it counts against
+  `maxToolResultChars` — the list is trimmed, never the result
+  (`fitKnownNames`, `known_names.omitted`), and with no room even for the
+  count nothing is attached. Every event, the ledger, the decision rows and
+  the `coverageDeclared` row see a result that never held them; the
   conversation (history, `iteration_end.history`, the messages slot's
   `context.injected`, a narrative entry's `rawValue`, `lastToolResult`) is
-  where they live. A copy of the envelope carries no channel, so its names
-  are not served — the safe direction.
+  where they live, under the same redaction policy as the result. A copy of
+  the envelope carries no channel, so its names are not served — the safe
+  direction.
 - **Bounded cost.** A looked-for spelling over 128 code points, or a list over
   `MAX_NAMES_RANKED` (10,000) names, ranks nothing and serves the count alone;
   otherwise one comparison is at most 128 × 128 cells (≈ 0.4 s measured for the
@@ -838,9 +846,9 @@ if (!array) return absent({
 
 Pinned by `test/core/agent/coverage-among.test.ts` (the mint, the channel,
 the bounds, a seeded property, byte identity) and
-`test/core/agent/coverage-among-run.test.ts` (the loop: rules that stringify,
-wrap or deny the result, the cap, a seeded property over JSON-ish rule chains,
-the schema-malformed value).
+`test/core/agent/coverage-among-run.test.ts` (the loop: rules that keep,
+narrow, drop, stringify, wrap or deny; the cap; a redaction policy; a seeded
+property over JSON-ish rule chains; the schema-malformed value).
 
 ## What the framework does with them
 
@@ -989,7 +997,7 @@ armed: the final branch cannot write back, and one key has one writer.
 | `refusal.ts`    | how every helper refuses (§ 5): the one prefix, `refused: `, and the one unknown-key check, naming the spelling meant                                                                                                                                                                         |
 | `recognize.ts`  | the two recognizers (`readAbsence`, `readCoverageLedger`) and the two markers — a leaf, so a post-hoc reader loads them without the mints                                                                                                                                                     |
 | `absent.ts`     | `absent()`, the static note, and the ONE rule set for a suggestion (`tryInsteadOfAbsence` and `tryInsteadToolOfAbsence` read by it); re-exports its recognizer                                                                                                                                |
-| `among.ts`      | the `among` rule set (§ 9): `mintAmong` (the names facet, the irremovable gap, the names), `namesFacetOf`, and the names channel — `keepKnownNames`, `knownNamesFor`, `withKnownNames` (the one attaching rule) |
+| `among.ts`      | the `among` rule set (§ 9): `mintAmong` (the names facet, the irremovable gap, the names), `namesFacetOf`, the names channel (`keepKnownNames`, `knownNamesFor`), what a rule may hand back (`knownNamesProblem`, `ruleKnownNames`), the one attaching rule (`withKnownNames`) and the cap (`fitKnownNames`) |
 | `ledger.ts`     | `coverage()` and the static note; re-exports its recognizer                                                                                                                                                                                                                                   |
 | `emptiness.ts`  | the ONE reader of what came back (§ 6) — typed routes, the door the record holds, what a value's own envelope declares (`declaredByValue`), the `rowsAt` rule                                                                                                                                 |
 | `read.ts`       | the ONE reader both dispatch boundaries and the raise site (`../../core/agent/stages/toolCalls.ts` · `declareRaisedAbsence`) call — lifts the suggestion beside the coverage                                                                                                                                |
